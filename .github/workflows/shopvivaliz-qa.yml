@@ -25,4 +25,5 @@ jobs:
           fi
       - name: Secret scan basic
         run: |
-          ! grep -RInE "(sk_live|sk_test|pk_live|client_secret|refresh_token|access_token|FTP_PASSWORD|senha)" . --exclude-dir=.git --exclude='*.md' || (echo "Potential secret found" && exit 1)
+          PATTERN='(sk_live|sk_test|pk_live|client[_-]?secret|refresh[_-]?token|access[_-]?token|FTP[_-]?PASSWORD|sen''ha)'
+          ! grep -RInE "$PATTERN" . --exclude-dir=.git --exclude='*.md' --exclude='shopvivaliz-qa.yml' || (echo "Potential secret found" && exit 1)
