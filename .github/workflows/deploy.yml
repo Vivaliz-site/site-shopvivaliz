@@ -32,3 +32,20 @@ jobs:
             **/vendor/**
             **/*.sql
             **/*.zip
+
+      - name: Aguardar publicação no servidor
+        run: sleep 20
+
+      - name: Agente de testes pós-deploy
+        run: |
+          set -e
+          BASE="https://dev.shopvivaliz.com.br"
+          echo "Testando página de publicação..."
+          curl -fsS "$BASE/cnpj-rodape-teste.html" | grep -q "49.903.300/0001-70"
+          echo "Testando agente Olist zero id em modo diagnóstico..."
+          curl -fsS "$BASE/api/agent/olist-zero-id-repair.php" | tee olist-zero-id-repair.json
+          grep -q '"agent"' olist-zero-id-repair.json
+          grep -q 'olist_zero_id_repair' olist-zero-id-repair.json
+          echo "Testando diagnóstico Melhor Envio..."
+          curl -fsS "$BASE/api/melhorenvio/diagnostic.php?cep=35500025" | tee melhorenvio-diagnostic.json || true
+          echo "Testes pós-deploy concluídos."
