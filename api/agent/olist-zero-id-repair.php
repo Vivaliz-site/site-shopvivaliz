@@ -9,26 +9,16 @@ function svz_pdo(): ?PDO
     foreach (array('sv_pdo', 'sv_db', 'db', 'get_pdo') as $fn) {
         if (function_exists($fn)) {
             $db = $fn();
-            if ($db instanceof PDO) {
-                return $db;
-            }
+            if ($db instanceof PDO) return $db;
         }
     }
-    $candidates = array(
-        __DIR__ . '/../../config.php',
-        __DIR__ . '/../../includes/config.php',
-        __DIR__ . '/../../app/config.php',
-        __DIR__ . '/../../bootstrap.php',
-    );
-    foreach ($candidates as $file) {
+    foreach (array(__DIR__ . '/../../config.php', __DIR__ . '/../../includes/config.php', __DIR__ . '/../../app/config.php', __DIR__ . '/../../bootstrap.php') as $file) {
         if (is_file($file)) {
             require_once $file;
             foreach (array('sv_pdo', 'sv_db', 'db', 'get_pdo') as $fn) {
                 if (function_exists($fn)) {
                     $db = $fn();
-                    if ($db instanceof PDO) {
-                        return $db;
-                    }
+                    if ($db instanceof PDO) return $db;
                 }
             }
         }
@@ -36,48 +26,44 @@ function svz_pdo(): ?PDO
     return null;
 }
 
-function svz_table(PDO $pdo, string $table): bool
+function svz_column(PDO $pdo, string $table, string $column): ?array
 {
     try {
-        $stmt = $pdo->prepare('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1');
-        $stmt->execute(array($table));
-        return (bool)$stmt->fetchColumn();
-    } catch (Throwable $e) {
-        return false;
-    }
-}
-
-function svz_col(PDO $pdo, string $table, string $col): bool
-{
-    try {
-        $stmt = $pdo->prepare('SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1');
-        $stmt->execute(array($table, $col));
-        return (bool)$stmt->fetchColumn();
-    } catch (Throwable $e) {
-        return false;
-    }
-}
-
-function svz_count(PDO $pdo, string $sql): ?int
-{
-    try {
-        return (int)$pdo->query($sql)->fetchColumn();
+        $stmt = $pdo->prepare('SELECT COLUMN_TYPE, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1');
+        $stmt->execute(array($table, $column));
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
     } catch (Throwable $e) {
         return null;
     }
 }
 
+function svz_count(PDO $pdo, string $table, string $column): ?int
+{
+    try {
+        return (int)$pdo->query('SELECT COUNT(*) FROM ' . $table . ' WHERE ' . $column . ' = 0')->fetchColumn();
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+function svz_nullable(PDO $pdo, string $table, string $column, array &$out): void
+{
+    $meta = svz_column($pdo, $table, $column);
+    if (!$meta) return;
+    if ((string)$meta['IS_NULLABLE'] === 'YES') return;
+    $type = (string)$meta['COLUMN_TYPE'];
+    try {
+        $pdo->exec('ALTER TABLE ' . $table . ' MODIFY ' . $column . ' ' . $type . ' NULL');
+        $out['actions'][] = array('table' => $table, 'column' => $column, 'made_nullable' => true);
+    } catch (Throwable $e) {
+        $out['errors'][] = 'nullable_failed ' . $table . '.' . $column . ': ' . $e->getMessage();
+    }
+}
+
 $apply = isset($_GET['apply']) && (string)$_GET['apply'] === '1';
 $pdo = svz_pdo();
-$out = array(
-    'ok' => false,
-    'agent' => 'olist_zero_id_repair',
-    'apply' => $apply,
-    'generated_at' => date('c'),
-    'checks' => array(),
-    'actions' => array(),
-    'errors' => array(),
-);
+$out = array('ok' => false, 'agent' => 'olist_zero_id_repair', 'apply' => $apply, 'generated_at' => date('c'), 'checks' => array(), 'actions' => array(), 'errors' => array());
 
 if (!$pdo) {
     $out['errors'][] = 'database unavailable';
@@ -87,31 +73,31 @@ if (!$pdo) {
 }
 
 try {
-    $targets = array('olist_products', 'olist_product_images');
-    foreach ($targets as $table) {
-        if (svz_table($pdo, $table) && svz_col($pdo, $table, 'olist_id')) {
-            $out['checks'][$table . '.olist_id_zero'] = svz_count($pdo, 'SELECT COUNT(*) FROM ' . $table . ' WHERE olist_id = 0');
-            if ($apply) {
-                $affected = $pdo->exec('UPDATE ' . $table . ' SET olist_id = NULL WHERE olist_id = 0');
-                $out['actions'][] = array('table' => $table, 'column' => 'olist_id', 'set_zero_to_null' => $affected);
-            }
-        }
-        if (svz_table($pdo, $table) && svz_col($pdo, $table, 'olist_product_id')) {
-            $out['checks'][$table . '.olist_product_id_zero'] = svz_count($pdo, 'SELECT COUNT(*) FROM ' . $table . ' WHERE olist_product_id = 0');
-            if ($apply) {
-                $affected = $pdo->exec('UPDATE ' . $table . ' SET olist_product_id = NULL WHERE olist_product_id = 0');
-                $out['actions'][] = array('table' => $table, 'column' => 'olist_product_id', 'set_zero_to_null' => $affected);
-            }
-        }
-        if (svz_table($pdo, $table) && svz_col($pdo, $table, 'idProduto')) {
-            $out['checks'][$table . '.idProduto_zero'] = svz_count($pdo, 'SELECT COUNT(*) FROM ' . $table . ' WHERE idProduto = 0');
-            if ($apply) {
-                $affected = $pdo->exec('UPDATE ' . $table . ' SET idProduto = NULL WHERE idProduto = 0');
-                $out['actions'][] = array('table' => $table, 'column' => 'idProduto', 'set_zero_to_null' => $affected);
+    $targets = array(
+        array('olist_products', 'olist_id'),
+        array('olist_products', 'olist_product_id'),
+        array('olist_products', 'idProduto'),
+        array('olist_product_images', 'olist_id'),
+        array('olist_product_images', 'olist_product_id')
+    );
+    foreach ($targets as $target) {
+        $table = $target[0];
+        $column = $target[1];
+        $meta = svz_column($pdo, $table, $column);
+        if (!$meta) continue;
+        $out['checks'][$table . '.' . $column . '.nullable'] = (string)$meta['IS_NULLABLE'];
+        $out['checks'][$table . '.' . $column . '.zero'] = svz_count($pdo, $table, $column);
+        if ($apply) {
+            svz_nullable($pdo, $table, $column, $out);
+            try {
+                $affected = $pdo->exec('UPDATE ' . $table . ' SET ' . $column . ' = NULL WHERE ' . $column . ' = 0');
+                $out['actions'][] = array('table' => $table, 'column' => $column, 'zero_to_null' => $affected);
+            } catch (Throwable $e) {
+                $out['errors'][] = 'zero_to_null_failed ' . $table . '.' . $column . ': ' . $e->getMessage();
             }
         }
     }
-    $out['ok'] = true;
+    $out['ok'] = count($out['errors']) === 0;
 } catch (Throwable $e) {
     $out['errors'][] = $e->getMessage();
 }
