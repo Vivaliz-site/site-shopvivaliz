@@ -1,0 +1,24 @@
+name: Deploy Automático Cyberduck - Shop Vivaliz
+
+on:
+  push:
+    branches:
+      - main  # Dispara a automação sempre que houver atualização na branch principal
+
+jobs:
+  deploy:
+    name: Sincronizar com a HostGator
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Baixar o código do repositório
+      uses: actions/checkout@v4
+
+    - name: Sincronizar via Cyberduck CLI
+      uses: iterate-ch/cyberduck-cli-action@v1
+      env:
+        USERNAME: ${{ secrets.FTP_USERNAME }}
+        PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      with:
+        # Executa o comando duck usando exatamente os nomes de Secrets que você já cadastrou
+        command: duck --synchronize ftp://${{ secrets.FTP_SERVER }}/public_html/ ./ --assumeyes --quiet
