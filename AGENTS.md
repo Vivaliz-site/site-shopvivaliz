@@ -64,6 +64,23 @@ Valida retomada apos interrupcao. Deve conferir relatorios, status por SKU, arqu
 ### Olist Image Position Auditor
 Audita a regra de imagens no ERP: manter imagens 1 a 5, inserir Hero Shot na posicao correta, limitar resultado final a ate 6 imagens quando houver 5 ou mais imagens, e remover imagens excedentes das posicoes 7, 8, 9 em diante.
 
+## Agentes reais v9.2.84 no repositorio
+
+A pasta `agents/v9.2.84` materializa os agentes antes apenas conceituais:
+
+- `SafeMigrationRepairAgent`: cria tabelas/indices de controle e tolera execucoes repetidas.
+- `OlistImageRepairAgent`: repara imagem primaria, contagem de imagens e status Olist.
+- `AutonomousReportAgent`: gera relatorio JSON para acompanhamento pelo ChatGPT.
+- `SelfTestAgent`: valida runtime basico.
+- `LoopStarterAgent`: registra pedido de ciclo autonomo.
+- `AutonomousWatchdogAgent`: orquestra todos os agentes.
+
+Endpoints apos deploy:
+
+- `/api/agent/autonomous-report.php`
+- `/api/agent/autonomous-watchdog.php`
+- `/installer/agent-handoff.php`
+
 ## Fluxo padrao quando solicitado "utilize os agentes"
 
 1. `Seguranca / Segredos` valida que nenhuma credencial real sera commitada.
@@ -79,3 +96,7 @@ Audita a regra de imagens no ERP: manter imagens 1 a 5, inserir Hero Shot na pos
 ## Comando inicial para Codex
 
 Leia este AGENTS.md e prepare o ShopVivaliz para atualizacoes cumulativas, QA automatico, releases, OAuth Olist/Tiny, frete/checkout, imagens de produtos, self-test, automacoes Selenium/Olist e seguranca de credenciais.
+
+## Comando inicial para agentes v9.2.84
+
+Usar `agents/v9.2.84` como pacote de deploy da versao `9.2.84-resident-autonomous-watchdog`, rodar o workflow `Package ShopVivaliz v9.2.84 Agents`, revisar a issue #1 e manter as proximas mudancas cumulativas.
