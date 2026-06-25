@@ -10,7 +10,6 @@ jobs:
     name: Sincronizar com a HostGator
     runs-on: ubuntu-latest
     
-    # Resolve o aviso do Node do GitHub para actions antigas
     env:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
@@ -25,4 +24,4 @@ jobs:
         username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
         local-dir: ./
-        server-dir: ./public_html/
+        server-dir: ./public_html/dev/
