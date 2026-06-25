@@ -1,0 +1,42 @@
+name: Package ShopVivaliz v9.2.84 Agents
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/v9-2-84-autonomous-report-agents
+    paths:
+      - 'agents/v9.2.84/**'
+      - '.github/workflows/package-v9-2-84.yml'
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare package structure
+        run: |
+          mkdir -p dist/shopvivaliz-v9.2.84-resident-autonomous-watchdog/app
+          mkdir -p dist/shopvivaliz-v9.2.84-resident-autonomous-watchdog/api/agent
+          mkdir -p dist/shopvivaliz-v9.2.84-resident-autonomous-watchdog/installer
+          mkdir -p dist/shopvivaliz-v9.2.84-resident-autonomous-watchdog/database/migrations
+          mkdir -p dist/shopvivaliz-v9.2.84-resident-autonomous-watchdog/release-notes
+          cp agents/v9.2.84/app/*.php dist/shopvivaliz-v9.2.84-resident-autonomous-watchdog/app/
+          cp agents/v9.2.84/api/agent/*.php dist/shopvivaliz-v9.2.84-resident-autonomous-watchdog/api/agent/
+          cp agents/v9.2.84/installer/*.php dist/shopvivaliz-v9.2.84-resident-autonomous-watchdog/installer/
+          cp agents/v9.2.84/database/migrations/*.sql dist/shopvivaliz-v9.2.84-resident-autonomous-watchdog/database/migrations/
+          cp agents/v9.2.84/README.md dist/shopvivaliz-v9.2.84-resident-autonomous-watchdog/release-notes/9.2.84-resident-autonomous-watchdog.md
+          cp agents/v9.2.84/manifest.json dist/shopvivaliz-v9.2.84-resident-autonomous-watchdog/release-notes/9.2.84-resident-autonomous-watchdog.manifest.json
+          echo '9.2.84-resident-autonomous-watchdog' > dist/shopvivaliz-v9.2.84-resident-autonomous-watchdog/VERSION
+
+      - name: PHP syntax check
+        run: |
+          find dist/shopvivaliz-v9.2.84-resident-autonomous-watchdog -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Upload update artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shopvivaliz-v9.2.84-resident-autonomous-watchdog
+          path: dist/shopvivaliz-v9.2.84-resident-autonomous-watchdog
