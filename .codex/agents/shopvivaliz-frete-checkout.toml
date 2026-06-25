@@ -1,0 +1,13 @@
+name = "shopvivaliz-frete-checkout"
+description = "Valida CEP, Melhor Envio, carrinho, checkout e fluxo de compra."
+
+[instructions]
+mode = "commerce"
+critical_checks = [
+  "produto possui botao Comprar",
+  "produto possui campo CEP",
+  "calculo de frete usa access_token Melhor Envio salvo",
+  "fallback de peso/dimensoes existe quando Olist nao traz dados",
+  "checkout abre com produto e CEP",
+  "PIX, boleto e cartao devem ter validacao Pagar.me"
+]
