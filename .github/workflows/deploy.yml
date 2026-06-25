@@ -46,6 +46,12 @@ jobs:
           curl -fsS "$BASE/api/agent/olist-zero-id-repair.php" | tee olist-zero-id-repair.json
           grep -q '"agent"' olist-zero-id-repair.json
           grep -q 'olist_zero_id_repair' olist-zero-id-repair.json
+          echo "Testando agente de manual do admin..."
+          curl -fsS "$BASE/api/agent/admin-manual-audit.php" | tee admin-manual-audit.json
+          grep -q 'admin_manual_audit' admin-manual-audit.json
+          echo "Atualizando manual operacional do admin..."
+          curl -fsS "$BASE/api/agent/admin-manual-audit.php?apply=1" | tee admin-manual-audit-apply.json
+          grep -q 'ADMIN_MANUAL.md' admin-manual-audit-apply.json
           echo "Testando diagnóstico Melhor Envio..."
           curl -fsS "$BASE/api/melhorenvio/diagnostic.php?cep=35500025" | tee melhorenvio-diagnostic.json || true
           echo "Testes pós-deploy concluídos."
