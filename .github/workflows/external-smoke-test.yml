@@ -1,0 +1,38 @@
+name: ShopVivaliz External Smoke Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Base URL do ambiente'
+        required: false
+        default: 'https://dev.shopvivaliz.com.br'
+      expected_version:
+        description: 'Versao esperada'
+        required: false
+        default: '9.2.69-external-monitor-agent'
+  schedule:
+    - cron: '*/30 * * * *'
+
+jobs:
+  external-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, mbstring
+      - name: Run external smoke test
+        env:
+          SHOPVIVALIZ_BASE_URL: ${{ github.event.inputs.base_url || 'https://dev.shopvivaliz.com.br' }}
+          SHOPVIVALIZ_EXPECTED_VERSION: ${{ github.event.inputs.expected_version || '9.2.69-external-monitor-agent' }}
+        run: |
+          php tools/external-smoke-test.php "$SHOPVIVALIZ_BASE_URL" "$SHOPVIVALIZ_EXPECTED_VERSION" | tee external-smoke-test-report.json
+      - name: Upload smoke test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-smoke-test-report
+          path: external-smoke-test-report.json
