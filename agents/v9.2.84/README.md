@@ -42,6 +42,10 @@ para obter o relatorio, ou:
 
 para executar o watchdog. O endpoint aceita token opcional via `agent_key`, `key` ou header `X-Shopvivaliz-Agent-Key` se o site ja tiver chave configurada.
 
+## Status
+
+Revisao de pacote disparada para gerar artefato v9.2.84 pelo GitHub Actions.
+
 ## Notas de seguranca
 
 - Nenhuma credencial foi colocada no codigo.
