@@ -87,12 +87,13 @@ final class ShopvivalizOlistImageRepairAgent
     private function stats(PDO $pdo): array
     {
         $out = [];
-        foreach ([
+        $queries = [
             'products_total' => 'SELECT COUNT(*) FROM olist_products',
-            'products_with_image' => 'SELECT COUNT(*) FROM olist_products WHERE primary_image_url IS NOT NULL AND primary_image_url <> '''',
-            'products_without_image' => 'SELECT COUNT(*) FROM olist_products WHERE primary_image_url IS NULL OR primary_image_url = ''''',
-            'images_total' => 'SELECT COUNT(*) FROM olist_product_images WHERE status = ''active'''
-        ] as $key => $sql) {
+            'products_with_image' => "SELECT COUNT(*) FROM olist_products WHERE primary_image_url IS NOT NULL AND primary_image_url <> ''",
+            'products_without_image' => "SELECT COUNT(*) FROM olist_products WHERE primary_image_url IS NULL OR primary_image_url = ''",
+            'images_total' => "SELECT COUNT(*) FROM olist_product_images WHERE status = 'active'"
+        ];
+        foreach ($queries as $key => $sql) {
             try { $out[$key] = (int)$pdo->query($sql)->fetchColumn(); } catch (Throwable $e) { $out[$key] = null; }
         }
         return $out;
