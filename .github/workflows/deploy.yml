@@ -1,4 +1,4 @@
-name: Deploy Automático Cyberduck - Shop Vivaliz
+name: Deploy Automático Inteligente - Shop Vivaliz
 
 on:
   push:
@@ -14,13 +14,15 @@ jobs:
     - name: Baixar o código do repositório
       uses: actions/checkout@v4
 
-    - name: Instalar Cyberduck CLI (duck)
+    - name: Executar Sincronizacao Inteligente via LFTP
+      env:
+        USER: ${{ secrets.FTP_USERNAME }}
+        PASS: ${{ secrets.FTP_PASSWORD }}
+        HOST: ${{ secrets.FTP_SERVER }}
       run: |
-        echo "deb https://amazonaws.com bionic main" | sudo tee /etc/apt/sources.list.d/cyberduck.list
-        sudo apt-key adv --keyserver ://ubuntu.com --recv-keys FE7097963EFC5B16 || true
-        sudo apt-get update
-        sudo apt-get install duck -y
-
-    - name: Executar Sincronizacao via FTP
-      run: |
-        duck --synchronize ftp://${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}@${{ secrets.FTP_SERVER }}/public_html/ ./ --assumeyes --quiet
+        lftp -c "
+        set ftp:ssl-allow no;
+        open -u $USER,$PASS $HOST;
+        mirror --reverse --delete --verbose ./ /public_html/;
+        quit
+        "
