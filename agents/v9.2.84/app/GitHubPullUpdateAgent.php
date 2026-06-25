@@ -59,7 +59,7 @@ final class ShopvivalizGitHubPullUpdateAgent
                 ob_start();
                 include $root . '/installer/agent-handoff.php';
                 $handoffOutput = trim((string)ob_get_clean());
-                $result['steps'][] = ['step' => 'handoff', 'ok' => true, 'output_preview' => mb_substr($handoffOutput, 0, 500)];
+                $result['steps'][] = ['step' => 'handoff', 'ok' => true, 'output_preview' => substr($handoffOutput, 0, 500)];
             }
 
             $result['ok'] = count($result['errors']) === 0;
@@ -83,27 +83,33 @@ final class ShopvivalizGitHubPullUpdateAgent
             $base . 'app/LoopStarterAgent.php' => 'app/LoopStarterAgent.php',
             $base . 'app/AutonomousWatchdogAgent.php' => 'app/AutonomousWatchdogAgent.php',
             $base . 'app/GitHubPullUpdateAgent.php' => 'app/GitHubPullUpdateAgent.php',
+            $base . 'app/MediaQualityAgent.php' => 'app/MediaQualityAgent.php',
             $base . 'api/agent/autonomous-report.php' => 'api/agent/autonomous-report.php',
             $base . 'api/agent/autonomous-watchdog.php' => 'api/agent/autonomous-watchdog.php',
-            $base . 'api/agent/external-trigger.php' => 'api/agent/external-trigger.php',
+            $base . 'api/agent/media-quality.php' => 'api/agent/media-quality.php',
             $base . 'installer/agent-handoff.php' => 'installer/agent-handoff.php',
-            $base . 'installer/github-pull-update.php' => 'installer/github-pull-update.php',
             $base . 'database/migrations/20260625_9284_autonomous_report_agents.sql' => 'database/migrations/20260625_9284_autonomous_report_agents.sql',
         ];
     }
 
     private function fetchRepoFile(string $path): ?string
     {
-        $url = 'https://raw.githubusercontent.com/' . $this->repo . '/' . rawurlencode($this->branch) . '/' . str_replace('%2F', '/', rawurlencode($path));
-        $headers = [];
-        $key = getenv('SHOPVIVALIZ_GH_KEY') ?: '';
+        $url = 'https://api.github.com/repos/' . $this->repo . '/contents/' . str_replace('%2F', '/', rawurlencode($path)) . '?ref=' . rawurlencode($this->branch);
+        $headers = [
+            'User-Agent: ShopVivaliz-Agent',
+            'Accept: application/vnd.github+json',
+        ];
+        $key = getenv('SHOPVIVALIZ_GH_KEY') ?: getenv('SHOPVIVALIZ_REPO_KEY') ?: '';
         if ($key !== '') {
             $headers[] = 'Authorization: Bearer ' . $key;
         }
         $context = stream_context_create(['http' => ['timeout' => 40, 'header' => implode("\r\n", $headers)]]);
-        $content = @file_get_contents($url, false, $context);
-        if ($content === false || $content === '') return null;
-        return $content;
+        $raw = @file_get_contents($url, false, $context);
+        if ($raw === false || $raw === '') return null;
+        $json = json_decode($raw, true);
+        if (!is_array($json) || ($json['encoding'] ?? '') !== 'base64' || empty($json['content'])) return null;
+        $content = base64_decode((string)$json['content'], true);
+        return $content === false ? null : $content;
     }
 
     private function root(): string
