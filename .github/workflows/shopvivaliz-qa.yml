@@ -1,0 +1,28 @@
+name: ShopVivaliz QA
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: PHP lint
+        run: |
+          if find . -path './vendor' -prune -o -name '*.php' -print | grep -q .; then
+            find . -path './vendor' -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
+          else
+            echo "No PHP files yet."
+          fi
+      - name: Secret scan basic
+        run: |
+          ! grep -RInE "(sk_live|sk_test|pk_live|client_secret|refresh_token|access_token|FTP_PASSWORD|senha)" . --exclude-dir=.git --exclude='*.md' || (echo "Potential secret found" && exit 1)
