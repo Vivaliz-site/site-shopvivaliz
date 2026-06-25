@@ -12,6 +12,7 @@ final class ShopvivalizMediaQualityAgent
             'agent' => 'media_quality',
             'generated_at' => date('c'),
             'summary' => [],
+            'recommendations' => [],
             'errors' => [],
         ];
         if (!$pdo) {
@@ -23,6 +24,14 @@ final class ShopvivalizMediaQualityAgent
             $data['summary']['items_ready'] = $this->count($pdo, "SELECT COUNT(*) FROM olist_products WHERE primary_image_url IS NOT NULL AND primary_image_url <> ''");
             $data['summary']['items_pending'] = $this->count($pdo, "SELECT COUNT(*) FROM olist_products WHERE primary_image_url IS NULL OR primary_image_url = ''");
             $data['summary']['media_total'] = $this->count($pdo, "SELECT COUNT(*) FROM olist_product_images WHERE status = 'active'");
+            $data['summary']['media_without_item'] = $this->count($pdo, 'SELECT COUNT(*) FROM olist_product_images WHERE product_local_id IS NULL OR product_local_id = 0');
+            $data['summary']['items_with_more_than_10_media'] = $this->count($pdo, "SELECT COUNT(*) FROM (SELECT product_local_id FROM olist_product_images WHERE status = 'active' GROUP BY product_local_id HAVING COUNT(*) > 10) x");
+            if (($data['summary']['items_pending'] ?? 0) > 0) {
+                $data['recommendations'][] = 'Run media repair and import cycle again.';
+            }
+            if (($data['summary']['media_without_item'] ?? 0) > 0) {
+                $data['recommendations'][] = 'Run media relation repair before next report.';
+            }
             $data['ok'] = true;
         } catch (Throwable $e) {
             $data['errors'][] = $e->getMessage();
