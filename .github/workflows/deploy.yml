@@ -1,4 +1,4 @@
-name: Deploy Automático Inteligente - Shop Vivaliz
+name: Deploy Automático Seguro - Shop Vivaliz
 
 on:
   push:
@@ -6,30 +6,18 @@ on:
       - main
 
 jobs:
-  deploy:
+  web-deploy:
     name: Sincronizar com a HostGator
     runs-on: ubuntu-latest
-
     steps:
     - name: Baixar o código do repositório
       uses: actions/checkout@v4
 
-    - name: Instalar LFTP no Servidor
-      run: |
-        sudo apt-get update
-        sudo apt-get install lftp -y
-
-    - name: Executar Sincronizacao Inteligente via LFTP
-      env:
-        USER: ${{ secrets.FTP_USERNAME }}
-        PASS: ${{ secrets.FTP_PASSWORD }}
-        HOST: ${{ secrets.FTP_SERVER }}
-      run: |
-        lftp -c "
-        set ftp:ssl-force yes;
-        set ftp:ssl-protect-data yes;
-        set ssl:verify-certificate no;
-        open -u $USER,$PASS $HOST;
-        mirror --reverse --delete --verbose ./ /public_html/;
-        quit
-        "
+    - name: Enviar via FTP Deploy Action
+      uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      with:
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        local-dir: ./
+        server-dir: ./public_html/
