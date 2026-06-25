@@ -1,0 +1,23 @@
+project = "ShopVivaliz"
+default_agent = "shopvivaliz-release"
+
+[context]
+language = "pt-BR"
+stack = "PHP 8.3, MySQL 5.7, JavaScript, CSS"
+site_dev = "https://dev.shopvivaliz.com.br"
+release_policy = "cumulative"
+
+[quality]
+require_php_lint = true
+require_zip_integrity = true
+require_self_test = true
+require_no_secrets = true
+
+[paths]
+app = "app"
+admin = "admin"
+api = "api"
+installer = "installer"
+database = "database"
+docs = "docs"
+tools = "tools"
