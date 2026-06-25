@@ -2,7 +2,7 @@
   "package": "shopvivaliz-v9.2.84-resident-autonomous-watchdog",
   "version": "9.2.84-resident-autonomous-watchdog",
   "created_at": "2026-06-25",
-  "purpose": "Agentes reais para atualizacao autonoma, relatorio, watchdog, self-test, reparos de midia e handoff pos-update.",
+  "purpose": "Agentes reais para atualizacao autonoma, relatorio, watchdog, self-test, auditorias de midia e handoff pos-update.",
   "copy_map": [
     {"from": "app/SafeMigrationRepairAgent.php", "to": "app/SafeMigrationRepairAgent.php"},
     {"from": "app/OlistImageRepairAgent.php", "to": "app/OlistImageRepairAgent.php"},
@@ -12,9 +12,11 @@
     {"from": "app/AutonomousWatchdogAgent.php", "to": "app/AutonomousWatchdogAgent.php"},
     {"from": "app/GitHubPullUpdateAgent.php", "to": "app/GitHubPullUpdateAgent.php"},
     {"from": "app/MediaQualityAgent.php", "to": "app/MediaQualityAgent.php"},
+    {"from": "app/MediaMismatchAgent.php", "to": "app/MediaMismatchAgent.php"},
     {"from": "api/agent/autonomous-report.php", "to": "api/agent/autonomous-report.php"},
     {"from": "api/agent/autonomous-watchdog.php", "to": "api/agent/autonomous-watchdog.php"},
     {"from": "api/agent/media-quality.php", "to": "api/agent/media-quality.php"},
+    {"from": "api/agent/media-mismatch.php", "to": "api/agent/media-mismatch.php"},
     {"from": "api/agent/external-trigger.php", "to": "api/agent/external-trigger.php"},
     {"from": "installer/agent-handoff.php", "to": "installer/agent-handoff.php"},
     {"from": "installer/sync-runner.php", "to": "installer/sync-runner.php"},
@@ -24,6 +26,7 @@
     "/api/agent/autonomous-report.php",
     "/api/agent/autonomous-watchdog.php",
     "/api/agent/media-quality.php",
+    "/api/agent/media-mismatch.php",
     "/api/agent/external-trigger.php",
     "/installer/agent-handoff.php",
     "/installer/sync-runner.php"
