@@ -3,7 +3,7 @@ name: Deploy Automático Cyberduck - Shop Vivaliz
 on:
   push:
     branches:
-      - main  # Dispara a automação sempre que houver atualização na branch principal
+      - main
 
 jobs:
   deploy:
@@ -20,5 +20,7 @@ jobs:
         USERNAME: ${{ secrets.FTP_USERNAME }}
         PASSWORD: ${{ secrets.FTP_PASSWORD }}
       with:
-        # Executa o comando duck usando exatamente os nomes de Secrets que você já cadastrou
-        command: duck --synchronize ftp://${{ secrets.FTP_SERVER }}/public_html/ ./ --assumeyes --quiet
+        mode: synchronize
+        url: ftp://${{ secrets.FTP_SERVER }}/public_html/
+        path: ./
+        args: --assumeyes --quiet
