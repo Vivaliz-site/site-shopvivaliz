@@ -22,7 +22,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Upload arquivos via curl FTP
+      - name: Diagnostico FTP e upload
         shell: bash
         env:
           FTP_SERVER:     ${{ secrets.FTP_SERVER }}
@@ -32,55 +32,62 @@ jobs:
           FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
         run: |
           PORT="${FTP_PORT:-21}"
-          # Garante barra no final do diretório remoto
-          RDIR="${FTP_REMOTE_DIR%/}/"
 
-          upload() {
-            local local_path="$1"
-            local remote_file="$2"
-            echo "⬆ Enviando $local_path"
+          echo "=== Diagnóstico ==="
+          echo "FTP_SERVER: ${FTP_SERVER}"
+          echo "FTP_PORT: ${PORT}"
+          echo "FTP_REMOTE_DIR: ${FTP_REMOTE_DIR}"
+          echo "FTP_USERNAME: ${FTP_USERNAME}"
+          echo "Formato URL que será usada: ftp://SERVER:PORT/REMOTE_DIR/arquivo"
+          echo "==================="
 
-            # Tenta FTPS primeiro (HostGator requer TLS), depois FTP simples
-            if curl -s -T "$local_path" \
-                "ftp://${FTP_SERVER}:${PORT}/${RDIR}${remote_file}" \
-                --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-                --ssl --ftp-create-dirs \
-                --connect-timeout 30 --max-time 120 \
-                -w "  → %{size_upload} bytes (FTPS)\n"; then
-              return 0
-            fi
+          # Testa conexão FTP simples antes de subir arquivos
+          echo "Testando conexão FTP..."
+          if curl -sv --connect-timeout 10 \
+              "ftp://${FTP_SERVER}:${PORT}/" \
+              --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
+              2>&1 | grep -E "Connected|226|530|Login|failed|refused"; then
+            echo "Conexão FTP OK"
+          else
+            echo "⚠️ Problema na conexão FTP"
+          fi
 
-            echo "  FTPS falhou, tentando FTP simples..."
-            curl -s -T "$local_path" \
-              "ftp://${FTP_SERVER}:${PORT}/${RDIR}${remote_file}" \
+          # Tentativa de upload com URL exatamente igual ao SamKirkland action
+          # (sem barra extra, sem double-slash)
+          RDIR="${FTP_REMOTE_DIR}"
+          # Garante barra no final
+          [[ "${RDIR}" != */ ]] && RDIR="${RDIR}/"
+          # Remove barra inicial se existir (curl FTP usa path relativo ao home do usuário)
+          RDIR="${RDIR#/}"
+
+          echo "RDIR normalizado: '${RDIR}'"
+
+          upload_file() {
+            local src="$1"
+            local dst="$2"
+            local url="ftp://${FTP_SERVER}:${PORT}/${RDIR}${dst}"
+            echo "⬆ $src → $url"
+            curl -v -T "$src" "$url" \
               --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
               --ftp-create-dirs \
-              --connect-timeout 30 --max-time 120 \
-              -w "  → %{size_upload} bytes (FTP)\n"
+              --connect-timeout 30 \
+              --max-time 120 \
+              2>&1 | tail -20
+            echo "Exit code curl: $?"
           }
 
-          upload "api/agent/squad-chat.php"  "api/agent/squad-chat.php"
-          upload "admin/squad-chat.html"      "admin/squad-chat.html"
-          upload "admin/squad-chat.php"       "admin/squad-chat.php"
-          upload "api/agent/squad-canary.txt" "api/agent/squad-canary.txt"
+          upload_file "api/agent/squad-canary.txt" "api/agent/squad-canary.txt"
+          upload_file "api/agent/squad-chat.php"   "api/agent/squad-chat.php"
+          upload_file "admin/squad-chat.html"       "admin/squad-chat.html"
+          upload_file "admin/squad-chat.php"        "admin/squad-chat.php"
 
-          echo "✅ Upload concluído."
-
-      - name: Verificar deploy no servidor
+      - name: Verificar no servidor
         shell: bash
         run: |
           sleep 15
           BASE="https://dev.shopvivaliz.com.br"
-
-          echo "--- Canário ---"
-          if curl -fsS "$BASE/api/agent/squad-canary.txt" | grep -q "squad-canary-ok"; then
-            echo "✅ FTP no caminho correto."
-          else
-            echo "⚠️ Canário não encontrado em $BASE/api/agent/squad-canary.txt"
-            echo "Resposta recebida:"
-            curl -s "$BASE/api/agent/squad-canary.txt" | head -3
-          fi
-
-          echo "--- Health Squad Chat ---"
+          echo "=== Verificação ==="
+          CANARY=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/api/agent/squad-canary.txt")
+          echo "Canário HTTP: $CANARY"
           HEALTH=$(curl -s "$BASE/api/agent/squad-chat.php?health=1")
-          echo "$HEALTH"
+          echo "Health: $HEALTH"
