@@ -124,16 +124,7 @@ jobs:
           if curl -fsS "$BASE/api/agent/squad-chat.php?health=1" -o /tmp/squad-health.json; then
             if grep -q '"endpoint":"squad-chat"' /tmp/squad-health.json; then
               echo "✅ Squad Chat health respondeu."
-              python3 - <<'PY'
-import json
-try:
-    data=json.load(open('/tmp/squad-health.json'))
-    providers=data.get('providers', {})
-    for name, cfg in providers.items():
-        print(f"Provider {name}: configured={cfg.get('configured')} model={cfg.get('model')}")
-except Exception as exc:
-    print(f"⚠️ Não foi possível resumir health: {exc}")
-PY
+              jq -r '.providers | to_entries[] | "Provider \(.key): configured=\(.value.configured) model=\(.value.model)"' /tmp/squad-health.json || echo "⚠️ jq não disponível para resumir health."
             else
               echo "⚠️ Squad Chat health não contém endpoint esperado."
               cat /tmp/squad-health.json
@@ -159,17 +150,7 @@ PY
             "$BASE/api/agent/squad-chat.php" \
             -o /tmp/squad-response.json; then
             echo "✅ Squad Chat POST respondeu. Resumo sanitizado:"
-            python3 - <<'PY'
-import json
-try:
-    data=json.load(open('/tmp/squad-response.json'))
-    print('cycle_id=', data.get('cycle_id'))
-    for r in data.get('responses', []):
-        text=str(r.get('text','')).replace('\n',' ')[:180]
-        print(f"{r.get('name')} | provider={r.get('provider')} | model={r.get('model')} | ok={r.get('ok')} | text={text}")
-except Exception as exc:
-    print(f"⚠️ Não foi possível resumir resposta: {exc}")
-PY
+            jq -r '"cycle_id= " + (.cycle_id // "n/a"), (.responses[]? | "\(.name) | provider=\(.provider) | model=\(.model) | ok=\(.ok) | text=\(.text // "" | .[0:180])")' /tmp/squad-response.json || echo "⚠️ jq não disponível para resumir resposta."
             if grep -q '"provider":"openai"' /tmp/squad-response.json && grep -q '"provider":"gemini"' /tmp/squad-response.json && grep -q '"provider":"anthropic"' /tmp/squad-response.json; then
               echo "✅ Providers reais identificados na resposta do Squad."
             else
