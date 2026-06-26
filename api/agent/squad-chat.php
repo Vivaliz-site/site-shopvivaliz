@@ -8,299 +8,408 @@ declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: no-referrer');
 
-$allowed_origins = [
-    'https://dev.shopvivaliz.com.br',
-    'https://shopvivaliz.com.br',
-    'http://localhost',
-    'http://127.0.0.1',
-];
-$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if (in_array($origin, $allowed_origins, true)) {
-    header("Access-Control-Allow-Origin: $origin");
-}
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, X-Squad-Token');
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(['error' => 'Method not allowed']);
+function squad_json(int $status, array $payload): never
+{
+    http_response_code($status);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
-// Token de segurança
-$expected_token = getenv('SQUAD_TOKEN') ?: '';
-$received_token = $_SERVER['HTTP_X_SQUAD_TOKEN'] ?? '';
-if ($expected_token !== '' && $received_token !== $expected_token) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Unauthorized']);
-    exit;
-}
+function squad_env_load(string $path): void
+{
+    if (!is_file($path) || !is_readable($path)) {
+        return;
+    }
 
-// Carregar .env
-$env_file = dirname(__DIR__, 2) . '/.env';
-if (file_exists($env_file)) {
-    foreach (file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-        if (str_starts_with(trim($line), '#')) continue;
-        if (str_contains($line, '=')) {
-            [$k, $v] = explode('=', $line, 2);
-            putenv(trim($k) . '=' . trim($v));
+    $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!is_array($lines)) {
+        return;
+    }
+
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
+            continue;
+        }
+
+        [$key, $value] = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim($value);
+        $value = trim($value, " \t\n\r\0\x0B\"'");
+
+        if ($key !== '' && getenv($key) === false) {
+            putenv($key . '=' . $value);
+            $_ENV[$key] = $value;
         }
     }
 }
 
-$ANTHROPIC_KEY = getenv('ANTHROPIC_API_KEY') ?: '';
-$OPENAI_KEY    = getenv('OPENAI_API_KEY')    ?: '';
-$GEMINI_KEY    = getenv('GEMINI_API_KEY')    ?: '';
+squad_env_load(dirname(__DIR__, 2) . '/.env');
 
-if (empty($ANTHROPIC_KEY)) {
-    http_response_code(500);
-    echo json_encode(['error' => 'ANTHROPIC_API_KEY not configured']);
+$allowed_origins = [
+    'https://dev.shopvivaliz.com.br',
+    'https://shopvivaliz.com.br',
+];
+
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if ($origin !== '' && in_array($origin, $allowed_origins, true)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+    header('Vary: Origin');
+}
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, X-Squad-Token');
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+    http_response_code(204);
     exit;
 }
 
-// Input
-$body = json_decode(file_get_contents('php://input'), true);
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    squad_json(405, ['error' => 'Method not allowed']);
+}
+
+$expected_token = getenv('SQUAD_TOKEN') ?: '';
+$received_token = $_SERVER['HTTP_X_SQUAD_TOKEN'] ?? '';
+
+if ($expected_token === '') {
+    squad_json(503, ['error' => 'SQUAD_TOKEN not configured']);
+}
+
+if ($received_token === '' || !hash_equals($expected_token, $received_token)) {
+    squad_json(401, ['error' => 'Unauthorized']);
+}
+
+$raw_body = file_get_contents('php://input') ?: '';
+if (strlen($raw_body) > 50000) {
+    squad_json(413, ['error' => 'Payload too large']);
+}
+
+$body = json_decode($raw_body, true);
 if (!is_array($body) || empty($body['message'])) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Invalid input']);
-    exit;
+    squad_json(400, ['error' => 'Invalid input']);
 }
 
-$user_message     = trim((string) $body['message']);
+$user_message = trim((string) $body['message']);
+if ($user_message === '' || mb_strlen($user_message) > 8000) {
+    squad_json(400, ['error' => 'Message is empty or too large']);
+}
+
 $requested_agents = $body['agents'] ?? ['director', 'claude', 'gpt', 'gemini'];
-$history          = $body['history'] ?? [];
+if (!is_array($requested_agents)) {
+    $requested_agents = ['director', 'claude', 'gpt', 'gemini'];
+}
 
-$cycle_id = 'cycle_' . date('YmdHis') . '_' . substr(md5(uniqid()), 0, 6);
+$history = $body['history'] ?? [];
+if (!is_array($history)) {
+    $history = [];
+}
 
-$history = array_slice(array_filter($history, fn($h) =>
-    is_array($h) &&
-    in_array($h['role'] ?? '', ['user', 'assistant'], true) &&
-    !empty($h['content'])
-), -8);
+$history = array_slice(array_filter($history, static function ($item): bool {
+    if (!is_array($item)) {
+        return false;
+    }
 
-// Configuração dos agentes
+    $role = $item['role'] ?? '';
+    $content = (string) ($item['content'] ?? '');
+
+    return in_array($role, ['user', 'assistant'], true)
+        && $content !== ''
+        && mb_strlen($content) <= 8000;
+}), -8);
+
+$cycle_id = 'cycle_' . date('YmdHis') . '_' . substr(hash('sha256', uniqid('', true)), 0, 8);
+
+$ANTHROPIC_KEY = getenv('ANTHROPIC_API_KEY') ?: '';
+$OPENAI_KEY = getenv('OPENAI_API_KEY') ?: '';
+$GEMINI_KEY = getenv('GEMINI_API_KEY') ?: (getenv('GOOGLE_API_KEY') ?: '');
+
 $AGENT_CONFIGS = [
     'director' => [
-        'name'     => 'Diretor de Projetos',
+        'name' => 'Diretor de Projetos',
         'provider' => 'anthropic',
-        'model'    => 'claude-sonnet-4-6',
-        'system'   => <<<'SYS'
-Você é o Diretor de Projetos do ShopVivaliz, e-commerce PHP 8.3/MySQL 5.7.
-Você lidera: Claude (Arquiteto), GPT (Integrador) e Gemini (Auditor).
-Consolide informações, defina prioridades e decida o que vai para produção.
-Seja direto e objetivo. Indique quais agentes devem agir e em que ordem.
-Prioridades: mockups/imagens, banners, capas de categoria, Olist, checkout, painel admin, Google Shopping, segurança.
-Regras: nunca expor credenciais, nunca alterar preços sem aprovação, nunca publicar campanhas automaticamente, nunca apagar dados sem aprovação.
-Responda em português.
+        'model' => 'claude-sonnet-4-6',
+        'system' => <<<'SYS'
+Você é o Diretor de Projetos do ShopVivaliz. Coordene o ciclo com foco em segurança, execução cumulativa e validação antes de qualquer mudança.
+Regras: nunca exponha credenciais, nunca altere preços sem aprovação, nunca publique campanhas automaticamente, nunca apague dados sem aprovação.
+Responda em português, com decisão objetiva e próximos passos.
 SYS,
     ],
     'claude' => [
-        'name'     => 'Arquiteto (Claude)',
+        'name' => 'Arquiteto (Claude)',
         'provider' => 'anthropic',
-        'model'    => 'claude-sonnet-4-6',
-        'system'   => <<<'SYS'
-Você é o Arquiteto de Software do ShopVivaliz.
-Stack: PHP 8.3, MySQL 5.7, hospedagem compartilhada. Banco: shopv506_shopvivaliz.
-Purista de Clean Code e SOLID. Responsabilidades: arquitetura modular, refatoração, PSR, tratamento de erros, migrations seguras.
-Sempre use declare(strict_types=1), try/catch específico, PHPDoc. Sem CLI/Composer em prod.
-Responda em português.
+        'model' => 'claude-sonnet-4-6',
+        'system' => <<<'SYS'
+Você é o Arquiteto de Software do ShopVivaliz. Foque em arquitetura PHP 8.3, organização, segurança, tratamento de erro, código cumulativo e compatibilidade com hospedagem compartilhada.
+Não invente estrutura sem evidência. Responda em português.
 SYS,
     ],
     'gpt' => [
-        'name'     => 'Integrador (GPT-4o)',
+        'name' => 'Integrador (GPT-4o)',
         'provider' => 'openai',
-        'model'    => 'gpt-4o',
-        'system'   => <<<'SYS'
-Você é o Especialista em Integrações do ShopVivaliz.
-Stack: PHP 8.3, MySQL 5.7, hospedagem compartilhada. Banco: shopv506_shopvivaliz.
-Responsabilidades: Mercado Pago, Pix, Correios, Melhor Envio, Olist, GitHub Actions, diagnósticos de produção.
-Priorize soluções sem SSH. Responda em português com código funcional.
+        'model' => 'gpt-4o',
+        'system' => <<<'SYS'
+Você é o Integrador do ShopVivaliz. Foque em APIs, deploy, GitHub Actions, testes, diagnóstico prático, Olist, checkout, frete, Pix e boleto.
+Proponha passos executáveis e seguros para ambiente dev antes de produção. Responda em português.
 SYS,
     ],
     'gemini' => [
-        'name'     => 'Auditor (Gemini)',
+        'name' => 'Auditor (Gemini)',
         'provider' => 'gemini',
-        'model'    => 'gemini-1.5-flash',
-        'system'   => <<<'SYS'
-Você é o Auditor Geral do ShopVivaliz.
-Stack: PHP 8.3, MySQL 5.7. Visão sistêmica. Atua como advogado do diabo.
-Responsabilidades: segurança (SQLi, XSS, CSRF, LGPD), SEO, Google Shopping, banners, documentação.
-Regras: credenciais nunca em logs, tokens mascarados, preços/dados nunca alterados sem aprovação.
-Responda em português com parecer crítico e lista de riscos.
+        'model' => 'gemini-1.5-flash',
+        'system' => <<<'SYS'
+Você é o Auditor Geral do ShopVivaliz. Atue como advogado do diabo. Revise riscos de segurança, LGPD, XSS, CSRF, exposição de credenciais, custos de API, SEO, documentação e qualidade visual.
+Bloqueie soluções frágeis ou incompletas. Responda em português.
 SYS,
     ],
 ];
 
-// ─── APIs ─────────────────────────────────────────────────────────────────────
-
-function call_anthropic(string $api_key, string $system_prompt, string $model, array $messages, int $max_tokens = 700): string
+function squad_required_key(string $provider, string $anthropic, string $openai, string $gemini): string
 {
+    return match ($provider) {
+        'openai' => $openai,
+        'gemini' => $gemini,
+        default => $anthropic,
+    };
+}
+
+function call_anthropic(string $api_key, string $system_prompt, string $model, array $messages, int $max_tokens = 900): string
+{
+    if ($api_key === '') {
+        throw new RuntimeException('ANTHROPIC_API_KEY não configurada.');
+    }
+
     $payload = json_encode([
-        'model'      => $model,
+        'model' => $model,
         'max_tokens' => $max_tokens,
-        'system'     => $system_prompt,
-        'messages'   => $messages,
-    ]);
+        'system' => $system_prompt,
+        'messages' => $messages,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
     $ch = curl_init('https://api.anthropic.com/v1/messages');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => $payload,
-        CURLOPT_TIMEOUT        => 45,
-        CURLOPT_HTTPHEADER     => [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_TIMEOUT => 60,
+        CURLOPT_HTTPHEADER => [
             'Content-Type: application/json',
             'x-api-key: ' . $api_key,
             'anthropic-version: 2023-06-01',
         ],
         CURLOPT_SSL_VERIFYPEER => true,
     ]);
-    $response   = curl_exec($ch);
-    $http_code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+    $response = curl_exec($ch);
+    $http_code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curl_error = curl_error($ch);
     curl_close($ch);
-    if ($curl_error) throw new RuntimeException("cURL error: $curl_error");
-    if ($http_code !== 200) {
-        $msg = json_decode($response, true)['error']['message'] ?? "HTTP $http_code";
-        throw new RuntimeException("Anthropic: $msg");
+
+    if ($curl_error !== '') {
+        throw new RuntimeException('Anthropic cURL error.');
     }
-    $data = json_decode($response, true);
+
+    if ($http_code < 200 || $http_code >= 300) {
+        $decoded = json_decode((string) $response, true);
+        $msg = $decoded['error']['message'] ?? ('HTTP ' . $http_code);
+        throw new RuntimeException('Anthropic: ' . $msg);
+    }
+
+    $data = json_decode((string) $response, true);
     $text = '';
-    foreach ($data['content'] ?? [] as $block) {
-        if ($block['type'] === 'text') $text .= $block['text'];
+    foreach (($data['content'] ?? []) as $block) {
+        if (($block['type'] ?? '') === 'text') {
+            $text .= (string) ($block['text'] ?? '');
+        }
     }
+
     return trim($text) ?: 'Sem resposta.';
 }
 
-function call_openai(string $api_key, string $system_prompt, string $model, array $messages, int $max_tokens = 700): string
+function call_openai(string $api_key, string $system_prompt, string $model, array $messages, int $max_tokens = 900): string
 {
-    if (empty($api_key)) throw new RuntimeException('OPENAI_API_KEY não configurada.');
+    if ($api_key === '') {
+        throw new RuntimeException('OPENAI_API_KEY não configurada.');
+    }
+
     $oai = [['role' => 'system', 'content' => $system_prompt]];
-    foreach ($messages as $m) $oai[] = ['role' => $m['role'], 'content' => $m['content']];
-    $payload = json_encode(['model' => $model, 'messages' => $oai, 'max_tokens' => $max_tokens]);
+    foreach ($messages as $message) {
+        $oai[] = ['role' => $message['role'], 'content' => $message['content']];
+    }
+
+    $payload = json_encode([
+        'model' => $model,
+        'messages' => $oai,
+        'max_tokens' => $max_tokens,
+        'temperature' => 0.2,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
     $ch = curl_init('https://api.openai.com/v1/chat/completions');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => $payload,
-        CURLOPT_TIMEOUT        => 45,
-        CURLOPT_HTTPHEADER     => [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_TIMEOUT => 60,
+        CURLOPT_HTTPHEADER => [
             'Content-Type: application/json',
             'Authorization: Bearer ' . $api_key,
         ],
         CURLOPT_SSL_VERIFYPEER => true,
     ]);
-    $response   = curl_exec($ch);
-    $http_code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+    $response = curl_exec($ch);
+    $http_code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curl_error = curl_error($ch);
     curl_close($ch);
-    if ($curl_error) throw new RuntimeException("cURL error: $curl_error");
-    if ($http_code !== 200) {
-        $msg = json_decode($response, true)['error']['message'] ?? "HTTP $http_code";
-        throw new RuntimeException("OpenAI: $msg");
+
+    if ($curl_error !== '') {
+        throw new RuntimeException('OpenAI cURL error.');
     }
-    $data = json_decode($response, true);
-    return trim($data['choices'][0]['message']['content'] ?? 'Sem resposta.');
+
+    if ($http_code < 200 || $http_code >= 300) {
+        $decoded = json_decode((string) $response, true);
+        $msg = $decoded['error']['message'] ?? ('HTTP ' . $http_code);
+        throw new RuntimeException('OpenAI: ' . $msg);
+    }
+
+    $data = json_decode((string) $response, true);
+    return trim((string) ($data['choices'][0]['message']['content'] ?? '')) ?: 'Sem resposta.';
 }
 
-function call_gemini(string $api_key, string $system_prompt, string $model, array $messages, int $max_tokens = 700): string
+function call_gemini(string $api_key, string $system_prompt, string $model, array $messages, int $max_tokens = 900): string
 {
-    if (empty($api_key)) throw new RuntimeException('GEMINI_API_KEY não configurada.');
+    if ($api_key === '') {
+        throw new RuntimeException('GEMINI_API_KEY/GOOGLE_API_KEY não configurada.');
+    }
+
     $contents = [];
-    foreach ($messages as $m) {
+    foreach ($messages as $message) {
         $contents[] = [
-            'role'  => $m['role'] === 'assistant' ? 'model' : 'user',
-            'parts' => [['text' => $m['content']]],
+            'role' => $message['role'] === 'assistant' ? 'model' : 'user',
+            'parts' => [['text' => $message['content']]],
         ];
     }
+
     $payload = json_encode([
         'system_instruction' => ['parts' => [['text' => $system_prompt]]],
-        'contents'           => $contents,
-        'generationConfig'   => ['maxOutputTokens' => $max_tokens],
-    ]);
-    $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$api_key}";
-    $ch  = curl_init($url);
+        'contents' => $contents,
+        'generationConfig' => ['maxOutputTokens' => $max_tokens, 'temperature' => 0.2],
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    $ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => $payload,
-        CURLOPT_TIMEOUT        => 45,
-        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_TIMEOUT => 60,
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+            'x-goog-api-key: ' . $api_key,
+        ],
         CURLOPT_SSL_VERIFYPEER => true,
     ]);
-    $response   = curl_exec($ch);
-    $http_code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+    $response = curl_exec($ch);
+    $http_code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curl_error = curl_error($ch);
     curl_close($ch);
-    if ($curl_error) throw new RuntimeException("cURL error: $curl_error");
-    if ($http_code !== 200) {
-        $msg = json_decode($response, true)['error']['message'] ?? "HTTP $http_code";
-        throw new RuntimeException("Gemini: $msg");
+
+    if ($curl_error !== '') {
+        throw new RuntimeException('Gemini cURL error.');
     }
-    $data = json_decode($response, true);
-    return trim($data['candidates'][0]['content']['parts'][0]['text'] ?? 'Sem resposta.');
+
+    if ($http_code < 200 || $http_code >= 300) {
+        $decoded = json_decode((string) $response, true);
+        $msg = $decoded['error']['message'] ?? ('HTTP ' . $http_code);
+        throw new RuntimeException('Gemini: ' . $msg);
+    }
+
+    $data = json_decode((string) $response, true);
+    return trim((string) ($data['candidates'][0]['content']['parts'][0]['text'] ?? '')) ?: 'Sem resposta.';
 }
 
-// ─── Processar agentes ────────────────────────────────────────────────────────
-
-$valid_order   = ['director', 'claude', 'gpt', 'gemini'];
-$agents_to_run = array_filter(
+$valid_order = ['director', 'claude', 'gpt', 'gemini'];
+$agents_to_run = array_values(array_filter(
     $valid_order,
-    fn($id) => in_array($id, (array) $requested_agents, true) && isset($AGENT_CONFIGS[$id])
-);
+    static fn(string $id): bool => in_array($id, $requested_agents, true) && isset($AGENT_CONFIGS[$id])
+));
+
+if ($agents_to_run === []) {
+    squad_json(400, ['error' => 'No valid agents selected']);
+}
 
 $responses = [];
 
 foreach ($agents_to_run as $agent_id) {
-    $cfg     = $AGENT_CONFIGS[$agent_id];
+    $cfg = $AGENT_CONFIGS[$agent_id];
     $context = $user_message;
 
-    if (!empty($responses)) {
+    if ($responses !== []) {
         $context .= "\n\n--- Respostas anteriores dos agentes ---";
-        foreach ($responses as $r) {
-            $context .= "\n\n[{$r['name']}]:\n{$r['text']}";
+        foreach ($responses as $response) {
+            $context .= "\n\n[" . $response['name'] . "]:\n" . $response['text'];
         }
     }
 
     $messages = [];
-    foreach ($history as $h) {
-        $messages[] = ['role' => $h['role'], 'content' => (string) $h['content']];
+    foreach ($history as $item) {
+        $messages[] = ['role' => $item['role'], 'content' => (string) $item['content']];
     }
     $messages[] = ['role' => 'user', 'content' => $context];
 
     try {
-        $provider = $cfg['provider'];
+        $provider = (string) $cfg['provider'];
+        $api_key = squad_required_key($provider, $ANTHROPIC_KEY, $OPENAI_KEY, $GEMINI_KEY);
+
         if ($provider === 'openai') {
-            $text = call_openai($OPENAI_KEY, $cfg['system'], $cfg['model'], $messages);
+            $text = call_openai($api_key, $cfg['system'], $cfg['model'], $messages);
         } elseif ($provider === 'gemini') {
-            $text = call_gemini($GEMINI_KEY, $cfg['system'], $cfg['model'], $messages);
+            $text = call_gemini($api_key, $cfg['system'], $cfg['model'], $messages);
         } else {
-            $text = call_anthropic($ANTHROPIC_KEY, $cfg['system'], $cfg['model'], $messages);
+            $text = call_anthropic($api_key, $cfg['system'], $cfg['model'], $messages);
         }
-        $responses[] = ['agent' => $agent_id, 'name' => $cfg['name'], 'text' => $text, 'ok' => true];
+
+        $responses[] = [
+            'agent' => $agent_id,
+            'name' => $cfg['name'],
+            'provider' => $provider,
+            'model' => $cfg['model'],
+            'text' => $text,
+            'ok' => true,
+        ];
     } catch (RuntimeException $e) {
-        $responses[] = ['agent' => $agent_id, 'name' => $cfg['name'], 'text' => 'Erro: ' . $e->getMessage(), 'ok' => false];
+        $responses[] = [
+            'agent' => $agent_id,
+            'name' => $cfg['name'],
+            'provider' => $cfg['provider'],
+            'model' => $cfg['model'],
+            'text' => 'Erro: ' . $e->getMessage(),
+            'ok' => false,
+        ];
     }
 }
 
-// ─── Log ──────────────────────────────────────────────────────────────────────
-
 $log_dir = dirname(__DIR__, 2) . '/logs/squad';
-if (!is_dir($log_dir)) @mkdir($log_dir, 0755, true);
+if (!is_dir($log_dir)) {
+    @mkdir($log_dir, 0755, true);
+}
 
 @file_put_contents(
-    "$log_dir/chat.log",
+    $log_dir . '/chat.log',
     json_encode([
         'cycle_id' => $cycle_id,
-        'at'       => date('c'),
-        'agents'   => array_column($responses, 'agent'),
-        'msg_len'  => strlen($user_message),
-        'ok_count' => count(array_filter($responses, fn($r) => $r['ok'])),
-    ]) . "\n",
+        'at' => date('c'),
+        'agents' => array_column($responses, 'agent'),
+        'providers' => array_column($responses, 'provider'),
+        'msg_len' => mb_strlen($user_message),
+        'ok_count' => count(array_filter($responses, static fn(array $r): bool => $r['ok'] === true)),
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n",
     FILE_APPEND | LOCK_EX
 );
 
-// ─── Resposta ─────────────────────────────────────────────────────────────────
-
-echo json_encode(['cycle_id' => $cycle_id, 'responses' => $responses, 'at' => date('c')]);
+echo json_encode([
+    'cycle_id' => $cycle_id,
+    'responses' => $responses,
+    'at' => date('c'),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
