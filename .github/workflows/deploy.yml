@@ -36,22 +36,33 @@ jobs:
       - name: Aguardar publicação no servidor
         run: sleep 20
 
-      - name: Agente de testes pós-deploy
+      - name: Instalar Dependências das IAs
+        run: |
+          pip install google-genai openai
+
+      - name: Agente de testes pós-deploy com Diagnóstico de IA
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}  # A chave do Gemini entra aqui com segurança
         run: |
           set -e
-          BASE="https://dev.shopvivaliz.com.br"
+          BASE="https://shopvivaliz.com.br"
           echo "Testando página de publicação..."
           curl -fsS "$BASE/cnpj-rodape-teste.html" | grep -q "49.903.300/0001-70"
+          
           echo "Testando agente Olist zero id em modo diagnóstico..."
           curl -fsS "$BASE/api/agent/olist-zero-id-repair.php" | tee olist-zero-id-repair.json
           grep -q '"agent"' olist-zero-id-repair.json
           grep -q 'olist_zero_id_repair' olist-zero-id-repair.json
+          
           echo "Testando agente de manual do admin..."
           curl -fsS "$BASE/api/agent/admin-manual-audit.php" | tee admin-manual-audit.json
           grep -q 'admin_manual_audit' admin-manual-audit.json
+          
           echo "Atualizando manual operacional do admin..."
           curl -fsS "$BASE/api/agent/admin-manual-audit.php?apply=1" | tee admin-manual-audit-apply.json
           grep -q 'ADMIN_MANUAL.md' admin-manual-audit-apply.json
+          
           echo "Testando diagnóstico Melhor Envio..."
           curl -fsS "$BASE/api/melhorenvio/diagnostic.php?cep=35500025" | tee melhorenvio-diagnostic.json || true
           echo "Testes pós-deploy concluídos."
