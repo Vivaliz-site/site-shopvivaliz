@@ -41,10 +41,27 @@ jobs:
           check_secret "FTP_PASSWORD" "${{ secrets.FTP_PASSWORD }}"
           check_secret "FTP_PORT" "${{ secrets.FTP_PORT }}"
           check_secret "FTP_REMOTE_DIR" "${{ secrets.FTP_REMOTE_DIR }}"
+          check_secret "SQUAD_TOKEN" "${{ secrets.SQUAD_TOKEN }}"
+          check_secret "ANTHROPIC_API_KEY" "${{ secrets.ANTHROPIC_API_KEY }}"
+          check_secret "OPENAI_API_KEY" "${{ secrets.OPENAI_API_KEY }}"
+          check_secret "GEMINI_API_KEY" "${{ secrets.GEMINI_API_KEY }}"
 
           if [ "$missing" -ne 0 ]; then
             exit 1
           fi
+
+      - name: Gerar .env temporário para o ambiente dev
+        shell: bash
+        run: |
+          cat > .env <<'EOF'
+          SQUAD_TOKEN=${{ secrets.SQUAD_TOKEN }}
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          EOF
+          sed -i 's/^          //' .env
+          chmod 600 .env
+          echo "Arquivo .env temporário gerado para deploy. Conteúdo omitido."
 
       - name: Enviar via FTP Deploy Action
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -65,7 +82,6 @@ jobs:
             **/vendor/**
             **/*.sql
             **/*.zip
-            **/.env
             **/.env.*
             **/login_config.json
             **/*.duck
