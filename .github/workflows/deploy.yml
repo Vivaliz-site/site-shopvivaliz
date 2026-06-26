@@ -38,12 +38,13 @@ jobs:
 
       - name: Instalar Dependências das IAs
         run: |
-          pip install google-genai openai
+          pip install google-genai openai anthropic
 
       - name: Agente de testes pós-deploy com Diagnóstico de IA
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           BASE="https://shopvivaliz.com.br"
           DEPLOY_FAILED=false
@@ -67,9 +68,9 @@ jobs:
           fi
 
           if [ "$DEPLOY_FAILED" = true ]; then
-            echo "🚨 Iniciando diagnóstico conjunto: Gemini + ChatGPT..."
+            echo "🚨 Iniciando diagnóstico conjunto: Gemini + Claude + ChatGPT..."
             python ai_collaboration.py
-            echo "❌ Deploy finalizado com erros. O relatório da IA foi gerado nos logs."
+            echo "❌ Deploy finalizado com erros. O relatório do trio de IA foi gerado nos logs."
             exit 1
           else
             echo "✅ Todos os testes pós-deploy passaram com sucesso!"
