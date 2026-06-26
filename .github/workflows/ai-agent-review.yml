@@ -1,0 +1,203 @@
+name: Revisão dos Agentes IA - ShopVivaliz
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_file:
+        description: "Arquivo para revisão"
+        required: false
+        default: ".github/workflows/deploy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  ai-review:
+    name: Revisar arquivo com ChatGPT Claude Gemini
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4.2.2
+
+      - name: Validar arquivo alvo
+        shell: bash
+        run: |
+          TARGET="${{ github.event.inputs.target_file }}"
+          if [ -z "$TARGET" ]; then
+            TARGET=".github/workflows/deploy.yml"
+          fi
+
+          if [ ! -f "$TARGET" ]; then
+            echo "::error::Arquivo alvo não encontrado: $TARGET"
+            exit 1
+          fi
+
+          echo "TARGET_FILE=$TARGET" >> "$GITHUB_ENV"
+
+      - name: Preparar prompt seguro
+        shell: bash
+        run: |
+          cat > ai_review_prompt.txt <<'EOF'
+          Revise o arquivo informado do projeto ShopVivaliz.
+
+          Objetivo:
+          - Identificar erros de deploy.
+          - Validar YAML.
+          - Validar nomes de secrets.
+          - Validar FTP, FTPS ou SFTP.
+          - Validar diretório local e remoto.
+          - Validar riscos de vazamento de secrets.
+          - Sugerir correção segura, cumulativa e reversível.
+
+          Regras:
+          - Não solicitar valores reais de secrets.
+          - Não imprimir tokens, senhas, chaves ou credenciais.
+          - Usar somente referências como secrets.NOME_DO_SECRET.
+          - Não sugerir ações destrutivas sem backup.
+          EOF
+
+          {
+            echo ""
+            echo "Arquivo alvo: $TARGET_FILE"
+            echo ""
+            echo "Conteúdo sanitizado:"
+            echo '```yaml'
+            sed -E 's/(password:|token:|secret:|senha:).*/\1 ***REDACTED***/Ig' "$TARGET_FILE"
+            echo '```'
+          } >> ai_review_prompt.txt
+
+      - name: Revisão Claude
+        if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+
+          prompt = open("ai_review_prompt.txt", "r", encoding="utf-8").read()
+          payload = {
+              "model": "claude-3-5-sonnet-latest",
+              "max_tokens": 2000,
+              "messages": [{"role": "user", "content": prompt}]
+          }
+
+          req = urllib.request.Request(
+              "https://api.anthropic.com/v1/messages",
+              data=json.dumps(payload).encode("utf-8"),
+              headers={
+                  "x-api-key": os.environ["ANTHROPIC_API_KEY"],
+                  "anthropic-version": "2023-06-01",
+                  "content-type": "application/json"
+              },
+              method="POST"
+          )
+
+          try:
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  data = json.loads(r.read().decode("utf-8"))
+              text = "\n".join(
+                  block.get("text", "")
+                  for block in data.get("content", [])
+                  if block.get("type") == "text"
+              )
+          except Exception as e:
+              text = f"Falha ao consultar Claude: {type(e).__name__}"
+
+          open("claude-review.md", "w", encoding="utf-8").write("# Revisão Claude\n\n" + text)
+          PY
+
+      - name: Revisão ChatGPT
+        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+
+          prompt = open("ai_review_prompt.txt", "r", encoding="utf-8").read()
+          payload = {
+              "model": "gpt-4.1-mini",
+              "messages": [{"role": "user", "content": prompt}],
+              "temperature": 0.1
+          }
+
+          req = urllib.request.Request(
+              "https://api.openai.com/v1/chat/completions",
+              data=json.dumps(payload).encode("utf-8"),
+              headers={
+                  "Authorization": "Bearer " + os.environ["OPENAI_API_KEY"],
+                  "content-type": "application/json"
+              },
+              method="POST"
+          )
+
+          try:
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  data = json.loads(r.read().decode("utf-8"))
+              text = data["choices"][0]["message"]["content"]
+          except Exception as e:
+              text = f"Falha ao consultar ChatGPT/OpenAI: {type(e).__name__}"
+
+          open("chatgpt-review.md", "w", encoding="utf-8").write("# Revisão ChatGPT\n\n" + text)
+          PY
+
+      - name: Revisão Gemini
+        if: ${{ secrets.GEMINI_API_KEY != '' }}
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+
+          prompt = open("ai_review_prompt.txt", "r", encoding="utf-8").read()
+          url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + os.environ["GEMINI_API_KEY"]
+
+          payload = {
+              "contents": [{"parts": [{"text": prompt}]}]
+          }
+
+          req = urllib.request.Request(
+              url,
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"content-type": "application/json"},
+              method="POST"
+          )
+
+          try:
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  data = json.loads(r.read().decode("utf-8"))
+              text = data["candidates"][0]["content"]["parts"][0]["text"]
+          except Exception as e:
+              text = f"Falha ao consultar Gemini: {type(e).__name__}"
+
+          open("gemini-review.md", "w", encoding="utf-8").write("# Revisão Gemini\n\n" + text)
+          PY
+
+      - name: Consolidar relatório
+        shell: bash
+        run: |
+          {
+            echo "# Relatório dos Agentes IA"
+            echo ""
+            echo "Arquivo revisado: $TARGET_FILE"
+            echo ""
+            echo "## Claude"
+            if [ -f claude-review.md ]; then cat claude-review.md; else echo "Claude não executado."; fi
+            echo ""
+            echo "## ChatGPT"
+            if [ -f chatgpt-review.md ]; then cat chatgpt-review.md; else echo "ChatGPT não executado."; fi
+            echo ""
+            echo "## Gemini"
+            if [ -f gemini-review.md ]; then cat gemini-review.md; else echo "Gemini não executado."; fi
+          } > ai-agent-review-report.md
+
+      - name: Publicar relatório como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-agent-review-report
+          path: ai-agent-review-report.md
