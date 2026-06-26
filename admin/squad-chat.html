@@ -10,6 +10,10 @@
 *{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}.logo{font-weight:700}.badge{font-size:11px;padding:2px 10px;border-radius:99px;background:#eff6ff;color:var(--accent)}.header-controls{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}.ctrl-btn{font-size:12px;padding:6px 12px;border-radius:99px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);cursor:pointer}.ctrl-btn:hover{border-color:var(--accent);color:var(--accent)}.ctrl-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}.ctrl-btn.danger{color:var(--danger)}.countdown{font-size:11px;color:var(--text-3);min-width:80px;text-align:right}.cycle-dot{width:8px;height:8px;border-radius:50%;background:#f59e0b}.cycle-dot.active{background:#22c55e;animation:blink 2s infinite}@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
 .layout{display:grid;grid-template-columns:235px 1fr;flex:1;height:calc(100vh - 57px)}.sidebar{background:var(--surface);border-right:1px solid var(--border);padding:16px 12px;display:flex;flex-direction:column;gap:8px;overflow:auto}.sidebar-title{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:8px 4px 4px}.agent-card{border:1px solid var(--border);border-radius:10px;padding:10px;cursor:pointer;background:var(--surface-2)}.agent-card.active.director{border-color:var(--director-border);background:var(--director-bg)}.agent-card.active.claude{border-color:var(--claude-border);background:var(--claude-bg)}.agent-card.active.gpt{border-color:var(--gpt-border);background:var(--gpt-bg)}.agent-card.active.gemini{border-color:var(--gemini-border);background:var(--gemini-bg)}.ac-name{font-size:12px;font-weight:600;margin-bottom:2px}.ac-role{font-size:11px;color:var(--text-2)}.ac-model{font-size:10px;color:var(--text-3);margin-top:3px}.panel{padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2)}.panel label{font-size:11px;color:var(--text-3);display:block;margin-bottom:6px}.panel input,.panel select{width:100%;font-size:12px;padding:7px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)}.quick-btn{width:100%;text-align:left;font-size:11px;padding:8px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);cursor:pointer;margin-bottom:5px;line-height:1.35}.main{display:flex;flex-direction:column;height:100%;overflow:hidden}.chat-area{flex:1;overflow:auto;padding:20px;display:flex;flex-direction:column;gap:12px}.msg{display:flex;flex-direction:column;gap:4px}.msg-header{display:flex;align-items:center;gap:8px}.avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}.av-director{background:var(--director-bg);color:var(--director-text)}.av-claude{background:var(--claude-bg);color:var(--claude-text)}.av-gpt{background:var(--gpt-bg);color:var(--gpt-text)}.av-gemini{background:var(--gemini-bg);color:var(--gemini-text)}.av-user{background:#eff6ff;color:var(--accent)}.av-system{background:var(--surface-2);color:var(--text-3)}.msg-name{font-size:12px;font-weight:600;color:var(--text-2)}.msg-time{font-size:10px;color:var(--text-3)}.msg-provider{font-size:9px;padding:1px 7px;border-radius:99px;background:var(--surface-2);color:var(--text-3)}.bubble{font-size:13px;line-height:1.65;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface);max-width:92%;margin-left:36px;white-space:pre-wrap;word-break:break-word}.bubble.director{border-color:var(--director-border);background:var(--director-bg);color:var(--director-text)}.bubble.claude{border-color:var(--claude-border);background:var(--claude-bg);color:var(--claude-text)}.bubble.gpt{border-color:var(--gpt-border);background:var(--gpt-bg);color:var(--gpt-text)}.bubble.gemini{border-color:var(--gemini-border);background:var(--gemini-bg);color:var(--gemini-text)}.bubble.user{background:#eff6ff;border-color:rgba(37,99,235,.2);color:var(--text);margin-left:auto;margin-right:0}.bubble.system{background:var(--surface-2);color:var(--text-2);font-style:italic}.cycle-divider{text-align:center;font-size:10px;color:var(--text-3);padding:6px 0}.thinking{margin-left:36px;color:var(--text-3);font-size:12px}.input-area{padding:14px 20px;background:var(--surface);border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}.input-row{display:flex;gap:10px}textarea{flex:1;resize:none;height:56px;padding:10px 14px;font-size:13px;font-family:inherit;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-2);color:var(--text);outline:none}.send-btn{padding:0 20px;height:56px;font-size:13px;font-weight:600;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);cursor:pointer}.send-btn:disabled{opacity:.45;cursor:not-allowed}.input-footer{display:flex;justify-content:space-between;align-items:center}.status-txt{font-size:11px;color:var(--text-3)}.clear-btn{font-size:11px;color:var(--text-3);background:none;border:none;cursor:pointer}@media(max-width:700px){.layout{grid-template-columns:1fr}.sidebar{display:none}.header-controls{margin-left:0}.bubble{max-width:100%}}
 </style>
+<style>
+.dialogue-divider{text-align:center;font-size:11px;font-weight:600;color:var(--accent);padding:8px 12px;margin:6px 0;background:rgba(37,99,235,.07);border-radius:6px;border:1px dashed rgba(37,99,235,.25)}
+.msg-reply-to{font-size:10px;color:var(--text-3);margin-left:36px;margin-bottom:2px;font-style:italic}
+</style>
 </head>
 <body>
 <header>
@@ -51,7 +55,22 @@
       </select>
     </div>
 
-    <div class="sidebar-title">Atalhos</div>
+    <div class="sidebar-title">Debate entre agentes</div>
+    <div class="panel">
+      <label for="dialogueRounds">Rodadas de conversa</label>
+      <select id="dialogueRounds">
+        <option value="2">2 rodadas</option>
+        <option value="3" selected>3 rodadas</option>
+        <option value="5">5 rodadas</option>
+        <option value="8">8 rodadas</option>
+      </select>
+    </div>
+    <button class="quick-btn" style="font-weight:600;border-color:var(--accent);color:var(--accent)" onclick="startDialogue()">🗣 Debate autônomo — usar texto do campo</button>
+    <button class="quick-btn" onclick="startDialogueWith('Qual deve ser a prioridade técnica número 1 do ShopVivaliz agora e por quê?')">🎯 Debater prioridade atual</button>
+    <button class="quick-btn" onclick="startDialogueWith('O ciclo autônomo atual é seguro? Há riscos de custo, travamento ou conflito de dados?')">⚠️ Debater ciclo autônomo</button>
+    <button class="quick-btn" onclick="startDialogueWith('Qual é a maior vulnerabilidade de segurança do ShopVivaliz hoje e como corrigi-la com segurança?')">🛡 Debater segurança</button>
+
+    <div class="sidebar-title">Atalhos rápidos</div>
     <button class="quick-btn" onclick="sendQuick('Qual é a prioridade número 1 agora no ShopVivaliz?')">🎯 Prioridade atual</button>
     <button class="quick-btn" onclick="sendQuick('Audite o ciclo automático: há riscos de travamento, custo ou conflito?')">⚠️ Auditar ciclo</button>
     <button class="quick-btn" onclick="sendQuick('Revise a estratégia de imagens do Olist por SKU e liste riscos de integridade.')">🖼 Imagens Olist</button>
@@ -155,6 +174,110 @@ async function sendQuick(msg){if(!busy){clearTimeout(autonomousTimer);await runC
 function handleKey(event){if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();handleSend();}}
 function toggleAgent(card){const id=card.dataset.agent;if(card.classList.contains('active')){if(activeAgents.size<=1)return;activeAgents.delete(id);card.classList.remove('active');}else{activeAgents.add(id);card.classList.add('active');}}
 function clearChat(){document.getElementById('chatArea').innerHTML='';history=[];cycleCount=0;agendaIndex=0;setStatus('Histórico limpo.');}
+
+// ── Debate autônomo entre agentes ────────────────────────────────────────────
+const DIALOGUE_ORDER = ['director','claude','gpt','gemini'];
+let dialogueThread = [];
+
+function addDialogueDivider(round, total) {
+  const node = document.createElement('div');
+  node.className = 'dialogue-divider';
+  node.textContent = `🗣 Rodada ${round} de ${total} · ${ts()}`;
+  document.getElementById('chatArea').appendChild(node);
+}
+
+function addReplyTo(prevName) {
+  const node = document.createElement('div');
+  node.className = 'msg-reply-to';
+  node.textContent = `↩ respondendo a ${prevName}`;
+  document.getElementById('chatArea').appendChild(node);
+}
+
+async function startDialogueWith(topic) {
+  document.getElementById('userInput').value = topic;
+  await startDialogue();
+}
+
+async function startDialogue() {
+  const input = document.getElementById('userInput');
+  const topic = input.value.trim();
+  if (!topic) { setStatus('Digite o tema no campo de texto antes de iniciar o debate.'); input.focus(); return; }
+  if (!token()) { setStatus('Informe o SQUAD_TOKEN antes de iniciar.'); return; }
+  if (busy) return;
+
+  input.value = '';
+  busy = true;
+  document.getElementById('sendBtn').disabled = true;
+  dialogueThread = [];
+
+  const agents = DIALOGUE_ORDER.filter(id => activeAgents.has(id));
+  if (agents.length < 2) {
+    addMsg('system','Ative pelo menos 2 agentes para o debate autônomo.');
+    busy = false; document.getElementById('sendBtn').disabled = false; return;
+  }
+
+  const rounds = parseInt(document.getElementById('dialogueRounds').value, 10) || 3;
+  const totalTurns = agents.length * rounds;
+
+  addMsg('user', `[Tema para debate]: ${topic}`);
+  setStatus(`Iniciando debate: ${rounds} rodadas × ${agents.length} agentes = ${totalTurns} turnos...`);
+
+  for (let round = 0; round < rounds; round++) {
+    addDialogueDivider(round + 1, rounds);
+    for (let i = 0; i < agents.length; i++) {
+      const agentId = agents[i];
+      const meta = AGENT_META[agentId];
+      const prevEntry = dialogueThread.length > 0 ? dialogueThread[dialogueThread.length - 1] : null;
+
+      // Build the message: full conversation context for this agent
+      let messageContent;
+      if (!prevEntry) {
+        messageContent = `Tema para debate da equipe: ${topic}\n\nAbra a discussão como ${meta.name}. Apresente sua perspectiva inicial sobre o tema.`;
+      } else {
+        const recent = dialogueThread.slice(-5).map(t => `[${t.name}]: ${t.text}`).join('\n\n---\n\n');
+        messageContent = `Tema original: "${topic}"\n\nConversa recente:\n\n${recent}\n\nAgora é a vez de ${meta.name}. Responda ao que [${prevEntry.name}] disse acima.`;
+      }
+
+      addThinking(agentId);
+      try {
+        const res = await fetch(API_ENDPOINT, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json','X-Squad-Token':token()},
+          body: JSON.stringify({
+            message: messageContent,
+            agents: [agentId],
+            history: [],
+            dialogue_mode: true,
+            original_topic: topic,
+            prev_speaker_name: prevEntry ? prevEntry.name : 'Usuário'
+          })
+        });
+        removeThinking(agentId);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+        const response = (data.responses || [])[0];
+        if (response) {
+          if (prevEntry) addReplyTo(prevEntry.name);
+          addMsg(agentId, response.text, false, response.provider || '', response.model || '');
+          dialogueThread.push({ agentId, name: meta.name, text: response.text });
+        }
+      } catch (err) {
+        removeThinking(agentId);
+        addMsg('system', `Erro ao chamar ${meta.name}: ${err.message}`);
+      }
+
+      const done = round * agents.length + i + 1;
+      setStatus(`Debate em andamento… ${done}/${totalTurns} turnos`);
+      // Pequena pausa para não estourar rate limit (12 req/min = 1 req/5s margem segura)
+      if (done < totalTurns) await new Promise(r => setTimeout(r, 600));
+    }
+  }
+
+  addMsg('system', `Debate autônomo concluído: ${rounds} rodadas, ${agents.length} agentes, ${dialogueThread.length} turnos.`);
+  setStatus(`Debate concluído — ${dialogueThread.length} turnos de conversa.`);
+  busy = false; document.getElementById('sendBtn').disabled = false; scrollBottom();
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 addMsg('director','Esquadrão ShopVivaliz online. GPT, Claude e Gemini estão configurados como agentes reais no backend. Informe o SQUAD_TOKEN para iniciar chamadas reais. O ciclo autônomo começa pausado para evitar custo automático.');
 const savedToken=token();if(savedToken){setStatus('Token carregado da sessão. Pronto para enviar.');}else{setStatus('Informe o SQUAD_TOKEN para usar os agentes reais.');}

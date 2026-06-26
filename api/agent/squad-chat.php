@@ -150,7 +150,7 @@ if (($_GET['health'] ?? '') === '1') {
     squad_json(200, [
         'ok' => true,
         'endpoint' => 'squad-chat',
-        'version' => 'squad-chat-health-get-fix-20260626',
+        'version' => 'squad-chat-dialogue-mode-20260626',
         'token_required_for_post' => true,
         'env_loaded' => is_file(dirname(__DIR__, 2) . '/.env'),
         'providers' => [
@@ -201,6 +201,10 @@ $history = array_slice(array_filter($history, static function ($item): bool {
         && trim((string) ($item['content'] ?? '')) !== '';
 }), -8);
 
+$dialogueMode   = ($body['dialogue_mode'] ?? false) === true;
+$originalTopic  = trim((string) ($body['original_topic'] ?? ''));
+$prevSpeakerName = trim((string) ($body['prev_speaker_name'] ?? ''));
+
 $agentConfigs = [
     'director' => [
         'name' => 'Diretor de Projetos',
@@ -227,6 +231,20 @@ $agentConfigs = [
         'system' => 'Você é o Auditor Geral do ShopVivaliz. Revise segurança, LGPD, XSS, CSRF, custo de API, SEO e qualidade. Responda em português.',
     ],
 ];
+
+if ($dialogueMode) {
+    $topicStr = $originalTopic !== '' ? "Tópico em debate: \"{$originalTopic}\". " : '';
+    $prevStr  = $prevSpeakerName !== '' ? "O agente anterior que falou foi: {$prevSpeakerName}. " : '';
+    $preamble = "Você está num debate técnico colaborativo entre agentes de IA da equipe ShopVivaliz. "
+        . "Os participantes são: Diretor de Projetos (Claude), Arquiteto (Claude), Integrador (GPT-4o) e Auditor (Gemini). "
+        . $topicStr . $prevStr
+        . "Seja conciso (até 3 parágrafos), responda diretamente ao ponto anterior, discorde quando necessário e agregue sua perspectiva especializada. "
+        . "Não repita o que já foi dito — avance a conversa.\n\n";
+    foreach ($agentConfigs as &$cfg) {
+        $cfg['system'] = $preamble . $cfg['system'];
+    }
+    unset($cfg);
+}
 
 $requestedAgents = $body['agents'] ?? array_keys($agentConfigs);
 if (!is_array($requestedAgents)) {
