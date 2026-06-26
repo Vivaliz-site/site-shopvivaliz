@@ -43,10 +43,11 @@ jobs:
       - name: Agente de testes pós-deploy com Diagnóstico de IA
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}  # A chave do Gemini entra aqui com segurança
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           set -e
           BASE="https://shopvivaliz.com.br"
+          
           echo "Testando página de publicação..."
           curl -fsS "$BASE/cnpj-rodape-teste.html" | grep -q "49.903.300/0001-70"
           
@@ -65,4 +66,8 @@ jobs:
           
           echo "Testando diagnóstico Melhor Envio..."
           curl -fsS "$BASE/api/melhorenvio/diagnostic.php?cep=35500025" | tee melhorenvio-diagnostic.json || true
+          
+          echo "Executando o agente de IA conjunto..."
+          python ai_collaboration.py
+          
           echo "Testes pós-deploy concluídos."
