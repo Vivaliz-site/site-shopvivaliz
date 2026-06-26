@@ -146,15 +146,11 @@ if ($maxTokens < 100 || $maxTokens > 4000) {
     $maxTokens = 900;
 }
 
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
-    if (($_GET['health'] ?? '') !== '1') {
-        squad_json(405, ['error' => 'Method not allowed', 'hint' => 'Use POST or ?health=1']);
-    }
-
+if (($_GET['health'] ?? '') === '1') {
     squad_json(200, [
         'ok' => true,
         'endpoint' => 'squad-chat',
-        'version' => 'real-agents-health-public-20260626',
+        'version' => 'squad-chat-health-get-fix-20260626',
         'token_required_for_post' => true,
         'env_loaded' => is_file(dirname(__DIR__, 2) . '/.env'),
         'providers' => [
@@ -167,7 +163,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-    squad_json(405, ['error' => 'Method not allowed']);
+    squad_json(405, ['error' => 'Method not allowed', 'hint' => 'Use POST or ?health=1']);
 }
 
 $expectedToken = getenv('SQUAD_TOKEN') ?: '';
