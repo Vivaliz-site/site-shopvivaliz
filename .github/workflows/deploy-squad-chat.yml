@@ -68,14 +68,24 @@ jobs:
           port:       ${{ secrets.FTP_PORT }}
           protocol:   ftp
           local-dir:  ./
-          server-dir: ${{ secrets.FTP_REMOTE_DIR }}
+          server-dir: /
           dangerous-clean-slate: false
           log-level:  verbose
-          include: |
-            api/agent/squad-chat.php
-            admin/squad-chat.html
-            admin/squad-chat.php
-            api/agent/squad-canary.txt
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/node_modules/**
+            **/vendor/**
+            **/*.sql
+            **/*.zip
+            **/.env.*
+            **/login_config.json
+            **/*.duck
+            **/*secret*
+            **/*token*
+            **/*password*
+            **/*senha*
 
       - name: Verificar deploy
         shell: bash
