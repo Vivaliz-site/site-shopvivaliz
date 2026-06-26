@@ -14,7 +14,7 @@ on:
 
 jobs:
   deploy:
-    name: Upload Squad Chat via FTP
+    name: Upload Squad Chat
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -22,7 +22,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Diagnostico FTP e upload
+      - name: Deletar sync state via FTP (força re-upload)
         shell: bash
         env:
           FTP_SERVER:     ${{ secrets.FTP_SERVER }}
@@ -31,63 +31,63 @@ jobs:
           FTP_PORT:       ${{ secrets.FTP_PORT }}
           FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
         run: |
-          PORT="${FTP_PORT:-21}"
+          python3 - <<'PYEOF'
+          import os, ftplib
 
-          echo "=== Diagnóstico ==="
-          echo "FTP_SERVER: ${FTP_SERVER}"
-          echo "FTP_PORT: ${PORT}"
-          echo "FTP_REMOTE_DIR: ${FTP_REMOTE_DIR}"
-          echo "FTP_USERNAME: ${FTP_USERNAME}"
-          echo "Formato URL que será usada: ftp://SERVER:PORT/REMOTE_DIR/arquivo"
-          echo "==================="
+          server   = os.environ['FTP_SERVER']
+          user     = os.environ['FTP_USERNAME']
+          password = os.environ['FTP_PASSWORD']
+          port     = int(os.environ.get('FTP_PORT', 21) or 21)
+          rdir     = os.environ.get('FTP_REMOTE_DIR', '/')
 
-          # Testa conexão FTP simples antes de subir arquivos
-          echo "Testando conexão FTP..."
-          if curl -sv --connect-timeout 10 \
-              "ftp://${FTP_SERVER}:${PORT}/" \
-              --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-              2>&1 | grep -E "Connected|226|530|Login|failed|refused"; then
-            echo "Conexão FTP OK"
-          else
-            echo "⚠️ Problema na conexão FTP"
-          fi
+          print(f"Conectando a {server}:{port} ...")
+          try:
+              ftp = ftplib.FTP()
+              ftp.connect(server, port, timeout=20)
+              ftp.login(user, password)
+              print(f"Login OK. Navegando para: {rdir}")
+              ftp.cwd(rdir)
+              files = ftp.nlst()
+              print(f"Arquivos na raiz: {files[:10]}")
+              if '.ftp-deploy-sync-state.json' in files:
+                  ftp.delete('.ftp-deploy-sync-state.json')
+                  print("Sync state deletado — FTP action vai re-enviar tudo.")
+              else:
+                  print("Sync state nao encontrado (primeira vez ou ja deletado).")
+              ftp.quit()
+          except Exception as e:
+              print(f"Aviso FTP: {e}")
+          PYEOF
 
-          # Tentativa de upload com URL exatamente igual ao SamKirkland action
-          # (sem barra extra, sem double-slash)
-          RDIR="${FTP_REMOTE_DIR}"
-          # Garante barra no final
-          [[ "${RDIR}" != */ ]] && RDIR="${RDIR}/"
-          # Remove barra inicial se existir (curl FTP usa path relativo ao home do usuário)
-          RDIR="${RDIR#/}"
+      - name: Deploy via FTP Deploy Action
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server:     ${{ secrets.FTP_SERVER }}
+          username:   ${{ secrets.FTP_USERNAME }}
+          password:   ${{ secrets.FTP_PASSWORD }}
+          port:       ${{ secrets.FTP_PORT }}
+          protocol:   ftp
+          local-dir:  ./
+          server-dir: ${{ secrets.FTP_REMOTE_DIR }}
+          dangerous-clean-slate: false
+          log-level:  verbose
+          include: |
+            api/agent/squad-chat.php
+            admin/squad-chat.html
+            admin/squad-chat.php
+            api/agent/squad-canary.txt
 
-          echo "RDIR normalizado: '${RDIR}'"
-
-          upload_file() {
-            local src="$1"
-            local dst="$2"
-            local url="ftp://${FTP_SERVER}:${PORT}/${RDIR}${dst}"
-            echo "⬆ $src → $url"
-            curl -v -T "$src" "$url" \
-              --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-              --ftp-create-dirs \
-              --connect-timeout 30 \
-              --max-time 120 \
-              2>&1 | tail -20
-            echo "Exit code curl: $?"
-          }
-
-          upload_file "api/agent/squad-canary.txt" "api/agent/squad-canary.txt"
-          upload_file "api/agent/squad-chat.php"   "api/agent/squad-chat.php"
-          upload_file "admin/squad-chat.html"       "admin/squad-chat.html"
-          upload_file "admin/squad-chat.php"        "admin/squad-chat.php"
-
-      - name: Verificar no servidor
+      - name: Verificar deploy
         shell: bash
         run: |
           sleep 15
           BASE="https://dev.shopvivaliz.com.br"
-          echo "=== Verificação ==="
           CANARY=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/api/agent/squad-canary.txt")
-          echo "Canário HTTP: $CANARY"
           HEALTH=$(curl -s "$BASE/api/agent/squad-chat.php?health=1")
+          echo "Canário HTTP: $CANARY"
           echo "Health: $HEALTH"
+          if [ "$CANARY" = "200" ]; then
+            echo "✅ Deploy confirmado!"
+          else
+            echo "⚠️ Canário ainda ausente. Ver log da FTP Action acima."
+          fi
