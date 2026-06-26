@@ -59,6 +59,19 @@ jobs:
               print(f"Aviso: {e}")
           PYEOF
 
+      - name: Gerar .env com chaves de API
+        shell: bash
+        run: |
+          cat > .env <<'EOF'
+          SQUAD_TOKEN=${{ secrets.SQUAD_TOKEN }}
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          EOF
+          sed -i 's/^          //' .env
+          chmod 600 .env
+          echo ".env gerado com $(wc -l < .env) linhas."
+
       - name: Deploy via FTP Deploy Action
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
