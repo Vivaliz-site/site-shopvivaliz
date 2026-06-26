@@ -25,26 +25,37 @@ jobs:
         run: |
           missing=0
 
-          check_secret() {
+          check_required_secret() {
             local name="$1"
             local value="$2"
             if [ -z "$value" ]; then
               echo "::error::Secret obrigatório ausente: $name"
               missing=1
             else
-              echo "Secret configurado: $name"
+              echo "Secret obrigatório configurado: $name"
             fi
           }
 
-          check_secret "FTP_SERVER" "${{ secrets.FTP_SERVER }}"
-          check_secret "FTP_USERNAME" "${{ secrets.FTP_USERNAME }}"
-          check_secret "FTP_PASSWORD" "${{ secrets.FTP_PASSWORD }}"
-          check_secret "FTP_PORT" "${{ secrets.FTP_PORT }}"
-          check_secret "FTP_REMOTE_DIR" "${{ secrets.FTP_REMOTE_DIR }}"
-          check_secret "SQUAD_TOKEN" "${{ secrets.SQUAD_TOKEN }}"
-          check_secret "ANTHROPIC_API_KEY" "${{ secrets.ANTHROPIC_API_KEY }}"
-          check_secret "OPENAI_API_KEY" "${{ secrets.OPENAI_API_KEY }}"
-          check_secret "GEMINI_API_KEY" "${{ secrets.GEMINI_API_KEY }}"
+          check_optional_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "$value" ]; then
+              echo "::warning::Secret opcional ausente: $name. O deploy continuará, mas o provider correspondente ficará indisponível."
+            else
+              echo "Secret opcional configurado: $name"
+            fi
+          }
+
+          check_required_secret "FTP_SERVER" "${{ secrets.FTP_SERVER }}"
+          check_required_secret "FTP_USERNAME" "${{ secrets.FTP_USERNAME }}"
+          check_required_secret "FTP_PASSWORD" "${{ secrets.FTP_PASSWORD }}"
+          check_required_secret "FTP_PORT" "${{ secrets.FTP_PORT }}"
+          check_required_secret "FTP_REMOTE_DIR" "${{ secrets.FTP_REMOTE_DIR }}"
+          check_required_secret "SQUAD_TOKEN" "${{ secrets.SQUAD_TOKEN }}"
+
+          check_optional_secret "ANTHROPIC_API_KEY" "${{ secrets.ANTHROPIC_API_KEY }}"
+          check_optional_secret "OPENAI_API_KEY" "${{ secrets.OPENAI_API_KEY }}"
+          check_optional_secret "GEMINI_API_KEY" "${{ secrets.GEMINI_API_KEY }}"
 
           if [ "$missing" -ne 0 ]; then
             exit 1
@@ -105,6 +116,13 @@ jobs:
             DEPLOY_FAILED=true
           else
             echo "✅ Home dev acessível."
+          fi
+
+          echo "Testando health público do Squad Chat, se publicado..."
+          if curl -fsS "$BASE/api/agent/squad-chat.php?health=1" | grep -q '"endpoint":"squad-chat"'; then
+            echo "✅ Squad Chat health respondeu."
+          else
+            echo "⚠️ Squad Chat health ainda não respondeu como esperado. Não bloqueando deploy."
           fi
 
           echo "Testando arquivo de validação do CNPJ, se existir..."
