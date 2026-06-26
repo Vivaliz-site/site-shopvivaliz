@@ -7,6 +7,7 @@ on:
     paths:
       - 'api/agent/squad-chat.php'
       - 'admin/squad-chat.html'
+      - 'admin/squad-chat.php'
       - '.github/workflows/deploy-squad-chat.yml'
   workflow_dispatch: # permite rodar manualmente pela aba Actions
 
@@ -39,6 +40,7 @@ jobs:
           include: |
             api/agent/squad-chat.php
             admin/squad-chat.html
+            admin/squad-chat.php
 
           # Não apagar arquivos que já existem no servidor
           dangerous-clean-slate: false
@@ -51,4 +53,5 @@ jobs:
           echo "✅ Squad Chat enviado para o servidor"
           echo "📁 api/agent/squad-chat.php"
           echo "📁 admin/squad-chat.html"
+          echo "📁 admin/squad-chat.php"
           echo "🕐 $(date '+%Y-%m-%d %H:%M:%S')"
