@@ -10,50 +10,73 @@ on:
       - 'admin/squad-chat.php'
       - 'api/agent/squad-canary.txt'
       - '.github/workflows/deploy-squad-chat.yml'
-  workflow_dispatch: # permite rodar manualmente pela aba Actions
+  workflow_dispatch:
 
 jobs:
   deploy:
-    name: Upload via FTP
+    name: Upload Squad Chat via FTP direto
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
-      - name: Checkout do repositório
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server:   ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          port:     ${{ secrets.FTP_PORT }}
-          protocol: ftp
-
-          # Pasta local para subir
-          local-dir: ./
-
-          # Pasta raiz do ShopVivaliz no servidor (mesmo caminho do deploy principal)
-          server-dir: ${{ secrets.FTP_REMOTE_DIR }}
-
-          # Subir apenas os arquivos do squad chat
-          include: |
-            api/agent/squad-chat.php
-            admin/squad-chat.html
-            admin/squad-chat.php
-            api/agent/squad-canary.txt
-
-          # Não apagar arquivos que já existem no servidor
-          dangerous-clean-slate: false
-
-          # Log sem expor credenciais
-          log-level: standard
-
-      - name: Confirmar deploy
+      - name: Upload arquivos via curl FTP
+        shell: bash
+        env:
+          FTP_SERVER:     ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME:   ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD:   ${{ secrets.FTP_PASSWORD }}
+          FTP_PORT:       ${{ secrets.FTP_PORT }}
+          FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
         run: |
-          echo "✅ Squad Chat enviado para o servidor"
-          echo "📁 api/agent/squad-chat.php"
-          echo "📁 admin/squad-chat.html"
-          echo "📁 admin/squad-chat.php"
-          echo "🕐 $(date '+%Y-%m-%d %H:%M:%S')"
+          set -e
+          BASE="ftp://${FTP_SERVER}${FTP_REMOTE_DIR}"
+          CREDS="${FTP_USERNAME}:${FTP_PASSWORD}"
+          PORT="${FTP_PORT:-21}"
+
+          upload() {
+            local local_path="$1"
+            local remote_path="$2"
+            echo "⬆ Enviando $local_path → $remote_path"
+            curl -s -T "$local_path" "${BASE}${remote_path}" \
+              --user "$CREDS" \
+              --port "$PORT" \
+              --ftp-create-dirs \
+              --connect-timeout 30 \
+              --max-time 120 \
+              -w "HTTP %{http_code} | Tamanho: %{size_upload} bytes\n"
+          }
+
+          upload "api/agent/squad-chat.php"  "api/agent/squad-chat.php"
+          upload "admin/squad-chat.html"      "admin/squad-chat.html"
+          upload "admin/squad-chat.php"       "admin/squad-chat.php"
+          upload "api/agent/squad-canary.txt" "api/agent/squad-canary.txt"
+
+          echo "✅ Upload concluído."
+
+      - name: Aguardar propagação e verificar
+        shell: bash
+        run: |
+          sleep 10
+          BASE="https://dev.shopvivaliz.com.br"
+
+          echo "Verificando canário..."
+          if curl -fsS "$BASE/api/agent/squad-canary.txt" | grep -q "squad-canary-ok"; then
+            echo "✅ Canário confirmado — FTP chegou no lugar certo."
+          else
+            echo "⚠️ Canário não encontrado. Verificar FTP_REMOTE_DIR."
+            curl -s "$BASE/api/agent/squad-canary.txt" | head -5
+          fi
+
+          echo "Verificando health do Squad Chat..."
+          HEALTH=$(curl -s "$BASE/api/agent/squad-chat.php?health=1")
+          if echo "$HEALTH" | grep -q '"ok":true'; then
+            echo "✅ Squad Chat health OK"
+            echo "$HEALTH" | grep -o '"version":"[^"]*"'
+            echo "$HEALTH" | grep -o '"configured":[^,}]*' | head -6
+          else
+            echo "⚠️ Health não retornou ok:true. Resposta:"
+            echo "$HEALTH"
+          fi
