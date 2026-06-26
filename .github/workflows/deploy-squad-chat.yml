@@ -8,6 +8,7 @@ on:
       - 'api/agent/squad-chat.php'
       - 'admin/squad-chat.html'
       - 'admin/squad-chat.php'
+      - 'api/agent/squad-canary.txt'
       - '.github/workflows/deploy-squad-chat.yml'
   workflow_dispatch: # permite rodar manualmente pela aba Actions
 
@@ -33,14 +34,15 @@ jobs:
           # Pasta local para subir
           local-dir: ./
 
-          # Pasta raiz do ShopVivaliz no servidor
-          server-dir: /public_html/dev/
+          # Pasta raiz do ShopVivaliz no servidor (mesmo caminho do deploy principal)
+          server-dir: ${{ secrets.FTP_REMOTE_DIR }}
 
           # Subir apenas os arquivos do squad chat
           include: |
             api/agent/squad-chat.php
             admin/squad-chat.html
             admin/squad-chat.php
+            api/agent/squad-canary.txt
 
           # Não apagar arquivos que já existem no servidor
           dangerous-clean-slate: false
