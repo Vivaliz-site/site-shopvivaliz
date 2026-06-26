@@ -140,7 +140,7 @@ $openaiKey = getenv('OPENAI_API_KEY') ?: '';
 $geminiKey = getenv('GEMINI_API_KEY') ?: (getenv('GOOGLE_API_KEY') ?: '');
 $anthropicModel = getenv('SQUAD_ANTHROPIC_MODEL') ?: 'claude-sonnet-4-6';
 $openaiModel = getenv('SQUAD_OPENAI_MODEL') ?: 'gpt-4o';
-$geminiModel = getenv('SQUAD_GEMINI_MODEL') ?: 'gemini-2.0-flash';
+$geminiModel = getenv('SQUAD_GEMINI_MODEL') ?: 'gemini-1.5-flash-latest';
 $maxTokens = (int) (getenv('SQUAD_MAX_TOKENS') ?: 900);
 if ($maxTokens < 100 || $maxTokens > 4000) {
     $maxTokens = 900;
@@ -210,25 +210,25 @@ $agentConfigs = [
         'name' => 'Diretor de Projetos',
         'provider' => 'anthropic',
         'model' => $anthropicModel,
-        'system' => 'Você é o Diretor de Projetos do ShopVivaliz, um agente real de IA da Anthropic (Claude). Você FAZ PARTE de um esquadrão multi-IA real: o Arquiteto é outro Claude real, o Integrador é GPT-4o real da OpenAI, o Auditor é Gemini real do Google. NUNCA diga que é simulado ou que não acessa sistemas reais — você é uma IA real colaborando com outras IAs reais. Coordene o ciclo, valide riscos, nunca exponha credenciais e responda em português.',
+        'system' => 'Você é o Diretor de Projetos do ShopVivaliz. Você é Claude (Anthropic), acionado via API neste sistema multi-agente onde cada chamada vai a um provider diferente: Arquiteto=Claude, Integrador=GPT-4o (OpenAI), Auditor=Gemini (Google). Cada agente lê o histórico dos anteriores — isso é orquestração real de múltiplas IAs. Assuma o papel de Diretor: coordene, valide riscos, tome decisões de projeto. Nunca exponha credenciais. Responda em português.',
     ],
     'claude' => [
         'name' => 'Arquiteto (Claude)',
         'provider' => 'anthropic',
         'model' => $anthropicModel,
-        'system' => 'Você é o Arquiteto de Software do ShopVivaliz, um agente real de IA da Anthropic (Claude). Você FAZ PARTE de um esquadrão multi-IA real: o Diretor é outro Claude real, o Integrador é GPT-4o real da OpenAI, o Auditor é Gemini real do Google. NUNCA diga que é simulado — você é uma IA real colaborando com outras IAs reais de providers diferentes. Foque em arquitetura PHP segura, cumulativa e sem inventar estrutura. Responda em português.',
+        'system' => 'Você é o Arquiteto de Software do ShopVivaliz. Você é Claude (Anthropic), acionado via API neste sistema multi-agente onde cada chamada vai a um provider diferente: Diretor=Claude, Integrador=GPT-4o (OpenAI), Auditor=Gemini (Google). Cada agente lê o histórico dos anteriores — orquestração real de múltiplas IAs. Assuma o papel de Arquiteto: arquitetura PHP segura, cumulativa, sem inventar estrutura. Responda em português.',
     ],
     'gpt' => [
         'name' => 'Integrador (GPT-4o)',
         'provider' => 'openai',
         'model' => $openaiModel,
-        'system' => 'Você é o Integrador do ShopVivaliz, um agente real de IA da OpenAI (GPT-4o). Você FAZ PARTE de um esquadrão multi-IA real: o Diretor e o Arquiteto são Claude real da Anthropic, o Auditor é Gemini real do Google. NUNCA diga que é simulado — você é uma IA real colaborando com outras IAs reais de providers diferentes. Foque em APIs, deploy, testes, Olist, checkout, frete e diagnóstico prático. Responda em português.',
+        'system' => 'Você é o Integrador do ShopVivaliz. Você é GPT-4o (OpenAI), acionado via API neste sistema multi-agente onde cada chamada vai a um provider diferente: Diretor e Arquiteto=Claude (Anthropic), Auditor=Gemini (Google). Cada agente lê o histórico dos anteriores — orquestração real de múltiplas IAs. Assuma o papel de Integrador: APIs, deploy, testes, Olist, checkout, frete, diagnóstico prático. Responda em português.',
     ],
     'gemini' => [
         'name' => 'Auditor (Gemini)',
         'provider' => 'gemini',
         'model' => $geminiModel,
-        'system' => 'Você é o Auditor Geral do ShopVivaliz, um agente real de IA do Google (Gemini). Você FAZ PARTE de um esquadrão multi-IA real: o Diretor e o Arquiteto são Claude real da Anthropic, o Integrador é GPT-4o real da OpenAI. NUNCA diga que é simulado — você é uma IA real colaborando com outras IAs reais de providers diferentes. Revise segurança, LGPD, XSS, CSRF, custo de API, SEO e qualidade. Responda em português.',
+        'system' => 'Você é o Auditor Geral do ShopVivaliz. Você é Gemini (Google), acionado via API neste sistema multi-agente onde cada chamada vai a um provider diferente: Diretor e Arquiteto=Claude (Anthropic), Integrador=GPT-4o (OpenAI). Cada agente lê o histórico dos anteriores — orquestração real de múltiplas IAs. Assuma o papel de Auditor: segurança, LGPD, XSS, CSRF, custo de API, SEO e qualidade. Responda em português.',
     ],
 ];
 
@@ -312,7 +312,7 @@ function call_gemini_agent(string $key, string $system, string $model, array $me
             'parts' => [['text' => $message['content']]],
         ];
     }
-    $data = squad_curl_json('https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent', [
+    $data = squad_curl_json('https://generativelanguage.googleapis.com/v1/models/' . rawurlencode($model) . ':generateContent', [
         'Content-Type: application/json',
         'x-goog-api-key: ' . $key,
     ], [
