@@ -118,6 +118,77 @@ function squad_curl_json(string $url, array $headers, array $payload, int $timeo
 
 squad_env_load(dirname(__DIR__, 2) . '/.env');
 
+function squad_github_tree(): string
+{
+    $token = getenv('GH_REPO_TOKEN') ?: '';
+    $repo  = getenv('GH_REPO') ?: 'fredmourao-ai/site-shopvivaliz';
+    if ($token === '') return '';
+
+    $cacheDir  = dirname(__DIR__, 2) . '/logs/squad';
+    $cacheFile = $cacheDir . '/repo-tree.cache';
+    if (is_file($cacheFile) && (time() - filemtime($cacheFile)) < 300) {
+        return (string) file_get_contents($cacheFile);
+    }
+
+    $ch = curl_init("https://api.github.com/repos/{$repo}/git/trees/HEAD?recursive=1");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_HTTPHEADER     => [
+            "Authorization: Bearer {$token}",
+            "Accept: application/vnd.github+json",
+            "User-Agent: ShopVivaliz-Squad/1.0",
+        ],
+    ]);
+    $raw = (string) curl_exec($ch);
+    curl_close($ch);
+
+    $data = json_decode($raw, true);
+    if (!isset($data['tree'])) return '';
+
+    $keep = array_filter($data['tree'], fn($item) =>
+        $item['type'] === 'blob' &&
+        !str_contains($item['path'], 'node_modules') &&
+        preg_match('/\.(php|html|yml|yaml|json|md|txt|js|css|env\.example)$/', $item['path'])
+    );
+    $paths = implode("\n", array_column(array_values($keep), 'path'));
+    $ctx = "=== REPOSITÓRIO github.com/{$repo} ===\n{$paths}";
+
+    @mkdir($cacheDir, 0755, true);
+    @file_put_contents($cacheFile, $ctx);
+    return $ctx;
+}
+
+function squad_github_file(string $path): string
+{
+    $token = getenv('GH_REPO_TOKEN') ?: '';
+    $repo  = getenv('GH_REPO') ?: 'fredmourao-ai/site-shopvivaliz';
+    if ($token === '' || $path === '') return '';
+
+    $path = ltrim(preg_replace('/[^a-zA-Z0-9\/._\-]/', '', $path), '/');
+    $ch = curl_init("https://api.github.com/repos/{$repo}/contents/{$path}");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_HTTPHEADER     => [
+            "Authorization: Bearer {$token}",
+            "Accept: application/vnd.github+json",
+            "User-Agent: ShopVivaliz-Squad/1.0",
+        ],
+    ]);
+    $raw = (string) curl_exec($ch);
+    curl_close($ch);
+
+    $data = json_decode($raw, true);
+    if (!isset($data['content'])) return '';
+    $content = base64_decode(str_replace("\n", '', $data['content']));
+    $lines   = substr_count($content, "\n");
+    if ($lines > 300) {
+        $content = implode("\n", array_slice(explode("\n", $content), 0, 300)) . "\n... (truncado em 300 linhas)";
+    }
+    return "=== {$path} ===\n{$content}";
+}
+
 $allowed_origins = [
     'https://dev.shopvivaliz.com.br',
     'https://shopvivaliz.com.br',
@@ -231,6 +302,30 @@ $agentConfigs = [
         'system' => 'Você é o Auditor Geral do ShopVivaliz. Você é Gemini (Google), acionado via API neste sistema multi-agente onde cada chamada vai a um provider diferente: Diretor e Arquiteto=Claude (Anthropic), Integrador=GPT-4o (OpenAI). Cada agente lê o histórico dos anteriores — orquestração real de múltiplas IAs. Assuma o papel de Auditor: segurança, LGPD, XSS, CSRF, custo de API, SEO e qualidade. Responda em português.',
     ],
 ];
+
+// Contexto do repositório para todos os agentes
+$repoTree = squad_github_tree();
+
+// Detecta arquivos mencionados na mensagem e busca conteúdo
+$repoFileCtx = '';
+if ($repoTree !== '') {
+    preg_match_all('/(?:^|[\s`\'"])([a-zA-Z0-9_\-\/]+\.[a-zA-Z]{2,5})(?:[\s`\'"]|$)/', $userMessage, $fileMatches);
+    $mentioned = array_unique($fileMatches[1] ?? []);
+    $fetched = [];
+    foreach (array_slice($mentioned, 0, 3) as $fp) {
+        $fc = squad_github_file($fp);
+        if ($fc !== '') $fetched[] = $fc;
+    }
+    $repoFileCtx = $fetched !== [] ? "\n\n" . implode("\n\n", $fetched) : '';
+}
+
+if ($repoTree !== '') {
+    $repoContext = "\n\n" . $repoTree . $repoFileCtx;
+    foreach ($agentConfigs as &$cfg) {
+        $cfg['system'] .= $repoContext;
+    }
+    unset($cfg);
+}
 
 if ($dialogueMode) {
     $topicStr = $originalTopic !== '' ? "Tópico em debate: \"{$originalTopic}\". " : '';
