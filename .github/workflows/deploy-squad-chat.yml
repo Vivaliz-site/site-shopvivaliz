@@ -37,7 +37,7 @@ jobs:
           user     = os.environ['FTP_USERNAME']
           password = os.environ['FTP_PASSWORD']
           port     = int(os.environ.get('FTP_PORT') or 21)
-          dev_dir  = 'public_html/dev'
+          dev_dir  = '/'
 
           print(f"Conectando {server}:{port} ...")
           try:
@@ -68,7 +68,7 @@ jobs:
           port:       ${{ secrets.FTP_PORT }}
           protocol:   ftp
           local-dir:  ./
-          server-dir: /public_html/dev/
+          server-dir: ${{ secrets.FTP_REMOTE_DIR }}
           dangerous-clean-slate: false
           log-level:  verbose
           include: |
