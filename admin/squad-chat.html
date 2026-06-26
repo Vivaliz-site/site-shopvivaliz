@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Squad Chat — ShopVivaliz</title>
+<style>
+:root {
+  --bg: #f4f4f2;
+  --surface: #ffffff;
+  --surface-2: #f9f9f8;
+  --border: rgba(0,0,0,.1);
+  --text: #1a1a18;
+  --text-2: #5a5a56;
+  --text-3: #9a9a96;
+  --accent: #2563eb;
+  --accent-bg: #eff6ff;
+  --radius: 8px;
+  --director-bg: #faeeda; --director-border: #ef9f27; --director-text: #633806;
+  --claude-bg: #eeedfe;   --claude-border: #afa9ec;  --claude-text: #3c3489;
+  --gpt-bg: #e1f5ee;      --gpt-border: #5dcaa5;     --gpt-text: #085041;
+  --gemini-bg: #faece7;   --gemini-border: #f0997b;  --gemini-text: #712b13;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111110; --surface: #1c1c1a; --surface-2: #222220;
+    --border: rgba(255,255,255,.1); --text: #f0f0ec; --text-2: #a0a09c; --text-3: #606060;
+    --director-bg:#412402; --claude-bg:#26215c; --gpt-bg:#04342c; --gemini-bg:#4a1b0c;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+header { background: var(--surface); border-bottom: 0.5px solid var(--border); padding: 12px 20px; display: flex; align-items: center; gap: 12px; }
+.logo { font-size: 15px; font-weight: 600; color: var(--text); }
+.badge { font-size: 11px; padding: 2px 10px; border-radius: 99px; background: var(--accent-bg); color: var(--accent); font-weight: 500; }
+.cycle-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; animation: blink 2s infinite; margin-left: auto; }
+.cycle-label { font-size: 11px; color: var(--text-3); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+.layout { display: grid; grid-template-columns: 220px 1fr; gap: 0; flex: 1; height: calc(100vh - 49px); }
+.sidebar { background: var(--surface); border-right: 0.5px solid var(--border); padding: 16px 12px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.sidebar-title { font-size: 11px; font-weight: 500; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; padding: 0 4px; margin-bottom: 4px; }
+.agent-card { border: 0.5px solid var(--border); border-radius: 10px; padding: 10px; cursor: pointer; transition: border-color .15s; background: var(--surface-2); }
+.agent-card:hover { border-color: rgba(0,0,0,.2); }
+.agent-card.active.director { border-color: var(--director-border); background: var(--director-bg); }
+.agent-card.active.claude   { border-color: var(--claude-border);   background: var(--claude-bg); }
+.agent-card.active.gpt      { border-color: var(--gpt-border);      background: var(--gpt-bg); }
+.agent-card.active.gemini   { border-color: var(--gemini-border);   background: var(--gemini-bg); }
+.ac-name { font-size: 12px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
+.ac-role { font-size: 11px; color: var(--text-2); }
+.ac-model { font-size: 10px; color: var(--text-3); margin-top: 3px; }
+.sidebar-section { margin-top: 16px; }
+.quick-btn { width: 100%; text-align: left; font-size: 11px; padding: 7px 10px; border-radius: var(--radius); border: 0.5px solid var(--border); background: var(--surface-2); color: var(--text-2); cursor: pointer; margin-bottom: 5px; line-height: 1.4; }
+.quick-btn:hover { background: var(--bg); }
+.main { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.chat-area { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.cycle-divider { text-align: center; font-size: 10px; color: var(--text-3); padding: 6px 0; position: relative; }
+.cycle-divider::before { content:''; position:absolute; left:0; top:50%; width:100%; height:0.5px; background:var(--border); z-index:0; }
+.cycle-divider span { background: var(--bg); padding: 0 10px; position: relative; z-index:1; }
+.msg { display: flex; flex-direction: column; gap: 4px; }
+.msg-header { display: flex; align-items: center; gap: 8px; }
+.avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; flex-shrink: 0; }
+.av-director { background:var(--director-bg); color:var(--director-text); }
+.av-claude   { background:var(--claude-bg);   color:var(--claude-text); }
+.av-gpt      { background:var(--gpt-bg);      color:var(--gpt-text); }
+.av-gemini   { background:var(--gemini-bg);   color:var(--gemini-text); }
+.av-user     { background:var(--accent-bg);   color:var(--accent); }
+.msg-name { font-size: 12px; font-weight: 500; color: var(--text-2); }
+.msg-time { font-size: 10px; color: var(--text-3); }
+.bubble { font-size: 13px; line-height: 1.65; padding: 10px 14px; border-radius: 10px; border: 0.5px solid var(--border); background: var(--surface); max-width: 90%; margin-left: 36px; white-space: pre-wrap; word-break: break-word; }
+.bubble.director { border-color:var(--director-border); background:var(--director-bg); color:var(--director-text); }
+.bubble.claude   { border-color:var(--claude-border);   background:var(--claude-bg);   color:var(--claude-text); }
+.bubble.gpt      { border-color:var(--gpt-border);      background:var(--gpt-bg);      color:var(--gpt-text); }
+.bubble.gemini   { border-color:var(--gemini-border);   background:var(--gemini-bg);   color:var(--gemini-text); }
+.bubble.user     { background:var(--accent-bg); border-color:rgba(37,99,235,.2); color:var(--text); margin-left:auto; margin-right:0; }
+.thinking { display:flex; align-items:center; gap:8px; margin-left:36px; padding:8px 0; }
+.dot-anim span { width:5px; height:5px; border-radius:50%; background:var(--text-3); display:inline-block; animation:pulse 1.2s ease-in-out infinite; margin-right:3px; }
+.dot-anim span:nth-child(2){animation-delay:.2s} .dot-anim span:nth-child(3){animation-delay:.4s}
+@keyframes pulse{0%,80%,100%{opacity:.3}40%{opacity:1}}
+.thinking-label { font-size:12px; color:var(--text-3); }
+.input-area { padding: 14px 20px; background: var(--surface); border-top: 0.5px solid var(--border); display:flex; flex-direction:column; gap:8px; }
+.input-row { display: flex; gap: 10px; }
+textarea { flex:1; resize:none; height:56px; padding:10px 14px; font-size:13px; font-family:inherit; border:0.5px solid var(--border); border-radius:var(--radius); background:var(--surface-2); color:var(--text); outline:none; }
+textarea:focus { border-color: rgba(37,99,235,.5); }
+.send-btn { padding: 0 20px; height:56px; font-size:13px; font-weight:500; background:var(--accent); color:#fff; border:none; border-radius:var(--radius); cursor:pointer; white-space:nowrap; }
+.send-btn:disabled { opacity:.4; cursor:not-allowed; }
+.input-footer { display:flex; justify-content:space-between; align-items:center; }
+.status-txt { font-size:11px; color:var(--text-3); }
+.clear-btn { font-size:11px; color:var(--text-3); background:none; border:none; cursor:pointer; padding:2px 6px; border-radius:4px; }
+.clear-btn:hover { background:var(--bg); }
+@media (max-width:640px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar { display:none; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">&#x1F6D2; ShopVivaliz</span>
+  <span class="badge">Squad Chat</span>
+  <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+    <div class="cycle-dot"></div>
+    <span class="cycle-label">ciclo ativo &middot; 1h</span>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-title">Agentes</div>
+
+    <div class="agent-card director active" data-agent="director" onclick="toggleAgent(this)">
+      <div class="ac-name">&#x1F451; Diretor de Projetos</div>
+      <div class="ac-role">Consolida e decide</div>
+      <div class="ac-model">Hierárquico</div>
+    </div>
+    <div class="agent-card claude active" data-agent="claude" onclick="toggleAgent(this)">
+      <div class="ac-name">&#x1F9F1; Arquiteto</div>
+      <div class="ac-role">Arquitetura e SOLID</div>
+      <div class="ac-model">Claude Sonnet</div>
+    </div>
+    <div class="agent-card gpt active" data-agent="gpt" onclick="toggleAgent(this)">
+      <div class="ac-name">&#x1F50C; Integrador</div>
+      <div class="ac-role">Deploy e testes</div>
+      <div class="ac-model">GPT-4o (simulado)</div>
+    </div>
+    <div class="agent-card gemini active" data-agent="gemini" onclick="toggleAgent(this)">
+      <div class="ac-name">&#x1F6E1; Auditor</div>
+      <div class="ac-role">Segurança e docs</div>
+      <div class="ac-model">Gemini (simulado)</div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Atalhos</div>
+      <button class="quick-btn" onclick="sendQuick('Qual é a prioridade número 1 agora no ShopVivaliz?')">&#x1F3AF; Prioridade atual</button>
+      <button class="quick-btn" onclick="sendQuick('Audite o ciclo automático de 1h: há riscos de travamento ou conflito?')">&#x26A0; Auditar ciclo automático</button>
+      <button class="quick-btn" onclick="sendQuick('Como estruturar o project-director.php como gate de segurança que bloqueia o ciclo se checkout ou segurança estiverem com falha?')">&#x1F512; Gate de segurança</button>
+      <button class="quick-btn" onclick="sendQuick('Gere o relatório completo do ciclo atual: versão, arquivos alterados, parecer de cada agente e pendências priorizadas.')">&#x1F4CB; Relatório de versão</button>
+      <button class="quick-btn" onclick="sendQuick('Revise a estratégia de imagens do Olist: como comparar a planilha diária com as imagens atuais do banco e corrigir vínculos por SKU automaticamente?')">&#x1F5BC; Imagens Olist</button>
+      <button class="quick-btn" onclick="sendQuick('Quais são os riscos de segurança críticos no ShopVivaliz agora e como corrigi-los?')">&#x1F6E1; Auditoria de segurança</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="chat-area" id="chatArea"></div>
+
+    <div class="input-area">
+      <div class="input-row">
+        <textarea id="userInput"
+          placeholder="Fale com o esquadrão... (Enter envia, Shift+Enter nova linha)"
+          onkeydown="handleKey(event)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="handleSend()">Enviar</button>
+      </div>
+      <div class="input-footer">
+        <span class="status-txt" id="statusTxt">Agentes prontos</span>
+        <button class="clear-btn" onclick="clearChat()">&#x1F5D1; Limpar</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const API_ENDPOINT = '/api/agent/squad-chat.php';
+const SQUAD_TOKEN  = ''; // Defina o mesmo token do PHP se quiser autenticação
+
+let activeAgents = new Set(['director','claude','gpt','gemini']);
+let history = [];
+let busy = false;
+
+const AGENT_META = {
+  director: { name:'Diretor de Projetos', av:'DP', cls:'director' },
+  claude:   { name:'Arquiteto (Claude)',  av:'CL', cls:'claude'   },
+  gpt:      { name:'Integrador (GPT-4o)', av:'GP', cls:'gpt'      },
+  gemini:   { name:'Auditor (Gemini)',    av:'GM', cls:'gemini'   },
+  user:     { name:'Você',               av:'VC', cls:'user'      },
+};
+
+function toggleAgent(card) {
+  const id = card.dataset.agent;
+  if (card.classList.contains('active')) {
+    if (activeAgents.size <= 1) return;
+    activeAgents.delete(id);
+    card.classList.remove('active');
+  } else {
+    activeAgents.add(id);
+    card.classList.add('active');
+  }
+}
+
+function ts() {
+  return new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+}
+
+function addMsg(agentId, text) {
+  const m = AGENT_META[agentId] || AGENT_META.user;
+  const div = document.createElement('div');
+  div.className = 'msg';
+  div.innerHTML = `
+    <div class="msg-header">
+      <div class="avatar av-${m.cls}">${m.av}</div>
+      <span class="msg-name">${m.name}</span>
+      <span class="msg-time">${ts()}</span>
+    </div>
+    <div class="bubble ${m.cls}">${esc(text)}</div>`;
+  document.getElementById('chatArea').appendChild(div);
+  scrollBottom();
+}
+
+function addDivider() {
+  const d = document.createElement('div');
+  d.className = 'cycle-divider';
+  d.innerHTML = `<span>ciclo ${ts()}</span>`;
+  document.getElementById('chatArea').appendChild(d);
+}
+
+function addThinking(agentId) {
+  const m = AGENT_META[agentId];
+  const div = document.createElement('div');
+  div.className = 'msg';
+  div.id = 'thinking-' + agentId;
+  div.innerHTML = `
+    <div class="msg-header">
+      <div class="avatar av-${m.cls}">${m.av}</div>
+      <span class="msg-name">${m.name}</span>
+    </div>
+    <div class="thinking">
+      <div class="dot-anim"><span></span><span></span><span></span></div>
+      <span class="thinking-label">analisando...</span>
+    </div>`;
+  document.getElementById('chatArea').appendChild(div);
+  scrollBottom();
+}
+
+function removeThinking(agentId) {
+  document.getElementById('thinking-' + agentId)?.remove();
+}
+
+function scrollBottom() {
+  const el = document.getElementById('chatArea');
+  el.scrollTop = el.scrollHeight;
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function setStatus(txt) {
+  document.getElementById('statusTxt').textContent = txt;
+}
+
+async function runCycle(userMsg) {
+  busy = true;
+  document.getElementById('sendBtn').disabled = true;
+  setStatus('Esquadrão respondendo...');
+
+  addMsg('user', userMsg);
+  addDivider();
+
+  const agents = ['director','claude','gpt','gemini']
+    .filter(id => activeAgents.has(id));
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (SQUAD_TOKEN) headers['X-Squad-Token'] = SQUAD_TOKEN;
+
+    agents.forEach(id => addThinking(id));
+
+    const res = await fetch(API_ENDPOINT, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        message: userMsg,
+        agents,
+        history: history.slice(-8),
+      }),
+    });
+
+    agents.forEach(id => removeThinking(id));
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const allText = [];
+
+    for (const r of data.responses || []) {
+      addMsg(r.agent, r.text);
+      allText.push(`[${r.name}]: ${r.text}`);
+      setStatus(`✓ ${r.name} respondeu`);
+    }
+
+    history.push({ role:'user',      content: userMsg });
+    history.push({ role:'assistant', content: allText.join('\n\n') });
+    if (history.length > 20) history = history.slice(-20);
+
+    setStatus(`${agents.length} agentes · ciclo ${data.cycle_id?.slice(-6) ?? ''}`);
+
+  } catch (err) {
+    agents.forEach(id => removeThinking(id));
+    addMsg('director', `Erro no ciclo: ${err.message}`);
+    setStatus('Erro — verifique o endpoint e a chave API');
+  }
+
+  busy = false;
+  document.getElementById('sendBtn').disabled = false;
+  scrollBottom();
+}
+
+async function handleSend() {
+  const inp = document.getElementById('userInput');
+  const msg = inp.value.trim();
+  if (!msg || busy) return;
+  inp.value = '';
+  await runCycle(msg);
+}
+
+async function sendQuick(msg) {
+  if (busy) return;
+  await runCycle(msg);
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+}
+
+function clearChat() {
+  document.getElementById('chatArea').innerHTML = '';
+  history = [];
+  setStatus('Agentes prontos');
+}
+
+// Mensagem inicial
+addMsg('director', 'Esquadrão ShopVivaliz online.\nCiclo automático: ativo (1h).\nPrioridade atual: corrigir mockups visuais e garantir checkout funcional.\nAguardando instruções.');
+</script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+name: Deploy Squad Chat
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'api/agent/squad-chat.php'
+      - 'admin/squad-chat.html'
+      - '.github/workflows/deploy-squad-chat.yml'
+  workflow_dispatch: # permite rodar manualmente pela aba Actions
+
+jobs:
+  deploy:
+    name: Upload via FTP
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server:   ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port:     21
+          protocol: ftp
+
+          # Pasta local para subir
+          local-dir: ./
+
+          # Pasta raiz do ShopVivaliz no servidor
+          server-dir: /public_html/dev/
+
+          # Subir apenas os arquivos do squad chat
+          include: |
+            api/agent/squad-chat.php
+            admin/squad-chat.html
+
+          # Não apagar arquivos que já existem no servidor
+          dangerous-clean-slate: false
+
+          # Log sem expor credenciais
+          log-level: standard
+
+      - name: Confirmar deploy
+        run: |
+          echo "✅ Squad Chat enviado para o servidor"
+          echo "📁 api/agent/squad-chat.php"
+          echo "📁 admin/squad-chat.html"
+          echo "🕐 $(date '+%Y-%m-%d %H:%M:%S')"
