@@ -209,7 +209,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
 $anthropicKey = getenv('ANTHROPIC_API_KEY') ?: '';
 $openaiKey = getenv('OPENAI_API_KEY') ?: '';
 $geminiKey = getenv('GEMINI_API_KEY') ?: (getenv('GOOGLE_API_KEY') ?: '');
-$anthropicModel = getenv('SQUAD_ANTHROPIC_MODEL') ?: 'claude-sonnet-4-6';
+$anthropicModel = getenv('SQUAD_ANTHROPIC_MODEL') ?: 'claude-haiku-4-5-20251001';
 $openaiModel = getenv('SQUAD_OPENAI_MODEL') ?: 'gpt-4o';
 $geminiModel = getenv('SQUAD_GEMINI_MODEL') ?: 'gemini-2.5-flash';
 $maxTokens = (int) (getenv('SQUAD_MAX_TOKENS') ?: 900);
