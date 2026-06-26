@@ -32,9 +32,9 @@ jobs:
           FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
         run: |
           set -e
-          BASE="ftp://${FTP_SERVER}${FTP_REMOTE_DIR}"
-          CREDS="${FTP_USERNAME}:${FTP_PASSWORD}"
           PORT="${FTP_PORT:-21}"
+          BASE="ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}"
+          CREDS="${FTP_USERNAME}:${FTP_PASSWORD}"
 
           upload() {
             local local_path="$1"
@@ -42,11 +42,10 @@ jobs:
             echo "⬆ Enviando $local_path → $remote_path"
             curl -s -T "$local_path" "${BASE}${remote_path}" \
               --user "$CREDS" \
-              --port "$PORT" \
               --ftp-create-dirs \
               --connect-timeout 30 \
               --max-time 120 \
-              -w "HTTP %{http_code} | Tamanho: %{size_upload} bytes\n"
+              -w "Tamanho: %{size_upload} bytes\n"
           }
 
           upload "api/agent/squad-chat.php"  "api/agent/squad-chat.php"
