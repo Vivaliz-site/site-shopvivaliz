@@ -44,7 +44,7 @@ def iniciar_super_agente_trio():
         f"O que pode quebrar a resposta JSON ou travar o curl estruturalmente nas requisições PHP locais?"
     )
     res_claude = anthropic_client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-sonnet-4-6",
         max_tokens=1500,
         messages=[{"role": "user", "content": prompt_claude}]
     )
