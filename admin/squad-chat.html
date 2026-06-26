@@ -33,3 +33,273 @@ header{background:var(--surface);border-bottom:0.5px solid var(--border);padding
 .layout{display:grid;grid-template-columns:220px 1fr;flex:1;height:calc(100vh - 57px)}
 .sidebar{background:var(--surface);border-right:0.5px solid var(--border);padding:16px 12px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
 .sidebar-title{font-size:11px;font-weight:500;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;padding:0 4px;margin-bottom:4px}
+.agent-card{border:0.5px solid var(--border);border-radius:10px;padding:10px;cursor:pointer;transition:border-color .15s;background:var(--surface-2)}
+.agent-card.active.director{border-color:var(--director-border);background:var(--director-bg)}
+.agent-card.active.claude{border-color:var(--claude-border);background:var(--claude-bg)}
+.agent-card.active.gpt{border-color:var(--gpt-border);background:var(--gpt-bg)}
+.agent-card.active.gemini{border-color:var(--gemini-border);background:var(--gemini-bg)}
+.ac-name{font-size:12px;font-weight:500;color:var(--text);margin-bottom:2px}
+.ac-role{font-size:11px;color:var(--text-2)}
+.ac-model{font-size:10px;color:var(--text-3);margin-top:3px}
+.interval-ctrl{margin-top:8px;padding:10px;border-radius:10px;border:0.5px solid var(--border);background:var(--surface-2)}
+.interval-ctrl label{font-size:11px;color:var(--text-3);display:block;margin-bottom:6px}
+.interval-ctrl select{width:100%;font-size:12px;padding:5px 8px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer}
+.sidebar-section{margin-top:8px}
+.quick-btn{width:100%;text-align:left;font-size:11px;padding:7px 10px;border-radius:var(--radius);border:0.5px solid var(--border);background:var(--surface-2);color:var(--text-2);cursor:pointer;margin-bottom:5px;line-height:1.4}
+.quick-btn:hover{background:var(--bg)}
+.main{display:flex;flex-direction:column;height:100%;overflow:hidden}
+.chat-area{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px}
+.cycle-divider{text-align:center;font-size:10px;color:var(--text-3);padding:6px 0;position:relative}
+.cycle-divider::before{content:'';position:absolute;left:0;top:50%;width:100%;height:0.5px;background:var(--border);z-index:0}
+.cycle-divider span{background:var(--bg);padding:0 10px;position:relative;z-index:1}
+.cycle-divider.auto span{color:var(--accent);font-weight:500}
+.msg{display:flex;flex-direction:column;gap:4px}
+.msg-header{display:flex;align-items:center;gap:8px}
+.avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0}
+.av-director{background:var(--director-bg);color:var(--director-text)}
+.av-claude{background:var(--claude-bg);color:var(--claude-text)}
+.av-gpt{background:var(--gpt-bg);color:var(--gpt-text)}
+.av-gemini{background:var(--gemini-bg);color:var(--gemini-text)}
+.av-user{background:var(--accent-bg);color:var(--accent)}
+.av-system{background:var(--surface-2);color:var(--text-3)}
+.msg-name{font-size:12px;font-weight:500;color:var(--text-2)}
+.msg-time{font-size:10px;color:var(--text-3)}
+.msg-tag{font-size:9px;padding:1px 7px;border-radius:99px;background:var(--accent-bg);color:var(--accent);font-weight:500}
+.bubble{font-size:13px;line-height:1.65;padding:10px 14px;border-radius:10px;border:0.5px solid var(--border);background:var(--surface);max-width:90%;margin-left:36px;white-space:pre-wrap;word-break:break-word}
+.bubble.director{border-color:var(--director-border);background:var(--director-bg);color:var(--director-text)}
+.bubble.claude{border-color:var(--claude-border);background:var(--claude-bg);color:var(--claude-text)}
+.bubble.gpt{border-color:var(--gpt-border);background:var(--gpt-bg);color:var(--gpt-text)}
+.bubble.gemini{border-color:var(--gemini-border);background:var(--gemini-bg);color:var(--gemini-text)}
+.bubble.user{background:var(--accent-bg);border-color:rgba(37,99,235,.2);color:var(--text);margin-left:auto;margin-right:0}
+.bubble.system{background:var(--surface-2);color:var(--text-3);font-size:12px;font-style:italic}
+.thinking{display:flex;align-items:center;gap:8px;margin-left:36px;padding:8px 0}
+.dot-anim span{width:5px;height:5px;border-radius:50%;background:var(--text-3);display:inline-block;animation:pulse 1.2s ease-in-out infinite;margin-right:3px}
+.dot-anim span:nth-child(2){animation-delay:.2s}.dot-anim span:nth-child(3){animation-delay:.4s}
+@keyframes pulse{0%,80%,100%{opacity:.3}40%{opacity:1}}
+.thinking-label{font-size:12px;color:var(--text-3)}
+.input-area{padding:14px 20px;background:var(--surface);border-top:0.5px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.input-row{display:flex;gap:10px}
+textarea{flex:1;resize:none;height:56px;padding:10px 14px;font-size:13px;font-family:inherit;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface-2);color:var(--text);outline:none}
+textarea:focus{border-color:rgba(37,99,235,.5)}
+.send-btn{padding:0 20px;height:56px;font-size:13px;font-weight:500;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);cursor:pointer;white-space:nowrap}
+.send-btn:disabled{opacity:.4;cursor:not-allowed}
+.input-footer{display:flex;justify-content:space-between;align-items:center}
+.status-txt{font-size:11px;color:var(--text-3)}
+.clear-btn{font-size:11px;color:var(--text-3);background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px}
+.clear-btn:hover{background:var(--bg)}
+@media(max-width:640px){.layout{grid-template-columns:1fr}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">&#x1F6D2; ShopVivaliz</span>
+  <span class="badge">Squad Chat</span>
+  <div class="header-controls">
+    <div class="cycle-dot" id="cycleDot"></div>
+    <span class="cycle-label" id="cycleLabel">inicializando...</span>
+    <button class="ctrl-btn" id="btnPause" onclick="togglePause()">&#x23F8; Pausar</button>
+    <button class="ctrl-btn" onclick="triggerManualCycle()">&#x26A1; Ciclo agora</button>
+    <span class="countdown" id="countdown"></span>
+  </div>
+</header>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-title">Agentes</div>
+    <div class="agent-card director active" data-agent="director" onclick="toggleAgent(this)">
+      <div class="ac-name">&#x1F451; Diretor de Projetos</div>
+      <div class="ac-role">Consolida e decide</div>
+      <div class="ac-model">Hierarquico</div>
+    </div>
+    <div class="agent-card claude active" data-agent="claude" onclick="toggleAgent(this)">
+      <div class="ac-name">&#x1F9F1; Arquiteto</div>
+      <div class="ac-role">Arquitetura e SOLID</div>
+      <div class="ac-model">Claude Sonnet</div>
+    </div>
+    <div class="agent-card gpt active" data-agent="gpt" onclick="toggleAgent(this)">
+      <div class="ac-name">&#x1F50C; Integrador</div>
+      <div class="ac-role">Deploy e testes</div>
+      <div class="ac-model">GPT-4o (simulado)</div>
+    </div>
+    <div class="agent-card gemini active" data-agent="gemini" onclick="toggleAgent(this)">
+      <div class="ac-name">&#x1F6E1; Auditor</div>
+      <div class="ac-role">Seguranca e docs</div>
+      <div class="ac-model">Gemini (simulado)</div>
+    </div>
+    <div class="interval-ctrl">
+      <label>&#x23F1; Intervalo autonomo</label>
+      <select id="intervalSelect" onchange="changeInterval()">
+        <option value="300">5 minutos</option>
+        <option value="600">10 minutos</option>
+        <option value="1800" selected>30 minutos</option>
+        <option value="3600">1 hora</option>
+        <option value="7200">2 horas</option>
+      </select>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Atalhos</div>
+      <button class="quick-btn" onclick="sendQuick('Qual e a prioridade numero 1 agora no ShopVivaliz?')">&#x1F3AF; Prioridade atual</button>
+      <button class="quick-btn" onclick="sendQuick('Audite o ciclo automatico: ha riscos de travamento ou conflito?')">&#x26A0; Auditar ciclo automatico</button>
+      <button class="quick-btn" onclick="sendQuick('Como estruturar o project-director.php como gate de seguranca que bloqueia o ciclo se checkout ou seguranca estiverem com falha?')">&#x1F512; Gate de seguranca</button>
+      <button class="quick-btn" onclick="sendQuick('Gere o relatorio completo do ciclo atual: versao, arquivos alterados, parecer de cada agente e pendencias priorizadas.')">&#x1F4CB; Relatorio de versao</button>
+      <button class="quick-btn" onclick="sendQuick('Revise a estrategia de imagens do Olist: como comparar a planilha diaria com as imagens atuais do banco e corrigir vinculos por SKU automaticamente?')">&#x1F5BC; Imagens Olist</button>
+      <button class="quick-btn" onclick="sendQuick('Quais sao os riscos de seguranca criticos no ShopVivaliz agora e como corrigi-los?')">&#x1F6E1; Auditoria de seguranca</button>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="chat-area" id="chatArea"></div>
+    <div class="input-area">
+      <div class="input-row">
+        <textarea id="userInput" placeholder="Fale com o esquadrao... (Enter envia, Shift+Enter nova linha)" onkeydown="handleKey(event)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="handleSend()">Enviar</button>
+      </div>
+      <div class="input-footer">
+        <span class="status-txt" id="statusTxt">Inicializando...</span>
+        <button class="clear-btn" onclick="clearChat()">&#x1F5D1; Limpar</button>
+      </div>
+    </div>
+  </main>
+</div>
+<script>
+const API_ENDPOINT='/api/agent/squad-chat.php';
+const SQUAD_TOKEN='';
+const AUTONOMOUS_AGENDAS=[
+  'Ciclo autonomo iniciado. Diretor: faca uma varredura rapida das prioridades atuais do ShopVivaliz e delegue tarefas especificas para o Arquiteto, Integrador e Auditor neste ciclo.',
+  'Ciclo autonomo. Diretor: avalie o status do checkout (botao comprar, CEP, frete, Pix, boleto). Solicite ao Integrador o diagnostico e ao Auditor a revisao de seguranca.',
+  'Ciclo autonomo. Diretor: cheque o estado dos mockups visuais e banners. Solicite ao Arquiteto a estrutura de componentes e ao Auditor a avaliacao de qualidade visual.',
+  'Ciclo autonomo. Diretor: revise o pipeline de imagens Olist. Delegue ao Integrador a estrategia de vinculo por SKU e ao Auditor a verificacao de integridade dos dados.',
+  'Ciclo autonomo. Diretor: faca um relatorio rapido de riscos de seguranca. O Auditor deve listar os 3 riscos criticos e o Arquiteto deve propor a correcao de maior impacto.',
+  'Ciclo autonomo. Diretor: avalie o painel admin e fila de aprovacao. O Arquiteto define a estrutura, o Integrador valida os endpoints e o Auditor garante os controles de acesso.',
+  'Ciclo autonomo. Diretor: verifique Google Shopping e feed XML. O Auditor lidera a avaliacao de SEO tecnico e schema. Integrador valida o sitemap e geracao do feed.',
+];
+let activeAgents=new Set(['director','claude','gpt','gemini']);
+let history=[],busy=false,paused=false,cycleCount=0,agendaIndex=0;
+let intervalSeconds=1800,nextCycleAt=null,autonomousTimer=null;
+const AGENT_META={
+  director:{name:'Diretor de Projetos',av:'DP',cls:'director'},
+  claude:{name:'Arquiteto (Claude)',av:'CL',cls:'claude'},
+  gpt:{name:'Integrador (GPT-4o)',av:'GP',cls:'gpt'},
+  gemini:{name:'Auditor (Gemini)',av:'GM',cls:'gemini'},
+  user:{name:'Voce',av:'VC',cls:'user'},
+  system:{name:'Sistema',av:'S',cls:'system'},
+};
+function ts(){return new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function setStatus(t){document.getElementById('statusTxt').textContent=t;}
+function scrollBottom(){const el=document.getElementById('chatArea');el.scrollTop=el.scrollHeight;}
+function addMsg(id,text,isAuto=false){
+  const m=AGENT_META[id]||AGENT_META.user;
+  const tag=isAuto?'<span class="msg-tag">autonomo</span>':'';
+  const d=document.createElement('div');d.className='msg';
+  d.innerHTML='<div class="msg-header"><div class="avatar av-'+m.cls+'">'+m.av+'</div><span class="msg-name">'+m.name+'</span><span class="msg-time">'+ts()+'</span>'+tag+'</div><div class="bubble '+m.cls+'">'+esc(text)+'</div>';
+  document.getElementById('chatArea').appendChild(d);scrollBottom();
+}
+function addDivider(auto=false){
+  const label=auto?('&#x1F916; ciclo autonomo #'+cycleCount+' &middot; '+ts()):('ciclo manual &middot; '+ts());
+  const d=document.createElement('div');d.className='cycle-divider'+(auto?' auto':'');
+  d.innerHTML='<span>'+label+'</span>';
+  document.getElementById('chatArea').appendChild(d);
+}
+function addThinking(id){
+  const m=AGENT_META[id];const d=document.createElement('div');
+  d.className='msg';d.id='thinking-'+id;
+  d.innerHTML='<div class="msg-header"><div class="avatar av-'+m.cls+'">'+m.av+'</div><span class="msg-name">'+m.name+'</span></div><div class="thinking"><div class="dot-anim"><span></span><span></span><span></span></div><span class="thinking-label">analisando...</span></div>';
+  document.getElementById('chatArea').appendChild(d);scrollBottom();
+}
+function removeThinking(id){document.getElementById('thinking-'+id)?.remove();}
+function updateCountdown(){
+  if(!nextCycleAt||paused){document.getElementById('countdown').textContent='';return;}
+  const secs=Math.max(0,Math.round((nextCycleAt-Date.now())/1000));
+  const m=String(Math.floor(secs/60)).padStart(2,'0'),s=String(secs%60).padStart(2,'0');
+  document.getElementById('countdown').textContent='proximo: '+m+':'+s;
+}
+function scheduleNext(){
+  clearTimeout(autonomousTimer);if(paused)return;
+  nextCycleAt=Date.now()+intervalSeconds*1000;
+  autonomousTimer=setTimeout(autonomousCycle,intervalSeconds*1000);
+}
+async function autonomousCycle(){
+  if(busy||paused){scheduleNext();return;}
+  cycleCount++;
+  const agenda=AUTONOMOUS_AGENDAS[agendaIndex%AUTONOMOUS_AGENDAS.length];agendaIndex++;
+  await runCycle(agenda,true);scheduleNext();
+}
+async function triggerManualCycle(){
+  if(busy)return;cycleCount++;
+  const agenda=AUTONOMOUS_AGENDAS[agendaIndex%AUTONOMOUS_AGENDAS.length];agendaIndex++;
+  clearTimeout(autonomousTimer);nextCycleAt=null;
+  await runCycle(agenda,true);scheduleNext();
+}
+function changeInterval(){
+  intervalSeconds=parseInt(document.getElementById('intervalSelect').value);scheduleNext();
+  const sel=document.getElementById('intervalSelect');
+  addMsg('system','Intervalo autonomo alterado para '+sel.options[sel.selectedIndex].text+'.');
+}
+function togglePause(){
+  paused=!paused;
+  const btn=document.getElementById('btnPause'),dot=document.getElementById('cycleDot');
+  if(paused){
+    clearTimeout(autonomousTimer);nextCycleAt=null;
+    btn.innerHTML='&#x25B6; Retomar';btn.classList.add('active');
+    dot.className='cycle-dot paused';
+    document.getElementById('cycleLabel').textContent='ciclo pausado';
+    document.getElementById('countdown').textContent='';
+    addMsg('system','Ciclo autonomo pausado. Aguardando comando ou clique em Retomar.');
+  } else {
+    btn.innerHTML='&#x23F8; Pausar';btn.classList.remove('active');
+    dot.className='cycle-dot';
+    document.getElementById('cycleLabel').textContent='ciclo ativo';
+    addMsg('system','Ciclo autonomo retomado.');scheduleNext();
+  }
+}
+async function runCycle(userMsg,isAuto=false){
+  busy=true;document.getElementById('sendBtn').disabled=true;
+  setStatus(isAuto?'Ciclo autonomo em andamento...':'Esquadrao respondendo...');
+  if(!isAuto)addMsg('user',userMsg);
+  addDivider(isAuto);
+  const agents=['director','claude','gpt','gemini'].filter(id=>activeAgents.has(id));
+  try{
+    const headers={'Content-Type':'application/json'};
+    if(SQUAD_TOKEN)headers['X-Squad-Token']=SQUAD_TOKEN;
+    agents.forEach(id=>addThinking(id));
+    const res=await fetch(API_ENDPOINT,{method:'POST',headers,body:JSON.stringify({message:userMsg,agents,history:history.slice(-8),autonomous:isAuto})});
+    agents.forEach(id=>removeThinking(id));
+    if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error||'HTTP '+res.status);}
+    const data=await res.json();const allText=[];
+    for(const r of data.responses||[]){addMsg(r.agent,r.text,isAuto);allText.push('['+r.name+']: '+r.text);setStatus('✓ '+r.name+' respondeu');}
+    history.push({role:'user',content:userMsg});history.push({role:'assistant',content:allText.join('
+
+')});
+    if(history.length>20)history=history.slice(-20);
+    setStatus(agents.length+' agentes responderam'+(isAuto?' · ciclo #'+cycleCount:''));
+  }catch(err){
+    agents.forEach(id=>removeThinking(id));
+    addMsg('director','Erro no ciclo: '+err.message,isAuto);
+    setStatus('Erro — verifique o endpoint e a chave API');
+  }
+  busy=false;document.getElementById('sendBtn').disabled=false;scrollBottom();
+}
+async function handleSend(){
+  const inp=document.getElementById('userInput'),msg=inp.value.trim();
+  if(!msg||busy)return;inp.value='';
+  clearTimeout(autonomousTimer);await runCycle(msg,false);scheduleNext();
+}
+async function sendQuick(msg){if(!busy){clearTimeout(autonomousTimer);await runCycle(msg,false);scheduleNext();}}
+function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleSend();}}
+function toggleAgent(card){
+  const id=card.dataset.agent;
+  if(card.classList.contains('active')){if(activeAgents.size<=1)return;activeAgents.delete(id);card.classList.remove('active');}
+  else{activeAgents.add(id);card.classList.add('active');}
+}
+function clearChat(){document.getElementById('chatArea').innerHTML='';history=[];cycleCount=0;agendaIndex=0;setStatus('Agentes prontos');}
+// Boot
+addMsg('director','Esquadrao ShopVivaliz online.
+Ciclo autonomo: ATIVO (padrao: 30 minutos).
+Prioridade: corrigir mockups visuais e garantir checkout funcional.
+
+Os agentes iniciarao comunicacao autonoma automaticamente.
+Voce pode enviar comandos a qualquer momento ou pausar no cabecalho.');
+setInterval(updateCountdown,1000);
+scheduleNext();
+</script>
+</body>
+</html>
