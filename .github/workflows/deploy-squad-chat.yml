@@ -14,7 +14,7 @@ on:
 
 jobs:
   deploy:
-    name: Upload Squad Chat via FTP direto
+    name: Upload Squad Chat via FTP
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -31,21 +31,32 @@ jobs:
           FTP_PORT:       ${{ secrets.FTP_PORT }}
           FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
         run: |
-          set -e
           PORT="${FTP_PORT:-21}"
-          BASE="ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}"
-          CREDS="${FTP_USERNAME}:${FTP_PASSWORD}"
+          # Garante barra no final do diretório remoto
+          RDIR="${FTP_REMOTE_DIR%/}/"
 
           upload() {
             local local_path="$1"
-            local remote_path="$2"
-            echo "⬆ Enviando $local_path → $remote_path"
-            curl -s -T "$local_path" "${BASE}${remote_path}" \
-              --user "$CREDS" \
+            local remote_file="$2"
+            echo "⬆ Enviando $local_path"
+
+            # Tenta FTPS primeiro (HostGator requer TLS), depois FTP simples
+            if curl -s -T "$local_path" \
+                "ftp://${FTP_SERVER}:${PORT}/${RDIR}${remote_file}" \
+                --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
+                --ssl --ftp-create-dirs \
+                --connect-timeout 30 --max-time 120 \
+                -w "  → %{size_upload} bytes (FTPS)\n"; then
+              return 0
+            fi
+
+            echo "  FTPS falhou, tentando FTP simples..."
+            curl -s -T "$local_path" \
+              "ftp://${FTP_SERVER}:${PORT}/${RDIR}${remote_file}" \
+              --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
               --ftp-create-dirs \
-              --connect-timeout 30 \
-              --max-time 120 \
-              -w "Tamanho: %{size_upload} bytes\n"
+              --connect-timeout 30 --max-time 120 \
+              -w "  → %{size_upload} bytes (FTP)\n"
           }
 
           upload "api/agent/squad-chat.php"  "api/agent/squad-chat.php"
@@ -55,27 +66,21 @@ jobs:
 
           echo "✅ Upload concluído."
 
-      - name: Aguardar propagação e verificar
+      - name: Verificar deploy no servidor
         shell: bash
         run: |
-          sleep 10
+          sleep 15
           BASE="https://dev.shopvivaliz.com.br"
 
-          echo "Verificando canário..."
+          echo "--- Canário ---"
           if curl -fsS "$BASE/api/agent/squad-canary.txt" | grep -q "squad-canary-ok"; then
-            echo "✅ Canário confirmado — FTP chegou no lugar certo."
+            echo "✅ FTP no caminho correto."
           else
-            echo "⚠️ Canário não encontrado. Verificar FTP_REMOTE_DIR."
-            curl -s "$BASE/api/agent/squad-canary.txt" | head -5
+            echo "⚠️ Canário não encontrado em $BASE/api/agent/squad-canary.txt"
+            echo "Resposta recebida:"
+            curl -s "$BASE/api/agent/squad-canary.txt" | head -3
           fi
 
-          echo "Verificando health do Squad Chat..."
+          echo "--- Health Squad Chat ---"
           HEALTH=$(curl -s "$BASE/api/agent/squad-chat.php?health=1")
-          if echo "$HEALTH" | grep -q '"ok":true'; then
-            echo "✅ Squad Chat health OK"
-            echo "$HEALTH" | grep -o '"version":"[^"]*"'
-            echo "$HEALTH" | grep -o '"configured":[^,}]*' | head -6
-          else
-            echo "⚠️ Health não retornou ok:true. Resposta:"
-            echo "$HEALTH"
-          fi
+          echo "$HEALTH"

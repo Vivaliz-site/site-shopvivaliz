@@ -176,7 +176,9 @@ function toggleAgent(card){const id=card.dataset.agent;if(card.classList.contain
 function clearChat(){document.getElementById('chatArea').innerHTML='';history=[];cycleCount=0;agendaIndex=0;setStatus('Histórico limpo.');}
 
 // ── Debate autônomo entre agentes ────────────────────────────────────────────
-const DIALOGUE_ORDER = ['director','claude','gpt','gemini'];
+// Ordem do debate: 1 Claude (Anthropic) + 1 GPT-4o (OpenAI) + 1 Gemini (Google)
+// Director é omitido para não duplicar Claude no mesmo debate
+const DIALOGUE_ORDER = ['claude','gpt','gemini'];
 let dialogueThread = [];
 
 function addDialogueDivider(round, total) {
