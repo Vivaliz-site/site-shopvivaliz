@@ -312,7 +312,7 @@ function call_gemini_agent(string $key, string $system, string $model, array $me
             'parts' => [['text' => $message['content']]],
         ];
     }
-    $data = squad_curl_json('https://generativelanguage.googleapis.com/v1/models/' . rawurlencode($model) . ':generateContent', [
+    $data = squad_curl_json('https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent', [
         'Content-Type: application/json',
         'x-goog-api-key: ' . $key,
     ], [
