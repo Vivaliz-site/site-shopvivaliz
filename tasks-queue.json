@@ -3,7 +3,7 @@
     {
       "id": "task-001",
       "title": "Adicionar filtro de preço na listagem de produtos",
-      "description": "Implementar filtro de preço mínimo e máximo com integração ao banco de dados MySQL. Atualizar a página de listagem com Ajax para filtro em tempo real.",
+      "description": "Implementar filtro de preço mínimo e máximo com integração ao banco de dados MySQL. Atualizar a página de listagem com Ajax para filtro em tempo real sem recarregar.",
       "priority": "high",
       "status": "pending",
       "created_at": "2026-06-27T12:00:00Z"
@@ -11,7 +11,7 @@
     {
       "id": "task-002",
       "title": "Implementar carrinho de compras persistente",
-      "description": "Criar sistema de carrinho com salva em sessão PHP e localStorage JS. Permitir adicionar, remover e atualizar quantidade de produtos.",
+      "description": "Criar sistema de carrinho com salva em sessão PHP e localStorage JS. Permitir adicionar, remover e atualizar quantidade de produtos. Integrar com banco de dados para usuários logados.",
       "priority": "high",
       "status": "pending",
       "created_at": "2026-06-27T12:05:00Z"
@@ -19,18 +19,66 @@
     {
       "id": "task-003",
       "title": "Integrar sistema de cupons de desconto",
-      "description": "Criar tabela de cupons, validar cupons no checkout, aplicar desconto ao total. Suportar desconto percentual e valor fixo.",
-      "priority": "medium",
+      "description": "Criar tabela de cupons no MySQL, validar cupons no checkout, aplicar desconto ao total. Suportar desconto percentual e valor fixo. Incluir expiração de cupons.",
+      "priority": "high",
       "status": "pending",
       "created_at": "2026-06-27T12:10:00Z"
     },
     {
       "id": "task-004",
       "title": "Melhorar performance de carregamento das imagens",
-      "description": "Implementar lazy loading, otimizar tamanho das imagens, cache HTTP. Usar WebP com fallback para PNG.",
+      "description": "Implementar lazy loading com Intersection Observer, otimizar tamanho das imagens com ImageMagick, configurar cache HTTP headers. Usar WebP com fallback para PNG/JPG.",
       "priority": "medium",
       "status": "pending",
       "created_at": "2026-06-27T12:15:00Z"
+    },
+    {
+      "id": "task-005",
+      "title": "Implementar busca com autocomplete",
+      "description": "Criar endpoint de busca em PHP que retorna JSON, implementar autocomplete no frontend com AJAX. Suportar busca por nome, categoria e SKU. Cache de resultados.",
+      "priority": "medium",
+      "status": "pending",
+      "created_at": "2026-06-27T12:20:00Z"
+    },
+    {
+      "id": "task-006",
+      "title": "Adicionar sistema de avaliações e comentários",
+      "description": "Criar tabelas para avaliações de produtos (1-5 estrelas) e comentários. Implementar validação de usuário autenticado. Mostrar média de avaliações na página do produto.",
+      "priority": "medium",
+      "status": "pending",
+      "created_at": "2026-06-27T12:25:00Z"
+    },
+    {
+      "id": "task-007",
+      "title": "Integrar gateway de pagamento Stripe",
+      "description": "Configurar Stripe API, criar página de checkout segura, processar pagamentos, receber webhooks de confirmação. Suportar múltiplos métodos de pagamento.",
+      "priority": "high",
+      "status": "pending",
+      "created_at": "2026-06-27T12:30:00Z"
+    },
+    {
+      "id": "task-008",
+      "title": "Implementar sistema de notificações por email",
+      "description": "Configurar SMTP para enviar emails de confirmação de pedido, shipment tracking, e promoções. Usar templates HTML profissionais. Respeitar preferências do usuário.",
+      "priority": "medium",
+      "status": "pending",
+      "created_at": "2026-06-27T12:35:00Z"
+    },
+    {
+      "id": "task-009",
+      "title": "Adicionar painel de administração para gerenciar produtos",
+      "description": "Criar painel admin com CRUD de produtos, categorias, preços e imagens. Importar/exportar dados via CSV. Validar dados de entrada. Logs de auditoria.",
+      "priority": "high",
+      "status": "pending",
+      "created_at": "2026-06-27T12:40:00Z"
+    },
+    {
+      "id": "task-010",
+      "title": "Otimizar SEO do ecommerce",
+      "description": "Implementar meta tags dinâmicas por produto, criar sitemap XML, adicionar structured data (Schema.org), otimizar URLs amigáveis. Melhorar velocidade de página.",
+      "priority": "medium",
+      "status": "pending",
+      "created_at": "2026-06-27T12:45:00Z"
     }
   ]
 }
