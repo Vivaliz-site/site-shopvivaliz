@@ -178,7 +178,7 @@ function sendCommand() {
 function triggerAgentResponse($userMessage) {
     /**
      * Faz os agentes responderem no chat em tempo real
-     * Usa Trio IA: Gemini → Claude → ChatGPT
+     * Usa Trio IA: Gemini → Claude
      */
     try {
         // Gemini analisa e responde
@@ -187,84 +187,129 @@ function triggerAgentResponse($userMessage) {
         if ($geminiResponse) {
             // Claude refina a resposta
             $claudeResponse = callClaude($userMessage, $geminiResponse);
+            $finalResponse = $claudeResponse ?: $geminiResponse;
 
             // Salvar resposta
             $responseFile = __DIR__ . '/../../logs/monitor-responses.jsonl';
             @mkdir(dirname($responseFile), 0755, true);
 
-            $response = [
+            $logEntry = [
                 'timestamp' => date('c'),
                 'user_message' => $userMessage,
-                'agent_response' => $claudeResponse ?: $geminiResponse,
+                'agent_response' => $finalResponse,
                 'agents_used' => ['Gemini', 'Claude']
             ];
 
-            file_put_contents($responseFile, json_encode($response) . "\n", FILE_APPEND);
+            file_put_contents($responseFile, json_encode($logEntry, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
 
-            return $claudeResponse ?: $geminiResponse;
+            return $finalResponse;
+        } else {
+            error_log("⚠️ Nenhuma resposta recebida do Gemini");
         }
     } catch (Exception $e) {
-        error_log("Agent response error: " . $e->getMessage());
+        error_log("❌ Agent response error: " . $e->getMessage());
     }
 
     return null;
 }
 
 function callGemini($message) {
-    $apiKey = $_ENV['GEMINI_API_KEY'] ?? getenv('GEMINI_API_KEY');
-    if (!$apiKey) return null;
+    // Tentar múltiplas formas de acessar a chave
+    $apiKey = $_ENV['GEMINI_API_KEY']
+           ?? getenv('GEMINI_API_KEY')
+           ?? $_SERVER['GEMINI_API_KEY']
+           ?? null;
+
+    if (!$apiKey) {
+        error_log("❌ GEMINI_API_KEY não encontrada");
+        return null;
+    }
 
     try {
-        $ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $apiKey);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . urlencode($apiKey);
+
+        $payload = json_encode([
             'contents' => [
-                ['parts' => [['text' => "Você é um assistente técnico do ShopVivaliz ecommerce. Responda esta solicitação de forma breve e prática:\n\n$message"]]]
+                ['parts' => [['text' => "Você é um assistente técnico do ShopVivaliz ecommerce. Responda BREVEMENTE (máx 100 palavras):\n\n$message"]]]
             ]
-        ]));
+        ]);
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Content-Length: ' . strlen($payload)
+        ]);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
 
         $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
+
+        if ($httpCode !== 200) {
+            error_log("❌ Gemini HTTP $httpCode: $response");
+            return null;
+        }
 
         $data = json_decode($response, true);
         return $data['candidates'][0]['content']['parts'][0]['text'] ?? null;
     } catch (Exception $e) {
+        error_log("❌ Gemini error: " . $e->getMessage());
         return null;
     }
 }
 
 function callClaude($userMessage, $geminiResponse) {
-    $apiKey = $_ENV['ANTHROPIC_API_KEY'] ?? getenv('ANTHROPIC_API_KEY');
-    if (!$apiKey) return null;
+    // Tentar múltiplas formas de acessar a chave
+    $apiKey = $_ENV['ANTHROPIC_API_KEY']
+           ?? getenv('ANTHROPIC_API_KEY')
+           ?? $_SERVER['ANTHROPIC_API_KEY']
+           ?? null;
+
+    if (!$apiKey) {
+        error_log("❌ ANTHROPIC_API_KEY não encontrada");
+        return null;
+    }
 
     try {
-        $ch = curl_init('https://api.anthropic.com/v1/messages');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'x-api-key: ' . $apiKey,
-            'anthropic-version: 2023-06-01'
-        ]);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+        $payload = json_encode([
             'model' => 'claude-3-5-sonnet-20241022',
             'max_tokens' => 256,
             'messages' => [
                 [
                     'role' => 'user',
-                    'content' => "Refine esta análise técnica para ser mais clara:\n\n$geminiResponse\n\nSolicitação original: $userMessage"
+                    'content' => "Refine BREVEMENTE (máx 100 palavras):\n\n$geminiResponse\n\nOriginal: $userMessage"
                 ]
             ]
-        ]));
+        ]);
+
+        $ch = curl_init('https://api.anthropic.com/v1/messages');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'x-api-key: ' . $apiKey,
+            'anthropic-version: 2023-06-01',
+            'Content-Length: ' . strlen($payload)
+        ]);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
 
         $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
+
+        if ($httpCode !== 200) {
+            error_log("❌ Claude HTTP $httpCode: $response");
+            return null;
+        }
 
         $data = json_decode($response, true);
         return $data['content'][0]['text'] ?? null;
     } catch (Exception $e) {
+        error_log("❌ Claude error: " . $e->getMessage());
         return null;
     }
 }
@@ -294,9 +339,15 @@ function processCommand($command, $message) {
             file_put_contents($msgFile, date('Y-m-d H:i:s') . " | $message\n", FILE_APPEND);
 
             // Acionar resposta dos agentes
-            triggerAgentResponse($message);
+            $agentResponse = triggerAgentResponse($message);
 
-            return '🤖 Agentes analisando sua solicitação... Resposta em breve!';
+            // Se agentes responderam, retornar resposta
+            if ($agentResponse) {
+                return '✅ ' . $agentResponse;
+            }
+
+            // Fallback: resposta genérica se APIs falharem
+            return '⚠️ Agentes offline. Status: Processando tarefas. Tente novamente em alguns minutos.';
 
         default:
             return 'Comando desconhecido.';
