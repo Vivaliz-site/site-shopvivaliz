@@ -1,0 +1,77 @@
+name: 24/7 Agentes Continuos - Processamento Infinito
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'  # A cada 5 minutos
+    - cron: '*/15 * * * *' # A cada 15 minutos (backup)
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  continuous-agents:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Git
+        run: |
+          git config user.name "Trio IA Continuo"
+          git config user.email "trio-continuous@shopvivaliz.com.br"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install google-generativeai anthropic openai
+
+      - name: Processar 3 tarefas em paralelo (Gemini, Claude, ChatGPT)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          echo "Iniciando ciclo de processamento..."
+          python scripts/real-task-executor.py
+          echo "Ciclo concluido!"
+
+      - name: Commitar resultados
+        continue-on-error: true
+        run: |
+          git add -A
+          git commit -m "feat: agentes processaram tarefas ($(date +'%Y-%m-%d %H:%M:%S'))" || true
+          git push || true
+
+      - name: Aguardar antes do proximo ciclo
+        run: sleep 10
+
+  verify-progress:
+    needs: continuous-agents
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar progresso
+        run: |
+          echo "Verificando status da fila..."
+          python3 << 'EOF'
+          import json
+          with open('tasks-queue.json') as f:
+              queue = json.load(f)
+
+          completed = len([t for t in queue['queue'] if t['status'] == 'completed'])
+          pending = len([t for t in queue['queue'] if t['status'] == 'pending'])
+          total = len(queue['queue'])
+
+          print(f"Total: {total}")
+          print(f"Completadas: {completed}")
+          print(f"Pendentes: {pending}")
+          print(f"Progresso: {completed}/{total} ({100*completed/total:.1f}%)")
+          EOF
