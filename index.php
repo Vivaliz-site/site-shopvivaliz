@@ -16,13 +16,10 @@ header('X-XSS-Protection: 1; mode=block');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Content-Type: text/html; charset=UTF-8');
 
-// Carregador de configurações
-require_once __DIR__ . '/config/constants.php';
-require_once __DIR__ . '/config/database.php';
-
 // Versão da aplicação
 define('APP_VERSION', '9.2.85');
 define('APP_NAME', 'ShopVivaliz');
+define('BASE_URL', 'https://dev.shopvivaliz.com.br');
 
 ?>
 <!DOCTYPE html>
@@ -133,16 +130,19 @@ define('APP_NAME', 'ShopVivaliz');
     </footer>
 
     <!-- Scripts -->
-    <script src="/js/app.js"></script>
     <script>
-        // Carregar dados em tempo real
-        fetch('/api/monitor/api.php?action=status')
-            .then(r => r.json())
-            .then(data => {
-                document.getElementById('tasks-completed').textContent = data.queue.completed;
-                document.getElementById('uptime').textContent = data.queue.completion_rate + '%';
-            })
-            .catch(e => console.error('Erro ao carregar status:', e));
+        // Carregar dados em tempo real da API Monitor
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/api/monitor/api.php?action=status')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.queue) {
+                        document.getElementById('tasks-completed').textContent = data.queue.completed || '0';
+                        document.getElementById('uptime').textContent = (data.queue.completion_rate || 0) + '%';
+                    }
+                })
+                .catch(e => console.log('Monitor desconectado (esperado em desenvolvimento)'));
+        });
     </script>
 </body>
 </html>
