@@ -175,6 +175,100 @@ function sendCommand() {
     ]);
 }
 
+function triggerAgentResponse($userMessage) {
+    /**
+     * Faz os agentes responderem no chat em tempo real
+     * Usa Trio IA: Gemini → Claude → ChatGPT
+     */
+    try {
+        // Gemini analisa e responde
+        $geminiResponse = callGemini($userMessage);
+
+        if ($geminiResponse) {
+            // Claude refina a resposta
+            $claudeResponse = callClaude($userMessage, $geminiResponse);
+
+            // Salvar resposta
+            $responseFile = __DIR__ . '/../../logs/monitor-responses.jsonl';
+            @mkdir(dirname($responseFile), 0755, true);
+
+            $response = [
+                'timestamp' => date('c'),
+                'user_message' => $userMessage,
+                'agent_response' => $claudeResponse ?: $geminiResponse,
+                'agents_used' => ['Gemini', 'Claude']
+            ];
+
+            file_put_contents($responseFile, json_encode($response) . "\n", FILE_APPEND);
+
+            return $claudeResponse ?: $geminiResponse;
+        }
+    } catch (Exception $e) {
+        error_log("Agent response error: " . $e->getMessage());
+    }
+
+    return null;
+}
+
+function callGemini($message) {
+    $apiKey = $_ENV['GEMINI_API_KEY'] ?? getenv('GEMINI_API_KEY');
+    if (!$apiKey) return null;
+
+    try {
+        $ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $apiKey);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+            'contents' => [
+                ['parts' => [['text' => "Você é um assistente técnico do ShopVivaliz ecommerce. Responda esta solicitação de forma breve e prática:\n\n$message"]]]
+            ]
+        ]));
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $data = json_decode($response, true);
+        return $data['candidates'][0]['content']['parts'][0]['text'] ?? null;
+    } catch (Exception $e) {
+        return null;
+    }
+}
+
+function callClaude($userMessage, $geminiResponse) {
+    $apiKey = $_ENV['ANTHROPIC_API_KEY'] ?? getenv('ANTHROPIC_API_KEY');
+    if (!$apiKey) return null;
+
+    try {
+        $ch = curl_init('https://api.anthropic.com/v1/messages');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'x-api-key: ' . $apiKey,
+            'anthropic-version: 2023-06-01'
+        ]);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+            'model' => 'claude-3-5-sonnet-20241022',
+            'max_tokens' => 256,
+            'messages' => [
+                [
+                    'role' => 'user',
+                    'content' => "Refine esta análise técnica para ser mais clara:\n\n$geminiResponse\n\nSolicitação original: $userMessage"
+                ]
+            ]
+        ]));
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $data = json_decode($response, true);
+        return $data['content'][0]['text'] ?? null;
+    } catch (Exception $e) {
+        return null;
+    }
+}
+
 function processCommand($command, $message) {
     switch ($command) {
         case 'execute-now':
@@ -198,7 +292,11 @@ function processCommand($command, $message) {
             $msgFile = __DIR__ . '/../../logs/monitor-messages.log';
             @mkdir(dirname($msgFile), 0755, true);
             file_put_contents($msgFile, date('Y-m-d H:i:s') . " | $message\n", FILE_APPEND);
-            return 'Mensagem registrada e processada pelos agentes.';
+
+            // Acionar resposta dos agentes
+            triggerAgentResponse($message);
+
+            return '🤖 Agentes analisando sua solicitação... Resposta em breve!';
 
         default:
             return 'Comando desconhecido.';
