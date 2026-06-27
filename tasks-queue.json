@@ -1,0 +1,36 @@
+{
+  "queue": [
+    {
+      "id": "task-001",
+      "title": "Adicionar filtro de preço na listagem de produtos",
+      "description": "Implementar filtro de preço mínimo e máximo com integração ao banco de dados MySQL. Atualizar a página de listagem com Ajax para filtro em tempo real.",
+      "priority": "high",
+      "status": "pending",
+      "created_at": "2026-06-27T12:00:00Z"
+    },
+    {
+      "id": "task-002",
+      "title": "Implementar carrinho de compras persistente",
+      "description": "Criar sistema de carrinho com salva em sessão PHP e localStorage JS. Permitir adicionar, remover e atualizar quantidade de produtos.",
+      "priority": "high",
+      "status": "pending",
+      "created_at": "2026-06-27T12:05:00Z"
+    },
+    {
+      "id": "task-003",
+      "title": "Integrar sistema de cupons de desconto",
+      "description": "Criar tabela de cupons, validar cupons no checkout, aplicar desconto ao total. Suportar desconto percentual e valor fixo.",
+      "priority": "medium",
+      "status": "pending",
+      "created_at": "2026-06-27T12:10:00Z"
+    },
+    {
+      "id": "task-004",
+      "title": "Melhorar performance de carregamento das imagens",
+      "description": "Implementar lazy loading, otimizar tamanho das imagens, cache HTTP. Usar WebP com fallback para PNG.",
+      "priority": "medium",
+      "status": "pending",
+      "created_at": "2026-06-27T12:15:00Z"
+    }
+  ]
+}

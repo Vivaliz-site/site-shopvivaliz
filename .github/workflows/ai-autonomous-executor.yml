@@ -1,0 +1,50 @@
+name: Trio IA - Executor Autônomo
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  executor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Git
+        run: |
+          git config user.name "Trio IA Autônomo"
+          git config user.email "trio@shopvivaliz.com.br"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências
+        run: pip install google-genai openai anthropic
+
+      - name: Executar próxima tarefa
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python scripts/autonomous-executor.py
+
+      - name: Gerar relatório
+        if: always()
+        run: python scripts/generate-report.py
+
+      - name: Upload relatório
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorio-${{ github.run_id }}
+          path: /tmp/trio-report.txt
+          if-no-files-found: ignore
