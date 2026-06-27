@@ -48,3 +48,51 @@ jobs:
           name: relatorio-${{ github.run_id }}
           path: /tmp/trio-report.txt
           if-no-files-found: ignore
+
+      - name: Notificar em caso de falha
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USER }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: '🚨 Trio IA - Falha na Execução'
+          to: fredmourao@gmail.com
+          from: Trio IA <trio@shopvivaliz.com.br>
+          body: |
+            Impedimento detectado na execução do Trio IA!
+
+            🔍 Detalhes:
+            - Workflow: ${{ github.workflow }}
+            - Run ID: ${{ github.run_id }}
+            - Status: FALHA
+            - Hora: ${{ github.event.head_commit.timestamp }}
+
+            📊 Acione o monitor:
+            https://dev.shopvivaliz.com.br/admin/monitor/
+
+            📋 Verifique os logs:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            ⚠️ Ação Recomendada:
+            1. Verifique os logs do workflow
+            2. Analise a última tarefa executada
+            3. Intervir manualmente se necessário via GitHub Issues
+
+      - name: Notificar sucesso
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USER }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: '✅ Trio IA - Execução com Sucesso'
+          to: fredmourao@gmail.com
+          from: Trio IA <trio@shopvivaliz.com.br>
+          body: |
+            ✅ Trio IA completou a execução com sucesso!
+
+            📊 Acompanhe o progresso:
+            https://dev.shopvivaliz.com.br/admin/monitor/

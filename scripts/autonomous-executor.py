@@ -3,8 +3,11 @@
 import json
 import subprocess
 import sys
+import smtplib
 from datetime import datetime
 from pathlib import Path
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 def main():
     queue_file = Path("tasks-queue.json")

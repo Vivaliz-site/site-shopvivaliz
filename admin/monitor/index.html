@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 Trio IA Monitor - ShopVivaliz</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #667eea;
+            --secondary: #764ba2;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --dark: #1f2937;
+            --light: #f9fafb;
+            --border: #e5e7eb;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: var(--dark);
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+            height: 100vh;
+            grid-template-rows: auto 1fr;
+            grid-template-areas: "header header" "main chat";
+        }
+
+        header {
+            grid-area: header;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .header-title h1 {
+            font-size: 1.8em;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-title p {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            background: #dcfce7;
+            border-radius: 20px;
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-area {
+            grid-area: main;
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+        }
+
+        .chat-area {
+            grid-area: chat;
+            background: white;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 15px;
+            font-weight: 600;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .message {
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            word-wrap: break-word;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.agent {
+            background: #f3f4f6;
+            color: var(--dark);
+            align-self: flex-start;
+            max-width: 80%;
+        }
+
+        .message.user {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            align-self: flex-end;
+            max-width: 80%;
+        }
+
+        .message.system {
+            background: #fef3c7;
+            color: #92400e;
+            align-self: center;
+            text-align: center;
+            font-size: 0.85em;
+        }
+
+        .chat-input-area {
+            padding: 15px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input-area input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-family: inherit;
+            font-size: 0.9em;
+        }
+
+        .chat-input-area input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn-send {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+
+        .btn-send:hover {
+            transform: scale(1.05);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, white 100%);
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid var(--primary);
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.85em;
+        }
+
+        .progress-section {
+            margin-bottom: 25px;
+        }
+
+        .progress-section h3 {
+            color: var(--primary);
+            margin-bottom: 10px;
+            font-size: 1em;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e5e7eb;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.85em;
+            transition: width 0.5s ease;
+        }
+
+        .tasks-section {
+            margin-bottom: 25px;
+        }
+
+        .tasks-section h3 {
+            color: var(--primary);
+            margin-bottom: 15px;
+            font-size: 1em;
+        }
+
+        .task-item {
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            background: #f9fafb;
+            border-left: 4px solid var(--primary);
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .task-item.completed {
+            border-left-color: var(--success);
+            opacity: 0.7;
+        }
+
+        .task-item.pending {
+            border-left-color: var(--warning);
+        }
+
+        .task-info {
+            flex: 1;
+        }
+
+        .task-id {
+            font-weight: bold;
+            color: var(--primary);
+            font-size: 0.85em;
+        }
+
+        .task-title {
+            font-weight: 500;
+            margin: 5px 0;
+            font-size: 0.95em;
+        }
+
+        .task-priority {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+
+        .priority-high {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .priority-medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .priority-low {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+
+        .action-btn {
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9em;
+        }
+
+        .action-btn.primary {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+        }
+
+        .action-btn.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .action-btn.secondary {
+            background: var(--light);
+            color: var(--dark);
+            border: 1px solid var(--border);
+        }
+
+        .action-btn.secondary:hover {
+            background: var(--border);
+        }
+
+        .action-btn.danger {
+            background: #fee2e2;
+            color: var(--danger);
+        }
+
+        .action-btn.danger:hover {
+            background: #fecaca;
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+                grid-template-areas: "header" "main" "chat";
+                height: auto;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            font-size: 1.3em;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--primary);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            font-size: 0.9em;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.9em;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .modal-buttons button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .modal-buttons .btn-cancel {
+            background: var(--light);
+            color: var(--dark);
+        }
+
+        .modal-buttons .btn-submit {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+        }
+
+        .timestamp {
+            font-size: 0.8em;
+            color: #999;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="header-title">
+                <div>
+                    <h1>🤖 Trio IA Monitor</h1>
+                    <p>Gerenciamento autônomo de desenvolvimento</p>
+                </div>
+            </div>
+            <div class="status-indicator">
+                <span class="status-dot"></span>
+                <span id="status-text">Ativo</span>
+            </div>
+        </header>
+
+        <!-- Main Area -->
+        <div class="main-area">
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="total-tasks">10</div>
+                    <div class="stat-label">Total de Tarefas</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="pending-tasks">10</div>
+                    <div class="stat-label">Pendentes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="completed-tasks">0</div>
+                    <div class="stat-label">Completas</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="completion-rate">0%</div>
+                    <div class="stat-label">Taxa Conclusão</div>
+                </div>
+            </div>
+
+            <!-- Progress -->
+            <div class="progress-section">
+                <h3>Progresso Geral</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill" style="width: 0%">
+                        <span id="progress-text">0%</span>
+                    </div>
+                </div>
+                <div style="font-size: 0.85em; color: #666; margin-top: 8px;">
+                    Próxima execução: <strong id="next-run">Em ~30 min</strong>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="quick-actions">
+                <button class="action-btn primary" onclick="executeNow()">▶️ Executar Agora</button>
+                <button class="action-btn secondary" onclick="openAddTaskModal()">➕ Adicionar Tarefa</button>
+                <button class="action-btn secondary" id="pause-btn" onclick="togglePause()">⏸️ Pausar</button>
+                <button class="action-btn secondary" onclick="refreshData()">🔄 Atualizar</button>
+            </div>
+
+            <!-- Next Tasks -->
+            <div class="tasks-section">
+                <h3>⏭️ Próximas Tarefas</h3>
+                <div id="next-tasks-list">
+                    <p style="color: #999;">Carregando...</p>
+                </div>
+            </div>
+
+            <!-- Completed Tasks -->
+            <div class="tasks-section">
+                <h3>✅ Tarefas Completas</h3>
+                <div id="completed-tasks-list">
+                    <p style="color: #999;">Nenhuma tarefa completa ainda</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-area">
+            <div class="chat-header">💬 Chat com Agentes IA</div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="message system">Chat iniciado - Envie instruções aos agentes</div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" placeholder="Descreva sua instrução..." onkeypress="if(event.key==='Enter') sendMessage()">
+                <button class="btn-send" onclick="sendMessage()">→</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Adicionar Tarefa -->
+    <div class="modal" id="add-task-modal">
+        <div class="modal-content">
+            <div class="modal-header">Adicionar Nova Tarefa</div>
+            <div class="form-group">
+                <label>Título *</label>
+                <input type="text" id="task-title" placeholder="Ex: Integrar Stripe">
+            </div>
+            <div class="form-group">
+                <label>Descrição *</label>
+                <textarea id="task-desc" placeholder="Descreva o que precisa ser feito..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Prioridade</label>
+                <select id="task-priority" style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px;">
+                    <option value="low">Baixa</option>
+                    <option value="medium" selected>Média</option>
+                    <option value="high">Alta</option>
+                </select>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="closeAddTaskModal()">Cancelar</button>
+                <button class="btn-submit" onclick="submitAddTask()">Adicionar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/monitor/api.php';
+        let isPaused = false;
+        let autoRefreshInterval;
+
+        // Inicializar
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshData();
+            autoRefreshInterval = setInterval(refreshData, 5000); // Atualizar a cada 5s
+        });
+
+        async function refreshData() {
+            try {
+                // Pegar status
+                const statusResp = await fetch(`${API_BASE}?action=status`);
+                const status = await statusResp.json();
+
+                document.getElementById('total-tasks').textContent = status.queue.total;
+                document.getElementById('pending-tasks').textContent = status.queue.pending;
+                document.getElementById('completed-tasks').textContent = status.queue.completed;
+                document.getElementById('completion-rate').textContent = status.queue.completion_rate.toFixed(0) + '%';
+
+                const progressFill = document.getElementById('progress-fill');
+                progressFill.style.width = status.queue.completion_rate + '%';
+                document.getElementById('progress-text').textContent = status.queue.completion_rate.toFixed(0) + '%';
+
+                document.getElementById('status-text').textContent = status.executor.is_running ? 'Ativo' : 'Pausado';
+
+                // Pegar tarefas
+                const tasksResp = await fetch(`${API_BASE}?action=tasks`);
+                const tasks = await tasksResp.json();
+
+                updateTasksList('next-tasks-list', tasks.pending);
+                updateTasksList('completed-tasks-list', tasks.completed);
+            } catch (error) {
+                console.error('Erro ao atualizar dados:', error);
+            }
+        }
+
+        function updateTasksList(elementId, tasks) {
+            const element = document.getElementById(elementId);
+            if (tasks.length === 0) {
+                element.innerHTML = '<p style="color: #999;">Nenhuma tarefa</p>';
+                return;
+            }
+
+            element.innerHTML = tasks.map(task => `
+                <div class="task-item ${task.status}">
+                    <div class="task-info">
+                        <div class="task-id">${task.id}</div>
+                        <div class="task-title">${task.title}</div>
+                        <div class="task-priority priority-${task.priority}">${task.priority.toUpperCase()}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            // Adicionar mensagem do usuário
+            addChatMessage(message, 'user');
+            input.value = '';
+
+            try {
+                // Enviar comando aos agentes
+                const response = await fetch(`${API_BASE}?action=send-command`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        command: 'message',
+                        message: message
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    addChatMessage(result.response, 'agent');
+                }
+            } catch (error) {
+                addChatMessage('Erro ao processar mensagem.', 'agent');
+            }
+        }
+
+        function addChatMessage(text, type) {
+            const container = document.getElementById('chat-messages');
+            const div = document.createElement('div');
+            div.className = `message ${type}`;
+            div.innerHTML = `
+                ${text}
+                <div class="timestamp">${new Date().toLocaleTimeString('pt-BR')}</div>
+            `;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function executeNow() {
+            addChatMessage('Acionando executor agora...', 'system');
+            try {
+                const response = await fetch(`${API_BASE}?action=send-command`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: 'execute-now' })
+                });
+
+                const result = await response.json();
+                addChatMessage('✅ ' + result.response, 'agent');
+                setTimeout(refreshData, 2000);
+            } catch (error) {
+                addChatMessage('❌ Erro ao executar.', 'agent');
+            }
+        }
+
+        async function togglePause() {
+            isPaused = !isPaused;
+            const btn = document.getElementById('pause-btn');
+
+            try {
+                const response = await fetch(`${API_BASE}?action=send-command`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: isPaused ? 'pause' : 'resume' })
+                });
+
+                const result = await response.json();
+                addChatMessage((isPaused ? '⏸️' : '▶️') + ' ' + result.response, 'agent');
+                btn.textContent = isPaused ? '▶️ Retomar' : '⏸️ Pausar';
+                refreshData();
+            } catch (error) {
+                addChatMessage('❌ Erro ao pausar/retomar.', 'agent');
+            }
+        }
+
+        function openAddTaskModal() {
+            document.getElementById('add-task-modal').classList.add('active');
+        }
+
+        function closeAddTaskModal() {
+            document.getElementById('add-task-modal').classList.remove('active');
+        }
+
+        async function submitAddTask() {
+            const title = document.getElementById('task-title').value;
+            const desc = document.getElementById('task-desc').value;
+            const priority = document.getElementById('task-priority').value;
+
+            if (!title || !desc) {
+                alert('Preencha todos os campos');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}?action=add-task`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, description: desc, priority })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    addChatMessage(`✅ Tarefa ${result.task.id} adicionada!`, 'agent');
+                    closeAddTaskModal();
+                    document.getElementById('task-title').value = '';
+                    document.getElementById('task-desc').value = '';
+                    refreshData();
+                }
+            } catch (error) {
+                addChatMessage('❌ Erro ao adicionar tarefa.', 'agent');
+            }
+        }
+    </script>
+</body>
+</html>
