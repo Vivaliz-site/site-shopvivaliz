@@ -189,6 +189,98 @@ function squad_github_file(string $path): string
     return "=== {$path} ===\n{$content}";
 }
 
+function squad_github_issues(): string
+{
+    $token = getenv('GH_REPO_TOKEN') ?: '';
+    $repo  = getenv('GH_REPO') ?: 'fredmourao-ai/site-shopvivaliz';
+    if ($token === '') return '';
+
+    $ch = curl_init("https://api.github.com/repos/{$repo}/issues?state=open&per_page=10&sort=updated");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_HTTPHEADER     => [
+            "Authorization: Bearer {$token}",
+            "Accept: application/vnd.github+json",
+            "User-Agent: ShopVivaliz-Squad/1.0",
+        ],
+    ]);
+    $raw = (string) curl_exec($ch);
+    curl_close($ch);
+
+    $items = json_decode($raw, true);
+    if (!is_array($items)) return '';
+
+    $lines = ["=== ISSUES ABERTAS ==="];
+    foreach (array_slice($items, 0, 10) as $i) {
+        $lines[] = "#{$i['number']} [{$i['state']}] {$i['title']} — {$i['html_url']}";
+    }
+    return implode("\n", $lines);
+}
+
+function squad_github_create_issue(string $title, string $body, array $labels = []): string
+{
+    $token = getenv('GH_REPO_TOKEN') ?: '';
+    $repo  = getenv('GH_REPO') ?: 'fredmourao-ai/site-shopvivaliz';
+    if ($token === '' || $title === '') return '';
+
+    $payload = json_encode(array_filter(['title' => $title, 'body' => $body, 'labels' => $labels]));
+    $ch = curl_init("https://api.github.com/repos/{$repo}/issues");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_HTTPHEADER     => [
+            "Authorization: Bearer {$token}",
+            "Accept: application/vnd.github+json",
+            "Content-Type: application/json",
+            "User-Agent: ShopVivaliz-Squad/1.0",
+        ],
+    ]);
+    $raw  = (string) curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $data = json_decode($raw, true);
+    if ($code === 201 && isset($data['html_url'])) {
+        return "✅ Issue criada: #{$data['number']} — {$data['html_url']}";
+    }
+    return "⚠️ Erro ao criar issue: HTTP {$code}";
+}
+
+function squad_github_commits(): string
+{
+    $token = getenv('GH_REPO_TOKEN') ?: '';
+    $repo  = getenv('GH_REPO') ?: 'fredmourao-ai/site-shopvivaliz';
+    if ($token === '') return '';
+
+    $ch = curl_init("https://api.github.com/repos/{$repo}/commits?per_page=10");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_HTTPHEADER     => [
+            "Authorization: Bearer {$token}",
+            "Accept: application/vnd.github+json",
+            "User-Agent: ShopVivaliz-Squad/1.0",
+        ],
+    ]);
+    $raw = (string) curl_exec($ch);
+    curl_close($ch);
+
+    $items = json_decode($raw, true);
+    if (!is_array($items)) return '';
+
+    $lines = ["=== COMMITS RECENTES ==="];
+    foreach (array_slice($items, 0, 10) as $c) {
+        $sha  = substr($c['sha'], 0, 7);
+        $msg  = strtok($c['commit']['message'], "\n");
+        $date = substr($c['commit']['author']['date'], 0, 10);
+        $lines[] = "{$sha} [{$date}] {$msg}";
+    }
+    return implode("\n", $lines);
+}
+
 $allowed_origins = [
     'https://dev.shopvivaliz.com.br',
     'https://shopvivaliz.com.br',
@@ -304,7 +396,9 @@ $agentConfigs = [
 ];
 
 // Contexto do repositório para todos os agentes
-$repoTree = squad_github_tree();
+$repoTree    = squad_github_tree();
+$repoIssues  = squad_github_issues();
+$repoCommits = squad_github_commits();
 
 // Detecta arquivos mencionados na mensagem e busca conteúdo
 $repoFileCtx = '';
@@ -319,8 +413,12 @@ if ($repoTree !== '') {
     $repoFileCtx = $fetched !== [] ? "\n\n" . implode("\n\n", $fetched) : '';
 }
 
-if ($repoTree !== '') {
-    $repoContext = "\n\n" . $repoTree . $repoFileCtx;
+$ghCtxParts = array_filter([$repoTree, $repoIssues, $repoCommits]);
+if ($ghCtxParts !== []) {
+    $ghInstructions = "\n\nVocê tem acesso total ao repositório GitHub. "
+        . "Para criar uma issue use o bloco: [CRIAR_ISSUE titulo=\"...\" corpo=\"...\"] no final da sua resposta. "
+        . "Você pode analisar o código, sugerir melhorias, identificar bugs e abrir issues diretamente.";
+    $repoContext = "\n\n" . implode("\n\n", $ghCtxParts) . $repoFileCtx . $ghInstructions;
     foreach ($agentConfigs as &$cfg) {
         $cfg['system'] .= $repoContext;
     }
@@ -442,7 +540,16 @@ foreach ($agentsToRun as $agentId) {
         } else {
             $text = call_anthropic_agent($anthropicKey, $config['system'], $config['model'], $messages, $maxTokens);
         }
-        $responses[] = ['agent' => $agentId, 'name' => $config['name'], 'provider' => $config['provider'], 'model' => $config['model'], 'text' => $text, 'ok' => true];
+        // Processa comando de criação de issue
+        $githubAction = null;
+        if (preg_match('/\[CRIAR_ISSUE\s+titulo="([^"]+)"\s+corpo="([^"]*)"\]/i', $text, $im)) {
+            $issueResult  = squad_github_create_issue($im[1], $im[2], [$config['name']]);
+            $text         = preg_replace('/\[CRIAR_ISSUE[^\]]+\]/i', '', $text);
+            $githubAction = $issueResult;
+        }
+        $entry = ['agent' => $agentId, 'name' => $config['name'], 'provider' => $config['provider'], 'model' => $config['model'], 'text' => $text, 'ok' => true];
+        if ($githubAction !== null) $entry['github_action'] = $githubAction;
+        $responses[] = $entry;
     } catch (RuntimeException $e) {
         $responses[] = ['agent' => $agentId, 'name' => $config['name'], 'provider' => $config['provider'], 'model' => $config['model'], 'text' => 'Erro: ' . $e->getMessage(), 'ok' => false];
     }
