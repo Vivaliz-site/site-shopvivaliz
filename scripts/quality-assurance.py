@@ -18,7 +18,7 @@ class QualityAssurance:
 
     def run_php_lint(self):
         """Validar sintaxe PHP"""
-        print("🔍 Verificando sintaxe PHP...")
+        print(" Verificando sintaxe PHP...")
         try:
             result = subprocess.run(
                 ["php", "-l", "-f", "find . -name '*.php' | head -20"],
@@ -26,10 +26,10 @@ class QualityAssurance:
                 text=True
             )
             self.results['lint'] = result.returncode == 0
-            print(f"  {'✅' if self.results['lint'] else '❌'} PHP Lint")
+            print(f"  {'' if self.results['lint'] else ''} PHP Lint")
             return self.results['lint']
         except Exception as e:
-            print(f"  ⚠️ PHP Lint não disponível: {e}")
+            print(f"   PHP Lint não disponível: {e}")
             return True  # Não bloquear se PHP não disponível
 
     def run_code_analysis(self):
@@ -57,10 +57,10 @@ class QualityAssurance:
                     issues.append(f"{php_file}: {issue}")
 
         if not issues:
-            print("  ✅ Nenhum padrão perigoso encontrado")
+            print("   Nenhum padrão perigoso encontrado")
             self.results['syntax'] = True
         else:
-            print("  ⚠️ Problemas encontrados:")
+            print("   Problemas encontrados:")
             for issue in issues[:5]:  # Mostrar até 5
                 print(f"    - {issue}")
             self.results['syntax'] = False
@@ -79,10 +79,10 @@ class QualityAssurance:
                 input="<?php echo 'OK';"
             )
             self.results['build'] = result.returncode == 0
-            print(f"  {'✅' if self.results['build'] else '❌'} Build")
+            print(f"  {'' if self.results['build'] else ''} Build")
             return self.results['build']
         except Exception as e:
-            print(f"  ⚠️ Build check erro: {e}")
+            print(f"   Build check erro: {e}")
             return True
 
     def run_tests(self):
@@ -103,16 +103,16 @@ class QualityAssurance:
                 timeout=30
             )
             self.results['tests'] = result.returncode == 0
-            print(f"  {'✅' if self.results['tests'] else '❌'} Testes")
+            print(f"  {'' if self.results['tests'] else ''} Testes")
             return self.results['tests']
         except subprocess.TimeoutExpired:
-            print("  ⚠️ Testes demoraram muito")
+            print("   Testes demoraram muito")
             return False
 
     def run_all_checks(self):
         """Executar todos os checks"""
         print("\n" + "=" * 60)
-        print("🔍 QUALITY ASSURANCE - PRÉ-COMMIT")
+        print(" QUALITY ASSURANCE - PRÉ-COMMIT")
         print("=" * 60 + "\n")
 
         self.run_php_lint()
@@ -130,9 +130,9 @@ class QualityAssurance:
 
         print("\n" + "=" * 60)
         if self.results['overall']:
-            print("✅ TODOS OS CHECKS PASSARAM - OK PARA COMMIT")
+            print(" TODOS OS CHECKS PASSARAM - OK PARA COMMIT")
         else:
-            print("❌ FALHAS DETECTADAS - COMMIT BLOQUEADO")
+            print(" FALHAS DETECTADAS - COMMIT BLOQUEADO")
         print("=" * 60 + "\n")
 
         return self.results['overall']

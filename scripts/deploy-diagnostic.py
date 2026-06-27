@@ -14,7 +14,7 @@ class DeployDiagnostic:
 
     def check_ftp_credentials(self):
         """Verificar credenciais FTP"""
-        print("🔍 Verificando credenciais FTP...")
+        print(" Verificando credenciais FTP...")
 
         ftp_host = os.getenv('FTP_SERVER')
         ftp_user = os.getenv('FTP_USERNAME')
@@ -22,20 +22,20 @@ class DeployDiagnostic:
         ftp_dir = os.getenv('FTP_REMOTE_DIR')
 
         if not ftp_host:
-            self.issues.append("❌ FTP_SERVER não configurado nos secrets")
+            self.issues.append(" FTP_SERVER não configurado nos secrets")
         if not ftp_user:
-            self.issues.append("❌ FTP_USERNAME não configurado")
+            self.issues.append(" FTP_USERNAME não configurado")
         if not ftp_pass:
-            self.issues.append("❌ FTP_PASSWORD não configurado")
+            self.issues.append(" FTP_PASSWORD não configurado")
         if not ftp_dir:
-            self.warnings.append("⚠️ FTP_REMOTE_DIR não definido (verificar padrão)")
+            self.warnings.append(" FTP_REMOTE_DIR não definido (verificar padrão)")
 
         if not self.issues:
-            print("  ✅ Credenciais FTP configuradas")
+            print("   Credenciais FTP configuradas")
 
     def check_file_permissions(self):
         """Verificar permissões de arquivos"""
-        print("🔍 Verificando permissões de arquivos...")
+        print(" Verificando permissões de arquivos...")
 
         files_to_check = [
             "admin/monitor/index.html",
@@ -46,13 +46,13 @@ class DeployDiagnostic:
 
         for file in files_to_check:
             if not Path(file).exists():
-                self.issues.append(f"❌ Arquivo não encontrado: {file}")
+                self.issues.append(f" Arquivo não encontrado: {file}")
             else:
-                print(f"  ✅ {file}")
+                print(f"   {file}")
 
     def check_github_secrets(self):
         """Verificar secrets do GitHub"""
-        print("🔍 Verificando GitHub Secrets...")
+        print(" Verificando GitHub Secrets...")
 
         required_secrets = [
             'FTP_SERVER',
@@ -69,14 +69,14 @@ class DeployDiagnostic:
         missing = [s for s in required_secrets if not os.getenv(s)]
 
         if missing:
-            print(f"  ⚠️ Secrets faltando: {', '.join(missing)}")
+            print(f"   Secrets faltando: {', '.join(missing)}")
             self.warnings.append(f"Secrets não disponíveis localmente (OK em GitHub)")
         else:
-            print("  ✅ Todos os secrets presentes")
+            print("   Todos os secrets presentes")
 
     def check_workflow_syntax(self):
         """Verificar sintaxe dos workflows YAML"""
-        print("🔍 Verificando workflow YAML...")
+        print(" Verificando workflow YAML...")
 
         workflows = Path(".github/workflows").glob("*.yml")
 
@@ -86,15 +86,15 @@ class DeployDiagnostic:
                 with open(wf) as f:
                     content = f.read()
                     if "on:" in content and "jobs:" in content:
-                        print(f"  ✅ {wf.name}")
+                        print(f"   {wf.name}")
                     else:
-                        self.warnings.append(f"⚠️ {wf.name} pode ter sintaxe incorreta")
+                        self.warnings.append(f" {wf.name} pode ter sintaxe incorreta")
             except Exception as e:
-                self.issues.append(f"❌ Erro ao ler {wf.name}: {e}")
+                self.issues.append(f" Erro ao ler {wf.name}: {e}")
 
     def check_php_syntax(self):
         """Verificar sintaxe PHP"""
-        print("🔍 Verificando PHP...")
+        print(" Verificando PHP...")
 
         php_files = list(Path(".").rglob("*.php"))[:5]
 
@@ -107,14 +107,14 @@ class DeployDiagnostic:
                     timeout=5
                 )
                 if result.returncode == 0:
-                    print(f"  ✅ {php_file}")
+                    print(f"   {php_file}")
             except Exception as e:
-                self.warnings.append(f"⚠️ PHP check falhou: {e}")
+                self.warnings.append(f" PHP check falhou: {e}")
                 break
 
     def check_git_status(self):
         """Verificar status do Git"""
-        print("🔍 Verificando Git...")
+        print(" Verificando Git...")
 
         result = subprocess.run(
             ["git", "status", "--porcelain"],
@@ -123,9 +123,9 @@ class DeployDiagnostic:
         )
 
         if result.stdout.strip():
-            self.warnings.append("⚠️ Há arquivos não commitados")
+            self.warnings.append(" Há arquivos não commitados")
         else:
-            print("  ✅ Repositório limpo")
+            print("   Repositório limpo")
 
     def generate_report(self):
         """Gerar relatório de diagnóstico"""
@@ -134,19 +134,19 @@ class DeployDiagnostic:
         print("=" * 60 + "\n")
 
         if self.issues:
-            print("❌ PROBLEMAS ENCONTRADOS:\n")
+            print(" PROBLEMAS ENCONTRADOS:\n")
             for issue in self.issues:
                 print(f"  {issue}")
             print()
 
         if self.warnings:
-            print("⚠️ AVISOS:\n")
+            print(" AVISOS:\n")
             for warning in self.warnings:
                 print(f"  {warning}")
             print()
 
         if not self.issues and not self.warnings:
-            print("✅ NENHUM PROBLEMA DETECTADO\n")
+            print(" NENHUM PROBLEMA DETECTADO\n")
 
         print("=" * 60)
 
@@ -155,7 +155,7 @@ class DeployDiagnostic:
     def run_all_checks(self):
         """Rodar todos os checks"""
         print("\n" + "=" * 60)
-        print("🔍 DEPLOY DIAGNOSTIC")
+        print(" DEPLOY DIAGNOSTIC")
         print("=" * 60 + "\n")
 
         self.check_ftp_credentials()

@@ -90,7 +90,7 @@ class LearningLoop:
         lessons = self.get_lessons_for_agent(agent_name, 'syntax_error')
 
         if len(lessons) > 3:
-            print(f"⚠️ {agent_name} tem histórico de syntax errors - recomendando mudança de abordagem")
+            print(f" {agent_name} tem histórico de syntax errors - recomendando mudança de abordagem")
             return True
 
         return False

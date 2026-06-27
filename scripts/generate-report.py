@@ -15,13 +15,13 @@ pending = len([t for t in tasks if t["status"] == "pending"])
 total = len(tasks)
 
 report = f"""
-📊 RELATÓRIO - Trio IA Autônomo
+ RELATÓRIO - Trio IA Autônomo
 {'='*60}
 Data/Hora: {datetime.utcnow().isoformat()}
 
 STATUS DA FILA:
   Total: {total}
-  ✅ Completas: {completed}
+   Completas: {completed}
   ⏳ Pendentes: {pending}
   Taxa: {(completed/total*100) if total > 0 else 0:.1f}%
 

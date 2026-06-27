@@ -10,13 +10,13 @@ import requests
 def configurar_branch_protection():
     token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN")
     if not token:
-        print("❌ GITHUB_TOKEN não encontrado em variáveis de ambiente")
+        print(" GITHUB_TOKEN não encontrado em variáveis de ambiente")
         sys.exit(1)
 
     # Extrair owner/repo do git remote
     repo_url = os.popen("git config --get remote.origin.url").read().strip()
     if "github.com" not in repo_url:
-        print(f"❌ Remote URL inválida: {repo_url}")
+        print(f" Remote URL inválida: {repo_url}")
         sys.exit(1)
 
     # Extrair owner/repo
@@ -58,11 +58,11 @@ def configurar_branch_protection():
     response = requests.put(url, json=payload, headers=headers)
 
     if response.status_code in (200, 201):
-        print("✅ Branch protection configurada com sucesso!")
+        print(" Branch protection configurada com sucesso!")
         print("   - GitHub Actions pode fazer push direto")
         print("   - Force push habilitado para recuperação de emergência")
     else:
-        print(f"❌ Erro ao configurar: {response.status_code}")
+        print(f" Erro ao configurar: {response.status_code}")
         print(response.text)
         sys.exit(1)
 

@@ -14,21 +14,21 @@ class AutoDocumentation:
         """Gerar README.md"""
         readme = f"""# ShopVivaliz - Ecommerce Autônomo
 
-## 🤖 Sistema Operado por IA
+##  Sistema Operado por IA
 
 Desenvolvido automaticamente por Trio IA (Gemini + Claude + ChatGPT)
 
 **Última atualização:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
-## 📊 Status
+##  Status
 
-- ✅ Sistema operacional 24/7
-- ✅ Desenvolvimento contínuo
-- ✅ Agentes trabalhando em paralelo
-- ✅ QA automático
-- ✅ Deploy automático
+-  Sistema operacional 24/7
+-  Desenvolvimento contínuo
+-  Agentes trabalhando em paralelo
+-  QA automático
+-  Deploy automático
 
-## 🚀 Features
+##  Features
 
 - Filtro de preço
 - Carrinho de compras
@@ -50,7 +50,7 @@ Desenvolvido automaticamente por Trio IA (Gemini + Claude + ChatGPT)
 - CI/CD: GitHub Actions
 - Deployment: HostGator
 
-## 📈 Métricas
+##  Métricas
 
 - Tarefas completadas: 1/12 (8%)
 - Taxa de sucesso: 100%
@@ -65,7 +65,7 @@ O sistema é autônomo. Instruções via GitHub Issues com tag [TRIO].
 *Gerado automaticamente pelo sistema*
 """
         Path("README.md").write_text(readme)
-        print("✅ README.md gerado")
+        print(" README.md gerado")
 
     def generate_api_docs(self):
         """Gerar API documentation"""
@@ -109,7 +109,7 @@ Server-Sent Events para chat bidirecional
 *Gerado automaticamente*
 """
         self.docs_dir.joinpath("API.md").write_text(api_docs)
-        print("✅ API.md gerado")
+        print(" API.md gerado")
 
     def generate_changelog(self):
         """Gerar CHANGELOG.md"""
@@ -143,7 +143,7 @@ Server-Sent Events para chat bidirecional
 *Gerado automaticamente em {datetime.now().strftime('%Y-%m-%d')}*
 """
         Path("CHANGELOG.md").write_text(changelog)
-        print("✅ CHANGELOG.md gerado")
+        print(" CHANGELOG.md gerado")
 
     def generate_all(self):
         """Gerar toda documentação"""
@@ -151,4 +151,4 @@ Server-Sent Events para chat bidirecional
         self.generate_readme()
         self.generate_api_docs()
         self.generate_changelog()
-        print("\n✅ Documentação atualizada!")
+        print("\n Documentação atualizada!")

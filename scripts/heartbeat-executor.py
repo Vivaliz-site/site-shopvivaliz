@@ -14,7 +14,7 @@ def trigger_executor():
 
     token = os.getenv('GITHUB_TOKEN')
     if not token:
-        print("❌ GITHUB_TOKEN não configurado")
+        print(" GITHUB_TOKEN não configurado")
         return False
 
     # Acionar workflow
@@ -28,7 +28,7 @@ def trigger_executor():
     try:
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode == 0:
-            print(f"✅ Executor acionado em {datetime.now().isoformat()}")
+            print(f" Executor acionado em {datetime.now().isoformat()}")
 
             # Log do heartbeat
             logfile = Path(__file__).parent.parent / "logs" / "executor-heartbeat.log"
@@ -40,10 +40,10 @@ def trigger_executor():
             )
             return True
         else:
-            print(f"❌ Erro ao acionar: {result.stderr}")
+            print(f" Erro ao acionar: {result.stderr}")
             return False
     except Exception as e:
-        print(f"❌ Erro: {e}")
+        print(f" Erro: {e}")
         return False
 
 if __name__ == "__main__":

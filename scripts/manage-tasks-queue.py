@@ -54,7 +54,7 @@ def add_task(title, description, priority="medium"):
     data["queue"].append(new_task)
     save_queue(data)
 
-    print(f"✅ Tarefa adicionada!")
+    print(f" Tarefa adicionada!")
     print(f"   ID: {new_id}")
     print(f"   Título: {title}")
     print(f"   Prioridade: {priority}")
@@ -63,14 +63,14 @@ def remove_task(task_id):
     data = load_queue()
     data["queue"] = [t for t in data["queue"] if t["id"] != task_id]
     save_queue(data)
-    print(f"✅ Tarefa {task_id} removida da fila")
+    print(f" Tarefa {task_id} removida da fila")
 
 def mark_task(task_id, status):
     data = load_queue()
     task = next((t for t in data["queue"] if t["id"] == task_id), None)
 
     if not task:
-        print(f"❌ Tarefa {task_id} não encontrada")
+        print(f" Tarefa {task_id} não encontrada")
         return
 
     task["status"] = status
@@ -78,19 +78,19 @@ def mark_task(task_id, status):
         task["completed_at"] = datetime.utcnow().isoformat() + "Z"
 
     save_queue(data)
-    print(f"✅ Tarefa {task_id} marcada como {status}")
+    print(f" Tarefa {task_id} marcada como {status}")
 
 def priority(task_id, new_priority):
     data = load_queue()
     task = next((t for t in data["queue"] if t["id"] == task_id), None)
 
     if not task:
-        print(f"❌ Tarefa {task_id} não encontrada")
+        print(f" Tarefa {task_id} não encontrada")
         return
 
     task["priority"] = new_priority
     save_queue(data)
-    print(f"✅ Prioridade de {task_id} alterada para {new_priority}")
+    print(f" Prioridade de {task_id} alterada para {new_priority}")
 
 def stats():
     data = load_queue()
@@ -100,9 +100,9 @@ def stats():
     completed = len([t for t in tasks if t["status"] == "completed"])
     pending = len([t for t in tasks if t["status"] == "pending"])
 
-    print(f"\n📊 Estatísticas da Fila:")
+    print(f"\n Estatísticas da Fila:")
     print(f"   Total: {total}")
-    print(f"   ✅ Completas: {completed}")
+    print(f"    Completas: {completed}")
     print(f"   ⏳ Pendentes: {pending}")
     print(f"   Taxa: {(completed/total*100):.1f}%")
     print()

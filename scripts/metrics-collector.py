@@ -91,7 +91,7 @@ class MetricsCollector:
         stats = self.get_agent_stats()
         budget = self.get_budget_usage()
 
-        report = "# 📊 Relatório de Métricas\n\n"
+        report = "#  Relatório de Métricas\n\n"
         report += f"**Gerado:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
 
         report += "## Performance por Agente\n\n"
@@ -117,7 +117,7 @@ class MetricsCollector:
         report_file = Path("metrics-report.md")
         report = self.generate_report()
         report_file.write_text(report)
-        print("✅ Relatório salvo em metrics-report.md")
+        print(" Relatório salvo em metrics-report.md")
 
 if __name__ == "__main__":
     collector = MetricsCollector()

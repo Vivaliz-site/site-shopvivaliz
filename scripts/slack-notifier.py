@@ -15,7 +15,7 @@ class SlackNotifier:
     def notify_task_completed(self, task_id, agent_name, elapsed_time):
         """Notificar conclusão de tarefa"""
         message = f"""
-✅ **Tarefa Completada!**
+ **Tarefa Completada!**
 - Task: {task_id}
 - Agente: {agent_name}
 - Tempo: {elapsed_time:.1f}s
@@ -26,7 +26,7 @@ class SlackNotifier:
     def notify_error(self, task_id, error_msg):
         """Notificar erro"""
         message = f"""
-❌ **Erro Detectado!**
+ **Erro Detectado!**
 - Task: {task_id}
 - Erro: {error_msg}
 - Timestamp: {datetime.now().strftime('%H:%M:%S')}
@@ -37,7 +37,7 @@ class SlackNotifier:
         """Notificar limite de budget"""
         percentage = (used / limit) * 100
         message = f"""
-⚠️ **Budget Warning!**
+ **Budget Warning!**
 - Agente: {agent_name}
 - Gasto: ${used:.2f} / ${limit:.2f} ({percentage:.1f}%)
 - Ação: Considere pausar ou otimizar
@@ -63,6 +63,6 @@ class SlackNotifier:
         }
 
         if command in commands:
-            print(f"✅ Comando {command}: {commands[command]}")
+            print(f" Comando {command}: {commands[command]}")
             return True
         return False

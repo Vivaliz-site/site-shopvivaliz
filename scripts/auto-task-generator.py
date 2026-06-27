@@ -22,7 +22,7 @@ def get_gemini_suggestions():
 Analize o que já foi implementado e sugira 3 novas tarefas/features de ALTA PRIORIDADE que faltam:
 
 Já implementado:
-- Filtro de preço ✅
+- Filtro de preço 
 - Em desenvolvimento: Carrinho persistente
 
 Requisitos:
@@ -43,7 +43,7 @@ Seja específico e técnico."""
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        print(f"❌ Gemini error: {e}")
+        print(f" Gemini error: {e}")
         return None
 
 def get_claude_analysis():
@@ -74,7 +74,7 @@ Retorne JSON com 2-3 tarefas URGENTES."""
         )
         return message.content[0].text
     except Exception as e:
-        print(f"❌ Claude error: {e}")
+        print(f" Claude error: {e}")
         return None
 
 def parse_and_create_tasks(suggestions):
@@ -92,10 +92,10 @@ def parse_and_create_tasks(suggestions):
             tasks_data = json.loads(json_match.group())
             new_tasks = tasks_data.get('tasks', [])
         else:
-            print("⚠️ Nenhuma sugestão estruturada recebida")
+            print(" Nenhuma sugestão estruturada recebida")
             return 0
     except json.JSONDecodeError:
-        print("⚠️ Erro ao parsear JSON das sugestões")
+        print(" Erro ao parsear JSON das sugestões")
         return 0
 
     # Adicionar à fila
@@ -121,7 +121,7 @@ def parse_and_create_tasks(suggestions):
         created += 1
         max_id += 1
 
-        print(f"✅ Tarefa criada: {new_id} - {task_data.get('title')}")
+        print(f" Tarefa criada: {new_id} - {task_data.get('title')}")
 
     # Salvar fila atualizada
     with open(queue_file, "w", encoding="utf-8") as f:
@@ -130,25 +130,25 @@ def parse_and_create_tasks(suggestions):
     return created
 
 def main():
-    print("🤖 Auto Task Generator - Agentes sugerindo novas tarefas\n")
+    print(" Auto Task Generator - Agentes sugerindo novas tarefas\n")
 
     # Gemini sugere
-    print("1️⃣  Gemini analisando projeto...")
+    print("  Gemini analisando projeto...")
     gemini_suggestions = get_gemini_suggestions()
 
     if gemini_suggestions:
-        print("✅ Gemini forneceu sugestões")
+        print(" Gemini forneceu sugestões")
         created = parse_and_create_tasks(gemini_suggestions)
-        print(f"✅ {created} tarefas criadas por Gemini\n")
+        print(f" {created} tarefas criadas por Gemini\n")
 
     # Claude valida
-    print("2️⃣  Claude validando...")
+    print("  Claude validando...")
     claude_analysis = get_claude_analysis()
 
     if claude_analysis:
-        print("✅ Claude forneceu análise")
+        print(" Claude forneceu análise")
         created = parse_and_create_tasks(claude_analysis)
-        print(f"✅ {created} tarefas criadas por Claude\n")
+        print(f" {created} tarefas criadas por Claude\n")
 
     # Commit automático
     try:
@@ -158,11 +158,11 @@ def main():
             "feat: Trio IA gerou novas tarefas autonomamente\n\nAgentes analisaram o projeto e sugeriram melhorias."
         ], check=True)
         subprocess.run(["git", "push"], check=True)
-        print("✅ Tarefas commitadas e enviadas ao repositório")
+        print(" Tarefas commitadas e enviadas ao repositório")
     except Exception as e:
-        print(f"⚠️  Erro ao fazer commit: {e}")
+        print(f"  Erro ao fazer commit: {e}")
 
-    print("\n🎯 Sistema de auto-geração de tarefas operacional!")
+    print("\n Sistema de auto-geração de tarefas operacional!")
 
 if __name__ == "__main__":
     main()

@@ -51,11 +51,11 @@ class RollbackManager:
 
             # Log do rollback
             self._log_rollback(task_id, previous_commit, "success")
-            print(f"✅ Rollback completado para {task_id}")
+            print(f" Rollback completado para {task_id}")
 
             return True
         except Exception as e:
-            print(f"❌ Erro ao fazer rollback: {e}")
+            print(f" Erro ao fazer rollback: {e}")
             self._log_rollback(task_id, "", "failed")
             return False
 
@@ -74,7 +74,7 @@ class RollbackManager:
     def retry_task(self, task_id, agents, attempt=1):
         """Tentar tarefa com agente diferente"""
         if attempt > self.max_retries:
-            print(f"❌ {task_id} falhou {self.max_retries}x - ENVIANDO ALERT")
+            print(f" {task_id} falhou {self.max_retries}x - ENVIANDO ALERT")
             return False
 
         print(f"\n🔄 Tentativa {attempt}/{self.max_retries} para {task_id}")
@@ -90,7 +90,7 @@ class RollbackManager:
 
     def validate_commit(self, commit_hash):
         """Validar se commit é seguro"""
-        print(f"🔍 Validando commit {commit_hash[:7]}...")
+        print(f" Validando commit {commit_hash[:7]}...")
 
         # Verificar mudanças
         result = subprocess.run(
@@ -104,7 +104,7 @@ class RollbackManager:
 
         # Verificar se não deletou muitos arquivos
         if "deletions" in changes:
-            print("   ⚠️ Commit contém deleções")
+            print("    Commit contém deleções")
 
         return True
 

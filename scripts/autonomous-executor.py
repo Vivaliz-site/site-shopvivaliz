@@ -20,7 +20,7 @@ def main():
     pending_tasks = [t for t in queue_data["queue"] if t["status"] == "pending"]
 
     if not pending_tasks:
-        print("✅ Nenhuma tarefa pendente. Fila vazia ou todas completas!")
+        print(" Nenhuma tarefa pendente. Fila vazia ou todas completas!")
         return 0
 
     task = pending_tasks[0]
@@ -28,7 +28,7 @@ def main():
     task_title = task["title"]
     task_desc = task["description"]
 
-    print(f"🎯 Executando tarefa: {task_title}")
+    print(f" Executando tarefa: {task_title}")
     print(f"   ID: {task_id}")
     print(f"   Descrição: {task_desc[:100]}...")
     print()
@@ -50,7 +50,7 @@ def main():
         )
 
         if result.returncode == 0:
-            print("✅ Tarefa executada com sucesso!")
+            print(" Tarefa executada com sucesso!")
 
             # Marcar tarefa como completa
             task["status"] = "completed"
@@ -80,23 +80,23 @@ def main():
                 )
                 subprocess.run(["git", "push", "origin", "HEAD:main"], check=True)
                 print("📤 Código commitado e publicado em main")
-                print("🚀 Deploy acionado automaticamente!")
+                print(" Deploy acionado automaticamente!")
             else:
                 print("ℹ️  Nenhuma mudança de código para commitar")
 
-            print(f"📋 Tarefa {task_id} marcada como completa")
+            print(f" Tarefa {task_id} marcada como completa")
             print()
             print("⏭️  Próxima execução em 1 hora")
             return 0
         else:
-            print(f"❌ Erro ao executar: {result.stderr}")
+            print(f" Erro ao executar: {result.stderr}")
             return 1
 
     except subprocess.TimeoutExpired:
-        print("⏱️  Timeout na execução (>10 min). Tentando novamente na próxima hora.")
+        print("  Timeout na execução (>10 min). Tentando novamente na próxima hora.")
         return 1
     except Exception as e:
-        print(f"❌ Erro: {e}")
+        print(f" Erro: {e}")
         return 1
 
 if __name__ == "__main__":

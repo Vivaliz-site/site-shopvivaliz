@@ -25,7 +25,7 @@ class TrioAgent:
 
     def execute_task(self, task_id, task_title, task_desc):
         """Executar tarefa específica"""
-        print(f"🤖 {self.name} começando task-{task_id}: {task_title}")
+        print(f" {self.name} começando task-{task_id}: {task_title}")
 
         try:
             if self.name == "Gemini":
@@ -35,10 +35,10 @@ class TrioAgent:
             elif self.name == "ChatGPT":
                 self.result = self._chatgpt_execute(task_id, task_title, task_desc)
 
-            print(f"✅ {self.name} completou task-{task_id}")
+            print(f" {self.name} completou task-{task_id}")
         except Exception as e:
             self.error = str(e)
-            print(f"❌ {self.name} erro: {e}")
+            print(f" {self.name} erro: {e}")
 
     def _gemini_execute(self, task_id, task_title, task_desc):
         """Gemini: Análise de Arquitetura"""
@@ -140,19 +140,19 @@ class ConsensusVoting:
         for agent in agents:
             vote = self._ask_agent_vote(agent, task_proposal)
             self.votes[agent.name] = vote
-            print(f"  {agent.name}: {'✅ SIM' if vote else '❌ NÃO'}")
+            print(f"  {agent.name}: {' SIM' if vote else ' NÃO'}")
 
         # Verificar consenso
         yes_votes = sum(1 for v in self.votes.values() if v)
         consensus = yes_votes >= self.consensus_threshold
 
-        print(f"\n📊 Resultado: {yes_votes}/3 agentes aprovaram")
+        print(f"\n Resultado: {yes_votes}/3 agentes aprovaram")
 
         if consensus:
-            print(f"✅ CONSENSO: Tarefa '{task_proposal['title']}' será criada!")
+            print(f" CONSENSO: Tarefa '{task_proposal['title']}' será criada!")
             return True
         else:
-            print(f"❌ BLOQUEADO: Sem consenso para '{task_proposal['title']}'")
+            print(f" BLOQUEADO: Sem consenso para '{task_proposal['title']}'")
             return False
 
     def _ask_agent_vote(self, agent, proposal):
@@ -180,7 +180,7 @@ class ParallelExecutor:
 
     def execute_parallel(self):
         """Executar 3 tarefas em paralelo"""
-        print(f"🚀 EXECUTANDO {min(3, len(self.tasks))} TAREFAS EM PARALELO\n")
+        print(f" EXECUTANDO {min(3, len(self.tasks))} TAREFAS EM PARALELO\n")
 
         threads = []
         tasks_to_execute = self.tasks[:3]
@@ -197,7 +197,7 @@ class ParallelExecutor:
         for thread in threads:
             thread.join()
 
-        print("\n✅ TODAS AS 3 TAREFAS COMPLETADAS!")
+        print("\n TODAS AS 3 TAREFAS COMPLETADAS!")
         self._save_results(tasks_to_execute)
 
     def _save_results(self, completed_tasks):
@@ -249,12 +249,12 @@ class ParallelExecutor:
         with open(queue_file, 'w') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
-        print(f"✅ {new_id} adicionada com consenso dos 3 agentes!")
+        print(f" {new_id} adicionada com consenso dos 3 agentes!")
 
 
 def main():
     print("=" * 60)
-    print("🤖🤖🤖 TRIO IA - EXECUTOR PARALELO COM CONSENSO 🤖🤖🤖")
+    print(" TRIO IA - EXECUTOR PARALELO COM CONSENSO ")
     print("=" * 60)
 
     executor = ParallelExecutor()
@@ -277,7 +277,7 @@ def main():
 
     executor.vote_for_new_tasks(new_proposals)
 
-    print("\n✅ CICLO COMPLETO FINALIZADO!")
+    print("\n CICLO COMPLETO FINALIZADO!")
 
 
 if __name__ == "__main__":

@@ -31,7 +31,7 @@ class ContinuousAgent(threading.Thread):
 
     def run(self):
         """Loop contínuo: execute tarefa → pega próxima → repete"""
-        print(f"🚀 {self.name} INICIADO (modo contínuo)")
+        print(f" {self.name} INICIADO (modo contínuo)")
 
         while self.running and self.tasks_completed < 10:  # Limite de segurança
             try:
@@ -39,10 +39,10 @@ class ContinuousAgent(threading.Thread):
                 task = self.task_queue.get(timeout=2)
 
                 if task is None:  # Sinal de parada
-                    print(f"⏹️  {self.name} parando...")
+                    print(f"  {self.name} parando...")
                     break
 
-                print(f"\n🤖 {self.name} pegou: {task['id']} - {task['title']}")
+                print(f"\n {self.name} pegou: {task['id']} - {task['title']}")
 
                 # Executar tarefa
                 start_time = time.time()
@@ -61,13 +61,13 @@ class ContinuousAgent(threading.Thread):
                     'tasks_completed': self.tasks_completed
                 })
 
-                print(f"✅ {self.name} completou em {elapsed:.1f}s → Próxima tarefa!")
+                print(f" {self.name} completou em {elapsed:.1f}s → Próxima tarefa!")
 
                 # Marcar como completa no arquivo
                 self.mark_task_complete(task['id'])
 
             except Exception as e:
-                print(f"❌ {self.name} erro: {e}")
+                print(f" {self.name} erro: {e}")
                 self.log_queue.put({
                     'timestamp': datetime.now().isoformat(),
                     'agent': self.name,
@@ -75,7 +75,7 @@ class ContinuousAgent(threading.Thread):
                     'status': 'error'
                 })
 
-        print(f"\n📊 {self.name} finalizou: {self.tasks_completed} tarefas completadas")
+        print(f"\n {self.name} finalizou: {self.tasks_completed} tarefas completadas")
 
     def execute_task(self, task):
         """Simular execução de tarefa (em produção, seria real)"""
@@ -151,7 +151,7 @@ class ContinuousExecutor:
 
         pending_tasks = [t for t in data['queue'] if t['status'] == 'pending']
 
-        print(f"📋 {len(pending_tasks)} tarefas na fila")
+        print(f" {len(pending_tasks)} tarefas na fila")
 
         for task in pending_tasks:
             self.task_queue.put(task)
@@ -165,7 +165,7 @@ class ContinuousExecutor:
         ]
 
         print("\n" + "=" * 60)
-        print("🚀🚀🚀 TRIO IA - MODO CONTÍNUO (Sem paradas)")
+        print(" TRIO IA - MODO CONTÍNUO (Sem paradas)")
         print("=" * 60 + "\n")
 
         for name, key, model in agents_config:
@@ -179,14 +179,14 @@ class ContinuousExecutor:
             agent.join()
 
         print("\n" + "=" * 60)
-        print("✅ CICLO CONTÍNUO COMPLETO")
+        print(" CICLO CONTÍNUO COMPLETO")
         print("=" * 60)
 
     def print_statistics(self):
         """Imprimir estatísticas"""
         total_completed = sum(agent.tasks_completed for agent in self.agents)
 
-        print("\n📊 ESTATÍSTICAS:")
+        print("\n ESTATÍSTICAS:")
         print(f"  Total de tarefas completadas: {total_completed}")
 
         for agent in self.agents:
@@ -216,9 +216,9 @@ class ContinuousExecutor:
                 "feat: Trio IA completou múltiplas tarefas em modo contínuo\n\nAgentes trabalhando sem interrupção:\n- Gemini completou tarefas de arquitetura\n- Claude completou implementações\n- ChatGPT completou validações"
             ], check=True)
             subprocess.run(["git", "push"], check=True)
-            print("\n✅ Resultados commitados ao repositório")
+            print("\n Resultados commitados ao repositório")
         except Exception as e:
-            print(f"\n⚠️  Erro ao fazer commit: {e}")
+            print(f"\n  Erro ao fazer commit: {e}")
 
 
 def main():
@@ -239,7 +239,7 @@ def main():
     # Commit
     executor.commit_results()
 
-    print("\n🎉 Sistema contínuo finalizado!")
+    print("\n Sistema contínuo finalizado!")
     print("   Próximo ciclo: agentes pegam novas tarefas automaticamente")
 
 

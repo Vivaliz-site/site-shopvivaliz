@@ -47,8 +47,8 @@ class PerformanceTester:
     def run_load_test(self):
         """Teste de carga antes de deploy"""
         print("⚡ Teste de carga: 100 req/s")
-        print("  ✅ Latência: 120ms (OK)")
-        print("  ✅ Memory: 256MB (OK)")
+        print("   Latência: 120ms (OK)")
+        print("   Memory: 256MB (OK)")
         return True
 
 class GitHubIssuesCreator:
@@ -67,7 +67,7 @@ class AnalyticsReporter:
     def generate_report(self):
         """Gerar relatório visual"""
         report = """
-        📊 ANALYTICS
+         ANALYTICS
 
         Produtividade: ████████░░ 80%
         Confiabilidade: ██████████ 100%
@@ -80,16 +80,16 @@ class DeploymentOrchestrator:
     def deploy_to_environment(self, env):
         """Deploy para ambiente específico"""
         environments = {
-            'dev': '✅ Dev deployed',
-            'staging': '✅ Staging deployed (10% traffic)',
-            'prod': '✅ Prod deployed (canary)'
+            'dev': ' Dev deployed',
+            'staging': ' Staging deployed (10% traffic)',
+            'prod': ' Prod deployed (canary)'
         }
-        print(f"🚀 {environments.get(env, 'Unknown')}")
+        print(f" {environments.get(env, 'Unknown')}")
         return True
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("🎯 ADVANCED AUTOMATION FEATURES")
+    print(" ADVANCED AUTOMATION FEATURES")
     print("=" * 60 + "\n")
 
     vm = VersionManager()
@@ -109,4 +109,4 @@ if __name__ == "__main__":
     do.deploy_to_environment('staging')
     do.deploy_to_environment('prod')
 
-    print("\n✅ Todas as features ativas!")
+    print("\n Todas as features ativas!")

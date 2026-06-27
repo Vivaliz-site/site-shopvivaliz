@@ -34,7 +34,7 @@ class SmartTaskScheduler:
         for agent, strengths in self.agent_strengths.items():
             # Verificar orçamento
             if not self.can_afford(agent):
-                print(f"  ⚠️ {agent} sem budget")
+                print(f"   {agent} sem budget")
                 continue
 
             # Calcular score baseado em força
@@ -60,7 +60,7 @@ class SmartTaskScheduler:
         task_cost = budget['cost_per_task']
 
         if remaining < task_cost:
-            print(f"  ⚠️ {agent}: ${remaining:.2f} restante < ${task_cost:.2f} necessário")
+            print(f"   {agent}: ${remaining:.2f} restante < ${task_cost:.2f} necessário")
             return False
 
         return True
@@ -96,7 +96,7 @@ class SmartTaskScheduler:
         priority_order = {'high': 0, 'medium': 1, 'low': 2}
         pending.sort(key=lambda t: priority_order.get(t['priority'], 3))
 
-        print("📋 AGENDA INTELIGENTE:\n")
+        print(" AGENDA INTELIGENTE:\n")
         print(f"Total de tarefas pendentes: {len(pending)}\n")
 
         schedule = []
@@ -136,7 +136,7 @@ class SmartTaskScheduler:
 
         for agent, budget in self.api_budget.items():
             if total_cost > budget['limit']:
-                print(f"   ⚠️ ALERTA: Vai exceder budget!")
+                print(f"    ALERTA: Vai exceder budget!")
 
         return total_cost
 
@@ -144,7 +144,7 @@ if __name__ == "__main__":
     scheduler = SmartTaskScheduler()
 
     print("=" * 60)
-    print("🧠 SMART TASK SCHEDULER")
+    print(" SMART TASK SCHEDULER")
     print("=" * 60)
 
     # Mostrar budget
