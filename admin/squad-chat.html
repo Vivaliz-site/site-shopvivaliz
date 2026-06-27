@@ -79,7 +79,13 @@
   <main class="main">
     <div class="chat-area" id="chatArea"></div>
     <div class="input-area">
+      <div id="attachmentBar" style="display:none;align-items:center;gap:8px;padding:6px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);font-size:12px">
+        <span style="color:var(--text-2)">📎 <span id="attachName"></span></span>
+        <span style="color:var(--text-3);font-size:11px" id="attachSize"></span>
+        <button onclick="removeAttachment()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--danger);font-size:13px">✕</button>
+      </div>
       <div class="input-row">
+        <label for="attachInput" title="Anexar arquivo (txt, md, php, json, csv, log, yml)" style="display:flex;align-items:center;justify-content:center;width:40px;height:56px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-2);cursor:pointer;font-size:18px;flex-shrink:0">📎<input id="attachInput" type="file" accept=".txt,.md,.php,.js,.html,.css,.json,.csv,.log,.yml,.yaml,.sql,.py,.ts,.env,.xml" style="display:none" onchange="loadAttachment(event)"></label>
         <textarea id="userInput" placeholder="Fale com o esquadrão... (Enter envia, Shift+Enter nova linha)" onkeydown="handleKey(event)"></textarea>
         <button class="send-btn" id="sendBtn" onclick="handleSend()">Enviar</button>
       </div>
@@ -148,7 +154,9 @@ async function runCycle(userMsg,isAuto=false){
   const agents=['director','claude','gpt','gemini'].filter(id=>activeAgents.has(id));
   agents.forEach(addThinking);
   try{
-    const res=await fetch(API_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','X-Squad-Token':token()},body:JSON.stringify({message:userMsg,agents,history:history.slice(-8),autonomous:isAuto})});
+    const payload={message:userMsg,agents,history:history.slice(-8),autonomous:isAuto};
+    if(currentAttachment)payload.attachment=currentAttachment;
+    const res=await fetch(API_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','X-Squad-Token':token()},body:JSON.stringify(payload)});
     agents.forEach(removeThinking);
     const data=await res.json().catch(()=>({}));
     if(!res.ok)throw new Error(data.error||'HTTP '+res.status);
@@ -169,7 +177,34 @@ async function runCycle(userMsg,isAuto=false){
     busy=false;document.getElementById('sendBtn').disabled=false;scrollBottom();
   }
 }
-async function handleSend(){const input=document.getElementById('userInput');const msg=input.value.trim();if(!msg||busy)return;input.value='';clearTimeout(autonomousTimer);await runCycle(msg,false);scheduleNext();}
+// ── Anexos ────────────────────────────────────────────────────────────────────
+let currentAttachment=null;
+function loadAttachment(event){
+  const file=event.target.files[0];
+  if(!file)return;
+  const maxBytes=400*1024;
+  if(file.size>maxBytes){alert('Arquivo muito grande. Máximo: 400 KB.');event.target.value='';return;}
+  const reader=new FileReader();
+  reader.onload=e=>{
+    currentAttachment={name:file.name,content:e.target.result};
+    document.getElementById('attachName').textContent=file.name;
+    document.getElementById('attachSize').textContent='('+Math.round(file.size/1024)+' KB)';
+    document.getElementById('attachmentBar').style.display='flex';
+  };
+  reader.readAsText(file,'UTF-8');
+}
+function removeAttachment(){currentAttachment=null;document.getElementById('attachmentBar').style.display='none';document.getElementById('attachInput').value='';}
+async function handleSend(){
+  const input=document.getElementById('userInput');
+  const msg=input.value.trim();
+  if((!msg&&!currentAttachment)||busy)return;
+  input.value='';
+  const att=currentAttachment;
+  removeAttachment();
+  clearTimeout(autonomousTimer);
+  await runCycle(msg||(att?'Analise o anexo: '+att.name:''),false);
+  scheduleNext();
+}
 async function sendQuick(msg){if(!busy){clearTimeout(autonomousTimer);await runCycle(msg,false);scheduleNext();}}
 function handleKey(event){if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();handleSend();}}
 function toggleAgent(card){const id=card.dataset.agent;if(card.classList.contains('active')){if(activeAgents.size<=1)return;activeAgents.delete(id);card.classList.remove('active');}else{activeAgents.add(id);card.classList.add('active');}}

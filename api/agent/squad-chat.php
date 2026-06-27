@@ -341,7 +341,7 @@ if ($receivedToken === '' || !hash_equals($expectedToken, $receivedToken)) {
 squad_rate_limit($expectedToken);
 
 $rawBody = file_get_contents('php://input') ?: '';
-if (strlen($rawBody) > 50000) {
+if (strlen($rawBody) > 500000) {
     squad_json(413, ['error' => 'Payload too large']);
 }
 $body = json_decode($rawBody, true);
@@ -350,8 +350,29 @@ if (!is_array($body) || empty($body['message'])) {
 }
 
 $userMessage = trim((string) $body['message']);
-if ($userMessage === '' || squad_len($userMessage) > 8000) {
+if ($userMessage === '') {
     squad_json(400, ['error' => 'Message is empty or too large']);
+}
+// Trunca mensagens muito grandes em vez de rejeitar
+if (squad_len($userMessage) > 80000) {
+    $userMessage = mb_substr($userMessage, 0, 80000, 'UTF-8') . "\n\n[... conteúdo truncado em 80.000 caracteres]";
+}
+
+// Anexo de arquivo: conteúdo é adicionado ao contexto da mensagem
+$attachmentCtx = '';
+if (!empty($body['attachment'])) {
+    $att = $body['attachment'];
+    $attName    = preg_replace('/[^a-zA-Z0-9._\-]/', '_', (string) ($att['name'] ?? 'arquivo'));
+    $attContent = trim((string) ($att['content'] ?? ''));
+    if ($attContent !== '') {
+        if (squad_len($attContent) > 40000) {
+            $attContent = mb_substr($attContent, 0, 40000, 'UTF-8') . "\n\n[... truncado em 40.000 caracteres]";
+        }
+        $attachmentCtx = "\n\n=== ANEXO: {$attName} ===\n{$attContent}\n=== FIM DO ANEXO ===";
+    }
+}
+if ($attachmentCtx !== '') {
+    $userMessage .= $attachmentCtx;
 }
 
 $history = $body['history'] ?? [];
