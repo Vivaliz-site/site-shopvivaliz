@@ -12,6 +12,14 @@ on:
       - '.github/workflows/deploy-squad-chat.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  checks: write
+  statuses: write
+  deployments: write
+
 jobs:
   deploy:
     name: Upload Squad Chat para /public_html/dev/

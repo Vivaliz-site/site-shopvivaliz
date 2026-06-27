@@ -9,6 +9,13 @@ on:
       - 'agents/v9.2.84/**'
       - '.github/workflows/package-v9-2-84.yml'
 
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  checks: write
+  statuses: write
+
 jobs:
   package:
     runs-on: ubuntu-latest

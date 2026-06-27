@@ -5,6 +5,13 @@ on:
   schedule:
     - cron: '0 */6 * * *'
 
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  checks: write
+  statuses: write
+
 jobs:
   fetch:
     runs-on: ubuntu-latest

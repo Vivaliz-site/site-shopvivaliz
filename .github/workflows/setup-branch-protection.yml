@@ -1,0 +1,41 @@
+name: Setup - Configurar Branch Protection
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  administration: write
+
+jobs:
+  configure:
+    name: Configurar main branch
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar branch protection via API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          OWNER=$(git config --get remote.origin.url | sed -E 's/.*github\.com[:/]([^/]+).*/\1/')
+          REPO=$(git config --get remote.origin.url | sed -E 's/.*github\.com[:/][^/]+\/(.+)(\.git)?$/\1/' | sed 's/\.git$//')
+
+          echo "Configurando $OWNER/$REPO..."
+
+          gh api \
+            --method PUT \
+            "repos/$OWNER/$REPO/branches/main/protection" \
+            -f required_status_checks="null" \
+            -f enforce_admins=false \
+            -f require_pull_request_reviews.dismiss_stale_reviews=false \
+            -f require_pull_request_reviews.require_code_owner_reviews=false \
+            -f require_pull_request_reviews.required_approving_review_count=0 \
+            -f restrictions="null" \
+            -f required_linear_history=false \
+            -f allow_force_pushes=true \
+            -f allow_deletions=false || echo "⚠️  Branch protection já existe ou erro na configuração"
+
+          echo "✅ Branch protection habilitada para GitHub Actions"

@@ -12,6 +12,13 @@ on:
         required: true
         default: '9.2.70-update-executor-agent'
 
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  checks: write
+  statuses: write
+
 jobs:
   execute-update:
     runs-on: ubuntu-latest

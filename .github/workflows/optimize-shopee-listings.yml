@@ -5,6 +5,13 @@ on:
   schedule:
     - cron: '0 3 * * *'   # diariamente às 03h UTC
 
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  checks: write
+  statuses: write
+
 jobs:
   optimize:
     runs-on: ubuntu-latest

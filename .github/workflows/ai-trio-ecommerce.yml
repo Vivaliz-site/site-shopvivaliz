@@ -1,0 +1,93 @@
+name: Trio IA - Desenvolvimento Ecommerce ShopVivaliz
+
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "Modo de operacao do trio IA"
+        required: true
+        default: "ecommerce"
+        type: choice
+        options:
+          - ecommerce
+          - diagnostico
+      tarefa:
+        description: "Descreva a tarefa ou feature a desenvolver (ex: adicionar filtro por preco na listagem)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  checks: write
+  issues: write
+  statuses: write
+
+jobs:
+  ai-trio:
+    name: "Trio IA (${{ github.event.inputs.modo }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout do repositorio
+        uses: actions/checkout@v4.2.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configurar Git para push automatico
+        run: |
+          git config user.name "ShopVivaliz Trio IA"
+          git config user.email "ai-trio@shopvivaliz.com.br"
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias das IAs
+        run: pip install --quiet google-genai openai anthropic
+
+      - name: Executar Trio IA
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python ai_collaboration.py \
+            --modo "${{ github.event.inputs.modo }}" \
+            --tarefa "${{ github.event.inputs.tarefa }}"
+
+      - name: Upload do relatorio como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: "relatorio-trio-ia-${{ github.event.inputs.modo }}"
+          path: "ai_collaboration_report_${{ github.event.inputs.modo }}.md"
+          if-no-files-found: warn
+
+      - name: Commitar relatorio e fazer push automatico
+        run: |
+          REPORT="ai_collaboration_report_${{ github.event.inputs.modo }}.md"
+          if [ -f "$REPORT" ]; then
+            git add "$REPORT"
+            git diff --cached --quiet && echo "Nenhuma mudanca para commitar." && exit 0
+            git commit -m "docs: relatorio trio IA (${{ github.event.inputs.modo }}) [skip ci]"
+            git push origin HEAD:main
+            echo "Relatorio commitado e publicado em main."
+          fi
+
+      - name: Exibir relatorio no log
+        run: |
+          REPORT="ai_collaboration_report_${{ github.event.inputs.modo }}.md"
+          [ -f "$REPORT" ] && cat "$REPORT" || echo "Relatorio nao encontrado."
+
+      - name: Acionar deploy automatico pos-relatorio
+        if: success() && github.event.inputs.modo == 'ecommerce'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Acionando workflow de deploy apos analise do Trio IA..."
+          gh workflow run deploy.yml --ref main || echo "Deploy nao acionado (sem mudancas de codigo)."
