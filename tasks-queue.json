@@ -1,6 +1,14 @@
 {
   "queue": [
     {
+      "id": "task-olist-images-import",
+      "title": "Importar imagens de produtos da Olist",
+      "description": "Conectar na API Olist/Tiny ERP, baixar imagens de todos os produtos, processar e otimizar tamanho, armazenar em /uploads/products/ e atualizar tabela olist_product_images no banco de dados com URLs locais. Suportar retry automático para falhas de conexao.",
+      "priority": "high",
+      "status": "pending",
+      "created_at": "2026-06-27T20:16:00Z"
+    },
+    {
       "id": "task-001",
       "title": "Adicionar filtro de pre\u00c3\u0192\u00c2\u00a7o na listagem de produtos",
       "description": "Implementar filtro de pre\u00c3\u0192\u00c2\u00a7o m\u00c3\u0192\u00c2\u00adnimo e m\u00c3\u0192\u00c2\u00a1ximo com integra\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00a3o ao banco de dados MySQL. Atualizar a p\u00c3\u0192\u00c2\u00a1gina de listagem com Ajax para filtro em tempo real sem recarregar.",
