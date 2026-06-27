@@ -1,0 +1,83 @@
+name: Auto Task Generator - Agentes Criam Tarefas
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # A cada 6 horas
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Git
+        run: |
+          git config user.name "Trio IA Autônomo"
+          git config user.email "trio@shopvivaliz.com.br"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências
+        run: pip install google-generativeai anthropic
+
+      - name: Gerar novas tarefas autonomamente
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/auto-task-generator.py
+
+      - name: Notificar novas tarefas
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.titan.email
+          server_port: 465
+          username: ${{ secrets.EMAIL_USER }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: '🤖 Trio IA: Novas Tarefas Criadas Autonomamente'
+          to: fredmourao@gmail.com
+          from: Trio IA <trio@shopvivaliz.com.br>
+          body: |
+            ✅ Agentes criaram novas tarefas autonomamente!
+
+            🔍 Análise do Trio IA:
+            - Gemini: Analisou arquitetura e sugeriu melhorias
+            - Claude: Validou prioridades e conformidade
+            - Novas tarefas adicionadas à fila
+
+            📊 Verifique no monitor:
+            https://dev.shopvivaliz.com.br/admin/monitor/
+
+            🎯 Próximas execuções:
+            - Tarefas serão processadas automaticamente
+            - Geração de novas tarefas a cada 6 horas
+            - Desenvolvimento 24/7 sem interrupção
+
+            📋 Repositório:
+            https://github.com/fredmourao-ai/site-shopvivaliz
+
+      - name: Notificar em caso de erro
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.titan.email
+          server_port: 465
+          username: ${{ secrets.EMAIL_USER }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: '🔴 Trio IA: Erro ao gerar tarefas'
+          to: fredmourao@gmail.com
+          from: Trio IA <trio@shopvivaliz.com.br>
+          body: |
+            ❌ Erro na geração autônoma de tarefas
+
+            Verifique os logs:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
