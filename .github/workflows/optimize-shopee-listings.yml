@@ -1,0 +1,77 @@
+name: Optimize Shopee Listings via Tiny API
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'   # diariamente às 03h UTC
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, json
+          tools: none
+
+      - name: Verificar secrets disponíveis (somente nomes)
+        run: |
+          echo "=== Tiny/Olist secrets ==="
+          env | grep -E '^(TINY|OLIST|ERP)' | sed 's/=.*/=***MASKED***/' || echo "(nenhum)"
+          echo "=== AI secrets ==="
+          env | grep -E '^(ANTHROPIC|OPENAI|GOOGLE)' | sed 's/=.*/=***MASKED***/' || echo "(nenhum)"
+        env:
+          TINY_ACCESS_TOKEN:   ${{ secrets.TINY_ACCESS_TOKEN }}
+          TINY_API_TOKEN:      ${{ secrets.TINY_API_TOKEN }}
+          TINY_CLIENT_ID:      ${{ secrets.TINY_CLIENT_ID }}
+          TINY_CLIENT_SECRET:  ${{ secrets.TINY_CLIENT_SECRET }}
+          TINY_REFRESH_TOKEN:  ${{ secrets.TINY_REFRESH_TOKEN }}
+          OLIST_ACCESS_TOKEN:  ${{ secrets.OLIST_ACCESS_TOKEN }}
+          OLIST_CLIENT_ID:     ${{ secrets.OLIST_CLIENT_ID }}
+          OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
+          OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
+          ERP_API_TOKEN:       ${{ secrets.ERP_API_TOKEN }}
+          ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY:      ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Verificar sintaxe PHP
+        run: |
+          php -l agents/v9.2.85/app/ShopeeListingsOptimizationAgent.php
+          php -l agents/v9.2.85/scripts/optimize-shopee-listings.php
+
+      - name: Definir nome do relatório
+        id: output
+        run: echo "filename=listings/optimization-report-$(date +%Y%m%d-%H%M%S).json" >> "$GITHUB_OUTPUT"
+
+      - name: Executar otimização dos anúncios
+        run: php agents/v9.2.85/scripts/optimize-shopee-listings.php
+        env:
+          OUTPUT_FILE:         ${{ steps.output.outputs.filename }}
+          TINY_ACCESS_TOKEN:   ${{ secrets.TINY_ACCESS_TOKEN }}
+          TINY_API_TOKEN:      ${{ secrets.TINY_API_TOKEN }}
+          TINY_CLIENT_ID:      ${{ secrets.TINY_CLIENT_ID }}
+          TINY_CLIENT_SECRET:  ${{ secrets.TINY_CLIENT_SECRET }}
+          TINY_REFRESH_TOKEN:  ${{ secrets.TINY_REFRESH_TOKEN }}
+          OLIST_ACCESS_TOKEN:  ${{ secrets.OLIST_ACCESS_TOKEN }}
+          OLIST_CLIENT_ID:     ${{ secrets.OLIST_CLIENT_ID }}
+          OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
+          OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
+          ERP_API_TOKEN:       ${{ secrets.ERP_API_TOKEN }}
+          ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY:      ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Commit do relatório de otimização
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add listings/
+          git diff --cached --quiet && echo "Sem alterações." || \
+            git commit -m "chore: shopee optimization report $(date +%Y-%m-%d)" && git push
