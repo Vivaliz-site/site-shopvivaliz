@@ -116,6 +116,49 @@ function squad_curl_json(string $url, array $headers, array $payload, int $timeo
     return is_array($decoded) ? $decoded : [];
 }
 
+function squad_pdf_extract_text(string $pdf): string
+{
+    $text = '';
+
+    // Estratégia 1: BT/ET com operadores de texto
+    if (preg_match_all('/BT\s(.*?)ET/s', $pdf, $blocks)) {
+        foreach ($blocks[1] as $block) {
+            preg_match_all('/\(([^)\\\\]*(?:\\\\.[^)\\\\]*)*)\)\s*(?:Tj|TJ|\'|")/s', $block, $tj);
+            foreach ($tj[1] as $t) {
+                $decoded = stripcslashes($t);
+                $text   .= $decoded . ' ';
+            }
+            preg_match_all('/\[([^\]]*)\]\s*TJ/s', $block, $arr);
+            foreach ($arr[1] as $a) {
+                preg_match_all('/\(([^)\\\\]*(?:\\\\.[^)\\\\]*)*)\)/s', $a, $parts);
+                foreach ($parts[1] as $p) {
+                    $text .= stripcslashes($p);
+                }
+                $text .= ' ';
+            }
+        }
+    }
+
+    // Estratégia 2: streams não comprimidos
+    if (trim($text) === '') {
+        preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $pdf, $streams);
+        foreach ($streams[1] as $s) {
+            if (strpos($s, "\x78\x9c") === 0 || strpos($s, "\x78\x01") === 0) continue;
+            $clean = preg_replace('/[^\x09\x0A\x0D\x20-\x7E]/', ' ', $s);
+            $clean = preg_replace('/\s+/', ' ', $clean);
+            if (strlen(trim($clean)) > 20) $text .= $clean . "\n";
+        }
+    }
+
+    $text = preg_replace('/\s+/', ' ', $text);
+    $text = trim($text);
+
+    if ($text === '') {
+        return '[PDF sem texto extraível — provavelmente escaneado como imagem. Descreva o conteúdo manualmente.]';
+    }
+    return $text;
+}
+
 squad_env_load(dirname(__DIR__, 2) . '/.env');
 
 function squad_github_tree(): string
@@ -361,14 +404,29 @@ if (squad_len($userMessage) > 80000) {
 // Anexo de arquivo: conteúdo é adicionado ao contexto da mensagem
 $attachmentCtx = '';
 if (!empty($body['attachment'])) {
-    $att = $body['attachment'];
-    $attName    = preg_replace('/[^a-zA-Z0-9._\-]/', '_', (string) ($att['name'] ?? 'arquivo'));
-    $attContent = trim((string) ($att['content'] ?? ''));
-    if ($attContent !== '') {
+    $att     = $body['attachment'];
+    $attName = preg_replace('/[^a-zA-Z0-9._\-]/', '_', (string) ($att['name'] ?? 'arquivo'));
+    $attType = strtolower((string) ($att['type'] ?? 'text'));
+    $attRaw  = (string) ($att['content'] ?? '');
+
+    if ($attRaw !== '') {
+        if ($attType === 'pdf') {
+            $pdfBytes = base64_decode($attRaw, true);
+            if ($pdfBytes !== false) {
+                $attContent = squad_pdf_extract_text($pdfBytes);
+            } else {
+                $attContent = '[Erro ao decodificar PDF]';
+            }
+        } else {
+            $attContent = trim($attRaw);
+        }
+
         if (squad_len($attContent) > 40000) {
             $attContent = mb_substr($attContent, 0, 40000, 'UTF-8') . "\n\n[... truncado em 40.000 caracteres]";
         }
-        $attachmentCtx = "\n\n=== ANEXO: {$attName} ===\n{$attContent}\n=== FIM DO ANEXO ===";
+        if ($attContent !== '') {
+            $attachmentCtx = "\n\n=== ANEXO: {$attName} ===\n{$attContent}\n=== FIM DO ANEXO ===";
+        }
     }
 }
 if ($attachmentCtx !== '') {
