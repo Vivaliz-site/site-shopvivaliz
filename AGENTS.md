@@ -11,6 +11,8 @@ Este repositorio usa agentes especializados para acelerar lancamento, QA, automa
 - SQLs, migrations e reparos de vinculo devem rodar no atualizador sem links manuais.
 - Todo release deve atualizar `SV_VERSION`, migrations, self-test e relatorio.
 - Para automacoes Olist/Tiny, sempre executar validacoes locais antes de gerar ZIP ou publicar alteracoes.
+- Para integracao Olist/Tiny ERP API v3, consultar `docs/olist-tiny-erp-api-knowledge-v2.md` como base principal e `docs/olist-tiny-erp-api-knowledge.md` como historico V1.
+- Nunca expor secrets, tokens, cookies ou sessoes. Usar API publica primeiro; endpoints internos somente em ambiente autorizado.
 
 ## Agentes principais
 
