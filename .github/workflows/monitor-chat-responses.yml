@@ -1,0 +1,97 @@
+name: Monitor Chat - Respostas Automáticas
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/2 * * * *'  # A cada 2 minutos
+
+permissions:
+  contents: read
+
+jobs:
+  respond-to-chat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install google-generativeai anthropic
+
+      - name: Monitorar e responder mensagens do chat
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python3 << 'EOF'
+          import json
+          import os
+          from datetime import datetime
+          from pathlib import Path
+
+          # Carregar mensagens nao respondidas
+          chat_file = Path('logs/monitor-messages.log')
+          response_file = Path('logs/monitor-responses.jsonl')
+
+          if not chat_file.exists():
+              print("Nenhuma mensagem de chat ainda")
+              exit(0)
+
+          responded = set()
+          if response_file.exists():
+              with open(response_file) as f:
+                  for line in f:
+                      try:
+                          data = json.loads(line)
+                          responded.add(data.get('user_message', ''))
+                      except:
+                          pass
+
+          with open(chat_file) as f:
+              messages = [json.loads(line) for line in f if line.strip()]
+
+          # Responder mensagens nao respondidas
+          print(f"Total mensagens: {len(messages)}")
+          print(f"Ja respondidas: {len(responded)}")
+
+          new_messages = [m for m in messages if m.get('message') not in responded]
+          print(f"Novas mensagens: {len(new_messages)}")
+
+          if new_messages:
+              print("\nRespondendo mensagens...")
+
+              # Importar script de resposta
+              import sys
+              sys.path.insert(0, 'scripts')
+
+              try:
+                  from chat_responder import ChatResponder
+                  responder = ChatResponder()
+
+                  for msg in new_messages[-5:]:  # Responder ultimas 5
+                      user_msg = msg.get('message', '')
+                      print(f"\nMensagem: {user_msg}")
+
+                      response = responder.generate_response(user_msg)
+                      responder.save_response(response)
+
+                      print(f"Resposta de {response['agent']}: OK")
+              except Exception as e:
+                  print(f"Erro ao responder: {e}")
+
+          print("\nMonitor de chat finalizado!")
+          EOF
+
+      - name: Commit respostas
+        continue-on-error: true
+        run: |
+          git add logs/monitor-responses.jsonl
+          git commit -m "chat: agentes responderam mensagens do monitor" || true
+          git push || true
