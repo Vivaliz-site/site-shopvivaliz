@@ -179,6 +179,7 @@ async function runCycle(userMsg,isAuto=false){
     const allText=[];
     for(const response of (data.responses||[])){
       addMsg(response.agent,response.text,isAuto,response.provider||'',response.model||'');
+      if(response.github_actions&&response.github_actions.length){response.github_actions.forEach(a=>addMsg('system','🔧 '+a,isAuto));}
       allText.push('['+response.name+']: '+response.text);
     }
     history.push({role:'user',content:userMsg});

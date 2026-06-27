@@ -292,6 +292,55 @@ function squad_github_create_issue(string $title, string $body, array $labels = 
     return "⚠️ Erro ao criar issue: HTTP {$code}";
 }
 
+function squad_github_commit(string $path, string $content, string $message): string
+{
+    $token = getenv('GH_REPO_TOKEN') ?: '';
+    $repo  = getenv('GH_REPO') ?: 'fredmourao-ai/site-shopvivaliz';
+    if ($token === '' || $path === '') return '';
+
+    $path = ltrim(preg_replace('/[^a-zA-Z0-9\/._\-]/', '', $path), '/');
+
+    // Bloqueio de segurança: só permite caminhos seguros
+    $blocked = ['login_config', '.env', 'secret', 'password', 'senha', 'token', '.duck', '.sql'];
+    foreach ($blocked as $b) {
+        if (stripos($path, $b) !== false) {
+            return "⚠️ Arquivo bloqueado por segurança: {$path}";
+        }
+    }
+    $allowedPrefixes = ['admin/', 'api/', 'docs/', 'assets/', 'css/', 'js/', 'includes/'];
+    $allowed = false;
+    foreach ($allowedPrefixes as $p) {
+        if (str_starts_with($path, $p)) { $allowed = true; break; }
+    }
+    if (!$allowed) return "⚠️ Caminho não permitido: {$path} (use admin/, api/, docs/, assets/, css/, js/)";
+
+    // Busca SHA do arquivo atual (necessário para atualizar)
+    $sha = '';
+    $ch = curl_init("https://api.github.com/repos/{$repo}/contents/{$path}");
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10,
+        CURLOPT_HTTPHEADER => ["Authorization: Bearer {$token}", "Accept: application/vnd.github+json", "User-Agent: ShopVivaliz-Squad/1.0"]]);
+    $existing = json_decode((string) curl_exec($ch), true);
+    curl_close($ch);
+    if (isset($existing['sha'])) $sha = $existing['sha'];
+
+    $payload = ['message' => "[Squad] {$message}", 'content' => base64_encode($content)];
+    if ($sha !== '') $payload['sha'] = $sha;
+
+    $ch = curl_init("https://api.github.com/repos/{$repo}/contents/{$path}");
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => 'PUT',
+        CURLOPT_POSTFIELDS => json_encode($payload), CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => ["Authorization: Bearer {$token}", "Accept: application/vnd.github+json",
+            "Content-Type: application/json", "User-Agent: ShopVivaliz-Squad/1.0"]]);
+    $res  = json_decode((string) curl_exec($ch), true);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if (in_array($code, [200, 201]) && isset($res['commit']['html_url'])) {
+        return "✅ Commit aplicado: {$res['commit']['html_url']}";
+    }
+    return "⚠️ Erro no commit HTTP {$code}";
+}
+
 function squad_github_commits(): string
 {
     $token = getenv('GH_REPO_TOKEN') ?: '';
@@ -523,9 +572,14 @@ if ($repoTree !== '') {
 
 $ghCtxParts = array_filter([$repoTree, $repoIssues, $repoCommits]);
 if ($ghCtxParts !== []) {
-    $ghInstructions = "\n\nVocê tem acesso total ao repositório GitHub. "
-        . "Para criar uma issue use o bloco: [CRIAR_ISSUE titulo=\"...\" corpo=\"...\"] no final da sua resposta. "
-        . "Você pode analisar o código, sugerir melhorias, identificar bugs e abrir issues diretamente.";
+    $ghInstructions = "\n\nACESSO TOTAL AO REPOSITÓRIO GITHUB — você pode agir diretamente:\n"
+        . "• Criar issue: [CRIAR_ISSUE titulo=\"titulo\" corpo=\"descricao\"]\n"
+        . "• Aplicar mudança de código:\n"
+        . "  [APLICAR_MUDANCA arquivo=\"admin/exemplo.php\" mensagem=\"fix: corrigir X\"]\n"
+        . "  conteúdo completo do arquivo aqui\n"
+        . "  [/APLICAR_MUDANCA]\n"
+        . "Caminhos permitidos: admin/, api/, docs/, assets/, css/, js/\n"
+        . "Quando o squad chegar a consenso numa discussão, APLIQUE a mudança — não espere aprovação humana.";
     $repoContext = "\n\n" . implode("\n\n", $ghCtxParts) . $repoFileCtx . $ghInstructions;
     foreach ($agentConfigs as &$cfg) {
         $cfg['system'] .= $repoContext;
@@ -534,13 +588,15 @@ if ($ghCtxParts !== []) {
 }
 
 if ($dialogueMode) {
-    $topicStr = $originalTopic !== '' ? "Tópico em debate: \"{$originalTopic}\". " : '';
-    $prevStr  = $prevSpeakerName !== '' ? "O agente anterior que falou foi: {$prevSpeakerName}. " : '';
-    $preamble = "Você está num debate técnico colaborativo entre agentes de IA da equipe ShopVivaliz. "
-        . "Os participantes são: Diretor de Projetos (Claude), Arquiteto (Claude), Integrador (GPT-4o) e Auditor (Gemini). "
-        . $topicStr . $prevStr
-        . "Seja conciso (até 3 parágrafos), responda diretamente ao ponto anterior, discorde quando necessário e agregue sua perspectiva especializada. "
-        . "Não repita o que já foi dito — avance a conversa.\n\n";
+    $topicStr = $originalTopic !== '' ? "TÓPICO EM DEBATE: \"{$originalTopic}\"\n" : '';
+    $preamble = "MODO DEBATE ATIVO — você está numa reunião de equipe com outros agentes de IA do ShopVivaliz.\n"
+        . $topicStr
+        . "\nREGRAS OBRIGATÓRIAS DO DEBATE:\n"
+        . "• REAJA diretamente ao que os colegas disseram — cite pelo nome (\"Concordo com o Arquiteto...\", \"Discordo do GPT porque...\")\n"
+        . "• CONVERSE, não faça relatório — tome partido, questione, proponha\n"
+        . "• PROPONHA ações concretas — não só análise\n"
+        . "• Se chegou a um consenso com os colegas: use [APLICAR_MUDANCA] ou [CRIAR_ISSUE] para agir\n"
+        . "• Máximo 3 parágrafos — seja direto e avance a conversa\n\n";
     foreach ($agentConfigs as &$cfg) {
         $cfg['system'] = $preamble . $cfg['system'];
     }
@@ -648,15 +704,24 @@ foreach ($agentsToRun as $agentId) {
         } else {
             $text = call_anthropic_agent($anthropicKey, $config['system'], $config['model'], $messages, $maxTokens);
         }
-        // Processa comando de criação de issue
-        $githubAction = null;
+        // Processa ações GitHub nas respostas
+        $githubActions = [];
+
+        // Criar issue
         if (preg_match('/\[CRIAR_ISSUE\s+titulo="([^"]+)"\s+corpo="([^"]*)"\]/i', $text, $im)) {
-            $issueResult  = squad_github_create_issue($im[1], $im[2], [$config['name']]);
-            $text         = preg_replace('/\[CRIAR_ISSUE[^\]]+\]/i', '', $text);
-            $githubAction = $issueResult;
+            $githubActions[] = squad_github_create_issue($im[1], $im[2], [$config['name']]);
+            $text = preg_replace('/\[CRIAR_ISSUE[^\]]+\]/i', '', $text);
         }
+
+        // Aplicar mudança de código
+        if (preg_match('/\[APLICAR_MUDANCA\s+arquivo="([^"]+)"\s+mensagem="([^"]+)"\](.*?)\[\/APLICAR_MUDANCA\]/s', $text, $cm)) {
+            $githubActions[] = squad_github_commit(trim($cm[1]), trim($cm[3]), $cm[2]);
+            $text = preg_replace('/\[APLICAR_MUDANCA[^\]]*\].*?\[\/APLICAR_MUDANCA\]/s', '', $text);
+        }
+
+        $text  = trim($text);
         $entry = ['agent' => $agentId, 'name' => $config['name'], 'provider' => $config['provider'], 'model' => $config['model'], 'text' => $text, 'ok' => true];
-        if ($githubAction !== null) $entry['github_action'] = $githubAction;
+        if ($githubActions !== []) $entry['github_actions'] = $githubActions;
         $responses[] = $entry;
     } catch (RuntimeException $e) {
         $responses[] = ['agent' => $agentId, 'name' => $config['name'], 'provider' => $config['provider'], 'model' => $config['model'], 'text' => 'Erro: ' . $e->getMessage(), 'ok' => false];
