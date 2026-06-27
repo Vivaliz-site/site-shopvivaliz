@@ -193,7 +193,7 @@
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
-        .btn-send {
+        .btn-send, .btn-upload {
             padding: 10px 20px;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             color: white;
@@ -204,7 +204,12 @@
             transition: transform 0.2s;
         }
 
-        .btn-send:hover {
+        .btn-upload {
+            padding: 10px 15px;
+            font-size: 1.2em;
+        }
+
+        .btn-send:hover, .btn-upload:hover {
             transform: scale(1.05);
         }
 
@@ -581,6 +586,8 @@
             </div>
             <div class="chat-input-area">
                 <input type="text" id="chat-input" placeholder="Descreva sua instrução..." onkeypress="if(event.key==='Enter') sendMessage()">
+                <input type="file" id="file-input" style="display: none;" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" onchange="uploadFile()">
+                <button class="btn-upload" onclick="document.getElementById('file-input').click()" title="Anexar arquivo (PDF, Office, Imagens)">📎</button>
                 <button class="btn-send" onclick="sendMessage()">→</button>
             </div>
         </div>
@@ -785,6 +792,37 @@
             } catch (error) {
                 addChatMessage('❌ Erro ao adicionar tarefa.', 'agent');
             }
+        }
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+
+            if (!file) return;
+
+            addChatMessage(`📎 Enviando anexo: ${file.name} (${(file.size / 1024).toFixed(2)} KB)...`, 'system');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/monitor/upload-attachment.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    addChatMessage(`✅ Anexo enviado: <a href="${result.file.url}" target="_blank">📄 ${result.file.name}</a>`, 'agent');
+                } else {
+                    addChatMessage(`❌ Erro: ${result.error}`, 'agent');
+                }
+            } catch (error) {
+                addChatMessage(`❌ Erro ao enviar anexo: ${error.message}`, 'agent');
+            }
+
+            fileInput.value = '';
         }
     </script>
 
