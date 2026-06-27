@@ -77,6 +77,9 @@ def main():
                 )
                 subprocess.run(["git", "push", "origin", "HEAD:main"], check=True)
                 print("📤 Código commitado e publicado em main")
+                print("🚀 Deploy acionado automaticamente!")
+            else:
+                print("ℹ️  Nenhuma mudança de código para commitar")
 
             print(f"📋 Tarefa {task_id} marcada como completa")
             print()
