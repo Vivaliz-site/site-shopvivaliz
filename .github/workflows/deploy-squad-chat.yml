@@ -120,7 +120,7 @@ jobs:
           echo "Canário HTTP: $CANARY"
           echo "Health: $HEALTH"
           if [ "$CANARY" = "200" ]; then
-            echo "✅ Deploy confirmado!"
+            echo " Deploy confirmado!"
           else
-            echo "⚠️ Canário ausente — ver log da FTP Action acima."
+            echo " Canário ausente — ver log da FTP Action acima."
           fi

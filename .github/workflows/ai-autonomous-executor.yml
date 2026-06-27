@@ -57,25 +57,25 @@ jobs:
           server_port: 465
           username: ${{ secrets.EMAIL_USER }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: '🚨 Trio IA - Falha na Execução'
+          subject: ' Trio IA - Falha na Execução'
           to: fredmourao@gmail.com
           from: Trio IA <trio@shopvivaliz.com.br>
           body: |
             Impedimento detectado na execução do Trio IA!
 
-            🔍 Detalhes:
+             Detalhes:
             - Workflow: ${{ github.workflow }}
             - Run ID: ${{ github.run_id }}
             - Status: FALHA
             - Hora: ${{ github.event.head_commit.timestamp }}
 
-            📊 Acione o monitor:
+             Acione o monitor:
             https://dev.shopvivaliz.com.br/admin/monitor/
 
-            📋 Verifique os logs:
+             Verifique os logs:
             ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-            ⚠️ Ação Recomendada:
+             Ação Recomendada:
             1. Verifique os logs do workflow
             2. Analise a última tarefa executada
             3. Intervir manualmente se necessário via GitHub Issues
@@ -88,11 +88,11 @@ jobs:
           server_port: 465
           username: ${{ secrets.EMAIL_USER }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: '✅ Trio IA - Execução com Sucesso'
+          subject: ' Trio IA - Execução com Sucesso'
           to: fredmourao@gmail.com
           from: Trio IA <trio@shopvivaliz.com.br>
           body: |
-            ✅ Trio IA completou a execução com sucesso!
+             Trio IA completou a execução com sucesso!
 
-            📊 Acompanhe o progresso:
+             Acompanhe o progresso:
             https://dev.shopvivaliz.com.br/admin/monitor/

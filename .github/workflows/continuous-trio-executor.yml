@@ -29,13 +29,13 @@ jobs:
       - name: Instalar dependências
         run: pip install google-generativeai anthropic openai
 
-      - name: 🚀 Iniciar Trio IA em Modo Contínuo
+      - name:  Iniciar Trio IA em Modo Contínuo
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          echo "🤖🤖🤖 TRIO IA - MODO CONTÍNUO"
+          echo " TRIO IA - MODO CONTÍNUO"
           echo ""
           echo "Agentes começando (nunca param):"
           echo "1️⃣  Gemini - Analisa e pega próxima tarefa"
@@ -44,7 +44,7 @@ jobs:
           echo ""
           python scripts/continuous-executor.py
 
-      - name: 📊 Gerar Relatório
+      - name:  Gerar Relatório
         if: always()
         run: |
           echo "# Execução Contínua - Relatório" > continuous-report.md
@@ -66,18 +66,18 @@ jobs:
           server_port: 465
           username: ${{ secrets.EMAIL_USER }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: '🚀 Trio IA Contínuo: Múltiplas Tarefas Completadas'
+          subject: ' Trio IA Contínuo: Múltiplas Tarefas Completadas'
           to: fredmourao@gmail.com
           from: Trio IA Contínuo <trio@shopvivaliz.com.br>
           body: |
-            🚀 EXECUÇÃO CONTÍNUA COMPLETA!
+             EXECUÇÃO CONTÍNUA COMPLETA!
 
-            🤖 3 Agentes trabalhando SEM INTERRUPÇÃO:
+             3 Agentes trabalhando SEM INTERRUPÇÃO:
             - Gemini: Completou tarefas, pegou nova
             - Claude: Completou tarefas, pegou nova
             - ChatGPT: Completou tarefas, pegou nova
 
-            📊 Nenhum agente ficou parado!
+             Nenhum agente ficou parado!
 
             ✨ Sistema de desenvolvimento 24/7:
             - Sempre processando tarefas

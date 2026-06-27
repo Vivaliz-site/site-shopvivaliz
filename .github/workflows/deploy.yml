@@ -123,23 +123,23 @@ jobs:
 
           echo "Testando home do ambiente dev..."
           if ! curl -fsS "$BASE/" >/dev/null; then
-            echo "❌ Falha ao acessar a home do ambiente dev."
+            echo " Falha ao acessar a home do ambiente dev."
             DEPLOY_FAILED=true
           else
-            echo "✅ Home dev acessível."
+            echo " Home dev acessível."
           fi
 
           echo "Testando health público do Squad Chat..."
           if curl -fsS "$BASE/api/agent/squad-chat.php?health=1" -o /tmp/squad-health.json; then
             if grep -q '"endpoint":"squad-chat"' /tmp/squad-health.json; then
-              echo "✅ Squad Chat health respondeu."
-              jq -r '.providers | to_entries[] | "Provider \(.key): configured=\(.value.configured) model=\(.value.model)"' /tmp/squad-health.json || echo "⚠️ jq não disponível para resumir health."
+              echo " Squad Chat health respondeu."
+              jq -r '.providers | to_entries[] | "Provider \(.key): configured=\(.value.configured) model=\(.value.model)"' /tmp/squad-health.json || echo " jq não disponível para resumir health."
             else
-              echo "⚠️ Squad Chat health não contém endpoint esperado."
+              echo " Squad Chat health não contém endpoint esperado."
               cat /tmp/squad-health.json
             fi
           else
-            echo "⚠️ Squad Chat health falhou. Não bloqueando deploy."
+            echo " Squad Chat health falhou. Não bloqueando deploy."
           fi
 
           echo "Pedindo teste real aos agentes do Squad Chat..."
@@ -158,44 +158,44 @@ jobs:
             --data-binary @/tmp/squad-payload.json \
             "$BASE/api/agent/squad-chat.php" \
             -o /tmp/squad-response.json; then
-            echo "✅ Squad Chat POST respondeu. Resumo sanitizado:"
-            jq -r '"cycle_id= " + (.cycle_id // "n/a"), (.responses[]? | "\(.name) | provider=\(.provider) | model=\(.model) | ok=\(.ok) | text=\(.text // "" | .[0:180])")' /tmp/squad-response.json || echo "⚠️ jq não disponível para resumir resposta."
+            echo " Squad Chat POST respondeu. Resumo sanitizado:"
+            jq -r '"cycle_id= " + (.cycle_id // "n/a"), (.responses[]? | "\(.name) | provider=\(.provider) | model=\(.model) | ok=\(.ok) | text=\(.text // "" | .[0:180])")' /tmp/squad-response.json || echo " jq não disponível para resumir resposta."
             if grep -q '"provider":"openai"' /tmp/squad-response.json && grep -q '"provider":"gemini"' /tmp/squad-response.json && grep -q '"provider":"anthropic"' /tmp/squad-response.json; then
-              echo "✅ Providers reais identificados na resposta do Squad."
+              echo " Providers reais identificados na resposta do Squad."
             else
-              echo "⚠️ Nem todos os providers foram identificados na resposta. Verificar resumo acima."
+              echo " Nem todos os providers foram identificados na resposta. Verificar resumo acima."
             fi
           else
-            echo "⚠️ Squad Chat POST falhou. Não bloqueando deploy para manter publicação segura."
+            echo " Squad Chat POST falhou. Não bloqueando deploy para manter publicação segura."
           fi
 
           echo "Testando arquivo de validação do CNPJ, se existir..."
           if curl -fsS "$BASE/cnpj-rodape-teste.html" | grep -q "49.903.300/0001-70"; then
-            echo "✅ CNPJ validado no arquivo de teste."
+            echo " CNPJ validado no arquivo de teste."
           else
-            echo "⚠️ Arquivo de CNPJ não encontrado ou conteúdo diferente. Não bloqueando deploy."
+            echo " Arquivo de CNPJ não encontrado ou conteúdo diferente. Não bloqueando deploy."
           fi
 
           echo "Testando agente Olist, se existir..."
           if curl -fsS "$BASE/api/agent/olist-zero-id-repair.php" | grep -q '"agent"'; then
-            echo "✅ Agente Olist respondeu."
+            echo " Agente Olist respondeu."
           else
-            echo "⚠️ Agente Olist não disponível. Não bloqueando deploy."
+            echo " Agente Olist não disponível. Não bloqueando deploy."
           fi
 
           echo "Testando agente de manual do admin, se existir..."
           if curl -fsS "$BASE/api/agent/admin-manual-audit.php" | grep -q 'admin_manual_audit'; then
-            echo "✅ Agente de manual do admin respondeu."
+            echo " Agente de manual do admin respondeu."
           else
-            echo "⚠️ Agente de manual do admin não disponível. Não bloqueando deploy."
+            echo " Agente de manual do admin não disponível. Não bloqueando deploy."
           fi
 
           if [ "$DEPLOY_FAILED" = true ]; then
-            echo "❌ Deploy publicado, mas teste básico falhou."
+            echo " Deploy publicado, mas teste básico falhou."
             exit 1
           fi
 
-          echo "✅ Deploy concluído com sucesso."
+          echo " Deploy concluído com sucesso."
 
       - name: Diagnóstico de IA em caso de falha
         if: failure()
@@ -205,12 +205,12 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         shell: bash
         run: |
-          echo "🚨 Workflow falhou. Iniciando diagnóstico se o arquivo existir."
+          echo " Workflow falhou. Iniciando diagnóstico se o arquivo existir."
 
           if [ -f "ai_collaboration.py" ]; then
             python -m pip install --upgrade pip
             pip install google-genai openai anthropic
             python ai_collaboration.py --modo diagnostico
           else
-            echo "⚠️ ai_collaboration.py não encontrado. Diagnóstico de IA ignorado."
+            echo " ai_collaboration.py não encontrado. Diagnóstico de IA ignorado."
           fi
