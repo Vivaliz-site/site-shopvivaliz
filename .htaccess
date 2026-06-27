@@ -1,0 +1,111 @@
+# ShopVivaliz - Configuração Apache
+# Segurança e Rewriting de URLs
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Remove .php de URLs
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^([a-zA-Z0-9_-]+)/?$ $1.php [QSA,L]
+
+    # Redirecionar para HTTPS
+    RewriteCond %{HTTPS} off
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    # Bloquear acesso direto a arquivos sensíveis
+    RewriteRule ^config/ - [F,L]
+    RewriteRule ^storage/ - [F,L]
+    RewriteRule ^\.env - [F,L]
+</IfModule>
+
+# Segurança - Headers
+<IfModule mod_headers.c>
+    # HSTS (HTTP Strict-Transport-Security)
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+    # Content Security Policy
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://api.tiny.com.br https://api.shopee.com"
+
+    # X-Frame-Options
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    # X-Content-Type-Options
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Referrer-Policy
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # Permissions-Policy
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+</IfModule>
+
+# Compressão Gzip
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/plain
+    AddOutputFilterByType DEFLATE text/xml
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE text/javascript
+    AddOutputFilterByType DEFLATE application/xml
+    AddOutputFilterByType DEFLATE application/xhtml+xml
+    AddOutputFilterByType DEFLATE application/rss+xml
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE application/x-javascript
+    AddOutputFilterByType DEFLATE application/json
+</IfModule>
+
+# Cache HTTP
+<IfModule mod_expires.c>
+    ExpiresActive On
+
+    # Arquivos estáticos - 1 mês
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/gif "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/webp "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType font/woff "access plus 1 month"
+    ExpiresByType font/woff2 "access plus 1 month"
+
+    # HTML - 1 hora
+    ExpiresByType text/html "access plus 1 hour"
+
+    # API - sem cache
+    <FilesMatch "\.json$">
+        ExpiresActive Off
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+    </FilesMatch>
+</IfModule>
+
+# Bloquear acesso a arquivos sensíveis
+<FilesMatch "\.(env|md|txt|sql|log|git|md5)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Bloquear acesso a diretórios específicos
+<DirectoryMatch "^/(config|storage|admin/.*private)">
+    Order allow,deny
+    Deny from all
+</DirectoryMatch>
+
+# Proteção contra SQL Injection
+<IfModule mod_rewrite.c>
+    RewriteCond %{QUERY_STRING} (<|>|'|"|%3c|%3e|%27|%22) [NC]
+    RewriteRule .* - [F,L]
+</IfModule>
+
+# Timeout
+TimeOut 300
+
+# Limite de tamanho de upload
+LimitRequestBody 10485760
+
+# Tipo de conteúdo padrão
+DefaultType text/html
+
+# Charset
+AddCharset UTF-8 .html .txt .php .json .js .css .xml
