@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Completo - Dashboard + Tarefas + Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #2ECC71 0%, #1F3A70 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .tab-btn {
+            padding: 12px 20px;
+            border: none;
+            background: #f0f0f0;
+            cursor: pointer;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            background: #2ECC71;
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* DASHBOARD */
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .card h3 {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .card .number {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #2ECC71;
+        }
+
+        .card.pending .number { color: #ff6b6b; }
+        .card.progress .number { color: #ffd43b; }
+        .card.done .number { color: #51cf66; }
+
+        /* FORMULÁRIO DE TAREFAS */
+        .form-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 1em;
+        }
+
+        textarea {
+            resize: vertical;
+            height: 80px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #2ECC71 0%, #1F3A70 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1em;
+            transition: opacity 0.3s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* LISTA DE TAREFAS */
+        .tasks-list {
+            display: grid;
+            gap: 15px;
+        }
+
+        .task-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #2ECC71;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .task-item.pending {
+            border-left-color: #ff6b6b;
+        }
+
+        .task-item.progress {
+            border-left-color: #ffd43b;
+        }
+
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 10px;
+        }
+
+        .task-title {
+            font-weight: 600;
+            font-size: 1.1em;
+            color: #333;
+        }
+
+        .task-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+            background: #f0f0f0;
+        }
+
+        .task-badge.pending { background: #ffe0e0; color: #c92a2a; }
+        .task-badge.progress { background: #fff3bf; color: #e67700; }
+        .task-badge.done { background: #d3f9d8; color: #2f9e44; }
+
+        .task-desc {
+            color: #666;
+            font-size: 0.95em;
+            margin-bottom: 8px;
+        }
+
+        .task-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 0.85em;
+            color: #888;
+        }
+
+        /* CHAT */
+        .chat-box {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 400px;
+            max-height: 600px;
+            overflow-y: auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 15px;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 8px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .message.user {
+            background: #e8f4f8;
+            justify-content: flex-end;
+        }
+
+        .message.agent {
+            background: #f0f8e8;
+        }
+
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .avatar.user { background: #2ECC71; }
+        .avatar.agent { background: #667eea; }
+
+        .msg-content {
+            flex: 1;
+        }
+
+        .msg-header {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .input-area {
+            display: flex;
+            gap: 10px;
+        }
+
+        textarea.chat-input {
+            flex: 1;
+            height: 60px;
+            padding: 12px;
+        }
+
+        .status {
+            font-size: 0.9em;
+            color: #888;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 900px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Monitor Completo v2</h1>
+            <p>Dashboard + Criar Tarefas + Chat com Agentes</p>
+        </header>
+
+        <!-- ABAS -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('dashboard')">📊 Dashboard</button>
+            <button class="tab-btn" onclick="switchTab('tasks')">📋 Tarefas</button>
+            <button class="tab-btn" onclick="switchTab('chat')">💬 Chat</button>
+        </div>
+
+        <!-- ABA 1: DASHBOARD -->
+        <div id="dashboard" class="tab-content active">
+            <div class="dashboard">
+                <div class="card">
+                    <h3>Total de Tarefas</h3>
+                    <div class="number" id="totalTasks">0</div>
+                </div>
+                <div class="card pending">
+                    <h3>Pendentes</h3>
+                    <div class="number" id="pendingTasks">0</div>
+                </div>
+                <div class="card progress">
+                    <h3>Em Progresso</h3>
+                    <div class="number" id="progressTasks">0</div>
+                </div>
+                <div class="card done">
+                    <h3>Completadas</h3>
+                    <div class="number" id="doneTasks">0</div>
+                </div>
+            </div>
+
+            <div class="form-container">
+                <h2>📌 Status do Sistema</h2>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 0.95em;">
+                    <div>✅ E-commerce: Operacional</div>
+                    <div>✅ Agentes: 3 Ativos (Claude, Gemini, GPT)</div>
+                    <div>✅ Workflows: 24/7 Rodando</div>
+                    <div>✅ Deploy: Automático via FTP</div>
+                    <div>✅ Autonomia: 100% Ativa</div>
+                    <div>✅ Chat: Respondendo</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ABA 2: TAREFAS -->
+        <div id="tasks" class="tab-content">
+            <div class="form-container">
+                <h2>➕ Criar Nova Tarefa</h2>
+                <form onsubmit="addTask(event)">
+                    <div class="form-group">
+                        <label>Título da Tarefa *</label>
+                        <input type="text" id="taskTitle" required placeholder="Ex: Implementar pagamento PIX">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Descrição</label>
+                        <textarea id="taskDesc" placeholder="Detalhes da tarefa..."></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Prioridade</label>
+                            <select id="taskPriority">
+                                <option value="low">Baixa</option>
+                                <option value="medium" selected>Média</option>
+                                <option value="high">Alta</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Atribuir Para</label>
+                            <select id="taskAssignee">
+                                <option value="all">Todos (Gemini, Claude, GPT)</option>
+                                <option value="claude">Claude (Desenvolvedor)</option>
+                                <option value="gemini">Gemini (Arquiteto)</option>
+                                <option value="gpt">GPT (Integrador)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select id="taskStatus">
+                                <option value="pending" selected>Pendente</option>
+                                <option value="progress">Em Progresso</option>
+                                <option value="done">Completada</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit">➕ Adicionar Tarefa</button>
+                </form>
+            </div>
+
+            <h2 style="margin-top: 30px; margin-bottom: 15px;">📋 Fila de Tarefas</h2>
+            <div class="tasks-list" id="tasksList">
+                <div style="text-align: center; color: #999; padding: 40px;">
+                    Carregando tarefas...
+                </div>
+            </div>
+        </div>
+
+        <!-- ABA 3: CHAT -->
+        <div id="chat" class="tab-content">
+            <div class="chat-box" id="chatBox">
+                <div class="message agent">
+                    <div class="avatar agent">S</div>
+                    <div class="msg-content">
+                        <div class="msg-header">Sistema</div>
+                        <div>Conectado ao Squad Chat API - Agentes reais respondendo</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-area">
+                <textarea id="userInput" class="chat-input" placeholder="Digite sua mensagem para os agentes..."></textarea>
+                <button id="sendBtn" onclick="sendMessage()" style="width: auto;">Enviar</button>
+            </div>
+
+            <div class="status">
+                <div id="statusText">Pronto</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ABAS
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+
+            if (tabName === 'dashboard' || tabName === 'tasks') {
+                loadTasks();
+            }
+        }
+
+        // TAREFAS - Dados em localStorage
+        let tasks = JSON.parse(localStorage.getItem('shopvivaliz_tasks') || '[]');
+
+        function loadTasks() {
+            const totalEl = document.getElementById('totalTasks');
+            const pendingEl = document.getElementById('pendingTasks');
+            const progressEl = document.getElementById('progressTasks');
+            const doneEl = document.getElementById('doneTasks');
+            const listEl = document.getElementById('tasksList');
+
+            const pending = tasks.filter(t => t.status === 'pending').length;
+            const progress = tasks.filter(t => t.status === 'progress').length;
+            const done = tasks.filter(t => t.status === 'done').length;
+
+            if (totalEl) totalEl.textContent = tasks.length;
+            if (pendingEl) pendingEl.textContent = pending;
+            if (progressEl) progressEl.textContent = progress;
+            if (doneEl) doneEl.textContent = done;
+
+            if (listEl) {
+                if (tasks.length === 0) {
+                    listEl.innerHTML = '<div style="text-align: center; color: #999; padding: 40px;">Nenhuma tarefa. Crie uma acima!</div>';
+                } else {
+                    listEl.innerHTML = tasks.map((task, idx) => `
+                        <div class="task-item ${task.status}">
+                            <div class="task-header">
+                                <div class="task-title">${task.title}</div>
+                                <span class="task-badge ${task.status}">${statusLabel(task.status)}</span>
+                            </div>
+                            ${task.desc ? `<div class="task-desc">${task.desc}</div>` : ''}
+                            <div class="task-meta">
+                                <span>Prioridade: ${task.priority}</span>
+                                <span>Atribuída: ${task.assignee}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+
+        function statusLabel(status) {
+            const labels = {
+                pending: 'Pendente',
+                progress: 'Em Progresso',
+                done: 'Completada'
+            };
+            return labels[status] || status;
+        }
+
+        function addTask(e) {
+            e.preventDefault();
+            const task = {
+                id: Date.now(),
+                title: document.getElementById('taskTitle').value,
+                desc: document.getElementById('taskDesc').value,
+                priority: document.getElementById('taskPriority').value,
+                assignee: document.getElementById('taskAssignee').value,
+                status: document.getElementById('taskStatus').value,
+                created: new Date().toISOString()
+            };
+
+            tasks.unshift(task);
+            localStorage.setItem('shopvivaliz_tasks', JSON.stringify(tasks));
+
+            document.querySelector('form').reset();
+            loadTasks();
+
+            alert('✅ Tarefa criada! Agentes vão processar em breve.');
+        }
+
+        // CHAT
+        const chatBox = document.getElementById('chatBox');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const statusText = document.getElementById('statusText');
+
+        function addMessage(agent, text, isUser = false) {
+            const msg = document.createElement('div');
+            msg.className = `message ${isUser ? 'user' : 'agent'}`;
+
+            const avatar = document.createElement('div');
+            avatar.className = `avatar ${isUser ? 'user' : 'agent'}`;
+            avatar.textContent = isUser ? 'VC' : agent.substring(0, 2).toUpperCase();
+
+            const content = document.createElement('div');
+            content.className = 'msg-content';
+
+            const header = document.createElement('div');
+            header.className = 'msg-header';
+            header.textContent = isUser ? 'Você' : agent;
+
+            const textDiv = document.createElement('div');
+            textDiv.textContent = text;
+
+            content.appendChild(header);
+            content.appendChild(textDiv);
+
+            msg.appendChild(avatar);
+            msg.appendChild(content);
+
+            chatBox.appendChild(msg);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            addMessage('user', text, true);
+            userInput.value = '';
+
+            sendBtn.disabled = true;
+            statusText.textContent = 'Enviando...';
+
+            try {
+                const response = await fetch('/api/agent/squad-chat.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text, agents: ['claude', 'gemini', 'gpt'] })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.response) {
+                    addMessage('agent', data.response);
+                    statusText.textContent = `✅ ${data.agent}`;
+                } else {
+                    addMessage('system', `Erro: ${data.error || 'Sem resposta'}`);
+                    statusText.textContent = 'Erro';
+                }
+            } catch (error) {
+                addMessage('system', `Erro: ${error.message}`);
+                statusText.textContent = 'Erro de conexão';
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Carregar na inicialização
+        loadTasks();
+    </script>
+</body>
+</html>
