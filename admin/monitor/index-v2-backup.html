@@ -84,7 +84,7 @@
             50% { opacity: 0.5; }
         }
 
-        /* SIDEBAR */
+        /* SIDEBAR DE CHATS */
         .chat-sidebar {
             grid-area: sidebar;
             background: white;
@@ -99,8 +99,9 @@
             padding: 15px;
             border-bottom: 1px solid var(--border);
             font-weight: 600;
-            color: white;
+            color: var(--dark);
             background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
         }
 
         .btn-new-chat {
@@ -161,7 +162,7 @@
             margin-top: 4px;
         }
 
-        /* MAIN AREA */
+        /* AREA PRINCIPAL */
         .main-area {
             grid-area: main;
             background: white;
@@ -169,41 +170,6 @@
             padding: 20px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid var(--border);
-        }
-
-        .tab-button {
-            padding: 10px 20px;
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            color: #666;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
-        }
-
-        .tab-button.active {
-            color: var(--primary);
-            border-bottom-color: var(--primary);
-        }
-
-        .tab-content {
-            display: none;
-            flex: 1;
-            overflow-y: auto;
-        }
-
-        .tab-content.active {
-            display: block;
         }
 
         .stats-grid {
@@ -233,167 +199,7 @@
             font-size: 0.85em;
         }
 
-        .filter-tasks {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .filter-btn {
-            padding: 8px 16px;
-            background: var(--light);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-weight: 600;
-        }
-
-        .filter-btn.active {
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
-        }
-
-        .tasks-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9em;
-        }
-
-        .tasks-table thead {
-            background: linear-gradient(135deg, #f5f7fa 0%, white 100%);
-            border-bottom: 2px solid var(--border);
-            position: sticky;
-            top: 0;
-        }
-
-        .tasks-table th {
-            padding: 12px;
-            text-align: left;
-            font-weight: 600;
-            color: var(--dark);
-        }
-
-        .tasks-table td {
-            padding: 12px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .tasks-table tbody tr:hover {
-            background: #f9fafb;
-        }
-
-        .task-id {
-            font-weight: 600;
-            color: var(--primary);
-            font-family: monospace;
-            font-size: 0.85em;
-        }
-
-        .task-title {
-            font-weight: 500;
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 0.85em;
-            font-weight: 600;
-        }
-
-        .status-completed {
-            background: #dcfce7;
-            color: var(--success);
-        }
-
-        .status-pending {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .btn-view-log {
-            padding: 6px 12px;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.85em;
-            transition: background 0.3s;
-        }
-
-        .btn-view-log:hover {
-            background: var(--secondary);
-        }
-
-        .btn-view-log:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .modal.active {
-            display: flex;
-        }
-
-        .modal-content {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            max-width: 800px;
-            max-height: 80vh;
-            overflow-y: auto;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-            width: 90%;
-        }
-
-        .modal-header {
-            font-size: 1.3em;
-            font-weight: 600;
-            margin-bottom: 15px;
-            color: var(--primary);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            font-size: 1.5em;
-            cursor: pointer;
-            color: #666;
-        }
-
-        .log-content {
-            background: #1e293b;
-            color: #e2e8f0;
-            padding: 15px;
-            border-radius: 8px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.85em;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            max-height: 400px;
-            overflow-y: auto;
-            line-height: 1.5;
-        }
-
-        /* CHAT AREA */
+        /* AREA DE CHAT */
         .chat-area {
             grid-area: chat;
             background: white;
@@ -536,7 +342,7 @@
             </div>
         </header>
 
-        <!-- SIDEBAR -->
+        <!-- SIDEBAR COM HISTORICO DE CHATS -->
         <div class="chat-sidebar">
             <div class="sidebar-header">Historico de Chats</div>
             <button class="btn-new-chat" onclick="createNewChat()">+ Nova Conversa</button>
@@ -548,70 +354,29 @@
             </div>
         </div>
 
-        <!-- MAIN AREA -->
+        <!-- AREA PRINCIPAL -->
         <div class="main-area">
-            <!-- TABS -->
-            <div class="tabs">
-                <button class="tab-button active" onclick="switchTab('dashboard')">Dashboard</button>
-                <button class="tab-button" onclick="switchTab('tasks')">Tarefas (41)</button>
-                <button class="tab-button" onclick="switchTab('activity')">Atividade</button>
-            </div>
-
-            <!-- TAB: DASHBOARD -->
-            <div id="dashboard" class="tab-content active">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-number" id="tasks-total">41</div>
-                        <div class="stat-label">Total de Tarefas</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="tasks-completed">17</div>
-                        <div class="stat-label">Completadas</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="tasks-pending">24</div>
-                        <div class="stat-label">Pendentes</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="uptime">41%</div>
-                        <div class="stat-label">Progresso</div>
-                    </div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="tasks-total">41</div>
+                    <div class="stat-label">Total de Tarefas</div>
                 </div>
-            </div>
-
-            <!-- TAB: TASKS -->
-            <div id="tasks" class="tab-content">
-                <div class="filter-tasks">
-                    <button class="filter-btn active" onclick="filterTasks('all')">Todas</button>
-                    <button class="filter-btn" onclick="filterTasks('completed')">Completadas</button>
-                    <button class="filter-btn" onclick="filterTasks('pending')">Pendentes</button>
+                <div class="stat-card">
+                    <div class="stat-number" id="tasks-completed">17</div>
+                    <div class="stat-label">Completadas</div>
                 </div>
-
-                <table class="tasks-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 15%">ID</th>
-                            <th style="width: 35%">Tarefa</th>
-                            <th style="width: 15%">Status</th>
-                            <th style="width: 20%">Data</th>
-                            <th style="width: 15%">Acao</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tasks-table-body">
-                        <tr>
-                            <td colspan="5" style="text-align: center; padding: 20px;">Carregando...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- TAB: ACTIVITY -->
-            <div id="activity" class="tab-content">
-                <p>Historico de atividades...</p>
+                <div class="stat-card">
+                    <div class="stat-number" id="tasks-pending">24</div>
+                    <div class="stat-label">Pendentes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="uptime">41%</div>
+                    <div class="stat-label">Progresso</div>
+                </div>
             </div>
         </div>
 
-        <!-- CHAT AREA -->
+        <!-- AREA DE CHAT -->
         <div class="chat-area">
             <div class="chat-header">Conversando com Agentes</div>
             <div class="chat-messages" id="chat-messages">
@@ -626,42 +391,29 @@
         </div>
     </div>
 
-    <!-- MODAL DE LOG -->
-    <div id="logModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <span id="logModalTitle">Log da Tarefa</span>
-                <button class="modal-close" onclick="closeLogModal()">x</button>
-            </div>
-            <div id="logContent" class="log-content">Carregando...</div>
-        </div>
-    </div>
-
     <script>
         const API_BASE = '/api/monitor';
         let currentChatId = null;
-        let currentFilter = 'all';
 
-        // Inicializar
-        document.addEventListener('DOMContentLoaded', () => {
-            loadChats();
-            loadTasks();
-        });
+        // Carregar lista de chats ao iniciar
+        document.addEventListener('DOMContentLoaded', loadChats);
 
-        // Carregar chats
+        // Carregar e exibir chats
         async function loadChats() {
             try {
                 const response = await fetch(`${API_BASE}/chat-history.php?action=list`);
                 const data = await response.json();
+
                 if (data.chats && data.chats.length > 0) {
                     const chatsList = document.getElementById('chats-list');
                     chatsList.innerHTML = '';
+
                     data.chats.forEach(chat => {
                         const div = document.createElement('div');
                         div.className = 'chat-item';
                         div.onclick = () => loadChat(chat.id);
                         div.innerHTML = `
-                            <div class="chat-item-title">${chat.title.substring(0, 30)}</div>
+                            <div class="chat-item-title">${chat.title}</div>
                             <div class="chat-item-meta">${chat.messages_count} mensagens</div>
                         `;
                         chatsList.appendChild(div);
@@ -672,108 +424,7 @@
             }
         }
 
-        // Carregar tarefas
-        async function loadTasks() {
-            try {
-                const response = await fetch(`${API_BASE}/tasks-api.php?action=list&filter=${currentFilter}`);
-                const data = await response.json();
-
-                if (data.success) {
-                    updateTasksTable(data.tasks);
-                    updateTasksSummary(data);
-                }
-            } catch (error) {
-                console.error('Erro ao carregar tarefas:', error);
-            }
-        }
-
-        // Atualizar tabela de tarefas
-        function updateTasksTable(tasks) {
-            const tbody = document.getElementById('tasks-table-body');
-            tbody.innerHTML = '';
-
-            if (tasks.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">Nenhuma tarefa encontrada</td></tr>';
-                return;
-            }
-
-            tasks.forEach(task => {
-                const row = document.createElement('tr');
-                const status = task.status === 'completed' ? 'Completa' : 'Pendente';
-                const statusClass = task.status === 'completed' ? 'status-completed' : 'status-pending';
-                const date = task.completed_at ? new Date(task.completed_at).toLocaleString('pt-BR') : '—';
-
-                row.innerHTML = `
-                    <td><span class="task-id">${task.id}</span></td>
-                    <td><span class="task-title">${task.title}</span></td>
-                    <td><span class="status-badge ${statusClass}">${status}</span></td>
-                    <td>${date}</td>
-                    <td>
-                        <button class="btn-view-log" onclick="viewTaskLog('${task.id}')" ${!task.has_log ? 'disabled' : ''}>
-                            ${task.has_log ? 'Ver Log' : 'N/A'}
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-        }
-
-        // Atualizar resumo de tarefas
-        function updateTasksSummary(data) {
-            document.getElementById('tasks-total').textContent = data.total;
-            document.getElementById('tasks-completed').textContent = data.completed;
-            document.getElementById('tasks-pending').textContent = data.pending;
-            document.getElementById('uptime').textContent = data.percentage + '%';
-        }
-
-        // Ver log de tarefa
-        async function viewTaskLog(taskId) {
-            try {
-                const response = await fetch(`${API_BASE}/tasks-api.php?action=get-log&task_id=${taskId}`);
-                const data = await response.json();
-
-                if (data.success) {
-                    document.getElementById('logModalTitle').textContent = `Log - ${taskId}`;
-                    document.getElementById('logContent').textContent = data.log_content;
-                    document.getElementById('logModal').classList.add('active');
-                }
-            } catch (error) {
-                alert('Erro ao carregar log: ' + error.message);
-            }
-        }
-
-        // Fechar modal
-        function closeLogModal() {
-            document.getElementById('logModal').classList.remove('active');
-        }
-
-        // Filtrar tarefas
-        function filterTasks(filter) {
-            currentFilter = filter;
-            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            loadTasks();
-        }
-
-        // Trocar abas
-        function switchTab(tab) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
-            document.getElementById(tab).classList.add('active');
-            event.target.classList.add('active');
-
-            if (tab === 'tasks') {
-                loadTasks();
-            }
-        }
-
-        // Chat functions
-        function startNewChat() {
-            currentChatId = null;
-            document.getElementById('chat-messages').innerHTML =
-                '<div class="message system">Bem-vindo ao chat com Agentes IA (Gemini, Claude, ChatGPT)</div>';
-        }
-
+        // Criar novo chat
         async function createNewChat() {
             const title = prompt('Nome da conversa:');
             if (!title) return;
@@ -784,6 +435,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title })
                 });
+
                 const data = await response.json();
                 if (data.success) {
                     currentChatId = data.chat_id;
@@ -792,32 +444,49 @@
                     loadChats();
                 }
             } catch (error) {
-                console.error('Erro:', error);
+                console.error('Erro ao criar chat:', error);
             }
         }
 
+        // Iniciar novo chat temporário
+        function startNewChat() {
+            currentChatId = null;
+            document.getElementById('chat-messages').innerHTML =
+                '<div class="message system">Bem-vindo ao chat com Agentes IA (Gemini, Claude, ChatGPT)</div>';
+        }
+
+        // Carregar chat anterior
         async function loadChat(chatId) {
             try {
                 const response = await fetch(`${API_BASE}/chat-history.php?action=load&chat_id=${chatId}`);
                 const data = await response.json();
+
                 if (data.chat) {
                     currentChatId = chatId;
-                    const container = document.getElementById('chat-messages');
-                    container.innerHTML = '';
+                    const messagesContainer = document.getElementById('chat-messages');
+                    messagesContainer.innerHTML = '';
+
                     data.chat.messages.forEach(msg => {
                         addChatMessage(msg.content, msg.role);
                     });
+
+                    // Marcar como ativo
+                    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+                    event.target.closest('.chat-item')?.classList.add('active');
                 }
             } catch (error) {
-                console.error('Erro:', error);
+                console.error('Erro ao carregar chat:', error);
             }
         }
 
+        // Enviar mensagem
         async function sendMessage() {
             const input = document.getElementById('chat-input');
             const message = input.value.trim();
+
             if (!message) return;
 
+            // Se nao tem chat ativo, criar um
             if (!currentChatId) {
                 const title = `Conversa ${new Date().toLocaleTimeString('pt-BR')}`;
                 const response = await fetch(`${API_BASE}/chat-history.php?action=create`, {
@@ -829,16 +498,19 @@
                 currentChatId = data.chat_id;
             }
 
+            // Adicionar mensagem do usuario
             addChatMessage(message, 'user');
             input.value = '';
 
             try {
+                // Registrar mensagem no webhook
                 await fetch('/api/monitor/chat-webhook.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message })
                 });
 
+                // Salvar no historico
                 if (currentChatId) {
                     await fetch(`${API_BASE}/chat-history.php?action=add-message`, {
                         method: 'POST',
@@ -853,10 +525,12 @@
 
                 addChatMessage('Agentes respondendo em 2 minutos...', 'system');
             } catch (error) {
-                console.error('Erro:', error);
+                console.error('Erro ao enviar:', error);
+                addChatMessage('Erro ao processar mensagem.', 'agent');
             }
         }
 
+        // Adicionar mensagem ao chat
         function addChatMessage(text, type) {
             const container = document.getElementById('chat-messages');
             const div = document.createElement('div');
@@ -867,14 +541,6 @@
             `;
             container.appendChild(div);
             container.scrollTop = container.scrollHeight;
-        }
-
-        // Fechar modal ao clicar fora
-        window.onclick = function(event) {
-            const modal = document.getElementById('logModal');
-            if (event.target == modal) {
-                modal.classList.remove('active');
-            }
         }
     </script>
 </body>
