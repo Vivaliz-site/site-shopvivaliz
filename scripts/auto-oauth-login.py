@@ -33,7 +33,7 @@ except ImportError:
 # Configurações
 CLIENT_ID = os.getenv('OLIST_CLIENT_ID', 'tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553')
 CLIENT_SECRET = os.getenv('OLIST_CLIENT_SECRET', 'sh1MLgXhFlvycybhlShnvQMcEL8T2GWv')
-REDIRECT_URI = 'https://dev.shopvivaliz.com.br/olist/setup-oauth.php'
+REDIRECT_URI = 'https://dev.shopvivaliz.com.br/olist/oauth-callback-simple.php'
 
 # Credenciais Olist
 OLIST_EMAIL = os.getenv('OLIST_EMAIL', 'atendimento@shopvivaliz.com.br')
@@ -181,22 +181,27 @@ def login_and_get_token():
         # Extrair código da URL
         if 'code=' in current_url:
             code = current_url.split('code=')[1].split('&')[0]
-            log_msg(f"Código obtido: {code[:30]}...")
+            log_msg(f"Codigo obtido: {code[:30]}...")
 
-            # Verificar se o arquivo de config foi criado
-            time.sleep(2)
-            if CONFIG_FILE.exists():
-                log_msg(f"✅ Token foi salvo em {CONFIG_FILE}")
-                with open(CONFIG_FILE, 'r') as f:
-                    config = json.load(f)
-                    log_msg(f"✅ Refresh token: {config.get('refresh_token', 'N/A')[:30]}...")
-                    log_msg(f"✅ Access token: {config.get('access_token', 'N/A')[:30]}...")
+            # Trocar código por token chamando sync-agora.php com o código
+            log_msg("Trocando codigo por token...")
+            import subprocess
+            result = subprocess.run(
+                [sys.executable, 'scripts/auto-sync-agora.py', '--code', code],
+                capture_output=True,
+                text=True,
+                cwd=PROJECT_ROOT
+            )
+
+            log_msg(result.stdout)
+            if result.returncode == 0:
+                log_msg("Sucesso: Token obtido!")
                 return True
             else:
-                log_msg("⚠️ Arquivo de config não foi criado")
+                log_msg(f"Erro ao trocar codigo: {result.stderr}")
                 return False
         else:
-            log_msg("❌ Código não encontrado na URL")
+            log_msg("Codigo nao encontrado na URL")
             return False
 
     except Exception as e:
