@@ -13,7 +13,7 @@ import csv
 # Credenciais
 CONFIG = {
     'host': 'localhost',
-    'user': 'claude',
+    'user': 'shopv506_claude',
     'password': 'CFqmkF8}$C_2',
     'database': 'shopv506_shopvivaliz'
 }
