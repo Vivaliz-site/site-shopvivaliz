@@ -59,7 +59,7 @@ try {
     $insert_sql = "INSERT INTO products (sku, product_id, name, price, description, category, stock, image_url, active, created_at, updated_at)
     SELECT " . implode(',', $select_parts) . "
     FROM olist_products op
-    LEFT JOIN products p ON p.sku = op.sku
+    LEFT JOIN products p ON p.sku COLLATE utf8mb4_unicode_ci = op.sku COLLATE utf8mb4_unicode_ci
     WHERE p.id IS NULL
     AND op.sku IS NOT NULL
     AND op.sku != ''
