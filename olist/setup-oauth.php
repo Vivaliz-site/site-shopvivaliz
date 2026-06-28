@@ -16,19 +16,25 @@ $redirect_uri = 'https://dev.shopvivaliz.com.br/olist/setup-oauth.php';
 if (isset($_GET['code'])) {
     $code = $_GET['code'];
 
+    error_log("[Setup OAuth] Código recebido: " . substr($code, 0, 20) . "...");
+
     // Trocar código por token
     $token_url = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token";
+
+    $post_data = [
+        'grant_type' => 'authorization_code',
+        'client_id' => $client_id,
+        'client_secret' => $client_secret,
+        'code' => $code,
+        'redirect_uri' => $redirect_uri
+    ];
+
+    error_log("[Setup OAuth] POST data: " . json_encode($post_data));
 
     $ch = curl_init($token_url);
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => http_build_query([
-            'grant_type' => 'authorization_code',
-            'client_id' => $client_id,
-            'client_secret' => $client_secret,
-            'code' => $code,
-            'redirect_uri' => $redirect_uri
-        ]),
+        CURLOPT_POSTFIELDS => http_build_query($post_data),
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_TIMEOUT => 30,
@@ -37,20 +43,30 @@ if (isset($_GET['code'])) {
 
     $response = curl_exec($ch);
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
     curl_close($ch);
+
+    error_log("[Setup OAuth] Status: $status, Error: $error");
+    error_log("[Setup OAuth] Response: " . substr($response, 0, 300));
 
     if ($status == 200) {
         $data = json_decode($response, true);
 
+        error_log("[Setup OAuth] Parsed data: " . json_encode($data));
+
         if (isset($data['refresh_token'])) {
             // Salvar refresh token
             $token_dir = __DIR__ . '/../.tokens';
-            @mkdir($token_dir, 0755, true);
+            if (!file_exists($token_dir)) {
+                @mkdir($token_dir, 0777, true);
+                @chmod($token_dir, 0777);
+            }
 
-            file_put_contents(
-                $token_dir . '/olist_refresh_token.txt',
-                $data['refresh_token']
-            );
+            $token_file = $token_dir . '/olist_refresh_token.txt';
+            $result = file_put_contents($token_file, $data['refresh_token']);
+
+            error_log("[Setup OAuth] Token salvo em: $token_file, resultado: " . ($result ? 'SUCCESS' : 'FAILED'));
+            @chmod($token_file, 0666);
 
             echo <<<HTML
 <!DOCTYPE html>
