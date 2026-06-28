@@ -27,6 +27,7 @@ if (file_exists($arquivo_produtos)) {
         $produtos = $GLOBALS['produtos_olist'];
         $cache_valido = true;
         error_log("[Catalogo] Carregou " . count($produtos) . " produtos do arquivo");
+        header('X-Debug-Produtos: ' . count($produtos));
 
         // SYNC 198 PRODUTOS AO BANCO
         if (count($produtos) >= 190) {
