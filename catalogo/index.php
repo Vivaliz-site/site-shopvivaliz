@@ -30,20 +30,24 @@ if (file_exists($arquivo_produtos)) {
 
         // SYNC 198 PRODUTOS AO BANCO
         if (count($produtos) >= 190) {
-            try {
-                $db_host = getenv('DB_HOST') ?: 'localhost';
-                $db_user = getenv('DB_USER') ?: 'root';
-                $db_pass = getenv('DB_PASS') ?: '';
-                $db_name = getenv('DB_NAME') ?: 'shopvivaliz';
+            $db_host = getenv('DB_HOST') ?: 'localhost';
+            $db_user = getenv('DB_USER') ?: 'root';
+            $db_pass = getenv('DB_PASS') ?: '';
+            $db_name = getenv('DB_NAME') ?: 'shopvivaliz';
 
-                $db = @new mysqli($db_host, $db_user, $db_pass, $db_name);
+            $db = @new mysqli($db_host, $db_user, $db_pass, $db_name);
 
-                if (!$db->connect_error) {
-                    $sql = "INSERT INTO products (product_id, name, price, description, category, stock, created_at, updated_at)
-                            VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
-                            ON DUPLICATE KEY UPDATE price=VALUES(price), description=VALUES(description), category=VALUES(category), stock=VALUES(stock), updated_at=NOW()";
+            if ($db->connect_error) {
+                error_log("[Catalogo-SYNC] Erro conexão: " . $db->connect_error . " (host=$db_host user=$db_user db=$db_name)");
+            } else {
+                $sql = "INSERT INTO products (product_id, name, price, description, category, stock, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+                        ON DUPLICATE KEY UPDATE price=VALUES(price), description=VALUES(description), category=VALUES(category), stock=VALUES(stock), updated_at=NOW()";
 
-                    $stmt = $db->prepare($sql);
+                $stmt = $db->prepare($sql);
+                if (!$stmt) {
+                    error_log("[Catalogo-SYNC] Prepare error: " . $db->error);
+                } else {
                     $sync_count = 0;
 
                     foreach ($produtos as $p) {
@@ -54,16 +58,22 @@ if (file_exists($arquivo_produtos)) {
                         $cat = $p['categoria'] ?? 'Geral';
                         $est = (int)($p['estoque'] ?? 0);
 
-                        if ($id && $nome && $stmt->bind_param('ssdssi', $id, $nome, $preco, $desc, $cat, $est)) {
-                            if ($stmt->execute()) $sync_count++;
+                        if ($id && $nome) {
+                            if (!$stmt->bind_param('ssdssi', $id, $nome, $preco, $desc, $cat, $est)) {
+                                error_log("[Catalogo-SYNC] Bind error: " . $stmt->error);
+                                continue;
+                            }
+                            if ($stmt->execute()) {
+                                $sync_count++;
+                            } else {
+                                error_log("[Catalogo-SYNC] Execute error: " . $stmt->error);
+                            }
                         }
                     }
 
-                    error_log("[Catalogo] Sincronizou " . $sync_count . " produtos ao banco");
-                    $db->close();
+                    error_log("[Catalogo-SYNC] Sincronizou " . $sync_count . " produtos ao banco (total esperado: " . count($produtos) . ")");
                 }
-            } catch (Exception $e) {
-                error_log("[Catalogo] Erro ao sincronizar: " . $e->getMessage());
+                $db->close();
             }
         }
     }
