@@ -36,8 +36,8 @@ log_msg("Codigo salvo em $code_file");
 // Chamar complete-oauth-flow.php para fazer a sincronizacao
 log_msg("Chamando complete-oauth-flow.php...");
 
-$client_id = getenv('OLIST_CLIENT_ID') ?: 'tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553';
-$client_secret = getenv('OLIST_CLIENT_SECRET') ?: 'sh1MLgXhFlvycybhlShnvQMcEL8T2GWv';
+$client_id = getenv('OLIST_CLIENT_ID') ?: die('ERRO: OLIST_CLIENT_ID não configurado');
+$client_secret = getenv('OLIST_CLIENT_SECRET') ?: die('ERRO: OLIST_CLIENT_SECRET não configurado');
 $redirect_uri = 'https://dev.shopvivaliz.com.br/olist/callback.php';
 
 try {
