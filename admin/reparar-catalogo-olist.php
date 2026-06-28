@@ -34,19 +34,30 @@ try {
 
     // 2. IMPORTAR PRODUTOS DE olist_products PARA products
     // Inserir produtos que ainda não existem (por SKU)
+    // Primeiro, descobrir estrutura de olist_products
+    $col_result = $db->query("DESCRIBE olist_products");
+    $cols = [];
+    while ($col = $col_result->fetch_assoc()) {
+        $cols[$col['Field']] = true;
+    }
+
+    // Montar INSERT dinâmico baseado nas colunas que existem
+    $select_parts = [
+        'op.sku',
+        'op.olist_product_id',
+        'op.name',
+        'CAST(op.price AS DECIMAL(10,2))',
+        'op.description',
+        isset($cols['category']) ? 'op.category' : "'Geral' as category",
+        isset($cols['stock']) ? 'op.stock' : '0 as stock',
+        'op.primary_image_url',
+        '1 as active',
+        'NOW()',
+        'NOW()'
+    ];
+
     $insert_sql = "INSERT INTO products (sku, product_id, name, price, description, category, stock, image_url, active, created_at, updated_at)
-    SELECT
-        op.sku,
-        op.olist_product_id,
-        op.name,
-        op.price,
-        op.description,
-        op.category,
-        op.stock,
-        op.primary_image_url,
-        1 as active,
-        NOW(),
-        NOW()
+    SELECT " . implode(',', $select_parts) . "
     FROM olist_products op
     LEFT JOIN products p ON p.sku = op.sku
     WHERE p.id IS NULL
