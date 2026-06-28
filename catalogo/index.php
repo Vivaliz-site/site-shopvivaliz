@@ -44,6 +44,18 @@ if (file_exists($arquivo_produtos)) {
                 error_log("[Catalogo-SYNC] Erro conexão: " . $db->connect_error . " (host=$db_host user=$db_user db=$db_name)");
             } else {
                 header('X-Sync-Status: CONECTADO');
+
+                // DEBUG: Listar tabelas disponíveis
+                $tables_result = $db->query("SHOW TABLES");
+                $tables_list = [];
+                if ($tables_result) {
+                    while ($row = $tables_result->fetch_row()) {
+                        $tables_list[] = $row[0];
+                    }
+                }
+                header('X-Tables-Available: ' . implode(',', $tables_list));
+                error_log("[Catalogo-SYNC] Tabelas disponíveis: " . implode(',', $tables_list));
+
                 $sql = "INSERT INTO products (product_id, name, price, description, category, stock, created_at, updated_at)
                         VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
                         ON DUPLICATE KEY UPDATE price=VALUES(price), description=VALUES(description), category=VALUES(category), stock=VALUES(stock), updated_at=NOW()";
