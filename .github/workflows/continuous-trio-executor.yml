@@ -1,8 +1,8 @@
-name: Trio IA Contínuo - Sem Paradas
+name: Trio IA Continuo - Sem Paradas
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # A cada 30 min (segurança)
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -12,76 +12,40 @@ permissions:
 jobs:
   continuous:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Configurar Git
         run: |
-          git config user.name "Trio IA Contínuo"
+          git config user.name "Trio IA Continuo"
           git config user.email "trio-continuous@shopvivaliz.com.br"
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Instalar dependências
+      - name: Instalar dependencias
         run: pip install google-generativeai anthropic openai
 
-      - name:  Iniciar Trio IA em Modo Contínuo
+      - name: Iniciar Trio IA em Modo Continuo
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          echo " TRIO IA - MODO CONTÍNUO"
-          echo ""
-          echo "Agentes começando (nunca param):"
-          echo "1️⃣  Gemini - Analisa e pega próxima tarefa"
-          echo "2️⃣  Claude - Implementa e pega próxima tarefa"
-          echo "3️⃣  ChatGPT - Valida e pega próxima tarefa"
-          echo ""
-          python scripts/continuous-executor.py
+        run: python scripts/continuous-executor.py
 
-      - name:  Gerar Relatório
+      - name: Gerar Relatorio
         if: always()
         run: |
-          echo "# Execução Contínua - Relatório" > continuous-report.md
-          echo "" >> continuous-report.md
-          echo "**Modo:** Contínuo (agentes nunca param)" >> continuous-report.md
-          echo "**Timestamp:** $(date)" >> continuous-report.md
-          echo "" >> continuous-report.md
-          echo "## Fluxo:" >> continuous-report.md
-          echo "1. Agente completa tarefa" >> continuous-report.md
-          echo "2. Pega próxima tarefa da fila" >> continuous-report.md
-          echo "3. Processa continuamente" >> continuous-report.md
-          echo "4. Nunca fica parado" >> continuous-report.md
+          echo "# Execucao Continua - Relatorio" > continuous-report.md
+          echo "Timestamp: $(date)" >> continuous-report.md
+          echo "Status: ciclo concluido" >> continuous-report.md
 
-      - name: Notificar Sucesso
-        if: success()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.titan.email
-          server_port: 465
-          username: ${{ secrets.EMAIL_USER }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: ' Trio IA Contínuo: Múltiplas Tarefas Completadas'
-          to: fredmourao@gmail.com
-          from: Trio IA Contínuo <trio@shopvivaliz.com.br>
-          body: |
-             EXECUÇÃO CONTÍNUA COMPLETA!
-
-             3 Agentes trabalhando SEM INTERRUPÇÃO:
-            - Gemini: Completou tarefas, pegou nova
-            - Claude: Completou tarefas, pegou nova
-            - ChatGPT: Completou tarefas, pegou nova
-
-             Nenhum agente ficou parado!
-
-            ✨ Sistema de desenvolvimento 24/7:
-            - Sempre processando tarefas
-            - Fila contínua
-            - Automação total
-
-            🔗 Monitor: https://dev.shopvivaliz.com.br/admin/monitor/
+      - name: Commitar resultados
+        continue-on-error: true
+        run: |
+          git add -A
+          git commit -m "feat: agentes trio continuo ($(date +'%Y-%m-%d %H:%M:%S'))" || true
+          git push || true

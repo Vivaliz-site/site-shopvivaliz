@@ -1,91 +1,61 @@
 # Relatorio Trio IA — Modo: Revisão e melhoria de features do ecommerce
 
-**Tarefa:** Implementar carrinho de compras persistente: Criar sistema de carrinho com salva em sessão PHP e localStorage JS. Permitir adicionar, remover e atualizar quantidade de produtos. Integrar com banco de dados para usuários logados.
+**Tarefa:** Adicionar rastreamento de pedidos em tempo real: Integrar com transportadoras (Correios, Loggi) para rastreamento automatico. Enviar notificacoes via email/SMS/WhatsApp.
 
 ---
 
-# Relatório Final - Sistema de Carrinho de Compras Persistente do ShopVivaliz
+# Relatório Final - Sistema de Rastreamento de Pedidos em Tempo Real da ShopVivaliz
 
 ## 1. Validação dos Requisitos de Negócio
 
-Para a implementação do sistema de carrinho de compras persistente do ShopVivaliz, os seguintes requisitos de negócio foram considerados e validados:
+A solução proposta atende aos requisitos de negócio definidos para o rastreamento de pedidos em tempo real da ShopVivaliz. Os principais pontos validados incluem:
 
-### Funcionalidades Implementadas:
-
-1. **Persistência do Carrinho:**
-   - Preservação do estado do carrinho entre sessões usando `localStorage` para usuários não logados e o banco de dados para usuários logados.
-   
-2. **Adição de Itens:**
-   - Possibilidade de adicionar produtos ao carrinho, com validações de estoque e preço no backend.
-
-3. **Remoção de Itens:**
-   - Funcionamento da remoção de produtos do carrinho, tanto na sessão quanto no banco de dados.
-
-4. **Atualização de Quantidades:**
-   - Capacidade de modificar a quantidade de produtos no carrinho com feedback dinâmico e persistente.
-
-5. **Sincronização entre Sessão, LocalStorage e Banco de Dados:**
-   - Implementação da lógica `syncCart()` para garantir a consistência e integridade dos dados.
-
-### Requisitos de Segurança Implementados:
-
-1. **Validação de Dados:**
-   - Todas as operações no backend realizam validações necessárias, prevenindo injeções SQL e operações inválidas.
-
-2. **Uso de Prepared Statements:**
-   - Adoção de prepared statements para proteção contra SQL Injection.
-
-3. **Segurança em Sessões:**
-   - Implementação de `session_regenerate_id(true)` em momentos críticos, como em logins e logouts.
+- **Integração com Transportadoras:** Implementação das integrações com as transportadoras Correios e Loggi, utilizando APIs adequadas (REST e SOAP).
+- **Rastreamento Automático:** Implementação de um sistema de rastreamento que atualiza o status dos pedidos a cada X minutos, através de um Cron Job, como uma solução de "quase em tempo real" devido às limitações do ambiente HostGator.
+- **Notificações Proativas:** Envio de notificações via e-mail, SMS e WhatsApp a clientes conforme alterações no status do pedido. Isso inclui notificações para eventos relevantes como "Pedido postado", "Em trânsito", "Saiu para entrega" e "Entregue".
+- **Interface de Administração:** Funcionalidade de gerenciar pedidos, incluindo a visualização de status de rastreamento e histórico de eventos na interface administrativa.
 
 ## 2. Pontos de Risco ou Bugs Encontrados
 
-Durante o desenvolvimento e testes, os seguintes riscos e problemas foram identificados:
+Durante a análise e desenvolvimento, alguns riscos e potenciais bugs foram identificados:
 
-1. **Concorrência e Bloqueio de Sessão:**
-   - Acesso simultâneo à sessão PHP pode causar lentidão; mitigado ao fechar a sessão após leitura.
-
-2. **Carga Excessiva no Banco de Dados:**
-   - Um alto volume de requisições rápidas pode impactar o desempenho do MySQL, mitigado pela adoção de atualizações em lote.
-
-3. **Inconsistências nas Sincronizações:**
-   - Problemas potenciais na lógica de `syncCart`, onde dados poderiam ser sobrescritos; verificações rigorosas foram implementadas.
-
-4. **Segurança e Exposição de Dados:**
-   - Necessidade de validação contínua dos dados recebidos para evitar manipulações indevidas, com testes de segurança adicionais recomendados.
-
-5. **Interação com LocalStorage:**
-   - Possibilidade de inconsistências entre `localStorage` e o backend; reforçou-se a validação durante a sincronização.
+- **Limitações de Recursos:** O ambiente de hospedagem compartilhada na HostGator pode levar a limitações no uso de CPU e memória para a execução do Cron Job, especialmente se o número de pedidos em processamento for alto.
+- **Complexidade na Integração de APIs:** A integração com a API SOAP dos Correios pode apresentar desafios adicionais de complexidade e manutenção se houver mudanças nas suas especificações.
+- **Notificações Bloqueadas:** O envio excessivo de e-mails ou mensagens podem levar a bloqueios por parte do provedor de hospedagem, por conta de regras de envio estabelecidas.
+- **Controle de Erros e Retries:** É necessário assegurar que o código lida corretamente com erros de chamadas de API e condições de falha, evitando loops infinitos que podem levar a sobrecarga do servidor.
 
 ## 3. Checklist de Testes Antes do Deploy
 
-### Funcionalidade
+Antes de realizar o deploy da solução, recomenda-se seguir esta checklist de testes:
 
-- [ ] **Adicionar Item ao Carrinho**: Testes de sucesso e falha (produto não disponível).
-- [ ] **Remover Item do Carrinho**: Testar remoção de itens existentes.
-- [ ] **Atualizar Quantidade**: Verificar se a quantidade é atualizada corretamente.
-- [ ] **Sincronização**: Confirmar se `localStorage` e PHP estão sincronizados após mudanças.
-- [ ] **Persistência**: Verificar se o carrinho persiste após o fechamento e reabertura do navegador.
+1. **Testes de Integração com Transportadoras:**
+   - Verificar a conexão e autenticação com as APIs do Correios e Loggi.
+   - Testar diferentes cenários de resposta da API (códigos de sucesso e erro).
 
-### Segurança
+2. **Testes de Rastreio:**
+   - Validar a lógica de atualização de status nos registros de rastreamento.
+   - Verificar se os dados estão sendo inseridos corretamente nas tabelas pertinentes.
 
-- [ ] **Validações de Backend**: Testar entradas inválidas e caso de injeção SQL.
-- [ ] **Segurança de Sessão**: Testar mudanças no `session_id` antes e depois do login/logout.
+3. **Testes de Notificação:**
+   - Testar o envio de notificações via e-mail, SMS e WhatsApp com seus respectivos serviços.
+   - Confirmar o recebimento das notificações em diferentes cenários.
 
-### Performance
+4. **Testes de Performance do Cron Job:**
+   - Executar o Cron Job manualmente e verificar o tempo de execução.
+   - Monitorar o uso de recursos do servidor durante a execução do script.
 
-- [ ] **Carregamento do Banco de Dados**: Testar desempenho sob alta carga (simular múltiplas requisições).
-- [ ] **Performance do PHP**: Monitorar tempo de resposta das rotas da API.
+5. **Testes de Segurança:**
+   - Validar o gerenciamento de secrets e credenciais no GitHub.
+   - Garantir que as respostas das APIs sejam tratadas adequadamente para evitar injeção de código.
 
-### Usabilidade
-
-- [ ] **Experiência do Usuário**: Feedback visual e mensagens em caso de sucesso ou erro nas operações do carrinho.
-- [ ] **Adaptabilidade**: Testar funcionamento em diferentes dispositivos e navegadores.
+6. **Testes de Interface Administrativa:**
+   - Testar a funcionalidade de cadastro e visualização de pedidos.
+   - Verificar o funcionamento da exibição do status atual e do histórico de rastreamento.
 
 ## 4. Resumo Executivo da Feature
 
-A implementação do sistema de carrinho de compras persistente no ShopVivaliz foi desenhada para proporcionar aos usuários uma experiência de compra mais fluida e eficiente. O sistema permite que os usuários adicionem, removam e atualizem produtos em seus carrinhos, assegurando que as informações sejam mantidas de uma sessão para outra, mesmo após o fechamento do navegador, utilizando o `localStorage` e o banco de dados MySQL. 
+O novo sistema de rastreamento de pedidos em tempo real da ShopVivaliz foi projetado para oferecer uma experiência aprimorada aos clientes, permitindo acompanhar o status de seus pedidos de maneira prática e rápida. Integrações com as transportadoras Correios e Loggi garantem a obtenção de informações atualizadas sobre o transporte dos pedidos, enquanto um sistema de notificações envia alertas automáticos via e-mail, SMS e WhatsApp.
 
-A arquitetura foi desenvolvida tendo em mente a segurança e a integridade dos dados, com validações robustas e mitigação de riscos realizados durante o processo de desenvolvimento. Um conjunto de testes abrangentes foi preparado para assegurar a funcionalidade correta, a segurança, a performance e a usabilidade antes do deploy, garantindo que a nova feature atenda às necessidades dos clientes do ShopVivaliz e contribua para a melhoria nas taxas de conversão do ecommerce. 
+Com uma arquitetura modular e segura, a solução foi desenvolvida levando em consideração as limitações do ambiente de hospedagem compartilhada, priorizando a performance e a eficiência no uso de recursos. A interface administrativa fornece um painel de controle intuitivo, permitindo gerenciar pedidos e monitorar o status de rastreamento de forma simples.
 
-A próxima fase envolve a monitorização do sistema após o deploy e a coleta de feedback dos usuários para futuras melhorias e otimizações na experiência de compra.
+Essa feature não só atende aos objetivos estabelecidos pela equipe, mas também posiciona a ShopVivaliz como um e-commerce que se preocupa em oferecer transparência e satisfação ao cliente, fundamental para aumentar a confiança e a lealdade à marca.

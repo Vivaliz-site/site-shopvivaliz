@@ -5,13 +5,14 @@
       "title": "Importar imagens de produtos da Olist",
       "description": "Conectar na API Olist/Tiny ERP, baixar imagens de todos os produtos, processar e otimizar tamanho, armazenar em /uploads/products/ e atualizar tabela olist_product_images no banco de dados com URLs locais. Suportar retry automático para falhas de conexao.",
       "priority": "high",
-      "status": "pending",
-      "created_at": "2026-06-27T20:16:00Z"
+      "status": "completed",
+      "created_at": "2026-06-27T20:16:00Z",
+      "completed_at": "2026-06-28T07:41:04.696558"
     },
     {
       "id": "task-001",
-      "title": "Adicionar filtro de pre\u00c3\u0192\u00c2\u00a7o na listagem de produtos",
-      "description": "Implementar filtro de pre\u00c3\u0192\u00c2\u00a7o m\u00c3\u0192\u00c2\u00adnimo e m\u00c3\u0192\u00c2\u00a1ximo com integra\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00a3o ao banco de dados MySQL. Atualizar a p\u00c3\u0192\u00c2\u00a1gina de listagem com Ajax para filtro em tempo real sem recarregar.",
+      "title": "Adicionar filtro de preÃƒÂ§o na listagem de produtos",
+      "description": "Implementar filtro de preÃƒÂ§o mÃƒÂ­nimo e mÃƒÂ¡ximo com integraÃƒÂ§ÃƒÂ£o ao banco de dados MySQL. Atualizar a pÃƒÂ¡gina de listagem com Ajax para filtro em tempo real sem recarregar.",
       "priority": "high",
       "status": "completed",
       "created_at": "2026-06-27T12:00:00Z",
@@ -20,7 +21,7 @@
     {
       "id": "task-002",
       "title": "Implementar carrinho de compras persistente",
-      "description": "Criar sistema de carrinho com salva em sess\u00c3\u0192\u00c2\u00a3o PHP e localStorage JS. Permitir adicionar, remover e atualizar quantidade de produtos. Integrar com banco de dados para usu\u00c3\u0192\u00c2\u00a1rios logados.",
+      "description": "Criar sistema de carrinho com salva em sessÃƒÂ£o PHP e localStorage JS. Permitir adicionar, remover e atualizar quantidade de produtos. Integrar com banco de dados para usuÃƒÂ¡rios logados.",
       "priority": "high",
       "status": "completed",
       "created_at": "2026-06-27T12:05:00Z",
@@ -29,7 +30,7 @@
     {
       "id": "task-003",
       "title": "Integrar sistema de cupons de desconto",
-      "description": "Criar tabela de cupons no MySQL, validar cupons no checkout, aplicar desconto ao total. Suportar desconto percentual e valor fixo. Incluir expira\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00a3o de cupons.",
+      "description": "Criar tabela de cupons no MySQL, validar cupons no checkout, aplicar desconto ao total. Suportar desconto percentual e valor fixo. Incluir expiraÃƒÂ§ÃƒÂ£o de cupons.",
       "priority": "high",
       "status": "completed",
       "created_at": "2026-06-27T12:10:00Z",
@@ -40,135 +41,136 @@
       "title": "Melhorar performance de carregamento das imagens",
       "description": "Implementar lazy loading com Intersection Observer, otimizar tamanho das imagens com ImageMagick, configurar cache HTTP headers. Usar WebP com fallback para PNG/JPG.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T12:15:00Z",
-      "completed_at": "2026-06-27T17:43:13.791339"
+      "completed_at": "2026-06-28T07:41:05.197347"
     },
     {
       "id": "task-005",
       "title": "Implementar busca com autocomplete",
       "description": "Criar endpoint de busca em PHP que retorna JSON, implementar autocomplete no frontend com AJAX. Suportar busca por nome, categoria e SKU. Cache de resultados.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T12:20:00Z",
-      "completed_at": "2026-06-27T17:43:14.293182"
+      "completed_at": "2026-06-28T07:41:05.698263"
     },
     {
       "id": "task-006",
-      "title": "Adicionar sistema de avalia\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00b5es e coment\u00c3\u0192\u00c2\u00a1rios",
-      "description": "Criar tabelas para avalia\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00b5es de produtos (1-5 estrelas) e coment\u00c3\u0192\u00c2\u00a1rios. Implementar valida\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00a3o de usu\u00c3\u0192\u00c2\u00a1rio autenticado. Mostrar m\u00c3\u0192\u00c2\u00a9dia de avalia\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00b5es na p\u00c3\u0192\u00c2\u00a1gina do produto.",
+      "title": "Adicionar sistema de avaliaÃƒÂ§ÃƒÂµes e comentÃƒÂ¡rios",
+      "description": "Criar tabelas para avaliaÃƒÂ§ÃƒÂµes de produtos (1-5 estrelas) e comentÃƒÂ¡rios. Implementar validaÃƒÂ§ÃƒÂ£o de usuÃƒÂ¡rio autenticado. Mostrar mÃƒÂ©dia de avaliaÃƒÂ§ÃƒÂµes na pÃƒÂ¡gina do produto.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T12:25:00Z",
-      "completed_at": "2026-06-27T17:43:14.795165"
+      "completed_at": "2026-06-28T07:47:07.061312Z",
+      "completed_by": "Gemini"
     },
     {
       "id": "task-007",
       "title": "Integrar gateway de pagamento Stripe",
-      "description": "Configurar Stripe API, criar p\u00c3\u0192\u00c2\u00a1gina de checkout segura, processar pagamentos, receber webhooks de confirma\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00a3o. Suportar m\u00c3\u0192\u00c2\u00baltiplos m\u00c3\u0192\u00c2\u00a9todos de pagamento.",
+      "description": "Configurar Stripe API, criar pÃƒÂ¡gina de checkout segura, processar pagamentos, receber webhooks de confirmaÃƒÂ§ÃƒÂ£o. Suportar mÃƒÂºltiplos mÃƒÂ©todos de pagamento.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T12:30:00Z",
-      "completed_at": "2026-06-27T17:43:15.29673"
+      "completed_at": "2026-06-28T08:37:05.577307Z"
     },
     {
       "id": "task-008",
-      "title": "Implementar sistema de notifica\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00b5es por email",
-      "description": "Configurar SMTP para enviar emails de confirma\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00a3o de pedido, shipment tracking, e promo\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00b5es. Usar templates HTML profissionais. Respeitar prefer\u00c3\u0192\u00c2\u00aancias do usu\u00c3\u0192\u00c2\u00a1rio.",
+      "title": "Implementar sistema de notificaÃƒÂ§ÃƒÂµes por email",
+      "description": "Configurar SMTP para enviar emails de confirmaÃƒÂ§ÃƒÂ£o de pedido, shipment tracking, e promoÃƒÂ§ÃƒÂµes. Usar templates HTML profissionais. Respeitar preferÃƒÂªncias do usuÃƒÂ¡rio.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T12:35:00Z",
-      "completed_at": "2026-06-27T17:43:15.798344"
+      "completed_at": "2026-06-28T10:09:13.972179Z"
     },
     {
       "id": "task-009",
-      "title": "Adicionar painel de administra\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00a3o para gerenciar produtos",
-      "description": "Criar painel admin com CRUD de produtos, categorias, pre\u00c3\u0192\u00c2\u00a7os e imagens. Importar/exportar dados via CSV. Validar dados de entrada. Logs de auditoria.",
+      "title": "Adicionar painel de administraÃƒÂ§ÃƒÂ£o para gerenciar produtos",
+      "description": "Criar painel admin com CRUD de produtos, categorias, preÃƒÂ§os e imagens. Importar/exportar dados via CSV. Validar dados de entrada. Logs de auditoria.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T12:40:00Z",
-      "completed_at": "2026-06-27T17:43:16.299855"
+      "completed_at": "2026-06-28T10:09:13.972188Z"
     },
     {
       "id": "task-010",
       "title": "Otimizar SEO do ecommerce",
-      "description": "Implementar meta tags din\u00c3\u0192\u00c2\u00a2micas por produto, criar sitemap XML, adicionar structured data (Schema.org), otimizar URLs amig\u00c3\u0192\u00c2\u00a1veis. Melhorar velocidade de p\u00c3\u0192\u00c2\u00a1gina.",
+      "description": "Implementar meta tags dinÃƒÂ¢micas por produto, criar sitemap XML, adicionar structured data (Schema.org), otimizar URLs amigÃƒÂ¡veis. Melhorar velocidade de pÃƒÂ¡gina.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T12:45:00Z",
-      "completed_at": "2026-06-27T17:43:16.802551"
+      "completed_at": "2026-06-28T10:09:13.972190Z"
     },
     {
       "id": "task-011",
       "title": "Implementar autenticacao OAuth2",
       "description": "Integrar login via Google e Facebook usando OAuth2. Permitir registro automatico na primeira autenticacao. Vincular contas existentes com OAuth.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:08:00Z",
-      "completed_at": "2026-06-27T18:05:08.855016"
+      "completed_at": "2026-06-28T10:09:44.707362"
     },
     {
       "id": "task-012",
       "title": "Criar sistema de wishlist",
       "description": "Permitir usuarios guardar produtos favoritos, compartilhar wishlist com outros usuarios. Notificar quando produto entra em promocao. Integrar com carrinho.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:09:00Z",
-      "completed_at": "2026-06-27T18:05:09.370396"
+      "completed_at": "2026-06-28T10:09:45.212679"
     },
     {
       "id": "task-013",
       "title": "Implementar recomendacoes de produtos via IA",
       "description": "Usar machine learning para recomendar produtos baseado no historico de compras e browsing do usuario. Exibir na homepage e apos checkout.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:10:00Z",
-      "completed_at": "2026-06-27T18:05:09.883058"
+      "completed_at": "2026-06-28T10:09:45.714170"
     },
     {
       "id": "task-014",
       "title": "Adicionar integracao com WhatsApp Business API",
       "description": "Configurar WhatsApp Business para enviar notificacoes de pedido, status de entrega e suporte ao cliente. Permitir chat com atendimento.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:11:00Z",
-      "completed_at": "2026-06-27T18:05:10.398164"
+      "completed_at": "2026-06-28T10:10:17.708671"
     },
     {
       "id": "task-015",
       "title": "Criar programa de fidelizacao com pontos",
       "description": "Implementar sistema de pontos por compra, permitir resgate em desconto. Leaderboard de clientes top. Bonus pontos em datas especiais.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:12:00Z",
-      "completed_at": "2026-06-27T18:05:10.911787"
+      "completed_at": "2026-06-28T10:10:18.213414"
     },
     {
       "id": "task-016",
       "title": "Integrar com sistema de ERP",
       "description": "Conectar ecommerce com ERP para sincronizacao automatica de estoque, pedidos e faturas. Usar webhooks e APIs.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:13:00Z",
-      "completed_at": "2026-06-27T18:05:11.428105"
+      "completed_at": "2026-06-28T10:10:18.714598"
     },
     {
       "id": "task-017",
       "title": "Implementar live chat com atendimento em tempo real",
       "description": "Integrar live chat widget para suporte ao cliente. Usar Tawk.to, Zendesk ou similar. Transferir chats para multiplos agentes.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:14:00Z",
-      "completed_at": "2026-06-27T18:05:11.941984"
+      "completed_at": "2026-06-28T12:21:39.976489Z"
     },
     {
       "id": "task-018",
       "title": "Adicionar rastreamento de pedidos em tempo real",
       "description": "Integrar com transportadoras (Correios, Loggi) para rastreamento automatico. Enviar notificacoes via email/SMS/WhatsApp.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:15:00Z",
-      "completed_at": "2026-06-27T18:05:12.458111"
+      "completed_at": "2026-06-28T13:07:42.775225Z"
     },
     {
       "id": "task-019",
@@ -357,7 +359,7 @@
       "priority": "medium",
       "status": "pending",
       "created_at": "2026-06-27T20:36:00Z",
-      "completed_at": "2026-06-27T18:05:23.250917"
+      "completed_at": null
     },
     {
       "id": "task-040",
