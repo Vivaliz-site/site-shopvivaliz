@@ -34,32 +34,23 @@ try {
 
     // 2. IMPORTAR PRODUTOS DE olist_products PARA products
     // Inserir produtos que ainda não existem (por SKU)
-    // Primeiro, descobrir estrutura de olist_products
-    $col_result = $db->query("DESCRIBE olist_products");
-    $cols = [];
-    while ($col = $col_result->fetch_assoc()) {
-        $cols[$col['Field']] = true;
-    }
-
-    // Montar INSERT dinâmico baseado nas colunas que existem
-    $select_parts = [
-        'op.sku',
-        'op.olist_product_id',
-        'op.name',
-        'CAST(op.price AS DECIMAL(10,2))',
-        'op.description',
-        isset($cols['category']) ? 'op.category' : "'Geral' as category",
-        isset($cols['stock']) ? 'op.stock' : '0 as stock',
-        'op.primary_image_url',
-        '1 as active',
-        'NOW()',
-        'NOW()'
-    ];
-
-    $insert_sql = "INSERT INTO products (sku, product_id, name, price, description, category, stock, image_url, active, created_at, updated_at)
-    SELECT " . implode(',', $select_parts) . "
+    // Importar produtos de olist_products para products
+    // Estrutura correta: products tem (id, olist_id, sku, name, price, description, stock, image_url, active, ...)
+    // olist_products tem (id, olist_id, sku, name, price, description, stock_quantity, primary_image_url, is_visible, ...)
+    $insert_sql = "INSERT INTO products (olist_id, sku, name, price, description, stock, image_url, active, created_at, updated_at)
+    SELECT
+        op.olist_id,
+        op.sku,
+        op.name,
+        CAST(op.price AS DECIMAL(10,2)),
+        op.description,
+        CAST(COALESCE(op.stock_quantity, 0) AS INT),
+        op.primary_image_url,
+        op.is_visible,
+        NOW(),
+        NOW()
     FROM olist_products op
-    LEFT JOIN products p ON p.sku COLLATE utf8mb4_unicode_ci = op.sku COLLATE utf8mb4_unicode_ci
+    LEFT JOIN products p ON p.olist_id = op.olist_id
     WHERE p.id IS NULL
     AND op.sku IS NOT NULL
     AND op.sku != ''
@@ -68,6 +59,7 @@ try {
         price=VALUES(price),
         description=VALUES(description),
         stock=VALUES(stock),
+        image_url=VALUES(image_url),
         updated_at=NOW()";
 
     if ($db->query($insert_sql)) {
@@ -111,7 +103,7 @@ try {
     $update_primary_sql = "UPDATE olist_products op
     SET
         op.primary_image_url = (
-            SELECT url FROM olist_product_images
+            SELECT image_url FROM olist_product_images
             WHERE product_local_id = (SELECT id FROM products WHERE sku = op.sku LIMIT 1)
             ORDER BY position LIMIT 1
         ),
