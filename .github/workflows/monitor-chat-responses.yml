@@ -1,4 +1,4 @@
-name: Monitor Chat - Respostas Automáticas
+name: Monitor Chat - Respostas Automticas
 
 on:
   workflow_dispatch:

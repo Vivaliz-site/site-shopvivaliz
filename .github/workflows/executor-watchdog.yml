@@ -1,4 +1,4 @@
-name: Executor Watchdog - Garantir Execução
+name: Executor Watchdog - Garantir Execuo
 
 on:
   schedule:
@@ -21,17 +21,17 @@ jobs:
         run: |
           echo " Verificando status do executor..."
 
-          # Se última execução foi há mais de 45 min, acionar novamente
+          # Se ltima execuo foi h mais de 45 min, acionar novamente
           LAST_RUN=$(gh run list --workflow ai-autonomous-executor.yml --limit 1 --json createdAt --jq '.[0].createdAt' 2>/dev/null || echo "never")
 
-          echo "Última execução: $LAST_RUN"
+          echo "ltima execuo: $LAST_RUN"
 
           if [ "$LAST_RUN" = "never" ]; then
             echo " Executor nunca rodou! Acionando..."
             exit 1
           fi
 
-      - name: Acionar executor se necessário
+      - name: Acionar executor se necessrio
         if: failure()
         run: |
           echo " Acionando executor como fallback..."

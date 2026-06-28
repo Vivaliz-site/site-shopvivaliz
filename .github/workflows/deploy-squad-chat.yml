@@ -30,7 +30,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deletar sync state (força re-upload)
+      - name: Deletar sync state (fora re-upload)
         shell: bash
         env:
           FTP_SERVER:   ${{ secrets.FTP_SERVER }}
@@ -117,10 +117,10 @@ jobs:
           BASE="https://dev.shopvivaliz.com.br"
           CANARY=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/api/agent/squad-canary.txt")
           HEALTH=$(curl -s "$BASE/api/agent/squad-chat.php?health=1")
-          echo "Canário HTTP: $CANARY"
+          echo "Canrio HTTP: $CANARY"
           echo "Health: $HEALTH"
           if [ "$CANARY" = "200" ]; then
             echo " Deploy confirmado!"
           else
-            echo " Canário ausente — ver log da FTP Action acima."
+            echo " Canrio ausente  ver log da FTP Action acima."
           fi

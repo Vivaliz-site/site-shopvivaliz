@@ -36,6 +36,6 @@ jobs:
             -f restrictions="null" \
             -f required_linear_history=false \
             -f allow_force_pushes=true \
-            -f allow_deletions=false || echo "  Branch protection já existe ou erro na configuração"
+            -f allow_deletions=false || echo "  Branch protection j existe ou erro na configurao"
 
           echo " Branch protection habilitada para GitHub Actions"

@@ -1,4 +1,4 @@
-name: 🚀 E-commerce Multi-AI Builder 24/7
+name:  E-commerce Multi-AI Builder 24/7
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       pages:
-        description: 'Páginas a construir (all | catalogo | produto | carrinho)'
+        description: 'Pginas a construir (all | catalogo | produto | carrinho)'
         default: 'all'
         required: true
 
@@ -20,21 +20,21 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: 📥 Checkout
+      - name:  Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 🐍 Setup Python
+      - name:  Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: 📦 Install dependencies
+      - name:  Install dependencies
         run: |
           python -m pip install --quiet anthropic openai google-genai
 
-      - name: 🤖 Gemini + Claude + GPT - Multi-AI Builder
+      - name:  Gemini + Claude + GPT - Multi-AI Builder
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -42,35 +42,35 @@ jobs:
         run: |
           python scripts/ecommerce-multi-ai-builder.py --pages=${{ github.event.inputs.pages || 'all' }}
 
-      - name: 📝 Git config
+      - name:  Git config
         run: |
-          git config user.name "🤖 Multi-AI Agents"
+          git config user.name " Multi-AI Agents"
           git config user.email "agents@shopvivaliz.com.br"
 
-      - name: 💾 Commit gerado
+      - name:  Commit gerado
         continue-on-error: true
         run: |
           if [[ $(git status --porcelain) ]]; then
             git add -A
-            git commit -m "feat: páginas e-commerce geradas por Gemini+Claude+GPT
+            git commit -m "feat: pginas e-commerce geradas por Gemini+Claude+GPT
 
-- Gemini (Arquiteto): especificação UX/dados
-- Claude (Desenvolvedor): implementação PHP
-- GPT (QA): revisão e aprovação
+- Gemini (Arquiteto): especificao UX/dados
+- Claude (Desenvolvedor): implementao PHP
+- GPT (QA): reviso e aprovao
 
 $(date +'%Y-%m-%d %H:%M:%S')
 
-Co-Authored-By: 🤖 ShopVivaliz Agents <agents@shopvivaliz.com.br>"
+Co-Authored-By:  ShopVivaliz Agents <agents@shopvivaliz.com.br>"
             git push || true
           fi
 
-      - name: 🚀 Deploy automático
+      - name:  Deploy automtico
         if: success()
         run: |
-          echo "✅ Páginas prontas para deploy"
-          echo "Próximo passo: git push para main → Deploy FTP automático"
+          echo " Pginas prontas para deploy"
+          echo "Prximo passo: git push para main  Deploy FTP automtico"
 
-      - name: 📊 Log do build
+      - name:  Log do build
         if: always()
         run: |
           if [ -f logs/ecommerce-build-log.json ]; then

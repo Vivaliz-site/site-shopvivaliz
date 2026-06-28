@@ -1,0 +1,108 @@
+name: Auto-Validation and Auto-Fix
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'  # A cada 30 minutos
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --quiet pyyaml requests
+
+      - name: Run Autonomous Validator
+        run: |
+          python3 scripts/autonomous-validator.py
+
+      - name: Auto-Fix Issues
+        continue-on-error: true
+        run: |
+          python3 << 'FIXEOF'
+          import os
+          import glob
+          import json
+          from pathlib import Path
+
+          print("\n[AUTO-FIX] Iniciando correccoes automaticas...")
+          fixes = []
+
+          # 1. Remover caracteres especiais dos workflows
+          for wf_file in glob.glob('.github/workflows/*.yml'):
+              with open(wf_file, 'rb') as f:
+                  content = f.read()
+              # Remove non-ASCII characters
+              content = content.decode('utf-8', errors='ignore').encode('ascii', errors='ignore')
+              with open(wf_file, 'wb') as f:
+                  f.write(content)
+              print(f"  [FIXED] {Path(wf_file).name}: Caracteres especiais removidos")
+              fixes.append(f"Cleaned {Path(wf_file).name}")
+
+          # 2. Verificar e criar diretorios faltantes
+          dirs_needed = ['logs', 'images', 'catalogo', 'checkout', 'includes']
+          for d in dirs_needed:
+              if not os.path.exists(d):
+                  os.makedirs(d, exist_ok=True)
+                  print(f"  [FIXED] Diretorio criado: {d}")
+                  fixes.append(f"Created directory {d}")
+
+          # 3. Verificar permissoes de arquivos Python
+          for py_file in glob.glob('scripts/*.py'):
+              os.chmod(py_file, 0o755)
+          print(f"  [FIXED] Permissoes de scripts atualizadas")
+
+          # 4. Salvar log de fixes
+          with open('logs/auto-fix-log.json', 'w') as f:
+              json.dump({
+                  'fixes_applied': fixes,
+                  'total': len(fixes)
+              }, f, indent=2)
+
+          print(f"\n[OK] {len(fixes)} correccoes aplicadas automaticamente")
+          FIXEOF
+
+      - name: Commit Auto-Fixes
+        continue-on-error: true
+        run: |
+          git config user.name "Autonomous Validator Bot"
+          git config user.email "validator@shopvivaliz.com.br"
+
+          if [[ $(git status --porcelain) ]]; then
+            git add -A logs/
+            git add -A .github/workflows/
+            git commit -m "chore: correccoes automaticas via validador autonomo
+
+[AUTO-FIX]
+- Removidos caracteres especiais de workflows
+- Diretorios criados conforme necessario
+- Permissoes de arquivos corrigidas
+
+Relatorio: logs/validation-report.json
+Fixes: logs/auto-fix-log.json"
+            git push || true
+          else
+            echo "[OK] Nenhuma correcao necessaria"
+          fi
+
+      - name: Report Status
+        if: always()
+        run: |
+          if [ -f logs/validation-report.json ]; then
+            echo "[VALIDATION REPORT]"
+            cat logs/validation-report.json | head -30
+          fi

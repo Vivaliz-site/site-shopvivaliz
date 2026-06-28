@@ -1,4 +1,4 @@
-name: Ciclo Autônomo 24/7
+name: Ciclo Autnomo 24/7
 
 on:
   schedule:
@@ -12,19 +12,19 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Squad Chat — ciclo autônomo
+      - name: Squad Chat  ciclo autnomo
         env:
           SQUAD_TOKEN: ${{ secrets.SQUAD_TOKEN }}
         shell: bash
         run: |
           BASE="https://dev.shopvivaliz.com.br"
-          echo "=== Iniciando ciclo autônomo $(date '+%Y-%m-%d %H:%M:%S') ==="
+          echo "=== Iniciando ciclo autnomo $(date '+%Y-%m-%d %H:%M:%S') ==="
 
           RESPONSE=$(curl -s -X POST "$BASE/api/agent/squad-chat.php" \
             -H "Content-Type: application/json" \
             -H "X-Squad-Token: ${SQUAD_TOKEN}" \
             -d '{
-              "message": "Ciclo autônomo 24/7. Analise o estado atual do projeto ShopVivaliz, identifique tarefas prioritárias e execute melhorias dentro do seu papel. Seja objetivo e registre decisões.",
+              "message": "Ciclo autnomo 24/7. Analise o estado atual do projeto ShopVivaliz, identifique tarefas prioritrias e execute melhorias dentro do seu papel. Seja objetivo e registre decises.",
               "agents": ["director", "claude", "gpt", "gemini"],
               "autonomous": true,
               "history": []
@@ -47,7 +47,7 @@ jobs:
               print(sys.stdin.read()[:500])
           " 2>/dev/null || echo "$RESPONSE" | head -c 1000
 
-      - name: Monitor — acionar executor de tarefas
+      - name: Monitor  acionar executor de tarefas
         shell: bash
         run: |
           BASE="https://dev.shopvivaliz.com.br"

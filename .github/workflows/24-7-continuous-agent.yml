@@ -1,4 +1,4 @@
-name: 24/7 Agentes Continuos - Processamento Automático
+name: 24/7 Agentes Continuos - Processamento Automtico
 
 on:
   workflow_dispatch:

@@ -29,9 +29,9 @@ jobs:
           extensions: curl, json
           tools: none
 
-      - name: Verificar secrets disponíveis (somente nomes)
+      - name: Verificar secrets disponveis (somente nomes)
         run: |
-          echo "=== Secrets disponíveis ==="
+          echo "=== Secrets disponveis ==="
           env | grep -E '^(TINY|OLIST|ERP|SHOPEE)' | sed 's/=.*/=***MASKED***/' || echo "(nenhum secret configurado)"
         env:
           TINY_ACCESS_TOKEN:  ${{ secrets.TINY_ACCESS_TOKEN }}
@@ -48,11 +48,11 @@ jobs:
       - name: Verificar sintaxe PHP
         run: php -l agents/v9.2.85/app/ShopeeListingsExtractorAgent.php
 
-      - name: Definir nome do arquivo de saída
+      - name: Definir nome do arquivo de sada
         id: output
         run: echo "filename=listings/shopee-listings-$(date +%Y%m%d-%H%M%S).json" >> "$GITHUB_OUTPUT"
 
-      - name: Executar extração de anúncios
+      - name: Executar extrao de anncios
         run: php agents/v9.2.85/scripts/fetch-shopee-listings.php
         env:
           OUTPUT_FILE:        ${{ steps.output.outputs.filename }}
@@ -72,5 +72,5 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add listings/
-          git diff --cached --quiet && echo "Sem alterações." || \
+          git diff --cached --quiet && echo "Sem alteraes." || \
             git commit -m "chore: shopee listings $(date +%Y-%m-%d)" && git push
