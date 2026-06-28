@@ -1,0 +1,36 @@
+name: Exportar imagens Olist para CSV
+
+on:
+  workflow_dispatch:
+
+jobs:
+  export-olist-images-csv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Exportar produtos e imagens para CSV
+        env:
+          OLIST_CLIENT_ID: ${{ secrets.OLIST_CLIENT_ID }}
+          OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
+          OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
+          OLIST_ACCESS_TOKEN: ${{ secrets.OLIST_ACCESS_TOKEN }}
+          TINY_ACCESS_TOKEN: ${{ secrets.TINY_ACCESS_TOKEN }}
+          OUT_CSV: logs/olist-images-export.csv
+          OUT_JSON: logs/olist-products-raw.json
+        run: |
+          python3 scripts/export-olist-images-csv.py
+
+      - name: Enviar CSV como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: olist-images-export
+          path: |
+            logs/olist-images-export.csv
+            logs/olist-products-raw.json
