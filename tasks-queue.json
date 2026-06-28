@@ -78,27 +78,27 @@
       "title": "Implementar sistema de notificaÃƒÂ§ÃƒÂµes por email",
       "description": "Configurar SMTP para enviar emails de confirmaÃƒÂ§ÃƒÂ£o de pedido, shipment tracking, e promoÃƒÂ§ÃƒÂµes. Usar templates HTML profissionais. Respeitar preferÃƒÂªncias do usuÃƒÂ¡rio.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T12:35:00Z",
-      "completed_at": "2026-06-27T17:43:15.798344"
+      "completed_at": "2026-06-28T10:09:13.972179Z"
     },
     {
       "id": "task-009",
       "title": "Adicionar painel de administraÃƒÂ§ÃƒÂ£o para gerenciar produtos",
       "description": "Criar painel admin com CRUD de produtos, categorias, preÃƒÂ§os e imagens. Importar/exportar dados via CSV. Validar dados de entrada. Logs de auditoria.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T12:40:00Z",
-      "completed_at": "2026-06-27T17:43:16.299855"
+      "completed_at": "2026-06-28T10:09:13.972188Z"
     },
     {
       "id": "task-010",
       "title": "Otimizar SEO do ecommerce",
       "description": "Implementar meta tags dinÃƒÂ¢micas por produto, criar sitemap XML, adicionar structured data (Schema.org), otimizar URLs amigÃƒÂ¡veis. Melhorar velocidade de pÃƒÂ¡gina.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T12:45:00Z",
-      "completed_at": "2026-06-27T17:43:16.802551"
+      "completed_at": "2026-06-28T10:09:13.972190Z"
     },
     {
       "id": "task-011",
