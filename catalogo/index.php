@@ -68,11 +68,18 @@ if (!$cache_valido && $tiny_api_key) {
 
 // Fallback: dados de teste se nenhum produto
 if (empty($produtos)) {
+    error_log("[Catalogo] AVISO: Nenhum produto carregado! Cache: $cache_file, Existe: " . (file_exists($cache_file) ? 'SIM' : 'NÃO'));
+
+    // Apenas para teste - remover quando tiver dados reais
     $produtos = [
         ['id' => 1, 'nome' => 'Camiseta Premium', 'preco' => 79.90, 'categoria' => 'Roupas', 'descricao' => '100% algodão'],
         ['id' => 2, 'nome' => 'Calça Jeans', 'preco' => 149.90, 'categoria' => 'Roupas', 'descricao' => 'Azul clássico'],
         ['id' => 3, 'nome' => 'Tênis Esportivo', 'preco' => 199.90, 'categoria' => 'Calçados', 'descricao' => 'Para corrida'],
+        ['id' => 4, 'nome' => 'Mochila Executiva', 'preco' => 189.90, 'categoria' => 'Acessórios', 'descricao' => 'Profissional'],
+        ['id' => 5, 'nome' => 'Relógio Analógico', 'preco' => 99.90, 'categoria' => 'Acessórios', 'descricao' => 'Clássico'],
     ];
+} else {
+    error_log("[Catalogo] Produtos carregados: " . count($produtos));
 }
 
 // Aplicar filtros
