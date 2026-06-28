@@ -1,0 +1,316 @@
+<?php
+/**
+ * Monitor Completo - Dashboard + Tarefas + Chat
+ * Tudo em um único painel
+ */
+
+// Carregar tarefas
+$tasks_queue = json_decode(file_get_contents('logs/tasks-queue.json') ?? '[]', true) ?? [];
+$pending_count = count(array_filter($tasks_queue, fn($t) => $t['status'] === 'pending'));
+$assigned_count = count(array_filter($tasks_queue, fn($t) => $t['status'] === 'assigned'));
+$total_tasks = count($tasks_queue);
+
+// Carregar respostas
+$responses_file = 'logs/monitor-responses.jsonl';
+$recent_responses = [];
+if (file_exists($responses_file)) {
+    $lines = array_slice(file($responses_file), -5);
+    foreach ($lines as $line) {
+        if ($line = trim($line)) {
+            $recent_responses[] = json_decode($line, true);
+        }
+    }
+}
+$recent_responses = array_reverse($recent_responses);
+
+// Carregar mensagens
+$messages_file = 'logs/monitor-messages.log';
+$recent_messages = [];
+if (file_exists($messages_file)) {
+    $lines = array_slice(file($messages_file), -3);
+    foreach ($lines as $line) {
+        if ($line = trim($line)) {
+            $recent_messages[] = json_decode($line, true);
+        }
+    }
+}
+$recent_messages = array_reverse($recent_messages);
+?>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Completo - ShopVivaliz</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #2ECC71 0%, #1F3A70 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .card h3 {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .card .number {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #2ECC71;
+        }
+
+        .card.tasks-pending .number {
+            color: #ff6b6b;
+        }
+
+        .card.tasks-assigned .number {
+            color: #ffd43b;
+        }
+
+        .card.tasks-done .number {
+            color: #51cf66;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .panel h2 {
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .task-item {
+            padding: 12px;
+            background: #f9f9f9;
+            border-left: 4px solid #2ECC71;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+
+        .task-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .task-status {
+            font-size: 0.85em;
+            color: #888;
+        }
+
+        .message-item {
+            padding: 12px;
+            background: #f0f8f8;
+            border-left: 4px solid #1F3A70;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+
+        .message-time {
+            font-size: 0.85em;
+            color: #888;
+            margin-bottom: 4px;
+        }
+
+        .message-text {
+            color: #333;
+            font-size: 0.95em;
+        }
+
+        .response-item {
+            padding: 12px;
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+
+        .response-agent {
+            font-weight: 600;
+            color: #2e7d32;
+            margin-bottom: 4px;
+        }
+
+        .response-text {
+            color: #333;
+            font-size: 0.95em;
+            margin-top: 4px;
+        }
+
+        .empty {
+            color: #999;
+            font-style: italic;
+            padding: 20px;
+            text-align: center;
+        }
+
+        @media (max-width: 900px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Monitor Completo - ShopVivaliz</h1>
+            <p>Dashboard de Tarefas Autônomas + Chat com Agentes</p>
+        </header>
+
+        <!-- DASHBOARD -->
+        <div class="dashboard">
+            <div class="card">
+                <h3>Total de Tarefas</h3>
+                <div class="number"><?php echo $total_tasks; ?></div>
+            </div>
+            <div class="card tasks-pending">
+                <h3>Pendentes</h3>
+                <div class="number"><?php echo $pending_count; ?></div>
+            </div>
+            <div class="card tasks-assigned">
+                <h3>Em Progresso</h3>
+                <div class="number"><?php echo $assigned_count; ?></div>
+            </div>
+            <div class="card tasks-done">
+                <h3>Agentes</h3>
+                <div class="number">3</div>
+            </div>
+        </div>
+
+        <!-- TAREFAS + CHAT -->
+        <div class="grid-2">
+            <!-- PAINEL DE TAREFAS -->
+            <div class="panel">
+                <h2>📋 Fila de Tarefas</h2>
+                <?php if (empty($tasks_queue)): ?>
+                    <div class="empty">Nenhuma tarefa enfileirada</div>
+                <?php else: ?>
+                    <?php foreach (array_slice($tasks_queue, 0, 5) as $task): ?>
+                        <div class="task-item">
+                            <div class="task-title"><?php echo htmlspecialchars($task['title']); ?></div>
+                            <div class="task-status">
+                                Status: <?php echo htmlspecialchars($task['status']); ?> ·
+                                Prioridade: <?php echo htmlspecialchars($task['priority']); ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+            <!-- PAINEL DE CHAT/RESPOSTAS -->
+            <div class="panel">
+                <h2>💬 Últimas Respostas</h2>
+                <?php if (empty($recent_responses)): ?>
+                    <div class="empty">Nenhuma resposta ainda</div>
+                <?php else: ?>
+                    <?php foreach ($recent_responses as $resp): ?>
+                        <div class="response-item">
+                            <div class="response-agent">🤖 <?php echo htmlspecialchars($resp['agent'] ?? 'Sistema'); ?></div>
+                            <div class="response-text"><?php echo htmlspecialchars(substr($resp['agent_response'], 0, 100)); ?></div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- ATALHOS -->
+        <div class="panel" style="margin-bottom: 20px;">
+            <h2>🔗 Atalhos Rápidos</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                <a href="/admin/squad-chat.php" style="display: inline-block; padding: 12px; background: #2ECC71; color: white; border-radius: 6px; text-decoration: none; text-align: center;">
+                    💬 Squad Chat (Agentes)
+                </a>
+                <a href="/catalogo/" style="display: inline-block; padding: 12px; background: #1F3A70; color: white; border-radius: 6px; text-decoration: none; text-align: center;">
+                    🛍 Catálogo
+                </a>
+                <a href="/admin/monitor/" style="display: inline-block; padding: 12px; background: #ff6b6b; color: white; border-radius: 6px; text-decoration: none; text-align: center;">
+                    📊 Monitor Original
+                </a>
+                <a href="/checkout/" style="display: inline-block; padding: 12px; background: #9c36b5; color: white; border-radius: 6px; text-decoration: none; text-align: center;">
+                    💳 Checkout
+                </a>
+            </div>
+        </div>
+
+        <!-- STATUS -->
+        <div class="panel">
+            <h2>📈 Status do Sistema</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 0.95em;">
+                <div>✅ E-commerce: Operacional</div>
+                <div>✅ Agentes: 3 Ativos (Claude, Gemini, GPT)</div>
+                <div>✅ Tarefas: <?php echo $pending_count; ?> Pendentes</div>
+                <div>✅ Workflows: 24/7 Rodando</div>
+                <div>✅ Deploy: Automático via FTP</div>
+                <div>✅ Autonomia: 100% Ativa</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-refresh a cada 30 segundos
+        setTimeout(() => {
+            location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>
