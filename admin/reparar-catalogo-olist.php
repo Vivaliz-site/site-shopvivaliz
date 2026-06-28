@@ -9,7 +9,7 @@ set_time_limit(300);
 
 // Conectar ao banco
 $host = 'localhost';
-$user = 'claude';
+$user = 'shopv506_claude';
 $pass = 'CFqmkF8}$C_2';
 $db_name = 'shopv506_shopvivaliz';
 
