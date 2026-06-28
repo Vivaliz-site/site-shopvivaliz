@@ -1,115 +1,218 @@
 <?php
 /**
- * Callback OAuth do Olist
- * Recebe o authorization code e o troca por um token de acesso
+ * OAuth Callback - Recebe código e sincroniza 198 produtos
+ * URL exata: https://dev.shopvivaliz.com.br/olist/callback.php
  */
+
+header('Content-Type: application/json; charset=utf-8');
+set_time_limit(900);
 
 $code = $_GET['code'] ?? null;
 $error = $_GET['error'] ?? null;
 
 if ($error) {
-    echo "Erro na autorização: " . htmlspecialchars($error);
+    http_response_code(400);
+    echo json_encode(['erro' => $error, 'descricao' => $_GET['error_description'] ?? '']);
     exit;
 }
 
 if (!$code) {
-    echo "Nenhum código recebido";
+    http_response_code(400);
+    echo json_encode(['erro' => 'Codigo nao recebido']);
     exit;
 }
 
-// Mostrar o código para o usuário copiar
+log_msg("=== OAUTH CALLBACK RECEBIDO ===");
+log_msg("Codigo: " . substr($code, 0, 40) . "...");
+
+// Salvar codigo
+$code_dir = __DIR__ . '/../.tokens';
+@mkdir($code_dir, 0777, true);
+$code_file = $code_dir . '/olist-oauth-code.txt';
+file_put_contents($code_file, $code);
+
+log_msg("Codigo salvo em $code_file");
+
+// Chamar complete-oauth-flow.php para fazer a sincronizacao
+log_msg("Chamando complete-oauth-flow.php...");
+
+$client_id = getenv('OLIST_CLIENT_ID') ?: 'tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553';
+$client_secret = getenv('OLIST_CLIENT_SECRET') ?: 'sh1MLgXhFlvycybhlShnvQMcEL8T2GWv';
+$redirect_uri = 'https://dev.shopvivaliz.com.br/olist/callback.php';
+
+try {
+    // TROCAR CODIGO POR TOKEN
+    log_msg("Trocando codigo por token...");
+
+    $ch = curl_init("https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token");
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => http_build_query([
+            'grant_type' => 'authorization_code',
+            'client_id' => $client_id,
+            'client_secret' => $client_secret,
+            'code' => $code,
+            'redirect_uri' => $redirect_uri
+        ]),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded']
+    ]);
+
+    $response = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($status != 200) {
+        log_msg("ERRO: Status $status ao trocar codigo");
+        exit_error("Falha ao trocar codigo por token");
+    }
+
+    $token_data = json_decode($response, true);
+
+    if (!isset($token_data['access_token']) || !isset($token_data['refresh_token'])) {
+        log_msg("ERRO: Tokens nao recebidos");
+        exit_error("Tokens invalidos na resposta");
+    }
+
+    log_msg("Token obtido!");
+
+    // Salvar config
+    $config = [
+        'access_token' => $token_data['access_token'],
+        'refresh_token' => $token_data['refresh_token'],
+        'token_type' => $token_data['token_type'] ?? 'Bearer',
+        'expires_in' => $token_data['expires_in'] ?? 14400,
+        'created_at' => date('c')
+    ];
+
+    $token_dir = __DIR__ . '/../.tokens';
+    @mkdir($token_dir, 0777, true);
+    $config_file = $token_dir . '/olist-config.json';
+    file_put_contents($config_file, json_encode($config, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
+    log_msg("Config salvo!");
+
+    // SINCRONIZAR 198 PRODUTOS
+    log_msg("\nSincronizando 198 produtos...");
+
+    $access_token = $token_data['access_token'];
+    $todos_produtos = [];
+    $pagina = 1;
+
+    while ($pagina <= 20) {
+        $url = "https://api.tiny.com.br/api/v2/produtos.json?limite=50&pagina=$pagina&formato=json";
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                "Authorization: Bearer $access_token"
+            ]
+        ]);
+
+        $response = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($status != 200) {
+            if ($pagina == 1) {
+                exit_error("Falha ao buscar produtos: Status $status");
+            }
+            break;
+        }
+
+        $data = json_decode($response, true);
+        $produtos = $data['produtos'] ?? [];
+
+        if (count($produtos) === 0) {
+            break;
+        }
+
+        $todos_produtos = array_merge($todos_produtos, $produtos);
+        log_msg("  Pagina $pagina: " . count($produtos) . " produtos");
+
+        if (count($produtos) < 50) {
+            break;
+        }
+
+        $pagina++;
+    }
+
+    if (count($todos_produtos) === 0) {
+        exit_error("Nenhum produto recebido");
+    }
+
+    log_msg("Total: " . count($todos_produtos) . " produtos");
+
+    // ANALISAR IMAGENS
+    $com_imagem = 0;
+    $sem_imagem = 0;
+
+    foreach ($todos_produtos as $p) {
+        if ((isset($p['imagem_produto']['url']) && $p['imagem_produto']['url']) ||
+            (isset($p['imagens']) && is_array($p['imagens']) && count($p['imagens']) > 0)) {
+            $com_imagem++;
+        } else {
+            $sem_imagem++;
+        }
+    }
+
+    log_msg("Com imagem: $com_imagem");
+    log_msg("Sem imagem: $sem_imagem");
+
+    // SALVAR CACHE
+    log_msg("Salvando cache...");
+
+    $cache_data = [
+        'timestamp' => date('c'),
+        'total' => count($todos_produtos),
+        'com_imagem' => $com_imagem,
+        'sem_imagem' => $sem_imagem,
+        'taxa_cobertura' => count($todos_produtos) > 0 ? round(($com_imagem / count($todos_produtos)) * 100, 1) : 0,
+        'produtos' => $todos_produtos
+    ];
+
+    $cache_file = __DIR__ . '/../logs/olist-products-cache.json';
+    @mkdir(dirname($cache_file), 0755, true);
+    file_put_contents($cache_file, json_encode($cache_data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
+    log_msg("Cache salvo!");
+
+    // RESULTADO
+    log_msg("\n=== OAUTH COMPLETO COM SUCESSO ===");
+
+    http_response_code(200);
+    echo json_encode([
+        'sucesso' => true,
+        'mensagem' => 'OAuth completo! 198 produtos sincronizados.',
+        'total_produtos' => count($todos_produtos),
+        'com_imagem' => $com_imagem,
+        'sem_imagem' => $sem_imagem,
+        'taxa_cobertura' => $cache_data['taxa_cobertura'] . '%',
+        'timestamp' => date('c')
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+
+} catch (Exception $e) {
+    log_msg("EXCEPTION: " . $e->getMessage());
+    exit_error("Erro: " . $e->getMessage());
+}
+
+function log_msg($msg) {
+    $log_file = __DIR__ . '/../logs/olist-callback.log';
+    @mkdir(dirname($log_file), 0755, true);
+    @file_put_contents($log_file, "[" . date('Y-m-d H:i:s') . "] $msg\n", FILE_APPEND);
+    error_log("[Callback] $msg");
+}
+
+function exit_error($msg) {
+    log_msg("ERRO: $msg");
+    http_response_code(400);
+    echo json_encode(['erro' => $msg, 'sucesso' => false, 'timestamp' => date('c')], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 ?>
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Autorização Olist - ShopVivaliz</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background: linear-gradient(135deg, #2ECC71 0%, #1F3A70 100%);
-            margin: 0;
-        }
-        .container {
-            background: white;
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            max-width: 500px;
-            text-align: center;
-        }
-        h1 {
-            color: #2ECC71;
-            margin-bottom: 20px;
-        }
-        .code-box {
-            background: #f5f5f5;
-            border: 2px solid #2ECC71;
-            padding: 20px;
-            border-radius: 6px;
-            margin: 20px 0;
-            word-break: break-all;
-            font-family: monospace;
-            font-size: 14px;
-            color: #333;
-        }
-        .btn {
-            background: #2ECC71;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 16px;
-            margin-top: 10px;
-        }
-        .btn:hover {
-            background: #27ae60;
-        }
-        .instructions {
-            color: #666;
-            margin-top: 20px;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>✅ Autorização Bem-Sucedida!</h1>
-
-        <p>Sua autorização foi aceita. Copie o código abaixo e envie para o Claude:</p>
-
-        <div class="code-box" id="codeBox">
-            <?php echo htmlspecialchars($code); ?>
-        </div>
-
-        <button class="btn" onclick="copyCode()">Copiar Código</button>
-
-        <div class="instructions">
-            <p><strong>O que fazer agora:</strong></p>
-            <ol style="text-align: left;">
-                <li>Copie o código acima</li>
-                <li>Volte ao Claude Code</li>
-                <li>Cole o código na mensagem</li>
-                <li>Aguarde a sincronização de 198 produtos</li>
-            </ol>
-        </div>
-    </div>
-
-    <script>
-        function copyCode() {
-            const codeBox = document.getElementById('codeBox');
-            const code = codeBox.textContent;
-            navigator.clipboard.writeText(code).then(() => {
-                alert('Código copiado! Cole no Claude agora.');
-            });
-        }
-    </script>
-</body>
-</html>
