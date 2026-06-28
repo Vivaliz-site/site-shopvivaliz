@@ -688,22 +688,22 @@
             input.value = '';
 
             try {
-                // Enviar comando aos agentes
-                const response = await fetch(`${API_BASE}?action=send-command`, {
+                // 1. Registrar mensagem no webhook
+                const webhookResponse = await fetch('/api/monitor/chat-webhook.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        command: 'message',
-                        message: message
-                    })
+                    body: JSON.stringify({ message: message })
                 });
 
-                const result = await response.json();
-                if (result.success) {
-                    addChatMessage(result.response, 'agent');
+                const webhookResult = await webhookResponse.json();
+                if (webhookResult.success) {
+                    addChatMessage('Agentes respondendo em 2 minutos...', 'system');
+                } else {
+                    console.error('Webhook error:', webhookResult);
                 }
             } catch (error) {
-                addChatMessage('Erro ao processar mensagem.', 'agent');
+                console.error('Erro ao enviar:', error);
+                addChatMessage('Erro ao registrar mensagem.', 'agent');
             }
         }
 
