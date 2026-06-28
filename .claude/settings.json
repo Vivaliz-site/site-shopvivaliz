@@ -4,13 +4,16 @@
       "Read",
       "Edit",
       "Write",
+      "Bash",
       "Bash(*)",
+      "PowerShell",
       "PowerShell(*)",
       "Glob",
       "Grep",
       "Agent",
       "Skill"
     ],
-    "defaultMode": "dontAsk"
+    "deny": [],
+    "defaultMode": "acceptEdits"
   }
 }
