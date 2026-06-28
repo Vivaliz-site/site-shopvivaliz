@@ -49,7 +49,9 @@ def log_msg(msg):
     """Log com timestamp"""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     line = f"[{timestamp}] {msg}"
-    print(line)
+    # Remove caracteres especiais para evitar erro de encoding
+    line_safe = line.encode('ascii', 'replace').decode('ascii')
+    print(line_safe)
 
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(LOG_FILE, 'a', encoding='utf-8') as f:
@@ -83,25 +85,76 @@ def login_and_get_token():
         driver.get(auth_url)
         time.sleep(3)
 
-        # Preencher email
+        # Tentar múltiplos seletores para o email
+        log_msg("Procurando campo de email...")
+        email_input = None
+        for selector_type, selector_value in [
+            (By.ID, "username"),
+            (By.NAME, "username"),
+            (By.NAME, "email"),
+            (By.CSS_SELECTOR, "input[type='email']"),
+            (By.CSS_SELECTOR, "input[name='username']"),
+            (By.CSS_SELECTOR, "input[id='username']"),
+        ]:
+            try:
+                email_input = WebDriverWait(driver, 3).until(
+                    EC.presence_of_element_located((selector_type, selector_value))
+                )
+                log_msg(f"Campo encontrado: {selector_type} = {selector_value}")
+                break
+            except:
+                pass
+
+        if not email_input:
+            log_msg("ERRO: Campo de email nao encontrado. Salvando screenshot...")
+            driver.save_screenshot(str(LOG_FILE.parent / 'login_page.png'))
+            log_msg(f"Screenshot salvo em {LOG_FILE.parent / 'login_page.png'}")
+            raise Exception("Campo de email nao encontrado")
+
         log_msg("Preenchendo email...")
-        email_input = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.ID, "username"))
-        )
         email_input.clear()
         email_input.send_keys(OLIST_EMAIL)
-        time.sleep(1)
+        time.sleep(2)
 
         # Preencher senha
         log_msg("Preenchendo senha...")
-        password_input = driver.find_element(By.ID, "password")
+        password_input = None
+        for selector_type, selector_value in [
+            (By.ID, "password"),
+            (By.NAME, "password"),
+            (By.CSS_SELECTOR, "input[type='password']"),
+        ]:
+            try:
+                password_input = driver.find_element(selector_type, selector_value)
+                break
+            except:
+                pass
+
+        if not password_input:
+            raise Exception("Campo de senha nao encontrado")
+
         password_input.clear()
         password_input.send_keys(OLIST_PASSWORD)
-        time.sleep(1)
+        time.sleep(2)
 
         # Clicar em login
         log_msg("Clicando em login...")
-        login_button = driver.find_element(By.ID, "kc-login")
+        login_button = None
+        for selector_type, selector_value in [
+            (By.ID, "kc-login"),
+            (By.NAME, "login"),
+            (By.CSS_SELECTOR, "button[type='submit']"),
+            (By.XPATH, "//button[contains(text(), 'login') or contains(text(), 'Entrar') or contains(text(), 'Login')]"),
+        ]:
+            try:
+                login_button = driver.find_element(selector_type, selector_value)
+                break
+            except:
+                pass
+
+        if not login_button:
+            raise Exception("Botao de login nao encontrado")
+
         login_button.click()
         time.sleep(5)
 
