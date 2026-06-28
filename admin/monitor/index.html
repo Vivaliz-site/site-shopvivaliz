@@ -646,6 +646,11 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadChats();
             loadTasks();
+            loadAgentResponses();
+            // Polling: carregar respostas dos agentes a cada 5 segundos
+            setInterval(loadAgentResponses, 5000);
+            // Recarregar tarefas a cada 30 segundos
+            setInterval(loadTasks, 30000);
         });
 
         // Carregar chats
@@ -867,6 +872,29 @@
             `;
             container.appendChild(div);
             container.scrollTop = container.scrollHeight;
+        }
+
+        // Carregar respostas dos agentes em tempo real
+        let lastResponseTimestamp = null;
+        async function loadAgentResponses() {
+            try {
+                const response = await fetch(`${API_BASE}/get-responses.php`);
+                const data = await response.json();
+
+                if (data.success && data.responses && data.responses.length > 0) {
+                    data.responses.forEach(response => {
+                        // Evitar duplicatas
+                        if (!lastResponseTimestamp || response.timestamp > lastResponseTimestamp) {
+                            const agent = response.agent || 'Agente';
+                            const text = `[${agent}] ${response.agent_response}`;
+                            addChatMessage(text, 'agent');
+                            lastResponseTimestamp = response.timestamp;
+                        }
+                    });
+                }
+            } catch (error) {
+                console.log('Aguardando respostas dos agentes...');
+            }
         }
 
         // Fechar modal ao clicar fora

@@ -125,25 +125,26 @@ Usuario perguntou: {message}
 Responda de forma concisa (max 2 linhas) com informacoes util sobre o sistema."""
 
         try:
-            import google.genai as genai
-            genai.configure(api_key=self.gemini_key)
-            response = genai.responses.create(model='gemini-pro', input=prompt)
-            return self._extract_text_from_response(response)
-        except ModuleNotFoundError:
-            pass
+            import google.genai
+            client = google.genai.Client(api_key=self.gemini_key)
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt
+            )
+            if response.text:
+                return response.text.strip()
         except Exception as e:
-            print(f"Erro ao chamar Gemini via google.genai: {e}")
+            print(f"Erro ao chamar Gemini (google.genai): {e}")
 
         try:
             import google.generativeai as genai
             genai.configure(api_key=self.gemini_key)
-            model = genai.GenerativeModel('gemini-pro')
+            model = genai.GenerativeModel('gemini-2.5-flash')
             response = model.generate_content(prompt)
-            return self._extract_text_from_response(response)
-        except ModuleNotFoundError:
-            pass
+            if response.text:
+                return response.text.strip()
         except Exception as e:
-            print(f"Erro ao chamar Gemini via google.generativeai: {e}")
+            print(f"Erro ao chamar Gemini (google.generativeai): {e}")
 
         return None
 
@@ -157,8 +158,8 @@ Responda de forma concisa (max 2 linhas) com informacoes util sobre o sistema.""
 
             client = anthropic.Anthropic(api_key=self.claude_key)
 
-            message_obj = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+            response = client.messages.create(
+                model="claude-sonnet-4-6",
                 max_tokens=200,
                 messages=[
                     {
@@ -171,7 +172,8 @@ Responda de forma concisa (max 2 linhas) sobre o sistema."""
                 ]
             )
 
-            return self._extract_text_from_response(message_obj)
+            if response.content and len(response.content) > 0:
+                return response.content[0].text.strip()
         except Exception as e:
             print(f"Erro ao chamar Claude: {e}")
             return None
@@ -190,21 +192,14 @@ Responda de forma concisa (max 2 linhas) com informacoes util sobre o sistema.""
             import openai
             client = openai.OpenAI(api_key=self.openai_key)
 
-            if hasattr(client, 'chat') and hasattr(client.chat, 'completions'):
-                response = client.chat.completions.create(
-                    model='gpt-4o-mini',
-                    messages=[{'role': 'user', 'content': prompt}],
-                    max_tokens=200
-                )
-                return self._extract_text_from_response(response)
+            response = client.chat.completions.create(
+                model='gpt-4o-mini',
+                messages=[{'role': 'user', 'content': prompt}],
+                max_tokens=200
+            )
 
-            if hasattr(client, 'responses'):
-                response = client.responses.create(
-                    model='gpt-4o-mini',
-                    input=prompt,
-                    max_output_tokens=200
-                )
-                return self._extract_text_from_response(response)
+            if response.choices and len(response.choices) > 0:
+                return response.choices[0].message.content.strip()
 
         except Exception as e:
             print(f"Erro ao chamar OpenAI: {e}")
