@@ -240,9 +240,9 @@
       "title": "Adicionar versao mobile app (React Native)",
       "description": "Criar app iOS/Android com React Native. Feature parity com web. Push notifications. Suporte offline.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:23:00Z",
-      "completed_at": "2026-06-27T18:05:16.567704"
+      "completed_at": "2026-06-28T20:45:53.378437Z"
     },
     {
       "id": "task-027",
