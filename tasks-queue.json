@@ -159,9 +159,9 @@
       "title": "Implementar live chat com atendimento em tempo real",
       "description": "Integrar live chat widget para suporte ao cliente. Usar Tawk.to, Zendesk ou similar. Transferir chats para multiplos agentes.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:14:00Z",
-      "completed_at": "2026-06-27T18:05:11.941984"
+      "completed_at": "2026-06-28T12:21:39.976489Z"
     },
     {
       "id": "task-018",
