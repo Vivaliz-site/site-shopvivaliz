@@ -204,9 +204,9 @@
       "title": "Implementar blog integrado ao ecommerce",
       "description": "Criar sistema de artigos para SEO. Relacionar artigos com produtos. Comentarios em artigos. Social sharing.",
       "priority": "low",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:19:00Z",
-      "completed_at": "2026-06-27T18:05:14.513384"
+      "completed_at": "2026-06-28T16:52:40.562974Z"
     },
     {
       "id": "task-023",
