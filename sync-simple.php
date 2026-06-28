@@ -2,7 +2,7 @@
 header('Content-Type: application/json');
 include __DIR__ . '/olist/produtos-olist-array.php';
 $p = $GLOBALS['produtos_olist'] ?? [];
-$db = @new mysqli('localhost', 'root', '', 'shopvivaliz');
+$db = @new mysqli('localhost', 'shopv506_user', '', 'shopv506_shopvivaliz');
 if ($db->connect_error) exit(json_encode(['erro' => $db->connect_error]));
 $sync = 0;
 foreach ($p as $prod) {
