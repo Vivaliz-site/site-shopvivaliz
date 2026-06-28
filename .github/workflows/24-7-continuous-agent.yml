@@ -1,77 +1,87 @@
-name: 24/7 Agentes Continuos - Processamento Infinito
+name: 24/7 Agentes Continuos - Processamento Automático
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/5 * * * *'  # A cada 5 minutos
-    - cron: '*/15 * * * *' # A cada 15 minutos (backup)
+    - cron: '*/5 * * * *'
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
-  continuous-agents:
+  execute-tasks:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configurar Git
-        run: |
-          git config user.name "Trio IA Continuo"
-          git config user.email "trio-continuous@shopvivaliz.com.br"
-
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Instalar dependencias
         run: pip install google-generativeai anthropic openai
 
-      - name: Processar 3 tarefas em paralelo (Gemini, Claude, ChatGPT)
+      - name: Configurar Git
+        run: |
+          git config user.name "Agentes ShopVivaliz"
+          git config user.email "agentes@shopvivaliz.com.br"
+
+      - name: Executar executor de tarefas
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          echo "Iniciando ciclo de processamento..."
-          python scripts/real-task-executor.py
-          echo "Ciclo concluido!"
+          echo "[$(date +'%H:%M:%S')] Iniciando ciclo de tarefas..."
+          python3 scripts/real-task-executor.py
+          echo "[$(date +'%H:%M:%S')] Ciclo concluido!"
 
-      - name: Commitar resultados
+      - name: Commitar progresso
         continue-on-error: true
         run: |
-          git add -A
-          git commit -m "feat: agentes processaram tarefas ($(date +'%Y-%m-%d %H:%M:%S'))" || true
+          git add -A tasks-queue.json logs/execution/
+          git commit -m "feat: agentes executaram tarefas [$(date +'%H:%M:%S')]" || true
           git push || true
 
-      - name: Aguardar antes do proximo ciclo
-        run: sleep 10
-
-  verify-progress:
-    needs: continuous-agents
+  verify-status:
+    needs: execute-tasks
     runs-on: ubuntu-latest
     if: always()
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verificar progresso
+      - name: Verificar status da fila
         run: |
-          echo "Verificando status da fila..."
           python3 << 'EOF'
           import json
-          with open('tasks-queue.json') as f:
-              queue = json.load(f)
+          from pathlib import Path
 
-          completed = len([t for t in queue['queue'] if t['status'] == 'completed'])
-          pending = len([t for t in queue['queue'] if t['status'] == 'pending'])
-          total = len(queue['queue'])
+          queue_file = Path('tasks-queue.json')
+          if not queue_file.exists():
+              print("Fila de tarefas nao encontrada!")
+              exit(1)
 
-          print(f"Total: {total}")
-          print(f"Completadas: {completed}")
-          print(f"Pendentes: {pending}")
-          print(f"Progresso: {completed}/{total} ({100*completed/total:.1f}%)")
+          with open(queue_file) as f:
+              data = json.load(f)
+
+          tasks = data.get('queue', [])
+          completed = [t for t in tasks if t['status'] == 'completed']
+          pending = [t for t in tasks if t['status'] == 'pending']
+
+          total = len(tasks)
+          completed_count = len(completed)
+          pending_count = len(pending)
+          progress = (completed_count / total * 100) if total > 0 else 0
+
+          print(f"\n{'='*50}")
+          print(f"STATUS DA FILA DE TAREFAS")
+          print(f"{'='*50}")
+          print(f"Total:       {total}")
+          print(f"Completadas: {completed_count} ({progress:.1f}%)")
+          print(f"Pendentes:   {pending_count}")
+          print(f"{'='*50}\n")
           EOF
