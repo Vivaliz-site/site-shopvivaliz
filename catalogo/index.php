@@ -39,8 +39,11 @@ if (file_exists($arquivo_produtos)) {
             $db = @new mysqli($db_host, $db_user, $db_pass, $db_name);
 
             if ($db->connect_error) {
+                header('X-Sync-Status: FALHA_CONEXAO');
+                header('X-Sync-Error: ' . $db->connect_error);
                 error_log("[Catalogo-SYNC] Erro conexão: " . $db->connect_error . " (host=$db_host user=$db_user db=$db_name)");
             } else {
+                header('X-Sync-Status: CONECTADO');
                 $sql = "INSERT INTO products (product_id, name, price, description, category, stock, created_at, updated_at)
                         VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
                         ON DUPLICATE KEY UPDATE price=VALUES(price), description=VALUES(description), category=VALUES(category), stock=VALUES(stock), updated_at=NOW()";
