@@ -504,6 +504,110 @@
             transform: scale(1.05);
         }
 
+        /* TASK CREATION FORM */
+        .task-creation-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .task-creation-panel h3 {
+            color: var(--primary);
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+
+        .task-form {
+            display: grid;
+            gap: 12px;
+        }
+
+        .task-form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .task-form-group label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: var(--dark);
+            font-size: 0.9em;
+        }
+
+        .task-form-group input,
+        .task-form-group textarea,
+        .task-form-group select {
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.95em;
+        }
+
+        .task-form-group textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .task-form-group input:focus,
+        .task-form-group textarea:focus,
+        .task-form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .task-form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .btn-create-task {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.95em;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-create-task:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-create-task:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .task-status-msg {
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 0.9em;
+            display: none;
+        }
+
+        .task-status-msg.success {
+            display: block;
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .task-status-msg.error {
+            display: block;
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
         ::-webkit-scrollbar {
             width: 8px;
         }
@@ -555,6 +659,7 @@
                 <button class="tab-button active" onclick="switchTab('dashboard')">Dashboard</button>
                 <button class="tab-button" onclick="switchTab('tasks')">Tarefas (41)</button>
                 <button class="tab-button" onclick="switchTab('activity')">Atividade</button>
+                <button class="tab-button" onclick="switchTab('command')">📋 Nova Tarefa</button>
             </div>
 
             <!-- TAB: DASHBOARD -->
@@ -608,6 +713,53 @@
             <!-- TAB: ACTIVITY -->
             <div id="activity" class="tab-content">
                 <p>Historico de atividades...</p>
+            </div>
+
+            <!-- TAB: COMMAND / NOVA TAREFA -->
+            <div id="command" class="tab-content">
+                <div class="task-creation-panel">
+                    <h3>📋 Criar Nova Tarefa para Agentes</h3>
+                    <form class="task-form" onsubmit="submitTaskCommand(event)">
+                        <div class="task-form-group">
+                            <label for="task-title">Título da Tarefa *</label>
+                            <input type="text" id="task-title" placeholder="Ex: Criar página de catálogo" required />
+                        </div>
+
+                        <div class="task-form-group">
+                            <label for="task-description">Descrição (detalhes)</label>
+                            <textarea id="task-description" placeholder="Descreva o que você quer que os agentes façam..."></textarea>
+                        </div>
+
+                        <div class="task-form-row">
+                            <div class="task-form-group">
+                                <label for="task-priority">Prioridade</label>
+                                <select id="task-priority">
+                                    <option value="low">Baixa</option>
+                                    <option value="medium" selected>Média</option>
+                                    <option value="high">Alta</option>
+                                </select>
+                            </div>
+
+                            <div class="task-form-group">
+                                <label for="task-assign">Atribuir para</label>
+                                <select id="task-assign">
+                                    <option value="all" selected>Todos (Gemini + Claude + GPT)</option>
+                                    <option value="gemini">Gemini (Arquiteto)</option>
+                                    <option value="claude">Claude (Desenvolvedor)</option>
+                                    <option value="gpt">GPT (QA)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn-create-task">
+                            🚀 Enviar Tarefa aos Agentes
+                        </button>
+                        <div class="task-status-msg" id="task-status-msg"></div>
+                    </form>
+                </div>
+
+                <h3 style="color: var(--primary); margin-top: 30px;">📝 Tarefas Recentes</h3>
+                <div id="recent-tasks" style="margin-top: 15px;"></div>
             </div>
         </div>
 
@@ -896,6 +1048,100 @@
                 console.log('Aguardando respostas dos agentes...');
             }
         }
+
+        // Criar tarefa para agentes
+        async function submitTaskCommand(event) {
+            event.preventDefault();
+
+            const title = document.getElementById('task-title').value;
+            const description = document.getElementById('task-description').value;
+            const priority = document.getElementById('task-priority').value;
+            const assignTo = document.getElementById('task-assign').value;
+            const statusMsg = document.getElementById('task-status-msg');
+
+            if (!title.trim()) {
+                showTaskStatus('Por favor, preencha o título', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/tasks-command.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'create_task',
+                        title,
+                        description,
+                        priority,
+                        assignTo
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showTaskStatus(
+                        `✅ Tarefa criada com sucesso!\nID: ${data.task.id}\n\nAgentes começarão em poucos minutos...`,
+                        'success'
+                    );
+                    document.getElementById('task-title').value = '';
+                    document.getElementById('task-description').value = '';
+                    loadRecentTasks();
+                } else {
+                    showTaskStatus('❌ Erro: ' + (data.error || 'Desconhecido'), 'error');
+                }
+            } catch (error) {
+                showTaskStatus('❌ Erro na comunicação: ' + error.message, 'error');
+            }
+        }
+
+        function showTaskStatus(msg, type) {
+            const el = document.getElementById('task-status-msg');
+            el.textContent = msg;
+            el.className = `task-status-msg ${type}`;
+        }
+
+        // Carregar tarefas recentes
+        async function loadRecentTasks() {
+            try {
+                const response = await fetch(`${API_BASE}/tasks-command.php`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const container = document.getElementById('recent-tasks');
+                    container.innerHTML = '';
+
+                    if (data.tasks.length === 0) {
+                        container.innerHTML = '<p style="color: #666;">Nenhuma tarefa criada ainda.</p>';
+                        return;
+                    }
+
+                    data.tasks.forEach(task => {
+                        const div = document.createElement('div');
+                        div.style.cssText = 'padding: 12px; margin: 8px 0; background: #f5f7fa; border-left: 4px solid var(--primary); border-radius: 4px;';
+                        div.innerHTML = `
+                            <strong>${task.title}</strong>
+                            <div style="font-size: 0.85em; color: #666; margin-top: 4px;">
+                                🎯 ${task.assign_to} | 📊 ${task.status} | 🕐 ${new Date(task.timestamp).toLocaleTimeString('pt-BR')}
+                            </div>
+                            ${task.description ? `<div style="font-size: 0.9em; color: #555; margin-top: 4px;">${task.description}</div>` : ''}
+                        `;
+                        container.appendChild(div);
+                    });
+                }
+            } catch (error) {
+                console.log('Erro ao carregar tarefas:', error);
+            }
+        }
+
+        // Atualizar tarefas ao mudar para a aba
+        let originalSwitchTab = switchTab;
+        switchTab = function(tab) {
+            originalSwitchTab(tab);
+            if (tab === 'command') {
+                loadRecentTasks();
+            }
+        };
 
         // Fechar modal ao clicar fora
         window.onclick = function(event) {
