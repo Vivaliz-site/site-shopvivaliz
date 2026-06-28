@@ -1,88 +1,61 @@
 # Relatorio Trio IA — Modo: Revisão e melhoria de features do ecommerce
 
-**Tarefa:** Implementar live chat com atendimento em tempo real: Integrar live chat widget para suporte ao cliente. Usar Tawk.to, Zendesk ou similar. Transferir chats para multiplos agentes.
+**Tarefa:** Adicionar rastreamento de pedidos em tempo real: Integrar com transportadoras (Correios, Loggi) para rastreamento automatico. Enviar notificacoes via email/SMS/WhatsApp.
 
 ---
 
-# Relatório Final - Implementação do Widget de Live Chat para ShopVivaliz
+# Relatório Final - Sistema de Rastreamento de Pedidos em Tempo Real da ShopVivaliz
 
 ## 1. Validação dos Requisitos de Negócio
 
-### Requisitos Funcionais
+A solução proposta atende aos requisitos de negócio definidos para o rastreamento de pedidos em tempo real da ShopVivaliz. Os principais pontos validados incluem:
 
-- **Integração do Widget de Live Chat:**
-  - O widget foi integrado com sucesso no site da ShopVivaliz utilizando Tawk.to. O snippet JavaScript foi eficientemente inserido no layout principal, permitindo a comunicação em tempo real com os clientes.
-
-- **Atendimento em Tempo Real:**
-  - O sistema foi configurado para possibilitar que os agentes respondam a mensagens dos clientes em tempo real. A funcionalidade de chat foi completamente testada e comprovada.
-
-- **Transferência para Múltiplos Agentes:**
-  - A funcionalidade de transferência de chats entre agentes foi validada, confirmando seu funcionamento segundo as especificações do Tawk.to.
-
-- **Identificação Segura de Usuários:**
-  - A implementação permite passar dados dos usuários logados (nome, e-mail, ID) para o widget, melhorando o atendimento.
-
-- **Compliance com LGPD:**
-  - Foi feita a devida inclusão nas práticas de conformidade à LGPD, incluindo ajustes na política de privacidade da ShopVivaliz.
-
-### Requisitos Não Funcionais
-
-- **Desempenho:**
-  - Testes iniciais não indicaram degradação significativa no tempo de carregamento da página, mas recomenda-se monitorar com ferramentas de desempenho (ex: PageSpeed Insights).
-
-- **Escalabilidade:**
-  - A solução atual é escalável; a transição para um sistema mais complexo (como integração com Squad Chat) pode ser realizada sem grandes reestruturações.
+- **Integração com Transportadoras:** Implementação das integrações com as transportadoras Correios e Loggi, utilizando APIs adequadas (REST e SOAP).
+- **Rastreamento Automático:** Implementação de um sistema de rastreamento que atualiza o status dos pedidos a cada X minutos, através de um Cron Job, como uma solução de "quase em tempo real" devido às limitações do ambiente HostGator.
+- **Notificações Proativas:** Envio de notificações via e-mail, SMS e WhatsApp a clientes conforme alterações no status do pedido. Isso inclui notificações para eventos relevantes como "Pedido postado", "Em trânsito", "Saiu para entrega" e "Entregue".
+- **Interface de Administração:** Funcionalidade de gerenciar pedidos, incluindo a visualização de status de rastreamento e histórico de eventos na interface administrativa.
 
 ## 2. Pontos de Risco ou Bugs Encontrados
 
-### Pontos de Risco
+Durante a análise e desenvolvimento, alguns riscos e potenciais bugs foram identificados:
 
-- **Dependência do Provedor Externo:**
-  - A disponibilidade do chat depende da infraestrutura do Tawk.to. É essencial monitorar a qualidade do serviço e ter canais alternativos.
-
-- **Configurações de Segurança da API:**
-  - Possíveis vulnerabilidades relacionadas ao gerenciamento de segredos da API. As chaves devem ser mantidas seguras e rotacionadas conforme a política de segurança.
-
-- **Compliance com LGPD/GDPR:**
-  - A coleta de dados dos usuários deve ser cuidadosamente monitorada para garantir o cumprimento contínuo das legislações.
-
-### Bugs Encontrados
-
-- **Identificação nos Testes:**
-  - Durante os testes, um bug foi identificado na passagem de dados do usuário logado: o nome e o e-mail não eram corretamente exibidos no painel do agente, devido a falhas na identificação de sessão em alguns navegadores.
-  - **Solução Aplicada:** A lógica de injeção foi revisada para garantir que utilize corretamente as sessões de usuário.
+- **Limitações de Recursos:** O ambiente de hospedagem compartilhada na HostGator pode levar a limitações no uso de CPU e memória para a execução do Cron Job, especialmente se o número de pedidos em processamento for alto.
+- **Complexidade na Integração de APIs:** A integração com a API SOAP dos Correios pode apresentar desafios adicionais de complexidade e manutenção se houver mudanças nas suas especificações.
+- **Notificações Bloqueadas:** O envio excessivo de e-mails ou mensagens podem levar a bloqueios por parte do provedor de hospedagem, por conta de regras de envio estabelecidas.
+- **Controle de Erros e Retries:** É necessário assegurar que o código lida corretamente com erros de chamadas de API e condições de falha, evitando loops infinitos que podem levar a sobrecarga do servidor.
 
 ## 3. Checklist de Testes Antes do Deploy
 
-1. **Verificação do Snippet**
-   - [ ] Confirmar a presença do snippet do live chat em todas as páginas chave (home, produto, checkout).
-   
-2. **Funcionalidade do Chat**
-   - [ ] Iniciar uma conversa como cliente e verificar a recepção da mensagem pelo agente.
-   - [ ] Testar a transferência de chat entre agentes.
+Antes de realizar o deploy da solução, recomenda-se seguir esta checklist de testes:
 
-3. **Passagem de Dados do Usuário**
-   - [ ] Testar a passagem correta de dados do usuário logado para o widget.
-   - [ ] Verificar a segurança da lógica de hash ao enviar o e-mail do usuário.
+1. **Testes de Integração com Transportadoras:**
+   - Verificar a conexão e autenticação com as APIs do Correios e Loggi.
+   - Testar diferentes cenários de resposta da API (códigos de sucesso e erro).
 
-4. **Performance**
-   - [ ] Testar o carregamento da página com e sem o snippet do chat.
-   - [ ] Usar ferramentas como PageSpeed Insights para medir o impacto.
+2. **Testes de Rastreio:**
+   - Validar a lógica de atualização de status nos registros de rastreamento.
+   - Verificar se os dados estão sendo inseridos corretamente nas tabelas pertinentes.
 
-5. **Conformidade com LGPD**
-   - [ ] Garantir que todas as informações de privacidade e consentimento estejam visíveis para os usuários.
+3. **Testes de Notificação:**
+   - Testar o envio de notificações via e-mail, SMS e WhatsApp com seus respectivos serviços.
+   - Confirmar o recebimento das notificações em diferentes cenários.
 
-6. **Backup e Monitoramento**
-   - [ ] Configurar monitoramento para garantir que o serviço de chat esteja funcionando corretamente após o deploy.
+4. **Testes de Performance do Cron Job:**
+   - Executar o Cron Job manualmente e verificar o tempo de execução.
+   - Monitorar o uso de recursos do servidor durante a execução do script.
+
+5. **Testes de Segurança:**
+   - Validar o gerenciamento de secrets e credenciais no GitHub.
+   - Garantir que as respostas das APIs sejam tratadas adequadamente para evitar injeção de código.
+
+6. **Testes de Interface Administrativa:**
+   - Testar a funcionalidade de cadastro e visualização de pedidos.
+   - Verificar o funcionamento da exibição do status atual e do histórico de rastreamento.
 
 ## 4. Resumo Executivo da Feature
 
-A implementação do widget de live chat na plataforma de e-commerce da ShopVivaliz visa proporcionar um suporte ao cliente mais ágil e eficiente. Utilizando o Tawk.to, a equipe da ShopVivaliz é capaz de interagir com os clientes em tempo real, garantindo que suas dúvidas sejam respondidas rapidamente. A transferência de chats entre múltiplos agentes e a capacidade de enriquecer o atendimento com dados dos usuários logados são características chave que aprimoram a experiência do cliente.
+O novo sistema de rastreamento de pedidos em tempo real da ShopVivaliz foi projetado para oferecer uma experiência aprimorada aos clientes, permitindo acompanhar o status de seus pedidos de maneira prática e rápida. Integrações com as transportadoras Correios e Loggi garantem a obtenção de informações atualizadas sobre o transporte dos pedidos, enquanto um sistema de notificações envia alertas automáticos via e-mail, SMS e WhatsApp.
 
-A solução foi desenhada considerando a escalabilidade futura, a possibilidade de integração com inteligência artificial e LLMs, e a conformidade jurídica necessária em relação à coleta e armazenamento de dados pessoais. A estratégia de implementação em fases permite um lançamento rápido e uma validação efetiva do fluxo de trabalho, com a opção de adicionar funcionalidades avançadas consoante à evolução das necessidades dos clientes e da equipe de suporte.
+Com uma arquitetura modular e segura, a solução foi desenvolvida levando em consideração as limitações do ambiente de hospedagem compartilhada, priorizando a performance e a eficiência no uso de recursos. A interface administrativa fornece um painel de controle intuitivo, permitindo gerenciar pedidos e monitorar o status de rastreamento de forma simples.
 
-### Próximos Passos
-
-- Monitorar o desempenho do sistema e a experiência do usuário nas primeiras semanas após o lançamento.
-- Coletar feedback da equipe sobre a utilização do widget e identificar áreas de melhoria.
-- Revisar rotineiramente as configurações de privacidade e segurança associadas ao uso do live chat.
+Essa feature não só atende aos objetivos estabelecidos pela equipe, mas também posiciona a ShopVivaliz como um e-commerce que se preocupa em oferecer transparência e satisfação ao cliente, fundamental para aumentar a confiança e a lealdade à marca.
