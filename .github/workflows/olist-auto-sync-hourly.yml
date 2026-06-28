@@ -1,0 +1,77 @@
+name: Olist Auto Sync - Horário
+
+on:
+  schedule:
+    # Executar a cada hora no minuto 0
+    - cron: '0 * * * *'
+  workflow_dispatch:  # Permite disparo manual
+
+jobs:
+  sync-olist-products:
+    name: Sincronizar 198 produtos Olist
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Sincronizar 198 produtos da Olist
+        id: sync
+        run: |
+          echo "⏱️ Iniciando sincronização de 198 produtos..."
+
+          RESPONSE=$(curl -s -X GET \
+            "https://dev.shopvivaliz.com.br/olist/auto-sync-hourly.php" \
+            -H "User-Agent: GitHub-Actions-Olist-Sync" \
+            --max-time 300)
+
+          echo "Resposta da API:"
+          echo "$RESPONSE" | jq '.' || echo "$RESPONSE"
+
+          # Verificar se foi bem-sucedido
+          if echo "$RESPONSE" | jq -e '.sucesso == true' > /dev/null 2>&1; then
+            TOTAL=$(echo "$RESPONSE" | jq '.total_produtos')
+            COM_IMAGEM=$(echo "$RESPONSE" | jq '.com_imagem')
+            TAXA=$(echo "$RESPONSE" | jq '.taxa_cobertura')
+
+            echo "✅ SUCESSO!"
+            echo "  Total: $TOTAL produtos"
+            echo "  Com imagem: $COM_IMAGEM"
+            echo "  Taxa de cobertura: $TAXA%"
+
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "total=$TOTAL" >> $GITHUB_OUTPUT
+            echo "com_imagem=$COM_IMAGEM" >> $GITHUB_OUTPUT
+            echo "taxa=$TAXA" >> $GITHUB_OUTPUT
+          else
+            echo "❌ ERRO na sincronização"
+            echo "status=failed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log de sucesso
+        if: steps.sync.outputs.status == 'success'
+        run: |
+          echo "📊 Sincronização Concluída"
+          echo "Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo "Total: ${{ steps.sync.outputs.total }}"
+          echo "Com imagem: ${{ steps.sync.outputs.com_imagem }}"
+          echo "Taxa: ${{ steps.sync.outputs.taxa }}%"
+          echo "Próxima sincronização: em 1 hora"
+
+      - name: Log de erro
+        if: steps.sync.outputs.status == 'failed'
+        run: |
+          echo "⚠️ FALHA na sincronização"
+          echo "Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo "Verificar logs em: https://dev.shopvivaliz.com.br/logs/olist-auto-sync-hourly.log"
+          exit 1
+
+      - name: Notificar Slack em caso de erro
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Erro na sincronização Olist de produtos'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        continue-on-error: true
