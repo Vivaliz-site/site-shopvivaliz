@@ -15,34 +15,19 @@ $busca = $_GET['busca'] ?? '';
 $pagina = (int)($_GET['pagina'] ?? 1);
 $por_pagina = 20;
 
-// Carrega 198 produtos via API
+// Carrega 198 produtos via arquivo incluído
 $produtos = [];
 $cache_valido = false;
 
-try {
-    $api_url = BASE_URL . '/api/get-produtos-198.php';
-    $ch = curl_init($api_url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_TIMEOUT => 60,
-        CURLOPT_HTTPHEADER => ['User-Agent: Mozilla/5.0']
-    ]);
-
-    $response = curl_exec($ch);
-    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($status === 200) {
-        $data = json_decode($response, true);
-        if ($data && !empty($data['produtos'])) {
-            $produtos = $data['produtos'];
-            $cache_valido = true;
-            error_log("[Catalogo] Carregou " . count($produtos) . " produtos");
-        }
+// 1. Tentar incluir arquivo de 198 produtos
+$arquivo_produtos = __DIR__ . '/../olist/produtos-olist-array.php';
+if (file_exists($arquivo_produtos)) {
+    include $arquivo_produtos;
+    if (!empty($GLOBALS['produtos_olist'])) {
+        $produtos = $GLOBALS['produtos_olist'];
+        $cache_valido = true;
+        error_log("[Catalogo] Carregou " . count($produtos) . " produtos do arquivo");
     }
-} catch (Exception $e) {
-    error_log("[Catalogo] Erro: " . $e->getMessage());
 }
 
 // Se cache expirado, buscar da API
