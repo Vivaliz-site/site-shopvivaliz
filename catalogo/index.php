@@ -28,81 +28,8 @@ if (file_exists($arquivo_produtos)) {
         $cache_valido = true;
         error_log("[Catalogo] Carregou " . count($produtos) . " produtos do arquivo");
 
-        // SYNC 198 PRODUTOS AO BANCO
-        if (count($produtos) >= 190) {
-            // CREDENCIAIS CORRETAS DO SERVIDOR
-            $db_host = getenv('DB_HOST') ?: 'localhost';
-            $db_user = getenv('DB_USER') ?: 'claude';
-            $db_pass = getenv('DB_PASS') ?: 'CFqmkF8}$C_2';
-            $db_name = getenv('DB_NAME') ?: 'shopv506_shopvivaliz';
-
-            $db = @new mysqli($db_host, $db_user, $db_pass, $db_name);
-
-            if ($db->connect_error) {
-                header('X-Sync-Status: FALHA_CONEXAO');
-                header('X-Sync-Error: ' . $db->connect_error);
-                error_log("[Catalogo-SYNC] Erro conexão: " . $db->connect_error . " (host=$db_host user=$db_user db=$db_name)");
-            } else {
-                header('X-Sync-Status: CONECTADO');
-
-                // CRIAR TABELA SE NÃO EXISTIR
-                $create_table = "CREATE TABLE IF NOT EXISTS products (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    product_id VARCHAR(50) UNIQUE NOT NULL,
-                    name VARCHAR(255) NOT NULL,
-                    price DECIMAL(10, 2) NOT NULL,
-                    description TEXT,
-                    category VARCHAR(100),
-                    stock INT DEFAULT 0,
-                    image_url VARCHAR(500),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    INDEX idx_product_id (product_id),
-                    INDEX idx_category (category)
-                )";
-
-                if (!$db->query($create_table)) {
-                    error_log("[Catalogo-SYNC] CREATE TABLE error: " . $db->error);
-                } else {
-                    error_log("[Catalogo-SYNC] Tabela produtos criada/verificada");
-                }
-
-                $sql = "INSERT INTO products (product_id, name, price, description, category, stock, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
-                        ON DUPLICATE KEY UPDATE price=VALUES(price), description=VALUES(description), category=VALUES(category), stock=VALUES(stock), updated_at=NOW()";
-
-                $stmt = $db->prepare($sql);
-                if (!$stmt) {
-                    error_log("[Catalogo-SYNC] Prepare error: " . $db->error);
-                } else {
-                    $sync_count = 0;
-
-                    foreach ($produtos as $p) {
-                        $id = $p['id'] ?? '';
-                        $nome = $p['nome'] ?? '';
-                        $preco = (float)($p['preco'] ?? 0);
-                        $desc = $p['descricao'] ?? '';
-                        $cat = $p['categoria'] ?? 'Geral';
-                        $est = (int)($p['estoque'] ?? 0);
-
-                        if ($id && $nome) {
-                            if (!$stmt->bind_param('ssdssi', $id, $nome, $preco, $desc, $cat, $est)) {
-                                error_log("[Catalogo-SYNC] Bind error: " . $stmt->error);
-                                continue;
-                            }
-                            if ($stmt->execute()) {
-                                $sync_count++;
-                            } else {
-                                error_log("[Catalogo-SYNC] Execute error: " . $stmt->error);
-                            }
-                        }
-                    }
-
-                    error_log("[Catalogo-SYNC] Sincronizou " . $sync_count . " produtos ao banco (total esperado: " . count($produtos) . ")");
-                }
-                $db->close();
-            }
-        }
+        // SYNC 198 PRODUTOS AO BANCO - TEMPORARIAMENTE DESABILITADO PARA DEBUG
+        // TODO: Implementar sincronização após resolver erro de conexão ao banco
     }
 }
 
