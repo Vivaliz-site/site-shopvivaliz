@@ -15,23 +15,34 @@ $busca = $_GET['busca'] ?? '';
 $pagina = (int)($_GET['pagina'] ?? 1);
 $por_pagina = 20;
 
-// Cache de 1 hora
-$cache_file = __DIR__ . '/../logs/olist-products-cache.json';
-$cache_valido = false;
+// Tentar carregar produtos via endpoint que sincroniza ON-DEMAND
 $produtos = [];
-$total_cache = 0;
+$cache_valido = false;
 
-if (file_exists($cache_file)) {
-    $cache_time = filemtime($cache_file);
-    if (time() - $cache_time < 3600) { // 1 hora
-        $cache_data = json_decode(file_get_contents($cache_file), true);
-        if ($cache_data && !empty($cache_data['produtos'])) {
-            $produtos = $cache_data['produtos'];
-            $total_cache = count($produtos);
+try {
+    $api_url = BASE_URL . '/olist/get-or-sync-products.php';
+    $ch = curl_init($api_url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 60,
+        CURLOPT_HTTPHEADER => ['User-Agent: Mozilla/5.0']
+    ]);
+
+    $response = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($status === 200) {
+        $data = json_decode($response, true);
+        if ($data && !empty($data['produtos'])) {
+            $produtos = $data['produtos'];
             $cache_valido = true;
-            error_log("[Catalogo] Cache carregado com $total_cache produtos");
+            error_log("[Catalogo] Carregou " . count($produtos) . " produtos via API (" . $data['fonte'] . ")");
         }
     }
+} catch (Exception $e) {
+    error_log("[Catalogo] Erro ao chamar API: " . $e->getMessage());
 }
 
 // Se cache expirado, buscar da API
