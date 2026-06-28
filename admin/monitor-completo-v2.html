@@ -556,17 +556,17 @@
             statusText.textContent = 'Enviando...';
 
             try {
-                const response = await fetch('/api/agent/squad-chat.php', {
+                const response = await fetch('/api/simple-agent-chat.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text, agents: ['claude', 'gemini', 'gpt'] })
+                    body: JSON.stringify({ message: text })
                 });
 
                 const data = await response.json();
 
                 if (response.ok && data.response) {
-                    addMessage('agent', data.response);
-                    statusText.textContent = `✅ ${data.agent}`;
+                    addMessage(data.agent || 'Agente', data.response);
+                    statusText.textContent = `✅ Respondido`;
                 } else {
                     addMessage('system', `Erro: ${data.error || 'Sem resposta'}`);
                     statusText.textContent = 'Erro';
