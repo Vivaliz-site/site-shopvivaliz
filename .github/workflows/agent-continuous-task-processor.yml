@@ -1,0 +1,77 @@
+name: Agent Continuous Task Processor - 24/7 Autonomous
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # A cada 5 minutos (agentes sempre processando)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  process-tasks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Process Next Task (Agentes Autônomos)
+        run: |
+          echo "=========================================="
+          echo "Agent Task Processor - Operação Autônoma"
+          echo "=========================================="
+          python3 scripts/agent-task-processor.py
+          echo ""
+          echo "✅ Ciclo completo"
+
+      - name: Git Config
+        run: |
+          git config user.name "Agent Task Processor"
+          git config user.email "processor@shopvivaliz.com.br"
+
+      - name: Commit Progress
+        continue-on-error: true
+        run: |
+          if git diff --quiet logs/tasks-queue.json logs/tasks-execution.jsonl 2>/dev/null; then
+            echo "Nenhuma mudança para commitar"
+          else
+            git add -A logs/
+            git commit -m "chore: agentes processaram tarefas da fila [$(date +'%H:%M:%S')]
+
+Execução autônoma:
+- Próxima tarefa da fila assumida
+- Agente designado iniciou processamento
+- Progresso registrado em logs/
+
+Agentes operando 24/7" || true
+            git push || true
+          fi
+
+      - name: Report Status
+        run: |
+          echo "=========================================="
+          echo "Status Atual da Fila"
+          echo "=========================================="
+          if [ -f logs/tasks-queue.json ]; then
+            echo "Fila de tarefas:"
+            python3 -c "
+            import json
+            with open('logs/tasks-queue.json') as f:
+              tasks = json.load(f)
+            pending = [t for t in tasks if t['status'] == 'pending']
+            done = [t for t in tasks if t['status'] == 'done']
+            print(f'Total: {len(tasks)}')
+            print(f'Pendentes: {len(pending)}')
+            print(f'Completas: {len(done)}')
+            if pending:
+              print(f'Próxima: {pending[0][\"title\"]}')
+            " || echo "Nenhuma fila encontrada"
+          fi
+          echo "=========================================="
