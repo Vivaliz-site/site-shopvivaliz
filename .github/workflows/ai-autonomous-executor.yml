@@ -28,7 +28,7 @@ jobs:
           python-version: "3.11"
 
       - name: Instalar dependencias
-        run: pip install google-generativeai openai anthropic
+        run: pip install google-genai openai anthropic
 
       - name: Executar proxima tarefa
         env:
