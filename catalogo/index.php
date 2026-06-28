@@ -27,6 +27,45 @@ if (file_exists($arquivo_produtos)) {
         $produtos = $GLOBALS['produtos_olist'];
         $cache_valido = true;
         error_log("[Catalogo] Carregou " . count($produtos) . " produtos do arquivo");
+
+        // SYNC 198 PRODUTOS AO BANCO
+        if (count($produtos) >= 190) {
+            try {
+                $db_host = getenv('DB_HOST') ?: 'localhost';
+                $db_user = getenv('DB_USER') ?: 'root';
+                $db_pass = getenv('DB_PASS') ?: '';
+                $db_name = getenv('DB_NAME') ?: 'shopvivaliz';
+
+                $db = @new mysqli($db_host, $db_user, $db_pass, $db_name);
+
+                if (!$db->connect_error) {
+                    $sql = "INSERT INTO products (product_id, name, price, description, category, stock, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+                            ON DUPLICATE KEY UPDATE price=VALUES(price), description=VALUES(description), category=VALUES(category), stock=VALUES(stock), updated_at=NOW()";
+
+                    $stmt = $db->prepare($sql);
+                    $sync_count = 0;
+
+                    foreach ($produtos as $p) {
+                        $id = $p['id'] ?? '';
+                        $nome = $p['nome'] ?? '';
+                        $preco = (float)($p['preco'] ?? 0);
+                        $desc = $p['descricao'] ?? '';
+                        $cat = $p['categoria'] ?? 'Geral';
+                        $est = (int)($p['estoque'] ?? 0);
+
+                        if ($id && $nome && $stmt->bind_param('ssdssi', $id, $nome, $preco, $desc, $cat, $est)) {
+                            if ($stmt->execute()) $sync_count++;
+                        }
+                    }
+
+                    error_log("[Catalogo] Sincronizou " . $sync_count . " produtos ao banco");
+                    $db->close();
+                }
+            } catch (Exception $e) {
+                error_log("[Catalogo] Erro ao sincronizar: " . $e->getMessage());
+            }
+        }
     }
 }
 
