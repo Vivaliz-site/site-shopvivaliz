@@ -1,0 +1,76 @@
+name: Ciclo Autônomo 24/7
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  autonomous-cycle:
+    name: Executar ciclo dos agentes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Squad Chat — ciclo autônomo
+        env:
+          SQUAD_TOKEN: ${{ secrets.SQUAD_TOKEN }}
+        shell: bash
+        run: |
+          BASE="https://dev.shopvivaliz.com.br"
+          echo "=== Iniciando ciclo autônomo $(date '+%Y-%m-%d %H:%M:%S') ==="
+
+          RESPONSE=$(curl -s -X POST "$BASE/api/agent/squad-chat.php" \
+            -H "Content-Type: application/json" \
+            -H "X-Squad-Token: ${SQUAD_TOKEN}" \
+            -d '{
+              "message": "Ciclo autônomo 24/7. Analise o estado atual do projeto ShopVivaliz, identifique tarefas prioritárias e execute melhorias dentro do seu papel. Seja objetivo e registre decisões.",
+              "agents": ["director", "claude", "gpt", "gemini"],
+              "autonomous": true,
+              "history": []
+            }' \
+            --max-time 120)
+
+          echo "--- Resposta do Squad ---"
+          echo "$RESPONSE" | python3 -c "
+          import sys, json
+          try:
+              data = json.load(sys.stdin)
+              print(f'cycle_id: {data.get(\"cycle_id\", \"n/a\")}')
+              for r in data.get('responses', []):
+                  ok = r.get('ok', False)
+                  text = str(r.get('text', ''))[:300]
+                  print(f'[{r[\"name\"]}] provider={r.get(\"provider\",\"?\")} ok={ok}')
+                  print(f'  {text}')
+          except Exception as e:
+              print(f'Parse error: {e}')
+              print(sys.stdin.read()[:500])
+          " 2>/dev/null || echo "$RESPONSE" | head -c 1000
+
+      - name: Monitor — acionar executor de tarefas
+        shell: bash
+        run: |
+          BASE="https://dev.shopvivaliz.com.br"
+
+          RESULT=$(curl -s -X POST "$BASE/api/monitor/api.php?action=send-command" \
+            -H "Content-Type: application/json" \
+            -d '{"command":"execute-now"}' \
+            --max-time 30 || echo '{"error":"timeout"}')
+
+          echo "Monitor executor: $RESULT"
+
+      - name: Status final
+        shell: bash
+        run: |
+          BASE="https://dev.shopvivaliz.com.br"
+
+          STATUS=$(curl -s "$BASE/api/monitor/api.php?action=status" --max-time 10 || echo '{}')
+          echo "$STATUS" | python3 -c "
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              q = d.get('queue', {})
+              print(f'Fila: {q.get(\"total\",0)} total | {q.get(\"pending\",0)} pendentes | {q.get(\"completed\",0)} completas | {q.get(\"completion_rate\",0):.1f}%')
+          except:
+              pass
+          " 2>/dev/null || true
