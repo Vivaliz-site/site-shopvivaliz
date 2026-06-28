@@ -3,7 +3,7 @@
     {
       "id": "task-olist-images-import",
       "title": "Importar imagens de produtos da Olist",
-      "description": "Conectar na API Olist/Tiny ERP, baixar imagens de todos os produtos, processar e otimizar tamanho, armazenar em /uploads/products/ e atualizar tabela olist_product_images no banco de dados com URLs locais. Suportar retry autom\u00e1tico para falhas de conexao.",
+      "description": "Conectar na API Olist/Tiny ERP, baixar imagens de todos os produtos, processar e otimizar tamanho, armazenar em /uploads/products/ e atualizar tabela olist_product_images no banco de dados com URLs locais. Suportar retry automático para falhas de conexao.",
       "priority": "high",
       "status": "completed",
       "created_at": "2026-06-27T20:16:00Z",
@@ -11,8 +11,8 @@
     },
     {
       "id": "task-001",
-      "title": "Adicionar filtro de pre\u00c3\u0192\u00c2\u00a7o na listagem de produtos",
-      "description": "Implementar filtro de pre\u00c3\u0192\u00c2\u00a7o m\u00c3\u0192\u00c2\u00adnimo e m\u00c3\u0192\u00c2\u00a1ximo com integra\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00a3o ao banco de dados MySQL. Atualizar a p\u00c3\u0192\u00c2\u00a1gina de listagem com Ajax para filtro em tempo real sem recarregar.",
+      "title": "Adicionar filtro de preÃƒÂ§o na listagem de produtos",
+      "description": "Implementar filtro de preÃƒÂ§o mÃƒÂ­nimo e mÃƒÂ¡ximo com integraÃƒÂ§ÃƒÂ£o ao banco de dados MySQL. Atualizar a pÃƒÂ¡gina de listagem com Ajax para filtro em tempo real sem recarregar.",
       "priority": "high",
       "status": "completed",
       "created_at": "2026-06-27T12:00:00Z",
@@ -21,7 +21,7 @@
     {
       "id": "task-002",
       "title": "Implementar carrinho de compras persistente",
-      "description": "Criar sistema de carrinho com salva em sess\u00c3\u0192\u00c2\u00a3o PHP e localStorage JS. Permitir adicionar, remover e atualizar quantidade de produtos. Integrar com banco de dados para usu\u00c3\u0192\u00c2\u00a1rios logados.",
+      "description": "Criar sistema de carrinho com salva em sessÃƒÂ£o PHP e localStorage JS. Permitir adicionar, remover e atualizar quantidade de produtos. Integrar com banco de dados para usuÃƒÂ¡rios logados.",
       "priority": "high",
       "status": "completed",
       "created_at": "2026-06-27T12:05:00Z",
@@ -30,7 +30,7 @@
     {
       "id": "task-003",
       "title": "Integrar sistema de cupons de desconto",
-      "description": "Criar tabela de cupons no MySQL, validar cupons no checkout, aplicar desconto ao total. Suportar desconto percentual e valor fixo. Incluir expira\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00a3o de cupons.",
+      "description": "Criar tabela de cupons no MySQL, validar cupons no checkout, aplicar desconto ao total. Suportar desconto percentual e valor fixo. Incluir expiraÃƒÂ§ÃƒÂ£o de cupons.",
       "priority": "high",
       "status": "completed",
       "created_at": "2026-06-27T12:10:00Z",
@@ -56,17 +56,18 @@
     },
     {
       "id": "task-006",
-      "title": "Adicionar sistema de avalia\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00b5es e coment\u00c3\u0192\u00c2\u00a1rios",
-      "description": "Criar tabelas para avalia\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00b5es de produtos (1-5 estrelas) e coment\u00c3\u0192\u00c2\u00a1rios. Implementar valida\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00a3o de usu\u00c3\u0192\u00c2\u00a1rio autenticado. Mostrar m\u00c3\u0192\u00c2\u00a9dia de avalia\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00b5es na p\u00c3\u0192\u00c2\u00a1gina do produto.",
+      "title": "Adicionar sistema de avaliaÃƒÂ§ÃƒÂµes e comentÃƒÂ¡rios",
+      "description": "Criar tabelas para avaliaÃƒÂ§ÃƒÂµes de produtos (1-5 estrelas) e comentÃƒÂ¡rios. Implementar validaÃƒÂ§ÃƒÂ£o de usuÃƒÂ¡rio autenticado. Mostrar mÃƒÂ©dia de avaliaÃƒÂ§ÃƒÂµes na pÃƒÂ¡gina do produto.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T12:25:00Z",
-      "completed_at": "2026-06-27T17:43:14.795165"
+      "completed_at": "2026-06-28T07:47:07.061312Z",
+      "completed_by": "Gemini"
     },
     {
       "id": "task-007",
       "title": "Integrar gateway de pagamento Stripe",
-      "description": "Configurar Stripe API, criar p\u00c3\u0192\u00c2\u00a1gina de checkout segura, processar pagamentos, receber webhooks de confirma\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00a3o. Suportar m\u00c3\u0192\u00c2\u00baltiplos m\u00c3\u0192\u00c2\u00a9todos de pagamento.",
+      "description": "Configurar Stripe API, criar pÃƒÂ¡gina de checkout segura, processar pagamentos, receber webhooks de confirmaÃƒÂ§ÃƒÂ£o. Suportar mÃƒÂºltiplos mÃƒÂ©todos de pagamento.",
       "priority": "high",
       "status": "pending",
       "created_at": "2026-06-27T12:30:00Z",
@@ -74,8 +75,8 @@
     },
     {
       "id": "task-008",
-      "title": "Implementar sistema de notifica\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00b5es por email",
-      "description": "Configurar SMTP para enviar emails de confirma\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00a3o de pedido, shipment tracking, e promo\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00b5es. Usar templates HTML profissionais. Respeitar prefer\u00c3\u0192\u00c2\u00aancias do usu\u00c3\u0192\u00c2\u00a1rio.",
+      "title": "Implementar sistema de notificaÃƒÂ§ÃƒÂµes por email",
+      "description": "Configurar SMTP para enviar emails de confirmaÃƒÂ§ÃƒÂ£o de pedido, shipment tracking, e promoÃƒÂ§ÃƒÂµes. Usar templates HTML profissionais. Respeitar preferÃƒÂªncias do usuÃƒÂ¡rio.",
       "priority": "medium",
       "status": "pending",
       "created_at": "2026-06-27T12:35:00Z",
@@ -83,8 +84,8 @@
     },
     {
       "id": "task-009",
-      "title": "Adicionar painel de administra\u00c3\u0192\u00c2\u00a7\u00c3\u0192\u00c2\u00a3o para gerenciar produtos",
-      "description": "Criar painel admin com CRUD de produtos, categorias, pre\u00c3\u0192\u00c2\u00a7os e imagens. Importar/exportar dados via CSV. Validar dados de entrada. Logs de auditoria.",
+      "title": "Adicionar painel de administraÃƒÂ§ÃƒÂ£o para gerenciar produtos",
+      "description": "Criar painel admin com CRUD de produtos, categorias, preÃƒÂ§os e imagens. Importar/exportar dados via CSV. Validar dados de entrada. Logs de auditoria.",
       "priority": "high",
       "status": "pending",
       "created_at": "2026-06-27T12:40:00Z",
@@ -93,7 +94,7 @@
     {
       "id": "task-010",
       "title": "Otimizar SEO do ecommerce",
-      "description": "Implementar meta tags din\u00c3\u0192\u00c2\u00a2micas por produto, criar sitemap XML, adicionar structured data (Schema.org), otimizar URLs amig\u00c3\u0192\u00c2\u00a1veis. Melhorar velocidade de p\u00c3\u0192\u00c2\u00a1gina.",
+      "description": "Implementar meta tags dinÃƒÂ¢micas por produto, criar sitemap XML, adicionar structured data (Schema.org), otimizar URLs amigÃƒÂ¡veis. Melhorar velocidade de pÃƒÂ¡gina.",
       "priority": "medium",
       "status": "pending",
       "created_at": "2026-06-27T12:45:00Z",
@@ -165,7 +166,7 @@
     {
       "id": "task-018",
       "title": "Adicionar rastreamento de pedidos em tempo real",
-      "description": "Integrar com transportadoras (Correios, Loggi) para rastreamento automatico. Enviar notificacoes via email/SMS/WhatsApp.",
+      "description": "Integrar com transportadoras (Corr: "Integrar com transportadoras (Correios, Loggi) para rastreamento automatico. Enviar notificacoes via email/SMS/WhatsApp.",
       "priority": "high",
       "status": "pending",
       "created_at": "2026-06-27T20:15:00Z",
@@ -358,7 +359,7 @@
       "priority": "medium",
       "status": "pending",
       "created_at": "2026-06-27T20:36:00Z",
-      "completed_at": "2026-06-27T18:05:23.250917"
+      "comple
     },
     {
       "id": "task-040",
@@ -368,6 +369,9 @@
       "status": "pending",
       "created_at": "2026-06-27T20:37:00Z",
       "completed_at": "2026-06-27T18:05:23.76721"
+    }
+  ]
+}026-06-27T18:05:23.76721"
     }
   ]
 }
