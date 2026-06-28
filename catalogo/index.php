@@ -19,6 +19,7 @@ $por_pagina = 20;
 $cache_file = __DIR__ . '/../logs/olist-products-cache.json';
 $cache_valido = false;
 $produtos = [];
+$total_cache = 0;
 
 if (file_exists($cache_file)) {
     $cache_time = filemtime($cache_file);
@@ -26,7 +27,9 @@ if (file_exists($cache_file)) {
         $cache_data = json_decode(file_get_contents($cache_file), true);
         if ($cache_data && !empty($cache_data['produtos'])) {
             $produtos = $cache_data['produtos'];
+            $total_cache = count($produtos);
             $cache_valido = true;
+            error_log("[Catalogo] Cache carregado com $total_cache produtos");
         }
     }
 }
