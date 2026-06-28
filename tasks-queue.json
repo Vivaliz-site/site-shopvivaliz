@@ -132,27 +132,27 @@
       "title": "Adicionar integracao com WhatsApp Business API",
       "description": "Configurar WhatsApp Business para enviar notificacoes de pedido, status de entrega e suporte ao cliente. Permitir chat com atendimento.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:11:00Z",
-      "completed_at": "2026-06-27T18:05:10.398164"
+      "completed_at": "2026-06-28T10:10:17.708671"
     },
     {
       "id": "task-015",
       "title": "Criar programa de fidelizacao com pontos",
       "description": "Implementar sistema de pontos por compra, permitir resgate em desconto. Leaderboard de clientes top. Bonus pontos em datas especiais.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:12:00Z",
-      "completed_at": "2026-06-27T18:05:10.911787"
+      "completed_at": "2026-06-28T10:10:18.213414"
     },
     {
       "id": "task-016",
       "title": "Integrar com sistema de ERP",
       "description": "Conectar ecommerce com ERP para sincronizacao automatica de estoque, pedidos e faturas. Usar webhooks e APIs.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:13:00Z",
-      "completed_at": "2026-06-27T18:05:11.428105"
+      "completed_at": "2026-06-28T10:10:18.714598"
     },
     {
       "id": "task-017",
