@@ -45,16 +45,27 @@ if (file_exists($arquivo_produtos)) {
             } else {
                 header('X-Sync-Status: CONECTADO');
 
-                // DEBUG: Listar tabelas disponíveis
-                $tables_result = $db->query("SHOW TABLES");
-                $tables_list = [];
-                if ($tables_result) {
-                    while ($row = $tables_result->fetch_row()) {
-                        $tables_list[] = $row[0];
-                    }
+                // CRIAR TABELA SE NÃO EXISTIR
+                $create_table = "CREATE TABLE IF NOT EXISTS products (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    product_id VARCHAR(50) UNIQUE NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    price DECIMAL(10, 2) NOT NULL,
+                    description TEXT,
+                    category VARCHAR(100),
+                    stock INT DEFAULT 0,
+                    image_url VARCHAR(500),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX idx_product_id (product_id),
+                    INDEX idx_category (category)
+                )";
+
+                if (!$db->query($create_table)) {
+                    error_log("[Catalogo-SYNC] CREATE TABLE error: " . $db->error);
+                } else {
+                    error_log("[Catalogo-SYNC] Tabela produtos criada/verificada");
                 }
-                header('X-Tables-Available: ' . implode(',', $tables_list));
-                error_log("[Catalogo-SYNC] Tabelas disponíveis: " . implode(',', $tables_list));
 
                 $sql = "INSERT INTO products (product_id, name, price, description, category, stock, created_at, updated_at)
                         VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
