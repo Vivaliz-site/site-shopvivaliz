@@ -169,8 +169,26 @@
     <div class="container">
         <header>
             <h1>Monitor de Agentes v2</h1>
-            <p>Chat com agentes reais (Claude, Gemini, GPT) via API Squad Chat</p>
+            <p>Chat com agentes + Fila de Tarefas Autônomas</p>
         </header>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <!-- TAREFAS PENDENTES -->
+            <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd;">
+                <h3 style="margin-bottom: 10px; color: #ff6b6b;">📋 Tarefas Pendentes</h3>
+                <div id="tasksPending" style="font-size: 0.9em; line-height: 1.6;">
+                    <div style="color: #888;">Carregando tarefas...</div>
+                </div>
+            </div>
+
+            <!-- TAREFAS PROCESSADAS -->
+            <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd;">
+                <h3 style="margin-bottom: 10px; color: #51cf66;">✅ Tarefas Processadas</h3>
+                <div id="tasksProcessed" style="font-size: 0.9em; line-height: 1.6;">
+                    <div style="color: #888;">Carregando tarefas...</div>
+                </div>
+            </div>
+        </div>
 
         <div class="chat-box" id="chatBox">
             <div class="message system">
@@ -194,7 +212,7 @@
     </div>
 
     <script>
-        const API = '/api/monitor/simple-chat.php';
+        const API = 'https://dev.shopvivaliz.com.br/admin/squad-chat.php';
         const chatBox = document.getElementById('chatBox');
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
