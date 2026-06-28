@@ -32,7 +32,7 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
 
     <title><?php echo APP_NAME; ?> - Ecommerce Inteligente com IA</title>
 
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/responsive.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -45,7 +45,8 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
                 <h1><?php echo APP_NAME; ?></h1>
                 <span class="version">v<?php echo APP_VERSION; ?></span>
             </div>
-            <div class="navbar-menu">
+            <button class="menu-toggle" id="menuToggle">☰</button>
+            <div class="navbar-menu" id="navMenu">
                 <a href="/">Home</a>
                 <a href="/catalogo">Catálogo</a>
                 <a href="/sobre">Sobre</a>
@@ -131,6 +132,23 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
 
     <!-- Scripts -->
     <script>
+        // Menu toggle mobile
+        const menuToggle = document.getElementById('menuToggle');
+        const navMenu = document.getElementById('navMenu');
+
+        if (menuToggle) {
+            menuToggle.addEventListener('click', function() {
+                navMenu.classList.toggle('active');
+            });
+
+            // Fechar menu ao clicar em um link
+            navMenu.querySelectorAll('a').forEach(link => {
+                link.addEventListener('click', function() {
+                    navMenu.classList.remove('active');
+                });
+            });
+        }
+
         // Carregar dados em tempo real da API Monitor
         document.addEventListener('DOMContentLoaded', function() {
             fetch('/api/monitor/api.php?action=status')
