@@ -4,11 +4,13 @@
       "Read",
       "Edit",
       "Write",
-      "Bash",
-      "PowerShell",
+      "Bash(*)",
+      "PowerShell(*)",
       "Glob",
-      "Grep"
+      "Grep",
+      "Agent",
+      "Skill"
     ],
-    "defaultMode": "auto"
+    "defaultMode": "dontAsk"
   }
 }
