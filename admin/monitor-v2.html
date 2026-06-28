@@ -194,21 +194,12 @@
     </div>
 
     <script>
-        const API = '/api/agent/squad-chat.php';
+        const API = '/api/monitor/simple-chat.php';
         const chatBox = document.getElementById('chatBox');
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
         const statusText = document.getElementById('statusText');
         const loadingText = document.getElementById('loadingText');
-
-        let token = sessionStorage.getItem('SQUAD_TOKEN') || '';
-
-        if (!token) {
-            token = prompt('Informe o SQUAD_TOKEN (ou deixe em branco):') || '';
-            if (token) {
-                sessionStorage.setItem('SQUAD_TOKEN', token);
-            }
-        }
 
         function addMessage(agent, text, isUser = false) {
             const msg = document.createElement('div');
@@ -249,9 +240,7 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        token: token,
-                        message: text,
-                        agents: ['claude', 'gemini', 'gpt']
+                        message: text
                     })
                 });
 
