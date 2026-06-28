@@ -65,6 +65,8 @@ jobs:
           check_optional_secret "ANTHROPIC_API_KEY" "${{ secrets.ANTHROPIC_API_KEY }}"
           check_optional_secret "OPENAI_API_KEY" "${{ secrets.OPENAI_API_KEY }}"
           check_optional_secret "GEMINI_API_KEY" "${{ secrets.GEMINI_API_KEY }}"
+          check_optional_secret "OLIST_CLIENT_ID" "${{ secrets.OLIST_CLIENT_ID }}"
+          check_optional_secret "OLIST_CLIENT_SECRET" "${{ secrets.OLIST_CLIENT_SECRET }}"
 
           if [ "$missing" -ne 0 ]; then
             exit 1
@@ -78,6 +80,8 @@ jobs:
           ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          OLIST_CLIENT_ID=${{ secrets.OLIST_CLIENT_ID }}
+          OLIST_CLIENT_SECRET=${{ secrets.OLIST_CLIENT_SECRET }}
           EOF
           sed -i 's/^          //' .env
           chmod 600 .env
