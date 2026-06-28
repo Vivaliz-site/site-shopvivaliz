@@ -20,13 +20,16 @@ class RealTaskExecutor:
 
     def load_queue(self):
         """Carregar fila de tarefas"""
-        with open(self.queue_file) as f:
+        with open(self.queue_file, encoding='utf-8') as f:
             return json.load(f)
 
     def save_queue(self, data):
-        """Salvar fila atualizada"""
-        with open(self.queue_file, 'w') as f:
-            json.dump(data, f, indent=2)
+        """Salvar fila atualizada com escrita atomica"""
+        import tempfile, os
+        tmp = str(self.queue_file) + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, self.queue_file)
 
     def execute_task_real(self, task):
         """REALMENTE executa uma tarefa (não apenas marca)"""
