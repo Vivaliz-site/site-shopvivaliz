@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🤖 Trio IA Monitor - ShopVivaliz</title>
+    <title>Trio IA Monitor - ShopVivaliz</title>
     <style>
         * {
             margin: 0;
@@ -32,14 +32,14 @@
 
         .container {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 280px 1fr 1fr;
             gap: 20px;
             padding: 20px;
-            max-width: 1600px;
+            max-width: 1800px;
             margin: 0 auto;
             height: 100vh;
             grid-template-rows: auto 1fr;
-            grid-template-areas: "header header" "main chat";
+            grid-template-areas: "header header header" "sidebar main chat";
         }
 
         header {
@@ -53,22 +53,11 @@
             align-items: center;
         }
 
-        .header-title {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
         .header-title h1 {
             font-size: 1.8em;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-        }
-
-        .header-title p {
-            color: #666;
-            font-size: 0.9em;
         }
 
         .status-indicator {
@@ -95,6 +84,85 @@
             50% { opacity: 0.5; }
         }
 
+        /* SIDEBAR DE CHATS */
+        .chat-sidebar {
+            grid-area: sidebar;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 15px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            color: var(--dark);
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+        }
+
+        .btn-new-chat {
+            width: calc(100% - 20px);
+            margin: 10px;
+            padding: 10px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9em;
+            transition: opacity 0.3s;
+        }
+
+        .btn-new-chat:hover {
+            opacity: 0.9;
+        }
+
+        .chats-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .chat-item {
+            padding: 12px;
+            margin: 5px 0;
+            background: var(--light);
+            border-radius: 8px;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            transition: all 0.3s;
+            font-size: 0.9em;
+        }
+
+        .chat-item:hover {
+            background: #e5e7eb;
+        }
+
+        .chat-item.active {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border-left-color: white;
+        }
+
+        .chat-item-title {
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .chat-item-meta {
+            font-size: 0.8em;
+            opacity: 0.7;
+            margin-top: 4px;
+        }
+
+        /* AREA PRINCIPAL */
         .main-area {
             grid-area: main;
             background: white;
@@ -104,6 +172,34 @@
             overflow-y: auto;
         }
 
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, white 100%);
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid var(--primary);
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.85em;
+        }
+
+        /* AREA DE CHAT */
         .chat-area {
             grid-area: chat;
             background: white;
@@ -153,14 +249,14 @@
             background: #f3f4f6;
             color: var(--dark);
             align-self: flex-start;
-            max-width: 80%;
+            max-width: 85%;
         }
 
         .message.user {
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             color: white;
             align-self: flex-end;
-            max-width: 80%;
+            max-width: 85%;
         }
 
         .message.system {
@@ -169,6 +265,12 @@
             align-self: center;
             text-align: center;
             font-size: 0.85em;
+        }
+
+        .timestamp {
+            font-size: 0.75em;
+            opacity: 0.7;
+            margin-top: 5px;
         }
 
         .chat-input-area {
@@ -193,7 +295,7 @@
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
-        .btn-send, .btn-upload {
+        .btn-send {
             padding: 10px 20px;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             color: white;
@@ -204,509 +306,231 @@
             transition: transform 0.2s;
         }
 
-        .btn-upload {
-            padding: 10px 15px;
-            font-size: 1.2em;
-        }
-
-        .btn-send:hover, .btn-upload:hover {
+        .btn-send:hover {
             transform: scale(1.05);
         }
 
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin-bottom: 25px;
+        ::-webkit-scrollbar {
+            width: 8px;
         }
 
-        .stat-card {
-            background: linear-gradient(135deg, #f5f7fa 0%, white 100%);
-            padding: 20px;
-            border-radius: 10px;
-            border-left: 4px solid var(--primary);
-            text-align: center;
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
         }
 
-        .stat-number {
-            font-size: 2em;
-            font-weight: bold;
-            color: var(--primary);
-            margin-bottom: 5px;
-        }
-
-        .stat-label {
-            color: #666;
-            font-size: 0.85em;
-        }
-
-        .progress-section {
-            margin-bottom: 25px;
-        }
-
-        .progress-section h3 {
-            color: var(--primary);
-            margin-bottom: 10px;
-            font-size: 1em;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 30px;
-            background: #e5e7eb;
-            border-radius: 15px;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--primary), var(--secondary));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 0.85em;
-            transition: width 0.5s ease;
-        }
-
-        .tasks-section {
-            margin-bottom: 25px;
-        }
-
-        .tasks-section h3 {
-            color: var(--primary);
-            margin-bottom: 15px;
-            font-size: 1em;
-        }
-
-        .task-item {
-            padding: 12px 15px;
-            margin-bottom: 10px;
-            background: #f9fafb;
-            border-left: 4px solid var(--primary);
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary);
             border-radius: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
 
-        .task-item.completed {
-            border-left-color: var(--success);
-            opacity: 0.7;
-        }
-
-        .task-item.pending {
-            border-left-color: var(--warning);
-        }
-
-        .task-info {
-            flex: 1;
-        }
-
-        .task-id {
-            font-weight: bold;
-            color: var(--primary);
-            font-size: 0.85em;
-        }
-
-        .task-title {
-            font-weight: 500;
-            margin: 5px 0;
-            font-size: 0.95em;
-        }
-
-        .task-priority {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.75em;
-            font-weight: 600;
-            margin-top: 5px;
-        }
-
-        .priority-high {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        .priority-medium {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .priority-low {
-            background: #dcfce7;
-            color: #166534;
-        }
-
-        .quick-actions {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-            margin-bottom: 25px;
-        }
-
-        .action-btn {
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 0.9em;
-        }
-
-        .action-btn.primary {
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
-        }
-
-        .action-btn.primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
-        }
-
-        .action-btn.secondary {
-            background: var(--light);
-            color: var(--dark);
-            border: 1px solid var(--border);
-        }
-
-        .action-btn.secondary:hover {
-            background: var(--border);
-        }
-
-        .action-btn.danger {
-            background: #fee2e2;
-            color: var(--danger);
-        }
-
-        .action-btn.danger:hover {
-            background: #fecaca;
-        }
-
-        @media (max-width: 1024px) {
-            .container {
-                grid-template-columns: 1fr;
-                grid-template-areas: "header" "main" "chat";
-                height: auto;
-            }
-
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            .quick-actions {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal.active {
-            display: flex;
-        }
-
-        .modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            max-width: 500px;
-            width: 90%;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-        }
-
-        .modal-header {
-            font-size: 1.3em;
-            font-weight: 600;
-            margin-bottom: 20px;
-            color: var(--primary);
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-            font-size: 0.9em;
-        }
-
-        .form-group input,
-        .form-group textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            font-family: inherit;
-            font-size: 0.9em;
-        }
-
-        .form-group textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
-
-        .form-group input:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .modal-buttons {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-            margin-top: 20px;
-        }
-
-        .modal-buttons button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-
-        .modal-buttons .btn-cancel {
-            background: var(--light);
-            color: var(--dark);
-        }
-
-        .modal-buttons .btn-submit {
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
-        }
-
-        .timestamp {
-            font-size: 0.8em;
-            color: #999;
-            margin-top: 5px;
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--secondary);
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
+        <!-- HEADER -->
         <header>
             <div class="header-title">
-                <div>
-                    <h1>🤖 Trio IA Monitor</h1>
-                    <p>Gerenciamento autônomo de desenvolvimento</p>
-                </div>
+                <h1>Trio IA Monitor</h1>
+                <p>v9.2.85 - ShopVivaliz</p>
             </div>
             <div class="status-indicator">
                 <span class="status-dot"></span>
-                <span id="status-text">Ativo</span>
+                Agentes Online
             </div>
         </header>
 
-        <!-- Main Area -->
+        <!-- SIDEBAR COM HISTORICO DE CHATS -->
+        <div class="chat-sidebar">
+            <div class="sidebar-header">Historico de Chats</div>
+            <button class="btn-new-chat" onclick="createNewChat()">+ Nova Conversa</button>
+            <div class="chats-list" id="chats-list">
+                <div class="chat-item active" onclick="startNewChat()">
+                    <div class="chat-item-title">Chat Atual</div>
+                    <div class="chat-item-meta">Nova conversa</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AREA PRINCIPAL -->
         <div class="main-area">
-            <!-- Stats -->
             <div class="stats-grid">
                 <div class="stat-card">
-                    <div class="stat-number" id="total-tasks">10</div>
+                    <div class="stat-number" id="tasks-total">41</div>
                     <div class="stat-label">Total de Tarefas</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number" id="pending-tasks">10</div>
+                    <div class="stat-number" id="tasks-completed">17</div>
+                    <div class="stat-label">Completadas</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="tasks-pending">24</div>
                     <div class="stat-label">Pendentes</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number" id="completed-tasks">0</div>
-                    <div class="stat-label">Completas</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="completion-rate">0%</div>
-                    <div class="stat-label">Taxa Conclusão</div>
-                </div>
-            </div>
-
-            <!-- Progress -->
-            <div class="progress-section">
-                <h3>Progresso Geral</h3>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progress-fill" style="width: 0%">
-                        <span id="progress-text">0%</span>
-                    </div>
-                </div>
-                <div style="font-size: 0.85em; color: #666; margin-top: 8px;">
-                    Próxima execução: <strong id="next-run">Em ~30 min</strong>
-                </div>
-            </div>
-
-            <!-- Quick Actions -->
-            <div class="quick-actions">
-                <button class="action-btn primary" onclick="executeNow()">▶️ Executar Agora</button>
-                <button class="action-btn secondary" onclick="openAddTaskModal()">➕ Adicionar Tarefa</button>
-                <button class="action-btn secondary" id="pause-btn" onclick="togglePause()">⏸️ Pausar</button>
-                <button class="action-btn secondary" onclick="refreshData()">🔄 Atualizar</button>
-            </div>
-
-            <!-- Next Tasks -->
-            <div class="tasks-section">
-                <h3>⏭️ Próximas Tarefas</h3>
-                <div id="next-tasks-list">
-                    <p style="color: #999;">Carregando...</p>
-                </div>
-            </div>
-
-            <!-- Completed Tasks -->
-            <div class="tasks-section">
-                <h3>✅ Tarefas Completas</h3>
-                <div id="completed-tasks-list">
-                    <p style="color: #999;">Nenhuma tarefa completa ainda</p>
+                    <div class="stat-number" id="uptime">41%</div>
+                    <div class="stat-label">Progresso</div>
                 </div>
             </div>
         </div>
 
-        <!-- Chat Area -->
+        <!-- AREA DE CHAT -->
         <div class="chat-area">
-            <div class="chat-header">💬 Chat com Agentes IA</div>
+            <div class="chat-header">Conversando com Agentes</div>
             <div class="chat-messages" id="chat-messages">
-                <div class="message system">Chat iniciado - Envie instruções aos agentes</div>
+                <div class="message system">
+                    Bem-vindo ao chat com Agentes IA (Gemini, Claude, ChatGPT)
+                </div>
             </div>
             <div class="chat-input-area">
-                <input type="text" id="chat-input" placeholder="Descreva sua instrução..." onkeypress="if(event.key==='Enter') sendMessage()">
-                <input type="file" id="file-input" style="display: none;" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" onchange="uploadFile()">
-                <button class="btn-upload" onclick="document.getElementById('file-input').click()" title="Anexar arquivo (PDF, Office, Imagens)">📎</button>
-                <button class="btn-send" onclick="sendMessage()">→</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal para Adicionar Tarefa -->
-    <div class="modal" id="add-task-modal">
-        <div class="modal-content">
-            <div class="modal-header">Adicionar Nova Tarefa</div>
-            <div class="form-group">
-                <label>Título *</label>
-                <input type="text" id="task-title" placeholder="Ex: Integrar Stripe">
-            </div>
-            <div class="form-group">
-                <label>Descrição *</label>
-                <textarea id="task-desc" placeholder="Descreva o que precisa ser feito..."></textarea>
-            </div>
-            <div class="form-group">
-                <label>Prioridade</label>
-                <select id="task-priority" style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px;">
-                    <option value="low">Baixa</option>
-                    <option value="medium" selected>Média</option>
-                    <option value="high">Alta</option>
-                </select>
-            </div>
-            <div class="modal-buttons">
-                <button class="btn-cancel" onclick="closeAddTaskModal()">Cancelar</button>
-                <button class="btn-submit" onclick="submitAddTask()">Adicionar</button>
+                <input type="text" id="chat-input" placeholder="Digite sua mensagem..." onkeypress="if(event.key==='Enter') sendMessage()">
+                <button class="btn-send" onclick="sendMessage()">Enviar</button>
             </div>
         </div>
     </div>
 
     <script>
-        const API_BASE = '/api/monitor/api.php';
-        let isPaused = false;
-        let autoRefreshInterval;
+        const API_BASE = '/api/monitor';
+        let currentChatId = null;
 
-        // Inicializar
-        document.addEventListener('DOMContentLoaded', () => {
-            refreshData();
-            autoRefreshInterval = setInterval(refreshData, 5000); // Atualizar a cada 5s
-        });
+        // Carregar lista de chats ao iniciar
+        document.addEventListener('DOMContentLoaded', loadChats);
 
-        async function refreshData() {
+        // Carregar e exibir chats
+        async function loadChats() {
             try {
-                // Pegar status
-                const statusResp = await fetch(`${API_BASE}?action=status`);
-                const status = await statusResp.json();
+                const response = await fetch(`${API_BASE}/chat-history.php?action=list`);
+                const data = await response.json();
 
-                document.getElementById('total-tasks').textContent = status.queue.total;
-                document.getElementById('pending-tasks').textContent = status.queue.pending;
-                document.getElementById('completed-tasks').textContent = status.queue.completed;
-                document.getElementById('completion-rate').textContent = status.queue.completion_rate.toFixed(0) + '%';
+                if (data.chats && data.chats.length > 0) {
+                    const chatsList = document.getElementById('chats-list');
+                    chatsList.innerHTML = '';
 
-                const progressFill = document.getElementById('progress-fill');
-                progressFill.style.width = status.queue.completion_rate + '%';
-                document.getElementById('progress-text').textContent = status.queue.completion_rate.toFixed(0) + '%';
-
-                document.getElementById('status-text').textContent = status.executor.is_running ? 'Ativo' : 'Pausado';
-
-                // Pegar tarefas
-                const tasksResp = await fetch(`${API_BASE}?action=tasks`);
-                const tasks = await tasksResp.json();
-
-                updateTasksList('next-tasks-list', tasks.pending);
-                updateTasksList('completed-tasks-list', tasks.completed);
+                    data.chats.forEach(chat => {
+                        const div = document.createElement('div');
+                        div.className = 'chat-item';
+                        div.onclick = () => loadChat(chat.id);
+                        div.innerHTML = `
+                            <div class="chat-item-title">${chat.title}</div>
+                            <div class="chat-item-meta">${chat.messages_count} mensagens</div>
+                        `;
+                        chatsList.appendChild(div);
+                    });
+                }
             } catch (error) {
-                console.error('Erro ao atualizar dados:', error);
+                console.error('Erro ao carregar chats:', error);
             }
         }
 
-        function updateTasksList(elementId, tasks) {
-            const element = document.getElementById(elementId);
-            if (tasks.length === 0) {
-                element.innerHTML = '<p style="color: #999;">Nenhuma tarefa</p>';
-                return;
-            }
+        // Criar novo chat
+        async function createNewChat() {
+            const title = prompt('Nome da conversa:');
+            if (!title) return;
 
-            element.innerHTML = tasks.map(task => `
-                <div class="task-item ${task.status}">
-                    <div class="task-info">
-                        <div class="task-id">${task.id}</div>
-                        <div class="task-title">${task.title}</div>
-                        <div class="task-priority priority-${task.priority}">${task.priority.toUpperCase()}</div>
-                    </div>
-                </div>
-            `).join('');
+            try {
+                const response = await fetch(`${API_BASE}/chat-history.php?action=create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    currentChatId = data.chat_id;
+                    document.getElementById('chat-messages').innerHTML =
+                        '<div class="message system">Novo chat criado. Comece a conversar!</div>';
+                    loadChats();
+                }
+            } catch (error) {
+                console.error('Erro ao criar chat:', error);
+            }
         }
 
+        // Iniciar novo chat temporário
+        function startNewChat() {
+            currentChatId = null;
+            document.getElementById('chat-messages').innerHTML =
+                '<div class="message system">Bem-vindo ao chat com Agentes IA (Gemini, Claude, ChatGPT)</div>';
+        }
+
+        // Carregar chat anterior
+        async function loadChat(chatId) {
+            try {
+                const response = await fetch(`${API_BASE}/chat-history.php?action=load&chat_id=${chatId}`);
+                const data = await response.json();
+
+                if (data.chat) {
+                    currentChatId = chatId;
+                    const messagesContainer = document.getElementById('chat-messages');
+                    messagesContainer.innerHTML = '';
+
+                    data.chat.messages.forEach(msg => {
+                        addChatMessage(msg.content, msg.role);
+                    });
+
+                    // Marcar como ativo
+                    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+                    event.target.closest('.chat-item')?.classList.add('active');
+                }
+            } catch (error) {
+                console.error('Erro ao carregar chat:', error);
+            }
+        }
+
+        // Enviar mensagem
         async function sendMessage() {
             const input = document.getElementById('chat-input');
             const message = input.value.trim();
 
             if (!message) return;
 
-            // Adicionar mensagem do usuário
+            // Se nao tem chat ativo, criar um
+            if (!currentChatId) {
+                const title = `Conversa ${new Date().toLocaleTimeString('pt-BR')}`;
+                const response = await fetch(`${API_BASE}/chat-history.php?action=create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title })
+                });
+                const data = await response.json();
+                currentChatId = data.chat_id;
+            }
+
+            // Adicionar mensagem do usuario
             addChatMessage(message, 'user');
             input.value = '';
 
             try {
-                // 1. Registrar mensagem no webhook
-                const webhookResponse = await fetch('/api/monitor/chat-webhook.php', {
+                // Registrar mensagem no webhook
+                await fetch('/api/monitor/chat-webhook.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message })
+                    body: JSON.stringify({ message })
                 });
 
-                const webhookResult = await webhookResponse.json();
-                if (webhookResult.success) {
-                    addChatMessage('Agentes respondendo em 2 minutos...', 'system');
-                } else {
-                    console.error('Webhook error:', webhookResult);
+                // Salvar no historico
+                if (currentChatId) {
+                    await fetch(`${API_BASE}/chat-history.php?action=add-message`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chat_id: currentChatId,
+                            message,
+                            role: 'user'
+                        })
+                    });
                 }
+
+                addChatMessage('Agentes respondendo em 2 minutos...', 'system');
             } catch (error) {
                 console.error('Erro ao enviar:', error);
-                addChatMessage('Erro ao registrar mensagem.', 'agent');
+                addChatMessage('Erro ao processar mensagem.', 'agent');
             }
         }
 
+        // Adicionar mensagem ao chat
         function addChatMessage(text, type) {
             const container = document.getElementById('chat-messages');
             const div = document.createElement('div');
@@ -718,143 +542,6 @@
             container.appendChild(div);
             container.scrollTop = container.scrollHeight;
         }
-
-        async function executeNow() {
-            addChatMessage('Acionando executor agora...', 'system');
-            try {
-                const response = await fetch(`${API_BASE}?action=send-command`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: 'execute-now' })
-                });
-
-                const result = await response.json();
-                addChatMessage('✅ ' + result.response, 'agent');
-                setTimeout(refreshData, 2000);
-            } catch (error) {
-                addChatMessage('❌ Erro ao executar.', 'agent');
-            }
-        }
-
-        async function togglePause() {
-            isPaused = !isPaused;
-            const btn = document.getElementById('pause-btn');
-
-            try {
-                const response = await fetch(`${API_BASE}?action=send-command`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: isPaused ? 'pause' : 'resume' })
-                });
-
-                const result = await response.json();
-                addChatMessage((isPaused ? '⏸️' : '▶️') + ' ' + result.response, 'agent');
-                btn.textContent = isPaused ? '▶️ Retomar' : '⏸️ Pausar';
-                refreshData();
-            } catch (error) {
-                addChatMessage('❌ Erro ao pausar/retomar.', 'agent');
-            }
-        }
-
-        function openAddTaskModal() {
-            document.getElementById('add-task-modal').classList.add('active');
-        }
-
-        function closeAddTaskModal() {
-            document.getElementById('add-task-modal').classList.remove('active');
-        }
-
-        async function submitAddTask() {
-            const title = document.getElementById('task-title').value;
-            const desc = document.getElementById('task-desc').value;
-            const priority = document.getElementById('task-priority').value;
-
-            if (!title || !desc) {
-                alert('Preencha todos os campos');
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_BASE}?action=add-task`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title, description: desc, priority })
-                });
-
-                const result = await response.json();
-                if (result.success) {
-                    addChatMessage(`✅ Tarefa ${result.task.id} adicionada!`, 'agent');
-                    closeAddTaskModal();
-                    document.getElementById('task-title').value = '';
-                    document.getElementById('task-desc').value = '';
-                    refreshData();
-                }
-            } catch (error) {
-                addChatMessage('❌ Erro ao adicionar tarefa.', 'agent');
-            }
-        }
-
-        async function uploadFile() {
-            const fileInput = document.getElementById('file-input');
-            const file = fileInput.files[0];
-
-            if (!file) return;
-
-            addChatMessage(`📎 Enviando anexo: ${file.name} (${(file.size / 1024).toFixed(2)} KB)...`, 'system');
-
-            const formData = new FormData();
-            formData.append('file', file);
-
-            try {
-                const response = await fetch('/api/monitor/upload-attachment.php', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    addChatMessage(`✅ Anexo enviado: <a href="${result.file.url}" target="_blank">📄 ${result.file.name}</a>`, 'agent');
-                } else {
-                    addChatMessage(`❌ Erro: ${result.error}`, 'agent');
-                }
-            } catch (error) {
-                addChatMessage(`❌ Erro ao enviar anexo: ${error.message}`, 'agent');
-            }
-
-            fileInput.value = '';
-        }
     </script>
-
-    <!-- Footer com Versão -->
-    <footer style="
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: rgba(0,0,0,0.8);
-        color: #fff;
-        padding: 10px 20px;
-        font-size: 12px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-top: 1px solid #667eea;
-    ">
-        <div>
-            <strong>ShopVivaliz</strong> v9.2.90 |
-            <span id="system-status">🟢 Online</span> |
-            <span id="version-info">Trio IA Autônomo 24/7</span>
-        </div>
-        <div style="text-align: right;">
-            <span id="last-update">Atualizado agora</span>
-        </div>
-    </footer>
-
-    <style>
-        body {
-            padding-bottom: 50px;
-        }
-    </style>
 </body>
 </html>
