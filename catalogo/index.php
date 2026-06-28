@@ -30,10 +30,11 @@ if (file_exists($arquivo_produtos)) {
 
         // SYNC 198 PRODUTOS AO BANCO
         if (count($produtos) >= 190) {
+            // CREDENCIAIS CORRETAS DO SERVIDOR
             $db_host = getenv('DB_HOST') ?: 'localhost';
-            $db_user = getenv('DB_USER') ?: 'root';
+            $db_user = getenv('DB_USER') ?: 'shopv506_user';
             $db_pass = getenv('DB_PASS') ?: '';
-            $db_name = getenv('DB_NAME') ?: 'shopvivaliz';
+            $db_name = getenv('DB_NAME') ?: 'shopv506_shopvivaliz';
 
             $db = @new mysqli($db_host, $db_user, $db_pass, $db_name);
 
