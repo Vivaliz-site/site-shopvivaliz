@@ -213,27 +213,27 @@
       "title": "Adicionar suporte para assinaturas mensais",
       "description": "Criar sistema de products como servico. Renovacao automatica, cancelamento facil. Integrar com Stripe subscription.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:20:00Z",
-      "completed_at": "2026-06-27T18:05:15.026588"
+      "completed_at": "2026-06-28T20:39:02.663269Z"
     },
     {
       "id": "task-024",
       "title": "Implementar carrinho abandonado recovery",
       "description": "Enviar email automatico quando usuario abandona carrinho. Oferecer desconto para completar compra. Rastrear taxa de resgate.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:21:00Z",
-      "completed_at": "2026-06-27T18:05:15.541077"
+      "completed_at": "2026-06-28T20:39:02.663277Z"
     },
     {
       "id": "task-025",
       "title": "Criar marketplace para sellers terceirizados",
       "description": "Permitir que sellers abram lojas na plataforma. Sistema de comissao. Gestao de produtos e pedidos separado.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:22:00Z",
-      "completed_at": "2026-06-27T18:05:16.053578"
+      "completed_at": "2026-06-28T20:39:02.663279Z"
     },
     {
       "id": "task-026",
