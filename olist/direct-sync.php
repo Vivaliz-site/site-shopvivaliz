@@ -26,11 +26,20 @@ try {
 
     $refresh_token = null;
 
-    // Tentar ler de arquivo
-    $token_file = __DIR__ . '/../.tokens/olist_refresh_token.txt';
-    if (file_exists($token_file)) {
-        $refresh_token = trim(file_get_contents($token_file));
-        log_msg("  Token encontrado no arquivo");
+    // Tentar ler de sessão
+    session_start();
+    if (isset($_SESSION['olist_refresh_token'])) {
+        $refresh_token = $_SESSION['olist_refresh_token'];
+        log_msg("  Token encontrado em SESSION");
+    }
+
+    // Se não estiver em sessão, tentar ler de arquivo
+    if (!$refresh_token) {
+        $token_file = __DIR__ . '/../.tokens/olist_refresh_token.txt';
+        if (file_exists($token_file)) {
+            $refresh_token = trim(file_get_contents($token_file));
+            log_msg("  Token encontrado no arquivo");
+        }
     }
 
     // ========================================================================

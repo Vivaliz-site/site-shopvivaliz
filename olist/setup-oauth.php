@@ -55,7 +55,16 @@ if (isset($_GET['code'])) {
         error_log("[Setup OAuth] Parsed data: " . json_encode($data));
 
         if (isset($data['refresh_token'])) {
-            // Salvar refresh token
+            // Salvar em SESSION
+            session_start();
+            $_SESSION['olist_refresh_token'] = $data['refresh_token'];
+            $_SESSION['olist_access_token'] = $data['access_token'];
+            $_SESSION['olist_token_expires'] = time() + ($data['expires_in'] ?? 14400);
+            session_write_close();
+
+            error_log("[Setup OAuth] Token salvo em SESSION");
+
+            // Também salvar em arquivo como backup
             $token_dir = __DIR__ . '/../.tokens';
             if (!file_exists($token_dir)) {
                 @mkdir($token_dir, 0777, true);
@@ -65,7 +74,7 @@ if (isset($_GET['code'])) {
             $token_file = $token_dir . '/olist_refresh_token.txt';
             $result = file_put_contents($token_file, $data['refresh_token']);
 
-            error_log("[Setup OAuth] Token salvo em: $token_file, resultado: " . ($result ? 'SUCCESS' : 'FAILED'));
+            error_log("[Setup OAuth] Token também salvo em: $token_file, resultado: " . ($result ? 'SUCCESS' : 'FAILED'));
             @chmod($token_file, 0666);
 
             echo <<<HTML
