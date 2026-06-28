@@ -47,18 +47,25 @@
         }
 
         .tab-btn {
-            padding: 12px 20px;
-            border: none;
-            background: #f0f0f0;
+            padding: 12px 24px;
+            border: 2px solid #e5e7eb;
+            background: white;
             cursor: pointer;
             border-radius: 6px;
             font-weight: 600;
             transition: all 0.3s;
+            font-size: 1em;
+        }
+
+        .tab-btn:hover {
+            border-color: #2ECC71;
+            background: #f0f8f5;
         }
 
         .tab-btn.active {
             background: #2ECC71;
             color: white;
+            border-color: #2ECC71;
         }
 
         .tab-content {
@@ -441,10 +448,21 @@
             }
         }
 
-        // TAREFAS - Dados em localStorage
-        let tasks = JSON.parse(localStorage.getItem('shopvivaliz_tasks') || '[]');
+        // TAREFAS - Carregar do servidor OU localStorage
+        let tasks = [];
 
-        function loadTasks() {
+        async function loadTasks() {
+            // Tentar carregar do servidor primeiro
+            try {
+                const response = await fetch('/api/get-tasks.php');
+                if (response.ok) {
+                    tasks = await response.json();
+                }
+            } catch (e) {
+                // Fallback para localStorage
+                tasks = JSON.parse(localStorage.getItem('shopvivaliz_tasks') || '[]');
+            }
+
             const totalEl = document.getElementById('totalTasks');
             const pendingEl = document.getElementById('pendingTasks');
             const progressEl = document.getElementById('progressTasks');
@@ -452,7 +470,7 @@
             const listEl = document.getElementById('tasksList');
 
             const pending = tasks.filter(t => t.status === 'pending').length;
-            const progress = tasks.filter(t => t.status === 'progress').length;
+            const progress = tasks.filter(t => t.status === 'processing').length;
             const done = tasks.filter(t => t.status === 'done').length;
 
             if (totalEl) totalEl.textContent = tasks.length;
@@ -467,13 +485,13 @@
                     listEl.innerHTML = tasks.map((task, idx) => `
                         <div class="task-item ${task.status}">
                             <div class="task-header">
-                                <div class="task-title">${task.title}</div>
+                                <div class="task-title">${task.title || 'Sem título'}</div>
                                 <span class="task-badge ${task.status}">${statusLabel(task.status)}</span>
                             </div>
-                            ${task.desc ? `<div class="task-desc">${task.desc}</div>` : ''}
+                            ${task.description || task.desc ? `<div class="task-desc">${task.description || task.desc}</div>` : ''}
                             <div class="task-meta">
-                                <span>Prioridade: ${task.priority}</span>
-                                <span>Atribuída: ${task.assignee}</span>
+                                <span>Prioridade: ${task.priority || 'média'}</span>
+                                <span>Agente: ${task.assigned_to || task.assignee || 'N/A'}</span>
                             </div>
                         </div>
                     `).join('');
