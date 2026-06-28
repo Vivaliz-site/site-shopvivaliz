@@ -177,27 +177,27 @@
       "title": "Criar dashboard de analise de vendas",
       "description": "Implementar graficos de vendas por periodo, produto mais vendido, receita, taxa de conversao. Exportar relatorios em PDF.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:16:00Z",
-      "completed_at": "2026-06-27T18:05:12.971672"
+      "completed_at": "2026-06-28T15:54:12.662900Z"
     },
     {
       "id": "task-020",
       "title": "Implementar teste A/B para CTAs e landing pages",
       "description": "Criar sistema para testar diferentes versoes de paginas. Medir conversao e CTR. Aplicar vencedor automaticamente.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:17:00Z",
-      "completed_at": "2026-06-27T18:05:13.486355"
+      "completed_at": "2026-06-28T15:54:12.662911Z"
     },
     {
       "id": "task-021",
       "title": "Adicionar suporte a multiplas moedas",
       "description": "Permitir usuarios selecionar moeda (USD, EUR, BRL). Usar taxas de cambio em tempo real. Aceitar pagamento em diferentes moedas.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:18:00Z",
-      "completed_at": "2026-06-27T18:05:13.998454"
+      "completed_at": "2026-06-28T15:54:12.662912Z"
     },
     {
       "id": "task-022",
