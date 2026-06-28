@@ -105,27 +105,27 @@
       "title": "Implementar autenticacao OAuth2",
       "description": "Integrar login via Google e Facebook usando OAuth2. Permitir registro automatico na primeira autenticacao. Vincular contas existentes com OAuth.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:08:00Z",
-      "completed_at": "2026-06-27T18:05:08.855016"
+      "completed_at": "2026-06-28T10:09:44.707362"
     },
     {
       "id": "task-012",
       "title": "Criar sistema de wishlist",
       "description": "Permitir usuarios guardar produtos favoritos, compartilhar wishlist com outros usuarios. Notificar quando produto entra em promocao. Integrar com carrinho.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:09:00Z",
-      "completed_at": "2026-06-27T18:05:09.370396"
+      "completed_at": "2026-06-28T10:09:45.212679"
     },
     {
       "id": "task-013",
       "title": "Implementar recomendacoes de produtos via IA",
       "description": "Usar machine learning para recomendar produtos baseado no historico de compras e browsing do usuario. Exibir na homepage e apos checkout.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:10:00Z",
-      "completed_at": "2026-06-27T18:05:09.883058"
+      "completed_at": "2026-06-28T10:09:45.714170"
     },
     {
       "id": "task-014",
