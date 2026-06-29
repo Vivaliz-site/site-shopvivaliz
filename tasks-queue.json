@@ -249,27 +249,27 @@
       "title": "Implementar AR try-on para produtos",
       "description": "Usar WebAR/ARKit para permitir clientes experimentar produtos (roupas, oculos, moveis) em AR antes de comprar.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:24:00Z",
-      "completed_at": "2026-06-27T18:05:17.081302"
+      "completed_at": "2026-06-29T12:50:12.327576Z"
     },
     {
       "id": "task-028",
       "title": "Criar sistema de cupons e promocoes automaticas",
       "description": "Regras para aplicar cupons automaticamente baseado em compra anterior, valor do carrinho, fonte de trafego. Testes A/B.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:25:00Z",
-      "completed_at": "2026-06-27T18:05:17.595386"
+      "completed_at": "2026-06-29T12:50:12.327585Z"
     },
     {
       "id": "task-029",
       "title": "Adicionar integracao com Adobe Analytics",
       "description": "Rastrear eventos de compra, visualizacoes, clicks. Criar funnels. Debugar problemas de conversao.",
       "priority": "low",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:26:00Z",
-      "completed_at": "2026-06-27T18:05:18.108896"
+      "completed_at": "2026-06-29T12:50:12.327587Z"
     },
     {
       "id": "task-030",
