@@ -13,14 +13,17 @@ class TikTokIntegration:
     def __init__(self):
         self.access_token = os.getenv('TIKTOK_ACCESS_TOKEN', '')
         self.shop_id = os.getenv('TIKTOK_SHOP_ID', '')
-        self.api_base = 'https://open-api.tiktokglobalshop.com'
+        self.api_base = os.getenv('TIKTOK_API_BASE_URL', 'https://open-api.tiktokglobalshop.com')
+        self.products_api_url = os.getenv('SHOPVIVALIZ_PRODUCTS_API_URL', '')
 
     def update_all_products(self):
         """Atualiza todos os produtos automaticamente"""
         print("\n[TIKTOK] Iniciando atualizacao automatica")
         print("="*70)
 
-        products_to_update = self._load_products_from_performance()
+        products_to_update = self._load_products_from_api()
+        if not products_to_update:
+            products_to_update = self._load_products_from_performance()
 
         if not products_to_update:
             print("[INFO] Nenhum produto para atualizar")
@@ -65,6 +68,33 @@ class TikTokIntegration:
                         })
             return products
         except:
+            return []
+
+    def _load_products_from_api(self):
+        """Carrega produtos diretamente de uma API quando disponível."""
+        if not self.products_api_url:
+            return []
+
+        try:
+            response = requests.get(self.products_api_url, timeout=30)
+            response.raise_for_status()
+            payload = response.json()
+
+            items = payload.get('products') if isinstance(payload, dict) else payload
+            products = []
+            for row in items or []:
+                if not row.get('product_id'):
+                    continue
+                products.append({
+                    'product_id': str(row.get('product_id')),
+                    'name': row.get('name', f"Produto {row.get('product_id')}"),
+                    'title': row.get('title') or row.get('seo_title') or f"Adorei! Produto {row.get('product_id')}",
+                    'description': row.get('description') or row.get('seo_description') or '',
+                    'images': row.get('images') or [],
+                })
+            return products
+        except Exception as exc:
+            print(f"[AVISO] TikTok API de produtos indisponível: {exc}")
             return []
 
     def _load_images_for_product(self, product_id):
