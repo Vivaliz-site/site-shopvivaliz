@@ -17,6 +17,7 @@ TOKEN_URL = os.getenv(
     "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token",
 )
 PRODUCTS_API = os.getenv("OLIST_PRODUCTS_API", "https://api.tiny.com.br/api/v2/produtos.json")
+PROXY_URL    = os.getenv("OLIST_PROXY_URL", "")  # se definido, usa proxy PHP no servidor
 OUT_CSV = Path(os.getenv("OUT_CSV", "logs/olist-images-export.csv"))
 OUT_JSON = Path(os.getenv("OUT_JSON", "logs/olist-products-raw.json"))
 LIMIT = int(os.getenv("OLIST_PAGE_LIMIT", "50"))
@@ -55,6 +56,13 @@ def http_post_form(url: str, data: dict, timeout: int = 45) -> dict:
 
 
 def auth_context() -> dict:
+    # Modo proxy: usa o servidor como intermediário (contorna bloqueio de IP)
+    if PROXY_URL:
+        squad_token = os.getenv("SQUAD_TOKEN", "")
+        api_token   = os.getenv("TOKEN_API_OLIST") or os.getenv("OLIST_API_TOKEN") or ""
+        print(f"Usando proxy PHP: {PROXY_URL}")
+        return {"type": "proxy", "proxy_url": PROXY_URL, "squad_token": squad_token, "olist_token": api_token}
+
     api_token = os.getenv("OLIST_API_TOKEN") or os.getenv("TINY_API_TOKEN") or os.getenv("TOKEN_API_OLIST")
     if api_token:
         print("Usando token de API v2 por parametro seguro.")
@@ -91,8 +99,18 @@ def auth_context() -> dict:
 
 
 def http_get_json(url: str, auth: dict, params: dict, timeout: int = 45) -> dict:
-    query = dict(params)
+    query   = dict(params)
     headers = {"Accept": "application/json"}
+
+    if auth["type"] == "proxy":
+        # Chama o proxy PHP no servidor em vez da API diretamente
+        proxy_params = dict(params)
+        proxy_url    = auth["proxy_url"]
+        headers["X-Squad-Token"] = auth.get("squad_token", "")
+        headers["X-Olist-Token"] = auth.get("olist_token", "")
+        request = Request(f"{proxy_url}?{urlencode(proxy_params)}", headers=headers, method="GET")
+        return http_json(request, timeout=timeout)
+
     if auth["type"] == "query_token":
         query["token"] = auth["token"]
     else:
