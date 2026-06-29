@@ -88,19 +88,64 @@ class ShopeeIntegration:
             return []
 
     def _update_product_title(self, product_id, title):
-        """Atualiza título do produto"""
-        # Simulado - em produção faria chamada real à API
-        print(f"    └─ Título: {title[:50]}...")
+        """Atualiza título do produto via API"""
+        try:
+            url = f"{self.api_base}/api/v2/product/update_title"
+            payload = {
+                'product_id': int(product_id),
+                'title': title
+            }
+            response = requests.post(url, json=payload, headers=self.headers, timeout=30)
+            if response.status_code == 200:
+                print(f"    └─ Título: {title[:50]}... [ENVIADO]")
+                return True
+            else:
+                print(f"    └─ Título: ERRO {response.status_code}")
+                return False
+        except Exception as e:
+            print(f"    └─ Título: ERRO {str(e)}")
+            return False
 
     def _update_product_description(self, product_id, description):
-        """Atualiza descrição do produto"""
-        # Simulado - em produção faria chamada real à API
-        print(f"    └─ Descrição: {description[:50]}...")
+        """Atualiza descrição do produto via API"""
+        try:
+            url = f"{self.api_base}/api/v2/product/update_description"
+            payload = {
+                'product_id': int(product_id),
+                'description': description
+            }
+            response = requests.post(url, json=payload, headers=self.headers, timeout=30)
+            if response.status_code == 200:
+                print(f"    └─ Descrição: {description[:50]}... [ENVIADO]")
+                return True
+            else:
+                print(f"    └─ Descrição: ERRO {response.status_code}")
+                return False
+        except Exception as e:
+            print(f"    └─ Descrição: ERRO {str(e)}")
+            return False
 
     def _update_product_images(self, product_id, images):
-        """Atualiza imagens do produto"""
-        if images:
-            print(f"    └─ Imagens: {len(images)} uploads")
+        """Atualiza imagens do produto via API"""
+        if not images:
+            return False
+
+        try:
+            url = f"{self.api_base}/api/v2/product/update_images"
+            payload = {
+                'product_id': int(product_id),
+                'images': images[:4]  # Máximo 4 imagens
+            }
+            response = requests.post(url, json=payload, headers=self.headers, timeout=30)
+            if response.status_code == 200:
+                print(f"    └─ Imagens: {len(images)} uploads [ENVIADO]")
+                return True
+            else:
+                print(f"    └─ Imagens: ERRO {response.status_code}")
+                return False
+        except Exception as e:
+            print(f"    └─ Imagens: ERRO {str(e)}")
+            return False
 
 # CLI
 if __name__ == '__main__':
