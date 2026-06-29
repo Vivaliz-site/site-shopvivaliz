@@ -14,24 +14,39 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Deploy products-proxy.php via FTP
+      - name: Deploy products-proxy.php via FTP (com token embutido)
         shell: python
         env:
-          FTP_SERVER:     ${{ secrets.FTP_SERVER }}
-          FTP_USERNAME:   ${{ secrets.FTP_USERNAME }}
-          FTP_PASSWORD:   ${{ secrets.FTP_PASSWORD }}
-          FTP_PORT:       ${{ secrets.FTP_PORT }}
-          FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
-          SQUAD_TOKEN:    ${{ secrets.SQUAD_TOKEN }}
+          FTP_SERVER:      ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME:    ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD:    ${{ secrets.FTP_PASSWORD }}
+          FTP_PORT:        ${{ secrets.FTP_PORT }}
+          FTP_REMOTE_DIR:  ${{ secrets.FTP_REMOTE_DIR }}
+          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
+          SQUAD_TOKEN:     ${{ secrets.SQUAD_TOKEN }}
         run: |
-          import ftplib, os
-          from pathlib import Path
+          import ftplib, io, os, re
 
           server   = os.environ["FTP_SERVER"]
           user     = os.environ["FTP_USERNAME"]
           password = os.environ["FTP_PASSWORD"]
           port     = int(os.environ.get("FTP_PORT") or "21")
           base     = (os.environ.get("FTP_REMOTE_DIR") or "/").strip() or "/"
+          token    = os.environ.get("TOKEN_API_OLIST", "")
+          squad    = os.environ.get("SQUAD_TOKEN", "")
+
+          with open("api/olist/products-proxy.php", encoding="utf-8") as f:
+              php = f.read()
+
+          # Substituir fallback vazio pelo token real (embutido na implantação)
+          php = php.replace(
+              "getenv('TOKEN_API_OLIST') ?? ''",
+              f"getenv('TOKEN_API_OLIST') ?: '{token}'"
+          ).replace(
+              "getenv('SQUAD_TOKEN') ?: ''",
+              f"getenv('SQUAD_TOKEN') ?: '{squad}'"
+          )
+          content = php.encode("utf-8")
 
           def cwd_mkdir(ftp, path):
               if path.startswith("/"): ftp.cwd("/")
@@ -44,10 +59,9 @@ jobs:
           ftp.connect(server, port, timeout=45)
           ftp.login(user, password)
           cwd_mkdir(ftp, base.rstrip("/") + "/api/olist")
-          with open("api/olist/products-proxy.php", "rb") as fh:
-              ftp.storbinary("STOR products-proxy.php", fh)
+          ftp.storbinary("STOR products-proxy.php", io.BytesIO(content))
           ftp.quit()
-          print("✅ products-proxy.php enviado ao servidor")
+          print("✅ products-proxy.php (com token) enviado ao servidor")
 
       - name: Testar proxy
         env:
