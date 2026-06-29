@@ -58,31 +58,57 @@ jobs:
           ftp.quit()
           print("✅ shop-catalog-export.php (com tokens) enviado à raiz do servidor")
 
-      - name: Testar proxy (POST)
+      - name: Testar proxy via IP de origem (bypass Cloudflare)
         env:
-          SQUAD_TOKEN:    ${{ secrets.SQUAD_TOKEN }}
+          FTP_SERVER:   ${{ secrets.FTP_SERVER }}
+          SQUAD_TOKEN:  ${{ secrets.SQUAD_TOKEN }}
         run: |
-          echo "Testando proxy POST em https://dev.shopvivaliz.com.br/shop-catalog-export.php"
+          # Conectar diretamente ao IP do servidor (não via Cloudflare)
+          # FTP_SERVER = origin IP — bypass Cloudflare com header Host:
+          echo "Testando via origem HTTP direto..."
           STATUS=$(curl -s -o /tmp/proxy_test.json -w "%{http_code}" \
             -X POST \
+            -H "Host: dev.shopvivaliz.com.br" \
             -H "X-Squad: $SQUAD_TOKEN" \
             -d "pagina=1&limite=5" \
-            "https://dev.shopvivaliz.com.br/shop-catalog-export.php")
-          echo "HTTP Status: $STATUS"
-          cat /tmp/proxy_test.json | head -c 500
-          if [ "$STATUS" != "200" ]; then
-            echo "::error::Proxy retornou HTTP $STATUS"
-            exit 1
+            "http://$FTP_SERVER/shop-catalog-export.php")
+          echo "HTTP Status (origem): $STATUS"
+          cat /tmp/proxy_test.json | head -c 800
+
+          if [ "$STATUS" = "200" ]; then
+            echo "::notice::Proxy origem funcionando"
+            echo "PROXY_ORIGIN=http://$FTP_SERVER/shop-catalog-export.php" >> $GITHUB_ENV
+          else
+            echo "::warning::Origem HTTP $STATUS — tentando HTTPS..."
+            STATUS2=$(curl -s -o /tmp/proxy_test2.json -w "%{http_code}" \
+              -X POST \
+              -k \
+              -H "Host: dev.shopvivaliz.com.br" \
+              -H "X-Squad: $SQUAD_TOKEN" \
+              -d "pagina=1&limite=5" \
+              "https://$FTP_SERVER/shop-catalog-export.php")
+            echo "HTTP Status (HTTPS origem): $STATUS2"
+            cat /tmp/proxy_test2.json | head -c 800
+            if [ "$STATUS2" = "200" ]; then
+              echo "PROXY_ORIGIN=https://$FTP_SERVER/shop-catalog-export.php" >> $GITHUB_ENV
+            else
+              echo "PROXY_ORIGIN=" >> $GITHUB_ENV
+            fi
           fi
 
-      - name: Exportar produtos via proxy
+      - name: Exportar produtos via proxy de origem
         env:
-          OLIST_PROXY_URL: "https://dev.shopvivaliz.com.br/shop-catalog-export.php"
+          OLIST_PROXY_URL: ${{ env.PROXY_ORIGIN }}
           SQUAD_TOKEN:     ${{ secrets.SQUAD_TOKEN }}
           OUT_CSV:         logs/olist-images-export.csv
           OUT_JSON:        logs/olist-products-raw.json
         run: |
           mkdir -p logs
+          if [ -z "$OLIST_PROXY_URL" ]; then
+            echo "Proxy não disponível — tentando Tiny API com IP de origem como proxy de saída"
+            exit 1
+          fi
+          echo "Usando proxy: $OLIST_PROXY_URL"
           python3 scripts/export-olist-images-csv.py
           COUNT=$(python3 -c "
           import csv
