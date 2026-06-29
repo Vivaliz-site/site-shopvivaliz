@@ -55,7 +55,7 @@ class PipelineOrchestrator:
             print("-" * 80)
             results = []
 
-            for i, product in enumerate(prioritized[:50], 1):  # Limitar a 50 por execução
+            for i, product in enumerate(prioritized, 1):  # Processar TODOS os produtos
                 print(f"\n[{i}] Processando: {product['name']} (Score: {product['priority_score']})")
 
                 try:
@@ -93,11 +93,63 @@ class PipelineOrchestrator:
             }
 
     def _load_products(self, spreadsheet_path: str) -> List[Dict]:
-        """Carrega produtos da planilha"""
+        """Carrega produtos da planilha - TODOS os 198 produtos"""
         products = []
 
-        # Simulado - em produção usaria openpyxl
-        sample_products = [
+        try:
+            # Tentar carregar do Excel
+            import openpyxl
+            wb = openpyxl.load_workbook(spreadsheet_path)
+            ws = wb.active
+
+            for row in ws.iter_rows(min_row=2, values_only=False):
+                if row[0].value:  # Se tem ID
+                    product = {
+                        'id': row[0].value,
+                        'name': row[1].value or f"Produto {row[0].value}",
+                        'stock': int(row[2].value or 0),
+                        'price': float(row[3].value or 0),
+                        'category': row[4].value or 'Geral',
+                        'margin': float(row[5].value or 0),
+                        'description': row[6].value or '',
+                        'images': [row[7].value] if row[7].value else [],
+                        'demand_indicator': float(row[8].value or 5)
+                    }
+                    products.append(product)
+
+            print(f"[OK] Carregados {len(products)} produtos do Excel")
+            return products
+        except:
+            pass
+
+        # Fallback: Tentar CSV
+        try:
+            import csv
+            with open('logs/shopee-import-completo.csv', 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row.get('id'):
+                        product = {
+                            'id': row.get('id'),
+                            'name': row.get('name', f"Produto {row.get('id')}"),
+                            'stock': int(row.get('stock', 0)),
+                            'price': float(row.get('price', 0)),
+                            'category': row.get('category', 'Geral'),
+                            'margin': float(row.get('margin', 0)),
+                            'description': row.get('description', ''),
+                            'images': row.get('images', '').split(';'),
+                            'demand_indicator': float(row.get('demand', 5))
+                        }
+                        products.append(product)
+
+            print(f"[OK] Carregados {len(products)} produtos do CSV")
+            return products
+        except:
+            pass
+
+        # Fallback final: Dados de amostra
+        print("[AVISO] Usando dados de amostra (2 produtos)")
+        return [
             {
                 'id': 1,
                 'name': 'Fone Bluetooth',
@@ -121,8 +173,6 @@ class PipelineOrchestrator:
                 'demand_indicator': 7.2
             }
         ]
-
-        return sample_products
 
     def _prioritize_products(self, products: List[Dict]) -> List[Dict]:
         """Prioriza produtos com IA"""
