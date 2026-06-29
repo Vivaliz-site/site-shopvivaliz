@@ -18,11 +18,23 @@ if sys.platform == 'win32':
 
 class IAImageGenerator:
     def __init__(self):
-        self.api_key = os.getenv('OPENAI_API_KEY', '')
+        # Tentar múltiplos nomes de variáveis
+        self.api_key = (
+            os.getenv('OPENAI_API_KEY') or
+            os.getenv('OPENAI_API_KEY_SK') or
+            os.getenv('OPENAI_KEY') or
+            os.getenv('OPENAI_SECRET') or
+            ''
+        )
         self.output_dir = 'storage/processed'
 
         if not self.api_key:
-            print("⚠️  OPENAI_API_KEY não configurada!")
+            print("[INFO] OPENAI_API_KEY nao configurada")
+            print("       Tente estes nomes nos GitHub Secrets:")
+            print("       - OPENAI_API_KEY")
+            print("       - OPENAI_API_KEY_SK")
+            print("       - OPENAI_KEY")
+            print("       - OPENAI_SECRET")
 
     def generate_product_images(self, product: Dict) -> Dict:
         """Gera 4 imagens REAIS para um produto e salva em disco"""
