@@ -20,6 +20,9 @@ from seo.seo_generator import SEOGenerator
 from ia.image_generator import IAImageGenerator
 from abtest.ab_tester import ABTester
 from analytics.performance_tracker import PerformanceTracker
+from integrations.shopee import ShopeeIntegration
+from integrations.tiktok import TikTokIntegration
+from integrations.marketplace_validator import MarketplaceValidator
 
 class PipelineOrchestrator:
     def __init__(self):
@@ -28,10 +31,51 @@ class PipelineOrchestrator:
         self.image_generator = IAImageGenerator()
         self.ab_tester = ABTester()
         self.tracker = PerformanceTracker()
+        self.shopee = ShopeeIntegration()
+        self.tiktok = TikTokIntegration()
+        self.validator = MarketplaceValidator()
 
         self.processed_count = 0
         self.failed_count = 0
         self.start_time = datetime.now()
+        self.csv_log_file = Path('logs.csv')
+        self._init_csv_log()
+
+    def _init_csv_log(self) -> None:
+        if self.csv_log_file.exists():
+            return
+        self.csv_log_file.parent.mkdir(parents=True, exist_ok=True)
+        with self.csv_log_file.open('w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=[
+                'timestamp',
+                'product_id',
+                'product_name',
+                'priority_score',
+                'shopee_seo_score',
+                'tiktok_seo_score',
+                'image_quality_score',
+                'ab_winner_variant',
+                'status',
+                'error',
+            ])
+            writer.writeheader()
+
+    def _append_csv_log(self, row: Dict) -> None:
+        self.csv_log_file.parent.mkdir(parents=True, exist_ok=True)
+        with self.csv_log_file.open('a', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=[
+                'timestamp',
+                'product_id',
+                'product_name',
+                'priority_score',
+                'shopee_seo_score',
+                'tiktok_seo_score',
+                'image_quality_score',
+                'ab_winner_variant',
+                'status',
+                'error',
+            ])
+            writer.writerow(row)
 
     def run_complete_pipeline(self, spreadsheet_path: str) -> Dict:
         """Executa pipeline completo automaticamente"""
@@ -62,6 +106,18 @@ class PipelineOrchestrator:
                     result = self._process_single_product(product)
                     results.append(result)
                     self.processed_count += 1
+                    self._append_csv_log({
+                        'timestamp': datetime.now().isoformat(),
+                        'product_id': result.get('product_id'),
+                        'product_name': result.get('product_name'),
+                        'priority_score': product.get('priority_score', 0),
+                        'shopee_seo_score': result.get('steps', {}).get('shopee_seo', {}).get('quality_score', 0),
+                        'tiktok_seo_score': result.get('steps', {}).get('tiktok_seo', {}).get('quality_score', 0),
+                        'image_quality_score': result.get('steps', {}).get('images', {}).get('quality_score', 0),
+                        'ab_winner_variant': result.get('steps', {}).get('ab_test', {}).get('variant', ''),
+                        'status': 'success',
+                        'error': '',
+                    })
                     print(f"    [OK] Concluído com sucesso")
                 except Exception as e:
                     self.failed_count += 1
@@ -71,6 +127,18 @@ class PipelineOrchestrator:
                         'status': 'failed',
                         'error': str(e)
                     })
+                    self._append_csv_log({
+                        'timestamp': datetime.now().isoformat(),
+                        'product_id': product.get('id'),
+                        'product_name': product.get('name', ''),
+                        'priority_score': product.get('priority_score', 0),
+                        'shopee_seo_score': 0,
+                        'tiktok_seo_score': 0,
+                        'image_quality_score': 0,
+                        'ab_winner_variant': '',
+                        'status': 'failed',
+                        'error': str(e),
+                    })
 
             # 4. Gerar relatório final
             print("\n" + "="*80)
@@ -79,7 +147,7 @@ class PipelineOrchestrator:
             print("="*80)
 
             return {
-                'status': 'success',
+                'status': 'success' if self.failed_count < len(prioritized) else 'partial',
                 'processed': self.processed_count,
                 'failed': self.failed_count,
                 'results': results
@@ -218,6 +286,53 @@ class PipelineOrchestrator:
             'impressions': 500,
             'sales': 25
         })
+
+        # Passo 6: Atualizar Shopee e TikTok sem alterar preço
+        marketplace_payload = {
+            'product_id': str(product_id),
+            'name': product.get('name', ''),
+            'title_shopee': shopee_seo['title'],
+            'description_shopee': shopee_seo['description'],
+            'title_tiktok': tiktok_seo['title'],
+            'description_tiktok': tiktok_seo['description'],
+            'images': [img.get('local_file') for img in images['images'] if img.get('local_file')],
+            'price': product.get('price'),
+        }
+
+        try:
+            self.shopee._update_product_title(product_id, marketplace_payload['title_shopee'])
+            self.shopee._update_product_description(product_id, marketplace_payload['description_shopee'])
+            self.shopee._update_product_images(product_id, marketplace_payload['images'])
+        except Exception as e:
+            print(f"    [AVISO] Falha Shopee para {product_id}: {e}")
+
+        try:
+            self.tiktok._update_product_title(product_id, marketplace_payload['title_tiktok'])
+            self.tiktok._update_product_description(product_id, marketplace_payload['description_tiktok'])
+            self.tiktok._update_product_images(product_id, marketplace_payload['images'])
+        except Exception as e:
+            print(f"    [AVISO] Falha TikTok para {product_id}: {e}")
+
+        try:
+            primary_image_url = ''
+            if result['steps']['images']['images']:
+                first_success = next((img for img in result['steps']['images']['images'] if img.get('local_file')), None)
+                if first_success:
+                    primary_image_url = str(first_success.get('local_file', ''))
+            self.validator.validate_shopee_update(
+                product_id,
+                marketplace_payload['title_shopee'],
+                marketplace_payload['description_shopee'],
+                primary_image_url,
+            )
+            self.validator.validate_tiktok_update(
+                product_id,
+                marketplace_payload['title_tiktok'],
+                marketplace_payload['description_tiktok'],
+                primary_image_url,
+            )
+        except Exception as e:
+            print(f"    [AVISO] Validação de marketplace falhou para {product_id}: {e}")
 
         result['status'] = 'success'
         return result
