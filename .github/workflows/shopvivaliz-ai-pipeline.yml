@@ -1,0 +1,317 @@
+name: ShopVivaliz AI Image Pipeline
+
+# Pipeline completo de imagens IA - roda a cada 6 horas
+# Etapas: exportar produtos → gerar imagens IA → auto-otimizar → publicar marketplace → A/B test
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'     # a cada 6 horas
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Limite de produtos (0 = todos)'
+        required: false
+        default: '0'
+        type: string
+      dry_run:
+        description: 'Dry-run (não gera imagens reais)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      skip_publish:
+        description: 'Pular publicação no marketplace'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      skip_ab:
+        description: 'Pular registro de A/B test'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+
+concurrency:
+  group: shopvivaliz-ai-pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # ETAPA 1 + 2: Exportar produtos Olist e extrair atributos
+  # ──────────────────────────────────────────────────────────────────────────
+  export-products:
+    name: "1-2 · Exportar produtos e atributos"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      products_count: ${{ steps.export.outputs.products_count }}
+      csv_available:  ${{ steps.export.outputs.csv_available }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Exportar produtos e imagens Olist
+        id: export
+        env:
+          OLIST_CLIENT_ID:     ${{ secrets.OLIST_CLIENT_ID }}
+          OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
+          OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
+          OLIST_ACCESS_TOKEN:  ${{ secrets.OLIST_ACCESS_TOKEN }}
+          OLIST_API_TOKEN:     ${{ secrets.TOKEN_API_OLIST }}
+          TINY_ACCESS_TOKEN:   ${{ secrets.TINY_ACCESS_TOKEN }}
+          TINY_API_TOKEN:      ${{ secrets.TINY_API_TOKEN }}
+          OUT_CSV:  logs/olist-images-export.csv
+          OUT_JSON: logs/olist-products-raw.json
+        run: |
+          mkdir -p logs
+          python3 scripts/export-olist-images-csv.py
+          COUNT=$(python3 -c "import csv; f=open('logs/olist-images-export.csv', encoding='utf-8-sig'); r=list(csv.DictReader(f)); print(sum(1 for row in r if row.get('primary_image_url','').startswith('http')))" 2>/dev/null || echo "0")
+          echo "products_count=$COUNT" >> $GITHUB_OUTPUT
+          echo "csv_available=true"   >> $GITHUB_OUTPUT
+          echo "Produtos com imagem: $COUNT"
+
+      - name: Upload CSV de produtos
+        uses: actions/upload-artifact@v4
+        with:
+          name: products-export
+          path: |
+            logs/olist-images-export.csv
+            logs/olist-products-raw.json
+          retention-days: 1
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # ETAPA 3 + 4: Gerar imagens IA (GPT-4o Vision + DALL-E 3)
+  # ──────────────────────────────────────────────────────────────────────────
+  generate-images:
+    name: "3-4 · Gerar imagens IA (4 tipos por produto)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    needs: export-products
+    if: needs.export-products.outputs.csv_available == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download CSV de produtos
+        uses: actions/download-artifact@v4
+        with:
+          name: products-export
+          path: logs/
+
+      - name: Gerar imagens com IA
+        env:
+          OPENAI_API_KEY:   ${{ secrets.OPENAI_API_KEY }}
+          FTP_SERVER:       ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME:     ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD:     ${{ secrets.FTP_PASSWORD }}
+          FTP_PORT:         ${{ secrets.FTP_PORT }}
+          FTP_REMOTE_DIR:   ${{ secrets.FTP_REMOTE_DIR }}
+          SITE_BASE_URL:    https://dev.shopvivaliz.com.br
+          AI_LIMIT:         ${{ github.event.inputs.limit || '0' }}
+          AI_IMAGES_DIR:    storage/ai-images
+          AI_REPORTS_DIR:   logs
+        run: |
+          mkdir -p storage/ai-images logs
+          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+          LIMIT="${{ github.event.inputs.limit || '0' }}"
+          ARGS="--input logs/olist-images-export.csv"
+          [ "$LIMIT" != "0" ] && ARGS="$ARGS --limit $LIMIT"
+          [ "$DRY_RUN" = "true" ] && ARGS="$ARGS --dry-run"
+          python3 scripts/generate-ai-images.py $ARGS
+
+      - name: Upload relatório de imagens IA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-images-report
+          path: |
+            logs/ai-images-report.csv
+            logs/ai-images-report.json
+          retention-days: 7
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # ETAPA 7: Auto-otimização (detecta e re-gera imagens ruins)
+  # ──────────────────────────────────────────────────────────────────────────
+  auto-optimize:
+    name: "7 · Auto-otimização de imagens"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: generate-images
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download relatório de imagens
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-images-report
+          path: logs/
+
+      - name: Detectar e re-gerar imagens ruins
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SQUAD_TOKEN:    ${{ secrets.SQUAD_TOKEN }}
+          SITE_BASE_URL:  https://dev.shopvivaliz.com.br
+          FTP_SERVER:     ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME:   ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD:   ${{ secrets.FTP_PASSWORD }}
+          FTP_PORT:       ${{ secrets.FTP_PORT }}
+          FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+        run: |
+          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+          ARGS="--report logs/ai-images-report.json --out logs/auto-optimize-report.json"
+          [ "$DRY_RUN" = "true" ] && ARGS="$ARGS --dry-run"
+          python3 scripts/auto-optimize-images.py $ARGS
+
+      - name: Upload relatório de otimização
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-optimize-report
+          path: logs/auto-optimize-report.json
+          retention-days: 3
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # ETAPA 9: Publicar no marketplace (Shopee imagem branca, TikTok lifestyle)
+  # ──────────────────────────────────────────────────────────────────────────
+  publish-marketplace:
+    name: "9 · Publicar imagens no marketplace"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: auto-optimize
+    if: github.event.inputs.skip_publish != 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download relatório de imagens
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-images-report
+          path: logs/
+
+      - name: Publicar imagens no Shopee e TikTok
+        env:
+          OLIST_ACCESS_TOKEN:  ${{ secrets.OLIST_ACCESS_TOKEN }}
+          TINY_ACCESS_TOKEN:   ${{ secrets.TINY_ACCESS_TOKEN }}
+          TINY_API_TOKEN:      ${{ secrets.TINY_API_TOKEN }}
+          OLIST_CLIENT_ID:     ${{ secrets.OLIST_CLIENT_ID }}
+          OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
+          OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
+          ERP_API_TOKEN:       ${{ secrets.ERP_API_TOKEN }}
+        run: |
+          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+          LIMIT="${{ github.event.inputs.limit || '0' }}"
+          ARGS="--report logs/ai-images-report.json --out logs/publish-report.json"
+          [ "$LIMIT" != "0" ] && ARGS="$ARGS --limit $LIMIT"
+          [ "$DRY_RUN" = "true" ] && ARGS="$ARGS --dry-run"
+          python3 scripts/publish-to-marketplace.py $ARGS
+
+      - name: Upload relatório de publicação
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-report
+          path: logs/publish-report.json
+          retention-days: 7
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # ETAPA 6: Registrar sessões A/B test
+  # ──────────────────────────────────────────────────────────────────────────
+  ab-test-register:
+    name: "6 · Registrar A/B tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: publish-marketplace
+    if: |
+      always() &&
+      needs.publish-marketplace.result != 'cancelled' &&
+      github.event.inputs.skip_ab != 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download relatório de imagens
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-images-report
+          path: logs/
+
+      - name: Registrar sessões A/B
+        env:
+          SQUAD_TOKEN:   ${{ secrets.SQUAD_TOKEN }}
+          SITE_BASE_URL: https://dev.shopvivaliz.com.br
+        run: |
+          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+          ARGS="register --report logs/ai-images-report.json --out logs/ab-test-report.json"
+          [ "$DRY_RUN" = "true" ] && ARGS="$ARGS --dry-run"
+          python3 scripts/ab-test-manager.py $ARGS || true
+
+      - name: Analisar sessões A/B existentes e declarar vencedores
+        env:
+          SQUAD_TOKEN:   ${{ secrets.SQUAD_TOKEN }}
+          SITE_BASE_URL: https://dev.shopvivaliz.com.br
+        run: |
+          python3 scripts/ab-test-manager.py analyze || true
+
+      - name: Upload relatório A/B
+        uses: actions/upload-artifact@v4
+        with:
+          name: ab-test-report
+          path: logs/ab-test-report.json
+          retention-days: 30
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Resumo final
+  # ──────────────────────────────────────────────────────────────────────────
+  pipeline-summary:
+    name: "Resumo do pipeline"
+    runs-on: ubuntu-latest
+    needs: [export-products, generate-images, auto-optimize, publish-marketplace, ab-test-register]
+    if: always()
+
+    steps:
+      - name: Exibir resumo
+        run: |
+          echo "=== SHOPVIVALIZ AI PIPELINE ==="
+          echo "Data: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          echo "Etapa 1-2 (Export):      ${{ needs.export-products.result }}"
+          echo "Etapa 3-4 (Generate AI): ${{ needs.generate-images.result }}"
+          echo "Etapa 7   (Optimize):    ${{ needs.auto-optimize.result }}"
+          echo "Etapa 9   (Publish):     ${{ needs.publish-marketplace.result }}"
+          echo "Etapa 6   (A/B Test):    ${{ needs.ab-test-register.result }}"
+          echo ""
+          echo "Produtos exportados: ${{ needs.export-products.outputs.products_count }}"
