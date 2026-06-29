@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""
-Exporta produtos e imagens Olist/Tiny para CSV.
-
-Uso local:
-  OLIST_CLIENT_ID=... OLIST_CLIENT_SECRET=... OLIST_REFRESH_TOKEN=... python export_olist_images_to_csv.py
-
-Uso GitHub Actions:
-  Configure os secrets OLIST_CLIENT_ID, OLIST_CLIENT_SECRET e OLIST_REFRESH_TOKEN.
-  O CSV sera salvo em logs/olist-images-export.csv por padrao.
-"""
+"""Exporta produtos e URLs de imagens Olist/Tiny para CSV sem imprimir secrets."""
 
 import csv
 import json
@@ -17,11 +8,14 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
-from urllib.error import HTTPError, URLError
 
-TOKEN_URL = os.getenv("OLIST_TOKEN_URL", "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token")
+TOKEN_URL = os.getenv(
+    "OLIST_TOKEN_URL",
+    "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token",
+)
 PRODUCTS_API = os.getenv("OLIST_PRODUCTS_API", "https://api.tiny.com.br/api/v2/produtos.json")
 OUT_CSV = Path(os.getenv("OUT_CSV", "logs/olist-images-export.csv"))
 OUT_JSON = Path(os.getenv("OUT_JSON", "logs/olist-products-raw.json"))
@@ -30,21 +24,9 @@ MAX_PAGES = int(os.getenv("OLIST_MAX_PAGES", "20"))
 SLEEP_SECONDS = float(os.getenv("OLIST_SLEEP_SECONDS", "0.3"))
 
 
-def fail(message: str, code: int = 1):
+def fail(message: str, code: int = 1) -> None:
     print(f"ERRO: {message}", file=sys.stderr)
     sys.exit(code)
-
-
-def http_post_form(url: str, data: dict, timeout: int = 45) -> dict:
-    body = urlencode(data).encode("utf-8")
-    request = Request(url, data=body, headers={"Content-Type": "application/x-www-form-urlencoded"}, method="POST")
-    return http_json(request, timeout=timeout)
-
-
-def http_get_json(url: str, token: str, params: dict, timeout: int = 45) -> dict:
-    full_url = f"{url}?{urlencode(params)}"
-    request = Request(full_url, headers={"Accept": "application/json", "Authorization": f"Bearer {token}"}, method="GET")
-    return http_json(request, timeout=timeout)
 
 
 def http_json(request: Request, timeout: int = 45) -> dict:
@@ -59,24 +41,44 @@ def http_json(request: Request, timeout: int = 45) -> dict:
         fail(f"Falha de rede em {request.full_url}: {exc}")
     except json.JSONDecodeError as exc:
         fail(f"Resposta nao e JSON valido em {request.full_url}: {exc}")
+    return {}
 
 
-def get_access_token() -> str:
-    direct_token = os.getenv("OLIST_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
-    if direct_token:
-        print("Usando access token direto do ambiente.")
-        return direct_token
+def http_post_form(url: str, data: dict, timeout: int = 45) -> dict:
+    request = Request(
+        url,
+        data=urlencode(data).encode("utf-8"),
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    return http_json(request, timeout=timeout)
+
+
+def auth_context() -> dict:
+    api_token = os.getenv("OLIST_API_TOKEN") or os.getenv("TINY_API_TOKEN") or os.getenv("TOKEN_API_OLIST")
+    if api_token:
+        print("Usando token de API v2 por parametro seguro.")
+        return {"type": "query_token", "token": api_token}
+
+    access_token = os.getenv("OLIST_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
+    if access_token:
+        print("Usando access token Bearer direto do ambiente.")
+        return {"type": "bearer", "token": access_token}
 
     client_id = os.getenv("OLIST_CLIENT_ID") or os.getenv("TINY_CLIENT_ID")
     client_secret = os.getenv("OLIST_CLIENT_SECRET") or os.getenv("TINY_CLIENT_SECRET")
     refresh_token = os.getenv("OLIST_REFRESH_TOKEN") or os.getenv("TINY_REFRESH_TOKEN")
-
     if not client_id or not client_secret:
-        fail("Configure OLIST_CLIENT_ID e OLIST_CLIENT_SECRET nos secrets.")
+        fail("Configure OLIST_API_TOKEN/TOKEN_API_OLIST ou OLIST_CLIENT_ID e OLIST_CLIENT_SECRET.")
 
     if refresh_token:
         print("Renovando access token com refresh_token...")
-        payload = {"grant_type": "refresh_token", "client_id": client_id, "client_secret": client_secret, "refresh_token": refresh_token}
+        payload = {
+            "grant_type": "refresh_token",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+        }
     else:
         print("Refresh token nao encontrado. Tentando client_credentials...")
         payload = {"grant_type": "client_credentials", "client_id": client_id, "client_secret": client_secret}
@@ -85,7 +87,18 @@ def get_access_token() -> str:
     access_token = token_response.get("access_token")
     if not access_token:
         fail(f"Token nao retornado. Resposta: {json.dumps(token_response, ensure_ascii=False)[:1000]}")
-    return access_token
+    return {"type": "bearer", "token": access_token}
+
+
+def http_get_json(url: str, auth: dict, params: dict, timeout: int = 45) -> dict:
+    query = dict(params)
+    headers = {"Accept": "application/json"}
+    if auth["type"] == "query_token":
+        query["token"] = auth["token"]
+    else:
+        headers["Authorization"] = f"Bearer {auth['token']}"
+    request = Request(f"{url}?{urlencode(query)}", headers=headers, method="GET")
+    return http_json(request, timeout=timeout)
 
 
 def normalize_product(item):
@@ -109,7 +122,7 @@ def get_nested(data: dict, *paths, default=""):
     return default
 
 
-def extract_images(product: dict):
+def extract_images(product: dict) -> list:
     images = []
 
     def add(url, source):
@@ -135,7 +148,13 @@ def extract_images(product: dict):
     return images
 
 
-def extract_products(response: dict):
+def extract_products(response: dict) -> list:
+    retorno = response.get("retorno")
+    if isinstance(retorno, dict):
+        for key in ("produtos", "products", "data", "items"):
+            value = retorno.get(key)
+            if isinstance(value, list):
+                return value
     for key in ("produtos", "products", "data", "items"):
         value = response.get(key)
         if isinstance(value, list):
@@ -143,68 +162,81 @@ def extract_products(response: dict):
     return []
 
 
-def fetch_all_products(token: str):
+def fetch_all_products(auth: dict) -> list:
     all_products = []
     for page in range(1, MAX_PAGES + 1):
         print(f"Buscando pagina {page}...")
-        response = http_get_json(PRODUCTS_API, token, {"limite": LIMIT, "pagina": page, "formato": "json"})
+        response = http_get_json(PRODUCTS_API, auth, {"limite": LIMIT, "pagina": page, "formato": "json"})
         products = extract_products(response)
         print(f"  Retornados: {len(products)}")
         if not products:
             break
-        all_products.extend([normalize_product(p) for p in products])
+        all_products.extend([normalize_product(product) for product in products])
         if len(products) < LIMIT:
             break
         time.sleep(SLEEP_SECONDS)
     return all_products
 
 
-def build_rows(products):
+def build_rows(products: list) -> list:
     now = datetime.now(timezone.utc).isoformat()
     rows = []
     for product in products:
         images = extract_images(product)
         image_urls = [img["url"] for img in images]
         image_sources = [img["source"] for img in images]
-        rows.append({
-            "exported_at": now,
-            "olist_id": get_nested(product, "id", "idProduto", "id_produto"),
-            "sku": get_nested(product, "codigo", "sku", "codigo_sku"),
-            "nome": get_nested(product, "nome", "descricao", "name"),
-            "preco_venda": get_nested(product, "preco_venda", "preco", "price"),
-            "estoque_atual": get_nested(product, "estoque_atual", "estoque", "stock"),
-            "primary_image_url": image_urls[0] if image_urls else "",
-            "images_count": len(image_urls),
-            "all_image_urls": " | ".join(image_urls),
-            "image_sources": " | ".join(image_sources),
-            "raw_json": json.dumps(product, ensure_ascii=False, separators=(",", ":")),
-        })
+        rows.append(
+            {
+                "exported_at": now,
+                "olist_id": get_nested(product, "id", "idProduto", "id_produto"),
+                "sku": get_nested(product, "codigo", "sku", "codigo_sku"),
+                "nome": get_nested(product, "nome", "descricao", "name"),
+                "preco_venda": get_nested(product, "preco_venda", "preco", "price"),
+                "estoque_atual": get_nested(product, "estoque_atual", "estoque", "stock"),
+                "primary_image_url": image_urls[0] if image_urls else "",
+                "images_count": len(image_urls),
+                "all_image_urls": " | ".join(image_urls),
+                "image_sources": " | ".join(image_sources),
+                "raw_json": json.dumps(product, ensure_ascii=False, separators=(",", ":")),
+            }
+        )
     return rows
 
 
-def write_outputs(products, rows):
+def write_outputs(products: list, rows: list) -> None:
     OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = ["exported_at", "olist_id", "sku", "nome", "preco_venda", "estoque_atual", "primary_image_url", "images_count", "all_image_urls", "image_sources", "raw_json"]
-    with OUT_CSV.open("w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+    fieldnames = [
+        "exported_at",
+        "olist_id",
+        "sku",
+        "nome",
+        "preco_venda",
+        "estoque_atual",
+        "primary_image_url",
+        "images_count",
+        "all_image_urls",
+        "image_sources",
+        "raw_json",
+    ]
+    with OUT_CSV.open("w", newline="", encoding="utf-8-sig") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
-    with OUT_JSON.open("w", encoding="utf-8") as f:
-        json.dump({"total": len(products), "produtos": products}, f, ensure_ascii=False, indent=2)
+    with OUT_JSON.open("w", encoding="utf-8") as json_file:
+        json.dump({"total": len(products), "produtos": products}, json_file, ensure_ascii=False, indent=2)
 
 
-def main():
-    token = get_access_token()
-    products = fetch_all_products(token)
+def main() -> None:
+    auth = auth_context()
+    products = fetch_all_products(auth)
     rows = build_rows(products)
     write_outputs(products, rows)
     with_images = sum(1 for row in rows if row["primary_image_url"])
-    without_images = len(rows) - with_images
     print("EXPORTACAO CONCLUIDA")
     print(f"Total produtos: {len(rows)}")
     print(f"Com imagem: {with_images}")
-    print(f"Sem imagem: {without_images}")
+    print(f"Sem imagem: {len(rows) - with_images}")
     print(f"CSV: {OUT_CSV}")
     print(f"JSON bruto: {OUT_JSON}")
 
