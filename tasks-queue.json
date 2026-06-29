@@ -276,9 +276,9 @@
       "title": "Implementar recomendacao baseada em colaboracao",
       "description": "Usar algoritmo de filtro colaborativo para recomendar produtos. Integrar com ML service externo se necessario.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:27:00Z",
-      "completed_at": "2026-06-27T18:05:18.623528"
+      "completed_at": "2026-06-29T12:53:14.759110Z"
     },
     {
       "id": "task-031",
