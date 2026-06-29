@@ -76,23 +76,36 @@ class PerformanceTracker:
         image_scores = []
         top_performing = []
 
-        with open(self.log_file, 'r') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                score = float(row['image_score'] or 0)
-                image_scores.append(score)
+        try:
+            with open(self.log_file, 'r') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row.get('image_score'):
+                        score = float(row['image_score'])
+                        image_scores.append(score)
 
-                if float(row['ctr'] or 0) > 0.12:
-                    top_performing.append({
-                        'product_id': row['product_id'],
-                        'ctr': float(row['ctr']),
-                        'image_score': score
-                    })
+                        if float(row.get('ctr') or 0) > 0.12:
+                            top_performing.append({
+                                'product_id': row['product_id'],
+                                'ctr': float(row['ctr']),
+                                'image_score': score
+                            })
+        except:
+            pass
+
+        avg_score = sum(image_scores) / len(image_scores) if image_scores else 0
+
+        # Gerar recomendacoes localmente
+        improvements = []
+        if avg_score < 60:
+            improvements = ['Aumentar resolucao', 'Melhorar iluminacao']
+        elif avg_score < 80:
+            improvements = ['Optimizar cores']
 
         return {
-            'avg_image_score': sum(image_scores) / len(image_scores) if image_scores else 0,
+            'avg_image_score': avg_score,
             'top_performing_images': sorted(top_performing, key=lambda x: x['ctr'], reverse=True)[:10],
-            'improvement_areas': self._get_improvement_areas()
+            'improvement_areas': improvements
         }
 
     def get_conversion_insights(self) -> Dict:

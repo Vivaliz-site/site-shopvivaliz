@@ -1,0 +1,34 @@
+{
+  "product_id": 2,
+  "images": [
+    {
+      "variant": 1,
+      "url": "https://storage.shopvivaliz.com/ai_generated/-8295057382439613074.jpg",
+      "prompt": "Imagem profissional e atraente do Camiseta Premium. Fundo branco. Iluminacao Studio",
+      "generated_at": "2026-06-29T15:46:53.562873",
+      "status": "success"
+    },
+    {
+      "variant": 2,
+      "url": "https://storage.shopvivaliz.com/ai_generated/3108309067347255691.jpg",
+      "prompt": "Camiseta Premium em uso pr\u00e1tico. Ambiente realista. Alta qualidade",
+      "generated_at": "2026-06-29T15:46:53.562881",
+      "status": "success"
+    },
+    {
+      "variant": 3,
+      "url": "https://storage.shopvivaliz.com/ai_generated/-6572751502228135846.jpg",
+      "prompt": "Detalhe closeup do Camiseta Premium. Texturas e acabamentos. Profissional",
+      "generated_at": "2026-06-29T15:46:53.562885",
+      "status": "success"
+    },
+    {
+      "variant": 4,
+      "url": "https://storage.shopvivaliz.com/ai_generated/1582927762160157424.jpg",
+      "prompt": "Camiseta Premium destaque com efeito visual. Cores vibrantes. Marketing",
+      "generated_at": "2026-06-29T15:46:53.562888",
+      "status": "success"
+    }
+  ],
+  "created_at": "2026-06-29T15:46:53.563415"
+}
