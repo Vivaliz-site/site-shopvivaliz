@@ -1,0 +1,89 @@
+name: Deploy Olist Proxy + Rodar Pipeline IA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-and-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Deploy products-proxy.php via FTP
+        shell: python
+        env:
+          FTP_SERVER:     ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME:   ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD:   ${{ secrets.FTP_PASSWORD }}
+          FTP_PORT:       ${{ secrets.FTP_PORT }}
+          FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+          SQUAD_TOKEN:    ${{ secrets.SQUAD_TOKEN }}
+        run: |
+          import ftplib, os
+          from pathlib import Path
+
+          server   = os.environ["FTP_SERVER"]
+          user     = os.environ["FTP_USERNAME"]
+          password = os.environ["FTP_PASSWORD"]
+          port     = int(os.environ.get("FTP_PORT") or "21")
+          base     = (os.environ.get("FTP_REMOTE_DIR") or "/").strip() or "/"
+
+          def cwd_mkdir(ftp, path):
+              if path.startswith("/"): ftp.cwd("/")
+              for part in [p for p in path.replace("\\","/").split("/") if p]:
+                  try: ftp.mkd(part)
+                  except ftplib.error_perm: pass
+                  ftp.cwd(part)
+
+          ftp = ftplib.FTP()
+          ftp.connect(server, port, timeout=45)
+          ftp.login(user, password)
+          cwd_mkdir(ftp, base.rstrip("/") + "/api/olist")
+          with open("api/olist/products-proxy.php", "rb") as fh:
+              ftp.storbinary("STOR products-proxy.php", fh)
+          ftp.quit()
+          print("✅ products-proxy.php enviado ao servidor")
+
+      - name: Testar proxy
+        env:
+          SQUAD_TOKEN:    ${{ secrets.SQUAD_TOKEN }}
+          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
+        run: |
+          echo "Testando proxy em https://dev.shopvivaliz.com.br/api/olist/products-proxy.php"
+          STATUS=$(curl -s -o /tmp/proxy_test.json -w "%{http_code}" \
+            -H "X-Squad-Token: $SQUAD_TOKEN" \
+            -H "X-Olist-Token: $TOKEN_API_OLIST" \
+            "https://dev.shopvivaliz.com.br/api/olist/products-proxy.php?pagina=1&limite=5")
+          echo "HTTP Status: $STATUS"
+          cat /tmp/proxy_test.json | head -c 500
+
+      - name: Exportar produtos via proxy
+        env:
+          OLIST_PROXY_URL: "https://dev.shopvivaliz.com.br/api/olist/products-proxy.php"
+          SQUAD_TOKEN:     ${{ secrets.SQUAD_TOKEN }}
+          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
+          OUT_CSV:         logs/olist-images-export.csv
+          OUT_JSON:        logs/olist-products-raw.json
+        run: |
+          mkdir -p logs
+          python3 scripts/export-olist-images-csv.py
+          COUNT=$(python3 -c "
+          import csv
+          with open('logs/olist-images-export.csv', encoding='utf-8-sig') as f:
+              r = list(csv.DictReader(f))
+              print(sum(1 for row in r if row.get('primary_image_url','').startswith('http')))
+          " 2>/dev/null || echo "0")
+          echo "Produtos com imagem: $COUNT"
+
+      - name: Upload CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: olist-products-export
+          path: |
+            logs/olist-images-export.csv
+            logs/olist-products-raw.json
