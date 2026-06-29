@@ -14,7 +14,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Deploy products-proxy.php via FTP (com token embutido)
+      - name: Deploy shop-catalog-export.php via FTP (token embutido)
         shell: python
         env:
           FTP_SERVER:      ${{ secrets.FTP_SERVER }}
@@ -25,7 +25,7 @@ jobs:
           TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
           SQUAD_TOKEN:     ${{ secrets.SQUAD_TOKEN }}
         run: |
-          import ftplib, io, os, re
+          import ftplib, io, os
 
           server   = os.environ["FTP_SERVER"]
           user     = os.environ["FTP_USERNAME"]
@@ -35,17 +35,12 @@ jobs:
           token    = os.environ.get("TOKEN_API_OLIST", "")
           squad    = os.environ.get("SQUAD_TOKEN", "")
 
-          with open("api/olist/products-proxy.php", encoding="utf-8") as f:
+          with open("shop-catalog-export.php", encoding="utf-8") as f:
               php = f.read()
 
-          # Substituir fallback vazio pelo token real (embutido na implantação)
-          php = php.replace(
-              "getenv('TOKEN_API_OLIST') ?? ''",
-              f"getenv('TOKEN_API_OLIST') ?: '{token}'"
-          ).replace(
-              "getenv('SQUAD_TOKEN') ?: ''",
-              f"getenv('SQUAD_TOKEN') ?: '{squad}'"
-          )
+          # Embutir tokens no PHP antes de fazer upload
+          php = php.replace("'__SQUAD_TOKEN__'", f"'{squad}'")
+          php = php.replace("'__OLIST_TOKEN__'", f"'{token}'")
           content = php.encode("utf-8")
 
           def cwd_mkdir(ftp, path):
@@ -58,29 +53,32 @@ jobs:
           ftp = ftplib.FTP()
           ftp.connect(server, port, timeout=45)
           ftp.login(user, password)
-          cwd_mkdir(ftp, base.rstrip("/") + "/api/olist")
-          ftp.storbinary("STOR products-proxy.php", io.BytesIO(content))
+          cwd_mkdir(ftp, base.rstrip("/"))
+          ftp.storbinary("STOR shop-catalog-export.php", io.BytesIO(content))
           ftp.quit()
-          print("✅ products-proxy.php (com token) enviado ao servidor")
+          print("✅ shop-catalog-export.php (com tokens) enviado à raiz do servidor")
 
-      - name: Testar proxy
+      - name: Testar proxy (POST)
         env:
           SQUAD_TOKEN:    ${{ secrets.SQUAD_TOKEN }}
-          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
         run: |
-          echo "Testando proxy em https://dev.shopvivaliz.com.br/api/olist/products-proxy.php"
+          echo "Testando proxy POST em https://dev.shopvivaliz.com.br/shop-catalog-export.php"
           STATUS=$(curl -s -o /tmp/proxy_test.json -w "%{http_code}" \
-            -H "X-Squad-Token: $SQUAD_TOKEN" \
-            -H "X-Olist-Token: $TOKEN_API_OLIST" \
-            "https://dev.shopvivaliz.com.br/api/olist/products-proxy.php?pagina=1&limite=5")
+            -X POST \
+            -H "X-Squad: $SQUAD_TOKEN" \
+            -d "pagina=1&limite=5" \
+            "https://dev.shopvivaliz.com.br/shop-catalog-export.php")
           echo "HTTP Status: $STATUS"
           cat /tmp/proxy_test.json | head -c 500
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Proxy retornou HTTP $STATUS"
+            exit 1
+          fi
 
       - name: Exportar produtos via proxy
         env:
-          OLIST_PROXY_URL: "https://dev.shopvivaliz.com.br/api/olist/products-proxy.php"
+          OLIST_PROXY_URL: "https://dev.shopvivaliz.com.br/shop-catalog-export.php"
           SQUAD_TOKEN:     ${{ secrets.SQUAD_TOKEN }}
-          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
           OUT_CSV:         logs/olist-images-export.csv
           OUT_JSON:        logs/olist-products-raw.json
         run: |
