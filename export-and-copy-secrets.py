@@ -18,7 +18,7 @@ if sys.platform == 'win32':
 
 # Configurações
 SOURCE_REPO = "fredmourao-ai/site-shopvivaliz"
-TARGET_REPO = "fredmourao-ai/-shopvivaliz-pipeline"
+TARGET_REPO = "fredmourao-ai/shopvivaliz-pipeline"
 TOKEN = os.getenv("GH_TOKEN")
 
 def run_command(cmd):

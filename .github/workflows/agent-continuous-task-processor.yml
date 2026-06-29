@@ -43,14 +43,7 @@ jobs:
             echo "Nenhuma mudança para commitar"
           else
             git add -A logs/
-            git commit -m "chore: agentes processaram tarefas da fila [$(date +'%H:%M:%S')]
-
-Execução autônoma:
-- Próxima tarefa da fila assumida
-- Agente designado iniciou processamento
-- Progresso registrado em logs/
-
-Agentes operando 24/7" || true
+            git commit -m "chore: agentes processaram tarefas da fila [$(date +'%H:%M:%S')]"
             git push || true
           fi
 

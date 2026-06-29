@@ -36,8 +36,8 @@ jobs:
           SHOPEE_SHOP_ID: ${{ secrets.SHOPEE_SHOP_ID }}
           TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
           TIKTOK_APP_KEY: ${{ secrets.TIKTOK_APP_KEY }}
-          FTP_HOST: ${{ secrets.FTP_HOST }}
-          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_HOST: ${{ secrets.FTP_HOST || secrets.FTP_SERVER }}
+          FTP_USER: ${{ secrets.FTP_USER || secrets.FTP_USERNAME }}
           FTP_PASS: ${{ secrets.FTP_PASS }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
@@ -58,7 +58,7 @@ jobs:
         if: success()
         env:
           TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
-          TIKTOK_SHOP_ID: ${{ secrets.TIKTOK_SHOP_ID }}
+          TIKTOK_SHOP_ID: ${{ secrets.TIKTOK_SHOP_ID || secrets.SHOPEE_SHOP_ID }}
         run: |
           python scripts/integrations/tiktok.py --update-all
 

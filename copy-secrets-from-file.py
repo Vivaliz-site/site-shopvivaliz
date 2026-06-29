@@ -16,7 +16,7 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # Configurações
-TARGET_REPO = "fredmourao-ai/-shopvivaliz-pipeline"
+TARGET_REPO = "fredmourao-ai/shopvivaliz-pipeline"
 SECRETS_FILE = "secrets-to-copy.txt"
 TOKEN = os.getenv("GH_TOKEN")
 

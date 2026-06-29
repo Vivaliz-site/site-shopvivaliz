@@ -55,9 +55,9 @@ jobs:
             fi
           }
 
-          check_required_secret "FTP_SERVER" "${{ secrets.FTP_SERVER }}"
-          check_required_secret "FTP_USERNAME" "${{ secrets.FTP_USERNAME }}"
-          check_required_secret "FTP_PASSWORD" "${{ secrets.FTP_PASSWORD }}"
+          check_required_secret "FTP_SERVER" "${{ secrets.FTP_SERVER || secrets.FTP_HOST }}"
+          check_required_secret "FTP_USERNAME" "${{ secrets.FTP_USERNAME || secrets.FTP_USER }}"
+          check_required_secret "FTP_PASSWORD" "${{ secrets.FTP_PASSWORD || secrets.FTP_PASS }}"
           check_required_secret "FTP_PORT" "${{ secrets.FTP_PORT }}"
           check_required_secret "FTP_REMOTE_DIR" "${{ secrets.FTP_REMOTE_DIR }}"
           check_required_secret "SQUAD_TOKEN" "${{ secrets.SQUAD_TOKEN }}"
@@ -90,8 +90,8 @@ jobs:
       - name: Enviar via FTP Deploy Action
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
+          server: ${{ secrets.FTP_SERVER || secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USERNAME || secrets.FTP_USER }}
           password: ${{ secrets.FTP_PASSWORD }}
           port: ${{ secrets.FTP_PORT }}
           protocol: ftp

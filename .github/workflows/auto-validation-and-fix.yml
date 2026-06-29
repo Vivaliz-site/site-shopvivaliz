@@ -85,15 +85,7 @@ jobs:
           if [[ $(git status --porcelain) ]]; then
             git add -A logs/
             git add -A .github/workflows/
-            git commit -m "chore: correccoes automaticas via validador autonomo
-
-[AUTO-FIX]
-- Removidos caracteres especiais de workflows
-- Diretorios criados conforme necessario
-- Permissoes de arquivos corrigidas
-
-Relatorio: logs/validation-report.json
-Fixes: logs/auto-fix-log.json"
+            git commit -m "chore: correccoes automaticas via validador autonomo [AUTO-FIX]"
             git push || true
           else
             echo "[OK] Nenhuma correcao necessaria"

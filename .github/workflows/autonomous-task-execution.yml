@@ -83,14 +83,7 @@ jobs:
         continue-on-error: true
         run: |
           git add -A logs/
-          git commit -m "chore: agentes processaram tarefas autonomas [$(date +'%H:%M:%S')]
-
-Tarefas executadas:
-- Sincronizar Olist
-- Otimizar imagens
-- Validar checkout
-- Gerar páginas
-- Implementar pagamentos" || true
+          git commit -m "chore: agentes processaram tarefas autonomas [$(date +'%H:%M:%S')]"
           git push || true
 
       - name: Relatório
