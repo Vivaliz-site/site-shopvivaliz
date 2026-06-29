@@ -104,11 +104,17 @@ def http_get_json(url: str, auth: dict, params: dict, timeout: int = 45) -> dict
 
     if auth["type"] == "proxy":
         # Chama o proxy PHP no servidor em vez da API diretamente
+        # Usa query params para evitar headers X- que bloqueiam WAF/ModSecurity
         proxy_params = dict(params)
-        proxy_url    = auth["proxy_url"]
-        headers["X-Squad-Token"] = auth.get("squad_token", "")
-        headers["X-Olist-Token"] = auth.get("olist_token", "")
-        request = Request(f"{proxy_url}?{urlencode(proxy_params)}", headers=headers, method="GET")
+        if auth.get("squad_token"):
+            proxy_params["squad_token"] = auth["squad_token"]
+        if auth.get("olist_token"):
+            proxy_params["olist_token"] = auth["olist_token"]
+        request = Request(
+            f"{auth['proxy_url']}?{urlencode(proxy_params)}",
+            headers={"User-Agent": "Mozilla/5.0 (compatible; ShopVivaliz/1.0)", "Accept": "*/*"},
+            method="GET",
+        )
         return http_json(request, timeout=timeout)
 
     if auth["type"] == "query_token":
