@@ -152,14 +152,54 @@ function create_tables() {
         // Imagens Olist
         'CREATE TABLE IF NOT EXISTS olist_product_images (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            product_id INT NOT NULL,
-            local_url VARCHAR(500) NOT NULL,
-            original_url VARCHAR(500),
+            product_id BIGINT UNSIGNED NULL,
+            product_local_id BIGINT UNSIGNED NULL,
+            olist_product_id VARCHAR(64) NULL,
+            olist_id VARCHAR(64) NULL,
+            sku VARCHAR(191) NULL,
+            image_url VARCHAR(1000) NULL,
+            site_url VARCHAR(1000) NULL,
+            local_url VARCHAR(1000) NULL,
+            original_url VARCHAR(1000),
+            original_url_olist VARCHAR(1000) NULL,
+            local_file VARCHAR(1000) NULL,
+            position INT NOT NULL DEFAULT 0,
+            is_primary TINYINT(1) NOT NULL DEFAULT 0,
+            source VARCHAR(80) NOT NULL DEFAULT "olist_api",
+            status VARCHAR(40) NOT NULL DEFAULT "active",
+            url_hash CHAR(64) NULL,
+            file_hash CHAR(64) NULL,
+            dedupe_key VARCHAR(191) NULL,
+            uploaded TINYINT(1) NOT NULL DEFAULT 0,
+            linked TINYINT(1) NOT NULL DEFAULT 0,
+            error_message TEXT NULL,
             format VARCHAR(10),
             size_kb INT,
             dimensions VARCHAR(50),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_product_id (product_id)
+            updated_at DATETIME NULL,
+            INDEX idx_product_id (product_id),
+            INDEX idx_olist_images_product_status (product_local_id, status),
+            INDEX idx_olist_images_sku_status (sku, status),
+            INDEX idx_olist_images_dedupe (dedupe_key)
+        )',
+
+        // Produtos Olist
+        'CREATE TABLE IF NOT EXISTS olist_products (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            sku VARCHAR(191) NULL,
+            olist_product_id VARCHAR(64) NULL,
+            olist_id VARCHAR(64) NULL,
+            idProduto VARCHAR(64) NULL,
+            name VARCHAR(255) NULL,
+            primary_image_url VARCHAR(1000) NULL,
+            images_count INT NOT NULL DEFAULT 0,
+            image_sync_status VARCHAR(40) NOT NULL DEFAULT "pending",
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NULL,
+            INDEX idx_olist_products_sku (sku),
+            INDEX idx_olist_products_olist_id (olist_id),
+            INDEX idx_olist_products_olist_product_id (olist_product_id)
         )',
 
         // Logs de atividade
@@ -172,6 +212,69 @@ function create_tables() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_user_id (user_id),
             INDEX idx_created_at (created_at)
+        )',
+
+        // Jobs de geração de imagens IA
+        'CREATE TABLE IF NOT EXISTS ai_image_jobs (
+            id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            sku           VARCHAR(191)  NULL,
+            olist_id      VARCHAR(64)   NULL,
+            nome_produto  VARCHAR(255)  NULL,
+            original_url  VARCHAR(1000) NULL,
+            status        VARCHAR(40)   NOT NULL DEFAULT "pending",
+            vision_model  VARCHAR(80)   NULL,
+            image_model   VARCHAR(80)   NULL,
+            generated_at  DATETIME      NULL,
+            error_message TEXT          NULL,
+            created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at    DATETIME      NULL,
+            PRIMARY KEY (id),
+            INDEX idx_aij_sku (sku),
+            INDEX idx_aij_status (status)
+        )',
+
+        // Itens de cada job (uma linha por tipo de imagem)
+        'CREATE TABLE IF NOT EXISTS ai_image_job_items (
+            id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            job_id      BIGINT UNSIGNED NOT NULL,
+            image_type  VARCHAR(40)   NOT NULL,
+            prompt      TEXT          NULL,
+            site_url    VARCHAR(1000) NULL,
+            local_file  VARCHAR(1000) NULL,
+            status      VARCHAR(40)   NOT NULL DEFAULT "pending",
+            error       VARCHAR(500)  NULL,
+            created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            INDEX idx_aiji_job (job_id),
+            INDEX idx_aiji_type (image_type)
+        )',
+
+        // Sessões de A/B test de imagens
+        'CREATE TABLE IF NOT EXISTS ab_test_sessions (
+            id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            session_id      VARCHAR(64)   NOT NULL,
+            sku             VARCHAR(191)  NULL,
+            olist_id        VARCHAR(64)   NULL,
+            variant_a_type  VARCHAR(40)   NOT NULL,
+            variant_a_url   VARCHAR(1000) NOT NULL,
+            variant_b_type  VARCHAR(40)   NOT NULL,
+            variant_b_url   VARCHAR(1000) NOT NULL,
+            clicks_a        INT           NOT NULL DEFAULT 0,
+            clicks_b        INT           NOT NULL DEFAULT 0,
+            sales_a         INT           NOT NULL DEFAULT 0,
+            sales_b         INT           NOT NULL DEFAULT 0,
+            impressions     INT           NOT NULL DEFAULT 0,
+            winner_type     VARCHAR(40)   NULL,
+            winner_url      VARCHAR(1000) NULL,
+            status          VARCHAR(40)   NOT NULL DEFAULT "running",
+            started_at      DATETIME      NULL,
+            decided_at      DATETIME      NULL,
+            created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at      DATETIME      NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_abs_session (session_id),
+            INDEX idx_abs_sku (sku),
+            INDEX idx_abs_status (status)
         )',
     ];
 
