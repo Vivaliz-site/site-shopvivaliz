@@ -13,10 +13,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.3.0
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v5.1.0
         with:
           python-version: '3.11'
 
@@ -48,12 +48,10 @@ jobs:
 
       - name: Upload final artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.3.0
         with:
-          name: shopee-image-pipeline
+          name: shopee-pipeline-results
           path: |
-            planilhas/shopee_import.xlsx
-            planilhas/produtos.xlsx
-            storage/raw/**
-            storage/processed/**
-            storage/uploaded_urls.csv
+            logs/
+            storage/
+          if-no-files-found: ignore
