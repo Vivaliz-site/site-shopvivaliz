@@ -103,17 +103,15 @@ def http_get_json(url: str, auth: dict, params: dict, timeout: int = 45) -> dict
     headers = {"Accept": "application/json"}
 
     if auth["type"] == "proxy":
-        # Chama o proxy PHP no servidor em vez da API diretamente
-        # Token embutido no servidor — não passa na URL (evita falso positivo WAF)
+        # Chama o proxy PHP via POST (token embutido no servidor, não vai na URL)
         proxy_params = dict(params)
-        if auth.get("squad_token"):
-            proxy_params["squad_token"] = auth["squad_token"]
-        # olist_token NÃO vai na URL: o PHP usa getenv ou o token embutido no deploy
-        request = Request(
-            f"{auth['proxy_url']}?{urlencode(proxy_params)}",
-            headers={"User-Agent": "Mozilla/5.0 (compatible; ShopVivaliz/1.0)", "Accept": "*/*"},
-            method="GET",
-        )
+        post_data    = urlencode(proxy_params).encode()
+        req_headers  = {
+            "User-Agent":   "Mozilla/5.0 (compatible; ShopVivaliz/1.0)",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-Squad":      auth.get("squad_token", ""),
+        }
+        request = Request(auth["proxy_url"], data=post_data, headers=req_headers, method="POST")
         return http_json(request, timeout=timeout)
 
     if auth["type"] == "query_token":
