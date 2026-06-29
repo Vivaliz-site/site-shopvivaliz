@@ -1,47 +1,88 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Gerador de imagens com IA (OpenAI)
-Cria 4 imagens por produto baseadas na imagem real
+Cria 4 imagens REAIS por produto baseadas na imagem real
 """
 
 import os
+import sys
 import json
+import requests
 from datetime import datetime
 from typing import List, Dict
+from pathlib import Path
+
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8')
 
 class IAImageGenerator:
     def __init__(self):
         self.api_key = os.getenv('OPENAI_API_KEY', '')
-        self.output_dir = 'storage/ia_images'
+        self.output_dir = 'storage/processed'
+
+        if not self.api_key:
+            print("⚠️  OPENAI_API_KEY não configurada!")
 
     def generate_product_images(self, product: Dict) -> Dict:
-        """Gera 4 imagens para um produto"""
+        """Gera 4 imagens REAIS para um produto e salva em disco"""
         product_id = product.get('id', 'unknown')
         product_name = product.get('name', 'Produto')
+
+        # Criar diretório para produto
+        product_dir = os.path.join(self.output_dir, str(product_id))
+        os.makedirs(product_dir, exist_ok=True)
 
         images = []
 
         prompts = [
-            f"Imagem profissional e atraente do {product_name}. Fundo branco. Iluminacao Studio",
-            f"{product_name} em uso prático. Ambiente realista. Alta qualidade",
-            f"Detalhe closeup do {product_name}. Texturas e acabamentos. Profissional",
-            f"{product_name} destaque com efeito visual. Cores vibrantes. Marketing"
+            f"Imagem profissional e atraente do {product_name}. Fundo branco puro. Iluminação Studio. Alta qualidade. 4K",
+            f"{product_name} em uso prático. Ambiente realista e natural. Luz natural. Alta qualidade",
+            f"Detalhe closeup do {product_name}. Texturas e acabamentos visíveis. Macro photography. Profissional",
+            f"{product_name} destaque com efeito visual atraente. Cores vibrantes. Marketing photo. Produção profissional"
         ]
 
-        for i, prompt in enumerate(prompts):
+        print(f"\n🎨 Gerando 4 imagens para: {product_id} ({product_name})")
+        print(f"📁 Salvando em: {product_dir}")
+
+        for i, prompt in enumerate(prompts, 1):
             try:
-                image_url = self._call_image_generation(prompt)
-                images.append({
-                    'variant': i + 1,
-                    'url': image_url,
-                    'prompt': prompt,
-                    'generated_at': datetime.now().isoformat(),
-                    'status': 'success'
-                })
+                print(f"  [{i}/4] Gerando imagem {i}...", end=" ", flush=True)
+
+                # Gerar imagem REAL via OpenAI
+                image_data = self._call_image_generation_real(prompt)
+
+                if image_data:
+                    # Salvar em disco
+                    file_path = os.path.join(product_dir, f"{i}.jpg")
+                    with open(file_path, 'wb') as f:
+                        f.write(image_data)
+
+                    print(f"✅ Salvo: {file_path}")
+
+                    images.append({
+                        'variant': i,
+                        'local_file': file_path,
+                        'prompt': prompt,
+                        'generated_at': datetime.now().isoformat(),
+                        'status': 'success',
+                        'file_size': len(image_data)
+                    })
+                else:
+                    print("❌ Falhou")
+                    images.append({
+                        'variant': i,
+                        'local_file': None,
+                        'prompt': prompt,
+                        'error': 'Não conseguiu baixar imagem',
+                        'status': 'failed'
+                    })
+
             except Exception as e:
+                print(f"❌ Erro: {str(e)}")
                 images.append({
-                    'variant': i + 1,
-                    'url': None,
+                    'variant': i,
+                    'local_file': None,
                     'prompt': prompt,
                     'error': str(e),
                     'status': 'failed'
@@ -50,18 +91,56 @@ class IAImageGenerator:
         # Salvar metadata
         self._save_image_metadata(product_id, images)
 
+        success_count = len([img for img in images if img['status'] == 'success'])
+        print(f"\n✅ Resultado: {success_count}/4 imagens geradas com sucesso\n")
+
         return {
             'product_id': product_id,
             'product_name': product_name,
             'images': images,
-            'total_generated': len([img for img in images if img['status'] == 'success']),
+            'total_generated': success_count,
             'quality_score': self._calculate_image_quality(images)
         }
 
-    def _call_image_generation(self, prompt: str) -> str:
-        """Chama API OpenAI para gerar imagem"""
-        # Simulado - em produção usaria openai.Image.create()
-        return f"https://storage.shopvivaliz.com/ai_generated/{hash(prompt)}.jpg"
+    def _call_image_generation_real(self, prompt: str) -> bytes:
+        """Chama API OpenAI REAL para gerar imagem e retorna bytes"""
+        try:
+            import openai
+
+            if not self.api_key:
+                print("❌ OPENAI_API_KEY não configurada")
+                return None
+
+            openai.api_key = self.api_key
+
+            # Chamar API OpenAI REAL
+            print(f"OpenAI...", end=" ", flush=True)
+            response = openai.Image.create(
+                prompt=prompt,
+                n=1,
+                size="1024x1024",
+                quality="hd"
+            )
+
+            if not response or not response.get('data'):
+                print("❌ Resposta vazia")
+                return None
+
+            image_url = response['data'][0]['url']
+
+            # Baixar imagem da URL
+            print(f"Download...", end=" ", flush=True)
+            img_response = requests.get(image_url, timeout=30)
+
+            if img_response.status_code == 200:
+                return img_response.content
+            else:
+                print(f"❌ HTTP {img_response.status_code}")
+                return None
+
+        except Exception as e:
+            print(f"❌ Erro OpenAI: {str(e)}")
+            return None
 
     def detect_bad_images(self, images: List[str]) -> List[Dict]:
         """Detecta imagens com baixo CTR (ruim)"""
