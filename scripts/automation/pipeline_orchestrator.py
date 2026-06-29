@@ -106,6 +106,7 @@ class PipelineOrchestrator:
                     result = self._process_single_product(product)
                     results.append(result)
                     self.processed_count += 1
+                    ab_result = result.get('steps', {}).get('ab_test') or {}
                     self._append_csv_log({
                         'timestamp': datetime.now().isoformat(),
                         'product_id': result.get('product_id'),
@@ -114,7 +115,7 @@ class PipelineOrchestrator:
                         'shopee_seo_score': result.get('steps', {}).get('shopee_seo', {}).get('quality_score', 0),
                         'tiktok_seo_score': result.get('steps', {}).get('tiktok_seo', {}).get('quality_score', 0),
                         'image_quality_score': result.get('steps', {}).get('images', {}).get('quality_score', 0),
-                        'ab_winner_variant': result.get('steps', {}).get('ab_test', {}).get('variant', ''),
+                        'ab_winner_variant': ab_result.get('variant', ''),
                         'status': 'success',
                         'error': '',
                     })
@@ -165,30 +166,74 @@ class PipelineOrchestrator:
         products = []
 
         try:
-            # Tentar carregar do Excel
             import openpyxl
-            wb = openpyxl.load_workbook(spreadsheet_path)
-            ws = wb.active
+            workbook = openpyxl.load_workbook(spreadsheet_path, read_only=False, data_only=True)
+            sheet = workbook.active
+            headers = [str(cell.value).strip() if cell.value is not None else '' for cell in sheet[1]]
+            header_map = {name.lower(): idx for idx, name in enumerate(headers)}
 
-            for row in ws.iter_rows(min_row=2, values_only=False):
-                if row[0].value:  # Se tem ID
-                    product = {
-                        'id': row[0].value,
-                        'name': row[1].value or f"Produto {row[0].value}",
-                        'stock': int(row[2].value or 0),
-                        'price': float(row[3].value or 0),
-                        'category': row[4].value or 'Geral',
-                        'margin': float(row[5].value or 0),
-                        'description': row[6].value or '',
-                        'images': [row[7].value] if row[7].value else [],
-                        'demand_indicator': float(row[8].value or 5)
-                    }
-                    products.append(product)
+            def cell_value(row, *names, default=''):
+                for name in names:
+                    idx = header_map.get(name.lower())
+                    if idx is not None and idx < len(row):
+                        value = row[idx].value
+                        if value is not None and str(value).strip() != '':
+                            return value
+                return default
 
-            print(f"[OK] Carregados {len(products)} produtos do Excel")
+            def collect_attributes(row):
+                attrs = {}
+                for idx, cell in enumerate(row):
+                    header = headers[idx] if idx < len(headers) else ''
+                    normalized = str(header).strip().lower()
+                    if not normalized:
+                        continue
+                    if normalized in {
+                        'et_title_product_id',
+                        'et_title_parent_sku',
+                        'et_title_product_name',
+                        'et_title_product_category',
+                        'ps_item_cover_image',
+                        'et_title_reason',
+                    } or normalized.startswith('ps_item_image.'):
+                        continue
+                    value = cell.value
+                    if value is None or str(value).strip() == '':
+                        continue
+                    attrs[normalized] = value
+                return attrs
+
+            for row in sheet.iter_rows(min_row=2):
+                product_id = cell_value(row, 'et_title_product_id', 'item_id', 'sku', default='')
+                if not product_id:
+                    continue
+                name = cell_value(row, 'et_title_product_name', 'name', default=f'Produto {product_id}')
+                category = cell_value(row, 'et_title_product_category', 'category', default='Geral')
+                cover = cell_value(row, 'ps_item_cover_image', 'image_url', 'primary_image_url', default='')
+                images = [cover] if cover else []
+                for idx in range(1, 9):
+                    extra = cell_value(row, f'ps_item_image.{idx}', default='')
+                    if extra:
+                        images.append(extra)
+
+                product = {
+                    'id': product_id,
+                    'name': name,
+                    'stock': 0,
+                    'price': 0,
+                    'category': category,
+                    'margin': 0,
+                    'description': cell_value(row, 'et_title_reason', default=''),
+                    'images': images,
+                    'demand_indicator': 5,
+                    'attributes': collect_attributes(row),
+                }
+                products.append(product)
+
+            print(f"[OK] Carregados {len(products)} produtos do Excel: {spreadsheet_path}")
             return products
-        except:
-            pass
+        except Exception as exc:
+            print(f"[AVISO] Falha ao ler Excel {spreadsheet_path}: {exc}")
 
         # Fallback: Tentar CSV
         try:
@@ -269,6 +314,16 @@ class PipelineOrchestrator:
         images = self.image_generator.generate_product_images(product)
         result['steps']['images'] = images
 
+        # Auto-correção: se a qualidade ficou ruim, marcar para regenerar
+        if images.get('quality_score', 0) < 0.5:
+            bad_images = self.image_generator.detect_bad_images(
+                [img.get('local_file') or '' for img in images.get('images', []) if img.get('local_file')]
+            )
+            result['steps']['image_correction'] = {
+                'bad_images': bad_images,
+                'needs_regeneration': bool(bad_images),
+            }
+
         # Passo 4: Criar A/B test
         test_id = f"test_{product_id}"
         ab_test = self.ab_tester.create_ab_test(test_id, images['images'][:4])
@@ -316,9 +371,9 @@ class PipelineOrchestrator:
         try:
             primary_image_url = ''
             if result['steps']['images']['images']:
-                first_success = next((img for img in result['steps']['images']['images'] if img.get('local_file')), None)
-                if first_success:
-                    primary_image_url = str(first_success.get('local_file', ''))
+                best_variant = self.image_generator.select_best_image(result['steps']['images']['images'])
+                if best_variant:
+                    primary_image_url = str(best_variant.get('local_file') or '')
             self.validator.validate_shopee_update(
                 product_id,
                 marketplace_payload['title_shopee'],

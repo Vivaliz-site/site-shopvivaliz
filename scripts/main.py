@@ -11,7 +11,7 @@ from automation.pipeline_orchestrator import PipelineOrchestrator
 
 
 def main() -> int:
-    spreadsheet = sys.argv[1] if len(sys.argv) > 1 else 'planilhas/shopee.xlsx'
+    spreadsheet = sys.argv[1] if len(sys.argv) > 1 else 'mass_update_media_info.xlsx'
     orchestrator = PipelineOrchestrator()
     result = orchestrator.run_complete_pipeline(spreadsheet)
     return 0 if result.get('status') == 'success' else 1
