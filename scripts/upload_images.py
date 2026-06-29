@@ -5,7 +5,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,15 +15,39 @@ logger = logging.getLogger(__name__)
 
 INPUT_PROCESSED_ROOT = Path('storage/processed')
 OUTPUT_MAPPING_FILE = Path('storage/uploaded_urls.csv')
+SKU_MAPPING_FILE = Path('storage/sku_mapping.csv')
 REMOTE_BASE_DIR = '/public_html/dev/uploads/olist'
 WEB_BASE_URL = 'https://dev.shopvivaliz.com.br/uploads/olist'
 
 
-def get_env_variable(name: str) -> str:
+def get_env_variable(name: str, alt_names: Optional[list[str]] = None) -> str:
     value = os.environ.get(name)
+    found_name = name
+    if not value and alt_names:
+        for alt in alt_names:
+            value = os.environ.get(alt)
+            if value:
+                found_name = alt
+                break
+
     if not value:
-        raise EnvironmentError(f'Missing required environment variable: {name}')
+        alt_text = f' or {", ".join(alt_names)}' if alt_names else ''
+        raise EnvironmentError(f'Missing required environment variable: {name}{alt_text}')
+    if found_name != name:
+        logger.info(f'Using environment variable {found_name} for {name}')
     return value.strip()
+
+
+def load_sku_mapping() -> Dict[str, str]:
+    mapping: Dict[str, str] = {}
+    if not SKU_MAPPING_FILE.exists():
+        return mapping
+    with SKU_MAPPING_FILE.open('r', encoding='utf-8', newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            if row.get('sanitized_folder') and row.get('sku'):
+                mapping[row['sanitized_folder'].strip()] = row['sku'].strip()
+    return mapping
 
 
 def create_remote_dirs(ftp: ftplib.FTP, remote_dir: str) -> None:
@@ -47,9 +71,9 @@ def upload_file(ftp: ftplib.FTP, local_file: Path, remote_path: str) -> None:
 
 def main(argv=None) -> int:
     try:
-        host = get_env_variable('FTP_HOST')
-        user = get_env_variable('FTP_USER')
-        password = get_env_variable('FTP_PASS')
+        host = get_env_variable('FTP_HOST', ['FTP_SERVER'])
+        user = get_env_variable('FTP_USER', ['FTP_USERNAME'])
+        password = get_env_variable('FTP_PASS', ['FTP_PASSWORD'])
     except EnvironmentError as exc:
         logger.error(exc)
         return 1
@@ -78,23 +102,35 @@ def main(argv=None) -> int:
         ftp.quit()
         return 1
 
+    sku_mapping = load_sku_mapping()
     for sku_dir in sorted(INPUT_PROCESSED_ROOT.iterdir()):
         if not sku_dir.is_dir():
             continue
-        local_file = sku_dir / '1.jpg'
-        if not local_file.exists():
-            logger.warning(f'Skipping SKU {sku_dir.name}: no processed image found')
-            continue
 
+        original_sku = sku_mapping.get(sku_dir.name, sku_dir.name)
         remote_dir = f'{REMOTE_BASE_DIR}/{sku_dir.name}'
-        remote_file = f'{remote_dir}/1.jpg'
         try:
             create_remote_dirs(ftp, remote_dir)
             ftp.cwd(remote_dir)
-            upload_file(ftp, local_file, '1.jpg')
-            image_url = f'{WEB_BASE_URL}/{sku_dir.name}/1.jpg'
-            mapping_rows.append({'sku': sku_dir.name, 'image_url': image_url})
-            logger.info(f'Uploaded SKU {sku_dir.name} to {image_url}')
+
+            uploaded_urls = {}
+            for variant in range(1, 5):
+                local_file = sku_dir / f'{variant}.jpg'
+                field_name = f'image_url_{variant}'
+                if local_file.exists():
+                    upload_file(ftp, local_file, f'{variant}.jpg')
+                    uploaded_urls[field_name] = f'{WEB_BASE_URL}/{sku_dir.name}/{variant}.jpg'
+                    logger.info(f'Uploaded SKU {original_sku} variant {variant} to {uploaded_urls[field_name]}')
+                else:
+                    uploaded_urls[field_name] = ''
+                    logger.warning(f'SKU {sku_dir.name} missing processed file {local_file}; leaving {field_name} blank')
+
+            if not any(uploaded_urls.values()):
+                logger.warning(f'Skipping SKU {sku_dir.name}: no processed images uploaded')
+                continue
+
+            mapping_row = {'sku': original_sku, **uploaded_urls}
+            mapping_rows.append(mapping_row)
             processed_count += 1
         except Exception as exc:
             logger.error(f'Failed to upload SKU {sku_dir.name}: {exc}')
@@ -107,7 +143,8 @@ def main(argv=None) -> int:
     if OUTPUT_MAPPING_FILE.parent:
         OUTPUT_MAPPING_FILE.parent.mkdir(parents=True, exist_ok=True)
     with OUTPUT_MAPPING_FILE.open('w', newline='', encoding='utf-8') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=['sku', 'image_url'])
+        fieldnames = ['sku', 'image_url_1', 'image_url_2', 'image_url_3', 'image_url_4']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(mapping_rows)
 

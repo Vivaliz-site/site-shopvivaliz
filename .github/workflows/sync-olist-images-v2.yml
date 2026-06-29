@@ -1,0 +1,98 @@
+name: Sincronizar Imagens Olist v2 (WebScraping)
+
+on:
+  schedule:
+    # Executa a cada 6 horas
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      csv_file:
+        description: 'CSV de entrada (sku,olist_product_id,nome_produto)'
+        required: false
+        default: 'produtos_ids_exemplo.csv'
+
+jobs:
+  download-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Determinar arquivo de entrada
+        id: csv_path
+        run: |
+          CSV_FILE="${{ github.event.inputs.csv_file || 'produtos_ids_exemplo.csv' }}"
+          if [ ! -f "$CSV_FILE" ]; then
+            echo "CSV não encontrado: $CSV_FILE"
+            exit 1
+          fi
+          echo "csv_file=$CSV_FILE" >> $GITHUB_OUTPUT
+
+      - name: Executar download de imagens
+        env:
+          OLIST_EMAIL: ${{ secrets.OLIST_EMAIL }}
+          OLIST_PASSWORD: ${{ secrets.OLIST_PASSWORD }}
+        run: |
+          python scripts/download-olist-images-v2.py \
+            "${{ steps.csv_path.outputs.csv_file }}" \
+            "./downloads_olist_imagens"
+
+      - name: Gerar relatório
+        if: always()
+        run: |
+          echo "## Relatório de Download de Imagens" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "downloads_olist_imagens/olist_imagens_baixadas.csv" ]; then
+            echo "### ✓ Auditoria gerada" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            head -5 downloads_olist_imagens/olist_imagens_baixadas.csv >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ -f "downloads_olist_imagens/mapa_upload_shopvivaliz.csv" ]; then
+            echo "### ✓ Mapeamento gerado" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            head -5 downloads_olist_imagens/mapa_upload_shopvivaliz.csv >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Enviar CSVs para logs
+        if: always()
+        run: |
+          mkdir -p logs
+          [ -f "downloads_olist_imagens/olist_imagens_baixadas.csv" ] && \
+            cp downloads_olist_imagens/olist_imagens_baixadas.csv logs/
+          [ -f "downloads_olist_imagens/mapa_upload_shopvivaliz.csv" ] && \
+            cp downloads_olist_imagens/mapa_upload_shopvivaliz.csv logs/
+
+      - name: Commit CSVs (se houver mudanças)
+        if: always()
+        run: |
+          git config user.name "Claude Autonomous Bot"
+          git config user.email "noreply@anthropic.com"
+          git add logs/*.csv 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "logs: atualizar CSVs de imagens Olist"
+          git push || echo "Nada a fazer"
+
+      - name: Fazer upload dos CSVs como artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: olist-images-mapping
+          path: |
+            downloads_olist_imagens/*.csv
+            logs/*.csv
+          retention-days: 30

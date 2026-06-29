@@ -11,10 +11,21 @@ DEFAULT_ATTACHMENT_PATHS = [
 ]
 
 
-def get_env_variable(name: str) -> str:
+def get_env_variable(name: str, alt_names: Optional[list[str]] = None) -> str:
     value = os.environ.get(name)
+    found_name = name
+    if not value and alt_names:
+        for alt in alt_names:
+            value = os.environ.get(alt)
+            if value:
+                found_name = alt
+                break
+
     if not value:
-        raise EnvironmentError(f'Missing required environment variable: {name}')
+        alt_text = f' or {", ".join(alt_names)}' if alt_names else ''
+        raise EnvironmentError(f'Missing required environment variable: {name}{alt_text}')
+    if found_name != name:
+        print(f'Using environment variable {found_name} for {name}')
     return value.strip()
 
 
@@ -61,10 +72,10 @@ def send_email(msg: EmailMessage, host: str, port: int, user: str, password: str
 
 def main(argv=None) -> int:
     try:
-        smtp_host = get_env_variable('SMTP_HOST')
-        smtp_port = int(get_env_variable('SMTP_PORT'))
-        smtp_user = get_env_variable('SMTP_USER')
-        smtp_pass = get_env_variable('SMTP_PASS')
+        smtp_host = get_env_variable('SMTP_HOST', ['EMAIL_SMTP_HOST'])
+        smtp_port = int(get_env_variable('SMTP_PORT', ['EMAIL_SMTP_PORT']))
+        smtp_user = get_env_variable('SMTP_USER', ['EMAIL_USER'])
+        smtp_pass = get_env_variable('SMTP_PASS', ['EMAIL_PASSWORD'])
         email_from = get_env_variable('EMAIL_FROM')
         email_to = get_env_variable('EMAIL_TO')
     except EnvironmentError as exc:

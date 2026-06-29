@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import concurrent.futures
+import csv
 import logging
 import os
 import re
@@ -31,12 +33,35 @@ OUTPUT_EXCEL = Path('planilhas/produtos.xlsx')
 OUTPUT_RAW_ROOT = Path('storage/raw')
 
 IMAGE_COLUMN_KEY = 'image'
+MAX_WORKERS = 20
+DOWNLOAD_TIMEOUT = 10
+MAX_RETRIES = 3
+SKU_MAPPING_FILE = Path('storage/sku_mapping.csv')
+WINDOWS_RESERVED_NAMES = {
+    'CON', 'PRN', 'AUX', 'NUL',
+    'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
+    'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
+}
 
 
 def sanitize_folder_name(value: str) -> str:
     safe_value = re.sub(r'[\\/*:?"<>|]', '_', value or '')
-    safe_value = safe_value.strip() or 'unknown_sku'
+    safe_value = re.sub(r'\s+', '_', safe_value)
+    safe_value = safe_value.strip().rstrip('. ')
+    safe_value = safe_value or 'unknown_sku'
+    if safe_value.upper() in WINDOWS_RESERVED_NAMES:
+        safe_value = f'_{safe_value}'
     return safe_value[:120]
+
+
+def make_unique_folder_name(base_name: str, existing_names: set[str]) -> str:
+    candidate = base_name
+    suffix = 1
+    while candidate in existing_names:
+        candidate = f'{base_name}_{suffix}'
+        suffix += 1
+    existing_names.add(candidate)
+    return candidate
 
 
 def is_valid_url(value: Optional[str]) -> bool:
@@ -58,10 +83,15 @@ def load_rows_from_xlsx(path: Path) -> List[Dict[str, str]]:
         workbook = load_workbook(filename=path, read_only=True, data_only=True)
         sheet = workbook.active
         rows = []
-        header = [str(cell.value).strip() if cell.value is not None else '' for cell in next(sheet.iter_rows(values_only=True))]
-        for row in sheet.iter_rows(values_only=True):
+        rows_iter = sheet.iter_rows(values_only=True)
+        header_values = next(rows_iter, None)
+        if header_values is None:
+            return []
+        header = [str(cell).strip() if cell is not None else '' for cell in header_values]
+        for row in rows_iter:
             row_data = {header[idx].strip(): str(value).strip() if value is not None else '' for idx, value in enumerate(row) if idx < len(header)}
-            rows.append(row_data)
+            if any(row_data.values()):
+                rows.append(row_data)
         return rows
 
     logger.info('openpyxl not installed; using fallback XLSX reader')
@@ -208,14 +238,14 @@ def find_first_image_url(row: Dict[str, str], image_columns: List[str]) -> Optio
     return None
 
 
-def download_image(url: str, sku: str) -> Optional[Path]:
+def download_image(url: str, sku: str, folder_name: str) -> Optional[Path]:
     try:
-        response = requests.get(url.strip(), timeout=(10, 30), stream=True)
+        response = requests.get(url.strip(), timeout=DOWNLOAD_TIMEOUT, stream=True)
         if response.status_code != 200:
             logger.error(f'  [SKU {sku}] HTTP {response.status_code} for URL: {url}')
             return None
 
-        sku_folder = OUTPUT_RAW_ROOT / sanitize_folder_name(sku)
+        sku_folder = OUTPUT_RAW_ROOT / folder_name
         sku_folder.mkdir(parents=True, exist_ok=True)
         image_path = sku_folder / '1.jpg'
 
@@ -232,6 +262,28 @@ def download_image(url: str, sku: str) -> Optional[Path]:
     except OSError as exc:
         logger.error(f'  [SKU {sku}] Failed to write image file: {exc}')
         return None
+
+
+def download_image_with_retries(url: str, sku: str, folder_name: str) -> Optional[Path]:
+    for attempt in range(1, MAX_RETRIES + 1):
+        logger.info(f'  [SKU {sku}] Download attempt {attempt} for URL: {url}')
+        result = download_image(url, sku, folder_name)
+        if result is not None:
+            return result
+        if attempt < MAX_RETRIES:
+            logger.warning(f'  [SKU {sku}] Retry {attempt} failed, retrying...')
+            time.sleep(1)
+    logger.error(f'  [SKU {sku}] All {MAX_RETRIES} download attempts failed for URL: {url}')
+    return None
+
+
+def save_sku_mapping(mapping: Dict[str, str]) -> None:
+    SKU_MAPPING_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with SKU_MAPPING_FILE.open('w', encoding='utf-8', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=['sanitized_folder', 'sku'])
+        writer.writeheader()
+        for sanitized_folder, sku in sorted(mapping.items()):
+            writer.writerow({'sanitized_folder': sanitized_folder, 'sku': sku})
 
 
 def save_skus_excel(skus: List[str], output_path: Path) -> None:
@@ -270,9 +322,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
 
     skus = []
-    processed_count = 0
     skipped_count = 0
-    failed_count = 0
+    rows_to_download = []
+    folder_mapping: Dict[str, str] = {}
+    used_folders: set[str] = set()
 
     for idx, row in enumerate(rows, start=1):
         sku = choose_sku(row, columns['sku'], columns['item_id'])
@@ -282,31 +335,47 @@ def main(argv: Optional[List[str]] = None) -> int:
             continue
 
         image_url = find_first_image_url(row, columns['image_columns'])
-        logger.info(f'Row {idx}: processing SKU={sku}')
-
+        safe_folder = make_unique_folder_name(sanitize_folder_name(sku), used_folders)
         if image_url is None:
             logger.warning(f'  [SKU {sku}] No valid image URL found; skipping download')
-            processed_count += 1
             skus.append(sku)
             continue
 
-        downloaded = download_image(image_url, sku)
-        if downloaded is None:
-            failed_count += 1
-            logger.warning(f'  [SKU {sku}] Image download failed for URL: {image_url}')
-        else:
-            processed_count += 1
-            skus.append(sku)
+        rows_to_download.append((idx, sku, safe_folder, image_url))
+        folder_mapping[safe_folder] = sku
+        skus.append(sku)
 
-        time.sleep(0.15)
+    total_images = len(rows_to_download)
+    success_count = 0
+    failed_count = 0
 
+    if rows_to_download:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            future_to_task = {
+                executor.submit(download_image_with_retries, image_url, sku, safe_folder): (idx, sku, safe_folder, image_url)
+                for idx, sku, safe_folder, image_url in rows_to_download
+            }
+            for future in concurrent.futures.as_completed(future_to_task):
+                idx, sku, safe_folder, image_url = future_to_task[future]
+                try:
+                    result = future.result()
+                    if result is not None:
+                        success_count += 1
+                    else:
+                        failed_count += 1
+                except Exception as exc:
+                    failed_count += 1
+                    logger.error(f'  [SKU {sku}] Unexpected error downloading {image_url}: {exc}')
+    
     try:
         save_skus_excel(skus, OUTPUT_EXCEL)
+        if folder_mapping:
+            save_sku_mapping(folder_mapping)
     except Exception as exc:
-        logger.error(f'Failed to write output Excel: {exc}')
+        logger.error(f'Failed to write output files: {exc}')
         return 1
 
-    logger.info(f'Processed {processed_count} rows; skipped {skipped_count}; failures {failed_count}')
+    logger.info(f'Total images attempted: {total_images}; success: {success_count}; failed: {failed_count}; skipped rows: {skipped_count}')
     return 0
 
 
