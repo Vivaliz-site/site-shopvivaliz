@@ -18,7 +18,8 @@ from tenacity import (
     wait_exponential,
 )
 
-BASE_URL = "https://partner.shopeemobile.com/api/v2"
+DEFAULT_BASE_URL = "https://partner.shopeemobile.com/api/v2"
+SANDBOX_BASE_URL = "https://openplatform.sandbox.test-stable.shopee.sg/api/v2"
 
 
 def _is_retryable(exc: Exception) -> bool:
@@ -37,17 +38,52 @@ class ShopeeClient:
         self.partner_id = int(pid)
         self.partner_key = pkey
         self.access_token = os.environ["SHOPEE_ACCESS_TOKEN"]
+        self.refresh_token = os.environ.get("SHOPEE_REFRESH_TOKEN", "")
         self.shop_id = int(os.environ["SHOPEE_SHOP_ID"])
+        self.base_url = self._resolve_base_url()
         self._session = requests.Session()
         self._session.headers.update({"Content-Type": "application/json"})
+        if self.refresh_token:
+            self._refresh_access_token()
+
+    @staticmethod
+    def _is_invalid_token_response(resp: requests.Response) -> bool:
+        try:
+            data = resp.json()
+        except ValueError:
+            return False
+        error = str(data.get("error", "")).lower()
+        return error in {"invalid_access_token", "invalid_acceess_token", "access_token_expired"}
+
+    def _resolve_base_url(self) -> str:
+        configured = (os.environ.get("SHOPEE_BASE_URL") or "").strip().rstrip("/")
+        if configured:
+            return configured
+        if os.environ.get("SHOPEE_TEST_PARTNER_ID") or os.environ.get("SHOPEE_TEST_PARTNER_KEY"):
+            return SANDBOX_BASE_URL
+        return DEFAULT_BASE_URL
 
     def _sign(self, path: str, timestamp: int) -> str:
-        base = f"{self.partner_id}{path}{timestamp}{self.access_token}{self.shop_id}"
+        api_path = self._signed_path(path)
+        base = f"{self.partner_id}{api_path}{timestamp}{self.access_token}{self.shop_id}"
         return hmac.new(
             self.partner_key.encode("utf-8"),
             base.encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
+
+    def _auth_sign(self, path: str, timestamp: int) -> str:
+        api_path = self._signed_path(path)
+        base = f"{self.partner_id}{api_path}{timestamp}"
+        return hmac.new(
+            self.partner_key.encode("utf-8"),
+            base.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+    @staticmethod
+    def _signed_path(path: str) -> str:
+        return path if path.startswith("/api/") else f"/api/v2{path}"
 
     def _base_params(self, path: str) -> dict:
         ts = int(time.time())
@@ -59,15 +95,77 @@ class ShopeeClient:
             "sign": self._sign(path, ts),
         }
 
+    def _refresh_access_token(self) -> None:
+        path = "/auth/access_token/get"
+        timestamp = int(time.time())
+        params = {
+            "partner_id": self.partner_id,
+            "timestamp": timestamp,
+            "sign": self._auth_sign(path, timestamp),
+        }
+        body = {
+            "refresh_token": self.refresh_token,
+            "shop_id": self.shop_id,
+            "partner_id": self.partner_id,
+        }
+        try:
+            resp = self._session.post(f"{self.base_url}{path}", params=params, json=body, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            response = data.get("response") or data
+            new_access_token = response.get("access_token")
+            new_refresh_token = response.get("refresh_token")
+            if new_access_token:
+                self.access_token = new_access_token
+            if new_refresh_token:
+                self.refresh_token = new_refresh_token
+        except Exception:
+            # Keep the configured token if refresh fails.
+            pass
+
+    def _send_with_refresh(
+        self,
+        method: str,
+        path: str,
+        *,
+        extra_params: dict | None = None,
+        json_body: dict | None = None,
+        files: dict | None = None,
+        timeout: int = 30,
+    ) -> requests.Response:
+        params = {**self._base_params(path), **(extra_params or {})}
+        resp = self._session.request(
+            method,
+            f"{self.base_url}{path}",
+            params=params,
+            json=json_body,
+            files=files,
+            timeout=timeout,
+        )
+        if resp.status_code == 403 and self.refresh_token and self._is_invalid_token_response(resp):
+            self._refresh_access_token()
+            params = {**self._base_params(path), **(extra_params or {})}
+            resp = self._session.request(
+                method,
+                f"{self.base_url}{path}",
+                params=params,
+                json=json_body,
+                files=files,
+                timeout=timeout,
+            )
+        return resp
+
     @retry(
         retry=retry_if_exception(_is_retryable),
         wait=wait_exponential(multiplier=1, min=2, max=30),
         stop=stop_after_attempt(4),
     )
     def _get(self, path: str, extra_params: dict | None = None) -> dict:
-        params = {**self._base_params(path), **(extra_params or {})}
-        resp = self._session.get(f"{BASE_URL}{path}", params=params, timeout=30)
-        resp.raise_for_status()
+        resp = self._send_with_refresh("GET", path, extra_params=extra_params, timeout=30)
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            raise requests.HTTPError(f"{exc} | body={resp.text[:400]}", response=resp) from exc
         data = resp.json()
         if data.get("error"):
             raise RuntimeError(f"Shopee API error {data['error']}: {data.get('message')}")
@@ -79,9 +177,11 @@ class ShopeeClient:
         stop=stop_after_attempt(4),
     )
     def _post(self, path: str, body: dict, extra_params: dict | None = None) -> dict:
-        params = {**self._base_params(path), **(extra_params or {})}
-        resp = self._session.post(f"{BASE_URL}{path}", params=params, json=body, timeout=30)
-        resp.raise_for_status()
+        resp = self._send_with_refresh("POST", path, extra_params=extra_params, json_body=body, timeout=30)
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            raise requests.HTTPError(f"{exc} | body={resp.text[:400]}", response=resp) from exc
         data = resp.json()
         if data.get("error"):
             raise RuntimeError(f"Shopee API error {data['error']}: {data.get('message')}")
@@ -153,11 +253,10 @@ class ShopeeClient:
     def upload_image(self, local_path: str) -> str:
         """Faz upload de imagem local para Shopee e retorna image_id."""
         path = "/media_space/upload_image"
-        params = self._base_params(path)
         with open(local_path, "rb") as f:
-            resp = self._session.post(
-                f"{BASE_URL}{path}",
-                params=params,
+            resp = self._send_with_refresh(
+                "POST",
+                path,
                 files={"image": (Path(local_path).name, f, "image/jpeg")},
                 timeout=60,
             )
