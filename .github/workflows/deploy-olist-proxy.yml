@@ -67,6 +67,9 @@ jobs:
           # pela Cloudflare dele; o PHP então chama a Tiny API a partir do IP do
           # servidor de hospedagem (não um IP de GitHub Actions), o que evita o bloqueio.
           echo "Testando via dominio normal..."
+          echo "=== Headers de resposta (diagnostico) ==="
+          curl -sD - -o /dev/null -X POST -H "X-Squad: $SQUAD_TOKEN" -d "pagina=1&limite=1" "https://dev.shopvivaliz.com.br/shop-catalog-export.php"
+          echo "=== fim headers ==="
           STATUS=$(curl -s -o /tmp/proxy_test.json -w "%{http_code}" \
             -X POST \
             -H "X-Squad: $SQUAD_TOKEN" \
