@@ -1,0 +1,129 @@
+name: AI Pipeline Full — Shopee + TikTok
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # a cada 6 horas
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Plataforma (shopee | tiktok | both)"
+        required: false
+        default: "both"
+      limit:
+        description: "Máximo de produtos (0 = todos)"
+        required: false
+        default: "0"
+      skip_images:
+        description: "Pular geração de imagens (true/false)"
+        required: false
+        default: "false"
+      dry_run:
+        description: "Dry run - não publica (true/false)"
+        required: false
+        default: "false"
+
+jobs:
+  pipeline:
+    name: Pipeline IA
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    env:
+      # Shopee Partner API
+      # SHOPEE_TEST_PARTNER_ID/KEY são os secrets existentes no repo
+      SHOPEE_PARTNER_ID:   ${{ secrets.SHOPEE_TEST_PARTNER_ID }}
+      SHOPEE_PARTNER_KEY:  ${{ secrets.SHOPEE_TEST_PARTNER_KEY }}
+      SHOPEE_ACCESS_TOKEN: ${{ secrets.SHOPEE_ACCESS_TOKEN }}
+      SHOPEE_SHOP_ID:      ${{ secrets.SHOPEE_SHOP_ID }}
+      SHOPEE_REFRESH_TOKEN: ${{ secrets.SHOPEE_REFRESH_TOKEN }}
+      # TikTok Shop API
+      TIKTOK_APP_KEY:      ${{ secrets.TIKTOK_APP_KEY }}
+      TIKTOK_APP_SECRET:   ${{ secrets.TIKTOK_APP_SECRET }}
+      TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
+      TIKTOK_SHOP_ID:      ${{ secrets.TIKTOK_SHOP_ID }}
+      # OpenAI
+      OPENAI_API_KEY:      ${{ secrets.OPENAI_API_KEY }}
+      # FTP (upload de imagens)
+      FTP_SERVER:          ${{ secrets.FTP_SERVER }}
+      FTP_USERNAME:        ${{ secrets.FTP_USERNAME }}
+      FTP_PASSWORD:        ${{ secrets.FTP_PASSWORD }}
+      FTP_PORT:            ${{ secrets.FTP_PORT }}
+      FTP_REMOTE_DIR:      ${{ secrets.FTP_REMOTE_DIR }}
+      SITE_DOMAIN:         "shopvivaliz.com.br"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Verificar secrets e decidir plataformas ativas
+        id: check_secrets
+        run: |
+          # Shopee — obrigatório
+          missing_shopee=""
+          for var in SHOPEE_PARTNER_ID SHOPEE_PARTNER_KEY SHOPEE_ACCESS_TOKEN SHOPEE_SHOP_ID OPENAI_API_KEY; do
+            [ -z "${!var}" ] && missing_shopee="$missing_shopee $var"
+          done
+          if [ -n "$missing_shopee" ]; then
+            echo "❌ Secrets Shopee ausentes:$missing_shopee"; exit 1
+          fi
+          echo "✅ Shopee: secrets OK"
+
+          # TikTok — opcional, só ativa se ambos presentes
+          if [ -n "$TIKTOK_ACCESS_TOKEN" ] && [ -n "$TIKTOK_SHOP_ID" ]; then
+            echo "✅ TikTok: secrets OK"
+            echo "tiktok_ready=true"  >> $GITHUB_OUTPUT
+          else
+            echo "⚠️  TikTok: TIKTOK_ACCESS_TOKEN ou TIKTOK_SHOP_ID ausentes — rodando só Shopee"
+            echo "tiktok_ready=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Análise de CTR (detectar produtos com baixa performance)
+        run: |
+          PLATFORM="${{ github.event.inputs.platform || 'both' }}"
+          [ "${{ steps.check_secrets.outputs.tiktok_ready }}" = "false" ] && PLATFORM="shopee"
+          python scripts/main.py --analytics-only --platform "$PLATFORM"
+        continue-on-error: true
+
+      - name: Pipeline principal
+        run: |
+          PLATFORM="${{ github.event.inputs.platform || 'both' }}"
+          [ "${{ steps.check_secrets.outputs.tiktok_ready }}" = "false" ] && PLATFORM="shopee"
+          ARGS="--platform $PLATFORM"
+          ARGS="$ARGS --limit ${{ github.event.inputs.limit || '0' }}"
+          [ "${{ github.event.inputs.skip_images }}" = "true" ] && ARGS="$ARGS --skip-images"
+          [ "${{ github.event.inputs.dry_run }}" = "true" ]     && ARGS="$ARGS --dry-run"
+          python scripts/main.py $ARGS
+
+      - name: Salvar logs como artefato
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-logs-${{ github.run_id }}
+          path: |
+            storage/logs/pipeline.csv
+            storage/logs/abtest_results.csv
+            storage/logs/ctr_report.csv
+          retention-days: 30
+
+      - name: Resumo do pipeline
+        if: always()
+        run: |
+          echo "## Pipeline ShopVivaliz" >> $GITHUB_STEP_SUMMARY
+          echo "- Plataforma: ${{ github.event.inputs.platform || 'both' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Limite: ${{ github.event.inputs.limit || '0 (todos)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Dry run: ${{ github.event.inputs.dry_run || 'false' }}" >> $GITHUB_STEP_SUMMARY
+          if [ -f storage/logs/pipeline.csv ]; then
+            TOTAL=$(tail -n +2 storage/logs/pipeline.csv | wc -l)
+            OK=$(grep -c ",OK," storage/logs/pipeline.csv || echo 0)
+            ERRORS=$(grep -c ",ERROR," storage/logs/pipeline.csv || echo 0)
+            echo "- Eventos log: $TOTAL (OK: $OK | Erros: $ERRORS)" >> $GITHUB_STEP_SUMMARY
+          fi
