@@ -55,7 +55,8 @@ class ShopeeClient:
         return DEFAULT_BASE_URL
 
     def _sign(self, path: str, timestamp: int) -> str:
-        base = f"{self.partner_id}{path}{timestamp}{self.access_token}{self.shop_id}"
+        api_path = self._signed_path(path)
+        base = f"{self.partner_id}{api_path}{timestamp}{self.access_token}{self.shop_id}"
         return hmac.new(
             self.partner_key.encode("utf-8"),
             base.encode("utf-8"),
@@ -63,12 +64,17 @@ class ShopeeClient:
         ).hexdigest()
 
     def _auth_sign(self, path: str, timestamp: int) -> str:
-        base = f"{self.partner_id}{path}{timestamp}"
+        api_path = self._signed_path(path)
+        base = f"{self.partner_id}{api_path}{timestamp}"
         return hmac.new(
             self.partner_key.encode("utf-8"),
             base.encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
+
+    @staticmethod
+    def _signed_path(path: str) -> str:
+        return path if path.startswith("/api/") else f"/api/v2{path}"
 
     def _base_params(self, path: str) -> dict:
         ts = int(time.time())
