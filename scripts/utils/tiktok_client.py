@@ -136,10 +136,10 @@ class TikTokClient:
 
     def iter_all_products(self, page_size: int = 100) -> Generator[dict, None, None]:
         """Itera por TODOS os produtos com paginação automática."""
-        path = "/api/products/search"
+        path = "/product/202309/products/search"
         page_token = ""
         while True:
-            params: dict = {"page_size": page_size}
+            params: dict = {"page_size": page_size, "version": "202309"}
             if page_token:
                 params["page_token"] = page_token
             data = self._post(path, {}, extra_params=params)
@@ -153,7 +153,7 @@ class TikTokClient:
             time.sleep(0.4)
 
     def get_product_detail(self, product_id: str) -> dict:
-        path = f"/api/products/{product_id}"
+        path = f"/product/202309/products/{product_id}"
         return self._get(path).get("data", {})
 
     # ── Atualização ───────────────────────────────────────────────────────────

@@ -18,7 +18,8 @@ from tenacity import (
     wait_exponential,
 )
 
-BASE_URL = "https://partner.shopeemobile.com/api/v2"
+DEFAULT_BASE_URL = "https://partner.shopeemobile.com/api/v2"
+SANDBOX_BASE_URL = "https://partner.test-stable.shopeemobile.com/api/v2"
 
 
 def _is_retryable(exc: Exception) -> bool:
@@ -38,8 +39,17 @@ class ShopeeClient:
         self.partner_key = pkey
         self.access_token = os.environ["SHOPEE_ACCESS_TOKEN"]
         self.shop_id = int(os.environ["SHOPEE_SHOP_ID"])
+        self.base_url = self._resolve_base_url()
         self._session = requests.Session()
         self._session.headers.update({"Content-Type": "application/json"})
+
+    def _resolve_base_url(self) -> str:
+        configured = (os.environ.get("SHOPEE_BASE_URL") or "").strip().rstrip("/")
+        if configured:
+            return configured
+        if os.environ.get("SHOPEE_TEST_PARTNER_ID") or os.environ.get("SHOPEE_TEST_PARTNER_KEY"):
+            return SANDBOX_BASE_URL
+        return DEFAULT_BASE_URL
 
     def _sign(self, path: str, timestamp: int) -> str:
         base = f"{self.partner_id}{path}{timestamp}{self.access_token}{self.shop_id}"
@@ -66,7 +76,7 @@ class ShopeeClient:
     )
     def _get(self, path: str, extra_params: dict | None = None) -> dict:
         params = {**self._base_params(path), **(extra_params or {})}
-        resp = self._session.get(f"{BASE_URL}{path}", params=params, timeout=30)
+        resp = self._session.get(f"{self.base_url}{path}", params=params, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         if data.get("error"):
@@ -80,7 +90,7 @@ class ShopeeClient:
     )
     def _post(self, path: str, body: dict, extra_params: dict | None = None) -> dict:
         params = {**self._base_params(path), **(extra_params or {})}
-        resp = self._session.post(f"{BASE_URL}{path}", params=params, json=body, timeout=30)
+        resp = self._session.post(f"{self.base_url}{path}", params=params, json=body, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         if data.get("error"):
@@ -156,7 +166,7 @@ class ShopeeClient:
         params = self._base_params(path)
         with open(local_path, "rb") as f:
             resp = self._session.post(
-                f"{BASE_URL}{path}",
+                f"{self.base_url}{path}",
                 params=params,
                 files={"image": (Path(local_path).name, f, "image/jpeg")},
                 timeout=60,
