@@ -46,6 +46,15 @@ class ShopeeClient:
         if self.refresh_token:
             self._refresh_access_token()
 
+    @staticmethod
+    def _is_invalid_token_response(resp: requests.Response) -> bool:
+        try:
+            data = resp.json()
+        except ValueError:
+            return False
+        error = str(data.get("error", "")).lower()
+        return error in {"invalid_access_token", "invalid_acceess_token", "access_token_expired"}
+
     def _resolve_base_url(self) -> str:
         configured = (os.environ.get("SHOPEE_BASE_URL") or "").strip().rstrip("/")
         if configured:
@@ -114,14 +123,45 @@ class ShopeeClient:
             # Keep the configured token if refresh fails.
             pass
 
+    def _send_with_refresh(
+        self,
+        method: str,
+        path: str,
+        *,
+        extra_params: dict | None = None,
+        json_body: dict | None = None,
+        files: dict | None = None,
+        timeout: int = 30,
+    ) -> requests.Response:
+        params = {**self._base_params(path), **(extra_params or {})}
+        resp = self._session.request(
+            method,
+            f"{self.base_url}{path}",
+            params=params,
+            json=json_body,
+            files=files,
+            timeout=timeout,
+        )
+        if resp.status_code == 403 and self.refresh_token and self._is_invalid_token_response(resp):
+            self._refresh_access_token()
+            params = {**self._base_params(path), **(extra_params or {})}
+            resp = self._session.request(
+                method,
+                f"{self.base_url}{path}",
+                params=params,
+                json=json_body,
+                files=files,
+                timeout=timeout,
+            )
+        return resp
+
     @retry(
         retry=retry_if_exception(_is_retryable),
         wait=wait_exponential(multiplier=1, min=2, max=30),
         stop=stop_after_attempt(4),
     )
     def _get(self, path: str, extra_params: dict | None = None) -> dict:
-        params = {**self._base_params(path), **(extra_params or {})}
-        resp = self._session.get(f"{self.base_url}{path}", params=params, timeout=30)
+        resp = self._send_with_refresh("GET", path, extra_params=extra_params, timeout=30)
         try:
             resp.raise_for_status()
         except requests.HTTPError as exc:
@@ -137,8 +177,7 @@ class ShopeeClient:
         stop=stop_after_attempt(4),
     )
     def _post(self, path: str, body: dict, extra_params: dict | None = None) -> dict:
-        params = {**self._base_params(path), **(extra_params or {})}
-        resp = self._session.post(f"{self.base_url}{path}", params=params, json=body, timeout=30)
+        resp = self._send_with_refresh("POST", path, extra_params=extra_params, json_body=body, timeout=30)
         try:
             resp.raise_for_status()
         except requests.HTTPError as exc:
@@ -214,11 +253,10 @@ class ShopeeClient:
     def upload_image(self, local_path: str) -> str:
         """Faz upload de imagem local para Shopee e retorna image_id."""
         path = "/media_space/upload_image"
-        params = self._base_params(path)
         with open(local_path, "rb") as f:
-            resp = self._session.post(
-                f"{self.base_url}{path}",
-                params=params,
+            resp = self._send_with_refresh(
+                "POST",
+                path,
                 files={"image": (Path(local_path).name, f, "image/jpeg")},
                 timeout=60,
             )
