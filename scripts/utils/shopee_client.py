@@ -38,10 +38,13 @@ class ShopeeClient:
         self.partner_id = int(pid)
         self.partner_key = pkey
         self.access_token = os.environ["SHOPEE_ACCESS_TOKEN"]
+        self.refresh_token = os.environ.get("SHOPEE_REFRESH_TOKEN", "")
         self.shop_id = int(os.environ["SHOPEE_SHOP_ID"])
         self.base_url = self._resolve_base_url()
         self._session = requests.Session()
         self._session.headers.update({"Content-Type": "application/json"})
+        if self.refresh_token:
+            self._refresh_access_token()
 
     def _resolve_base_url(self) -> str:
         configured = (os.environ.get("SHOPEE_BASE_URL") or "").strip().rstrip("/")
@@ -59,6 +62,14 @@ class ShopeeClient:
             hashlib.sha256,
         ).hexdigest()
 
+    def _auth_sign(self, path: str, timestamp: int) -> str:
+        base = f"{self.partner_id}{path}{timestamp}"
+        return hmac.new(
+            self.partner_key.encode("utf-8"),
+            base.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
     def _base_params(self, path: str) -> dict:
         ts = int(time.time())
         return {
@@ -69,6 +80,34 @@ class ShopeeClient:
             "sign": self._sign(path, ts),
         }
 
+    def _refresh_access_token(self) -> None:
+        path = "/auth/access_token/get"
+        timestamp = int(time.time())
+        params = {
+            "partner_id": self.partner_id,
+            "timestamp": timestamp,
+            "sign": self._auth_sign(path, timestamp),
+        }
+        body = {
+            "refresh_token": self.refresh_token,
+            "shop_id": self.shop_id,
+            "partner_id": self.partner_id,
+        }
+        try:
+            resp = self._session.post(f"{self.base_url}{path}", params=params, json=body, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            response = data.get("response", {})
+            new_access_token = response.get("access_token")
+            new_refresh_token = response.get("refresh_token")
+            if new_access_token:
+                self.access_token = new_access_token
+            if new_refresh_token:
+                self.refresh_token = new_refresh_token
+        except Exception:
+            # Keep the configured token if refresh fails.
+            pass
+
     @retry(
         retry=retry_if_exception(_is_retryable),
         wait=wait_exponential(multiplier=1, min=2, max=30),
@@ -77,7 +116,10 @@ class ShopeeClient:
     def _get(self, path: str, extra_params: dict | None = None) -> dict:
         params = {**self._base_params(path), **(extra_params or {})}
         resp = self._session.get(f"{self.base_url}{path}", params=params, timeout=30)
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            raise requests.HTTPError(f"{exc} | body={resp.text[:400]}", response=resp) from exc
         data = resp.json()
         if data.get("error"):
             raise RuntimeError(f"Shopee API error {data['error']}: {data.get('message')}")
@@ -91,7 +133,10 @@ class ShopeeClient:
     def _post(self, path: str, body: dict, extra_params: dict | None = None) -> dict:
         params = {**self._base_params(path), **(extra_params or {})}
         resp = self._session.post(f"{self.base_url}{path}", params=params, json=body, timeout=30)
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            raise requests.HTTPError(f"{exc} | body={resp.text[:400]}", response=resp) from exc
         data = resp.json()
         if data.get("error"):
             raise RuntimeError(f"Shopee API error {data['error']}: {data.get('message')}")

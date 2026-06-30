@@ -81,7 +81,10 @@ class TikTokClient:
             headers=self._headers(content_type=None),
             timeout=30,
         )
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            raise requests.HTTPError(f"{exc} | body={resp.text[:400]}", response=resp) from exc
         data = resp.json()
         code = data.get("code", 0)
         if code not in (0, 200):
@@ -103,7 +106,10 @@ class TikTokClient:
             headers=self._headers(),
             timeout=30,
         )
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            raise requests.HTTPError(f"{exc} | body={resp.text[:400]}", response=resp) from exc
         data = resp.json()
         code = data.get("code", 0)
         if code not in (0, 200):
@@ -125,7 +131,10 @@ class TikTokClient:
             headers=self._headers(),
             timeout=30,
         )
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            raise requests.HTTPError(f"{exc} | body={resp.text[:400]}", response=resp) from exc
         data = resp.json()
         code = data.get("code", 0)
         if code not in (0, 200):
