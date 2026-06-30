@@ -101,7 +101,7 @@ def main() -> int:
 
     print(json.dumps(data, indent=2, ensure_ascii=False)[:1200])
 
-    response = data.get("response", {})
+    response = data.get("response") or data
     access_token = response.get("access_token")
     new_refresh_token = response.get("refresh_token")
 

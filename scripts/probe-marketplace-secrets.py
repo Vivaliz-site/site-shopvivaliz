@@ -102,7 +102,7 @@ def probe_shopee() -> None:
                 except Exception as exc:
                     log("shopee", f"refresh erro tecnico: {exc}")
                     continue
-                response = data.get("response", {})
+                response = data.get("response") or data
                 if response.get("access_token"):
                     log("shopee", f"refresh OK com {base_name}/{pid_name}/{pkey_name}/{rname}")
                     access_token_candidates = [("refreshed_access_token", response["access_token"])]

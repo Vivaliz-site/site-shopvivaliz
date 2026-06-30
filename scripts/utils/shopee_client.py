@@ -112,7 +112,7 @@ class ShopeeClient:
             resp = self._session.post(f"{self.base_url}{path}", params=params, json=body, timeout=30)
             resp.raise_for_status()
             data = resp.json()
-            response = data.get("response", {})
+            response = data.get("response") or data
             new_access_token = response.get("access_token")
             new_refresh_token = response.get("refresh_token")
             if new_access_token:
