@@ -1,14 +1,14 @@
-name: Sincronizar imagens Olist no site
+name: Sincronizar imagens Olist no site via Tiny V2 ao vivo
 
 on:
   workflow_dispatch:
     inputs:
       mapping_csv_gzip_base64:
-        description: CSV de URLs Olist compactado com gzip+base64
+        description: CSV compactado com gzip+base64 contendo ao menos ID e SKU dos produtos para consulta ao vivo na Tiny V2
         required: true
         type: string
       dry_run:
-        description: Executar sem vincular banco
+        description: Executar sem vincular banco no servidor
         required: false
         default: "false"
         type: choice
@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   sync:
-    name: Baixar, subir e vincular imagens
+    name: Buscar na Tiny V2, subir e vincular imagens
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -38,7 +38,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Preparar CSV de entrada
+      - name: Preparar CSV de entrada para Tiny V2 ao vivo
         env:
           MAPPING_CSV_GZIP_BASE64: ${{ inputs.mapping_csv_gzip_base64 }}
         shell: python
@@ -49,7 +49,7 @@ jobs:
           raw = base64.b64decode(os.environ["MAPPING_CSV_GZIP_BASE64"])
           csv_bytes = gzip.decompress(raw)
           Path("storage/reports/olist_imagens_urls_min.csv").write_bytes(csv_bytes)
-          print("CSV de entrada preparado com bytes:", len(csv_bytes))
+          print("CSV de entrada preparado para consulta ao vivo na Tiny V2. Bytes:", len(csv_bytes))
 
       - name: Publicar endpoint de vinculo protegido
         env:
@@ -94,21 +94,21 @@ jobs:
           ftp.quit()
           print("Endpoint publicado.")
 
-      - name: Baixar e subir imagens por FTP
+      - name: Buscar imagens na Tiny V2 ao vivo e subir por FTP
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_PORT: ${{ secrets.FTP_PORT }}
           FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
           SITE_BASE_URL: https://dev.shopvivaliz.com.br
           OLIST_UPLOAD_MODE: ftp
           OLIST_DB_MODE: none
         run: |
           python3 scripts/sync-olist-images.py \
             --input storage/reports/olist_imagens_urls_min.csv \
-            --skip-api \
-            --allow-sheet-image-fallback \
+            --api-version v2 \
             --quiet \
             --upload-mode ftp \
             --db-mode none
@@ -134,7 +134,7 @@ jobs:
               headers={
                   "Content-Type": "application/json",
                   "X-Squad-Token": os.environ["SQUAD_TOKEN"],
-                  "User-Agent": "ShopVivalizOlistImageSyncAction/1.0",
+                  "User-Agent": "ShopVivalizOlistImageSyncActionTinyV2/1.0",
               },
               method="POST",
           )
