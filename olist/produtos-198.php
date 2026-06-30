@@ -1,6 +1,7 @@
 ﻿<?php
 // Auto-generated: 198 Olist products
-$GLOBALS['produtos_olist'] = [
+$GLOBALS['produtos_olist'] = json_decode(<<<'JSON'
+[
   {
     "id": "PROD-0001",
     "sku": "SKU-0001",
@@ -2655,5 +2656,6 @@ $GLOBALS['produtos_olist'] = [
     "status": "ativo",
     "sincronizado_em": "2026-06-28T12:44:55.703531"
   }
-];
+]
+JSON, true) ?: [];
 ?>
