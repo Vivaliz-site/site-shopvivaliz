@@ -32,7 +32,7 @@ from urllib.request import Request, urlopen
 OPENAI_CHAT_URL    = "https://api.openai.com/v1/chat/completions"
 OPENAI_IMAGE_URL   = "https://api.openai.com/v1/images/generations"
 VISION_MODEL       = os.getenv("OPENAI_VISION_MODEL",  "gpt-4o")
-GENERATION_MODEL   = os.getenv("OPENAI_IMAGE_MODEL",   "dall-e-3")
+GENERATION_MODEL   = os.getenv("OPENAI_IMAGE_MODEL") or "dall-e-3"
 IMAGE_SIZE         = os.getenv("OPENAI_IMAGE_SIZE",     "1024x1024")
 IMAGE_QUALITY      = os.getenv("OPENAI_IMAGE_QUALITY",  "hd")
 DEFAULT_IN_CSV     = Path(os.getenv("AI_INPUT_CSV",     "logs/olist-images-export.csv"))

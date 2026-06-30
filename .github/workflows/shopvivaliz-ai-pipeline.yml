@@ -25,6 +25,11 @@ on:
         default: 'false'
         type: choice
         options: ['false', 'true']
+      image_model:
+        description: 'Override do modelo de imagem OpenAI (vazio = padrão dall-e-3)'
+        required: false
+        default: ''
+        type: string
       skip_ab:
         description: 'Pular registro de A/B test'
         required: false
@@ -132,6 +137,7 @@ jobs:
           AI_LIMIT:         ${{ github.event.inputs.limit || '0' }}
           AI_IMAGES_DIR:    storage/ai-images
           AI_REPORTS_DIR:   logs
+          OPENAI_IMAGE_MODEL: ${{ github.event.inputs.image_model || '' }}
         run: |
           mkdir -p storage/ai-images logs
           DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
