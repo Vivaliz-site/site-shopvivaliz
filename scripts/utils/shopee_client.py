@@ -19,7 +19,7 @@ from tenacity import (
 )
 
 DEFAULT_BASE_URL = "https://partner.shopeemobile.com/api/v2"
-SANDBOX_BASE_URL = "https://partner.test-stable.shopeemobile.com/api/v2"
+SANDBOX_BASE_URL = "https://openplatform.sandbox.test-stable.shopee.sg/api/v2"
 
 
 def _is_retryable(exc: Exception) -> bool:
