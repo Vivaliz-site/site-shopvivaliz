@@ -1,0 +1,127 @@
+name: Deploy Olist Proxy + Rodar Pipeline IA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-and-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Deploy shop-catalog-export.php via FTP (token embutido)
+        shell: python
+        env:
+          FTP_SERVER:      ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME:    ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD:    ${{ secrets.FTP_PASSWORD }}
+          FTP_PORT:        ${{ secrets.FTP_PORT }}
+          FTP_REMOTE_DIR:  ${{ secrets.FTP_REMOTE_DIR }}
+          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
+          SQUAD_TOKEN:     ${{ secrets.SQUAD_TOKEN }}
+        run: |
+          import ftplib, io, os
+
+          server   = os.environ["FTP_SERVER"]
+          user     = os.environ["FTP_USERNAME"]
+          password = os.environ["FTP_PASSWORD"]
+          port     = int(os.environ.get("FTP_PORT") or "21")
+          base     = (os.environ.get("FTP_REMOTE_DIR") or "/").strip() or "/"
+          token    = os.environ.get("TOKEN_API_OLIST", "")
+          squad    = os.environ.get("SQUAD_TOKEN", "")
+
+          with open("shop-catalog-export.php", encoding="utf-8") as f:
+              php = f.read()
+
+          # Embutir tokens no PHP antes de fazer upload
+          php = php.replace("'__SQUAD_TOKEN__'", f"'{squad}'")
+          php = php.replace("'__OLIST_TOKEN__'", f"'{token}'")
+          content = php.encode("utf-8")
+
+          def cwd_mkdir(ftp, path):
+              if path.startswith("/"): ftp.cwd("/")
+              for part in [p for p in path.replace("\\","/").split("/") if p]:
+                  try: ftp.mkd(part)
+                  except ftplib.error_perm: pass
+                  ftp.cwd(part)
+
+          ftp = ftplib.FTP()
+          ftp.connect(server, port, timeout=45)
+          ftp.login(user, password)
+          cwd_mkdir(ftp, base.rstrip("/"))
+          ftp.storbinary("STOR shop-catalog-export.php", io.BytesIO(content))
+          ftp.quit()
+          print("✅ shop-catalog-export.php (com tokens) enviado à raiz do servidor")
+
+      - name: Testar proxy via IP de origem (bypass Cloudflare)
+        env:
+          FTP_SERVER:   ${{ secrets.FTP_SERVER }}
+          SQUAD_TOKEN:  ${{ secrets.SQUAD_TOKEN }}
+        run: |
+          # Conectar diretamente ao IP do servidor (não via Cloudflare)
+          # FTP_SERVER = origin IP — bypass Cloudflare com header Host:
+          echo "Testando via origem HTTP direto..."
+          STATUS=$(curl -s -o /tmp/proxy_test.json -w "%{http_code}" \
+            -X POST \
+            -H "Host: dev.shopvivaliz.com.br" \
+            -H "X-Squad: $SQUAD_TOKEN" \
+            -d "pagina=1&limite=5" \
+            "http://$FTP_SERVER/shop-catalog-export.php")
+          echo "HTTP Status (origem): $STATUS"
+          cat /tmp/proxy_test.json | head -c 800
+
+          if [ "$STATUS" = "200" ]; then
+            echo "::notice::Proxy origem funcionando"
+            echo "PROXY_ORIGIN=http://$FTP_SERVER/shop-catalog-export.php" >> $GITHUB_ENV
+          else
+            echo "::warning::Origem HTTP $STATUS — tentando HTTPS..."
+            STATUS2=$(curl -s -o /tmp/proxy_test2.json -w "%{http_code}" \
+              -X POST \
+              -k \
+              -H "Host: dev.shopvivaliz.com.br" \
+              -H "X-Squad: $SQUAD_TOKEN" \
+              -d "pagina=1&limite=5" \
+              "https://$FTP_SERVER/shop-catalog-export.php")
+            echo "HTTP Status (HTTPS origem): $STATUS2"
+            cat /tmp/proxy_test2.json | head -c 800
+            if [ "$STATUS2" = "200" ]; then
+              echo "PROXY_ORIGIN=https://$FTP_SERVER/shop-catalog-export.php" >> $GITHUB_ENV
+            else
+              echo "PROXY_ORIGIN=" >> $GITHUB_ENV
+            fi
+          fi
+
+      - name: Exportar produtos via proxy de origem
+        env:
+          OLIST_PROXY_URL: ${{ env.PROXY_ORIGIN }}
+          SQUAD_TOKEN:     ${{ secrets.SQUAD_TOKEN }}
+          OUT_CSV:         logs/olist-images-export.csv
+          OUT_JSON:        logs/olist-products-raw.json
+        run: |
+          mkdir -p logs
+          if [ -z "$OLIST_PROXY_URL" ]; then
+            echo "Proxy não disponível — tentando Tiny API com IP de origem como proxy de saída"
+            exit 1
+          fi
+          echo "Usando proxy: $OLIST_PROXY_URL"
+          python3 scripts/export-olist-images-csv.py
+          COUNT=$(python3 -c "
+          import csv
+          with open('logs/olist-images-export.csv', encoding='utf-8-sig') as f:
+              r = list(csv.DictReader(f))
+              print(sum(1 for row in r if row.get('primary_image_url','').startswith('http')))
+          " 2>/dev/null || echo "0")
+          echo "Produtos com imagem: $COUNT"
+
+      - name: Upload CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: olist-products-export
+          path: |
+            logs/olist-images-export.csv
+            logs/olist-products-raw.json

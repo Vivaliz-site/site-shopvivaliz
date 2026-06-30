@@ -1,0 +1,28 @@
+name: Diagnóstico - Tiny API Direto
+
+on: workflow_dispatch
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Testar Tiny API v2 direto
+        env:
+          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
+        run: |
+          echo "=== Tiny API v2 direto ==="
+          STATUS=$(curl -s -o /tmp/tiny_test.json -w "%{http_code}" \
+            "https://api.tiny.com.br/api/v2/produtos.json?token=$TOKEN_API_OLIST&formato=json&pagina=1&limite=3")
+          echo "HTTP Status: $STATUS"
+          cat /tmp/tiny_test.json | head -c 800
+
+      - name: Testar Tiny API v2 com User-Agent de browser
+        env:
+          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
+        run: |
+          echo "=== Tiny API v2 com User-Agent browser ==="
+          STATUS=$(curl -s -o /tmp/tiny_ua.json -w "%{http_code}" \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+            "https://api.tiny.com.br/api/v2/produtos.json?token=$TOKEN_API_OLIST&formato=json&pagina=1&limite=3")
+          echo "HTTP Status: $STATUS"
+          cat /tmp/tiny_ua.json | head -c 800
