@@ -23,7 +23,7 @@ OUT_CSV = Path(os.getenv("OUT_CSV", "logs/olist-images-export.csv"))
 OUT_JSON = Path(os.getenv("OUT_JSON", "logs/olist-products-raw.json"))
 LIMIT = int(os.getenv("OLIST_PAGE_LIMIT", "50"))
 MAX_PAGES = int(os.getenv("OLIST_MAX_PAGES", "20"))
-SLEEP_SECONDS = float(os.getenv("OLIST_SLEEP_SECONDS", "0.3"))
+SLEEP_SECONDS = float(os.getenv("OLIST_SLEEP_SECONDS", "1.0"))
 
 
 def fail(message: str, code: int = 1) -> None:
@@ -31,18 +31,24 @@ def fail(message: str, code: int = 1) -> None:
     sys.exit(code)
 
 
-def http_json(request: Request, timeout: int = 45) -> dict:
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            raw = response.read().decode("utf-8", errors="replace")
-            return json.loads(raw) if raw else {}
-    except HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        fail(f"HTTP {exc.code} em {request.full_url}: {body[:1000]}")
-    except URLError as exc:
-        fail(f"Falha de rede em {request.full_url}: {exc}")
-    except json.JSONDecodeError as exc:
-        fail(f"Resposta nao e JSON valido em {request.full_url}: {exc}")
+def http_json(request: Request, timeout: int = 45, retries: int = 5) -> dict:
+    for attempt in range(retries):
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                raw = response.read().decode("utf-8", errors="replace")
+                return json.loads(raw) if raw else {}
+        except HTTPError as exc:
+            if exc.code == 429 and attempt < retries - 1:
+                wait = 2 ** attempt
+                print(f"  Rate limit (429), aguardando {wait}s...")
+                time.sleep(wait)
+                continue
+            body = exc.read().decode("utf-8", errors="replace")
+            fail(f"HTTP {exc.code} em {request.full_url}: {body[:1000]}")
+        except URLError as exc:
+            fail(f"Falha de rede em {request.full_url}: {exc}")
+        except json.JSONDecodeError as exc:
+            fail(f"Resposta nao e JSON valido em {request.full_url}: {exc}")
     return {}
 
 
