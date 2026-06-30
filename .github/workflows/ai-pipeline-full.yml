@@ -90,7 +90,7 @@ jobs:
         run: |
           PLATFORM="${{ github.event.inputs.platform || 'both' }}"
           [ "${{ steps.check_secrets.outputs.tiktok_ready }}" = "false" ] && PLATFORM="shopee"
-          python scripts/main.py --analytics-only --platform "$PLATFORM"
+          python scripts/ia_pipeline_main.py --analytics-only --platform "$PLATFORM"
         continue-on-error: true
 
       - name: Pipeline principal
@@ -101,7 +101,7 @@ jobs:
           ARGS="$ARGS --limit ${{ github.event.inputs.limit || '0' }}"
           [ "${{ github.event.inputs.skip_images }}" = "true" ] && ARGS="$ARGS --skip-images"
           [ "${{ github.event.inputs.dry_run }}" = "true" ]     && ARGS="$ARGS --dry-run"
-          python scripts/main.py $ARGS
+          python scripts/ia_pipeline_main.py $ARGS
 
       - name: Salvar logs como artefato
         if: always()
