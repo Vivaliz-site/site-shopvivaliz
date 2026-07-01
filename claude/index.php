@@ -29,9 +29,9 @@ function http_check(string $url, int $timeout = 8): array {
 // Health checks em paralelo via múltiplas requisições
 $checks = [
     'homepage' => $base . '/claude/',
-    'api'      => $base . '/api/health.php',
-    'catalogo' => $base . '/catalogo.php',
-    'carrinho' => $base . '/carrinho.php',
+    'api'      => $base . '/claude/api/health.php',
+    'catalogo' => $base . '/claude/catalogo/',
+    'carrinho' => $base . '/claude/carrinho/',
 ];
 
 $results = [];
