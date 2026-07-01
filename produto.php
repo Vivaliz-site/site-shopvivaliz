@@ -40,7 +40,7 @@ $requestedId = sv_product_value('id', sv_product_value('olist_product_id'));
 $resolved = sv_product_lookup($requestedSku, $requestedId);
 
 $sku = trim((string)($resolved['sku'] ?? '')) ?: sv_product_value('sku', sv_product_value('id', 'sem-sku'));
-$name = trim((string)($resolved['name'] ?? '')) ?: sv_product_value('name', 'Produto ShopVivaliz');
+$name = trim((string)($resolved['name'] ?? '')) ?: sv_product_value('name', 'Produto Vivaliz');
 $image = trim((string)($resolved['image_url'] ?? '')) ?: sv_product_value('image', '/favicon.ico');
 $price = (string)($resolved['price'] ?? sv_product_value('price', '0'));
 $olistId = trim((string)($resolved['olist_product_id'] ?? '')) ?: sv_product_value('olist_product_id', '');
@@ -52,13 +52,14 @@ $priceLabel = $priceValue > 0 ? 'R$ ' . number_format($priceValue, 2, ',', '.') 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?> - ShopVivaliz</title>
+    <meta name="theme-color" content="#173B63">
+    <title><?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?> | Vivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
     <nav class="navbar">
         <div class="container nav-inner">
-            <a class="brand-link" href="/">ShopVivaliz</a>
+            <a class="brand-link" href="/">Vivaliz</a>
             <div class="navbar-menu">
                 <a href="/catalogo">Catálogo</a>
                 <a href="/carrinho.php">Carrinho</a>

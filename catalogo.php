@@ -85,7 +85,12 @@ $statusText = $products
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Catálogo - ShopVivaliz</title>
+    <meta name="description" content="Catálogo de produtos Vivaliz — rodízios, ferragens, utilidades e muito mais. Compre online com entrega rápida.">
+    <meta name="theme-color" content="#173B63">
+    <meta property="og:title" content="Catálogo | Vivaliz">
+    <meta property="og:description" content="Explore nosso catálogo completo de produtos com qualidade e entrega rápida.">
+    <meta property="og:type" content="website">
+    <title>Catálogo | Vivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
