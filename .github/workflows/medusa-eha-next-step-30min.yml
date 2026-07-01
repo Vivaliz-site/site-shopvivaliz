@@ -1,0 +1,48 @@
+name: Medusa EHA Next Step
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 * * * *'
+
+jobs:
+  medusa-next-step:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_REPO_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: Run Medusa migration agent
+        run: php automation/eha/medusa_migration_agent.php
+
+      - name: Upload Medusa EHA report
+        uses: actions/upload-artifact@v4
+        with:
+          name: medusa-eha-report-${{ github.run_number }}
+          path: |
+            automation/eha/reports/medusa-last-run.json
+            automation/eha/reports/medusa-run-history.jsonl
+            logs/tasks-queue.json
+          retention-days: 14
+
+      - name: Commit Medusa status
+        run: |
+          git config user.email 'ci-autonomo@shopvivaliz.com.br'
+          git config user.name 'CI Autonomo'
+          git add automation/eha/reports/medusa-last-run.json automation/eha/reports/medusa-run-history.jsonl logs/tasks-queue.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: atualiza proximo passo medusa #${{ github.run_number }} [skip ci]"
+            for i in 1 2 3 4; do
+              git pull --rebase origin main && git push origin HEAD:main && break
+              sleep $((i * 2))
+            done
+          fi

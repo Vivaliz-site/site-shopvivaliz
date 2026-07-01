@@ -1,0 +1,26 @@
+{
+  "agent": "medusa_migration_agent",
+  "status": "in_progress",
+  "next_step_key": "generate_publishable_key",
+  "next_step_title": "Medusa: gerar publishable key",
+  "next_step_description": "Subir o backend e gerar uma publishable API key valida para a storefront consumir a Store API.",
+  "applied_actions": [
+    "created_backend_env",
+    "created_storefront_env"
+  ],
+  "state": {
+    "timestamp": "2026-07-01T00:00:00+00:00",
+    "workspace_exists": true,
+    "backend_exists": true,
+    "storefront_exists": true,
+    "root_package_exists": true,
+    "node_modules_exists": true,
+    "backend_env_template_exists": true,
+    "backend_env_exists": true,
+    "storefront_env_example_exists": true,
+    "storefront_env_exists": true,
+    "backend_config_exists": true,
+    "storefront_package_exists": true,
+    "storefront_publishable_key_present": false
+  }
+}
