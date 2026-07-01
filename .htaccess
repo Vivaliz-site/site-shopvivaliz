@@ -13,15 +13,14 @@ AddCharset UTF-8 .html .txt .php .json
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteRule ^$ home.php [L]
-    RewriteRule ^catalogo/?$ catalogo.php [L]
-    RewriteRule ^carrinho/?$ carrinho/index.php [L]
-    RewriteRule ^checkout/?$ checkout/index.php [L]
-    RewriteRule ^sobre/?$ sobre/index.php [L]
-    RewriteRule ^contato/?$ contato/index.php [L]
-    RewriteRule ^faq/?$ faq/index.php [L]
-    RewriteRule ^blog/?$ blog/index.php [L]
-    RewriteRule ^politica-privacidade/?$ politica-privacidade/index.php [L]
+    # Main project is in /claude/
+    # Don't rewrite /claude/ requests
+    RewriteCond %{REQUEST_URI} !^/claude/
+    # Don't rewrite existing files or directories
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    # Rewrite everything else to /claude/
+    RewriteRule ^(.*)$ /claude/$1 [L]
 </IfModule>
 
 # Gzip compression (se disponível)
