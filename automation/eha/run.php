@@ -28,7 +28,7 @@ $action = decide_next_step($metrics);
 _eha_log("DECISION action=$action");
 
 // 4. Executa loop
-run_loop($metrics);
+$loop = run_loop($metrics);
 
 // 5. Salva relatório final
 $elapsed = round(microtime(true) - $start, 2);
@@ -36,6 +36,7 @@ $report  = [
     'action'     => $action,
     'metrics'    => $metrics,
     'validation' => $validation,
+    'loop'       => $loop,
     'elapsed_s'  => $elapsed,
     'run_id'     => getenv('GITHUB_RUN_NUMBER') ?: 'local-' . time(),
 ];
@@ -61,6 +62,15 @@ function run_loop(array|string $error_log): array
     ];
 
     _eha_log("LOOP risk=$risk issue=$issue");
+
+    if ($issue === 'none') {
+        $response['result'] = [
+            'status' => 'no_action',
+            'note' => 'Metricas saudaveis; nenhuma correcao automatica necessaria.',
+        ];
+        _eha_log('LOOP result=' . json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        return $response;
+    }
 
     if ($risk === 'LOW') {
         $response['result'] = \auto_fix($issue) ?? eha_auto_fix($issue);
@@ -99,6 +109,11 @@ function eha_detect_issue(array|string $error_log): string
 
     if (!empty($error_log['checkout_fail']) || !empty($error_log['e2e_failed']) || !empty($error_log['error_high'])) {
         return 'checkout_fail';
+    }
+
+    $errorCount = (int)($error_log['error_count'] ?? 0);
+    if ($errorCount === 0 && empty($error_log['error_low']) && empty($error_log['error_medium'])) {
+        return 'none';
     }
 
     if (!empty($error_log['error_medium'])) {
