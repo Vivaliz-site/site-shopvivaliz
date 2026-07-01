@@ -104,6 +104,56 @@ function svcat_get(array $row, array $keys, string $default = ''): string
     return $default;
 }
 
+function svcat_tiny_price_map(): array
+{
+    $cache = svcat_root() . '/storage/tiny_prices_cache.json';
+    if (is_file($cache) && (time() - filemtime($cache)) < 21600) {
+        $data = json_decode((string)file_get_contents($cache), true);
+        if (is_array($data)) return $data;
+    }
+    $token = '';
+    $envFile = svcat_root() . '/.env';
+    if (is_file($envFile)) {
+        foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+            if (str_starts_with(trim($line), '#') || !str_contains($line, '=')) continue;
+            [$k, $v] = explode('=', $line, 2);
+            if (trim($k) === 'TOKEN_API_OLIST') { $token = trim(trim($v), "\"'"); break; }
+        }
+    }
+    if ($token === '') $token = (string)getenv('TOKEN_API_OLIST');
+    if ($token === '') return [];
+
+    $map = [];
+    $page = 1;
+    $maxPages = 10;
+    while ($page <= $maxPages) {
+        $url = "https://api.tiny.com.br/api/v2/produtos.json?token={$token}&formato=json&pagina={$page}&limite=100";
+        $ctx = stream_context_create(['http' => ['timeout' => 20, 'header' => "User-Agent: ShopVivaliz/1.0
+"]]);
+        $raw = @file_get_contents($url, false, $ctx);
+        if ($raw === false) break;
+        $data = json_decode($raw, true);
+        $items = $data['retorno']['produtos'] ?? [];
+        if (empty($items)) break;
+        foreach ($items as $wrapper) {
+            $item = $wrapper['produto'] ?? $wrapper;
+            $pid = (string)($item['id'] ?? '');
+            $sku = (string)($item['codigo'] ?? '');
+            $price = (float)str_replace(',', '.', (string)($item['preco'] ?? '0'));
+            if ($pid !== '') $map[$pid] = $price;
+            if ($sku !== '') $map['sku:' . $sku] = $price;
+        }
+        if (count($items) < 100) break;
+        $page++;
+        usleep(300000);
+    }
+    if ($map) {
+        @mkdir(svcat_root() . '/storage', 0755, true);
+        @file_put_contents($cache, json_encode($map, JSON_UNESCAPED_UNICODE));
+    }
+    return $map;
+}
+
 function svcat_db_products(mysqli $db, int $limit, string $q): array
 {
     $products = [];
@@ -241,6 +291,21 @@ try {
 if (!$products) {
     $products = svcat_fallback_products($limit, $q);
     $source = 'fallback_report';
+}
+
+// Enrich products with prices from Tiny API (cached 6h on HostGator)
+if ($products) {
+    $priceMap = svcat_tiny_price_map();
+    if ($priceMap) {
+        foreach ($products as &$p) {
+            if (($p['price'] ?? 0) > 0) continue;
+            $pid = (string)($p['olist_product_id'] ?? $p['id'] ?? '');
+            $sku = (string)($p['sku'] ?? '');
+            $price = $priceMap[$pid] ?? $priceMap['sku:' . $sku] ?? 0.0;
+            if ($price > 0) $p['price'] = $price;
+        }
+        unset($p);
+    }
 }
 
 svcat_json(200, [
