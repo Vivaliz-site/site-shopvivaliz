@@ -61,10 +61,15 @@ jobs:
           check_required_secret "FTP_PORT" "${{ secrets.FTP_PORT }}"
           check_required_secret "FTP_REMOTE_DIR" "${{ secrets.FTP_REMOTE_DIR }}"
           check_required_secret "SQUAD_TOKEN" "${{ secrets.SQUAD_TOKEN }}"
+          check_required_secret "DB_HOST" "${{ secrets.DB_HOST }}"
+          check_required_secret "DB_NAME" "${{ secrets.DB_NAME }}"
+          check_required_secret "DB_USER" "${{ secrets.DB_USER }}"
+          check_required_secret "DB_PASS" "${{ secrets.DB_PASS }}"
 
           check_optional_secret "ANTHROPIC_API_KEY" "${{ secrets.ANTHROPIC_API_KEY }}"
           check_optional_secret "OPENAI_API_KEY" "${{ secrets.OPENAI_API_KEY }}"
           check_optional_secret "GEMINI_API_KEY" "${{ secrets.GEMINI_API_KEY }}"
+          check_optional_secret "DB_PORT" "${{ secrets.DB_PORT }}"
 
           if [ "$missing" -ne 0 ]; then
             exit 1
@@ -78,6 +83,13 @@ jobs:
           ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          DB_HOST=${{ secrets.DB_HOST }}
+          DB_PORT=${{ secrets.DB_PORT }}
+          DB_NAME=${{ secrets.DB_NAME }}
+          DB_USER=${{ secrets.DB_USER }}
+          DB_PASS=${{ secrets.DB_PASS }}
+          APP_ENV=development
+          BASE_URL=https://dev.shopvivaliz.com.br
           EOF
           sed -i 's/^          //' .env
           chmod 600 .env
@@ -139,6 +151,18 @@ jobs:
             DEPLOY_FAILED=true
           else
             echo " Home dev acessível."
+          fi
+
+          echo "Testando health público básico..."
+          if curl -fsS "$BASE/api/health.php" -o /tmp/app-health.json; then
+            if grep -q '"ok":true' /tmp/app-health.json; then
+              echo " App health respondeu."
+            else
+              echo " App health respondeu sem payload esperado."
+              cat /tmp/app-health.json
+            fi
+          else
+            echo " App health não disponível. Seguindo com smoke do Squad."
           fi
 
           echo "Testando health público do Squad Chat..."
