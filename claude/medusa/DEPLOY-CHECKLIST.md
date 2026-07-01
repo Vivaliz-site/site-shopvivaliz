@@ -12,6 +12,18 @@
 | Banco de dados de produção | ⏳ Pendente (ver passo 1) |
 | Deploy backend/storefront em produção | ⏳ Pendente (ver passo 2) |
 
+Reverificado em ambiente novo (container efêmero, sem estado anterior): Postgres/Redis
+locais provisionados, `npm install` + `npm run build` OK nos dois apps, migrations +
+seed (5 produtos incluindo T-shirt, cliente teste) aplicados, backend/storefront
+subiram e o storefront renderizou a página do produto a partir da API real, webhook
+testado com assinatura válida/inválida/ausente.
+
+**Nota:** `npm install` no backend falhava com `ERESOLVE` porque `@medusajs/ui` e
+`react-router-dom` estavam pinados em versões incompatíveis com o peer exigido por
+`@medusajs/draft-order@2.17.0` (corrigido no `package.json`: `@medusajs/ui@4.1.17`,
+`react-router-dom@6.30.4`). Se voltar a acontecer após atualizar `@medusajs/medusa`,
+verifique a versão de peer exigida na mensagem de erro do npm e alinhe o `package.json`.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
