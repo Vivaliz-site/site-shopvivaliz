@@ -99,6 +99,7 @@ jobs:
           OLIST_CLIENT_SECRET=${{ secrets.OLIST_CLIENT_SECRET }}
           OLIST_REFRESH_TOKEN=${{ secrets.OLIST_REFRESH_TOKEN }}
           OLIST_ACCESS_TOKEN=${{ secrets.OLIST_ACCESS_TOKEN }}
+          LOJA_WHATSAPP=${{ secrets.LOJA_WHATSAPP }}
           APP_ENV=development
           BASE_URL=https://dev.shopvivaliz.com.br
           EOF

@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
         );
 
         // Email de notificacao para o lojista
-        $adminEmail = 'fredmourao@gmail.com';
+        $adminEmail = defined('LOJA_EMAIL_ADMIN') ? LOJA_EMAIL_ADMIN : 'fredmourao@gmail.com';
         $subject = "Novo pedido {$pedidoId} - Vivaliz";
         $itemLines = implode("
 ", array_map(function ($it) {
@@ -274,7 +274,7 @@ Content-Type: text/plain; charset=UTF-8");
                 $wppMsg = rawurlencode("Ola! Fiz um pedido na Vivaliz (ID: {$pedidoId}).
 Itens: {$wppItems}
 Aguardo confirmacao e dados de pagamento. Obrigado!");
-                $wppTel = '5511999999999';
+                $wppTel = defined('LOJA_WHATSAPP') ? LOJA_WHATSAPP : '5511999999999';
                 ?>
                 <div style="display:grid;gap:12px;margin-top:16px;">
                     <a class="primary-btn" href="https://wa.me/<?= $wppTel ?>?text=<?= $wppMsg ?>" target="_blank" rel="noreferrer"
