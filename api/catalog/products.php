@@ -199,6 +199,34 @@ function svcat_fallback_products(int $limit, string $q): array
         }
         fclose($fh);
     }
+
+    if (!$bySku) {
+        $phpProductsFile = svcat_root() . '/olist/produtos-olist-array.php';
+        if (is_file($phpProductsFile) && is_readable($phpProductsFile)) {
+            include $phpProductsFile;
+            if (!empty($GLOBALS['produtos_olist'])) {
+                foreach ($GLOBALS['produtos_olist'] as $p) {
+                    $sku = $p['id'] ?? '';
+                    $name = $p['nome'] ?? '';
+                    $image = $p['url_imagem'] ?? '';
+                    if ($sku === '' || $image === '') continue;
+                    if ($q !== '' && stripos($sku . ' ' . $name, $q) === false) continue;
+                    $key = strtoupper($sku);
+                    $bySku[$key] = svcat_product([
+                        'sku' => $sku,
+                        'name' => $name,
+                        'olist_product_id' => $sku,
+                        'image_url' => $image,
+                        'images_count' => 1,
+                        'price' => (float)($p['preco'] ?? 0),
+                        'status' => 'fallback_php',
+                    ]);
+                    if (count($bySku) >= $limit) break;
+                }
+            }
+        }
+    }
+
     return array_map(static function (array $product): array {
         unset($product['_primary_seen']);
         return $product;
