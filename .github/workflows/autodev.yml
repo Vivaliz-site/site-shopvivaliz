@@ -1,0 +1,242 @@
+name: AutoDev — Continuous Optimization
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip_validate:
+        description: "Skip validation tests (danger)"
+        required: false
+        default: "false"
+  schedule:
+    - cron: "*/30 * * * *"
+
+env:
+  PHP_VERSION: "8.1"
+  NODE_VERSION: "20"
+
+jobs:
+  # ──────────────────────────────────────────────
+  # JOB 1: Playwright checkout + regression tests
+  # ──────────────────────────────────────────────
+  validate:
+    name: "Validation (Playwright)"
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.skip_validate != 'true' }}
+
+    outputs:
+      tests_passed: ${{ steps.run_tests.outcome == 'success' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: autodev/validation/package-lock.json
+
+      - name: Install dependencies
+        working-directory: autodev/validation
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: autodev/validation
+        run: npx playwright install --with-deps chromium
+
+      - name: Start local PHP server
+        run: |
+          php -S 127.0.0.1:8000 -t . > /tmp/shopvivaliz-php.log 2>&1 &
+          sleep 3
+
+      - name: Run Playwright tests
+        id: run_tests
+        working-directory: autodev/validation
+        run: npx playwright test
+        env:
+          SITE_URL: ${{ secrets.SITE_URL || 'http://127.0.0.1:8000' }}
+          CI: true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results-${{ github.run_number }}
+          path: |
+            autodev/validation/test-results/
+            autodev/validation/playwright-report/
+          retention-days: 14
+
+      - name: Notify on validation failure
+        if: failure()
+        run: |
+          echo "::error::Playwright validation failed. AutoDev will not run."
+          # Structure for webhook — replace URL with real endpoint:
+          # curl -s -X POST "${{ secrets.NOTIFICATION_WEBHOOK_URL }}" \
+          #   -H "Content-Type: application/json" \
+          #   -d "{\"text\":\"AutoDev validation FAILED on run #${{ github.run_number }}\",\"severity\":\"error\"}"
+
+  # ──────────────────────────────────────────────
+  # JOB 2: AutoDev decision engine
+  # ──────────────────────────────────────────────
+  autodev:
+    name: "AutoDev Decision Engine"
+    runs-on: ubuntu-latest
+    needs: validate
+    if: success()
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository (with write token)
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up PHP ${{ env.PHP_VERSION }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: json, mbstring, curl
+          coverage: none
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "AutoDev Bot"
+          git config user.email "autodev-bot@shopvivaliz.com.br"
+
+      - name: Run decision engine
+        id: decision
+        run: |
+          php autodev/core/decision_engine.php 2>&1 | tee /tmp/autodev_output.txt
+
+      - name: Check for file changes
+        id: changes
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Changed files:"
+            git diff --name-only
+            git diff --cached --name-only
+          fi
+
+      - name: Commit changes and create branch
+        id: commit
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          BRANCH="autodev/cycle-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "chore(autodev): optimization cycle $(date +%Y-%m-%dT%H:%M:%SZ)
+
+          Automated changes from AutoDev decision engine.
+          Run: #${{ github.run_number }}
+          Trigger: ${{ github.event_name }}"
+          git push origin "$BRANCH"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Create pull request
+        if: steps.changes.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ steps.commit.outputs.branch }}"
+          SUMMARY=$(tail -20 /tmp/autodev_output.txt)
+
+          gh pr create \
+            --title "AutoDev: optimization cycle $(date +%Y-%m-%d)" \
+            --body "## AutoDev Optimization Cycle
+
+          **Triggered by:** \`${{ github.event_name }}\`
+          **Run:** #${{ github.run_number }}
+          **Timestamp:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          ### Decision Engine Output (last 20 lines)
+          \`\`\`
+          ${SUMMARY}
+          \`\`\`
+
+          ### Review checklist
+          - [ ] Changed files look correct
+          - [ ] A/B test assignments are consistent
+          - [ ] layout_config.json changes are safe to deploy
+
+          ---
+          _This PR was created automatically by the AutoDev system._" \
+            --base main \
+            --head "$BRANCH" \
+            --label "autodev,automated" || true
+
+      - name: Log no-op run
+        if: steps.changes.outputs.has_changes == 'false'
+        run: echo "::notice::AutoDev ran but produced no changes — system is already optimal."
+
+      - name: Notify on autodev failure
+        if: failure()
+        run: |
+          echo "::error::AutoDev decision engine failed on run #${{ github.run_number }}."
+          # curl -s -X POST "${{ secrets.NOTIFICATION_WEBHOOK_URL }}" \
+          #   -H "Content-Type: application/json" \
+          #   -d "{\"text\":\"AutoDev FAILED on run #${{ github.run_number }}\",\"severity\":\"error\"}"
+
+  # ──────────────────────────────────────────────
+  # JOB 3: Metrics snapshot (every push)
+  # ──────────────────────────────────────────────
+  metrics-snapshot:
+    name: "Metrics Snapshot"
+    runs-on: ubuntu-latest
+    if: always()
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Set up PHP ${{ env.PHP_VERSION }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: json, mbstring, curl
+          coverage: none
+
+      - name: Take metrics snapshot
+        run: php autodev/core/metrics_cli.php snapshot
+
+      - name: Check metrics thresholds
+        id: threshold_check
+        run: |
+          php autodev/core/metrics_cli.php check
+          echo "threshold_exit=$?" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Commit snapshot data
+        run: |
+          git config user.name  "AutoDev Bot"
+          git config user.email "autodev-bot@shopvivaliz.com.br"
+          if ! git diff --quiet autodev/data/; then
+            git add autodev/data/
+            git commit -m "chore(metrics): snapshot $(date +%Y-%m-%dT%H:%M:%SZ) [skip ci]"
+            git push
+          else
+            echo "No metric changes to commit."
+          fi
+
+      - name: Alert on threshold breach
+        if: steps.threshold_check.outputs.threshold_exit == '1'
+        run: |
+          echo "::warning::Metrics threshold breach detected — AutoDev may need to act."
+          # curl -s -X POST "${{ secrets.NOTIFICATION_WEBHOOK_URL }}" \
+          #   -H "Content-Type: application/json" \
+          #   -d "{\"text\":\"Metrics threshold breach on ShopVivaliz\",\"severity\":\"warning\"}"

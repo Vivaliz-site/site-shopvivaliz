@@ -1,0 +1,14 @@
+{
+  "name": "autodev-validation",
+  "version": "1.0.0",
+  "description": "Playwright-based validation suite for AutoDev (checkout flow + regression tests)",
+  "scripts": {
+    "test": "playwright test",
+    "test:checkout": "playwright test playwright_checkout.spec.js",
+    "test:regression": "playwright test regression.spec.js",
+    "test:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0"
+  }
+}
