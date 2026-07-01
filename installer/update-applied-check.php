@@ -48,6 +48,8 @@ $checks = [
     'Checkout com PIX' => svi_has($checkout, 'PIX'),
     'Checkout com boleto' => svi_has($checkout, 'boleto'),
     'Catalogo publico ativo' => is_file(svi_root() . '/api/catalog/products.php'),
+    'Diagnostico Melhor Envio presente' => is_file(svi_root() . '/api/melhorenvio/diagnostic.php'),
+    'Diagnostico Pagar.me presente' => is_file(svi_root() . '/api/pagarme/diagnostic.php'),
 ];
 
 $ok = !in_array(false, $checks, true);
