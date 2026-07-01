@@ -62,8 +62,7 @@ $priceLabel = $priceValue > 0 ? 'R$ ' . number_format($priceValue, 2, ',', '.') 
             <a class="brand-link" href="/">Vivaliz</a>
             <div class="navbar-menu">
                 <a href="/catalogo">Catálogo</a>
-                <a href="/carrinho.php">Carrinho</a>
-                <a href="/checkout.php">Checkout</a>
+                <a href="/carrinho/">🛒 Carrinho</a>
             </div>
         </div>
     </nav>
