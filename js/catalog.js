@@ -94,7 +94,12 @@
   if (form) {
     form.addEventListener('submit', function (event) {
       event.preventDefault();
-      loadCatalog(input ? input.value.trim() : '');
+      const query = input ? input.value.trim() : '';
+      const target = new URL(window.location.href);
+      if (query) target.searchParams.set('q', query);
+      else target.searchParams.delete('q');
+      window.history.replaceState({}, '', target.toString());
+      loadCatalog(query);
     });
   }
 
@@ -106,10 +111,17 @@
         if (window.AutoDev && typeof window.AutoDev.track === 'function' && input.value.trim().length >= 2) {
           window.AutoDev.track('search', { query: input.value.trim(), path: window.location.pathname });
         }
-        loadCatalog(input.value.trim());
+        const query = input.value.trim();
+        const target = new URL(window.location.href);
+        if (query) target.searchParams.set('q', query);
+        else target.searchParams.delete('q');
+        window.history.replaceState({}, '', target.toString());
+        loadCatalog(query);
       }, 250);
     });
   }
 
-  loadCatalog('');
+  const initialQuery = new URLSearchParams(window.location.search).get('q') || '';
+  if (input && initialQuery) input.value = initialQuery;
+  loadCatalog(initialQuery);
 })();

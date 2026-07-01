@@ -7,8 +7,8 @@ header('Content-Type: text/html; charset=UTF-8');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Catálogo de produtos ShopVivaliz — encontre tudo com entrega rápida.">
-    <title>Catálogo — ShopVivaliz</title>
+    <meta name="description" content="Catalogo de produtos Vivaliz com busca ativa e imagens reais do acervo.">
+    <title>Vivaliz - Catalogo</title>
     <link rel="stylesheet" href="/css/responsive.css">
     <style>
         :root { --green:#22c55e; --navy:#1e3a5f; --dark:#1a3050; }
@@ -130,9 +130,9 @@ header('Content-Type: text/html; charset=UTF-8');
     <div class="container">
         <div class="navbar-brand">
             <a href="/" style="display:flex;align-items:center;text-decoration:none;">
-                <img src="/images/logo.svg" alt="ShopVivaliz" style="height:44px;width:auto;"
+                <img src="/images/logo-vivaliz.png" alt="Vivaliz" style="height:44px;width:auto;"
                      onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-                <span style="display:none;font-size:20px;font-weight:700;color:#1e3a5f;">ShopVivaliz</span>
+                <span style="display:none;font-size:20px;font-weight:700;color:#1e3a5f;">Vivaliz</span>
             </a>
         </div>
         <button class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>

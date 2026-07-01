@@ -1,230 +1,378 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-ini_set('log_errors', 1);
-define('APP_NAME', 'ShopVivaliz');
+declare(strict_types=1);
 
-session_start();
-
-// Base de dados de produtos
-$produtos_db = [
-    1 => ['id' => 1, 'nome' => 'Camiseta Premium', 'preco' => 79.90],
-    2 => ['id' => 2, 'nome' => 'Calça Jeans', 'preco' => 149.90],
-    3 => ['id' => 3, 'nome' => 'Tênis Esportivo', 'preco' => 199.90],
-    4 => ['id' => 4, 'nome' => 'Relógio Digital', 'preco' => 89.90],
-    5 => ['id' => 5, 'nome' => 'Mochila Impermeável', 'preco' => 129.90],
-    6 => ['id' => 6, 'nome' => 'Jaqueta de Couro', 'preco' => 299.90],
-];
-
-$carrinho = $_SESSION['carrinho'] ?? [];
-$acao = $_POST['acao'] ?? '';
-
-// Processar ações
-if ($acao === 'atualizar_quantidade') {
-    $id = (int)$_POST['id'];
-    $qtd = (int)$_POST['quantidade'];
-    if ($qtd > 0) {
-        $_SESSION['carrinho'][$id] = $qtd;
-    } else {
-        unset($_SESSION['carrinho'][$id]);
-    }
-    $carrinho = $_SESSION['carrinho'] ?? [];
-}
-
-if ($acao === 'remover') {
-    $id = (int)$_POST['id'];
-    unset($_SESSION['carrinho'][$id]);
-    $carrinho = $_SESSION['carrinho'] ?? [];
-}
-
-// Calcular total
-$total = 0;
-$itens = [];
-foreach ($carrinho as $id => $qtd) {
-    if (isset($produtos_db[$id])) {
-        $p = $produtos_db[$id];
-        $subtotal = $p['preco'] * $qtd;
-        $total += $subtotal;
-        $itens[] = ['id' => $id, 'nome' => $p['nome'], 'preco' => $p['preco'], 'qtd' => $qtd, 'subtotal' => $subtotal];
-    }
-}
+header('Content-Type: text/html; charset=UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo APP_NAME; ?> - Carrinho</title>
+    <title>Vivaliz - Carrinho</title>
     <link rel="stylesheet" href="/css/responsive.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        .carrinho-container {
+        .cart-shell {
+            padding: 36px 0 64px;
+        }
+        .cart-header {
+            margin-bottom: 24px;
+        }
+        .cart-header h1 {
+            color: #1F3A70;
+            margin-bottom: 8px;
+        }
+        .cart-layout {
             display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 30px;
-            margin: 30px 0;
+            grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+            gap: 24px;
         }
-        @media (max-width: 768px) {
-            .carrinho-container {
-                grid-template-columns: 1fr;
-            }
+        .cart-panel,
+        .summary-panel {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 18px;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
         }
-        .carrinho-tabela {
+        .cart-panel {
+            overflow: hidden;
+        }
+        .cart-table {
             width: 100%;
             border-collapse: collapse;
         }
-        .carrinho-tabela th {
-            background: #667eea;
-            color: white;
-            padding: 12px;
+        .cart-table th,
+        .cart-table td {
+            padding: 16px;
+            border-bottom: 1px solid #eef2f7;
             text-align: left;
+            vertical-align: middle;
         }
-        .carrinho-tabela td {
-            padding: 12px;
-            border-bottom: 1px solid #e5e7eb;
+        .cart-table th {
+            background: #f8fafc;
+            color: #334155;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
         }
-        .carrinho-tabela input {
-            width: 60px;
-            padding: 5px;
+        .item-line {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .item-thumb {
+            width: 72px;
+            height: 72px;
+            border-radius: 12px;
+            background: #f8fafc;
             border: 1px solid #e5e7eb;
+            object-fit: cover;
+            flex-shrink: 0;
         }
-        .carrinho-vazio {
-            text-align: center;
-            padding: 40px;
-            color: #666;
+        .item-title {
+            font-weight: 600;
+            color: #0f172a;
+            margin-bottom: 4px;
         }
-        .resumo-pedido {
-            background: #f5f7fa;
-            padding: 20px;
-            border-radius: 8px;
+        .item-sku {
+            font-size: 12px;
+            color: #64748b;
+        }
+        .qty-input {
+            width: 84px;
+            padding: 10px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            font: inherit;
+        }
+        .remove-btn,
+        .primary-btn,
+        .ghost-btn {
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font: inherit;
+            font-weight: 600;
+            transition: transform 0.2s ease, opacity 0.2s ease, background 0.2s ease;
+        }
+        .remove-btn {
+            background: #fee2e2;
+            color: #b91c1c;
+            padding: 10px 12px;
+        }
+        .primary-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            background: #1F3A70;
+            color: white;
+            padding: 14px 18px;
+            text-decoration: none;
+        }
+        .ghost-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            background: white;
+            color: #1F3A70;
+            border: 1px solid #cbd5e1;
+            padding: 14px 18px;
+            text-decoration: none;
+        }
+        .summary-panel {
+            padding: 22px;
             height: fit-content;
         }
-        .resumo-linha {
+        .summary-panel h2 {
+            color: #1F3A70;
+            margin-bottom: 16px;
+        }
+        .summary-row {
             display: flex;
             justify-content: space-between;
-            margin: 10px 0;
+            gap: 16px;
             padding: 10px 0;
-            border-bottom: 1px solid #e5e7eb;
+            color: #475569;
+            border-bottom: 1px solid #eef2f7;
         }
-        .resumo-total {
-            font-size: 1.5em;
-            font-weight: bold;
-            color: #667eea;
-            margin: 20px 0;
-            text-align: right;
+        .summary-total {
+            font-size: 24px;
+            color: #0f172a;
+            font-weight: 700;
+            padding-top: 18px;
         }
-        .btn-checkout {
-            background: #667eea;
+        .summary-actions {
+            display: grid;
+            gap: 12px;
+            margin-top: 22px;
+        }
+        .empty-state {
+            padding: 48px 24px;
+            text-align: center;
+            color: #64748b;
+        }
+        .empty-state h2 {
+            color: #1F3A70;
+            margin-bottom: 10px;
+        }
+        .toast {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            background: #0f172a;
             color: white;
-            border: none;
-            padding: 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            width: 100%;
-            font-size: 1.1em;
-            font-weight: 600;
-            margin-top: 15px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            opacity: 0;
+            transform: translateY(12px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
         }
-        .btn-checkout:hover {
-            background: #764ba2;
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
         }
-        .btn-continuar {
-            background: white;
-            color: #667eea;
-            border: 2px solid #667eea;
-            padding: 10px;
-            border-radius: 6px;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 10px;
+        @media (max-width: 900px) {
+            .cart-layout {
+                grid-template-columns: 1fr;
+            }
         }
-        .btn-remover {
-            background: #ef4444;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
+        @media (max-width: 720px) {
+            .cart-table thead {
+                display: none;
+            }
+            .cart-table,
+            .cart-table tbody,
+            .cart-table tr,
+            .cart-table td {
+                display: block;
+                width: 100%;
+            }
+            .cart-table tr {
+                border-bottom: 1px solid #eef2f7;
+            }
+            .cart-table td {
+                padding: 12px 16px;
+                border-bottom: none;
+            }
+            .cart-table td[data-label]::before {
+                content: attr(data-label);
+                display: block;
+                font-size: 12px;
+                text-transform: uppercase;
+                color: #64748b;
+                margin-bottom: 6px;
+            }
         }
     </style>
 </head>
 <body>
-    <?php include __DIR__ . '/../includes/navbar.php'; ?>
-    <main class="container">
-        <h1>🛒 Carrinho de Compras</h1>
-
-        <?php if (empty($itens)): ?>
-            <div class="carrinho-vazio">
-                <p>Seu carrinho está vazio</p>
-                <a href="/catalogo/index.php" class="btn-checkout">← Continuar Comprando</a>
-            </div>
-        <?php else: ?>
-            <div class="carrinho-container">
-                <div>
-                    <table class="carrinho-tabela">
-                        <thead>
-                            <tr>
-                                <th>Produto</th>
-                                <th>Preço</th>
-                                <th>Quantidade</th>
-                                <th>Subtotal</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($itens as $item): ?>
-                                <tr>
-                                    <td><?php echo htmlspecialchars($item['nome']); ?></td>
-                                    <td>R$ <?php echo number_format($item['preco'], 2, ',', '.'); ?></td>
-                                    <td>
-                                        <form method="POST" style="display: flex; gap: 5px;">
-                                            <input type="hidden" name="acao" value="atualizar_quantidade">
-                                            <input type="hidden" name="id" value="<?php echo $item['id']; ?>">
-                                            <input type="number" name="quantidade" value="<?php echo $item['qtd']; ?>" min="1">
-                                            <button type="submit" style="padding: 5px 10px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer;">✓</button>
-                                        </form>
-                                    </td>
-                                    <td>R$ <?php echo number_format($item['subtotal'], 2, ',', '.'); ?></td>
-                                    <td>
-                                        <form method="POST" style="display: inline;">
-                                            <input type="hidden" name="acao" value="remover">
-                                            <input type="hidden" name="id" value="<?php echo $item['id']; ?>">
-                                            <button type="submit" class="btn-remover">✕</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="resumo-pedido">
-                    <h3>Resumo do Pedido</h3>
-                    <div class="resumo-linha">
-                        <span>Subtotal:</span>
-                        <span>R$ <?php echo number_format($total, 2, ',', '.'); ?></span>
-                    </div>
-                    <div class="resumo-linha">
-                        <span>Frete:</span>
-                        <span>R$ 0,00</span>
-                    </div>
-                    <div class="resumo-total">
-                        Total: R$ <?php echo number_format($total, 2, ',', '.'); ?>
-                    </div>
-                    <a href="/checkout/index.php">
-                        <button class="btn-checkout">💳 Finalizar Compra</button>
-                    </a>
-                    <a href="/catalogo/index.php">
-                        <button class="btn-continuar">← Continuar Comprando</button>
-                    </a>
-                </div>
-            </div>
-        <?php endif; ?>
-    </main>
-    <footer>
-        <div class="container">
-            <p>&copy; 2026 ShopVivaliz. Todos os direitos reservados.</p>
+<?php include __DIR__ . '/../includes/navbar.php'; ?>
+<main class="cart-shell">
+    <div class="container">
+        <div class="cart-header">
+            <h1>Carrinho</h1>
+            <p>Revise os itens escolhidos antes de seguir para a finalizacao do pedido.</p>
         </div>
-    </footer>
+
+        <div id="cart-root"></div>
+    </div>
+</main>
+
+<div class="toast" id="cart-toast"></div>
+
+<script>
+    (function () {
+        const root = document.getElementById('cart-root');
+        const toast = document.getElementById('cart-toast');
+
+        function money(value) {
+            return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
+        function showToast(message) {
+            if (!toast) return;
+            toast.textContent = message;
+            toast.classList.add('show');
+            window.clearTimeout(showToast._timer);
+            showToast._timer = window.setTimeout(function () {
+                toast.classList.remove('show');
+            }, 2200);
+        }
+
+        function readCart() {
+            try {
+                const value = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
+                return Array.isArray(value) ? value : [];
+            } catch (error) {
+                return [];
+            }
+        }
+
+        function writeCart(items) {
+            localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+            render();
+        }
+
+        function renderEmpty() {
+            root.innerHTML = `
+                <section class="cart-panel empty-state">
+                    <h2>Seu carrinho esta vazio</h2>
+                    <p>Adicione produtos no catalogo para continuar a compra.</p>
+                    <div class="summary-actions" style="max-width:320px;margin:24px auto 0;">
+                        <a class="primary-btn" href="/catalogo">Ir para o catalogo</a>
+                    </div>
+                </section>
+            `;
+        }
+
+        function render() {
+            const items = readCart();
+            if (!items.length) {
+                renderEmpty();
+                return;
+            }
+
+            const subtotal = items.reduce(function (sum, item) {
+                return sum + (Number(item.price || 0) * Number(item.quantity || 1));
+            }, 0);
+
+            root.innerHTML = `
+                <div class="cart-layout">
+                    <section class="cart-panel">
+                        <table class="cart-table">
+                            <thead>
+                                <tr>
+                                    <th>Produto</th>
+                                    <th>Preco</th>
+                                    <th>Quantidade</th>
+                                    <th>Subtotal</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${items.map(function (item, index) {
+                                    const image = item.image_url || item.image || '/favicon.ico';
+                                    const quantity = Math.max(1, Number(item.quantity || 1));
+                                    return `
+                                        <tr>
+                                            <td data-label="Produto">
+                                                <div class="item-line">
+                                                    <img class="item-thumb" src="${image}" alt="${item.name || 'Produto'}" onerror="this.src='/favicon.ico'">
+                                                    <div>
+                                                        <div class="item-title">${item.name || 'Produto ShopVivaliz'}</div>
+                                                        <div class="item-sku">${item.sku || 'sem-sku'}</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td data-label="Preco">${money(item.price || 0)}</td>
+                                            <td data-label="Quantidade">
+                                                <input class="qty-input" type="number" min="1" value="${quantity}" data-index="${index}" data-role="quantity">
+                                            </td>
+                                            <td data-label="Subtotal">${money((item.price || 0) * quantity)}</td>
+                                            <td data-label="Remover">
+                                                <button class="remove-btn" type="button" data-index="${index}" data-role="remove">Remover</button>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </section>
+
+                    <aside class="summary-panel">
+                        <h2>Resumo do pedido</h2>
+                        <div class="summary-row">
+                            <span>Itens</span>
+                            <strong>${items.reduce(function (sum, item) { return sum + Number(item.quantity || 1); }, 0)}</strong>
+                        </div>
+                        <div class="summary-row">
+                            <span>Subtotal</span>
+                            <strong>${money(subtotal)}</strong>
+                        </div>
+                        <div class="summary-row">
+                            <span>Frete</span>
+                            <strong>A calcular</strong>
+                        </div>
+                        <div class="summary-row summary-total">
+                            <span>Total</span>
+                            <span>${money(subtotal)}</span>
+                        </div>
+                        <div class="summary-actions">
+                            <a class="primary-btn" href="/checkout">Ir para checkout</a>
+                            <a class="ghost-btn" href="/catalogo">Continuar comprando</a>
+                        </div>
+                    </aside>
+                </div>
+            `;
+
+            root.querySelectorAll('[data-role="quantity"]').forEach(function (input) {
+                input.addEventListener('change', function () {
+                    const next = readCart();
+                    const index = Number(input.getAttribute('data-index'));
+                    const quantity = Math.max(1, Number(input.value || 1));
+                    if (!next[index]) return;
+                    next[index].quantity = quantity;
+                    writeCart(next);
+                    showToast('Quantidade atualizada.');
+                });
+            });
+
+            root.querySelectorAll('[data-role="remove"]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const next = readCart();
+                    const index = Number(button.getAttribute('data-index'));
+                    if (!next[index]) return;
+                    next.splice(index, 1);
+                    writeCart(next);
+                    showToast('Item removido do carrinho.');
+                });
+            });
+        }
+
+        render();
+    })();
+</script>
 </body>
 </html>

@@ -9,11 +9,7 @@
     <div class="container">
         <div class="navbar-brand">
             <a href="/" class="brand-lockup" style="text-decoration: none;">
-                <img src="/images/logo.svg" alt="ShopVivaliz" style="height: 50px; width: auto;">
-                <span class="brand-text">
-                    <strong>ShopVivaliz</strong>
-                    <span>Loja oficial</span>
-                </span>
+                <img src="/images/logo-vivaliz.png" alt="Vivaliz" style="height: 46px; width: auto;" onerror="this.src='/images/logo.svg'">
             </a>
         </div>
         <button class="menu-toggle" id="menuToggle">☰</button>
@@ -22,7 +18,7 @@
             <a href="/catalogo">Catálogo</a>
             <a href="/sobre">Sobre</a>
             <a href="/contato">Contato</a>
-            <a href="/carrinho">🛒 Carrinho</a>
+            <a href="/carrinho">Carrinho</a>
         </div>
     </div>
 </nav>
