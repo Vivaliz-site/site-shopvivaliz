@@ -77,7 +77,7 @@ if (file_exists($arquivo_produtos)) {
                 <div class="product-info">
                     <div class="product-name"><?= htmlspecialchars(substr($p['nome'], 0, 40)) ?></div>
                     <div class="product-price">R$ <?= number_format($p['preco'], 2, ',', '.') ?></div>
-                    <a href="/claude/catalogo/" class="btn-comprar">Ver Detalhes</a>
+                    <a href="/claude/carrinho/?add=<?= (int)($p['id'] ?? 0) ?>" class="btn-comprar">🛒 Adicionar ao carrinho</a>
                 </div>
             </div>
             <?php endforeach; ?>
