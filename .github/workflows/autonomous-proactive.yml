@@ -1,0 +1,215 @@
+name: Autonomous Proactive Agent — Vivaliz
+
+on:
+  schedule:
+    - cron: "0 */4 * * *"   # a cada 4 horas
+  workflow_dispatch:
+    inputs:
+      focus:
+        description: "Área de foco (blank = varredura geral)"
+        required: false
+        default: ""
+
+jobs:
+  proactive-improve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install anthropic requests
+
+      - name: Run Proactive Agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FOCUS: ${{ inputs.focus }}
+        run: |
+          python3 << 'PYEOF'
+          import anthropic, json, os, subprocess, sys
+          from pathlib import Path
+          from datetime import datetime
+
+          ROOT = Path(".")
+          FOCUS = os.getenv("FOCUS", "").strip()
+          client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+          def read_file(path, max_chars=4000):
+              try:
+                  content = Path(path).read_text(encoding="utf-8", errors="replace")
+                  return content[:max_chars] + ("..." if len(content) > max_chars else "")
+              except Exception:
+                  return ""
+
+          def run(cmd):
+              return subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout.strip()
+
+          # Coleta contexto do projeto
+          catalog_raw = read_file("api/catalog/fallback-products.json", 500)
+          catalog_data = json.loads(Path("api/catalog/fallback-products.json").read_text(encoding="utf-8"))
+          total_products = len(catalog_data)
+          no_desc = sum(1 for p in catalog_data if not str(p.get("description","")).strip())
+          no_price = sum(1 for p in catalog_data if not float(p.get("price",0) or 0))
+          categories = {}
+          for p in catalog_data:
+              c = p.get("category","")
+              if c: categories[c] = categories.get(c,0) + 1
+
+          signals_path = Path("storage/commerce_signals.json")
+          signals = json.loads(signals_path.read_text()) if signals_path.exists() else {}
+
+          pedidos_path = Path("logs/pedidos.jsonl")
+          total_orders = 0
+          if pedidos_path.exists():
+              total_orders = sum(1 for l in pedidos_path.read_text().splitlines() if l.strip())
+
+          recent_commits = run("git log --oneline -10")
+          git_status = run("git status --short")
+
+          # Lê arquivos principais para contexto
+          htaccess = read_file(".htaccess", 2000)
+          index_head = read_file("index.php", 2000)
+          catalog_php = read_file("catalogo.php", 1500)
+
+          context = f"""
+          PROJETO: Vivaliz e-commerce (dev.shopvivaliz.com.br)
+          DATA: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}
+          FOCO: {FOCUS or 'varredura geral'}
+
+          ESTADO DO CATÁLOGO:
+          - Total produtos: {total_products}
+          - Sem descrição: {no_desc} ({round(no_desc/total_products*100)}%)
+          - Sem preço: {no_price} (tokens Tiny expirados)
+          - Categorias: {json.dumps(categories, ensure_ascii=False)}
+          - Sinais commerce: {json.dumps(signals, ensure_ascii=False)[:500]}
+          - Pedidos recebidos: {total_orders}
+
+          COMMITS RECENTES:
+          {recent_commits}
+
+          GIT STATUS:
+          {git_status or '(limpo)'}
+
+          .htaccess (primeiros 2000 chars):
+          {htaccess}
+
+          index.php (primeiros 2000 chars):
+          {index_head}
+
+          catalogo.php (primeiros 1500 chars):
+          {catalog_php}
+          """
+
+          prompt = f"""
+          Você é o agente autônomo proativo do projeto Vivaliz e-commerce.
+          Analise o estado atual e faça UMA melhoria concreta e segura.
+
+          REGRAS OBRIGATÓRIAS:
+          1. Faça apenas mudanças seguras e incrementais — nunca apague funcionalidade existente
+          2. Se não há nada crítico para melhorar, adicione algo de valor (ex: nova categoria, melhora de UX)
+          3. Responda APENAS com JSON no formato abaixo — sem texto extra
+          4. max 1 arquivo por execução
+          5. Nunca altere: .github/workflows/deploy.yml, api/catalog/fallback-products.json (exceto via quality engine), logs/
+
+          CONTEXTO:
+          {context}
+
+          Responda SOMENTE com este JSON (sem markdown, sem texto antes/depois):
+          {{
+            "action": "write_file" | "no_action",
+            "reason": "por que esta mudança agrega valor agora",
+            "file_path": "caminho/relativo/arquivo.php",
+            "content": "conteúdo completo do arquivo",
+            "commit_message": "mensagem de commit curta e descritiva"
+          }}
+
+          Se não houver nada seguro e valioso para fazer, use action=no_action com reason explicando.
+          """
+
+          print("Consultando Claude para melhoria proativa...")
+          message = client.messages.create(
+              model="claude-haiku-4-5-20251001",
+              max_tokens=4096,
+              messages=[{"role": "user", "content": prompt}]
+          )
+
+          raw = message.content[0].text.strip()
+          print(f"Resposta recebida ({len(raw)} chars)")
+
+          # Extrai JSON
+          try:
+              # Remove possível markdown
+              if raw.startswith("```"):
+                  raw = raw.split("```")[1]
+                  if raw.startswith("json"): raw = raw[4:]
+              result = json.loads(raw.strip())
+          except json.JSONDecodeError as e:
+              print(f"JSON inválido: {e}")
+              print(f"Raw: {raw[:500]}")
+              sys.exit(0)
+
+          action = result.get("action", "no_action")
+          reason = result.get("reason", "")
+          print(f"Ação: {action}")
+          print(f"Motivo: {reason}")
+
+          if action == "no_action":
+              print("Nenhuma melhoria necessária nesta execução.")
+              sys.exit(0)
+
+          if action == "write_file":
+              file_path = result.get("file_path", "")
+              content   = result.get("content", "")
+              commit_msg = result.get("commit_message", "chore: melhoria proativa autonoma")
+
+              # Bloqueios de segurança
+              blocked = [
+                  ".github/workflows/deploy.yml",
+                  "logs/", "storage/commerce_signals.json",
+                  ".env", "config/constants.php"
+              ]
+              if any(file_path.startswith(b) or file_path == b for b in blocked):
+                  print(f"BLOQUEADO: arquivo proibido ({file_path})")
+                  sys.exit(0)
+
+              if not file_path or not content:
+                  print("file_path ou content vazio — abortando")
+                  sys.exit(0)
+
+              # Escreve arquivo
+              target = ROOT / file_path
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(content, encoding="utf-8")
+              print(f"Arquivo escrito: {file_path}")
+
+              # Commit e push
+              subprocess.run("git config user.name 'Claude Autonomo'", shell=True)
+              subprocess.run("git config user.email 'fredmourao@gmail.com'", shell=True)
+              subprocess.run(f"git add '{file_path}'", shell=True)
+              diff = run("git diff --cached --stat")
+              if not diff:
+                  print("Sem diferença após escrita — nada a commitar")
+                  sys.exit(0)
+              print(f"Diff: {diff}")
+              subprocess.run(f"git commit -m '{commit_msg}\n\nAgente: autonomous-proactive\nCo-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>'", shell=True)
+              subprocess.run("git push origin main", shell=True)
+              print(f"✅ Commit e push: {commit_msg}")
+
+          PYEOF
+
+      - name: Log execução
+        if: always()
+        run: |
+          mkdir -p automation/proactive/logs
+          echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"focus\":\"${{ inputs.focus }}\",\"run_id\":\"${{ github.run_id }}\"}" >> automation/proactive/logs/runs.jsonl
