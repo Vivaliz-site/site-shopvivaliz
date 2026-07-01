@@ -27,6 +27,7 @@ AddCharset UTF-8 .html .txt .php .json
     # Rotas principais da loja
     RewriteRule ^$ index.php [L]
     RewriteRule ^home/?$ home.php [L]
+    RewriteRule ^produtos/?$ catalogo.php [L]
     RewriteRule ^catalogo/?$ catalogo.php [L]
     RewriteRule ^carrinho/?$ carrinho/index.php [L]
     RewriteRule ^checkout/?$ checkout/index.php [L]
