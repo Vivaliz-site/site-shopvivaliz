@@ -1,12 +1,11 @@
 <?php
-declare(strict_types=1);
-
 header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store');
-
-echo json_encode([
+$response = [
     'ok' => true,
-    'status' => 'healthy',
-    'app' => 'shopvivaliz',
-    'time' => date('c'),
-], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    'status' => 'READY_FOR_PRODUCTION',
+    'timestamp' => date('c'),
+    'version' => '2.0',
+    'logo' => '/assets/images/logo/vivaliz-logo.svg',
+];
+echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+?>
