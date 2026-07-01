@@ -1,11 +1,12 @@
-# ShopVivaliz - Configuração Apache Minimalista
-# IMPORTANTE: Este é um .htaccess simples que funciona em HostGator
-# Segurança avançada será via PHP (config/constants.php)
+# ShopVivaliz - Apache routing
 
-# Bloquear acesso a arquivos sensíveis
-<FilesMatch "\.env|\.htaccess|config/.*\.php">
-    Order allow,deny
-    Deny from all
+# Bloquear acesso a arquivos sensiveis
+<FilesMatch "^(\.env|\.htaccess)$">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "^config/.*\.php$">
+    Require all denied
 </FilesMatch>
 
 # Charset UTF-8
@@ -13,26 +14,39 @@ AddCharset UTF-8 .html .txt .php .json
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    # Main project is in /claude/
-    # Don't rewrite /claude/ requests
-    RewriteCond %{REQUEST_URI} !^/claude/
-    # Don't rewrite existing files or directories
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteCond %{REQUEST_FILENAME} !-d
-    # Rewrite everything else to /claude/
-    RewriteRule ^(.*)$ /claude/$1 [L]
+
+    # Mantem o dashboard operacional isolado na subpasta /claude/
+    RewriteRule ^claude/?$ claude/index.php [L]
+    RewriteRule ^claude/(.*)$ claude/$1 [L]
+
+    # Nao reescrever arquivos e diretorios reais
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Rotas principais da loja
+    RewriteRule ^$ index.php [L]
+    RewriteRule ^home/?$ home.php [L]
+    RewriteRule ^catalogo/?$ catalogo.php [L]
+    RewriteRule ^carrinho/?$ carrinho/index.php [L]
+    RewriteRule ^checkout/?$ checkout/index.php [L]
+    RewriteRule ^sobre/?$ sobre/index.php [L]
+    RewriteRule ^contato/?$ contato/index.php [L]
+    RewriteRule ^faq/?$ faq/index.php [L]
+    RewriteRule ^blog/?$ blog/index.php [L]
+    RewriteRule ^politica-privacidade/?$ politica-privacidade/index.php [L]
+    RewriteRule ^produto/?$ produto.php [L]
 </IfModule>
 
-# Gzip compression (se disponível)
 <IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
 </IfModule>
 
-# Cache control (opcional)
 <IfModule mod_expires.c>
     ExpiresActive On
     ExpiresByType image/jpeg "access plus 30 days"
     ExpiresByType image/png "access plus 30 days"
+    ExpiresByType image/webp "access plus 30 days"
     ExpiresByType text/css "access plus 30 days"
     ExpiresByType application/javascript "access plus 30 days"
 </IfModule>
