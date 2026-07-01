@@ -9,8 +9,8 @@
 | Produtos de teste (T-shirt, Jeans, Tênis, Boné, Jaqueta) | ✅ Criados em BRL/USD |
 | Cliente de teste | ✅ Criado (`cliente.teste@shopvivaliz.com.br`) |
 | Webhook Medusa → EHA | ✅ Testado ponta a ponta |
-| Pagamento Stripe/PIX (módulo `@medusajs/payment-stripe`, condicional a `STRIPE_API_KEY`) | 🆕 Adicionado 2026-07-01, aguardando chaves reais (ver seção 4) |
-| Sincronização Olist ⇄ Medusa (`sync-olist-products.php` + webhook `src/api/webhooks/olist/route.ts`) | 🆕 Adicionado 2026-07-01, aguardando credenciais Olist/Tiny (ver seção 4) |
+| Pagamento Stripe/PIX (módulo `@medusajs/payment-stripe`, condicional a `STRIPE_API_KEY`) | ✅ Código validado 2026-07-01 (build + registro do provider confirmado no Postgres), aguardando chaves reais (ver seção 4) |
+| Sincronização Olist ⇄ Medusa (`sync-olist-products.php` + webhook `src/api/webhooks/olist/route.ts`) | ✅ Código adicionado e sintaxe validada 2026-07-01, aguardando credenciais Olist/Tiny (ver seção 4) |
 | Banco de dados de produção | ⏳ Pendente (ver passo 1) |
 | Deploy backend/storefront em produção | ⏳ Pendente (ver passo 2) |
 
@@ -40,6 +40,19 @@ revertida após a validação para não poluir a fila real).
 `@medusajs/draft-order@2.17.0` (corrigido no `package.json`: `@medusajs/ui@4.1.17`,
 `react-router-dom@6.30.4`). Se voltar a acontecer após atualizar `@medusajs/medusa`,
 verifique a versão de peer exigida na mensagem de erro do npm e alinhe o `package.json`.
+
+**Validação do módulo de pagamento Stripe/PIX (2026-07-01):** `npm install` +
+`npm run build` OK no backend com `STRIPE_API_KEY` ausente (comportamento antigo
+preservado, zero regressão) e também com uma chave de teste dummy definida. Para
+confirmar que o módulo realmente resolve (o `medusa build` sozinho não faz DI/module
+resolution), subimos um Postgres/Redis locais descartáveis, rodamos `npx medusa
+db:migrate` e depois `npx medusa develop` com as chaves dummy: o servidor subiu limpo
+e a tabela `payment_provider` do Postgres mostrou `pp_stripe_stripe` (e variantes
+PIX/OXXO/PromptPay/etc. do Stripe) com `is_enabled = true`, confirmando que
+`medusa-config.ts` registra o provider corretamente. Banco/role/`.env` temporários
+foram removidos depois do teste. `claude/api/sync-olist-products.php` e
+`claude/api/olist/webhook.php` passaram em `php -l` (sem erro de sintaxe); não têm
+credenciais Olist reais nesta sessão para testar a chamada de rede em si.
 
 ## 1. Banco de dados de produção
 

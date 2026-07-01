@@ -97,9 +97,13 @@ para o passo a passo de deploy em produção.
 2. ✅ Setup do Next.js Storefront (build limpo, testado com região `br`/BRL)
 3. ✅ Webhook MedusaJS -> EHA (`claude/api/medusa-webhook.php`) testado ponta a ponta
 4. ✅ 5 produtos de teste (T-shirt, Calça Jeans, Tênis, Boné, Jaqueta) com preços em BRL/USD
-5. ⏳ Banco de dados de produção (Supabase ou outro Postgres gerenciado) — requer criar
+5. ✅ Pagamento Stripe/PIX (`@medusajs/payment-stripe`, condicional a `STRIPE_API_KEY`)
+   e sincronização Olist ⇄ Medusa (`claude/api/sync-olist-products.php` +
+   `src/api/webhooks/olist/route.ts`) — código adicionado e validado (build +
+   registro do provider confirmado em Postgres); aguardando chaves/credenciais reais
+6. ⏳ Banco de dados de produção (Supabase ou outro Postgres gerenciado) — requer criar
    conta e configurar `DATABASE_URL` real (ação humana, ver `DEPLOY-CHECKLIST.md`)
-6. ⏳ Deploy em produção (HostGator/outro host) — requer decisão de hospedagem para
+7. ⏳ Deploy em produção (HostGator/outro host) — requer decisão de hospedagem para
    Node.js (HostGator compartilhado normalmente não roda Node; considerar Railway,
    Render, Fly.io ou VPS para o backend Medusa, mantendo o PHP no HostGator)
 7. ⏳ Migrar produtos reais (Olist/Shopee) para o catálogo Medusa
