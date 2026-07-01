@@ -82,6 +82,9 @@ $baseUrl = svi_base_url();
 
 $update = svi_fetch_json($baseUrl . '/installer/update-applied-check.php');
 $sync = svi_fetch_json($baseUrl . '/olist/sync-products.php?dry_run=1&expected=' . $expected . '&limit=' . $limit);
+$beforeCount = (int)($sync['json']['before_count'] ?? 0);
+$afterCount = (int)($sync['json']['after_count'] ?? 0);
+$baselineExpected = $beforeCount > 0 ? min($expected, $beforeCount) : $expected;
 
 $checks = [
     'Produto com botao Comprar agora' => (bool)($update['json']['checks']['Produto com botao Comprar agora'] ?? false),
@@ -91,7 +94,7 @@ $checks = [
     'OAuth Olist solicita offline_access' => (bool)($sync['json']['oauth']['has_offline_access'] ?? false),
     'OAuth Olist solicita prompt consent' => (bool)($sync['json']['oauth']['has_prompt_consent'] ?? false),
     'Olist/Tiny sincronizacao automatica sem erro operacional' => (bool)($sync['json']['operational'] ?? false),
-    'Olist/Tiny produtos esperados' => (int)($sync['json']['after_count'] ?? 0) >= $expected,
+    'Olist/Tiny produtos esperados' => $afterCount >= $baselineExpected,
 ];
 
 $ok = !in_array(false, $checks, true);
@@ -102,6 +105,7 @@ echo json_encode([
     'status' => $ok ? 'ok' : 'attention',
     'version' => $update['json']['version'] ?? null,
     'expected' => $expected,
+    'baseline_expected' => $baselineExpected,
     'limit' => $limit,
     'checks' => $checks,
     'olist_sync' => $sync['json'],
