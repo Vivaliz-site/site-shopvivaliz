@@ -82,6 +82,10 @@ $log_path    = dirname(__DIR__) . '/automation/eha/reports/eha.log';
 $log_lines   = @file($log_path) ?: [];
 $recent_log  = array_reverse(array_slice($log_lines, -30));
 
+// Lê last_run.json para detalhes do último run EHA
+$last_run_path = dirname(__DIR__) . '/automation/eha/reports/last_run.json';
+$last_run      = @json_decode(@file_get_contents($last_run_path) ?: '{}', true) ?: [];
+
 // Lê histórico de runs EHA do run_history.jsonl
 $history_path = dirname(__DIR__) . '/automation/eha/reports/run_history.jsonl';
 $eha_runs     = [];
@@ -190,6 +194,40 @@ if ($gh_raw) {
             <div class="card-sub">Verificado agora</div>
         </div>
     </div>
+
+    <?php if (!empty($last_run)): ?>
+    <h2>Último Run EHA — #<?= htmlspecialchars((string)($last_run['run_id'] ?? '?')) ?></h2>
+    <div class="grid" style="margin-bottom:1.5rem">
+        <div class="card">
+            <div class="card-label">Decisão</div>
+            <div class="card-value <?= ($last_run['action'] ?? '') === 'DEPLOY_OK' ? 'ok' : (($last_run['action'] ?? '') === 'ROLLBACK' ? 'fail' : 'warn') ?>">
+                <?= htmlspecialchars($last_run['action'] ?? '—') ?>
+            </div>
+            <div class="card-sub"><?= htmlspecialchars($last_run['elapsed_s'] ?? '?') ?>s elapsed</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Validação</div>
+            <div class="card-value <?= ($last_run['validation']['status'] ?? '') === 'READY_FOR_PRODUCTION' ? 'ok' : 'fail' ?>">
+                <?= htmlspecialchars($last_run['validation']['status'] ?? '—') ?>
+            </div>
+            <div class="card-sub"><?= htmlspecialchars(substr($last_run['metrics']['timestamp'] ?? '', 0, 16)) ?> UTC</div>
+        </div>
+        <div class="card">
+            <div class="card-label">E2E Tests</div>
+            <div class="card-value <?= ($last_run['metrics']['e2e_failed'] ?? false) ? 'warn' : 'ok' ?>">
+                <?= ($last_run['metrics']['e2e_failed'] ?? false) ? 'FALHOU' : 'PASSOU' ?>
+            </div>
+            <div class="card-sub">Checkout: <?= ($last_run['metrics']['checkout_ok'] ?? false) ? '✓' : '✗' ?></div>
+        </div>
+        <div class="card">
+            <div class="card-label">Risco (Loop)</div>
+            <div class="card-value <?= ($last_run['loop']['risk'] ?? 'LOW') === 'LOW' ? 'ok' : (($last_run['loop']['risk'] ?? '') === 'HIGH' ? 'fail' : 'warn') ?>">
+                <?= htmlspecialchars($last_run['loop']['risk'] ?? '—') ?>
+            </div>
+            <div class="card-sub"><?= htmlspecialchars($last_run['loop']['issue'] ?? 'none') ?></div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <?php if (!empty($eha_runs_recent)): ?>
     <h2>Histórico EHA — últimos <?= count($eha_runs_recent) ?> runs</h2>
