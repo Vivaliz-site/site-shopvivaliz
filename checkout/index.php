@@ -1,64 +1,50 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-ini_set('log_errors', 1);
-define('APP_NAME', 'ShopVivaliz');
+declare(strict_types=1);
 
-session_start();
+header('Content-Type: text/html; charset=UTF-8');
 
-if (empty($_SESSION['carrinho'])) {
-    header('Location: /carrinho/index.php');
-    exit;
-}
+$pedidoCriado = false;
+$pedidoId = null;
 
-// Processar pedido
-$pedido_criado = false;
-$acao = $_POST['acao'] ?? '';
-if ($acao === 'finalizar_pedido') {
-    $nome = trim($_POST['nome'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $telefone = trim($_POST['telefone'] ?? '');
-    $endereco = trim($_POST['endereco'] ?? '');
-    $numero = trim($_POST['numero'] ?? '');
-    $complemento = trim($_POST['complemento'] ?? '');
-    $cidade = trim($_POST['cidade'] ?? '');
-    $cep = trim($_POST['cep'] ?? '');
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finalizar_pedido') {
+    $cliente = [
+        'nome' => trim((string)($_POST['nome'] ?? '')),
+        'email' => trim((string)($_POST['email'] ?? '')),
+        'telefone' => trim((string)($_POST['telefone'] ?? '')),
+        'endereco' => trim((string)($_POST['endereco'] ?? '')),
+        'numero' => trim((string)($_POST['numero'] ?? '')),
+        'complemento' => trim((string)($_POST['complemento'] ?? '')),
+        'cidade' => trim((string)($_POST['cidade'] ?? '')),
+        'cep' => trim((string)($_POST['cep'] ?? '')),
+    ];
+    $itemsPayload = json_decode((string)($_POST['cart_payload'] ?? '[]'), true);
+    $items = is_array($itemsPayload) ? array_values(array_filter($itemsPayload, static function ($item): bool {
+        return is_array($item) && !empty($item['name']);
+    })) : [];
 
-    if ($nome && $email && $telefone && $endereco && $numero && $cidade && $cep) {
-        // Criar registro de pedido em arquivo
-        $logs_dir = __DIR__ . '/../logs';
-        if (!is_dir($logs_dir)) {
-            mkdir($logs_dir, 0755, true);
-        }
-
-        $pedido = [
-            'id' => 'PED-' . date('YmdHis'),
+    if ($cliente['nome'] !== '' && $cliente['email'] !== '' && $cliente['telefone'] !== '' && $cliente['endereco'] !== '' && $cliente['numero'] !== '' && $cliente['cidade'] !== '' && $cliente['cep'] !== '' && $items) {
+        $pedidoId = 'PED-' . date('YmdHis');
+        $registro = [
+            'id' => $pedidoId,
             'timestamp' => date('c'),
-            'cliente' => [
-                'nome' => $nome,
-                'email' => $email,
-                'telefone' => $telefone,
-            ],
-            'endereco' => [
-                'logradouro' => $endereco,
-                'numero' => $numero,
-                'complemento' => $complemento,
-                'cidade' => $cidade,
-                'cep' => $cep,
-            ],
-            'itens' => $_SESSION['carrinho'],
-            'status' => 'pendente_pagamento',
+            'cliente' => $cliente,
+            'items' => $items,
+            'status' => 'pendente_atendimento',
+            'source' => 'checkout_site',
         ];
 
+        $logsDir = __DIR__ . '/../logs';
+        if (!is_dir($logsDir)) {
+            mkdir($logsDir, 0755, true);
+        }
+
         file_put_contents(
-            $logs_dir . '/pedidos.jsonl',
-            json_encode($pedido, JSON_UNESCAPED_UNICODE) . "\n",
+            $logsDir . '/pedidos.jsonl',
+            json_encode($registro, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
             FILE_APPEND | LOCK_EX
         );
 
-        $pedido_criado = true;
-        $pedido_id = $pedido['id'];
-        unset($_SESSION['carrinho']);
+        $pedidoCriado = true;
     }
 }
 ?>
@@ -67,270 +53,323 @@ if ($acao === 'finalizar_pedido') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo APP_NAME; ?> - Checkout</title>
+    <title>Vivaliz - Checkout</title>
     <link rel="stylesheet" href="/css/responsive.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
             background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
         }
-        .checkout-container {
-            display: grid;
-            grid-template-columns: 1.5fr 1fr;
-            gap: 30px;
-            margin: 30px 0;
+        .checkout-shell {
+            padding: 36px 0 64px;
         }
-        @media (max-width: 768px) {
-            .checkout-container {
+        .checkout-shell h1 {
+            color: #1F3A70;
+            margin-bottom: 8px;
+        }
+        .checkout-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
+            gap: 24px;
+            margin-top: 24px;
+        }
+        .form-panel,
+        .summary-panel,
+        .success-panel {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 18px;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+        }
+        .form-panel {
+            padding: 26px;
+        }
+        .summary-panel {
+            padding: 22px;
+            height: fit-content;
+        }
+        .success-panel {
+            padding: 32px;
+            max-width: 780px;
+        }
+        .success-panel h2 {
+            color: #166534;
+            margin-bottom: 12px;
+        }
+        .order-code {
+            margin: 18px 0;
+            padding: 14px 16px;
+            background: #f8fafc;
+            border-radius: 12px;
+            font-family: Consolas, monospace;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .form-section {
+            margin-bottom: 22px;
+        }
+        .form-section h2,
+        .summary-panel h2 {
+            color: #1F3A70;
+            margin-bottom: 12px;
+            font-size: 20px;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+        .form-grid.full {
+            grid-template-columns: 1fr;
+        }
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .field label {
+            font-weight: 600;
+            color: #334155;
+        }
+        .field input {
+            padding: 12px 14px;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            font: inherit;
+        }
+        .field input:focus {
+            outline: none;
+            border-color: #1F3A70;
+            box-shadow: 0 0 0 3px rgba(31, 58, 112, 0.12);
+        }
+        .summary-list {
+            display: grid;
+            gap: 12px;
+        }
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #eef2f7;
+            color: #475569;
+        }
+        .summary-total {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            margin-top: 18px;
+            padding-top: 18px;
+            border-top: 1px solid #e2e8f0;
+            font-size: 24px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .muted {
+            color: #64748b;
+        }
+        .primary-btn,
+        .ghost-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            padding: 14px 18px;
+        }
+        .primary-btn {
+            width: 100%;
+            border: none;
+            background: #1F3A70;
+            color: white;
+            cursor: pointer;
+        }
+        .ghost-btn {
+            margin-top: 14px;
+            background: white;
+            color: #1F3A70;
+            border: 1px solid #cbd5e1;
+        }
+        .checkout-empty {
+            padding: 32px;
+            text-align: center;
+            color: #64748b;
+        }
+        .checkout-empty h2 {
+            color: #1F3A70;
+            margin-bottom: 12px;
+        }
+        @media (max-width: 900px) {
+            .checkout-layout {
                 grid-template-columns: 1fr;
             }
         }
-        .formulario {
-            background: white;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .form-section {
-            margin-bottom: 25px;
-        }
-        .form-section h3 {
-            color: #1F3A70;
-            margin-bottom: 15px;
-            font-size: 1.1em;
-        }
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
-        .form-row.full {
-            grid-template-columns: 1fr;
-        }
-        .form-group {
-            display: flex;
-            flex-direction: column;
-        }
-        .form-group label {
-            font-weight: 600;
-            margin-bottom: 5px;
-            color: #333;
-        }
-        .form-group input,
-        .form-group textarea {
-            padding: 10px;
-            border: 1px solid #e5e7eb;
-            border-radius: 6px;
-            font-family: inherit;
-            font-size: 0.95em;
-        }
-        .form-group input:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: #1F3A70;
-            box-shadow: 0 0 0 3px rgba(31, 58, 112, 0.1);
-        }
-        .form-group textarea {
-            resize: vertical;
-            min-height: 60px;
-        }
-        .resumo-pedido {
-            background: #f5f7fa;
-            padding: 20px;
-            border-radius: 8px;
-            height: fit-content;
-        }
-        .resumo-item {
-            padding: 10px 0;
-            border-bottom: 1px solid #e5e7eb;
-            font-size: 0.95em;
-        }
-        .resumo-total {
-            font-size: 1.3em;
-            font-weight: bold;
-            color: #1F3A70;
-            margin: 15px 0;
-            text-align: right;
-        }
-        .btn-finalizar {
-            background: #1F3A70;
-            color: white;
-            border: none;
-            padding: 14px;
-            border-radius: 6px;
-            cursor: pointer;
-            width: 100%;
-            font-size: 1.05em;
-            font-weight: 600;
-            margin-top: 20px;
-        }
-        .btn-finalizar:hover {
-            background: #667eea;
-        }
-        .mensagem-sucesso {
-            background: #dcfce7;
-            border: 2px solid #10b981;
-            color: #166534;
-            padding: 20px;
-            border-radius: 8px;
-            text-align: center;
-            margin: 20px 0;
-        }
-        .mensagem-sucesso h2 {
-            margin: 10px 0;
-        }
-        .pedido-id {
-            background: #f3f4f6;
-            padding: 10px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 1.1em;
-            margin: 10px 0;
-            word-break: break-all;
-        }
-        .prox-passos {
-            background: #fef3c7;
-            border-left: 4px solid #f59e0b;
-            padding: 15px;
-            border-radius: 4px;
-            margin: 15px 0;
+        @media (max-width: 640px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
-    <?php include __DIR__ . '/../includes/navbar.php'; ?>
-    <main class="container">
-        <h1>Finalizar Compra</h1>
-
-        <?php if ($pedido_criado): ?>
-            <div class="mensagem-sucesso">
-                <h2>✓ Pedido Recebido com Sucesso!</h2>
-                <p>Seu pedido foi registrado em nosso sistema.</p>
-                <div class="pedido-id"><?php echo htmlspecialchars($pedido_id); ?></div>
-                <p>Um e-mail de confirmação será enviado para você em breve.</p>
-                <div class="prox-passos">
-                    <strong>Próximos passos:</strong>
-                    <ul style="margin-top: 10px; text-align: left;">
-                        <li>Você receberá um e-mail com os dados de pagamento</li>
-                        <li>Após confirmação de pagamento, seu pedido será processado</li>
-                        <li>Você receberá atualizações sobre o envio</li>
-                    </ul>
-                </div>
-                <a href="/catalogo/index.php" style="display: inline-block; margin-top: 20px; background: #1F3A70; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none;">
-                    ← Continuar Comprando
-                </a>
-            </div>
+<?php include __DIR__ . '/../includes/navbar.php'; ?>
+<main class="checkout-shell">
+    <div class="container">
+        <?php if ($pedidoCriado): ?>
+            <section class="success-panel">
+                <h2>Pedido recebido com sucesso</h2>
+                <p class="muted">Seu pedido foi registrado e entrou na fila de atendimento da ShopVivaliz.</p>
+                <div class="order-code"><?php echo htmlspecialchars((string)$pedidoId, ENT_QUOTES, 'UTF-8'); ?></div>
+                <p class="muted">Os dados foram salvos localmente em nosso registro operacional. O proximo passo e contato comercial para confirmacao do pedido e pagamento.</p>
+                <a class="ghost-btn" href="/catalogo">Voltar ao catalogo</a>
+            </section>
         <?php else: ?>
-            <div class="checkout-container">
-                <form method="POST" class="formulario">
-                    <input type="hidden" name="acao" value="finalizar_pedido">
+            <h1>Checkout</h1>
+            <p class="muted">Finalize seus dados para transformar o carrinho em pedido.</p>
 
-                    <div class="form-section">
-                        <h3>Dados Pessoais</h3>
-                        <div class="form-row full">
-                            <div class="form-group">
-                                <label for="nome">Nome Completo *</label>
+            <div id="checkout-empty" class="checkout-empty" hidden>
+                <h2>Nao ha itens no carrinho</h2>
+                <p>Adicione produtos antes de seguir para a finalizacao.</p>
+                <a class="ghost-btn" href="/catalogo">Ir para o catalogo</a>
+            </div>
+
+            <div id="checkout-content" class="checkout-layout">
+                <form method="POST" class="form-panel" id="checkout-form">
+                    <input type="hidden" name="acao" value="finalizar_pedido">
+                    <input type="hidden" name="cart_payload" id="cart-payload" value="[]">
+
+                    <section class="form-section">
+                        <h2>Dados pessoais</h2>
+                        <div class="form-grid full">
+                            <div class="field">
+                                <label for="nome">Nome completo</label>
                                 <input type="text" id="nome" name="nome" required>
                             </div>
                         </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="email">E-mail *</label>
+                        <div class="form-grid">
+                            <div class="field">
+                                <label for="email">E-mail</label>
                                 <input type="email" id="email" name="email" required>
                             </div>
-                            <div class="form-group">
-                                <label for="telefone">Telefone *</label>
-                                <input type="tel" id="telefone" name="telefone" placeholder="(11) 99999-9999" required>
+                            <div class="field">
+                                <label for="telefone">Telefone</label>
+                                <input type="tel" id="telefone" name="telefone" required>
                             </div>
                         </div>
-                    </div>
+                    </section>
 
-                    <div class="form-section">
-                        <h3>Endereço de Entrega</h3>
-                        <div class="form-row full">
-                            <div class="form-group">
-                                <label for="endereco">Rua/Avenida *</label>
+                    <section class="form-section">
+                        <h2>Endereco de entrega</h2>
+                        <div class="form-grid full">
+                            <div class="field">
+                                <label for="endereco">Rua ou avenida</label>
                                 <input type="text" id="endereco" name="endereco" required>
                             </div>
                         </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="numero">Número *</label>
+                        <div class="form-grid">
+                            <div class="field">
+                                <label for="numero">Numero</label>
                                 <input type="text" id="numero" name="numero" required>
                             </div>
-                            <div class="form-group">
+                            <div class="field">
                                 <label for="complemento">Complemento</label>
-                                <input type="text" id="complemento" name="complemento" placeholder="Apto, sala, etc">
+                                <input type="text" id="complemento" name="complemento">
                             </div>
                         </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="cidade">Cidade *</label>
+                        <div class="form-grid">
+                            <div class="field">
+                                <label for="cidade">Cidade</label>
                                 <input type="text" id="cidade" name="cidade" required>
                             </div>
-                            <div class="form-group">
-                                <label for="cep">CEP *</label>
-                                <input type="text" id="cep" name="cep" placeholder="00000-000" required>
+                            <div class="field">
+                                <label for="cep">CEP</label>
+                                <input type="text" id="cep" name="cep" required>
                             </div>
                         </div>
-                    </div>
+                    </section>
 
-                    <div class="form-section">
-                        <h3>Pagamento</h3>
-                        <p style="color: #666; margin-bottom: 15px;">
-                            Você receberá um e-mail com as opções de pagamento após confirmar este pedido.
-                        </p>
-                        <div class="form-row full">
-                            <div class="form-group">
-                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                                    <input type="checkbox" required style="width: auto;">
-                                    Concordo com os termos e condições
-                                </label>
-                            </div>
-                        </div>
-                    </div>
+                    <section class="form-section">
+                        <h2>Confirmacao</h2>
+                        <p class="muted">O pedido sera salvo com os itens do carrinho e encaminhado para atendimento comercial.</p>
+                    </section>
 
-                    <button type="submit" class="btn-finalizar">
-                        Confirmar Pedido
-                    </button>
+                    <button class="primary-btn" type="submit">Confirmar pedido</button>
                 </form>
 
-                <div class="resumo-pedido">
-                    <h3 style="color: #1F3A70; margin-bottom: 15px;">Resumo do Pedido</h3>
-                    <?php
-                    $produtos_db = [
-                        1 => ['id' => 1, 'nome' => 'Camiseta Premium', 'preco' => 79.90],
-                        2 => ['id' => 2, 'nome' => 'Calça Jeans', 'preco' => 149.90],
-                        3 => ['id' => 3, 'nome' => 'Tênis Esportivo', 'preco' => 199.90],
-                        4 => ['id' => 4, 'nome' => 'Relógio Digital', 'preco' => 89.90],
-                        5 => ['id' => 5, 'nome' => 'Mochila Impermeável', 'preco' => 129.90],
-                        6 => ['id' => 6, 'nome' => 'Jaqueta de Couro', 'preco' => 299.90],
-                    ];
-
-                    $total = 0;
-                    foreach ($_SESSION['carrinho'] as $id => $qtd) {
-                        if (isset($produtos_db[$id])) {
-                            $p = $produtos_db[$id];
-                            $subtotal = $p['preco'] * $qtd;
-                            $total += $subtotal;
-                            echo '<div class="resumo-item">';
-                            echo htmlspecialchars($p['nome']) . ' x ' . $qtd;
-                            echo ' <span style="float: right;">R$ ' . number_format($subtotal, 2, ',', '.') . '</span>';
-                            echo '</div>';
-                        }
-                    }
-                    ?>
-                    <div class="resumo-total">
-                        Total: R$ <?php echo number_format($total, 2, ',', '.'); ?>
+                <aside class="summary-panel">
+                    <h2>Resumo do pedido</h2>
+                    <div id="checkout-summary" class="summary-list"></div>
+                    <div class="summary-total">
+                        <span>Total</span>
+                        <span id="checkout-total">R$ 0,00</span>
                     </div>
-                </div>
+                </aside>
             </div>
         <?php endif; ?>
-    </main>
-    <footer>
-        <div class="container">
-            <p>&copy; 2026 ShopVivaliz. Todos os direitos reservados.</p>
-        </div>
-    </footer>
+    </div>
+</main>
+
+<?php if (!$pedidoCriado): ?>
+<script>
+    (function () {
+        const content = document.getElementById('checkout-content');
+        const emptyState = document.getElementById('checkout-empty');
+        const summary = document.getElementById('checkout-summary');
+        const totalNode = document.getElementById('checkout-total');
+        const payloadNode = document.getElementById('cart-payload');
+        const form = document.getElementById('checkout-form');
+
+        function money(value) {
+            return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
+        function readCart() {
+            try {
+                const value = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
+                return Array.isArray(value) ? value : [];
+            } catch (error) {
+                return [];
+            }
+        }
+
+        const items = readCart().filter(function (item) {
+            return item && item.name;
+        });
+
+        if (!items.length) {
+            if (content) content.hidden = true;
+            if (emptyState) emptyState.hidden = false;
+            return;
+        }
+
+        const total = items.reduce(function (sum, item) {
+            return sum + (Number(item.price || 0) * Number(item.quantity || 1));
+        }, 0);
+
+        if (summary) {
+            summary.innerHTML = items.map(function (item) {
+                const quantity = Math.max(1, Number(item.quantity || 1));
+                return `
+                    <div class="summary-item">
+                        <div>
+                            <strong>${item.name || 'Produto'}</strong><br>
+                            <span class="muted">${item.sku || 'sem-sku'} x ${quantity}</span>
+                        </div>
+                        <strong>${money((item.price || 0) * quantity)}</strong>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        if (totalNode) totalNode.textContent = money(total);
+        if (payloadNode) payloadNode.value = JSON.stringify(items);
+
+        form.addEventListener('submit', function () {
+            localStorage.removeItem('shopvivaliz_cart');
+        });
+    })();
+</script>
+<?php endif; ?>
 </body>
 </html>

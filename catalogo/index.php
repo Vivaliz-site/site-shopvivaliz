@@ -114,7 +114,7 @@ sort($categorias);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#1F3A70">
-    <title><?php echo APP_NAME; ?> - Catálogo</title>
+    <title>Vivaliz - Catalogo</title>
     <link rel="stylesheet" href="/css/responsive.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
