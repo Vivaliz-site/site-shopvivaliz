@@ -1,7 +1,6 @@
 <?php
 // Auto-gerado: 198 produtos Olist
 $GLOBALS['produtos_olist'] = array(
-  array(
   array('id' => 'PROD-0001', 'nome' => 'Produto Premium #1', 'preco' => 81.4, 'categoria' => 'Calcados', 'descricao' => 'Produto de qualidade numero 1 com detalhes tecnicos', 'url_imagem' => '/storage/original/00.jpg'),
   array('id' => 'PROD-0002', 'nome' => 'Produto Premium #2', 'preco' => 82.9, 'categoria' => 'Acessorios', 'descricao' => 'Produto de qualidade numero 2 com detalhes tecnicos', 'url_imagem' => '/storage/original/03080.2050.10.jpg'),
   array('id' => 'PROD-0003', 'nome' => 'Produto Premium #3', 'preco' => 84.4, 'categoria' => 'Eletronicos', 'descricao' => 'Produto de qualidade numero 3 com detalhes tecnicos', 'url_imagem' => '/storage/original/03080.3050.10.jpg'),
