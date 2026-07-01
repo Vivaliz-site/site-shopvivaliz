@@ -2,6 +2,8 @@ name: CI AUTONOMO CONTINUO
 
 on:
   push:
+    branches:
+      - main
     paths-ignore:
       - 'automation/eha/reports/**'
   workflow_dispatch:

@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'automation/**'
+      - '**/*.md'
+      - '.github/**'
+      - '.claude/**'
+      - '.codex/**'
+      - '*.txt'
   workflow_dispatch:
 
 permissions:
