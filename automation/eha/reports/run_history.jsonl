@@ -1,0 +1,1 @@
+{"run_id":"30","ts":"2026-07-01T10:06:02+00:00","status":"READY_FOR_PRODUCTION","action":"DEPLOY_OK","elapsed_s":1.18,"checkout_ok":true,"api_ok":true,"db_ok":true,"e2e_failed":false,"error_count":0}
