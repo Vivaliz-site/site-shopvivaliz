@@ -1,8 +1,8 @@
 {
-    "action": "ROLLBACK",
+    "action": "CREATE_PR",
     "metrics": {
-        "checkout_ok": false,
-        "checkout_fail": true,
+        "checkout_ok": true,
+        "checkout_fail": false,
         "api_ok": true,
         "db_ok": true,
         "pages_ok": true,
@@ -12,27 +12,33 @@
         "error_high": false,
         "recent_errors": [],
         "e2e_failed": true,
-        "timestamp": "2026-07-01T12:31:00+00:00"
+        "timestamp": "2026-07-01T13:09:22+00:00"
     },
     "validation": {
-        "status": "BLOCKED",
-        "checkout_ok": false,
+        "status": "READY_FOR_PRODUCTION",
+        "checkout_ok": true,
         "api_ok": true,
         "db_ok": true,
         "pages_ok": true,
-        "timestamp": "2026-07-01T12:31:00+00:00"
+        "timestamp": "2026-07-01T13:09:22+00:00"
     },
     "loop": {
-        "risk": "HIGH",
+        "risk": "MEDIUM",
         "issue": "checkout_fail",
         "handled": true,
         "result": {
-            "status": "rollback_requested",
-            "reason": "checkout_fail",
-            "timestamp": "2026-07-01T12:31:00+00:00",
-            "note": "Rollback automático requer aprovação humana. Evento registrado."
+            "status": "proposal_only",
+            "branch": "autodev\/auto-eha-checkout-fail-20260701-130922",
+            "pull_request": {
+                "title": "[AUTO] EHA: checkout_fail",
+                "branch": "autodev\/auto-eha-checkout-fail-20260701-130922",
+                "body": "PR gerado automaticamente pelo EHA em 2026-07-01T13:09:22+00:00.\n\nMotivo: EHA: checkout_fail",
+                "base": "main",
+                "draft": true
+            },
+            "note": "Git\/PR automático exige revisão humana e workflow autenticado."
         }
     },
-    "elapsed_s": 1.23,
-    "run_id": "55"
+    "elapsed_s": 0.68,
+    "run_id": "57"
 }
