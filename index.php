@@ -1,473 +1,716 @@
 <?php
 /**
- * ShopVivaliz - Homepage
+ * ShopVivaliz - Redirecionamento para Dashboard
+ * A homepage pública é o dashboard em /claude/ até homologação completa
  */
-declare(strict_types=1);
+header('Location: /claude/', true, 301);
+exit;
 
-error_reporting(E_ALL);
-ini_set('display_errors', '0');
-ini_set('log_errors', '1');
-
-header('X-Content-Type-Options: nosniff');
-header('X-Frame-Options: SAMEORIGIN');
-header('X-XSS-Protection: 1; mode=block');
-header('Referrer-Policy: strict-origin-when-cross-origin');
-header('Content-Type: text/html; charset=UTF-8');
-
-define('APP_VERSION', '9.2.85');
-define('APP_NAME', 'ShopVivaliz');
-
-// ── Conexão com banco de dados ────────────────────────────────────────────────
-function home_load_env(): void
+function home_read_mapping_products(int $limit = 8): array
 {
-    $path = __DIR__ . '/.env';
-    if (!is_file($path)) return;
-    foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-        $line = trim($line);
-        if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
-        [$k, $v] = explode('=', $line, 2);
-        $k = trim($k); $v = trim(trim($v), "\"'");
-        if ($k !== '' && getenv($k) === false) putenv("$k=$v");
+    $path = __DIR__ . '/uploads/olist_imagens_site_mapeamento.csv';
+    if (!is_file($path) || !is_readable($path)) {
+        return [];
     }
+
+    $fh = fopen($path, 'r');
+    if (!$fh) {
+        return [];
+    }
+
+    $headers = fgetcsv($fh);
+    if (!is_array($headers)) {
+        fclose($fh);
+        return [];
+    }
+
+    $headers[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string)$headers[0]);
+    $products = [];
+
+    while (($values = fgetcsv($fh)) !== false) {
+        $row = [];
+        foreach ($headers as $index => $header) {
+            $row[(string)$header] = $values[$index] ?? '';
+        }
+
+        $sku = trim((string)($row['sku'] ?? ''));
+        $name = trim((string)($row['nome_produto'] ?? ''));
+        $image = trim((string)($row['site_url'] ?? ''));
+        $isPrimary = strtolower(trim((string)($row['is_primary'] ?? ''))) === 'true';
+
+        if ($sku === '' || $name === '' || $image === '' || !$isPrimary) {
+            continue;
+        }
+
+        $products[] = [
+            'sku' => $sku,
+            'name' => $name,
+            'image_url' => $image,
+        ];
+
+        if (count($products) >= $limit) {
+            break;
+        }
+    }
+
+    fclose($fh);
+    return $products;
 }
 
-function home_db(): ?mysqli
+function home_product_tags(string $name): array
 {
-    if (!class_exists('mysqli')) return null;
-    home_load_env();
-    $constants = __DIR__ . '/config/constants.php';
-    if (is_file($constants)) @include_once $constants;
-    $host = defined('DB_HOST') ? DB_HOST : (getenv('DB_HOST') ?: 'localhost');
-    $port = (int)(defined('DB_PORT') ? DB_PORT : (getenv('DB_PORT') ?: 3306));
-    $name = defined('DB_NAME') ? DB_NAME : (getenv('DB_NAME') ?: '');
-    $user = defined('DB_USER') ? DB_USER : (getenv('DB_USER') ?: '');
-    $pass = defined('DB_PASS') ? DB_PASS : (getenv('DB_PASS') ?: '');
-    if ($name === '' || $user === '') return null;
-    mysqli_report(MYSQLI_REPORT_OFF);
-    $db = @new mysqli((string)$host, (string)$user, (string)$pass, (string)$name, $port);
-    if ($db->connect_errno) return null;
-    $db->set_charset('utf8mb4');
-    return $db;
-}
+    $normalized = mb_strtolower($name, 'UTF-8');
+    $map = [
+        'Rodizios' => ['rodizio', 'rodizios'],
+        'Banheiro' => ['tampa', 'assento', 'banheiro'],
+        'Ferragens' => ['abracadeira', 'fita perfurada', 'suporte', 'gancho'],
+        'Casa' => ['floreira', 'organiz', 'casa', 'cozinha'],
+        'Moveis' => ['rodizio', 'gel', 'freio'],
+        'Utilidades' => ['jogo', 'kit', 'conjunto'],
+    ];
 
-function home_table_exists(mysqli $db, string $table): bool
-{
-    $stmt = $db->prepare('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? LIMIT 1');
-    if (!$stmt) return false;
-    $stmt->bind_param('s', $table);
-    $stmt->execute();
-    return (bool)$stmt->get_result()->fetch_row();
-}
-
-function home_load_products(int $limit = 8): array
-{
-    try {
-        $db = home_db();
-        if (!$db) return [];
-        if (home_table_exists($db, 'olist_products')) {
-            $stmt = $db->prepare(
-                'SELECT id, sku, name, primary_image_url AS image_url
-                 FROM olist_products
-                 WHERE primary_image_url IS NOT NULL AND primary_image_url != ""
-                 ORDER BY updated_at DESC, id DESC LIMIT ?'
-            );
-            if ($stmt) {
-                $stmt->bind_param('i', $limit); $stmt->execute();
-                $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-                if ($rows) return $rows;
+    $tags = [];
+    foreach ($map as $label => $terms) {
+        foreach ($terms as $term) {
+            if (str_contains($normalized, $term)) {
+                $tags[] = $label;
+                break;
             }
         }
-        if (home_table_exists($db, 'products')) {
-            $stmt = $db->prepare(
-                'SELECT id, sku, name, price, image_url
-                 FROM products
-                 WHERE active=1 AND image_url IS NOT NULL AND image_url != ""
-                 ORDER BY updated_at DESC, id DESC LIMIT ?'
-            );
-            if ($stmt) {
-                $stmt->bind_param('i', $limit); $stmt->execute();
-                $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-                if ($rows) return $rows;
-            }
-        }
-    } catch (Throwable) {}
-    return [];
+    }
+
+    return array_values(array_unique($tags));
 }
 
-$featured_products = home_load_products(8);
-$has_products = count($featured_products) > 0;
+$featuredProducts = home_read_mapping_products(8);
+$metrics = [
+    'itens' => '198 produtos mapeados',
+    'imagens' => 'Galerias vinculadas',
+    'operacao' => 'Catalogo em consolidacao',
+];
+$categoryLinks = [
+    ['title' => 'Rodizios', 'query' => 'rodizio', 'note' => 'Modelos com gel, freio e alta carga'],
+    ['title' => 'Banheiro', 'query' => 'tampa', 'note' => 'Assentos e linhas de acabamento'],
+    ['title' => 'Ferragens', 'query' => 'abracadeira', 'note' => 'Fixacao, suporte e componentes'],
+    ['title' => 'Casa e organizacao', 'query' => 'organiz', 'note' => 'Itens para uso pratico no dia a dia'],
+];
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="ShopVivaliz - Sua loja online de qualidade. Produtos variados com entrega rápida e segura.">
-    <meta name="theme-color" content="#1e3a5f">
-    <title><?= APP_NAME ?> - Sua Loja Online de Confiança</title>
+    <meta name="description" content="Vivaliz com catalogo ativo, produtos reais e operacao preparada para venda online e marketplace.">
+    <meta name="theme-color" content="#173B63">
+    <title>Vivaliz | Loja online</title>
     <link rel="stylesheet" href="/css/responsive.css">
+    <link rel="icon" type="image/png" href="/images/logo-vivaliz-square.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        :root { --brand-green:#22c55e; --brand-navy:#1e3a5f; --brand-dark:#1a3050; }
+        :root {
+            --navy: #173B63;
+            --navy-2: #274E78;
+            --green: #2DBB57;
+            --green-soft: #DFF5E7;
+            --ink: #102033;
+            --muted: #5E7188;
+            --line: #DBE5EF;
+            --surface: #F4F8FB;
+            --card: #FFFFFF;
+        }
 
-        /* ===== BANNER SLIDER ===== */
-        .banner-slider { position:relative; width:100%; height:300px; overflow:hidden; margin-bottom:40px; }
-        /* FIX: display:none aqui; .active define display:flex */
-        .banner-slide {
-            display:none; width:100%; height:100%;
-            position:absolute; top:0; left:0;
-            color:white; align-items:center; justify-content:center;
-            text-align:center; padding:20px;
+        html, body {
+            font-family: 'Manrope', 'Segoe UI', sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(45,187,87,0.08), transparent 28%),
+                linear-gradient(180deg, #F8FBFD 0%, #F3F7FB 100%);
+            color: var(--ink);
         }
-        .banner-slide.active { display:flex; }
-        .banner-slide:nth-child(1) { background:linear-gradient(135deg,var(--brand-navy),#2563eb); }
-        .banner-slide:nth-child(2) { background:linear-gradient(135deg,#065f46,var(--brand-green)); }
-        .banner-slide:nth-child(3) { background:linear-gradient(135deg,#7c3aed,#4f46e5); }
-        .banner-slide h2 { font-size:28px; margin-bottom:10px; }
-        .banner-slide p  { font-size:16px; margin-bottom:20px; opacity:.95; }
-        .banner-btn {
-            display:inline-block; padding:12px 28px; background:white;
-            color:var(--brand-navy); font-weight:700; border-radius:6px;
-            text-decoration:none; transition:transform .2s,box-shadow .2s;
-        }
-        .banner-btn:hover { transform:translateY(-2px); box-shadow:0 4px 14px rgba(0,0,0,.25); }
-        .banner-arrow {
-            position:absolute; top:50%; transform:translateY(-50%);
-            background:rgba(255,255,255,.22); border:none; color:white;
-            font-size:24px; width:42px; height:42px; border-radius:50%;
-            cursor:pointer; z-index:10; transition:background .2s;
-        }
-        .banner-arrow:hover { background:rgba(255,255,255,.42); }
-        .banner-arrow.prev { left:14px; } .banner-arrow.next { right:14px; }
-        .banner-dots {
-            position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
-            display:flex; gap:8px; z-index:10;
-        }
-        .dot { width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,.4); cursor:pointer; border:none; transition:all .3s; }
-        .dot.active { background:white; width:30px; border-radius:5px; }
 
-        /* ===== BUSCA ===== */
-        .search-bar { display:flex; gap:8px; margin:20px 0 32px; }
-        .search-bar input { flex:1; padding:13px 16px; border:2px solid #e5e7eb; border-radius:6px; font-size:15px; transition:border-color .2s; }
-        .search-bar input:focus { outline:none; border-color:var(--brand-navy); }
-        .search-bar button { padding:13px 24px; background:var(--brand-navy); color:white; border:none; border-radius:6px; font-weight:600; cursor:pointer; transition:background .2s; }
-        .search-bar button:hover { background:var(--brand-dark); }
+        .navbar {
+            background: rgba(255,255,255,0.92);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(219,229,239,0.85);
+        }
 
-        /* ===== CATEGORIAS ===== */
-        .categories-section { padding:40px 0; background:#f9fafb; }
-        .categories-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+        .navbar .container {
+            min-height: 82px;
+        }
+
+        .hero-shell {
+            padding: 28px 0 28px;
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.8fr);
+            gap: 20px;
+            align-items: stretch;
+        }
+
+        .hero-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 30px;
+            padding: 42px;
+            background:
+                radial-gradient(circle at top right, rgba(45,187,87,0.22), transparent 24%),
+                linear-gradient(135deg, #143A62 0%, #20486F 44%, #2DBB57 125%);
+            color: white;
+            min-height: 420px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: 0 28px 60px rgba(23,59,99,0.20);
+        }
+
+        .hero-card::after {
+            content: "";
+            position: absolute;
+            inset: auto -50px -70px auto;
+            width: 220px;
+            height: 220px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.08);
+            filter: blur(2px);
+        }
+
+        .hero-kicker {
+            display: inline-flex;
+            width: fit-content;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.16);
+            font-size: 12px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .hero-copy h1 {
+            font-size: clamp(34px, 5vw, 64px);
+            line-height: 0.98;
+            margin: 18px 0 18px;
+            max-width: 9.5ch;
+        }
+
+        .hero-copy p {
+            max-width: 58ch;
+            font-size: 17px;
+            line-height: 1.75;
+            color: rgba(255,255,255,0.88);
+        }
+
+        .hero-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 28px;
+        }
+
+        .hero-btn,
+        .hero-btn-alt {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 16px;
+            padding: 14px 18px;
+            text-decoration: none;
+            font-weight: 800;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .hero-btn {
+            background: white;
+            color: var(--navy);
+            box-shadow: 0 12px 28px rgba(255,255,255,0.18);
+        }
+
+        .hero-btn-alt {
+            background: rgba(255,255,255,0.10);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.16);
+        }
+
+        .hero-btn:hover,
+        .hero-btn-alt:hover,
+        .mini-banner:hover,
+        .category-card:hover,
+        .product-card:hover {
+            transform: translateY(-3px);
+        }
+
+        .hero-metrics {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 28px;
+        }
+
+        .metric-box {
+            background: rgba(255,255,255,0.10);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 18px;
+            padding: 16px;
+        }
+
+        .metric-box strong {
+            display: block;
+            font-size: 16px;
+            margin-bottom: 6px;
+        }
+
+        .metric-box span {
+            color: rgba(255,255,255,0.80);
+            font-size: 13px;
+        }
+
+        .hero-side {
+            display: grid;
+            gap: 16px;
+        }
+
+        .mini-banner {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 26px;
+            padding: 24px;
+            box-shadow: 0 18px 40px rgba(15,23,42,0.06);
+            transition: transform 0.2s ease;
+        }
+
+        .mini-banner strong {
+            color: var(--navy);
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .mini-banner h2 {
+            margin: 12px 0 10px;
+            font-size: 24px;
+            color: var(--ink);
+        }
+
+        .mini-banner p {
+            color: var(--muted);
+            line-height: 1.7;
+            margin-bottom: 16px;
+        }
+
+        .mini-banner a {
+            color: var(--navy);
+            font-weight: 800;
+            text-decoration: none;
+        }
+
+        .section-shell {
+            padding: 22px 0 8px;
+        }
+
+        .section-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .section-head h2 {
+            font-size: 30px;
+            color: var(--ink);
+            margin-bottom: 6px;
+        }
+
+        .section-head p {
+            color: var(--muted);
+            max-width: 62ch;
+            line-height: 1.7;
+        }
+
+        .section-head a {
+            text-decoration: none;
+            color: var(--navy);
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .categories-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+        }
+
         .category-card {
-            background:white; padding:20px 12px; border-radius:10px; text-align:center;
-            text-decoration:none; color:inherit; border:2px solid transparent;
-            box-shadow:0 1px 3px rgba(0,0,0,.06); transition:all .2s; display:block;
+            background: linear-gradient(180deg, #FFFFFF 0%, #F7FBFD 100%);
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            padding: 24px;
+            text-decoration: none;
+            color: inherit;
+            box-shadow: 0 18px 40px rgba(15,23,42,0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
-        .category-card:hover { border-color:var(--brand-green); transform:translateY(-4px); box-shadow:0 6px 18px rgba(34,197,94,.2); }
-        .category-icon { font-size:32px; margin-bottom:8px; }
-        .category-card h3 { font-size:13px; color:#1f2937; font-weight:600; }
 
-        /* ===== SECTION HEADER ===== */
-        .section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; }
-        .section-title  { font-size:22px; color:#1f2937; font-weight:700; }
-        .section-link   { font-size:14px; color:var(--brand-navy); text-decoration:none; font-weight:600; }
-        .section-link:hover { text-decoration:underline; }
-
-        /* ===== PRODUTOS ===== */
-        .featured-section { padding:40px 0; }
-        .products-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
-        .product-card { background:white; border-radius:10px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.08); transition:all .25s; }
-        .product-card:hover { transform:translateY(-6px); box-shadow:0 8px 24px rgba(0,0,0,.13); }
-        .product-image { width:100%; height:200px; background:#f3f4f6; display:flex; align-items:center; justify-content:center; overflow:hidden; }
-        .product-image img { width:100%; height:100%; object-fit:cover; transition:transform .3s; }
-        .product-card:hover .product-image img { transform:scale(1.05); }
-        .product-image-placeholder { width:100%; height:100%; background:linear-gradient(135deg,#e5e7eb,#d1d5db); display:flex; align-items:center; justify-content:center; font-size:11px; color:#9ca3af; text-transform:uppercase; letter-spacing:.08em; }
-        .product-info { padding:14px; }
-        .product-name { font-size:13px; font-weight:600; color:#1f2937; margin-bottom:8px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-        .product-price { font-size:16px; font-weight:700; color:var(--brand-navy); margin-bottom:12px; }
-        .product-btn { width:100%; padding:10px; background:var(--brand-green); color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600; font-size:13px; transition:background .2s; }
-        .product-btn:hover { background:#16a34a; }
-        .product-btn:active { transform:scale(.98); }
-        .no-products { grid-column:1/-1; text-align:center; padding:60px 20px; color:#6b7280; }
-        .no-products a { color:var(--brand-navy); font-weight:600; }
-
-        /* ===== PROMO ===== */
-        .promo-banner { background:linear-gradient(135deg,var(--brand-navy),#2563eb); color:white; padding:40px 24px; border-radius:12px; text-align:center; margin:40px 0; }
-        .promo-banner h2 { font-size:24px; margin-bottom:8px; }
-        .promo-banner p  { font-size:15px; margin-bottom:16px; opacity:.9; }
-        .promo-code { display:inline-block; background:rgba(255,255,255,.2); border:2px dashed rgba(255,255,255,.6); padding:6px 20px; border-radius:6px; font-weight:700; letter-spacing:2px; font-size:20px; margin-bottom:20px; }
-
-        /* ===== NEWSLETTER ===== */
-        .newsletter-section { background:#f9fafb; padding:40px 0; }
-        .newsletter-content { max-width:480px; margin:0 auto; text-align:center; }
-        .newsletter-content h2 { font-size:22px; margin-bottom:8px; }
-        .newsletter-content p  { margin-bottom:20px; color:#6b7280; }
-        .newsletter-form { display:flex; flex-direction:column; gap:10px; }
-        .newsletter-form input { padding:13px 16px; border:2px solid #e5e7eb; border-radius:6px; font-size:14px; }
-        .newsletter-form input:focus { outline:none; border-color:var(--brand-navy); }
-        .newsletter-form button { padding:13px; background:var(--brand-navy); color:white; border:none; border-radius:6px; font-weight:600; cursor:pointer; transition:background .2s; }
-        .newsletter-form button:hover { background:var(--brand-dark); }
-
-        /* ===== TOAST ===== */
-        .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(80px); background:#1f2937; color:white; padding:13px 24px; border-radius:8px; font-size:14px; font-weight:500; z-index:9999; transition:transform .3s ease; white-space:nowrap; pointer-events:none; }
-        .toast.show { transform:translateX(-50%) translateY(0); }
-
-        /* ===== RESPONSIVO ===== */
-        @media (max-width:767px) {
-            .banner-slider { height:220px; }
-            .banner-slide h2 { font-size:20px; }
-            .banner-slide p  { font-size:13px; margin-bottom:14px; }
-            .section-title { font-size:18px; }
-            .promo-banner h2 { font-size:18px; }
+        .category-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: var(--green-soft);
+            color: var(--green);
+            font-weight: 800;
+            margin-bottom: 16px;
         }
-        @media (min-width:768px) {
-            .banner-slider { height:360px; }
-            .banner-slide h2 { font-size:36px; }
-            .categories-grid { grid-template-columns:repeat(6,1fr); }
-            .products-grid   { grid-template-columns:repeat(4,1fr); }
-            .newsletter-form { flex-direction:row; }
-            .newsletter-form input { flex:1; }
+
+        .category-card h3 {
+            color: var(--ink);
+            font-size: 18px;
+            margin-bottom: 8px;
         }
-        @media (min-width:1025px) {
-            .banner-slider { height:420px; }
-            .banner-slide h2 { font-size:44px; }
-            .section-title  { font-size:26px; }
-            .product-image  { height:220px; }
+
+        .category-card p {
+            color: var(--muted);
+            line-height: 1.7;
+            font-size: 14px;
+        }
+
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .product-card {
+            background: white;
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            overflow: hidden;
+            box-shadow: 0 18px 40px rgba(15,23,42,0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .product-image {
+            background: #F7FBFD;
+            height: 240px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .product-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .product-body {
+            padding: 18px;
+        }
+
+        .product-tag-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .product-tag {
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #EEF5FB;
+            color: var(--navy);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .product-title {
+            color: var(--ink);
+            font-size: 16px;
+            line-height: 1.45;
+            min-height: 46px;
+            margin-bottom: 14px;
+            font-weight: 700;
+        }
+
+        .product-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .product-meta span {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .product-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 108px;
+            padding: 11px 14px;
+            border-radius: 14px;
+            background: var(--green);
+            color: white;
+            text-decoration: none;
+            font-weight: 800;
+        }
+
+        .value-strip {
+            margin: 28px 0 34px;
+            padding: 24px 28px;
+            border-radius: 26px;
+            background: linear-gradient(135deg, #0F2843 0%, #173B63 45%, #204C77 100%);
+            color: white;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 18px;
+        }
+
+        .value-strip strong {
+            display: block;
+            font-size: 19px;
+            margin-bottom: 8px;
+        }
+
+        .value-strip p {
+            color: rgba(255,255,255,0.80);
+            line-height: 1.7;
+            font-size: 14px;
+        }
+
+        .empty-products {
+            background: white;
+            border: 1px dashed var(--line);
+            border-radius: 22px;
+            padding: 30px;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        footer {
+            margin-top: 46px;
+            background: #0F2843;
+            color: white;
+            padding: 34px 0;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 1.2fr repeat(2, minmax(0, 1fr));
+            gap: 22px;
+        }
+
+        .footer-grid p,
+        .footer-grid a {
+            color: rgba(255,255,255,0.78);
+            text-decoration: none;
+            line-height: 1.7;
+            font-size: 14px;
+        }
+
+        .footer-grid h3 {
+            margin-bottom: 10px;
+            font-size: 15px;
+        }
+
+        @media (max-width: 1100px) {
+            .hero-grid,
+            .categories-grid,
+            .products-grid,
+            .footer-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .hero-card {
+                min-height: 380px;
+            }
+        }
+
+        @media (max-width: 820px) {
+            .hero-grid,
+            .categories-grid,
+            .products-grid,
+            .value-strip,
+            .footer-grid {
+                grid-template-columns: 1fr;
+            }
+            .hero-card,
+            .mini-banner,
+            .category-card,
+            .product-card {
+                border-radius: 20px;
+            }
+            .hero-card {
+                padding: 28px;
+                min-height: auto;
+            }
+            .hero-metrics {
+                grid-template-columns: 1fr;
+            }
+            .section-head {
+                flex-direction: column;
+                align-items: start;
+            }
         }
     </style>
 </head>
 <body>
+<?php include __DIR__ . '/includes/navbar.php'; ?>
 
-<!-- Navbar -->
-<nav class="navbar">
-    <div class="container">
-        <div class="navbar-brand">
-            <a href="/" style="display:flex;align-items:center;text-decoration:none;">
-                <img src="/images/logo.svg" alt="ShopVivaliz" style="height:46px;width:auto;"
-                     onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-                <span style="display:none;font-size:20px;font-weight:700;color:var(--brand-navy);">ShopVivaliz</span>
-            </a>
-        </div>
-        <button class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
-        <div class="navbar-menu" id="navMenu">
-            <a href="/">Home</a>
-            <a href="/catalogo">Catálogo</a>
-            <a href="/sobre">Sobre</a>
-            <a href="/contato">Contato</a>
-            <a href="/carrinho">🛒 Carrinho <span id="cartCount" style="display:none;background:#ef4444;color:white;border-radius:999px;padding:1px 7px;font-size:11px;"></span></a>
-        </div>
-    </div>
-</nav>
-
-<!-- Banner Slider -->
-<section class="banner-slider" aria-label="Banners">
-    <div class="banner-slide active">
-        <div><h2>Bem-vindo ao ShopVivaliz</h2><p>Produtos de qualidade com entrega rápida e segura</p><a href="/catalogo" class="banner-btn">Ver Catálogo</a></div>
-    </div>
-    <div class="banner-slide">
-        <div><h2>Promoção 50% OFF</h2><p>Em produtos selecionados — só esta semana</p><a href="/catalogo?promo=1" class="banner-btn" style="color:#065f46;">Ver Promoções</a></div>
-    </div>
-    <div class="banner-slide">
-        <div><h2>Frete Grátis</h2><p>Em compras acima de R$ 100 para todo o Brasil</p><a href="/catalogo" class="banner-btn" style="color:#4f46e5;">Aproveitar</a></div>
-    </div>
-    <button class="banner-arrow prev" onclick="moveSlide(-1)" aria-label="Anterior">‹</button>
-    <button class="banner-arrow next" onclick="moveSlide(1)" aria-label="Próximo">›</button>
-    <div class="banner-dots">
-        <button class="dot active" onclick="goToSlide(0)"></button>
-        <button class="dot" onclick="goToSlide(1)"></button>
-        <button class="dot" onclick="goToSlide(2)"></button>
-    </div>
-</section>
-
-<!-- Busca -->
-<section class="container">
-    <form class="search-bar" action="/catalogo" method="get" role="search">
-        <input type="text" name="q" placeholder="Buscar produtos, marcas ou categorias..." autocomplete="off">
-        <button type="submit">🔍 Buscar</button>
-    </form>
-</section>
-
-<!-- Categorias -->
-<section class="categories-section">
-    <div class="container">
-        <div class="section-header">
-            <h2 class="section-title">Categorias</h2>
-            <a href="/catalogo" class="section-link">Ver tudo →</a>
-        </div>
-        <div class="categories-grid">
-            <a href="/catalogo?categoria=roupas"     class="category-card"><div class="category-icon">👕</div><h3>Roupas</h3></a>
-            <a href="/catalogo?categoria=calcados"   class="category-card"><div class="category-icon">👟</div><h3>Calçados</h3></a>
-            <a href="/catalogo?categoria=acessorios" class="category-card"><div class="category-icon">💎</div><h3>Acessórios</h3></a>
-            <a href="/catalogo?categoria=casa"       class="category-card"><div class="category-icon">🏠</div><h3>Casa</h3></a>
-            <a href="/catalogo?categoria=esportes"   class="category-card"><div class="category-icon">⚽</div><h3>Esportes</h3></a>
-            <a href="/catalogo?categoria=eletronicos" class="category-card"><div class="category-icon">📱</div><h3>Eletrônicos</h3></a>
-        </div>
-    </div>
-</section>
-
-<!-- Produtos em Destaque -->
-<section class="featured-section">
-    <div class="container">
-        <div class="section-header">
-            <h2 class="section-title">Produtos em Destaque</h2>
-            <a href="/catalogo" class="section-link">Ver todos →</a>
-        </div>
-        <div class="products-grid">
-            <?php if ($has_products): ?>
-                <?php foreach ($featured_products as $p): ?>
-                    <?php
-                        $id    = htmlspecialchars((string)($p['id'] ?? ''), ENT_QUOTES);
-                        $sku   = htmlspecialchars((string)($p['sku'] ?? ''), ENT_QUOTES);
-                        $name  = htmlspecialchars((string)($p['name'] ?? 'Produto'), ENT_QUOTES);
-                        $price = isset($p['price']) && $p['price'] > 0
-                            ? 'R$ ' . number_format((float)$p['price'], 2, ',', '.') : '';
-                        $raw_img = trim((string)($p['image_url'] ?? $p['primary_image_url'] ?? ''));
-                        if ($raw_img !== '' && str_starts_with($raw_img, '//')) $raw_img = 'https:' . $raw_img;
-                        $img = htmlspecialchars($raw_img, ENT_QUOTES);
-                    ?>
-                    <div class="product-card">
-                        <div class="product-image">
-                            <?php if ($img !== ''): ?>
-                                <img src="<?= $img ?>" alt="<?= $name ?>" loading="lazy"
-                                     onerror="this.parentElement.innerHTML='<div class=product-image-placeholder>Sem imagem</div>'">
-                            <?php else: ?>
-                                <div class="product-image-placeholder">Sem imagem</div>
-                            <?php endif; ?>
+<main>
+    <section class="hero-shell">
+        <div class="container">
+            <div class="hero-grid">
+                <article class="hero-card">
+                    <div>
+                        <span class="hero-kicker">Catalogo ativo Vivaliz</span>
+                        <div class="hero-copy">
+                            <h1>Produtos reais, marca certa e vitrine com identidade.</h1>
+                            <p>A Vivaliz precisa vender com cara de operacao seria. Esta home foi reorientada para destacar catalogo, linhas de produto e fluxo comercial sem o visual generico que estava no ar.</p>
                         </div>
-                        <div class="product-info">
-                            <div class="product-name"><?= $name ?></div>
-                            <?php if ($price): ?><div class="product-price"><?= $price ?></div><?php endif; ?>
-                            <button class="product-btn"
-                                data-id="<?= $id ?>" data-sku="<?= $sku ?>"
-                                data-name="<?= $name ?>"
-                                data-price="<?= htmlspecialchars((string)($p['price'] ?? 0), ENT_QUOTES) ?>"
-                                data-image="<?= $img ?>">
-                                🛒 Adicionar ao Carrinho
-                            </button>
+                        <div class="hero-actions">
+                            <a class="hero-btn" href="/catalogo">Ver catalogo</a>
+                            <a class="hero-btn-alt" href="/contato">Falar com a Vivaliz</a>
                         </div>
                     </div>
+                    <div class="hero-metrics">
+                        <?php foreach ($metrics as $label => $text): ?>
+                            <div class="metric-box">
+                                <strong><?php echo htmlspecialchars($text, ENT_QUOTES, 'UTF-8'); ?></strong>
+                                <span><?php echo htmlspecialchars(ucfirst($label), ENT_QUOTES, 'UTF-8'); ?></span>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </article>
+
+                <aside class="hero-side">
+                    <article class="mini-banner">
+                        <strong>Linhas com mais demanda</strong>
+                        <h2>Rodizios, ferragens e itens de casa com imagem vinculada.</h2>
+                        <p>Os melhores blocos para tracao inicial do site estao sendo puxados da mesma base que mapeia imagens reais para a operacao.</p>
+                        <a href="/catalogo?q=rodizio">Explorar rodizios</a>
+                    </article>
+                    <article class="mini-banner">
+                        <strong>Operacao comercial</strong>
+                        <h2>Menos tema fake. Mais pagina pronta para venda.</h2>
+                        <p>O foco aqui e consolidar vitrine, navegação e jornada de compra antes de expandir automacoes e marketplace.</p>
+                        <a href="/sobre">Ver posicionamento da marca</a>
+                    </article>
+                </aside>
+            </div>
+
+            <div class="value-strip">
+                <div>
+                    <strong>Logo oficial aplicado</strong>
+                    <p>A home agora passa a usar o arquivo de identidade da Vivaliz em vez de um simbolo improvisado.</p>
+                </div>
+                <div>
+                    <strong>Categorias com contexto</strong>
+                    <p>As entradas da vitrine deixam de simular moda e passam a refletir linhas reais mais proximas do catalogo atual.</p>
+                </div>
+                <div>
+                    <strong>Destaques vindos do mapeamento</strong>
+                    <p>Os cards principais usam nomes e imagens reais da base local de upload, sem “Produto Premium” inventado.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section-shell">
+        <div class="container">
+            <div class="section-head">
+                <div>
+                    <h2>Categorias em foco</h2>
+                    <p>Atalhos orientados para as linhas que fazem sentido no catalogo atual, usando busca direta no acervo de produtos.</p>
+                </div>
+                <a href="/catalogo">Abrir todo o catalogo</a>
+            </div>
+
+            <div class="categories-grid">
+                <?php foreach ($categoryLinks as $index => $category): ?>
+                    <a class="category-card" href="/catalogo?q=<?php echo urlencode($category['query']); ?>">
+                        <span class="category-pill"><?php echo (string)($index + 1); ?></span>
+                        <h3><?php echo htmlspecialchars($category['title'], ENT_QUOTES, 'UTF-8'); ?></h3>
+                        <p><?php echo htmlspecialchars($category['note'], ENT_QUOTES, 'UTF-8'); ?></p>
+                    </a>
                 <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+
+    <section class="section-shell">
+        <div class="container">
+            <div class="section-head">
+                <div>
+                    <h2>Produtos em destaque</h2>
+                    <p>Selecao inicial com imagem principal vinculada no site e nomes reais vindos do mapeamento local de produtos.</p>
+                </div>
+                <a href="/catalogo">Ver todos</a>
+            </div>
+
+            <?php if ($featuredProducts): ?>
+                <div class="products-grid">
+                    <?php foreach ($featuredProducts as $product): ?>
+                        <?php $tags = home_product_tags($product['name']); ?>
+                        <article class="product-card">
+                            <div class="product-image">
+                                <img src="<?php echo htmlspecialchars($product['image_url'], ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?>" loading="lazy" onerror="this.src='/images/logo-vivaliz-square.png'">
+                            </div>
+                            <div class="product-body">
+                                <div class="product-tag-row">
+                                    <?php foreach (array_slice($tags ?: ['Catalogo'], 0, 2) as $tag): ?>
+                                        <span class="product-tag"><?php echo htmlspecialchars($tag, ENT_QUOTES, 'UTF-8'); ?></span>
+                                    <?php endforeach; ?>
+                                </div>
+                                <div class="product-title"><?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                <div class="product-meta">
+                                    <span><?php echo htmlspecialchars($product['sku'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                    <a class="product-link" href="/catalogo?q=<?php echo urlencode($product['sku']); ?>">Ver item</a>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
             <?php else: ?>
-                <div class="no-products">
-                    <p style="font-size:16px;margin-bottom:12px;">Nosso catálogo está sendo atualizado.</p>
-                    <a href="/catalogo">Ver catálogo completo →</a>
+                <div class="empty-products">
+                    O mapeamento local ainda nao retornou produtos em destaque. A estrutura da home ja esta pronta para exibi-los assim que a base estiver acessivel.
                 </div>
             <?php endif; ?>
         </div>
-    </div>
-</section>
+    </section>
+</main>
 
-<!-- Promoção -->
-<section class="container">
-    <div class="promo-banner">
-        <h2>🎉 Oferta Especial de Boas-Vindas</h2>
-        <p>20% de desconto na sua primeira compra</p>
-        <div class="promo-code">BEMVINDO20</div><br>
-        <a href="/catalogo" class="banner-btn" style="margin-top:4px;color:var(--brand-navy);">Usar Cupom Agora</a>
-    </div>
-</section>
-
-<!-- Newsletter -->
-<section class="newsletter-section">
-    <div class="container">
-        <div class="newsletter-content">
-            <h2>📬 Fique por Dentro</h2>
-            <p>Receba ofertas exclusivas e novidades direto no seu e-mail</p>
-            <form class="newsletter-form" id="newsletterForm">
-                <input type="email" name="email" placeholder="Seu melhor e-mail" required autocomplete="email">
-                <button type="submit">Inscrever</button>
-            </form>
-        </div>
-    </div>
-</section>
-
-<!-- Footer -->
 <footer>
-    <div class="container">
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:28px;margin-bottom:28px;text-align:left;">
-            <div>
-                <h3 style="margin-bottom:12px;font-size:15px;">Sobre</h3>
-                <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:8px;">
-                    <li><a href="/sobre" style="color:#ccc;text-decoration:none;font-size:13px;">Sobre Nós</a></li>
-                    <li><a href="/blog"  style="color:#ccc;text-decoration:none;font-size:13px;">Blog</a></li>
-                </ul>
-            </div>
-            <div>
-                <h3 style="margin-bottom:12px;font-size:15px;">Compras</h3>
-                <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:8px;">
-                    <li><a href="/catalogo"       style="color:#ccc;text-decoration:none;font-size:13px;">Catálogo</a></li>
-                    <li><a href="/catalogo?promo=1" style="color:#ccc;text-decoration:none;font-size:13px;">Promoções</a></li>
-                    <li><a href="/carrinho"        style="color:#ccc;text-decoration:none;font-size:13px;">Carrinho</a></li>
-                </ul>
-            </div>
-            <div>
-                <h3 style="margin-bottom:12px;font-size:15px;">Suporte</h3>
-                <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:8px;">
-                    <li><a href="/contato"              style="color:#ccc;text-decoration:none;font-size:13px;">Contato</a></li>
-                    <li><a href="/faq"                  style="color:#ccc;text-decoration:none;font-size:13px;">FAQ</a></li>
-                    <li><a href="/politica-privacidade" style="color:#ccc;text-decoration:none;font-size:13px;">Privacidade</a></li>
-                </ul>
-            </div>
+    <div class="container footer-grid">
+        <div>
+            <img src="/images/logo-vivaliz.png" alt="Vivaliz" style="height:42px;width:auto;margin-bottom:12px;" onerror="this.src='/images/logo.svg'">
+            <p>Vitrine digital da Vivaliz em consolidacao, com foco em navegacao, catalogo e consistencia visual para venda online.</p>
         </div>
-        <div style="border-top:1px solid #444;padding-top:18px;text-align:center;">
-            <p style="font-size:13px;">&copy; 2026 ShopVivaliz. Todos os direitos reservados.</p>
-            <p style="font-size:11px;margin-top:8px;color:#999;">Entrega Rápida · Compra Segura</p>
+        <div>
+            <h3>Navegacao</h3>
+            <p><a href="/catalogo">Catalogo</a></p>
+            <p><a href="/sobre">Sobre</a></p>
+            <p><a href="/contato">Contato</a></p>
+        </div>
+        <div>
+            <h3>Operacao</h3>
+            <p><a href="/carrinho">Carrinho</a></p>
+            <p><a href="/faq">Perguntas frequentes</a></p>
+            <p><a href="/politica-privacidade">Privacidade</a></p>
         </div>
     </div>
 </footer>
-
-<div class="toast" id="toast"></div>
-
-<script>
-    function showToast(msg, ms=2800) {
-        const t=document.getElementById('toast'); t.textContent=msg;
-        t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),ms);
-    }
-    function getCart()  { try{return JSON.parse(localStorage.getItem('shopvivaliz_cart')||'[]');}catch{return[];} }
-    function saveCart(c){ localStorage.setItem('shopvivaliz_cart',JSON.stringify(c)); updateBadge(); }
-    function updateBadge() {
-        const n=getCart().reduce((s,i)=>s+(i.qty||1),0);
-        const el=document.getElementById('cartCount');
-        if(el){el.textContent=n;el.style.display=n>0?'inline':'none';}
-    }
-    function addToCart(p) {
-        const cart=getCart(), idx=cart.findIndex(i=>i.id===p.id);
-        if(idx>=0) cart[idx].qty=(cart[idx].qty||1)+1; else cart.push({...p,qty:1});
-        saveCart(cart); showToast('✓ '+p.name+' adicionado ao carrinho!');
-    }
-    document.querySelectorAll('.product-btn').forEach(btn=>{
-        btn.addEventListener('click',function(){
-            addToCart({id:this.dataset.id,sku:this.dataset.sku,name:this.dataset.name,
-                price:parseFloat(this.dataset.price)||0,image:this.dataset.image});
-        });
-    });
-    updateBadge();
-
-    let slideIdx=0;
-    const slides=document.querySelectorAll('.banner-slide'), dots=document.querySelectorAll('.dot');
-    let timer;
-    function showSlide(n){
-        slideIdx=((n%slides.length)+slides.length)%slides.length;
-        slides.forEach((s,i)=>s.classList.toggle('active',i===slideIdx));
-        dots.forEach((d,i)=>d.classList.toggle('active',i===slideIdx));
-    }
-    function moveSlide(dir){clearInterval(timer);showSlide(slideIdx+dir);startAuto();}
-    function goToSlide(n)  {clearInterval(timer);showSlide(n);startAuto();}
-    function startAuto()   {timer=setInterval(()=>showSlide(slideIdx+1),5000);}
-    startAuto();
-    let tx=0; const sl=document.querySelector('.banner-slider');
-    sl.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;},{passive:true});
-    sl.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>40)moveSlide(dx<0?1:-1);});
-
-    const toggle=document.getElementById('menuToggle'), nav=document.getElementById('navMenu');
-    toggle.addEventListener('click',()=>nav.classList.toggle('active'));
-    nav.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>nav.classList.remove('active')));
-
-    document.getElementById('newsletterForm').addEventListener('submit',function(e){
-        e.preventDefault();
-        const email=this.querySelector('input[type=email]').value.trim();
-        if(!email)return; showToast('📬 '+email+' inscrito com sucesso!'); this.reset();
-    });
-</script>
 </body>
-</html><?php // fim
+</html>
