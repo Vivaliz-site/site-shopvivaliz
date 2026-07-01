@@ -2,6 +2,8 @@ name: CI AUTONOMO CONTINUO
 
 on:
   push:
+    paths-ignore:
+      - 'automation/eha/reports/**'
   workflow_dispatch:
   schedule:
     - cron: "*/15 * * * *"
@@ -79,6 +81,20 @@ jobs:
           name: eha-report-${{ github.run_number }}
           path: automation/eha/reports/
           retention-days: 14
+
+      - name: Commit EHA reports ao repo
+        if: always()
+        run: |
+          git config user.email 'ci-autonomo@shopvivaliz.com.br'
+          git config user.name 'CI Autônomo'
+          git add automation/eha/reports/
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: atualiza relatórios EHA run #${{ github.run_number }} [skip ci]"
+            for i in 1 2 3 4; do
+              git pull --rebase origin main && git push origin HEAD:main && break
+              sleep $((i * 2))
+            done
+          fi
 
       - name: Fail if BLOCKED
         run: |
