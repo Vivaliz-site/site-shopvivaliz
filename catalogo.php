@@ -14,7 +14,7 @@ function sv_catalog_query(): string
     return is_scalar($value) ? trim((string)$value) : '';
 }
 
-function sv_catalog_products(int $limit, string $query): array
+function sv_catalog_products(int $limit, string $query, string $category = ''): array
 {
     $jsonPath = sv_catalog_root() . '/api/catalog/fallback-products.json';
     if (!is_file($jsonPath) || !is_readable($jsonPath)) {
@@ -28,28 +28,42 @@ function sv_catalog_products(int $limit, string $query): array
 
     $products = [];
     foreach ($decoded as $row) {
-        if (!is_array($row)) {
-            continue;
-        }
-        $sku = trim((string)($row['sku'] ?? ''));
+        if (!is_array($row)) continue;
+        $sku  = trim((string)($row['sku'] ?? ''));
         $name = trim((string)($row['name'] ?? 'Produto Vivaliz'));
-        if ($query !== '' && stripos($sku . ' ' . $name, $query) === false) {
-            continue;
-        }
+        $cat  = trim((string)($row['category'] ?? ''));
+        if ($query !== '' && stripos($sku . ' ' . $name, $query) === false) continue;
+        if ($category !== '' && $cat !== $category) continue;
         $products[] = [
-            'sku' => $sku !== '' ? $sku : (string)($row['id'] ?? 'sem-sku'),
-            'name' => $name !== '' ? $name : 'Produto Vivaliz',
-            'image_url' => trim((string)($row['image_url'] ?? '/favicon.ico')) ?: '/favicon.ico',
-            'price' => (float)($row['price'] ?? 0),
-            'images_count' => (int)($row['images_count'] ?? 0),
+            'sku'              => $sku !== '' ? $sku : (string)($row['id'] ?? 'sem-sku'),
+            'name'             => $name !== '' ? $name : 'Produto Vivaliz',
+            'image_url'        => trim((string)($row['image_url'] ?? '/favicon.ico')) ?: '/favicon.ico',
+            'price'            => (float)($row['price'] ?? 0),
+            'images_count'     => (int)($row['images_count'] ?? 0),
             'olist_product_id' => (string)($row['olist_product_id'] ?? ''),
+            'category'         => $cat,
+            'slug'             => trim((string)($row['slug'] ?? '')),
+            'tags'             => is_array($row['tags'] ?? null) ? $row['tags'] : [],
         ];
-        if (count($products) >= $limit) {
-            break;
-        }
+        if (count($products) >= $limit) break;
     }
 
     return $products;
+}
+
+function sv_catalog_categories(): array
+{
+    $jsonPath = sv_catalog_root() . '/api/catalog/fallback-products.json';
+    if (!is_file($jsonPath)) return [];
+    $decoded = json_decode((string)file_get_contents($jsonPath), true);
+    if (!is_array($decoded)) return [];
+    $cats = [];
+    foreach ($decoded as $row) {
+        $cat = trim((string)($row['category'] ?? ''));
+        if ($cat !== '') $cats[$cat] = ($cats[$cat] ?? 0) + 1;
+    }
+    arsort($cats);
+    return $cats;
 }
 
 function sv_catalog_esc(string $value): string
@@ -74,11 +88,14 @@ function sv_catalog_product_url(array $product): string
     return '/produto?' . $params;
 }
 
-$query = sv_catalog_query();
-$products = sv_catalog_products(48, $query);
+$query      = sv_catalog_query();
+$category   = trim((string)($_GET['categoria'] ?? ''));
+$products   = sv_catalog_products(200, $query, $category);
+$categories = sv_catalog_categories();
+$totalStr   = count($products) . ' produto' . (count($products) === 1 ? '' : 's');
 $statusText = $products
-    ? count($products) . ' produto' . (count($products) === 1 ? '' : 's') . ' pronto' . (count($products) === 1 ? '' : 's') . ' para navegação.'
-    : ($query !== '' ? 'Nenhum produto encontrado para a busca.' : 'Nenhum produto encontrado no catálogo.');
+    ? $totalStr . ($category !== '' ? " em \"{$category}\"" : '') . '.'
+    : ($query !== '' ? 'Nenhum produto encontrado.' : 'Catálogo não disponível no momento.');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -109,9 +126,9 @@ $statusText = $products
         <section class="catalog-header">
             <div class="container catalog-header-inner">
                 <div>
-                    <p class="eyebrow">Catálogo ao vivo</p>
-                    <h1>Produtos prontos para venda</h1>
-                    <p class="muted">Itens importados do Tiny/Olist com imagens vinculadas ao catálogo do site.</p>
+                    <p class="eyebrow"><?= $category !== '' ? sv_catalog_esc($category) : 'Todos os produtos' ?></p>
+                    <h1>Catálogo Vivaliz</h1>
+                    <p class="muted"><?= $statusText ?></p>
                 </div>
                 <form class="catalog-search" role="search" method="get" action="/catalogo">
                     <input id="catalog-search" name="q" type="search" placeholder="Buscar por SKU ou produto" autocomplete="off" value="<?= sv_catalog_esc($query) ?>">
@@ -121,41 +138,53 @@ $statusText = $products
         </section>
 
         <section class="container catalog-tools">
-            <form class="cep-checker" action="/checkout.php" method="get">
-                <label for="catalog-cep">CEP para calcular frete</label>
-                <div class="cep-checker-row">
-                    <input id="catalog-cep" name="cep" type="text" inputmode="numeric" placeholder="Digite seu CEP" maxlength="9">
-                    <button type="submit">Calcular frete</button>
-                </div>
-            </form>
+            <div class="category-filters" role="navigation" aria-label="Filtrar por categoria">
+                <a class="cat-filter<?= $category === '' ? ' active' : '' ?>" href="/catalogo">Todos</a>
+                <?php foreach ($categories as $cat => $count): ?>
+                    <a class="cat-filter<?= $category === $cat ? ' active' : '' ?>"
+                       href="/catalogo?categoria=<?= rawurlencode($cat) ?><?= $query !== '' ? '&q=' . rawurlencode($query) : '' ?>">
+                        <?= sv_catalog_esc($cat) ?> <span class="cat-count"><?= $count ?></span>
+                    </a>
+                <?php endforeach; ?>
+            </div>
             <div id="catalog-status" class="status-line"><?= sv_catalog_esc($statusText) ?></div>
         </section>
 
         <section class="container product-grid" id="product-grid" aria-live="polite">
             <?php foreach ($products as $product): ?>
                 <?php
-                $image = $product['image_url'] !== '' ? $product['image_url'] : '/favicon.ico';
+                $image      = $product['image_url'] !== '' ? $product['image_url'] : '/favicon.ico';
+                $slug       = $product['slug'] !== '' ? $product['slug'] : '';
+                $productUrl = $slug !== ''
+                    ? '/produto/' . $slug
+                    : sv_catalog_product_url($product);
                 $payload = rawurlencode(json_encode([
-                    'sku' => $product['sku'],
-                    'name' => $product['name'],
-                    'image_url' => $image,
-                    'price' => $product['price'],
+                    'sku'              => $product['sku'],
+                    'name'             => $product['name'],
+                    'image_url'        => $image,
+                    'price'            => $product['price'],
                     'olist_product_id' => $product['olist_product_id'],
                 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
                 ?>
                 <article class="product-card">
-                    <a class="product-image" href="<?= sv_catalog_esc($image) ?>" target="_blank" rel="noreferrer">
+                    <a class="product-image" href="<?= sv_catalog_esc($productUrl) ?>">
                         <img src="<?= sv_catalog_esc($image) ?>" alt="<?= sv_catalog_esc($product['name']) ?>" loading="lazy" onerror="this.src='/favicon.ico'">
                     </a>
                     <div class="product-info">
-                        <div class="product-sku"><?= sv_catalog_esc($product['sku']) ?></div>
+                        <?php if ($product['category'] !== ''): ?>
+                            <div class="product-category"><?= sv_catalog_esc($product['category']) ?></div>
+                        <?php endif; ?>
                         <h2><?= sv_catalog_esc($product['name']) ?></h2>
-                        <div class="product-meta">
-                            <span><?= sv_catalog_esc(sv_catalog_money((float)$product['price'])) ?></span>
-                            <span><?= (int)$product['images_count'] ?> imagem<?= (int)$product['images_count'] === 1 ? '' : 's' ?></span>
-                        </div>
+                        <div class="product-price"><?= sv_catalog_esc(sv_catalog_money((float)$product['price'])) ?></div>
+                        <?php if (!empty($product['tags'])): ?>
+                            <div class="product-tags">
+                                <?php foreach (array_slice($product['tags'], 0, 3) as $tag): ?>
+                                    <span class="tag"><?= sv_catalog_esc($tag) ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
                         <div class="card-actions">
-                            <a class="btn btn-secondary card-link" href="<?= sv_catalog_esc(sv_catalog_product_url($product)) ?>">Ver detalhes</a>
+                            <a class="btn btn-secondary card-link" href="<?= sv_catalog_esc($productUrl) ?>">Ver detalhes</a>
                             <button class="buy-button" type="button" data-product="<?= sv_catalog_esc($payload) ?>">Comprar agora</button>
                         </div>
                     </div>
