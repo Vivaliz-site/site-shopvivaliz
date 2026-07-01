@@ -44,6 +44,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
             FILE_APPEND | LOCK_EX
         );
 
+        // Email de notificacao para o lojista
+        $adminEmail = 'fredmourao@gmail.com';
+        $subject = "Novo pedido {$pedidoId} - Vivaliz";
+        $itemLines = implode("
+", array_map(function ($it) {
+            $price = number_format((float)($it['price'] ?? 0), 2, ',', '.');
+            $qty = (int)($it['quantity'] ?? 1);
+            return "  - {$it['name']} (SKU: {$it['sku']}) x{$qty} = R$ {$price}";
+        }, $items));
+        $total = array_reduce($items, function ($s, $it) {
+            return $s + (float)($it['price'] ?? 0) * (int)($it['quantity'] ?? 1);
+        }, 0.0);
+        $totalFmt = number_format($total, 2, ',', '.');
+        $body  = "Novo pedido recebido pelo site Vivaliz.
+
+";
+        $body .= "ID: {$pedidoId}
+";
+        $body .= "Data: " . date('d/m/Y H:i') . "
+
+";
+        $body .= "CLIENTE
+";
+        $body .= "Nome: {$cliente['nome']}
+";
+        $body .= "Email: {$cliente['email']}
+";
+        $body .= "Telefone: {$cliente['telefone']}
+";
+        $body .= "Endereco: {$cliente['endereco']}, {$cliente['numero']} {$cliente['complemento']}
+";
+        $body .= "Cidade/CEP: {$cliente['cidade']} - {$cliente['cep']}
+
+";
+        $body .= "ITENS
+{$itemLines}
+
+";
+        $body .= "TOTAL: R$ {$totalFmt} (frete a calcular)
+
+";
+        $body .= "Acesse os pedidos em: https://dev.shopvivaliz.com.br/admin/
+";
+        @mail($adminEmail, $subject, $body, "From: pedidos@dev.shopvivaliz.com.br
+
+Content-Type: text/plain; charset=UTF-8");
+
         $pedidoCriado = true;
     }
 }
@@ -221,8 +268,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
                 <h2>Pedido recebido com sucesso</h2>
                 <p class="muted">Seu pedido foi registrado e entrou na fila de atendimento da ShopVivaliz.</p>
                 <div class="order-code"><?php echo htmlspecialchars((string)$pedidoId, ENT_QUOTES, 'UTF-8'); ?></div>
-                <p class="muted">Os dados foram salvos localmente em nosso registro operacional. O proximo passo e contato comercial para confirmacao do pedido e pagamento.</p>
-                <a class="ghost-btn" href="catalogo">Voltar ao catalogo</a>
+                <p class="muted">Seu pedido foi registrado. Entraremos em contato em breve para confirmar o pagamento e prazo de entrega.</p>
+                <?php
+                $wppItems = implode(', ', array_map(function($it){ return $it['name'] . ' x' . ($it['quantity'] ?? 1); }, $items));
+                $wppMsg = rawurlencode("Ola! Fiz um pedido na Vivaliz (ID: {$pedidoId}).
+Itens: {$wppItems}
+Aguardo confirmacao e dados de pagamento. Obrigado!");
+                $wppTel = '5511999999999';
+                ?>
+                <div style="display:grid;gap:12px;margin-top:16px;">
+                    <a class="primary-btn" href="https://wa.me/<?= $wppTel ?>?text=<?= $wppMsg ?>" target="_blank" rel="noreferrer"
+                       style="background:#25D366;border-radius:12px;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;">
+                        📱 Confirmar pelo WhatsApp
+                    </a>
+                    <a class="ghost-btn" href="/catalogo" style="border-radius:12px;text-decoration:none;display:flex;align-items:center;justify-content:center;">Voltar ao catálogo</a>
+                </div>
             </section>
         <?php else: ?>
             <h1>Checkout</h1>
