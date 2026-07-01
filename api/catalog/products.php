@@ -104,6 +104,53 @@ function svcat_get(array $row, array $keys, string $default = ''): string
     return $default;
 }
 
+function svcat_env_value(string $key): string
+{
+    $envFile = svcat_root() . '/.env';
+    if (is_file($envFile)) {
+        foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+            $line = trim($line);
+            if (str_starts_with($line, '#') || !str_contains($line, '=')) continue;
+            [$k, $v] = explode('=', $line, 2);
+            if (trim($k) === $key) return trim(trim($v), "\"'");
+        }
+    }
+    return (string)getenv($key);
+}
+
+function svcat_tiny_access_token(): string
+{
+    $clientId     = svcat_env_value('OLIST_CLIENT_ID')     ?: svcat_env_value('TINY_CLIENT_ID');
+    $clientSecret = svcat_env_value('OLIST_CLIENT_SECRET') ?: svcat_env_value('TINY_CLIENT_SECRET');
+    $refreshToken = svcat_env_value('OLIST_REFRESH_TOKEN') ?: svcat_env_value('TINY_REFRESH_TOKEN');
+    if ($clientId && $clientSecret && $refreshToken) {
+        $payload = http_build_query([
+            'grant_type'    => 'refresh_token',
+            'client_id'     => $clientId,
+            'client_secret' => $clientSecret,
+            'refresh_token' => $refreshToken,
+        ]);
+        $ctx = stream_context_create(['http' => [
+            'method'  => 'POST',
+            'header'  => "Content-Type: application/x-www-form-urlencoded
+User-Agent: ShopVivaliz/1.0
+",
+            'content' => $payload,
+            'timeout' => 15,
+        ]]);
+        $raw = @file_get_contents(
+            'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token',
+            false, $ctx
+        );
+        if ($raw) {
+            $data = json_decode($raw, true);
+            $at = (string)($data['access_token'] ?? '');
+            if ($at !== '') return $at;
+        }
+    }
+    return svcat_env_value('OLIST_ACCESS_TOKEN') ?: svcat_env_value('TINY_ACCESS_TOKEN');
+}
+
 function svcat_tiny_price_map(): array
 {
     $cache = svcat_root() . '/storage/tiny_prices_cache.json';
@@ -111,32 +158,27 @@ function svcat_tiny_price_map(): array
         $data = json_decode((string)file_get_contents($cache), true);
         if (is_array($data)) return $data;
     }
-    $token = '';
-    $envFile = svcat_root() . '/.env';
-    if (is_file($envFile)) {
-        foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-            if (str_starts_with(trim($line), '#') || !str_contains($line, '=')) continue;
-            [$k, $v] = explode('=', $line, 2);
-            if (trim($k) === 'TOKEN_API_OLIST') { $token = trim(trim($v), "\"'"); break; }
-        }
-    }
-    if ($token === '') $token = (string)getenv('TOKEN_API_OLIST');
+    $token = svcat_tiny_access_token();
     if ($token === '') return [];
 
     $map = [];
     $page = 1;
     $maxPages = 10;
     while ($page <= $maxPages) {
-        $url = "https://api.tiny.com.br/api/v2/produtos.json?token={$token}&formato=json&pagina={$page}&limite=100";
-        $ctx = stream_context_create(['http' => ['timeout' => 20, 'header' => "User-Agent: ShopVivaliz/1.0
-"]]);
+        $url = "https://api.tiny.com.br/public-api/v3/produtos?pagina={$page}&limite=100";
+        $ctx = stream_context_create(['http' => [
+            'timeout' => 20,
+            'header'  => "Authorization: Bearer {$token}
+User-Agent: ShopVivaliz/1.0
+Accept: application/json
+",
+        ]]);
         $raw = @file_get_contents($url, false, $ctx);
         if ($raw === false) break;
         $data = json_decode($raw, true);
-        $items = $data['retorno']['produtos'] ?? [];
+        $items = $data['data']['itens'] ?? [];
         if (empty($items)) break;
-        foreach ($items as $wrapper) {
-            $item = $wrapper['produto'] ?? $wrapper;
+        foreach ($items as $item) {
             $pid = (string)($item['id'] ?? '');
             $sku = (string)($item['codigo'] ?? '');
             $price = (float)str_replace(',', '.', (string)($item['preco'] ?? '0'));
