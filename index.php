@@ -389,6 +389,34 @@ $categoryLinks = [
             border-radius: 14px;
             padding: 11px 14px;
         }
+        .product-price-label {
+            font-size: 12px;
+            color: var(--muted);
+        }
+        .btn-add-cart {
+            width: 100%;
+            margin-top: 10px;
+            padding: 11px 14px;
+            background: var(--navy);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: opacity .2s;
+        }
+        .btn-add-cart:hover { opacity: .85; }
+        .btn-add-cart.added { background: var(--green); }
+        .cart-toast {
+            position: fixed; right: 20px; bottom: 20px;
+            background: #0f172a; color: white; padding: 12px 18px;
+            border-radius: 12px; font-size: 14px; z-index: 999;
+            opacity: 0; transform: translateY(10px);
+            transition: opacity .25s, transform .25s;
+        }
+        .cart-toast.show { opacity: 1; transform: translateY(0); }
         .empty-products {
             background: white;
             border: 1px dashed var(--line);
@@ -548,9 +576,16 @@ $categoryLinks = [
                                 </div>
                                 <div class="product-title"><?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?></div>
                                 <div class="product-meta">
-                                    <span><?php echo htmlspecialchars($product['sku'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                    <span class="product-price-label">Preço sob consulta</span>
                                     <a class="product-link" href="/catalogo?q=<?php echo urlencode($product['sku']); ?>">Ver item</a>
                                 </div>
+                                <button class="btn-add-cart" type="button"
+                                    data-sku="<?php echo htmlspecialchars($product['sku'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-name="<?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-image="<?php echo htmlspecialchars($product['image_url'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-price="0">
+                                    🛒 Adicionar ao carrinho
+                                </button>
                             </div>
                         </article>
                     <?php endforeach; ?>
@@ -581,5 +616,36 @@ $categoryLinks = [
         </div>
     </div>
 </footer>
+<div class="cart-toast" id="homeCartToast"></div>
+<script>
+(function(){
+    var toast=document.getElementById('homeCartToast');
+    function showToast(m){
+        if(!toast)return;
+        toast.textContent=m;
+        toast.classList.add('show');
+        clearTimeout(showToast._t);
+        showToast._t=setTimeout(function(){toast.classList.remove('show');},2000);
+    }
+    function readCart(){
+        try{var v=JSON.parse(localStorage.getItem('shopvivaliz_cart')||'[]');return Array.isArray(v)?v:[];}
+        catch(e){return[];}
+    }
+    document.querySelectorAll('.btn-add-cart').forEach(function(btn){
+        btn.addEventListener('click',function(){
+            var items=readCart();
+            var sku=btn.dataset.sku||'';
+            var existing=items.find(function(i){return i.sku===sku;});
+            if(existing){existing.quantity=(existing.quantity||1)+1;}
+            else{items.push({sku:sku,name:btn.dataset.name||sku,image_url:btn.dataset.image||'',price:Number(btn.dataset.price||0),quantity:1});}
+            localStorage.setItem('shopvivaliz_cart',JSON.stringify(items));
+            btn.classList.add('added');
+            btn.textContent='✓ Adicionado!';
+            setTimeout(function(){btn.classList.remove('added');btn.textContent='🛒 Adicionar ao carrinho';},1800);
+            showToast('Produto adicionado ao carrinho!');
+        });
+    });
+})();
+</script>
 </body>
 </html>
