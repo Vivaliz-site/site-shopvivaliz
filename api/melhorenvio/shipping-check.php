@@ -122,7 +122,12 @@ if (!$product) {
     svsc_json(404, ['ok' => false, 'error' => 'product_not_found']);
 }
 
-$token = svsc_env('MELHORENVIO_ACCESS_TOKEN', 'SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN');
+$token = svsc_env(
+    'MELHORENVIO_ACCESS_TOKEN',
+    'SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN',
+    'MELHORENVIO_API_KEY',
+    'SHOPVIVALIZ_MELHORENVIO_API_KEY'
+);
 $fromPostalCode = preg_replace('/\D+/', '', svsc_env('MELHORENVIO_FROM_POSTAL_CODE', 'SHOPVIVALIZ_FROM_POSTAL_CODE')) ?: '35500000';
 $payload = [
     'from' => ['postal_code' => $fromPostalCode],
@@ -161,4 +166,3 @@ svsc_json($result['ok'] ? 200 : 502, [
     'payload' => $payload,
     'result' => $result,
 ]);
-
