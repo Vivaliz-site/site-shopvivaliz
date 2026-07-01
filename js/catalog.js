@@ -79,13 +79,12 @@
       grid.querySelectorAll('[data-product]').forEach(function (button) {
         button.addEventListener('click', function () {
           const product = JSON.parse(decodeURIComponent(button.getAttribute('data-product') || '{}'));
-          if (window.AutoDev && typeof window.AutoDev.track === 'function') {
-            window.AutoDev.track('add_to_cart', {
-              sku: product.sku,
-              olist_product_id: product.olist_product_id || '',
-              source: window.location.pathname
-            });
-          }
+          // V16: signal cart_add
+          fetch('/api/catalog/signal.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'cart_add', sku: product.sku, olist_product_id: product.olist_product_id || '' })
+          }).catch(function () {});
           const items = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
           const existing = items.find(function (item) { return item.sku === product.sku; });
           if (existing) existing.quantity += 1;

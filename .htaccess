@@ -37,6 +37,8 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^blog/?$ blog/index.php [L]
     RewriteRule ^politica-privacidade/?$ politica-privacidade/index.php [L]
     RewriteRule ^produto/?$ produto.php [L]
+    RewriteRule ^produto/([a-z0-9][a-z0-9\-]*[0-9]+)/?$ produto.php?slug=$1 [L,QSA]
+    RewriteRule ^sitemap\.xml$ sitemap.php [L]
 </IfModule>
 
 <IfModule mod_deflate.c>
