@@ -95,6 +95,10 @@ jobs:
           DB_USER=${{ secrets.DB_USER }}
           DB_PASS=${{ secrets.DB_PASS }}
           TOKEN_API_OLIST=${{ secrets.TOKEN_API_OLIST }}
+          OLIST_CLIENT_ID=${{ secrets.OLIST_CLIENT_ID }}
+          OLIST_CLIENT_SECRET=${{ secrets.OLIST_CLIENT_SECRET }}
+          OLIST_REFRESH_TOKEN=${{ secrets.OLIST_REFRESH_TOKEN }}
+          OLIST_ACCESS_TOKEN=${{ secrets.OLIST_ACCESS_TOKEN }}
           APP_ENV=development
           BASE_URL=https://dev.shopvivaliz.com.br
           EOF
