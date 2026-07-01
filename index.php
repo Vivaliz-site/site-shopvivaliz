@@ -100,14 +100,12 @@ $featuredProducts = sv_home_products();
     <nav class="navbar">
         <div class="container">
             <div class="navbar-brand">
-                <h1><?php echo APP_NAME; ?></h1>
-                <span class="version">v<?php echo APP_VERSION; ?></span>
+                <a href="/" style="text-decoration:none;color:inherit;"><h1>Vivaliz</h1></a>
             </div>
             <div class="navbar-menu">
                 <a href="/">Home</a>
                 <a href="/catalogo">Catálogo</a>
-                <a href="/admin/">Admin</a>
-                <a href="/admin/monitor/">Monitor</a>
+                <a href="/carrinho/" id="nav-cart">🛒 Carrinho</a>
             </div>
         </div>
     </nav>
@@ -116,13 +114,13 @@ $featuredProducts = sv_home_products();
     <section class="hero">
         <div class="container">
             <div class="hero-content">
-                <p class="eyebrow">Loja em preparação final</p>
-                <h1>Produtos selecionados para comprar com confiança</h1>
-                <p>Catálogo ShopVivaliz sincronizado com Tiny/Olist, imagens vinculadas e vitrine pronta para iniciar as vendas.</p>
+                <p class="eyebrow">Qualidade e entrega rápida</p>
+                <h1>Produtos que você precisa, na hora certa</h1>
+                <p>Rodízios, ferragens, utilidades domésticas e muito mais — tudo com qualidade garantida e entrega para todo o Brasil.</p>
 
                 <div class="cta-buttons">
                     <a href="/catalogo" class="btn btn-primary">Ver Catálogo</a>
-                    <a href="/admin/monitor/" class="btn btn-secondary">Acessar Monitor</a>
+                    <a href="/carrinho/" class="btn btn-secondary">🛒 Meu Carrinho</a>
                 </div>
             </div>
         </div>
@@ -134,7 +132,7 @@ $featuredProducts = sv_home_products();
             <div class="section-heading">
                 <div>
                     <h2>Catálogo em destaque</h2>
-                    <p class="muted">Produtos carregados do banco ou do relatório validado de imagens.</p>
+                    <p class="muted">Seleção especial de produtos disponíveis agora.</p>
                 </div>
                 <a href="/catalogo" class="btn btn-secondary">Ver todos</a>
             </div>
