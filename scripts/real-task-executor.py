@@ -13,7 +13,7 @@ from datetime import datetime
 
 class RealTaskExecutor:
     def __init__(self):
-        self.queue_file = Path('tasks-queue.json')
+        self.queue_file = Path('logs/tasks-queue.json')
         self.log_dir = Path('logs/execution')
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.agents = ['Gemini', 'Claude', 'ChatGPT']

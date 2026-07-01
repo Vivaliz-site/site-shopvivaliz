@@ -6,10 +6,10 @@
 
 header('Content-Type: application/json; charset=utf-8');
 
-$host = 'localhost';
-$user = 'shopv506_claude';
-$pass = 'CFqmkF8}$C_2';
-$db_name = 'shopv506_shopvivaliz';
+$host = getenv('DB_HOST') ?: 'localhost';
+$user = getenv('DB_USER') ?: 'root';
+$pass = getenv('DB_PASS') ?: '';
+$db_name = getenv('DB_NAME') ?: 'shopvivaliz';
 
 $db = new mysqli($host, $user, $pass, $db_name, 3306);
 

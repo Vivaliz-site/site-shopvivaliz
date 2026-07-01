@@ -88,11 +88,11 @@ try {
 // TESTE 4: Cache de produtos
 // ============================================================================
 
-$cache_file = __DIR__ . '/../../logs/olist-products-cache.json';
+$cache_file = __DIR__ . '/../../storage/cache/olist-products-cache.json';
 $cache_existe = file_exists($cache_file);
 
 if ($cache_existe) {
-    $cache_data = json_decode(file_get_contents($cache_file), true);
+    $cache_data = json_decode((string)file_get_contents($cache_file), true) ?: [];
     $cache_idade = time() - filemtime($cache_file);
     $cache_horas = floor($cache_idade / 3600);
 

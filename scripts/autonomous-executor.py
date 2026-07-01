@@ -10,7 +10,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 def main():
-    queue_file = Path("tasks-queue.json")
+    queue_file = Path("logs/tasks-queue.json")
 
     # Ler fila de tarefas
     with open(queue_file, "r", encoding="utf-8") as f:

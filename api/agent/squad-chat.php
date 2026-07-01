@@ -395,7 +395,7 @@ $openaiKey = getenv('OPENAI_API_KEY') ?: '';
 $geminiKey = getenv('GEMINI_API_KEY') ?: (getenv('GOOGLE_API_KEY') ?: '');
 $anthropicModel = getenv('SQUAD_ANTHROPIC_MODEL') ?: 'claude-haiku-4-5-20251001';
 $openaiModel = getenv('SQUAD_OPENAI_MODEL') ?: 'gpt-4o-mini';
-$geminiModel = getenv('SQUAD_GEMINI_MODEL') ?: 'gemini-2.5-flash';
+$geminiModel = getenv('SQUAD_GEMINI_MODEL') ?: 'gemini-1.5-flash';
 $maxTokens = (int) (getenv('SQUAD_MAX_TOKENS') ?: 900);
 if ($maxTokens < 100 || $maxTokens > 4000) {
     $maxTokens = 900;

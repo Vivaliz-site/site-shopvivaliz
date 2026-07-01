@@ -28,13 +28,13 @@ def check_marketplace_credentials() -> dict:
     """Verifica credenciais disponíveis dos marketplaces"""
     creds = {
         'shopee': {
-            'partner_id': os.environ.get('SHOPEE_PARTNER_ID'),
-            'partner_key': os.environ.get('SHOPEE_PARTNER_KEY'),
+            'partner_id': os.environ.get('SHOPEE_PARTNER_ID') or os.environ.get('SHOPEE_TEST_PARTNER_ID'),
+            'partner_key': os.environ.get('SHOPEE_PARTNER_KEY') or os.environ.get('SHOPEE_TEST_PARTNER_KEY'),
             'configured': False
         },
         'tiktok': {
-            'client_id': os.environ.get('TIKTOK_CLIENT_ID'),
-            'client_secret': os.environ.get('TIKTOK_CLIENT_SECRET'),
+            'client_id': os.environ.get('TIKTOK_CLIENT_ID') or os.environ.get('TIKTOK_APP_KEY'),
+            'client_secret': os.environ.get('TIKTOK_CLIENT_SECRET') or os.environ.get('TIKTOK_APP_SECRET'),
             'configured': False
         }
     }

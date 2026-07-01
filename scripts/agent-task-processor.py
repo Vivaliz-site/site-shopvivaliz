@@ -24,11 +24,16 @@ def load_tasks():
         print("[ERRO] tasks-queue.json não encontrado!")
         return []
     with open(TASKS_FILE) as f:
-        return json.load(f)
+        data = json.load(f)
+        if isinstance(data, dict) and isinstance(data.get('queue'), list):
+            return data['queue']
+        if isinstance(data, list):
+            return data
+        return []
 
 def save_tasks(tasks):
     with open(TASKS_FILE, 'w') as f:
-        json.dump(tasks, f, indent=2)
+        json.dump({'queue': tasks}, f, indent=2)
 
 def get_next_pending_task(tasks):
     for task in tasks:
@@ -52,7 +57,7 @@ def process_task(task, tasks):
 
     result = f"Tarefa '{task['title']}' processada com sucesso por {agent_name(task)}"
 
-    tasks[idx]['status'] = 'done'
+    tasks[idx]['status'] = 'completed'
     tasks[idx]['completed_at'] = datetime.now().isoformat()
     save_tasks(tasks)
 

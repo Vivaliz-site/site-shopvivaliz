@@ -27,7 +27,7 @@ class SystemHealthCheck:
             'config/database.php': 'Banco de dados',
             '.htaccess': 'Segurança',
             '.env.example': 'Template ENV',
-            'tasks-queue.json': 'Fila de tarefas',
+            'logs/tasks-queue.json': 'Fila de tarefas',
             'api/monitor/api.php': 'API Monitor',
             '.github/workflows/24-7-continuous-agent.yml': 'Workflow 24/7'
         }
@@ -49,12 +49,16 @@ class SystemHealthCheck:
         print("\n2. VERIFICANDO FILA DE TAREFAS...")
 
         try:
-            with open('tasks-queue.json') as f:
+            with open('logs/tasks-queue.json') as f:
                 queue = json.load(f)
 
-            total = len(queue['queue'])
-            completed = len([t for t in queue['queue'] if t['status'] == 'completed'])
-            pending = len([t for t in queue['queue'] if t['status'] == 'pending'])
+            tasks = queue['queue'] if isinstance(queue, dict) and 'queue' in queue else queue
+            if not isinstance(tasks, list):
+                raise ValueError('Formato de fila inválido')
+
+            total = len(tasks)
+            completed = len([t for t in tasks if t['status'] == 'completed'])
+            pending = len([t for t in tasks if t['status'] == 'pending'])
 
             print(f"  Total de tarefas: {total}")
             print(f"  Completadas: {completed} ({100*completed/total:.1f}%)")

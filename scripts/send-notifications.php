@@ -5,11 +5,13 @@
  */
 
 class TriaNotifier {
-    private $emailTo = 'fredmourao@gmail.com';
-    private $emailFrom = 'trio-ia@shopvivaliz.com.br';
+    private $emailTo;
+    private $emailFrom;
     private $logFile;
 
     public function __construct() {
+        $this->emailTo = getenv('EMAIL_TO') ?: getenv('NOTIFY_EMAIL_TO') ?: '';
+        $this->emailFrom = getenv('EMAIL_FROM') ?: getenv('EMAIL_USER') ?: 'trio-ia@shopvivaliz.com.br';
         $this->logFile = __DIR__ . '/../logs/notifications.log';
         @mkdir(dirname($this->logFile), 0755, true);
     }
@@ -105,6 +107,11 @@ class TriaNotifier {
      * Enviar email
      */
     private function send($subject, $body, $type, $title) {
+        if ($this->emailTo === '') {
+            $this->log($type, $title, 'Destino de email nao configurado');
+            return false;
+        }
+
         $headers = [
             'From' => $this->emailFrom,
             'Reply-To' => $this->emailFrom,
@@ -275,6 +282,6 @@ if (php_sapi_name() === 'cli') {
             'A autenticação com a API do Gemini falhou. Verifique as credenciais em GitHub Secrets.',
             'task-001'
         );
-        echo "✅ Email de teste enviado para $fredmourao@gmail.com\n";
+        echo "✅ Notificação de teste processada para o destino configurado\n";
     }
 }

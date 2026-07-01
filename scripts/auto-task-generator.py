@@ -79,7 +79,7 @@ Retorne JSON com 2-3 tarefas URGENTES."""
 
 def parse_and_create_tasks(suggestions):
     """Extrai tarefas e cria na fila"""
-    queue_file = Path("tasks-queue.json")
+    queue_file = Path("logs/tasks-queue.json")
 
     with open(queue_file, "r", encoding="utf-8") as f:
         queue_data = json.load(f)
@@ -152,7 +152,7 @@ def main():
 
     # Commit automático
     try:
-        subprocess.run(["git", "add", "tasks-queue.json"], check=True)
+        subprocess.run(["git", "add", "logs/tasks-queue.json"], check=True)
         subprocess.run([
             "git", "commit", "-m",
             "feat: Trio IA gerou novas tarefas autonomamente\n\nAgentes analisaram o projeto e sugeriram melhorias."

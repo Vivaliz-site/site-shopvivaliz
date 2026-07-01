@@ -39,22 +39,16 @@ try {
 
 // Listar todas as tarefas com status
 function listTasks() {
-    $queue_file = realpath(__DIR__ . '/../../tasks-queue.json');
-    if (!$queue_file || !file_exists($queue_file)) {
+    $queue_file = __DIR__ . '/../../logs/tasks-queue.json';
+    if (!file_exists($queue_file)) {
         http_response_code(404);
         echo json_encode(['error' => 'Fila de tarefas não encontrada']);
         exit;
     }
 
-    $data = json_decode(file_get_contents($queue_file), true);
-    if (!$data || !isset($data['queue'])) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Formato inválido']);
-        exit;
-    }
-
     $filter = $_GET['filter'] ?? 'all';
-    $tasks = $data['queue'];
+    $data = json_decode((string)file_get_contents($queue_file), true) ?: [];
+    $tasks = $data['queue'] ?? $data;
 
     // Filtrar por status
     if ($filter !== 'all') {
@@ -71,7 +65,7 @@ function listTasks() {
     });
 
     // Adicionar informações de log
-    $log_dir = realpath(__DIR__ . '/../../logs/execution');
+    $log_dir = __DIR__ . '/../../logs/execution';
     foreach ($tasks as &$task) {
         $log_file = $log_dir . '/' . $task['id'] . '.log';
         $task['has_log'] = file_exists($log_file);
@@ -90,15 +84,15 @@ function listTasks() {
 
 // Resumo de tarefas
 function taskSummary() {
-    $queue_file = realpath(__DIR__ . '/../../tasks-queue.json');
-    if (!$queue_file || !file_exists($queue_file)) {
+    $queue_file = __DIR__ . '/../../logs/tasks-queue.json';
+    if (!file_exists($queue_file)) {
         http_response_code(404);
         echo json_encode(['error' => 'Fila não encontrada']);
         exit;
     }
 
-    $data = json_decode(file_get_contents($queue_file), true);
-    $queue = $data['queue'] ?? [];
+    $data = json_decode((string)file_get_contents($queue_file), true) ?: [];
+    $queue = $data['queue'] ?? $data ?? [];
 
     $completed = array_filter($queue, function($t) { return $t['status'] === 'completed'; });
     $pending = array_filter($queue, function($t) { return $t['status'] === 'pending'; });
@@ -142,8 +136,8 @@ function getTaskLog() {
         exit;
     }
 
-    $log_file = realpath(__DIR__ . '/../../logs/execution/' . $task_id . '.log');
-    if (!$log_file || !file_exists($log_file)) {
+    $log_file = __DIR__ . '/../../logs/execution/' . $task_id . '.log';
+    if (!file_exists($log_file)) {
         http_response_code(404);
         echo json_encode(['error' => 'Log não encontrado']);
         exit;

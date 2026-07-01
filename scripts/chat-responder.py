@@ -207,7 +207,7 @@ Como posso ajudar?""",
 
     def load_queue(self):
         """Carregar fila de tarefas"""
-        queue_file = Path('tasks-queue.json')
+        queue_file = Path('logs/tasks-queue.json')
         if queue_file.exists():
             with open(queue_file) as f:
                 return json.load(f)

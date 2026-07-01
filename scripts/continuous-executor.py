@@ -115,7 +115,7 @@ class ContinuousAgent(threading.Thread):
 
     def mark_task_complete(self, task_id):
         """Marcar tarefa como completa no arquivo"""
-        queue_file = Path("tasks-queue.json")
+        queue_file = Path("logs/tasks-queue.json")
         with open(queue_file, 'r') as f:
             data = json.load(f)
 
@@ -145,7 +145,7 @@ class ContinuousExecutor:
 
     def _load_and_queue_tasks(self):
         """Carregar tarefas pendentes"""
-        queue_file = Path("tasks-queue.json")
+        queue_file = Path("logs/tasks-queue.json")
         with open(queue_file) as f:
             data = json.load(f)
 
@@ -159,9 +159,9 @@ class ContinuousExecutor:
     def start_agents(self):
         """Iniciar 3 agentes contínuos"""
         agents_config = [
-            ("Gemini", GEMINI_KEY, "gemini-1.5-flash"),
-            ("Claude", ANTHROPIC_KEY, "claude-3-5-sonnet-20241022"),
-            ("ChatGPT", OPENAI_KEY, "gpt-4")
+            ("Gemini", GEMINI_KEY, os.getenv("GEMINI_MODEL") or "gemini-1.5-flash"),
+            ("Claude", ANTHROPIC_KEY, os.getenv("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"),
+            ("ChatGPT", OPENAI_KEY, os.getenv("OPENAI_MODEL") or "gpt-4o-mini")
         ]
 
         print("\n" + "=" * 60)

@@ -15,8 +15,11 @@ print("SINCRONIZACAO TINY API - 198 PRODUTOS")
 print("="*70)
 
 # Credenciais
-TINY_CLIENT_ID = "tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553"
-TINY_CLIENT_SECRET = "sh1MLgXhFlvycybhlShnvQMcEL8T2GWv"
+TINY_CLIENT_ID = os.getenv("TINY_CLIENT_ID") or os.getenv("OLIST_CLIENT_ID") or ""
+TINY_CLIENT_SECRET = os.getenv("TINY_CLIENT_SECRET") or os.getenv("OLIST_CLIENT_SECRET") or ""
+
+if not TINY_CLIENT_ID or not TINY_CLIENT_SECRET:
+    raise SystemExit("TINY_CLIENT_ID/TINY_CLIENT_SECRET ou OLIST_CLIENT_ID/OLIST_CLIENT_SECRET precisam estar configurados")
 
 print(f"\n[OK] Client ID: {TINY_CLIENT_ID[:40]}...")
 print(f"[OK] Client Secret: {TINY_CLIENT_SECRET[:30]}...\n")
@@ -62,7 +65,7 @@ try:
                 'produtos': produtos
             }
 
-            cache_file = Path('logs/olist-products-cache.json')
+            cache_file = Path('storage/cache/olist-products-cache.json')
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f, ensure_ascii=False, indent=2)
 

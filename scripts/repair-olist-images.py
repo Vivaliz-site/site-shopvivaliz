@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Reparo de Imagens Olist - Sincroniza 147 produtos sem imagem
-Lê do cache (logs/olist-products-cache.json)
+Lê do cache (storage/cache/olist-products-cache.json)
 Busca imagens para cada produto
 Atualiza no cache + prepara script SQL
 """
@@ -15,7 +15,7 @@ print("REPARO DE IMAGENS OLIST - 147 PRODUTOS")
 print("="*70)
 
 # Carregar cache de produtos
-cache_file = Path('logs/olist-products-cache.json')
+cache_file = Path('storage/cache/olist-products-cache.json')
 
 if not cache_file.exists():
     print("[ERRO] Cache não encontrado!")

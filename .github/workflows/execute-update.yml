@@ -34,7 +34,7 @@ jobs:
       - name: Execute ShopVivaliz update
         env:
           SHOPVIVALIZ_UPDATE_URL: ${{ secrets.SHOPVIVALIZ_UPDATE_URL }}
-          SHOPVIVALIZ_UPDATE_TOKEN: ${{ secrets.SHOPVIVALIZ_UPDATE_TOKEN }}
+          SHOPVIVALIZ_UPDATE_TOKEN: ${{ secrets.SHOPVIVALIZ_UPDATE_TOKEN || secrets.SQUAD_TOKEN }}
           SHOPVIVALIZ_EXPECTED_VERSION: ${{ github.event.inputs.expected_version }}
         run: |
           php tools/execute-update.php "${{ github.event.inputs.zip_path }}" "${{ github.event.inputs.expected_version }}" | tee update-executor-report.json

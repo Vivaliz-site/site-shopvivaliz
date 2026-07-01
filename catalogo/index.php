@@ -4,6 +4,7 @@ ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 define('APP_NAME', 'ShopVivaliz');
 define('BASE_URL', 'https://dev.shopvivaliz.com.br');
+$cache_file = __DIR__ . '/../storage/catalogo-cache.json';
 
 // Configuração TinyERP/Olist
 $tiny_api_key = getenv('TINY_ERP_API_KEY') ?: '';
@@ -112,13 +113,16 @@ sort($categorias);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#2ECC71">
+    <meta name="theme-color" content="#1F3A70">
     <title><?php echo APP_NAME; ?> - Catálogo</title>
     <link rel="stylesheet" href="/css/responsive.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        body {
+            background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+        }
         .catalog-header {
-            background: linear-gradient(135deg, #2ECC71 0%, #1F3A70 100%);
+            background: linear-gradient(135deg, #1F3A70 0%, #667eea 55%, #2ECC71 140%);
             color: white;
             padding: 20px 0;
             margin-bottom: 20px;
@@ -150,7 +154,7 @@ sort($categorias);
         }
         .search-bar button {
             padding: 10px 20px;
-            background: #2ECC71;
+            background: #1F3A70;
             color: white;
             border: none;
             border-radius: 6px;
@@ -173,12 +177,12 @@ sort($categorias);
             font-weight: 600;
         }
         .filter-btn:hover {
-            border-color: #2ECC71;
+            border-color: #1F3A70;
         }
         .filter-btn.active {
-            background: #2ECC71;
+            background: #1F3A70;
             color: white;
-            border-color: #2ECC71;
+            border-color: #1F3A70;
         }
         .products-grid {
             display: grid;
@@ -232,12 +236,12 @@ sort($categorias);
         }
         .product-price {
             font-size: 1.5em;
-            color: #2ECC71;
+            color: #1F3A70;
             font-weight: bold;
             margin: 10px 0;
         }
         .btn-produto {
-            background: #2ECC71;
+            background: #1F3A70;
             color: white;
             border: none;
             padding: 8px 16px;
@@ -248,7 +252,7 @@ sort($categorias);
             font-weight: 600;
         }
         .btn-produto:hover {
-            background: #1F3A70;
+            background: #667eea;
         }
         .pagination {
             display: flex;
@@ -264,7 +268,7 @@ sort($categorias);
             color: #667eea;
         }
         .pagination a:hover, .pagination .active {
-            background: #2ECC71;
+            background: #1F3A70;
             color: white;
         }
         .no-products {
@@ -279,7 +283,7 @@ sort($categorias);
 
     <div class="catalog-header">
         <div class="container">
-            <h1>🛍️ Catálogo de Produtos</h1>
+            <h1>🛍️ Catálogo ShopVivaliz</h1>
             <div class="product-count">
                 Total: <?php echo number_format($total_filtrado, 0, ',', '.'); ?> produtos
                 <?php if ($categoria_filtro): ?>

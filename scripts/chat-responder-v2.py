@@ -12,7 +12,7 @@ class ChatResponderV2:
     def __init__(self):
         self.chat_log = Path('logs/monitor-messages.log')
         self.response_log = Path('logs/monitor-responses.jsonl')
-        self.queue_file = Path('tasks-queue.json')
+        self.queue_file = Path('logs/tasks-queue.json')
         self.log_dir = Path('logs')
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -139,7 +139,7 @@ Responda de forma concisa (max 2 linhas) com informacoes util sobre o sistema.""
         try:
             import google.generativeai as genai
             genai.configure(api_key=self.gemini_key)
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            model = genai.GenerativeModel(os.getenv('GEMINI_MODEL') or 'gemini-1.5-flash')
             response = model.generate_content(prompt)
             if response.text:
                 return response.text.strip()
@@ -159,7 +159,7 @@ Responda de forma concisa (max 2 linhas) com informacoes util sobre o sistema.""
             client = anthropic.Anthropic(api_key=self.claude_key)
 
             response = client.messages.create(
-                model="claude-sonnet-4-6",
+                model=os.getenv('ANTHROPIC_MODEL') or 'claude-haiku-4-5-20251001',
                 max_tokens=200,
                 messages=[
                     {
@@ -193,7 +193,7 @@ Responda de forma concisa (max 2 linhas) com informacoes util sobre o sistema.""
             client = openai.OpenAI(api_key=self.openai_key)
 
             response = client.chat.completions.create(
-                model='gpt-4o-mini',
+                model=os.getenv('OPENAI_MODEL') or 'gpt-4o-mini',
                 messages=[{'role': 'user', 'content': prompt}],
                 max_tokens=200
             )

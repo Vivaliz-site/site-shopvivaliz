@@ -8,8 +8,12 @@
 <nav class="navbar">
     <div class="container">
         <div class="navbar-brand">
-            <a href="/" style="display: flex; align-items: center; text-decoration: none;">
+            <a href="/" class="brand-lockup" style="text-decoration: none;">
                 <img src="/images/logo.svg" alt="ShopVivaliz" style="height: 50px; width: auto;">
+                <span class="brand-text">
+                    <strong>ShopVivaliz</strong>
+                    <span>Loja oficial</span>
+                </span>
             </a>
         </div>
         <button class="menu-toggle" id="menuToggle">☰</button>

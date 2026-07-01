@@ -42,8 +42,8 @@ jobs:
 
       - name: Executar download de imagens
         env:
-          OLIST_EMAIL: ${{ secrets.OLIST_EMAIL }}
-          OLIST_PASSWORD: ${{ secrets.OLIST_PASSWORD }}
+          OLIST_EMAIL: ${{ secrets.OLIST_EMAIL || secrets.EMAIL_USER }}
+          OLIST_PASSWORD: ${{ secrets.OLIST_PASSWORD || secrets.EMAIL_PASSWORD }}
         run: |
           python scripts/download-olist-images-v2.py \
             "${{ steps.csv_path.outputs.csv_file }}" \

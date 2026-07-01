@@ -223,7 +223,7 @@ try {
         'produtos' => $todos_produtos
     ];
 
-    $cache_file = __DIR__ . '/../../logs/olist-products-cache.json';
+    $cache_file = __DIR__ . '/../../storage/cache/olist-products-cache.json';
     @mkdir(dirname($cache_file), 0755, true);
 
     if (file_put_contents(

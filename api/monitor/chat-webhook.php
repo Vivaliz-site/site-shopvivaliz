@@ -39,12 +39,9 @@ try {
     }
 
     // Criar diretório de logs se não existir
-    $logs_dir = realpath(__DIR__ . '/../../logs');
-    if (!$logs_dir) {
-        $logs_dir = __DIR__ . '/../../logs';
-        if (!is_dir($logs_dir)) {
-            mkdir($logs_dir, 0755, true);
-        }
+    $logs_dir = __DIR__ . '/../../logs';
+    if (!is_dir($logs_dir)) {
+        mkdir($logs_dir, 0755, true);
     }
 
     // Salvar mensagem no log

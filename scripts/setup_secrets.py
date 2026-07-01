@@ -20,6 +20,8 @@ SECRETS_TO_ADD = {
     # Olist
     'OLIST_CLIENT_ID': 'ID Cliente Olist',
     'OLIST_CLIENT_SECRET': 'Secret Cliente Olist',
+    'OLIST_ACCESS_TOKEN': 'Token de acesso Olist',
+    'OLIST_REFRESH_TOKEN': 'Refresh token Olist',
     'TOKEN_API_OLIST': 'Token API Olist',
     'CLIENT_ID_API_OLIST': 'ID API Olist',
     'CLIENT_SECRET_OLIST': 'Secret API Olist',
@@ -55,8 +57,12 @@ SECRETS_TO_ADD = {
     # Marketplace
     'SHOPEE_PARTNER_ID': 'ID Partner Shopee',
     'SHOPEE_PARTNER_KEY': 'Key Partner Shopee',
+    'SHOPEE_TEST_PARTNER_ID': 'ID Partner Shopee Teste',
+    'SHOPEE_TEST_PARTNER_KEY': 'Key Partner Shopee Teste',
     'TIKTOK_CLIENT_ID': 'ID Cliente TikTok Shop',
     'TIKTOK_CLIENT_SECRET': 'Secret TikTok Shop',
+    'TIKTOK_APP_KEY': 'App Key TikTok',
+    'TIKTOK_APP_SECRET': 'App Secret TikTok',
 
     # Tiny
     'TINY_CLIENT_ID': 'ID Cliente Tiny',

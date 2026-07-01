@@ -13,11 +13,11 @@ BASE_URL = "https://dev.shopvivaliz.com.br"
 OLIST_AUTH_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth"
 OLIST_TOKEN_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
 
-CLIENT_ID = "tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553"
+CLIENT_ID = os.getenv("OLIST_CLIENT_ID") or os.getenv("TINY_CLIENT_ID") or ""
 CLIENT_SECRET = "sh1MLgXhFlvycybhlShnvQMcEL8T2GWv"
 
-EMAIL = "atendimento@shopvivaliz.com.br"
-SENHA = "L:z27062021*"
+EMAIL = os.getenv("OLIST_EMAIL") or os.getenv("OLIST_USER") or os.getenv("EMAIL_USER") or ""
+SENHA = os.getenv("OLIST_PASSWORD") or os.getenv("EMAIL_PASSWORD") or ""
 
 print("\n" + "="*70)
 print("OLIST LOGIN - OBTER AUTHORIZATION CODE E SINCRONIZAR")

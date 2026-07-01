@@ -45,7 +45,8 @@ class TrioAgent:
         import google.generativeai as genai
 
         genai.configure(api_key=self.api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model_name = os.getenv('GEMINI_MODEL') or 'gemini-1.5-flash'
+        model = genai.GenerativeModel(model_name)
 
         prompt = f"""Você é arquiteto de software. Implemente RAPIDAMENTE:
 
@@ -71,7 +72,7 @@ Responda com:
 
         client = Anthropic()
         message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model=os.getenv("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001",
             max_tokens=2048,
             messages=[
                 {
@@ -101,7 +102,7 @@ Forneça:
 
         client = openai.OpenAI(api_key=self.api_key)
         response = client.chat.completions.create(
-            model="gpt-4",
+            model=os.getenv("OPENAI_MODEL") or "gpt-4o-mini",
             messages=[
                 {
                     "role": "user",
@@ -166,14 +167,14 @@ class ParallelExecutor:
     def __init__(self):
         self.tasks = self._load_tasks()
         self.agents = [
-            TrioAgent("Gemini", GEMINI_KEY, "gemini-1.5-flash"),
-            TrioAgent("Claude", ANTHROPIC_KEY, "claude-3-5-sonnet-20241022"),
-            TrioAgent("ChatGPT", OPENAI_KEY, "gpt-4")
+            TrioAgent("Gemini", GEMINI_KEY, os.getenv("GEMINI_MODEL") or "gemini-1.5-flash"),
+            TrioAgent("Claude", ANTHROPIC_KEY, os.getenv("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001"),
+            TrioAgent("ChatGPT", OPENAI_KEY, os.getenv("OPENAI_MODEL") or "gpt-4o-mini")
         ]
 
     def _load_tasks(self):
         """Carregar fila de tarefas"""
-        queue_file = Path("tasks-queue.json")
+        queue_file = Path("logs/tasks-queue.json")
         with open(queue_file) as f:
             data = json.load(f)
         return [t for t in data['queue'] if t['status'] == 'pending']
@@ -202,7 +203,7 @@ class ParallelExecutor:
 
     def _save_results(self, completed_tasks):
         """Salvar resultados e atualizar queue"""
-        queue_file = Path("tasks-queue.json")
+        queue_file = Path("logs/tasks-queue.json")
         with open(queue_file) as f:
             data = json.load(f)
 
@@ -226,7 +227,7 @@ class ParallelExecutor:
 
     def _add_approved_task(self, task):
         """Adicionar tarefa aprovada à fila"""
-        queue_file = Path("tasks-queue.json")
+        queue_file = Path("logs/tasks-queue.json")
         with open(queue_file) as f:
             data = json.load(f)
 

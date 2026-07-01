@@ -6,13 +6,21 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-QUEUE_FILE = Path("tasks-queue.json")
+QUEUE_FILE = Path("logs/tasks-queue.json")
 
 def load_queue():
+    if not QUEUE_FILE.exists():
+        return {"queue": []}
     with open(QUEUE_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+        if isinstance(data, dict) and isinstance(data.get("queue"), list):
+            return data
+        if isinstance(data, list):
+            return {"queue": data}
+        return {"queue": []}
 
 def save_queue(data):
+    QUEUE_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(QUEUE_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
@@ -39,7 +47,14 @@ def add_task(title, description, priority="medium"):
     data = load_queue()
 
     # Gerar ID
-    task_ids = [int(t["id"].split("-")[1]) for t in data["queue"] if t["id"].startswith("task-")]
+    task_ids = []
+    for t in data["queue"]:
+        task_id = str(t.get("id", ""))
+        if task_id.startswith("task-"):
+            try:
+                task_ids.append(int(task_id.split("-")[1]))
+            except (IndexError, ValueError):
+                continue
     new_id = f"task-{max(task_ids or [0]) + 1:03d}"
 
     new_task = {
@@ -104,7 +119,7 @@ def stats():
     print(f"   Total: {total}")
     print(f"    Completas: {completed}")
     print(f"   ⏳ Pendentes: {pending}")
-    print(f"   Taxa: {(completed/total*100):.1f}%")
+    print(f"   Taxa: {(completed/total*100):.1f}%" if total else "   Taxa: 0.0%")
     print()
 
 if __name__ == "__main__":

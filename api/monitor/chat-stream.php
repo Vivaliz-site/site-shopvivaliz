@@ -21,8 +21,8 @@ send_event('connected', ['timestamp' => date('c'), 'message' => 'Conectado aos a
 // Polling: enviar novas mensagens cada 2 segundos
 $iteration = 0;
 while ($iteration < 300) { // 10 minutos max
-    if (file_exists($messageFile)) {
-        $lines = file($messageFile);
+if (file_exists($messageFile)) {
+        $lines = @file($messageFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 
         foreach ($lines as $index => $line) {
             if ($index >= $lastEventId) {
@@ -38,7 +38,7 @@ while ($iteration < 300) { // 10 minutos max
     // Check se há resposta dos agentes
     $responseFile = __DIR__ . '/../../logs/monitor-responses.jsonl';
     if (file_exists($responseFile)) {
-        $responses = file($responseFile);
+        $responses = @file($responseFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         foreach ($responses as $response) {
             $data = json_decode(trim($response), true);
             if ($data && ($data['timestamp'] ?? '') > date('c', time() - 30)) {

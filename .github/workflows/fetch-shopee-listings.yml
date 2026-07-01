@@ -35,7 +35,7 @@ jobs:
           env | grep -E '^(TINY|OLIST|ERP|SHOPEE)' | sed 's/=.*/=***MASKED***/' || echo "(nenhum secret configurado)"
         env:
           TINY_ACCESS_TOKEN:  ${{ secrets.TINY_ACCESS_TOKEN }}
-          TINY_API_TOKEN:     ${{ secrets.TINY_API_TOKEN }}
+          TINY_API_TOKEN:     ${{ secrets.TINY_API_TOKEN || secrets.TINY_ACCESS_TOKEN }}
           TINY_CLIENT_ID:     ${{ secrets.TINY_CLIENT_ID }}
           TINY_CLIENT_SECRET: ${{ secrets.TINY_CLIENT_SECRET }}
           TINY_REFRESH_TOKEN: ${{ secrets.TINY_REFRESH_TOKEN }}
@@ -43,7 +43,7 @@ jobs:
           OLIST_CLIENT_ID:     ${{ secrets.OLIST_CLIENT_ID }}
           OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
           OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
-          ERP_API_TOKEN:       ${{ secrets.ERP_API_TOKEN }}
+          ERP_API_TOKEN:       ${{ secrets.ERP_API_TOKEN || secrets.TOKEN_API_OLIST }}
 
       - name: Verificar sintaxe PHP
         run: php -l agents/v9.2.85/app/ShopeeListingsExtractorAgent.php
@@ -57,7 +57,7 @@ jobs:
         env:
           OUTPUT_FILE:        ${{ steps.output.outputs.filename }}
           TINY_ACCESS_TOKEN:  ${{ secrets.TINY_ACCESS_TOKEN }}
-          TINY_API_TOKEN:     ${{ secrets.TINY_API_TOKEN }}
+          TINY_API_TOKEN:     ${{ secrets.TINY_API_TOKEN || secrets.TINY_ACCESS_TOKEN }}
           TINY_CLIENT_ID:     ${{ secrets.TINY_CLIENT_ID }}
           TINY_CLIENT_SECRET: ${{ secrets.TINY_CLIENT_SECRET }}
           TINY_REFRESH_TOKEN: ${{ secrets.TINY_REFRESH_TOKEN }}
@@ -65,7 +65,7 @@ jobs:
           OLIST_CLIENT_ID:     ${{ secrets.OLIST_CLIENT_ID }}
           OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
           OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
-          ERP_API_TOKEN:       ${{ secrets.ERP_API_TOKEN }}
+          ERP_API_TOKEN:       ${{ secrets.ERP_API_TOKEN || secrets.TOKEN_API_OLIST }}
 
       - name: Commit do resultado
         run: |

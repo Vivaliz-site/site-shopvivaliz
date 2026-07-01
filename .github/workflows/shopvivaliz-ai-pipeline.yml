@@ -68,9 +68,9 @@ jobs:
           OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
           OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
           OLIST_ACCESS_TOKEN:  ${{ secrets.OLIST_ACCESS_TOKEN }}
-          OLIST_API_TOKEN:     ${{ secrets.TOKEN_API_OLIST }}
+          OLIST_API_TOKEN:     ${{ secrets.TOKEN_API_OLIST || secrets.ERP_API_TOKEN }}
           TINY_ACCESS_TOKEN:   ${{ secrets.TINY_ACCESS_TOKEN }}
-          TINY_API_TOKEN:      ${{ secrets.TINY_API_TOKEN }}
+          TINY_API_TOKEN:      ${{ secrets.TINY_API_TOKEN || secrets.TINY_ACCESS_TOKEN }}
           OUT_CSV:  logs/olist-images-export.csv
           OUT_JSON: logs/olist-products-raw.json
         run: |
@@ -221,11 +221,11 @@ jobs:
         env:
           OLIST_ACCESS_TOKEN:  ${{ secrets.OLIST_ACCESS_TOKEN }}
           TINY_ACCESS_TOKEN:   ${{ secrets.TINY_ACCESS_TOKEN }}
-          TINY_API_TOKEN:      ${{ secrets.TINY_API_TOKEN }}
+          TINY_API_TOKEN:      ${{ secrets.TINY_API_TOKEN || secrets.TINY_ACCESS_TOKEN }}
           OLIST_CLIENT_ID:     ${{ secrets.OLIST_CLIENT_ID }}
           OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
           OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
-          ERP_API_TOKEN:       ${{ secrets.ERP_API_TOKEN }}
+          ERP_API_TOKEN:       ${{ secrets.ERP_API_TOKEN || secrets.TOKEN_API_OLIST }}
         run: |
           DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
           LIMIT="${{ github.event.inputs.limit || '0' }}"

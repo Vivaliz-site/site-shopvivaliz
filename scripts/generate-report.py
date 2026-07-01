@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-queue_file = Path("tasks-queue.json")
+queue_file = Path("logs/tasks-queue.json")
 
 with open(queue_file, "r", encoding="utf-8") as f:
     data = json.load(f)

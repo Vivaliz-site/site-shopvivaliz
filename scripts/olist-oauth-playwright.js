@@ -9,8 +9,8 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-const EMAIL = 'atendimento@shopvivaliz.com.br';
-const SENHA = 'L:z27062021*';
+const EMAIL = process.env.OLIST_EMAIL || process.env.EMAIL_USER || '';
+const SENHA = process.env.OLIST_PASSWORD || process.env.EMAIL_PASSWORD || '';
 const SITE_URL = 'https://dev.shopvivaliz.com.br';
 const CONNECT_URL = `${SITE_URL}/olist/connect.php`;
 const CALLBACK_URL = `${SITE_URL}/olist/callback.php`;

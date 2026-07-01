@@ -38,9 +38,9 @@ $Config = @{
     CallbackUrl = "https://dev.shopvivaliz.com.br/olist/callback.php"
     SyncUrl = "https://dev.shopvivaliz.com.br/olist/sync-products.php"
     DiagnosticUrl = "https://dev.shopvivaliz.com.br/api/olist/diagnostic.php"
-    Email = "atendimento@shopvivaliz.com.br"
-    Senha = "L:z27062021*"
-    ClientId = "tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553"
+    Email = $env:OLIST_EMAIL
+    Senha = $env:OLIST_PASSWORD
+    ClientId = $env:OLIST_CLIENT_ID
 }
 
 $LogFile = "logs/olist-sync-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"

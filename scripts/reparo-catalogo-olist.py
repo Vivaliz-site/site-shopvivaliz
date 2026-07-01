@@ -12,10 +12,10 @@ import csv
 
 # Credenciais
 CONFIG = {
-    'host': 'localhost',
-    'user': 'shopv506_claude',
-    'password': 'CFqmkF8}$C_2',
-    'database': 'shopv506_shopvivaliz'
+        'host': os.getenv('DB_HOST', 'localhost'),
+        'user': os.getenv('DB_USER', 'root'),
+        'password': os.getenv('DB_PASS', ''),
+        'database': os.getenv('DB_NAME', 'shopvivaliz')
 }
 
 def conectar():

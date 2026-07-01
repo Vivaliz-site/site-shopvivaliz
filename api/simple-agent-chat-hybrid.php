@@ -159,7 +159,7 @@ function call_claude_api($message) {
         $client = new \Anthropic\Anthropic(['apiKey' => $api_key]);
 
         $response = $client->messages->create([
-            'model' => 'claude-opus-4-1',
+            'model' => getenv('ANTHROPIC_MODEL') ?: 'claude-haiku-4-5-20251001',
             'max_tokens' => 1024,
             'system' => 'Você é um assistente inteligente do sistema ShopVivaliz. Analise a pergunta do usuário e responda de forma precisa e proativa. Se a pergunta for sobre o status do sistema, ofereça sugestões de ações.',
             'messages' => [

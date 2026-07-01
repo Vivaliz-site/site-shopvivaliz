@@ -13,7 +13,8 @@ if (empty($_SESSION['carrinho'])) {
 
 // Processar pedido
 $pedido_criado = false;
-if ($_POST['acao'] === 'finalizar_pedido') {
+$acao = $_POST['acao'] ?? '';
+if ($acao === 'finalizar_pedido') {
     $nome = trim($_POST['nome'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $telefone = trim($_POST['telefone'] ?? '');
@@ -70,6 +71,9 @@ if ($_POST['acao'] === 'finalizar_pedido') {
     <link rel="stylesheet" href="/css/responsive.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        body {
+            background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+        }
         .checkout-container {
             display: grid;
             grid-template-columns: 1.5fr 1fr;
@@ -91,7 +95,7 @@ if ($_POST['acao'] === 'finalizar_pedido') {
             margin-bottom: 25px;
         }
         .form-section h3 {
-            color: #667eea;
+            color: #1F3A70;
             margin-bottom: 15px;
             font-size: 1.1em;
         }
@@ -123,8 +127,8 @@ if ($_POST['acao'] === 'finalizar_pedido') {
         .form-group input:focus,
         .form-group textarea:focus {
             outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            border-color: #1F3A70;
+            box-shadow: 0 0 0 3px rgba(31, 58, 112, 0.1);
         }
         .form-group textarea {
             resize: vertical;
@@ -144,12 +148,12 @@ if ($_POST['acao'] === 'finalizar_pedido') {
         .resumo-total {
             font-size: 1.3em;
             font-weight: bold;
-            color: #667eea;
+            color: #1F3A70;
             margin: 15px 0;
             text-align: right;
         }
         .btn-finalizar {
-            background: #10b981;
+            background: #1F3A70;
             color: white;
             border: none;
             padding: 14px;
@@ -161,7 +165,7 @@ if ($_POST['acao'] === 'finalizar_pedido') {
             margin-top: 20px;
         }
         .btn-finalizar:hover {
-            background: #059669;
+            background: #667eea;
         }
         .mensagem-sucesso {
             background: #dcfce7;
@@ -212,7 +216,7 @@ if ($_POST['acao'] === 'finalizar_pedido') {
                         <li>Você receberá atualizações sobre o envio</li>
                     </ul>
                 </div>
-                <a href="/catalogo/index.php" style="display: inline-block; margin-top: 20px; background: #667eea; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none;">
+                <a href="/catalogo/index.php" style="display: inline-block; margin-top: 20px; background: #1F3A70; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none;">
                     ← Continuar Comprando
                 </a>
             </div>
@@ -292,7 +296,7 @@ if ($_POST['acao'] === 'finalizar_pedido') {
                 </form>
 
                 <div class="resumo-pedido">
-                    <h3 style="color: #667eea; margin-bottom: 15px;">Resumo do Pedido</h3>
+                    <h3 style="color: #1F3A70; margin-bottom: 15px;">Resumo do Pedido</h3>
                     <?php
                     $produtos_db = [
                         1 => ['id' => 1, 'nome' => 'Camiseta Premium', 'preco' => 79.90],

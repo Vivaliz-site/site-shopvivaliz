@@ -23,6 +23,10 @@ REQUIRED_SECRETS = {
         'OLIST_CLIENT_ID',
         'OLIST_CLIENT_SECRET',
         'TOKEN_API_OLIST',
+        'CLIENT_ID_API_OLIST',
+        'CLIENT_SECRET_OLIST',
+        'OLIST_ACCESS_TOKEN',
+        'OLIST_REFRESH_TOKEN',
     ],
     'FTP': [
         'FTP_SERVER',
@@ -43,8 +47,15 @@ REQUIRED_SECRETS = {
     'Marketplace': [
         'SHOPEE_PARTNER_ID',
         'SHOPEE_PARTNER_KEY',
+        'SHOPEE_TEST_PARTNER_ID',
+        'SHOPEE_TEST_PARTNER_KEY',
         'TIKTOK_CLIENT_ID',
         'TIKTOK_CLIENT_SECRET',
+        'TIKTOK_APP_KEY',
+        'TIKTOK_APP_SECRET',
+        'TIKTOK_ACCESS_TOKEN',
+        'TIKTOK_SHOP_ID',
+        'TIKTOK_SHOP_CIPHER',
     ],
 }
 

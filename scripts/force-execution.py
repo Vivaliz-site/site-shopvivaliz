@@ -10,7 +10,7 @@ from datetime import datetime
 
 class ForceExecutor:
     def __init__(self):
-        self.queue_file = Path('tasks-queue.json')
+        self.queue_file = Path('logs/tasks-queue.json')
         self.api_keys = {
             'gemini': os.getenv('GEMINI_API_KEY'),
             'anthropic': os.getenv('ANTHROPIC_API_KEY'),

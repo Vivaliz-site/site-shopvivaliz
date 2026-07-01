@@ -48,8 +48,8 @@ BASE_URL = "https://dev.shopvivaliz.com.br"
 CONNECT_URL = f"{BASE_URL}/olist/connect.php"
 SYNC_URL = f"{BASE_URL}/olist/sync-products.php"
 
-EMAIL = "atendimento@shopvivaliz.com.br"
-SENHA = "L:z27062021*"
+EMAIL = os.getenv("OLIST_EMAIL") or os.getenv("OLIST_USER") or os.getenv("EMAIL_USER") or ""
+SENHA = os.getenv("OLIST_PASSWORD") or os.getenv("EMAIL_PASSWORD") or ""
 
 print("\n" + "="*70)
 print("SINCRONIZAR 198 PRODUTOS - CHROME AUTOMATION")

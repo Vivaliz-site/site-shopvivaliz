@@ -21,8 +21,8 @@ LOG_FILE = PROJECT_ROOT / 'logs' / 'auto-complete-olist.log'
 # Credenciais
 CLIENT_ID = os.getenv('OLIST_CLIENT_ID', 'tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553')
 CLIENT_SECRET = os.getenv('OLIST_CLIENT_SECRET', 'sh1MLgXhFlvycybhlShnvQMcEL8T2GWv')
-OLIST_EMAIL = os.getenv('OLIST_EMAIL', 'atendimento@shopvivaliz.com.br')
-OLIST_PASSWORD = os.getenv('OLIST_PASSWORD', 'L:z27062021*')
+OLIST_EMAIL = os.getenv('OLIST_EMAIL') or os.getenv('OLIST_USER') or os.getenv('EMAIL_USER') or ''
+OLIST_PASSWORD = os.getenv('OLIST_PASSWORD') or os.getenv('EMAIL_PASSWORD') or ''
 REDIRECT_URI = 'https://dev.shopvivaliz.com.br/olist/handle-callback.php'
 
 def log_msg(msg):

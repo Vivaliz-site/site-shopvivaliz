@@ -2,12 +2,12 @@
 header('Content-Type: application/json; charset=utf-8');
 set_time_limit(300);
 
-// CREDENCIAIS CONFIRMADAS
-$host = 'localhost';
-$port = 3306;
-$db = 'shopv506_shopvivaliz';
-$user = 'claude';
-$pass = 'CFqmkF8}$C_2';
+// CREDENCIAIS VIA AMBIENTE
+$host = getenv('DB_HOST') ?: 'localhost';
+$port = (int) (getenv('DB_PORT') ?: 3306);
+$db = getenv('DB_NAME') ?: 'shopvivaliz';
+$user = getenv('DB_USER') ?: 'root';
+$pass = getenv('DB_PASS') ?: '';
 
 // CONECTAR
 $conn = new mysqli($host, $user, $pass, $db, $port);

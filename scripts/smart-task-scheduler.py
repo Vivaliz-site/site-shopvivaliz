@@ -8,7 +8,7 @@ from datetime import datetime
 
 class SmartTaskScheduler:
     def __init__(self):
-        self.queue_file = Path("tasks-queue.json")
+        self.queue_file = Path("logs/tasks-queue.json")
         self.api_budget = {
             'Gemini': {'used': 0.0, 'limit': 50.0, 'cost_per_task': 0.50},
             'Claude': {'used': 0.0, 'limit': 100.0, 'cost_per_task': 1.50},

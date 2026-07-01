@@ -6,13 +6,17 @@ import sys
 
 # Configurações
 REPO = "fredmourao-ai/site-shopvivaliz"
-SECRETS = {
-    "EMAIL_USER": "agentes@shopvivaliz.com.br",
-    "EMAIL_PASSWORD": "Zoomp123-",
+
+DEFAULTS = {
     "EMAIL_SMTP_HOST": "smtp.titan.email",
     "EMAIL_SMTP_PORT": "465",
-    "EMAIL_TO": "fredmourao@gmail.com"
 }
+
+SECRETS = [
+    "EMAIL_USER",
+    "EMAIL_PASSWORD",
+    "EMAIL_TO",
+]
 
 def add_secret_via_gh_cli(name, value):
     """Adicionar secret usando GitHub CLI"""
@@ -36,7 +40,11 @@ def main():
 
     success_count = 0
 
-    for name, value in SECRETS.items():
+    for name in SECRETS:
+        value = input(f"Informe o valor para {name}: ").strip()
+        if not value:
+            print(f"  Pulando {name} (valor vazio)")
+            continue
         success, msg = add_secret_via_gh_cli(name, value)
         print(f"  {msg}")
 
@@ -48,12 +56,13 @@ def main():
     print(f"{'='*50}\n")
 
     print(" Secrets configurados:")
-    for name in SECRETS.keys():
+    for name in SECRETS:
         print(f"  • {name}")
 
     print(f"\n Sistema pronto para notificações por email!")
-    print(f"\n📧 Emails serão enviados para: fredmourao@gmail.com")
-    print(f"   Usando: agentes@shopvivaliz.com.br")
+    if DEFAULTS["EMAIL_TO"]:
+        print(f"\n📧 Destino padrão sugerido: {DEFAULTS['EMAIL_TO']}")
+    print("   Configure EMAIL_USER e EMAIL_PASSWORD via input seguro ou ambiente.")
 
 if __name__ == "__main__":
     main()

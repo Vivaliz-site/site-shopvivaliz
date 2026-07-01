@@ -85,9 +85,24 @@ try {
 }
 
 function getStatus() {
-    $queueFile = realpath(__DIR__ . '/../../tasks-queue.json');
+    $queueFile = __DIR__ . '/../../logs/tasks-queue.json';
     if (!file_exists($queueFile)) {
-        echo json_encode(['error' => 'Queue file not found']);
+        echo json_encode([
+            'status' => 'active',
+            'timestamp' => date('c'),
+            'executor' => [
+                'frequency' => '30 minutes',
+                'last_run' => getLastRunTime(),
+                'next_run' => getNextRunTime(),
+                'is_running' => isExecutorRunning()
+            ],
+            'queue' => [
+                'total' => 0,
+                'completed' => 0,
+                'pending' => 0,
+                'completion_rate' => 0
+            ]
+        ]);
         return;
     }
 
@@ -117,9 +132,9 @@ function getStatus() {
 }
 
 function getTasks() {
-    $queueFile = realpath(__DIR__ . '/../../tasks-queue.json');
+    $queueFile = __DIR__ . '/../../logs/tasks-queue.json';
     if (!file_exists($queueFile)) {
-        echo json_encode(['error' => 'Queue file not found']);
+        echo json_encode(['pending' => [], 'completed' => []]);
         return;
     }
 
@@ -137,9 +152,7 @@ function getTasks() {
 }
 
 function getHistory() {
-    // Ler logs de execução
-    $logsDir = realpath(__DIR__ . '/../../ai_collaboration_report_*.md');
-    $reports = glob(__DIR__ . '/../../ai_collaboration_report_*.md');
+    $reports = glob(__DIR__ . '/../../ai_collaboration_report_*.md') ?: [];
 
     $history = [];
     foreach ($reports as $report) {
@@ -242,7 +255,8 @@ function callGemini($message) {
     }
 
     try {
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . urlencode($apiKey);
+        $geminiModel = getenv('GEMINI_MODEL') ?: 'gemini-1.5-flash';
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($geminiModel) . ':generateContent?key=' . urlencode($apiKey);
 
         $payload = json_encode([
             'contents' => [
@@ -291,7 +305,7 @@ function callClaude($userMessage, $geminiResponse) {
 
     try {
         $payload = json_encode([
-            'model' => 'claude-3-5-sonnet-20241022',
+            'model' => getenv('ANTHROPIC_MODEL') ?: 'claude-haiku-4-5-20251001',
             'max_tokens' => 256,
             'messages' => [
                 [
@@ -383,11 +397,15 @@ function addTask() {
         return;
     }
 
-    $queueFile = realpath(__DIR__ . '/../../tasks-queue.json');
-    $data = json_decode(file_get_contents($queueFile), true);
+    $queueFile = __DIR__ . '/../../logs/tasks-queue.json';
+    $data = file_exists($queueFile) ? (json_decode((string)file_get_contents($queueFile), true) ?: []) : [];
+    $data['queue'] = $data['queue'] ?? [];
 
     // Gerar novo ID
-    $ids = array_map(fn($t) => (int) substr($t['id'], 5), $data['queue']);
+    $ids = array_map(function ($t) {
+        return (int) preg_replace('/\D+/', '', $t['id'] ?? '0');
+    }, $data['queue']);
+    $ids = array_filter($ids, fn($value) => $value > 0);
     $newId = 'task-' . str_pad(max($ids) + 1, 3, '0', STR_PAD_LEFT);
 
     $newTask = [
@@ -400,7 +418,8 @@ function addTask() {
     ];
 
     $data['queue'][] = $newTask;
-    file_put_contents($queueFile, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    @mkdir(dirname($queueFile), 0755, true);
+    file_put_contents($queueFile, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
 
     echo json_encode([
         'success' => true,
@@ -417,8 +436,14 @@ function getLogs() {
         return;
     }
 
-    $lines = array_reverse(file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES));
-    $logs = array_map('json_decode', array_slice($lines, 0, 50));
+    $lines = array_reverse(@file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: []);
+    $logs = [];
+    foreach (array_slice($lines, 0, 50) as $line) {
+        $decoded = json_decode($line, true);
+        if (is_array($decoded)) {
+            $logs[] = $decoded;
+        }
+    }
 
     echo json_encode(['logs' => $logs]);
 }
