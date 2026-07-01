@@ -1,5 +1,5 @@
 {
-    "action": "ROLLBACK",
+    "action": "aguardando_primeiro_run",
     "metrics": {
         "checkout_ok": false,
         "checkout_fail": true,
@@ -12,16 +12,22 @@
         "error_high": false,
         "recent_errors": [],
         "e2e_failed": false,
-        "timestamp": "2026-07-01T00:51:13+00:00"
+        "timestamp": "2026-07-01T00:00:00+00:00"
     },
     "validation": {
-        "status": "BLOCKED",
+        "status": "UNKNOWN",
         "checkout_ok": false,
         "api_ok": false,
         "db_ok": true,
         "pages_ok": false,
-        "timestamp": "2026-07-01T00:51:13+00:00"
+        "timestamp": "2026-07-01T00:00:00+00:00"
     },
-    "elapsed_s": 0.01,
-    "run_id": "local-1782867073"
+    "loop": {
+        "risk": "LOW",
+        "issue": "none",
+        "handled": false,
+        "result": null
+    },
+    "elapsed_s": 0,
+    "run_id": "bootstrap"
 }
