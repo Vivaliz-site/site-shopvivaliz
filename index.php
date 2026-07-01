@@ -81,10 +81,14 @@ $featuredProducts = sv_home_products();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="ShopVivaliz - catálogo online com produtos importados do Tiny/Olist">
-    <meta name="theme-color" content="#1a73e8">
+    <meta name="description" content="Vivaliz - Loja online com produtos de qualidade. Rodízios, ferragens, utilidades e muito mais. Compre com segurança.">
+    <meta name="theme-color" content="#173B63">
+    <meta property="og:title" content="Vivaliz | Loja Online">
+    <meta property="og:description" content="Catálogo com produtos de qualidade. Compre online com entrega rápida.">
+    <meta property="og:image" content="/images/logo-vivaliz-square.png">
+    <meta property="og:type" content="website">
 
-    <title><?php echo APP_NAME; ?> - Catálogo Online</title>
+    <title>Vivaliz | Loja Online</title>
 
     <link rel="stylesheet" href="/css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
