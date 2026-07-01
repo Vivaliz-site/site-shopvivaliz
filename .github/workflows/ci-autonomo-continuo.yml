@@ -37,7 +37,7 @@ jobs:
       - name: Install deps
         run: |
           if [ -f automation/eha/package.json ]; then
-            cd automation/eha && npm ci
+            cd automation/eha && npm install
           elif [ -f package.json ]; then
             npm ci
           else
@@ -55,15 +55,15 @@ jobs:
 
       - name: Install Playwright
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+        run: cd automation/eha && npx playwright install --with-deps chromium
 
       - name: Install Playwright system deps
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+        run: cd automation/eha && npx playwright install-deps chromium
 
       - name: Run E2E Checkout
         id: e2e
-        run: npx playwright test automation/eha/checkout.spec.js --config=automation/eha/playwright.config.js --reporter=line
+        run: cd automation/eha && npx playwright test checkout.spec.js --config=playwright.config.js --reporter=line
         continue-on-error: true
 
       - name: Run PHP EHA Loop
