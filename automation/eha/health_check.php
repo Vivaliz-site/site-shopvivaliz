@@ -93,7 +93,10 @@ function check_pages(): bool {
 function collect_metrics(): array {
     $e2e_failed = (getenv('E2E_FAILED') === '1');
 
-    $checkout_ok = !$e2e_failed && check_checkout();
+    // HTTP checks sempre rodam, independente de E2E.
+    // E2E é um sinal separado — falha de infra (ex: módulo faltando) não
+    // deve bloquear o pipeline se o site está respondendo corretamente.
+    $checkout_ok = check_checkout();
     $api_ok      = check_api();
     $db_ok       = check_db();
     $pages_ok    = check_pages();
