@@ -69,7 +69,7 @@ function check_db(): bool {
     $user = getenv('DB_USER')     ?: '';
     $pass = getenv('DB_PASS')     ?: '';
 
-    if (!$host || !$db) return true; // sem credenciais no ambiente, ignora
+    if (!$host || !$db || !$user) return true; // sem credenciais completas, ignora
 
     try {
         $pdo = new PDO("mysql:host=$host;dbname=$db;charset=utf8mb4", $user, $pass, [
@@ -124,7 +124,7 @@ function collect_metrics(): array {
         'db_ok'         => $db_ok,
         'pages_ok'      => $pages_ok,
         'error_count'   => count($recent_errors),
-        'error_low'     => count($recent_errors) <= 5,
+        'error_low'     => count($recent_errors) > 0 && count($recent_errors) <= 5,
         'error_medium'  => count($recent_errors) > 5 && count($recent_errors) <= 20,
         'error_high'    => count($recent_errors) > 20,
         'recent_errors' => array_slice($recent_errors, -10),
