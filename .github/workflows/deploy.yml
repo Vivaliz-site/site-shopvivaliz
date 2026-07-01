@@ -61,14 +61,13 @@ jobs:
           check_required_secret "FTP_PORT" "${{ secrets.FTP_PORT }}"
           check_required_secret "FTP_REMOTE_DIR" "${{ secrets.FTP_REMOTE_DIR }}"
           check_required_secret "SQUAD_TOKEN" "${{ secrets.SQUAD_TOKEN }}"
-          check_required_secret "DB_HOST" "${{ secrets.DB_HOST }}"
-          check_required_secret "DB_NAME" "${{ secrets.DB_NAME }}"
-          check_required_secret "DB_USER" "${{ secrets.DB_USER }}"
-          check_required_secret "DB_PASS" "${{ secrets.DB_PASS }}"
-
           check_optional_secret "ANTHROPIC_API_KEY" "${{ secrets.ANTHROPIC_API_KEY }}"
           check_optional_secret "OPENAI_API_KEY" "${{ secrets.OPENAI_API_KEY }}"
           check_optional_secret "GEMINI_API_KEY" "${{ secrets.GEMINI_API_KEY }}"
+          check_optional_secret "DB_HOST" "${{ secrets.DB_HOST }}"
+          check_optional_secret "DB_NAME" "${{ secrets.DB_NAME }}"
+          check_optional_secret "DB_USER" "${{ secrets.DB_USER }}"
+          check_optional_secret "DB_PASS" "${{ secrets.DB_PASS }}"
           check_optional_secret "DB_PORT" "${{ secrets.DB_PORT }}"
 
           if [ "$missing" -ne 0 ]; then
