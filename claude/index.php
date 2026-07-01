@@ -82,6 +82,28 @@ $log_path    = dirname(__DIR__) . '/automation/eha/reports/eha.log';
 $log_lines   = @file($log_path) ?: [];
 $recent_log  = array_reverse(array_slice($log_lines, -30));
 
+// Lê histórico de runs EHA do run_history.jsonl
+$history_path = dirname(__DIR__) . '/automation/eha/reports/run_history.jsonl';
+$eha_runs     = [];
+if (is_readable($history_path)) {
+    foreach (file($history_path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        $r = json_decode($line, true);
+        if ($r) $eha_runs[] = $r;
+    }
+}
+$eha_runs_recent = array_reverse(array_slice($eha_runs, -20));
+$total_runs      = count($eha_runs);
+$ok_runs         = count(array_filter($eha_runs, fn($r) => ($r['status'] ?? '') === 'READY_FOR_PRODUCTION'));
+$streak          = 0;
+foreach (array_reverse($eha_runs) as $r) {
+    if (($r['status'] ?? '') === 'READY_FOR_PRODUCTION') $streak++;
+    else break;
+}
+$avg_elapsed = $total_runs > 0
+    ? round(array_sum(array_column($eha_runs, 'elapsed_s')) / $total_runs, 2)
+    : 0;
+$uptime_pct  = $total_runs > 0 ? round($ok_runs / $total_runs * 100, 1) : 0;
+
 $status_color = $all_ok ? '#22c55e' : '#ef4444';
 
 // Lê histórico de runs do GitHub Actions via API pública (sem token)
@@ -126,6 +148,13 @@ if ($gh_raw) {
         .log .hi { color: #f8fafc; }
         a { color: #38bdf8; text-decoration: none; }
         a:hover { text-decoration: underline; }
+        .sparkline { display: flex; gap: 3px; align-items: flex-end; height: 28px; margin: .5rem 0 1.25rem; }
+        .spark-bar { width: 10px; border-radius: 2px; min-height: 4px; }
+        .spark-ok   { background: #22c55e; }
+        .spark-fail { background: #ef4444; }
+        .stat-row { display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+        .stat { font-size: .82rem; color: #94a3b8; }
+        .stat strong { color: #f1f5f9; font-size: 1rem; }
     </style>
 </head>
 <body>
@@ -161,6 +190,50 @@ if ($gh_raw) {
             <div class="card-sub">Verificado agora</div>
         </div>
     </div>
+
+    <?php if (!empty($eha_runs_recent)): ?>
+    <h2>Histórico EHA — últimos <?= count($eha_runs_recent) ?> runs</h2>
+    <div class="stat-row">
+        <div class="stat">Streak OK <strong class="ok"><?= $streak ?></strong></div>
+        <div class="stat">Uptime <strong><?= $uptime_pct ?>%</strong></div>
+        <div class="stat">Runs totais <strong><?= $total_runs ?></strong></div>
+        <div class="stat">Média elapsed <strong><?= $avg_elapsed ?>s</strong></div>
+    </div>
+    <div class="sparkline">
+    <?php
+    $max_e = max(array_column($eha_runs_recent, 'elapsed_s') ?: [1]);
+    foreach ($eha_runs_recent as $r):
+        $ok  = ($r['status'] ?? '') === 'READY_FOR_PRODUCTION';
+        $h   = max(4, (int)round(($r['elapsed_s'] / $max_e) * 28));
+        $cls = $ok ? 'spark-ok' : 'spark-fail';
+        $tip = '#' . $r['run_id'] . ' · ' . substr($r['ts'] ?? '', 0, 16) . ' · ' . $r['elapsed_s'] . 's';
+    ?>
+        <div class="spark-bar <?= $cls ?>" style="height:<?= $h ?>px" title="<?= htmlspecialchars($tip) ?>"></div>
+    <?php endforeach; ?>
+    </div>
+    <table>
+        <thead>
+            <tr><th>Run</th><th>Status</th><th>Elapsed</th><th>Checkout</th><th>API</th><th>DB</th><th>E2E</th><th>Erros</th><th>Timestamp (UTC)</th></tr>
+        </thead>
+        <tbody>
+        <?php foreach ($eha_runs_recent as $r):
+            $ok = ($r['status'] ?? '') === 'READY_FOR_PRODUCTION';
+        ?>
+            <tr>
+                <td>#<?= htmlspecialchars((string)($r['run_id'] ?? '?')) ?></td>
+                <td><span class="<?= $ok ? 'ok' : 'fail' ?>"><?= $ok ? '✓ OK' : '✗ BLOCKED' ?></span></td>
+                <td style="color:#94a3b8"><?= number_format((float)($r['elapsed_s'] ?? 0), 2) ?>s</td>
+                <td class="<?= ($r['checkout_ok'] ?? false) ? 'ok' : 'fail' ?>"><?= ($r['checkout_ok'] ?? false) ? '✓' : '✗' ?></td>
+                <td class="<?= ($r['api_ok'] ?? false) ? 'ok' : 'fail' ?>"><?= ($r['api_ok'] ?? false) ? '✓' : '✗' ?></td>
+                <td class="<?= ($r['db_ok'] ?? false) ? 'ok' : 'fail' ?>"><?= ($r['db_ok'] ?? false) ? '✓' : '✗' ?></td>
+                <td class="<?= !($r['e2e_failed'] ?? false) ? 'ok' : 'warn' ?>"><?= !($r['e2e_failed'] ?? false) ? '✓' : '!' ?></td>
+                <td style="color:<?= ($r['error_count'] ?? 0) > 0 ? '#f59e0b' : '#475569' ?>"><?= (int)($r['error_count'] ?? 0) ?></td>
+                <td style="font-size:.75rem;color:#64748b"><?= htmlspecialchars(substr($r['ts'] ?? '', 0, 16)) ?></td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+    <?php endif; ?>
 
     <?php if (!empty($gh_runs)): ?>
     <h2>Últimos runs — CI Autônomo Contínuo</h2>
