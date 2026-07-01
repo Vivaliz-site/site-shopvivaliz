@@ -3,17 +3,47 @@ declare(strict_types=1);
 
 header('Content-Type: text/html; charset=UTF-8');
 
+function sv_product_catalog(): array
+{
+    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
+    if (!is_file($jsonPath) || !is_readable($jsonPath)) {
+        return [];
+    }
+    $decoded = json_decode((string)file_get_contents($jsonPath), true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function sv_product_lookup(string $sku, string $id): array
+{
+    foreach (sv_product_catalog() as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $rowSku = trim((string)($row['sku'] ?? ''));
+        $rowId = trim((string)($row['id'] ?? $row['olist_product_id'] ?? ''));
+        $rowOlistId = trim((string)($row['olist_product_id'] ?? ''));
+        if (($sku !== '' && strcasecmp($rowSku, $sku) === 0) || ($id !== '' && ($rowId === $id || $rowOlistId === $id))) {
+            return $row;
+        }
+    }
+    return [];
+}
+
 function sv_product_value(string $key, string $fallback = ''): string
 {
     $value = $_GET[$key] ?? $fallback;
     return is_scalar($value) ? trim((string)$value) : $fallback;
 }
 
-$sku = sv_product_value('sku', sv_product_value('id', 'sem-sku'));
-$name = sv_product_value('name', 'Produto ShopVivaliz');
-$image = sv_product_value('image', '/favicon.ico');
-$price = sv_product_value('price', '0');
-$olistId = sv_product_value('olist_product_id', '');
+$requestedSku = sv_product_value('sku');
+$requestedId = sv_product_value('id', sv_product_value('olist_product_id'));
+$resolved = sv_product_lookup($requestedSku, $requestedId);
+
+$sku = trim((string)($resolved['sku'] ?? '')) ?: sv_product_value('sku', sv_product_value('id', 'sem-sku'));
+$name = trim((string)($resolved['name'] ?? '')) ?: sv_product_value('name', 'Produto ShopVivaliz');
+$image = trim((string)($resolved['image_url'] ?? '')) ?: sv_product_value('image', '/favicon.ico');
+$price = (string)($resolved['price'] ?? sv_product_value('price', '0'));
+$olistId = trim((string)($resolved['olist_product_id'] ?? '')) ?: sv_product_value('olist_product_id', '');
 $priceValue = is_numeric($price) ? (float)$price : 0.0;
 $priceLabel = $priceValue > 0 ? 'R$ ' . number_format($priceValue, 2, ',', '.') : 'Preco sob consulta';
 ?>
