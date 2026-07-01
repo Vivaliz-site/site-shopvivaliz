@@ -1,0 +1,76 @@
+name: CI AUTONOMO CONTINUO
+
+on:
+  push:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    env:
+      DB_HOST:     ${{ secrets.DB_HOST }}
+      DB_NAME:     ${{ secrets.DB_NAME }}
+      DB_DATABASE: ${{ secrets.DB_DATABASE }}
+      GH_TOKEN:    ${{ secrets.GH_REPO_TOKEN }}
+      BASE_URL:    ${{ secrets.BASE_URL != '' && secrets.BASE_URL || 'https://shopvivaliz.com.br' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_REPO_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: pdo, pdo_mysql, curl, json, mbstring
+
+      - name: Install deps
+        run: |
+          if [ -f automation/eha/package.json ]; then
+            cd automation/eha && npm ci
+          elif [ -f package.json ]; then
+            npm ci
+          else
+            npm install @playwright/test || true
+          fi
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E Checkout
+        id: e2e
+        run: npx playwright test automation/eha/checkout.spec.js --config=automation/eha/playwright.config.js --reporter=line
+        continue-on-error: true
+
+      - name: Run PHP EHA Loop
+        id: eha
+        run: php automation/eha/run.php
+        env:
+          E2E_FAILED: ${{ steps.e2e.outcome == 'failure' && '1' || '0' }}
+
+      - name: Upload EHA Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eha-report-${{ github.run_number }}
+          path: automation/eha/reports/
+          retention-days: 14
+
+      - name: Fail if BLOCKED
+        run: |
+          STATUS=$(cat automation/eha/reports/last_status.txt 2>/dev/null || echo "UNKNOWN")
+          echo "EHA Status: $STATUS"
+          if [ "$STATUS" = "BLOCKED" ] || [ "$STATUS" = "ROLLBACK" ]; then
+            echo "::error::EHA retornou $STATUS — pipeline bloqueada"
+            exit 1
+          fi
