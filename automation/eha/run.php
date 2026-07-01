@@ -15,12 +15,12 @@ require_once dirname(__DIR__) . '/create_auto_pr.php';
 
 $start = microtime(true);
 
-// 1. Coleta métricas reais
+// 1. Coleta métricas reais (uma única vez)
 $metrics = collect_metrics();
 _eha_log('METRICS ' . json_encode($metrics));
 
-// 2. Valida release
-$validation = validate_final_release();
+// 2. Valida release reaproveitando as métricas já coletadas
+$validation = validate_final_release($metrics);
 _eha_log('VALIDATION status=' . $validation['status']);
 
 // 3. Decide próximo passo
@@ -48,7 +48,7 @@ file_put_contents($dir . '/last_run.json', json_encode($report, JSON_PRETTY_PRIN
 echo "EHA: $action in {$elapsed}s | status={$validation['status']}\n";
 exit($validation['status'] === 'BLOCKED' ? 1 : 0);
 
-// ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────
 
 function run_loop(array|string $error_log): array
 {
