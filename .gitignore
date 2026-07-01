@@ -3,6 +3,7 @@ vendor/
 .env
 .env.*
 !.env.example
+.tokens/
 *.log
 logs/
 cache/

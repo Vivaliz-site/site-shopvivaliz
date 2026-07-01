@@ -3,6 +3,7 @@
 Login OAuth Olist - Obtém authorization code e sincroniza produtos
 Usando Python requests para simular o fluxo de login
 """
+import os
 import requests
 import json
 import re
@@ -14,7 +15,7 @@ OLIST_AUTH_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-conne
 OLIST_TOKEN_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
 
 CLIENT_ID = os.getenv("OLIST_CLIENT_ID") or os.getenv("TINY_CLIENT_ID") or ""
-CLIENT_SECRET = "sh1MLgXhFlvycybhlShnvQMcEL8T2GWv"
+CLIENT_SECRET = os.getenv("OLIST_CLIENT_SECRET") or os.getenv("TINY_CLIENT_SECRET") or ""
 
 EMAIL = os.getenv("OLIST_EMAIL") or os.getenv("OLIST_USER") or os.getenv("EMAIL_USER") or ""
 SENHA = os.getenv("OLIST_PASSWORD") or os.getenv("EMAIL_PASSWORD") or ""
