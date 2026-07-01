@@ -3,8 +3,8 @@
 ## ✅ Dados a Configurar
 
 ```
-OLIST_CLIENT_ID = tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553
-OLIST_CLIENT_SECRET = sh1MLgXhFlvycybhlShnvQMcEL8T2GWv
+OLIST_CLIENT_ID = SEU_OLIST_CLIENT_ID_AQUI
+OLIST_CLIENT_SECRET = SEU_OLIST_CLIENT_SECRET_AQUI
 OLIST_REDIRECT_URI = https://dev.shopvivaliz.com.br/olist/callback.php
 ```
 
@@ -22,12 +22,12 @@ OLIST_REDIRECT_URI = https://dev.shopvivaliz.com.br/olist/callback.php
 
    **Secret 1:**
    - Name: `OLIST_CLIENT_ID`
-   - Value: `tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553`
+   - Value: `SEU_OLIST_CLIENT_ID_AQUI`
    - Clique em **"Add secret"**
 
    **Secret 2:**
    - Name: `OLIST_CLIENT_SECRET`
-   - Value: `sh1MLgXhFlvycybhlShnvQMcEL8T2GWv`
+   - Value: `SEU_OLIST_CLIENT_SECRET_AQUI`
    - Clique em **"Add secret"**
 
    **Secret 3:**
@@ -42,9 +42,9 @@ OLIST_REDIRECT_URI = https://dev.shopvivaliz.com.br/olist/callback.php
 ### **Opção 2: Via GitHub CLI (Se tiver instalado)**
 
 ```bash
-gh secret set OLIST_CLIENT_ID --repo fredmourao-ai/site-shopvivaliz --body "tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553"
+gh secret set OLIST_CLIENT_ID --repo fredmourao-ai/site-shopvivaliz --body "SEU_OLIST_CLIENT_ID_AQUI"
 
-gh secret set OLIST_CLIENT_SECRET --repo fredmourao-ai/site-shopvivaliz --body "sh1MLgXhFlvycybhlShnvQMcEL8T2GWv"
+gh secret set OLIST_CLIENT_SECRET --repo fredmourao-ai/site-shopvivaliz --body "SEU_OLIST_CLIENT_SECRET_AQUI"
 
 gh secret set OLIST_REDIRECT_URI --repo fredmourao-ai/site-shopvivaliz --body "https://dev.shopvivaliz.com.br/olist/callback.php"
 ```
@@ -58,8 +58,8 @@ Se quer testar AGORA sem adicionar ao GitHub:
 ```bash
 # Criar .env local
 cat > .env << EOF
-OLIST_CLIENT_ID=tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553
-OLIST_CLIENT_SECRET=sh1MLgXhFlvycybhlShnvQMcEL8T2GWv
+OLIST_CLIENT_ID=SEU_OLIST_CLIENT_ID_AQUI
+OLIST_CLIENT_SECRET=SEU_OLIST_CLIENT_SECRET_AQUI
 OLIST_REDIRECT_URI=https://dev.shopvivaliz.com.br/olist/callback.php
 EOF
 
@@ -84,7 +84,7 @@ Após configurar os secrets:
 
 1. **Você abre o link de autorização:**
    ```
-   https://accounts.tiny.com.br/oauth/authorize?client_id=tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553&redirect_uri=https%3a%2f%2fdev.shopvivaliz.com.br%2folist%2fcallback.php&response_type=code&scope=produtos:read
+   https://accounts.tiny.com.br/oauth/authorize?client_id=SEU_OLIST_CLIENT_ID_AQUI&redirect_uri=https%3a%2f%2fdev.shopvivaliz.com.br%2folist%2fcallback.php&response_type=code&scope=produtos:read
    ```
 
 2. **Você autoriza e pega o CODE**

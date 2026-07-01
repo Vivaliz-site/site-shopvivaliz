@@ -23,7 +23,7 @@
 
 **Problema:**
 ```php
-$client_secret = getenv('OLIST_CLIENT_SECRET') ?: 'sh1MLgXhFlvycybhlShnvQMcEL8T2GWv';
+$client_secret = getenv('OLIST_CLIENT_SECRET') ?: 'SEU_OLIST_CLIENT_SECRET_AQUI';
 ```
 
 13 arquivos contêm fallback hardcoded com credenciais reais.
