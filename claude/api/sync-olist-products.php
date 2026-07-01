@@ -10,9 +10,12 @@
  * Uso HTTP:  GET/POST claude/api/sync-olist-products.php
  *
  * Variáveis de ambiente necessárias:
- *   OLIST_CLIENT_ID, OLIST_CLIENT_SECRET  - credenciais OAuth do Tiny/Olist
- *   MEDUSA_BACKEND_URL                    - ex. http://localhost:9000
- *   MEDUSA_ADMIN_API_KEY                  - API key de admin do Medusa
+ *   OLIST_CLIENT_ID, OLIST_CLIENT_SECRET      - credenciais OAuth do Tiny/Olist
+ *   MEDUSA_BACKEND_URL                        - ex. http://localhost:9000
+ *   MEDUSA_ADMIN_EMAIL, MEDUSA_ADMIN_PASSWORD - login do usuário admin Medusa
+ *                                                (as rotas /admin exigem um JWT de
+ *                                                sessão obtido via /auth/user/emailpass,
+ *                                                não uma API key estática)
  */
 
 class OlistSync
@@ -23,7 +26,9 @@ class OlistSync
     private string $clientId;
     private string $clientSecret;
     private string $medusaBackendUrl;
-    private string $medusaAdminApiKey;
+    private string $medusaAdminEmail;
+    private string $medusaAdminPassword;
+    private ?string $medusaAuthToken = null;
     private array $log = [];
 
     public function __construct(array $config = [])
@@ -31,7 +36,8 @@ class OlistSync
         $this->clientId = $config['olist_client_id'] ?? (getenv('OLIST_CLIENT_ID') ?: '');
         $this->clientSecret = $config['olist_client_secret'] ?? (getenv('OLIST_CLIENT_SECRET') ?: '');
         $this->medusaBackendUrl = rtrim($config['medusa_backend_url'] ?? (getenv('MEDUSA_BACKEND_URL') ?: 'http://localhost:9000'), '/');
-        $this->medusaAdminApiKey = $config['medusa_admin_api_key'] ?? (getenv('MEDUSA_ADMIN_API_KEY') ?: '');
+        $this->medusaAdminEmail = $config['medusa_admin_email'] ?? (getenv('MEDUSA_ADMIN_EMAIL') ?: '');
+        $this->medusaAdminPassword = $config['medusa_admin_password'] ?? (getenv('MEDUSA_ADMIN_PASSWORD') ?: '');
     }
 
     /** Executa a sincronização completa e retorna um relatório. */
@@ -44,9 +50,15 @@ class OlistSync
                 'Sincronização real requer credenciais do app Olist/Tiny ERP (passo humano).');
         }
 
-        if ($this->medusaAdminApiKey === '') {
-            return $this->fail('MEDUSA_ADMIN_API_KEY não configurada. ' .
-                'Gere uma API key de admin em Settings > API Key Management no Medusa Admin.');
+        if ($this->medusaAdminEmail === '' || $this->medusaAdminPassword === '') {
+            return $this->fail('MEDUSA_ADMIN_EMAIL / MEDUSA_ADMIN_PASSWORD não configurados. ' .
+                'Necessário um usuário admin Medusa (npx medusa user -e ... -p ...) para autenticar nas rotas /admin.');
+        }
+
+        try {
+            $this->medusaAuthToken = $this->loginToMedusa();
+        } catch (\Throwable $e) {
+            return $this->fail('Falha ao autenticar no Medusa: ' . $e->getMessage());
         }
 
         try {
@@ -100,6 +112,46 @@ class OlistSync
             'instructions' => 'Cadastre esta URL em https://app.tiny.com.br (Configurações > ' .
                 'Integrações > Webhooks) para eventos de produto/estoque.',
         ];
+    }
+
+    private function loginToMedusa(): string
+    {
+        $response = $this->httpPostJson($this->medusaBackendUrl . '/auth/user/emailpass', [
+            'email' => $this->medusaAdminEmail,
+            'password' => $this->medusaAdminPassword,
+        ]);
+
+        if (!isset($response['token'])) {
+            throw new \RuntimeException('Login Medusa sem token: ' . json_encode($response));
+        }
+
+        $this->addLog('Autenticado no Medusa Admin com sucesso');
+        return $response['token'];
+    }
+
+    private function httpPostJson(string $url, array $data): array
+    {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($data),
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+        ]);
+        $raw = curl_exec($ch);
+        if ($raw === false) {
+            $err = curl_error($ch);
+            curl_close($ch);
+            throw new \RuntimeException("Erro cURL POST {$url}: {$err}");
+        }
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        $decoded = json_decode($raw, true) ?? [];
+        if ($status >= 400) {
+            throw new \RuntimeException("POST {$url} retornou HTTP {$status}: {$raw}");
+        }
+        return $decoded;
     }
 
     private function getAccessToken(): string
@@ -165,7 +217,7 @@ class OlistSync
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 30,
             CURLOPT_HTTPHEADER => [
-                'Authorization: Bearer ' . $this->medusaAdminApiKey,
+                'Authorization: Bearer ' . $this->medusaAuthToken,
                 'Content-Type: application/json',
             ],
         ]);

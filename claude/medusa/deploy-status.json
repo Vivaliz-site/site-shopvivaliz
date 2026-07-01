@@ -1,0 +1,76 @@
+{
+  "generated_at": "2026-07-01T16:46:51Z",
+  "generated_by": "rotina autonoma de implantacao ShopVivaliz Medusa",
+  "status": "PRONTO_PARA_DEPLOY_COM_BLOCKERS_HUMANOS",
+  "steps": {
+    "1_database_setup": {
+      "status": "ok_local",
+      "detail": "Postgres 16 + Redis locais provisionados nesta sessao (efemeros). DATABASE_URL configurada em claude/medusa/apps/backend/.env (nao commitado). Banco gerenciado de producao (Supabase/Neon/Railway) requer conta humana - nao criado automaticamente.",
+      "blocker": "banco de producao gerenciado requer login humano"
+    },
+    "2_migrations_seed": {
+      "status": "ok",
+      "detail": "npx medusa db:migrate + seed-shopvivaliz-test-data.ts executados sem erro. 10 produtos de teste criados (Jeans, Tenis, Bone, Jaqueta, Camiseta, Vestido, Bermuda, Blusa, Bolsa, Meia) + regiao Brasil (BRL) + cliente de teste + usuario admin."
+    },
+    "3_payment_gateway": {
+      "status": "ok_test_keys",
+      "detail": "Modulo @medusajs/payment-stripe registrado em medusa-config.ts com chaves de teste publicas da Stripe (sk_test_4eC39.../pk_test_4eC39...). Provider pp_stripe_stripe confirmado ativo via /admin/payments/payment-providers e vinculado a regiao Brasil. PIX habilitavel via payment_method_types no PaymentIntent.",
+      "blocker": "PayPal nao configurado (credencial fornecida na tarefa era placeholder invalido); chaves Stripe reais da conta ShopVivaliz precisam ser geradas por humano"
+    },
+    "4_env_vars": {
+      "status": "ok",
+      "detail": "JWT_SECRET, COOKIE_SECRET, EHA_WEBHOOK_SECRET gerados com openssl rand -base64 32. .env.example atualizado (backend e raiz) documentando todas as variaveis novas."
+    },
+    "5_build_validation": {
+      "status": "ok",
+      "detail": "Backend: npm run build OK (medusa build, backend+admin dashboard compilados). Storefront: npm run build OK (149 paginas geradas, first load JS ~102kB)."
+    },
+    "6_local_testing": {
+      "status": "ok",
+      "detail": "npx medusa develop na porta 9000. GET /health retornou 200 OK. Login admin + /store/products confirmou 14 produtos (10 ShopVivaliz + 4 demo Medusa) acessiveis via publishable API key."
+    },
+    "7_marketplace_olist": {
+      "status": "ok_sem_credenciais_reais",
+      "detail": "claude/api/sync-olist-products.php criado com classe OlistSync (Olist/Tiny -> Medusa Admin API, autenticacao via login /auth/user/emailpass). Testado: (a) falha graciosamente e informativa sem OLIST_CLIENT_ID/SECRET; (b) fluxo de login+chamada Medusa validado end-to-end com usuario admin real. claude/api/olist/webhook.php criado como recebedor de webhook.",
+      "blocker": "sincronizacao real requer OLIST_CLIENT_ID/OLIST_CLIENT_SECRET validos e cadastro manual do webhook no painel Tiny/Olist"
+    },
+    "8_github_secrets": {
+      "status": "blocked",
+      "detail": "Sessao nao tem gh CLI nem API MCP de secrets do GitHub. Scripts setup-github-secrets.sh e setup-all-secrets-complete.sh ja existem no repo para uso humano com gh auth login.",
+      "blocker": "sem acesso a gh CLI / GitHub secrets API nesta sessao"
+    },
+    "9_deployment_prep": {
+      "status": "ok",
+      "detail": "claude/medusa/deploy.sh criado (build backend/storefront + migrations). claude/medusa/DEPLOY-CHECKLIST.md atualizado com secoes de pagamentos, GitHub secrets e achado de seguranca."
+    },
+    "10_deployment_checklist": {
+      "status": "ok",
+      "detail": "claude/medusa/DEPLOY-CHECKLIST.md contem checklist completo de pre-requisitos, variaveis e pos-deploy."
+    }
+  },
+  "security_findings": [
+    {
+      "severity": "high",
+      "file": "SETUP-OLIST-SECRETS.md",
+      "detail": "Credenciais reais OLIST_CLIENT_ID/OLIST_CLIENT_SECRET commitadas em texto puro no repositorio (pre-existente, nao introduzido nesta sessao). Recomenda-se rotacionar no painel Tiny/Olist."
+    },
+    {
+      "severity": "medium",
+      "file": ".tokens/olist-oauth-code.txt",
+      "detail": "Token OAuth Olist commitado em texto puro (pre-existente). Recomenda-se remover do historico e rotacionar."
+    }
+  ],
+  "blockers_criticos": [
+    "Banco de dados de producao (Supabase/Neon/Railway) - requer criacao de conta humana",
+    "GitHub Secrets - sem gh CLI/API disponivel nesta sessao para configurar automaticamente",
+    "Credenciais reais: Stripe (conta ShopVivaliz), PayPal sandbox, Olist/Tiny OAuth - todas requerem cadastro humano em paineis externos"
+  ],
+  "proximos_passos_humanos": [
+    "Criar projeto Postgres gerenciado e definir DATABASE_URL de producao",
+    "Rodar setup-github-secrets.sh com gh auth login configurado",
+    "Gerar chaves Stripe reais + sandbox PayPal + credenciais Olist/Tiny validas",
+    "Rotacionar segredos expostos em SETUP-OLIST-SECRETS.md e .tokens/olist-oauth-code.txt",
+    "Provisionar host Node.js (Railway/Render/Fly/VPS) para o backend + storefront (HostGator continua servindo apenas o PHP)",
+    "Rodar claude/medusa/deploy.sh no host de producao apos configurar as variaveis de ambiente"
+  ]
+}
