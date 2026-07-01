@@ -232,6 +232,7 @@ $imported = 0;
 $queryModesTried = [];
 $errors = [];
 $operational = false;
+$pageSize = min(100, max(1, $limit));
 
 $oauthUrl = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth?' . http_build_query([
     'client_id' => $clientId,
@@ -242,25 +243,45 @@ $oauthUrl = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/au
 ]);
 
 if ($apiTokenV2 !== '') {
-    $url = 'https://api.tiny.com.br/api2/produtos.pesquisa.php?' . http_build_query([
-        'token' => $apiTokenV2,
-        'formato' => 'json',
-        'pagina' => 1,
-        'limite' => $limit,
-    ]);
-    $queryModesTried[] = 'tiny_api_v2_pagina_1';
-    $result = svi_sync_http_get($url, ['Accept: application/json', 'User-Agent: ShopVivaliz-OlistSync/2.0']);
-    if ($result['status'] === 200) {
+    $seen = [];
+    for ($page = 1; $page <= 20; $page++) {
+        $url = 'https://api.tiny.com.br/api2/produtos.pesquisa.php?' . http_build_query([
+            'token' => $apiTokenV2,
+            'formato' => 'json',
+            'pagina' => $page,
+            'limite' => $pageSize,
+        ]);
+        $queryModesTried[] = 'tiny_api_v2_pagina_' . $page;
+        $result = svi_sync_http_get($url, ['Accept: application/json', 'User-Agent: ShopVivaliz-OlistSync/2.0']);
+        if ($result['status'] !== 200) {
+            $errors[] = 'tiny_v2_http_' . $result['status'];
+            break;
+        }
+
         $json = json_decode($result['body'], true);
         $items = $json['retorno']['produtos'] ?? [];
-        if (is_array($items)) {
-            $fetched = count($items);
-            $operational = true;
-        } else {
+        if (!is_array($items)) {
             $errors[] = 'tiny_v2_invalid_payload';
+            break;
         }
-    } else {
-        $errors[] = 'tiny_v2_http_' . $result['status'];
+
+        $batchCount = 0;
+        foreach ($items as $item) {
+            $produto = is_array($item['produto'] ?? null) ? $item['produto'] : $item;
+            $id = (string)($produto['id'] ?? $produto['idProduto'] ?? md5(json_encode($produto)));
+            if (isset($seen[$id])) {
+                continue;
+            }
+            $seen[$id] = true;
+            $batchCount++;
+        }
+
+        $fetched = count($seen);
+        $operational = true;
+
+        if ($batchCount === 0 || count($items) < $pageSize) {
+            break;
+        }
     }
 } elseif ($refreshToken !== '' && $clientId !== '' && $clientSecret !== '') {
     $queryModesTried[] = 'oauth_refresh_attempt';
