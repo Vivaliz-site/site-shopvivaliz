@@ -18,6 +18,21 @@ seed (5 produtos incluindo T-shirt, cliente teste) aplicados, backend/storefront
 subiram e o storefront renderizou a página do produto a partir da API real, webhook
 testado com assinatura válida/inválida/ausente.
 
+**Reverificado novamente em 2026-07-01** (novo container efêmero, `main` sincronizado
+com `origin/main`): Postgres 16 + Redis locais provisionados, `npm install` limpo em
+ambos os apps (backend: 1341 pacotes / ~23min; storefront: 544 pacotes), `npx medusa
+db:migrate` + seed inicial + `seed-shopvivaliz-test-data.ts` aplicados sem erros
+(região Brasil/BRL, 5 produtos ShopVivaliz, cliente `cliente.teste@shopvivaliz.com.br`),
+usuário admin criado, `npm run build` OK nos dois apps (backend: 4.9s backend + 24.5s
+frontend/admin; storefront: 109 páginas estáticas geradas). Publishable API key criada
+via Admin API e vinculada ao Default Sales Channel; `GET /store/products` retornou os
+9 produtos (4 demo + 5 ShopVivaliz). Storefront em modo produção (`npm run start`, porta
+8000) renderizou `/br/products/camiseta-shopvivaliz` com preço real da API (R$69,90).
+Webhook Medusa → EHA reverificado ponta a ponta com o backend real rodando: update de
+produto via Admin API disparou o subscriber, que fez POST assinado (HMAC-SHA256) para
+`medusa-webhook.php`, validado e enfileirado em `tasks-queue.json` (entrada de teste
+revertida após a validação para não poluir a fila real).
+
 **Nota:** `npm install` no backend falhava com `ERESOLVE` porque `@medusajs/ui` e
 `react-router-dom` estavam pinados em versões incompatíveis com o peer exigido por
 `@medusajs/draft-order@2.17.0` (corrigido no `package.json`: `@medusajs/ui@4.1.17`,
