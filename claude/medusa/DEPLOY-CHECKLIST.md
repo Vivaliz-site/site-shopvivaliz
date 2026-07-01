@@ -9,6 +9,8 @@
 | Produtos de teste (T-shirt, Jeans, Tênis, Boné, Jaqueta) | ✅ Criados em BRL/USD |
 | Cliente de teste | ✅ Criado (`cliente.teste@shopvivaliz.com.br`) |
 | Webhook Medusa → EHA | ✅ Testado ponta a ponta |
+| Pagamento Stripe/PIX (módulo `@medusajs/payment-stripe`, condicional a `STRIPE_API_KEY`) | 🆕 Adicionado 2026-07-01, aguardando chaves reais (ver seção 4) |
+| Sincronização Olist ⇄ Medusa (`sync-olist-products.php` + webhook `src/api/webhooks/olist/route.ts`) | 🆕 Adicionado 2026-07-01, aguardando credenciais Olist/Tiny (ver seção 4) |
 | Banco de dados de produção | ⏳ Pendente (ver passo 1) |
 | Deploy backend/storefront em produção | ⏳ Pendente (ver passo 2) |
 
@@ -101,6 +103,43 @@ webhook responde 401.
 - [ ] Migrar produtos reais do Olist/Shopee para o catálogo Medusa
 - [ ] Configurar backups automáticos do banco de produção
 - [ ] Teste de carga (fora do escopo desta sessão)
+
+## 4. Pagamentos (Stripe/PIX) e sincronização Olist
+
+Adicionado em 2026-07-01 (portado de sessões anteriores que já haviam
+validado o desenho, mas cujo branch não tinha sido integrado a `main`):
+
+- **Pagamento**: `medusa-config.ts` registra `@medusajs/payment-stripe`
+  automaticamente quando `STRIPE_API_KEY` está definido no `.env` do backend
+  (senão nenhum módulo de pagamento é carregado — comportamento antigo
+  preservado). PIX no Brasil é feito enviando
+  `payment_method_types: ["pix"]` ao criar o PaymentIntent do Stripe.
+  Variáveis: `STRIPE_API_KEY`, `STRIPE_PUBLIC_KEY`, `STRIPE_WEBHOOK_SECRET`
+  (chaves de teste em https://dashboard.stripe.com/test/apikeys). PayPal
+  ainda não tem credenciais configuradas (`PAYPAL_CLIENT_ID/SECRET`
+  documentados em `.env.example`, mas sem provedor Medusa registrado ainda).
+- **Olist → Medusa (pull/lote)**: `claude/api/sync-olist-products.php`
+  (classe `OlistSync`) busca produtos na API Tiny/Olist e faz upsert via
+  Admin API do Medusa (login JWT, não API key estática). Requer
+  `OLIST_CLIENT_ID`, `OLIST_CLIENT_SECRET`, `MEDUSA_BACKEND_URL`,
+  `MEDUSA_ADMIN_EMAIL`, `MEDUSA_ADMIN_PASSWORD`.
+- **Olist → Medusa (webhook/push por SKU)**: `src/api/webhooks/olist/route.ts`
+  recebe `{ sku, preco_venda, estoque_atual }` e atualiza preço/estoque da
+  variante correspondente, com verificação de assinatura HMAC-SHA256
+  (`OLIST_WEBHOOK_SECRET`) igual ao padrão já usado no bridge EHA.
+  `claude/api/olist/webhook.php` é o receptor do lado PHP (Olist chama esta
+  URL), que dispara `OlistSync`.
+- Secrets pendentes de configurar (Stripe, PayPal, Olist, EHA) estão listados
+  com comandos prontos em `claude/medusa/GITHUB_SECRETS_TODO.md`.
+
+⚠️ **Achado de segurança (2026-07-01):** um `OLIST_CLIENT_ID`/`OLIST_CLIENT_SECRET`
+reais estavam commitados em texto puro em vários arquivos (`SETUP-OLIST-SECRETS.md`,
+`GITHUB-SECRETS-TO-ADD.md`, `scripts/olist-*.py`) e um authorization code OAuth
+estava versionado em `.tokens/olist-oauth-code.txt`. Os valores nos arquivos
+atuais foram redigidos e `.tokens/` foi removido do git e adicionado ao
+`.gitignore` nesta sessão, mas **o segredo antigo permanece no histórico do
+git**. Recomenda-se rotacionar o client secret no painel Tiny/Olist o quanto
+antes; ver `claude/medusa/GITHUB_SECRETS_TODO.md` para detalhes.
 
 ## Rodando localmente (resumo)
 
