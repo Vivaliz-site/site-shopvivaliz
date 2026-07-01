@@ -78,7 +78,7 @@ $elapsed     = round(microtime(true) - $t0, 2);
 $ts          = date('Y-m-d H:i:s') . ' UTC';
 
 // Lê o log EHA se existir (não crítico)
-$log_path    = dirname(__DIR__) . '/automation/eha/reports/eha.log';
+$log_path    = dirname(__DIR__) . '/automation/eha/reports/eha_events.txt';
 $log_lines   = @file($log_path) ?: [];
 $recent_log  = array_reverse(array_slice($log_lines, -30));
 
@@ -251,15 +251,24 @@ if ($gh_raw) {
     </div>
     <table>
         <thead>
-            <tr><th>Run</th><th>Status</th><th>Elapsed</th><th>Checkout</th><th>API</th><th>DB</th><th>E2E</th><th>Erros</th><th>Timestamp (UTC)</th></tr>
+            <tr><th>Run</th><th>Status</th><th>Ação</th><th>Elapsed</th><th>Checkout</th><th>API</th><th>DB</th><th>E2E</th><th>Erros</th><th>Timestamp (UTC)</th></tr>
         </thead>
         <tbody>
         <?php foreach ($eha_runs_recent as $r):
             $ok = ($r['status'] ?? '') === 'READY_FOR_PRODUCTION';
+            $act = $r['action'] ?? '—';
+            $act_color = match($act) {
+                'DEPLOY_OK'  => '#22c55e',
+                'CREATE_PR'  => '#f59e0b',
+                'AUTO_FIX'   => '#38bdf8',
+                'ROLLBACK'   => '#ef4444',
+                default      => '#64748b',
+            };
         ?>
             <tr>
                 <td>#<?= htmlspecialchars((string)($r['run_id'] ?? '?')) ?></td>
                 <td><span class="<?= $ok ? 'ok' : 'fail' ?>"><?= $ok ? '✓ OK' : '✗ BLOCKED' ?></span></td>
+                <td><span style="color:<?= $act_color ?>;font-weight:600;font-size:.78rem"><?= htmlspecialchars($act) ?></span></td>
                 <td style="color:#94a3b8"><?= number_format((float)($r['elapsed_s'] ?? 0), 2) ?>s</td>
                 <td class="<?= ($r['checkout_ok'] ?? false) ? 'ok' : 'fail' ?>"><?= ($r['checkout_ok'] ?? false) ? '✓' : '✗' ?></td>
                 <td class="<?= ($r['api_ok'] ?? false) ? 'ok' : 'fail' ?>"><?= ($r['api_ok'] ?? false) ? '✓' : '✗' ?></td>
@@ -315,7 +324,7 @@ if ($gh_raw) {
     ?></div>
     <?php else: ?>
     <h2>Log EHA</h2>
-    <div class="log" style="color:#475569">Nenhum log EHA disponível no servidor ainda. O CI roda no GitHub Actions.</div>
+    <div class="log" style="color:#475569">Nenhum log EHA disponível ainda — será populado a partir do próximo run do CI.</div>
     <?php endif; ?>
 </body>
 </html>
