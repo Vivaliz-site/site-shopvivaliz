@@ -82,6 +82,8 @@ $baseUrl = svi_base_url();
 
 $update = svi_fetch_json($baseUrl . '/installer/update-applied-check.php');
 $sync = svi_fetch_json($baseUrl . '/olist/sync-products.php?dry_run=1&expected=' . $expected . '&limit=' . $limit);
+$melhorEnvio = svi_fetch_json($baseUrl . '/api/melhorenvio/diagnostic.php?cep=35500025');
+$pagarme = svi_fetch_json($baseUrl . '/api/pagarme/diagnostic.php');
 $beforeCount = (int)($sync['json']['before_count'] ?? 0);
 $afterCount = (int)($sync['json']['after_count'] ?? 0);
 $baselineExpected = $beforeCount > 0 ? min($expected, $beforeCount) : $expected;
@@ -91,10 +93,14 @@ $checks = [
     'Produto com campo CEP' => (bool)($update['json']['checks']['Produto com campo CEP'] ?? false),
     'Checkout com PIX' => (bool)($update['json']['checks']['Checkout com PIX'] ?? false),
     'Checkout com boleto' => (bool)($update['json']['checks']['Checkout com boleto'] ?? false),
+    'Diagnostico Melhor Envio presente' => (bool)($update['json']['checks']['Diagnostico Melhor Envio presente'] ?? false),
+    'Diagnostico Pagar.me presente' => (bool)($update['json']['checks']['Diagnostico Pagar.me presente'] ?? false),
     'OAuth Olist solicita offline_access' => (bool)($sync['json']['oauth']['has_offline_access'] ?? false),
     'OAuth Olist solicita prompt consent' => (bool)($sync['json']['oauth']['has_prompt_consent'] ?? false),
     'Olist/Tiny sincronizacao automatica sem erro operacional' => (bool)($sync['json']['operational'] ?? false),
     'Olist/Tiny produtos esperados' => $afterCount >= $baselineExpected,
+    'Melhor Envio pronto para cotacao' => (bool)($melhorEnvio['json']['ok'] ?? false),
+    'Pagar.me pronto para autenticacao' => (bool)($pagarme['json']['ok'] ?? false),
 ];
 
 $ok = !in_array(false, $checks, true);
@@ -109,6 +115,8 @@ echo json_encode([
     'limit' => $limit,
     'checks' => $checks,
     'olist_sync' => $sync['json'],
+    'melhorenvio' => $melhorEnvio['json'],
+    'pagarme' => $pagarme['json'],
     'update_applied' => $update['json'],
     'generated_at' => date('c'),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
