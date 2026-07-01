@@ -1,36 +1,26 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/core/event_collector.php';
+require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/core/metrics_engine.php';
-require_once __DIR__ . '/core/decision_engine.php';
-require_once __DIR__ . '/evolution/conversion_analyzer.php';
-require_once __DIR__ . '/evolution/ux_optimizer.php';
-require_once __DIR__ . '/evolution/product_ranker.php';
-require_once __DIR__ . '/actions/safe_layout_applier.php';
-require_once __DIR__ . '/actions/ab_test_engine.php';
-require_once __DIR__ . '/git/branch_manager.php';
-require_once __DIR__ . '/git/pr_generator.php';
+require_once __DIR__ . '/directors/conversion_director.php';
+require_once __DIR__ . '/directors/ux_director.php';
+require_once __DIR__ . '/directors/gitops_director.php';
 
-$sample = [
-    'visits' => 1000,
-    'sales' => 18,
-    'checkout_start' => 120,
-    'orders' => 40,
-    'bounce_rate' => 0.51,
-];
-
-$metrics = autodev_metrics($sample);
-$decision = autodev_decide($metrics);
-$proposal = autodev_ux_optimizer($decision);
-$branch = autodev_branch_name($decision);
+$hours = min(168, max(1, (int)($argv[1] ?? $_GET['hours'] ?? 24)));
+$conversion = autodev_conversion_director($hours);
+$decision = (string)($conversion['decision'] ?? 'no_action');
+$ux = autodev_ux_director($decision);
+$gitops = autodev_gitops_director($decision);
+$metrics = autodev_calculate_metrics($hours);
+autodev_save_metrics_snapshot($metrics);
 
 echo json_encode([
     'ok' => true,
+    'hours' => $hours,
     'metrics' => $metrics,
     'decision' => $decision,
-    'proposal' => $proposal,
-    'ab_test' => autodev_create_ab_test($decision),
-    'layout' => autodev_safe_layout_apply($proposal),
-    'pr' => autodev_pr_payload('AutoDev Evolution System', $branch),
+    'conversion' => $conversion,
+    'ux' => $ux,
+    'gitops' => $gitops,
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;

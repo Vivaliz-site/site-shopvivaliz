@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once dirname(__DIR__) . '/core/metrics_engine.php';
+
 /**
  * AutoDev Evolution — Conversion Analyzer
  *
@@ -263,6 +265,33 @@ function generate_report(int $hours = 24): string
     $lines[] = '=== End of Report ===';
 
     return implode(PHP_EOL, $lines);
+}
+
+function autodev_conversion_snapshot(int $hours = 24): array
+{
+    $metrics = autodev_calculate_metrics($hours);
+    $funnel = autodev_get_funnel($hours);
+
+    return [
+        'summary' => analyze_conversion([
+            'visits' => $funnel['visits'],
+            'sales' => $funnel['orders'],
+            'checkout_start' => $funnel['checkout_start'],
+            'orders' => $funnel['orders'],
+            'revenue' => (float)($metrics['revenue_estimate'] ?? 0),
+            'session_product_views' => $funnel['product_views'],
+        ]),
+        'metrics' => $metrics,
+        'funnel' => $funnel,
+        'drop_points' => get_drop_points([
+            'visit' => $funnel['visits'],
+            'product_view' => $funnel['product_views'],
+            'add_to_cart' => $funnel['add_to_cart'],
+            'checkout_start' => $funnel['checkout_start'],
+            'checkout_submit' => $funnel['checkout_submit'],
+            'purchase' => $funnel['orders'],
+        ]),
+    ];
 }
 
 // ─── Internal helpers ──────────────────────────────────────────────────────────

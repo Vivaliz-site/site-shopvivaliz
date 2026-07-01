@@ -1,15 +1,11 @@
 <?php
-/**
- * AutoDev Metrics Engine
- * Computes conversion funnel metrics from raw events, persists snapshots.
- */
-
 declare(strict_types=1);
 
 require_once __DIR__ . '/event_collector.php';
+require_once dirname(__DIR__) . '/bootstrap.php';
 
-define('METRICS_HISTORY_PATH', __DIR__ . '/../../data/metrics_history.json');
-define('MAX_SNAPSHOTS', 48);
+const AUTODEV_METRICS_HISTORY_PATH = __DIR__ . '/../data/metrics_history.json';
+const AUTODEV_MAX_SNAPSHOTS = 96;
 
 /**
  * Derive a stable session key from IP + User-Agent stored in an event record.
@@ -17,9 +13,9 @@ define('MAX_SNAPSHOTS', 48);
  * @param array $event  A raw event record from get_events().
  * @return string
  */
-function _session_key(array $event): string
+function autodev_session_key(array $event): string
 {
-    return md5(($event['ip'] ?? '') . '|' . ($event['user_agent'] ?? ''));
+    return (string)($event['session_id'] ?? md5(($event['ip'] ?? '') . '|' . ($event['user_agent'] ?? '')));
 }
 
 /**
@@ -36,10 +32,10 @@ function _session_key(array $event): string
  * @param int $hours  Look-back window in hours.
  * @return array
  */
-function calculate_metrics(int $hours = 24): array
+function autodev_calculate_metrics(int $hours = 24): array
 {
     $since  = time() - ($hours * 3600);
-    $events = get_events($since);
+    $events = autodev_get_events($since);
 
     // Group events by session key
     $sessions        = [];   // session_key => [event_type, …]
@@ -48,7 +44,7 @@ function calculate_metrics(int $hours = 24): array
     $checkout_starts = 0;
 
     foreach ($events as $ev) {
-        $key  = _session_key($ev);
+        $key  = autodev_session_key($ev);
         $type = $ev['event'] ?? '';
 
         $sessions[$key][] = $type;
@@ -60,7 +56,7 @@ function calculate_metrics(int $hours = 24): array
             $checkout_starts++;
         }
         if ($type === 'product_view') {
-            $product_id = $ev['data']['product_id'] ?? 'unknown';
+            $product_id = $ev['data']['sku'] ?? $ev['data']['product_id'] ?? 'unknown';
             $product_views[$product_id] = ($product_views[$product_id] ?? 0) + 1;
         }
     }
@@ -101,7 +97,7 @@ function calculate_metrics(int $hours = 24): array
     $revenue_estimate = round($orders * $avg_order_value, 2);
 
     return [
-        'computed_at'      => date('Y-m-d H:i:s'),
+        'computed_at'      => date('c'),
         'window_hours'     => $hours,
         'sessions_count'   => $session_count,
         'orders'           => $orders,
@@ -122,19 +118,19 @@ function calculate_metrics(int $hours = 24): array
  * @return array  ['visits' => int, 'product_views' => int, 'add_to_cart' => int,
  *                 'checkout_start' => int, 'orders' => int]
  */
-function get_funnel(int $hours = 24): array
+function autodev_get_funnel(int $hours = 24): array
 {
     $since        = time() - ($hours * 3600);
-    $funnel_steps = ['page_view', 'product_view', 'add_to_cart', 'checkout_start', 'order_complete'];
+    $funnel_steps = ['page_view', 'product_view', 'add_to_cart', 'checkout_start', 'checkout_submit', 'order_complete'];
     $step_sessions = array_fill_keys($funnel_steps, []);
 
-    $events = get_events($since);
+    $events = autodev_get_events($since);
     foreach ($events as $ev) {
         $type = $ev['event'] ?? '';
         if (!in_array($type, $funnel_steps, true)) {
             continue;
         }
-        $key = _session_key($ev);
+        $key = autodev_session_key($ev);
         $step_sessions[$type][$key] = true;
     }
 
@@ -144,6 +140,7 @@ function get_funnel(int $hours = 24): array
         'product_views'  => count($step_sessions['product_view']),
         'add_to_cart'    => count($step_sessions['add_to_cart']),
         'checkout_start' => count($step_sessions['checkout_start']),
+        'checkout_submit'=> count($step_sessions['checkout_submit']),
         'orders'         => count($step_sessions['order_complete']),
     ];
 }
@@ -154,55 +151,14 @@ function get_funnel(int $hours = 24): array
  * @param array $metrics  Result of calculate_metrics().
  * @return bool
  */
-function save_metrics_snapshot(array $metrics): bool
+function autodev_save_metrics_snapshot(array $metrics): bool
 {
-    $dir = dirname(METRICS_HISTORY_PATH);
-    if (!is_dir($dir)) {
-        if (!mkdir($dir, 0755, true) && !is_dir($dir)) {
-            error_log('[AutoDev] Cannot create data directory for metrics history.');
-            return false;
-        }
-    }
-
-    $mode = file_exists(METRICS_HISTORY_PATH) ? 'r+' : 'w+';
-    $fh   = fopen(METRICS_HISTORY_PATH, $mode);
-    if ($fh === false) {
-        error_log('[AutoDev] Cannot open metrics_history.json.');
-        return false;
-    }
-
-    flock($fh, LOCK_EX);
-
-    $content = '';
-    while (!feof($fh)) {
-        $content .= fread($fh, 8192);
-    }
-
-    $history = [];
-    if ($content !== '') {
-        $decoded = json_decode($content, true);
-        if (is_array($decoded)) {
-            $history = $decoded;
-        }
-    }
-
+    $history = autodev_load_metrics_history();
     $history[] = $metrics;
-
-    // Trim to MAX_SNAPSHOTS most recent entries
-    if (count($history) > MAX_SNAPSHOTS) {
-        $history = array_slice($history, -MAX_SNAPSHOTS);
+    if (count($history) > AUTODEV_MAX_SNAPSHOTS) {
+        $history = array_slice($history, -AUTODEV_MAX_SNAPSHOTS);
     }
-
-    $json = json_encode($history, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
-    rewind($fh);
-    ftruncate($fh, 0);
-    fwrite($fh, $json . "\n");
-
-    flock($fh, LOCK_UN);
-    fclose($fh);
-
-    return true;
+    return autodev_write_json(AUTODEV_METRICS_HISTORY_PATH, $history);
 }
 
 /**
@@ -210,27 +166,7 @@ function save_metrics_snapshot(array $metrics): bool
  *
  * @return array  Array of metric records, oldest first.
  */
-function load_metrics_history(): array
+function autodev_load_metrics_history(): array
 {
-    if (!file_exists(METRICS_HISTORY_PATH)) {
-        return [];
-    }
-
-    $fh = fopen(METRICS_HISTORY_PATH, 'r');
-    if ($fh === false) {
-        error_log('[AutoDev] Cannot open metrics_history.json for reading.');
-        return [];
-    }
-
-    flock($fh, LOCK_SH);
-    $content = stream_get_contents($fh);
-    flock($fh, LOCK_UN);
-    fclose($fh);
-
-    if ($content === '' || $content === false) {
-        return [];
-    }
-
-    $data = json_decode($content, true);
-    return is_array($data) ? $data : [];
+    return autodev_read_json(AUTODEV_METRICS_HISTORY_PATH, []);
 }
