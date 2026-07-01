@@ -266,7 +266,7 @@ Content-Type: text/plain; charset=UTF-8");
         <?php if ($pedidoCriado): ?>
             <section class="success-panel">
                 <h2>Pedido recebido com sucesso</h2>
-                <p class="muted">Seu pedido foi registrado e entrou na fila de atendimento da ShopVivaliz.</p>
+                <p class="muted">Seu pedido foi registrado e entrou na fila de atendimento da Vivaliz.</p>
                 <div class="order-code"><?php echo htmlspecialchars((string)$pedidoId, ENT_QUOTES, 'UTF-8'); ?></div>
                 <p class="muted">Seu pedido foi registrado. Entraremos em contato em breve para confirmar o pagamento e prazo de entrega.</p>
                 <?php
