@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 return array(
-    'version' => '9.2.94',
-    'version_code' => 90294,
+    'version' => '9.2.95',
+    'version_code' => 90295,
     'channel' => 'dev',
-    'codename' => 'installer-sync-observability',
+    'codename' => 'gateway-diagnostics-hardening',
     'release_type' => 'cumulative',
     'generated_at' => '2026-07-01T00:00:00-03:00',
     'requires_update_php_sync' => true,
@@ -21,5 +21,6 @@ return array(
         'Reforca guarda de segredos locais, cookies, HARs, perfis Chrome e storage privado no Git.',
         'Versiona update-applied-check e auto-routines no repositorio para diagnostico consistente apos deploy.',
         'Moderniza o sync Olist/Tiny para ler secrets persistidos, expor status operacional e manter OAuth com offline_access.',
+        'Adiciona diagnostico versionado de Melhor Envio e Pagar.me para diferenciar endpoint ativo de gateway realmente autenticado.',
     ),
 );
