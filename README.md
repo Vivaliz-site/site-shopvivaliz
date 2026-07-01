@@ -2,6 +2,22 @@
 
 Código-fonte e automações do e-commerce ShopVivaliz operado por **Gemini + Claude + ChatGPT** trabalhando autonomamente.
 
+## Direção de plataforma
+
+O projeto está evoluindo para uma base pronta com **MedusaJS** como backend principal, mantendo o stack PHP atual durante a transição.
+
+### Arquitetura alvo
+
+- **Backend:** MedusaJS
+- **Frontend:** Next.js Commerce
+- **Banco:** PostgreSQL
+- **Cache/fila:** Redis
+- **Integrações:** Olist, Tiny e marketplaces
+
+### Documento de migração
+
+Veja o plano em [`docs/medusa-migracao-roadmap.md`](docs/medusa-migracao-roadmap.md).
+
 ## 🤖 Trio IA Autônomo
 
 Seu ecommerce agora funciona com inteligência artificial 24/7:
