@@ -28,7 +28,7 @@ function http_check(string $url, int $timeout = 8): array {
 
 // Health checks em paralelo via múltiplas requisições
 $checks = [
-    'home'     => $base . '/',
+    'homepage' => $base . '/claude/',
     'api'      => $base . '/api/health.php',
     'catalogo' => $base . '/catalogo.php',
     'carrinho' => $base . '/carrinho.php',
@@ -64,14 +64,14 @@ foreach ($handles as $key => $ch) {
 }
 curl_multi_close($mh);
 
-$home_ok     = ($results['home']['code'] ?? 0) === 200;
+$homepage_ok = ($results['homepage']['code'] ?? 0) === 200;
 $api_ok      = in_array($results['api']['code'] ?? 0, [200, 204], true);
 $catalogo_ok = ($results['catalogo']['code'] ?? 0) < 500;
 $carrinho_ok = ($results['carrinho']['code'] ?? 0) < 500
                && (str_contains($results['carrinho']['body'], 'carrinho')
                    || str_contains($results['carrinho']['body'], 'cart'));
 
-$all_ok      = $home_ok && $api_ok && $catalogo_ok && $carrinho_ok;
+$all_ok      = $homepage_ok && $api_ok && $catalogo_ok && $carrinho_ok;
 $status      = $all_ok ? 'READY_FOR_PRODUCTION' : 'BLOCKED';
 
 $elapsed     = round(microtime(true) - $t0, 2);
@@ -137,8 +137,8 @@ if ($gh_raw) {
     <div class="grid">
         <div class="card">
             <div class="card-label">Homepage</div>
-            <div class="card-value <?= $home_ok ? 'ok' : 'fail' ?>"><?= $home_ok ? 'OK' : 'FALHOU' ?></div>
-            <div class="card-sub">HTTP <?= $results['home']['code'] ?> · <?= $results['home']['ms'] ?>ms</div>
+            <div class="card-value <?= $homepage_ok ? 'ok' : 'fail' ?>"><?= $homepage_ok ? 'OK' : 'FALHOU' ?></div>
+            <div class="card-sub">HTTP <?= $results['homepage']['code'] ?> · <?= $results['homepage']['ms'] ?>ms</div>
         </div>
         <div class="card">
             <div class="card-label">API Health</div>
