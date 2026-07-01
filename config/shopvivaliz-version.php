@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 return array(
-    'version' => '9.2.95',
-    'version_code' => 90295,
+    'version' => '9.2.96',
+    'version_code' => 90296,
     'channel' => 'dev',
-    'codename' => 'gateway-diagnostics-hardening',
+    'codename' => 'gateway-secret-injection',
     'release_type' => 'cumulative',
     'generated_at' => '2026-07-01T00:00:00-03:00',
     'requires_update_php_sync' => true,
@@ -22,5 +22,6 @@ return array(
         'Versiona update-applied-check e auto-routines no repositorio para diagnostico consistente apos deploy.',
         'Moderniza o sync Olist/Tiny para ler secrets persistidos, expor status operacional e manter OAuth com offline_access.',
         'Adiciona diagnostico versionado de Melhor Envio e Pagar.me para diferenciar endpoint ativo de gateway realmente autenticado.',
+        'Prepara o deploy para injetar secrets de Melhor Envio e Pagar.me no .env temporario do servidor e aceita aliases de nome para o token de frete.',
     ),
 );
