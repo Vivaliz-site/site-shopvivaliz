@@ -213,7 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
     </style>
 </head>
 <body>
-<?php include __DIR__ . '/../includes/navbar.php'; ?>
+<?php include __DIR__ . '/../navbar.php'; ?>
 <main class="checkout-shell">
     <div class="container">
         <?php if ($pedidoCriado): ?>
