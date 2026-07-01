@@ -1,89 +1,264 @@
 <?php
 /**
- * ShopVivaliz - Homepage Principal
- * Catálogo de Produtos com Integração Olist
+ * ShopVivaliz - Homepage V2 (V17)
+ * Busca rápida + lazy loading + cart localStorage + 24 produtos por score
  */
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
-// Carregar configurações
 require_once __DIR__ . '/constants.php';
 
-// Carregar produtos
 $produtos = [];
 $arquivo_produtos = __DIR__ . '/../olist/produtos-olist-array.php';
 if (file_exists($arquivo_produtos)) {
     include $arquivo_produtos;
     if (!empty($GLOBALS['produtos_olist'])) {
-        $produtos = array_slice($GLOBALS['produtos_olist'], 0, 12);
+        $todos = $GLOBALS['produtos_olist'];
+
+        // Ordena por score: tem imagem (2pts) + tem preço (1pt) — produtos melhores primeiro
+        usort($todos, function($a, $b) {
+            $sa = (!empty($a['url_imagem']) ? 2 : 0) + ($a['preco'] > 0 ? 1 : 0);
+            $sb = (!empty($b['url_imagem']) ? 2 : 0) + ($b['preco'] > 0 ? 1 : 0);
+            return $sb - $sa;
+        });
+
+        $produtos = array_slice($todos, 0, 24);
+
+        // Categorias únicas para atalhos rápidos
+        $categorias_raw = array_filter(array_unique(array_column($todos, 'categoria')));
+        sort($categorias_raw);
+        $categorias = array_slice($categorias_raw, 0, 8);
     }
 }
+
+$total_geral = !empty($GLOBALS['produtos_olist']) ? count($GLOBALS['produtos_olist']) : 0;
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="ShopVivaliz - Loja online com 198 produtos de qualidade">
-    <title>ShopVivaliz - Sua Loja Online de Confiança</title>
+    <meta name="description" content="ShopVivaliz — Loja online com <?= $total_geral ?: 198 ?> produtos de qualidade. Entrega rápida e segura.">
+    <title>ShopVivaliz — Sua Loja Online de Confiança</title>
     <link rel="stylesheet" href="/css/responsive.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background: #f8f9fa; margin: 0; padding: 0; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
-        .hero { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 60px 0; text-align: center; }
-        .hero h1 { font-size: 3em; margin: 0 0 20px 0; }
-        .hero p { font-size: 1.2em; margin: 0 0 30px 0; }
-        .btn { display: inline-block; padding: 12px 30px; background: white; color: #667eea; border-radius: 5px; text-decoration: none; font-weight: 600; }
-        .btn:hover { background: #f0f0f0; }
-        .products { padding: 60px 0; }
-        .products h2 { text-align: center; font-size: 2em; margin-bottom: 40px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 30px; }
-        .product-card { background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); transition: transform 0.3s; }
-        .product-card:hover { transform: translateY(-5px); box-shadow: 0 5px 20px rgba(0,0,0,0.15); }
-        .product-image { height: 200px; background: #e0e0e0; display: flex; align-items: center; justify-content: center; font-size: 3em; }
-        .product-info { padding: 20px; }
-        .product-name { font-size: 1.1em; font-weight: 600; margin-bottom: 10px; }
-        .product-price { font-size: 1.5em; color: #667eea; font-weight: 700; margin-bottom: 15px; }
-        .btn-comprar { width: 100%; padding: 10px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; }
-        .btn-comprar:hover { background: #764ba2; }
-        .dashboard-link { position: fixed; bottom: 20px; right: 20px; padding: 15px 20px; background: #333; color: white; border-radius: 50px; text-decoration: none; font-size: 0.9em; }
-        .dashboard-link:hover { background: #555; }
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:'Inter',sans-serif;background:#f8f9fa;color:#1f2937}
+        a{text-decoration:none;color:inherit}
+
+        /* NAVBAR */
+        .sv-nav{background:#1e3a5f;padding:0 20px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:100}
+        .sv-nav-brand{color:white;font-size:1.25rem;font-weight:700}
+        .sv-nav-links{display:flex;gap:20px;align-items:center}
+        .sv-nav-links a{color:rgba(255,255,255,.85);font-size:.9rem;transition:color .2s}
+        .sv-nav-links a:hover{color:white}
+        .sv-cart-btn{background:#22c55e;color:white!important;padding:6px 14px;border-radius:20px;font-weight:600;font-size:.85rem;display:flex;align-items:center;gap:6px}
+        .sv-cart-count{background:white;color:#1e3a5f;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;display:none}
+        @media(max-width:640px){.sv-nav-links a:not(.sv-cart-btn){display:none}}
+
+        /* HERO */
+        .hero{background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 60%,#22c55e 140%);color:white;padding:60px 20px 48px;text-align:center}
+        .hero h1{font-size:clamp(1.8rem,5vw,3rem);font-weight:800;margin-bottom:12px}
+        .hero p{font-size:1.1rem;opacity:.9;margin-bottom:32px}
+        .hero-search{max-width:520px;margin:0 auto;display:flex;gap:8px}
+        .hero-search input{flex:1;padding:14px 18px;border-radius:8px;border:none;font-size:1rem;outline:none}
+        .hero-search button{padding:14px 22px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:700;font-size:1rem;cursor:pointer;white-space:nowrap}
+        .hero-search button:hover{background:#16a34a}
+        .hero-stats{margin-top:20px;font-size:.9rem;opacity:.75}
+
+        /* CATEGORIAS */
+        .sv-cats{background:white;padding:20px;border-bottom:1px solid #e5e7eb}
+        .sv-cats-inner{max-width:1200px;margin:0 auto;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+        .sv-cats-label{font-size:.8rem;font-weight:600;color:#6b7280;white-space:nowrap}
+        .sv-cat-chip{padding:6px 14px;border:1.5px solid #e5e7eb;border-radius:20px;font-size:.82rem;font-weight:500;cursor:pointer;transition:all .2s;white-space:nowrap}
+        .sv-cat-chip:hover{border-color:#2563eb;color:#2563eb}
+
+        /* SEÇÃO PRODUTOS */
+        .sv-section{max-width:1200px;margin:0 auto;padding:40px 20px}
+        .sv-section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}
+        .sv-section-head h2{font-size:1.5rem;font-weight:700}
+        .sv-see-all{color:#2563eb;font-size:.9rem;font-weight:600;border:1.5px solid #2563eb;padding:6px 16px;border-radius:6px;transition:all .2s}
+        .sv-see-all:hover{background:#2563eb;color:white}
+
+        /* GRID */
+        .sv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:20px}
+        .sv-card{background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);transition:transform .25s,box-shadow .25s;display:flex;flex-direction:column}
+        .sv-card:hover{transform:translateY(-4px);box-shadow:0 6px 20px rgba(0,0,0,.12)}
+        .sv-card-img{height:180px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+        .sv-card-img img{width:100%;height:100%;object-fit:cover;transition:transform .3s}
+        .sv-card:hover .sv-card-img img{transform:scale(1.04)}
+        .sv-card-img-placeholder{font-size:3rem;color:#9ca3af}
+        .sv-card-body{padding:16px;flex:1;display:flex;flex-direction:column;gap:8px}
+        .sv-card-name{font-size:.9rem;font-weight:600;color:#1f2937;line-height:1.4;flex:1}
+        .sv-card-price{font-size:1.3rem;font-weight:800;color:#1e3a5f}
+        .sv-card-price-empty{font-size:.85rem;color:#9ca3af}
+        .sv-card-actions{display:flex;gap:8px;margin-top:4px}
+        .sv-btn-detail{flex:0 0 auto;padding:9px 12px;border:1.5px solid #1e3a5f;color:#1e3a5f;border-radius:6px;font-size:.82rem;font-weight:600;cursor:pointer;background:white;transition:all .2s}
+        .sv-btn-detail:hover{background:#1e3a5f;color:white}
+        .sv-btn-cart{flex:1;padding:9px 0;background:#22c55e;color:white;border:none;border-radius:6px;font-size:.85rem;font-weight:700;cursor:pointer;transition:background .2s}
+        .sv-btn-cart:hover{background:#16a34a}
+        .sv-btn-cart.added{background:#16a34a}
+
+        /* TOAST */
+        .sv-toast{position:fixed;bottom:24px;right:24px;background:#1f2937;color:white;padding:14px 20px;border-radius:10px;font-size:.9rem;font-weight:600;opacity:0;transform:translateY(10px);transition:all .3s;z-index:999;pointer-events:none;max-width:280px}
+        .sv-toast.show{opacity:1;transform:translateY(0)}
+
+        /* RODAPÉ */
+        .sv-footer{background:#1e3a5f;color:rgba(255,255,255,.7);text-align:center;padding:24px 20px;font-size:.85rem;margin-top:60px}
     </style>
 </head>
 <body>
-    <div class="hero">
-        <div class="container">
-            <h1>🛍️ ShopVivaliz</h1>
-            <p>Sua Loja Online de Confiança</p>
-            <p style="font-size: 1em; margin: 20px 0;">198 Produtos • Entrega Rápida • Qualidade Garantida</p>
-            <a href="/claude/catalogo/" class="btn">Ver Catálogo Completo →</a>
-        </div>
+
+<!-- NAVBAR -->
+<nav class="sv-nav">
+    <a href="/" class="sv-nav-brand">🛍️ ShopVivaliz</a>
+    <div class="sv-nav-links">
+        <a href="/claude/catalogo/">Catálogo</a>
+        <a href="/claude/carrinho/" class="sv-cart-btn">
+            🛒 Carrinho
+            <span class="sv-cart-count" id="cartCount">0</span>
+        </a>
+    </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+    <h1>ShopVivaliz</h1>
+    <p>Produtos de qualidade com entrega rápida e segura</p>
+    <form class="hero-search" action="/claude/catalogo/" method="GET">
+        <input type="text" name="busca" placeholder="O que você está procurando?" autocomplete="off">
+        <button type="submit">🔍 Buscar</button>
+    </form>
+    <div class="hero-stats"><?= $total_geral ?: 198 ?> produtos disponíveis • Frete para todo o Brasil</div>
+</section>
+
+<!-- ATALHOS DE CATEGORIA -->
+<?php if (!empty($categorias)): ?>
+<div class="sv-cats">
+    <div class="sv-cats-inner">
+        <span class="sv-cats-label">Categorias:</span>
+        <?php foreach ($categorias as $cat): ?>
+            <a href="/claude/catalogo/?categoria=<?= urlencode($cat) ?>" class="sv-cat-chip"><?= htmlspecialchars($cat) ?></a>
+        <?php endforeach; ?>
+        <a href="/claude/catalogo/" class="sv-cat-chip" style="border-color:#2563eb;color:#2563eb">Ver todas →</a>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- PRODUTOS EM DESTAQUE -->
+<section class="sv-section">
+    <div class="sv-section-head">
+        <h2>Produtos em Destaque</h2>
+        <a href="/claude/catalogo/" class="sv-see-all">Ver todos →</a>
     </div>
 
-    <div class="container products">
-        <h2>Produtos em Destaque</h2>
-        <div class="grid">
-            <?php foreach ($produtos as $p): ?>
-            <div class="product-card">
-                <div class="product-image">
-                    <?php if (!empty($p['url_imagem'])): ?>
-                        <img src="<?= htmlspecialchars($p['url_imagem']) ?>" style="width:100%; height:100%; object-fit:cover;" alt="<?= htmlspecialchars($p['nome']) ?>">
+    <?php if (empty($produtos)): ?>
+        <p style="text-align:center;color:#6b7280;padding:40px">Carregando produtos...</p>
+    <?php else: ?>
+    <div class="sv-grid">
+        <?php foreach ($produtos as $p):
+            $id   = htmlspecialchars($p['id'] ?? '');
+            $nome = htmlspecialchars($p['nome'] ?? 'Produto');
+            $nome_curto = htmlspecialchars(mb_strimwidth($p['nome'] ?? 'Produto', 0, 55, '…'));
+            $preco = $p['preco'] > 0 ? 'R$ ' . number_format($p['preco'], 2, ',', '.') : '';
+            $img  = htmlspecialchars($p['url_imagem'] ?? '');
+            $sku  = htmlspecialchars($p['id'] ?? '');
+            $preco_js = (float)($p['preco'] ?? 0);
+        ?>
+        <div class="sv-card">
+            <a href="/claude/catalogo/produto.php?id=<?= $id ?>">
+                <div class="sv-card-img">
+                    <?php if ($img): ?>
+                        <img src="<?= $img ?>" alt="<?= $nome ?>" loading="lazy" onerror="this.parentNode.innerHTML='<span class=sv-card-img-placeholder>📦</span>'">
                     <?php else: ?>
-                        📦
+                        <span class="sv-card-img-placeholder">📦</span>
                     <?php endif; ?>
                 </div>
-                <div class="product-info">
-                    <div class="product-name"><?= htmlspecialchars(substr($p['nome'], 0, 40)) ?></div>
-                    <div class="product-price">R$ <?= number_format($p['preco'], 2, ',', '.') ?></div>
-                    <a href="/claude/carrinho/?add=<?= (int)($p['id'] ?? 0) ?>" class="btn-comprar">🛒 Adicionar ao carrinho</a>
+            </a>
+            <div class="sv-card-body">
+                <div class="sv-card-name"><?= $nome_curto ?></div>
+                <?php if ($preco): ?>
+                    <div class="sv-card-price"><?= $preco ?></div>
+                <?php else: ?>
+                    <div class="sv-card-price-empty">Preço sob consulta</div>
+                <?php endif; ?>
+                <div class="sv-card-actions">
+                    <a href="/claude/catalogo/produto.php?id=<?= $id ?>">
+                        <button class="sv-btn-detail" type="button">Ver</button>
+                    </a>
+                    <button class="sv-btn-cart" type="button"
+                        data-sku="<?= $sku ?>"
+                        data-name="<?= $nome ?>"
+                        data-price="<?= $preco_js ?>"
+                        data-img="<?= $img ?>"
+                        onclick="addToCart(this)">
+                        🛒 Adicionar
+                    </button>
                 </div>
             </div>
-            <?php endforeach; ?>
         </div>
+        <?php endforeach; ?>
     </div>
+    <?php endif; ?>
+</section>
 
-    <a href="/claude/dashboard/" class="dashboard-link">📊 Status do Sistema</a>
+<!-- RODAPÉ -->
+<footer class="sv-footer">
+    &copy; <?= date('Y') ?> ShopVivaliz. Todos os direitos reservados.
+</footer>
+
+<!-- TOAST -->
+<div class="sv-toast" id="svToast"></div>
+
+<script>
+(function(){
+    var CART_KEY = 'shopvivaliz_cart';
+
+    function getCart(){return JSON.parse(localStorage.getItem(CART_KEY)||'[]');}
+    function saveCart(c){localStorage.setItem(CART_KEY,JSON.stringify(c));}
+
+    function updateBadge(){
+        var c=getCart();
+        var total=c.reduce(function(s,i){return s+(i.quantity||1);},0);
+        var el=document.getElementById('cartCount');
+        if(el){
+            el.textContent=total;
+            el.style.display=total>0?'inline-flex':'none';
+        }
+    }
+
+    function showToast(msg){
+        var t=document.getElementById('svToast');
+        t.textContent=msg;
+        t.classList.add('show');
+        setTimeout(function(){t.classList.remove('show');},2800);
+    }
+
+    window.addToCart=function(btn){
+        var sku=btn.getAttribute('data-sku');
+        var name=btn.getAttribute('data-name');
+        var price=parseFloat(btn.getAttribute('data-price')||'0');
+        var img=btn.getAttribute('data-img');
+
+        var cart=getCart();
+        var existing=cart.find(function(i){return i.sku===sku;});
+        if(existing){
+            existing.quantity=(existing.quantity||1)+1;
+        } else {
+            cart.push({sku:sku,name:name,price:price,image_url:img,olist_product_id:sku,quantity:1});
+        }
+        saveCart(cart);
+        updateBadge();
+        showToast('✅ Adicionado: '+name.substring(0,30)+'…');
+        btn.textContent='✓ Adicionado';
+        btn.classList.add('added');
+        setTimeout(function(){btn.textContent='🛒 Adicionar';btn.classList.remove('added');},2000);
+    };
+
+    updateBadge();
+})();
+</script>
 </body>
 </html>
