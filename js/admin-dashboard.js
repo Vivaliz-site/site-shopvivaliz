@@ -36,7 +36,9 @@
         'Versão ativa: ' + (update.version || 'n/d'),
         'Produto com CEP: ' + yesNo(update.checks && update.checks['Produto com campo CEP']),
         'Checkout com PIX/boleto: ' + yesNo(update.checks && update.checks['Checkout com PIX'] && update.checks['Checkout com boleto']),
-        'Catálogo público ativo: ' + yesNo(update.checks && update.checks['Catalogo publico ativo'])
+        'Catálogo público ativo: ' + yesNo(update.checks && update.checks['Catalogo publico ativo']),
+        'Melhor Envio: ' + yesNo(routines.checks && routines.checks['Melhor Envio pronto para cotacao']),
+        'Pagar.me: ' + yesNo(routines.checks && routines.checks['Pagar.me pronto para autenticacao'])
       ]);
 
       setPill('olist-status-pill', routines.olist_sync && routines.olist_sync.ok ? 'Integrado' : 'Atenção', routines.olist_sync && routines.olist_sync.ok ? 'success' : 'warning');
