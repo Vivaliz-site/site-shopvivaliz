@@ -66,7 +66,7 @@ $diagnostics[] = [
 ];
 
 // 7. Rate limit tratado
-require_once __DIR__ . '/../../config/olist-rate-limit.php';
+require_once __DIR__ . '/../../../config/olist-rate-limit.php';
 $rate_status = OlistRateLimit::get_status();
 $diagnostics[] = [
     'check' => 'Rate limit handler',
@@ -76,7 +76,7 @@ $diagnostics[] = [
 
 // 8. Produtos em olist_products
 try {
-    require_once __DIR__ . '/../../config/database.php';
+    require_once __DIR__ . '/../../../config/database.php';
     $db = Database::getInstance();
     $result = $db->query("SELECT COUNT(*) as total FROM olist_products");
     $row = $result->fetch_assoc();

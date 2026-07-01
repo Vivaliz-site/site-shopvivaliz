@@ -9,7 +9,7 @@
 
 header('Content-Type: application/json; charset=utf-8');
 
-require_once __DIR__ . '/../../config/constants.php';
+require_once __DIR__ . '/../../../config/constants.php';
 
 $client_id = getenv('OLIST_CLIENT_ID') ?: '';
 $client_secret = getenv('OLIST_CLIENT_SECRET') ?: '';

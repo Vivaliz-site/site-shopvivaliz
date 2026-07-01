@@ -21,7 +21,7 @@ if (!$client_id || !$client_secret) {
 log_sync("Credenciais carregadas");
 
 // Banco de dados
-require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../../config/database.php';
 $db = Database::getInstance();
 
 // URLs

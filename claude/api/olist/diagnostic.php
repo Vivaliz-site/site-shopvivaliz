@@ -55,7 +55,7 @@ foreach ($arquivos as $nome => $path) {
 // ============================================================================
 
 try {
-    require_once __DIR__ . '/../../config/database.php';
+    require_once __DIR__ . '/../../../config/database.php';
     $db = Database::getInstance();
 
     $tables = ['olist_products', 'olist_product_images'];
