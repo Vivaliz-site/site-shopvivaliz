@@ -35,6 +35,26 @@ produto via Admin API disparou o subscriber, que fez POST assinado (HMAC-SHA256)
 `medusa-webhook.php`, validado e enfileirado em `tasks-queue.json` (entrada de teste
 revertida após a validação para não poluir a fila real).
 
+**Reverificado novamente em 2026-07-01** (terceira rodada, novo container efêmero,
+`main` sincronizado com `origin/main` pós force-push que unificou o histórico
+EHA/Medusa): Postgres 16 + Redis locais provisionados, `npm install` limpo em
+ambos os apps (backend: ~685 pacotes; storefront: 544 pacotes, 2 vulnerabilidades
+moderadas pré-existentes no `npm audit`, não investigadas nesta rodada), `npx
+medusa db:migrate` + seed inicial + `seed-shopvivaliz-test-data.ts` aplicados sem
+erros (região Brasil/BRL, 5 produtos ShopVivaliz + 4 produtos demo = 9 no total,
+cliente `cliente.teste@shopvivaliz.com.br`), usuário admin criado, `npm run
+build` OK nos dois apps. Publishable API key criada via Admin API e vinculada
+ao Default Sales Channel; `GET /store/products` retornou os 9 produtos.
+Storefront em modo produção (`npm run start`, porta 8000) renderizou
+`/br/products/camiseta-shopvivaliz` com preço real da API (R$69,90). Webhook
+Medusa → EHA reverificado ponta a ponta com o backend real rodando: update de
+produto via Admin API disparou o subscriber, que fez POST assinado
+(HMAC-SHA256) para `medusa-webhook.php` (servidor PHP embutido local), validado
+(200) e enfileirado em `tasks-queue.json`; requisições com assinatura ausente/
+inválida corretamente rejeitadas com 401. Entradas de teste revertidas
+(`git checkout -- tasks-queue.json`, metadata de teste removida do produto)
+após a validação para não poluir dados reais.
+
 **Nota:** `npm install` no backend falhava com `ERESOLVE` porque `@medusajs/ui` e
 `react-router-dom` estavam pinados em versões incompatíveis com o peer exigido por
 `@medusajs/draft-order@2.17.0` (corrigido no `package.json`: `@medusajs/ui@4.1.17`,
