@@ -55,3 +55,8 @@ Error: listen EADDRINUSE: address already in use :::9000
 [32minfo[39m:    No job to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+draft-order@2.17._31fabe62e633ad2b1ed7f7fb8c0b7eeb\node_modules\@medusajs\draft-order\.medusa\server\src\jobs. skipped.
 [32minfo[39m:    Admin URL → http://localhost:9000/app
 [32mhttp[39m:    GET /app ← - (200) - 36.709 ms
+[32mhttp[39m:    GET /app ← - (200) - 4.954 ms
+[32mhttp[39m:    POST /admin/auth ← - (401) - 41.007 ms
+[32mhttp[39m:    POST /admin/auth ← - (401) - 1.371 ms
+[32mhttp[39m:    POST /admin/auth ← - (401) - 0.936 ms
+[32mhttp[39m:    POST /admin/auth ← - (401) - 0.935 ms
