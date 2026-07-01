@@ -43,6 +43,7 @@ if ($clientId && $clientSecret && $refreshToken) {
         'header'  => "Content-Type: application/x-www-form-urlencoded\r\nUser-Agent: ShopVivaliz/1.0\r\n",
         'content' => $payload,
         'timeout' => 15,
+        'ignore_errors' => true,
     ]]);
     $raw = @file_get_contents(
         'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token',
@@ -56,6 +57,8 @@ if ($clientId && $clientSecret && $refreshToken) {
         $result['refresh_ok'] = $at !== '';
         $result['new_access_token_hint'] = $at ? substr($at, 0, 12) . '...' : null;
         $result['refresh_error'] = isset($data['error']) ? $data['error'] : null;
+        $result['refresh_error_desc'] = $data['error_description'] ?? null;
+        $result['refresh_raw'] = $raw ? substr($raw, 0, 300) : null;
         if ($at) {
             // Test v3 products API
             $ctx3 = stream_context_create(['http' => [
