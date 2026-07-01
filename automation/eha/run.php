@@ -45,6 +45,25 @@ $dir = __DIR__ . '/reports';
 if (!is_dir($dir)) mkdir($dir, 0755, true);
 file_put_contents($dir . '/last_run.json', json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
+// 6. Salva histórico compacto (janela deslizante de 100 execuções)
+$history_record = json_encode([
+    'run_id'      => $report['run_id'],
+    'ts'          => $metrics['timestamp'] ?? date('c'),
+    'status'      => $validation['status'],
+    'action'      => $action,
+    'elapsed_s'   => $elapsed,
+    'checkout_ok' => (bool)($metrics['checkout_ok'] ?? false),
+    'api_ok'      => (bool)($metrics['api_ok'] ?? false),
+    'db_ok'       => (bool)($metrics['db_ok'] ?? false),
+    'e2e_failed'  => (bool)($metrics['e2e_failed'] ?? false),
+    'error_count' => (int)($metrics['error_count'] ?? 0),
+], JSON_UNESCAPED_UNICODE) . "\n";
+file_put_contents($dir . '/run_history.jsonl', $history_record, FILE_APPEND | LOCK_EX);
+$lines = @file($dir . '/run_history.jsonl') ?: [];
+if (count($lines) > 100) {
+    file_put_contents($dir . '/run_history.jsonl', implode('', array_slice($lines, -100)));
+}
+
 echo "EHA: $action in {$elapsed}s | status={$validation['status']}\n";
 
 // Sempre sai com 0 — o gate de pipeline é o step 'Fail if BLOCKED' no workflow YAML.
