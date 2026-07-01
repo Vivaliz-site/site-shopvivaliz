@@ -4,13 +4,6 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - 'automation/**'
-      - '**/*.md'
-      - '.github/**'
-      - '.claude/**'
-      - '.codex/**'
-      - '*.txt'
   workflow_dispatch:
 
 permissions:
@@ -30,7 +23,7 @@ jobs:
   web-deploy:
     name: Sincronizar com a HostGator Dev
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
 
     steps:
       - name: Baixar o código do repositório
@@ -76,6 +69,12 @@ jobs:
           check_optional_secret "DB_USER" "${{ secrets.DB_USER }}"
           check_optional_secret "DB_PASS" "${{ secrets.DB_PASS }}"
           check_optional_secret "DB_PORT" "${{ secrets.DB_PORT }}"
+          check_optional_secret "MELHORENVIO_ACCESS_TOKEN" "${{ secrets.MELHORENVIO_ACCESS_TOKEN }}"
+          check_optional_secret "MELHORENVIO_API_KEY" "${{ secrets.MELHORENVIO_API_KEY }}"
+          check_optional_secret "MELHORENVIO_FROM_POSTAL_CODE" "${{ secrets.MELHORENVIO_FROM_POSTAL_CODE }}"
+          check_optional_secret "PAGARME_SECRET_KEY" "${{ secrets.PAGARME_SECRET_KEY }}"
+          check_optional_secret "PAGARME_API_KEY" "${{ secrets.PAGARME_API_KEY }}"
+          check_optional_secret "PAGARME_PUBLIC_KEY" "${{ secrets.PAGARME_PUBLIC_KEY }}"
 
           if [ "$missing" -ne 0 ]; then
             exit 1
@@ -94,12 +93,12 @@ jobs:
           DB_NAME=${{ secrets.DB_NAME }}
           DB_USER=${{ secrets.DB_USER }}
           DB_PASS=${{ secrets.DB_PASS }}
-          TOKEN_API_OLIST=${{ secrets.TOKEN_API_OLIST }}
-          OLIST_CLIENT_ID=${{ secrets.OLIST_CLIENT_ID }}
-          OLIST_CLIENT_SECRET=${{ secrets.OLIST_CLIENT_SECRET }}
-          OLIST_REFRESH_TOKEN=${{ secrets.OLIST_REFRESH_TOKEN }}
-          OLIST_ACCESS_TOKEN=${{ secrets.OLIST_ACCESS_TOKEN }}
-          LOJA_WHATSAPP=${{ secrets.LOJA_WHATSAPP }}
+          MELHORENVIO_ACCESS_TOKEN=${{ secrets.MELHORENVIO_ACCESS_TOKEN }}
+          MELHORENVIO_API_KEY=${{ secrets.MELHORENVIO_API_KEY }}
+          MELHORENVIO_FROM_POSTAL_CODE=${{ secrets.MELHORENVIO_FROM_POSTAL_CODE }}
+          PAGARME_SECRET_KEY=${{ secrets.PAGARME_SECRET_KEY }}
+          PAGARME_API_KEY=${{ secrets.PAGARME_API_KEY }}
+          PAGARME_PUBLIC_KEY=${{ secrets.PAGARME_PUBLIC_KEY }}
           APP_ENV=development
           BASE_URL=https://dev.shopvivaliz.com.br
           EOF
@@ -140,7 +139,6 @@ jobs:
             **/tmp_*.json
             **/.env.*
             **/login_config.json
-            **/claude/medusa/**
             **/*.duck
             **/*secret*
             **/*token*
