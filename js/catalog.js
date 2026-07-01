@@ -25,13 +25,19 @@
     const image = product.image_url || '/favicon.ico';
     const sku = product.sku || product.olist_product_id || 'sem-sku';
     const images = Number(product.images_count || 0);
-    const encoded = encodeURIComponent(JSON.stringify({
+    const payload = {
       sku: sku,
       name: product.name || sku,
       image_url: image,
       price: Number(product.price || 0),
       olist_product_id: product.olist_product_id || ''
-    }));
+    };
+    const encoded = encodeURIComponent(JSON.stringify(payload));
+    const productUrl = '/produto?sku=' + encodeURIComponent(payload.sku)
+      + '&name=' + encodeURIComponent(payload.name)
+      + '&image=' + encodeURIComponent(payload.image_url)
+      + '&price=' + encodeURIComponent(String(payload.price))
+      + '&olist_product_id=' + encodeURIComponent(payload.olist_product_id);
     return `
       <article class="product-card">
         <a class="product-image" href="${esc(image)}" target="_blank" rel="noreferrer">
@@ -44,7 +50,10 @@
             <span>${esc(money(product.price))}</span>
             <span>${images} imagem${images === 1 ? '' : 's'}</span>
           </div>
-          <button class="buy-button" type="button" data-product="${encoded}">Comprar agora</button>
+          <div class="card-actions">
+            <a class="btn btn-secondary card-link" href="${esc(productUrl)}">Ver detalhes</a>
+            <button class="buy-button" type="button" data-product="${encoded}">Comprar agora</button>
+          </div>
         </div>
       </article>`;
   }
@@ -94,12 +103,7 @@
   if (form) {
     form.addEventListener('submit', function (event) {
       event.preventDefault();
-      const query = input ? input.value.trim() : '';
-      const target = new URL(window.location.href);
-      if (query) target.searchParams.set('q', query);
-      else target.searchParams.delete('q');
-      window.history.replaceState({}, '', target.toString());
-      loadCatalog(query);
+      loadCatalog(input ? input.value.trim() : '');
     });
   }
 
@@ -111,17 +115,10 @@
         if (window.AutoDev && typeof window.AutoDev.track === 'function' && input.value.trim().length >= 2) {
           window.AutoDev.track('search', { query: input.value.trim(), path: window.location.pathname });
         }
-        const query = input.value.trim();
-        const target = new URL(window.location.href);
-        if (query) target.searchParams.set('q', query);
-        else target.searchParams.delete('q');
-        window.history.replaceState({}, '', target.toString());
-        loadCatalog(query);
+        loadCatalog(input.value.trim());
       }, 250);
     });
   }
 
-  const initialQuery = new URLSearchParams(window.location.search).get('q') || '';
-  if (input && initialQuery) input.value = initialQuery;
-  loadCatalog(initialQuery);
+  loadCatalog('');
 })();
