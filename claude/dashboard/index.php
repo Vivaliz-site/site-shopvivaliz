@@ -229,6 +229,50 @@ if ($gh_raw) {
     </div>
     <?php endif; ?>
 
+    <?php
+    $e2e_details = $last_run['e2e_details'] ?? [];
+    $e2e_total   = (int)($e2e_details['total'] ?? 0);
+    if (!empty($last_run) && !empty($last_run['metrics']['e2e_failed']) && $e2e_total > 0):
+    ?>
+    <h2>Detalhes E2E — Playwright</h2>
+    <div class="grid" style="margin-bottom:1rem">
+        <div class="card">
+            <div class="card-label">Total de testes</div>
+            <div class="card-value"><?= $e2e_total ?></div>
+        </div>
+        <div class="card">
+            <div class="card-label">Passou</div>
+            <div class="card-value ok"><?= (int)($e2e_details['passed'] ?? 0) ?></div>
+        </div>
+        <div class="card">
+            <div class="card-label">Falhou</div>
+            <div class="card-value fail"><?= (int)($e2e_details['failed'] ?? 0) ?></div>
+        </div>
+        <?php if (!empty($e2e_details['flaky'])): ?>
+        <div class="card">
+            <div class="card-label">Flaky</div>
+            <div class="card-value warn"><?= (int)$e2e_details['flaky'] ?></div>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php if (!empty($e2e_details['failed_tests'])): ?>
+    <table style="margin-bottom:2rem">
+        <thead>
+            <tr><th>Suite</th><th>Teste</th><th>Erro</th></tr>
+        </thead>
+        <tbody>
+        <?php foreach ($e2e_details['failed_tests'] as $ft): ?>
+            <tr>
+                <td style="color:#94a3b8;font-size:.75rem"><?= htmlspecialchars($ft['suite'] ?? '') ?></td>
+                <td class="fail" style="font-weight:600"><?= htmlspecialchars($ft['test'] ?? '') ?></td>
+                <td style="font-family:monospace;font-size:.72rem;color:#f59e0b;max-width:400px;word-break:break-word"><?= htmlspecialchars($ft['error'] ?? '') ?></td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+    <?php endif; ?>
+    <?php endif; ?>
+
     <?php if (!empty($eha_runs_recent)): ?>
     <h2>Histórico EHA — últimos <?= count($eha_runs_recent) ?> runs</h2>
     <div class="stat-row">
