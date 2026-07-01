@@ -423,8 +423,8 @@ $has_products = count($featured_products) > 0;
         const t=document.getElementById('toast'); t.textContent=msg;
         t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),ms);
     }
-    function getCart()  { try{return JSON.parse(localStorage.getItem('svCart')||'[]');}catch{return[];} }
-    function saveCart(c){ localStorage.setItem('svCart',JSON.stringify(c)); updateBadge(); }
+    function getCart()  { try{return JSON.parse(localStorage.getItem('shopvivaliz_cart')||'[]');}catch{return[];} }
+    function saveCart(c){ localStorage.setItem('shopvivaliz_cart',JSON.stringify(c)); updateBadge(); }
     function updateBadge() {
         const n=getCart().reduce((s,i)=>s+(i.qty||1),0);
         const el=document.getElementById('cartCount');
