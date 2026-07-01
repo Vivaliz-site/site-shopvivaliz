@@ -108,6 +108,10 @@ $avg_elapsed = $total_runs > 0
     : 0;
 $uptime_pct  = $total_runs > 0 ? round($ok_runs / $total_runs * 100, 1) : 0;
 
+// E2E: conta runs consecutivos com falha
+$e2e_consecutive = (int)($last_run['e2e_consecutive'] ?? 0);
+$e2e_alert       = $e2e_consecutive >= 10;
+
 $status_color = $all_ok ? '#22c55e' : '#ef4444';
 
 // Lê histórico de runs do GitHub Actions via API pública (sem token)
@@ -138,12 +142,15 @@ if ($gh_raw) {
         .badge { display: inline-block; padding: .35rem .9rem; border-radius: 999px; font-weight: 700; font-size: 1rem; color: #fff; background: <?= $status_color ?>; margin-bottom: 1.5rem; }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
         .card { background: #1e293b; border-radius: .75rem; padding: 1rem 1.25rem; }
+        .card.alert { border: 1px solid #f59e0b; }
         .card-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: #64748b; margin-bottom: .3rem; }
         .card-value { font-size: 1.15rem; font-weight: 700; }
         .card-sub { font-size: .72rem; color: #475569; margin-top: .2rem; }
         .ok   { color: #22c55e; }
         .fail { color: #ef4444; }
         .warn { color: #f59e0b; }
+        .alert-banner { background: #7c2d12; border: 1px solid #f59e0b; border-radius: .75rem; padding: 1rem 1.25rem; margin-bottom: 1.5rem; color: #fef3c7; font-size: .9rem; }
+        .alert-banner strong { color: #fbbf24; }
         table { width: 100%; border-collapse: collapse; font-size: .82rem; margin-bottom: 2rem; }
         th { text-align: left; padding: .5rem .75rem; color: #64748b; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; border-bottom: 1px solid #1e293b; }
         td { padding: .45rem .75rem; border-bottom: 1px solid #0f172a; }
@@ -166,6 +173,13 @@ if ($gh_raw) {
     <p class="sub">Health check ao vivo &nbsp;·&nbsp; <?= $ts ?> &nbsp;·&nbsp; <?= $elapsed ?>s &nbsp;·&nbsp; <a href="<?= htmlspecialchars($base) ?>"><?= htmlspecialchars($base) ?></a></p>
 
     <div class="badge"><?= htmlspecialchars($status) ?></div>
+
+    <?php if ($e2e_alert): ?>
+    <div class="alert-banner">
+        ⚠️ <strong>E2E persistentemente falhando:</strong> <?= $e2e_consecutive ?> runs consecutivos com falha.
+        O sistema escalou para <strong>CREATE_PR</strong> — verifique a infraestrutura do Playwright / checkout.spec.js.
+    </div>
+    <?php endif; ?>
 
     <div class="grid">
         <div class="card">
@@ -192,6 +206,13 @@ if ($gh_raw) {
             <div class="card-label">Status geral</div>
             <div class="card-value <?= $all_ok ? 'ok' : 'fail' ?>"><?= $all_ok ? 'HEALTHY' : 'DEGRADED' ?></div>
             <div class="card-sub">Verificado agora</div>
+        </div>
+        <div class="card <?= $e2e_alert ? 'alert' : '' ?>">
+            <div class="card-label">E2E Streak Falhas</div>
+            <div class="card-value <?= $e2e_consecutive === 0 ? 'ok' : ($e2e_alert ? 'fail' : 'warn') ?>">
+                <?= $e2e_consecutive ?> runs
+            </div>
+            <div class="card-sub"><?= $e2e_alert ? '⚠️ Escalando CREATE_PR' : ($e2e_consecutive > 0 ? 'monitorando' : 'E2E estável') ?></div>
         </div>
     </div>
 
@@ -280,6 +301,7 @@ if ($gh_raw) {
         <div class="stat">Uptime <strong><?= $uptime_pct ?>%</strong></div>
         <div class="stat">Runs totais <strong><?= $total_runs ?></strong></div>
         <div class="stat">Média elapsed <strong><?= $avg_elapsed ?>s</strong></div>
+        <div class="stat">E2E falhas consecutivas <strong class="<?= $e2e_alert ? 'fail' : ($e2e_consecutive > 0 ? 'warn' : 'ok') ?>"><?= $e2e_consecutive ?></strong></div>
     </div>
     <div class="sparkline">
     <?php
@@ -295,7 +317,7 @@ if ($gh_raw) {
     </div>
     <table>
         <thead>
-            <tr><th>Run</th><th>Status</th><th>Ação</th><th>Elapsed</th><th>Checkout</th><th>API</th><th>DB</th><th>E2E</th><th>Erros</th><th>Timestamp (UTC)</th></tr>
+            <tr><th>Run</th><th>Status</th><th>Ação</th><th>Elapsed</th><th>Checkout</th><th>API</th><th>DB</th><th>E2E</th><th>E2E Streak</th><th>Erros</th><th>Timestamp (UTC)</th></tr>
         </thead>
         <tbody>
         <?php foreach ($eha_runs_recent as $r):
@@ -308,6 +330,7 @@ if ($gh_raw) {
                 'ROLLBACK'   => '#ef4444',
                 default      => '#64748b',
             };
+            $e2e_streak = (int)($r['e2e_consecutive'] ?? 0);
         ?>
             <tr>
                 <td>#<?= htmlspecialchars((string)($r['run_id'] ?? '?')) ?></td>
@@ -318,6 +341,7 @@ if ($gh_raw) {
                 <td class="<?= ($r['api_ok'] ?? false) ? 'ok' : 'fail' ?>"><?= ($r['api_ok'] ?? false) ? '✓' : '✗' ?></td>
                 <td class="<?= ($r['db_ok'] ?? false) ? 'ok' : 'fail' ?>"><?= ($r['db_ok'] ?? false) ? '✓' : '✗' ?></td>
                 <td class="<?= !($r['e2e_failed'] ?? false) ? 'ok' : 'warn' ?>"><?= !($r['e2e_failed'] ?? false) ? '✓' : '!' ?></td>
+                <td class="<?= $e2e_streak >= 10 ? 'fail' : ($e2e_streak > 0 ? 'warn' : 'ok') ?>"><?= $e2e_streak > 0 ? $e2e_streak . 'x' : '—' ?></td>
                 <td style="color:<?= ($r['error_count'] ?? 0) > 0 ? '#f59e0b' : '#475569' ?>"><?= (int)($r['error_count'] ?? 0) ?></td>
                 <td style="font-size:.75rem;color:#64748b"><?= htmlspecialchars(substr($r['ts'] ?? '', 0, 16)) ?></td>
             </tr>
