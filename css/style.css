@@ -257,6 +257,43 @@ a {
     width: 100%;
 }
 
+.card-actions {
+    display: grid;
+    gap: 8px;
+}
+
+.card-link {
+    display: block;
+    text-align: center;
+}
+
+.product-detail {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+    margin-bottom: 18px;
+}
+
+.product-detail-image {
+    aspect-ratio: 1 / 1;
+    background: #eef1f6;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.product-detail-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.product-detail-copy {
+    display: grid;
+    gap: 10px;
+}
+
 .catalog-page {
     padding-bottom: 44px;
 }
@@ -592,6 +629,10 @@ footer {
     }
 
     .checkout-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .product-detail {
         grid-template-columns: 1fr;
     }
 
