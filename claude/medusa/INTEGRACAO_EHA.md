@@ -13,12 +13,15 @@
 ├── checkout/                    # Checkout (Medusa API consumer)
 ├── api/                         # APIs (EHA + Medusa bridges)
 └── medusa/
-    ├── backend/                 # MedusaJS (Port 9000)
-    │   ├── src/
-    │   └── package.json
-    └── storefront/              # Next.js (Port 8000)
-        ├── app/
-        └── package.json
+    └── apps/
+        ├── backend/              # MedusaJS v2 (Port 9000)
+        │   ├── src/
+        │   │   ├── subscribers/eha-webhook.ts
+        │   │   └── scripts/seed-shopvivaliz-test-data.ts
+        │   └── package.json
+        └── storefront/           # Next.js 15 (Port 8000)
+            ├── src/
+            └── package.json
 ```
 
 ## 🔄 Como Funcionam Juntos
@@ -59,11 +62,17 @@
 
 ### 3. EHA sincroniza com Marketplaces
 ```bash
-EHA Webhook Listener
-├── Recebe eventos de Medusa
-├── Sincroniza com Shopee/Amazon/Olist
-└── Atualiza estoque em tempo real
+EHA Webhook Listener (claude/api/medusa-webhook.php)
+├── Recebe eventos assinados (HMAC-SHA256) do subscriber Medusa
+├── Valida assinatura com EHA_WEBHOOK_SECRET
+├── Registra evento em storage/logs/medusa-webhook.log
+├── Enfileira tarefa em tasks-queue.json (product.created/updated, order.placed, customer.created)
+└── Fluxo de automação existente do EHA processa a fila e sincroniza com Shopee/Olist
 ```
+
+Testado ponta a ponta: atualizar um produto no Admin do Medusa dispara o
+subscriber `eha-webhook.ts`, que faz POST assinado para o endpoint PHP acima,
+que valida a assinatura e grava o evento/tarefa.
 
 ### 4. Automações autônomas
 ```bash
@@ -98,31 +107,42 @@ CI Autonomo + MedusaJS
 
 ## 📋 Variáveis de Ambiente
 
-### MedusaJS Backend (.env)
+### MedusaJS Backend (claude/medusa/apps/backend/.env)
 ```
-MEDUSA_BACKEND_URL=http://localhost:9000
-MEDUSA_ADMIN_BACKEND_URL=http://localhost:9000
-DATABASE_URL=postgres://user:pass@localhost:5432/shopvivaliz
+DATABASE_URL=postgres://user:pass@host:5432/shopvivaliz
 JWT_SECRET=seu-secret-aqui
+COOKIE_SECRET=seu-secret-aqui
+STORE_CORS=...
+ADMIN_CORS=...
+AUTH_CORS=...
+REDIS_URL=redis://localhost:6379   # opcional em dev
+
+# EHA / ShopVivaliz
+MEDUSA_API_URL=http://localhost:9000
+EHA_WEBHOOK_URL=http://localhost/claude/api/medusa-webhook.php
+EHA_WEBHOOK_SECRET=seu-webhook-secret
+MARKETPLACE_SYNC_ENABLED=false
 ```
 
-### EHA Integration (.env)
+### Storefront (claude/medusa/apps/storefront/.env.local)
 ```
-MEDUSA_API_URL=http://localhost:9000
-MEDUSA_API_KEY=seu-api-key
-EHA_WEBHOOK_SECRET=seu-webhook-secret
-MARKETPLACE_SYNC_ENABLED=true
+NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_...
+NEXT_PUBLIC_MEDUSA_BACKEND_URL=http://localhost:9000
+NEXT_PUBLIC_DEFAULT_REGION=br
+NEXT_PUBLIC_BASE_URL=http://localhost:8000
 ```
 
 ## ✅ Checklist de Setup
 
-- [ ] MedusaJS Backend rodando (port 9000)
-- [ ] Next.js Storefront rodando (port 8000)
-- [ ] EHA Dashboard monitorando
-- [ ] Webhooks Medusa → EHA configurados
-- [ ] APIs Medusa consumidas em /claude/catalogo/
-- [ ] Marketplace sync ativo
-- [ ] Testes de fluxo end-to-end
+- [x] MedusaJS Backend rodando (port 9000) — build + migrations + seed validados
+- [x] Next.js Storefront rodando (port 8000) — build validado, região `br` testada
+- [x] Webhooks Medusa → EHA configurados (`eha-webhook.ts` -> `medusa-webhook.php`)
+- [x] Testes de fluxo end-to-end (update de produto -> webhook -> tasks-queue.json)
+- [ ] EHA Dashboard monitorando o backend Medusa (ainda não há healthcheck dedicado)
+- [ ] APIs Medusa consumidas em /claude/catalogo/ (catálogo PHP ainda usa fonte própria)
+- [ ] Marketplace sync ativo (`MARKETPLACE_SYNC_ENABLED=true` + credenciais reais)
+- [ ] Banco de produção real (Supabase/Postgres gerenciado) configurado
+- [ ] Deploy em produção
 
 ## 🔐 Segurança
 
