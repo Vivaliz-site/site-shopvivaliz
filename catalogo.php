@@ -32,13 +32,13 @@ function sv_catalog_products(int $limit, string $query): array
             continue;
         }
         $sku = trim((string)($row['sku'] ?? ''));
-        $name = trim((string)($row['name'] ?? 'Produto ShopVivaliz'));
+        $name = trim((string)($row['name'] ?? 'Produto Vivaliz'));
         if ($query !== '' && stripos($sku . ' ' . $name, $query) === false) {
             continue;
         }
         $products[] = [
             'sku' => $sku !== '' ? $sku : (string)($row['id'] ?? 'sem-sku'),
-            'name' => $name !== '' ? $name : 'Produto ShopVivaliz',
+            'name' => $name !== '' ? $name : 'Produto Vivaliz',
             'image_url' => trim((string)($row['image_url'] ?? '/favicon.ico')) ?: '/favicon.ico',
             'price' => (float)($row['price'] ?? 0),
             'images_count' => (int)($row['images_count'] ?? 0),

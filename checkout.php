@@ -8,13 +8,13 @@ header('Content-Type: text/html; charset=UTF-8');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Checkout - ShopVivaliz</title>
+    <title>Checkout | Vivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
     <nav class="navbar">
         <div class="container nav-inner">
-            <a class="brand-link" href="/">ShopVivaliz</a>
+            <a class="brand-link" href="/">Vivaliz</a>
             <div class="navbar-menu">
                 <a href="/catalogo">Catálogo</a>
                 <a href="/carrinho.php">Carrinho</a>
