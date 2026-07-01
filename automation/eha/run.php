@@ -43,6 +43,13 @@ $report  = [
 
 $dir = __DIR__ . '/reports';
 if (!is_dir($dir)) mkdir($dir, 0755, true);
+
+// Inclui detalhes dos testes E2E do Playwright se disponível
+$e2e_details = read_e2e_details($dir);
+if ($e2e_details !== []) {
+    $report['e2e_details'] = $e2e_details;
+}
+
 file_put_contents($dir . '/last_run.json', json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
 // 6. Salva histórico compacto (janela deslizante de 100 execuções)
@@ -112,6 +119,52 @@ function run_loop(array|string $error_log): array
 
     _eha_log('LOOP result=' . json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     return $response;
+}
+
+function read_e2e_details(string $reports_dir): array
+{
+    $path = $reports_dir . '/playwright-results.json';
+    if (!file_exists($path)) return [];
+    $data = @json_decode(@file_get_contents($path) ?: '{}', true) ?: [];
+    if (empty($data)) return [];
+
+    $stats = $data['stats'] ?? [];
+    $failed_tests = [];
+
+    $collect = function(array $suites, string $parent = '') use (&$collect, &$failed_tests): void {
+        foreach ($suites as $suite) {
+            $ctx = trim($parent . ' > ' . ($suite['title'] ?? ''), ' >');
+            foreach ($suite['specs'] ?? [] as $spec) {
+                if (!($spec['ok'] ?? true)) {
+                    $err = '';
+                    foreach ($spec['tests'] ?? [] as $test) {
+                        foreach ($test['results'] ?? [] as $result) {
+                            if (!empty($result['error']['message'])) {
+                                $err = substr(trim($result['error']['message']), 0, 300);
+                                break 2;
+                            }
+                        }
+                    }
+                    $failed_tests[] = [
+                        'suite' => $ctx,
+                        'test'  => $spec['title'] ?? '?',
+                        'error' => $err,
+                    ];
+                }
+            }
+            $collect($suite['suites'] ?? [], $ctx);
+        }
+    };
+
+    $collect($data['suites'] ?? []);
+
+    return [
+        'total'        => ($stats['expected'] ?? 0) + ($stats['unexpected'] ?? 0),
+        'passed'       => $stats['expected'] ?? 0,
+        'failed'       => $stats['unexpected'] ?? 0,
+        'flaky'        => $stats['flaky'] ?? 0,
+        'failed_tests' => $failed_tests,
+    ];
 }
 
 function eha_detect_issue(array|string $error_log): string
