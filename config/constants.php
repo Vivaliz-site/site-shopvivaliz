@@ -60,7 +60,7 @@ define('API_TIMEOUT', 10);
 define('EXECUTION_TIMEOUT', 300);
 
 // Versão
-define('APP_VERSION', '9.2.94');
+define('APP_VERSION', '9.2.95');
 define('DB_VERSION', '1.0');
 
 // Agentes
@@ -93,11 +93,6 @@ define('OLIST_API_URL', 'https://api.tiny.com.br');
 define('SHOPEE_ENABLED', true);
 define('SHOPEE_API_URL', 'https://partner.shopeemall.com/api');
 define('MELHORENVIO_ENABLED', true);
-
-// Loja - Contato
-define('LOJA_WHATSAPP', getenv('LOJA_WHATSAPP') ?: '5511999999999'); // Formato: 55 + DDD + numero (sem espacos)
-define('LOJA_EMAIL_ADMIN', getenv('LOJA_EMAIL_ADMIN') ?: 'fredmourao@gmail.com');
-define('LOJA_NOME', 'Vivaliz');
 
 // FTP Deploy
 define('FTP_ENABLED', true);
