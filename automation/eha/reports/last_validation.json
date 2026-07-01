@@ -1,0 +1,8 @@
+{
+    "status": "BLOCKED",
+    "checkout_ok": false,
+    "api_ok": false,
+    "db_ok": true,
+    "pages_ok": false,
+    "timestamp": "2026-07-01T00:51:13+00:00"
+}

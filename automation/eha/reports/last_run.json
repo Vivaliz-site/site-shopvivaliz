@@ -1,0 +1,27 @@
+{
+    "action": "ROLLBACK",
+    "metrics": {
+        "checkout_ok": false,
+        "checkout_fail": true,
+        "api_ok": false,
+        "db_ok": true,
+        "pages_ok": false,
+        "error_count": 0,
+        "error_low": true,
+        "error_medium": false,
+        "error_high": false,
+        "recent_errors": [],
+        "e2e_failed": false,
+        "timestamp": "2026-07-01T00:51:13+00:00"
+    },
+    "validation": {
+        "status": "BLOCKED",
+        "checkout_ok": false,
+        "api_ok": false,
+        "db_ok": true,
+        "pages_ok": false,
+        "timestamp": "2026-07-01T00:51:13+00:00"
+    },
+    "elapsed_s": 0.01,
+    "run_id": "local-1782867073"
+}
