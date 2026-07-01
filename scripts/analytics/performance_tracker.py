@@ -6,6 +6,7 @@ Analisa dados para melhoria contínua
 
 import csv
 import json
+import os
 from datetime import datetime
 from typing import Dict, List
 
@@ -16,6 +17,7 @@ class PerformanceTracker:
 
     def _init_log_file(self):
         """Inicializa arquivo de log se não existir"""
+        os.makedirs(os.path.dirname(self.log_file) or '.', exist_ok=True)
         try:
             with open(self.log_file, 'r') as f:
                 pass
