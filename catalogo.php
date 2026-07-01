@@ -96,11 +96,11 @@ $statusText = $products
 <body>
     <nav class="navbar">
         <div class="container nav-inner">
-            <a class="brand-link" href="/">ShopVivaliz</a>
+            <a class="brand-link" href="/">Vivaliz</a>
             <div class="navbar-menu">
                 <a href="/">Home</a>
-                <a href="/catalogo.php" aria-current="page">Catálogo</a>
-                <a href="/admin/">Admin</a>
+                <a href="/catalogo" aria-current="page">Catálogo</a>
+                <a href="/carrinho/">🛒 Carrinho</a>
             </div>
         </div>
     </nav>
