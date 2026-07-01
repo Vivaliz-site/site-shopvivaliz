@@ -15,12 +15,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Simples arquivo-based storage para histórico
-$chat_dir = realpath(__DIR__ . '/../../logs/chats');
-if (!$chat_dir) {
-    $chat_dir = __DIR__ . '/../../logs/chats';
-    if (!is_dir($chat_dir)) {
-        mkdir($chat_dir, 0755, true);
-    }
+$chat_dir = __DIR__ . '/../../logs/chats';
+if (!is_dir($chat_dir)) {
+    mkdir($chat_dir, 0755, true);
 }
 
 $action = $_GET['action'] ?? 'list';
@@ -55,7 +52,7 @@ function listChats() {
 
     $chats = [];
     foreach (glob($chat_dir . '/*.json') as $file) {
-        $data = json_decode(file_get_contents($file), true);
+        $data = json_decode((string)file_get_contents($file), true);
         if ($data) {
             $chats[] = [
                 'id' => basename($file, '.json'),
@@ -138,7 +135,7 @@ function loadChat() {
         exit;
     }
 
-    $chat_data = json_decode(file_get_contents($file), true);
+    $chat_data = json_decode((string)file_get_contents($file), true);
 
     http_response_code(200);
     echo json_encode([
@@ -169,7 +166,7 @@ function addMessageToChat() {
         exit;
     }
 
-    $chat_data = json_decode(file_get_contents($file), true);
+    $chat_data = json_decode((string)file_get_contents($file), true);
 
     $message = [
         'id' => 'msg_' . time() . '_' . bin2hex(random_bytes(4)),

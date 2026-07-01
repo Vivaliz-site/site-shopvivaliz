@@ -26,8 +26,9 @@ if (!$message) {
 }
 
 // Salvar mensagem
-@mkdir('../../logs', 0755, true);
-$log_file = '../../logs/monitor-messages.log';
+$logDir = __DIR__ . '/../../logs';
+@mkdir($logDir, 0755, true);
+$log_file = $logDir . '/monitor-messages.log';
 $msg_data = [
     'timestamp' => date('c'),
     'message' => $message,
@@ -36,13 +37,16 @@ $msg_data = [
 file_put_contents($log_file, json_encode($msg_data) . "\n", FILE_APPEND);
 
 // Responder com mensagem de agentes
-$responses_file = '../../logs/monitor-responses.jsonl';
+$responses_file = $logDir . '/monitor-responses.jsonl';
 $latest_response = null;
 
 if (file_exists($responses_file)) {
-    $lines = file($responses_file);
+    $lines = @file($responses_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     if (!empty($lines)) {
-        $latest_response = json_decode(end($lines), true);
+        $decoded = json_decode((string)end($lines), true);
+        if (is_array($decoded)) {
+            $latest_response = $decoded;
+        }
     }
 }
 

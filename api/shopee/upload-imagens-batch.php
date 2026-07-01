@@ -7,14 +7,18 @@
 
 class ShopeeImageUpload {
     private $shopee_host = 'https://partner.shopeemx.com';
-    private $partner_id = 'YOUR_PARTNER_ID';
-    private $partner_key = 'YOUR_PARTNER_KEY';
-    private $shop_id = 'YOUR_SHOP_ID';
-    private $access_token = 'YOUR_ACCESS_TOKEN';
+    private $partner_id;
+    private $partner_key;
+    private $shop_id;
+    private $access_token;
     private $log_file;
 
     public function __construct() {
         $this->log_file = __DIR__ . '/../../logs/shopee-upload.log';
+        $this->partner_id = getenv('SHOPEE_PARTNER_ID') ?: getenv('SHOPEE_TEST_PARTNER_ID') ?: '';
+        $this->partner_key = getenv('SHOPEE_PARTNER_KEY') ?: getenv('SHOPEE_TEST_PARTNER_KEY') ?: '';
+        $this->shop_id = getenv('SHOPEE_SHOP_ID') ?: '';
+        $this->access_token = getenv('SHOPEE_ACCESS_TOKEN') ?: '';
     }
 
     /**

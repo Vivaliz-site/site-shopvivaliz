@@ -4,33 +4,64 @@
  * Tudo em um único painel
  */
 
+function monitor_read_json(string $path, array $fallback = []): array
+{
+    if (!file_exists($path)) {
+        return $fallback;
+    }
+
+    $content = file_get_contents($path);
+    if ($content === false || trim($content) === '') {
+        return $fallback;
+    }
+
+    $data = json_decode($content, true);
+    return is_array($data) ? $data : $fallback;
+}
+
+function monitor_read_lines(string $path, int $limit = 5): array
+{
+    if (!file_exists($path)) {
+        return [];
+    }
+
+    $lines = @file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!is_array($lines)) {
+        return [];
+    }
+
+    return array_slice($lines, -$limit);
+}
+
 // Carregar tarefas
-$tasks_queue = json_decode(file_get_contents('logs/tasks-queue.json') ?? '[]', true) ?? [];
+$tasks_queue = monitor_read_json(__DIR__ . '/../logs/tasks-queue.json', []);
 $pending_count = count(array_filter($tasks_queue, fn($t) => $t['status'] === 'pending'));
 $assigned_count = count(array_filter($tasks_queue, fn($t) => $t['status'] === 'assigned'));
 $total_tasks = count($tasks_queue);
 
 // Carregar respostas
-$responses_file = 'logs/monitor-responses.jsonl';
+$responses_file = __DIR__ . '/../logs/monitor-responses.jsonl';
 $recent_responses = [];
-if (file_exists($responses_file)) {
-    $lines = array_slice(file($responses_file), -5);
-    foreach ($lines as $line) {
-        if ($line = trim($line)) {
-            $recent_responses[] = json_decode($line, true);
+foreach (monitor_read_lines($responses_file, 5) as $line) {
+    $line = trim($line);
+    if ($line !== '') {
+        $decoded = json_decode($line, true);
+        if (is_array($decoded)) {
+            $recent_responses[] = $decoded;
         }
     }
 }
 $recent_responses = array_reverse($recent_responses);
 
 // Carregar mensagens
-$messages_file = 'logs/monitor-messages.log';
+$messages_file = __DIR__ . '/../logs/monitor-messages.log';
 $recent_messages = [];
-if (file_exists($messages_file)) {
-    $lines = array_slice(file($messages_file), -3);
-    foreach ($lines as $line) {
-        if ($line = trim($line)) {
-            $recent_messages[] = json_decode($line, true);
+foreach (monitor_read_lines($messages_file, 3) as $line) {
+    $line = trim($line);
+    if ($line !== '') {
+        $decoded = json_decode($line, true);
+        if (is_array($decoded)) {
+            $recent_messages[] = $decoded;
         }
     }
 }

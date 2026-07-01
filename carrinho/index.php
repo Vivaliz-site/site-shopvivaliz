@@ -17,9 +17,10 @@ $produtos_db = [
 ];
 
 $carrinho = $_SESSION['carrinho'] ?? [];
+$acao = $_POST['acao'] ?? '';
 
 // Processar ações
-if ($_POST['acao'] === 'atualizar_quantidade') {
+if ($acao === 'atualizar_quantidade') {
     $id = (int)$_POST['id'];
     $qtd = (int)$_POST['quantidade'];
     if ($qtd > 0) {
@@ -30,7 +31,7 @@ if ($_POST['acao'] === 'atualizar_quantidade') {
     $carrinho = $_SESSION['carrinho'] ?? [];
 }
 
-if ($_POST['acao'] === 'remover') {
+if ($acao === 'remover') {
     $id = (int)$_POST['id'];
     unset($_SESSION['carrinho'][$id]);
     $carrinho = $_SESSION['carrinho'] ?? [];

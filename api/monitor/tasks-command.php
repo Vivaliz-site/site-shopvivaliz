@@ -116,11 +116,12 @@ try {
     }
 
     // Também adicionar à fila de tarefas para os agentes (tasks-queue.json)
-    $queue_file = __DIR__ . '/../../tasks-queue.json';
+    $queue_file = __DIR__ . '/../../logs/tasks-queue.json';
     $queue = [];
 
     if (file_exists($queue_file)) {
-        $queue = json_decode(file_get_contents($queue_file), true) ?? [];
+        $existing = json_decode((string)file_get_contents($queue_file), true);
+        $queue = isset($existing['queue']) && is_array($existing['queue']) ? $existing['queue'] : (is_array($existing) ? $existing : []);
     }
 
     // Converter para formato de fila
@@ -141,7 +142,8 @@ try {
         $queue = array_slice($queue, -50);
     }
 
-    file_put_contents($queue_file, json_encode($queue, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    @mkdir(dirname($queue_file), 0755, true);
+    file_put_contents($queue_file, json_encode(['queue' => $queue], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
 
     http_response_code(201);
     echo json_encode([

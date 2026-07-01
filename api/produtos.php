@@ -16,11 +16,11 @@ $limite = min($limite, 100);
 $pagina = max($pagina, 1);
 
 // Carregar cache
-$cache_file = __DIR__ . '/../logs/olist-products-cache.json';
+$cache_file = __DIR__ . '/../storage/cache/olist-products-cache.json';
 $produtos = [];
 
 if (file_exists($cache_file)) {
-    $data = json_decode(file_get_contents($cache_file), true);
+    $data = json_decode((string)file_get_contents($cache_file), true);
     if ($data && !empty($data['produtos'])) {
         $produtos = $data['produtos'];
     }

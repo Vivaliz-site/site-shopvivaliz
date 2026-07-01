@@ -27,7 +27,8 @@ if (!$produto) {
 }
 
 // Adicionar ao carrinho
-if ($_POST['acao'] === 'add_carrinho') {
+$acao = $_POST['acao'] ?? '';
+if ($acao === 'add_carrinho') {
     $qtd = (int)$_POST['quantidade'] ?? 1;
     if (!isset($_SESSION['carrinho'])) {
         $_SESSION['carrinho'] = [];

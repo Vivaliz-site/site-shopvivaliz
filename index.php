@@ -8,15 +8,14 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
+require_once __DIR__ . '/config/constants.php';
+require_once __DIR__ . '/config/shopvivaliz-version.php';
+
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: SAMEORIGIN');
 header('X-XSS-Protection: 1; mode=block');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Content-Type: text/html; charset=UTF-8');
-
-define('APP_VERSION', '9.2.85');
-define('APP_NAME', 'ShopVivaliz');
-define('BASE_URL', 'https://dev.shopvivaliz.com.br');
 
 ?>
 <!DOCTYPE html>
@@ -24,23 +23,78 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="ShopVivaliz - Sua loja online de qualidade. Produtos variados com entrega rápida e segura.">
-    <meta name="theme-color" content="#667eea">
-    <title><?php echo APP_NAME; ?> - Sua Loja Online de Confiança</title>
+    <meta name="description" content="ShopVivaliz - loja online com catálogo organizado, envio ágil e experiência pensada para conversão.">
+    <meta name="theme-color" content="#1F3A70">
+    <title>ShopVivaliz | Loja oficial</title>
     <link rel="stylesheet" href="/css/responsive.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --brand-dark: #2d3748;
+            --brand-blue: #667eea;
+            --brand-navy: #1F3A70;
+            --brand-green: #2ECC71;
+            --surface: #f7f9fc;
+            --line: #e6eaf2;
+        }
+
+        body {
+            background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+        }
+
+        .navbar {
+            background: rgba(255,255,255,0.92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(230,234,242,0.9);
+        }
+
+        .navbar .container {
+            min-height: 84px;
+        }
+
+        .brand-lockup {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-lockup img {
+            height: 42px;
+            width: auto;
+        }
+
+        .brand-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.1;
+        }
+
+        .brand-text strong {
+            font-size: 18px;
+            letter-spacing: 0.08em;
+            color: var(--brand-dark);
+        }
+
+        .brand-text span {
+            font-size: 11px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+        }
+
         /* Banner Slider */
         .banner-slider {
             position: relative;
             width: 100%;
-            height: 300px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 420px;
+            background:
+                radial-gradient(circle at top left, rgba(102,126,234,0.35), transparent 35%),
+                linear-gradient(135deg, #1F3A70 0%, #667eea 52%, #2ECC71 130%);
             border-radius: 0;
             overflow: hidden;
-            margin-bottom: 40px;
+            margin-bottom: 24px;
         }
 
         .banner-slide {
@@ -50,7 +104,7 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
             position: absolute;
             top: 0;
             left: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, rgba(31,58,112,0.88) 0%, rgba(102,126,234,0.92) 55%, rgba(46,204,113,0.88) 130%);
             color: white;
             display: flex;
             align-items: center;
@@ -63,15 +117,35 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
             display: flex;
         }
 
+        .hero-panel {
+            max-width: 760px;
+            padding: 0 20px;
+        }
+
+        .hero-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border: 1px solid rgba(255,255,255,0.28);
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            font-size: 12px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 18px;
+        }
+
         .banner-slide h2 {
-            font-size: 28px;
+            font-size: 46px;
             margin-bottom: 10px;
+            line-height: 1.05;
         }
 
         .banner-slide p {
-            font-size: 16px;
-            margin-bottom: 20px;
-            opacity: 0.95;
+            font-size: 18px;
+            margin-bottom: 28px;
+            opacity: 0.96;
         }
 
         .banner-dots {
@@ -98,10 +172,93 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
             border-radius: 5px;
         }
 
+        .hero-actions {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 14px 26px;
+            border-radius: 999px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .btn-primary {
+            background: white;
+            color: var(--brand-navy);
+            box-shadow: 0 10px 28px rgba(17, 24, 39, 0.18);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: white;
+            border: 1px solid rgba(255,255,255,0.35);
+        }
+
+        .trust-strip {
+            background: white;
+            border-top: 1px solid var(--line);
+            border-bottom: 1px solid var(--line);
+            padding: 18px 0;
+        }
+
+        .trust-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .trust-item {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid #edf1f7;
+        }
+
+        .trust-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            background: rgba(102,126,234,0.12);
+            color: var(--brand-navy);
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .trust-item strong {
+            display: block;
+            font-size: 14px;
+            color: var(--brand-dark);
+        }
+
+        .trust-item span {
+            font-size: 12px;
+            color: #64748b;
+        }
+
         /* Categorias */
         .categories-section {
             padding: 40px 0;
-            background: #f9fafb;
+            background: var(--surface);
         }
 
         .categories-grid {
@@ -224,7 +381,7 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
 
         /* Promoção */
         .promo-banner {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1F3A70 0%, #667eea 60%, #2ECC71 140%);
             color: white;
             padding: 40px;
             border-radius: 8px;
@@ -310,7 +467,7 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
 
         .search-bar button {
             padding: 12px 24px;
-            background: #667eea;
+            background: var(--brand-navy);
             color: white;
             border: none;
             border-radius: 6px;
@@ -321,15 +478,24 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
         /* Responsivo */
         @media (max-width: 767px) {
             .banner-slider {
-                height: 200px;
+                height: 420px;
             }
 
             .banner-slide h2 {
-                font-size: 20px;
+                font-size: 30px;
             }
 
             .banner-slide p {
-                font-size: 14px;
+                font-size: 15px;
+            }
+
+            .hero-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .trust-grid {
+                grid-template-columns: 1fr;
             }
 
             .categories-grid {
@@ -396,7 +562,7 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
             }
 
             .banner-slide h2 {
-                font-size: 42px;
+                font-size: 54px;
             }
 
             .categories-grid {
@@ -418,8 +584,12 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
     <nav class="navbar">
         <div class="container">
             <div class="navbar-brand">
-                <a href="/" style="display: flex; align-items: center; text-decoration: none;">
+                <a href="/" class="brand-lockup" style="text-decoration: none;">
                     <img src="/images/logo.svg" alt="ShopVivaliz" style="height: 50px; width: auto;">
+                    <span class="brand-text">
+                        <strong>ShopVivaliz</strong>
+                        <span>Loja oficial</span>
+                    </span>
                 </a>
             </div>
             <button class="menu-toggle" id="menuToggle">☰</button>
@@ -433,27 +603,65 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
         </div>
     </nav>
 
+    <section class="trust-strip">
+        <div class="container">
+            <div class="trust-grid">
+                <div class="trust-item">
+                    <div class="trust-icon">✓</div>
+                    <div>
+                        <strong>Marca consistente</strong>
+                        <span>Logo e cores unificados em todo o site</span>
+                    </div>
+                </div>
+                <div class="trust-item">
+                    <div class="trust-icon">⚡</div>
+                    <div>
+                        <strong>Compra ágil</strong>
+                        <span>Fluxo direto para catálogo e carrinho</span>
+                    </div>
+                </div>
+                <div class="trust-item">
+                    <div class="trust-icon">🛡</div>
+                    <div>
+                        <strong>Base segura</strong>
+                        <span>Configuração centralizada e sem segredos expostos</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Banner Slider -->
     <section class="banner-slider">
         <div class="banner-slide active">
-            <div>
-                <h2>Bem-vindo ao ShopVivaliz</h2>
-                <p>Produtos de qualidade com entrega rápida</p>
-                <a href="/catalogo" class="btn btn-primary" style="display: inline-block;">Comprar Agora</a>
+            <div class="hero-panel">
+                <div class="hero-kicker">Vivaliz · loja oficial</div>
+                <h2>Uma vitrine que parece pronta para vender</h2>
+                <p>Catálogo organizado, visual limpo e identidade alinhada com o logo da marca.</p>
+                <div class="hero-actions">
+                    <a href="/catalogo" class="btn btn-primary">Explorar catálogo</a>
+                    <a href="/carrinho" class="btn btn-secondary">Ver carrinho</a>
+                </div>
             </div>
         </div>
         <div class="banner-slide">
-            <div>
-                <h2>Promoção 50% OFF</h2>
-                <p>Em produtos selecionados esta semana</p>
-                <a href="/catalogo" class="btn btn-primary" style="display: inline-block;">Ver Promoções</a>
+            <div class="hero-panel">
+                <div class="hero-kicker">Frete e promoções</div>
+                <h2>Promoções com leitura imediata</h2>
+                <p>Mensagens curtas, contraste forte e chamada única para não confundir o cliente.</p>
+                <div class="hero-actions">
+                    <a href="/catalogo" class="btn btn-primary">Ver ofertas</a>
+                </div>
             </div>
         </div>
         <div class="banner-slide">
-            <div>
-                <h2>Frete Grátis</h2>
-                <p>Compras acima de R$ 100</p>
-                <a href="/catalogo" class="btn btn-primary" style="display: inline-block;">Aproveitar</a>
+            <div class="hero-panel">
+                <div class="hero-kicker">Conversão</div>
+                <h2>Compra simples e sem ruído</h2>
+                <p>Menos enfeite, mais clareza. A home precisa levar para produto e checkout com confiança.</p>
+                <div class="hero-actions">
+                    <a href="/catalogo" class="btn btn-primary">Aproveitar</a>
+                </div>
             </div>
         </div>
         <div class="banner-dots">
