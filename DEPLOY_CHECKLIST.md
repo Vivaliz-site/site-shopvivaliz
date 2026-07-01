@@ -4,6 +4,18 @@ Gerado/verificado em 2026-07-01 nesta sessão (container efêmero, sem estado
 anterior). Ver também `claude/medusa/DEPLOY-CHECKLIST.md` (checklist técnico
 anterior) e `claude/medusa/GITHUB_SECRETS_TODO.md` (secrets pendentes).
 
+**Re-verificado no mesmo dia** (segunda sessão, novo container efêmero): pipeline
+completo (migrations, seed de 14 produtos, build backend/storefront, admin user +
+publishable key, `/store/products` com 14 produtos, storefront servindo
+`/br/products/camiseta-shopvivaliz` com preço real R$69,90) confirmado do zero.
+Dois bugs reais encontrados e corrigidos nesta passagem: (1) `@medusajs/payment-stripe`
+estava referenciado em `medusa-config.ts` mas faltava em `package.json` -
+adicionado explicitamente; (2) os scripts pré-existentes
+`claude/api/olist/{auto-sync,diagnostic,diagnostic-full,token-refresh}.php`
+tinham um path de `require` quebrado (`../../config/` em vez de `../../../config/`)
+que os derrubava com fatal error antes de qualquer lógica rodar - corrigido e
+validado. Detalhes completos em `MEDUSA_DEPLOY_VALIDATION.json`.
+
 ## Status verificado nesta sessão
 
 - [x] Database conectando - Postgres **local** (`postgres://medusa:***@127.0.0.1:5432/medusa_backend`).
