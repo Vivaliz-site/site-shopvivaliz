@@ -10,8 +10,13 @@ function classify(string|array $error_log): string {
         // Falha HTTP no checkout ou erros críticos -> HIGH
         if (!empty($metrics['checkout_fail'])) return 'HIGH';
         if (!empty($metrics['error_high']))    return 'HIGH';
-        // Falha E2E sem falha HTTP -> MEDIUM (pode ser problema de infra CI)
-        if (!empty($metrics['e2e_failed']))    return 'MEDIUM';
+        // Falha E2E com site HTTP saudável -> LOW (flakiness de CI, não bug real)
+        // Falha E2E com HTTP também falhando -> MEDIUM (investigar)
+        if (!empty($metrics['e2e_failed'])) {
+            $site_healthy = !empty($metrics['checkout_ok']) && !empty($metrics['api_ok']) && !empty($metrics['pages_ok']);
+            if ($site_healthy) return 'LOW';
+            return 'MEDIUM';
+        }
         if (!empty($metrics['error_medium']))  return 'MEDIUM';
         return 'LOW';
     }

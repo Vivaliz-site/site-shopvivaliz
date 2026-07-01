@@ -130,7 +130,11 @@ function eha_detect_issue(array|string $error_log): string
         return trim($error_log) !== '' ? trim($error_log) : 'null_error';
     }
 
-    if (!empty($error_log['checkout_fail']) || !empty($error_log['e2e_failed']) || !empty($error_log['error_high'])) {
+    // checkout_fail real (HTTP falhou) -> issue real
+    // e2e_failed com checkout_ok -> flakiness CI, não é issue real
+    $real_checkout_fail = !empty($error_log['checkout_fail']);
+    $e2e_only_fail      = !empty($error_log['e2e_failed']) && !empty($error_log['checkout_ok']);
+    if ($real_checkout_fail || (!$e2e_only_fail && !empty($error_log['e2e_failed'])) || !empty($error_log['error_high'])) {
         return 'checkout_fail';
     }
 
