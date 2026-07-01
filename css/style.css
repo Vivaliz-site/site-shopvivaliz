@@ -651,3 +651,82 @@ footer {
         width: 100%;
     }
 }
+
+/* V14 - Catalog Quality Engine: filtros, categorias, tags */
+.category-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 0 4px;
+}
+
+.cat-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--line);
+    background: white;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    color: var(--ink);
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.cat-filter:hover {
+    border-color: var(--brand);
+    color: var(--brand);
+}
+
+.cat-filter.active {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: white;
+}
+
+.cat-count {
+    background: rgba(0,0,0,0.12);
+    border-radius: 10px;
+    padding: 1px 6px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.cat-filter.active .cat-count {
+    background: rgba(255,255,255,0.25);
+}
+
+.product-category {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--brand);
+    margin-bottom: 4px;
+}
+
+.product-price {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 6px 0;
+}
+
+.product-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #f1f5f9;
+    color: var(--muted);
+    border: 1px solid var(--line);
+}

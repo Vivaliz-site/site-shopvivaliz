@@ -132,8 +132,8 @@ function svcat_tiny_access_token(): string
         ]);
         $ctx = stream_context_create(['http' => [
             'method'  => 'POST',
-            'header'  => "Content-Type: application/x-www-form-urlencoded
-User-Agent: ShopVivaliz/1.0
+            'header'  => "Content-Type: application/x-www-form-urlencoded
+User-Agent: ShopVivaliz/1.0
 ",
             'content' => $payload,
             'timeout' => 15,
@@ -168,9 +168,9 @@ function svcat_tiny_price_map(): array
         $url = "https://api.tiny.com.br/public-api/v3/produtos?pagina={$page}&limite=100";
         $ctx = stream_context_create(['http' => [
             'timeout' => 20,
-            'header'  => "Authorization: Bearer {$token}
-User-Agent: ShopVivaliz/1.0
-Accept: application/json
+            'header'  => "Authorization: Bearer {$token}
+User-Agent: ShopVivaliz/1.0
+Accept: application/json
 ",
         ]]);
         $raw = @file_get_contents($url, false, $ctx);
@@ -242,7 +242,7 @@ function svcat_db_products(mysqli $db, int $limit, string $q): array
     return $products;
 }
 
-function svcat_fallback_products(int $limit, string $q): array
+function svcat_fallback_products(int $limit, string $q, string $category = ''): array
 {
     $jsonPath = svcat_root() . '/api/catalog/fallback-products.json';
     if (is_file($jsonPath) && is_readable($jsonPath)) {
@@ -254,7 +254,14 @@ function svcat_fallback_products(int $limit, string $q): array
                 $sku = trim((string)($row['sku'] ?? ''));
                 $name = trim((string)($row['name'] ?? ''));
                 if ($q !== '' && stripos($sku . ' ' . $name, $q) === false) continue;
-                $items[] = svcat_product($row);
+                if ($category !== '' && strcasecmp((string)($row['category'] ?? ''), $category) !== 0) continue;
+                $p = svcat_product($row);
+                // Passa campos V14
+                $p['category']      = (string)($row['category'] ?? '');
+                $p['slug']          = (string)($row['slug'] ?? '');
+                $p['quality_score'] = (int)($row['quality_score'] ?? 0);
+                $p['tags']          = is_array($row['tags'] ?? null) ? $row['tags'] : [];
+                $items[] = $p;
                 if (count($items) >= $limit) break;
             }
             if ($items) return $items;
@@ -316,6 +323,7 @@ function svcat_fallback_products(int $limit, string $q): array
 
 $limit = min(200, max(1, (int)($_GET['limit'] ?? 48)));
 $q = trim((string)($_GET['q'] ?? ''));
+$category = trim((string)($_GET['category'] ?? ''));
 $source = 'fallback_report';
 $products = [];
 try {
@@ -331,7 +339,7 @@ try {
     $source = 'fallback_report';
 }
 if (!$products) {
-    $products = svcat_fallback_products($limit, $q);
+    $products = svcat_fallback_products($limit, $q, $category);
     $source = 'fallback_report';
 }
 
@@ -350,9 +358,24 @@ if ($products) {
     }
 }
 
+// Monta lista de categorias disponíveis a partir do JSON completo
+$categories = [];
+$jsonPath = svcat_root() . '/api/catalog/fallback-products.json';
+if (is_file($jsonPath)) {
+    $all = json_decode((string)file_get_contents($jsonPath), true) ?: [];
+    $catCount = [];
+    foreach ($all as $row) {
+        $cat = (string)($row['category'] ?? '');
+        if ($cat !== '') $catCount[$cat] = ($catCount[$cat] ?? 0) + 1;
+    }
+    arsort($catCount);
+    $categories = $catCount;
+}
+
 svcat_json(200, [
-    'ok' => true,
-    'source' => $products && $source === 'database' ? 'database' : 'fallback_report',
-    'count' => count($products),
-    'products' => $products,
+    'ok'         => true,
+    'source'     => $products && $source === 'database' ? 'database' : 'fallback_report',
+    'count'      => count($products),
+    'products'   => $products,
+    'categories' => $categories,
 ]);
