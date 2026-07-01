@@ -279,7 +279,7 @@ sort($categorias);
     </style>
 </head>
 <body>
-    <?php include __DIR__ . '/../includes/navbar.php'; ?>
+    <?php include __DIR__ . '/../navbar.php'; ?>
 
     <div class="catalog-header">
         <div class="container">

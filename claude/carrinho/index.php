@@ -208,7 +208,7 @@ header('Content-Type: text/html; charset=UTF-8');
     </style>
 </head>
 <body>
-<?php include __DIR__ . '/../includes/navbar.php'; ?>
+<?php include __DIR__ . '/../navbar.php'; ?>
 <main class="cart-shell">
     <div class="container">
         <div class="cart-header">
