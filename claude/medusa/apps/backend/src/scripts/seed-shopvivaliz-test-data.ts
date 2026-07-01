@@ -230,6 +230,59 @@ export default async function seedShopVivalizTestData({
       priceBRL: 249.9,
       priceUSD: 49.9,
     },
+    {
+      title: "Vestido ShopVivaliz",
+      handle: "vestido-shopvivaliz",
+      description:
+        "Vestido midi em viscose leve, caimento fluido para o dia a dia.",
+      sku: "DRESS-001",
+      image: "https://placehold.co/800x800/e67e22/ffffff/png?text=Vestido",
+      weight: 300,
+      priceBRL: 179.9,
+      priceUSD: 35.9,
+    },
+    {
+      title: "Moletom ShopVivaliz",
+      handle: "moletom-shopvivaliz",
+      description:
+        "Moletom com capuz, forro felpudo, ideal para dias frios.",
+      sku: "HOODIE-001",
+      image: "https://placehold.co/800x800/7f8c8d/ffffff/png?text=Moletom",
+      weight: 650,
+      priceBRL: 189.9,
+      priceUSD: 37.9,
+    },
+    {
+      title: "Bermuda ShopVivaliz",
+      handle: "bermuda-shopvivaliz",
+      description:
+        "Bermuda em sarja, corte reto, confortável para o verão.",
+      sku: "SHORTS-001",
+      image: "https://placehold.co/800x800/2980b9/ffffff/png?text=Bermuda",
+      weight: 350,
+      priceBRL: 99.9,
+      priceUSD: 19.9,
+    },
+    {
+      title: "Meia ShopVivaliz (Kit 3 pares)",
+      handle: "meia-shopvivaliz-kit3",
+      description: "Kit com 3 pares de meias em algodão, cano médio.",
+      sku: "SOCKS-001",
+      image: "https://placehold.co/800x800/27ae60/ffffff/png?text=Meias",
+      weight: 100,
+      priceBRL: 39.9,
+      priceUSD: 7.9,
+    },
+    {
+      title: "Óculos de Sol ShopVivaliz",
+      handle: "oculos-sol-shopvivaliz",
+      description: "Óculos de sol com proteção UV400, armação em acetato.",
+      sku: "SUNGLASSES-001",
+      image: "https://placehold.co/800x800/f39c12/ffffff/png?text=%C3%93culos",
+      weight: 50,
+      priceBRL: 129.9,
+      priceUSD: 25.9,
+    },
   ];
 
   const { data: existingProducts } = await query.graph({
