@@ -11,6 +11,11 @@
 # Charset UTF-8
 AddCharset UTF-8 .html .txt .php .json
 
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^catalogo/?$ catalogo.php [L]
+</IfModule>
+
 # Gzip compression (se disponível)
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript
