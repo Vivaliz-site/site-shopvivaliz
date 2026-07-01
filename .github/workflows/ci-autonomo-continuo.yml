@@ -1,0 +1,108 @@
+name: CI AUTONOMO CONTINUO
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'automation/eha/reports/**'
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    env:
+      DB_HOST:     ${{ secrets.DB_HOST }}
+      DB_NAME:     ${{ secrets.DB_NAME }}
+      DB_DATABASE: ${{ secrets.DB_DATABASE }}
+      GH_TOKEN:    ${{ secrets.GH_REPO_TOKEN }}
+      BASE_URL:    ${{ secrets.BASE_URL != '' && secrets.BASE_URL || 'https://shopvivaliz.com.br' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_REPO_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: pdo, pdo_mysql, curl, json, mbstring
+
+      - name: Install deps
+        run: |
+          if [ -f automation/eha/package.json ]; then
+            cd automation/eha && npm install
+          elif [ -f package.json ]; then
+            npm ci
+          else
+            npm install @playwright/test || true
+          fi
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('**/package-lock.json', '**/package.json') }}
+          restore-keys: |
+            playwright-chromium-${{ runner.os }}-
+
+      - name: Install Playwright
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: cd automation/eha && npx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: cd automation/eha && npx playwright install-deps chromium
+
+      - name: Run E2E Checkout
+        id: e2e
+        run: cd automation/eha && npx playwright test checkout.spec.js --config=playwright.config.js --reporter=line
+        continue-on-error: true
+
+      - name: Run PHP EHA Loop
+        id: eha
+        run: php automation/eha/run.php
+        env:
+          E2E_FAILED: ${{ steps.e2e.outcome == 'failure' && '1' || '0' }}
+
+      - name: Upload EHA Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eha-report-${{ github.run_number }}
+          path: automation/eha/reports/
+          retention-days: 14
+
+      - name: Commit EHA reports ao repo
+        if: always()
+        run: |
+          git config user.email 'ci-autonomo@shopvivaliz.com.br'
+          git config user.name 'CI Autônomo'
+          git add automation/eha/reports/
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: atualiza relatórios EHA run #${{ github.run_number }} [skip ci]"
+            for i in 1 2 3 4; do
+              git pull --rebase origin main && git push origin HEAD:main && break
+              sleep $((i * 2))
+            done
+          fi
+
+      - name: Fail if BLOCKED
+        run: |
+          STATUS=$(cat automation/eha/reports/last_status.txt 2>/dev/null || echo "UNKNOWN")
+          echo "EHA Status: $STATUS"
+          if [ "$STATUS" = "BLOCKED" ] || [ "$STATUS" = "ROLLBACK" ]; then
+            echo "::error::EHA retornou $STATUS — pipeline bloqueada"
+            exit 1
+          fi

@@ -1,9 +1,16 @@
-name: Deploy Automtico Seguro - Shop Vivaliz
+name: Deploy Automático Seguro - Shop Vivaliz
 
 on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'automation/**'
+      - '**/*.md'
+      - '.github/**'
+      - '.claude/**'
+      - '.codex/**'
+      - '*.txt'
   workflow_dispatch:
 
 permissions:
@@ -26,10 +33,10 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Baixar o cdigo do repositrio
+      - name: Baixar o código do repositório
         uses: actions/checkout@v4.2.2
 
-      - name: Validar secrets obrigatrios
+      - name: Validar secrets obrigatórios
         shell: bash
         run: |
           missing=0
@@ -38,10 +45,10 @@ jobs:
             local name="$1"
             local value="$2"
             if [ -z "$value" ]; then
-              echo "::error::Secret obrigatrio ausente: $name"
+              echo "::error::Secret obrigatório ausente: $name"
               missing=1
             else
-              echo "Secret obrigatrio configurado: $name"
+              echo "Secret obrigatório configurado: $name"
             fi
           }
 
@@ -49,30 +56,32 @@ jobs:
             local name="$1"
             local value="$2"
             if [ -z "$value" ]; then
-              echo "::warning::Secret opcional ausente: $name. O deploy continuar, mas o provider correspondente ficar indisponvel."
+              echo "::warning::Secret opcional ausente: $name. O deploy continuará, mas o provider correspondente ficará indisponível."
             else
               echo "Secret opcional configurado: $name"
             fi
           }
 
-          check_required_secret "FTP_SERVER" "${{ secrets.FTP_SERVER || secrets.FTP_HOST }}"
-          check_required_secret "FTP_USERNAME" "${{ secrets.FTP_USERNAME || secrets.FTP_USER }}"
-          check_required_secret "FTP_PASSWORD" "${{ secrets.FTP_PASSWORD || secrets.FTP_PASS }}"
+          check_required_secret "FTP_SERVER" "${{ secrets.FTP_SERVER }}"
+          check_required_secret "FTP_USERNAME" "${{ secrets.FTP_USERNAME }}"
+          check_required_secret "FTP_PASSWORD" "${{ secrets.FTP_PASSWORD }}"
           check_required_secret "FTP_PORT" "${{ secrets.FTP_PORT }}"
           check_required_secret "FTP_REMOTE_DIR" "${{ secrets.FTP_REMOTE_DIR }}"
           check_required_secret "SQUAD_TOKEN" "${{ secrets.SQUAD_TOKEN }}"
-
           check_optional_secret "ANTHROPIC_API_KEY" "${{ secrets.ANTHROPIC_API_KEY }}"
           check_optional_secret "OPENAI_API_KEY" "${{ secrets.OPENAI_API_KEY }}"
           check_optional_secret "GEMINI_API_KEY" "${{ secrets.GEMINI_API_KEY }}"
-          check_optional_secret "OLIST_CLIENT_ID" "${{ secrets.OLIST_CLIENT_ID || secrets.CLIENT_ID_API_OLIST }}"
-          check_optional_secret "OLIST_CLIENT_SECRET" "${{ secrets.OLIST_CLIENT_SECRET || secrets.CLIENT_SECRET_OLIST }}"
+          check_optional_secret "DB_HOST" "${{ secrets.DB_HOST }}"
+          check_optional_secret "DB_NAME" "${{ secrets.DB_NAME }}"
+          check_optional_secret "DB_USER" "${{ secrets.DB_USER }}"
+          check_optional_secret "DB_PASS" "${{ secrets.DB_PASS }}"
+          check_optional_secret "DB_PORT" "${{ secrets.DB_PORT }}"
 
           if [ "$missing" -ne 0 ]; then
             exit 1
           fi
 
-      - name: Gerar .env temporrio para o ambiente dev
+      - name: Gerar .env temporário para o ambiente dev
         shell: bash
         run: |
           cat > .env <<'EOF'
@@ -80,18 +89,23 @@ jobs:
           ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-          OLIST_CLIENT_ID=${{ secrets.OLIST_CLIENT_ID || secrets.CLIENT_ID_API_OLIST }}
-          OLIST_CLIENT_SECRET=${{ secrets.OLIST_CLIENT_SECRET || secrets.CLIENT_SECRET_OLIST }}
+          DB_HOST=${{ secrets.DB_HOST }}
+          DB_PORT=${{ secrets.DB_PORT }}
+          DB_NAME=${{ secrets.DB_NAME }}
+          DB_USER=${{ secrets.DB_USER }}
+          DB_PASS=${{ secrets.DB_PASS }}
+          APP_ENV=development
+          BASE_URL=https://dev.shopvivaliz.com.br
           EOF
           sed -i 's/^          //' .env
           chmod 600 .env
-          echo "Arquivo .env temporrio gerado para deploy. Contedo omitido."
+          echo "Arquivo .env temporário gerado para deploy. Conteúdo omitido."
 
       - name: Enviar via FTP Deploy Action
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_SERVER || secrets.FTP_HOST }}
-          username: ${{ secrets.FTP_USERNAME || secrets.FTP_USER }}
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           port: ${{ secrets.FTP_PORT }}
           protocol: ftp
@@ -102,10 +116,22 @@ jobs:
             **/.git*
             **/.git*/**
             **/.github/**
+            **/.claude/**
+            **/.codex/**
+            **/.vscode/**
             **/node_modules/**
             **/vendor/**
+            **/__pycache__/**
+            **/storage/olist-images/**
+            **/storage/reports/**
+            **/storage/runtime/**
+            **/uploads/olist/**
+            **/reports/**
+            **/logs/**
             **/*.sql
             **/*.zip
+            **/*.log
+            **/tmp_*.json
             **/.env.*
             **/login_config.json
             **/*.duck
@@ -114,10 +140,10 @@ jobs:
             **/*password*
             **/*senha*
 
-      - name: Aguardar publicao no servidor
+      - name: Aguardar publicação no servidor
         run: sleep 20
 
-      - name: Teste ps-deploy bsico e Squad real
+      - name: Teste pós-deploy básico e Squad real
         env:
           SQUAD_TOKEN: ${{ secrets.SQUAD_TOKEN }}
         shell: bash
@@ -130,26 +156,38 @@ jobs:
             echo " Falha ao acessar a home do ambiente dev."
             DEPLOY_FAILED=true
           else
-            echo " Home dev acessvel."
+            echo " Home dev acessível."
           fi
 
-          echo "Testando health pblico do Squad Chat..."
+          echo "Testando health público básico..."
+          if curl -fsS "$BASE/api/health.php" -o /tmp/app-health.json; then
+            if grep -q '"ok":true' /tmp/app-health.json; then
+              echo " App health respondeu."
+            else
+              echo " App health respondeu sem payload esperado."
+              cat /tmp/app-health.json
+            fi
+          else
+            echo " App health não disponível. Seguindo com smoke do Squad."
+          fi
+
+          echo "Testando health público do Squad Chat..."
           if curl -fsS "$BASE/api/agent/squad-chat.php?health=1" -o /tmp/squad-health.json; then
             if grep -q '"endpoint":"squad-chat"' /tmp/squad-health.json; then
               echo " Squad Chat health respondeu."
-              jq -r '.providers | to_entries[] | "Provider \(.key): configured=\(.value.configured) model=\(.value.model)"' /tmp/squad-health.json || echo " jq no disponvel para resumir health."
+              jq -r '.providers | to_entries[] | "Provider \(.key): configured=\(.value.configured) model=\(.value.model)"' /tmp/squad-health.json || echo " jq não disponível para resumir health."
             else
-              echo " Squad Chat health no contm endpoint esperado."
+              echo " Squad Chat health não contém endpoint esperado."
               cat /tmp/squad-health.json
             fi
           else
-            echo " Squad Chat health falhou. No bloqueando deploy."
+            echo " Squad Chat health falhou. Não bloqueando deploy."
           fi
 
           echo "Pedindo teste real aos agentes do Squad Chat..."
           cat > /tmp/squad-payload.json <<'JSON'
           {
-            "message": "Teste real dos agentes executado pelo GitHub Actions. Cada agente deve responder somente: nome, provider, model, ok=true ou erro. No simule.",
+            "message": "Teste real dos agentes executado pelo GitHub Actions. Cada agente deve responder somente: nome, provider, model, ok=true ou erro. Não simule.",
             "agents": ["director", "claude", "gpt", "gemini"],
             "history": []
           }
@@ -163,45 +201,45 @@ jobs:
             "$BASE/api/agent/squad-chat.php" \
             -o /tmp/squad-response.json; then
             echo " Squad Chat POST respondeu. Resumo sanitizado:"
-            jq -r '"cycle_id= " + (.cycle_id // "n/a"), (.responses[]? | "\(.name) | provider=\(.provider) | model=\(.model) | ok=\(.ok) | text=\(.text // "" | .[0:180])")' /tmp/squad-response.json || echo " jq no disponvel para resumir resposta."
+            jq -r '"cycle_id= " + (.cycle_id // "n/a"), (.responses[]? | "\(.name) | provider=\(.provider) | model=\(.model) | ok=\(.ok) | text=\(.text // "" | .[0:180])")' /tmp/squad-response.json || echo " jq não disponível para resumir resposta."
             if grep -q '"provider":"openai"' /tmp/squad-response.json && grep -q '"provider":"gemini"' /tmp/squad-response.json && grep -q '"provider":"anthropic"' /tmp/squad-response.json; then
               echo " Providers reais identificados na resposta do Squad."
             else
               echo " Nem todos os providers foram identificados na resposta. Verificar resumo acima."
             fi
           else
-            echo " Squad Chat POST falhou. No bloqueando deploy para manter publicao segura."
+            echo " Squad Chat POST falhou. Não bloqueando deploy para manter publicação segura."
           fi
 
-          echo "Testando arquivo de validao do CNPJ, se existir..."
+          echo "Testando arquivo de validação do CNPJ, se existir..."
           if curl -fsS "$BASE/cnpj-rodape-teste.html" | grep -q "49.903.300/0001-70"; then
             echo " CNPJ validado no arquivo de teste."
           else
-            echo " Arquivo de CNPJ no encontrado ou contedo diferente. No bloqueando deploy."
+            echo " Arquivo de CNPJ não encontrado ou conteúdo diferente. Não bloqueando deploy."
           fi
 
           echo "Testando agente Olist, se existir..."
           if curl -fsS "$BASE/api/agent/olist-zero-id-repair.php" | grep -q '"agent"'; then
             echo " Agente Olist respondeu."
           else
-            echo " Agente Olist no disponvel. No bloqueando deploy."
+            echo " Agente Olist não disponível. Não bloqueando deploy."
           fi
 
           echo "Testando agente de manual do admin, se existir..."
           if curl -fsS "$BASE/api/agent/admin-manual-audit.php" | grep -q 'admin_manual_audit'; then
             echo " Agente de manual do admin respondeu."
           else
-            echo " Agente de manual do admin no disponvel. No bloqueando deploy."
+            echo " Agente de manual do admin não disponível. Não bloqueando deploy."
           fi
 
           if [ "$DEPLOY_FAILED" = true ]; then
-            echo " Deploy publicado, mas teste bsico falhou."
+            echo " Deploy publicado, mas teste básico falhou."
             exit 1
           fi
 
-          echo " Deploy concludo com sucesso."
+          echo " Deploy concluído com sucesso."
 
-      - name: Diagnstico de IA em caso de falha
+      - name: Diagnóstico de IA em caso de falha
         if: failure()
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -209,12 +247,12 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         shell: bash
         run: |
-          echo " Workflow falhou. Iniciando diagnstico se o arquivo existir."
+          echo " Workflow falhou. Iniciando diagnóstico se o arquivo existir."
 
           if [ -f "ai_collaboration.py" ]; then
             python -m pip install --upgrade pip
             pip install google-genai openai anthropic
             python ai_collaboration.py --modo diagnostico
           else
-            echo " ai_collaboration.py no encontrado. Diagnstico de IA ignorado."
+            echo " ai_collaboration.py não encontrado. Diagnóstico de IA ignorado."
           fi

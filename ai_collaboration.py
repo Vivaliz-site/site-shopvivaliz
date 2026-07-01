@@ -6,6 +6,9 @@ from google import genai
 from openai import OpenAI
 from anthropic import Anthropic
 
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-nano")
+OPENAI_REASONING_EFFORT = os.getenv("OPENAI_REASONING_EFFORT", "minimal")
+
 ARQUIVOS_CONTEXTO_ECOMMERCE = [
     ".github/workflows/deploy.yml",
     ".codex/config.toml",
@@ -116,11 +119,12 @@ def iniciar_super_agente_trio(modo: str = "diagnostico", tarefa: str = ""):
     prompt_openai = config_modo["openai_prompt"].format(
         gemini=analise_gemini, claude=analise_claude, tarefa=tarefa
     )
-    res_openai = openai_client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt_openai}],
+    res_openai = openai_client.responses.create(
+        model=OPENAI_MODEL,
+        reasoning={"effort": OPENAI_REASONING_EFFORT},
+        input=prompt_openai,
     )
-    relatorio_final = res_openai.choices[0].message.content
+    relatorio_final = res_openai.output_text
     print("  ChatGPT concluido.")
 
     print("\n========== RELATORIO DO TRIO IA - SHOPVIVALIZ ==========\n")
