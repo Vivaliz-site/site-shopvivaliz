@@ -152,7 +152,10 @@ sv_me_env_load();
 
 $postalCode = preg_replace('/\D+/', '', (string)($_GET['cep'] ?? $_POST['cep'] ?? '35500025'));
 
-$token = sv_me_env('MELHORENVIO_ACCESS_TOKEN') ?: sv_me_env('SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN');
+$token = sv_me_env('MELHORENVIO_ACCESS_TOKEN')
+    ?: sv_me_env('SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN')
+    ?: sv_me_env('MELHORENVIO_API_KEY')
+    ?: sv_me_env('SHOPVIVALIZ_MELHORENVIO_API_KEY');
 $fromPostalCode = preg_replace('/\D+/', '', (string)(sv_me_env('MELHORENVIO_FROM_POSTAL_CODE') ?: sv_me_env('SHOPVIVALIZ_FROM_POSTAL_CODE') ?: '35500000'));
 
 $payload = array(
