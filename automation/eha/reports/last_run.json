@@ -12,7 +12,7 @@
         "error_high": false,
         "recent_errors": [],
         "e2e_failed": true,
-        "timestamp": "2026-07-01T12:21:25+00:00"
+        "timestamp": "2026-07-01T12:28:20+00:00"
     },
     "validation": {
         "status": "BLOCKED",
@@ -20,7 +20,7 @@
         "api_ok": true,
         "db_ok": true,
         "pages_ok": true,
-        "timestamp": "2026-07-01T12:21:25+00:00"
+        "timestamp": "2026-07-01T12:28:20+00:00"
     },
     "loop": {
         "risk": "HIGH",
@@ -29,10 +29,10 @@
         "result": {
             "status": "rollback_requested",
             "reason": "checkout_fail",
-            "timestamp": "2026-07-01T12:21:25+00:00",
+            "timestamp": "2026-07-01T12:28:20+00:00",
             "note": "Rollback automático requer aprovação humana. Evento registrado."
         }
     },
-    "elapsed_s": 0.62,
-    "run_id": "53"
+    "elapsed_s": 0.9,
+    "run_id": "54"
 }
