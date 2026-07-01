@@ -4,7 +4,7 @@ ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 define('APP_NAME', 'ShopVivaliz');
 define('BASE_URL', 'https://dev.shopvivaliz.com.br');
-$cache_file = __DIR__ . '/../storagecatalogo-cache.json';
+$cache_file = __DIR__ . '/../storage/catalogo-cache.json';
 
 // Configuração TinyERP/Olist
 $tiny_api_key = getenv('TINY_ERP_API_KEY') ?: '';
