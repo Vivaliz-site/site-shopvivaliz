@@ -46,7 +46,11 @@ if (!is_dir($dir)) mkdir($dir, 0755, true);
 file_put_contents($dir . '/last_run.json', json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
 echo "EHA: $action in {$elapsed}s | status={$validation['status']}\n";
-exit($validation['status'] === 'BLOCKED' ? 1 : 0);
+
+// Sempre sai com 0 — o gate de pipeline é o step 'Fail if BLOCKED' no workflow YAML.
+// Se run.php sair com 1, o step 'Fail if BLOCKED' nunca é executado e o contexto
+// de erro se perde. O workflow lê last_status.txt e decide se bloqueia.
+exit(0);
 
 // ─────────────────────────────────────────────────────
 
