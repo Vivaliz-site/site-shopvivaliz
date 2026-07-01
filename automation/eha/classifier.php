@@ -7,15 +7,18 @@ function classify(string|array $error_log): string {
     // aceita string (raw log) ou array de métricas
     if (is_array($error_log)) {
         $metrics = $error_log;
-        if (!empty($metrics['checkout_fail']) || !empty($metrics['e2e_failed'])) return 'HIGH';
-        if (!empty($metrics['error_high']))   return 'HIGH';
-        if (!empty($metrics['error_medium'])) return 'MEDIUM';
+        // Falha HTTP no checkout ou erros críticos -> HIGH
+        if (!empty($metrics['checkout_fail'])) return 'HIGH';
+        if (!empty($metrics['error_high']))    return 'HIGH';
+        // Falha E2E sem falha HTTP -> MEDIUM (pode ser problema de infra CI)
+        if (!empty($metrics['e2e_failed']))    return 'MEDIUM';
+        if (!empty($metrics['error_medium']))  return 'MEDIUM';
         return 'LOW';
     }
 
     $log = strtolower((string) $error_log);
 
-    // padrões críticos → HIGH
+    // padrões críticos -> HIGH
     $high_patterns = [
         'fatal error', 'exception', 'checkout fail', 'payment fail',
         'database error', 'connection refused', 'rollback', 'critical',
@@ -25,7 +28,7 @@ function classify(string|array $error_log): string {
         if (str_contains($log, $p)) return 'HIGH';
     }
 
-    // padrões de atenção → MEDIUM
+    // padrões de atenção -> MEDIUM
     $medium_patterns = [
         'warning', 'deprecated', 'missing route', 'missing image',
         'undefined', 'null', '404 not found', 'timeout',
