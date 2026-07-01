@@ -7,8 +7,8 @@ header('Content-Type: text/html; charset=UTF-8');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Entre em contato com a ShopVivaliz para suporte comercial, pedidos e atendimento.">
-    <title>Contato | ShopVivaliz</title>
+    <meta name="description" content="Entre em contato com a Vivaliz para suporte comercial, pedidos e atendimento.">
+    <title>Contato | Vivaliz</title>
     <link rel="stylesheet" href="/css/responsive.css">
     <style>
         .page-shell {
@@ -53,7 +53,7 @@ header('Content-Type: text/html; charset=UTF-8');
     <div class="container contact-grid">
         <section class="contact-card">
             <h1>Contato</h1>
-            <p>Se precisar de ajuda com pedido, informacoes comerciais ou acompanhamento de compra, fale com a ShopVivaliz pelos canais abaixo.</p>
+            <p>Se precisar de ajuda com pedido, informacoes comerciais ou acompanhamento de compra, fale com a Vivaliz pelos canais abaixo.</p>
             <div class="contact-list">
                 <p>E-mail: <a href="mailto:agentes@shopvivaliz.com.br">agentes@shopvivaliz.com.br</a></p>
                 <p>Site de atendimento: <a href="https://dev.shopvivaliz.com.br">dev.shopvivaliz.com.br</a></p>
