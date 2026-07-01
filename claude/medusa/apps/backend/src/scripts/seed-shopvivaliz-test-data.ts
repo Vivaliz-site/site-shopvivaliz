@@ -177,6 +177,17 @@ export default async function seedShopVivalizTestData({
 
   const testProducts = [
     {
+      title: "Camiseta ShopVivaliz",
+      handle: "camiseta-shopvivaliz",
+      description:
+        "Camiseta 100% algodão, corte unissex, confortável para o dia a dia.",
+      sku: "TSHIRT-001",
+      image: "https://placehold.co/800x800/c0392b/ffffff/png?text=Camiseta",
+      weight: 200,
+      priceBRL: 69.9,
+      priceUSD: 13.9,
+    },
+    {
       title: "Calça Jeans ShopVivaliz",
       handle: "calca-jeans-shopvivaliz",
       description:
