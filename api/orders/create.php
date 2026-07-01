@@ -1,8 +1,6 @@
 <?php
 declare(strict_types=1);
 
-require_once dirname(__DIR__, 2) . '/autodev/core/event_collector.php';
-
 header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
@@ -18,6 +16,37 @@ function svo_json(int $status, array $payload): never
 function svo_root(): string
 {
     return dirname(__DIR__, 2);
+}
+
+function svo_autodev_available(): bool
+{
+    static $loaded = null;
+    if ($loaded !== null) {
+        return $loaded;
+    }
+    $path = svo_root() . '/autodev/core/event_collector.php';
+    if (!is_file($path) || !is_readable($path)) {
+        $loaded = false;
+        return false;
+    }
+    require_once $path;
+    $loaded = function_exists('autodev_track');
+    return $loaded;
+}
+
+function svo_order_dir(): string
+{
+    $preferred = svo_root() . '/storage/orders';
+    if ((is_dir($preferred) || @mkdir($preferred, 0755, true)) && is_writable($preferred)) {
+        return $preferred;
+    }
+
+    $fallback = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'shopvivaliz-orders';
+    if ((is_dir($fallback) || @mkdir($fallback, 0755, true)) && is_writable($fallback)) {
+        return $fallback;
+    }
+
+    return '';
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
@@ -95,8 +124,8 @@ $record = [
     'source' => 'site_checkout',
 ];
 
-$dir = svo_root() . '/storage/orders';
-if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+$dir = svo_order_dir();
+if ($dir === '') {
     svo_json(500, ['ok' => false, 'error' => 'order_storage_unavailable']);
 }
 $path = $dir . '/' . $orderNumber . '.json';
@@ -104,22 +133,25 @@ if (file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESC
     svo_json(500, ['ok' => false, 'error' => 'order_write_failed']);
 }
 
-autodev_track('order_complete', [
-    'order_number' => $orderNumber,
-    'total' => round($total, 2),
-    'items_count' => count($cleanItems),
-    'items' => array_map(static function (array $item): array {
-        return [
-            'sku' => $item['sku'],
-            'quantity' => $item['quantity'],
-            'price' => $item['price'],
-        ];
-    }, $cleanItems),
-]);
+if (svo_autodev_available()) {
+    autodev_track('order_complete', [
+        'order_number' => $orderNumber,
+        'total' => round($total, 2),
+        'items_count' => count($cleanItems),
+        'items' => array_map(static function (array $item): array {
+            return [
+                'sku' => $item['sku'],
+                'quantity' => $item['quantity'],
+                'price' => $item['price'],
+            ];
+        }, $cleanItems),
+    ]);
+}
 
 svo_json(200, [
     'ok' => true,
     'order_number' => $orderNumber,
     'status' => 'pending_confirmation',
     'message' => 'Pedido registrado para confirmacao manual de frete e pagamento.',
+    'storage' => str_contains($dir, 'shopvivaliz-orders') ? 'fallback_temp' : 'storage_orders',
 ]);
