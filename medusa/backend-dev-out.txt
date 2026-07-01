@@ -1,0 +1,57 @@
+[32minfo[39m:    Linting project...
+[32minfo[39m:    [Watcher] Using standard dev server (restart on file change)
+[32minfo[39m:    [Watcher] Watching filesystem to reload dev server on file change
+[32minfo[39m:    Skipping instrumentation registration. No register function found.
+[32minfo[39m:    No link to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+draft-order@2.17._31fabe62e633ad2b1ed7f7fb8c0b7eeb\node_modules\@medusajs\draft-order\.medusa\server\src\links. skipped.
+[33mwarn[39m:    Local Event Bus installed. This is not recommended for production.
+[32minfo[39m:    Locking module: Using "in-memory" as default.
+[32minfo[39m:    No workflow to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+draft-order@2.17._31fabe62e633ad2b1ed7f7fb8c0b7eeb\node_modules\@medusajs\draft-order\.medusa\server\src\workflows. skipped.
+[32minfo[39m:    No subscriber to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+draft-order@2.17._31fabe62e633ad2b1ed7f7fb8c0b7eeb\node_modules\@medusajs\draft-order\.medusa\server\src\subscribers. skipped.
+[32minfo[39m:    No job to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+medusa@2.17.0_@me_b3b3a8b2d6c607f9940a8a73d6a1891b\node_modules\@medusajs\medusa\dist\jobs. skipped.
+[32minfo[39m:    No job to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+draft-order@2.17._31fabe62e633ad2b1ed7f7fb8c0b7eeb\node_modules\@medusajs\draft-order\.medusa\server\src\jobs. skipped.
+Error: listen EADDRINUSE: address already in use :::9000
+    at Server.setupListenHandle [as _listen2] (node:net:2009:16)
+    at listenInCluster (node:net:2066:12)
+    at Server.listen (node:net:2171:7)
+    at internalStart (C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+medusa@2.17.0_@me_b3b3a8b2d6c607f9940a8a73d6a1891b\node_modules\@medusajs\medusa\src\commands\start.ts:325:15)
+    at async start (C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+medusa@2.17.0_@me_b3b3a8b2d6c607f9940a8a73d6a1891b\node_modules\@medusajs\medusa\src\commands\start.ts:424:12) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 9000
+}
+[32minfo[39m:    [Watcher] modified medusa-config.ts modified: restarting dev server
+[32minfo[39m:    [Watcher] Reloaded in 1091.49ms
+[32minfo[39m:    Skipping instrumentation registration. No register function found.
+[32minfo[39m:    No link to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+draft-order@2.17._31fabe62e633ad2b1ed7f7fb8c0b7eeb\node_modules\@medusajs\draft-order\.medusa\server\src\links. skipped.
+[33mwarn[39m:    Local Event Bus installed. This is not recommended for production.
+[32minfo[39m:    Locking module: Using "in-memory" as default.
+[32minfo[39m:    No workflow to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+draft-order@2.17._31fabe62e633ad2b1ed7f7fb8c0b7eeb\node_modules\@medusajs\draft-order\.medusa\server\src\workflows. skipped.
+[32minfo[39m:    No subscriber to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+draft-order@2.17._31fabe62e633ad2b1ed7f7fb8c0b7eeb\node_modules\@medusajs\draft-order\.medusa\server\src\subscribers. skipped.
+[32minfo[39m:    No job to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+medusa@2.17.0_@me_b3b3a8b2d6c607f9940a8a73d6a1891b\node_modules\@medusajs\medusa\dist\jobs. skipped.
+[32minfo[39m:    No job to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+draft-order@2.17._31fabe62e633ad2b1ed7f7fb8c0b7eeb\node_modules\@medusajs\draft-order\.medusa\server\src\jobs. skipped.
+Error: listen EADDRINUSE: address already in use :::9000
+    at Server.setupListenHandle [as _listen2] (node:net:2009:16)
+    at listenInCluster (node:net:2066:12)
+    at Server.listen (node:net:2171:7)
+    at internalStart (C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+medusa@2.17.0_@me_b3b3a8b2d6c607f9940a8a73d6a1891b\node_modules\@medusajs\medusa\src\commands\start.ts:325:15)
+    at async start (C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+medusa@2.17.0_@me_b3b3a8b2d6c607f9940a8a73d6a1891b\node_modules\@medusajs\medusa\src\commands\start.ts:424:12) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 9000
+}
+[32minfo[39m:    [Watcher] modified medusa-config.ts modified: restarting dev server
+[32minfo[39m:    [Watcher] Reloaded in 1645.61ms
+[32minfo[39m:    Skipping instrumentation registration. No register function found.
+[32minfo[39m:    No link to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+draft-order@2.17._31fabe62e633ad2b1ed7f7fb8c0b7eeb\node_modules\@medusajs\draft-order\.medusa\server\src\links. skipped.
+[33mwarn[39m:    Local Event Bus installed. This is not recommended for production.
+[32minfo[39m:    Locking module: Using "in-memory" as default.
+[32minfo[39m:    No workflow to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+draft-order@2.17._31fabe62e633ad2b1ed7f7fb8c0b7eeb\node_modules\@medusajs\draft-order\.medusa\server\src\workflows. skipped.
+[32minfo[39m:    No subscriber to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+draft-order@2.17._31fabe62e633ad2b1ed7f7fb8c0b7eeb\node_modules\@medusajs\draft-order\.medusa\server\src\subscribers. skipped.
+[32minfo[39m:    No job to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+medusa@2.17.0_@me_b3b3a8b2d6c607f9940a8a73d6a1891b\node_modules\@medusajs\medusa\dist\jobs. skipped.
+[32minfo[39m:    No job to load from C:\Users\user\site-shopvivaliz\medusa\node_modules\.pnpm\@medusajs+draft-order@2.17._31fabe62e633ad2b1ed7f7fb8c0b7eeb\node_modules\@medusajs\draft-order\.medusa\server\src\jobs. skipped.
+[32minfo[39m:    Admin URL → http://localhost:9000/app
+[32mhttp[39m:    GET /app ← - (200) - 36.709 ms
