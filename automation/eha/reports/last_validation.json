@@ -1,8 +1,8 @@
 {
-    "status": "BLOCKED",
-    "checkout_ok": false,
-    "api_ok": false,
+    "status": "READY_FOR_PRODUCTION",
+    "checkout_ok": true,
+    "api_ok": true,
     "db_ok": true,
-    "pages_ok": false,
-    "timestamp": "2026-07-01T00:51:13+00:00"
+    "pages_ok": true,
+    "timestamp": "2026-07-01T09:09:35+00:00"
 }

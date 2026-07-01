@@ -1,5 +1,5 @@
 {
-    "action": "aguardando_proximo_run",
+    "action": "DEPLOY_OK",
     "metrics": {
         "checkout_ok": true,
         "checkout_fail": false,
@@ -7,12 +7,12 @@
         "db_ok": true,
         "pages_ok": true,
         "error_count": 0,
-        "error_low": true,
+        "error_low": false,
         "error_medium": false,
         "error_high": false,
         "recent_errors": [],
         "e2e_failed": false,
-        "timestamp": "2026-07-01T07:00:00+00:00"
+        "timestamp": "2026-07-01T09:09:35+00:00"
     },
     "validation": {
         "status": "READY_FOR_PRODUCTION",
@@ -20,7 +20,7 @@
         "api_ok": true,
         "db_ok": true,
         "pages_ok": true,
-        "timestamp": "2026-07-01T07:00:00+00:00"
+        "timestamp": "2026-07-01T09:09:35+00:00"
     },
     "loop": {
         "risk": "LOW",
@@ -31,6 +31,6 @@
             "note": "Metricas saudaveis; nenhuma correcao automatica necessaria."
         }
     },
-    "elapsed_s": 0,
-    "run_id": "bootstrap-v2"
+    "elapsed_s": 0.96,
+    "run_id": "29"
 }
