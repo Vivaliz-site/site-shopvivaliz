@@ -94,6 +94,7 @@ jobs:
           DB_NAME=${{ secrets.DB_NAME }}
           DB_USER=${{ secrets.DB_USER }}
           DB_PASS=${{ secrets.DB_PASS }}
+          TOKEN_API_OLIST=${{ secrets.TOKEN_API_OLIST }}
           APP_ENV=development
           BASE_URL=https://dev.shopvivaliz.com.br
           EOF
