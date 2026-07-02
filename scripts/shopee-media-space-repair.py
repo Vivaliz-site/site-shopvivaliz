@@ -379,6 +379,18 @@ def main() -> int:
         "counters": dict(counters),
         "rows": report_rows,
     }
+    api_error_samples = [
+        {
+            "row_excel": row.get("row_excel"),
+            "item_id": row.get("item_id"),
+            "sku": row.get("sku"),
+            "api_error": row.get("api_error"),
+        }
+        for row in report_rows
+        if row.get("api_status") == "error"
+    ][:5]
+    if api_error_samples:
+        summary["api_error_samples"] = api_error_samples
     output_json.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({k: v for k, v in summary.items() if k != "rows"}, ensure_ascii=False, indent=2))
     print(f"report_saved={output_json}")

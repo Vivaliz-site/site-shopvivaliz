@@ -42,7 +42,6 @@ class ShopeeClient:
         self.shop_id = int(os.environ["SHOPEE_SHOP_ID"])
         self.base_url = self._resolve_base_url()
         self._session = requests.Session()
-        self._session.headers.update({"Content-Type": "application/json"})
         if self.refresh_token:
             self._refresh_access_token()
 
@@ -130,16 +129,20 @@ class ShopeeClient:
         *,
         extra_params: dict | None = None,
         json_body: dict | None = None,
+        form_data: dict | None = None,
         files: dict | None = None,
         timeout: int = 30,
     ) -> requests.Response:
         params = {**self._base_params(path), **(extra_params or {})}
+        headers = {"Content-Type": "application/json"} if files is None else None
         resp = self._session.request(
             method,
             f"{self.base_url}{path}",
             params=params,
             json=json_body,
+            data=form_data,
             files=files,
+            headers=headers,
             timeout=timeout,
         )
         if resp.status_code == 403 and self.refresh_token and self._is_invalid_token_response(resp):
@@ -150,7 +153,9 @@ class ShopeeClient:
                 f"{self.base_url}{path}",
                 params=params,
                 json=json_body,
+                data=form_data,
                 files=files,
+                headers=headers,
                 timeout=timeout,
             )
         return resp
@@ -261,6 +266,7 @@ class ShopeeClient:
             resp = self._send_with_refresh(
                 "POST",
                 path,
+                form_data={"scene": "normal"},
                 files={"image": (Path(local_path).name, f, "image/jpeg")},
                 timeout=60,
             )
