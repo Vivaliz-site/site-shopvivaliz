@@ -47,7 +47,17 @@ $total_geral = !empty($GLOBALS['produtos_olist']) ? count($GLOBALS['produtos_oli
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="ShopVivaliz — Loja online com <?= $total_geral ?: 198 ?> produtos de qualidade. Entrega rápida e segura.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="ShopVivaliz">
+    <meta property="og:title" content="ShopVivaliz — Sua Loja Online de Confiança">
+    <meta property="og:description" content="<?= $total_geral ?: 198 ?> produtos de qualidade com entrega rápida para todo o Brasil. Encontre o que você precisa com ótimos preços.">
+    <meta property="og:url" content="https://<?= htmlspecialchars($_SERVER['HTTP_HOST'] ?? 'shopvivaliz.com.br') ?>/">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="ShopVivaliz — Sua Loja Online de Confiança">
+    <meta name="twitter:description" content="<?= $total_geral ?: 198 ?> produtos com entrega rápida para todo o Brasil.">
     <title>ShopVivaliz — Sua Loja Online de Confiança</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="/css/responsive.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
