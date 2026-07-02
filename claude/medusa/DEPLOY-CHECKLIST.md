@@ -219,6 +219,33 @@ com `status: PROCESSED`; assinatura ausente/inválida continuam rejeitadas com
 401. Todos os processos/serviços locais parados e `.env`/`.env.local`/logs de
 teste removidos ao final; `git status` limpo além do fix de código acima.
 
+**Reverificado em 2026-07-02** (décima rodada, novo container efêmero, `main`
+sem alterações em `claude/medusa`/`claude/api` desde a rodada anterior):
+Postgres 16 + Redis locais provisionados, `npm install` limpo em ambos os apps
+(backend: 1342 pacotes; storefront: 542 pacotes), `npx medusa db:migrate` +
+`seed-shopvivaliz-test-data.ts` aplicados sem erros (região Brasil/BRL, 8
+produtos ShopVivaliz + 4 demo = 12 no total, cliente de teste confirmado via
+SELECT direto no Postgres), usuário admin criado. `npm run build` OK nos dois
+apps (backend: 4.56s backend + 21.02s frontend/admin; storefront: 133 páginas
+estáticas geradas, idêntico à rodada 9). Publishable API key criada via Admin
+API e vinculada ao Default Sales Channel; `GET /store/products` retornou os
+12 produtos. Storefront em modo produção renderizou
+`/br/products/camiseta-shopvivaliz` com preço real da API (R$69,90), HTTP
+200. Webhook Medusa → EHA revalidado ponta a ponta com o backend real
+rodando (update de produto real via Admin API → subscriber → POST assinado
+com header `X-Medusa-Signature` → `medusa-webhook.php` → HTTP 200,
+`status: PROCESSED` no log local para o `product_id` real) e também em teste
+isolado via `php -S` (assinatura válida → 200; inválida/ausente → 401).
+**Nenhum bug novo encontrado nesta rodada** — os fixes das rodadas 8 e 9
+permanecem corrigidos. Nota de processo: um teste manual isolado usou por
+engano o header `X-EHA-Signature` (em vez do correto `X-Medusa-Signature`,
+conforme `src/subscribers/eha-webhook.ts`) e retornou 401 — não é regressão,
+foi erro do próprio teste, corrigido ao reconferir o código-fonte antes de
+concluir. Todos os processos/serviços locais parados ao final; `.env`/
+`.env.local` de teste removidos; um diff incidental de `package-lock.json`
+(resolução flutuante de `picomatch`, dependência transitiva) foi revertido
+para manter o diff desta rodada limitado a documentação.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
