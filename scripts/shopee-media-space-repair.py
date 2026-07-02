@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import ntpath
 import re
 import unicodedata
 from collections import Counter
@@ -172,9 +173,11 @@ def resolve_local_image_path(original: Any, image_root: Path | None) -> Path | N
         return original_path
 
     if image_root and image_root.is_dir():
-        candidate = image_root / original_path.name
-        if candidate.is_file():
-            return candidate
+        file_names = [original_path.name, ntpath.basename(raw)]
+        for file_name in dict.fromkeys(name for name in file_names if name):
+            candidate = image_root / file_name
+            if candidate.is_file():
+                return candidate
 
     return original_path
 
