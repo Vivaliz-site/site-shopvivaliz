@@ -1,7 +1,9 @@
 # 🚀 ShopVivaliz Medusa - Deployment Status
 
-**Data:** 01/07/2026  
-**Status:** ⚙️ **IMPLANTAÇÃO EM PROGRESSO**
+**Data:** 02/07/2026 (round 7)
+**Status:** ⚠️ **VALIDADO LOCALMENTE — BLOQUEADO PARA PRODUÇÃO** (mesmos 5 blockers há várias rodadas, todos exigem ação humana)
+
+Relatório detalhado, item a item: [`claude/medusa/DEPLOY-STATUS-REPORT.json`](claude/medusa/DEPLOY-STATUS-REPORT.json) e [`claude/medusa/DEPLOY-CHECKLIST.md`](claude/medusa/DEPLOY-CHECKLIST.md).
 
 ---
 
@@ -11,163 +13,112 @@
 |--------|-----------|--------|--------|
 | **ShopVivaliz Autonomo** | A cada hora | ✅ Ativo | Validação e sincronização contínua |
 | **Medusa Completion** | A cada hora | ✅ Ativo | Finalização de tarefas pendentes |
-| **Full Deployment Agent** | A cada 2 horas | ✅ **NOVO** | Setup completo + produção |
+| **Full Deployment Agent** | A cada 2 horas | ✅ Ativo | Setup completo + produção |
 
 ---
 
 ## 📋 Checklist de Implantação
 
 ### 1. Database Setup
-- [ ] Verificar DATABASE_URL em `.env`
-- [ ] Se vazio, usar Supabase (5 min)
-- [ ] Se existe, validar conectividade
-- [ ] Converter DB_HOST/DB_USER para URL se necessário
+- [x] Verificar DATABASE_URL — vazio em todo `.env` (esperado, gitignored, container efêmero)
+- [ ] Supabase (ou Neon/Railway/RDS) — **BLOCKER**: requer login humano interativo, não é possível criar conta/projeto de forma autônoma (acesso de rede a `api.supabase.com` é bloqueado pela política de rede deste ambiente)
+- [x] Validado com Postgres 16 local (efêmero, só para revalidar a aplicação)
 
-**Status:** ⏳ Em progresso (agente verificando agora)
+**Status:** 🔴 BLOCKER (ação humana pendente há 7 rodadas)
 
 ### 2. Migrations & Seed Data
-- [ ] npm run migrate:latest
-- [ ] npm run seed (criar 10+ produtos)
-- [ ] Validar sem erros
+- [x] `npx medusa db:migrate` OK
+- [x] `npx medusa exec ./src/scripts/seed-shopvivaliz-test-data.ts` OK — 12 produtos (8 ShopVivaliz + 4 demo Medusa)
 
-**Status:** ⏳ Aguardando database setup
+**Status:** ✅ OK (local)
 
 ### 3. Payment Gateways (Teste)
-- [ ] Stripe TEST keys configuradas
-- [ ] PayPal sandbox setup
-- [ ] PIX automático
-- [ ] Webhooks registrados
+- [x] Stripe TEST keys (exemplo padrão da doc Stripe) configuradas em `.env` local
+- [ ] PayPal sandbox — sem credenciais disponíveis nesta sessão
+- [x] PIX (`PIX_PROVIDER=manual`, `PIX_ENABLED=true`) configurado
+- [ ] Webhooks reais no dashboard Stripe/PayPal — requer login humano
 
-**Status:** ⏳ Aguardando .env completo
+**Status:** ⚠️ OK_TEST_KEYS (produção pendente de credenciais reais)
 
 ### 4. Environment Variables
-- [ ] JWT_SECRET gerado
-- [ ] COOKIE_SECRET gerado
-- [ ] CORS_ORIGIN configurado
-- [ ] Todas as variáveis preenchidas
+- [x] JWT_SECRET, COOKIE_SECRET, EHA_WEBHOOK_SECRET, OLIST_WEBHOOK_SECRET, STRIPE_WEBHOOK_SECRET gerados com `openssl rand -base64 32`
+- [x] CORS (STORE/ADMIN/AUTH) configurado
+- [x] Nenhuma variável undefined para build/start local
 
-**Status:** ⏳ Em progresso
+**Status:** ✅ OK (local — produção precisa de secrets novos, nunca reaproveitar os de dev)
 
 ### 5. Build & Validation
-- [ ] Backend compila sem erros
-- [ ] Storefront compila sem erros
-- [ ] Bundle sizes validados
+- [x] Backend: `npm install` + `npm run build` (medusa build) sem erros
+- [x] Storefront: `npm install` + `npm run build` (next build) — 133 páginas estáticas, sem erros
 
-**Status:** ⏳ Aguardando env vars
+**Status:** ✅ OK
 
 ### 6. Local Testing
-- [ ] API rodando em localhost:9000
-- [ ] Health check respondendo
-- [ ] Endpoints testados
+- [x] Backend em `localhost:9000` via `npx medusa start`
+- [x] `GET /health` → 200 OK
+- [x] `GET /store/products` respondendo corretamente
 
-**Status:** ⏳ Aguardando build
+**Status:** ✅ OK
 
 ### 7. Marketplace Integration
-- [ ] sync-olist-products.php verificado
-- [ ] Teste de sincronização
-- [ ] Webhooks de Olist
+- [x] `claude/api/sync-olist-products.php` (classe `OlistSync`), `claude/api/olist/webhook.php`, `claude/api/medusa-webhook.php` — `php -l` sem erro de sintaxe
+- [ ] Teste end-to-end contra API real Olist/Tiny — sem credenciais reais nesta sessão
 
-**Status:** ⏳ Próximo passo
+**Status:** ⚠️ OK_SEM_CREDENCIAIS_REAIS
 
 ### 8. GitHub Secrets
-- [ ] Secrets configurados no GitHub
-- [ ] CI/CD workflows prontos
-- [ ] Automatic deployment configurado
+- [ ] **BLOCKER**: esta sessão não tem `gh` CLI nem ferramenta MCP de secrets do GitHub (só leitura/escrita de conteúdo, issues, PRs). Comandos prontos com placeholders em [`claude/medusa/GITHUB_SECRETS_TODO.md`](claude/medusa/GITHUB_SECRETS_TODO.md)
 
-**Status:** ⏳ Próximo passo
+**Status:** 🔴 BLOCKER (ação humana pendente há 7 rodadas)
 
 ### 9. Deployment Preparation
-- [ ] Node.js 18+ requisitos
-- [ ] PM2 setup
-- [ ] SSL/TLS preparado
-- [ ] deploy.sh script criado
+- [x] `claude/medusa/deploy.sh`, `DEPLOY-CHECKLIST.md`, `DEPLOY_HOSTGATOR.md` já existem e continuam válidos
+- ⚠️ **Correção importante**: HostGator (hospedagem compartilhada, usada hoje pelo site PHP legado) **não roda Node.js/Postgres persistente**. Backend/storefront Medusa precisam de host separado (Railway/Render/Fly.io/VPS + Vercel/Netlify) — ver `deploy.sh` e `DEPLOY-CHECKLIST.md`
 
-**Status:** ⏳ Próximo passo
+**Status:** 🔴 BLOCKER (host Node.js de produção ainda não escolhido/provisionado)
 
 ### 10. Deployment Checklist
-- [ ] Documento criado
-- [ ] Todos os pré-requisitos listados
-- [ ] Instruções passo-a-passo
+- [x] Documento existente e atualizado (`claude/medusa/DEPLOY-CHECKLIST.md`)
 
-**Status:** ⏳ Próximo passo
+**Status:** ✅ OK
 
 ### 11. Final Validation Report
-- [ ] JSON report gerado
-- [ ] Status "PRONTO_PARA_DEPLOY" se OK
-- [ ] Blockers documentados se houver
+- [x] `claude/medusa/DEPLOY-STATUS-REPORT.json` (round 7) — `overall_status: BLOQUEADO_PARA_PRODUCAO`
 
-**Status:** ⏳ Próximo passo
+**Status:** ✅ OK
 
 ---
 
-## 🔄 Timeline Esperada
+## 🔴 Blockers ativos (exigem ação humana — sem progresso possível por automação)
 
-| Etapa | Tempo Estimado | Status |
-|-------|---|---|
-| Database + Migrations | 30 min | ⏳ Em progresso |
-| Build & Validation | 10 min | ⏳ Aguardando |
-| Payment Setup | 15 min | ⏳ Aguardando |
-| Local Testing | 10 min | ⏳ Aguardando |
-| Marketplace Setup | 20 min | ⏳ Aguardando |
-| GitHub Secrets | 5 min | ⏳ Aguardando |
-| Deployment Prep | 30 min | ⏳ Aguardando |
-| **TOTAL** | **~2 horas** | ⏳ Em progresso |
+1. **Banco de dados de produção** — criar projeto Supabase/Neon/Railway/RDS manualmente e definir `DATABASE_URL`
+2. **Host Node.js de produção** — HostGator não serve para o backend/storefront Medusa; escolher VPS/Railway/Render/Fly.io (+ Vercel/Netlify para o storefront)
+3. **GitHub Secrets** — configurar via `Settings > Secrets and variables > Actions` ou `gh secret set` local (comandos prontos em `GITHUB_SECRETS_TODO.md`)
+4. **Credenciais reais de PayPal/Olist** — gerar sandbox PayPal e novo client secret Olist/Tiny
+5. **Rotacionar `OLIST_CLIENT_SECRET`** — segredo antigo vazado em texto puro permanece no histórico do git (achado de segurança de 2026-07-01); valores atuais já redigidos nos arquivos vigentes, mas rotação no painel Tiny/Olist ainda pendente
+
+Nenhum destes 5 itens mudou desde a 6ª rodada (01-02/07/2026); esta rodada revalidou o ambiente (sem marcadores de conflito de merge, JSON/PHP sintaticamente válidos, nenhuma mudança em `claude/medusa/` desde então) e confirmou que os blockers permanecem os mesmos.
 
 ---
 
-## 📊 O Que Está Acontecendo Agora
+## 🎯 O que já está pronto (sem ação humana)
 
-1. **Agente Full Deployment** está sendo executado agora (Session: cse_01TRojYfKJWC69y2yvhm5sHZ)
-2. Verificando e configurando database
-3. Gerando environment variables se necessário
-4. Compilando backend e storefront
-5. Testando API localmente
-6. Registrando webhooks
-7. Criando documentação de deploy
-8. Fazendo commits automáticos
+✅ Migrations + seed rodando limpo (12 produtos)
+✅ Build de backend e storefront sem erros
+✅ API local respondendo (`/health`, `/store/products`)
+✅ Stripe TEST configurado + PIX habilitado
+✅ Scripts/documentação de deploy prontos (`deploy.sh`, checklists)
+✅ Integração Olist com sintaxe validada
 
----
-
-## ⚡ Próximas Ações (Autônomas)
-
-- A cada 2 horas: Agente Full Deployment executa e avança 1 etapa
-- A cada 1 hora: Agentes Autonomo + Completion validam e corrigem
-- Automaticamente: GitHub Actions sync Olist (a cada 6 horas)
-
----
-
-## 🎯 Resultado Final Esperado
-
-✅ Database rodando (Supabase ou PostgreSQL)  
-✅ API rodando localmente (localhost:9000)  
-✅ Build compilando sem erros  
-✅ Pagamentos configurados (modo teste)  
-✅ Webhooks registrados  
-✅ GitHub Secrets setup  
-✅ Deploy script pronto  
-✅ Checklist de produção criado  
-
-**Status Final: PRONTO PARA DEPLOY EM HOSTGATOR**
+**Status Final: NÃO é "pronto para deploy em HostGator"** — o site PHP legado continua no HostGator, mas o backend/storefront Medusa (Node.js) precisa de um host separado. "Pronto para produção" só depois dos 5 blockers acima serem resolvidos por um humano.
 
 ---
 
 ## 📞 Monitorar Progresso
 
-Verifique o status em: https://claude.ai/code/routines
-
-Procure por: **"Medusa Full Deployment - Complete Setup & Production"**
+Relatório completo: [`claude/medusa/DEPLOY-STATUS-REPORT.json`](claude/medusa/DEPLOY-STATUS-REPORT.json)
 
 ---
 
-## 🔐 Nota de Segurança
-
-- ✅ Credenciais de TESTE serão usadas para o setup inicial
-- ✅ Documentação guiará sobre como inserir credenciais reais
-- ✅ Nenhuma credencial será commitada no Git
-- ✅ GitHub Secrets serão usados para produção
-
----
-
-**Agente iniciado:** 01/07/2026 14:44 UTC  
-**Próxima execução:** 01/07/2026 16:00 UTC  
-**Status:** ⏳ Implantação em progresso
+**Última verificação:** 02/07/2026
+**Próxima execução:** ciclo seguinte do Full Deployment Agent
