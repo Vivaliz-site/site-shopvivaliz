@@ -74,6 +74,34 @@ foram removidos depois do teste. `claude/api/sync-olist-products.php` e
 `claude/api/olist/webhook.php` passaram em `php -l` (sem erro de sintaxe); não têm
 credenciais Olist reais nesta sessão para testar a chamada de rede em si.
 
+**Reverificado novamente em 2026-07-02** (quarta rodada, novo container
+efêmero, `main` sincronizado com `origin/main`): Postgres 16 local
+provisionado, `npm install` limpo em ambos os apps (backend: 1341 pacotes/
+~24min; storefront: 544 pacotes), `npx medusa db:migrate` + seed inicial +
+`seed-shopvivaliz-test-data.ts` aplicados sem erros. Adicionados 2 produtos
+novos ao script de seed (Vestido e Bolsa ShopVivaliz) para atingir 11
+produtos no catálogo (7 ShopVivaliz + 4 demo), acima do mínimo de 10 pedido
+nesta rodada. Usuário admin criado, `npm run build` OK nos dois apps (backend:
+4.2s + 22.5s; storefront: 125 páginas estáticas geradas). Publishable API key
+criada via Admin API e vinculada ao Default Sales Channel; `GET
+/store/products` retornou os 11 produtos. Backend subiu limpo (`npm run dev`,
+`GET /health` → 200 OK) e o storefront em modo produção (`npm run start`,
+porta 8000) renderizou `/br/products/camiseta-shopvivaliz` com preço real da
+API (R$69,90). `sync-olist-products.php` executado sem credenciais reais:
+falhou de forma controlada com a mensagem esperada ("credenciais Olist/Tiny
+necessárias"), confirmando que o script já existe e se comporta corretamente.
+Criados `DEPLOY_HOSTGATOR.md` e `DEPLOY_CHECKLIST.md` (o `deploy.sh` já
+referenciava este último, mas o arquivo ainda não existia).
+
+**Confirmado nesta rodada:** este ambiente **não tem acesso de rede** a
+`supabase.com`, `api.stripe.com` nem `paypal.com` (bloqueio 403 da política
+de proxy da organização, não um erro transitório), então a criação de conta/
+projeto Supabase e a geração de chaves reais de Stripe/PayPal continuam sendo
+ações humanas que não podem ser automatizadas nesta sessão. `gh` CLI também
+não está disponível e a ferramenta MCP do GitHub não tem operação de secrets,
+então a configuração de GitHub Secrets segue manual (comandos prontos em
+`GITHUB_SECRETS_TODO.md`).
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local

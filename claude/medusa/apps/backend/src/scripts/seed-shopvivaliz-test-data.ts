@@ -230,6 +230,28 @@ export default async function seedShopVivalizTestData({
       priceBRL: 249.9,
       priceUSD: 49.9,
     },
+    {
+      title: "Vestido ShopVivaliz",
+      handle: "vestido-shopvivaliz",
+      description:
+        "Vestido midi em tecido leve, caimento solto, ideal para o dia a dia.",
+      sku: "DRESS-001",
+      image: "https://placehold.co/800x800/d35400/ffffff/png?text=Vestido",
+      weight: 300,
+      priceBRL: 129.9,
+      priceUSD: 25.9,
+    },
+    {
+      title: "Bolsa ShopVivaliz",
+      handle: "bolsa-shopvivaliz",
+      description:
+        "Bolsa transversal em couro sintético, compartimento interno amplo.",
+      sku: "BAG-001",
+      image: "https://placehold.co/800x800/7f8c8d/ffffff/png?text=Bolsa",
+      weight: 400,
+      priceBRL: 99.9,
+      priceUSD: 19.9,
+    },
   ];
 
   const { data: existingProducts } = await query.graph({

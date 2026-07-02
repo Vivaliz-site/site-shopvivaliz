@@ -1,0 +1,77 @@
+{
+  "run_date": "2026-07-02",
+  "project": "shopvivaliz-medusa",
+  "overall_status": "BLOCKERS_PENDENTES",
+  "summary": "Codigo, migrations, seed e build validados com sucesso em ambiente local efemero. Producao bloqueada por acoes humanas: criacao de conta Supabase, chaves reais de gateways de pagamento, DNS/SSL do dominio de producao e rotacao de credenciais Olist vazadas no historico do git.",
+  "steps": {
+    "1_database_setup": {
+      "status": "OK_LOCAL / BLOCKER_PRODUCAO",
+      "detail": "DATABASE_URL vazio no .env.example (esperado, .env nao versionado). Postgres 16 local provisionado nesta sessao e validado com SELECT 1. Producao requer projeto Supabase criado manualmente (sem acesso de rede a supabase.com neste ambiente - bloqueio 403 de politica de proxy da organizacao, nao transitorio).",
+      "blocker": true,
+      "blocker_reason": "Criacao de conta/projeto Supabase exige login humano; rede para supabase.com bloqueada nesta sessao."
+    },
+    "2_migrations_seed": {
+      "status": "OK",
+      "detail": "npx medusa db:migrate + seed inicial + seed-shopvivaliz-test-data.ts executados sem erro. 11 produtos no catalogo (7 ShopVivaliz + 4 demo), acima do minimo de 10 solicitado. Cliente de teste cliente.teste@shopvivaliz.com.br criado.",
+      "blocker": false
+    },
+    "3_payment_gateway_setup": {
+      "status": "OK_CODIGO / BLOCKER_CREDENCIAIS_REAIS",
+      "detail": "STRIPE_API_KEY/STRIPE_PUBLIC_KEY de teste (chave de exemplo publica oficial do Stripe, nao conta real) configuradas no .env local. Modulo @medusajs/payment-stripe carrega condicionalmente quando STRIPE_API_KEY esta definido (validado em sessao anterior via registro do provider no Postgres). PIX habilitado via payment_method_types. PAYPAL_CLIENT_ID/SECRET nao configurados (placeholder pendente).",
+      "blocker": true,
+      "blocker_reason": "Sem acesso de rede a api.stripe.com/paypal.com nesta sessao; criacao de contas/chaves reais e registro de webhooks exige acao humana nos dashboards."
+    },
+    "4_environment_variables": {
+      "status": "OK",
+      "detail": "JWT_SECRET, COOKIE_SECRET, EHA_WEBHOOK_SECRET, OLIST_WEBHOOK_SECRET gerados com openssl rand. CORS origins configurados. Nenhuma variavel critica indefinida para build/dev local.",
+      "blocker": false
+    },
+    "5_build_validation": {
+      "status": "OK",
+      "detail": "Backend: npm run build OK (4.2s backend, 22.5s admin). Storefront: npm run build OK (125 paginas estaticas geradas, first load JS 100-190kB por rota).",
+      "blocker": false
+    },
+    "6_local_testing": {
+      "status": "OK",
+      "detail": "npm run dev no backend, GET /health -> 200 OK. Storefront em modo producao renderizou /br/products/camiseta-shopvivaliz com preco real da API (R$69,90). GET /store/products retornou os 11 produtos.",
+      "blocker": false
+    },
+    "7_marketplace_integrations": {
+      "status": "OK",
+      "detail": "claude/api/sync-olist-products.php (classe OlistSync) ja existe e foi executado nesta sessao: falha controlada e esperada sem OLIST_CLIENT_ID/SECRET reais (exit code 1, mensagem clara). Webhook inbound src/api/webhooks/olist/route.ts tambem ja implementado.",
+      "blocker": false
+    },
+    "8_github_secrets_setup": {
+      "status": "BLOCKER_MANUAL",
+      "detail": "Sem gh CLI instalado e sem ferramenta MCP de secrets do GitHub disponivel nesta sessao (apenas leitura/escrita de conteudo, issues e PRs). Lista completa de secrets e comandos gh prontos em claude/medusa/GITHUB_SECRETS_TODO.md.",
+      "blocker": true,
+      "blocker_reason": "Nenhuma ferramenta disponivel nesta sessao para configurar GitHub Secrets automaticamente."
+    },
+    "9_deployment_preparation": {
+      "status": "OK",
+      "detail": "Criados claude/medusa/DEPLOY_HOSTGATOR.md (pre-requisitos + passo a passo VPS) e confirmado claude/medusa/deploy.sh ja existente (deploy via PM2, backend+storefront).",
+      "blocker": false
+    },
+    "10_deployment_checklist": {
+      "status": "OK",
+      "detail": "Criado claude/medusa/DEPLOY_CHECKLIST.md com itens validados e bloqueios pendentes.",
+      "blocker": false
+    }
+  },
+  "security_findings": [
+    {
+      "severity": "high",
+      "description": "OLIST_CLIENT_ID/OLIST_CLIENT_SECRET reais foram commitados em texto puro no historico do git em sessoes anteriores (SETUP-OLIST-SECRETS.md, GITHUB-SECRETS-TO-ADD.md, scripts/olist-*.py) e um authorization code OAuth em .tokens/. Arquivos atuais ja redigidos e .tokens/ no .gitignore, mas o segredo permanece no historico do git.",
+      "recommendation": "Rotacionar o client secret no painel Tiny/Olist assim que possivel. Avaliar reescrever historico do git (acao destrutiva, requer decisao humana)."
+    }
+  ],
+  "blockers": [
+    "Banco de dados de producao (Supabase ou equivalente) - requer conta humana, rede bloqueada nesta sessao",
+    "Chaves reais de pagamento Stripe/PayPal - requer conta humana, rede bloqueada nesta sessao",
+    "Registro de webhooks nos gateways de pagamento - depende do item anterior",
+    "GitHub Secrets - nenhuma ferramenta disponivel nesta sessao para configurar automaticamente",
+    "Rotacao de credenciais Olist/Tiny vazadas no historico do git",
+    "SSL, DNS e host de producao definidos (VPS HostGator ou alternativa Node-friendly)"
+  ],
+  "ready_for_deploy": false
+}
