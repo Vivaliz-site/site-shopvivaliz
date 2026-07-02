@@ -24,7 +24,17 @@ jobs:
       - name: Run Medusa migration agent
         run: php automation/eha/medusa_migration_agent.php
 
+      - name: Garantir arquivos de artefato existem
+        if: always()
+        run: |
+          mkdir -p automation/eha/reports logs
+          [ -f automation/eha/reports/medusa-last-run.json ] || echo '{}' > automation/eha/reports/medusa-last-run.json
+          [ -f automation/eha/reports/medusa-run-history.jsonl ] || echo '' > automation/eha/reports/medusa-run-history.jsonl
+          [ -f logs/tasks-queue.json ] || echo '[]' > logs/tasks-queue.json
+
       - name: Upload Medusa EHA report
+        if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: medusa-eha-report-${{ github.run_number }}
@@ -35,10 +45,11 @@ jobs:
           retention-days: 14
 
       - name: Commit Medusa status
+        if: always()
         run: |
           git config user.email 'ci-autonomo@shopvivaliz.com.br'
           git config user.name 'CI Autonomo'
-          git add automation/eha/reports/medusa-last-run.json automation/eha/reports/medusa-run-history.jsonl logs/tasks-queue.json
+          git add automation/eha/reports/medusa-last-run.json automation/eha/reports/medusa-run-history.jsonl || true
           if ! git diff --cached --quiet; then
             git commit -m "chore: atualiza proximo passo medusa #${{ github.run_number }} [skip ci]"
             for i in 1 2 3 4; do
