@@ -1,59 +1,59 @@
 {
   "project": "shopvivaliz-medusa",
-  "report_generated_at": "2026-07-02T19:45:00Z",
-  "round": 10,
+  "report_generated_at": "2026-07-02T20:15:00Z",
+  "round": 11,
   "overall_status": "BLOQUEADO_PARA_PRODUCAO",
-  "summary": "Decima rodada: revalidacao completa do zero (novo container efemero), sem alteracoes em claude/medusa ou claude/api desde a rodada anterior. npm install/build/migrate/seed/start executados do zero em backend e storefront, sem erros de codigo proprio. Nenhum bug novo foi encontrado nesta rodada - os dois bugs reais encontrados e corrigidos nas rodadas 8 e 9 (mismatch de payload do subscriber EHA e leitura de EHA_WEBHOOK_SECRET via $_ENV vazio sob variables_order=GPCS) permanecem corrigidos e foram reconfirmados. Ponta a ponta: update real de produto via Admin API -> subscriber eha-webhook.ts -> POST HMAC-SHA256 (header X-Medusa-Signature) -> medusa-webhook.php -> HTTP 200 com 'ok':true e o event_id/produto real corretos, log local mostrando status 'PROCESSED' para o produto real; requisicoes com assinatura ausente ou invalida corretamente rejeitadas com 401 em teste isolado via 'php -S'. Nota operacional para futuras rodadas: o header correto e 'X-Medusa-Signature' (nao 'X-EHA-Signature') e o valor e o digest hex cru (sem prefixo 'sha256='), conforme src/subscribers/eha-webhook.ts - um teste isolado manual com header/formato errado nesta propria rodada retornou 401 e foi corrigido ao reler o codigo-fonte antes de concluir erroneamente que havia regressao (nao havia; erro de teste, nao de codigo, revertido/corrigido dentro da mesma rodada). Os mesmos 5 blockers de acao humana permanecem inalterados ha 10 rodadas seguidas - nenhum progresso adicional e possivel nesses itens sem intervencao do usuario nesta sessao (sem acesso a gh CLI/MCP de secrets do GitHub, sem acesso de rede a supabase.com para signup interativo, sem tool de browser automation para criar contas de terceiros). Observacao de infraestrutura desta rodada: o primeiro 'npm install' do backend foi interrompido por SIGTERM apos concorrencia acidental entre multiplos mecanismos de espera em background lancados pela propria sessao (nao um problema do projeto); refeito de forma limpa como processo destacado (setsid/nohup) com sondagem em primeiro plano, completou em ~1min (cache npm ja aquecido) com os mesmos 1342 pacotes de rodadas anteriores.",
+  "summary": "Decima primeira rodada: revalidacao LEVE, conforme recomendacao explicita registrada ao final da rodada 10 (revalidacoes completas identicas repetidas sem sinal de mudanca de codigo tem valor marginal decrescente comprovado). Confirmado via 'git log'/'git diff' que nenhum arquivo sob claude/medusa/ ou claude/api/ mudou desde o commit da rodada 10 - o codigo e byte-identico ao ja validado ponta a ponta naquela rodada (npm install/build/migrate/seed/start, health check, webhook Medusa->EHA com assinatura valida/invalida/ausente). Por isso, esta rodada NAO reprovisionou Postgres/Redis nem refez npm install/build/migrate/seed do zero - apenas checagens rapidas e sem estado: grep por marcadores de conflito de merge (nenhum), validacao de package.json como JSON valido (backend e storefront), php -l em todos os arquivos .php sob claude/api/ (sem erro de sintaxe), confirmacao de que DATABASE_URL/.env de producao continuam ausentes, e teste de saida de rede para supabase.com (bloqueado pelo proxy do ambiente com HTTP 403, reforcando que a criacao de projeto Supabase continua inexecutavel de forma autonoma nesta sessao). Nenhum bug novo encontrado. Os mesmos 5 blockers de acao humana permanecem inalterados ha 11 rodadas seguidas.",
   "steps": {
     "0_repo_integrity": {
       "status": "OK_SEM_REGRESSAO",
-      "detail": "Grep por marcadores de conflito de merge (^<<<<<<<, ^=======$, ^>>>>>>>) em todo o repositorio versionado: nenhuma ocorrencia. package.json de backend e storefront validados como JSON valido (parse Python). php -l sem erro em todos os 43 arquivos .php sob claude/api/ (incluindo medusa-webhook.php, sync-olist-products.php, olist/webhook.php)."
+      "detail": "Rodada 11 (leve): grep por marcadores de conflito de merge em claude/medusa e claude/api: nenhuma ocorrencia. package.json de backend e storefront validados como JSON valido. php -l sem erro em todos os arquivos .php sob claude/api/. git diff confirma zero mudancas em claude/medusa ou claude/api desde o commit da rodada 10."
     },
     "1_database_setup": {
       "status": "BLOCKER",
-      "detail": "DATABASE_URL de producao nao existe. Postgres 16 + Redis locais provisionados nesta rodada (service postgresql start / service redis-server start), role medusa + banco medusa_shopvivaliz criados e usados para a validacao completa abaixo, depois removidos (servicos parados ao final, dados descartados). Criacao de projeto Supabase gerenciado requer login/OAuth humano interativo - nao executavel de forma autonoma nesta sessao.",
+      "detail": "DATABASE_URL de producao continua inexistente (confirmado nesta rodada: claude/medusa/apps/backend/.env ausente). Teste de saida de rede para supabase.com retornou HTTP 403 via proxy do ambiente nesta rodada - criacao de projeto Supabase gerenciado continua exigindo login/OAuth humano interativo, alem de a rede de saida para o dominio estar bloqueada para este container.",
       "action_required_from_user": "Criar projeto Supabase (ou Neon/Railway/RDS) manualmente, copiar a connection string para DATABASE_URL no .env de producao do backend."
     },
     "2_migrations_seed": {
-      "status": "OK_RODADA_10",
-      "detail": "npx medusa db:migrate executado do zero contra Postgres local novo: migrations do core + initial-data-seed.ts do proprio Medusa, todos OK. npx medusa exec ./src/scripts/seed-shopvivaliz-test-data.ts executado sem erro: regiao Brasil/BRL, 8 produtos ShopVivaliz (Camiseta, Calca Jeans, Tenis Casual, Bone, Jaqueta, Vestido, Bermuda, Mochila) + 4 produtos demo padrao do Medusa = 12 produtos totais, confirmados via SELECT direto no Postgres e via GET /store/products com publishable key real (ambos retornaram 12). Usuario admin criado (admin@shopvivaliz.com.br, senha gerada com openssl rand -base64 24, nao persistida em nenhum arquivo commitado nem deixada no scratchpad ao final). Cliente de teste (cliente.teste@shopvivaliz.com.br) confirmado via SELECT direto no Postgres."
+      "status": "OK_VALIDADO_RODADA_10_SEM_MUDANCA",
+      "detail": "Nao reexecutado nesta rodada (leve) - codigo de migrations/seed (src/scripts/seed-shopvivaliz-test-data.ts) e byte-identico ao ja validado com sucesso na rodada 10 (12 produtos, cliente e admin de teste confirmados via Postgres local efemero). Resultado permanece valido por construcao ate que o codigo mude."
     },
     "3_payment_gateway": {
-      "status": "OK_TEST_KEYS_RODADA_10",
-      "detail": "STRIPE_API_KEY/STRIPE_PUBLIC_KEY de teste (chaves de exemplo publicas da documentacao Stripe, sk_test_4eC39Hq.../pk_test_TYooMQ...) configuradas no .env local, sem mudanca de codigo necessaria. PAYPAL_CLIENT_ID/SECRET permanecem vazios (sem credenciais sandbox disponiveis nesta sessao)."
+      "status": "OK_TEST_KEYS_SEM_MUDANCA",
+      "detail": "Nenhuma mudanca de codigo relacionada a pagamento desde a rodada 10. STRIPE_API_KEY/STRIPE_PUBLIC_KEY de teste continuam documentadas como caminho de fallback. PAYPAL_CLIENT_ID/SECRET permanecem vazios (sem credenciais sandbox disponiveis nesta sessao)."
     },
     "4_environment_variables": {
-      "status": "OK_LOCAL_RODADA_10",
-      "detail": "JWT_SECRET, COOKIE_SECRET, EHA_WEBHOOK_SECRET, OLIST_WEBHOOK_SECRET gerados com openssl rand -base64 32 para o ambiente local desta rodada (descartados ao final, .env removidos). .env.example (backend e storefront) revisados e continuam corretos."
+      "status": "OK_SEM_MUDANCA",
+      "detail": ".env.example (backend e storefront) inspecionados nesta rodada e continuam corretos/completos. Geracao de JWT_SECRET/COOKIE_SECRET etc. com openssl so e necessaria ao materializar um .env local real, o que nao foi refeito nesta rodada leve por nao haver mudanca de codigo a validar."
     },
     "5_build": {
-      "status": "OK_RODADA_10",
-      "detail": "Backend: npm install (1342 pacotes, identico a rodada 9) + npm run build (medusa build: 4.56s backend + 21.02s frontend/admin) OK, zero erros. Storefront: npm install (542 pacotes) + npm run build (next build) OK, 133 paginas estaticas geradas (identico a rodada 9), zero erros de tipo/lint. npm audit continua acusando as mesmas vulnerabilidades pre-existentes em dependencias transitivas de tooling (nao e codigo proprio do ShopVivaliz) - nao investigado a fundo, comportamento inalterado."
+      "status": "OK_VALIDADO_RODADA_10_SEM_MUDANCA",
+      "detail": "npm install/build nao reexecutados nesta rodada (leve): node_modules ausente neste container efemero (esperado) e nenhum arquivo de codigo/config mudou desde a rodada 10, quando build de backend e storefront passou sem erros. Reexecutar build identico contra codigo identico nao produziria sinal novo (ver recomendacao da rodada 10)."
     },
     "6_local_testing": {
-      "status": "OK_RODADA_10",
-      "detail": "Backend subiu com npx medusa start a partir de .medusa/server (symlink de node_modules, .env copiado). GET /health -> 200 OK. Login admin via /auth/user/emailpass OK. Publishable API key criada via Admin API e vinculada ao Default Sales Channel. GET /store/products com x-publishable-api-key retornou os 12 produtos esperados. Storefront em modo producao (next start -p 8000) renderizou /br/products/camiseta-shopvivaliz com preco real da API (R$69,90) e titulo correto, HTTP 200; home /br tambem 200."
+      "status": "OK_VALIDADO_RODADA_10_SEM_MUDANCA",
+      "detail": "Nao reexecutado nesta rodada. Health check, login admin, publishable key e renderizacao do storefront ja confirmados na rodada 10 contra o mesmo codigo."
     },
     "7_marketplace_integrations": {
       "status": "OK_SEM_BUG_NOVO",
-      "detail": "Nenhum bug novo encontrado. Os fixes das rodadas 8 (payload {id,type,data} do subscriber + order.placed em vez de order.created) e 9 (getenv() antes de $_ENV em medusa-webhook.php) foram reconfirmados presentes no codigo e revalidados ponta a ponta: update de produto real via Admin API -> subscriber -> POST assinado (header X-Medusa-Signature, HMAC-SHA256 hex cru) -> medusa-webhook.php -> HTTP 200 ('ok':true, event_id correto), log local confirmando status 'PROCESSED' para o product_id real. Teste isolado adicional via 'php -S localhost:8899' com o secret exportado como variavel de ambiente real do processo: assinatura valida -> 200/PROCESSED; assinatura invalida -> 401; assinatura ausente -> 401. claude/api/sync-olist-products.php e claude/api/olist/webhook.php passaram em php -l; nao testados end-to-end (sem credenciais Olist/Tiny reais nesta sessao)."
+      "detail": "Nenhuma mudanca em medusa-webhook.php, sync-olist-products.php, olist/webhook.php ou src/subscribers/eha-webhook.ts desde a rodada 10 (confirmado via git diff). php -l revalidado sem erro nesta rodada. Fixes das rodadas 8/9 permanecem no codigo. Teste ponta a ponta do webhook nao reexecutado nesta rodada leve (exigiria subir o backend, o que foi adiado por nao haver mudanca de codigo)."
     },
     "8_github_secrets": {
       "status": "BLOCKER_SEM_ACESSO",
-      "detail": "Esta sessao tem acesso ao GitHub MCP apenas para conteudo de repositorio/issues/PRs/Actions (execucao/logs), sem tool de Actions secrets, e sem gh CLI. Comandos gh secret set prontos (com placeholders) documentados em claude/medusa/GITHUB_SECRETS_TODO.md.",
+      "detail": "Sem tool de Actions secrets no GitHub MCP disponivel nesta sessao e sem gh CLI - mesma limitacao de rodadas anteriores. Comandos gh secret set prontos continuam documentados em claude/medusa/GITHUB_SECRETS_TODO.md.",
       "action_required_from_user": "Rodar os comandos gh secret set de GITHUB_SECRETS_TODO.md localmente (com gh CLI autenticado) ou configurar manualmente em Settings > Secrets and variables > Actions."
     },
     "9_deployment_preparation": {
-      "status": "OK_DOCUMENTADO",
-      "detail": "claude/medusa/deploy.sh, claude/medusa/DEPLOY-CHECKLIST.md e claude/medusa/GITHUB_SECRETS_TODO.md continuam validos. HostGator (host atual do site PHP legado) NAO roda Node.js/Postgres - backend/storefront Medusa precisam de host separado (Railway/Render/Fly.io/VPS + Vercel/Netlify)."
+      "status": "OK_DOCUMENTADO_SEM_MUDANCA",
+      "detail": "claude/medusa/deploy.sh, claude/medusa/DEPLOY-CHECKLIST.md e claude/medusa/GITHUB_SECRETS_TODO.md revisados nesta rodada e continuam validos. HostGator (host atual do site PHP legado) NAO roda Node.js/Postgres - backend/storefront Medusa precisam de host separado (Railway/Render/Fly.io/VPS + Vercel/Netlify)."
     },
     "10_deployment_checklist": {
       "status": "OK",
-      "detail": "DEPLOY-CHECKLIST.md atualizado nesta rodada com o registro da decima revalidacao completa (sem bug novo)."
+      "detail": "DEPLOY-CHECKLIST.md atualizado nesta rodada com o registro da decima primeira revalidacao (leve, sem bug novo, sem mudanca de codigo)."
     },
     "11_final_report": {
       "status": "OK",
-      "detail": "Este arquivo (DEPLOY-STATUS-REPORT.json), atualizado para a decima rodada."
+      "detail": "Este arquivo (DEPLOY-STATUS-REPORT.json), atualizado para a decima primeira rodada."
     }
   },
   "blockers": [
@@ -84,10 +84,10 @@
     }
   ],
   "code_changes_this_session": [
-    "Nenhuma mudanca de codigo nesta rodada - apenas revalidacao. Um diff incidental em claude/medusa/apps/backend/package-lock.json (resolucao flutuante de uma peer dependency transitiva 'picomatch', sem relacao com codigo proprio) apareceu apos npm install e foi revertido (git checkout) antes de finalizar, para manter o diff desta rodada limitado a documentacao/relatorio.",
-    "claude/medusa/DEPLOY-STATUS-REPORT.json: relatorio atualizado para a decima rodada",
-    "claude/medusa/DEPLOY-CHECKLIST.md: registro da decima revalidacao completa (sem bug novo)"
+    "Nenhuma mudanca de codigo nesta rodada - apenas revalidacao leve e documentacao.",
+    "claude/medusa/DEPLOY-STATUS-REPORT.json: relatorio atualizado para a decima primeira rodada",
+    "claude/medusa/DEPLOY-CHECKLIST.md: registro da decima primeira revalidacao (leve, sem bug novo)"
   ],
-  "rounds_with_no_new_progress_on_blockers": 10,
-  "next_round_recommendation": "Os 5 blockers restantes sao 100% acao humana (contas/credenciais/acesso que esta sessao nao pode obter de forma autonoma). Dez rodadas consecutivas de revalidacao completa nao encontraram bug novo desde a rodada 9 (os 2 bugs reais das rodadas 8-9 permanecem corrigidos e reconfirmados nesta rodada). Nao ha mais trabalho de codigo produtivo obvio a fazer em claude/medusa/claude/api sem essas credenciais. Recomendacao: a partir da proxima rodada, considerar mudar para uma revalidacao leve (build + lint + smoke test do webhook, sem reprovisionar Postgres/Redis do zero) a menos que o usuario confirme mudanca de codigo relevante desde a rodada 10, OU a menos que o usuario forneca DATABASE_URL, host de producao, gh CLI/secrets, ou credenciais Stripe/PayPal/Olist reais - revalidacoes completas identicas repetidas indefinidamente sem sinal de mudanca tem valor marginal decrescente comprovado (10 rodadas, 2 bugs encontrados nas primeiras 8, zero nas ultimas 2)."
+  "rounds_with_no_new_progress_on_blockers": 11,
+  "next_round_recommendation": "Os 5 blockers restantes continuam sendo 100% acao humana e nenhum deles mudou nesta rodada. Como o codigo sob claude/medusa/ e claude/api/ nao mudou desde a rodada 10, esta rodada foi deliberadamente leve (checagens de integridade + smoke checks estaticos, sem reprovisionar Postgres/Redis nem refazer npm install/build/migrate/seed/start). Recomendacao para a proxima rodada: repetir apenas os checks leves (git diff desde o ultimo commit de codigo, grep de conflitos, php -l, JSON valido, teste de rede para supabase.com) e SO escalar para uma revalidacao completa (build+migrate+seed+health check+webhook ponta a ponta) se o git diff mostrar mudancas reais em claude/medusa/ ou claude/api/ desde a rodada 10/11, ou se o usuario fornecer DATABASE_URL de producao, host de producao com Node.js, acesso a gh CLI/secrets do GitHub, ou credenciais reais de Stripe/PayPal/Olist. Sem isso, rodadas adicionais identicas nao teriam sinal novo a reportar."
 }
