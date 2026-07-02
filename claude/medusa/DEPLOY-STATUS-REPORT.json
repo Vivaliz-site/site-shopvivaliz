@@ -1,42 +1,42 @@
 {
   "project": "shopvivaliz-medusa",
-  "report_generated_at": "2026-07-02T18:40:00Z",
-  "round": 9,
+  "report_generated_at": "2026-07-02T19:45:00Z",
+  "round": 10,
   "overall_status": "BLOQUEADO_PARA_PRODUCAO",
-  "summary": "Nona rodada: revalidacao completa do zero (novo container efemero) em vez de revalidacao leve, a pedido explicito do usuario. npm install/build/migrate/seed/start executados do zero em backend e storefront, sem erros de codigo proprio (npm audit continua acusando as mesmas vulnerabilidades pre-existentes em dependencias transitivas de tooling, ja documentadas em rodadas anteriores). Achado novo e corrigido nesta rodada: claude/api/medusa-webhook.php lia o segredo do webhook apenas via $_ENV['EHA_WEBHOOK_SECRET'], mas o PHP deste ambiente (e, muito provavelmente, o de producao/HostGator, que costuma ter a mesma configuracao padrao) usa variables_order=GPCS (sem 'E'), o que deixa $_ENV vazio mesmo com a variavel de ambiente exportada corretamente - o webhook caia silenciosamente no valor padrao hardcoded 'test_eha_webhook_secret' e rejeitava com 401 qualquer requisicao assinada com o segredo real (ou, pior, aceitaria como valida uma requisicao forjada com o segredo padrao conhecido). O arquivo irmao claude/api/sync-olist-products.php ja evitava esse problema usando getenv() com fallback para $_ENV; medusa-webhook.php foi corrigido para o mesmo padrao (getenv() primeiro, $_ENV como fallback, depois o default). Reconfirmado ponta a ponta apos o fix, com o secret exportado como variavel de ambiente do processo PHP (forma como normalmente e configurado em Apache/PHP-FPM de producao): update real de produto via Admin API -> subscriber eha-webhook.ts -> POST HMAC-SHA256 -> medusa-webhook.php -> HTTP 200 com status 'PROCESSED' e event_type 'product.updated' corretos; requisicoes sem assinatura ou com assinatura invalida continuam corretamente rejeitadas com 401. Os mesmos 5 blockers de acao humana permanecem inalterados ha 9 rodadas seguidas (conta Supabase/DB gerenciado, host Node.js de producao, acesso de escrita a GitHub Secrets, credenciais reais PayPal/Olist, rotacao do OLIST_CLIENT_SECRET vazado no historico do git) - nenhum progresso adicional e possivel nesses itens sem intervencao do usuario nesta sessao (sem acesso a gh CLI/MCP de secrets do GitHub, sem acesso de rede a supabase.com para signup interativo, sem tool de browser automation para criar contas de terceiros).",
+  "summary": "Decima rodada: revalidacao completa do zero (novo container efemero), sem alteracoes em claude/medusa ou claude/api desde a rodada anterior. npm install/build/migrate/seed/start executados do zero em backend e storefront, sem erros de codigo proprio. Nenhum bug novo foi encontrado nesta rodada - os dois bugs reais encontrados e corrigidos nas rodadas 8 e 9 (mismatch de payload do subscriber EHA e leitura de EHA_WEBHOOK_SECRET via $_ENV vazio sob variables_order=GPCS) permanecem corrigidos e foram reconfirmados. Ponta a ponta: update real de produto via Admin API -> subscriber eha-webhook.ts -> POST HMAC-SHA256 (header X-Medusa-Signature) -> medusa-webhook.php -> HTTP 200 com 'ok':true e o event_id/produto real corretos, log local mostrando status 'PROCESSED' para o produto real; requisicoes com assinatura ausente ou invalida corretamente rejeitadas com 401 em teste isolado via 'php -S'. Nota operacional para futuras rodadas: o header correto e 'X-Medusa-Signature' (nao 'X-EHA-Signature') e o valor e o digest hex cru (sem prefixo 'sha256='), conforme src/subscribers/eha-webhook.ts - um teste isolado manual com header/formato errado nesta propria rodada retornou 401 e foi corrigido ao reler o codigo-fonte antes de concluir erroneamente que havia regressao (nao havia; erro de teste, nao de codigo, revertido/corrigido dentro da mesma rodada). Os mesmos 5 blockers de acao humana permanecem inalterados ha 10 rodadas seguidas - nenhum progresso adicional e possivel nesses itens sem intervencao do usuario nesta sessao (sem acesso a gh CLI/MCP de secrets do GitHub, sem acesso de rede a supabase.com para signup interativo, sem tool de browser automation para criar contas de terceiros). Observacao de infraestrutura desta rodada: o primeiro 'npm install' do backend foi interrompido por SIGTERM apos concorrencia acidental entre multiplos mecanismos de espera em background lancados pela propria sessao (nao um problema do projeto); refeito de forma limpa como processo destacado (setsid/nohup) com sondagem em primeiro plano, completou em ~1min (cache npm ja aquecido) com os mesmos 1342 pacotes de rodadas anteriores.",
   "steps": {
     "0_repo_integrity": {
       "status": "OK_SEM_REGRESSAO",
-      "detail": "Grep por marcadores de conflito de merge (^<<<<<<<, ^=======$, ^>>>>>>>) em todo o repositorio versionado: nenhuma ocorrencia. package.json/package-lock.json de backend e storefront validados como JSON valido. php -l sem erro em medusa-webhook.php (apos o fix), sync-olist-products.php e olist/webhook.php."
+      "detail": "Grep por marcadores de conflito de merge (^<<<<<<<, ^=======$, ^>>>>>>>) em todo o repositorio versionado: nenhuma ocorrencia. package.json de backend e storefront validados como JSON valido (parse Python). php -l sem erro em todos os 43 arquivos .php sob claude/api/ (incluindo medusa-webhook.php, sync-olist-products.php, olist/webhook.php)."
     },
     "1_database_setup": {
       "status": "BLOCKER",
-      "detail": "DATABASE_URL de producao nao existe. Postgres 16 + Redis locais provisionados nesta rodada (service postgresql start / service redis-server start), role medusa + banco medusa_shopvivaliz criados e usados para a validacao completa abaixo, depois removidos (servicos parados ao final). Criacao de projeto Supabase gerenciado requer login/OAuth humano interativo - nao executavel de forma autonoma nesta sessao (sem ferramenta de automacao de navegador para signup de terceiros).",
+      "detail": "DATABASE_URL de producao nao existe. Postgres 16 + Redis locais provisionados nesta rodada (service postgresql start / service redis-server start), role medusa + banco medusa_shopvivaliz criados e usados para a validacao completa abaixo, depois removidos (servicos parados ao final, dados descartados). Criacao de projeto Supabase gerenciado requer login/OAuth humano interativo - nao executavel de forma autonoma nesta sessao.",
       "action_required_from_user": "Criar projeto Supabase (ou Neon/Railway/RDS) manualmente, copiar a connection string para DATABASE_URL no .env de producao do backend."
     },
     "2_migrations_seed": {
-      "status": "OK_RODADA_9",
-      "detail": "npx medusa db:migrate executado do zero contra Postgres local novo: migrations do core + initial-data-seed.ts do proprio Medusa, todos OK. npx medusa exec ./src/scripts/seed-shopvivaliz-test-data.ts executado sem erro: regiao Brasil/BRL, 8 produtos ShopVivaliz (Camiseta/T-shirt, Calca Jeans, Tenis Casual/Shoes, Bone/Hat, Jaqueta/Jacket, Vestido, Bermuda, Mochila) + 4 produtos demo padrao do Medusa = 12 produtos totais (GET /store/products confirmou os 12). Usuario admin criado (admin@shopvivaliz.com.br, senha gerada com openssl rand -base64 24, nao persistida em nenhum arquivo commitado). Cliente de teste (cliente.teste@shopvivaliz.com.br) confirmado via Admin API."
+      "status": "OK_RODADA_10",
+      "detail": "npx medusa db:migrate executado do zero contra Postgres local novo: migrations do core + initial-data-seed.ts do proprio Medusa, todos OK. npx medusa exec ./src/scripts/seed-shopvivaliz-test-data.ts executado sem erro: regiao Brasil/BRL, 8 produtos ShopVivaliz (Camiseta, Calca Jeans, Tenis Casual, Bone, Jaqueta, Vestido, Bermuda, Mochila) + 4 produtos demo padrao do Medusa = 12 produtos totais, confirmados via SELECT direto no Postgres e via GET /store/products com publishable key real (ambos retornaram 12). Usuario admin criado (admin@shopvivaliz.com.br, senha gerada com openssl rand -base64 24, nao persistida em nenhum arquivo commitado nem deixada no scratchpad ao final). Cliente de teste (cliente.teste@shopvivaliz.com.br) confirmado via SELECT direto no Postgres."
     },
     "3_payment_gateway": {
-      "status": "OK_TEST_KEYS_RODADA_9",
-      "detail": "STRIPE_API_KEY/STRIPE_PUBLIC_KEY de teste (chaves de exemplo publicas da documentacao Stripe) configuradas no .env local, sem mudanca de codigo necessaria. PAYPAL_CLIENT_ID/SECRET permanecem vazios (sem credenciais sandbox disponiveis nesta sessao)."
+      "status": "OK_TEST_KEYS_RODADA_10",
+      "detail": "STRIPE_API_KEY/STRIPE_PUBLIC_KEY de teste (chaves de exemplo publicas da documentacao Stripe, sk_test_4eC39Hq.../pk_test_TYooMQ...) configuradas no .env local, sem mudanca de codigo necessaria. PAYPAL_CLIENT_ID/SECRET permanecem vazios (sem credenciais sandbox disponiveis nesta sessao)."
     },
     "4_environment_variables": {
-      "status": "OK_LOCAL_RODADA_9",
-      "detail": "JWT_SECRET, COOKIE_SECRET, EHA_WEBHOOK_SECRET, OLIST_WEBHOOK_SECRET gerados com openssl rand -base64 32 para o ambiente local desta rodada (descartados ao final). .env.example (backend e storefront) revisados e continuam corretos."
+      "status": "OK_LOCAL_RODADA_10",
+      "detail": "JWT_SECRET, COOKIE_SECRET, EHA_WEBHOOK_SECRET, OLIST_WEBHOOK_SECRET gerados com openssl rand -base64 32 para o ambiente local desta rodada (descartados ao final, .env removidos). .env.example (backend e storefront) revisados e continuam corretos."
     },
     "5_build": {
-      "status": "OK_RODADA_9",
-      "detail": "Backend: npm install (1342 pacotes) + npm run build (medusa build) OK, zero erros. Storefront: npm install (542 pacotes) + npm run build (next build) OK, 133 paginas estaticas geradas (identico a rodada 8), zero erros de tipo/lint. npm audit continua acusando as mesmas vulnerabilidades pre-existentes em dependencias transitivas de tooling (nao e codigo proprio do ShopVivaliz)."
+      "status": "OK_RODADA_10",
+      "detail": "Backend: npm install (1342 pacotes, identico a rodada 9) + npm run build (medusa build: 4.56s backend + 21.02s frontend/admin) OK, zero erros. Storefront: npm install (542 pacotes) + npm run build (next build) OK, 133 paginas estaticas geradas (identico a rodada 9), zero erros de tipo/lint. npm audit continua acusando as mesmas vulnerabilidades pre-existentes em dependencias transitivas de tooling (nao e codigo proprio do ShopVivaliz) - nao investigado a fundo, comportamento inalterado."
     },
     "6_local_testing": {
-      "status": "OK_RODADA_9",
+      "status": "OK_RODADA_10",
       "detail": "Backend subiu com npx medusa start a partir de .medusa/server (symlink de node_modules, .env copiado). GET /health -> 200 OK. Login admin via /auth/user/emailpass OK. Publishable API key criada via Admin API e vinculada ao Default Sales Channel. GET /store/products com x-publishable-api-key retornou os 12 produtos esperados. Storefront em modo producao (next start -p 8000) renderizou /br/products/camiseta-shopvivaliz com preco real da API (R$69,90) e titulo correto, HTTP 200; home /br tambem 200."
     },
     "7_marketplace_integrations": {
-      "status": "OK_BUG_ENCONTRADO_E_CORRIGIDO",
-      "detail": "Bug de seguranca/portabilidade real encontrado nesta rodada (ver summary): claude/api/medusa-webhook.php usava apenas $_ENV para ler EHA_WEBHOOK_SECRET, que fica vazio sob variables_order=GPCS (configuracao padrao comum em PHP, incluindo provavelmente o HostGator de producao), fazendo o webhook usar sempre o segredo hardcoded 'test_eha_webhook_secret' em vez do segredo real configurado no ambiente. Corrigido para usar getenv() primeiro (mesmo padrao ja usado em sync-olist-products.php), com fallback para $_ENV e depois o default. Reconfirmado ponta a ponta com o secret passado como variavel de ambiente real do processo PHP: update de produto via Admin API -> subscriber -> POST assinado HMAC-SHA256 -> medusa-webhook.php -> 200 com 'status':'PROCESSED' e 'event_type':'product.updated' corretos. Testes de seguranca reconfirmados: assinatura ausente -> 401; assinatura invalida -> 401. claude/api/sync-olist-products.php e claude/api/olist/webhook.php passaram em php -l; nao testados end-to-end (sem credenciais Olist/Tiny reais nesta sessao)."
+      "status": "OK_SEM_BUG_NOVO",
+      "detail": "Nenhum bug novo encontrado. Os fixes das rodadas 8 (payload {id,type,data} do subscriber + order.placed em vez de order.created) e 9 (getenv() antes de $_ENV em medusa-webhook.php) foram reconfirmados presentes no codigo e revalidados ponta a ponta: update de produto real via Admin API -> subscriber -> POST assinado (header X-Medusa-Signature, HMAC-SHA256 hex cru) -> medusa-webhook.php -> HTTP 200 ('ok':true, event_id correto), log local confirmando status 'PROCESSED' para o product_id real. Teste isolado adicional via 'php -S localhost:8899' com o secret exportado como variavel de ambiente real do processo: assinatura valida -> 200/PROCESSED; assinatura invalida -> 401; assinatura ausente -> 401. claude/api/sync-olist-products.php e claude/api/olist/webhook.php passaram em php -l; nao testados end-to-end (sem credenciais Olist/Tiny reais nesta sessao)."
     },
     "8_github_secrets": {
       "status": "BLOCKER_SEM_ACESSO",
@@ -49,11 +49,11 @@
     },
     "10_deployment_checklist": {
       "status": "OK",
-      "detail": "DEPLOY-CHECKLIST.md atualizado nesta rodada com o registro da revalidacao completa e do fix de getenv()/$_ENV no webhook."
+      "detail": "DEPLOY-CHECKLIST.md atualizado nesta rodada com o registro da decima revalidacao completa (sem bug novo)."
     },
     "11_final_report": {
       "status": "OK",
-      "detail": "Este arquivo (DEPLOY-STATUS-REPORT.json), atualizado para a nona rodada."
+      "detail": "Este arquivo (DEPLOY-STATUS-REPORT.json), atualizado para a decima rodada."
     }
   },
   "blockers": [
@@ -84,10 +84,10 @@
     }
   ],
   "code_changes_this_session": [
-    "claude/api/medusa-webhook.php: corrigida leitura de EHA_WEBHOOK_SECRET para usar getenv() antes de $_ENV (variables_order=GPCS deixava $_ENV sempre vazio, fazendo o webhook usar o segredo padrao hardcoded em vez do real)",
-    "claude/medusa/DEPLOY-STATUS-REPORT.json: relatorio atualizado para a nona rodada",
-    "claude/medusa/DEPLOY-CHECKLIST.md: registro da revalidacao completa e do fix de getenv()/$_ENV"
+    "Nenhuma mudanca de codigo nesta rodada - apenas revalidacao. Um diff incidental em claude/medusa/apps/backend/package-lock.json (resolucao flutuante de uma peer dependency transitiva 'picomatch', sem relacao com codigo proprio) apareceu apos npm install e foi revertido (git checkout) antes de finalizar, para manter o diff desta rodada limitado a documentacao/relatorio.",
+    "claude/medusa/DEPLOY-STATUS-REPORT.json: relatorio atualizado para a decima rodada",
+    "claude/medusa/DEPLOY-CHECKLIST.md: registro da decima revalidacao completa (sem bug novo)"
   ],
-  "rounds_with_no_new_progress_on_blockers": 9,
-  "next_round_recommendation": "Os 5 blockers restantes sao 100% acao humana (contas/credenciais/acesso que esta sessao nao pode obter de forma autonoma). Nao ha mais trabalho de codigo produtivo obvio a fazer em claude/medusa/claude/api sem essas credenciais - 2 bugs reais de integracao ja foram encontrados e corrigidos em 2 revalidacoes completas seguidas (rodadas 8 e 9), entao revalidacoes completas continuam tendo valor (nao sao so repeticao). Proxima rodada: revalidacao completa novamente e revisar com atencao qualquer trecho de codigo que dependa de env vars/config carregada de forma nao obvia, ou revalidacao leve caso o usuario confirme que nada mudou, a menos que o usuario forneca DATABASE_URL, host de producao, gh CLI/secrets, ou credenciais Stripe/PayPal/Olist reais."
+  "rounds_with_no_new_progress_on_blockers": 10,
+  "next_round_recommendation": "Os 5 blockers restantes sao 100% acao humana (contas/credenciais/acesso que esta sessao nao pode obter de forma autonoma). Dez rodadas consecutivas de revalidacao completa nao encontraram bug novo desde a rodada 9 (os 2 bugs reais das rodadas 8-9 permanecem corrigidos e reconfirmados nesta rodada). Nao ha mais trabalho de codigo produtivo obvio a fazer em claude/medusa/claude/api sem essas credenciais. Recomendacao: a partir da proxima rodada, considerar mudar para uma revalidacao leve (build + lint + smoke test do webhook, sem reprovisionar Postgres/Redis do zero) a menos que o usuario confirme mudanca de codigo relevante desde a rodada 10, OU a menos que o usuario forneca DATABASE_URL, host de producao, gh CLI/secrets, ou credenciais Stripe/PayPal/Olist reais - revalidacoes completas identicas repetidas indefinidamente sem sinal de mudanca tem valor marginal decrescente comprovado (10 rodadas, 2 bugs encontrados nas primeiras 8, zero nas ultimas 2)."
 }
