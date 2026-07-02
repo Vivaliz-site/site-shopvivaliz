@@ -60,3 +60,24 @@ Error: listen EADDRINUSE: address already in use :::9000
 [32mhttp[39m:    POST /admin/auth ← - (401) - 1.371 ms
 [32mhttp[39m:    POST /admin/auth ← - (401) - 0.936 ms
 [32mhttp[39m:    POST /admin/auth ← - (401) - 0.935 ms
+[32minfo[39m:    Publishable API key required in the request header: x-publishable-api-key. You can manage your keys in settings in the dashboard.
+[32mhttp[39m:    GET /store/products ← - (400) - 3.571 ms
+[32mhttp[39m:    GET /store/regions ← - (200) - 50.080 ms
+[32mhttp[39m:    GET /store/products ← - (200) - 157.716 ms
+[32mhttp[39m:    POST /admin/auth ← - (401) - 1.077 ms
+[32mhttp[39m:    GET /store/customers/me?fields=%2Aorders ← - (401) - 10.099 ms
+[32mhttp[39m:    GET /store/regions ← - (200) - 26.261 ms
+[32mhttp[39m:    GET /store/locales ← - (404) - 17.618 ms
+[32mhttp[39m:    GET /store/collections?fields=%2Aproducts&limit=100&offset=0 ← - (200) - 27.035 ms
+[32mhttp[39m:    GET /store/collections?fields=id%2C%20handle%2C%20title&limit=100&offset=0 ← - (200) - 19.271 ms
+[32mhttp[39m:    GET /store/product-categories?fields=%2Acategory_children%2C%20%2Aproducts%2C%20%2Aparent_category%2C%20%2Aparent_category.parent_category&limit=100 ← - (200) - 43.115 ms
+[32mhttp[39m:    GET /store/customers/me?fields=%2Aorders ← - (401) - 5.576 ms
+[32mhttp[39m:    GET /store/locales ← - (404) - 5.705 ms
+[32mhttp[39m:    GET /store/products ← - (200) - 81.546 ms
+[32mhttp[39m:    POST /store/carts ← - (200) - 352.155 ms
+[32mhttp[39m:    POST /store/carts//line-items ← - (404) - 18.098 ms
+[32mhttp[39m:    POST /store/carts ← - (200) - 209.024 ms
+[32mhttp[39m:    GET /store/customers/me?fields=%2Aorders ← - (401) - 14.695 ms
+[32mhttp[39m:    GET /store/locales ← - (404) - 6.266 ms
+[32mhttp[39m:    POST /store/carts ← - (200) - 202.414 ms
+[32mhttp[39m:    POST /store/carts/cart_01KWF68YHVW7RJZ36MZN9XD4D7/line-items ← - (200) - 366.117 ms
