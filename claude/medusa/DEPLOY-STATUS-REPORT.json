@@ -1,18 +1,17 @@
 {
   "project": "shopvivaliz-medusa",
-  "report_generated_at": "2026-07-02T20:15:00Z",
-  "round": 11,
+  "report_generated_at": "2026-07-02T23:20:00Z",
+  "round": 12,
   "overall_status": "BLOQUEADO_PARA_PRODUCAO",
-  "summary": "Decima primeira rodada: revalidacao LEVE, conforme recomendacao explicita registrada ao final da rodada 10 (revalidacoes completas identicas repetidas sem sinal de mudanca de codigo tem valor marginal decrescente comprovado). Confirmado via 'git log'/'git diff' que nenhum arquivo sob claude/medusa/ ou claude/api/ mudou desde o commit da rodada 10 - o codigo e byte-identico ao ja validado ponta a ponta naquela rodada (npm install/build/migrate/seed/start, health check, webhook Medusa->EHA com assinatura valida/invalida/ausente). Por isso, esta rodada NAO reprovisionou Postgres/Redis nem refez npm install/build/migrate/seed do zero - apenas checagens rapidas e sem estado: grep por marcadores de conflito de merge (nenhum), validacao de package.json como JSON valido (backend e storefront), php -l em todos os arquivos .php sob claude/api/ (sem erro de sintaxe), confirmacao de que DATABASE_URL/.env de producao continuam ausentes, e teste de saida de rede para supabase.com (bloqueado pelo proxy do ambiente com HTTP 403, reforcando que a criacao de projeto Supabase continua inexecutavel de forma autonoma nesta sessao). Nenhum bug novo encontrado. Os mesmos 5 blockers de acao humana permanecem inalterados ha 11 rodadas seguidas.",
+  "summary": "Decima segunda rodada: revalidacao LEVE. Confirmado via 'git diff b3a77d5..HEAD -- claude/medusa claude/api' (b3a77d5 = commit da rodada 11) que o diff esta vazio - nenhum arquivo sob claude/medusa/ ou claude/api/ mudou desde a rodada 11. Por isso esta rodada nao reprovisionou npm install/build/migrate/seed do zero - apenas checagens rapidas: grep por marcadores de conflito de merge (nenhum), validacao de package.json como JSON valido (backend e storefront), php -l em todos os arquivos .php sob claude/api/ (sem erro), confirmacao de que DATABASE_URL/.env de producao continuam ausentes em apps/backend e apps/storefront, teste de saida de rede para supabase.com (ainda bloqueado pelo proxy do ambiente com HTTP 403), e verificacao explicita do GitHub MCP disponivel nesta sessao: nao expoe nenhum tool de gestao de secrets do repositorio (apenas Actions get/list/run_trigger, issues, PRs, arquivos, branches, secret scanning) - confirma que o blocker de secrets do CI/CD segue exigindo gh CLI autenticado ou configuracao manual. Localmente, Postgres 16 e Redis foram provisionados neste container efemero e uma conexao de teste (SELECT 1) foi validada com sucesso, mas isso NAO substitui o blocker de producao: nao ha acesso de navegador/OAuth para criar um projeto Supabase gerenciado real, e o proxy de rede do ambiente bloqueia supabase.com com 403. Nenhum bug novo encontrado. Os mesmos 5 blockers de acao humana permanecem inalterados ha 12 rodadas seguidas.",
   "steps": {
     "0_repo_integrity": {
       "status": "OK_SEM_REGRESSAO",
-      "detail": "Rodada 11 (leve): grep por marcadores de conflito de merge em claude/medusa e claude/api: nenhuma ocorrencia. package.json de backend e storefront validados como JSON valido. php -l sem erro em todos os arquivos .php sob claude/api/. git diff confirma zero mudancas em claude/medusa ou claude/api desde o commit da rodada 10."
+      "detail": "Rodada 12 (leve): git diff b3a77d5..HEAD -- claude/medusa claude/api retornou vazio (nenhuma mudanca desde a rodada 11). Grep por marcadores de conflito de merge: nenhuma ocorrencia. package.json de backend e storefront validados como JSON valido. php -l sem erro em todos os arquivos .php sob claude/api/."
     },
     "1_database_setup": {
       "status": "BLOCKER",
-      "detail": "DATABASE_URL de producao continua inexistente (confirmado nesta rodada: claude/medusa/apps/backend/.env ausente). Teste de saida de rede para supabase.com retornou HTTP 403 via proxy do ambiente nesta rodada - criacao de projeto Supabase gerenciado continua exigindo login/OAuth humano interativo, alem de a rede de saida para o dominio estar bloqueada para este container.",
-      "action_required_from_user": "Criar projeto Supabase (ou Neon/Railway/RDS) manualmente, copiar a connection string para DATABASE_URL no .env de producao do backend."
+      "detail": "DATABASE_URL de producao continua inexistente (confirmado nesta rodada: claude/medusa/apps/backend/.env e apps/storefront/.env ausentes). Teste de saida de rede para supabase.com retornou 'CONNECT tunnel failed, response 403' via proxy do ambiente nesta rodada - criacao de projeto Supabase gerenciado continua exigindo login/OAuth humano interativo, alem de a rede de saida para o dominio estar bloqueada para este container. Postgres 16 local foi provisionado e testado nesta rodada (SELECT 1 OK) apenas para fins de disponibilidade de ferramenta - nao e um substituto valido para o banco de producao."
     },
     "2_migrations_seed": {
       "status": "OK_VALIDADO_RODADA_10_SEM_MUDANCA",
@@ -28,7 +27,7 @@
     },
     "5_build": {
       "status": "OK_VALIDADO_RODADA_10_SEM_MUDANCA",
-      "detail": "npm install/build nao reexecutados nesta rodada (leve): node_modules ausente neste container efemero (esperado) e nenhum arquivo de codigo/config mudou desde a rodada 10, quando build de backend e storefront passou sem erros. Reexecutar build identico contra codigo identico nao produziria sinal novo (ver recomendacao da rodada 10)."
+      "detail": "npm install/build nao reexecutados nesta rodada (leve): node_modules ausente neste container efemero (esperado) e nenhum arquivo de codigo/config mudou desde a rodada 10, quando build de backend e storefront passou sem erros. Reexecutar build identico contra codigo identico nao produziria sinal novo."
     },
     "6_local_testing": {
       "status": "OK_VALIDADO_RODADA_10_SEM_MUDANCA",
@@ -36,11 +35,11 @@
     },
     "7_marketplace_integrations": {
       "status": "OK_SEM_BUG_NOVO",
-      "detail": "Nenhuma mudanca em medusa-webhook.php, sync-olist-products.php, olist/webhook.php ou src/subscribers/eha-webhook.ts desde a rodada 10 (confirmado via git diff). php -l revalidado sem erro nesta rodada. Fixes das rodadas 8/9 permanecem no codigo. Teste ponta a ponta do webhook nao reexecutado nesta rodada leve (exigiria subir o backend, o que foi adiado por nao haver mudanca de codigo)."
+      "detail": "Nenhuma mudanca em medusa-webhook.php, sync-olist-products.php, olist/webhook.php ou src/subscribers/eha-webhook.ts desde a rodada 10/11 (confirmado via git diff). php -l revalidado sem erro nesta rodada. Fixes das rodadas 8/9 permanecem no codigo. Teste ponta a ponta do webhook nao reexecutado nesta rodada leve (exigiria subir o backend, o que foi adiado por nao haver mudanca de codigo)."
     },
     "8_github_secrets": {
       "status": "BLOCKER_SEM_ACESSO",
-      "detail": "Sem tool de Actions secrets no GitHub MCP disponivel nesta sessao e sem gh CLI - mesma limitacao de rodadas anteriores. Comandos gh secret set prontos continuam documentados em claude/medusa/GITHUB_SECRETS_TODO.md.",
+      "detail": "Verificado explicitamente nesta rodada: o GitHub MCP disponivel na sessao expoe apenas actions_get/actions_list/actions_run_trigger, tools de issues/PRs/arquivos/branches e secret scanning - nenhum tool de leitura/escrita de Actions secrets. Sem gh CLI. Mesma limitacao de rodadas anteriores. Comandos gh secret set prontos continuam documentados em claude/medusa/GITHUB_SECRETS_TODO.md.",
       "action_required_from_user": "Rodar os comandos gh secret set de GITHUB_SECRETS_TODO.md localmente (com gh CLI autenticado) ou configurar manualmente em Settings > Secrets and variables > Actions."
     },
     "9_deployment_preparation": {
@@ -49,17 +48,17 @@
     },
     "10_deployment_checklist": {
       "status": "OK",
-      "detail": "DEPLOY-CHECKLIST.md atualizado nesta rodada com o registro da decima primeira revalidacao (leve, sem bug novo, sem mudanca de codigo)."
+      "detail": "DEPLOY-CHECKLIST.md atualizado nesta rodada com o registro da decima segunda revalidacao (leve, sem bug novo, sem mudanca de codigo)."
     },
     "11_final_report": {
       "status": "OK",
-      "detail": "Este arquivo (DEPLOY-STATUS-REPORT.json), atualizado para a decima primeira rodada."
+      "detail": "Este arquivo (DEPLOY-STATUS-REPORT.json), atualizado para a decima segunda rodada."
     }
   },
   "blockers": [
     {
       "id": "production_database",
-      "description": "DATABASE_URL de producao inexistente. Requer criacao manual de projeto Postgres gerenciado (Supabase/Neon/Railway/RDS) via login humano.",
+      "description": "DATABASE_URL de producao inexistente. Requer criacao manual de projeto Postgres gerenciado (Supabase/Neon/Railway/RDS) via login humano - egress para supabase.com bloqueado pelo proxy do ambiente (403).",
       "severity": "critical"
     },
     {
@@ -69,7 +68,7 @@
     },
     {
       "id": "github_secrets_write_access",
-      "description": "Sessao sem gh CLI nem MCP de secrets do GitHub. Configuracao de CI/CD secrets requer acao manual do usuario.",
+      "description": "Sessao sem gh CLI nem tool de Actions secrets no GitHub MCP (confirmado explicitamente nesta rodada). Configuracao de CI/CD secrets requer acao manual do usuario.",
       "severity": "high"
     },
     {
@@ -85,9 +84,9 @@
   ],
   "code_changes_this_session": [
     "Nenhuma mudanca de codigo nesta rodada - apenas revalidacao leve e documentacao.",
-    "claude/medusa/DEPLOY-STATUS-REPORT.json: relatorio atualizado para a decima primeira rodada",
-    "claude/medusa/DEPLOY-CHECKLIST.md: registro da decima primeira revalidacao (leve, sem bug novo)"
+    "claude/medusa/DEPLOY-STATUS-REPORT.json: relatorio atualizado para a decima segunda rodada",
+    "claude/medusa/DEPLOY-CHECKLIST.md: registro da decima segunda revalidacao (leve, sem bug novo)"
   ],
-  "rounds_with_no_new_progress_on_blockers": 11,
-  "next_round_recommendation": "Os 5 blockers restantes continuam sendo 100% acao humana e nenhum deles mudou nesta rodada. Como o codigo sob claude/medusa/ e claude/api/ nao mudou desde a rodada 10, esta rodada foi deliberadamente leve (checagens de integridade + smoke checks estaticos, sem reprovisionar Postgres/Redis nem refazer npm install/build/migrate/seed/start). Recomendacao para a proxima rodada: repetir apenas os checks leves (git diff desde o ultimo commit de codigo, grep de conflitos, php -l, JSON valido, teste de rede para supabase.com) e SO escalar para uma revalidacao completa (build+migrate+seed+health check+webhook ponta a ponta) se o git diff mostrar mudancas reais em claude/medusa/ ou claude/api/ desde a rodada 10/11, ou se o usuario fornecer DATABASE_URL de producao, host de producao com Node.js, acesso a gh CLI/secrets do GitHub, ou credenciais reais de Stripe/PayPal/Olist. Sem isso, rodadas adicionais identicas nao teriam sinal novo a reportar."
+  "rounds_with_no_new_progress_on_blockers": 12,
+  "next_round_recommendation": "Os 5 blockers restantes continuam sendo 100% acao humana e nenhum deles mudou nesta rodada. Como o codigo sob claude/medusa/ e claude/api/ nao mudou desde a rodada 10, esta rodada foi deliberadamente leve. Recomendacao para a proxima rodada: repetir apenas os checks leves (git diff desde o ultimo commit de codigo, grep de conflitos, php -l, JSON valido, teste de rede para supabase.com, verificacao de tools de secrets do GitHub MCP) e SO escalar para uma revalidacao completa (build+migrate+seed+health check+webhook ponta a ponta) se o git diff mostrar mudancas reais em claude/medusa/ ou claude/api/ desde a rodada 10/12, ou se o usuario fornecer DATABASE_URL de producao, host de producao com Node.js, acesso a gh CLI/secrets do GitHub, ou credenciais reais de Stripe/PayPal/Olist. Dado que 12 rodadas consecutivas produziram resultado identico sem nenhuma acao do usuario sobre os blockers, rodadas adicionais nao trarao sinal novo - o proximo passo de valor requer decisao/acao humana, nao mais execucao autonoma."
 }
