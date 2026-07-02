@@ -12,7 +12,7 @@
         "error_high": false,
         "recent_errors": [],
         "e2e_failed": false,
-        "timestamp": "2026-07-01T23:56:07+00:00"
+        "timestamp": "2026-07-02T02:46:19+00:00"
     },
     "validation": {
         "status": "READY_FOR_PRODUCTION",
@@ -20,7 +20,7 @@
         "api_ok": true,
         "db_ok": true,
         "pages_ok": true,
-        "timestamp": "2026-07-01T23:56:07+00:00"
+        "timestamp": "2026-07-02T02:46:19+00:00"
     },
     "loop": {
         "risk": "LOW",
@@ -31,7 +31,7 @@
             "note": "Metricas saudaveis; nenhuma correcao automatica necessaria."
         }
     },
-    "e2e_consecutive": 52,
-    "elapsed_s": 0.6,
-    "run_id": "150"
+    "e2e_consecutive": 0,
+    "elapsed_s": 0.91,
+    "run_id": "151"
 }
