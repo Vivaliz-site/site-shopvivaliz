@@ -151,6 +151,13 @@ jobs:
             **/*token*
             **/*password*
             **/*senha*
+            claude/medusa/**
+            imports/**
+            automation/**
+            scripts/**
+            requirements.txt
+            ai_collaboration.py
+            ai_collaboration_report*.md
 
       - name: Aguardar publicação no servidor
         run: sleep 20
