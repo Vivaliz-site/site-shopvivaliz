@@ -81,51 +81,87 @@ def iniciar_super_agente_trio(modo: str = "diagnostico", tarefa: str = ""):
     config_modo = MODOS.get(modo, MODOS["diagnostico"])
     print(f"Inicializando Trio IA — Modo: {config_modo['descricao']}")
 
+    gemini_client = None
+    openai_client = None
+    anthropic_client = None
+
     try:
         gemini_client = genai.Client()
+    except Exception as e:
+        print(f"  [AVISO] Falha ao inicializar Gemini: {e}")
+
+    try:
         openai_client = OpenAI()
+    except Exception as e:
+        print(f"  [AVISO] Falha ao inicializar OpenAI: {e}")
+
+    try:
         anthropic_client = Anthropic()
     except Exception as e:
-        print(f"Erro ao inicializar clientes de API: {e}")
-        sys.exit(1)
+        print(f"  [AVISO] Falha ao inicializar Claude: {e}")
+
+    if not any([gemini_client, openai_client, anthropic_client]):
+        print("Nenhum cliente de IA disponivel. Abortando diagnostico.")
+        sys.exit(0)
 
     contexto = carregar_contexto(modo)
 
     # --- FASE 1: GEMINI ---
     print("[1/3] Gemini analisando arquitetura e infraestrutura...")
-    prompt_gemini = config_modo["gemini_prompt"].format(contexto=contexto, tarefa=tarefa)
-    res_gemini = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt_gemini,
-    )
-    analise_gemini = res_gemini.text
-    print("  Gemini concluido.")
+    analise_gemini = "[Gemini indisponivel — API key ausente ou invalida]"
+    if gemini_client:
+        try:
+            prompt_gemini = config_modo["gemini_prompt"].format(contexto=contexto, tarefa=tarefa)
+            res_gemini = gemini_client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt_gemini,
+            )
+            analise_gemini = res_gemini.text
+            print("  Gemini concluido.")
+        except Exception as e:
+            print(f"  [AVISO] Gemini falhou: {e}")
+    else:
+        print("  Gemini ignorado (cliente nao inicializado).")
 
     # --- FASE 2: CLAUDE ---
     print("[2/3] Claude auditando codigo e logica de negocio...")
-    prompt_claude = config_modo["claude_prompt"].format(
-        gemini=analise_gemini, contexto=contexto, tarefa=tarefa
-    )
-    res_claude = anthropic_client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt_claude}],
-    )
-    analise_claude = res_claude.content[0].text
-    print("  Claude concluido.")
+    analise_claude = "[Claude indisponivel — API key ausente ou invalida]"
+    if anthropic_client:
+        try:
+            prompt_claude = config_modo["claude_prompt"].format(
+                gemini=analise_gemini, contexto=contexto, tarefa=tarefa
+            )
+            res_claude = anthropic_client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=2000,
+                messages=[{"role": "user", "content": prompt_claude}],
+            )
+            analise_claude = res_claude.content[0].text
+            print("  Claude concluido.")
+        except Exception as e:
+            print(f"  [AVISO] Claude falhou: {e}")
+    else:
+        print("  Claude ignorado (cliente nao inicializado).")
 
     # --- FASE 3: CHATGPT ---
     print("[3/3] ChatGPT consolidando relatorio final...")
-    prompt_openai = config_modo["openai_prompt"].format(
-        gemini=analise_gemini, claude=analise_claude, tarefa=tarefa
-    )
-    res_openai = openai_client.responses.create(
-        model=OPENAI_MODEL,
-        reasoning={"effort": OPENAI_REASONING_EFFORT},
-        input=prompt_openai,
-    )
-    relatorio_final = res_openai.output_text
-    print("  ChatGPT concluido.")
+    relatorio_final = f"## Relatorio parcial\n\n**Gemini:** {analise_gemini}\n\n**Claude:** {analise_claude}"
+    if openai_client:
+        try:
+            prompt_openai = config_modo["openai_prompt"].format(
+                gemini=analise_gemini, claude=analise_claude, tarefa=tarefa
+            )
+            res_openai = openai_client.responses.create(
+                model=OPENAI_MODEL,
+                reasoning={"effort": OPENAI_REASONING_EFFORT},
+                input=prompt_openai,
+            )
+            relatorio_final = res_openai.output_text
+            print("  ChatGPT concluido.")
+        except Exception as e:
+            print(f"  [AVISO] ChatGPT falhou: {e}")
+    else:
+        print("  ChatGPT ignorado (cliente nao inicializado).")
 
     print("\n========== RELATORIO DO TRIO IA - SHOPVIVALIZ ==========\n")
     print(relatorio_final)

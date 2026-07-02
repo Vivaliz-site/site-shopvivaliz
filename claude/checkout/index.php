@@ -24,11 +24,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
 
     if ($cliente['nome'] !== '' && $cliente['email'] !== '' && $cliente['telefone'] !== '' && $cliente['endereco'] !== '' && $cliente['numero'] !== '' && $cliente['cidade'] !== '' && $cliente['cep'] !== '' && $items) {
         $pedidoId = 'PED-' . date('YmdHis');
+        $totalPedido = array_sum(array_map(static function (array $item): float {
+            return (float)($item['price'] ?? 0) * max(1, (int)($item['quantity'] ?? 1));
+        }, $items));
         $registro = [
             'id' => $pedidoId,
             'timestamp' => date('c'),
             'cliente' => $cliente,
             'items' => $items,
+            'total' => $totalPedido,
             'status' => 'pendente_atendimento',
             'source' => 'checkout_site',
         ];
@@ -47,6 +51,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
         $pedidoCriado = true;
     }
 }
+
+$pixKey  = (string)(getenv('LOJA_PIX_KEY')  ?: '');
+$pixName = (string)(getenv('LOJA_PIX_NAME') ?: 'ShopVivaliz');
+$whatsapp = (string)(getenv('LOJA_WHATSAPP') ?: '');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -221,7 +229,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
                 <h2>Pedido recebido com sucesso</h2>
                 <p class="muted">Seu pedido foi registrado e entrou na fila de atendimento da ShopVivaliz.</p>
                 <div class="order-code"><?php echo htmlspecialchars((string)$pedidoId, ENT_QUOTES, 'UTF-8'); ?></div>
-                <p class="muted">Os dados foram salvos localmente em nosso registro operacional. O proximo passo e contato comercial para confirmacao do pedido e pagamento.</p>
+
+                <?php if ($totalPedido > 0): ?>
+                <p style="margin:12px 0;font-size:1.1rem;font-weight:700;color:#0f172a;">
+                    Total: R$ <?php echo number_format($totalPedido, 2, ',', '.'); ?>
+                </p>
+                <?php endif; ?>
+
+                <?php if ($pixKey !== ''): ?>
+                <div style="margin:18px 0;padding:18px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:14px;">
+                    <p style="font-weight:700;color:#166534;margin-bottom:8px;">Pague via PIX</p>
+                    <p style="color:#374151;font-size:.9rem;margin-bottom:10px;">
+                        Beneficiário: <strong><?php echo htmlspecialchars($pixName, ENT_QUOTES, 'UTF-8'); ?></strong>
+                    </p>
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                        <code id="pix-key" style="flex:1;padding:10px 14px;background:white;border:1px solid #d1fae5;border-radius:8px;font-size:.95rem;word-break:break-all;">
+                            <?php echo htmlspecialchars($pixKey, ENT_QUOTES, 'UTF-8'); ?>
+                        </code>
+                        <button onclick="navigator.clipboard.writeText(document.getElementById('pix-key').textContent.trim()).then(function(){this.textContent='Copiado!';}.bind(this))"
+                            style="padding:10px 16px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;">
+                            Copiar chave
+                        </button>
+                    </div>
+                    <p style="color:#6b7280;font-size:.82rem;margin-top:10px;">
+                        Após o pagamento, envie o comprovante pelo WhatsApp para confirmar seu pedido.
+                    </p>
+                </div>
+                <?php endif; ?>
+
+                <?php if ($whatsapp !== ''): ?>
+                <?php
+                    $waNumber = preg_replace('/\D/', '', $whatsapp);
+                    $waMsg = urlencode('Olá! Acabei de fazer o pedido ' . $pedidoId . ' no site ShopVivaliz. Seguem meus dados.');
+                ?>
+                <a href="https://wa.me/<?php echo htmlspecialchars($waNumber, ENT_QUOTES, 'UTF-8'); ?>?text=<?php echo $waMsg; ?>"
+                   target="_blank" rel="noopener noreferrer"
+                   style="display:inline-flex;align-items:center;gap:8px;margin-top:14px;padding:12px 20px;background:#25d366;color:white;border-radius:12px;font-weight:700;text-decoration:none;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.855L.057 23.998l6.304-1.654A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.016-1.378l-.36-.213-3.732.979 1.001-3.645-.235-.375A9.818 9.818 0 112 12a9.818 9.818 0 0110 9.818z"/></svg>
+                    Falar no WhatsApp
+                </a>
+                <?php endif; ?>
+
                 <a class="ghost-btn" href="catalogo">Voltar ao catalogo</a>
             </section>
         <?php else: ?>
