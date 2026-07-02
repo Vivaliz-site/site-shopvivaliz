@@ -13,82 +13,167 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Sincronizar precos do Tiny API v2
+      - name: Sincronizar precos (v3 OAuth → v2 fallback)
         env:
-          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
+          TOKEN_API_OLIST:      ${{ secrets.TOKEN_API_OLIST }}
+          OLIST_CLIENT_ID:      ${{ secrets.OLIST_CLIENT_ID }}
+          OLIST_CLIENT_SECRET:  ${{ secrets.OLIST_CLIENT_SECRET }}
+          OLIST_REFRESH_TOKEN:  ${{ secrets.OLIST_REFRESH_TOKEN }}
         run: |
           python3 << 'PYEOF'
-          import json, os, time, urllib.request, urllib.error
+          import json, os, time, urllib.request, urllib.error, urllib.parse
 
-          TOKEN = os.getenv("TOKEN_API_OLIST", "")
           FALLBACK_PATH = "api/catalog/fallback-products.json"
+          V3_PRODUCTS   = "https://api.tiny.com.br/public-api/v3/produtos"
+          V2_PRODUCTS   = "https://api.tiny.com.br/api/v2/produtos.json"
+          TOKEN_URL     = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
 
-          if not TOKEN:
-              print("ERROR: TOKEN_API_OLIST not set")
-              exit(1)
+          def http_get_json(url, headers=None, timeout=30):
+              req = urllib.request.Request(url, headers=headers or {"User-Agent": "ShopVivaliz/1.0"})
+              with urllib.request.urlopen(req, timeout=timeout) as r:
+                  return json.loads(r.read().decode())
 
-          def tiny_v2_get(page):
-              url = f"https://api.tiny.com.br/api/v2/produtos.json?token={TOKEN}&formato=json&pagina={page}&limite=100"
-              req = urllib.request.Request(url, headers={"User-Agent": "ShopVivaliz/1.0"})
+          def http_post_json(url, data, timeout=30):
+              body = urllib.parse.urlencode(data).encode()
+              req = urllib.request.Request(url, data=body,
+                                           headers={"Content-Type": "application/x-www-form-urlencoded"})
+              with urllib.request.urlopen(req, timeout=timeout) as r:
+                  return json.loads(r.read().decode())
+
+          # ── Tentar OAuth v3 ──────────────────────────────────────────
+          def get_v3_access_token():
+              client_id     = os.getenv("OLIST_CLIENT_ID", "")
+              client_secret = os.getenv("OLIST_CLIENT_SECRET", "")
+              refresh_token = os.getenv("OLIST_REFRESH_TOKEN", "")
+              if not all([client_id, client_secret, refresh_token]):
+                  return None
               try:
-                  with urllib.request.urlopen(req, timeout=30) as r:
-                      return json.loads(r.read().decode())
-              except urllib.error.HTTPError as e:
-                  print(f"HTTP {e.code} on page {page}")
-                  if e.code == 401:
-                      print("Token invalido ou expirado")
-                      exit(1)
-                  return {}
+                  resp = http_post_json(TOKEN_URL, {
+                      "grant_type":    "refresh_token",
+                      "client_id":     client_id,
+                      "client_secret": client_secret,
+                      "refresh_token": refresh_token,
+                  })
+                  token = resp.get("access_token", "")
+                  if token:
+                      print(f"  v3 OAuth OK (expires_in={resp.get('expires_in')}s)")
+                  return token or None
               except Exception as e:
-                  print(f"Error on page {page}: {e}")
-                  return {}
+                  print(f"  v3 OAuth falhou: {e}")
+                  return None
 
+          def fetch_prices_v3(access_token):
+              price_map = {}
+              page = 1
+              print("Buscando precos via Tiny API v3 (OAuth)...")
+              while True:
+                  url = f"{V3_PRODUCTS}?situacao=A&limit=100&offset={(page-1)*100}"
+                  try:
+                      resp = http_get_json(url, headers={
+                          "Authorization": f"Bearer {access_token}",
+                          "User-Agent": "ShopVivaliz/1.0",
+                      })
+                  except urllib.error.HTTPError as e:
+                      print(f"  HTTP {e.code} na pagina {page}")
+                      break
+                  except Exception as e:
+                      print(f"  Erro: {e}")
+                      break
+
+                  items = resp.get("itens") or resp.get("data") or resp.get("produtos") or []
+                  if not items:
+                      break
+                  for item in items:
+                      pid = str(item.get("id") or "")
+                      sku = str(item.get("codigo") or item.get("sku") or "")
+                      try:
+                          price = float(str(item.get("preco") or item.get("preco_venda") or 0).replace(",", "."))
+                      except Exception:
+                          price = 0.0
+                      if pid:
+                          price_map[pid] = price
+                      if sku:
+                          price_map[f"sku:{sku}"] = price
+                  print(f"  pagina {page}: {len(items)} produtos")
+                  if len(items) < 100:
+                      break
+                  page += 1
+                  time.sleep(0.5)
+              return price_map
+
+          def fetch_prices_v2():
+              token = os.getenv("TOKEN_API_OLIST", "")
+              if not token:
+                  return {}
+              price_map = {}
+              page = 1
+              print("Buscando precos via Tiny API v2 (token estatico)...")
+              while True:
+                  url = f"{V2_PRODUCTS}?token={token}&formato=json&pagina={page}&limite=100"
+                  try:
+                      resp = http_get_json(url)
+                      retorno = resp.get("retorno", {})
+                      if retorno.get("status") == "Erro":
+                          print(f"  API erro: {retorno.get('erros')}")
+                          break
+                      items = retorno.get("produtos", [])
+                      if not items:
+                          break
+                      for wrapper in items:
+                          item = wrapper.get("produto", wrapper)
+                          pid = str(item.get("id", ""))
+                          sku = str(item.get("codigo", ""))
+                          try:
+                              price = float(str(item.get("preco", 0) or 0).replace(",", "."))
+                          except Exception:
+                              price = 0.0
+                          if pid:
+                              price_map[pid] = price
+                          if sku:
+                              price_map[f"sku:{sku}"] = price
+                      print(f"  pagina {page}: {len(items)} produtos")
+                      if len(items) < 100:
+                          break
+                      page += 1
+                      time.sleep(0.4)
+                  except urllib.error.HTTPError as e:
+                      print(f"  HTTP {e.code} na pagina {page} (token expirado?)")
+                      break
+                  except Exception as e:
+                      print(f"  Erro: {e}")
+                      break
+              return price_map
+
+          # ── Tentar v3 primeiro, v2 como fallback ──────────────────────
+          price_map = {}
+          access_token = get_v3_access_token()
+          if access_token:
+              price_map = fetch_prices_v3(access_token)
+          if not price_map:
+              price_map = fetch_prices_v2()
+
+          print(f"Mapa de precos: {len(price_map)} entradas")
+
+          if not price_map:
+              print("AVISO: Nenhum preco obtido. Credenciais Tiny invalidas/expiradas.")
+              print("Acao necessaria: renovar OLIST_REFRESH_TOKEN ou TOKEN_API_OLIST no GitHub Secrets.")
+              exit(0)  # sair limpo para nao travar o deploy
+
+          # ── Aplicar precos ao catalogo ────────────────────────────────
           with open(FALLBACK_PATH) as f:
               products = json.load(f)
 
-          price_map = {}
-          page = 1
-
-          print("Buscando precos do Tiny API v2...")
-          while True:
-              resp = tiny_v2_get(page)
-              retorno = resp.get("retorno", {})
-              if retorno.get("status") == "Erro":
-                  print(f"API erro: {retorno.get('erros')}")
-                  break
-              items = retorno.get("produtos", [])
-              if not items:
-                  break
-              for wrapper in items:
-                  item = wrapper.get("produto", wrapper)
-                  pid = str(item.get("id", ""))
-                  sku = str(item.get("codigo", ""))
-                  try:
-                      price = float(str(item.get("preco", 0) or 0).replace(",", "."))
-                  except:
-                      price = 0.0
-                  if pid:
-                      price_map[pid] = price
-                  if sku:
-                      price_map[f"sku:{sku}"] = price
-              print(f"  pagina {page}: {len(items)} produtos")
-              if len(items) < 100:
-                  break
-              page += 1
-              time.sleep(0.4)
-
-          print(f"Mapa de precos: {len(price_map)} entradas")
           updated = 0
           for p in products:
               pid = str(p.get("olist_product_id") or p.get("id") or "")
               sku = str(p.get("sku") or "")
               price = price_map.get(pid) or price_map.get(f"sku:{sku}")
               if price and price > 0:
-                  p["price"] = price
+                  p["price"] = round(price, 2)
                   updated += 1
 
           print(f"Atualizados: {updated}/{len(products)}")
-          with open(FALLBACK_PATH, "w") as f:
+          with open(FALLBACK_PATH, "w", encoding="utf-8") as f:
               json.dump(products, f, ensure_ascii=False)
           PYEOF
 
@@ -100,6 +185,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Sem alteracoes de preco"
           else
-            git commit -m "chore: atualiza precos via Tiny API v2 [skip ci]"
+            git commit -m "chore: atualiza precos via Tiny API [skip ci]"
             git push
           fi
