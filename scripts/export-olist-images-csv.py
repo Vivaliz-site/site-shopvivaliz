@@ -62,6 +62,28 @@ def http_post_form(url: str, data: dict, timeout: int = 45) -> dict:
     return http_json(request, timeout=timeout)
 
 
+def try_token_request(url: str, data: dict, timeout: int = 45) -> dict:
+    """Como http_post_form, mas nunca encerra o processo: erros viram {} para
+    permitir que auth_context() tente o proximo metodo de autenticacao."""
+    request = Request(
+        url,
+        data=urlencode(data).encode("utf-8"),
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8", errors="replace")
+            return json.loads(raw) if raw else {}
+    except HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        print(f"  Token request falhou (HTTP {exc.code}): {body[:300]}")
+        return {}
+    except (URLError, json.JSONDecodeError) as exc:
+        print(f"  Token request falhou: {exc}")
+        return {}
+
+
 def auth_context() -> dict:
     # Modo proxy: usa o servidor como intermediário (contorna bloqueio de IP)
     if PROXY_URL:
@@ -84,7 +106,7 @@ def auth_context() -> dict:
             "client_secret": client_secret,
             "refresh_token": refresh_token,
         }
-        token_response = http_post_form(TOKEN_URL, payload)
+        token_response = try_token_request(TOKEN_URL, payload)
         access_token = token_response.get("access_token")
         if access_token:
             return {"type": "bearer_v3", "token": access_token}
@@ -105,7 +127,7 @@ def auth_context() -> dict:
 
     print("Refresh token nao encontrado. Tentando client_credentials...")
     payload = {"grant_type": "client_credentials", "client_id": client_id, "client_secret": client_secret}
-    token_response = http_post_form(TOKEN_URL, payload)
+    token_response = try_token_request(TOKEN_URL, payload)
     access_token = token_response.get("access_token")
     if not access_token:
         fail(f"Token nao retornado. Resposta: {json.dumps(token_response, ensure_ascii=False)[:1000]}")
