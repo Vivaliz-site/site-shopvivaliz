@@ -113,11 +113,15 @@ $statusText = $products
 <body>
     <nav class="navbar">
         <div class="container nav-inner">
-            <a class="brand-link" href="/">Vivaliz</a>
+            <a class="brand-link" href="/">
+                <span class="brand-logo">V</span>Vivaliz
+            </a>
             <div class="navbar-menu">
                 <a href="/">Home</a>
                 <a href="/catalogo" aria-current="page">Catálogo</a>
-                <a href="/carrinho/">🛒 Carrinho</a>
+                <a href="/carrinho.php" class="nav-cart">
+                    🛒 Carrinho <span class="cart-badge" id="nav-cart-count"></span>
+                </a>
             </div>
         </div>
     </nav>
@@ -193,7 +197,28 @@ $statusText = $products
         </section>
     </main>
 
+    <footer>
+        <div class="container">
+            <div class="footer-cols">
+                <div><strong>Vivaliz</strong><p>Qualidade e entrega rápida para todo o Brasil.</p></div>
+                <div><strong>Navegação</strong><a href="/">Home</a><a href="/catalogo">Catálogo</a><a href="/contato">Contato</a></div>
+                <div><strong>Atendimento</strong><a href="/faq">Dúvidas frequentes</a><a href="/politica-privacidade">Privacidade</a></div>
+            </div>
+            <p class="footer-copy">&copy; 2026 Vivaliz. Todos os direitos reservados.</p>
+        </div>
+    </footer>
+
     <script src="/autodev/client.js"></script>
     <script src="/js/catalog.js"></script>
+    <script>
+    (function(){
+        try {
+            var cart = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
+            var count = cart.reduce(function(a,i){ return a+(i.quantity||1); }, 0);
+            var badge = document.getElementById('nav-cart-count');
+            if (badge) badge.textContent = count > 0 ? count : '';
+        } catch(e){}
+    })();
+    </script>
 </body>
 </html>

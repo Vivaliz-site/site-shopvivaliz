@@ -90,6 +90,8 @@
           if (existing) existing.quantity += 1;
           else items.push(Object.assign(product, { quantity: 1 }));
           localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+          var badge = document.getElementById('nav-cart-count');
+          if (badge) badge.textContent = items.reduce(function(a,i){ return a+(i.quantity||1); }, 0);
           window.location.href = '/carrinho.php';
         });
       });
