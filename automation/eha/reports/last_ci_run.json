@@ -1,9 +1,9 @@
 {
-  "run_number": 192,
-  "run_id": "28607677217",
+  "run_number": 193,
+  "run_id": "28611330813",
   "eha_status": "READY_FOR_PRODUCTION",
-  "event": "schedule",
-  "sha": "91a6869f1a1a21e6b38ac7d7d66a1cbfbece4da6",
-  "timestamp": "2026-07-02T17:03:28Z",
-  "url": "https://github.com/fredmourao-ai/site-shopvivaliz/actions/runs/28607677217"
+  "event": "push",
+  "sha": "4a4094ce056ce709695cd9a9253b4bcd1f9e01ae",
+  "timestamp": "2026-07-02T18:05:20Z",
+  "url": "https://github.com/fredmourao-ai/site-shopvivaliz/actions/runs/28611330813"
 }
