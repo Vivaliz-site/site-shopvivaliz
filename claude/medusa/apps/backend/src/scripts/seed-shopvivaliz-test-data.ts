@@ -230,6 +230,39 @@ export default async function seedShopVivalizTestData({
       priceBRL: 249.9,
       priceUSD: 49.9,
     },
+    {
+      title: "Vestido ShopVivaliz",
+      handle: "vestido-shopvivaliz",
+      description:
+        "Vestido midi em viscose leve, corte solto e caimento fluido.",
+      sku: "DRESS-001",
+      image: "https://placehold.co/800x800/e67e22/ffffff/png?text=Vestido",
+      weight: 300,
+      priceBRL: 179.9,
+      priceUSD: 35.9,
+    },
+    {
+      title: "Bermuda ShopVivaliz",
+      handle: "bermuda-shopvivaliz",
+      description:
+        "Bermuda de sarja com elastano, confortável para o verão.",
+      sku: "SHORTS-001",
+      image: "https://placehold.co/800x800/27ae60/ffffff/png?text=Bermuda",
+      weight: 350,
+      priceBRL: 99.9,
+      priceUSD: 19.9,
+    },
+    {
+      title: "Mochila ShopVivaliz",
+      handle: "mochila-shopvivaliz",
+      description:
+        "Mochila impermeável com compartimento acolchoado para notebook.",
+      sku: "BACKPACK-001",
+      image: "https://placehold.co/800x800/2980b9/ffffff/png?text=Mochila",
+      weight: 600,
+      priceBRL: 159.9,
+      priceUSD: 31.9,
+    },
   ];
 
   const { data: existingProducts } = await query.graph({
