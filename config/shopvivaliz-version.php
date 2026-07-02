@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 return array(
-    'version' => '9.2.96',
-    'version_code' => 90296,
+    'version' => '9.2.101',
+    'version_code' => 902101,
     'channel' => 'dev',
-    'codename' => 'gateway-secret-injection',
+    'codename' => 'shopee-media-space-repair',
     'release_type' => 'cumulative',
-    'generated_at' => '2026-07-01T00:00:00-03:00',
+    'generated_at' => '2026-07-02T00:30:00-03:00',
     'requires_update_php_sync' => true,
     'notes' => array(
         'Centraliza numero da versao para deploy, endpoints e testes pos-deploy.',
@@ -23,5 +23,7 @@ return array(
         'Moderniza o sync Olist/Tiny para ler secrets persistidos, expor status operacional e manter OAuth com offline_access.',
         'Adiciona diagnostico versionado de Melhor Envio e Pagar.me para diferenciar endpoint ativo de gateway realmente autenticado.',
         'Prepara o deploy para injetar secrets de Melhor Envio e Pagar.me no .env temporario do servidor e aceita aliases de nome para o token de frete.',
+        'Adiciona reparo dedicado para Shopee Media Space lendo planilha de resultado, mapeando imagem local e atualizando a capa via Open API.',
+        'Prepara workflow manual com secrets do GitHub para executar uploads de arquivo local em lote sem depender de CDN externo.',
     ),
 );
