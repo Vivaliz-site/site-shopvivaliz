@@ -89,6 +89,12 @@ $featuredProducts = sv_home_products();
     <meta property="og:description" content="Catálogo com produtos de qualidade. Compre online com entrega rápida.">
     <meta property="og:image" content="/images/logo-vivaliz-square.png">
     <meta property="og:type" content="website">
+    <meta property="og:url" content="https://shopvivaliz.com.br/">
+    <meta property="og:site_name" content="ShopVivaliz">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Vivaliz | Loja Online">
+    <meta name="twitter:description" content="Catálogo com produtos de qualidade. Compre online com entrega rápida.">
+    <link rel="canonical" href="https://shopvivaliz.com.br/">
 
     <title>Vivaliz | Loja Online</title>
 
@@ -96,6 +102,36 @@ $featuredProducts = sv_home_products();
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "name": "Vivaliz",
+          "url": "https://shopvivaliz.com.br",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://shopvivaliz.com.br/catalogo?busca={search_term_string}"
+            },
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@type": "Store",
+          "name": "Vivaliz",
+          "url": "https://shopvivaliz.com.br",
+          "description": "Loja online com produtos de qualidade. Rodízios, ferragens, utilidades e muito mais.",
+          "priceRange": "R$",
+          "currenciesAccepted": "BRL",
+          "paymentAccepted": "PIX, Cartão de Crédito, Boleto",
+          "areaServed": "BR"
+        }
+      ]
+    }
+    </script>
 </head>
 <body>
     <!-- Navegação -->
