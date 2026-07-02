@@ -100,14 +100,16 @@ $featuredProducts = sv_home_products();
 <body>
     <!-- Navegação -->
     <nav class="navbar">
-        <div class="container">
-            <div class="navbar-brand">
-                <a href="/" style="text-decoration:none;color:inherit;"><h1>Vivaliz</h1></a>
-            </div>
+        <div class="container nav-inner">
+            <a class="brand-link" href="/">
+                <span class="brand-logo">V</span>Vivaliz
+            </a>
             <div class="navbar-menu">
-                <a href="/">Home</a>
                 <a href="/catalogo">Catálogo</a>
-                <a href="/carrinho/" id="nav-cart">🛒 Carrinho</a>
+                <a href="/sobre">Sobre</a>
+                <a href="/carrinho.php" class="nav-cart" id="nav-cart-link">
+                    🛒 Carrinho <span class="cart-badge" id="nav-cart-count">0</span>
+                </a>
             </div>
         </div>
     </nav>
@@ -116,13 +118,26 @@ $featuredProducts = sv_home_products();
     <section class="hero">
         <div class="container">
             <div class="hero-content">
-                <p class="eyebrow">Qualidade e entrega rápida</p>
-                <h1>Produtos que você precisa, na hora certa</h1>
-                <p>Rodízios, ferragens, utilidades domésticas e muito mais — tudo com qualidade garantida e entrega para todo o Brasil.</p>
+                <p class="eyebrow" style="color:#7dd3fc;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin:0 0 16px">
+                    🛍️ Loja oficial Vivaliz
+                </p>
+                <h1>Produtos que <span>você precisa</span>,<br>entrega para todo o Brasil</h1>
+                <p>Rodízios, ferragens, utilidades domésticas, garden e muito mais — <?= count($featuredProducts) > 0 ? '197 produtos' : 'catálogo completo' ?> com qualidade garantida.</p>
 
-                <div class="cta-buttons">
-                    <a href="/catalogo" class="btn btn-primary">Ver Catálogo</a>
-                    <a href="/carrinho/" class="btn btn-secondary">🛒 Meu Carrinho</a>
+                <div class="cta-buttons" style="margin-top:28px">
+                    <a href="/catalogo" class="btn btn-primary" style="background:#fff;color:#1d4ed8;font-size:15px;padding:14px 24px">
+                        Ver catálogo completo
+                    </a>
+                    <a href="/carrinho.php" class="btn" style="background:rgba(255,255,255,0.15);color:#fff;border:1.5px solid rgba(255,255,255,0.35);font-size:15px;padding:14px 24px">
+                        🛒 Meu Carrinho
+                    </a>
+                </div>
+
+                <div class="hero-trust">
+                    <div class="hero-trust-item"><span>🔒</span> Compra segura</div>
+                    <div class="hero-trust-item"><span>🚚</span> Entrega para todo Brasil</div>
+                    <div class="hero-trust-item"><span>⚡</span> PIX com aprovação imediata</div>
+                    <div class="hero-trust-item"><span>↩️</span> 30 dias para troca</div>
                 </div>
             </div>
         </div>
@@ -201,6 +216,16 @@ $featuredProducts = sv_home_products();
 
     <script src="/autodev/client.js"></script>
     <script src="/js/catalog.js"></script>
+    <script>
+    (function(){
+        try {
+            var cart = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
+            var count = cart.reduce(function(a,i){ return a+(i.quantity||1); }, 0);
+            var badge = document.getElementById('nav-cart-count');
+            if (badge) badge.textContent = count > 0 ? count : '';
+        } catch(e){}
+    })();
+    </script>
     <!-- V16: signal tracker — registra views dos cards em destaque -->
     <script>
     (function(){
