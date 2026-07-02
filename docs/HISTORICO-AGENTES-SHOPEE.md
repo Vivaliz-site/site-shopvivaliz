@@ -194,7 +194,8 @@ Base URL da API: `https://api.tiny.com.br/public-api/v3`
 | Data | Branch | O que foi feito |
 |---|---|---|
 | 2026-06-27 | `claude/guth-portfolio-access-81jjq2` | Criação de `ShopeeListingsExtractorAgent`, `ShopeeListingsOptimizationAgent`, workflows `fetch-shopee-listings.yml` e `optimize-shopee-listings.yml`, release-notes `9.2.85-shopee-listings-extractor-optimizer.json` e este documento. |
-| 2026-07-02 | `main` (rotina agendada, sem branch dedicada) | Ciclo de otimização inteligente (CTR/conversão/título/A-B) executado como rotina autônoma. Diagnóstico: nenhuma otimização foi aplicada — ver seção 9. |
+| 2026-07-02 (~13h UTC) | `main` (rotina agendada, sem branch dedicada) | Ciclo de otimização inteligente (CTR/conversão/título/A-B) executado como rotina autônoma. Diagnóstico: nenhuma otimização foi aplicada — ver seção 9. |
+| 2026-07-02 (~19h UTC) | `main` (rotina agendada, sem branch dedicada) | Novo ciclo (6h depois): mesmo bloqueador confirmado, sem mudanças no ambiente. `fetch-shopee-listings.yml` run #12 (18:17:31Z) segue retornando `total_products: 0` / 401; `optimize-shopee-listings.yml` run #5 (11:55:02Z) terminou em `failure`. Nenhum arquivo `optimization-report-*.json` novo desde 2026-06-30. Nenhuma alteração de título/descrição/imagem/preço aplicada — mesma decisão da seção 9. Nenhum dado de venda, CTR ou conversão foi inventado. |
 
 ---
 
@@ -234,3 +235,19 @@ orientada a dados.
 `TINY_REFRESH_TOKEN` em Settings → Secrets do repositório, e depois rodar
 `fetch-shopee-listings.yml` manualmente para confirmar `status: success` com `total_products > 0`
 antes de retomar os ciclos de otimização.
+
+### 9.1 Atualização — ciclo de 2026-07-02 ~19h UTC
+
+Bloqueador confirmado, sem mudanças desde a seção 9 acima (escrita ~6h antes):
+
+- `listings/shopee-listings-20260702-181749.json`: `status: partial`, `total_products: 0`,
+  erro `"Autenticação falhou (401). Token inválido ou expirado."`.
+- `fetch-shopee-listings.yml` run #12 (2026-07-02T18:17:31Z): job termina com exit 0 (histórico
+  de `b925f9d` mascarando 401 como sucesso de workflow), mas o payload confirma 0 produtos reais.
+- `optimize-shopee-listings.yml` run #5 (2026-07-02T11:55:02Z): `conclusion: failure`.
+- Nenhum `listings/optimization-report-*.json` novo desde `20260630-115948`.
+
+Este agente não tem acesso para renovar o token Tiny (requer login no ERP + GitHub Secrets), então
+o ciclo permanece bloqueado. Nenhuma otimização de título/descrição/imagem/atributo/preço foi
+aplicada, e nenhum dado de CTR/conversão/vendas foi assumido ou inventado para contornar a falta
+de dados reais.
