@@ -117,18 +117,25 @@ if (is_readable($history_path)) {
         if ($r) $eha_runs[] = $r;
     }
 }
-$eha_runs_recent = array_reverse(array_slice($eha_runs, -20));
+$eha_runs_recent = array_reverse(array_slice($eha_runs, -40));
 $total_runs      = count($eha_runs);
 $ok_runs         = count(array_filter($eha_runs, fn($r) => ($r['status'] ?? '') === 'READY_FOR_PRODUCTION'));
+$e2e_ok_runs     = count(array_filter($eha_runs, fn($r) => !($r['e2e_failed'] ?? false)));
 $streak          = 0;
 foreach (array_reverse($eha_runs) as $r) {
     if (($r['status'] ?? '') === 'READY_FOR_PRODUCTION') $streak++;
+    else break;
+}
+$e2e_streak_ok   = 0;
+foreach (array_reverse($eha_runs) as $r) {
+    if (!($r['e2e_failed'] ?? false)) $e2e_streak_ok++;
     else break;
 }
 $avg_elapsed = $total_runs > 0
     ? round(array_sum(array_column($eha_runs, 'elapsed_s')) / $total_runs, 2)
     : 0;
 $uptime_pct  = $total_runs > 0 ? round($ok_runs / $total_runs * 100, 1) : 0;
+$e2e_pct     = $total_runs > 0 ? round($e2e_ok_runs / $total_runs * 100, 1) : 0;
 
 $e2e_consecutive = (int)($last_run['e2e_consecutive'] ?? 0);
 $e2e_alert       = $e2e_consecutive >= 10;
@@ -185,6 +192,7 @@ $status_color = $all_ok ? '#22c55e' : '#ef4444';
         .spark-bar { width: 10px; border-radius: 2px; min-height: 4px; }
         .spark-ok   { background: #22c55e; }
         .spark-fail { background: #ef4444; }
+        .spark-e2e  { background: #f59e0b; }
         .stat-row { display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
         .stat { font-size: .82rem; color: #94a3b8; }
         .stat strong { color: #f1f5f9; font-size: 1rem; }
@@ -406,21 +414,30 @@ $status_color = $all_ok ? '#22c55e' : '#ef4444';
     <div class="stat-row">
         <div class="stat">Streak OK <strong class="ok"><?= $streak ?></strong></div>
         <div class="stat">Uptime <strong><?= $uptime_pct ?>%</strong></div>
+        <div class="stat">E2E pass rate <strong class="<?= $e2e_pct >= 90 ? 'ok' : ($e2e_pct >= 70 ? 'warn' : 'fail') ?>"><?= $e2e_pct ?>%</strong></div>
+        <div class="stat">E2E streak OK <strong class="<?= $e2e_streak_ok >= 20 ? 'ok' : ($e2e_streak_ok >= 5 ? 'warn' : 'fail') ?>"><?= $e2e_streak_ok ?></strong></div>
         <div class="stat">Runs totais <strong><?= $total_runs ?></strong></div>
         <div class="stat">Média elapsed <strong><?= $avg_elapsed ?>s</strong></div>
-        <div class="stat">E2E falhas consecutivas <strong class="<?= $e2e_alert ? 'fail' : ($e2e_consecutive > 0 ? 'warn' : 'ok') ?>"><?= $e2e_consecutive ?></strong></div>
     </div>
     <div class="sparkline">
     <?php
     $max_e = max(array_column($eha_runs_recent, 'elapsed_s') ?: [1]);
     foreach ($eha_runs_recent as $r):
-        $ok  = ($r['status'] ?? '') === 'READY_FOR_PRODUCTION';
-        $h   = max(4, (int)round(($r['elapsed_s'] / $max_e) * 28));
-        $cls = $ok ? 'spark-ok' : 'spark-fail';
-        $tip = '#' . $r['run_id'] . ' · ' . substr($r['ts'] ?? '', 0, 16) . ' · ' . $r['elapsed_s'] . 's';
+        $ok      = ($r['status'] ?? '') === 'READY_FOR_PRODUCTION';
+        $e2e_ok  = !($r['e2e_failed'] ?? false);
+        $h       = max(4, (int)round(($r['elapsed_s'] / $max_e) * 28));
+        $cls     = !$ok ? 'spark-fail' : ($e2e_ok ? 'spark-ok' : 'spark-e2e');
+        $tip     = '#' . $r['run_id'] . ' · ' . substr($r['ts'] ?? '', 0, 16) . ' · ' . $r['elapsed_s'] . 's'
+                 . ($ok ? ' · OK' : ' · BLOCKED')
+                 . ($e2e_ok ? '' : ' · E2E FAIL');
     ?>
         <div class="spark-bar <?= $cls ?>" style="height:<?= $h ?>px" title="<?= htmlspecialchars($tip) ?>"></div>
     <?php endforeach; ?>
+    </div>
+    <div style="font-size:.7rem;color:#64748b;margin-bottom:1rem;display:flex;gap:1rem">
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#22c55e;vertical-align:middle"></span> OK</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f59e0b;vertical-align:middle"></span> OK mas E2E falhou</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#ef4444;vertical-align:middle"></span> BLOCKED</span>
     </div>
     <table>
         <thead>
