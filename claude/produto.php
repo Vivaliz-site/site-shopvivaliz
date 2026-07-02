@@ -1,15 +1,96 @@
 <?php
 declare(strict_types=1);
 header('Content-Type: text/html; charset=UTF-8');
-$sku = htmlspecialchars(strip_tags((string)($_GET['sku'] ?? $_GET['id'] ?? '')));
+
+$sku_raw = strip_tags((string)($_GET['sku'] ?? $_GET['id'] ?? ''));
+$sku = htmlspecialchars($sku_raw);
+
+// Carrega dados do produto server-side para SEO
+$seo_nome      = 'Produto — ShopVivaliz';
+$seo_desc      = 'Compre produtos de qualidade com entrega rápida e segura na ShopVivaliz.';
+$seo_img       = '';
+$seo_preco     = '';
+$seo_categoria = '';
+$seo_produto   = null;
+
+if ($sku_raw !== '') {
+    $arr_file = __DIR__ . '/../olist/produtos-olist-array.php';
+    if (is_readable($arr_file)) {
+        include $arr_file;
+        $todos = $GLOBALS['produtos_olist'] ?? [];
+        foreach ($todos as $p) {
+            if (isset($p['id']) && strcasecmp((string)$p['id'], $sku_raw) === 0) {
+                $seo_produto   = $p;
+                $seo_nome      = trim($p['nome'] ?? '') ?: $seo_nome;
+                $seo_desc      = trim($p['descricao'] ?? '') !== ''
+                    ? substr(trim($p['descricao']), 0, 160) . ' — ShopVivaliz'
+                    : $seo_nome . ' — Compre na ShopVivaliz com entrega rápida.';
+                $seo_img       = trim($p['url_imagem'] ?? '');
+                $seo_preco     = isset($p['preco']) && $p['preco'] > 0
+                    ? number_format((float)$p['preco'], 2, '.', '') : '';
+                $seo_categoria = trim($p['categoria'] ?? '');
+                break;
+            }
+        }
+    }
+}
+
+$seo_title = $seo_nome . ($seo_nome !== 'Produto — ShopVivaliz' ? ' — ShopVivaliz' : '');
+$base_url  = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http')
+           . '://' . ($_SERVER['HTTP_HOST'] ?? 'shopvivaliz.com.br');
+$canonical = $base_url . '/claude/produto.php?sku=' . rawurlencode($sku_raw);
+$og_img    = $seo_img !== '' ? ($seo_img[0] === '/' ? $base_url . $seo_img : $seo_img) : '';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Detalhes do produto — ShopVivaliz">
-    <title id="page-title">Produto — ShopVivaliz</title>
+    <meta name="description" content="<?= htmlspecialchars($seo_desc) ?>">
+    <title><?= htmlspecialchars($seo_title) ?></title>
+    <link rel="canonical" href="<?= htmlspecialchars($canonical) ?>">
+    <!-- Open Graph -->
+    <meta property="og:type"        content="product">
+    <meta property="og:title"       content="<?= htmlspecialchars($seo_nome) ?>">
+    <meta property="og:description" content="<?= htmlspecialchars($seo_desc) ?>">
+    <meta property="og:url"         content="<?= htmlspecialchars($canonical) ?>">
+    <meta property="og:site_name"   content="ShopVivaliz">
+    <?php if ($og_img !== ''): ?>
+    <meta property="og:image"       content="<?= htmlspecialchars($og_img) ?>">
+    <?php endif; ?>
+    <?php if ($seo_preco !== ''): ?>
+    <meta property="product:price:amount"   content="<?= htmlspecialchars($seo_preco) ?>">
+    <meta property="product:price:currency" content="BRL">
+    <?php endif; ?>
+    <!-- Twitter Card -->
+    <meta name="twitter:card"        content="summary_large_image">
+    <meta name="twitter:title"       content="<?= htmlspecialchars($seo_nome) ?>">
+    <meta name="twitter:description" content="<?= htmlspecialchars($seo_desc) ?>">
+    <?php if ($og_img !== ''): ?>
+    <meta name="twitter:image"       content="<?= htmlspecialchars($og_img) ?>">
+    <?php endif; ?>
+    <?php if ($seo_produto !== null): ?>
+    <script type="application/ld+json">
+    <?= json_encode([
+        '@context'    => 'https://schema.org',
+        '@type'       => 'Product',
+        'name'        => $seo_nome,
+        'description' => $seo_desc,
+        'sku'         => $sku_raw,
+        'category'    => $seo_categoria,
+        'image'       => $og_img !== '' ? [$og_img] : [],
+        'url'         => $canonical,
+        'brand'       => ['@type' => 'Brand', 'name' => 'ShopVivaliz'],
+        'offers'      => $seo_preco !== '' ? [
+            '@type'         => 'Offer',
+            'priceCurrency' => 'BRL',
+            'price'         => $seo_preco,
+            'availability'  => 'https://schema.org/InStock',
+            'url'           => $canonical,
+        ] : null,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?>
+    </script>
+    <?php endif; ?>
     <link rel="stylesheet" href="/css/responsive.css">
     <style>
         :root { --green:#22c55e; --navy:#1e3a5f; }
