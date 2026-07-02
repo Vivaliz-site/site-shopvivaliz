@@ -252,6 +252,10 @@ class ShopeeClient:
 
     def upload_image(self, local_path: str) -> str:
         """Faz upload de imagem local para Shopee e retorna image_id."""
+        return self.upload_image_full(local_path)["image_id"]
+
+    def upload_image_full(self, local_path: str) -> dict:
+        """Faz upload de imagem local e retorna image_id e, se disponivel, a URL Shopee."""
         path = "/media_space/upload_image"
         with open(local_path, "rb") as f:
             resp = self._send_with_refresh(
@@ -261,7 +265,20 @@ class ShopeeClient:
                 timeout=60,
             )
         resp.raise_for_status()
-        return resp.json()["response"]["image_id"]
+        data = resp.json()
+        response = data.get("response") or data
+        image_id = str(response.get("image_id") or "")
+        image_url = ""
+        image_url_list = response.get("image_url_list") or []
+        if isinstance(image_url_list, list) and image_url_list:
+            first = image_url_list[0] or {}
+            if isinstance(first, dict):
+                image_url = str(first.get("image_url") or "")
+        return {
+            "image_id": image_id,
+            "image_url": image_url,
+            "raw": response,
+        }
 
     def upload_image_by_url(self, url: str) -> str:
         """Faz upload de imagem via URL para Shopee e retorna image_id."""

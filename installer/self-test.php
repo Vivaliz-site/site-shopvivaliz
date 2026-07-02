@@ -99,6 +99,26 @@ $tests[] = [
     'message' => implode(' | ', $tables)
 ];
 
+$shopeeRepairScript = is_file(dirname(__DIR__) . '/scripts/shopee-media-space-repair.py');
+$tests[] = [
+    'name' => 'Script Shopee Media Space repair',
+    'expected' => 'presente',
+    'actual' => $shopeeRepairScript ? 'presente' : 'ausente',
+    'pass' => $shopeeRepairScript,
+    'message' => $shopeeRepairScript ? '✓ Script presente' : '✗ Script ausente'
+];
+$all_pass = $all_pass && $shopeeRepairScript;
+
+$shopeeRepairWorkflow = is_file(dirname(__DIR__) . '/.github/workflows/shopee-media-space-repair.yml');
+$tests[] = [
+    'name' => 'Workflow Shopee Media Space repair',
+    'expected' => 'presente',
+    'actual' => $shopeeRepairWorkflow ? 'presente' : 'ausente',
+    'pass' => $shopeeRepairWorkflow,
+    'message' => $shopeeRepairWorkflow ? '✓ Workflow presente' : '✗ Workflow ausente'
+];
+$all_pass = $all_pass && $shopeeRepairWorkflow;
+
 $db->close();
 
 echo json_encode([
