@@ -24,7 +24,11 @@ async function forwardToEha({
     return
   }
 
-  const body = JSON.stringify({ event, data })
+  const body = JSON.stringify({
+    id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+    type: event,
+    data,
+  })
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   }

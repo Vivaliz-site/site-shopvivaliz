@@ -70,6 +70,7 @@ try {
             break;
 
         case 'order.created':
+        case 'order.placed':
             handleOrderCreated($eventData);
             $logEntry['status'] = 'PROCESSED';
             $logEntry['action'] = 'Order processing initiated';
