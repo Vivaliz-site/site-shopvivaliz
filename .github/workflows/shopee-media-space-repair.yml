@@ -73,7 +73,10 @@ jobs:
           test -d "${{ github.event.inputs.image_root }}" || { echo "Missing image_root"; exit 1; }
           if [ "${{ github.event.inputs.dry_run }}" != "true" ]; then
             for var in SHOPEE_PARTNER_ID SHOPEE_PARTNER_KEY SHOPEE_ACCESS_TOKEN SHOPEE_SHOP_ID; do
-              [ -z "${!var}" ] && { echo "Missing secret: $var"; exit 1; }
+              if [ -z "${!var}" ]; then
+                echo "Missing secret: $var"
+                exit 1
+              fi
             done
           fi
 
