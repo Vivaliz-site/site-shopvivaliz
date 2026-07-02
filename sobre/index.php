@@ -7,8 +7,8 @@ header('Content-Type: text/html; charset=UTF-8');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Conheca a ShopVivaliz, nossa proposta comercial e o compromisso com atendimento, catalogo confiavel e operacao em marketplace.">
-    <title>Sobre | ShopVivaliz</title>
+    <meta name="description" content="Conheca a Vivaliz, nossa proposta comercial e o compromisso com atendimento, catalogo confiavel e operacao em marketplace.">
+    <title>Sobre | Vivaliz</title>
     <link rel="stylesheet" href="/css/responsive.css">
     <style>
         .page-hero {
@@ -49,7 +49,7 @@ header('Content-Type: text/html; charset=UTF-8');
 <?php include __DIR__ . '/../includes/navbar.php'; ?>
 <section class="page-hero">
     <div class="container">
-        <h1>ShopVivaliz</h1>
+        <h1>Vivaliz</h1>
         <p>Operacao focada em catalogo confiavel, boa apresentacao e atendimento direto para venda online.</p>
     </div>
 </section>
@@ -57,7 +57,7 @@ header('Content-Type: text/html; charset=UTF-8');
     <div class="container">
         <section class="content-card">
             <h2>Nossa proposta</h2>
-            <p>A ShopVivaliz organiza produtos com foco em marketplace, apresentacao clara e experiencia de compra objetiva. Nosso trabalho combina curadoria de catalogo, estrutura comercial e melhoria continua da operacao digital.</p>
+            <p>A Vivaliz organiza produtos com foco em marketplace, apresentacao clara e experiencia de compra objetiva. Nosso trabalho combina curadoria de catalogo, estrutura comercial e melhoria continua da operacao digital.</p>
         </section>
         <section class="content-card">
             <h2>Como operamos</h2>

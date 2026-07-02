@@ -10,9 +10,17 @@ DB_HOST = localhost
 DB_PORT = 3306
 DB_NAME = shopv506_shopvivaliz
 DB_USERNAME = claude
-DB_PASSWORD = CFqmkF8}$C_2
+DB_PASSWORD = <REDACTED - rotacionar no cPanel/HostGator, senha real estava commitada em texto puro; ver alerta de seguranca abaixo>
 DB_CHARSET = utf8mb4
 ```
+
+⚠️ **Alerta de segurança (2026-07-02):** esta senha do MySQL de produção
+(HostGator/cPanel) estava commitada em texto puro neste arquivo e em
+`README_AGENTES.md` desde commits anteriores. Redigida agora, mas **o valor
+original permanece no histórico do git**. Ação recomendada: trocar a senha
+do usuário `claude` no painel MySQL do cPanel/HostGator o quanto antes e,
+se necessário, reescrever o histórico do repositório para remover o segredo
+antigo (ação destrutiva - requer decisão humana antes de executar).
 
 ## APIs de IA
 
@@ -25,8 +33,8 @@ GEMINI_API_KEY = (sua chave)
 ## Olist/Tiny ERP
 
 ```
-OLIST_CLIENT_ID = tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553
-OLIST_CLIENT_SECRET = sh1MLgXhFlvycybhlShnvQMcEL8T2GWv
+OLIST_CLIENT_ID = SEU_OLIST_CLIENT_ID_AQUI
+OLIST_CLIENT_SECRET = SEU_OLIST_CLIENT_SECRET_AQUI
 OLIST_ACCESS_TOKEN = (será gerado pelo OAuth)
 OLIST_REFRESH_TOKEN = (será gerado pelo OAuth)
 ```
@@ -71,5 +79,5 @@ Ou use GitHub CLI:
 gh secret set DB_HOST --body "localhost"
 gh secret set DB_NAME --body "shopv506_shopvivaliz"
 gh secret set DB_USERNAME --body "claude"
-gh secret set DB_PASSWORD --body "CFqmkF8}$C_2"
+gh secret set DB_PASSWORD --body "<nova senha, apos rotacionar no cPanel/HostGator>"
 ```

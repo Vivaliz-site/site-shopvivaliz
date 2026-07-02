@@ -1,0 +1,277 @@
+# Checklist de Deploy - MedusaJS (ShopVivaliz)
+
+## Status atual (ambiente de desenvolvimento)
+
+| Item | Status |
+|---|---|
+| Backend Medusa (build + migrations + seed) | ✅ OK (Postgres local) |
+| Storefront Next.js (build) | ✅ OK |
+| Produtos de teste (T-shirt, Jeans, Tênis, Boné, Jaqueta) | ✅ Criados em BRL/USD |
+| Cliente de teste | ✅ Criado (`cliente.teste@shopvivaliz.com.br`) |
+| Webhook Medusa → EHA | ✅ Testado ponta a ponta |
+| Pagamento Stripe/PIX (módulo `@medusajs/payment-stripe`, condicional a `STRIPE_API_KEY`) | ✅ Código validado 2026-07-01 (build + registro do provider confirmado no Postgres), aguardando chaves reais (ver seção 4) |
+| Sincronização Olist ⇄ Medusa (`sync-olist-products.php` + webhook `src/api/webhooks/olist/route.ts`) | ✅ Código adicionado e sintaxe validada 2026-07-01, aguardando credenciais Olist/Tiny (ver seção 4) |
+| Banco de dados de produção | ⏳ Pendente (ver passo 1) |
+| Deploy backend/storefront em produção | ⏳ Pendente (ver passo 2) |
+
+Reverificado em ambiente novo (container efêmero, sem estado anterior): Postgres/Redis
+locais provisionados, `npm install` + `npm run build` OK nos dois apps, migrations +
+seed (5 produtos incluindo T-shirt, cliente teste) aplicados, backend/storefront
+subiram e o storefront renderizou a página do produto a partir da API real, webhook
+testado com assinatura válida/inválida/ausente.
+
+**Reverificado novamente em 2026-07-01** (novo container efêmero, `main` sincronizado
+com `origin/main`): Postgres 16 + Redis locais provisionados, `npm install` limpo em
+ambos os apps (backend: 1341 pacotes / ~23min; storefront: 544 pacotes), `npx medusa
+db:migrate` + seed inicial + `seed-shopvivaliz-test-data.ts` aplicados sem erros
+(região Brasil/BRL, 5 produtos ShopVivaliz, cliente `cliente.teste@shopvivaliz.com.br`),
+usuário admin criado, `npm run build` OK nos dois apps (backend: 4.9s backend + 24.5s
+frontend/admin; storefront: 109 páginas estáticas geradas). Publishable API key criada
+via Admin API e vinculada ao Default Sales Channel; `GET /store/products` retornou os
+9 produtos (4 demo + 5 ShopVivaliz). Storefront em modo produção (`npm run start`, porta
+8000) renderizou `/br/products/camiseta-shopvivaliz` com preço real da API (R$69,90).
+Webhook Medusa → EHA reverificado ponta a ponta com o backend real rodando: update de
+produto via Admin API disparou o subscriber, que fez POST assinado (HMAC-SHA256) para
+`medusa-webhook.php`, validado e enfileirado em `tasks-queue.json` (entrada de teste
+revertida após a validação para não poluir a fila real).
+
+**Reverificado novamente em 2026-07-01** (terceira rodada, novo container efêmero,
+`main` sincronizado com `origin/main` pós force-push que unificou o histórico
+EHA/Medusa): Postgres 16 + Redis locais provisionados, `npm install` limpo em
+ambos os apps (backend: ~685 pacotes; storefront: 544 pacotes, 2 vulnerabilidades
+moderadas pré-existentes no `npm audit`, não investigadas nesta rodada), `npx
+medusa db:migrate` + seed inicial + `seed-shopvivaliz-test-data.ts` aplicados sem
+erros (região Brasil/BRL, 5 produtos ShopVivaliz + 4 produtos demo = 9 no total,
+cliente `cliente.teste@shopvivaliz.com.br`), usuário admin criado, `npm run
+build` OK nos dois apps. Publishable API key criada via Admin API e vinculada
+ao Default Sales Channel; `GET /store/products` retornou os 9 produtos.
+Storefront em modo produção (`npm run start`, porta 8000) renderizou
+`/br/products/camiseta-shopvivaliz` com preço real da API (R$69,90). Webhook
+Medusa → EHA reverificado ponta a ponta com o backend real rodando: update de
+produto via Admin API disparou o subscriber, que fez POST assinado
+(HMAC-SHA256) para `medusa-webhook.php` (servidor PHP embutido local), validado
+(200) e enfileirado em `tasks-queue.json`; requisições com assinatura ausente/
+inválida corretamente rejeitadas com 401. Entradas de teste revertidas
+(`git checkout -- tasks-queue.json`, metadata de teste removida do produto)
+após a validação para não poluir dados reais.
+
+**Reverificado em 2026-07-02** (quarta rodada, novo container efêmero, `main`
+sincronizado com `origin/main`; sessão compartilhada — outro processo commitou
+`README.md`/`tasks-queue.json` durante a verificação, sem relação com este
+trabalho): Postgres 16 + Redis locais provisionados via `service postgresql
+start` / `service redis-server start` (cluster/role Debian padrão em
+`/var/lib/postgresql/16/main`), role `medusa` + banco `medusa_shopvivaliz`
+criados e removidos ao final. `npm install` limpo em ambos os apps sem
+`ERESOLVE` (pins do `package.json` já corretos, nenhuma mudança de código
+necessária): backend 1341 pacotes / ~24min, storefront 544 pacotes / ~21s.
+`npx medusa db:migrate` + seed inicial + `seed-shopvivaliz-test-data.ts`
+aplicados sem erros (região Brasil/BRL, 5 produtos ShopVivaliz + 4 demo = 9
+no total, cliente `cliente.teste@shopvivaliz.com.br`), usuário admin criado
+com senha gerada via `openssl rand -base64 24`. `npm run build` OK nos dois
+apps (backend: 5.13s backend + 24.08s frontend/admin; storefront: 109 páginas
+estáticas geradas, idêntico às rodadas anteriores). Publishable API key criada
+via Admin API e vinculada ao Default Sales Channel; `GET /store/products`
+retornou os 9 produtos. Backend subiu com `npx medusa start` a partir de
+`.medusa/server` (porta 9000); storefront em modo produção (`npm run start`,
+porta 8000) renderizou `/br/products/camiseta-shopvivaliz` com preço real da
+API (R$69,90), HTTP 200. Webhook Medusa → EHA reverificado ponta a ponta:
+update de produto via Admin API disparou o subscriber, que fez POST assinado
+(HMAC-SHA256) para `medusa-webhook.php` (servidor PHP embutido local, porta
+8899), validado (200) e enfileirado em `tasks-queue.json`; testes manuais com
+assinatura ausente/inválida corretamente rejeitados com 401. Cada chamada de
+limpeza de metadata do produto de teste também disparou o subscriber (novo
+evento `product.updated` na fila) — reverter a metadata de teste gera, por si
+só, mais uma entrada na fila; rodamos `git checkout -- tasks-queue.json`
+repetidamente até a árvore de trabalho ficar limpa (confirmado por `git
+status`) em vez de uma única reversão. Confirmado que `claude/medusa/apps/
+backend/.env` e `claude/medusa/apps/storefront/.env.local` nunca foram
+commitados (`git log --all --full-history` vazio para os dois) e continuam
+ignorados pelos `.gitignore` — bloqueio de banco de produção documentado no
+item 1 permanece válido, nenhuma credencial real de produção existe no
+repositório. **Achado novo:** `npm audit` no backend acusa 100
+vulnerabilidades (92 moderadas, 8 altas), majoritariamente via
+`lodash`/`@graphql-codegen/*` (dependência transitiva de tooling do
+`@medusajs/cli`) e `uuid` via `bullmq`; não investigado a fundo nesta rodada
+(não é código do ShopVivaliz, correção exigiria `npm audit fix --force` com
+downgrade breaking de `@medusajs/cli`). Storefront manteve as mesmas 2
+vulnerabilidades moderadas (`postcss` via `next`) já registradas na rodada
+anterior. Nenhuma mudança de código foi necessária para fazer
+install/build/migrate funcionarem — comportamento idêntico ao já documentado.
+Todos os processos locais (backend, storefront, `php -S`, Postgres, Redis)
+foram encerrados ao final; `.env`/`.env.local` de teste removidos; `git
+status` limpo (sem alterações pendentes deste trabalho).
+
+**Nota:** `npm install` no backend falhava com `ERESOLVE` porque `@medusajs/ui` e
+`react-router-dom` estavam pinados em versões incompatíveis com o peer exigido por
+`@medusajs/draft-order@2.17.0` (corrigido no `package.json`: `@medusajs/ui@4.1.17`,
+`react-router-dom@6.30.4`). Se voltar a acontecer após atualizar `@medusajs/medusa`,
+verifique a versão de peer exigida na mensagem de erro do npm e alinhe o `package.json`.
+
+**Validação do módulo de pagamento Stripe/PIX (2026-07-01):** `npm install` +
+`npm run build` OK no backend com `STRIPE_API_KEY` ausente (comportamento antigo
+preservado, zero regressão) e também com uma chave de teste dummy definida. Para
+confirmar que o módulo realmente resolve (o `medusa build` sozinho não faz DI/module
+resolution), subimos um Postgres/Redis locais descartáveis, rodamos `npx medusa
+db:migrate` e depois `npx medusa develop` com as chaves dummy: o servidor subiu limpo
+e a tabela `payment_provider` do Postgres mostrou `pp_stripe_stripe` (e variantes
+PIX/OXXO/PromptPay/etc. do Stripe) com `is_enabled = true`, confirmando que
+`medusa-config.ts` registra o provider corretamente. Banco/role/`.env` temporários
+foram removidos depois do teste. `claude/api/sync-olist-products.php` e
+`claude/api/olist/webhook.php` passaram em `php -l` (sem erro de sintaxe); não têm
+credenciais Olist reais nesta sessão para testar a chamada de rede em si.
+
+**Reverificado em 2026-07-02** (quinta rodada, novo container efêmero, mesmo
+dia da rodada anterior — `main` sem alterações em `claude/medusa`/`claude/api`
+desde o commit `cbc9da7`, confirmado via `git diff --stat`): Postgres 16 +
+Redis locais provisionados (`service postgresql start` / `service
+redis-server start`), role `medusa` + banco `medusa_shopvivaliz` criados.
+`npm install` limpo em ambos os apps sem `ERESOLVE` (backend: 1341 pacotes/
+46s com cache quente; storefront: 544 pacotes/35s). `npx medusa db:migrate` +
+`seed-shopvivaliz-test-data.ts` aplicados sem erros. **Seed de teste ampliado
+nesta rodada** (`src/scripts/seed-shopvivaliz-test-data.ts`): adicionados 3
+produtos (Vestido, Bermuda, Mochila) aos 5 já existentes — total agora **12
+produtos** (8 ShopVivaliz + 4 demo padrão do Medusa), atendendo ao requisito
+de 10+ produtos de teste. Usuário admin criado. `npm run build` OK nos dois
+apps. **Achado de processo:** `npx medusa start` precisa ser executado a
+partir de `.medusa/server` (não de `apps/backend`), senão falha com "Could
+not find index.html in the admin build directory" mesmo com o build
+presente — usamos um symlink de `node_modules` para `.medusa/server` em vez
+de reinstalar. Publishable API key criada via Admin API e vinculada ao
+Default Sales Channel; `GET /store/products` retornou os 12 produtos.
+Payment providers Stripe/PIX confirmados na tabela `payment_provider`
+(`pp_stripe_stripe` + variantes OXXO/PromptPay/iDEAL/etc., todos
+`is_enabled=true`) com a chave de teste pública `sk_test_4eC39Hq...`
+(exemplo padrão da documentação Stripe, não uma credencial real). Storefront
+em modo produção renderizou `/br/products/camiseta-shopvivaliz` com preço
+real da API (R$69,90), HTTP 200. Webhook Medusa → EHA reverificado ponta a
+ponta (assinatura válida via update de produto, e 401 para assinatura
+ausente/inválida); `tasks-queue.json` revertido ao final. `claude/api/sync-
+olist-products.php`, `claude/api/olist/webhook.php` e `claude/api/medusa-
+webhook.php` passaram em `php -l`. Nenhum acesso a `gh secret set` ou
+equivalente MCP disponível nesta sessão (apenas leitura/escrita de conteúdo/
+issues/PRs do GitHub) — secrets de produção continuam pendentes de
+configuração manual (ver `GITHUB_SECRETS_TODO.md`). Criação de projeto
+Supabase não realizada (requer login humano interativo) — bloqueio do banco
+de produção (item 1) permanece válido. Todos os processos locais e serviços
+(Postgres, Redis, backend, storefront, `php -S`) parados ao final; `.env`/
+`.env.local` de teste removidos; `git status` limpo (apenas a mudança de
+código do seed listada acima permanece para commit).
+
+## 1. Banco de dados de produção
+
+O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
+para desenvolvimento (`postgres://medusa:***@localhost:5432/medusa_shopvivaliz`),
+mas isso **não persiste** fora desta sessão. Para produção:
+
+1. Criar um banco Postgres gerenciado (ex. [Supabase](https://supabase.com),
+   Neon, Railway, RDS). Isso requer login humano (conta + aceite de termos),
+   por isso não foi feito automaticamente aqui.
+2. Copiar a "Connection string" (modo *pooled*, porta 6543 no Supabase, ou
+   direta 5432) para `DATABASE_URL` no `.env` de produção do backend.
+3. Rodar as migrations contra o banco novo:
+   ```bash
+   cd claude/medusa/apps/backend
+   npx medusa db:migrate
+   npx medusa exec ./src/scripts/seed-shopvivaliz-test-data.ts   # dados de teste (opcional em produção)
+   npx medusa user -e admin@shopvivaliz.com.br -p "SENHA_FORTE_AQUI"
+   ```
+
+## 2. Deploy do backend + storefront
+
+O HostGator (hospedagem compartilhada, usada hoje pelo site PHP) **não roda
+Node.js/Postgres**, então o backend/storefront Medusa precisam de um host
+separado:
+
+- **Backend** (Node.js + Postgres + Redis): Railway, Render, Fly.io, ou um VPS
+  com Docker. Rodar `npm run build` e depois `.medusa/server` (`npm install &&
+  npx medusa start`), ou usar o Dockerfile oficial do Medusa.
+- **Storefront** (Next.js): Vercel, Netlify, Railway, ou o mesmo VPS do backend.
+- **PHP (`/claude/`)**: continua no HostGator, chamando a API pública do
+  Medusa (`NEXT_PUBLIC_MEDUSA_BACKEND_URL` / `MEDUSA_API_URL`) e recebendo
+  webhooks em `claude/api/medusa-webhook.php`.
+
+Variáveis a configurar no host de produção do backend:
+```
+DATABASE_URL=<connection string do Postgres gerenciado>
+REDIS_URL=<Redis gerenciado, ex. Upstash>
+JWT_SECRET=<gerar novo, não reutilizar o de dev>
+COOKIE_SECRET=<gerar novo, não reutilizar o de dev>
+STORE_CORS=https://shopvivaliz.com.br
+ADMIN_CORS=https://admin.shopvivaliz.com.br
+AUTH_CORS=https://shopvivaliz.com.br,https://admin.shopvivaliz.com.br
+EHA_WEBHOOK_URL=https://shopvivaliz.com.br/claude/api/medusa-webhook.php
+EHA_WEBHOOK_SECRET=<gerar novo, mesmo valor no .env do PHP em produção>
+```
+
+No servidor PHP (HostGator), garantir que `EHA_WEBHOOK_SECRET` no ambiente
+do site seja **o mesmo valor** configurado no backend Medusa, senão o
+webhook responde 401.
+
+## 3. Pós-deploy
+
+- [ ] Criar publishable API key de produção no Admin (`Settings > API Key
+      Management`) e configurar no storefront (`NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY`)
+- [ ] Trocar `JWT_SECRET` / `COOKIE_SECRET` / `EHA_WEBHOOK_SECRET` de dev por
+      valores novos gerados para produção
+- [ ] Testar checkout completo em produção (carrinho → pagamento → pedido)
+- [ ] Testar webhook em produção (atualizar um produto no Admin e conferir
+      `storage/logs/medusa-webhook.log` + `tasks-queue.json`)
+- [ ] Migrar produtos reais do Olist/Shopee para o catálogo Medusa
+- [ ] Configurar backups automáticos do banco de produção
+- [ ] Teste de carga (fora do escopo desta sessão)
+
+## 4. Pagamentos (Stripe/PIX) e sincronização Olist
+
+Adicionado em 2026-07-01 (portado de sessões anteriores que já haviam
+validado o desenho, mas cujo branch não tinha sido integrado a `main`):
+
+- **Pagamento**: `medusa-config.ts` registra `@medusajs/payment-stripe`
+  automaticamente quando `STRIPE_API_KEY` está definido no `.env` do backend
+  (senão nenhum módulo de pagamento é carregado — comportamento antigo
+  preservado). PIX no Brasil é feito enviando
+  `payment_method_types: ["pix"]` ao criar o PaymentIntent do Stripe.
+  Variáveis: `STRIPE_API_KEY`, `STRIPE_PUBLIC_KEY`, `STRIPE_WEBHOOK_SECRET`
+  (chaves de teste em https://dashboard.stripe.com/test/apikeys). PayPal
+  ainda não tem credenciais configuradas (`PAYPAL_CLIENT_ID/SECRET`
+  documentados em `.env.example`, mas sem provedor Medusa registrado ainda).
+- **Olist → Medusa (pull/lote)**: `claude/api/sync-olist-products.php`
+  (classe `OlistSync`) busca produtos na API Tiny/Olist e faz upsert via
+  Admin API do Medusa (login JWT, não API key estática). Requer
+  `OLIST_CLIENT_ID`, `OLIST_CLIENT_SECRET`, `MEDUSA_BACKEND_URL`,
+  `MEDUSA_ADMIN_EMAIL`, `MEDUSA_ADMIN_PASSWORD`.
+- **Olist → Medusa (webhook/push por SKU)**: `src/api/webhooks/olist/route.ts`
+  recebe `{ sku, preco_venda, estoque_atual }` e atualiza preço/estoque da
+  variante correspondente, com verificação de assinatura HMAC-SHA256
+  (`OLIST_WEBHOOK_SECRET`) igual ao padrão já usado no bridge EHA.
+  `claude/api/olist/webhook.php` é o receptor do lado PHP (Olist chama esta
+  URL), que dispara `OlistSync`.
+- Secrets pendentes de configurar (Stripe, PayPal, Olist, EHA) estão listados
+  com comandos prontos em `claude/medusa/GITHUB_SECRETS_TODO.md`.
+
+⚠️ **Achado de segurança (2026-07-01):** um `OLIST_CLIENT_ID`/`OLIST_CLIENT_SECRET`
+reais estavam commitados em texto puro em vários arquivos (`SETUP-OLIST-SECRETS.md`,
+`GITHUB-SECRETS-TO-ADD.md`, `scripts/olist-*.py`) e um authorization code OAuth
+estava versionado em `.tokens/olist-oauth-code.txt`. Os valores nos arquivos
+atuais foram redigidos e `.tokens/` foi removido do git e adicionado ao
+`.gitignore` nesta sessão, mas **o segredo antigo permanece no histórico do
+git**. Recomenda-se rotacionar o client secret no painel Tiny/Olist o quanto
+antes; ver `claude/medusa/GITHUB_SECRETS_TODO.md` para detalhes.
+
+## Rodando localmente (resumo)
+
+```bash
+# Backend
+cd claude/medusa/apps/backend
+cp .env.example .env   # editar DATABASE_URL etc.
+npm install
+npx medusa db:migrate
+npx medusa exec ./src/scripts/seed-shopvivaliz-test-data.ts
+npx medusa user -e admin@shopvivaliz.com.br -p "SUA_SENHA"
+npm run dev   # http://localhost:9000 (admin em /app)
+
+# Storefront (em outro terminal)
+cd claude/medusa/apps/storefront
+cp .env.example .env.local   # editar NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY
+npm install
+npm run dev   # http://localhost:8000
+```

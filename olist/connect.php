@@ -1,32 +1,46 @@
 <?php
-/**
- * Conectar com Olist via OAuth
- * Redireciona para a tela de autorização da Olist
- *
- * Fluxo:
- * 1. Usuario clica no link
- * 2. Redireciona para login Olist
- * 3. Olist redireciona de volta para callback.php com o CODE
- * 4. callback.php troca o CODE por TOKEN
- * 5. sync-products.php usa o TOKEN para buscar 198 produtos
- */
+declare(strict_types=1);
 
-// Credenciais
-$client_id = getenv('OLIST_CLIENT_ID') ?: 'tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553';
-$redirect_uri = 'https://dev.shopvivaliz.com.br/olist/callback.php';
+function svi_connect_load_env(string $path): void
+{
+    if (!is_file($path) || !is_readable($path)) {
+        return;
+    }
+    foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
+            continue;
+        }
+        [$key, $value] = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim(trim($value), "\"'");
+        if ($key !== '' && getenv($key) === false) {
+            putenv($key . '=' . $value);
+            $_ENV[$key] = $value;
+        }
+    }
+}
 
-// URL de autorização (endpoint oficial Olist/Tiny)
-// Conforme documentacao: https://api-docs.erp.olist.com/llms.txt
-$auth_url = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth?" . http_build_query([
-    'client_id' => $client_id,
-    'redirect_uri' => $redirect_uri,
+svi_connect_load_env(dirname(__DIR__) . '/.env');
+
+$clientId = getenv('OLIST_CLIENT_ID') ?: getenv('TINY_CLIENT_ID') ?: '';
+$redirectUri = getenv('OLIST_REDIRECT_URI') ?: getenv('TINY_REDIRECT_URI') ?: 'https://dev.shopvivaliz.com.br/olist/callback.php';
+
+if ($clientId === '') {
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'OLIST_CLIENT_ID não configurado';
+    exit;
+}
+
+$authUrl = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth?' . http_build_query([
+    'client_id' => $clientId,
+    'redirect_uri' => $redirectUri,
     'response_type' => 'code',
-    'scope' => 'openid'
+    'scope' => 'openid offline_access',
+    'prompt' => 'consent',
 ]);
 
-error_log("[Olist Connect] Redirecionando para: $auth_url");
-
-// Redirecionar
-header("Location: $auth_url");
+error_log('[Olist Connect] Redirecting to OAuth authorize endpoint');
+header('Location: ' . $authUrl, true, 302);
 exit;
-?>

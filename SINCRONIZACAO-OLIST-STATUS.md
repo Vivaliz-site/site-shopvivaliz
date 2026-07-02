@@ -108,7 +108,7 @@ https://dev.shopvivaliz.com.br/catalogo/
 
 - Email Olist: `atendimento@shopvivaliz.com.br`
 - Refresh Token: `~/.tokens/olist-config.json`
-- CLIENT_ID: `tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553`
+- CLIENT_ID: `SEU_OLIST_CLIENT_ID_AQUI`
 - CLIENT_SECRET: (armazenado em secrets)
 
 ---

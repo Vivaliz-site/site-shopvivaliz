@@ -144,6 +144,18 @@ https://github.com/fredmourao-ai/site-shopvivaliz/actions/workflows/ai-autonomou
 
 ---
 
+## 🛒 Backend Medusa (em desenvolvimento)
+
+Há um backend headless MedusaJS + storefront Next.js em `claude/medusa/apps/`,
+integrado ao site PHP legado via webhook (`claude/api/medusa-webhook.php`) e
+à sincronização Olist/Tiny ERP. Ainda não está em produção.
+
+📖 **Leia:** [`claude/medusa/README.md`](claude/medusa/README.md) (visão geral)
+e [`claude/medusa/DEPLOY-CHECKLIST.md`](claude/medusa/DEPLOY-CHECKLIST.md)
+(como rodar localmente, o que falta para produção).
+
+---
+
 ## 📝 Notas
 
 - Sistema opera 24/7 sem intervenção

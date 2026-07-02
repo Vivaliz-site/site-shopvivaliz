@@ -1,296 +1,383 @@
 <?php
-/**
- * Sincronizacao de Produtos Olist
- * Executa direto no servidor (evita bloqueio de IP)
- *
- * Uso: https://dev.shopvivaliz.com.br/olist/sync-products.php
- */
+declare(strict_types=1);
 
+header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
 
-log_msg("INICIO - Sincronizacao Olist");
+/* ── helpers ── */
+function svs_root(): string { return dirname(__DIR__); }
+function svs_log(string $m): void {
+    @file_put_contents(svs_root() . '/logs/olist-sync.log',
+        '[' . date('Y-m-d H:i:s') . '] ' . $m . PHP_EOL, FILE_APPEND);
+}
+function svs_json(int $code, array $d): never {
+    http_response_code($code);
+    echo json_encode($d, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+    exit;
+}
 
-// Credenciais (usar constants.php)
-require_once __DIR__ . '/../config/constants.php';
-
-$client_id = getenv('OLIST_CLIENT_ID') ?: die('ERRO: OLIST_CLIENT_ID não configurado');
-$client_secret = getenv('OLIST_CLIENT_SECRET') ?: die('ERRO: OLIST_CLIENT_SECRET não configurado');
-
-log_msg("Cliente: $client_id");
-
-// URLs (conforme documentacao oficial Olist)
-$token_url = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token";
-$api_url = "https://api.tiny.com.br/api/v2/produtos.json";
-
-try {
-    // Verificar se temos um codigo de autorizacao na session
-    session_start();
-    $code = $_GET['code'] ?? $_SESSION['olist_code'] ?? null;
-    $access_token = $_SESSION['olist_token'] ?? null;
-    $token_expires = $_SESSION['olist_token_expires'] ?? 0;
-    $refresh_token = $_SESSION['olist_refresh_token'] ?? null;
-
-    // Se nao temos token ou expirou, tentar renovar com refresh_token
-    if (!$access_token || time() >= $token_expires) {
-        if ($refresh_token) {
-            log_msg("Token expirado, renovando...");
-
-            $refresh_response = curl_post($token_url, [
-                'grant_type' => 'refresh_token',
-                'client_id' => $client_id,
-                'client_secret' => $client_secret,
-                'refresh_token' => $refresh_token
-            ]);
-
-            if (isset($refresh_response->access_token)) {
-                $access_token = $refresh_response->access_token;
-                $_SESSION['olist_token'] = $access_token;
-                $_SESSION['olist_token_expires'] = time() + ($refresh_response->expires_in ?? 3600);
-                $_SESSION['olist_refresh_token'] = $refresh_response->refresh_token ?? $refresh_token;
-                log_msg("Token renovado com sucesso");
-            } else {
-                log_msg("ERRO ao renovar token");
-                exit_error("Falha ao renovar token. Necessario fazer login novamente.");
+/* ── carregar credenciais ── */
+function svs_env(string ...$keys): string {
+    static $loaded = false;
+    if (!$loaded) {
+        $loaded = true;
+        $envFile = svs_root() . '/.env';
+        if (is_file($envFile)) {
+            foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+                $line = trim($line);
+                if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
+                [$k, $v] = explode('=', $line, 2);
+                $k = trim($k); $v = trim(trim($v), '"\'');
+                if ($k !== '' && getenv($k) === false) { putenv("$k=$v"); $_ENV[$k] = $v; }
             }
-        } elseif ($code) {
-            // Trocar code por token
-            log_msg("Trocando codigo por token...");
-
-            $token_response = curl_post($token_url, [
-                'grant_type' => 'authorization_code',
-                'client_id' => $client_id,
-                'client_secret' => $client_secret,
-                'code' => $code,
-                'redirect_uri' => 'https://dev.shopvivaliz.com.br/olist/sync-products.php'
-            ]);
-
-            if (isset($token_response->access_token)) {
-                $access_token = $token_response->access_token;
-                $_SESSION['olist_token'] = $access_token;
-                $_SESSION['olist_token_expires'] = time() + ($token_response->expires_in ?? 3600);
-                $_SESSION['olist_refresh_token'] = $token_response->refresh_token;
-                $_SESSION['olist_code'] = $code;
-                session_write_close();
-                log_msg("Token obtido com sucesso");
-            } else {
-                session_write_close();
-                log_msg("ERRO ao trocar codigo por token");
-                exit_error("Falha ao obter token. Resposta: " . json_encode($token_response));
+        }
+        // tokens persistidos pelo último sync bem-sucedido
+        $tf = svs_root() . '/storage/private/tokens.json';
+        if (is_file($tf)) {
+            $t = json_decode((string)file_get_contents($tf), true) ?: [];
+            foreach ($t as $k => $v) {
+                if (is_string($k) && is_string($v) && getenv($k) === false) {
+                    putenv("$k=$v"); $_ENV[$k] = $v;
+                }
             }
-        } else {
-            session_write_close();
-            log_msg("Nenhum token ou codigo disponivel");
-
-            // Redirecionar para fazer login OAuth
-            $auth_url = "https://id.olist.com/openid/authorize?" . http_build_query([
-                'client_id' => $client_id,
-                'redirect_uri' => 'https://dev.shopvivaliz.com.br/olist/sync-products.php',
-                'response_type' => 'code',
-                'scope' => 'products:read'
-            ]);
-
-            exit_error("Necessario fazer login OAuth. Clique aqui: <a href='$auth_url' target='_blank'>Fazer Login</a>", true);
         }
     }
+    foreach ($keys as $k) {
+        $v = getenv($k);
+        if (is_string($v) && $v !== '') return $v;
+        if (isset($_ENV[$k]) && is_string($_ENV[$k]) && $_ENV[$k] !== '') return $_ENV[$k];
+    }
+    return '';
+}
 
-    // Agora temos um access_token valido
-    log_msg("Acessando API com token valido...");
+function svs_save_tokens(string $access, string $refresh): void {
+    $dir = svs_root() . '/storage/private';
+    @mkdir($dir, 0750, true);
+    file_put_contents("$dir/tokens.json", json_encode([
+        'OLIST_ACCESS_TOKEN'  => $access,
+        'OLIST_REFRESH_TOKEN' => $refresh,
+        'updated_at'          => date('c'),
+    ], JSON_PRETTY_PRINT), LOCK_EX);
+}
 
-    // Buscar todos os produtos com paginacao
-    $todos_produtos = [];
-    $pagina = 1;
-    $limite = 50;
-    $total_recebido = 0;
+/* ── HTTP helpers ── */
+function svs_http_get(string $url, array $headers = [], int $timeout = 45): array {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => $timeout,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS      => 3,
+        CURLOPT_HTTPHEADER     => $headers,
+    ]);
+    $body   = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $err    = curl_error($ch);
+    curl_close($ch);
+    return ['status' => $status, 'body' => is_string($body) ? $body : '', 'error' => $err];
+}
+
+function svs_http_post(string $url, array $fields, array $extraHeaders = []): array {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => http_build_query($fields),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_HTTPHEADER     => array_merge(
+            ['Content-Type: application/x-www-form-urlencoded'],
+            $extraHeaders
+        ),
+    ]);
+    $body   = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    return ['status' => $status, 'body' => is_string($body) ? $body : ''];
+}
+
+/* ── OAuth: obter access_token via refresh ── */
+function svs_get_access_token(): string {
+    $TOKEN_URL    = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
+    $refresh      = svs_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN');
+    $clientId     = svs_env('OLIST_CLIENT_ID',     'TINY_CLIENT_ID');
+    $clientSecret = svs_env('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET');
+
+    if ($refresh === '' || $clientId === '' || $clientSecret === '') {
+        throw new RuntimeException(
+            'credentials_missing: configure OLIST_CLIENT_ID, OLIST_CLIENT_SECRET e OLIST_REFRESH_TOKEN'
+        );
+    }
+
+    $res = svs_http_post($TOKEN_URL, [
+        'grant_type'    => 'refresh_token',
+        'client_id'     => $clientId,
+        'client_secret' => $clientSecret,
+        'refresh_token' => $refresh,
+    ]);
+
+    if ($res['status'] !== 200) {
+        $d = json_decode($res['body'], true);
+        $e = is_array($d) ? ($d['error_description'] ?? $d['error'] ?? '') : '';
+        throw new RuntimeException("oauth_refresh_failed HTTP {$res['status']}: $e");
+    }
+
+    $json = json_decode($res['body'], true);
+    if (!is_array($json) || empty($json['access_token'])) {
+        throw new RuntimeException('oauth_invalid_payload: ' . substr($res['body'], 0, 200));
+    }
+
+    $newAccess  = (string)$json['access_token'];
+    $newRefresh = (string)($json['refresh_token'] ?? $refresh);
+    svs_save_tokens($newAccess, $newRefresh);
+    svs_log('Tokens OAuth renovados com sucesso.');
+    return $newAccess;
+}
+
+/* ── Tiny v3: buscar todos os produtos com paginação ── */
+function svs_fetch_v3(string $token): array {
+    $BASE     = 'https://api.tiny.com.br/public-api/v3';
+    $headers  = [
+        "Authorization: Bearer $token",
+        'Accept: application/json',
+        'User-Agent: ShopVivaliz-OlistSync/3.0',
+    ];
+    $all      = [];
+    $page     = 1;
+    $pageSize = 100;
 
     while (true) {
-        log_msg("Buscando pagina $pagina...");
+        $url = "$BASE/produtos?" . http_build_query([
+            'situacao' => 'A',
+            'limit'    => $pageSize,
+            'offset'   => ($page - 1) * $pageSize,
+        ]);
+        $res = svs_http_get($url, $headers);
 
-        $response = curl_get($api_url, [
-            'limite' => $limite,
-            'pagina' => $pagina,
-            'formato' => 'json'
-        ], $access_token);
+        if ($res['status'] !== 200) {
+            svs_log("v3 /produtos HTTP {$res['status']}: " . substr($res['body'], 0, 200));
+            break;
+        }
 
-        if (!$response || !isset($response->produtos)) {
-            if ($pagina == 1) {
-                log_msg("ERRO ao buscar primeira pagina");
-                exit_error("Falha ao buscar produtos da API");
-            } else {
-                log_msg("Fim da paginacao");
-                break;
+        $json  = json_decode($res['body'], true);
+        $itens = $json['itens'] ?? $json['data'] ?? $json['produtos'] ?? [];
+        if (!is_array($itens) || count($itens) === 0) break;
+
+        foreach ($itens as $i) { $all[] = $i; }
+
+        $total = (int)($json['paginacao']['totalRegistros'] ?? $json['total'] ?? count($all));
+        if (count($all) >= $total || count($itens) < $pageSize) break;
+        $page++;
+        usleep(400000); // 400ms entre páginas
+    }
+
+    return $all;
+}
+
+/* ── Tiny v2 fallback (token estático) ── */
+function svs_fetch_v2(string $apiToken): array {
+    $all  = [];
+    $seen = [];
+    for ($page = 1; $page <= 20; $page++) {
+        $url = 'https://api.tiny.com.br/api2/produtos.pesquisa.php?' . http_build_query([
+            'token'   => $apiToken,
+            'formato' => 'json',
+            'pagina'  => $page,
+            'limite'  => 100,
+        ]);
+        $res = svs_http_get($url, ['Accept: application/json', 'User-Agent: ShopVivaliz-OlistSync/3.0']);
+        if ($res['status'] !== 200) break;
+        $json  = json_decode($res['body'], true);
+        $items = $json['retorno']['produtos'] ?? [];
+        if (!is_array($items) || count($items) === 0) break;
+        $batch = 0;
+        foreach ($items as $item) {
+            $p  = is_array($item['produto'] ?? null) ? $item['produto'] : $item;
+            $id = (string)($p['id'] ?? $p['idProduto'] ?? md5(json_encode($p)));
+            if (isset($seen[$id])) continue;
+            $seen[$id] = true;
+            $all[] = $p;
+            $batch++;
+        }
+        if ($batch === 0) break;
+        usleep(300000);
+    }
+    return $all;
+}
+
+/* ── Normalizar produto bruto → formato Vivaliz ── */
+function svs_normalize(array $p, string $source): array {
+    $id    = (string)($p['id']      ?? $p['idProduto'] ?? '');
+    $sku   = trim((string)($p['codigo'] ?? $p['sku']   ?? $p['codigoPai'] ?? ''));
+    $name  = trim((string)($p['descricao'] ?? $p['nome'] ?? ''));
+    $price = (float)(
+        $p['preco']         ??  // v3
+        $p['preco_venda']   ??  // v2
+        0
+    );
+    $stock = (int)(
+        $p['estoque']['saldoFisicoTotal'] ??  // v3
+        $p['saldoEstoque']                ??  // v2
+        $p['estoque']                     ??
+        0
+    );
+
+    // imagens
+    $images = [];
+    if (!empty($p['imagens']) && is_array($p['imagens'])) {
+        foreach ($p['imagens'] as $img) {
+            $u = is_array($img) ? ($img['url'] ?? $img['link'] ?? '') : (string)$img;
+            if ($u !== '') $images[] = $u;
+        }
+    }
+    $primaryImage = $images[0]
+        ?? (string)($p['imagemURL'] ?? $p['imagem'] ?? $p['foto'] ?? '');
+
+    $description = trim((string)(
+        $p['descricaoComplementar'] ??
+        $p['obs']                   ??
+        $p['observacoes']           ??
+        ''
+    ));
+
+    $category = trim((string)(
+        $p['categoria']['nome'] ??
+        (is_string($p['categoria'] ?? null) ? $p['categoria'] : '') ??
+        ''
+    ));
+
+    return [
+        'olist_product_id' => $id,
+        'sku'              => $sku,
+        'name'             => $name,
+        'price'            => $price,
+        'stock'            => $stock,
+        'image_url'        => $primaryImage,
+        'images'           => $images,
+        'description'      => $description,
+        'category'         => $category,
+        'sync_source'      => $source,
+        'synced_at'        => date('c'),
+    ];
+}
+
+/* ── Merge: preserva campos V14 (slug, quality_score, tags, category) ── */
+function svs_merge_catalog(array $fetched, string $catalogPath): array {
+    $existing = [];
+    if (is_file($catalogPath)) {
+        $raw = json_decode((string)file_get_contents($catalogPath), true);
+        if (is_array($raw)) {
+            foreach ($raw as $p) {
+                if (!is_array($p)) continue;
+                $key = (string)($p['olist_product_id'] ?? $p['sku'] ?? '');
+                if ($key !== '') $existing[$key] = $p;
             }
         }
-
-        $produtos = $response->produtos;
-        $count = is_array($produtos) ? count($produtos) : 0;
-
-        if ($count == 0) {
-            log_msg("Pagina vazia, fim da paginacao");
-            break;
-        }
-
-        $todos_produtos = array_merge($todos_produtos, $produtos);
-        $total_recebido += $count;
-        log_msg("Pagina $pagina: $count produtos (total: $total_recebido)");
-
-        if ($count < $limite) {
-            log_msg("Ultima pagina recebida");
-            break;
-        }
-
-        $pagina++;
-
-        if ($pagina > 20) {
-            log_msg("Limite de 20 paginas atingido");
-            break;
-        }
     }
 
-    session_write_close();
-
-    // Analisar imagens
-    log_msg("Analisando imagens...");
-
-    $com_imagem = 0;
-    $sem_imagem = 0;
-
-    foreach ($todos_produtos as $p) {
-        $tem_imagem = false;
-
-        if (isset($p->imagem_produto->url) && $p->imagem_produto->url) {
-            $tem_imagem = true;
-        } elseif (isset($p->primary_image_url) && $p->primary_image_url) {
-            $tem_imagem = true;
-        } elseif (isset($p->imagens) && is_array($p->imagens) && count($p->imagens) > 0) {
-            $tem_imagem = true;
+    foreach ($fetched as $new) {
+        $key = $new['olist_product_id'] ?: $new['sku'];
+        if ($key === '') continue;
+        $old    = $existing[$key] ?? [];
+        $merged = array_merge($old, $new);
+        // preservar campos calculados localmente se o Tiny não trouxe
+        foreach (['slug', 'quality_score', 'quality_label', 'tags'] as $f) {
+            if (isset($old[$f]) && ($new[$f] ?? '') === '') {
+                $merged[$f] = $old[$f];
+            }
         }
-
-        if ($tem_imagem) {
-            $com_imagem++;
-        } else {
-            $sem_imagem++;
+        // preservar category local se o Tiny não enviou nada
+        if (isset($old['category']) && ($new['category'] ?? '') === '') {
+            $merged['category'] = $old['category'];
         }
+        $existing[$key] = $merged;
     }
 
-    // Salvar cache
-    log_msg("Salvando cache...");
-
-    $cache_data = [
-        'timestamp' => date('c'),
-        'total' => count($todos_produtos),
-        'com_imagem' => $com_imagem,
-        'sem_imagem' => $sem_imagem,
-        'source' => 'olist_oauth_php_server',
-        'produtos' => $todos_produtos
-    ];
-
-    $cache_file = __DIR__ . '/../logs/olist-products-cache.json';
-    @mkdir(dirname($cache_file), 0755, true);
-
-    file_put_contents(
-        $cache_file,
-        json_encode($cache_data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
-        LOCK_EX
-    );
-
-    log_msg("Cache salvo em $cache_file");
-
-    // Retornar sucesso
-    log_msg("SUCESSO - Sincronizacao concluida");
-
-    exit_success([
-        'total' => count($todos_produtos),
-        'com_imagem' => $com_imagem,
-        'sem_imagem' => $sem_imagem,
-        'taxa_cobertura' => count($todos_produtos) > 0 ? round($com_imagem / count($todos_produtos) * 100, 1) : 0,
-        'cache_file' => $cache_file,
-        'mensagem' => "Sincronizacao concluida: " . count($todos_produtos) . " produtos, " . $com_imagem . " com imagem"
-    ]);
-
-} catch (Exception $e) {
-    log_msg("EXCEPTION: " . $e->getMessage());
-    exit_error("Erro: " . $e->getMessage());
+    return array_values($existing);
 }
 
-// ============================================================================
-// FUNCOES AUXILIARES
-// ============================================================================
+/* ════════════════════════ MAIN ════════════════════════ */
+$dryRun  = isset($_GET['dry_run']) && $_GET['dry_run'] !== '0';
+$forceV2 = isset($_GET['v2'])      && $_GET['v2']      !== '0';
+$errors  = [];
+$fetched = [];
+$source  = 'none';
 
-function curl_post($url, $data, $token = null) {
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => http_build_query($data),
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_HTTPHEADER => array_filter([
-            'Content-Type: application/x-www-form-urlencoded',
-            $token ? "Authorization: Bearer $token" : null
-        ])
-    ]);
-
-    $response = curl_exec($ch);
-    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($status != 200) {
-        log_msg("curl_post falhou: Status $status");
-        return null;
+// Tentar v3 OAuth
+if (!$forceV2) {
+    try {
+        $token   = svs_get_access_token();
+        $raw     = svs_fetch_v3($token);
+        $source  = 'tiny_v3';
+        foreach ($raw as $p) { $fetched[] = svs_normalize($p, $source); }
+        svs_log("v3 sync: " . count($fetched) . ' produtos');
+    } catch (Throwable $e) {
+        $errors[] = $e->getMessage();
+        svs_log('v3 error: ' . $e->getMessage());
     }
-
-    return json_decode($response);
 }
 
-function curl_get($url, $params, $token) {
-    $url .= '?' . http_build_query($params);
-
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            "Authorization: Bearer $token"
-        ]
-    ]);
-
-    $response = curl_exec($ch);
-    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($status != 200) {
-        log_msg("curl_get falhou: Status $status, URL: $url");
-        return null;
-    }
-
-    return json_decode($response);
-}
-
-function log_msg($msg) {
-    error_log("[Olist Sync] $msg");
-    @file_put_contents(
-        __DIR__ . '/../logs/olist-sync.log',
-        "[" . date('Y-m-d H:i:s') . "] $msg\n",
-        FILE_APPEND
-    );
-}
-
-function exit_error($msg, $html = false) {
-    log_msg("ERRO: $msg");
-    http_response_code(400);
-    if ($html) {
-        echo "<html><body><h2>Erro</h2><p>$msg</p></body></html>";
+// Fallback v2 token estático
+if (count($fetched) === 0) {
+    $apiToken = svs_env('TOKEN_API_OLIST', 'TINY_API_TOKEN', 'OLIST_API_TOKEN');
+    if ($apiToken !== '') {
+        $raw    = svs_fetch_v2($apiToken);
+        $source = 'tiny_v2';
+        foreach ($raw as $p) { $fetched[] = svs_normalize($p, $source); }
+        svs_log("v2 sync: " . count($fetched) . ' produtos');
     } else {
-        echo json_encode(['erro' => $msg, 'sucesso' => false], JSON_UNESCAPED_UNICODE);
+        $errors[] = 'no_api_credentials';
     }
-    exit(1);
 }
 
-function exit_success($data) {
-    log_msg("Retornando sucesso");
-    echo json_encode(array_merge($data, ['sucesso' => true]), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-    exit(0);
+$catalogPath = svs_root() . '/api/catalog/fallback-products.json';
+$beforeCount = 0;
+if (is_file($catalogPath)) {
+    $tmp = json_decode((string)file_get_contents($catalogPath), true);
+    $beforeCount = is_array($tmp) ? count($tmp) : 0;
 }
-?>
+
+$catalog    = [];
+$saved      = false;
+$afterCount = $beforeCount;
+
+if (count($fetched) > 0 && !$dryRun) {
+    $catalog    = svs_merge_catalog($fetched, $catalogPath);
+    $afterCount = count($catalog);
+    $tmp        = $catalogPath . '.tmp';
+    if (file_put_contents($tmp, json_encode($catalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), LOCK_EX) !== false) {
+        rename($tmp, $catalogPath);
+        $saved = true;
+        svs_log("Catálogo salvo: $beforeCount → $afterCount produtos");
+
+        // gravar log de sync para admin
+        $syncLog = svs_root() . '/logs/olist-sync-history.jsonl';
+        @file_put_contents($syncLog, json_encode([
+            'ts'      => date('c'),
+            'source'  => $source,
+            'before'  => $beforeCount,
+            'after'   => $afterCount,
+            'fetched' => count($fetched),
+            'errors'  => $errors,
+        ], JSON_UNESCAPED_UNICODE) . PHP_EOL, FILE_APPEND);
+    } else {
+        $errors[] = 'catalog_write_failed';
+    }
+}
+
+$ok = count($fetched) > 0 && ($dryRun || $saved);
+svs_json($ok ? 200 : 207, [
+    'ok'           => $ok,
+    'source'       => $source,
+    'fetched'      => count($fetched),
+    'before_count' => $beforeCount,
+    'after_count'  => $afterCount,
+    'dry_run'      => $dryRun,
+    'saved'        => $saved,
+    'errors'       => $errors,
+    'synced_at'    => date('c'),
+]);

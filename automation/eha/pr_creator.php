@@ -21,8 +21,14 @@ function eha_rollback(string $reason = 'high_risk_detected'): array
 }
 
 function _eha_log(string $msg): void {
-    $dir = __DIR__ . '/reports';
+    $dir  = __DIR__ . '/reports';
     if (!is_dir($dir)) mkdir($dir, 0755, true);
+    $file = $dir . '/eha_events.txt';
     $line = '[' . date('c') . '] ' . $msg . PHP_EOL;
-    file_put_contents($dir . '/eha.log', $line, FILE_APPEND | LOCK_EX);
+    file_put_contents($file, $line, FILE_APPEND | LOCK_EX);
+    // janela deslizante: mantém últimas 500 linhas
+    $lines = @file($file) ?: [];
+    if (count($lines) > 500) {
+        file_put_contents($file, implode('', array_slice($lines, -500)), LOCK_EX);
+    }
 }
