@@ -194,13 +194,43 @@ Base URL da API: `https://api.tiny.com.br/public-api/v3`
 | Data | Branch | O que foi feito |
 |---|---|---|
 | 2026-06-27 | `claude/guth-portfolio-access-81jjq2` | Criação de `ShopeeListingsExtractorAgent`, `ShopeeListingsOptimizationAgent`, workflows `fetch-shopee-listings.yml` e `optimize-shopee-listings.yml`, release-notes `9.2.85-shopee-listings-extractor-optimizer.json` e este documento. |
+| 2026-07-02 | `main` (rotina agendada, sem branch dedicada) | Ciclo de otimização inteligente (CTR/conversão/título/A-B) executado como rotina autônoma. Diagnóstico: nenhuma otimização foi aplicada — ver seção 9. |
 
 ---
 
 ## 8. Próximas ações sugeridas
 
-- [ ] Configurar `TINY_ACCESS_TOKEN` ou `TINY_CLIENT_ID`+`SECRET`+`REFRESH_TOKEN` nos GitHub Secrets (se ainda não feito).
-- [ ] Configurar `ANTHROPIC_API_KEY` nos GitHub Secrets para ativar otimização com IA (issue #29).
-- [ ] Executar `fetch-shopee-listings.yml` para validar conectividade com a API Tiny.
-- [ ] Executar `optimize-shopee-listings.yml` em modo manual para revisar o primeiro relatório.
+- [x] Configurar `TINY_ACCESS_TOKEN` ou `TINY_CLIENT_ID`+`SECRET`+`REFRESH_TOKEN` nos GitHub Secrets (feito — mas token está **expirado/inválido** desde ~2026-06-30, ver seção 9).
+- [x] Configurar `ANTHROPIC_API_KEY` nos GitHub Secrets para ativar otimização com IA (issue #29) — presente nos secrets.
+- [x] Executar `fetch-shopee-listings.yml` para validar conectividade com a API Tiny — falhando com 401 desde 2026-07-01.
+- [ ] **Renovar `TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN` no ERP e nos GitHub Secrets** — bloqueador atual, ver seção 9.
+- [ ] Executar `optimize-shopee-listings.yml` em modo manual para revisar o primeiro relatório real (o único disponível hoje tem `total_products: 0`).
 - [ ] Criar agente de reposição de imagens (após ter URLs das imagens oficiais do ERP).
+- [ ] Revisar o commit `b925f9d` (converteu falha 401 em `::warning::`) e considerar um alerta ativo (issue automática, notificação) em vez de silenciar — CI verde não deve significar "sincronizado".
+
+---
+
+## 9. Bloqueador atual: token Tiny expirado (desde ~2026-06-30)
+
+A rotina de otimização inteligente (análise de CTR/conversão, reescrita de título/descrição,
+reordenação de imagens, testes A/B) depende de dados reais de produtos e desempenho vindos
+da API Tiny/ERP. Diagnóstico do ciclo de 2026-07-02:
+
+- Última extração com dados reais: `listings/shopee-listings-20260630-113006.json`
+  (1360 produtos, `status: success`, gerado em `2026-06-30T11:30:06Z`).
+- Todas as execuções seguintes (`fetch-shopee-listings.yml` run #11, `optimize-shopee-listings.yml`
+  run #5, ambas em 2026-07-02) retornam `total_products: 0` com erro
+  `"Autenticação Tiny falhou (401). Token inválido ou expirado."`.
+- O commit `b925f9d` (2026-07-02) mudou `optimize-shopee-listings.yml` para tratar esse 401
+  como `::warning::` (exit 0) em vez de falhar o job — o pipeline volta a aparecer "verde" no
+  CI mesmo sem sincronizar nenhum produto real, o que reduz a visibilidade do problema.
+
+**Por regra do agente ("análise deve ser baseada em dados, não suposições"), nenhuma alteração
+de título, descrição, imagem, atributo ou preço foi aplicada neste ciclo.** Gerar otimizações
+sobre dados de 2+ dias sem sincronização (ou inventados) seria uma suposição, não uma decisão
+orientada a dados.
+
+**Ação necessária (fora do escopo de um agente autônomo):** renovar `TINY_ACCESS_TOKEN` /
+`TINY_REFRESH_TOKEN` em Settings → Secrets do repositório, e depois rodar
+`fetch-shopee-listings.yml` manualmente para confirmar `status: success` com `total_products > 0`
+antes de retomar os ciclos de otimização.
