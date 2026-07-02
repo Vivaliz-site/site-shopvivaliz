@@ -157,6 +157,36 @@ de produção (item 1) permanece válido. Todos os processos locais e serviços
 `.env.local` de teste removidos; `git status` limpo (apenas a mudança de
 código do seed listada acima permanece para commit).
 
+**Reverificado em 2026-07-02** (oitava rodada, novo container efêmero, `main`
+sem alterações em `claude/medusa`/`claude/api` desde a rodada anterior):
+Postgres 16 + Redis locais provisionados, `npm install` limpo do zero em
+ambos os apps (backend: 1341 pacotes; storefront: 544 pacotes), `npx medusa
+db:migrate` + `seed-shopvivaliz-test-data.ts` aplicados sem erros (região
+Brasil/BRL, 8 produtos ShopVivaliz + 4 demo = 12 no total, cliente de teste),
+usuário admin criado. `npm run build` OK nos dois apps (backend e storefront,
+133 páginas estáticas geradas). Publishable API key criada via Admin API e
+vinculada ao Default Sales Channel; `GET /store/products` retornou os 12
+produtos. Storefront em modo produção renderizou
+`/br/products/camiseta-shopvivaliz` com preço real da API (R$69,90), HTTP 200.
+
+**Bug real encontrado e corrigido nesta rodada:** o subscriber
+`src/subscribers/eha-webhook.ts` enviava o payload do webhook como
+`{event, data}`, mas `claude/api/medusa-webhook.php` lê `$event['type']` —
+mismatch de nome de campo que fazia **todo evento real ser descartado
+silenciosamente** (`status: IGNORED`, `event_type: unknown`) mesmo com
+assinatura HMAC válida e resposta HTTP 200. Rodadas anteriores validaram
+apenas o código de status HTTP, não o corpo processado, então o bug passou
+despercebido por pelo menos 7 rodadas de "revalidação ponta a ponta".
+Corrigido: o subscriber agora envia `{id, type, data}`; `medusa-webhook.php`
+passou a aceitar também `order.placed` (nome real do evento de criação de
+pedido no Medusa v2 — o código só tratava `order.created`, que não existe
+nessa versão). Reconfirmado ponta a ponta após o fix: update real de produto
+via Admin API → subscriber → POST HMAC-SHA256 → `medusa-webhook.php` → HTTP
+200 com `status: PROCESSED` e `event_type: product.updated` corretos.
+Assinatura ausente/inválida continuam corretamente rejeitadas com 401.
+Todos os processos/serviços locais parados e `.env`/`.env.local` de teste
+removidos ao final; `git status` limpo além do fix de código acima.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
