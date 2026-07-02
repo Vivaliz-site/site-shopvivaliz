@@ -86,6 +86,10 @@ $recent_log  = array_reverse(array_slice($log_lines, -30));
 $last_run_path = dirname(__DIR__) . '/automation/eha/reports/last_run.json';
 $last_run      = @json_decode(@file_get_contents($last_run_path) ?: '{}', true) ?: [];
 
+// Lê last_ci_run.json gerado pelo CI (sem rate-limit de API GitHub)
+$last_ci_path = dirname(__DIR__) . '/automation/eha/reports/last_ci_run.json';
+$last_ci      = @json_decode(@file_get_contents($last_ci_path) ?: '{}', true) ?: [];
+
 // Lê histórico de runs EHA do run_history.jsonl
 $history_path = dirname(__DIR__) . '/automation/eha/reports/run_history.jsonl';
 $eha_runs     = [];
@@ -113,18 +117,6 @@ $e2e_consecutive = (int)($last_run['e2e_consecutive'] ?? 0);
 $e2e_alert       = $e2e_consecutive >= 10;
 
 $status_color = $all_ok ? '#22c55e' : '#ef4444';
-
-// Lê histórico de runs do GitHub Actions via API pública (sem token)
-$gh_runs = [];
-$gh_raw  = @file_get_contents(
-    'https://api.github.com/repos/fredmourao-ai/site-shopvivaliz/actions/workflows/ci-autonomo-continuo.yml/runs?per_page=10&branch=main',
-    false,
-    stream_context_create(['http' => ['header' => "User-Agent: EHA-Dashboard/2.0\r\n", 'timeout' => 5]])
-);
-if ($gh_raw) {
-    $gh_data = json_decode($gh_raw, true);
-    $gh_runs = $gh_data['workflow_runs'] ?? [];
-}
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -350,32 +342,32 @@ if ($gh_raw) {
     </table>
     <?php endif; ?>
 
-    <?php if (!empty($gh_runs)): ?>
-    <h2>Últimos runs — CI Autônomo Contínuo</h2>
-    <table>
-        <thead>
-            <tr><th>Run</th><th>Status</th><th>Conclusão</th><th>Disparado em (UTC)</th><th>Link</th></tr>
-        </thead>
-        <tbody>
-        <?php foreach (array_slice($gh_runs, 0, 10) as $run):
-            $conc = $run['conclusion'] ?? 'in_progress';
-            $color = match($conc) {
-                'success'   => '#22c55e',
-                'failure'   => '#ef4444',
-                'cancelled' => '#94a3b8',
-                default     => '#f59e0b',
-            };
-        ?>
-            <tr>
-                <td>#<?= (int)$run['run_number'] ?></td>
-                <td><?= htmlspecialchars($run['status'] ?? '—') ?></td>
-                <td><span style="color:<?= $color ?>;font-weight:600"><?= htmlspecialchars($conc) ?></span></td>
-                <td style="font-size:.75rem;color:#64748b"><?= htmlspecialchars(substr($run['created_at'] ?? '', 0, 19)) ?></td>
-                <td><a href="<?= htmlspecialchars($run['html_url'] ?? '#') ?>" target="_blank">ver</a></td>
-            </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table>
+    <?php if (!empty($last_ci)): ?>
+    <h2>Último CI Run — #<?= (int)($last_ci['run_number'] ?? 0) ?></h2>
+    <div class="grid" style="margin-bottom:1.5rem">
+        <div class="card">
+            <div class="card-label">Run</div>
+            <div class="card-value">#<?= (int)($last_ci['run_number'] ?? 0) ?></div>
+            <div class="card-sub"><?= htmlspecialchars($last_ci['event'] ?? '—') ?></div>
+        </div>
+        <div class="card">
+            <div class="card-label">EHA Status</div>
+            <div class="card-value <?= ($last_ci['eha_status'] ?? '') === 'READY_FOR_PRODUCTION' ? 'ok' : (($last_ci['eha_status'] ?? '') === 'BLOCKED' ? 'fail' : 'warn') ?>">
+                <?= htmlspecialchars($last_ci['eha_status'] ?? '—') ?>
+            </div>
+            <div class="card-sub"><?= htmlspecialchars(substr($last_ci['timestamp'] ?? '', 0, 16)) ?> UTC</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Commit SHA</div>
+            <div class="card-value" style="font-family:monospace;font-size:.9rem"><?= htmlspecialchars(substr($last_ci['sha'] ?? '', 0, 8)) ?></div>
+            <div class="card-sub">main branch</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Link</div>
+            <div class="card-value" style="font-size:.9rem"><a href="<?= htmlspecialchars($last_ci['url'] ?? '#') ?>" target="_blank">Ver no GitHub →</a></div>
+            <div class="card-sub">Actions log completo</div>
+        </div>
+    </div>
     <?php endif; ?>
 
     <?php if (!empty($recent_log)): ?>
