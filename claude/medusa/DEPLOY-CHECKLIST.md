@@ -120,6 +120,43 @@ foram removidos depois do teste. `claude/api/sync-olist-products.php` e
 `claude/api/olist/webhook.php` passaram em `php -l` (sem erro de sintaxe); não têm
 credenciais Olist reais nesta sessão para testar a chamada de rede em si.
 
+**Reverificado em 2026-07-02** (quinta rodada, novo container efêmero, mesmo
+dia da rodada anterior — `main` sem alterações em `claude/medusa`/`claude/api`
+desde o commit `cbc9da7`, confirmado via `git diff --stat`): Postgres 16 +
+Redis locais provisionados (`service postgresql start` / `service
+redis-server start`), role `medusa` + banco `medusa_shopvivaliz` criados.
+`npm install` limpo em ambos os apps sem `ERESOLVE` (backend: 1341 pacotes/
+46s com cache quente; storefront: 544 pacotes/35s). `npx medusa db:migrate` +
+`seed-shopvivaliz-test-data.ts` aplicados sem erros. **Seed de teste ampliado
+nesta rodada** (`src/scripts/seed-shopvivaliz-test-data.ts`): adicionados 3
+produtos (Vestido, Bermuda, Mochila) aos 5 já existentes — total agora **12
+produtos** (8 ShopVivaliz + 4 demo padrão do Medusa), atendendo ao requisito
+de 10+ produtos de teste. Usuário admin criado. `npm run build` OK nos dois
+apps. **Achado de processo:** `npx medusa start` precisa ser executado a
+partir de `.medusa/server` (não de `apps/backend`), senão falha com "Could
+not find index.html in the admin build directory" mesmo com o build
+presente — usamos um symlink de `node_modules` para `.medusa/server` em vez
+de reinstalar. Publishable API key criada via Admin API e vinculada ao
+Default Sales Channel; `GET /store/products` retornou os 12 produtos.
+Payment providers Stripe/PIX confirmados na tabela `payment_provider`
+(`pp_stripe_stripe` + variantes OXXO/PromptPay/iDEAL/etc., todos
+`is_enabled=true`) com a chave de teste pública `sk_test_4eC39Hq...`
+(exemplo padrão da documentação Stripe, não uma credencial real). Storefront
+em modo produção renderizou `/br/products/camiseta-shopvivaliz` com preço
+real da API (R$69,90), HTTP 200. Webhook Medusa → EHA reverificado ponta a
+ponta (assinatura válida via update de produto, e 401 para assinatura
+ausente/inválida); `tasks-queue.json` revertido ao final. `claude/api/sync-
+olist-products.php`, `claude/api/olist/webhook.php` e `claude/api/medusa-
+webhook.php` passaram em `php -l`. Nenhum acesso a `gh secret set` ou
+equivalente MCP disponível nesta sessão (apenas leitura/escrita de conteúdo/
+issues/PRs do GitHub) — secrets de produção continuam pendentes de
+configuração manual (ver `GITHUB_SECRETS_TODO.md`). Criação de projeto
+Supabase não realizada (requer login humano interativo) — bloqueio do banco
+de produção (item 1) permanece válido. Todos os processos locais e serviços
+(Postgres, Redis, backend, storefront, `php -S`) parados ao final; `.env`/
+`.env.local` de teste removidos; `git status` limpo (apenas a mudança de
+código do seed listada acima permanece para commit).
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
