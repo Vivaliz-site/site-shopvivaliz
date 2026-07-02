@@ -1,7 +1,7 @@
 <?php
 /**
  * EHA Status Dashboard — dev.shopvivaliz.com.br/claude
- * Faz health check em tempo real, sem depender de arquivos de report.
+ * Health check ao vivo + status dos providers de IA.
  */
 header('Content-Type: text/html; charset=utf-8');
 
@@ -26,7 +26,7 @@ function http_check(string $url, int $timeout = 8): array {
     return ['code' => $code, 'ms' => $ms, 'body' => (string)$body];
 }
 
-// Health checks em paralelo via múltiplas requisições
+// Health checks em paralelo
 $checks = [
     'homepage' => $base . '/claude/',
     'api'      => $base . '/claude/api/health.php',
@@ -77,21 +77,39 @@ $status      = $all_ok ? 'READY_FOR_PRODUCTION' : 'BLOCKED';
 $elapsed     = round(microtime(true) - $t0, 2);
 $ts          = date('Y-m-d H:i:s') . ' UTC';
 
-// Lê o log EHA se existir (não crítico)
-$log_path    = dirname(__DIR__) . '/automation/eha/reports/eha_events.txt';
+// --- Status dos Providers de IA (via squad-chat health) ---
+$squad_health_url = $base . '/api/agent/squad-chat.php?health=1';
+$squad_health_raw = http_check($squad_health_url, 6);
+$squad_health     = @json_decode($squad_health_raw['body'], true) ?: [];
+$providers        = $squad_health['providers'] ?? [];
+
+// Mapeamento amigável de nomes
+$provider_labels = [
+    'anthropic' => ['nome' => 'Anthropic (Claude)',  'emoji' => '🧠'],
+    'openai'    => ['nome' => 'OpenAI (GPT)',        'emoji' => '💻'],
+    'gemini'    => ['nome' => 'Google (Gemini)',     'emoji' => '✨'],
+];
+
+$ai_any_down  = false;
+$ai_all_down  = !empty($providers) && count($providers) > 0;
+foreach ($providers as $key => $info) {
+    $ok = (bool)($info['configured'] ?? false);
+    if (!$ok) $ai_any_down = true;
+    if ($ok)  $ai_all_down = false;
+}
+
+// Leitura dos arquivos de report (gracioso se ausentes)
+$log_path    = dirname(__DIR__, 2) . '/automation/eha/reports/eha_events.txt';
 $log_lines   = @file($log_path) ?: [];
 $recent_log  = array_reverse(array_slice($log_lines, -30));
 
-// Lê last_run.json para detalhes do último run EHA
-$last_run_path = dirname(__DIR__) . '/automation/eha/reports/last_run.json';
+$last_run_path = dirname(__DIR__, 2) . '/automation/eha/reports/last_run.json';
 $last_run      = @json_decode(@file_get_contents($last_run_path) ?: '{}', true) ?: [];
 
-// Lê last_ci_run.json gerado pelo CI (sem rate-limit de API GitHub)
-$last_ci_path = dirname(__DIR__) . '/automation/eha/reports/last_ci_run.json';
+$last_ci_path = dirname(__DIR__, 2) . '/automation/eha/reports/last_ci_run.json';
 $last_ci      = @json_decode(@file_get_contents($last_ci_path) ?: '{}', true) ?: [];
 
-// Lê histórico de runs EHA do run_history.jsonl
-$history_path = dirname(__DIR__) . '/automation/eha/reports/run_history.jsonl';
+$history_path = dirname(__DIR__, 2) . '/automation/eha/reports/run_history.jsonl';
 $eha_runs     = [];
 if (is_readable($history_path)) {
     foreach (file($history_path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
@@ -112,11 +130,9 @@ $avg_elapsed = $total_runs > 0
     : 0;
 $uptime_pct  = $total_runs > 0 ? round($ok_runs / $total_runs * 100, 1) : 0;
 
-// E2E: conta runs consecutivos com falha
 $e2e_consecutive = (int)($last_run['e2e_consecutive'] ?? 0);
 $e2e_alert       = $e2e_consecutive >= 10;
 
-// Freshness do CI (cron a cada 15min → alerta após 25min sem run)
 $ci_ts_raw   = $last_ci['timestamp'] ?? '';
 $ci_ts_unix  = $ci_ts_raw ? (int)strtotime($ci_ts_raw) : 0;
 $ci_mins_ago = $ci_ts_unix > 0 ? (int)round((time() - $ci_ts_unix) / 60) : -1;
@@ -139,9 +155,11 @@ $status_color = $all_ok ? '#22c55e' : '#ef4444';
         .sub { font-size: .85rem; color: #64748b; margin-bottom: 2rem; }
         .badge { display: inline-block; padding: .35rem .9rem; border-radius: 999px; font-weight: 700; font-size: 1rem; color: #fff; background: <?= $status_color ?>; margin-bottom: 1.5rem; }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
         .card { background: #1e293b; border-radius: .75rem; padding: 1rem 1.25rem; }
-        .card.alert { border: 1px solid #f59e0b; }
-        .card.stale { border: 1px solid #60a5fa; }
+        .card.alert  { border: 1px solid #f59e0b; }
+        .card.stale  { border: 1px solid #60a5fa; }
+        .card.danger { border: 1px solid #ef4444; background: #1a0a0a; }
         .card-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: #64748b; margin-bottom: .3rem; }
         .card-value { font-size: 1.15rem; font-weight: 700; }
         .card-sub { font-size: .72rem; color: #475569; margin-top: .2rem; }
@@ -151,6 +169,8 @@ $status_color = $all_ok ? '#22c55e' : '#ef4444';
         .info { color: #60a5fa; }
         .alert-banner { background: #7c2d12; border: 1px solid #f59e0b; border-radius: .75rem; padding: 1rem 1.25rem; margin-bottom: 1.5rem; color: #fef3c7; font-size: .9rem; }
         .alert-banner strong { color: #fbbf24; }
+        .danger-banner { background: #1f0505; border: 1px solid #ef4444; border-radius: .75rem; padding: 1rem 1.25rem; margin-bottom: 1.5rem; color: #fecaca; font-size: .9rem; }
+        .danger-banner strong { color: #f87171; }
         .info-banner { background: #172554; border: 1px solid #60a5fa; border-radius: .75rem; padding: 1rem 1.25rem; margin-bottom: 1.5rem; color: #bfdbfe; font-size: .9rem; }
         .info-banner strong { color: #93c5fd; }
         table { width: 100%; border-collapse: collapse; font-size: .82rem; margin-bottom: 2rem; }
@@ -168,13 +188,35 @@ $status_color = $all_ok ? '#22c55e' : '#ef4444';
         .stat-row { display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
         .stat { font-size: .82rem; color: #94a3b8; }
         .stat strong { color: #f1f5f9; font-size: 1rem; }
+        .provider-card { background: #1e293b; border-radius: .75rem; padding: 1.25rem; display: flex; flex-direction: column; gap: .5rem; }
+        .provider-card.ok-provider  { border-left: 4px solid #22c55e; }
+        .provider-card.fail-provider { border-left: 4px solid #ef4444; background: #1a0d0d; }
+        .provider-name { font-size: 1rem; font-weight: 700; }
+        .provider-model { font-size: .78rem; color: #64748b; }
+        .provider-status { font-size: .82rem; font-weight: 600; margin-top: .25rem; }
     </style>
 </head>
 <body>
     <h1>EHA — CI Autônomo Contínuo</h1>
-    <p class="sub">Health check ao vivo &nbsp;·&nbsp; <?= $ts ?> &nbsp;·&nbsp; <?= $elapsed ?>s &nbsp;·&nbsp; <a href="<?= htmlspecialchars($base) ?>"><?= htmlspecialchars($base) ?></a></p>
+    <p class="sub">Health check ao vivo &nbsp;&middot;&nbsp; <?= $ts ?> &nbsp;&middot;&nbsp; <?= $elapsed ?>s &nbsp;&middot;&nbsp; <a href="<?= htmlspecialchars($base) ?>"><?= htmlspecialchars($base) ?></a></p>
 
     <div class="badge"><?= htmlspecialchars($status) ?></div>
+
+    <?php if ($ai_all_down && !empty($providers)): ?>
+    <div class="danger-banner">
+        🚨 <strong>TODOS os providers de IA estão offline.</strong>
+        Squad Chat completamente inoperante. Verifique as chaves de API:
+        Anthropic (crédito insuficiente), OpenAI (cota excedida), Gemini (chave inválida).
+        Acesse <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>,
+        <a href="https://platform.openai.com" target="_blank">platform.openai.com</a> e
+        <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a> para renovar.
+    </div>
+    <?php elseif ($ai_any_down && !empty($providers)): ?>
+    <div class="alert-banner">
+        ⚠️ <strong>Um ou mais providers de IA estão offline.</strong>
+        Squad Chat com capacidade reduzida. Verifique a seção "Providers de IA" abaixo.
+    </div>
+    <?php endif; ?>
 
     <?php if ($e2e_alert): ?>
     <div class="alert-banner">
@@ -195,26 +237,27 @@ $status_color = $all_ok ? '#22c55e' : '#ef4444';
     </div>
     <?php endif; ?>
 
+    <!-- SITE HEALTH -->
     <div class="grid">
         <div class="card">
             <div class="card-label">Homepage</div>
             <div class="card-value <?= $homepage_ok ? 'ok' : 'fail' ?>"><?= $homepage_ok ? 'OK' : 'FALHOU' ?></div>
-            <div class="card-sub">HTTP <?= $results['homepage']['code'] ?> · <?= $results['homepage']['ms'] ?>ms</div>
+            <div class="card-sub">HTTP <?= $results['homepage']['code'] ?> &middot; <?= $results['homepage']['ms'] ?>ms</div>
         </div>
         <div class="card">
             <div class="card-label">API Health</div>
             <div class="card-value <?= $api_ok ? 'ok' : 'fail' ?>"><?= $api_ok ? 'OK' : 'FALHOU' ?></div>
-            <div class="card-sub">HTTP <?= $results['api']['code'] ?> · <?= $results['api']['ms'] ?>ms</div>
+            <div class="card-sub">HTTP <?= $results['api']['code'] ?> &middot; <?= $results['api']['ms'] ?>ms</div>
         </div>
         <div class="card">
             <div class="card-label">Catálogo</div>
             <div class="card-value <?= $catalogo_ok ? 'ok' : 'fail' ?>"><?= $catalogo_ok ? 'OK' : 'FALHOU' ?></div>
-            <div class="card-sub">HTTP <?= $results['catalogo']['code'] ?> · <?= $results['catalogo']['ms'] ?>ms</div>
+            <div class="card-sub">HTTP <?= $results['catalogo']['code'] ?> &middot; <?= $results['catalogo']['ms'] ?>ms</div>
         </div>
         <div class="card">
             <div class="card-label">Carrinho</div>
             <div class="card-value <?= $carrinho_ok ? 'ok' : 'fail' ?>"><?= $carrinho_ok ? 'OK' : 'FALHOU' ?></div>
-            <div class="card-sub">HTTP <?= $results['carrinho']['code'] ?> · <?= $results['carrinho']['ms'] ?>ms</div>
+            <div class="card-sub">HTTP <?= $results['carrinho']['code'] ?> &middot; <?= $results['carrinho']['ms'] ?>ms</div>
         </div>
         <div class="card">
             <div class="card-label">Status geral</div>
@@ -237,6 +280,48 @@ $status_color = $all_ok ? '#22c55e' : '#ef4444';
         </div>
     </div>
 
+    <!-- PROVIDERS DE IA -->
+    <?php if (!empty($providers) || $squad_health_raw['code'] !== 0): ?>
+    <h2>Providers de IA — Squad Chat</h2>
+    <?php if ($squad_health_raw['code'] === 200 && !empty($providers)): ?>
+    <div class="grid-3">
+    <?php foreach ($providers as $key => $info):
+        $ok      = (bool)($info['configured'] ?? false);
+        $label   = $provider_labels[$key] ?? ['nome' => ucfirst($key), 'emoji' => '🤖'];
+        $model   = $info['model'] ?? 'n/d';
+        $cls_card = $ok ? 'ok-provider' : 'fail-provider';
+        $cls_txt  = $ok ? 'ok' : 'fail';
+        $status_txt = $ok ? '✓ Online' : '✗ Offline';
+        $hint = '';
+        if (!$ok) {
+            $hint = match($key) {
+                'anthropic' => 'crédito insuficiente — recarregar em console.anthropic.com',
+                'openai'    => 'cota excedida — verificar em platform.openai.com',
+                'gemini'    => 'chave inválida — renovar em aistudio.google.com',
+                default     => 'verifique a chave de API',
+            };
+        }
+    ?>
+        <div class="provider-card <?= $cls_card ?>">
+            <div class="provider-name"><?= $label['emoji'] ?> <?= htmlspecialchars($label['nome']) ?></div>
+            <div class="provider-model">Modelo: <?= htmlspecialchars($model) ?></div>
+            <div class="provider-status <?= $cls_txt ?>"><?= $status_txt ?></div>
+            <?php if ($hint): ?>
+            <div style="font-size:.75rem;color:#f87171;margin-top:.2rem"><?= htmlspecialchars($hint) ?></div>
+            <?php endif; ?>
+        </div>
+    <?php endforeach; ?>
+    </div>
+    <?php else: ?>
+    <div class="card" style="margin-bottom:1.5rem">
+        <div class="card-label">Squad Chat Health</div>
+        <div class="card-value warn">Não disponível</div>
+        <div class="card-sub">HTTP <?= $squad_health_raw['code'] ?> — endpoint não acessível neste ambiente</div>
+    </div>
+    <?php endif; ?>
+    <?php endif; ?>
+
+    <!-- ÚLTIMO RUN EHA -->
     <?php if (!empty($last_run)): ?>
     <h2>Último Run EHA — #<?= htmlspecialchars((string)($last_run['run_id'] ?? '?')) ?></h2>
     <div class="grid" style="margin-bottom:1.5rem">
@@ -315,6 +400,7 @@ $status_color = $all_ok ? '#22c55e' : '#ef4444';
     <?php endif; ?>
     <?php endif; ?>
 
+    <!-- HISTÓRICO EHA -->
     <?php if (!empty($eha_runs_recent)): ?>
     <h2>Histórico EHA — últimos <?= count($eha_runs_recent) ?> runs</h2>
     <div class="stat-row">
@@ -371,6 +457,7 @@ $status_color = $all_ok ? '#22c55e' : '#ef4444';
     </table>
     <?php endif; ?>
 
+    <!-- ÚLTIMO CI RUN -->
     <?php if (!empty($last_ci)): ?>
     <h2>Último CI Run — #<?= (int)($last_ci['run_number'] ?? 0) ?></h2>
     <div class="grid" style="margin-bottom:1.5rem">
@@ -399,6 +486,7 @@ $status_color = $all_ok ? '#22c55e' : '#ef4444';
     </div>
     <?php endif; ?>
 
+    <!-- LOG EHA -->
     <?php if (!empty($recent_log)): ?>
     <h2>Log EHA (servidor)</h2>
     <div class="log"><?php
