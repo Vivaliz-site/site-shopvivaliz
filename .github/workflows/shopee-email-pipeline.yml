@@ -48,6 +48,7 @@ jobs:
 
       - name: Upload final artifacts
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4.3.0
         with:
           name: shopee-pipeline-results
@@ -55,3 +56,4 @@ jobs:
             logs/
             storage/
           if-no-files-found: ignore
+          retention-days: 3

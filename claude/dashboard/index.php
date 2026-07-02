@@ -116,6 +116,12 @@ $uptime_pct  = $total_runs > 0 ? round($ok_runs / $total_runs * 100, 1) : 0;
 $e2e_consecutive = (int)($last_run['e2e_consecutive'] ?? 0);
 $e2e_alert       = $e2e_consecutive >= 10;
 
+// Freshness do CI (cron a cada 15min → alerta após 25min sem run)
+$ci_ts_raw   = $last_ci['timestamp'] ?? '';
+$ci_ts_unix  = $ci_ts_raw ? (int)strtotime($ci_ts_raw) : 0;
+$ci_mins_ago = $ci_ts_unix > 0 ? (int)round((time() - $ci_ts_unix) / 60) : -1;
+$ci_stale    = $ci_mins_ago < 0 || $ci_mins_ago > 25;
+
 $status_color = $all_ok ? '#22c55e' : '#ef4444';
 ?>
 <!DOCTYPE html>
@@ -135,14 +141,18 @@ $status_color = $all_ok ? '#22c55e' : '#ef4444';
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
         .card { background: #1e293b; border-radius: .75rem; padding: 1rem 1.25rem; }
         .card.alert { border: 1px solid #f59e0b; }
+        .card.stale { border: 1px solid #60a5fa; }
         .card-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: #64748b; margin-bottom: .3rem; }
         .card-value { font-size: 1.15rem; font-weight: 700; }
         .card-sub { font-size: .72rem; color: #475569; margin-top: .2rem; }
         .ok   { color: #22c55e; }
         .fail { color: #ef4444; }
         .warn { color: #f59e0b; }
+        .info { color: #60a5fa; }
         .alert-banner { background: #7c2d12; border: 1px solid #f59e0b; border-radius: .75rem; padding: 1rem 1.25rem; margin-bottom: 1.5rem; color: #fef3c7; font-size: .9rem; }
         .alert-banner strong { color: #fbbf24; }
+        .info-banner { background: #172554; border: 1px solid #60a5fa; border-radius: .75rem; padding: 1rem 1.25rem; margin-bottom: 1.5rem; color: #bfdbfe; font-size: .9rem; }
+        .info-banner strong { color: #93c5fd; }
         table { width: 100%; border-collapse: collapse; font-size: .82rem; margin-bottom: 2rem; }
         th { text-align: left; padding: .5rem .75rem; color: #64748b; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; border-bottom: 1px solid #1e293b; }
         td { padding: .45rem .75rem; border-bottom: 1px solid #0f172a; }
@@ -170,6 +180,18 @@ $status_color = $all_ok ? '#22c55e' : '#ef4444';
     <div class="alert-banner">
         ⚠️ <strong>E2E persistentemente falhando:</strong> <?= $e2e_consecutive ?> runs consecutivos com falha.
         O sistema escalou para <strong>CREATE_PR</strong> — verifique a infraestrutura do Playwright / checkout.spec.js.
+    </div>
+    <?php endif; ?>
+
+    <?php if ($ci_stale): ?>
+    <div class="info-banner">
+        ⏰ <strong>CI possivelmente parado:</strong>
+        <?php if ($ci_mins_ago < 0): ?>
+            Nenhum registro de CI encontrado — aguardando primeiro run.
+        <?php else: ?>
+            Último run foi há <strong><?= $ci_mins_ago ?> minutos</strong>.
+            O cron roda a cada 15min — verifique os <a href="https://github.com/fredmourao-ai/site-shopvivaliz/actions/workflows/ci-autonomo-continuo.yml" target="_blank">GitHub Actions →</a>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 
@@ -205,6 +227,13 @@ $status_color = $all_ok ? '#22c55e' : '#ef4444';
                 <?= $e2e_consecutive ?> runs
             </div>
             <div class="card-sub"><?= $e2e_alert ? '⚠️ Escalando CREATE_PR' : ($e2e_consecutive > 0 ? 'monitorando' : 'E2E estável') ?></div>
+        </div>
+        <div class="card <?= $ci_stale ? 'stale' : '' ?>">
+            <div class="card-label">Último CI Run</div>
+            <div class="card-value <?= $ci_stale ? 'info' : 'ok' ?>">
+                <?= $ci_mins_ago >= 0 ? $ci_mins_ago . ' min atrás' : 'sem dados' ?>
+            </div>
+            <div class="card-sub"><?= $ci_stale ? '⏰ verifique o cron' : '✓ CI ativo' ?></div>
         </div>
     </div>
 
