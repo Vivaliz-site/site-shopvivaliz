@@ -1,54 +1,60 @@
 {
   "project": "shopvivaliz-medusa",
-  "report_generated_at": "2026-07-02T10:20:00Z",
+  "report_generated_at": "2026-07-02T13:30:00Z",
+  "round": 6,
   "overall_status": "BLOQUEADO_PARA_PRODUCAO",
-  "summary": "Ambiente local (dev) 100% funcional: install, build, migrations, seed, API e storefront validados nesta sessao. Deploy em producao permanece bloqueado por dependencias externas que exigem acao humana (conta Supabase, chaves reais de pagamento, host Node.js, acesso de escrita a GitHub Secrets).",
+  "summary": "Sexta rodada. Achado critico corrigido nesta sessao: os arquivos claude/medusa/apps/backend/{package.json,package-lock.json,.env.example,medusa-config.ts} e claude/medusa/apps/storefront/{next.config.js,package-lock.json} estavam commitados no branch main com marcadores de conflito de merge (<<<<<<< HEAD / ======= / >>>>>>> origin/main) literais desde o commit 1fd93d6, deixando package.json como JSON invalido - `npm install` falhava a partir de um clone limpo. Corrigido (merge manual dos blocos + package-lock.json regenerado via npm install) e revalidado ambiente local completo do zero: install, migrations, seed (12 produtos), build de backend e storefront, e health check todos OK. Deploy em producao continua bloqueado pelos mesmos 4 itens que exigem acao humana ha 6 rodadas seguidas (conta Supabase, chaves reais de pagamento/Olist, host Node.js para producao, acesso de escrita a GitHub Secrets) - nenhum progresso e possivel nesses itens sem intervencao do usuario.",
   "steps": {
+    "0_repo_integrity": {
+      "status": "FIXED_NESTA_RODADA",
+      "detail": "ACHADO CRITICO: claude/medusa/apps/backend/package.json, package-lock.json, .env.example, medusa-config.ts e claude/medusa/apps/storefront/next.config.js, package-lock.json estavam commitados em origin/main (desde o commit 1fd93d6 'merge: resolve conflicts after autonomous agent improvements') com marcadores de conflito de merge nao resolvidos (<<<<<<< HEAD / ======= / >>>>>>> origin/main) dentro do conteudo versionado. package.json era JSON invalido, entao `npm ci`/`npm install` falhava a partir de um clone limpo do main - qualquer rodada anterior que reportou build OK so validou contra um working tree que ja tinha esses arquivos corrigidos localmente (nao commitados) ou tinha node_modules cacheado. Corrigido nesta sessao: blocos de conflito resolvidos manualmente preservando as duas metades (Stripe payment module + AUTH_CORS do lado origin/main, variaveis de marketplace/EHA do lado HEAD), package-lock.json de ambos os apps regenerado via `npm install`.",
+      "action_required_from_user": "Nenhuma - corrigido e commitado nesta sessao. Recomenda-se revisar futuros merges para checar marcadores de conflito residuais antes de commitar (ex.: hook de pre-commit com grep '^<<<<<<< ')."
+    },
     "1_database_setup": {
       "status": "BLOCKER",
-      "detail": "DATABASE_URL nao existe em producao. .env do backend nao estava commitado (esperado, esta no .gitignore). Nao e possivel criar projeto Supabase de forma autonoma: requer login/OAuth interativo em https://supabase.com/dashboard. Para esta sessao, foi provisionado Postgres 16 local (postgres://medusa:***@localhost:5432/medusa_shopvivaliz) apenas para validar build/migrations/seed; nao persiste fora do container efemero.",
+      "detail": "DATABASE_URL nao existe em producao. .env do backend nao esta commitado (esperado, esta no .gitignore) e nao persiste entre sessoes (container efemero). Nao e possivel criar projeto Supabase de forma autonoma: requer login/OAuth interativo em https://supabase.com/dashboard. Nesta rodada, Postgres 16 local foi provisionado do zero (postgres://medusa_user:***@localhost:5432/shopvivaliz_medusa) apenas para revalidar install/migrations/seed/build apos o fix do item 0.",
       "action_required_from_user": "Criar projeto Supabase (ou Neon/Railway/RDS) manualmente, copiar a connection string para DATABASE_URL no .env de producao do backend."
     },
     "2_migrations_seed": {
       "status": "OK_LOCAL",
-      "detail": "npx medusa db:migrate + npx medusa exec ./src/scripts/seed-shopvivaliz-test-data.ts executados sem erro contra o Postgres local. Seed ampliado nesta sessao para 8 produtos ShopVivaliz (Camiseta, Calca Jeans, Tenis, Bone, Jaqueta, Vestido, Bermuda, Mochila) + 4 produtos demo padrao do Medusa = 12 produtos totais, cliente de teste cliente.teste@shopvivaliz.com.br criado. Confirmado via SELECT count(*) FROM product (12) e GET /store/products (count: 12)."
+      "detail": "npx medusa db:migrate + npx medusa exec ./src/scripts/seed-shopvivaliz-test-data.ts executados sem erro contra o Postgres local, do zero (banco/usuario recriados nesta rodada). 8 produtos ShopVivaliz + 4 produtos demo padrao do Medusa = 12 produtos totais. Confirmado via SELECT count(*) FROM product (12)."
     },
     "3_payment_gateway": {
       "status": "OK_TEST_KEYS",
-      "detail": "STRIPE_API_KEY/STRIPE_PUBLIC_KEY de teste (exemplo padrao da documentacao Stripe, sk_test_4eC39Hq.../pk_test_4eC39Hq...) configuradas no .env local. medusa-config.ts registrou @medusajs/payment-stripe corretamente: tabela payment_provider mostra pp_stripe_stripe e variantes PIX/OXXO/iDEAL/PromptPay/etc com is_enabled=true. PAYPAL_CLIENT_ID/SECRET permanecem vazios (nao ha credenciais sandbox disponiveis nesta sessao). Nenhum webhook real foi registrado no dashboard do Stripe/PayPal (requer conta/login humano)."
+      "detail": "STRIPE_API_KEY/STRIPE_PUBLIC_KEY de teste (exemplo padrao da documentacao Stripe) configuradas no .env local. medusa-config.ts (apos fix do conflito) registra @medusajs/payment-stripe corretamente quando STRIPE_API_KEY esta presente. PAYPAL_CLIENT_ID/SECRET permanecem vazios (sem credenciais sandbox disponiveis nesta sessao). Nenhum webhook real foi registrado no dashboard do Stripe/PayPal (requer conta/login humano)."
     },
     "4_environment_variables": {
       "status": "OK_LOCAL",
-      "detail": "JWT_SECRET, COOKIE_SECRET, EHA_WEBHOOK_SECRET e OLIST_WEBHOOK_SECRET gerados com openssl rand -base64 32 para o ambiente local. STORE_CORS/ADMIN_CORS/AUTH_CORS configurados com os defaults de desenvolvimento do .env.example. Nenhuma variavel ficou undefined para o build/start local. Secrets de producao devem ser gerados novamente (nunca reutilizar os de dev) - comandos prontos em GITHUB_SECRETS_TODO.md."
+      "detail": "JWT_SECRET, COOKIE_SECRET, EHA_WEBHOOK_SECRET, OLIST_WEBHOOK_SECRET e STRIPE_WEBHOOK_SECRET gerados com openssl rand -base64 32 para o ambiente local nesta rodada. STORE_CORS/ADMIN_CORS/AUTH_CORS configurados. .env.example tambem foi reescrito para consolidar as duas metades conflitantes num unico template coerente. Nenhuma variavel ficou undefined para build/start local. Secrets de producao devem ser gerados novamente (nunca reutilizar os de dev)."
     },
     "5_build": {
       "status": "OK",
-      "detail": "Backend: npm run build (medusa build) OK, ~6.5s backend + ~35.6s admin/frontend, sem erros. Storefront: npm run build (next build) OK apos backend estar de pe (necessario para generateStaticParams buscar produtos reais), 133 paginas estaticas geradas, sem erros de tipo/lint."
+      "detail": "Backend: npm install (regenerou package-lock.json) + npm run build (medusa build) OK, sem erros, apos fix dos marcadores de conflito. Storefront: npm install + npm run build (next build) OK, 133 paginas estaticas geradas, sem erros de tipo/lint. Bundles dentro do normal para Next.js/Medusa (First Load JS ~100-190kB por rota)."
     },
     "6_local_testing": {
       "status": "OK",
-      "detail": "Backend subiu com npx medusa start a partir de .medusa/server (nota: falha se executado a partir de apps/backend mesmo com build presente - usar symlink de node_modules ou reinstalar em .medusa/server). GET http://localhost:9000/health retornou 200 OK. Storefront em modo producao (porta 8000) renderizou /br/products/camiseta-shopvivaliz com preco real da API (R$69,90), HTTP 200."
+      "detail": "Backend subiu com npx medusa start a partir de .medusa/server (symlink de node_modules necessario). GET http://localhost:9000/health retornou 200 OK. GET /store/products respondeu corretamente exigindo x-publishable-api-key (comportamento esperado, chave publishable ja existe no banco seedado)."
     },
     "7_marketplace_integrations": {
       "status": "OK_SEM_CREDENCIAIS_REAIS",
-      "detail": "claude/api/sync-olist-products.php (classe OlistSync) ja existe e passou em php -l sem erro de sintaxe. claude/api/olist/webhook.php e claude/api/medusa-webhook.php tambem validados com php -l. Nao executado end-to-end contra a API real da Olist/Tiny (sem OLIST_CLIENT_ID/SECRET reais nesta sessao). Webhook Medusa -> EHA testado ponta a ponta com servidor PHP local: assinatura valida aceita (200, evento enfileirado em tasks-queue.json e revertido apos o teste), assinatura ausente/invalida rejeitada (401)."
+      "detail": "claude/api/sync-olist-products.php (classe OlistSync), claude/api/olist/webhook.php e claude/api/medusa-webhook.php revalidados com php -l nesta rodada, sem erro de sintaxe. Nao executado end-to-end contra a API real da Olist/Tiny (sem OLIST_CLIENT_ID/SECRET reais nesta sessao)."
     },
     "8_github_secrets": {
       "status": "BLOCKER_SEM_ACESSO",
-      "detail": "Esta sessao nao tem acesso ao gh CLI nem a uma ferramenta MCP de secrets do GitHub (apenas ferramentas de leitura/escrita de conteudo de repositorio, issues, PRs e Actions read-only estao disponiveis). Comandos gh secret set prontos (com placeholders) documentados em claude/medusa/GITHUB_SECRETS_TODO.md.",
+      "detail": "Esta sessao nao tem acesso ao gh CLI nem a uma ferramenta MCP de secrets do GitHub (apenas GitHub MCP de leitura/escrita de conteudo de repositorio, issues, PRs; sem tool de Actions secrets). Comandos gh secret set prontos (com placeholders) documentados em claude/medusa/GITHUB_SECRETS_TODO.md.",
       "action_required_from_user": "Rodar os comandos gh secret set de GITHUB_SECRETS_TODO.md localmente (com gh CLI autenticado) ou configurar manualmente em Settings > Secrets and variables > Actions."
     },
     "9_deployment_preparation": {
       "status": "OK_DOCUMENTADO",
-      "detail": "claude/medusa/deploy.sh ja existe e cobre backend (npm ci + build + migrate + pm2) e storefront. claude/medusa/DEPLOY-CHECKLIST.md documenta pre-requisitos de host (Node.js 18+/PM2/Postgres externo/SSL) e explica que o HostGator NAO suporta Node.js/Postgres - backend/storefront precisam de host separado (Railway/Render/Fly.io/VPS + Vercel/Netlify). Arquivo DEPLOY_HOSTGATOR.md mencionado no runbook nao existe no repositorio; o conteudo equivalente ja esta coberto em DEPLOY-CHECKLIST.md."
+      "detail": "claude/medusa/deploy.sh, claude/medusa/DEPLOY-CHECKLIST.md e claude/medusa/GITHUB_SECRETS_TODO.md ja existem de rodadas anteriores e continuam validos; nenhuma mudanca necessaria nesta rodada. HostGator (host atual do site PHP legado) NAO roda Node.js/Postgres - backend/storefront Medusa precisam de host separado (Railway/Render/Fly.io/VPS + Vercel/Netlify)."
     },
     "10_deployment_checklist": {
       "status": "OK",
-      "detail": "claude/medusa/DEPLOY-CHECKLIST.md atualizado nesta sessao com nova rodada de reverificacao (quinta rodada, mesmo dia da rodada anterior, sem mudancas de codigo em claude/medusa desde o ultimo commit de checklist)."
+      "detail": "Sem mudancas de conteudo necessarias no DEPLOY-CHECKLIST.md nesta rodada alem do registro do fix do item 0."
     },
     "11_final_report": {
       "status": "OK",
-      "detail": "Este arquivo (DEPLOY-STATUS-REPORT.json)."
+      "detail": "Este arquivo (DEPLOY-STATUS-REPORT.json), atualizado para a sexta rodada."
     }
   },
   "blockers": [
@@ -71,11 +77,20 @@
       "id": "real_payment_paypal_olist_credentials",
       "description": "PayPal sandbox e credenciais reais Olist/Tiny nao disponiveis nesta sessao (chaves Stripe de teste publicas ja configuradas).",
       "severity": "medium"
+    },
+    {
+      "id": "leaked_olist_secret_in_git_history",
+      "description": "Achado de seguranca de 2026-07-01 (ver claude/medusa/DEPLOY-CHECKLIST.md): OLIST_CLIENT_ID/SECRET reais e um authorization code OAuth ficaram commitados em texto puro em arquivos ja redigidos, mas o segredo antigo permanece no historico do git. Rotacionar o client secret no painel Tiny/Olist continua pendente.",
+      "severity": "high"
     }
   ],
   "code_changes_this_session": [
-    "claude/medusa/apps/backend/src/scripts/seed-shopvivaliz-test-data.ts: adicionados 3 produtos de teste (Vestido, Bermuda, Mochila) para atingir 10+ produtos",
-    "claude/medusa/DEPLOY-CHECKLIST.md: nova entrada de reverificacao (quinta rodada)",
-    "claude/medusa/DEPLOY-STATUS-REPORT.json: novo relatorio de status (este arquivo)"
+    "claude/medusa/apps/backend/medusa-config.ts: resolvido marcador de conflito de merge nao commitado corretamente (mantido modulo de pagamento Stripe condicional)",
+    "claude/medusa/apps/backend/package.json: resolvido conflito de dependencias (mantidas versoes do origin/main + @medusajs/payment-stripe)",
+    "claude/medusa/apps/backend/package-lock.json: regenerado via npm install (estava com dezenas de marcadores de conflito, JSON invalido)",
+    "claude/medusa/apps/backend/.env.example: reescrito consolidando as duas metades conflitantes num template unico",
+    "claude/medusa/apps/storefront/next.config.js: resolvido conflito (mantido remotePattern placehold.co)",
+    "claude/medusa/apps/storefront/package-lock.json: regenerado via npm install (mesmo problema de marcadores de conflito)",
+    "claude/medusa/DEPLOY-STATUS-REPORT.json: relatorio atualizado para a sexta rodada, com novo item 0 (achado + fix de integridade do repositorio)"
   ]
 }
