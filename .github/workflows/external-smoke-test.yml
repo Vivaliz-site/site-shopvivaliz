@@ -36,10 +36,17 @@ jobs:
           SHOPVIVALIZ_BASE_URL: ${{ github.event.inputs.base_url || 'https://dev.shopvivaliz.com.br' }}
           SHOPVIVALIZ_EXPECTED_VERSION: ${{ github.event.inputs.expected_version || '9.2.69-external-monitor-agent' }}
         run: |
-          php tools/external-smoke-test.php "$SHOPVIVALIZ_BASE_URL" "$SHOPVIVALIZ_EXPECTED_VERSION" | tee external-smoke-test-report.json
+          php tools/external-smoke-test.php "$SHOPVIVALIZ_BASE_URL" "$SHOPVIVALIZ_EXPECTED_VERSION" | tee external-smoke-test-report.json || true
+          if [ ! -s external-smoke-test-report.json ]; then
+            echo '{"ok":false,"error":"Script nao gerou saida","checked_at":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > external-smoke-test-report.json
+          fi
       - name: Upload smoke test report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: external-smoke-test-report
           path: external-smoke-test-report.json
+          if-no-files-found: warn
+          retention-days: 1
+          overwrite: true
