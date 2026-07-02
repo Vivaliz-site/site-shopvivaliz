@@ -1,0 +1,178 @@
+name: Shopee - Upload Imagens para Media Space
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (não faz upload real na Shopee)"
+        required: false
+        default: "true"
+      max_products:
+        description: "Máximo de produtos (0 = todos)"
+        required: false
+        default: "0"
+
+jobs:
+  upload-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests pillow
+
+      - name: Upload imagens Tiny S3 → Shopee Media Space
+        env:
+          SHOPEE_PARTNER_ID:    ${{ secrets.SHOPEE_PARTNER_ID }}
+          SHOPEE_PARTNER_KEY:   ${{ secrets.SHOPEE_PARTNER_KEY }}
+          SHOPEE_ACCESS_TOKEN:  ${{ secrets.SHOPEE_ACCESS_TOKEN }}
+          SHOPEE_SHOP_ID:       ${{ secrets.SHOPEE_SHOP_ID }}
+          DRY_RUN:              ${{ inputs.dry_run }}
+          MAX_PRODUCTS:         ${{ inputs.max_products }}
+        run: |
+          python3 << 'PYEOF'
+          import os, sys, hashlib, hmac, time, json, requests, csv
+
+          HOST        = "https://partner.shopeemobile.com"
+          UPLOAD_PATH = "/api/v2/media_space/upload_image"
+
+          PARTNER_ID   = os.environ.get("SHOPEE_PARTNER_ID", "")
+          PARTNER_KEY  = os.environ.get("SHOPEE_PARTNER_KEY", "")
+          ACCESS_TOKEN = os.environ.get("SHOPEE_ACCESS_TOKEN", "")
+          SHOP_ID      = os.environ.get("SHOPEE_SHOP_ID", "")
+          DRY_RUN      = os.environ.get("DRY_RUN", "true").lower() == "true"
+          MAX_P        = int(os.environ.get("MAX_PRODUCTS", "0"))
+
+          if not DRY_RUN and not all([PARTNER_ID, PARTNER_KEY, ACCESS_TOKEN, SHOP_ID]):
+              print("ERRO: Secrets SHOPEE_PARTNER_ID/KEY/ACCESS_TOKEN/SHOP_ID não configurados")
+              sys.exit(1)
+
+          def sign(path, ts):
+              base = f"{PARTNER_ID}{path}{ts}{ACCESS_TOKEN}{SHOP_ID}"
+              return hmac.new(PARTNER_KEY.encode(), base.encode(), hashlib.sha256).hexdigest()
+
+          def api_params(path):
+              ts = int(time.time())
+              return {
+                  "partner_id":   int(PARTNER_ID),
+                  "timestamp":    ts,
+                  "access_token": ACCESS_TOKEN,
+                  "shop_id":      int(SHOP_ID),
+                  "sign":         sign(path, ts),
+              }
+
+          # Ler catálogo
+          catalog = json.load(open("api/catalog/fallback-products.json", encoding="utf-8"))
+          print(f"Total de produtos: {len(catalog)}")
+
+          results = []
+          count   = 0
+          ok      = 0
+          fail    = 0
+
+          for prod in catalog:
+              sku   = str(prod.get("sku", "")).strip()
+              name  = str(prod.get("name", "")).strip()[:50]
+              iurl  = str(prod.get("image_url", "")).strip()
+              oid   = str(prod.get("olist_product_id", "")).strip()
+
+              if not iurl or not iurl.startswith("http"):
+                  results.append({"sku": sku, "olist_id": oid, "name": name,
+                                  "status": "SEM_URL", "shopee_url": ""})
+                  continue
+
+              if MAX_P > 0 and count >= MAX_P:
+                  break
+
+              count += 1
+              print(f"[{count}] {sku} | {name}", end=" ... ", flush=True)
+
+              if DRY_RUN:
+                  print("DRY_RUN")
+                  results.append({"sku": sku, "olist_id": oid, "name": name,
+                                  "status": "DRY_RUN", "shopee_url": iurl,
+                                  "original_url": iurl})
+                  ok += 1
+                  continue
+
+              # 1. Baixar imagem do Tiny S3
+              try:
+                  r = requests.get(iurl, timeout=25, headers={"User-Agent": "Mozilla/5.0"})
+                  r.raise_for_status()
+                  img_bytes = r.content
+                  content_type = r.headers.get("content-type", "image/jpeg")
+                  ext = "jpg" if "jpeg" in content_type else content_type.split("/")[-1].split(";")[0]
+              except Exception as e:
+                  print(f"ERRO download: {e}")
+                  results.append({"sku": sku, "olist_id": oid, "name": name,
+                                  "status": "DOWNLOAD_FAILED", "shopee_url": "",
+                                  "original_url": iurl, "error": str(e)})
+                  fail += 1
+                  time.sleep(0.5)
+                  continue
+
+              # 2. Upload para Shopee Media Space
+              try:
+                  p = api_params(UPLOAD_PATH)
+                  resp = requests.post(
+                      HOST + UPLOAD_PATH, params=p,
+                      files={"image": (f"{sku}.{ext}", img_bytes, f"image/{ext}")},
+                      timeout=30
+                  )
+                  data = resp.json()
+                  if resp.status_code == 200 and data.get("error") == "":
+                      shopee_url = data["response"]["image_info"]["image_url_list"][0]["image_url"]
+                      print(f"OK -> {shopee_url[:50]}")
+                      results.append({"sku": sku, "olist_id": oid, "name": name,
+                                      "status": "OK", "shopee_url": shopee_url,
+                                      "original_url": iurl})
+                      ok += 1
+                  else:
+                      err_msg = data.get("message", str(data))
+                      print(f"FALHOU: {err_msg}")
+                      results.append({"sku": sku, "olist_id": oid, "name": name,
+                                      "status": "SHOPEE_ERROR", "shopee_url": "",
+                                      "original_url": iurl, "error": err_msg})
+                      fail += 1
+              except Exception as e:
+                  print(f"ERRO upload: {e}")
+                  results.append({"sku": sku, "olist_id": oid, "name": name,
+                                  "status": "UPLOAD_EXCEPTION", "shopee_url": "",
+                                  "original_url": iurl, "error": str(e)})
+                  fail += 1
+
+              time.sleep(1.2)
+
+          # Salvar JSON completo
+          with open("shopee_upload_results.json", "w", encoding="utf-8") as f:
+              json.dump(results, f, ensure_ascii=False, indent=2)
+
+          # Salvar CSV de mapeamento SKU → URL Shopee
+          with open("shopee_sku_url_map.csv", "w", encoding="utf-8", newline="") as f:
+              w = csv.DictWriter(f, fieldnames=["sku", "olist_id", "name", "shopee_url", "status"])
+              w.writeheader()
+              for r in results:
+                  w.writerow({k: r.get(k, "") for k in ["sku", "olist_id", "name", "shopee_url", "status"]})
+
+          print(f"\n{'='*55}")
+          print(f"RESULTADO: {ok} OK | {fail} falha | {len(results)-count} sem URL")
+          print(f"Arquivos: shopee_upload_results.json | shopee_sku_url_map.csv")
+          print(f"{'='*55}")
+          PYEOF
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shopee-image-urls
+          path: |
+            shopee_upload_results.json
+            shopee_sku_url_map.csv
+          if-no-files-found: ignore
