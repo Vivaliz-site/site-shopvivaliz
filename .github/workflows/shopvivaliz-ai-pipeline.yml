@@ -49,8 +49,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
-      products_count: ${{ steps.export.outputs.products_count }}
-      csv_available:  ${{ steps.export.outputs.csv_available }}
+      products_count: ${{ steps.consolidate.outputs.products_count }}
+      csv_available:  ${{ steps.consolidate.outputs.csv_available }}
 
     steps:
       - name: Checkout
@@ -63,6 +63,7 @@ jobs:
 
       - name: Exportar produtos e imagens Olist
         id: export
+        continue-on-error: true
         env:
           OLIST_CLIENT_ID:     ${{ secrets.OLIST_CLIENT_ID }}
           OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
@@ -76,10 +77,57 @@ jobs:
         run: |
           mkdir -p logs
           python3 scripts/export-olist-images-csv.py
-          COUNT=$(python3 -c "import csv; f=open('logs/olist-images-export.csv', encoding='utf-8-sig'); r=list(csv.DictReader(f)); print(sum(1 for row in r if row.get('primary_image_url','').startswith('http')))" 2>/dev/null || echo "0")
+
+      - name: Fallback para dados locais se API falhou
+        id: fallback
+        if: steps.export.outcome == 'failure' || steps.export.outcome == 'skipped'
+        run: |
+          echo "::warning::API Olist indisponível — usando fallback de produtos locais"
+          mkdir -p logs
+          python3 - <<'PYEOF'
+          import json, csv, sys
+          fb = 'api/catalog/fallback-products.json'
+          try:
+              prods = json.load(open(fb, encoding='utf-8'))
+              if isinstance(prods, dict):
+                  prods = prods.get('products', prods.get('produtos', []))
+          except Exception as e:
+              print(f"Fallback nao disponivel: {e}", file=sys.stderr)
+              prods = []
+          if not prods:
+              sys.exit(0)
+          fields = ['id','nome','preco','categoria','sku','primary_image_url','image_urls']
+          with open('logs/olist-images-export.csv', 'w', newline='', encoding='utf-8') as f:
+              w = csv.DictWriter(f, fieldnames=fields, extrasaction='ignore')
+              w.writeheader()
+              for p in prods:
+                  row = {
+                      'id': p.get('id',''), 'nome': p.get('nome',''), 'preco': p.get('preco',''),
+                      'categoria': p.get('categoria',''), 'sku': p.get('id',''),
+                      'primary_image_url': p.get('url_imagem','') or p.get('image_url',''),
+                      'image_urls': '',
+                  }
+                  w.writerow(row)
+          print(f"Fallback: {len(prods)} produtos exportados para CSV")
+          PYEOF
+
+      - name: Consolidar outputs do export
+        id: consolidate
+        run: |
+          COUNT=$(python3 -c "
+          import csv, sys
+          try:
+              r = list(csv.DictReader(open('logs/olist-images-export.csv', encoding='utf-8')))
+              print(sum(1 for row in r if (row.get('primary_image_url') or row.get('image_url','')).startswith('http')))
+          except: print(0)
+          " 2>/dev/null || echo "0")
           echo "products_count=$COUNT" >> $GITHUB_OUTPUT
-          echo "csv_available=true"   >> $GITHUB_OUTPUT
-          echo "Produtos com imagem: $COUNT"
+          if [ -f "logs/olist-images-export.csv" ]; then
+            echo "csv_available=true" >> $GITHUB_OUTPUT
+          else
+            echo "csv_available=false" >> $GITHUB_OUTPUT
+          fi
+          echo "Produtos com imagem: $COUNT (fallback=${{ steps.export.outcome == 'failure' }})"
 
       - name: Upload CSV de produtos
         uses: actions/upload-artifact@v4
