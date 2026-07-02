@@ -78,11 +78,12 @@ jobs:
 
       - name: Upload EHA Report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: eha-report-${{ github.run_number }}
           path: automation/eha/reports/
-          retention-days: 14
+          retention-days: 7
 
       - name: Commit EHA reports ao repo
         if: always()
