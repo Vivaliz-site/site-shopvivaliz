@@ -17,12 +17,13 @@ TOKEN_URL = os.getenv(
     "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token",
 )
 PRODUCTS_API = os.getenv("OLIST_PRODUCTS_API", "https://api.tiny.com.br/api/v2/produtos.json")
+PRODUCTS_API_V3 = os.getenv("OLIST_PRODUCTS_API_V3", "https://api.tiny.com.br/public-api/v3/produtos")
 PROXY_URL    = os.getenv("OLIST_PROXY_URL", "")  # se definido, usa proxy PHP no servidor
 OUT_CSV = Path(os.getenv("OUT_CSV", "logs/olist-images-export.csv"))
 OUT_JSON = Path(os.getenv("OUT_JSON", "logs/olist-products-raw.json"))
 LIMIT = int(os.getenv("OLIST_PAGE_LIMIT", "50"))
 MAX_PAGES = int(os.getenv("OLIST_MAX_PAGES", "20"))
-SLEEP_SECONDS = float(os.getenv("OLIST_SLEEP_SECONDS", "0.3"))
+SLEEP_SECONDS = float(os.getenv("OLIST_SLEEP_SECONDS", "1.0"))
 
 
 def fail(message: str, code: int = 1) -> None:
@@ -30,18 +31,24 @@ def fail(message: str, code: int = 1) -> None:
     sys.exit(code)
 
 
-def http_json(request: Request, timeout: int = 45) -> dict:
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            raw = response.read().decode("utf-8", errors="replace")
-            return json.loads(raw) if raw else {}
-    except HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        fail(f"HTTP {exc.code} em {request.full_url}: {body[:1000]}")
-    except URLError as exc:
-        fail(f"Falha de rede em {request.full_url}: {exc}")
-    except json.JSONDecodeError as exc:
-        fail(f"Resposta nao e JSON valido em {request.full_url}: {exc}")
+def http_json(request: Request, timeout: int = 45, retries: int = 5) -> dict:
+    for attempt in range(retries):
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                raw = response.read().decode("utf-8", errors="replace")
+                return json.loads(raw) if raw else {}
+        except HTTPError as exc:
+            if exc.code == 429 and attempt < retries - 1:
+                wait = 2 ** attempt
+                print(f"  Rate limit (429), aguardando {wait}s...")
+                time.sleep(wait)
+                continue
+            body = exc.read().decode("utf-8", errors="replace")
+            fail(f"HTTP {exc.code} em {request.full_url}: {body[:1000]}")
+        except URLError as exc:
+            fail(f"Falha de rede em {request.full_url}: {exc}")
+        except json.JSONDecodeError as exc:
+            fail(f"Resposta nao e JSON valido em {request.full_url}: {exc}")
     return {}
 
 
@@ -63,44 +70,54 @@ def auth_context() -> dict:
         print(f"Usando proxy PHP: {PROXY_URL}")
         return {"type": "proxy", "proxy_url": PROXY_URL, "squad_token": squad_token, "olist_token": api_token}
 
-    api_token = os.getenv("OLIST_API_TOKEN") or os.getenv("TINY_API_TOKEN") or os.getenv("TOKEN_API_OLIST")
-    if api_token:
-        print("Usando token de API v2 por parametro seguro.")
-        return {"type": "query_token", "token": api_token}
-
-    access_token = os.getenv("OLIST_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
-    if access_token:
-        print("Usando access token Bearer direto do ambiente.")
-        return {"type": "bearer", "token": access_token}
-
+    # API v2 (legada) foi descontinuada pela Tiny e bloqueada via Cloudflare para
+    # qualquer origem (datacenter ou residencial) — preferimos sempre OAuth/v3.
     client_id = os.getenv("OLIST_CLIENT_ID") or os.getenv("TINY_CLIENT_ID")
     client_secret = os.getenv("OLIST_CLIENT_SECRET") or os.getenv("TINY_CLIENT_SECRET")
     refresh_token = os.getenv("OLIST_REFRESH_TOKEN") or os.getenv("TINY_REFRESH_TOKEN")
-    if not client_id or not client_secret:
-        fail("Configure OLIST_API_TOKEN/TOKEN_API_OLIST ou OLIST_CLIENT_ID e OLIST_CLIENT_SECRET.")
 
-    if refresh_token:
-        print("Renovando access token com refresh_token...")
+    if client_id and client_secret and refresh_token:
+        print("Renovando access token com refresh_token (API v3)...")
         payload = {
             "grant_type": "refresh_token",
             "client_id": client_id,
             "client_secret": client_secret,
             "refresh_token": refresh_token,
         }
-    else:
-        print("Refresh token nao encontrado. Tentando client_credentials...")
-        payload = {"grant_type": "client_credentials", "client_id": client_id, "client_secret": client_secret}
+        token_response = http_post_form(TOKEN_URL, payload)
+        access_token = token_response.get("access_token")
+        if access_token:
+            return {"type": "bearer_v3", "token": access_token}
+        print(f"Falha ao renovar token: {json.dumps(token_response, ensure_ascii=False)[:300]}")
 
+    access_token = os.getenv("OLIST_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
+    if access_token:
+        print("Usando access token Bearer direto do ambiente (API v3).")
+        return {"type": "bearer_v3", "token": access_token}
+
+    api_token = os.getenv("OLIST_API_TOKEN") or os.getenv("TINY_API_TOKEN") or os.getenv("TOKEN_API_OLIST")
+    if api_token:
+        print("Usando token de API v2 por parametro seguro (legado, pode estar bloqueado).")
+        return {"type": "query_token", "token": api_token}
+
+    if not client_id or not client_secret:
+        fail("Configure OLIST_REFRESH_TOKEN/OLIST_ACCESS_TOKEN ou OLIST_CLIENT_ID e OLIST_CLIENT_SECRET.")
+
+    print("Refresh token nao encontrado. Tentando client_credentials...")
+    payload = {"grant_type": "client_credentials", "client_id": client_id, "client_secret": client_secret}
     token_response = http_post_form(TOKEN_URL, payload)
     access_token = token_response.get("access_token")
     if not access_token:
         fail(f"Token nao retornado. Resposta: {json.dumps(token_response, ensure_ascii=False)[:1000]}")
-    return {"type": "bearer", "token": access_token}
+    return {"type": "bearer_v3", "token": access_token}
 
 
 def http_get_json(url: str, auth: dict, params: dict, timeout: int = 45) -> dict:
     query   = dict(params)
-    headers = {"Accept": "application/json"}
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    }
 
     if auth["type"] == "proxy":
         # Chama o proxy PHP via POST (token embutido no servidor, não vai na URL)
@@ -121,6 +138,12 @@ def http_get_json(url: str, auth: dict, params: dict, timeout: int = 45) -> dict
         headers["Authorization"] = f"Bearer {auth['token']}"
     request = Request(f"{url}?{urlencode(query)}", headers=headers, method="GET")
     return http_json(request, timeout=timeout)
+
+
+def fetch_v3_detail(product_id, auth: dict) -> dict:
+    headers = {"Accept": "application/json", "Authorization": f"Bearer {auth['token']}"}
+    request = Request(f"{PRODUCTS_API_V3}/{product_id}", headers=headers, method="GET")
+    return http_json(request, timeout=45)
 
 
 def normalize_product(item):
@@ -184,7 +207,33 @@ def extract_products(response: dict) -> list:
     return []
 
 
+def fetch_all_products_v3(auth: dict) -> list:
+    all_products = []
+    offset = 0
+    for page in range(1, MAX_PAGES + 1):
+        print(f"Buscando pagina {page} (offset={offset})...")
+        response = http_get_json(PRODUCTS_API_V3, auth, {"limit": LIMIT, "offset": offset})
+        items = response.get("itens") or []
+        total = (response.get("paginacao") or {}).get("total", 0)
+        print(f"  Retornados: {len(items)} (total disponivel: {total})")
+        if not items:
+            break
+        for item in items:
+            time.sleep(SLEEP_SECONDS)
+            detail = fetch_v3_detail(item.get("id"), auth)
+            merged = dict(item)
+            merged.update(detail)
+            all_products.append(merged)
+        offset += LIMIT
+        if offset >= total or len(items) < LIMIT:
+            break
+    return all_products
+
+
 def fetch_all_products(auth: dict) -> list:
+    if auth["type"] == "bearer_v3":
+        return fetch_all_products_v3(auth)
+
     all_products = []
     for page in range(1, MAX_PAGES + 1):
         print(f"Buscando pagina {page}...")
@@ -213,8 +262,8 @@ def build_rows(products: list) -> list:
                 "olist_id": get_nested(product, "id", "idProduto", "id_produto"),
                 "sku": get_nested(product, "codigo", "sku", "codigo_sku"),
                 "nome": get_nested(product, "nome", "descricao", "name"),
-                "preco_venda": get_nested(product, "preco_venda", "preco", "price"),
-                "estoque_atual": get_nested(product, "estoque_atual", "estoque", "stock"),
+                "preco_venda": get_nested(product, "preco_venda", "precos.preco", "preco", "price"),
+                "estoque_atual": get_nested(product, "estoque_atual", "estoque.quantidade", "estoque", "stock"),
                 "primary_image_url": image_urls[0] if image_urls else "",
                 "images_count": len(image_urls),
                 "all_image_urls": " | ".join(image_urls),
