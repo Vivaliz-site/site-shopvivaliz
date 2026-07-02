@@ -55,6 +55,52 @@ inválida corretamente rejeitadas com 401. Entradas de teste revertidas
 (`git checkout -- tasks-queue.json`, metadata de teste removida do produto)
 após a validação para não poluir dados reais.
 
+**Reverificado em 2026-07-02** (quarta rodada, novo container efêmero, `main`
+sincronizado com `origin/main`; sessão compartilhada — outro processo commitou
+`README.md`/`tasks-queue.json` durante a verificação, sem relação com este
+trabalho): Postgres 16 + Redis locais provisionados via `service postgresql
+start` / `service redis-server start` (cluster/role Debian padrão em
+`/var/lib/postgresql/16/main`), role `medusa` + banco `medusa_shopvivaliz`
+criados e removidos ao final. `npm install` limpo em ambos os apps sem
+`ERESOLVE` (pins do `package.json` já corretos, nenhuma mudança de código
+necessária): backend 1341 pacotes / ~24min, storefront 544 pacotes / ~21s.
+`npx medusa db:migrate` + seed inicial + `seed-shopvivaliz-test-data.ts`
+aplicados sem erros (região Brasil/BRL, 5 produtos ShopVivaliz + 4 demo = 9
+no total, cliente `cliente.teste@shopvivaliz.com.br`), usuário admin criado
+com senha gerada via `openssl rand -base64 24`. `npm run build` OK nos dois
+apps (backend: 5.13s backend + 24.08s frontend/admin; storefront: 109 páginas
+estáticas geradas, idêntico às rodadas anteriores). Publishable API key criada
+via Admin API e vinculada ao Default Sales Channel; `GET /store/products`
+retornou os 9 produtos. Backend subiu com `npx medusa start` a partir de
+`.medusa/server` (porta 9000); storefront em modo produção (`npm run start`,
+porta 8000) renderizou `/br/products/camiseta-shopvivaliz` com preço real da
+API (R$69,90), HTTP 200. Webhook Medusa → EHA reverificado ponta a ponta:
+update de produto via Admin API disparou o subscriber, que fez POST assinado
+(HMAC-SHA256) para `medusa-webhook.php` (servidor PHP embutido local, porta
+8899), validado (200) e enfileirado em `tasks-queue.json`; testes manuais com
+assinatura ausente/inválida corretamente rejeitados com 401. Cada chamada de
+limpeza de metadata do produto de teste também disparou o subscriber (novo
+evento `product.updated` na fila) — reverter a metadata de teste gera, por si
+só, mais uma entrada na fila; rodamos `git checkout -- tasks-queue.json`
+repetidamente até a árvore de trabalho ficar limpa (confirmado por `git
+status`) em vez de uma única reversão. Confirmado que `claude/medusa/apps/
+backend/.env` e `claude/medusa/apps/storefront/.env.local` nunca foram
+commitados (`git log --all --full-history` vazio para os dois) e continuam
+ignorados pelos `.gitignore` — bloqueio de banco de produção documentado no
+item 1 permanece válido, nenhuma credencial real de produção existe no
+repositório. **Achado novo:** `npm audit` no backend acusa 100
+vulnerabilidades (92 moderadas, 8 altas), majoritariamente via
+`lodash`/`@graphql-codegen/*` (dependência transitiva de tooling do
+`@medusajs/cli`) e `uuid` via `bullmq`; não investigado a fundo nesta rodada
+(não é código do ShopVivaliz, correção exigiria `npm audit fix --force` com
+downgrade breaking de `@medusajs/cli`). Storefront manteve as mesmas 2
+vulnerabilidades moderadas (`postcss` via `next`) já registradas na rodada
+anterior. Nenhuma mudança de código foi necessária para fazer
+install/build/migrate funcionarem — comportamento idêntico ao já documentado.
+Todos os processos locais (backend, storefront, `php -S`, Postgres, Redis)
+foram encerrados ao final; `.env`/`.env.local` de teste removidos; `git
+status` limpo (sem alterações pendentes deste trabalho).
+
 **Nota:** `npm install` no backend falhava com `ERESOLVE` porque `@medusajs/ui` e
 `react-router-dom` estavam pinados em versões incompatíveis com o peer exigido por
 `@medusajs/draft-order@2.17.0` (corrigido no `package.json`: `@medusajs/ui@4.1.17`,
