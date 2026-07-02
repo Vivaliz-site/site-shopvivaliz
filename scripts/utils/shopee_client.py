@@ -272,14 +272,28 @@ class ShopeeClient:
             )
         resp.raise_for_status()
         data = resp.json()
+        if data.get("error"):
+            raise RuntimeError(f"Shopee API error {data['error']}: {data.get('message')}")
         response = data.get("response") or data
-        image_id = str(response.get("image_id") or "")
+        image_info = response.get("image_info") or {}
+        image_info_list = response.get("image_info_list") or []
+        if not image_info and isinstance(image_info_list, list) and image_info_list:
+            first_info = image_info_list[0] or {}
+            if isinstance(first_info, dict):
+                image_info = first_info
+        image_id = str(response.get("image_id") or image_info.get("image_id") or "")
         image_url = ""
-        image_url_list = response.get("image_url_list") or []
+        image_url_list = response.get("image_url_list") or image_info.get("image_url_list") or []
         if isinstance(image_url_list, list) and image_url_list:
             first = image_url_list[0] or {}
             if isinstance(first, dict):
                 image_url = str(first.get("image_url") or "")
+            elif isinstance(first, str):
+                image_url = first
+        if not image_url:
+            image_url = str(response.get("image_url") or image_info.get("image_url") or "")
+        if not image_id:
+            raise RuntimeError(f"Shopee upload_image did not return image_id: {str(response)[:500]}")
         return {
             "image_id": image_id,
             "image_url": image_url,
