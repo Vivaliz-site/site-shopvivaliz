@@ -102,6 +102,30 @@ não está disponível e a ferramenta MCP do GitHub não tem operação de secre
 então a configuração de GitHub Secrets segue manual (comandos prontos em
 `GITHUB_SECRETS_TODO.md`).
 
+**Reverificado novamente em 2026-07-02** (quinta rodada, mesmo container desta
+sessão): `npm install` limpo em ambos os apps (backend: 1341 pacotes/25min;
+storefront: 544 pacotes/31s), `npx medusa db:migrate` + seed inicial +
+`seed-shopvivaliz-test-data.ts` sem erros (11 produtos, cliente de teste).
+`npm run build` OK nos dois apps. Desta vez o storefront foi buildado e
+iniciado (`npm run start`, porta 8000) contra o backend real rodando (não
+apenas revalidado com chave dummy): publishable API key real criada via
+Admin API, `GET /store/products` retornou os 11 produtos, e as páginas de
+produto renderizaram preços reais (R$69,90 a R$249,90). Webhook Medusa → EHA
+revalidado ponta a ponta (update de produto → subscriber → POST assinado →
+`medusa-webhook.php` → `tasks-queue.json`), entradas de teste revertidas.
+`npm audit` no backend reporta 100 vulnerabilidades (92 moderate/8 high),
+majoritariamente transitivas da árvore de dependências do Medusa (ex.
+`bullmq`→`uuid`); não corrigidas nesta rodada por risco de quebrar as versões
+fixadas (ver nota sobre `@medusajs/ui`/`react-router-dom` abaixo) — avaliar
+`npm audit fix` (sem `--force`) em uma sessão dedicada.
+
+⚠️ **Achado novo desta rodada:** `origin/main` tem um histórico de git
+**totalmente desconectado** (unrelated histories) de todas as branches de
+deploy do Medusa, incluindo esta. Detalhes e recomendação em
+`deploy-status-2026-07-02.json` → `git_branch_status`. Por isso esta rodada
+**não** deu push/merge para `main` — só commitou nesta branch
+(`feat/medusa-deploy-prep`), que já rastreia seu remoto.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local

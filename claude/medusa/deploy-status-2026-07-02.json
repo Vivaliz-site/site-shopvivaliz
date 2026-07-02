@@ -1,8 +1,9 @@
 {
   "run_date": "2026-07-02",
+  "revalidated_at": "2026-07-02T23:36:00Z",
   "project": "shopvivaliz-medusa",
   "overall_status": "BLOCKERS_PENDENTES",
-  "summary": "Codigo, migrations, seed e build validados com sucesso em ambiente local efemero. Producao bloqueada por acoes humanas: criacao de conta Supabase, chaves reais de gateways de pagamento, DNS/SSL do dominio de producao e rotacao de credenciais Olist vazadas no historico do git.",
+  "summary": "Codigo, migrations, seed, build e webhook end-to-end revalidados com sucesso (5a rodada) em ambiente local efemero, incluindo publishable API key real gerada via Admin API e storefront renderizando os 11 produtos a partir do backend ao vivo. Producao continua bloqueada por acoes humanas: criacao de conta Supabase, chaves reais de gateways de pagamento, DNS/SSL do dominio de producao e rotacao de credenciais Olist vazadas no historico do git. NOVO nesta rodada: a branch 'main' do repositorio remoto tem historico de git totalmente desconectado (unrelated histories) do trabalho de deploy do Medusa (branches feat/medusa-deploy-prep, claude/medusa-deploy-prep, medusa-deploy-2026-07-01) - ver 'git_branch_status' abaixo. Nao foi feito push/merge para main nesta rodada por ser uma acao de alto risco/dificil reversao sobre historico incompativel; decisao humana necessaria.",
   "steps": {
     "1_database_setup": {
       "status": "OK_LOCAL / BLOCKER_PRODUCAO",
@@ -33,7 +34,7 @@
     },
     "6_local_testing": {
       "status": "OK",
-      "detail": "npm run dev no backend, GET /health -> 200 OK. Storefront em modo producao renderizou /br/products/camiseta-shopvivaliz com preco real da API (R$69,90). GET /store/products retornou os 11 produtos.",
+      "detail": "npm run dev no backend, GET /health -> 200 OK. Publishable API key real criada via Admin API e vinculada ao Default Sales Channel. Storefront em modo producao (build + start) renderizou /br/products/camiseta-shopvivaliz com preco real da API (R$69,90) e os demais produtos (R$99,90-R$249,90). GET /store/products retornou os 11 produtos. Webhook Medusa -> EHA revalidado ponta a ponta com backend ao vivo: update de produto via Admin API disparou o subscriber, POST assinado HMAC-SHA256 chegou em medusa-webhook.php (200), evento gravado em storage/logs e tasks-queue.json; entradas de teste revertidas apos validacao (git checkout -- tasks-queue.json).",
       "blocker": false
     },
     "7_marketplace_integrations": {
@@ -58,6 +59,12 @@
       "blocker": false
     }
   },
+  "git_branch_status": {
+    "finding": "origin/main foi resetado para um historico de git totalmente novo e desconectado (sem ancestral comum) em algum momento apos o commit 3e0af3d (2026-06-30 'feat: EHA CI autonomo continuo + dashboard /claude'). O historico antigo foi preservado na branch origin/save-old-main-2026-07-01. Todo o trabalho de deploy do Medusa (esta branch feat/medusa-deploy-prep e as branches claude/medusa-deploy-prep, medusa-deploy-2026-07-01) descende do historico ANTIGO, nao do main atual. 'git merge'/'merge-tree' entre feat/medusa-deploy-prep e origin/main falha com 'refusing to merge unrelated histories'.",
+    "impact": "Nao e possivel abrir um merge/PR normal desta branch para main sem --allow-unrelated-histories, o que produziria uma uniao de duas arvores de arquivos nao relacionadas (main tem 4457 arquivos, incluindo varios arquivos com nomes corrompidos de um comando git mal executado no Windows). Esta e uma acao de alto risco e dificil reversao sobre a branch principal compartilhada.",
+    "action_taken": "Nenhum merge/push para main foi feito nesta sessao. As atualizacoes de documentacao e validacao desta rodada foram commitadas apenas em feat/medusa-deploy-prep (que ja rastreia origin/feat/medusa-deploy-prep).",
+    "recommendation": "Decisao humana necessaria: (a) restaurar save-old-main-2026-07-01 como main (perdendo o trabalho recente feito diretamente em main, ex. dashboard EHA em claude/index.php), (b) importar apenas o diretorio claude/medusa/ e claude/api/medusa-webhook.php para o main atual via 'git checkout feat/medusa-deploy-prep -- claude/medusa claude/api/medusa-webhook.php' em uma branch nova a partir de main (preserva o main atual, traz so os arquivos do Medusa), ou (c) manter os dois historicos separados intencionalmente se main e o codigo Medusa servem propositos distintos no projeto."
+  },
   "security_findings": [
     {
       "severity": "high",
@@ -71,7 +78,8 @@
     "Registro de webhooks nos gateways de pagamento - depende do item anterior",
     "GitHub Secrets - nenhuma ferramenta disponivel nesta sessao para configurar automaticamente",
     "Rotacao de credenciais Olist/Tiny vazadas no historico do git",
-    "SSL, DNS e host de producao definidos (VPS HostGator ou alternativa Node-friendly)"
+    "SSL, DNS e host de producao definidos (VPS HostGator ou alternativa Node-friendly)",
+    "origin/main tem historico de git desconectado do trabalho de deploy do Medusa - decisao humana necessaria antes de qualquer merge/push para main (ver 'git_branch_status')"
   ],
   "ready_for_deploy": false
 }
