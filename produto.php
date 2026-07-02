@@ -102,13 +102,17 @@ $jsonLd = [
 <body>
     <nav class="navbar">
         <div class="container nav-inner">
-            <a class="brand-link" href="/">Vivaliz</a>
+            <a class="brand-link" href="/">
+                <span class="brand-logo">V</span>Vivaliz
+            </a>
             <div class="navbar-menu">
                 <a href="/catalogo">Catálogo</a>
                 <?php if ($category !== ''): ?>
                     <a href="/catalogo?categoria=<?= rawurlencode($category) ?>"><?= sv_esc($category) ?></a>
                 <?php endif; ?>
-                <a href="/carrinho/">🛒 Carrinho</a>
+                <a href="/carrinho.php" class="nav-cart">
+                    🛒 Carrinho <span class="cart-badge" id="nav-cart-count"></span>
+                </a>
             </div>
         </div>
     </nav>
@@ -169,8 +173,18 @@ $jsonLd = [
             if (ex) ex.quantity = (ex.quantity || 1) + 1;
             else items.push(Object.assign({}, product, { quantity: 1 }));
             localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
-            window.location.href = '/carrinho/';
+            window.location.href = '/carrinho.php';
         });
+    })();
+    </script>
+    <script>
+    (function(){
+        try {
+            var c = JSON.parse(localStorage.getItem('shopvivaliz_cart')||'[]');
+            var n = c.reduce(function(a,i){ return a+(i.quantity||1); }, 0);
+            var b = document.getElementById('nav-cart-count');
+            if (b) b.textContent = n > 0 ? n : '';
+        } catch(e){}
     })();
     </script>
 </body>
