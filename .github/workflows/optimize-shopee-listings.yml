@@ -3,7 +3,7 @@ name: Optimize Shopee Listings via Tiny API
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *'   # diariamente s 03h UTC
+    - cron: '0 3 * * *'   # diariamente às 03h UTC
 
 permissions:
   contents: write
@@ -29,7 +29,7 @@ jobs:
           extensions: curl, json
           tools: none
 
-      - name: Verificar secrets disponveis (somente nomes)
+      - name: Verificar secrets disponíveis (somente nomes)
         run: |
           echo "=== Tiny/Olist secrets ==="
           env | grep -E '^(TINY|OLIST|ERP)' | sed 's/=.*/=***MASKED***/' || echo "(nenhum)"
@@ -54,18 +54,32 @@ jobs:
           php -l agents/v9.2.85/app/ShopeeListingsOptimizationAgent.php
           php -l agents/v9.2.85/scripts/optimize-shopee-listings.php
 
-      - name: Definir nome do relatrio
+      - name: Definir nome do relatório
         id: output
         run: echo "filename=listings/optimization-report-$(date +%Y%m%d-%H%M%S).json" >> "$GITHUB_OUTPUT"
 
-      - name: Executar otimizao dos anncios
+      - name: Executar otimização dos anúncios
         run: |
           if [ -z "$TINY_ACCESS_TOKEN" ] && [ -z "$TINY_API_TOKEN" ] && [ -z "$OLIST_ACCESS_TOKEN" ]; then
             echo "::warning::Nenhum secret de API configurado (TINY/OLIST). Pulando otimizacao."
             echo '{"status":"skipped","reason":"no_api_secrets","ts":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$OUTPUT_FILE"
             exit 0
           fi
+
+          set +e
           php agents/v9.2.85/scripts/optimize-shopee-listings.php
+          PHP_EXIT=$?
+          set -e
+
+          # Se o script falhou, verifica se é erro de autenticação (token expirado)
+          if [ $PHP_EXIT -ne 0 ]; then
+            if [ -f "$OUTPUT_FILE" ] && grep -q '401\|Autenticação Tiny falhou\|token_expired\|token expirado' "$OUTPUT_FILE" 2>/dev/null; then
+              echo "::warning::TINY_ACCESS_TOKEN expirado (401). Renove o token em Settings > Secrets > TINY_ACCESS_TOKEN."
+              exit 0
+            fi
+            echo "::error::Otimização Shopee falhou com código $PHP_EXIT. Verifique o relatório em $OUTPUT_FILE."
+            exit $PHP_EXIT
+          fi
         env:
           OUTPUT_FILE:         ${{ steps.output.outputs.filename }}
           TINY_ACCESS_TOKEN:   ${{ secrets.TINY_ACCESS_TOKEN }}
@@ -81,10 +95,10 @@ jobs:
           ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY:      ${{ secrets.OPENAI_API_KEY }}
 
-      - name: Commit do relatrio de otimizao
+      - name: Commit do relatório de otimização
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add listings/
-          git diff --cached --quiet && echo "Sem alteraes." || \
+          git diff --cached --quiet && echo "Sem alterações." || \
             git commit -m "chore: shopee optimization report $(date +%Y-%m-%d)" && git push
