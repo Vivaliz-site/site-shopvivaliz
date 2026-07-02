@@ -359,6 +359,25 @@ rodada; ambiente local revalidado do zero (install → migrate → seed → buil
 → health check, todos OK). Recomenda-se um hook de pre-commit/CI que rejeite
 commits contendo `^<<<<<<< ` para evitar recorrência.
 
+**Rodada 11 (2026-07-02, revalidação leve):** conforme recomendação registrada ao
+final da rodada 10 (revalidações completas repetidas sem mudança de código têm
+valor marginal decrescente), esta rodada não reprovisionou Postgres/Redis nem
+refez `npm install`/build/migrate/seed do zero. Confirmado via `git log`/`git diff`
+que **nenhum arquivo sob `claude/medusa/` ou `claude/api/` mudou desde o commit da
+rodada 10** — apenas checagens rápidas e sem estado foram refeitas: busca por
+marcadores de conflito de merge (nenhum), validação de `package.json` (backend e
+storefront, ambos JSON válido), `php -l` em todos os `.php` sob `claude/api/`
+(nenhum erro de sintaxe), confirmação de que `DATABASE_URL`/`.env` de produção
+continuam ausentes, e teste de rede de saída para `supabase.com` (bloqueado pelo
+proxy do ambiente, HTTP 403 — reforça que criação de projeto Supabase continua
+inexecutável de forma autônoma nesta sessão). Nenhum tool de secrets do GitHub
+disponível (mesma limitação de rodadas anteriores). Como o código é
+byte-idêntico ao já validado ponta a ponta na rodada 10 (build, migrations, seed,
+health check, webhook Medusa→EHA), os resultados daquela rodada permanecem
+válidos por construção — não foram re-executados para evitar gasto de tempo/CI
+sem sinal novo. Os 5 blockers de ação humana continuam inalterados (11 rodadas
+consecutivas). Nenhum bug novo encontrado.
+
 ## Rodando localmente (resumo)
 
 ```bash
