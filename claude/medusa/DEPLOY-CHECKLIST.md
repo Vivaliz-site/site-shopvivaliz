@@ -257,6 +257,19 @@ atuais foram redigidos e `.tokens/` foi removido do git e adicionado ao
 git**. Recomenda-se rotacionar o client secret no painel Tiny/Olist o quanto
 antes; ver `claude/medusa/GITHUB_SECRETS_TODO.md` para detalhes.
 
+⚠️ **Achado crítico corrigido (2026-07-02, 6ª rodada):** `apps/backend/package.json`,
+`package-lock.json`, `.env.example`, `medusa-config.ts` e
+`apps/storefront/next.config.js`, `package-lock.json` estavam commitados em
+`origin/main` (desde o commit `1fd93d6`) com marcadores de conflito de merge
+não resolvidos (`<<<<<<< HEAD` / `=======` / `>>>>>>> origin/main`) dentro do
+conteúdo versionado. `package.json` era JSON inválido, então `npm ci`/`npm
+install` falhava a partir de um clone limpo — qualquer rodada anterior que
+reportou build OK só validou contra um working tree que já tinha esses
+arquivos corrigidos localmente (não commitados). Corrigido e commitado nesta
+rodada; ambiente local revalidado do zero (install → migrate → seed → build
+→ health check, todos OK). Recomenda-se um hook de pre-commit/CI que rejeite
+commits contendo `^<<<<<<< ` para evitar recorrência.
+
 ## Rodando localmente (resumo)
 
 ```bash
