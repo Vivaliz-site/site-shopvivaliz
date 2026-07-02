@@ -37,7 +37,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
   actions: write
 
 jobs:
@@ -128,6 +128,19 @@ jobs:
             echo "csv_available=false" >> $GITHUB_OUTPUT
           fi
           echo "Produtos com imagem: $COUNT (fallback=${{ steps.export.outcome == 'failure' }})"
+
+      - name: Atualizar preco/estoque no catalogo do storefront
+        run: |
+          python3 scripts/refresh-catalog-fallback.py logs/olist-images-export.csv api/catalog/fallback-products.json
+          if ! git diff --quiet -- api/catalog/fallback-products.json; then
+            git config user.name "shopvivaliz-bot"
+            git config user.email "bot@shopvivaliz.com.br"
+            git add api/catalog/fallback-products.json
+            git commit -m "chore: atualizar preco/estoque do catalogo via Olist sync"
+            git push
+          else
+            echo "Nenhuma mudanca de preco/estoque a commitar."
+          fi
 
       - name: Upload CSV de produtos
         uses: actions/upload-artifact@v4
