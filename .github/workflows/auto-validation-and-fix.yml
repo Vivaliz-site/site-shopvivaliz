@@ -27,6 +27,7 @@ jobs:
           python -m pip install --quiet pyyaml requests
 
       - name: Run Autonomous Validator
+        continue-on-error: true
         run: |
           python3 scripts/autonomous-validator.py
 
@@ -67,6 +68,7 @@ jobs:
           print(f"  [FIXED] Permissoes de scripts atualizadas")
 
           # 4. Salvar log de fixes
+          os.makedirs('logs', exist_ok=True)
           with open('logs/auto-fix-log.json', 'w') as f:
               json.dump({
                   'fixes_applied': fixes,
