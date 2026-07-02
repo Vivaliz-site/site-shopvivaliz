@@ -42,7 +42,6 @@ class ShopeeClient:
         self.shop_id = int(os.environ["SHOPEE_SHOP_ID"])
         self.base_url = self._resolve_base_url()
         self._session = requests.Session()
-        self._session.headers.update({"Content-Type": "application/json"})
         if self.refresh_token:
             self._refresh_access_token()
 
@@ -130,16 +129,20 @@ class ShopeeClient:
         *,
         extra_params: dict | None = None,
         json_body: dict | None = None,
+        form_data: dict | None = None,
         files: dict | None = None,
         timeout: int = 30,
     ) -> requests.Response:
         params = {**self._base_params(path), **(extra_params or {})}
+        headers = {"Content-Type": "application/json"} if files is None else None
         resp = self._session.request(
             method,
             f"{self.base_url}{path}",
             params=params,
             json=json_body,
+            data=form_data,
             files=files,
+            headers=headers,
             timeout=timeout,
         )
         if resp.status_code == 403 and self.refresh_token and self._is_invalid_token_response(resp):
@@ -150,7 +153,9 @@ class ShopeeClient:
                 f"{self.base_url}{path}",
                 params=params,
                 json=json_body,
+                data=form_data,
                 files=files,
+                headers=headers,
                 timeout=timeout,
             )
         return resp
@@ -252,16 +257,48 @@ class ShopeeClient:
 
     def upload_image(self, local_path: str) -> str:
         """Faz upload de imagem local para Shopee e retorna image_id."""
+        return self.upload_image_full(local_path)["image_id"]
+
+    def upload_image_full(self, local_path: str) -> dict:
+        """Faz upload de imagem local e retorna image_id e, se disponivel, a URL Shopee."""
         path = "/media_space/upload_image"
         with open(local_path, "rb") as f:
             resp = self._send_with_refresh(
                 "POST",
                 path,
+                form_data={"scene": "normal"},
                 files={"image": (Path(local_path).name, f, "image/jpeg")},
                 timeout=60,
             )
         resp.raise_for_status()
-        return resp.json()["response"]["image_id"]
+        data = resp.json()
+        if data.get("error"):
+            raise RuntimeError(f"Shopee API error {data['error']}: {data.get('message')}")
+        response = data.get("response") or data
+        image_info = response.get("image_info") or {}
+        image_info_list = response.get("image_info_list") or []
+        if not image_info and isinstance(image_info_list, list) and image_info_list:
+            first_info = image_info_list[0] or {}
+            if isinstance(first_info, dict):
+                image_info = first_info
+        image_id = str(response.get("image_id") or image_info.get("image_id") or "")
+        image_url = ""
+        image_url_list = response.get("image_url_list") or image_info.get("image_url_list") or []
+        if isinstance(image_url_list, list) and image_url_list:
+            first = image_url_list[0] or {}
+            if isinstance(first, dict):
+                image_url = str(first.get("image_url") or "")
+            elif isinstance(first, str):
+                image_url = first
+        if not image_url:
+            image_url = str(response.get("image_url") or image_info.get("image_url") or "")
+        if not image_id:
+            raise RuntimeError(f"Shopee upload_image did not return image_id: {str(response)[:500]}")
+        return {
+            "image_id": image_id,
+            "image_url": image_url,
+            "raw": response,
+        }
 
     def upload_image_by_url(self, url: str) -> str:
         """Faz upload de imagem via URL para Shopee e retorna image_id."""

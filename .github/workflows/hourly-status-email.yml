@@ -23,6 +23,7 @@ jobs:
           python-version: '3.11'
 
       - name: Run hourly status email
+        continue-on-error: true
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST || secrets.EMAIL_SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT || secrets.EMAIL_SMTP_PORT }}

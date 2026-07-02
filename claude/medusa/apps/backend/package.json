@@ -30,10 +30,18 @@
     "@medusajs/draft-order": "2.17.0",
     "@medusajs/framework": "2.17.0",
     "@medusajs/medusa": "2.17.0",
+<<<<<<< HEAD
     "@medusajs/ui": "4.1.15",
     "@tanstack/react-query": "5.64.2",
     "react-i18next": "13.5.0",
     "react-router-dom": "6.30.3",
+=======
+    "@medusajs/payment-stripe": "2.17.0",
+    "@medusajs/ui": "4.1.17",
+    "@tanstack/react-query": "5.64.2",
+    "react-i18next": "13.5.0",
+    "react-router-dom": "6.30.4",
+>>>>>>> origin/main
     "zod": "4.2.0"
   },
   "devDependencies": {

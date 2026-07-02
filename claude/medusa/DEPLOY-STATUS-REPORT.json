@@ -1,0 +1,81 @@
+{
+  "project": "shopvivaliz-medusa",
+  "report_generated_at": "2026-07-02T10:20:00Z",
+  "overall_status": "BLOQUEADO_PARA_PRODUCAO",
+  "summary": "Ambiente local (dev) 100% funcional: install, build, migrations, seed, API e storefront validados nesta sessao. Deploy em producao permanece bloqueado por dependencias externas que exigem acao humana (conta Supabase, chaves reais de pagamento, host Node.js, acesso de escrita a GitHub Secrets).",
+  "steps": {
+    "1_database_setup": {
+      "status": "BLOCKER",
+      "detail": "DATABASE_URL nao existe em producao. .env do backend nao estava commitado (esperado, esta no .gitignore). Nao e possivel criar projeto Supabase de forma autonoma: requer login/OAuth interativo em https://supabase.com/dashboard. Para esta sessao, foi provisionado Postgres 16 local (postgres://medusa:***@localhost:5432/medusa_shopvivaliz) apenas para validar build/migrations/seed; nao persiste fora do container efemero.",
+      "action_required_from_user": "Criar projeto Supabase (ou Neon/Railway/RDS) manualmente, copiar a connection string para DATABASE_URL no .env de producao do backend."
+    },
+    "2_migrations_seed": {
+      "status": "OK_LOCAL",
+      "detail": "npx medusa db:migrate + npx medusa exec ./src/scripts/seed-shopvivaliz-test-data.ts executados sem erro contra o Postgres local. Seed ampliado nesta sessao para 8 produtos ShopVivaliz (Camiseta, Calca Jeans, Tenis, Bone, Jaqueta, Vestido, Bermuda, Mochila) + 4 produtos demo padrao do Medusa = 12 produtos totais, cliente de teste cliente.teste@shopvivaliz.com.br criado. Confirmado via SELECT count(*) FROM product (12) e GET /store/products (count: 12)."
+    },
+    "3_payment_gateway": {
+      "status": "OK_TEST_KEYS",
+      "detail": "STRIPE_API_KEY/STRIPE_PUBLIC_KEY de teste (exemplo padrao da documentacao Stripe, sk_test_4eC39Hq.../pk_test_4eC39Hq...) configuradas no .env local. medusa-config.ts registrou @medusajs/payment-stripe corretamente: tabela payment_provider mostra pp_stripe_stripe e variantes PIX/OXXO/iDEAL/PromptPay/etc com is_enabled=true. PAYPAL_CLIENT_ID/SECRET permanecem vazios (nao ha credenciais sandbox disponiveis nesta sessao). Nenhum webhook real foi registrado no dashboard do Stripe/PayPal (requer conta/login humano)."
+    },
+    "4_environment_variables": {
+      "status": "OK_LOCAL",
+      "detail": "JWT_SECRET, COOKIE_SECRET, EHA_WEBHOOK_SECRET e OLIST_WEBHOOK_SECRET gerados com openssl rand -base64 32 para o ambiente local. STORE_CORS/ADMIN_CORS/AUTH_CORS configurados com os defaults de desenvolvimento do .env.example. Nenhuma variavel ficou undefined para o build/start local. Secrets de producao devem ser gerados novamente (nunca reutilizar os de dev) - comandos prontos em GITHUB_SECRETS_TODO.md."
+    },
+    "5_build": {
+      "status": "OK",
+      "detail": "Backend: npm run build (medusa build) OK, ~6.5s backend + ~35.6s admin/frontend, sem erros. Storefront: npm run build (next build) OK apos backend estar de pe (necessario para generateStaticParams buscar produtos reais), 133 paginas estaticas geradas, sem erros de tipo/lint."
+    },
+    "6_local_testing": {
+      "status": "OK",
+      "detail": "Backend subiu com npx medusa start a partir de .medusa/server (nota: falha se executado a partir de apps/backend mesmo com build presente - usar symlink de node_modules ou reinstalar em .medusa/server). GET http://localhost:9000/health retornou 200 OK. Storefront em modo producao (porta 8000) renderizou /br/products/camiseta-shopvivaliz com preco real da API (R$69,90), HTTP 200."
+    },
+    "7_marketplace_integrations": {
+      "status": "OK_SEM_CREDENCIAIS_REAIS",
+      "detail": "claude/api/sync-olist-products.php (classe OlistSync) ja existe e passou em php -l sem erro de sintaxe. claude/api/olist/webhook.php e claude/api/medusa-webhook.php tambem validados com php -l. Nao executado end-to-end contra a API real da Olist/Tiny (sem OLIST_CLIENT_ID/SECRET reais nesta sessao). Webhook Medusa -> EHA testado ponta a ponta com servidor PHP local: assinatura valida aceita (200, evento enfileirado em tasks-queue.json e revertido apos o teste), assinatura ausente/invalida rejeitada (401)."
+    },
+    "8_github_secrets": {
+      "status": "BLOCKER_SEM_ACESSO",
+      "detail": "Esta sessao nao tem acesso ao gh CLI nem a uma ferramenta MCP de secrets do GitHub (apenas ferramentas de leitura/escrita de conteudo de repositorio, issues, PRs e Actions read-only estao disponiveis). Comandos gh secret set prontos (com placeholders) documentados em claude/medusa/GITHUB_SECRETS_TODO.md.",
+      "action_required_from_user": "Rodar os comandos gh secret set de GITHUB_SECRETS_TODO.md localmente (com gh CLI autenticado) ou configurar manualmente em Settings > Secrets and variables > Actions."
+    },
+    "9_deployment_preparation": {
+      "status": "OK_DOCUMENTADO",
+      "detail": "claude/medusa/deploy.sh ja existe e cobre backend (npm ci + build + migrate + pm2) e storefront. claude/medusa/DEPLOY-CHECKLIST.md documenta pre-requisitos de host (Node.js 18+/PM2/Postgres externo/SSL) e explica que o HostGator NAO suporta Node.js/Postgres - backend/storefront precisam de host separado (Railway/Render/Fly.io/VPS + Vercel/Netlify). Arquivo DEPLOY_HOSTGATOR.md mencionado no runbook nao existe no repositorio; o conteudo equivalente ja esta coberto em DEPLOY-CHECKLIST.md."
+    },
+    "10_deployment_checklist": {
+      "status": "OK",
+      "detail": "claude/medusa/DEPLOY-CHECKLIST.md atualizado nesta sessao com nova rodada de reverificacao (quinta rodada, mesmo dia da rodada anterior, sem mudancas de codigo em claude/medusa desde o ultimo commit de checklist)."
+    },
+    "11_final_report": {
+      "status": "OK",
+      "detail": "Este arquivo (DEPLOY-STATUS-REPORT.json)."
+    }
+  },
+  "blockers": [
+    {
+      "id": "production_database",
+      "description": "DATABASE_URL de producao inexistente. Requer criacao manual de projeto Postgres gerenciado (Supabase/Neon/Railway/RDS) via login humano.",
+      "severity": "critical"
+    },
+    {
+      "id": "production_node_host",
+      "description": "HostGator (usado hoje pelo site PHP legado) nao roda Node.js/Postgres. Backend/storefront Medusa precisam de host separado (VPS/Railway/Render/Fly.io + Vercel/Netlify).",
+      "severity": "critical"
+    },
+    {
+      "id": "github_secrets_write_access",
+      "description": "Sessao sem gh CLI nem MCP de secrets do GitHub. Configuracao de CI/CD secrets requer acao manual do usuario.",
+      "severity": "high"
+    },
+    {
+      "id": "real_payment_paypal_olist_credentials",
+      "description": "PayPal sandbox e credenciais reais Olist/Tiny nao disponiveis nesta sessao (chaves Stripe de teste publicas ja configuradas).",
+      "severity": "medium"
+    }
+  ],
+  "code_changes_this_session": [
+    "claude/medusa/apps/backend/src/scripts/seed-shopvivaliz-test-data.ts: adicionados 3 produtos de teste (Vestido, Bermuda, Mochila) para atingir 10+ produtos",
+    "claude/medusa/DEPLOY-CHECKLIST.md: nova entrada de reverificacao (quinta rodada)",
+    "claude/medusa/DEPLOY-STATUS-REPORT.json: novo relatorio de status (este arquivo)"
+  ]
+}

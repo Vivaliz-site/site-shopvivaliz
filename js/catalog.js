@@ -25,13 +25,19 @@
     const image = product.image_url || '/favicon.ico';
     const sku = product.sku || product.olist_product_id || 'sem-sku';
     const images = Number(product.images_count || 0);
-    const encoded = encodeURIComponent(JSON.stringify({
+    const payload = {
       sku: sku,
       name: product.name || sku,
       image_url: image,
       price: Number(product.price || 0),
       olist_product_id: product.olist_product_id || ''
-    }));
+    };
+    const encoded = encodeURIComponent(JSON.stringify(payload));
+    const productUrl = '/produto?sku=' + encodeURIComponent(payload.sku)
+      + '&name=' + encodeURIComponent(payload.name)
+      + '&image=' + encodeURIComponent(payload.image_url)
+      + '&price=' + encodeURIComponent(String(payload.price))
+      + '&olist_product_id=' + encodeURIComponent(payload.olist_product_id);
     return `
       <article class="product-card">
         <a class="product-image" href="${esc(image)}" target="_blank" rel="noreferrer">
@@ -44,7 +50,10 @@
             <span>${esc(money(product.price))}</span>
             <span>${images} imagem${images === 1 ? '' : 's'}</span>
           </div>
-          <button class="buy-button" type="button" data-product="${encoded}">Comprar agora</button>
+          <div class="card-actions">
+            <a class="btn btn-secondary card-link" href="${esc(productUrl)}">Ver detalhes</a>
+            <button class="buy-button" type="button" data-product="${encoded}">Comprar agora</button>
+          </div>
         </div>
       </article>`;
   }
@@ -70,18 +79,19 @@
       grid.querySelectorAll('[data-product]').forEach(function (button) {
         button.addEventListener('click', function () {
           const product = JSON.parse(decodeURIComponent(button.getAttribute('data-product') || '{}'));
-          if (window.AutoDev && typeof window.AutoDev.track === 'function') {
-            window.AutoDev.track('add_to_cart', {
-              sku: product.sku,
-              olist_product_id: product.olist_product_id || '',
-              source: window.location.pathname
-            });
-          }
+          // V16: signal cart_add
+          fetch('/api/catalog/signal.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'cart_add', sku: product.sku, olist_product_id: product.olist_product_id || '' })
+          }).catch(function () {});
           const items = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
           const existing = items.find(function (item) { return item.sku === product.sku; });
           if (existing) existing.quantity += 1;
           else items.push(Object.assign(product, { quantity: 1 }));
           localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+          var badge = document.getElementById('nav-cart-count');
+          if (badge) badge.textContent = items.reduce(function(a,i){ return a+(i.quantity||1); }, 0);
           window.location.href = '/carrinho.php';
         });
       });
@@ -94,12 +104,7 @@
   if (form) {
     form.addEventListener('submit', function (event) {
       event.preventDefault();
-      const query = input ? input.value.trim() : '';
-      const target = new URL(window.location.href);
-      if (query) target.searchParams.set('q', query);
-      else target.searchParams.delete('q');
-      window.history.replaceState({}, '', target.toString());
-      loadCatalog(query);
+      loadCatalog(input ? input.value.trim() : '');
     });
   }
 
@@ -111,17 +116,10 @@
         if (window.AutoDev && typeof window.AutoDev.track === 'function' && input.value.trim().length >= 2) {
           window.AutoDev.track('search', { query: input.value.trim(), path: window.location.pathname });
         }
-        const query = input.value.trim();
-        const target = new URL(window.location.href);
-        if (query) target.searchParams.set('q', query);
-        else target.searchParams.delete('q');
-        window.history.replaceState({}, '', target.toString());
-        loadCatalog(query);
+        loadCatalog(input.value.trim());
       }, 250);
     });
   }
 
-  const initialQuery = new URLSearchParams(window.location.search).get('q') || '';
-  if (input && initialQuery) input.value = initialQuery;
-  loadCatalog(initialQuery);
+  loadCatalog('');
 })();

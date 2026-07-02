@@ -20,6 +20,17 @@ def run(cmd: list[str]) -> str:
     return (result.stdout or result.stderr or "").strip()
 
 
+def fetch_status_json(base_url: str = "https://shopvivaliz.com.br") -> dict:
+    import urllib.request
+    import json
+    try:
+        url = f"{base_url}/claude/api/status.php?format=summary"
+        with urllib.request.urlopen(url, timeout=10) as r:
+            return json.loads(r.read())
+    except Exception:
+        return {}
+
+
 def build_report() -> str:
     now = datetime.now(timezone.utc).astimezone()
     lines = [
@@ -27,27 +38,34 @@ def build_report() -> str:
         "=" * 60,
         f"Horario: {now.isoformat(timespec='seconds')}",
         "",
-        "Resumo do que foi mexido:",
     ]
 
-    status = run(["git", "status", "--short"])
-    if status:
-        lines.append(status)
+    status_data = fetch_status_json()
+    if status_data:
+        ok = status_data.get("ok", False)
+        lines += [
+            f"Status do sistema: {'✓ SAUDAVEL' if ok else '✗ DEGRADADO'}",
+            f"Uptime: {status_data.get('uptime', '?')}%  |  Streak OK: {status_data.get('streak', '?')} runs",
+            f"EHA run: #{status_data.get('eha_run', '?')}  |  Acao: {status_data.get('eha_action', '?')}",
+            "",
+        ]
     else:
-        lines.append("Sem mudancas locais pendentes detectadas.")
+        lines += ["Status do sistema: nao disponivel (API offline?)", ""]
 
-    lines.extend([
-        "",
+    lines += [
         "Ultimos commits:",
         run(["git", "log", "--oneline", "-n", "5"]),
         "",
-        "Arquivos principais tocados hoje:",
+        "Arquivos tocados no ultimo commit:",
         run(["git", "diff", "--name-only", "HEAD~1..HEAD"]) or "Sem diff de commit disponivel.",
         "",
-        "Proximo foco:",
-        "Padronizar pages publicas, reduzir duplicacao e continuar limpando scripts legados.",
-    ])
+        "Dashboard: https://shopvivaliz.com.br/claude/dashboard/",
+    ]
     return "\n".join(lines).strip() + "\n"
+
+
+class SmtpNotConfiguredError(Exception):
+    """Raised when SMTP secrets are missing — not a real failure."""
 
 
 def send_email(subject: str, body: str) -> None:
@@ -59,7 +77,7 @@ def send_email(subject: str, body: str) -> None:
     email_to = env("EMAIL_TO")
 
     if not all([smtp_host, smtp_user, smtp_pass, email_to]):
-        raise RuntimeError("SMTP/EMAIL secrets incompletos")
+        raise SmtpNotConfiguredError("SMTP/EMAIL secrets não configurados — skipping")
 
     msg = EmailMessage()
     msg["Subject"] = subject
@@ -88,6 +106,9 @@ def main() -> int:
         send_email(subject, report)
         print("Email enviado com sucesso.")
         return 0
+    except SmtpNotConfiguredError as exc:
+        print(f"[AVISO] {exc}", file=sys.stderr)
+        return 0  # não é falha — secrets simplesmente não configurados
     except Exception as exc:
         print(f"Falha ao enviar email: {exc}", file=sys.stderr)
         return 1

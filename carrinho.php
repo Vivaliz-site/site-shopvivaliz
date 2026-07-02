@@ -1,4 +1,194 @@
 <?php
-// Redireciona para o carrinho — catalog.js aponta para /carrinho.php
-header('Location: /carrinho/', true, 301);
-exit;
+declare(strict_types=1);
+header('Content-Type: text/html; charset=UTF-8');
+?>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carrinho | Vivaliz</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .cart-page { padding: 36px 0 64px; }
+        .cart-layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; }
+        .cart-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 28px; box-shadow: var(--shadow); }
+        .cart-title { margin: 0 0 20px; font-size: 22px; font-weight: 800; }
+        .cart-empty { text-align: center; padding: 48px 0; }
+        .cart-empty p { color: var(--muted); margin: 8px 0 24px; }
+        .cart-item {
+            display: grid;
+            grid-template-columns: 72px 1fr auto;
+            gap: 14px;
+            align-items: center;
+            padding: 14px 0;
+            border-bottom: 1px solid var(--line);
+        }
+        .cart-item:last-child { border-bottom: none; }
+        .cart-item img { width: 72px; height: 72px; object-fit: contain; border-radius: 8px; background: #f3f5fa; border: 1px solid var(--line); }
+        .cart-item-info strong { display: block; font-size: 14px; line-height: 1.35; }
+        .cart-item-info span { color: var(--muted); font-size: 13px; }
+        .cart-item-price { font-weight: 800; font-size: 15px; white-space: nowrap; }
+        .cart-item-controls { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+        .qty-btn {
+            width: 28px; height: 28px; border-radius: 6px;
+            border: 1.5px solid var(--line); background: #fff;
+            font-size: 16px; font-weight: 700; cursor: pointer; color: var(--ink);
+            display: inline-flex; align-items: center; justify-content: center;
+        }
+        .qty-btn:hover { border-color: var(--brand); color: var(--brand); }
+        .qty-val { font-weight: 800; font-size: 14px; min-width: 20px; text-align: center; }
+        .btn-remove { background: none; border: none; cursor: pointer; color: #b42318; font-size: 13px; font-weight: 700; padding: 0; margin-left: 4px; }
+        .btn-remove:hover { text-decoration: underline; }
+        .summary-row { display: flex; justify-content: space-between; font-size: 14px; margin: 10px 0; }
+        .summary-total { font-size: 18px; font-weight: 800; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px; }
+        .btn-checkout { width: 100%; padding: 15px; font-size: 16px; border-radius: 10px; margin-top: 16px; }
+        .btn-continue { width: 100%; padding: 12px; font-size: 14px; border-radius: 10px; margin-top: 8px; background: transparent; border: 1.5px solid var(--line); color: var(--ink); font-weight: 700; cursor: pointer; text-align: center; text-decoration: none; display: block; }
+        .btn-continue:hover { border-color: var(--brand); color: var(--brand); }
+        @media (max-width: 700px) {
+            .cart-layout { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar">
+    <div class="container nav-inner">
+        <a class="brand-link" href="/">
+            <span class="brand-logo">V</span>Vivaliz
+        </a>
+        <div class="navbar-menu">
+            <a href="/catalogo">Catálogo</a>
+            <a href="/carrinho.php" class="nav-cart" aria-current="page">
+                🛒 Carrinho <span class="cart-badge" id="nav-cart-count"></span>
+            </a>
+        </div>
+    </div>
+</nav>
+
+<main class="container cart-page">
+    <div class="cart-layout">
+        <div class="cart-card">
+            <h1 class="cart-title">Meu Carrinho</h1>
+            <div id="cart-items-list"></div>
+        </div>
+
+        <aside class="cart-card" id="cart-summary">
+            <h2 class="cart-title" style="font-size:18px">Resumo do pedido</h2>
+            <div class="summary-row"><span>Subtotal</span><strong id="cart-subtotal">—</strong></div>
+            <div class="summary-row"><span>Frete</span><strong>A calcular</strong></div>
+            <div class="summary-row summary-total"><span>Total estimado</span><strong id="cart-total">—</strong></div>
+            <a href="/checkout.php" class="btn btn-primary btn-checkout" id="btn-checkout">Finalizar pedido</a>
+            <a href="/catalogo" class="btn-continue">Continuar comprando</a>
+            <div style="margin-top:20px;display:grid;gap:6px">
+                <div style="font-size:12px;color:var(--muted);font-weight:600">🔒 Compra segura</div>
+                <div style="font-size:12px;color:var(--muted);font-weight:600">🚚 Envio para todo Brasil</div>
+                <div style="font-size:12px;color:var(--muted);font-weight:600">↩️ 30 dias para troca</div>
+            </div>
+        </aside>
+    </div>
+</main>
+
+<footer>
+    <div class="container">
+        <div class="footer-cols">
+            <div><strong>Vivaliz</strong><p>Qualidade e entrega rápida para todo o Brasil.</p></div>
+            <div><strong>Navegação</strong><a href="/catalogo">Catálogo</a><a href="/sobre">Sobre</a><a href="/contato">Contato</a></div>
+            <div><strong>Atendimento</strong><a href="/contato">Fale conosco</a><a href="/faq">Dúvidas frequentes</a><a href="/politica-privacidade">Privacidade</a></div>
+        </div>
+        <p class="footer-copy">&copy; 2026 Vivaliz. Todos os direitos reservados.</p>
+    </div>
+</footer>
+
+<script>
+(function () {
+    function getCart() {
+        try { return JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'); } catch(e) { return []; }
+    }
+    function saveCart(items) { localStorage.setItem('shopvivaliz_cart', JSON.stringify(items)); }
+    function fmtMoney(v) {
+        if (!v || isNaN(v)) return 'Preço sob consulta';
+        return 'R$ ' + parseFloat(v).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    }
+
+    function render() {
+        var items = getCart();
+        var list = document.getElementById('cart-items-list');
+        var badge = document.getElementById('nav-cart-count');
+        var subtotalEl = document.getElementById('cart-subtotal');
+        var totalEl = document.getElementById('cart-total');
+        var btnCheckout = document.getElementById('btn-checkout');
+
+        var totalCount = items.reduce(function(a, i){ return a + (i.quantity || 1); }, 0);
+        if (badge) badge.textContent = totalCount > 0 ? totalCount : '';
+
+        if (!list) return;
+
+        if (!items.length) {
+            list.innerHTML = '<div class="cart-empty">'
+                + '<div style="font-size:48px">🛒</div>'
+                + '<p>Seu carrinho está vazio.</p>'
+                + '<a href="/catalogo" class="btn btn-primary">Ver catálogo</a>'
+                + '</div>';
+            if (subtotalEl) subtotalEl.textContent = 'R$ 0,00';
+            if (totalEl) totalEl.textContent = 'R$ 0,00';
+            if (btnCheckout) btnCheckout.style.opacity = '0.5';
+            return;
+        }
+
+        var total = 0;
+        var hasPrice = false;
+        var html = '';
+        items.forEach(function(it, idx) {
+            var price = parseFloat(it.price) || 0;
+            var sub = price * (it.quantity || 1);
+            total += sub;
+            if (price > 0) hasPrice = true;
+            html += '<div class="cart-item">'
+                + '<img src="' + (it.image_url || '/favicon.ico') + '" alt="" onerror="this.src=\'/favicon.ico\'">'
+                + '<div class="cart-item-info">'
+                + '<strong>' + (it.name || it.sku) + '</strong>'
+                + '<span>SKU: ' + it.sku + '</span>'
+                + '<div class="cart-item-controls">'
+                + '<button class="qty-btn" data-idx="' + idx + '" data-delta="-1">−</button>'
+                + '<span class="qty-val">' + (it.quantity || 1) + '</span>'
+                + '<button class="qty-btn" data-idx="' + idx + '" data-delta="1">+</button>'
+                + '<button class="btn-remove" data-remove="' + idx + '">Remover</button>'
+                + '</div></div>'
+                + '<div class="cart-item-price">' + (price > 0 ? fmtMoney(sub) : 'Sob consulta') + '</div>'
+                + '</div>';
+        });
+
+        list.innerHTML = html;
+
+        var fmt = hasPrice ? fmtMoney(total) : 'Sob consulta';
+        if (subtotalEl) subtotalEl.textContent = fmt;
+        if (totalEl) totalEl.textContent = fmt;
+
+        list.querySelectorAll('.qty-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var items2 = getCart();
+                var idx2 = parseInt(btn.getAttribute('data-idx'));
+                var delta = parseInt(btn.getAttribute('data-delta'));
+                if (!items2[idx2]) return;
+                items2[idx2].quantity = Math.max(1, (items2[idx2].quantity || 1) + delta);
+                saveCart(items2);
+                render();
+            });
+        });
+
+        list.querySelectorAll('.btn-remove').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var items2 = getCart();
+                var idx2 = parseInt(btn.getAttribute('data-remove'));
+                items2.splice(idx2, 1);
+                saveCart(items2);
+                render();
+            });
+        });
+    }
+
+    render();
+})();
+</script>
+</body>
+</html>

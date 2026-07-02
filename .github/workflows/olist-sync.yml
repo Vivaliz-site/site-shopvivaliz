@@ -1,0 +1,92 @@
+name: Olist Product Sync
+
+on:
+  schedule:
+    - cron: "0 */4 * * *"   # a cada 4 horas
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (não salva catálogo)"
+        required: false
+        default: "false"
+      force_v2:
+        description: "Forçar API v2 (token estático)"
+        required: false
+        default: "false"
+
+jobs:
+  sync-products:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync produtos via API Tiny/Olist
+        id: sync
+        env:
+          OLIST_CLIENT_ID:     ${{ secrets.OLIST_CLIENT_ID }}
+          OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
+          OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
+          TOKEN_API_OLIST:     ${{ secrets.TOKEN_API_OLIST }}
+        run: |
+          DRY="${{ inputs.dry_run || 'false' }}"
+          V2="${{ inputs.force_v2 || 'false' }}"
+          echo "=== Vivaliz Olist Sync ==="
+          echo "dry_run=$DRY  force_v2=$V2"
+
+          # Escrever tokens.json para que o PHP sync-products.php os encontre
+          mkdir -p storage/private
+          cat > storage/private/tokens.json <<EOF
+          {
+            "OLIST_CLIENT_ID":     "${OLIST_CLIENT_ID}",
+            "OLIST_CLIENT_SECRET": "${OLIST_CLIENT_SECRET}",
+            "OLIST_REFRESH_TOKEN": "${OLIST_REFRESH_TOKEN}",
+            "TOKEN_API_OLIST":     "${TOKEN_API_OLIST}",
+            "updated_at":          "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+          # Executar sync via PHP CLI
+          ARGS="--no-header"
+          [ "$DRY" = "true" ] && ARGS="$ARGS --define olist_dry_run=1"
+          [ "$V2"  = "true" ] && ARGS="$ARGS --define olist_force_v2=1"
+
+          php -r "
+            \$_GET['dry_run'] = '$([ \"$DRY\" = \"true\" ] && echo 1 || echo 0)';
+            \$_GET['v2']      = '$([ \"$V2\"  = \"true\" ] && echo 1 || echo 0)';
+            \$_SERVER['REQUEST_METHOD'] = 'GET';
+            ob_start();
+            include 'olist/sync-products.php';
+            \$out = ob_get_clean();
+            echo \$out . PHP_EOL;
+          " 2>&1 | tee /tmp/sync_output.txt
+
+          # Extrair resultado do JSON
+          FETCHED=$(python3 -c "import json,sys; d=json.loads(open('/tmp/sync_output.txt').read().strip()); print(d.get('fetched',0))" 2>/dev/null || echo 0)
+          SAVED=$(python3 -c "import json,sys; d=json.loads(open('/tmp/sync_output.txt').read().strip()); print(d.get('saved',False))" 2>/dev/null || echo False)
+          SOURCE=$(python3 -c "import json,sys; d=json.loads(open('/tmp/sync_output.txt').read().strip()); print(d.get('source','?'))" 2>/dev/null || echo unknown)
+          echo "fetched=$FETCHED" >> $GITHUB_OUTPUT
+          echo "saved=$SAVED"     >> $GITHUB_OUTPUT
+          echo "source=$SOURCE"   >> $GITHUB_OUTPUT
+          echo "Produtos buscados: $FETCHED | Fonte: $SOURCE | Salvo: $SAVED"
+
+      - name: Commit catálogo atualizado
+        if: steps.sync.outputs.saved == 'True'
+        run: |
+          git config user.name  "Claude Autonomo"
+          git config user.email "fredmourao@gmail.com"
+          git add api/catalog/fallback-products.json logs/ || true
+          if ! git diff --cached --quiet; then
+            git pull --rebase origin main || true
+            git commit -m "sync: catalogo Olist atualizado (${{ steps.sync.outputs.fetched }} produtos via ${{ steps.sync.outputs.source }})"
+            git push origin main
+            echo "✅ Catálogo publicado com ${{ steps.sync.outputs.fetched }} produtos"
+          else
+            echo "Sem alterações no catálogo"
+          fi

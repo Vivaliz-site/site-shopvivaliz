@@ -1,0 +1,90 @@
+name: Site Monitor + Auto-Fix — Vivaliz
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # a cada 30 minutos
+  workflow_dispatch:
+
+jobs:
+  monitor-and-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Monitor site e detecta problemas
+        id: monitor
+        run: |
+          BASE="https://dev.shopvivaliz.com.br"
+          ISSUES=""
+          ALL_OK=true
+
+          check_url() {
+            local url=$1
+            local label=$2
+            local code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$url")
+            echo "  $label: HTTP $code"
+            if [ "$code" != "200" ] && [ "$code" != "301" ] && [ "$code" != "302" ]; then
+              ISSUES="$ISSUES|$label:$code:$url"
+              ALL_OK=false
+            fi
+          }
+
+          echo "=== Verificando endpoints ==="
+          check_url "$BASE/"                      "homepage"
+          check_url "$BASE/catalogo"              "catalogo"
+          check_url "$BASE/carrinho/"             "carrinho"
+          check_url "$BASE/checkout/"             "checkout"
+          check_url "$BASE/sobre"                 "sobre"
+          check_url "$BASE/sitemap.xml"           "sitemap"
+          check_url "$BASE/api/catalog/products.php?limit=5" "api-catalog"
+          check_url "$BASE/api/health.php"        "api-health"
+          check_url "$BASE/autodev/client.js"     "autodev-js"
+          check_url "$BASE/js/catalog.js"         "catalog-js"
+          check_url "$BASE/css/style.css"         "style-css"
+
+          echo "issues=$ISSUES" >> $GITHUB_OUTPUT
+          echo "all_ok=$ALL_OK" >> $GITHUB_OUTPUT
+          echo "=== Resultado: all_ok=$ALL_OK issues=$ISSUES ==="
+
+      - name: Salva relatório de saúde
+        run: |
+          mkdir -p automation/proactive/logs
+          echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"issues\":\"${{ steps.monitor.outputs.issues }}\",\"all_ok\":${{ steps.monitor.outputs.all_ok }}}" >> automation/proactive/logs/health.jsonl
+          tail -100 automation/proactive/logs/health.jsonl > /tmp/health_tail.jsonl && mv /tmp/health_tail.jsonl automation/proactive/logs/health.jsonl
+
+      - name: Verifica API do catálogo retorna produtos
+        run: |
+          RESP=$(curl -s --max-time 15 "https://dev.shopvivaliz.com.br/api/catalog/products.php?limit=3" || echo '{}')
+          COUNT=$(echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('count',0))" 2>/dev/null || echo 0)
+          echo "Produtos retornados pela API: $COUNT"
+          if [ "$COUNT" -lt "1" ]; then
+            echo "⚠️ API do catálogo retornou 0 produtos"
+          else
+            echo "✅ API catálogo OK: $COUNT produtos"
+          fi
+
+      - name: Verifica sitemap tem produtos
+        run: |
+          SIZE=$(curl -s --max-time 15 "https://dev.shopvivaliz.com.br/sitemap.xml" | wc -c)
+          echo "Sitemap tamanho: $SIZE bytes"
+          if [ "$SIZE" -lt "1000" ]; then
+            echo "⚠️ Sitemap muito pequeno — pode estar com problema"
+          else
+            echo "✅ Sitemap OK"
+          fi
+
+      - name: Commit log de saúde
+        run: |
+          git config user.name "Claude Autonomo"
+          git config user.email "fredmourao@gmail.com"
+          git add automation/proactive/logs/ || true
+          if ! git diff --cached --quiet; then
+            git pull --rebase origin main || true
+            git commit -m "chore: log de monitoramento automatico [skip ci]"
+            git push origin main || true
+          fi

@@ -59,7 +59,13 @@ jobs:
         run: echo "filename=listings/optimization-report-$(date +%Y%m%d-%H%M%S).json" >> "$GITHUB_OUTPUT"
 
       - name: Executar otimizao dos anncios
-        run: php agents/v9.2.85/scripts/optimize-shopee-listings.php
+        run: |
+          if [ -z "$TINY_ACCESS_TOKEN" ] && [ -z "$TINY_API_TOKEN" ] && [ -z "$OLIST_ACCESS_TOKEN" ]; then
+            echo "::warning::Nenhum secret de API configurado (TINY/OLIST). Pulando otimizacao."
+            echo '{"status":"skipped","reason":"no_api_secrets","ts":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$OUTPUT_FILE"
+            exit 0
+          fi
+          php agents/v9.2.85/scripts/optimize-shopee-listings.php
         env:
           OUTPUT_FILE:         ${{ steps.output.outputs.filename }}
           TINY_ACCESS_TOKEN:   ${{ secrets.TINY_ACCESS_TOKEN }}

@@ -1,8 +1,8 @@
 {
-    "action": "ROLLBACK",
+    "action": "DEPLOY_OK",
     "metrics": {
-        "checkout_ok": false,
-        "checkout_fail": true,
+        "checkout_ok": true,
+        "checkout_fail": false,
         "api_ok": true,
         "db_ok": true,
         "pages_ok": true,
@@ -11,28 +11,27 @@
         "error_medium": false,
         "error_high": false,
         "recent_errors": [],
-        "e2e_failed": true,
-        "timestamp": "2026-07-01T12:31:00+00:00"
+        "e2e_failed": false,
+        "timestamp": "2026-07-02T11:09:34+00:00"
     },
     "validation": {
-        "status": "BLOCKED",
-        "checkout_ok": false,
+        "status": "READY_FOR_PRODUCTION",
+        "checkout_ok": true,
         "api_ok": true,
         "db_ok": true,
         "pages_ok": true,
-        "timestamp": "2026-07-01T12:31:00+00:00"
+        "timestamp": "2026-07-02T11:09:34+00:00"
     },
     "loop": {
-        "risk": "HIGH",
-        "issue": "checkout_fail",
-        "handled": true,
+        "risk": "LOW",
+        "issue": "none",
+        "handled": false,
         "result": {
-            "status": "rollback_requested",
-            "reason": "checkout_fail",
-            "timestamp": "2026-07-01T12:31:00+00:00",
-            "note": "Rollback automático requer aprovação humana. Evento registrado."
+            "status": "no_action",
+            "note": "Metricas saudaveis; nenhuma correcao automatica necessaria."
         }
     },
-    "elapsed_s": 1.23,
-    "run_id": "55"
+    "e2e_consecutive": 0,
+    "elapsed_s": 0.61,
+    "run_id": "179"
 }

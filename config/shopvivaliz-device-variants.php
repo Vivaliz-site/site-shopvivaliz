@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 return array(
-    'version' => '9.2.91',
-    'updated_at' => '2026-06-26T00:00:00+00:00',
+    'version' => '9.2.101',
+    'updated_at' => '2026-07-02T00:30:00-03:00',
     'variants' => array(
         'desktop' => array(
             'label' => 'Desktop',
