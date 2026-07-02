@@ -187,6 +187,38 @@ Assinatura ausente/inválida continuam corretamente rejeitadas com 401.
 Todos os processos/serviços locais parados e `.env`/`.env.local` de teste
 removidos ao final; `git status` limpo além do fix de código acima.
 
+**Reverificado em 2026-07-02** (nona rodada, novo container efêmero, `main`
+sem alterações em `claude/medusa`/`claude/api` desde a rodada anterior):
+Postgres 16 + Redis locais provisionados, `npm install` limpo do zero em
+ambos os apps (backend: 1342 pacotes; storefront: 542 pacotes), `npx medusa
+db:migrate` + `seed-shopvivaliz-test-data.ts` aplicados sem erros (região
+Brasil/BRL, 8 produtos ShopVivaliz + 4 demo = 12 no total, cliente de teste
+`cliente.teste@shopvivaliz.com.br` confirmado), usuário admin criado.
+`npm run build` OK nos dois apps (133 páginas estáticas geradas, idêntico à
+rodada anterior). Publishable API key criada via Admin API e vinculada ao
+Default Sales Channel; `GET /store/products` retornou os 12 produtos.
+Storefront em modo produção renderizou `/br/products/camiseta-shopvivaliz`
+com preço real da API (R$69,90), HTTP 200.
+
+**Bug real encontrado e corrigido nesta rodada:** `claude/api/medusa-webhook.php`
+lia o segredo do webhook só via `$_ENV['EHA_WEBHOOK_SECRET']`. Neste ambiente
+(PHP com `variables_order=GPCS`, sem `E` — configuração padrão comum, muito
+provavelmente também a do HostGator de produção) `$_ENV` fica **sempre vazio**
+mesmo com a variável de ambiente exportada corretamente no processo, então o
+webhook caía silenciosamente no valor padrão hardcoded `test_eha_webhook_secret`
+em vez do segredo real — ou seja, em produção o endpoint provavelmente rejeitaria
+todo webhook legítimo (assinado com o segredo real) com 401, e aceitaria como
+válida qualquer requisição forjada com o segredo padrão conhecido do código-fonte.
+`claude/api/sync-olist-products.php` já evitava esse problema usando `getenv()`
+com fallback para `$_ENV`; `medusa-webhook.php` foi corrigido para o mesmo
+padrão. Reconfirmado ponta a ponta com o secret exportado como variável de
+ambiente real do processo PHP (`EHA_WEBHOOK_SECRET=... php -S ...`, simulando
+como normalmente é configurado em Apache/PHP-FPM): update de produto via Admin
+API → subscriber → POST assinado (HMAC-SHA256) → `medusa-webhook.php` → 200
+com `status: PROCESSED`; assinatura ausente/inválida continuam rejeitadas com
+401. Todos os processos/serviços locais parados e `.env`/`.env.local`/logs de
+teste removidos ao final; `git status` limpo além do fix de código acima.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local

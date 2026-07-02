@@ -14,7 +14,7 @@ header('Content-Type: application/json');
 header('X-Content-Type-Options: nosniff');
 
 // Variáveis de ambiente
-$secret = $_ENV['EHA_WEBHOOK_SECRET'] ?? 'test_eha_webhook_secret';
+$secret = getenv('EHA_WEBHOOK_SECRET') ?: ($_ENV['EHA_WEBHOOK_SECRET'] ?? 'test_eha_webhook_secret');
 $logDir = __DIR__ . '/../logs';
 
 // Criar diretório de logs se não existir
