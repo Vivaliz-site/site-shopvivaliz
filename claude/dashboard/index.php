@@ -109,6 +109,16 @@ $last_run      = @json_decode(@file_get_contents($last_run_path) ?: '{}', true) 
 $last_ci_path = dirname(__DIR__, 2) . '/automation/eha/reports/last_ci_run.json';
 $last_ci      = @json_decode(@file_get_contents($last_ci_path) ?: '{}', true) ?: [];
 
+// Medusa migration status
+$medusa_path   = dirname(__DIR__, 2) . '/automation/eha/reports/medusa-last-run.json';
+$medusa_report = @json_decode(@file_get_contents($medusa_path) ?: '{}', true) ?: [];
+$medusa_ts_raw = $medusa_report['state']['timestamp'] ?? '';
+$medusa_ts_unix = $medusa_ts_raw ? (int)strtotime($medusa_ts_raw) : 0;
+$medusa_hours_ago = $medusa_ts_unix > 0 ? (int)round((time() - $medusa_ts_unix) / 3600) : -1;
+$medusa_stuck = $medusa_hours_ago > 4;  // stuck if same step for more than 4h
+$medusa_step_key = $medusa_report['next_step_key'] ?? '';
+$medusa_applied  = $medusa_report['applied_actions'] ?? [];
+
 $history_path = dirname(__DIR__, 2) . '/automation/eha/reports/run_history.jsonl';
 $eha_runs     = [];
 if (is_readable($history_path)) {
@@ -501,6 +511,70 @@ $status_color = $all_ok ? '#22c55e' : '#ef4444';
             <div class="card-sub">Actions log completo</div>
         </div>
     </div>
+    <?php endif; ?>
+
+    <!-- MIGRAÇÃO MEDUSA -->
+    <?php if (!empty($medusa_report)): ?>
+    <h2>Migração Medusa</h2>
+    <?php if ($medusa_stuck): ?>
+    <div class="alert-banner">
+        ⚠️ <strong>Migração parada há <?= $medusa_hours_ago ?>h:</strong>
+        Passo atual <code style="background:#0f172a;padding:2px 6px;border-radius:3px"><?= htmlspecialchars($medusa_step_key) ?></code>
+        requer intervenção manual — inicie o backend Medusa e gere a publishable key via admin API.
+    </div>
+    <?php endif; ?>
+    <div class="grid-3" style="margin-bottom:1.5rem">
+        <div class="card <?= ($medusa_report['status'] ?? '') === 'completed' ? '' : ($medusa_stuck ? 'alert' : '') ?>">
+            <div class="card-label">Status</div>
+            <div class="card-value <?= ($medusa_report['status'] ?? '') === 'completed' ? 'ok' : ($medusa_stuck ? 'warn' : 'info') ?>">
+                <?= htmlspecialchars(strtoupper($medusa_report['status'] ?? '—')) ?>
+            </div>
+            <div class="card-sub">
+                <?= $medusa_hours_ago >= 0 ? "atualizado há {$medusa_hours_ago}h" : 'sem timestamp' ?>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-label">Próximo passo</div>
+            <div class="card-value warn" style="font-size:.9rem;word-break:break-all">
+                <?= htmlspecialchars($medusa_report['next_step_title'] ?? '—') ?>
+            </div>
+            <div class="card-sub" style="font-size:.7rem"><?= htmlspecialchars($medusa_step_key) ?></div>
+        </div>
+        <div class="card">
+            <div class="card-label">Passos concluídos</div>
+            <div class="card-value ok"><?= count($medusa_applied) ?></div>
+            <div class="card-sub"><?= htmlspecialchars(implode(', ', $medusa_applied) ?: 'nenhum') ?></div>
+        </div>
+        <div class="card">
+            <div class="card-label">Backend</div>
+            <div class="card-value <?= ($medusa_report['state']['backend_exists'] ?? false) ? 'ok' : 'fail' ?>">
+                <?= ($medusa_report['state']['backend_exists'] ?? false) ? '✓ Existe' : '✗ Ausente' ?>
+            </div>
+            <div class="card-sub">medusa/apps/backend</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Storefront</div>
+            <div class="card-value <?= ($medusa_report['state']['storefront_exists'] ?? false) ? 'ok' : 'fail' ?>">
+                <?= ($medusa_report['state']['storefront_exists'] ?? false) ? '✓ Existe' : '✗ Ausente' ?>
+            </div>
+            <div class="card-sub">medusa/apps/storefront</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Publishable Key</div>
+            <div class="card-value <?= ($medusa_report['state']['storefront_publishable_key_present'] ?? false) ? 'ok' : 'fail' ?>">
+                <?= ($medusa_report['state']['storefront_publishable_key_present'] ?? false) ? '✓ Configurada' : '✗ Faltando' ?>
+            </div>
+            <div class="card-sub">necessária para storefront</div>
+        </div>
+    </div>
+    <?php if (!empty($medusa_report['next_step_description'])): ?>
+    <div class="card" style="margin-bottom:1.5rem;border-left:4px solid #f59e0b">
+        <div class="card-label">O que fazer agora</div>
+        <div style="font-size:.88rem;color:#cbd5e1;margin-top:.5rem;line-height:1.5">
+            <?= htmlspecialchars($medusa_report['next_step_description']) ?>
+        </div>
+    </div>
+    <?php endif; ?>
     <?php endif; ?>
 
     <!-- LOG EHA -->
