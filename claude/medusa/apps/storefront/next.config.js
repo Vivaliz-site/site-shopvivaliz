@@ -39,13 +39,10 @@ const nextConfig = {
         protocol: "https",
         hostname: "*.s3.amazonaws.com",
       },
-<<<<<<< HEAD
-=======
       {
         protocol: "https",
         hostname: "placehold.co",
       },
->>>>>>> origin/main
       ...(S3_HOSTNAME && S3_PATHNAME
         ? [
             {

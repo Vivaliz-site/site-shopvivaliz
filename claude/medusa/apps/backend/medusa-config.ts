@@ -12,9 +12,6 @@ module.exports = defineConfig({
       jwtSecret: process.env.JWT_SECRET,
       cookieSecret: process.env.COOKIE_SECRET,
     }
-<<<<<<< HEAD
-  }
-=======
   },
   modules: process.env.STRIPE_API_KEY
     ? [
@@ -38,5 +35,4 @@ module.exports = defineConfig({
         },
       ]
     : [],
->>>>>>> origin/main
 })
