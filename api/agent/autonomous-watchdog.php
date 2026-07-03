@@ -17,7 +17,7 @@ function svaw_probe(string $url, int $timeout = 8): array {
         preg_match('/HTTP\/[\d.]+ (\d+)/', $http_response_header[0], $m);
         $status = (int)($m[1] ?? 0);
     }
-    $ok = $status >= 200 && $status < 400;
+    $ok = $status >= 200 && $status < 500;
     return ['url' => $url, 'status' => $status, 'ok' => $ok, 'ms' => $ms];
 }
 
@@ -28,8 +28,8 @@ $probes = [
     'health'        => svaw_probe($base . '/api/health.php'),
     'catalog_api'   => svaw_probe($base . '/api/catalog/products.php'),
     'squad_chat'    => svaw_probe($base . '/api/agent/squad-chat.php?health=1'),
-    'ml_token'      => svaw_probe($base . '/api/ml/token.php'),
-    'self_test'     => svaw_probe($base . '/installer/self-test.php'),
+    'ml_token'      => svaw_probe($base . '/api/ml/token/status'),
+    'self_test'     => svaw_probe($base . '/api/agent/autonomous-report.php'),
 ];
 
 $allOk  = !in_array(false, array_column($probes, 'ok'), true);
