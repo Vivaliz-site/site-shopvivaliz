@@ -67,6 +67,9 @@ jobs:
           check_optional_secret "GEMINI_API_KEY" "${{ secrets.GEMINI_API_KEY }}"
           check_optional_secret "OLIST_CLIENT_ID" "${{ secrets.OLIST_CLIENT_ID }}"
           check_optional_secret "OLIST_CLIENT_SECRET" "${{ secrets.OLIST_CLIENT_SECRET }}"
+          check_optional_secret "ML_CLIENT_ID" "${{ secrets.ML_CLIENT_ID }}"
+          check_optional_secret "ML_CLIENT_SECRET" "${{ secrets.ML_CLIENT_SECRET }}"
+          check_optional_secret "ML_REDIRECT_URI" "${{ secrets.ML_REDIRECT_URI }}"
 
           if [ "$missing" -ne 0 ]; then
             exit 1
@@ -82,6 +85,9 @@ jobs:
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
           OLIST_CLIENT_ID=${{ secrets.OLIST_CLIENT_ID }}
           OLIST_CLIENT_SECRET=${{ secrets.OLIST_CLIENT_SECRET }}
+          ML_CLIENT_ID=${{ secrets.ML_CLIENT_ID }}
+          ML_CLIENT_SECRET=${{ secrets.ML_CLIENT_SECRET }}
+          ML_REDIRECT_URI=${{ secrets.ML_REDIRECT_URI }}
           EOF
           sed -i 's/^          //' .env
           chmod 600 .env
