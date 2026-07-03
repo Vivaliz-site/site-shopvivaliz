@@ -24,7 +24,12 @@ jobs:
 
       - name: Detect conflict markers
         run: |
-          if grep -RIn --exclude-dir=.git -E '<<<<<<< |=======|>>>>>>> ' .; then
+          # Padrão ancorado: <<<<<<< branch, ======= sozinho na linha, >>>>>>> branch
+          if grep -RIn --exclude-dir=.git \
+               --include="*.php" --include="*.py" --include="*.js" \
+               --include="*.ts" --include="*.json" --include="*.yml" \
+               --include="*.yaml" --include="*.md" --include="*.html" \
+               -E '^<<<<<<< |^=======$|^>>>>>>> ' .; then
             echo "Conflict markers found."
             exit 1
           fi
