@@ -425,6 +425,37 @@ credenciais reais PayPal/Olist, rotação do secret Olist vazado no histórico
 do git) continuam pendentes — todos exigem ação humana fora do alcance desta
 sessão.
 
+**Rodada 20 (2026-07-03, revalidação completa):** container efêmero novo;
+ref local `main` estava novamente atrás/divergente de `origin/main` (mesmo
+artefato de clone raso já visto na rodada 19) — resolvido com `git fetch
+origin main && git checkout -B main origin/main`, sem perda de commits
+(`origin/main` estava um commit à frente, `feat: dashboard /claude com
+indicador de frescor e countdown de refresh`). Postgres 16 local
+reprovisionado (role `medusa` + banco `shopvivaliz_medusa`), `pnpm install`
+limpo no monorepo (1662 pacotes, 17s, sem erros de build script). `npx
+medusa db:migrate` + `seed-shopvivaliz-test-data.ts` aplicados sem erro (12
+produtos confirmados via SQL: 8 ShopVivaliz + 4 demo padrão, cliente de
+teste criado). `medusa build` OK (4.6s backend + 27s admin). Backend subiu
+com `npx medusa develop` (porta 9000), `GET /health` → 200. `next build` do
+storefront OK (133 páginas estáticas). Storefront em modo produção (`next
+start`, porta 8000) respondeu HTTP 200 em `/br` e `GET /store/products` no
+backend retornou produtos reais (ex. "Medusa T-Shirt") usando a publishable
+key gerada nesta sessão. `medusa-webhook.php` testado com `php -S` +
+assinatura HMAC-SHA256 válida → HTTP 200 `{"ok":true,...}`; `php -l` sem
+erros. Teste de rede de saída para `api.supabase.com` e `console.neon.tech`
+continua bloqueado pelo proxy do ambiente (`CONNECT tunnel failed, response
+403`, confirmado via `/__agentproxy/status`). GitHub MCP revalidado sem
+nenhum tool de gestão de secrets (apenas Actions/issues/PRs/arquivos/branches/
+secret scanning). **Nenhum bug novo encontrado** — stack completo (build,
+migrations, seed, API, webhook) funciona ponta a ponta a partir de um clone
+limpo, sem nenhuma mudança de código de produto necessária nesta rodada.
+Todos os processos/serviços locais parados e `.env`/`.env.local` de teste
+removidos ao final. Os mesmos 5 blockers de ação humana permanecem
+pendentes (20 rodadas consecutivas) — ver recomendação: revalidações
+completas adicionais sem mudança de credenciais/código têm valor marginal
+decrescente; próxima rodada pode ser uma checagem leve (diff de código +
+teste de rede) até que algum blocker seja resolvido.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
