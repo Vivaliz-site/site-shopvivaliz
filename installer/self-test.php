@@ -6,6 +6,23 @@
 
 header('Content-Type: application/json; charset=utf-8');
 
+function selftest_exit(array $payload, int $status = 200): void
+{
+    http_response_code($status);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if (!extension_loaded('mysqli') || !class_exists('mysqli')) {
+    selftest_exit([
+        'ok' => false,
+        'status' => '✗ RUNTIME_INCOMPATIVEL',
+        'erro' => 'Extensão mysqli não disponível neste runtime PHP.',
+        'hint' => 'Habilite mysqli no PHP do servidor/CLI para executar o self-test completo.',
+        'timestamp' => date('c'),
+    ], 500);
+}
+
 $host = getenv('DB_HOST') ?: 'localhost';
 $user = getenv('DB_USER') ?: 'root';
 $pass = getenv('DB_PASS') ?: '';
@@ -14,7 +31,12 @@ $db_name = getenv('DB_NAME') ?: 'shopvivaliz';
 $db = new mysqli($host, $user, $pass, $db_name, 3306);
 
 if ($db->connect_error) {
-    exit(json_encode(['ok' => false, 'erro' => 'Conexão: ' . $db->connect_error]));
+    selftest_exit([
+        'ok' => false,
+        'status' => '✗ CONEXAO_FALHOU',
+        'erro' => 'Conexão: ' . $db->connect_error,
+        'timestamp' => date('c'),
+    ], 500);
 }
 
 $db->set_charset('utf8mb4');
@@ -121,10 +143,9 @@ $all_pass = $all_pass && $shopeeRepairWorkflow;
 
 $db->close();
 
-echo json_encode([
+selftest_exit([
     'ok' => $all_pass,
     'status' => $all_pass ? '✓ 100% OK' : '✗ FALHAS DETECTADAS',
     'tests' => $tests,
     'timestamp' => date('c')
-], JSON_UNESCAPED_UNICODE);
-?>
+]);

@@ -1,0 +1,17 @@
+{
+  "version": "9.2.102",
+  "date": "2026-07-03",
+  "codename": "self-test-mysqli-guard",
+  "type": "cumulative",
+  "highlights": [
+    "Evita fatal error no installer/self-test.php quando o runtime PHP não tem a extensão mysqli carregada.",
+    "Padroniza a saída do self-test em JSON de erro controlado para ambientes CLI e servidores mal configurados.",
+    "Sincroniza a versão do aplicativo e dos metadados de variantes para a release cumulativa 9.2.102."
+  ],
+  "files": [
+    "installer/self-test.php",
+    "config/constants.php",
+    "config/shopvivaliz-version.php",
+    "config/shopvivaliz-device-variants.php"
+  ]
+}
