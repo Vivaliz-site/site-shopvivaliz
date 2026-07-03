@@ -14,9 +14,73 @@ header('X-XSS-Protection: 1; mode=block');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Content-Type: text/html; charset=UTF-8');
 
-define('APP_VERSION', '9.2.85');
+// Mercado Livre OAuth callback — ML_REDIRECT_URI aponta para a raiz do domínio
+if (isset($_GET['code']) || isset($_GET['error'])) {
+    require_once __DIR__ . '/api/ml/callback.php';
+    exit;
+}
+
+require_once __DIR__ . '/api/catalog/image-recovery.php';
+require_once __DIR__ . '/api/catalog/ranking.php';
+
+// Versão da aplicação
+$svVersion = is_file(__DIR__ . '/config/shopvivaliz-version.php') ? require __DIR__ . '/config/shopvivaliz-version.php' : array();
+define('APP_VERSION', (string)($svVersion['version'] ?? '9.2.92'));
 define('APP_NAME', 'ShopVivaliz');
-define('BASE_URL', 'https://dev.shopvivaliz.com.br');
+if (!defined('BASE_URL')) define('BASE_URL', 'https://dev.shopvivaliz.com.br');
+
+function sv_home_products(int $limit = 8): array
+{
+    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
+    if (!is_file($jsonPath) || !is_readable($jsonPath)) {
+        return [];
+    }
+    $decoded = json_decode((string)file_get_contents($jsonPath), true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+    $items = [];
+    foreach ($decoded as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $items[] = [
+            'sku' => trim((string)($row['sku'] ?? $row['id'] ?? 'sem-sku')),
+            'name' => trim((string)($row['name'] ?? 'Produto ShopVivaliz')),
+            'image_url' => trim((string)($row['image_url'] ?? '')) ?: svimg_placeholder_url(),
+            'price' => (float)($row['price'] ?? 0),
+            'images_count' => (int)($row['images_count'] ?? 0),
+            'olist_product_id' => (string)($row['olist_product_id'] ?? ''),
+        ];
+    }
+
+    $items = array_map('svimg_recover_product', $items);
+    $items = svrank_sort_products($items);
+    return array_slice($items, 0, $limit);
+}
+
+function sv_home_esc(string $value): string
+{
+    return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+}
+
+function sv_home_money(float $value): string
+{
+    return $value > 0 ? 'R$ ' . number_format($value, 2, ',', '.') : 'Preço sob consulta';
+}
+
+function sv_home_product_url(array $product): string
+{
+    return '/produto?' . http_build_query([
+        'sku' => $product['sku'],
+        'name' => $product['name'],
+        'image' => $product['image_url'],
+        'price' => (string)$product['price'],
+        'olist_product_id' => $product['olist_product_id'],
+    ]);
+}
+
+$featuredProducts = sv_home_products();
 
 ?>
 <!DOCTYPE html>
@@ -28,6 +92,7 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
     <meta name="theme-color" content="#667eea">
     <title><?php echo APP_NAME; ?> - Sua Loja Online de Confiança</title>
     <link rel="stylesheet" href="/css/responsive.css">
+    <link rel="stylesheet" href="/css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -429,6 +494,8 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
                 <a href="/sobre">Sobre</a>
                 <a href="/contato">Contato</a>
                 <a href="/carrinho">🛒 Carrinho</a>
+                <a href="/admin/">Admin</a>
+                <a href="/admin/monitor/">Monitor</a>
             </div>
         </div>
     </nav>
@@ -509,93 +576,30 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
         <div class="container">
             <h2 class="section-title">Produtos em Destaque</h2>
             <div class="products-grid">
-                <!-- Produto 1 -->
-                <div class="product-card">
-                    <div class="product-image">👕</div>
-                    <div class="product-info">
-                        <div class="product-name">Camiseta Premium Azul</div>
-                        <div class="product-price">R$ 49,90</div>
-                        <div class="product-rating">★★★★★ (245)</div>
-                        <button class="product-btn">Adicionar ao Carrinho</button>
+                <?php if ($featuredProducts): ?>
+                    <?php foreach ($featuredProducts as $product): ?>
+                        <div class="product-card">
+                            <div class="product-image">
+                                <img src="<?php echo sv_home_esc($product['image_url']); ?>" alt="<?php echo sv_home_esc($product['name']); ?>" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy" onerror="this.src='<?php echo sv_home_esc(svimg_placeholder_url()); ?>'">
+                            </div>
+                            <div class="product-info">
+                                <div class="product-name"><?php echo sv_home_esc($product['name']); ?></div>
+                                <div class="product-price"><?php echo sv_home_esc(sv_home_money((float)$product['price'])); ?></div>
+                                <div class="product-rating"><?php echo (int)$product['images_count']; ?> imagem<?php echo (int)$product['images_count'] === 1 ? '' : 'ns'; ?> | SKU <?php echo sv_home_esc($product['sku']); ?></div>
+                                <a class="product-btn" href="<?php echo sv_home_esc(sv_home_product_url($product)); ?>" style="display: inline-block; text-align: center; text-decoration: none;">Ver Produto</a>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="product-card">
+                        <div class="product-info">
+                            <div class="product-name">Catálogo em preparação</div>
+                            <div class="product-price">Novos produtos em breve</div>
+                            <div class="product-rating">Aguardando sincronização final</div>
+                            <a class="product-btn" href="/catalogo" style="display: inline-block; text-align: center; text-decoration: none;">Ir para o catálogo</a>
+                        </div>
                     </div>
-                </div>
-
-                <!-- Produto 2 -->
-                <div class="product-card">
-                    <div class="product-image">👟</div>
-                    <div class="product-info">
-                        <div class="product-name">Tênis Conforto</div>
-                        <div class="product-price">R$ 189,90</div>
-                        <div class="product-rating">★★★★☆ (128)</div>
-                        <button class="product-btn">Adicionar ao Carrinho</button>
-                    </div>
-                </div>
-
-                <!-- Produto 3 -->
-                <div class="product-card">
-                    <div class="product-image">💎</div>
-                    <div class="product-info">
-                        <div class="product-name">Relógio Elegante</div>
-                        <div class="product-price">R$ 299,90</div>
-                        <div class="product-rating">★★★★★ (87)</div>
-                        <button class="product-btn">Adicionar ao Carrinho</button>
-                    </div>
-                </div>
-
-                <!-- Produto 4 -->
-                <div class="product-card">
-                    <div class="product-image">🧥</div>
-                    <div class="product-info">
-                        <div class="product-name">Jaqueta Impermeável</div>
-                        <div class="product-price">R$ 159,90</div>
-                        <div class="product-rating">★★★★★ (156)</div>
-                        <button class="product-btn">Adicionar ao Carrinho</button>
-                    </div>
-                </div>
-
-                <!-- Produto 5 -->
-                <div class="product-card">
-                    <div class="product-image">🎒</div>
-                    <div class="product-info">
-                        <div class="product-name">Mochila Travel</div>
-                        <div class="product-price">R$ 129,90</div>
-                        <div class="product-rating">★★★★☆ (93)</div>
-                        <button class="product-btn">Adicionar ao Carrinho</button>
-                    </div>
-                </div>
-
-                <!-- Produto 6 -->
-                <div class="product-card">
-                    <div class="product-image">🕶️</div>
-                    <div class="product-info">
-                        <div class="product-name">Óculos de Sol UV</div>
-                        <div class="product-price">R$ 79,90</div>
-                        <div class="product-rating">★★★★★ (211)</div>
-                        <button class="product-btn">Adicionar ao Carrinho</button>
-                    </div>
-                </div>
-
-                <!-- Produto 7 -->
-                <div class="product-card">
-                    <div class="product-image">⌚</div>
-                    <div class="product-info">
-                        <div class="product-name">Smartwatch Fitness</div>
-                        <div class="product-price">R$ 199,90</div>
-                        <div class="product-rating">★★★★★ (178)</div>
-                        <button class="product-btn">Adicionar ao Carrinho</button>
-                    </div>
-                </div>
-
-                <!-- Produto 8 -->
-                <div class="product-card">
-                    <div class="product-image">👜</div>
-                    <div class="product-info">
-                        <div class="product-name">Bolsa Couro Legítimo</div>
-                        <div class="product-price">R$ 249,90</div>
-                        <div class="product-rating">★★★★★ (134)</div>
-                        <button class="product-btn">Adicionar ao Carrinho</button>
-                    </div>
-                </div>
+                <?php endif; ?>
             </div>
         </div>
     </section>
@@ -718,5 +722,7 @@ define('BASE_URL', 'https://dev.shopvivaliz.com.br');
             });
         });
     </script>
+    <script src="/autodev/client.js"></script>
+    <script src="/js/catalog.js"></script>
 </body>
 </html>
