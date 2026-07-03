@@ -525,6 +525,50 @@ humana permanecem pendentes (22 rodadas consecutivas, contando a rodada 21
 leve) — concorda-se com a recomendação da rodada 21 de pausar revalidações
 completas automáticas até que o usuário resolva ao menos um blocker.
 
+**Rodada 23 (2026-07-03, revalidação leve, execução automática agendada):**
+confirmado via `git diff 190a299..HEAD -- claude/medusa claude/api` (commit da
+rodada 22) que **nenhum arquivo sob `claude/medusa/` ou `claude/api/` mudou
+desde a rodada 22** — diff vazio. `main` estava novamente com `HEAD` destacado
+apontando para um clone raso desatualizado (mesmo artefato de shallow clone já
+visto em rodadas anteriores) — `git fetch origin main && git checkout -B main
+origin/main` sincronizou sem perda de commits. `origin/main` recebeu 3 commits
+novos neste intervalo (`1a1a532` reduz consumo de quota do GitHub Actions,
+`ee67b0f` ajustes de dashboard, `7a3e585` reduz crons de `*/30min` para `6h`
+em 3 workflows por esgotamento de quota do GitHub Actions), nenhum deles em
+`claude/medusa/`/`claude/api/`. Repetidos apenas os checks leves: busca por
+marcadores de conflito de merge (nenhum), validação de `package.json` (backend
+e storefront, ambos JSON válido), `php -l` em todos os `.php` sob `claude/api/`
+(nenhum erro de sintaxe), confirmação de que nenhum `.env`/`.env.local` de
+produção existe no repositório, teste de rede de saída para `supabase.com`
+(continua bloqueado pelo proxy do ambiente, `CONNECT tunnel failed, response
+403`), e `list_pull_requests` via GitHub MCP (nenhuma PR aberta). Postgres 16 +
+Redis locais foram provisionados brevemente para gerar um `.env` de teste, mas
+o `npm install`/build completo **não foi refeito** nesta rodada — o código é
+byte-idêntico ao já validado ponta a ponta na rodada 20, e a própria rodada 21
+já havia recomendado não repetir revalidações completas sem sinal de mudança;
+ambiente local foi encerrado e removido sem rodar o install. Como o código não
+mudou, os resultados de build/migrate/seed/webhook das rodadas anteriores
+permanecem válidos por construção. **Nenhum bug novo encontrado.**
+
+**Recomendação reforçada nesta rodada:** esta é a **terceira rodada leve
+consecutiva** (21, e agora 23, com a 22 tendo sido uma revalidação completa
+por engano de numeração) confirmando os mesmos 5 blockers de ação humana sem
+nenhum progresso. O padrão de commits desta mesma janela (`7a3e585` reduzindo
+crons de 30min para 6h por esgotamento de quota do GitHub Actions) mostra que
+o repositório já está sofrendo com automação excessiva. Reitera-se a
+recomendação da rodada 21: **pausar o agendamento automático desta tarefa**
+até que o usuário resolva ao menos um dos blockers, com destaque para os dois
+mais acionáveis:
+1. **(Segurança, urgente)** Rotacionar o `OLIST_CLIENT_ID`/`OLIST_CLIENT_SECRET`
+   vazados no histórico do git (ver `GITHUB_SECRETS_TODO.md`) — pendente desde
+   2026-07-01, sem custo/dependência externa, decisão 100% do usuário.
+   Antes de rodar `gh secret set` ou equivalente, também recomenda-se
+   verificar se vale reescrever o histórico do git para remover o segredo
+   antigo (ação destrutiva — decisão humana).
+2. **(Desbloqueio de produção)** Criar um Postgres gerenciado (Supabase, Neon
+   ou Railway) — requer login humano interativo, não executável de forma
+   autônoma neste ambiente (rede bloqueada para esses domínios por design).
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
