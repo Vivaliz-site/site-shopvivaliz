@@ -1,7 +1,14 @@
 # 🚀 ShopVivaliz Medusa - Deployment Status
 
-**Data:** 02/07/2026 (round 7)
-**Status:** ⚠️ **VALIDADO LOCALMENTE — BLOQUEADO PARA PRODUÇÃO** (mesmos 5 blockers há várias rodadas, todos exigem ação humana)
+**Data:** 03/07/2026 (round 22)
+**Status:** ⚠️ **VALIDADO LOCALMENTE — BLOQUEADO PARA PRODUÇÃO** (mesmos 5 blockers há 22 rodadas, todos exigem ação humana)
+
+> Nota: este arquivo estava desatualizado desde a rodada 7 (o registro rodada-a-rodada mais completo vive em
+> [`claude/medusa/DEPLOY-CHECKLIST.md`](claude/medusa/DEPLOY-CHECKLIST.md)). Atualizado nesta rodada (22) para refletir
+> o status atual — nenhuma mudança de código de produto, apenas revalidação completa (pnpm install, migrations, seed,
+> build, health check, `/store/products`, webhook Medusa→EHA, `php -l`), todos os 5 blockers seguem inalterados. A
+> rodada 21 (checagem leve, commit `f980926`) recomendou pausar revalidações completas automáticas até que o usuário
+> resolva ao menos um blocker.
 
 Relatório detalhado, item a item: [`claude/medusa/DEPLOY-STATUS-REPORT.json`](claude/medusa/DEPLOY-STATUS-REPORT.json) e [`claude/medusa/DEPLOY-CHECKLIST.md`](claude/medusa/DEPLOY-CHECKLIST.md).
 
@@ -120,5 +127,5 @@ Relatório completo: [`claude/medusa/DEPLOY-STATUS-REPORT.json`](claude/medusa/D
 
 ---
 
-**Última verificação:** 02/07/2026
-**Próxima execução:** ciclo seguinte do Full Deployment Agent
+**Última verificação:** 03/07/2026 (round 22, revalidação completa, sem regressão — ver `claude/medusa/DEPLOY-CHECKLIST.md` para o histórico detalhado das 22 rodadas)
+**Próxima execução:** recomenda-se pausar/reduzir a revalidações leves até que o usuário resolva ao menos um dos 5 blockers (ver seção acima)

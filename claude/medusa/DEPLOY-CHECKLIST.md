@@ -479,6 +479,52 @@ pendente há múltiplas rodadas) e (b) a criação de um banco Postgres
 gerenciado (Supabase/Neon/Railway), que desbloqueia toda a cadeia de deploy
 em produção.
 
+**Rodada 22 (2026-07-03, revalidação completa):** container efêmero novo;
+`main` estava novamente com `HEAD` destacado apontando para um clone raso
+cujo `origin/main` local estava desatualizado (mesmo artefato de clone raso
+visto nas rodadas 17/19/20) — `git fetch --unshallow` confirmou que era só
+artefato de shallow clone (nenhum commit perdido) e `git checkout -B main
+origin/main` sincronizou. **Nota:** a rodada 21 já havia sido registrada por
+uma sessão concorrente como checagem leve (commit `f980926`, sem
+reprovisionar ambiente), então esta rodada — que executa a revalidação
+completa ponta a ponta solicitada — ficou como rodada 22 para evitar
+colisão de numeração. Postgres 16 local reprovisionado (`service postgresql
+start`, role `medusa` + banco `shopvivaliz_medusa` efêmeros, removidos ao
+final), Redis local iniciado. `pnpm install` limpo na raiz do monorepo
+(1662 pacotes, ~20s, sem erros). `npm run migrate` (`medusa db:migrate`) +
+`npm run seed` (`seed-shopvivaliz-test-data.ts`) aplicados sem erro — 12
+produtos confirmados via `SELECT count(*) FROM product` (8 ShopVivaliz + 4
+demo padrão Medusa), usuário admin criado. `medusa build` OK (5.44s backend
++ 31.33s admin/frontend). Backend subiu com `npx medusa start` a partir de
+`.medusa/server` (symlink de `node_modules`, mesmo procedimento das rodadas
+anteriores), `GET /health` → 200 OK. Publishable key obtida direto do
+Postgres; `GET /store/products` retornou os 12 produtos (contagem
+confirmada via JSON, ex. "Medusa T-Shirt"). `next build` do storefront OK
+(133 páginas estáticas, idêntico às rodadas anteriores). Storefront em modo
+produção (porta 8000) respondeu HTTP 200 em `/br` e renderizou
+`/br/products/camiseta-shopvivaliz` com preço real da API (R$69,90).
+`medusa-webhook.php` testado via `php -S` com o `EHA_WEBHOOK_SECRET` real
+exportado como variável de ambiente do processo: assinatura HMAC-SHA256
+válida → HTTP 200 `{"ok":true,...}`; assinatura inválida → HTTP 401
+`{"error":"Unauthorized"}`. `php -l` sem erros em `sync-olist-products.php`,
+`olist/webhook.php` e `medusa-webhook.php`. Teste de rede de saída para
+`api.supabase.com` continua bloqueado pelo proxy do ambiente (`gateway
+answered 403 to CONNECT`, confirmado via `/__agentproxy/status`). GitHub
+MCP revalidado: nenhum tool de gestão de secrets do Actions disponível
+(apenas `list_pull_requests` retornou vazio — nenhuma PR aberta). Nenhum
+arquivo `.env`/`.env.local`/segredo real encontrado em nenhum lugar do
+repositório (apenas os `.env.example` já versionados); nenhuma credencial
+de produção foi adicionada desde a rodada 20. **Nenhum bug novo
+encontrado** — stack completo (install, migrations, seed, build, health
+check, `/store/products`, storefront SSR, webhook Medusa→EHA, `php -l`)
+funciona ponta a ponta a partir de um clone limpo, sem nenhuma mudança de
+código de produto necessária. Todos os processos/serviços locais (backend,
+storefront, `php -S`, Postgres) parados e banco/role/`.env`/`.env.local` de
+teste removidos ao final; `git status` limpo. Os mesmos 5 blockers de ação
+humana permanecem pendentes (22 rodadas consecutivas, contando a rodada 21
+leve) — concorda-se com a recomendação da rodada 21 de pausar revalidações
+completas automáticas até que o usuário resolva ao menos um blocker.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
