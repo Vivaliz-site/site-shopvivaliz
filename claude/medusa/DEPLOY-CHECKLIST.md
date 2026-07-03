@@ -359,6 +359,25 @@ rodada; ambiente local revalidado do zero (install → migrate → seed → buil
 → health check, todos OK). Recomenda-se um hook de pre-commit/CI que rejeite
 commits contendo `^<<<<<<< ` para evitar recorrência.
 
+**Rodada 13 (2026-07-03, revalidação leve):** confirmado via `git diff
+4414b43..HEAD -- claude/medusa claude/api` (commit da rodada 12) que **nenhum
+arquivo sob `claude/medusa/` ou `claude/api/` mudou desde a rodada 12** — diff
+vazio. Repetidos apenas os checks leves: busca por marcadores de conflito de
+merge (nenhum), validação de `package.json` (backend e storefront, ambos JSON
+válido), `php -l` em todos os `.php` sob `claude/api/` (nenhum erro de
+sintaxe), confirmação de que `DATABASE_URL`/`.env` de produção continuam
+ausentes em `apps/backend` e `apps/storefront`, e teste de rede de saída para
+`supabase.com` (ainda bloqueado pelo proxy do ambiente, `CONNECT tunnel
+failed, response 403`, confirmado via `/__agentproxy/status`). GitHub MCP
+disponível nesta sessão revalidado sem tools de gestão de secrets (mesma
+limitação de rodadas anteriores). Como o código é byte-idêntico ao já
+validado ponta a ponta na rodada 10, os resultados permanecem válidos por
+construção. Os mesmos 5 blockers de ação humana continuam inalterados (13
+rodadas consecutivas). Nenhum bug novo encontrado. Dado que 13 rodadas
+seguidas produziram resultado idêntico, rodadas futuras devem continuar
+leves e só escalar para revalidação completa se o código mudar ou o usuário
+fornecer alguma das credenciais/acessos pendentes.
+
 **Rodada 12 (2026-07-02, revalidação leve):** confirmado via `git diff
 b3a77d5..HEAD -- claude/medusa claude/api` (commit da rodada 11) que **nenhum
 arquivo sob `claude/medusa/` ou `claude/api/` mudou desde a rodada 11** — diff
