@@ -1,0 +1,45 @@
+title = "ShopVivaliz Gitleaks Config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Paths e padroes que nao sao segredos reais"
+
+paths = [
+    "node_modules",
+    "vendor",
+    "docs/",
+    ".gitleaks.toml",
+    ".gitleaksignore",
+    "package-lock.json",
+    "automation/eha/reports/",
+    "storage/",
+    "logs/",
+    "scripts/.ftp-credentials.example",
+    "INSTRUCOES-DEPLOY-AUTONOMO.txt",
+    "scripts/setup-auto-deploy.py",
+    "scripts/setup-auto-deploy.ps1",
+]
+
+regexes = [
+    # Variaveis PHP lendo de ambiente (nao sao valores reais)
+    '''client_secret['"]\s*=>\s*[a-z_]+\(''',
+    # Arrays PHP com chave client_secret apontando para funcao getenv/env
+    '''['"]client_secret['"]\s*=>\s*\$[a-zA-Z]+''',
+    # Comentarios PHP
+    '''/\*.*client_secret.*\*/''',
+    # Placeholders de exemplo
+    '''(YOUR_|EXAMPLE_|PLACEHOLDER_|TEST_)[A-Z_]+''',
+    # URLs com parametros de exemplo
+    '''https?://[a-z0-9.-]+/.*\?.*token=EXAMPLE''',
+    # Tokens placeholder com palavras em minusculo/portugues (nao sao tokens reais)
+    '''ghp_[a-z][a-z_]+''',
+    # Placeholders de senha/token genericos
+    '''(senha|password|token|secret)_(ftp|exemplo|substitua|replace|placeholder)''',
+]
+
+commits = [
+    # Commits antes da limpeza do node_modules (SDK Anthropic continha padroes de credencial)
+    "e9edd69be45c9c1a6d45948bac6f878ae6e92b55",
+]

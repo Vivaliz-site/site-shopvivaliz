@@ -5,10 +5,40 @@ header('Content-Type: text/html; charset=UTF-8');
 /* ── helpers ── */
 function sv_product_catalog(): array
 {
+    static $data = null;
+    if ($data !== null) return $data;
     $path = __DIR__ . '/api/catalog/fallback-products.json';
-    if (!is_file($path)) return [];
+    if (!is_file($path)) return $data = [];
     $d = json_decode((string)file_get_contents($path), true);
-    return is_array($d) ? $d : [];
+    return $data = is_array($d) ? $d : [];
+}
+
+function sv_product_related(string $sku, string $category, int $limit = 4): array
+{
+    $all = sv_product_catalog();
+    $related = [];
+    $fallback = [];
+    foreach ($all as $row) {
+        if (!is_array($row)) continue;
+        if (trim((string)($row['sku'] ?? '')) === $sku) continue;
+        $rowCat = trim((string)($row['category'] ?? ''));
+        $entry = [
+            'sku'              => trim((string)($row['sku'] ?? '')),
+            'name'             => trim((string)($row['name'] ?? 'Produto Vivaliz')),
+            'image_url'        => trim((string)($row['image_url'] ?? '/favicon.ico')) ?: '/favicon.ico',
+            'price'            => (float)($row['price'] ?? 0),
+            'olist_product_id' => (string)($row['olist_product_id'] ?? ''),
+            'slug'             => trim((string)($row['slug'] ?? '')),
+            'category'         => $rowCat,
+        ];
+        if ($category !== '' && $rowCat === $category) {
+            $related[] = $entry;
+            if (count($related) >= $limit) return $related;
+        } elseif (count($fallback) < $limit) {
+            $fallback[] = $entry;
+        }
+    }
+    return array_slice(array_merge($related, $fallback), 0, $limit);
 }
 
 function sv_product_find_slug(string $slug): array
@@ -54,6 +84,8 @@ $rawSlug  = trim((string)($resolved['slug'] ?? ''));
 $priceRaw   = (float)($resolved['price'] ?? (float)sv_qv('price', '0'));
 $priceLabel = $priceRaw > 0 ? 'R$ ' . number_format($priceRaw, 2, ',', '.') : 'Preço sob consulta';
 $canonicalUrl = 'https://dev.shopvivaliz.com.br' . ($rawSlug !== '' ? '/produto/' . $rawSlug : '/produto?sku=' . rawurlencode($sku));
+
+$related = sv_product_related($sku, $category);
 
 /* ── V15: descrição automática ── */
 $description = trim((string)($resolved['description'] ?? ''));
@@ -158,6 +190,36 @@ $jsonLd = [
         </div>
     </main>
 
+    <?php if (!empty($related)): ?>
+    <section class="container related-products">
+        <h2 class="related-title">Você também pode gostar</h2>
+        <div class="product-grid related-grid">
+            <?php foreach ($related as $rp):
+                $rUrl = $rp['slug'] !== '' ? '/produto/' . $rp['slug']
+                      : '/produto?' . http_build_query(['sku' => $rp['sku'], 'name' => $rp['name'], 'image' => $rp['image_url'], 'price' => (string)$rp['price'], 'olist_product_id' => $rp['olist_product_id']]);
+                $rPayload = rawurlencode(json_encode(['sku' => $rp['sku'], 'name' => $rp['name'], 'image_url' => $rp['image_url'], 'price' => $rp['price'], 'olist_product_id' => $rp['olist_product_id']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            ?>
+            <article class="product-card">
+                <a class="product-image" href="<?= sv_esc($rUrl) ?>">
+                    <img src="<?= sv_esc($rp['image_url']) ?>" alt="<?= sv_esc($rp['name']) ?>" loading="lazy" onerror="this.src='/favicon.ico'">
+                </a>
+                <div class="product-info">
+                    <?php if ($rp['category'] !== ''): ?>
+                        <div class="product-category"><?= sv_esc($rp['category']) ?></div>
+                    <?php endif; ?>
+                    <h3><?= sv_esc($rp['name']) ?></h3>
+                    <div class="product-price"><?= sv_esc($rp['price'] > 0 ? 'R$ ' . number_format($rp['price'], 2, ',', '.') : 'Preço sob consulta') ?></div>
+                    <div class="card-actions">
+                        <a class="btn btn-secondary card-link" href="<?= sv_esc($rUrl) ?>">Ver detalhes</a>
+                        <button class="buy-button" type="button" data-product="<?= sv_esc($rPayload) ?>">Comprar</button>
+                    </div>
+                </div>
+            </article>
+            <?php endforeach; ?>
+        </div>
+    </section>
+    <?php endif; ?>
+
     <script>
     (function () {
         var product = {
@@ -167,14 +229,29 @@ $jsonLd = [
             price: <?= json_encode($priceRaw) ?>,
             olist_product_id: <?= json_encode($olistId, JSON_UNESCAPED_UNICODE) ?>
         };
-        document.getElementById('buy-now').addEventListener('click', function () {
+        function addToCart(p) {
             var items;
             try { items = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'); } catch(e) { items = []; }
-            var ex = items.find(function(i){ return i.sku === product.sku; });
+            var ex = items.find(function(i){ return i.sku === p.sku; });
             if (ex) ex.quantity = (ex.quantity || 1) + 1;
-            else items.push(Object.assign({}, product, { quantity: 1 }));
+            else items.push(Object.assign({}, p, { quantity: 1 }));
             localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+            return items;
+        }
+
+        document.getElementById('buy-now').addEventListener('click', function () {
+            addToCart(product);
             window.location.href = '/carrinho.php';
+        });
+
+        document.querySelectorAll('.buy-button[data-product]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                try {
+                    var p = JSON.parse(decodeURIComponent(this.dataset.product));
+                    addToCart(p);
+                    window.location.href = '/carrinho.php';
+                } catch(e) {}
+            });
         });
     })();
     </script>
