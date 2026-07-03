@@ -1,9 +1,9 @@
 {
   "projeto": "ShopVivaliz Medusa",
-  "rodada": 18,
+  "rodada": 20,
   "data": "2026-07-03",
   "status_geral": "BLOQUEADO_PARA_PRODUCAO_ACAO_HUMANA_NECESSARIA",
-  "resumo": "Ambiente local (container efemero) validado ponta a ponta com sucesso pela 18a vez consecutiva. Nenhuma regressao de codigo. Producao real segue bloqueada pelos mesmos 5 itens que exigem acao humana fora do alcance deste ambiente (sandbox sem acesso a internet externa e sem CLI/API de secrets do GitHub).",
+  "resumo": "Ambiente local (container efemero) validado ponta a ponta com sucesso pela 20a vez consecutiva. Nenhuma regressao de codigo, nenhuma mudanca de codigo de produto necessaria nesta rodada. Producao real segue bloqueada pelos mesmos 5 itens que exigem acao humana fora do alcance deste ambiente (sandbox sem acesso a internet externa e sem CLI/API de secrets do GitHub). Recomendacao registrada nas rodadas 12+ permanece: valor marginal de novas revalidacoes completas e decrescente ate que um blocker seja resolvido.",
   "passos": {
     "1_database_setup": {
       "status": "OK_LOCAL_BLOCKER_PRODUCAO",
@@ -43,7 +43,7 @@
     },
     "10_deployment_checklist": {
       "status": "OK",
-      "detalhe": "claude/medusa/DEPLOY-CHECKLIST.md contem checklist detalhado (18 rodadas de revalidacao). DEPLOY_HOSTGATOR.md contem instrucoes desatualizadas (assume Node.js no HostGator) que contradizem deploy.sh - recomenda-se marcar DEPLOY_HOSTGATOR.md como obsoleto/revisar."
+      "detalhe": "claude/medusa/DEPLOY-CHECKLIST.md contem checklist detalhado (20 rodadas de revalidacao). DEPLOY_HOSTGATOR.md contem instrucoes desatualizadas (assume Node.js no HostGator) que contradizem deploy.sh - recomenda-se marcar DEPLOY_HOSTGATOR.md como obsoleto/revisar."
     },
     "11_final_report": {
       "status": "OK",
@@ -78,12 +78,8 @@
     }
   ],
   "mudancas_de_codigo_desta_rodada": [
-    "claude/medusa/apps/backend/package.json: adicionados scripts migrate, migrate:latest, seed (faltavam - 17 rodadas anteriores usaram npx medusa diretamente e nunca notaram a lacuna)",
-    "claude/medusa/package.json: adicionado pnpm.onlyBuiltDependencies para permitir build scripts (esbuild, sharp, @swc/core etc.)",
-    "claude/medusa/pnpm-lock.yaml: atualizado para refletir versoes ja pinadas no package.json (@medusajs/ui 4.1.17, react-router-dom 6.30.4) que estavam desatualizadas no lockfile",
-    "claude/api/sync-olist-products.php: fix cosmetico do aviso PHP 'headers already sent'",
-    "claude/medusa/DEPLOY-CHECKLIST.md: adicionada rodada 18",
-    "claude/medusa/RELATORIO_FINAL_MEDUSA.json: este arquivo (novo)"
+    "claude/medusa/DEPLOY-CHECKLIST.md: adicionada rodada 20",
+    "claude/medusa/RELATORIO_FINAL_MEDUSA.json: atualizado para rodada 20 (nenhuma mudanca de codigo de produto - apenas documentacao)"
   ],
-  "recomendacao": "As ultimas 13+ rodadas desta mesma verificacao chegaram ao mesmo resultado: ambiente local 100% funcional, producao bloqueada pelos mesmos 5 itens que exigem acao humana. Recomenda-se que o usuario resolva pelo menos o blocker de banco de dados (criar Supabase/Neon) antes de disparar novas rodadas completas deste fluxo, ja que revalidacoes repetidas sem mudanca de credenciais/codigo tem valor marginal decrescente."
+  "recomendacao": "As ultimas 15+ rodadas desta mesma verificacao chegaram ao mesmo resultado: ambiente local 100% funcional, producao bloqueada pelos mesmos 5 itens que exigem acao humana (banco gerenciado, host Node.js, credenciais reais de pagamento, GitHub Secrets, rotacao de credenciais Olist vazadas). Nenhum desses itens pode ser resolvido de forma autonoma nesta sessao (sandbox sem acesso a internet externa a dominios de terceiros e sem CLI/API de gestao de secrets do GitHub). Recomenda-se fortemente que o usuario resolva pelo menos o blocker de banco de dados (criar conta Supabase/Neon/Railway) e configure os GitHub Secrets antes de disparar novas rodadas completas deste fluxo - revalidacoes repetidas sem mudanca de credenciais/codigo tem valor marginal decrescente e consomem tempo/CI sem sinal novo."
 }
