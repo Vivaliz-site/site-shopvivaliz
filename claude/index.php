@@ -83,10 +83,10 @@ $status_color = match($last_status) {
 $last_run_ts_raw = $last_run['metrics']['timestamp'] ?? ($last_run['validation']['timestamp'] ?? null);
 $last_run_unix   = $last_run_ts_raw ? strtotime($last_run_ts_raw) : 0;
 $age_seconds     = $last_run_unix > 0 ? (time() - $last_run_unix) : null;
-// Thresholds: CI roda a cada 15 min → warn > 20min, crit > 40min
-$staleness_color = $age_seconds === null ? '#64748b' : ($age_seconds < 1200 ? '#22c55e' : ($age_seconds < 2400 ? '#f59e0b' : '#ef4444'));
+// Thresholds: CI roda a cada 30 min → warn > 40min, crit > 80min
+$staleness_color = $age_seconds === null ? '#64748b' : ($age_seconds < 2400 ? '#22c55e' : ($age_seconds < 4800 ? '#f59e0b' : '#ef4444'));
 $staleness_label = $age_seconds === null ? '—' : ($age_seconds < 60 ? 'agora mesmo' : ($age_seconds < 3600 ? round($age_seconds / 60) . ' min atrás' : round($age_seconds / 3600, 1) . 'h atrás'));
-$staleness_alert = $age_seconds !== null && $age_seconds >= 2400;
+$staleness_alert = $age_seconds !== null && $age_seconds >= 4800;
 
 $action   = $last_run['action'] ?? '—';
 $elapsed  = $last_run['elapsed_s'] ?? '—';
@@ -177,6 +177,20 @@ $total_events = count($eha_log_lines);
     <p class="sub">Atualiza a cada 60s &nbsp;·&nbsp; EHA Run #<?= htmlspecialchars((string)$run_id) ?> &nbsp;·&nbsp; <?= htmlspecialchars((string)$ts) ?></p>
 
     <div class="badge"><?= htmlspecialchars($last_status) ?></div>
+
+    <?php
+    // Detecta se CI está parado (runs recentes todos falhando em < 30s = quota exaurida)
+    $quota_alert = ($age_seconds !== null && $age_seconds > 7200); // >2h sem run bem-sucedido
+    if ($quota_alert): ?>
+    <div style="background:#ef444415;border:1px solid #ef4444;border-radius:.75rem;padding:.85rem 1.25rem;margin-bottom:1.25rem;font-size:.88rem;">
+        ⚠️ <strong style="color:#ef4444">CI parado</strong> — Último run bem-sucedido há
+        <strong style="color:#f87171"><?= htmlspecialchars($staleness_label) ?></strong>.
+        Provável causa: <strong>quota GitHub Actions esgotada</strong>.
+        Verifique em <a href="https://github.com/settings/billing/summary" target="_blank" style="color:#60a5fa">billing</a>
+        e <a href="https://github.com/fredmourao-ai/site-shopvivaliz/settings/actions" target="_blank" style="color:#60a5fa">Actions settings</a>.
+        Fix de agendamentos já aplicado (commit 1a1a532) — economia de ~93% em runs/mês.
+    </div>
+    <?php endif; ?>
 
     <div class="staleness-bar <?= $staleness_alert ? 'staleness-crit' : 'staleness-ok' ?>">
         <span style="font-size:1.1rem"><?= $staleness_alert ? '⚠️' : '🟢' ?></span>
