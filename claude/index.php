@@ -21,6 +21,24 @@ foreach (array_slice($history_lines, -20) as $line) {
     if ($h) $history[] = $h;
 }
 
+// Agente Proativo — último run
+$proactive_log_path = dirname(__DIR__) . '/automation/proactive/logs/runs.jsonl';
+$proactive_runs = [];
+if (file_exists($proactive_log_path)) {
+    foreach (@file($proactive_log_path) ?: [] as $line) {
+        $e = @json_decode(trim($line), true);
+        if ($e) $proactive_runs[] = $e;
+    }
+}
+$proactive_last = end($proactive_runs) ?: null;
+$proactive_ts      = $proactive_last['timestamp'] ?? '—';
+$proactive_action  = $proactive_last['action'] ?? '—';
+$proactive_file    = $proactive_last['file'] ?? '—';
+$proactive_reason  = $proactive_last['reason'] ?? '—';
+$proactive_commit  = $proactive_last['commit'] ?? '—';
+$proactive_total   = count($proactive_runs);
+$proactive_color   = $proactive_last ? '#22c55e' : '#64748b';
+
 $status_color = match($last_status) {
     'READY_FOR_PRODUCTION' => '#22c55e',
     'BLOCKED'              => '#ef4444',
@@ -181,6 +199,36 @@ $sparkline_err = implode(',', $trend_err);
                 <div class="card-label">Ações aplicadas</div>
                 <div class="card-value ok"><?= (int)$medusa_applied ?></div>
             </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Agente Proativo</h2>
+        <div style="margin-bottom:.75rem">
+            <span style="display:inline-block;padding:.2rem .7rem;border-radius:999px;font-size:.8rem;font-weight:600;color:#fff;background:<?= $proactive_color ?>">
+                <?= $proactive_last ? 'ATIVO' : 'SEM EXECUÇÕES' ?>
+            </span>
+            &nbsp;<span style="font-size:.8rem;color:#64748b"><?= htmlspecialchars($proactive_total) ?> runs registrados</span>
+        </div>
+        <div class="grid">
+            <div class="card" style="grid-column:span 2">
+                <div class="card-label">Última ação</div>
+                <div class="card-value" style="font-size:.9rem"><?= htmlspecialchars($proactive_action) ?></div>
+            </div>
+            <div class="card">
+                <div class="card-label">Timestamp</div>
+                <div class="card-value muted" style="font-size:.8rem"><?= htmlspecialchars($proactive_ts) ?></div>
+            </div>
+            <?php if ($proactive_last && $proactive_action !== 'no_action'): ?>
+            <div class="card" style="grid-column:span 2">
+                <div class="card-label">Arquivo modificado</div>
+                <div class="card-value muted" style="font-size:.85rem"><?= htmlspecialchars($proactive_file) ?></div>
+            </div>
+            <div class="card" style="grid-column:span 3">
+                <div class="card-label">Motivo</div>
+                <div class="card-value" style="font-size:.82rem;font-weight:400"><?= htmlspecialchars(mb_substr($proactive_reason, 0, 200)) ?></div>
+            </div>
+            <?php endif; ?>
         </div>
     </div>
 
