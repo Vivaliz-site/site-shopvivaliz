@@ -135,6 +135,7 @@ jobs:
 
       - name: Commit EHA reports ao repo
         if: always()
+        continue-on-error: true
         run: |
           git config user.email 'ci-autonomo@shopvivaliz.com.br'
           git config user.name 'CI Autônomo'
@@ -142,7 +143,10 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -m "chore: atualiza relatórios EHA run #${{ github.run_number }} [skip ci]"
             for i in 1 2 3 4; do
-              git pull --rebase origin main && git push origin HEAD:main && break
+              if git pull --rebase origin main && git push origin HEAD:main; then
+                break
+              fi
+              git rebase --abort 2>/dev/null || true
               sleep $((i * 2))
             done
           fi
