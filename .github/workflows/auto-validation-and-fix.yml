@@ -2,7 +2,7 @@ name: Auto-Validation and Auto-Fix
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # A cada 30 minutos
+    - cron: '0 */6 * * *'  # A cada 6 horas
   workflow_dispatch:
 
 permissions:
@@ -43,16 +43,14 @@ jobs:
           print("\n[AUTO-FIX] Iniciando correccoes automaticas...")
           fixes = []
 
-          # 1. Remover caracteres especiais dos workflows
+          # 1. Verificar YAML de workflows (sem modificar conteudo)
           for wf_file in glob.glob('.github/workflows/*.yml'):
-              with open(wf_file, 'rb') as f:
-                  content = f.read()
-              # Remove non-ASCII characters
-              content = content.decode('utf-8', errors='ignore').encode('ascii', errors='ignore')
-              with open(wf_file, 'wb') as f:
-                  f.write(content)
-              print(f"  [FIXED] {Path(wf_file).name}: Caracteres especiais removidos")
-              fixes.append(f"Cleaned {Path(wf_file).name}")
+              try:
+                  with open(wf_file, 'r', encoding='utf-8') as f:
+                      f.read()
+                  print(f"  [OK] {Path(wf_file).name}: UTF-8 valido")
+              except Exception as e:
+                  print(f"  [WARN] {Path(wf_file).name}: {e}")
 
           # 2. Verificar e criar diretorios faltantes
           dirs_needed = ['logs', 'images', 'catalogo', 'checkout', 'includes']
