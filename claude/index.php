@@ -79,6 +79,15 @@ $status_color = match($last_status) {
     default                => '#94a3b8',
 };
 
+// Staleness — tempo desde último run (em segundos)
+$last_run_ts_raw = $last_run['metrics']['timestamp'] ?? ($last_run['validation']['timestamp'] ?? null);
+$last_run_unix   = $last_run_ts_raw ? strtotime($last_run_ts_raw) : 0;
+$age_seconds     = $last_run_unix > 0 ? (time() - $last_run_unix) : null;
+// Thresholds: CI roda a cada 15 min → warn > 20min, crit > 40min
+$staleness_color = $age_seconds === null ? '#64748b' : ($age_seconds < 1200 ? '#22c55e' : ($age_seconds < 2400 ? '#f59e0b' : '#ef4444'));
+$staleness_label = $age_seconds === null ? '—' : ($age_seconds < 60 ? 'agora mesmo' : ($age_seconds < 3600 ? round($age_seconds / 60) . ' min atrás' : round($age_seconds / 3600, 1) . 'h atrás'));
+$staleness_alert = $age_seconds !== null && $age_seconds >= 2400;
+
 $action   = $last_run['action'] ?? '—';
 $elapsed  = $last_run['elapsed_s'] ?? '—';
 $metrics  = $last_run['metrics'] ?? [];
@@ -121,8 +130,7 @@ $total_events = count($eha_log_lines);
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>EHA — CI Autônomo Contínuo</title>
-    <meta http-equiv="refresh" content="60">
-    <style>
+<style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 2rem; }
         h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: .25rem; }
@@ -156,6 +164,12 @@ $total_events = count($eha_log_lines);
         .priority-low    { background: #3b82f622; color: #3b82f6; }
         .progress-bar { background: #1e293b; border-radius: 999px; height: 8px; overflow: hidden; margin: .5rem 0 .25rem; }
         .progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #3b82f6, #22c55e); transition: width .3s; }
+        .staleness-bar { border-radius: .75rem; padding: .75rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; font-size: .9rem; }
+        .staleness-crit { background: #ef444415; border: 1px solid #ef4444; }
+        .staleness-ok   { background: #1e293b; }
+        .refresh-count  { font-size: .75rem; color: #64748b; margin-left: auto; }
+        .log .log-error   { color: #ef4444; }
+        .log .log-blocked { color: #f97316; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -163,6 +177,17 @@ $total_events = count($eha_log_lines);
     <p class="sub">Atualiza a cada 60s &nbsp;·&nbsp; EHA Run #<?= htmlspecialchars((string)$run_id) ?> &nbsp;·&nbsp; <?= htmlspecialchars((string)$ts) ?></p>
 
     <div class="badge"><?= htmlspecialchars($last_status) ?></div>
+
+    <div class="staleness-bar <?= $staleness_alert ? 'staleness-crit' : 'staleness-ok' ?>">
+        <span style="font-size:1.1rem"><?= $staleness_alert ? '⚠️' : '🟢' ?></span>
+        <span>
+            <strong style="color:<?= $staleness_color ?>">Último run: <span id="js-age"><?= htmlspecialchars($staleness_label) ?></span></strong>
+            <?php if ($staleness_alert): ?>
+                &nbsp;<span style="color:#ef4444;font-size:.8rem">— CI pode estar parado!</span>
+            <?php endif; ?>
+        </span>
+        <span class="refresh-count">Página recarrega em <span id="js-countdown">60</span>s</span>
+    </div>
 
     <h2>Métricas EHA</h2>
     <div class="grid">
@@ -478,7 +503,11 @@ $total_events = count($eha_log_lines);
         <div class="log"><?php
             foreach (array_reverse($recent_log) as $line) {
                 $safe = htmlspecialchars(rtrim($line));
-                if (str_contains($line, 'DECISION') || str_contains($line, 'VALIDATION') || str_contains($line, 'ROLLBACK')) {
+                if (str_contains($line, 'BLOCKED') || str_contains($line, 'ERROR')) {
+                    echo "<span class=\"log-blocked\">$safe</span>\n";
+                } elseif (str_contains($line, 'ROLLBACK')) {
+                    echo "<span class=\"log-error\">$safe</span>\n";
+                } elseif (str_contains($line, 'DECISION') || str_contains($line, 'VALIDATION')) {
                     echo "<span class=\"hi\">$safe</span>\n";
                 } else {
                     echo "$safe\n";
@@ -487,5 +516,30 @@ $total_events = count($eha_log_lines);
         ?></div>
         <?php endif; ?>
     </div>
+
+    <script>
+    (function() {
+        var lastRunUnix = <?= (int)$last_run_unix ?>;
+        var refreshIn   = 60;
+        var cdEl  = document.getElementById('js-countdown');
+        var ageEl = document.getElementById('js-age');
+
+        function fmtAge(secs) {
+            if (secs < 60)   return 'agora mesmo';
+            if (secs < 3600) return Math.round(secs / 60) + ' min atrás';
+            return (secs / 3600).toFixed(1) + 'h atrás';
+        }
+
+        setInterval(function() {
+            refreshIn--;
+            if (cdEl) cdEl.textContent = Math.max(0, refreshIn) + 's';
+            if (ageEl && lastRunUnix > 0) {
+                var age = Math.floor(Date.now() / 1000) - lastRunUnix;
+                ageEl.textContent = fmtAge(age);
+            }
+            if (refreshIn <= 0) location.reload();
+        }, 1000);
+    })();
+    </script>
 </body>
 </html>
