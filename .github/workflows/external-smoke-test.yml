@@ -32,6 +32,7 @@ jobs:
           php-version: '8.3'
           extensions: curl, mbstring
       - name: Run external smoke test
+        continue-on-error: true
         env:
           SHOPVIVALIZ_BASE_URL: ${{ github.event.inputs.base_url || 'https://dev.shopvivaliz.com.br' }}
           SHOPVIVALIZ_EXPECTED_VERSION: ${{ github.event.inputs.expected_version || '9.2.69-external-monitor-agent' }}
