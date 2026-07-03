@@ -24,10 +24,20 @@ foreach (array_slice($history_lines, -20) as $line) {
 // Calcular taxa de sucesso
 $total_runs   = count($history);
 $success_runs = count(array_filter($history, fn($h) =>
-    ($h['action'] ?? '') !== 'ROLLBACK' && (int)($h['metrics']['error_count'] ?? 0) === 0
+    ($h['action'] ?? '') !== 'ROLLBACK' && (int)($h['error_count'] ?? 0) === 0
 ));
 $success_rate = $total_runs > 0 ? round($success_runs / $total_runs * 100) : 0;
 $success_color = $success_rate >= 90 ? 'ok' : ($success_rate >= 70 ? 'warn' : 'fail');
+
+// Calcular streak de runs consecutivos sem falha
+$streak = 0;
+foreach (array_reverse($history) as $h) {
+    if (($h['action'] ?? '') === 'DEPLOY_OK' && (int)($h['error_count'] ?? 0) === 0 && !($h['e2e_failed'] ?? false)) {
+        $streak++;
+    } else {
+        break;
+    }
+}
 
 // Agente Proativo — último run
 $proactive_log_path = dirname(__DIR__) . '/automation/proactive/logs/runs.jsonl';
@@ -71,9 +81,9 @@ $medusa_next      = $medusa_run['next_step_title'] ?? '—';
 $medusa_applied   = count($medusa_run['applied_actions'] ?? []);
 $medusa_color     = $medusa_status === 'completed' ? '#22c55e' : ($medusa_status === 'error' ? '#ef4444' : '#f59e0b');
 
-// Trend sparkline data
-$trend_ok  = array_map(fn($h) => ($h['metrics']['checkout_ok'] ?? false) ? 1 : 0, $history);
-$trend_err = array_map(fn($h) => (int)($h['metrics']['error_count'] ?? 0), $history);
+// Trend sparkline data — run_history.jsonl usa campos no nível raiz (não aninhados em metrics)
+$trend_ok  = array_map(fn($h) => ($h['checkout_ok'] ?? false) ? 1 : 0, $history);
+$trend_err = array_map(fn($h) => (int)($h['error_count'] ?? 0), $history);
 $sparkline_ok  = implode(',', $trend_ok);
 $sparkline_err = implode(',', $trend_err);
 
@@ -167,6 +177,12 @@ $total_events = count($eha_log_lines);
             <div class="card-label">Erros recentes</div>
             <div class="card-value <?= ($metrics['error_count'] ?? 0) > 5 ? 'fail' : 'ok' ?>">
                 <?= (int)($metrics['error_count'] ?? 0) ?>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-label">Streak OK</div>
+            <div class="card-value <?= $streak >= 10 ? 'ok' : ($streak >= 3 ? 'warn' : 'muted') ?>">
+                <?= $streak ?> <span style="font-size:.7rem;font-weight:400;color:#64748b">runs</span>
             </div>
         </div>
         <div class="card">
@@ -296,6 +312,45 @@ $total_events = count($eha_log_lines);
         spark('sparkErr', err, '#ef4444');
     })();
     </script>
+    <?php endif; ?>
+
+    <?php if (count($history) > 0): ?>
+    <div class="section">
+        <h2>Histórico recente</h2>
+        <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+            <thead>
+                <tr style="color:#64748b;text-align:left">
+                    <th style="padding:.4rem .75rem;font-weight:600">Run</th>
+                    <th style="padding:.4rem .75rem;font-weight:600">Timestamp</th>
+                    <th style="padding:.4rem .75rem;font-weight:600">Ação</th>
+                    <th style="padding:.4rem .75rem;font-weight:600">Tempo</th>
+                    <th style="padding:.4rem .75rem;font-weight:600">Checkout</th>
+                    <th style="padding:.4rem .75rem;font-weight:600">E2E</th>
+                    <th style="padding:.4rem .75rem;font-weight:600">Erros</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach (array_reverse($history) as $h): ?>
+            <?php
+                $row_action = $h['action'] ?? '—';
+                $row_color  = $row_action === 'DEPLOY_OK' ? '#22c55e' : ($row_action === 'ROLLBACK' ? '#ef4444' : '#f59e0b');
+                $row_ts     = isset($h['ts']) ? substr($h['ts'], 0, 16) : '—';
+            ?>
+            <tr style="border-top:1px solid #1e293b">
+                <td style="padding:.4rem .75rem;color:#94a3b8"><?= htmlspecialchars((string)($h['run_id'] ?? '—')) ?></td>
+                <td style="padding:.4rem .75rem;color:#64748b;white-space:nowrap"><?= htmlspecialchars($row_ts) ?></td>
+                <td style="padding:.4rem .75rem;font-weight:600;color:<?= $row_color ?>"><?= htmlspecialchars($row_action) ?></td>
+                <td style="padding:.4rem .75rem;color:#64748b"><?= htmlspecialchars((string)($h['elapsed_s'] ?? '—')) ?>s</td>
+                <td style="padding:.4rem .75rem;color:<?= ($h['checkout_ok'] ?? false) ? '#22c55e' : '#ef4444' ?>"><?= ($h['checkout_ok'] ?? false) ? '✓' : '✗' ?></td>
+                <td style="padding:.4rem .75rem;color:<?= ($h['e2e_failed'] ?? false) ? '#ef4444' : '#22c55e' ?>"><?= ($h['e2e_failed'] ?? false) ? '✗' : '✓' ?></td>
+                <td style="padding:.4rem .75rem;color:<?= ($h['error_count'] ?? 0) > 0 ? '#ef4444' : '#64748b' ?>"><?= (int)($h['error_count'] ?? 0) ?></td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        </div>
+    </div>
     <?php endif; ?>
 
     <div class="section">
