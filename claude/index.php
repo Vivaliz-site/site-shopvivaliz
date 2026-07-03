@@ -105,9 +105,12 @@ $medusa_next      = $medusa_run['next_step_title'] ?? '—';
 $medusa_applied   = count($medusa_run['applied_actions'] ?? []);
 $medusa_color     = $medusa_status === 'completed' ? '#22c55e' : ($medusa_status === 'error' ? '#ef4444' : '#f59e0b');
 
-// Trio IA Executor — fila de tarefas
-$tasks_queue_path = dirname(__DIR__) . '/logs/tasks-queue.json';
-$tasks_data       = @json_decode(@file_get_contents($tasks_queue_path), true) ?: ['queue' => []];
+// Trio IA Executor — fila de tarefas (root tem prioridade; logs/ como fallback)
+$tasks_queue_path = dirname(__DIR__) . '/tasks-queue.json';
+if (!file_exists($tasks_queue_path)) {
+    $tasks_queue_path = dirname(__DIR__) . '/logs/tasks-queue.json';
+}
+$tasks_data = @json_decode(@file_get_contents($tasks_queue_path), true) ?: ['queue' => []];
 $tasks_all        = $tasks_data['queue'] ?? [];
 $tasks_completed  = array_values(array_filter($tasks_all, fn($t) => ($t['status'] ?? '') === 'completed'));
 $tasks_pending    = array_values(array_filter($tasks_all, fn($t) => ($t['status'] ?? '') === 'pending'));
