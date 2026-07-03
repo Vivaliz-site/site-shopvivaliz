@@ -6,22 +6,26 @@ from pathlib import Path
 
 queue_file = Path("logs/tasks-queue.json")
 
-with open(queue_file, "r", encoding="utf-8") as f:
-    data = json.load(f)
+if queue_file.exists():
+    with open(queue_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    tasks = data.get("queue", [])
+else:
+    print(f"⚠️  {queue_file} não encontrado. Gerando relatório vazio.")
+    tasks = []
 
-tasks = data["queue"]
 completed = len([t for t in tasks if t["status"] == "completed"])
 pending = len([t for t in tasks if t["status"] == "pending"])
 total = len(tasks)
 
 report = f"""
- RELATÓRIO - Trio IA Autônomo
+📊 RELATÓRIO - Trio IA Autônomo
 {'='*60}
 Data/Hora: {datetime.utcnow().isoformat()}
 
 STATUS DA FILA:
   Total: {total}
-   Completas: {completed}
+  ✅ Completas: {completed}
   ⏳ Pendentes: {pending}
   Taxa: {(completed/total*100) if total > 0 else 0:.1f}%
 
@@ -34,7 +38,7 @@ for task in [t for t in tasks if t["status"] == "completed"][-5:]:
 report += "\nPRÓXIMAS PENDENTES:\n"
 
 for task in [t for t in tasks if t["status"] == "pending"][:5]:
-    report += f"  • {task['id']} - {task['title']} ({task['priority']})\n"
+    report += f"  • {task['id']} - {task['title']} ({task.get('priority','normal')})\n"
 
 report += f"\n🔗 GitHub: https://github.com/fredmourao-ai/site-shopvivaliz\n"
 
