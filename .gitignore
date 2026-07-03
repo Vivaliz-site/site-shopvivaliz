@@ -17,4 +17,6 @@ Thumbs.db
 *.tar.gz
 backup/
 backups/
+claude-backup/
 __pycache__/
+scripts/.ftp-credentials
