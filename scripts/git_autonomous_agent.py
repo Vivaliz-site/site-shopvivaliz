@@ -47,9 +47,9 @@ DEFAULT_CONFIG = {
     "max_file_bytes": DEFAULT_MAX_FILE_BYTES,
 }
 SECRET_PATTERNS = [
-    re.compile(r"(?i)(api[_-]?key|client[_-]?secret|secret|token|password|passwd|senha)\s*[:=]\s*['\"][^'\"]{8,}['\"]"),
-    re.compile(r"(?i)\$(?:db_)?pass(?:word)?\s*=\s*['\"][^'\"]{6,}['\"]"),
-    re.compile(r"(?i)\b(?:db|ftp|smtp|redis|mysql|pgsql)_(?:pass|password)\s*[:=]\s*['\"][^'\"]{6,}['\"]"),
+    re.compile(r"(?i)(api[_-]?key|client[_-]?secret|secret|token|password|passwd|senha)\s*[:=]\s*['\"][^\s'\"]{8,}['\"]"),
+    re.compile(r"(?i)\$(?:db_)?pass(?:word)?\s*=\s*['\"][^\s'\"]{6,}['\"]"),
+    re.compile(r"(?i)\b(?:db|ftp|smtp|redis|mysql|pgsql)_(?:pass|password)\s*[:=]\s*['\"][^\s'\"]{6,}['\"]"),
     re.compile(r"(?i)-----BEGIN (?:RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
     re.compile(r"\bsk-[A-Za-z0-9]{20,}\b"),
