@@ -1,45 +1,45 @@
 {
   "project": "shopvivaliz-medusa",
-  "report_generated_at": "2026-07-03T10:35:00Z",
-  "round": 19,
+  "report_generated_at": "2026-07-03T14:15:00Z",
+  "round": 22,
   "overall_status": "BLOQUEADO_PARA_PRODUCAO",
-  "summary": "Decima nona rodada: revalidacao completa, em sessao concorrente a rodada 18 (que corrigiu os scripts migrate/seed ausentes em package.json e um aviso PHP cosmetico em sync-olist-products.php). Container efemero novo; o clone local iniciou com HEAD destacado e um ref local de 'origin/main' desatualizado que parecia divergir em 68 commits - 'git fetch origin main' resolveu (era so um artefato de clone raso; o commit base do HEAD destacado, e9edd69, e ancestral direto do main, confirmado antes de qualquer acao destrutiva). Nenhuma mudanca de codigo em claude/medusa/ ou claude/api/ desde a rodada 17 alem do fix da rodada 18 (rebaseado sem conflito). Postgres 16 local provisionado, 'npm install' limpo em backend (1342 pacotes/22min, mesmas 100 vulnerabilidades pre-existentes) e storefront (542 pacotes/17s, mesmas 2 vulnerabilidades moderadas), 'npx medusa db:migrate' + seed de teste aplicados sem erro (12 produtos incluindo os 5 pedidos pelo usuario - T-shirt/Camiseta, Jeans/Calca Jeans, Tenis/Shoes, Bone/Hat, Jaqueta/Jacket - cliente e admin de teste), 'npm run build' OK nos dois apps, backend subiu com 'npx medusa develop' (health check e login admin OK), publishable API key obtida via Admin API e usada para validar 'GET /store/products' (12 produtos, precos BRL/USD corretos) e o storefront em modo producao renderizou a pagina do produto com preco real da API (R$69,90). Webhook Medusa->EHA testado ponta a ponta com o backend real rodando (update de produto via Admin API -> subscriber -> POST HMAC-SHA256 -> medusa-webhook.php -> 200 PROCESSED) e isoladamente (assinatura invalida/ausente -> 401). Nenhum bug novo encontrado. Os mesmos 5 blockers de acao humana permanecem inalterados ha 19 rodadas seguidas (supabase.com continua bloqueado no proxy do ambiente; GitHub MCP continua sem tools de secrets de Actions).",
+  "summary": "Vigesima segunda rodada: revalidacao completa. A rodada 21 ja havia sido registrada por uma sessao concorrente como checagem leve (commit f980926, sem reprovisionar ambiente, recomendando pausar revalidacoes automaticas ate que ao menos um blocker seja resolvido); esta rodada executa a revalidacao completa ponta a ponta solicitada e ficou como rodada 22 para evitar colisao de numeracao. Container efemero novo; 'main' estava novamente com HEAD destacado apontando para um clone raso cujo 'origin/main' local estava desatualizado (mesmo artefato de clone raso ja visto nas rodadas 17/19/20) - 'git fetch --unshallow' + 'git checkout -B main origin/main' resolveu sem perda de commits (confirmado via merge-base antes de qualquer acao). Nenhuma mudanca de codigo em claude/medusa/ ou claude/api/ desde a rodada 20 (diff vazio exceto os proprios arquivos de documentacao da rodada 21). Postgres 16 local provisionado (role medusa + banco shopvivaliz_medusa efemeros), Redis local iniciado, 'pnpm install' limpo na raiz do monorepo (1662 pacotes, ~20s, sem erros), 'npm run migrate' + 'npm run seed' aplicados sem erro (12 produtos confirmados via SQL e via API, 8 ShopVivaliz + 4 demo, cliente e admin de teste criados), 'medusa build' + 'next build' OK nos dois apps (133 paginas estaticas, identico as rodadas anteriores), backend subiu com 'npx medusa start' (GET /health -> 200), 'GET /store/products' retornou os 12 produtos com a publishable key real, storefront em modo producao respondeu HTTP 200 em /br e renderizou a pagina de produto com preco real (R$69,90). Webhook 'medusa-webhook.php' testado isoladamente via 'php -S' com o segredo real como variavel de ambiente do processo: assinatura HMAC-SHA256 valida -> 200, invalida -> 401. 'php -l' sem erro nos 3 scripts de marketplace. Teste de rede de saida para 'api.supabase.com' continua bloqueado pelo proxy do ambiente (403). GitHub MCP revalidado sem nenhum tool de gestao de secrets do Actions; 'list_pull_requests' nao encontrou nenhuma PR aberta. Nenhum arquivo .env/.env.local ou segredo real novo foi encontrado em nenhum lugar do repositorio (apenas os .env.example ja versionados) - nenhuma credencial de producao foi adicionada desde a rodada 20. Nenhum bug novo encontrado. Os mesmos 5 blockers de acao humana permanecem inalterados ha 22 rodadas consecutivas.",
   "steps": {
     "0_repo_integrity": {
       "status": "OK_SEM_REGRESSAO",
-      "detail": "Resolvido um clone raso cujo ref local de origin/main estava desatualizado (git fetch corrigiu, sem perda de commits). Rebase local sobre o commit da rodada 18 (fix de scripts migrate/seed) sem conflito de codigo (apenas conflito textual em DEPLOY-CHECKLIST.md, resolvido mantendo ambas as entradas). Grep por marcadores de conflito de merge: nenhuma ocorrencia remanescente. package.json de backend e storefront validados como JSON valido. php -l sem erro em todos os arquivos .php sob claude/api/."
+      "detail": "Resolvido novamente um clone raso cujo ref local de origin/main estava desatualizado/HEAD destacado (git fetch --unshallow + checkout -B main origin/main corrigiram, sem perda de commits, confirmado via git merge-base --is-ancestor antes e depois). Nenhum marcador de conflito de merge remanescente. package.json de backend e storefront validados como JSON valido. php -l sem erro em todos os arquivos .php sob claude/api/. Nenhuma PR aberta no repositorio (list_pull_requests vazio)."
     },
     "1_database_setup": {
       "status": "BLOCKER",
-      "detail": "DATABASE_URL de producao continua inexistente. Postgres LOCAL efemero foi provisionado e usado com sucesso para validar toda a stack (migrations, seed, API), depois removido ao final (nao persiste). Teste de saida de rede para supabase.com retornou 'CONNECT tunnel failed, response 403' via proxy do ambiente nesta rodada - criacao de projeto Supabase gerenciado continua exigindo login/OAuth humano interativo, alem de a rede de saida para o dominio estar bloqueada para este container."
+      "detail": "DATABASE_URL de producao continua inexistente. Postgres LOCAL efemero foi provisionado e usado com sucesso para validar toda a stack (migrations, seed, API), depois removido ao final (nao persiste). Teste de saida de rede para api.supabase.com retornou 'gateway answered 403 to CONNECT' via proxy do ambiente nesta rodada - criacao de projeto Supabase/Neon/Railway gerenciado continua exigindo login/OAuth humano interativo, alem de a rede de saida para o dominio estar bloqueada para este container."
     },
     "2_migrations_seed": {
-      "status": "OK_REVALIDADO_RODADA_19",
-      "detail": "Reexecutado do zero nesta rodada contra Postgres local efemero: 'npx medusa db:migrate' (regioes, tax regions, stock locations, fulfillment) + 'npx medusa exec ./src/scripts/seed-shopvivaliz-test-data.ts' (8 produtos ShopVivaliz + 4 demo padrao = 12 produtos, regiao Brasil/BRL, cliente de teste) aplicados sem nenhum erro. Usuario admin criado via 'npx medusa user'."
+      "status": "OK_REVALIDADO_RODADA_22",
+      "detail": "Reexecutado do zero nesta rodada contra Postgres local efemero: 'npm run migrate' (medusa db:migrate) + 'npm run seed' (seed-shopvivaliz-test-data.ts) aplicados sem nenhum erro. 12 produtos confirmados via SELECT count(*) FROM product (8 ShopVivaliz + 4 demo padrao = 12) e via GET /store/products. Usuario admin criado via npx medusa user."
     },
     "3_payment_gateway": {
       "status": "OK_TEST_KEYS_SEM_MUDANCA",
-      "detail": "Nenhuma mudanca de codigo relacionada a pagamento desde rodadas anteriores. STRIPE_API_KEY/STRIPE_PUBLIC_KEY de teste continuam documentadas como caminho de fallback. PAYPAL_CLIENT_ID/SECRET permanecem vazios (sem credenciais sandbox disponiveis nesta sessao)."
+      "detail": "Nenhuma mudanca de codigo relacionada a pagamento desde rodadas anteriores. STRIPE_API_KEY/STRIPE_PUBLIC_KEY de exemplo publico da doc Stripe usadas apenas para nao quebrar o carregamento do provider. PAYPAL_CLIENT_ID/SECRET permanecem vazios (sem credenciais sandbox disponiveis nesta sessao)."
     },
     "4_environment_variables": {
-      "status": "OK_REVALIDADO_RODADA_19",
-      "detail": ".env.example (backend e storefront) usados como base para materializar um .env/.env.local local real nesta rodada (JWT_SECRET/COOKIE_SECRET gerados com openssl rand -base64 32, DATABASE_URL apontando para o Postgres local efemero). Todas as variaveis documentadas se mostraram suficientes para build+migrate+seed+start funcionarem. Arquivos removidos ao final (nunca commitados, protegidos por .gitignore)."
+      "status": "OK_REVALIDADO_RODADA_22",
+      "detail": ".env.example (backend e storefront) usados como base para materializar um .env/.env.local local real nesta rodada (JWT_SECRET/COOKIE_SECRET/webhook secrets gerados com openssl rand -base64 32, DATABASE_URL apontando para o Postgres local efemero). Todas as variaveis documentadas se mostraram suficientes para install+migrate+seed+build+start funcionarem. Arquivos removidos ao final (nunca commitados, protegidos por .gitignore). Nenhum .env real de producao encontrado em nenhum lugar do repositorio."
     },
     "5_build": {
-      "status": "OK_REVALIDADO_RODADA_19",
-      "detail": "'npm install' + 'npm run build' reexecutados do zero em ambos os apps nesta rodada (backend: 1342 pacotes, build 4.3s backend + 21s frontend/admin; storefront: 542 pacotes, 133 paginas estaticas geradas). Sem nenhum erro ou warning de build novo."
+      "status": "OK_REVALIDADO_RODADA_22",
+      "detail": "'pnpm install' + 'medusa build'/'next build' reexecutados do zero em ambos os apps nesta rodada (monorepo: 1662 pacotes via pnpm; backend build 5.44s + 31.33s admin/frontend; storefront: 133 paginas estaticas geradas). Sem nenhum erro ou warning de build novo."
     },
     "6_local_testing": {
-      "status": "OK_REVALIDADO_RODADA_19",
-      "detail": "Backend subiu com 'npx medusa develop' (porta 9000). 'GET /health' -> 200 OK. Login admin via '/auth/user/emailpass' OK (token JWT recebido). Publishable API key obtida via 'GET /admin/api-keys' e usada em 'GET /store/products' -> 12 produtos retornados com precos BRL/USD corretos. Storefront em modo producao (npm run start, porta 8000) renderizou /br/products/camiseta-shopvivaliz com preco real da API (R$69,90), HTTP 200."
+      "status": "OK_REVALIDADO_RODADA_22",
+      "detail": "Backend subiu com 'npx medusa start' a partir de .medusa/server (porta 9000). 'GET /health' -> 200 OK. Publishable API key obtida direto do Postgres e usada em 'GET /store/products' -> 12 produtos retornados com precos BRL corretos. Storefront em modo producao (npm run start, porta 8000) respondeu HTTP 200 em /br e renderizou /br/products/camiseta-shopvivaliz com preco real da API (R$69,90), HTTP 200."
     },
     "7_marketplace_integrations": {
-      "status": "OK_REVALIDADO_RODADA_19",
-      "detail": "claude/api/medusa-webhook.php testado ponta a ponta nesta rodada com o backend real rodando: update de produto via Admin API disparou o subscriber (src/subscribers/eha-webhook.ts), que fez POST assinado HMAC-SHA256 para medusa-webhook.php (via php -S) -> HTTP 200, status PROCESSED, event_type product.updated. Assinatura invalida/ausente testadas isoladamente -> 401 Unauthorized. php -l sem erro em todos os .php sob claude/api/."
+      "status": "OK_REVALIDADO_RODADA_22",
+      "detail": "claude/api/medusa-webhook.php testado isoladamente nesta rodada via php -S com o EHA_WEBHOOK_SECRET real exportado como variavel de ambiente do processo PHP: assinatura HMAC-SHA256 valida -> HTTP 200 {ok:true}; assinatura invalida -> HTTP 401 Unauthorized. php -l sem erro em sync-olist-products.php, olist/webhook.php e medusa-webhook.php."
     },
     "8_github_secrets": {
       "status": "BLOCKER_SEM_ACESSO",
-      "detail": "GitHub MCP disponivel na sessao expoe apenas actions_get/actions_list/actions_run_trigger, tools de issues/PRs/arquivos/branches e secret scanning - nenhum tool de leitura/escrita de Actions secrets, e sem gh CLI instalado. Mesma limitacao de rodadas anteriores. Comandos gh secret set prontos continuam documentados em claude/medusa/GITHUB_SECRETS_TODO.md.",
+      "detail": "GitHub MCP disponivel na sessao expoe apenas tools de issues/PRs/arquivos/branches/actions get-list-trigger/secret scanning - nenhum tool de leitura/escrita de Actions secrets, e sem gh CLI instalado. Mesma limitacao de rodadas anteriores (confirmado, nao re-testado exaustivamente por instrucao explicita desta rodada). Comandos gh secret set prontos continuam documentados em claude/medusa/GITHUB_SECRETS_TODO.md.",
       "action_required_from_user": "Rodar os comandos gh secret set de GITHUB_SECRETS_TODO.md localmente (com gh CLI autenticado) ou configurar manualmente em Settings > Secrets and variables > Actions."
     },
     "9_deployment_preparation": {
@@ -48,17 +48,17 @@
     },
     "10_deployment_checklist": {
       "status": "OK",
-      "detail": "DEPLOY-CHECKLIST.md atualizado nesta rodada com o registro da decima nona revalidacao (completa, sem bug novo, concorrente a rodada 18)."
+      "detail": "DEPLOY-CHECKLIST.md atualizado nesta rodada com o registro da vigesima segunda revalidacao (completa, sem bug novo)."
     },
     "11_final_report": {
       "status": "OK",
-      "detail": "Este arquivo (DEPLOY-STATUS-REPORT.json), atualizado para a decima nona rodada. Ver tambem claude/medusa/RELATORIO_FINAL_MEDUSA.json (rodada 18, sessao concorrente)."
+      "detail": "Este arquivo (DEPLOY-STATUS-REPORT.json), atualizado para a vigesima segunda rodada. Ver tambem claude/medusa/RELATORIO_FINAL_MEDUSA.json e DEPLOYMENT_STATUS.md (raiz do repo, tambem atualizado nesta rodada)."
     }
   },
   "blockers": [
     {
       "id": "production_database",
-      "description": "DATABASE_URL de producao inexistente. Requer criacao manual de projeto Postgres gerenciado (Supabase/Neon/Railway/RDS) via login humano - egress para supabase.com bloqueado pelo proxy do ambiente (403).",
+      "description": "DATABASE_URL de producao inexistente. Requer criacao manual de projeto Postgres gerenciado (Supabase/Neon/Railway/RDS) via login humano - egress para api.supabase.com bloqueado pelo proxy do ambiente (403).",
       "severity": "critical"
     },
     {
@@ -83,10 +83,12 @@
     }
   ],
   "code_changes_this_session": [
-    "Nenhuma mudanca de codigo nesta rodada (o fix de package.json/PHP ja veio da rodada 18 concorrente, incorporado via rebase) - revalidacao completa confirmou que o codigo existente funciona ponta a ponta.",
-    "claude/medusa/DEPLOY-STATUS-REPORT.json: relatorio atualizado para a decima nona rodada",
-    "claude/medusa/DEPLOY-CHECKLIST.md: registro da decima nona revalidacao (completa, sem bug novo)"
+    "Nenhuma mudanca de codigo de produto nesta rodada - revalidacao completa confirmou que o codigo existente funciona ponta a ponta sem regressao.",
+    "claude/medusa/DEPLOY-STATUS-REPORT.json: relatorio atualizado para a vigesima segunda rodada",
+    "claude/medusa/DEPLOY-CHECKLIST.md: registro da vigesima segunda revalidacao (completa, sem bug novo)",
+    "claude/medusa/RELATORIO_FINAL_MEDUSA.json: atualizado para rodada 22",
+    "DEPLOYMENT_STATUS.md: atualizado para rodada 22 (estava desatualizado desde a rodada 7)"
   ],
-  "rounds_with_no_new_progress_on_blockers": 19,
-  "next_round_recommendation": "Os 5 blockers restantes continuam sendo 100% acao humana e nenhum deles mudou nesta rodada, apesar de uma revalidacao completa ter sido feita. Recomendacao para a proxima rodada: voltar ao modo leve (git diff desde este commit, grep de conflitos, php -l, JSON valido, teste de rede para supabase.com, verificacao de tools de secrets do GitHub MCP) e so escalar para revalidacao completa novamente se o git diff mostrar mudancas reais em claude/medusa/ ou claude/api/, ou se o usuario fornecer DATABASE_URL de producao, host de producao com Node.js, acesso a gh CLI/secrets do GitHub, ou credenciais reais de Stripe/PayPal/Olist. O proximo passo de valor requer decisao/acao humana sobre os 5 blockers, nao mais execucao autonoma - recomenda-se ao usuario: (1) criar uma conta Supabase/Neon/Railway (5-10 min, requer login humano) e colar a DATABASE_URL em claude/medusa/apps/backend/.env; (2) escolher um host Node.js de producao (Railway/Render/Fly.io) para o backend/storefront, ja que o HostGator atual so serve PHP estatico; (3) rotacionar o secret Olist/Tiny vazado no historico do git (severidade alta, pendente ha varias rodadas)."
+  "rounds_with_no_new_progress_on_blockers": 22,
+  "next_round_recommendation": "Os 5 blockers restantes continuam sendo 100% acao humana e nenhum deles mudou nesta rodada, apesar de uma revalidacao completa ter sido feita novamente. Concorda-se com a recomendacao da rodada 21: revalidacoes completas repetidas sem mudanca de credenciais/codigo tem valor marginal decrescente. Recomenda-se pausar o agendamento automatico desta tarefa (ou reduzi-lo a checagens leves - git diff, php -l, teste de rede, verificacao de PRs abertas) ate que o usuario resolva ao menos um dos blockers: (1) criar uma conta Supabase/Neon/Railway (5-10 min, requer login humano) e colar a DATABASE_URL em claude/medusa/apps/backend/.env; (2) escolher um host Node.js de producao (Railway/Render/Fly.io) para o backend/storefront, ja que o HostGator atual so serve PHP estatico; (3) rotacionar o secret Olist/Tiny vazado no historico do git (severidade alta, pendente ha varias rodadas)."
 }

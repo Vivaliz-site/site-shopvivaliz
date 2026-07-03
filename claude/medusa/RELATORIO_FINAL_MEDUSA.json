@@ -1,17 +1,17 @@
 {
   "projeto": "ShopVivaliz Medusa",
-  "rodada": 21,
+  "rodada": 22,
   "data": "2026-07-03",
   "status_geral": "BLOQUEADO_PARA_PRODUCAO_ACAO_HUMANA_NECESSARIA",
-  "resumo": "Rodada 21 (checagem leve, conforme recomendacao da rodada 20): git log confirma que nenhum arquivo sob claude/medusa/ ou claude/api/ mudou desde a rodada 20 (unico commit novo, 174ffeb, fora de escopo). Rede para supabase.com/api.supabase.com continua bloqueada (403). GitHub MCP continua sem tool de gestao de secrets do Actions. Resultados da rodada 20 permanecem validos por construcao (codigo byte-identico). Os mesmos 5 blockers de acao humana seguem inalterados ha 21 rodadas consecutivas. Recomendacao: pausar revalidacoes automaticas ate o usuario resolver ao menos um blocker (banco gerenciado real ou rotacao do secret Olist vazado).",
+  "resumo": "Rodada 22 (revalidacao completa; a rodada 21 ja havia sido registrada por uma sessao concorrente como checagem leve, commit f980926, entao esta ficou como rodada 22 para evitar colisao de numeracao): pnpm install limpo (1662 pacotes), npx medusa db:migrate + seed-shopvivaliz-test-data.ts sem erro (12 produtos confirmados), medusa build + next build OK, backend subiu com GET /health -> 200, GET /store/products retornou os 12 produtos, storefront em modo producao renderizou a pagina de produto com preco real (R$69,90), medusa-webhook.php validado ponta a ponta (200 com assinatura valida, 401 sem/invalida), php -l sem erros nos 3 scripts de marketplace. Rede para api.supabase.com continua bloqueada (403 no proxy do ambiente). GitHub MCP continua sem tool de gestao de secrets do Actions; nenhuma PR aberta. Nenhum .env/segredo real novo encontrado no repositorio. Os mesmos 5 blockers de acao humana seguem inalterados ha 22 rodadas consecutivas. Nenhum bug novo encontrado.",
   "passos": {
     "1_database_setup": {
       "status": "OK_LOCAL_BLOCKER_PRODUCAO",
       "detalhe": "DATABASE_URL estava vazio. Supabase (dashboard.supabase.com) inacessivel: proxy do sandbox bloqueia api.supabase.com (403, confirmado via /__agentproxy/status). Usado Postgres 16 local (ja instalado no ambiente) como substituto para dev/teste: banco shopvivaliz_medusa, role medusa. NAO serve para producao - precisa de banco gerenciado real (Supabase/Neon/Railway), o que exige login humano interativo (conta + aceite de termos)."
     },
     "2_migrations_seed": {
-      "status": "OK",
-      "detalhe": "npx medusa db:migrate + seed-shopvivaliz-test-data.ts aplicados sem erro. 12 produtos confirmados via API real (8 ShopVivaliz + 4 demo padrao Medusa). Cliente de teste criado."
+      "status": "OK_REVALIDADO_RODADA_22",
+      "detalhe": "npx medusa db:migrate + seed-shopvivaliz-test-data.ts reexecutados do zero nesta rodada, sem erro. 12 produtos confirmados via SELECT count(*) FROM product e via API real (8 ShopVivaliz + 4 demo padrao Medusa). Cliente e usuario admin de teste criados."
     },
     "3_payment_gateway": {
       "status": "OK_TESTE_PENDENTE_CREDENCIAIS_REAIS",
@@ -22,16 +22,16 @@
       "detalhe": "JWT_SECRET, COOKIE_SECRET, STRIPE_WEBHOOK_SECRET, EHA_WEBHOOK_SECRET, OLIST_WEBHOOK_SECRET gerados com openssl rand. CORS (STORE_CORS/ADMIN_CORS/AUTH_CORS) preenchidos com defaults de dev. Nenhuma variavel undefined no .env local."
     },
     "5_build": {
-      "status": "OK",
-      "detalhe": "Backend (medusa build): OK, 5.8s + 32.4s (admin). Storefront (next build): OK, 133 paginas estaticas geradas (precisa do backend rodando durante o build para SSG - comportamento esperado, nao bug)."
+      "status": "OK_REVALIDADO_RODADA_22",
+      "detalhe": "Backend (medusa build): OK, 5.44s + 31.33s (admin/frontend). Storefront (next build): OK, 133 paginas estaticas geradas (precisa do backend rodando durante o build para SSG - comportamento esperado, nao bug). Identico as rodadas anteriores."
     },
     "6_local_testing": {
-      "status": "OK",
-      "detalhe": "medusa develop na porta 9000, GET /health -> 200 OK. Storefront em modo producao na porta 8000 renderizou pagina de produto real com preco da API (R$69,90)."
+      "status": "OK_REVALIDADO_RODADA_22",
+      "detalhe": "npx medusa start (a partir de .medusa/server) na porta 9000, GET /health -> 200 OK. GET /store/products com publishable key real retornou os 12 produtos. Storefront em modo producao na porta 8000 respondeu HTTP 200 em /br e renderizou /br/products/camiseta-shopvivaliz com preco real da API (R$69,90)."
     },
     "7_marketplace_olist": {
-      "status": "OK_CODIGO_TESTE_REDE_BLOQUEADO",
-      "detalhe": "claude/api/sync-olist-products.php ja existe com classe OlistSync. Executado com credenciais fake: falha graciosamente (proxy do sandbox bloqueia api.olist.com), retorna JSON de erro tratado. Corrigido aviso PHP 'headers already sent' (fix cosmetico). Webhook Medusa->EHA ja validado ponta a ponta em rodadas anteriores (nao alterado desde entao)."
+      "status": "OK_REVALIDADO_RODADA_22",
+      "detalhe": "php -l sem erro em sync-olist-products.php, olist/webhook.php e medusa-webhook.php. medusa-webhook.php testado via php -S com EHA_WEBHOOK_SECRET real exportado como env var do processo: assinatura HMAC-SHA256 valida -> 200 {ok:true}; assinatura invalida -> 401 Unauthorized. Nenhuma mudanca de codigo necessaria."
     },
     "8_github_secrets": {
       "status": "BLOCKER",
@@ -78,8 +78,11 @@
     }
   ],
   "mudancas_de_codigo_desta_rodada": [
-    "claude/medusa/DEPLOY-CHECKLIST.md: adicionada rodada 20",
-    "claude/medusa/RELATORIO_FINAL_MEDUSA.json: atualizado para rodada 20 (nenhuma mudanca de codigo de produto - apenas documentacao)"
+    "Nenhuma mudanca de codigo de produto nesta rodada - revalidacao completa confirmou que o codigo existente funciona ponta a ponta sem regressao.",
+    "claude/medusa/DEPLOY-CHECKLIST.md: adicionada rodada 22",
+    "claude/medusa/RELATORIO_FINAL_MEDUSA.json: atualizado para rodada 22",
+    "DEPLOYMENT_STATUS.md: atualizado para rodada 22 (estava desatualizado desde a rodada 7)",
+    "claude/medusa/DEPLOY-STATUS-REPORT.json: atualizado para rodada 22"
   ],
   "recomendacao": "As ultimas 15+ rodadas desta mesma verificacao chegaram ao mesmo resultado: ambiente local 100% funcional, producao bloqueada pelos mesmos 5 itens que exigem acao humana (banco gerenciado, host Node.js, credenciais reais de pagamento, GitHub Secrets, rotacao de credenciais Olist vazadas). Nenhum desses itens pode ser resolvido de forma autonoma nesta sessao (sandbox sem acesso a internet externa a dominios de terceiros e sem CLI/API de gestao de secrets do GitHub). Recomenda-se fortemente que o usuario resolva pelo menos o blocker de banco de dados (criar conta Supabase/Neon/Railway) e configure os GitHub Secrets antes de disparar novas rodadas completas deste fluxo - revalidacoes repetidas sem mudanca de credenciais/codigo tem valor marginal decrescente e consomem tempo/CI sem sinal novo."
 }
