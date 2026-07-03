@@ -379,6 +379,52 @@ descartado ao fim da sessão). Os mesmos 5 blockers de ação humana permanecem
 pendentes (18 rodadas consecutivas) — ver `RELATORIO_FINAL_MEDUSA.json` para o
 status estruturado desta rodada.
 
+**Rodada 19 (2026-07-03, revalidação completa, sessão concorrente à rodada
+18 acima):** container efêmero novo; `main` estava com `HEAD` destacado
+apontando para um clone raso cujo ref local `origin/main` estava
+desatualizado (parecia divergir em 68 commits) — `git fetch origin main`
+resolveu, confirmando que era só artefato de clone raso (sem perda de
+commits; `e9edd69`, base do `HEAD` destacado, é ancestral do `main` atual).
+Sessão iniciada em paralelo à rodada 18 acima (que corrigiu os scripts
+`migrate`/`seed` ausentes em `package.json`); esta rodada rodou `npx medusa
+db:migrate`/`exec` diretamente (antes do rebase que trouxe o fix da rodada
+18), depois rebaseada sobre o commit da rodada 18 sem conflito de código.
+Postgres 16 local provisionado (`pg_ctlcluster 16 main start`, role
+`medusa` + banco `shopvivaliz_medusa`), `npm install` limpo em ambos os
+apps (backend: 1342 pacotes/22min, mesmas 100 vulnerabilidades
+pré-existentes do `npm audit`; storefront: 542 pacotes/17s, mesmas 2
+vulnerabilidades moderadas). `npx medusa db:migrate` + `seed-shopvivaliz-
+test-data.ts` aplicados sem erros (região Brasil/BRL, 8 produtos ShopVivaliz
+incluindo os 5 pedidos — Camiseta/T-shirt, Calça Jeans, Tênis/Shoes, Boné/Hat,
+Jaqueta/Jacket — + Vestido/Bermuda/Mochila, mais 4 produtos demo padrão do
+Medusa = 12 no total, cliente `cliente.teste@shopvivaliz.com.br`, usuário
+admin `admin@shopvivaliz.com.br` criado com senha gerada via `openssl rand
+-base64 18`). `npm run build` OK nos dois apps (backend: 4.3s + 21s
+frontend/admin; storefront: 133 páginas estáticas geradas). Publishable API
+key obtida via Admin API e vinculada ao Default Sales Channel; `GET
+/store/products` retornou os 12 produtos com preços BRL/USD corretos.
+Backend subiu com `npx medusa develop` (porta 9000), `GET /health` → 200.
+Storefront em modo produção (`npm run start`, porta 8000) renderizou
+`/br/products/camiseta-shopvivaliz` com preço real da API (R$69,90), HTTP
+200. Webhook Medusa → EHA testado ponta a ponta com o backend real rodando:
+update de produto via Admin API → subscriber → POST assinado
+(HMAC-SHA256, header `X-Medusa-Signature`) → `medusa-webhook.php` (via
+`php -S`) → HTTP 200, `status: PROCESSED`, `event_type: product.updated`;
+assinatura ausente/inválida corretamente rejeitadas com 401. `php -l` sem
+erro em todos os `.php` sob `claude/api/`. Teste de rede de saída para
+`supabase.com` continua bloqueado pelo proxy do ambiente (`CONNECT tunnel
+failed, response 403`) — criação de banco Postgres gerenciado continua
+exigindo login humano interativo fora deste container. **Nenhum bug novo
+encontrado** — todo o stack (build, migrations, seed, API, webhook) funciona
+ponta a ponta a partir de um clone limpo, sem nenhuma mudança de código
+necessária. Todos os processos/serviços locais (backend, storefront,
+`php -S`, Postgres) parados e banco/role/`.env`/`.env.local` de teste
+removidos ao final; `git status` limpo. Os mesmos 5 blockers de ação humana
+(banco de produção, host Node.js de produção, secrets do GitHub Actions,
+credenciais reais PayPal/Olist, rotação do secret Olist vazado no histórico
+do git) continuam pendentes — todos exigem ação humana fora do alcance desta
+sessão.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
