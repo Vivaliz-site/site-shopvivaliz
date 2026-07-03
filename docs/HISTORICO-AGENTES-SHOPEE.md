@@ -196,6 +196,7 @@ Base URL da API: `https://api.tiny.com.br/public-api/v3`
 | 2026-06-27 | `claude/guth-portfolio-access-81jjq2` | Criação de `ShopeeListingsExtractorAgent`, `ShopeeListingsOptimizationAgent`, workflows `fetch-shopee-listings.yml` e `optimize-shopee-listings.yml`, release-notes `9.2.85-shopee-listings-extractor-optimizer.json` e este documento. |
 | 2026-07-02 (~13h UTC) | `main` (rotina agendada, sem branch dedicada) | Ciclo de otimização inteligente (CTR/conversão/título/A-B) executado como rotina autônoma. Diagnóstico: nenhuma otimização foi aplicada — ver seção 9. |
 | 2026-07-02 (~19h UTC) | `main` (rotina agendada, sem branch dedicada) | Novo ciclo (6h depois): mesmo bloqueador confirmado, sem mudanças no ambiente. `fetch-shopee-listings.yml` run #12 (18:17:31Z) segue retornando `total_products: 0` / 401; `optimize-shopee-listings.yml` run #5 (11:55:02Z) terminou em `failure`. Nenhum arquivo `optimization-report-*.json` novo desde 2026-06-30. Nenhuma alteração de título/descrição/imagem/preço aplicada — mesma decisão da seção 9. Nenhum dado de venda, CTR ou conversão foi inventado. |
+| 2026-07-03 (~04h UTC) | `main` (rotina agendada, sem branch dedicada) | 3º ciclo consecutivo (agora no dia seguinte): bloqueador ainda presente, ~33h após a última extração real. `optimize-shopee-listings.yml` gerou `listings/optimization-report-20260703-041044.json` com `status: error`, `"Autenticação Tiny falhou (401)."`, `total_products: 0`. Nenhuma otimização aplicada. Notificação enviada ao usuário (push) pedindo renovação manual do token, já que os 2 ciclos anteriores não resolveram o bloqueador. |
 
 ---
 
@@ -251,3 +252,16 @@ Este agente não tem acesso para renovar o token Tiny (requer login no ERP + Git
 o ciclo permanece bloqueado. Nenhuma otimização de título/descrição/imagem/atributo/preço foi
 aplicada, e nenhum dado de CTR/conversão/vendas foi assumido ou inventado para contornar a falta
 de dados reais.
+
+### 9.2 Atualização — ciclo de 2026-07-03 ~04h UTC
+
+Terceiro ciclo consecutivo com o mesmo bloqueador, agora ~33h sem extração real:
+
+- `listings/optimization-report-20260703-041044.json`: `status: error`,
+  `"Autenticação Tiny falhou (401)."`, `total_products: 0`, `optimized: 0`.
+- Nenhum `listings/shopee-listings-*.json` novo desde `20260702-181749` (também 401).
+- Como os dois ciclos anteriores (seções 9 e 9.1) não resultaram em renovação do token,
+  este ciclo enviou uma notificação push ao usuário pedindo a ação manual: renovar
+  `TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN` no ERP Tiny e atualizar o secret no GitHub,
+  depois rodar `fetch-shopee-listings.yml` manualmente para confirmar `status: success`
+  com `total_products > 0` antes do próximo ciclo autônomo.
