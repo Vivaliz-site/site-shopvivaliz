@@ -84,7 +84,10 @@ def github_api(path: str, method: str = "GET", body: dict = None, token: str = "
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
-            return json.loads(r.read().decode())
+            body = r.read().decode().strip()
+        if not body:
+            return {"ok": True}
+        return json.loads(body)
     except urllib.error.HTTPError as e:
         body_err = e.read().decode()
         print(f"  GitHub API erro {e.code}: {body_err[:200]}")
@@ -315,3 +318,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

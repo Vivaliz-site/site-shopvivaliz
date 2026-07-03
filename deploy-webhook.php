@@ -62,7 +62,9 @@ function dw_recursive_remove(string $path): void
     }
 
     if (is_file($path) || is_link($path)) {
-        @unlink($path);
+        if (!unlink($path)) {
+            dw_log("Failed to unlink file: $path");
+        }
         return;
     }
 
@@ -70,13 +72,21 @@ function dw_recursive_remove(string $path): void
         dw_recursive_remove($item->getPathname());
     }
 
-    @rmdir($path);
+    if (!rmdir($path)) {
+        dw_log("Failed to remove directory: $path");
+    }
 }
 
 function dw_log(string $msg): void
 {
     $dir = __DIR__ . '/logs';
-    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    if (!is_dir($dir)) {
+        if (!mkdir($dir, 0755, true)) {
+            // Fallback if log directory cannot be created
+            error_log("Failed to create log directory: $dir. Log message: $msg");
+            return;
+        }
+    }
     file_put_contents($dir . '/deploy-webhook.log',
         '[' . date('c') . '] ' . $msg . "\n", FILE_APPEND | LOCK_EX);
 }
@@ -179,7 +189,9 @@ $ctx = stream_context_create([
 $zip = @file_get_contents($zipUrl, false, $ctx);
 if ($zip === false || strlen($zip) < 1000) {
     dw_log("Falha ao baixar ZIP do GitHub.");
-    dw_abort(502, 'Não foi possível baixar o ZIP do repositório. Verifique GITHUB_TOKEN.');
+    // Clean up temporary zip file if it was partially created
+    if (file_exists($tmpZip)) @unlink($tmpZip);
+    dw_abort(502, 'Não foi possível baixar o ZIP do repositório. Verifique GITHUB_TOKEN ou conexão.');
 }
 
 file_put_contents($tmpZip, $zip);
@@ -192,7 +204,10 @@ if ($za->open($tmpZip) !== true) {
     dw_abort(500, 'ZIP inválido ou corrompido.');
 }
 
-@mkdir($tmpDir, 0755, true);
+if (!mkdir($tmpDir, 0755, true) && !is_dir($tmpDir)) {
+    @unlink($tmpZip); // Clean up downloaded zip
+    dw_abort(500, 'Falha ao criar diretório temporário para extração.');
+}
 $za->extractTo($tmpDir);
 $za->close();
 
@@ -219,7 +234,12 @@ $copied = 0;
 
 function dw_copy_dir(string $src, string $dst, array $skipList, int &$cnt): void
 {
-    if (!is_dir($dst)) @mkdir($dst, 0755, true);
+    if (!is_dir($dst)) {
+        if (!mkdir($dst, 0755, true)) {
+            dw_log("Failed to create destination directory: $dst");
+            return; // Cannot proceed if directory cannot be created
+        }
+    }
     $items = new DirectoryIterator($src);
     foreach ($items as $item) {
         if ($item->isDot()) continue;
@@ -236,8 +256,10 @@ function dw_copy_dir(string $src, string $dst, array $skipList, int &$cnt): void
         if ($item->isDir()) {
             dw_copy_dir($srcPath, $dstPath, $skipList, $cnt);
         } else {
-            if (@copy($srcPath, $dstPath)) {
+            if (copy($srcPath, $dstPath)) {
                 $cnt++;
+            } else {
+                dw_log("Failed to copy file from $srcPath to $dstPath");
             }
         }
     }
