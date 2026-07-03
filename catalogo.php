@@ -14,15 +14,20 @@ function sv_catalog_query(): string
     return is_scalar($value) ? trim((string)$value) : '';
 }
 
+function sv_catalog_load(): array
+{
+    static $data = null;
+    if ($data !== null) return $data;
+    $jsonPath = sv_catalog_root() . '/api/catalog/fallback-products.json';
+    if (!is_file($jsonPath) || !is_readable($jsonPath)) return $data = [];
+    $decoded = json_decode((string)file_get_contents($jsonPath), true);
+    return $data = is_array($decoded) ? $decoded : [];
+}
+
 function sv_catalog_products(int $limit, string $query, string $category = ''): array
 {
-    $jsonPath = sv_catalog_root() . '/api/catalog/fallback-products.json';
-    if (!is_file($jsonPath) || !is_readable($jsonPath)) {
-        return [];
-    }
-
-    $decoded = json_decode((string)file_get_contents($jsonPath), true);
-    if (!is_array($decoded)) {
+    $decoded = sv_catalog_load();
+    if ($decoded === []) {
         return [];
     }
 
@@ -53,10 +58,8 @@ function sv_catalog_products(int $limit, string $query, string $category = ''): 
 
 function sv_catalog_categories(): array
 {
-    $jsonPath = sv_catalog_root() . '/api/catalog/fallback-products.json';
-    if (!is_file($jsonPath)) return [];
-    $decoded = json_decode((string)file_get_contents($jsonPath), true);
-    if (!is_array($decoded)) return [];
+    $decoded = sv_catalog_load();
+    if ($decoded === []) return [];
     $cats = [];
     foreach ($decoded as $row) {
         $cat = trim((string)($row['category'] ?? ''));
