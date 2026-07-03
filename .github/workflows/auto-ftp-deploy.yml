@@ -2,8 +2,6 @@ name: Auto FTP Deploy
 
 # Deploy to FTP when changes are pushed (every 15 minutes)
 on:
-  schedule:
-    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 permissions:

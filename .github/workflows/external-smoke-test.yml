@@ -11,8 +11,7 @@ on:
         description: 'Versao esperada'
         required: false
         default: '9.2.69-external-monitor-agent'
-  schedule:
-    - cron: '*/30 * * * *'
+  # schedule disabled — covered by ci-autonomo-continuo.yml
 
 permissions:
   contents: write

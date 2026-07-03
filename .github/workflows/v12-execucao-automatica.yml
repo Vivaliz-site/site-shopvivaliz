@@ -1,9 +1,6 @@
 name: V12 - Execução Automática Global
 
 on:
-  schedule:
-    # A cada 5 minutos
-    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:

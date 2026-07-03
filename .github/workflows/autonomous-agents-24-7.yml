@@ -2,7 +2,7 @@ name:  Agentes Autnomos 24/7 - Decidem e Atualizam
 
 on:
   schedule:
-    - cron: '0 * * * *'  # A cada hora
+    - cron: '0 */6 * * *'  # A cada 6 horas
   workflow_dispatch:
 
 permissions:

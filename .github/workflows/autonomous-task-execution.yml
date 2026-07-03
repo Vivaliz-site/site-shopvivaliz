@@ -2,7 +2,7 @@ name: Autonomous Task Execution - Agentes Assumem Trabalho
 
 on:
   schedule:
-    - cron: '0 * * * *'  # A cada hora
+    - cron: '0 */6 * * *'  # A cada 6 horas
   workflow_dispatch:
 
 permissions:

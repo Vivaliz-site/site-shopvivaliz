@@ -1,8 +1,6 @@
 name: Ciclo Autnomo 24/7
 
 on:
-  schedule:
-    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:

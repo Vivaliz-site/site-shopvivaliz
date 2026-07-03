@@ -2,8 +2,6 @@ name: Auto Git Push
 
 # Automatically detect changes and push every 10 minutes
 on:
-  schedule:
-    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 permissions:

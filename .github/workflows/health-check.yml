@@ -3,7 +3,7 @@ name: Health Check
 # System health check every 60 minutes
 on:
   schedule:
-    - cron: '0 * * * *'  # Every hour
+    - cron: '0 */4 * * *'  # Every 4 hours
   workflow_dispatch:
 
 permissions:

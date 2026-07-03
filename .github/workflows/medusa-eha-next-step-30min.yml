@@ -3,7 +3,7 @@ name: Medusa EHA Next Step
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 */4 * * *'  # A cada 4 horas
 
 jobs:
   medusa-next-step:
