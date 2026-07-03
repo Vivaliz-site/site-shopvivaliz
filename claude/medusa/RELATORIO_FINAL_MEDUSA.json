@@ -1,0 +1,89 @@
+{
+  "projeto": "ShopVivaliz Medusa",
+  "rodada": 18,
+  "data": "2026-07-03",
+  "status_geral": "BLOQUEADO_PARA_PRODUCAO_ACAO_HUMANA_NECESSARIA",
+  "resumo": "Ambiente local (container efemero) validado ponta a ponta com sucesso pela 18a vez consecutiva. Nenhuma regressao de codigo. Producao real segue bloqueada pelos mesmos 5 itens que exigem acao humana fora do alcance deste ambiente (sandbox sem acesso a internet externa e sem CLI/API de secrets do GitHub).",
+  "passos": {
+    "1_database_setup": {
+      "status": "OK_LOCAL_BLOCKER_PRODUCAO",
+      "detalhe": "DATABASE_URL estava vazio. Supabase (dashboard.supabase.com) inacessivel: proxy do sandbox bloqueia api.supabase.com (403, confirmado via /__agentproxy/status). Usado Postgres 16 local (ja instalado no ambiente) como substituto para dev/teste: banco shopvivaliz_medusa, role medusa. NAO serve para producao - precisa de banco gerenciado real (Supabase/Neon/Railway), o que exige login humano interativo (conta + aceite de termos)."
+    },
+    "2_migrations_seed": {
+      "status": "OK",
+      "detalhe": "npx medusa db:migrate + seed-shopvivaliz-test-data.ts aplicados sem erro. 12 produtos confirmados via API real (8 ShopVivaliz + 4 demo padrao Medusa). Cliente de teste criado."
+    },
+    "3_payment_gateway": {
+      "status": "OK_TESTE_PENDENTE_CREDENCIAIS_REAIS",
+      "detalhe": "STRIPE_API_KEY/STRIPE_PUBLIC_KEY definidas com as chaves de exemplo publico da doc do Stripe (nao sao validas para chamadas reais de API, so evitam que o app quebre ao carregar o provider). PayPal sem credenciais (PAYPAL_CLIENT_ID/SECRET vazios - nao fornecidas nas instrucoes nem existentes no repo). PIX_ENABLED=true configurado (via payment_method_types:['pix'] no Stripe). Webhooks nao registrados nos gateways reais - requer conta Stripe/PayPal real."
+    },
+    "4_env_vars": {
+      "status": "OK",
+      "detalhe": "JWT_SECRET, COOKIE_SECRET, STRIPE_WEBHOOK_SECRET, EHA_WEBHOOK_SECRET, OLIST_WEBHOOK_SECRET gerados com openssl rand. CORS (STORE_CORS/ADMIN_CORS/AUTH_CORS) preenchidos com defaults de dev. Nenhuma variavel undefined no .env local."
+    },
+    "5_build": {
+      "status": "OK",
+      "detalhe": "Backend (medusa build): OK, 5.8s + 32.4s (admin). Storefront (next build): OK, 133 paginas estaticas geradas (precisa do backend rodando durante o build para SSG - comportamento esperado, nao bug)."
+    },
+    "6_local_testing": {
+      "status": "OK",
+      "detalhe": "medusa develop na porta 9000, GET /health -> 200 OK. Storefront em modo producao na porta 8000 renderizou pagina de produto real com preco da API (R$69,90)."
+    },
+    "7_marketplace_olist": {
+      "status": "OK_CODIGO_TESTE_REDE_BLOQUEADO",
+      "detalhe": "claude/api/sync-olist-products.php ja existe com classe OlistSync. Executado com credenciais fake: falha graciosamente (proxy do sandbox bloqueia api.olist.com), retorna JSON de erro tratado. Corrigido aviso PHP 'headers already sent' (fix cosmetico). Webhook Medusa->EHA ja validado ponta a ponta em rodadas anteriores (nao alterado desde entao)."
+    },
+    "8_github_secrets": {
+      "status": "BLOCKER",
+      "detalhe": "Sem gh CLI instalado e sem tool de gestao de secrets no GitHub MCP disponivel nesta sessao (apenas leitura/escrita de conteudo/issues/PRs/actions). Lista completa de comandos 'gh secret set' prontos para uso manual em claude/medusa/GITHUB_SECRETS_TODO.md."
+    },
+    "9_deployment_prep": {
+      "status": "DOCUMENTADO_DECISAO_PENDENTE",
+      "detalhe": "HostGator (hospedagem compartilhada) NAO roda Node.js/Postgres persistente - confirmado no cabecalho do proprio claude/medusa/deploy.sh. Backend/storefront Medusa precisam de host Node separado (Railway/Render/Fly.io/VPS Docker); o site PHP legado continua no HostGator via .github/workflows/deploy.yml (que ja exclui explicitamente claude/medusa/** do deploy FTP). deploy.sh e DEPLOY-CHECKLIST.md ja documentam o processo completo."
+    },
+    "10_deployment_checklist": {
+      "status": "OK",
+      "detalhe": "claude/medusa/DEPLOY-CHECKLIST.md contem checklist detalhado (18 rodadas de revalidacao). DEPLOY_HOSTGATOR.md contem instrucoes desatualizadas (assume Node.js no HostGator) que contradizem deploy.sh - recomenda-se marcar DEPLOY_HOSTGATOR.md como obsoleto/revisar."
+    },
+    "11_final_report": {
+      "status": "OK",
+      "detalhe": "Este arquivo."
+    }
+  },
+  "blockers_criticos_acao_humana": [
+    {
+      "item": "Banco de dados de producao",
+      "motivo": "Supabase/Neon/Railway exigem criacao de conta via login humano interativo; sandbox bloqueia acesso de rede a esses dominios.",
+      "acao_necessaria": "Usuario cria projeto Postgres gerenciado e cola a connection string em DATABASE_URL."
+    },
+    {
+      "item": "Host de producao para o app Node.js (Medusa)",
+      "motivo": "HostGator (hospedagem compartilhada atual) nao suporta processos Node.js persistentes.",
+      "acao_necessaria": "Usuario escolhe e provisiona um host Node (Railway/Render/Fly.io/VPS)."
+    },
+    {
+      "item": "Credenciais reais de pagamento (Stripe live/test, PayPal)",
+      "motivo": "Chaves de teste do Stripe usadas sao exemplos publicos da documentacao, nao funcionam para chamadas reais de API; PayPal nao tem nenhuma credencial.",
+      "acao_necessaria": "Usuario cria contas/apps no dashboard Stripe e developer.paypal.com e fornece as chaves."
+    },
+    {
+      "item": "GitHub Secrets do repositorio",
+      "motivo": "Sem gh CLI nem tool de secrets no GitHub MCP disponivel nesta sessao.",
+      "acao_necessaria": "Usuario roda os comandos em claude/medusa/GITHUB_SECRETS_TODO.md ou configura via GitHub web UI."
+    },
+    {
+      "item": "Rotacao de credenciais Olist/Tiny vazadas no historico do git",
+      "motivo": "OLIST_CLIENT_ID/SECRET reais foram commitados em texto puro em rodadas anteriores (ja redigidos dos arquivos atuais, mas presentes em commits antigos).",
+      "acao_necessaria": "Usuario rotaciona o client secret no painel Tiny/Olist e decide se reescreve o historico do git (acao destrutiva, requer decisao humana explicita)."
+    }
+  ],
+  "mudancas_de_codigo_desta_rodada": [
+    "claude/medusa/apps/backend/package.json: adicionados scripts migrate, migrate:latest, seed (faltavam - 17 rodadas anteriores usaram npx medusa diretamente e nunca notaram a lacuna)",
+    "claude/medusa/package.json: adicionado pnpm.onlyBuiltDependencies para permitir build scripts (esbuild, sharp, @swc/core etc.)",
+    "claude/medusa/pnpm-lock.yaml: atualizado para refletir versoes ja pinadas no package.json (@medusajs/ui 4.1.17, react-router-dom 6.30.4) que estavam desatualizadas no lockfile",
+    "claude/api/sync-olist-products.php: fix cosmetico do aviso PHP 'headers already sent'",
+    "claude/medusa/DEPLOY-CHECKLIST.md: adicionada rodada 18",
+    "claude/medusa/RELATORIO_FINAL_MEDUSA.json: este arquivo (novo)"
+  ],
+  "recomendacao": "As ultimas 13+ rodadas desta mesma verificacao chegaram ao mesmo resultado: ambiente local 100% funcional, producao bloqueada pelos mesmos 5 itens que exigem acao humana. Recomenda-se que o usuario resolva pelo menos o blocker de banco de dados (criar Supabase/Neon) antes de disparar novas rodadas completas deste fluxo, ja que revalidacoes repetidas sem mudanca de credenciais/codigo tem valor marginal decrescente."
+}

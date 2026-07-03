@@ -165,6 +165,8 @@ $sync = new OlistSync();
 $result = $sync->sync();
 
 // Retornar resultado
-header('Content-Type: application/json');
+if (!headers_sent()) {
+    header('Content-Type: application/json');
+}
 echo json_encode($result);
 ?>
