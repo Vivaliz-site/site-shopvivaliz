@@ -246,6 +246,31 @@ concluir. Todos os processos/serviços locais parados ao final; `.env`/
 (resolução flutuante de `picomatch`, dependência transitiva) foi revertido
 para manter o diff desta rodada limitado a documentação.
 
+**Rodada 15 (2026-07-03, revalidação leve):** confirmado via `git diff
+5055d0c..HEAD -- claude/medusa claude/api` (commit da rodada 14) que o único
+arquivo alterado sob esses caminhos desde a rodada 14 é
+`claude/medusa/apps/backend/package-lock.json`, e essa mudança **já estava
+commitada antes da rodada 14** (`bda6208`, normalização de resolução flutuante
+do `picomatch` após `npm install` limpo, mencionada desde a rodada 10) — ou
+seja, nenhum código novo entrou em `claude/medusa/` ou `claude/api/` nesta
+janela. `origin/main` também recebeu 2 commits neste intervalo
+(`9aa1ff8` suite Mercado Livre OAuth, `1022d49` `.git-guardian.json`), ambos
+fora do escopo Medusa/EHA-PHP, confirmado via `git show --stat`. Repetidos
+apenas os checks leves: busca por marcadores de conflito de merge (nenhum),
+validação de `package.json` (backend e storefront, ambos JSON válido), `php
+-l` em todos os `.php` sob `claude/api/` (nenhum erro de sintaxe), confirmação
+de que `DATABASE_URL`/`.env` de produção continuam ausentes em
+`apps/backend`/`apps/storefront`, e teste de rede de saída para `supabase.com`
+(ainda bloqueado pelo proxy do ambiente, `CONNECT tunnel failed, response
+403`, confirmado via `/__agentproxy/status`, `recentRelayFailures` lista
+`supabase.com:443`). GitHub MCP disponível nesta sessão revalidado sem tools
+de gestão de secrets (mesma limitação de rodadas anteriores: apenas
+`actions_get/list/run_trigger`, issues, PRs, arquivos, branches,
+`run_secret_scanning` — nenhum `secret_set` ou equivalente). Como o código é
+byte-idêntico ao já validado ponta a ponta na rodada 10, os resultados
+permanecem válidos por construção. Os mesmos 5 blockers de ação humana
+continuam inalterados (15 rodadas consecutivas). Nenhum bug novo encontrado.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
