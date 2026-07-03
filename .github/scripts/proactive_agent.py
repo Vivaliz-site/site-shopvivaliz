@@ -65,7 +65,8 @@ def call_llm(prompt: str) -> str:
         except Exception as e:
             print(f"Gemini falhou: {e}")
 
-    raise RuntimeError("Todos os providers AI falharam — verificar saldo/chaves")
+    print("AVISO: Todos os providers AI falharam ou chaves ausentes — sem acao nesta execucao.")
+    return ""
 
 
 def read_file(path: str, max_chars: int = 2000) -> str:
@@ -185,6 +186,9 @@ def run_agent():
 
     print("Consultando LLM...")
     raw = call_llm(prompt)
+    if not raw:
+        print("Nenhum provider disponivel — encerrando sem acao.")
+        sys.exit(0)
     print(f"Resposta recebida: {len(raw)} chars")
 
     # Remove markdown se vier
