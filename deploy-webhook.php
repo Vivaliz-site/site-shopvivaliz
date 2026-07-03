@@ -36,6 +36,17 @@ function dw_env(string $key): string
     return (string)(getenv($key) ?: '');
 }
 
+function dw_env_list(string $key): array
+{
+    $raw = trim(dw_env($key));
+    if ($raw === '') {
+        return [];
+    }
+
+    $parts = preg_split('/[\r\n,;]+/', $raw) ?: [];
+    return array_values(array_filter(array_map('trim', $parts), static fn(string $item): bool => $item !== ''));
+}
+
 function dw_abort(int $code, string $msg): never
 {
     http_response_code($code);
@@ -92,27 +103,36 @@ if ($payload === '') {
     dw_abort(400, 'Payload vazio.');
 }
 
-// ── Só age em push para main ──────────────────────────────────────────────────
+// ── Só age em push para main/repos autorizados ────────────────────────────────
 $data = json_decode($payload, true);
 if (!is_array($data)) {
     dw_abort(400, 'Payload JSON inválido.');
 }
 
+$repo = trim((string)($data['repository']['full_name'] ?? ''));
+if ($repo === '') {
+    dw_abort(400, 'Repositorio ausente no payload.');
+}
+
+$allowedRepos = dw_env_list('DEPLOY_REPOS');
+if ($allowedRepos !== [] && !in_array($repo, $allowedRepos, true)) {
+    dw_abort(403, 'Repositorio nao autorizado para este webhook.');
+}
+
 $ref  = $data['ref'] ?? '';
 if ($ref !== 'refs/heads/main') {
     header('Content-Type: application/json');
-    echo json_encode(['ok' => true, 'skipped' => true, 'ref' => $ref]);
+    echo json_encode(['ok' => true, 'skipped' => true, 'ref' => $ref, 'repo' => $repo]);
     exit;
 }
 
 $sha = $data['after'] ?? 'main';
-dw_log("Push recebido: ref=$ref sha=$sha");
+dw_log("Push recebido: repo=$repo ref=$ref sha=$sha");
 
 // ── Estratégia 1: git pull (se git disponível via exec) ───────────────────────
 $gitAvailable = false;
 if (function_exists('exec')) {
     $token     = dw_env('GITHUB_TOKEN');
-    $repo      = 'fredmourao-ai/site-shopvivaliz';
     $remoteUrl = $token !== ''
         ? "https://{$token}@github.com/{$repo}.git"
         : "https://github.com/{$repo}.git";
@@ -128,7 +148,7 @@ if (function_exists('exec')) {
             dw_log("git pull OK: " . $out);
             $gitAvailable = true;
             header('Content-Type: application/json');
-            echo json_encode(['ok' => true, 'method' => 'git_pull', 'output' => $out, 'sha' => $sha]);
+            echo json_encode(['ok' => true, 'method' => 'git_pull', 'output' => $out, 'sha' => $sha, 'repo' => $repo]);
             exit;
         }
         dw_log("git pull falhou (code=$code): $out — tentando ZIP");
@@ -137,7 +157,6 @@ if (function_exists('exec')) {
 
 // ── Estratégia 2: download ZIP via GitHub API ─────────────────────────────────
 $token    = dw_env('GITHUB_TOKEN');
-$repo     = 'fredmourao-ai/site-shopvivaliz';
 $zipUrl   = "https://api.github.com/repos/{$repo}/zipball/main";
 
 $tmpZip = sys_get_temp_dir() . '/shopvivaliz-deploy-' . time() . '.zip';
@@ -239,5 +258,6 @@ echo json_encode([
     'method' => 'zip_extract',
     'files'  => $copied,
     'sha'    => $sha,
+    'repo'   => $repo,
     'msg'    => $msg,
 ]);

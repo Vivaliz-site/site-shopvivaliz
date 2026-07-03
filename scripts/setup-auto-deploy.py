@@ -6,13 +6,15 @@ Configura deploy automático sem GitHub Actions, sem custo.
 O que faz:
   1. Sobe deploy-webhook.php para o servidor via FTP
   2. Gera DEPLOY_SECRET e salva no .env do servidor
-  3. Configura webhook no GitHub apontando para o servidor
+  3. Configura webhooks no GitHub apontando para o servidor
   4. A partir daí: push em main → GitHub avisa servidor → servidor baixa e extrai o código
 
 Uso:
   python scripts/setup-auto-deploy.py
+  python scripts/setup-auto-deploy.py --non-interactive --repos all
 """
 
+import argparse
 import ftplib
 import json
 import os
@@ -28,7 +30,10 @@ REPOS = [
     {
         "repo":       "fredmourao-ai/site-shopvivaliz",
         "webhook_url": "https://dev.shopvivaliz.com.br/deploy-webhook.php",
-        "ftp_remote":  "deploy-webhook.php",  # relativo a FTP_REMOTE_DIR
+    },
+    {
+        "repo":       "fredmourao-ai/-shopvivaliz-pipeline",
+        "webhook_url": "https://dev.shopvivaliz.com.br/deploy-webhook.php",
     },
 ]
 
@@ -55,7 +60,9 @@ def save_creds(data: dict) -> None:
             f.write(f"{k}={v}\n")
     print(f"  Credenciais salvas em {CREDS_FILE} (gitignored)")
 
-def ask(prompt: str, default: str = "", secret: bool = False) -> str:
+def ask(prompt: str, default: str = "", secret: bool = False, non_interactive: bool = False) -> str:
+    if non_interactive:
+        return default
     if secret:
         val = getpass.getpass(f"{prompt}: ")
     else:
@@ -98,7 +105,7 @@ def ftp_download_text(ftp: ftplib.FTP, remote_path: str) -> str:
 
 # ── Coleta de credenciais ─────────────────────────────────────────────────────
 
-def collect_credentials() -> dict:
+def collect_credentials(non_interactive: bool) -> dict:
     saved = load_env(CREDS_FILE)
     local = load_env(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
@@ -107,18 +114,31 @@ def collect_credentials() -> dict:
 
     creds = {
         "FTP_SERVER":     ask("FTP_SERVER (ex: ftp.shopvivaliz.com.br)",
-                              saved.get("FTP_SERVER", local.get("FTP_SERVER", ""))),
+                              saved.get("FTP_SERVER", local.get("FTP_SERVER", "")),
+                              non_interactive=non_interactive),
         "FTP_USERNAME":   ask("FTP_USERNAME",
-                              saved.get("FTP_USERNAME", local.get("FTP_USERNAME", ""))),
-        "FTP_PASSWORD":   ask("FTP_PASSWORD", secret=True),
-        "FTP_PORT":       ask("FTP_PORT", saved.get("FTP_PORT", local.get("FTP_PORT", "21"))),
+                              saved.get("FTP_USERNAME", local.get("FTP_USERNAME", "")),
+                              non_interactive=non_interactive),
+        "FTP_PASSWORD":   ask("FTP_PASSWORD",
+                              saved.get("FTP_PASSWORD", ""),
+                              secret=True,
+                              non_interactive=non_interactive),
+        "FTP_PORT":       ask("FTP_PORT", saved.get("FTP_PORT", local.get("FTP_PORT", "21")),
+                              non_interactive=non_interactive),
         "FTP_REMOTE_DIR": ask("FTP_REMOTE_DIR (raiz do site, ex: /public_html/dev)",
-                              saved.get("FTP_REMOTE_DIR", local.get("FTP_REMOTE_DIR", "/"))),
+                              saved.get("FTP_REMOTE_DIR", local.get("FTP_REMOTE_DIR", "/")),
+                              non_interactive=non_interactive),
         "GITHUB_TOKEN":   ask("GitHub Personal Access Token (repo:read + admin:repo_hook)",
-                              saved.get("GITHUB_TOKEN", ""), secret=True),
+                              saved.get("GITHUB_TOKEN", ""),
+                              secret=True,
+                              non_interactive=non_interactive),
     }
-    if not creds["FTP_PASSWORD"]:
-        creds["FTP_PASSWORD"] = saved.get("FTP_PASSWORD", "")
+
+    missing = [key for key, value in creds.items() if not value]
+    if missing:
+        print(f"\n✗ Credenciais ausentes: {', '.join(missing)}")
+        print("  Preencha scripts/.ftp-credentials ou rode sem --non-interactive na primeira execução.")
+        sys.exit(1)
 
     save_creds(creds)
     return creds
@@ -136,7 +156,7 @@ def step_test_ftp(creds: dict) -> ftplib.FTP:
     print(f"  ✓ Conectado a {creds['FTP_SERVER']}{remote_dir}")
     return ftp
 
-def step_upload_webhook(ftp: ftplib.FTP, creds: dict) -> str:
+def step_upload_webhook(ftp: ftplib.FTP, creds: dict, repos: list[dict]) -> str:
     print("\n[2/4] Enviando deploy-webhook.php para o servidor...")
     if not os.path.isfile(WEBHOOK_PHP):
         print(f"  ✗ Arquivo não encontrado: {WEBHOOK_PHP}")
@@ -158,20 +178,21 @@ def step_upload_webhook(ftp: ftplib.FTP, creds: dict) -> str:
              and not l.strip().startswith("GITHUB_TOKEN=")]
     lines.append(f"DEPLOY_SECRET={deploy_secret}")
     lines.append(f"GITHUB_TOKEN={creds['GITHUB_TOKEN']}")
+    lines.append("DEPLOY_REPOS=" + ",".join(repo_cfg["repo"] for repo_cfg in repos))
     new_env = "\n".join(lines).strip() + "\n"
     ftp_upload_text(ftp, ".env", new_env)
-    print("  ✓ .env do servidor atualizado com DEPLOY_SECRET e GITHUB_TOKEN")
+    print("  ✓ .env do servidor atualizado com DEPLOY_SECRET, GITHUB_TOKEN e DEPLOY_REPOS")
 
     return deploy_secret
 
-def step_configure_webhooks(creds: dict, deploy_secret: str) -> None:
+def step_configure_webhooks(creds: dict, deploy_secret: str, repos: list[dict]) -> None:
     print("\n[3/4] Configurando webhooks no GitHub...")
     token = creds["GITHUB_TOKEN"]
     if not token:
         print("  ✗ GITHUB_TOKEN não fornecido. Crie manualmente o webhook.")
         return
 
-    for repo_cfg in REPOS:
+    for repo_cfg in repos:
         repo = repo_cfg["repo"]
         url  = repo_cfg["webhook_url"]
         print(f"\n  Repo: {repo}")
@@ -201,9 +222,9 @@ def step_configure_webhooks(creds: dict, deploy_secret: str) -> None:
         else:
             print(f"    ✗ Falha ao criar webhook: {resp}")
 
-def step_test_webhook(creds: dict) -> None:
+def step_test_webhook(repos: list[dict]) -> None:
     print("\n[4/4] Testando se deploy-webhook.php está acessível...")
-    for repo_cfg in REPOS:
+    for repo_cfg in repos:
         url = repo_cfg["webhook_url"]
         try:
             req = urllib.request.Request(url, method="GET",
@@ -226,24 +247,61 @@ def step_test_webhook(creds: dict) -> None:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Configura o deploy autônomo do ShopVivaliz.")
+    parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="Usa apenas valores já salvos em scripts/.ftp-credentials ou .env, sem perguntar nada.",
+    )
+    parser.add_argument(
+        "--repos",
+        default="all",
+        help="Lista separada por vírgula com nomes de repositório ou 'all'. Ex: site-shopvivaliz,-shopvivaliz-pipeline",
+    )
+    return parser.parse_args()
+
+
+def select_repos(raw_selection: str) -> list[dict]:
+    selection = raw_selection.strip().lower()
+    if selection in {"", "all", "*"}:
+        return list(REPOS)
+
+    wanted = {item.strip().lower() for item in raw_selection.split(",") if item.strip()}
+    selected = [
+        repo_cfg for repo_cfg in REPOS
+        if repo_cfg["repo"].split("/", 1)[-1].lower() in wanted
+        or repo_cfg["repo"].lower() in wanted
+    ]
+    if not selected:
+        print(f"✗ Nenhum repositório conhecido corresponde a: {raw_selection}")
+        sys.exit(1)
+    return selected
+
 def main():
+    args = parse_args()
+    repos = select_repos(args.repos)
+
     print("=" * 60)
     print("  ShopVivaliz — Setup Deploy Autônomo")
     print("  Sem GitHub Actions, sem custo")
     print("=" * 60)
+    print("  Repositórios:")
+    for repo_cfg in repos:
+        print(f"    - {repo_cfg['repo']}")
 
-    creds = collect_credentials()
+    creds = collect_credentials(args.non_interactive)
 
     try:
         ftp            = step_test_ftp(creds)
-        deploy_secret  = step_upload_webhook(ftp, creds)
+        deploy_secret  = step_upload_webhook(ftp, creds, repos)
         ftp.quit()
     except Exception as e:
         print(f"\n✗ Erro FTP: {e}")
         sys.exit(1)
 
-    step_configure_webhooks(creds, deploy_secret)
-    step_test_webhook(creds)
+    step_configure_webhooks(creds, deploy_secret, repos)
+    step_test_webhook(repos)
 
     print("\n" + "=" * 60)
     print("  ✓ Setup concluído!")
