@@ -197,6 +197,7 @@ Base URL da API: `https://api.tiny.com.br/public-api/v3`
 | 2026-07-02 (~13h UTC) | `main` (rotina agendada, sem branch dedicada) | Ciclo de otimização inteligente (CTR/conversão/título/A-B) executado como rotina autônoma. Diagnóstico: nenhuma otimização foi aplicada — ver seção 9. |
 | 2026-07-02 (~19h UTC) | `main` (rotina agendada, sem branch dedicada) | Novo ciclo (6h depois): mesmo bloqueador confirmado, sem mudanças no ambiente. `fetch-shopee-listings.yml` run #12 (18:17:31Z) segue retornando `total_products: 0` / 401; `optimize-shopee-listings.yml` run #5 (11:55:02Z) terminou em `failure`. Nenhum arquivo `optimization-report-*.json` novo desde 2026-06-30. Nenhuma alteração de título/descrição/imagem/preço aplicada — mesma decisão da seção 9. Nenhum dado de venda, CTR ou conversão foi inventado. |
 | 2026-07-03 (~04h UTC) | `main` (rotina agendada, sem branch dedicada) | 3º ciclo consecutivo (agora no dia seguinte): bloqueador ainda presente, ~33h após a última extração real. `optimize-shopee-listings.yml` gerou `listings/optimization-report-20260703-041044.json` com `status: error`, `"Autenticação Tiny falhou (401)."`, `total_products: 0`. Nenhuma otimização aplicada. Notificação enviada ao usuário (push) pedindo renovação manual do token, já que os 2 ciclos anteriores não resolveram o bloqueador. |
+| 2026-07-03 (~14h UTC) | `main` (rotina agendada, sem branch dedicada) | 4º ciclo consecutivo: mesmo bloqueador (token Tiny), sem renovação desde a notificação do ciclo anterior. `fetch-shopee-listings.yml` run (10:16:18Z) e `optimize-shopee-listings.yml` run (11:53:23Z) terminaram em `failure` sem gerar novo relatório — causa raiz distinta: corrida de commit concorrente entre workflows autônomos no `main` (mesma classe de bug corrigida em `a3690a2` para o CI EHA), não um novo problema de dados. Nenhuma otimização aplicada; nenhum push duplicado enviado ao usuário por não haver fato novo além do já reportado no ciclo das 04h. |
 
 ---
 
@@ -265,3 +266,29 @@ Terceiro ciclo consecutivo com o mesmo bloqueador, agora ~33h sem extração rea
   `TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN` no ERP Tiny e atualizar o secret no GitHub,
   depois rodar `fetch-shopee-listings.yml` manualmente para confirmar `status: success`
   com `total_products > 0` antes do próximo ciclo autônomo.
+
+### 9.3 Atualização — ciclo de 2026-07-03 ~14h UTC
+
+Quarto ciclo consecutivo. O bloqueador de dados (token Tiny expirado) segue sem renovação:
+
+- `fetch-shopee-listings.yml` (run 2026-07-03T10:16:18Z): `conclusion: failure`.
+- `optimize-shopee-listings.yml` (run 2026-07-03T11:53:23Z): `conclusion: failure`.
+- Nenhum `listings/shopee-listings-*.json` ou `listings/optimization-report-*.json` novo
+  foi commitado a partir dessas duas execuções — diferente dos ciclos anteriores, que ao
+  menos conseguiam commitar um relatório com `status: error/partial`.
+- Causa provável dessas duas falhas sem relatório: corrida de commit concorrente no `main`
+  entre múltiplos workflows autônomos rodando na mesma janela (mesmo padrão de falha
+  diagnosticado e corrigido em `a3690a2` — "corrigir falha em cascata no step de commit do
+  CI EHA" — para o workflow `ci-autonomo-continuo.yml`). Os workflows Shopee usam um padrão
+  de commit/push semelhante e provavelmente sofrem do mesmo problema; ainda não corrigido
+  especificamente para `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml`.
+- Nenhuma otimização de título/descrição/imagem/atributo/preço foi aplicada — sem dados reais
+  de produto (token Tiny) não há base para decisão orientada a dados.
+- Nenhuma notificação push adicional foi enviada ao usuário neste ciclo: o fato acionável
+  (renovar `TINY_ACCESS_TOKEN`) é o mesmo já comunicado no ciclo das ~04h; alertar de novo
+  sem informação nova seria ruído.
+
+**Sugestão para o próximo ciclo com acesso de escrita a workflows:** aplicar em
+`fetch-shopee-listings.yml` e `optimize-shopee-listings.yml` o mesmo fix de `a3690a2`
+(`continue-on-error` + `if/fi` em vez de `&& break` + `git rebase --abort` antes de retry)
+para que corridas de commit concorrente parem de mascarar o diagnóstico do bloqueador real.
