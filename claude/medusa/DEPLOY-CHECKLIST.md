@@ -333,6 +333,52 @@ credenciais reais PayPal/Olist, rotação do secret Olist vazado no
 histórico do git) continuam pendentes — todos exigem ação humana fora do
 alcance desta sessão.
 
+**Rodada 18 (2026-07-03, revalidação completa + fix real):** container efêmero
+novo, `main` sincronizado com `origin/main` (commit `9424a44`, rodada 17).
+Postgres 16 local provisionado (`service postgresql start`, role `medusa` +
+banco `shopvivaliz_medusa`), `pnpm install` na raiz do monorepo (1662 pacotes)
++ `.env` novo gerado (`JWT_SECRET`/`COOKIE_SECRET`/webhook secrets via
+`openssl rand`, `STRIPE_API_KEY`/`STRIPE_PUBLIC_KEY` = chaves de exemplo
+público do Stripe conforme instrução, `PIX_ENABLED=true`). `npx medusa
+db:migrate` + `seed-shopvivaliz-test-data.ts` aplicados sem erros (região
+Brasil/BRL, 8 produtos ShopVivaliz + 4 demo = 12 no total, cliente de teste).
+`npm run build` OK nos dois apps (backend: 5.8s + 32.4s frontend/admin;
+storefront: build falhou na primeira tentativa por depender do backend rodando
+em `localhost:9000` durante a geração estática — comportamento esperado do
+Next.js App Router com `generateStaticParams`, não é bug; subiu o backend via
+`medusa develop` antes de re-buildar e o storefront gerou as 133 páginas
+normalmente). Publishable API key obtida direto do Postgres
+(`SELECT token FROM api_key WHERE type='publishable'`) e vinculada ao Default
+Sales Channel pelo próprio seed; `GET /store/products` com o `token` correto
+(prefixo `pk_...`, não o `id` `apk_...`) retornou os 12 produtos. Backend
+subiu com `medusa develop` (porta 9000), `GET /health` → `200 OK`. Storefront
+em modo produção (porta 8000) renderizou `/br/products/camiseta-shopvivaliz`
+com preço real da API (R$69,90), HTTP 200.
+
+**Fix real encontrado e corrigido nesta rodada:** `apps/backend/package.json`
+não tinha os scripts `migrate`/`migrate:latest`/`seed` — todas as 17 rodadas
+anteriores rodaram `npx medusa db:migrate` e `npx medusa exec
+./src/scripts/seed-shopvivaliz-test-data.ts` diretamente, então essa lacuna
+nunca tinha sido exercitada. Adicionados os 3 scripts (`"migrate"` e
+`"migrate:latest"` apontando para `medusa db:migrate`, `"seed"` para `medusa
+exec ./src/scripts/seed-shopvivaliz-test-data.ts`), alinhado com
+`turbo.json` (que já declarava a task `seed`) e com `package.json` raiz
+(`"backend:seed": "turbo seed --filter=@dtc/backend"`, que falhava sem o
+script correspondente). Corrigido também um aviso PHP em
+`claude/api/sync-olist-products.php` ("headers already sent") causado por
+`echo` no logger antes do `header()` final — sem impacto funcional (o JSON de
+resposta já estava correto), mas polui logs; guardado com `headers_sent()`.
+Testado `php claude/api/sync-olist-products.php` com credenciais fake:
+falha graciosamente (proxy do ambiente bloqueia `api.olist.com`, HTTP 0),
+retorna `{"success":true,"synced":0,"errors":0,"total":0}` sem warning.
+Teste de rede de saída para `supabase.com` confirmado bloqueado
+(`CONNECT tunnel failed, response 403`). GitHub MCP revalidado sem tools de
+gestão de secrets. Todos os processos/serviços locais parados ao final; `.env`
+de teste mantidos no container (gitignored, não commitados, container é
+descartado ao fim da sessão). Os mesmos 5 blockers de ação humana permanecem
+pendentes (18 rodadas consecutivas) — ver `RELATORIO_FINAL_MEDUSA.json` para o
+status estruturado desta rodada.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
