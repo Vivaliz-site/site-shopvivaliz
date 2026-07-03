@@ -1,0 +1,50 @@
+name: Git Auto Sync Validate
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect conflict markers
+        run: |
+          # Padrão ancorado: <<<<<<< branch, ======= sozinho na linha, >>>>>>> branch
+          if grep -RIn --exclude-dir=.git \
+               --include="*.php" --include="*.py" --include="*.js" \
+               --include="*.ts" --include="*.json" --include="*.yml" \
+               --include="*.yaml" --include="*.md" --include="*.html" \
+               -E '^<<<<<<< |^=======$|^>>>>>>> ' .; then
+            echo "Conflict markers found."
+            exit 1
+          fi
+
+      - name: Validate Python scripts
+        run: |
+          python -m compileall scripts || true
+          if [ -f scripts/git_autonomous_agent.py ]; then
+            python -m py_compile scripts/git_autonomous_agent.py
+          fi
+
+      - name: Check forbidden files
+        run: |
+          forbidden='(^|/)(\.env|node_modules|vendor|storage|uploads|dist|reports|test-results|\.claude|\.codex)(/|$)'
+          if git ls-files | grep -E "$forbidden"; then
+            echo "Forbidden files are tracked."
+            exit 1
+          fi

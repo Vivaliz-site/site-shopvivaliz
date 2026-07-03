@@ -1,0 +1,17 @@
+#!/bin/sh
+branch="$(git branch --show-current)"
+
+if [ -z "$branch" ]; then
+  echo "post-commit: detached HEAD, push automatico bloqueado."
+  exit 0
+fi
+
+case "$branch" in
+  main|master)
+    echo "post-commit: push automatico bloqueado em branch protegida: $branch"
+    exit 0
+    ;;
+esac
+
+echo "post-commit: enviando commit para origin/$branch"
+git push -u origin "$branch"
