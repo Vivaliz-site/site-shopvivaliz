@@ -60,7 +60,7 @@ jobs:
           check_required_secret "FTP_PASSWORD" "${{ secrets.FTP_PASSWORD }}"
           check_required_secret "FTP_PORT" "${{ secrets.FTP_PORT }}"
           check_required_secret "FTP_REMOTE_DIR" "${{ secrets.FTP_REMOTE_DIR }}"
-          check_required_secret "SQUAD_TOKEN" "${{ secrets.SQUAD_TOKEN }}"
+          check_optional_secret "SQUAD_TOKEN" "${{ secrets.SQUAD_TOKEN }}"
           check_optional_secret "ANTHROPIC_API_KEY" "${{ secrets.ANTHROPIC_API_KEY }}"
           check_optional_secret "OPENAI_API_KEY" "${{ secrets.OPENAI_API_KEY }}"
           check_optional_secret "GEMINI_API_KEY" "${{ secrets.GEMINI_API_KEY }}"
