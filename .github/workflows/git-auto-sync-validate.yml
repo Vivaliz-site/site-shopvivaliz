@@ -1,14 +1,7 @@
 name: Git Auto Sync Validate
 
 on:
-  push:
-    branches-ignore:
-      - main
-      - master
-  pull_request:
-    branches:
-      - main
-      - master
+  workflow_dispatch:
 
 permissions:
   contents: read
