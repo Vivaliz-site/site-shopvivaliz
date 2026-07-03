@@ -1,14 +1,14 @@
 # 🚀 ShopVivaliz Medusa - Deployment Status
 
-**Data:** 03/07/2026 (round 22)
-**Status:** ⚠️ **VALIDADO LOCALMENTE — BLOQUEADO PARA PRODUÇÃO** (mesmos 5 blockers há 22 rodadas, todos exigem ação humana)
+**Data:** 03/07/2026 (round 27)
+**Status:** ⚠️ **VALIDADO LOCALMENTE — BLOQUEADO PARA PRODUÇÃO** (mesmos 5 blockers há 27 rodadas, todos exigem ação humana)
 
 > Nota: este arquivo estava desatualizado desde a rodada 7 (o registro rodada-a-rodada mais completo vive em
-> [`claude/medusa/DEPLOY-CHECKLIST.md`](claude/medusa/DEPLOY-CHECKLIST.md)). Atualizado nesta rodada (22) para refletir
-> o status atual — nenhuma mudança de código de produto, apenas revalidação completa (pnpm install, migrations, seed,
-> build, health check, `/store/products`, webhook Medusa→EHA, `php -l`), todos os 5 blockers seguem inalterados. A
-> rodada 21 (checagem leve, commit `f980926`) recomendou pausar revalidações completas automáticas até que o usuário
-> resolva ao menos um blocker.
+> [`claude/medusa/DEPLOY-CHECKLIST.md`](claude/medusa/DEPLOY-CHECKLIST.md)). Rodada 27 (leve): nenhuma mudança de
+> código em `claude/medusa/`/`claude/api/` desde a rodada 26, todos os 5 blockers seguem inalterados. Esta é a **sexta
+> recomendação consecutiva** (rodadas 21, 23, 24, 25, 26, 27) de **pausar o agendamento automático externo** desta
+> tarefa até que o usuário resolva ao menos um blocker — em destaque, a rotação do secret Olist/Tiny vazado no
+> histórico do git (pendente desde 2026-07-01) e a criação de um Postgres gerenciado.
 
 Relatório detalhado, item a item: [`claude/medusa/DEPLOY-STATUS-REPORT.json`](claude/medusa/DEPLOY-STATUS-REPORT.json) e [`claude/medusa/DEPLOY-CHECKLIST.md`](claude/medusa/DEPLOY-CHECKLIST.md).
 
@@ -127,5 +127,5 @@ Relatório completo: [`claude/medusa/DEPLOY-STATUS-REPORT.json`](claude/medusa/D
 
 ---
 
-**Última verificação:** 03/07/2026 (round 22, revalidação completa, sem regressão — ver `claude/medusa/DEPLOY-CHECKLIST.md` para o histórico detalhado das 22 rodadas)
-**Próxima execução:** recomenda-se pausar/reduzir a revalidações leves até que o usuário resolva ao menos um dos 5 blockers (ver seção acima)
+**Última verificação:** 03/07/2026 (round 26, revalidação leve — diff vazio em `claude/medusa/`/`claude/api/` desde a rodada 25, sem regressão — ver `claude/medusa/DEPLOY-CHECKLIST.md` para o histórico detalhado das 26 rodadas)
+**Próxima execução:** 6ª rodada leve consecutiva (21, 23, 24, 25, 26) recomendando pausar o agendamento automático até que o usuário resolva ao menos um dos 5 blockers (ver seção acima) — nenhum é executável de forma autônoma neste sandbox

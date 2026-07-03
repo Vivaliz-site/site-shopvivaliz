@@ -1,39 +1,9 @@
-name: Sincronizar Shopee (a cada 6 horas)
-
+name: PAUSADO - Sync Shopee 6h
+# Desabilitado 2026-07-03: quota GitHub Actions esgotada
 on:
-  schedule:
-    # A cada 6 horas: 00:00, 06:00, 12:00, 18:00 UTC
-    - cron: '0 0,6,12,18 * * *'
   workflow_dispatch:
-
 jobs:
-  sync-shopee:
+  pausado:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.1'
-
-      - name: Sincronizar com Shopee
-        env:
-          SHOPEE_PARTNER_ID: ${{ secrets.SHOPEE_PARTNER_ID }}
-          SHOPEE_PARTNER_KEY: ${{ secrets.SHOPEE_PARTNER_KEY }}
-          SHOPEE_SHOP_ID: ${{ secrets.SHOPEE_SHOP_ID }}
-          MEDUSA_BACKEND_URL: ${{ secrets.MEDUSA_BACKEND_URL }}
-        run: |
-          php claude/api/sync-shopee-products.php
-
-      - name: Fazer commit de produtos sincronizados
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "Autonomous Sync"
-
-          if [[ -n $(git status -s) ]]; then
-            git add -A
-            git commit -m "chore: sincronizar produtos com Shopee (automático)"
-            git push
-          fi
+      - run: echo "Workflow pausado para economizar quota Actions."
