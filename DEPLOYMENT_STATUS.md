@@ -127,5 +127,5 @@ Relatório completo: [`claude/medusa/DEPLOY-STATUS-REPORT.json`](claude/medusa/D
 
 ---
 
-**Última verificação:** 03/07/2026 (round 22, revalidação completa, sem regressão — ver `claude/medusa/DEPLOY-CHECKLIST.md` para o histórico detalhado das 22 rodadas)
-**Próxima execução:** recomenda-se pausar/reduzir a revalidações leves até que o usuário resolva ao menos um dos 5 blockers (ver seção acima)
+**Última verificação:** 03/07/2026 (round 26, revalidação leve — diff vazio em `claude/medusa/`/`claude/api/` desde a rodada 25, sem regressão — ver `claude/medusa/DEPLOY-CHECKLIST.md` para o histórico detalhado das 26 rodadas)
+**Próxima execução:** 6ª rodada leve consecutiva (21, 23, 24, 25, 26) recomendando pausar o agendamento automático até que o usuário resolva ao menos um dos 5 blockers (ver seção acima) — nenhum é executável de forma autônoma neste sandbox

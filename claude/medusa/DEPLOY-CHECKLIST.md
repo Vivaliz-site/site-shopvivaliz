@@ -623,6 +623,34 @@ usuário rotacione o secret Olist/Tiny vazado ou crie um Postgres gerenciado
 — nenhuma das duas ações é executável de forma autônoma neste sandbox, e
 revalidações repetidas sem sinal novo consomem tempo/CI sem benefício.
 
+**Rodada 26 (2026-07-03, revalidação leve, execução automática agendada):**
+`main` estava em `HEAD` destacado apontando para `f622385` (mais recente que
+o commit da rodada 25); `git fetch origin main` confirmou que `f622385` já é
+`origin/main` — resolvido com `git checkout -B main origin/main`, sem perda
+de commits. `git diff dd312c6..HEAD -- claude/medusa claude/api` (commit da
+rodada 25) confirma **diff vazio**: nenhuma mudança em `claude/medusa/` ou
+`claude/api/` desde a rodada 25 — os únicos commits novos desde então
+(`f622385` e ancestrais, mesclados via PR #76) adicionam um orquestrador
+24/7 não relacionado ao Medusa (`admin/orchestrator.php`,
+`api/orchestrator/*`, `api/agent/cron-dispatcher.php`). Repetidos apenas os
+checks leves: nenhum marcador de conflito de merge, `package.json` válido
+em backend e storefront, `php -l` sem erro em todos os `.php` sob
+`claude/api/`, `list_pull_requests` via GitHub MCP (nenhuma PR aberta),
+nenhum `.env`/`.env.local` de produção no repositório, teste de rede de
+saída para `api.supabase.com` (continua bloqueado pelo proxy do ambiente,
+`CONNECT tunnel failed, response 403`), e confirmação de que o GitHub MCP
+desta sessão continua sem nenhum tool de gestão de secrets do Actions
+(mesma limitação de todas as rodadas anteriores). `npm install`/build
+completo **não foi refeito** — sem sinal de mudança de código desde a
+rodada 22 (última revalidação completa). **Nenhum bug novo encontrado.** Os
+mesmos 5 blockers de ação humana continuam inalterados havia **26 rodadas
+consecutivas** (6ª rodada leve seguida sem progresso). Reitera-se, pela
+quinta vez, a recomendação das rodadas 21/23/24/25: **pausar o agendamento
+automático desta tarefa** até que o usuário resolva ao menos um blocker —
+nenhum dos 5 é executável de forma autônoma neste sandbox (sem login
+humano interativo, sem acesso de rede a domínios de terceiros, sem
+CLI/tool de gestão de secrets do GitHub).
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
