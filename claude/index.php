@@ -10,7 +10,7 @@ $last_run        = @json_decode(@file_get_contents($report_dir . '/last_run.json
 $last_status     = trim(@file_get_contents($report_dir . '/last_status.txt') ?: 'UNKNOWN');
 $last_ci_run     = @json_decode(@file_get_contents($report_dir . '/last_ci_run.json'), true) ?: [];
 $medusa_run      = @json_decode(@file_get_contents($report_dir . '/medusa-last-run.json'), true) ?: [];
-$eha_log_lines   = @file($report_dir . '/eha.log') ?: [];
+$eha_log_lines   = @file($report_dir . '/eha_events.txt') ?: [];
 $recent_log      = array_slice($eha_log_lines, -30);
 
 // Parse run history for trend (last 20 runs)
@@ -20,6 +20,14 @@ foreach (array_slice($history_lines, -20) as $line) {
     $h = @json_decode(trim($line), true);
     if ($h) $history[] = $h;
 }
+
+// Calcular taxa de sucesso
+$total_runs   = count($history);
+$success_runs = count(array_filter($history, fn($h) =>
+    ($h['action'] ?? '') !== 'ROLLBACK' && (int)($h['metrics']['error_count'] ?? 0) === 0
+));
+$success_rate = $total_runs > 0 ? round($success_runs / $total_runs * 100) : 0;
+$success_color = $success_rate >= 90 ? 'ok' : ($success_rate >= 70 ? 'warn' : 'fail');
 
 // Agente Proativo — último run
 $proactive_log_path = dirname(__DIR__) . '/automation/proactive/logs/runs.jsonl';
@@ -68,6 +76,9 @@ $trend_ok  = array_map(fn($h) => ($h['metrics']['checkout_ok'] ?? false) ? 1 : 0
 $trend_err = array_map(fn($h) => (int)($h['metrics']['error_count'] ?? 0), $history);
 $sparkline_ok  = implode(',', $trend_ok);
 $sparkline_err = implode(',', $trend_err);
+
+// Total de eventos no log
+$total_events = count($eha_log_lines);
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -101,6 +112,8 @@ $sparkline_err = implode(',', $trend_err);
         .spark-row { display: flex; gap: 1rem; flex-wrap: wrap; }
         .spark-box { background: #1e293b; border-radius: .75rem; padding: 1rem; flex: 1; min-width: 200px; }
         .spark-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: #64748b; margin-bottom: .5rem; }
+        .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; }
+        .log-count { font-size: .75rem; color: #64748b; }
     </style>
 </head>
 <body>
@@ -118,6 +131,13 @@ $sparkline_err = implode(',', $trend_err);
         <div class="card">
             <div class="card-label">Tempo execução</div>
             <div class="card-value"><?= htmlspecialchars((string)$elapsed) ?>s</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Taxa de sucesso</div>
+            <div class="card-value <?= $success_color ?>">
+                <?= $success_rate ?>%
+                <span style="font-size:.7rem;font-weight:400;color:#64748b">(<?= $success_runs ?>/<?= $total_runs ?>)</span>
+            </div>
         </div>
         <div class="card">
             <div class="card-label">Checkout</div>
@@ -279,7 +299,12 @@ $sparkline_err = implode(',', $trend_err);
     <?php endif; ?>
 
     <div class="section">
-        <h2>Log recente</h2>
+        <h2>Log de eventos
+            <span class="log-count">(<?= $total_events ?> linhas totais · exibindo últimas 30)</span>
+        </h2>
+        <?php if (empty($recent_log)): ?>
+            <p style="color:#64748b;font-size:.85rem">Nenhum evento registrado ainda.</p>
+        <?php else: ?>
         <div class="log"><?php
             foreach (array_reverse($recent_log) as $line) {
                 $safe = htmlspecialchars(rtrim($line));
@@ -290,6 +315,7 @@ $sparkline_err = implode(',', $trend_err);
                 }
             }
         ?></div>
+        <?php endif; ?>
     </div>
 </body>
 </html>
