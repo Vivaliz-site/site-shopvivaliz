@@ -57,6 +57,21 @@ $proactive_commit  = $proactive_last['commit'] ?? '—';
 $proactive_total   = count($proactive_runs);
 $proactive_color   = $proactive_last ? '#22c55e' : '#64748b';
 
+// Mercado Livre — status do token OAuth
+$ml_token_path = dirname(__DIR__) . '/storage/private/ml-tokens.json';
+$ml_tokens     = @json_decode(@file_get_contents($ml_token_path), true) ?: [];
+$ml_connected  = !empty($ml_tokens['access_token']);
+$ml_user_id    = $ml_tokens['user_id'] ?? null;
+$ml_exp_ms     = (int)($ml_tokens['expires_at_ms'] ?? 0);
+$ml_now_ms     = (int)(microtime(true) * 1000);
+$ml_expires_in = $ml_exp_ms > 0 ? max(0, (int)(($ml_exp_ms - $ml_now_ms) / 1000)) : null;
+$ml_has_refresh = !empty($ml_tokens['refresh_token']);
+$ml_status_color = $ml_connected ? '#22c55e' : '#64748b';
+$ml_exp_label  = $ml_expires_in !== null
+    ? ($ml_expires_in > 3600 ? round($ml_expires_in / 3600, 1) . 'h' : round($ml_expires_in / 60) . 'min')
+    : '—';
+$ml_exp_color  = $ml_expires_in === null ? '#64748b' : ($ml_expires_in < 600 ? '#ef4444' : ($ml_expires_in < 3600 ? '#f59e0b' : '#22c55e'));
+
 $status_color = match($last_status) {
     'READY_FOR_PRODUCTION' => '#22c55e',
     'BLOCKED'              => '#ef4444',
@@ -266,6 +281,43 @@ $total_events = count($eha_log_lines);
             </div>
             <?php endif; ?>
         </div>
+    </div>
+
+    <div class="section">
+        <h2>Mercado Livre</h2>
+        <div style="margin-bottom:.75rem">
+            <span style="display:inline-block;padding:.2rem .7rem;border-radius:999px;font-size:.8rem;font-weight:600;color:#fff;background:<?= $ml_status_color ?>">
+                <?= $ml_connected ? 'CONECTADO' : 'NÃO CONECTADO' ?>
+            </span>
+            <?php if (!$ml_connected): ?>
+            &nbsp;<a href="/api/ml/login" style="font-size:.8rem;color:#60a5fa">Conectar via OAuth &rarr;</a>
+            <?php endif; ?>
+        </div>
+        <?php if ($ml_connected): ?>
+        <div class="grid">
+            <div class="card">
+                <div class="card-label">User ID</div>
+                <div class="card-value muted"><?= htmlspecialchars((string)$ml_user_id) ?></div>
+            </div>
+            <div class="card">
+                <div class="card-label">Token expira em</div>
+                <div class="card-value" style="color:<?= $ml_exp_color ?>"><?= htmlspecialchars($ml_exp_label) ?></div>
+            </div>
+            <div class="card">
+                <div class="card-label">Refresh Token</div>
+                <div class="card-value <?= $ml_has_refresh ? 'ok' : 'fail' ?>"><?= $ml_has_refresh ? 'Disponível' : 'Ausente' ?></div>
+            </div>
+            <div class="card">
+                <div class="card-label">Ações</div>
+                <div class="card-value" style="font-size:.85rem;font-weight:400">
+                    <a href="/api/ml/me" style="color:#60a5fa">/me</a> &nbsp;
+                    <a href="/api/ml/token" style="color:#60a5fa">status</a>
+                </div>
+            </div>
+        </div>
+        <?php else: ?>
+        <p style="font-size:.85rem;color:#64748b">Configure <code style="color:#94a3b8">ML_CLIENT_ID</code>, <code style="color:#94a3b8">ML_CLIENT_SECRET</code> e <code style="color:#94a3b8">ML_REDIRECT_URI</code> no .env / GitHub Secrets, depois acesse <a href="/api/ml/login" style="color:#60a5fa">/api/ml/login</a>.</p>
+        <?php endif; ?>
     </div>
 
     <?php if (count($history) > 1): ?>
