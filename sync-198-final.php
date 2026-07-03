@@ -2,12 +2,23 @@
 header('Content-Type: application/json; charset=utf-8');
 set_time_limit(300);
 
-// CREDENCIAIS CONFIRMADAS
-$host = 'localhost';
-$port = 3306;
-$db = 'shopv506_shopvivaliz';
-$user = 'claude';
-$pass = 'CFqmkF8}$C_2';
+(static function() {
+    $f = __DIR__ . '/.env';
+    if (!is_file($f)) return;
+    foreach (file($f, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
+        [$k, $v] = explode('=', $line, 2);
+        $k = trim($k); $v = trim(trim($v), '"\'');
+        if ($k !== '' && getenv($k) === false) putenv("$k=$v");
+    }
+})();
+
+$host = getenv('DB_HOST') ?: 'localhost';
+$port = (int)(getenv('DB_PORT') ?: 3306);
+$db   = getenv('DB_NAME') ?: '';
+$user = getenv('DB_USER') ?: '';
+$pass = getenv('DB_PASS') ?: '';
 
 // CONECTAR
 $conn = new mysqli($host, $user, $pass, $db, $port);

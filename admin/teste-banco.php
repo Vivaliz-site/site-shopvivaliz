@@ -1,10 +1,22 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 
-$host = 'localhost';
-$user = 'shopv506_claude';
-$pass = 'CFqmkF8}$C_2';
-$db_name = 'shopv506_shopvivaliz';
+(static function() {
+    $f = dirname(__DIR__) . '/.env';
+    if (!is_file($f)) return;
+    foreach (file($f, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
+        [$k, $v] = explode('=', $line, 2);
+        $k = trim($k); $v = trim(trim($v), '"\'');
+        if ($k !== '' && getenv($k) === false) putenv("$k=$v");
+    }
+})();
+
+$host    = getenv('DB_HOST') ?: 'localhost';
+$user    = getenv('DB_USER') ?: '';
+$pass    = getenv('DB_PASS') ?: '';
+$db_name = getenv('DB_NAME') ?: '';
 
 $db = new mysqli($host, $user, $pass, $db_name, 3306);
 
