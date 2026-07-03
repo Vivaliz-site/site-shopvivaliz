@@ -18,7 +18,7 @@ function ml_env(string ...$keys): string {
                 $line = trim($line);
                 if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
                 [$k, $v] = explode('=', $line, 2);
-                $k = trim($k); $v = trim(trim($v), '"\"');
+                $k = trim($k); $v = trim(trim($v), '"\'');
                 if ($k !== '' && getenv($k) === false) { putenv("$k=$v"); $_ENV[$k] = $v; }
             }
         }

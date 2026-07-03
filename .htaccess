@@ -24,6 +24,14 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
+    # Mercado Livre OAuth
+    RewriteRule ^api/ml/login/?$ api/ml/login.php [L]
+    RewriteRule ^api/ml/callback/?$ api/ml/callback.php [L,QSA]
+    RewriteRule ^api/ml/token/status/?$ api/ml/token.php [L]
+    RewriteRule ^api/ml/token/refresh/?$ api/ml/token.php [L]
+    RewriteRule ^api/ml/me/?$ api/ml/me.php [L]
+    RewriteRule ^api/ml/webhook/?$ api/ml/webhook.php [L,QSA]
+
     # Rotas principais da loja
     RewriteRule ^$ index.php [L]
     RewriteRule ^home/?$ home.php [L]
