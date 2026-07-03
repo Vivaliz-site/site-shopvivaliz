@@ -96,6 +96,16 @@ $medusa_next      = $medusa_run['next_step_title'] ?? '—';
 $medusa_applied   = count($medusa_run['applied_actions'] ?? []);
 $medusa_color     = $medusa_status === 'completed' ? '#22c55e' : ($medusa_status === 'error' ? '#ef4444' : '#f59e0b');
 
+// Trio IA Executor — fila de tarefas
+$tasks_queue_path = dirname(__DIR__) . '/logs/tasks-queue.json';
+$tasks_data       = @json_decode(@file_get_contents($tasks_queue_path), true) ?: ['queue' => []];
+$tasks_all        = $tasks_data['queue'] ?? [];
+$tasks_completed  = array_values(array_filter($tasks_all, fn($t) => ($t['status'] ?? '') === 'completed'));
+$tasks_pending    = array_values(array_filter($tasks_all, fn($t) => ($t['status'] ?? '') === 'pending'));
+$tasks_total      = count($tasks_all);
+$tasks_pct        = $tasks_total > 0 ? round(count($tasks_completed) / $tasks_total * 100) : 0;
+$tasks_color      = empty($tasks_pending) ? '#22c55e' : (count($tasks_completed) > 0 ? '#f59e0b' : '#3b82f6');
+
 // Trend sparkline data — run_history.jsonl usa campos no nível raiz (não aninhados em metrics)
 $trend_ok  = array_map(fn($h) => ($h['checkout_ok'] ?? false) ? 1 : 0, $history);
 $trend_err = array_map(fn($h) => (int)($h['error_count'] ?? 0), $history);
@@ -139,6 +149,13 @@ $total_events = count($eha_log_lines);
         .spark-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: #64748b; margin-bottom: .5rem; }
         .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; }
         .log-count { font-size: .75rem; color: #64748b; }
+        .task-item { background: #1e293b; border-radius: .5rem; padding: .65rem 1rem; margin-bottom: .5rem; display: flex; align-items: flex-start; gap: .75rem; }
+        .task-priority { border-radius: 999px; padding: .15rem .55rem; font-size: .7rem; font-weight: 700; flex-shrink: 0; margin-top: .1rem; }
+        .priority-high   { background: #ef444422; color: #ef4444; }
+        .priority-medium { background: #f59e0b22; color: #f59e0b; }
+        .priority-low    { background: #3b82f622; color: #3b82f6; }
+        .progress-bar { background: #1e293b; border-radius: 999px; height: 8px; overflow: hidden; margin: .5rem 0 .25rem; }
+        .progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #3b82f6, #22c55e); transition: width .3s; }
     </style>
 </head>
 <body>
@@ -251,6 +268,52 @@ $total_events = count($eha_log_lines);
                 <div class="card-value ok"><?= (int)$medusa_applied ?></div>
             </div>
         </div>
+    </div>
+
+    <div class="section">
+        <h2>Trio IA — Fila de Tarefas</h2>
+        <div style="margin-bottom:.75rem">
+            <span style="display:inline-block;padding:.2rem .7rem;border-radius:999px;font-size:.8rem;font-weight:600;color:#fff;background:<?= $tasks_color ?>">
+                <?= count($tasks_pending) ?> PENDENTES &nbsp;·&nbsp; <?= count($tasks_completed) ?> COMPLETAS
+            </span>
+            &nbsp;<span style="font-size:.8rem;color:#64748b"><?= $tasks_pct ?>% concluído</span>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-fill" style="width:<?= $tasks_pct ?>%"></div>
+        </div>
+        <div class="grid" style="margin-top:.75rem">
+            <div class="card">
+                <div class="card-label">Total</div>
+                <div class="card-value"><?= $tasks_total ?></div>
+            </div>
+            <div class="card">
+                <div class="card-label">Completas</div>
+                <div class="card-value ok"><?= count($tasks_completed) ?></div>
+            </div>
+            <div class="card">
+                <div class="card-label">Pendentes</div>
+                <div class="card-value <?= empty($tasks_pending) ? 'ok' : 'warn' ?>"><?= count($tasks_pending) ?></div>
+            </div>
+        </div>
+        <?php if (!empty($tasks_pending)): ?>
+        <div style="margin-top:.75rem">
+            <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:.5rem">PRÓXIMAS TAREFAS</div>
+            <?php foreach (array_slice($tasks_pending, 0, 3) as $t): ?>
+            <?php $pri = $t['priority'] ?? 'normal'; ?>
+            <div class="task-item">
+                <span class="task-priority priority-<?= htmlspecialchars($pri) ?>"><?= htmlspecialchars(strtoupper($pri)) ?></span>
+                <div>
+                    <div style="font-size:.88rem;font-weight:600;color:#e2e8f0"><?= htmlspecialchars($t['title'] ?? '') ?></div>
+                    <div style="font-size:.75rem;color:#64748b;margin-top:.15rem"><?= htmlspecialchars(mb_substr($t['description'] ?? '', 0, 110)) ?>…</div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php elseif ($tasks_total > 0): ?>
+        <p style="color:#22c55e;font-size:.85rem;margin-top:.5rem">✓ Todas as tarefas foram concluídas!</p>
+        <?php else: ?>
+        <p style="color:#64748b;font-size:.85rem;margin-top:.5rem">Nenhuma tarefa na fila. Adicione em <code style="color:#94a3b8">logs/tasks-queue.json</code>.</p>
+        <?php endif; ?>
     </div>
 
     <div class="section">
