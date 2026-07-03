@@ -1,0 +1,60 @@
+{
+  "version": "1.0.0",
+  "project": "ShopVivaliz",
+  "mode": "fully_autonomous_except_pricing",
+  "default_action": "execute_autonomously",
+  "human_intervention": {
+    "required": false,
+    "exception": "pricing_impact"
+  },
+  "allowed_without_approval": [
+    "development",
+    "bugfix",
+    "qa",
+    "documentation",
+    "deploy",
+    "rollback",
+    "monitoring",
+    "observability",
+    "seo",
+    "content",
+    "images",
+    "categories",
+    "marketplace_sync_without_price",
+    "erp_sync_without_price",
+    "ads_without_price_change",
+    "pipeline_update",
+    "agent_creation",
+    "dashboard_update"
+  ],
+  "blocked_without_manual_review": [
+    "pricing_impact"
+  ],
+  "pricing_impact_keywords": [
+    "preco",
+    "preço",
+    "price",
+    "pricing",
+    "valor final",
+    "valor de venda",
+    "sale_price",
+    "regular_price",
+    "promotional_price",
+    "discount",
+    "desconto",
+    "cupom",
+    "coupon",
+    "margem",
+    "margin",
+    "markup",
+    "regra de precificacao",
+    "regra de precificação",
+    "sincronizacao de preco",
+    "sincronização de preço"
+  ],
+  "log_policy": {
+    "never_print_secrets": true,
+    "mask_tokens": true,
+    "mask_passwords": true
+  }
+}
