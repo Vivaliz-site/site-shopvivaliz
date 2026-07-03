@@ -9,18 +9,29 @@ from pathlib import Path
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+DEFAULT_QUEUE = {
+    "version": "1.0",
+    "created_at": datetime.utcnow().isoformat() + "Z",
+    "queue": []
+}
+
+def load_queue(queue_file: Path) -> dict:
+    queue_file.parent.mkdir(parents=True, exist_ok=True)
+    if not queue_file.exists():
+        print(f"⚠️  {queue_file} não encontrado. Criando fila vazia.")
+        queue_file.write_text(json.dumps(DEFAULT_QUEUE, indent=2, ensure_ascii=False), encoding="utf-8")
+    with open(queue_file, "r", encoding="utf-8") as f:
+        return json.load(f)
+
 def main():
     queue_file = Path("logs/tasks-queue.json")
-
-    # Ler fila de tarefas
-    with open(queue_file, "r", encoding="utf-8") as f:
-        queue_data = json.load(f)
+    queue_data = load_queue(queue_file)
 
     # Encontrar primeira tarefa pendente
-    pending_tasks = [t for t in queue_data["queue"] if t["status"] == "pending"]
+    pending_tasks = [t for t in queue_data.get("queue", []) if t["status"] == "pending"]
 
     if not pending_tasks:
-        print(" Nenhuma tarefa pendente. Fila vazia ou todas completas!")
+        print("✅ Nenhuma tarefa pendente. Fila vazia ou todas completas!")
         return 0
 
     task = pending_tasks[0]
@@ -28,7 +39,7 @@ def main():
     task_title = task["title"]
     task_desc = task["description"]
 
-    print(f" Executando tarefa: {task_title}")
+    print(f"🚀 Executando tarefa: {task_title}")
     print(f"   ID: {task_id}")
     print(f"   Descrição: {task_desc[:100]}...")
     print()
@@ -50,7 +61,7 @@ def main():
         )
 
         if result.returncode == 0:
-            print(" Tarefa executada com sucesso!")
+            print("✅ Tarefa executada com sucesso!")
 
             # Marcar tarefa como completa
             task["status"] = "completed"
@@ -80,23 +91,23 @@ def main():
                 )
                 subprocess.run(["git", "push", "origin", "HEAD:main"], check=True)
                 print("📤 Código commitado e publicado em main")
-                print(" Deploy acionado automaticamente!")
+                print("🚀 Deploy acionado automaticamente!")
             else:
                 print("ℹ️  Nenhuma mudança de código para commitar")
 
-            print(f" Tarefa {task_id} marcada como completa")
+            print(f"✅ Tarefa {task_id} marcada como completa")
             print()
             print("⏭️  Próxima execução em 1 hora")
             return 0
         else:
-            print(f" Erro ao executar: {result.stderr}")
+            print(f"❌ Erro ao executar: {result.stderr}")
             return 1
 
     except subprocess.TimeoutExpired:
-        print("  Timeout na execução (>10 min). Tentando novamente na próxima hora.")
+        print("⏰ Timeout na execução (>10 min). Tentando novamente na próxima hora.")
         return 1
     except Exception as e:
-        print(f" Erro: {e}")
+        print(f"❌ Erro: {e}")
         return 1
 
 if __name__ == "__main__":
