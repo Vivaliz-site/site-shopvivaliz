@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Sincronização Autônoma Bidirecional - C:\FRED <-> c:/user/site-shopvivaliz
+Sincronização Autônoma Bidirecional - C:\\FRED <-> c:/user/site-shopvivaliz
 Executa a cada 2 minutos via Windows Task Scheduler
 """
 import os
