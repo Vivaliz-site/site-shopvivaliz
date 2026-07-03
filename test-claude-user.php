@@ -2,10 +2,24 @@
 header('Content-Type: application/json; charset=utf-8');
 
 // Testa se "claude" é usuário MySQL válido
+(static function() {
+    $f = __DIR__ . '/.env';
+    if (!is_file($f)) return;
+    foreach (file($f, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
+        [$k, $v] = explode('=', $line, 2);
+        $k = trim($k); $v = trim(trim($v), '"\'');
+        if ($k !== '' && getenv($k) === false) putenv("$k=$v");
+    }
+})();
+
+$dbPass = getenv('DB_PASS') ?: '';
+$dbName = getenv('DB_NAME') ?: 'shopv506_shopvivaliz';
 $configs = [
-    ['host' => 'localhost', 'user' => 'claude', 'pass' => 'CFqmkF8}$C_2', 'db' => 'shopv506_shopvivaliz'],
-    ['host' => 'localhost', 'user' => 'claude', 'pass' => 'CFqmkF8}$C_2', 'db' => 'shopvivaliz'],
-    ['host' => '127.0.0.1', 'user' => 'claude', 'pass' => 'CFqmkF8}$C_2', 'db' => 'shopv506_shopvivaliz'],
+    ['host' => 'localhost',  'user' => getenv('DB_USER') ?: 'claude', 'pass' => $dbPass, 'db' => $dbName],
+    ['host' => 'localhost',  'user' => getenv('DB_USER') ?: 'claude', 'pass' => $dbPass, 'db' => 'shopvivaliz'],
+    ['host' => '127.0.0.1', 'user' => getenv('DB_USER') ?: 'claude', 'pass' => $dbPass, 'db' => $dbName],
 ];
 
 $results = [];
