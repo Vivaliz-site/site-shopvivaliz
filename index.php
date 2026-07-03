@@ -89,7 +89,6 @@ $featuredProducts = sv_home_products();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<<<<<<< HEAD
     <meta name="description" content="Vivaliz - Loja online com produtos de qualidade. Rodízios, ferragens, utilidades e muito mais. Compre com segurança.">
     <meta name="theme-color" content="#173B63">
     <meta property="og:title" content="Vivaliz | Loja Online">
@@ -102,15 +101,10 @@ $featuredProducts = sv_home_products();
     <meta name="twitter:title" content="Vivaliz | Loja Online">
     <meta name="twitter:description" content="Catálogo com produtos de qualidade. Compre online com entrega rápida.">
     <link rel="canonical" href="https://shopvivaliz.com.br/">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
 
     <title>Vivaliz | Loja Online</title>
 
-=======
-    <meta name="description" content="ShopVivaliz - Sua loja online de qualidade. Produtos variados com entrega rápida e segura.">
-    <meta name="theme-color" content="#667eea">
-    <title><?php echo APP_NAME; ?> - Sua Loja Online de Confiança</title>
-    <link rel="stylesheet" href="/css/responsive.css">
->>>>>>> 1d7df53 (feat: integração Mercado Livre OAuth 2.0 + PKCE em PHP)
     <link rel="stylesheet" href="/css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -151,21 +145,14 @@ $featuredProducts = sv_home_products();
     <nav class="navbar">
         <div class="container nav-inner">
             <a class="brand-link" href="/">
-                <span class="brand-logo">V</span>Vivaliz
+                <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" onerror="this.src='/images/logo.svg'">
             </a>
             <div class="navbar-menu">
                 <a href="/catalogo">Catálogo</a>
                 <a href="/sobre">Sobre</a>
-<<<<<<< HEAD
                 <a href="/carrinho.php" class="nav-cart" id="nav-cart-link">
                     🛒 Carrinho <span class="cart-badge" id="nav-cart-count">0</span>
                 </a>
-=======
-                <a href="/contato">Contato</a>
-                <a href="/carrinho">🛒 Carrinho</a>
-                <a href="/admin/">Admin</a>
-                <a href="/admin/monitor/">Monitor</a>
->>>>>>> 1d7df53 (feat: integração Mercado Livre OAuth 2.0 + PKCE em PHP)
             </div>
         </div>
     </nav>
@@ -202,41 +189,12 @@ $featuredProducts = sv_home_products();
     <!-- Produtos em destaque -->
     <section class="home-products">
         <div class="container">
-<<<<<<< HEAD
             <div class="section-heading">
                 <div>
                     <h2>Catálogo em destaque</h2>
                     <p class="muted">Seleção especial de produtos disponíveis agora.</p>
                 </div>
                 <a href="/catalogo" class="btn btn-secondary">Ver todos</a>
-=======
-            <h2 class="section-title">Produtos em Destaque</h2>
-            <div class="products-grid">
-                <?php if ($featuredProducts): ?>
-                    <?php foreach ($featuredProducts as $product): ?>
-                        <div class="product-card">
-                            <div class="product-image">
-                                <img src="<?php echo sv_home_esc($product['image_url']); ?>" alt="<?php echo sv_home_esc($product['name']); ?>" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy" onerror="this.src='<?php echo sv_home_esc(svimg_placeholder_url()); ?>'">
-                            </div>
-                            <div class="product-info">
-                                <div class="product-name"><?php echo sv_home_esc($product['name']); ?></div>
-                                <div class="product-price"><?php echo sv_home_esc(sv_home_money((float)$product['price'])); ?></div>
-                                <div class="product-rating"><?php echo (int)$product['images_count']; ?> imagem<?php echo (int)$product['images_count'] === 1 ? '' : 'ns'; ?> | SKU <?php echo sv_home_esc($product['sku']); ?></div>
-                                <a class="product-btn" href="<?php echo sv_home_esc(sv_home_product_url($product)); ?>" style="display: inline-block; text-align: center; text-decoration: none;">Ver Produto</a>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <div class="product-card">
-                        <div class="product-info">
-                            <div class="product-name">Catálogo em preparação</div>
-                            <div class="product-price">Novos produtos em breve</div>
-                            <div class="product-rating">Aguardando sincronização final</div>
-                            <a class="product-btn" href="/catalogo" style="display: inline-block; text-align: center; text-decoration: none;">Ir para o catálogo</a>
-                        </div>
-                    </div>
-                <?php endif; ?>
->>>>>>> 1d7df53 (feat: integração Mercado Livre OAuth 2.0 + PKCE em PHP)
             </div>
             <div id="catalog-status" class="status-line"><?= count($featuredProducts) > 0 ? count($featuredProducts) . ' produtos em destaque carregados.' : 'Nenhum produto disponível no momento.' ?></div>
             <div class="product-grid" id="product-grid">
