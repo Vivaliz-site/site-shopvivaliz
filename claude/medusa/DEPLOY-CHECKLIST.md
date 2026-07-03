@@ -569,6 +569,35 @@ mais acionáveis:
    ou Railway) — requer login humano interativo, não executável de forma
    autônoma neste ambiente (rede bloqueada para esses domínios por design).
 
+**Rodada 24 (2026-07-03, revalidação leve, execução automática agendada):**
+`main` novamente com `origin/main` divergido de um `HEAD` local destacado
+(mesmo artefato de sincronização de container efêmero das rodadas
+anteriores); `git fetch origin main && git checkout -B main origin/main`
+resolveu sem perda de commits. Confirmado via `git diff 78660d9..HEAD --
+claude/medusa claude/api` (commit da rodada 23) que **nenhum arquivo sob
+`claude/medusa/` ou `claude/api/` mudou desde a rodada 23** — diff vazio. O
+único commit novo em `origin/main` neste intervalo (`9f5e87c`) desabilita o
+cron de dois workflows caros (`ai-pipeline-full.yml`,
+`ecommerce-multi-ai-build-24-7.yml`) por esgotamento de quota do GitHub
+Actions — fora do escopo do Medusa, mas reforça o padrão já observado na
+rodada 23 de o repositório estar cortando automação excessiva. Repetidos
+apenas os checks leves: nenhum `.env`/`.env.local` de produção no
+repositório, teste de rede de saída para `api.supabase.com` continua
+bloqueado pelo proxy do ambiente (`CONNECT tunnel failed, response 403`),
+`OLIST_CLIENT_ID`/`OLIST_CLIENT_SECRET` ainda **não rotacionados**
+(`SETUP-OLIST-SECRETS.md` continua no repositório com o alerta de
+segurança), e nenhum tool de gestão de secrets exposto pelo GitHub MCP
+disponível nesta sessão (mesma limitação de rodadas anteriores). Como o
+código é byte-idêntico ao já validado ponta a ponta na rodada 20/22, os
+resultados de build/migrate/seed/webhook permanecem válidos por construção
+— não re-executados nesta rodada leve. **Nenhum bug novo encontrado.** Os
+mesmos 5 blockers de ação humana continuam inalterados (24 rodadas
+consecutivas, 4ª rodada leve seguida sem progresso). Reitera-se a
+recomendação das rodadas 21/23: **pausar o agendamento automático desta
+tarefa** até que o usuário rotacione o secret Olist/Tiny vazado ou crie um
+Postgres gerenciado — nenhuma das duas ações é executável de forma autônoma
+neste sandbox.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
