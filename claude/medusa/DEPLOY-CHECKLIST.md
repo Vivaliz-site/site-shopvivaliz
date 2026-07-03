@@ -651,6 +651,35 @@ nenhum dos 5 é executável de forma autônoma neste sandbox (sem login
 humano interativo, sem acesso de rede a domínios de terceiros, sem
 CLI/tool de gestão de secrets do GitHub).
 
+**Rodada 27 (2026-07-03, revalidação leve, execução automática agendada):**
+`main` estava novamente em `HEAD` destacado apontando para `3246f33` (mais
+recente que o commit da rodada 26); `git fetch origin main` confirmou que
+`3246f33` já é `origin/main` e é descendente do `main` local anterior
+(`git merge-base --is-ancestor` confirmado antes de qualquer ação) — resolvido
+com `git checkout -B main origin/main`, sem perda de commits. `git diff
+1e6108a..HEAD -- claude/medusa claude/api` (commit da rodada 26) confirma
+**diff vazio**: nenhuma mudança em `claude/medusa/` ou `claude/api/` desde a
+rodada 26 — o único commit novo desde então (`3246f33`) ajusta triggers do
+workflow `ci-autonomo-continuo.yml`, fora do escopo Medusa/EHA-PHP. Repetidos
+apenas os checks leves: nenhum marcador de conflito de merge, `package.json`
+válido em backend e storefront, `php -l` sem erro em todos os `.php` sob
+`claude/api/`, `list_pull_requests` via GitHub MCP (nenhuma PR aberta),
+nenhum `.env`/`.env.local` de produção no repositório, teste de rede de saída
+para `api.supabase.com` (continua bloqueado pelo proxy do ambiente, CONNECT
+falhou), e confirmação de que o GitHub MCP desta sessão continua sem nenhum
+tool de gestão de secrets do Actions. `npm install`/build completo **não foi
+refeito** — sem sinal de mudança de código desde a rodada 22 (última
+revalidação completa). **Nenhum bug novo encontrado.** Os mesmos 5 blockers
+de ação humana continuam inalterados há **27 rodadas consecutivas** (6ª
+rodada leve seguida sem progresso, incluindo esta). Reitera-se, pela sexta
+vez, a recomendação das rodadas 21/23/24/25/26: **pausar o agendamento
+automático desta tarefa** até que o usuário resolva ao menos um blocker —
+nenhum dos 5 é executável de forma autônoma neste sandbox. Esta sessão não
+tem controle sobre o agendamento externo que dispara esta tarefa (nenhum job
+gerenciado por esta sessão via cron interno); a recomendação de pausar/
+espaçar a cadência precisa ser aplicada pelo usuário na configuração do
+agendador externo (workflow do GitHub Actions ou trigger equivalente).
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
