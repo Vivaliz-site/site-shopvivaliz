@@ -1,0 +1,24 @@
+#!/bin/sh
+protected=" main master "
+
+while read local_ref local_sha remote_ref remote_sha
+do
+  branch="${remote_ref#refs/heads/}"
+
+  case "$protected" in
+    *" $branch "*)
+      echo "pre-push: push direto para branch protegida bloqueado: $branch"
+      exit 1
+      ;;
+  esac
+
+  if [ "$remote_sha" != "0000000000000000000000000000000000000000" ] && \
+     [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
+    if ! git merge-base --is-ancestor "$remote_sha" "$local_sha"; then
+      echo "pre-push: non-fast-forward detectado. Nao use force push."
+      exit 1
+    fi
+  fi
+done
+
+exit 0
