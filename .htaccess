@@ -31,6 +31,9 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^api/ml/token/refresh/?$ api/ml/token.php [L]
     RewriteRule ^api/ml/me/?$ api/ml/me.php [L]
     RewriteRule ^api/ml/webhook/?$ api/ml/webhook.php [L,QSA]
+    RewriteRule ^api/ml/products/?$ api/ml/products.php [L,QSA]
+    RewriteRule ^api/ml/optimizer/?$ api/ml/optimizer.php [L,QSA]
+    RewriteRule ^admin/mercadolivre/?$ admin/mercadolivre.php [L]
 
     # Rotas principais da loja
     RewriteRule ^$ index.php [L]
