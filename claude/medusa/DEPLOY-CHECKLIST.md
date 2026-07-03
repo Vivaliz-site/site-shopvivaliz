@@ -246,6 +246,29 @@ concluir. Todos os processos/serviços locais parados ao final; `.env`/
 (resolução flutuante de `picomatch`, dependência transitiva) foi revertido
 para manter o diff desta rodada limitado a documentação.
 
+**Rodada 16 (2026-07-03, revalidação leve):** confirmado via `git diff
+eef5443..HEAD -- claude/medusa claude/api` (commit da rodada 15) que o diff
+está vazio — nenhum arquivo sob esses caminhos mudou desde a rodada 15.
+`origin/main` recebeu 4 commits neste intervalo (painel Trio IA Executor no
+dashboard `/claude`, fixes de `tasks-queue.json`/`autonomous-executor.py`,
+relatórios EHA), todos fora do escopo Medusa/EHA-PHP, confirmado via `git log
+--oneline`. Repetidos apenas os checks leves: busca por marcadores de conflito
+de merge (nenhum), validação de `package.json` (backend e storefront, ambos
+JSON válido), `php -l` em todos os `.php` sob `claude/api/` (nenhum erro de
+sintaxe), confirmação de que `DATABASE_URL`/`.env` de produção continuam
+ausentes em `apps/backend`/`apps/storefront`, teste de rede de saída para
+`supabase.com` (ainda bloqueado pelo proxy do ambiente, `CONNECT tunnel
+failed, response 403`, confirmado via `/__agentproxy/status`,
+`recentRelayFailures` lista `supabase.com:443`), confirmação de que `gh` CLI
+não está instalado no ambiente (`command not found`), e GitHub MCP disponível
+nesta sessão revalidado sem tools de gestão de secrets (mesma limitação de
+rodadas anteriores: apenas `actions_get/list/run_trigger`, issues, PRs,
+arquivos, branches, `run_secret_scanning` — nenhum `secret_set` ou
+equivalente). Como o código é byte-idêntico ao já validado ponta a ponta na
+rodada 10, os resultados permanecem válidos por construção. Os mesmos 5
+blockers de ação humana continuam inalterados (16 rodadas consecutivas).
+Nenhum bug novo encontrado.
+
 **Rodada 15 (2026-07-03, revalidação leve):** confirmado via `git diff
 5055d0c..HEAD -- claude/medusa claude/api` (commit da rodada 14) que o único
 arquivo alterado sob esses caminhos desde a rodada 14 é
