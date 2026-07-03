@@ -1,8 +1,8 @@
 name: AI Pipeline Full — Shopee + TikTok
 
 on:
-  schedule:
-    - cron: "0 */6 * * *"   # a cada 6 horas
+  # cron desabilitado — timeout 180min inviavel no free tier (21600 min/mes)
+  # Dispare manualmente via workflow_dispatch quando necessario
   workflow_dispatch:
     inputs:
       platform:

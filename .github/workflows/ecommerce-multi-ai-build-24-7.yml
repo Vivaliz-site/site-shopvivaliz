@@ -1,8 +1,8 @@
 name: E-commerce Multi-AI Builder 24/7
 
 on:
-  schedule:
-    - cron: '0 */6 * * *'
+  # cron desabilitado — rebuilds automaticos a cada 6h consomem muitos minutos
+  # Dispare manualmente via workflow_dispatch quando necessario
   workflow_dispatch:
     inputs:
       pages:
