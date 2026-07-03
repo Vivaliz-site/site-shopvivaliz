@@ -1,9 +1,9 @@
 {
   "projeto": "ShopVivaliz Medusa",
-  "rodada": 20,
+  "rodada": 21,
   "data": "2026-07-03",
   "status_geral": "BLOQUEADO_PARA_PRODUCAO_ACAO_HUMANA_NECESSARIA",
-  "resumo": "Ambiente local (container efemero) validado ponta a ponta com sucesso pela 20a vez consecutiva. Nenhuma regressao de codigo, nenhuma mudanca de codigo de produto necessaria nesta rodada. Producao real segue bloqueada pelos mesmos 5 itens que exigem acao humana fora do alcance deste ambiente (sandbox sem acesso a internet externa e sem CLI/API de secrets do GitHub). Recomendacao registrada nas rodadas 12+ permanece: valor marginal de novas revalidacoes completas e decrescente ate que um blocker seja resolvido.",
+  "resumo": "Rodada 21 (checagem leve, conforme recomendacao da rodada 20): git log confirma que nenhum arquivo sob claude/medusa/ ou claude/api/ mudou desde a rodada 20 (unico commit novo, 174ffeb, fora de escopo). Rede para supabase.com/api.supabase.com continua bloqueada (403). GitHub MCP continua sem tool de gestao de secrets do Actions. Resultados da rodada 20 permanecem validos por construcao (codigo byte-identico). Os mesmos 5 blockers de acao humana seguem inalterados ha 21 rodadas consecutivas. Recomendacao: pausar revalidacoes automaticas ate o usuario resolver ao menos um blocker (banco gerenciado real ou rotacao do secret Olist vazado).",
   "passos": {
     "1_database_setup": {
       "status": "OK_LOCAL_BLOCKER_PRODUCAO",

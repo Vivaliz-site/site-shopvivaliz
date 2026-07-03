@@ -456,6 +456,29 @@ completas adicionais sem mudança de credenciais/código têm valor marginal
 decrescente; próxima rodada pode ser uma checagem leve (diff de código +
 teste de rede) até que algum blocker seja resolvido.
 
+**Rodada 21 (2026-07-03, revalidação leve):** conforme recomendação da rodada
+20, esta rodada não reprovisionou banco/serviços nem refez
+install/build/migrate/seed. Confirmado via `git log 76530d8..HEAD --
+claude/medusa claude/api` que **nenhum arquivo sob `claude/medusa/` ou
+`claude/api/` mudou desde a rodada 20** (único commit novo, `174ffeb`, altera
+apenas `scripts/autonomous-sync.py`, fora do escopo do Medusa). Teste de rede
+de saída para `api.supabase.com` e `supabase.com` repetido: continua
+bloqueado pelo proxy do ambiente (`CONNECT tunnel failed, response 403`).
+GitHub MCP revalidado: continua sem nenhum tool de gestão de secrets do
+Actions (apenas `actions_get`/`actions_list`/`actions_run_trigger`,
+issues/PRs/arquivos/branches/secret scanning). Como o código é
+byte-idêntico ao já validado ponta a ponta na rodada 20, os resultados
+permanecem válidos por construção. Os mesmos 5 blockers de ação humana
+continuam inalterados (21 rodadas consecutivas). Nenhum bug novo
+encontrado. **Recomendação:** dado que 21 revalidações consecutivas não
+produziram nenhum progresso nos blockers (todos exigem ação humana fora do
+alcance deste sandbox), recomenda-se pausar o agendamento automático desta
+tarefa até que o usuário resolva ao menos um blocker — em especial (a) a
+rotação do secret Olist/Tiny vazado no histórico do git (item de segurança
+pendente há múltiplas rodadas) e (b) a criação de um banco Postgres
+gerenciado (Supabase/Neon/Railway), que desbloqueia toda a cadeia de deploy
+em produção.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
