@@ -1,0 +1,67 @@
+name: Auto FTP Deploy
+
+# Deploy to FTP when changes are pushed (every 15 minutes)
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ftp-deploy:
+    name: Auto-deploy to FTP
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set FTP credentials from secrets
+        run: |
+          echo "FTP_HOST=${{ secrets.FTP_HOST }}" >> $GITHUB_ENV
+          echo "FTP_USER=${{ secrets.FTP_USER }}" >> $GITHUB_ENV
+          echo "FTP_PASS=${{ secrets.FTP_PASS }}" >> $GITHUB_ENV
+          echo "FTP_PORT=21" >> $GITHUB_ENV
+          echo "FTP_REMOTE_PATH=/public_html/" >> $GITHUB_ENV
+
+      - name: Run FTP deploy script
+        continue-on-error: true
+        run: |
+          python3 scripts/autonomous-ftp-deploy.py
+
+      - name: Check deploy status
+        continue-on-error: true
+        run: |
+          if [ -f logs/autonomous-ftp-deploy.json ]; then
+            echo "=== FTP DEPLOY STATUS ==="
+            cat logs/autonomous-ftp-deploy.json
+          else
+            echo "No deploy report generated"
+          fi
+
+      - name: Generate deployment summary
+        if: always()
+        run: |
+          mkdir -p logs
+          cat > logs/ftp-deploy-summary.txt << 'EOF'
+          FTP Deployment Summary
+          =======================
+          Status: See autonomous-ftp-deploy.json
+          Last run: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          EOF
+
+      - name: Upload logs
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: ftp-deploy-logs
+          path: logs/autonomous-ftp-deploy.*
+          retention-days: 7

@@ -1,0 +1,74 @@
+name: Auto Git Pull
+
+# Automatically pull changes from remote every 5 minutes
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  auto-pull:
+    name: Auto-pull from remote
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --local user.email "autopull@shopvivaliz.com.br"
+          git config --local user.name "Auto-Pull Bot"
+
+      - name: Fetch remote
+        id: fetch
+        continue-on-error: true
+        run: |
+          echo "=== FETCHING REMOTE ==="
+          git fetch origin main
+          echo "✓ Fetch complete"
+
+      - name: Check for differences
+        id: check
+        run: |
+          BEHIND=$(git rev-list --count HEAD..origin/main)
+          echo "commits_behind=$BEHIND" >> $GITHUB_OUTPUT
+
+          if [ "$BEHIND" -gt 0 ]; then
+            echo "Local branch is $BEHIND commits behind remote"
+            echo "needs_pull=true" >> $GITHUB_OUTPUT
+          else
+            echo "Local branch is up to date"
+            echo "needs_pull=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Merge with -X ours strategy
+        if: steps.check.outputs.needs_pull == 'true'
+        continue-on-error: true
+        run: |
+          echo "=== MERGING CHANGES ==="
+          git merge -X ours origin/main -m "chore: auto-pull merge [AUTO]"
+          echo "✓ Merge complete"
+
+      - name: Push merged changes
+        if: steps.check.outputs.needs_pull == 'true'
+        continue-on-error: true
+        run: |
+          git push origin main
+
+      - name: Log pull operation
+        run: |
+          mkdir -p logs
+          cat > logs/auto-pull-$(date +%s).log << EOF
+          Timestamp: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          Commits behind: ${{ steps.check.outputs.commits_behind }}
+          Pull needed: ${{ steps.check.outputs.needs_pull }}
+          Current branch: $(git rev-parse --abbrev-ref HEAD)
+          Last commit: $(git log -1 --oneline)
+          EOF
