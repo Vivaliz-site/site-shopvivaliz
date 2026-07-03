@@ -598,6 +598,31 @@ tarefa** até que o usuário rotacione o secret Olist/Tiny vazado ou crie um
 Postgres gerenciado — nenhuma das duas ações é executável de forma autônoma
 neste sandbox.
 
+**Rodada 25 (2026-07-03, revalidação leve, execução automática agendada):**
+`main` novamente com `HEAD` destacado apontando para um clone raso cujo
+`origin/main` local estava desatualizado (mesmo artefato de sincronização de
+container efêmero das rodadas 17/19/20/23/24); `git fetch origin main && git
+checkout -B main origin/main` resolveu sem perda de commits (`fe8c988` era
+ancestral comum, sem divergência real). Confirmado via `git diff
+190a299..HEAD -- claude/medusa claude/api` (commit da rodada 22) que
+**nenhum arquivo sob `claude/medusa/` ou `claude/api/` mudou desde a rodada
+22** — diff vazio, três rodadas leves seguidas (23, 24, 25) sem nenhuma
+mudança de código. Repetidos apenas os checks leves: `list_pull_requests`
+via GitHub MCP (nenhuma PR aberta), teste de rede de saída para
+`api.supabase.com`/`supabase.com` (continua bloqueado pelo proxy do
+ambiente, `gateway answered 403 to CONNECT`), confirmação de que nenhum
+`.env`/`.env.local` de produção existe no repositório. `npm install`/build
+completo **não foi refeito** nesta rodada — o código é byte-idêntico ao já
+validado ponta a ponta na rodada 22, e as rodadas 21/23/24 já haviam
+recomendado não repetir revalidações completas sem sinal de mudança.
+**Nenhum bug novo encontrado.** Os mesmos 5 blockers de ação humana
+continuam inalterados (25 rodadas consecutivas, 5ª rodada leve seguida sem
+progresso). Reitera-se, pela quarta vez, a recomendação das rodadas
+21/23/24: **pausar o agendamento automático desta tarefa** até que o
+usuário rotacione o secret Olist/Tiny vazado ou crie um Postgres gerenciado
+— nenhuma das duas ações é executável de forma autônoma neste sandbox, e
+revalidações repetidas sem sinal novo consomem tempo/CI sem benefício.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local

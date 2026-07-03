@@ -198,6 +198,7 @@ Base URL da API: `https://api.tiny.com.br/public-api/v3`
 | 2026-07-02 (~19h UTC) | `main` (rotina agendada, sem branch dedicada) | Novo ciclo (6h depois): mesmo bloqueador confirmado, sem mudanças no ambiente. `fetch-shopee-listings.yml` run #12 (18:17:31Z) segue retornando `total_products: 0` / 401; `optimize-shopee-listings.yml` run #5 (11:55:02Z) terminou em `failure`. Nenhum arquivo `optimization-report-*.json` novo desde 2026-06-30. Nenhuma alteração de título/descrição/imagem/preço aplicada — mesma decisão da seção 9. Nenhum dado de venda, CTR ou conversão foi inventado. |
 | 2026-07-03 (~04h UTC) | `main` (rotina agendada, sem branch dedicada) | 3º ciclo consecutivo (agora no dia seguinte): bloqueador ainda presente, ~33h após a última extração real. `optimize-shopee-listings.yml` gerou `listings/optimization-report-20260703-041044.json` com `status: error`, `"Autenticação Tiny falhou (401)."`, `total_products: 0`. Nenhuma otimização aplicada. Notificação enviada ao usuário (push) pedindo renovação manual do token, já que os 2 ciclos anteriores não resolveram o bloqueador. |
 | 2026-07-03 (~14h UTC) | `main` (rotina agendada, sem branch dedicada) | 4º ciclo consecutivo: mesmo bloqueador (token Tiny), sem renovação desde a notificação do ciclo anterior. `fetch-shopee-listings.yml` run (10:16:18Z) e `optimize-shopee-listings.yml` run (11:53:23Z) terminaram em `failure` sem gerar novo relatório — causa raiz distinta: corrida de commit concorrente entre workflows autônomos no `main` (mesma classe de bug corrigida em `a3690a2` para o CI EHA), não um novo problema de dados. Nenhuma otimização aplicada; nenhum push duplicado enviado ao usuário por não haver fato novo além do já reportado no ciclo das 04h. |
+| 2026-07-03 (~19h UTC) | `main` (rotina agendada, sem branch dedicada) | 5º ciclo consecutivo: bloqueador do token Tiny inalterado, agora ~89h desde a última extração real. Novo run de `fetch-shopee-listings.yml` (2026-07-03T17:03:16Z) também terminou em `failure` sem commitar relatório (mesmo padrão dos dois runs do ciclo das 14h). A teoria de "corrida de commit concorrente" do ciclo anterior não pôde ser confirmada nem descartada: os logs desses runs já expiraram no GitHub Actions (download retorna 404) e o domínio de blob storage dos logs está fora da allowlist de rede deste ambiente. Comparação de `run_duration_ms` entre runs (falhas: ~4s; sucessos/erros com relatório: ~19-23s) é consistente com falha rápida antes de qualquer tentativa de commit, mas não prova a causa exata. Nenhuma otimização aplicada — sem dados reais de produto não há base para decisão orientada a dados. Nenhuma notificação push enviada: nenhum fato novo que mude a ação recomendada (renovar `TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN`), já comunicada nos ciclos anteriores. |
 
 ---
 
@@ -292,3 +293,30 @@ Quarto ciclo consecutivo. O bloqueador de dados (token Tiny expirado) segue sem 
 `fetch-shopee-listings.yml` e `optimize-shopee-listings.yml` o mesmo fix de `a3690a2`
 (`continue-on-error` + `if/fi` em vez de `&& break` + `git rebase --abort` antes de retry)
 para que corridas de commit concorrente parem de mascarar o diagnóstico do bloqueador real.
+
+### 9.4 Atualização — ciclo de 2026-07-03 ~19h UTC
+
+Quinto ciclo consecutivo. Bloqueador do token Tiny ainda sem renovação, agora ~89h
+sem extração real (última: `shopee-listings-20260630-113006.json`, 2026-06-30T11:30:06Z):
+
+- Novo run de `fetch-shopee-listings.yml` (2026-07-03T17:03:16Z, run #15): `conclusion: failure`,
+  sem novo `listings/shopee-listings-*.json` commitado — mesmo padrão dos dois runs sem
+  relatório do ciclo das 14h (seção 9.3).
+- `optimize-shopee-listings.yml` não teve run novo desde 2026-07-03T11:53:23Z (já coberto
+  na seção 9.3).
+- Tentativa de confirmar a causa raiz exata (corrida de commit vs. outra falha) não teve
+  sucesso: os logs desses runs de curta duração (~4s) já expiraram no GitHub Actions
+  (`get_job_logs` retorna 404) e a URL de download do zip completo aponta para um domínio de
+  blob storage (`*.blob.core.windows.net`) fora da allowlist de rede deste ambiente
+  (`CONNECT tunnel failed, response 403`). `get_workflow_run_usage` não ajuda a diferenciar
+  causas — retorna `total_ms: 0` tanto em runs de sucesso quanto de falha neste ambiente,
+  então não é sinal confiável de "bloqueado por cota/billing". O único dado observável é
+  `run_duration_ms`: falhas ~4s vs. sucessos/erros-com-relatório ~19-23s, consistente com uma
+  falha rápida antes de qualquer tentativa de commit, mas isso não confirma nem descarta a
+  hipótese de corrida de commit da seção 9.3.
+- Nenhuma otimização de título/descrição/imagem/atributo/preço foi aplicada — sem dados reais
+  de produto não há base para decisão orientada a dados.
+- Nenhuma notificação push enviada neste ciclo: a ação recomendada ao usuário continua a
+  mesma já comunicada (renovar `TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN` no ERP Tiny e no
+  GitHub Secrets); não há fato novo que mude essa recomendação, apenas mais uma confirmação
+  do mesmo bloqueador.

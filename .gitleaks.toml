@@ -16,6 +16,10 @@ paths = [
     "automation/eha/reports/",
     "storage/",
     "logs/",
+    "scripts/.ftp-credentials.example",
+    "INSTRUCOES-DEPLOY-AUTONOMO.txt",
+    "scripts/setup-auto-deploy.py",
+    "scripts/setup-auto-deploy.ps1",
 ]
 
 regexes = [
@@ -29,6 +33,10 @@ regexes = [
     '''(YOUR_|EXAMPLE_|PLACEHOLDER_|TEST_)[A-Z_]+''',
     # URLs com parametros de exemplo
     '''https?://[a-z0-9.-]+/.*\?.*token=EXAMPLE''',
+    # Tokens placeholder com palavras em minusculo/portugues (nao sao tokens reais)
+    '''ghp_[a-z][a-z_]+''',
+    # Placeholders de senha/token genericos
+    '''(senha|password|token|secret)_(ftp|exemplo|substitua|replace|placeholder)''',
 ]
 
 commits = [
