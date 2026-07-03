@@ -294,6 +294,45 @@ byte-idêntico ao já validado ponta a ponta na rodada 10, os resultados
 permanecem válidos por construção. Os mesmos 5 blockers de ação humana
 continuam inalterados (15 rodadas consecutivas). Nenhum bug novo encontrado.
 
+**Rodada 17 (2026-07-03, revalidação completa):** primeira revalidação
+completa desde a rodada 10 (rodadas 11-16 foram checks leves, código
+byte-idêntico; a rodada 16 acima foi feita por outra sessão concorrente em
+paralelo a esta — colisão de numeração resolvida com `git rebase` no push,
+por isso esta ficou como rodada 17). Container efêmero novo; `main` sincronizado com
+`origin/main` após resolver um clone raso cujo `HEAD` local apontava para
+um `main` desatualizado (409 commits atrás) — `git fetch --unshallow` +
+fast-forward corrigiu, sem perda de commits (o `main` antigo era ancestral
+do atual). Postgres 16 local provisionado (`service postgresql start`,
+role `medusa` + banco `medusa_backend`), `npm install` limpo em ambos os
+apps (backend: 1342 pacotes/41s; storefront: 542 pacotes/22s, registry
+npm acessível pelo proxy do ambiente). `npx medusa db:migrate` +
+`seed-shopvivaliz-test-data.ts` aplicados sem erros (região Brasil/BRL, 8
+produtos ShopVivaliz + 4 demo = 12 no total, cliente de teste, usuário
+admin criado). `npm run build` OK nos dois apps (backend: 6.7s + 34s
+frontend/admin; storefront: 133 páginas estáticas geradas). Publishable
+API key obtida via Admin API (`GET /admin/api-keys`, criada
+automaticamente pelo seed); `GET /store/products` retornou os 12
+produtos. Backend subiu com `npx medusa develop` (porta 9000), health
+check `GET /health` → 200 OK, login admin via
+`/auth/user/emailpass` OK. Webhook Medusa→EHA testado isoladamente via
+`php -S` contra `claude/api/medusa-webhook.php`: assinatura HMAC-SHA256
+válida → 200 `{"ok":true,...}`; assinatura inválida → 401
+`{"error":"Unauthorized"}`. `php -l` sem erro em todos os `.php` sob
+`claude/api/`. Teste de rede de saída para `supabase.com` continua
+bloqueado pelo proxy do ambiente (`CONNECT tunnel failed, response 403`) —
+criação de banco Postgres gerenciado continua exigindo login humano
+interativo fora deste container. GitHub MCP revalidado sem tools de
+gestão de secrets (mesma limitação de rodadas anteriores). **Nenhum bug
+novo encontrado** — todo o stack (build, migrations, seed, API, webhook)
+funciona ponta a ponta a partir de um clone limpo, sem nenhuma mudança de
+código necessária. Todos os processos/serviços locais (backend, `php -S`,
+Postgres) parados e banco/role/`.env`/`.env.local` de teste removidos ao
+final; `git status` limpo. Os mesmos 5 blockers de ação humana (banco de
+produção, host Node.js de produção, secrets do GitHub Actions,
+credenciais reais PayPal/Olist, rotação do secret Olist vazado no
+histórico do git) continuam pendentes — todos exigem ação humana fora do
+alcance desta sessão.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local

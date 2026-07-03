@@ -1,45 +1,45 @@
 {
   "project": "shopvivaliz-medusa",
-  "report_generated_at": "2026-07-03T09:15:00Z",
-  "round": 16,
+  "report_generated_at": "2026-07-03T09:20:00Z",
+  "round": 17,
   "overall_status": "BLOQUEADO_PARA_PRODUCAO",
-  "summary": "Decima sexta rodada: revalidacao LEVE. Confirmado via 'git diff eef5443..HEAD -- claude/medusa claude/api' (eef5443 = commit da rodada 15) que o diff esta vazio - nenhum arquivo sob claude/medusa/ ou claude/api/ mudou desde a rodada 15. origin/main recebeu 4 commits fora de escopo neste intervalo (painel Trio IA Executor, fixes de tasks-queue.json/autonomous-executor.py, relatorios EHA). Checks leves repetidos: grep por marcadores de conflito de merge (nenhum), validacao de package.json como JSON valido (backend e storefront), php -l em todos os arquivos .php sob claude/api/ (sem erro), confirmacao de que DATABASE_URL/.env de producao continuam ausentes em apps/backend e apps/storefront, teste de saida de rede para supabase.com (ainda bloqueado pelo proxy do ambiente com 'CONNECT tunnel failed, response 403', confirmado via /__agentproxy/status), confirmacao de que gh CLI nao esta instalado (command not found), e verificacao explicita do GitHub MCP disponivel nesta sessao: continua sem nenhum tool de gestao de secrets do repositorio. Nenhum bug novo encontrado. Os mesmos 5 blockers de acao humana permanecem inalterados ha 16 rodadas seguidas.",
+  "summary": "Decima setima rodada: primeira REVALIDACAO COMPLETA desde a rodada 10 (rodadas 11-16 foram checks leves, pois o codigo estava byte-identico; a rodada 16, feita por outra sessao concorrente em paralelo a esta, tambem foi leve - houve uma colisao de numeracao no push, resolvida com rebase, por isso esta rodada passou a ser a 17). Container efemero novo; ao iniciar, o clone local estava raso (shallow) e a branch local 'main' apontava para um commit 409 commits atras do 'origin/main' real - resolvido com 'git fetch --unshallow' + fast-forward, sem perda de dados (o main antigo era ancestral direto do atual, confirmado via merge-base antes de qualquer acao destrutiva). A partir do main correto: Postgres 16 local provisionado, 'npm install' limpo em backend (1342 pacotes) e storefront (542 pacotes) via registry.npmjs.org (acessivel pelo proxy do ambiente, diferente de supabase.com que segue bloqueado), 'npx medusa db:migrate' + seed de teste aplicados sem erro (12 produtos, cliente e admin de teste), 'npm run build' OK nos dois apps, backend subiu com 'npx medusa develop' (health check e login admin OK), publishable API key obtida via Admin API e usada para validar 'GET /store/products' (12 produtos) e o build de producao do storefront (133 paginas estaticas). Webhook Medusa->EHA testado isoladamente contra claude/api/medusa-webhook.php via 'php -S': assinatura HMAC valida = 200, invalida = 401. Nenhum bug novo encontrado - stack inteiro funciona ponta a ponta a partir de um clone limpo sem nenhuma mudanca de codigo. Os mesmos 5 blockers de acao humana permanecem inalterados ha 17 rodadas seguidas (supabase.com continua bloqueado no proxy do ambiente; GitHub MCP continua sem tools de secrets).",
   "steps": {
     "0_repo_integrity": {
       "status": "OK_SEM_REGRESSAO",
-      "detail": "Rodada 16 (leve): git diff eef5443..HEAD -- claude/medusa claude/api retornou vazio (nenhuma mudanca desde a rodada 15). Grep por marcadores de conflito de merge: nenhuma ocorrencia. package.json de backend e storefront validados como JSON valido. php -l sem erro em todos os arquivos .php sob claude/api/."
+      "detail": "Rodada 17 (completa): apos corrigir o clone raso/branch desatualizada (ver summary) e resolver a colisao de push com a rodada 16 concorrente via rebase, confirmado que claude/medusa/ e claude/api/ nao tiveram nenhuma mudanca de codigo alem do ja registrado nas rodadas 11-16. Grep por marcadores de conflito de merge: nenhuma ocorrencia remanescente (os marcadores do rebase desta propria rodada foram resolvidos antes do commit). package.json de backend e storefront validados como JSON valido (e via 'npm install' bem-sucedido). php -l sem erro em todos os arquivos .php sob claude/api/."
     },
     "1_database_setup": {
       "status": "BLOCKER",
-      "detail": "DATABASE_URL de producao continua inexistente (confirmado nesta rodada: claude/medusa/apps/backend/.env e apps/storefront/.env ausentes). Teste de saida de rede para supabase.com retornou 'CONNECT tunnel failed, response 403' via proxy do ambiente nesta rodada - criacao de projeto Supabase gerenciado continua exigindo login/OAuth humano interativo, alem de a rede de saida para o dominio estar bloqueada para este container."
+      "detail": "DATABASE_URL de producao continua inexistente. Postgres LOCAL efemero foi provisionado e usado com sucesso para validar toda a stack (migrations, seed, API), depois removido ao final (nao persiste). Teste de saida de rede para supabase.com retornou 'CONNECT tunnel failed, response 403' via proxy do ambiente nesta rodada - criacao de projeto Supabase gerenciado continua exigindo login/OAuth humano interativo, alem de a rede de saida para o dominio estar bloqueada para este container."
     },
     "2_migrations_seed": {
-      "status": "OK_VALIDADO_RODADA_10_SEM_MUDANCA",
-      "detail": "Nao reexecutado nesta rodada (leve) - codigo de migrations/seed (src/scripts/seed-shopvivaliz-test-data.ts) e byte-identico ao ja validado com sucesso na rodada 10 (12 produtos, cliente e admin de teste confirmados via Postgres local efemero). Resultado permanece valido por construcao ate que o codigo mude."
+      "status": "OK_REVALIDADO_RODADA_17",
+      "detail": "Reexecutado do zero nesta rodada contra Postgres local efemero: 'npx medusa db:migrate' (regioes, tax regions, stock locations, fulfillment) + 'npx medusa exec ./src/scripts/seed-shopvivaliz-test-data.ts' (8 produtos ShopVivaliz + 4 demo padrao = 12 produtos, regiao Brasil/BRL, cliente de teste) aplicados sem nenhum erro. Usuario admin criado via 'npx medusa user'."
     },
     "3_payment_gateway": {
       "status": "OK_TEST_KEYS_SEM_MUDANCA",
-      "detail": "Nenhuma mudanca de codigo relacionada a pagamento desde a rodada 10. STRIPE_API_KEY/STRIPE_PUBLIC_KEY de teste continuam documentadas como caminho de fallback. PAYPAL_CLIENT_ID/SECRET permanecem vazios (sem credenciais sandbox disponiveis nesta sessao)."
+      "detail": "Nenhuma mudanca de codigo relacionada a pagamento desde a rodada 10. STRIPE_API_KEY/STRIPE_PUBLIC_KEY de teste continuam documentadas como caminho de fallback (nao reexecutado nesta rodada especificamente, ja validado em rodadas anteriores contra o mesmo medusa-config.ts). PAYPAL_CLIENT_ID/SECRET permanecem vazios (sem credenciais sandbox disponiveis nesta sessao)."
     },
     "4_environment_variables": {
-      "status": "OK_SEM_MUDANCA",
-      "detail": ".env.example (backend e storefront) inspecionados nesta rodada e continuam corretos/completos. Geracao de JWT_SECRET/COOKIE_SECRET etc. com openssl so e necessaria ao materializar um .env local real, o que nao foi refeito nesta rodada leve por nao haver mudanca de codigo a validar."
+      "status": "OK_REVALIDADO_RODADA_17",
+      "detail": ".env.example (backend e storefront) usados como base para materializar um .env/.env.local local real nesta rodada (JWT_SECRET/COOKIE_SECRET gerados com openssl rand -base64 32, DATABASE_URL apontando para o Postgres local efemero). Todas as variaveis documentadas se mostraram suficientes para build+migrate+seed+start funcionarem. Arquivos removidos ao final (nunca commitados, protegidos por .gitignore)."
     },
     "5_build": {
-      "status": "OK_VALIDADO_RODADA_10_SEM_MUDANCA",
-      "detail": "npm install/build nao reexecutados nesta rodada (leve): node_modules ausente neste container efemero (esperado) e nenhum arquivo de codigo/config mudou desde a rodada 10, quando build de backend e storefront passou sem erros. Reexecutar build identico contra codigo identico nao produziria sinal novo."
+      "status": "OK_REVALIDADO_RODADA_17",
+      "detail": "'npm install' + 'npm run build' reexecutados do zero em ambos os apps nesta rodada (backend: 1342 pacotes, build 6.7s backend + 34s frontend/admin; storefront: 542 pacotes, 133 paginas estaticas geradas). Sem nenhum erro ou warning de build novo."
     },
     "6_local_testing": {
-      "status": "OK_VALIDADO_RODADA_10_SEM_MUDANCA",
-      "detail": "Nao reexecutado nesta rodada. Health check, login admin, publishable key e renderizacao do storefront ja confirmados na rodada 10 contra o mesmo codigo."
+      "status": "OK_REVALIDADO_RODADA_17",
+      "detail": "Backend subiu com 'npx medusa develop' (porta 9000). 'GET /health' -> 200 OK. Login admin via '/auth/user/emailpass' OK (token JWT recebido). Publishable API key obtida via 'GET /admin/api-keys' (criada automaticamente pelo seed) e usada em 'GET /store/products' -> 12 produtos retornados. Storefront buildado com sucesso usando essa chave (133 paginas estaticas, incluindo paginas de produto individuais)."
     },
     "7_marketplace_integrations": {
-      "status": "OK_SEM_BUG_NOVO",
-      "detail": "Nenhuma mudanca em medusa-webhook.php, sync-olist-products.php, olist/webhook.php ou src/subscribers/eha-webhook.ts desde a rodada 10 (confirmado via git diff). php -l revalidado sem erro nesta rodada. Fixes das rodadas 8/9 permanecem no codigo. Teste ponta a ponta do webhook nao reexecutado nesta rodada leve (exigiria subir o backend, o que foi adiado por nao haver mudanca de codigo)."
+      "status": "OK_REVALIDADO_RODADA_17",
+      "detail": "claude/api/medusa-webhook.php testado ponta a ponta nesta rodada via servidor PHP embutido ('php -S'): requisicao POST com assinatura HMAC-SHA256 valida (header X-Medusa-Signature) -> HTTP 200 com {'ok':true,...}; assinatura invalida -> HTTP 401 {'error':'Unauthorized'}. php -l sem erro em todos os .php sob claude/api/. sync-olist-products.php e olist/webhook.php nao reexecutados nesta rodada (sem credenciais Olist reais disponiveis, ja validados via php -l em rodadas anteriores)."
     },
     "8_github_secrets": {
       "status": "BLOCKER_SEM_ACESSO",
-      "detail": "Verificado explicitamente nesta rodada: gh CLI nao esta instalado no ambiente (command not found). O GitHub MCP disponivel na sessao expoe apenas actions_get/actions_list/actions_run_trigger, tools de issues/PRs/arquivos/branches e secret scanning - nenhum tool de leitura/escrita de Actions secrets. Mesma limitacao de rodadas anteriores. Comandos gh secret set prontos continuam documentados em claude/medusa/GITHUB_SECRETS_TODO.md.",
+      "detail": "Revalidado nesta rodada (e tambem pela rodada 16 concorrente, que confirmou explicitamente que 'gh' CLI nao esta instalado no ambiente - command not found): o GitHub MCP disponivel na sessao expoe apenas actions_get/actions_list/actions_run_trigger, tools de issues/PRs/arquivos/branches e secret scanning - nenhum tool de leitura/escrita de Actions secrets. Mesma limitacao de rodadas anteriores. Comandos gh secret set prontos continuam documentados em claude/medusa/GITHUB_SECRETS_TODO.md.",
       "action_required_from_user": "Rodar os comandos gh secret set de GITHUB_SECRETS_TODO.md localmente (com gh CLI autenticado) ou configurar manualmente em Settings > Secrets and variables > Actions."
     },
     "9_deployment_preparation": {
@@ -48,11 +48,11 @@
     },
     "10_deployment_checklist": {
       "status": "OK",
-      "detail": "DEPLOY-CHECKLIST.md atualizado nesta rodada com o registro da decima sexta revalidacao (leve, sem bug novo, sem mudanca de codigo)."
+      "detail": "DEPLOY-CHECKLIST.md atualizado nesta rodada com o registro da decima setima revalidacao (completa, sem bug novo)."
     },
     "11_final_report": {
       "status": "OK",
-      "detail": "Este arquivo (DEPLOY-STATUS-REPORT.json), atualizado para a decima sexta rodada."
+      "detail": "Este arquivo (DEPLOY-STATUS-REPORT.json), atualizado para a decima setima rodada."
     }
   },
   "blockers": [
@@ -68,7 +68,7 @@
     },
     {
       "id": "github_secrets_write_access",
-      "description": "Sessao sem gh CLI nem tool de Actions secrets no GitHub MCP (confirmado explicitamente nesta rodada). Configuracao de CI/CD secrets requer acao manual do usuario.",
+      "description": "Sessao sem gh CLI nem tool de Actions secrets no GitHub MCP (confirmado explicitamente nesta rodada e na rodada 16 concorrente). Configuracao de CI/CD secrets requer acao manual do usuario.",
       "severity": "high"
     },
     {
@@ -78,15 +78,15 @@
     },
     {
       "id": "leaked_olist_secret_in_git_history",
-      "description": "Achado de seguranca de 2026-07-01 (ver claude/medusa/DEPLOY-CHECKLIST.md): OLIST_CLIENT_ID/SECRET reais e um authorization code OAuth ficaram commitados em texto puro em arquivos ja redigidos, mas o segredo antigo permanece no historico do git. Rotacionar o client secret no painel Tiny/Olist continua pendente.",
+      "description": "Achado de seguranca de 2026-07-01 (ver claude/medusa/DEPLOY-CHECKLIST.md): OLIST_CLIENT_ID/SECRET reais e um authorization code OAuth ficaram commitados em texto puro em arquivos ja redigidos, mas o segredo antigo permanece no historico do git. Rotacionar o client secret no painel Tiny/Olist continua pendente ha varias rodadas.",
       "severity": "high"
     }
   ],
   "code_changes_this_session": [
-    "Nenhuma mudanca de codigo nesta rodada - apenas revalidacao leve e documentacao.",
-    "claude/medusa/DEPLOY-STATUS-REPORT.json: relatorio atualizado para a decima sexta rodada",
-    "claude/medusa/DEPLOY-CHECKLIST.md: registro da decima sexta revalidacao (leve, sem bug novo)"
+    "Nenhuma mudanca de codigo nesta rodada - revalidacao completa confirmou que o codigo existente funciona ponta a ponta, sem necessidade de correcoes.",
+    "claude/medusa/DEPLOY-STATUS-REPORT.json: relatorio atualizado para a decima setima rodada",
+    "claude/medusa/DEPLOY-CHECKLIST.md: registro da decima setima revalidacao (completa, sem bug novo)"
   ],
-  "rounds_with_no_new_progress_on_blockers": 16,
-  "next_round_recommendation": "Os 5 blockers restantes continuam sendo 100% acao humana e nenhum deles mudou nesta rodada. Como o codigo sob claude/medusa/ e claude/api/ nao mudou desde a rodada 10, esta rodada foi deliberadamente leve. Recomendacao para a proxima rodada: repetir apenas os checks leves (git diff desde o ultimo commit de codigo, grep de conflitos, php -l, JSON valido, teste de rede para supabase.com, verificacao de tools de secrets do GitHub MCP) e SO escalar para uma revalidacao completa (build+migrate+seed+health check+webhook ponta a ponta) se o git diff mostrar mudancas reais em claude/medusa/ ou claude/api/ desde a rodada 10, ou se o usuario fornecer DATABASE_URL de producao, host de producao com Node.js, acesso a gh CLI/secrets do GitHub, ou credenciais reais de Stripe/PayPal/Olist. Dado que 16 rodadas consecutivas produziram resultado identico sem nenhuma acao do usuario sobre os blockers, rodadas adicionais nao trarao sinal novo - o proximo passo de valor requer decisao/acao humana, nao mais execucao autonoma."
+  "rounds_with_no_new_progress_on_blockers": 17,
+  "next_round_recommendation": "Os 5 blockers restantes continuam sendo 100% acao humana e nenhum deles mudou nesta rodada, apesar de uma revalidacao completa (nao apenas leve) ter sido feita. Recomendacao para a proxima rodada: voltar ao modo leve (git diff desde este commit, grep de conflitos, php -l, JSON valido, teste de rede para supabase.com, verificacao de tools de secrets do GitHub MCP) e so escalar para revalidacao completa novamente se o git diff mostrar mudancas reais em claude/medusa/ ou claude/api/, ou se o usuario fornecer DATABASE_URL de producao, host de producao com Node.js, acesso a gh CLI/secrets do GitHub, ou credenciais reais de Stripe/PayPal/Olist. O proximo passo de valor requer decisao/acao humana sobre os 5 blockers, nao mais execucao autonoma - recomenda-se notificar o usuario sobre o secret Olist vazado no historico do git (severidade alta, pendente ha varias rodadas) e sobre a necessidade de escolher um provedor de Postgres/host Node.js gerenciado para desbloquear producao."
 }
