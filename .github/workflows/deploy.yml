@@ -124,6 +124,7 @@ jobs:
           local-dir: ./
           server-dir: ${{ secrets.FTP_REMOTE_DIR }}
           dangerous-clean-slate: false
+          log-level: verbose
           exclude: |
             **/.git*
             **/.git*/**
