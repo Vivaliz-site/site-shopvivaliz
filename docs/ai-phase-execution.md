@@ -16,6 +16,7 @@
 
 ## Execucao
 - Rodar `python scripts/run-autonomy-phases.py`
+- Para selecao continua da proxima tarefa segura, rodar `python scripts/autonomous-continuous-cycle.py --advance`
 - O script:
   - le a fila canonica em `tasks-queue.json`
   - consulta apenas os nomes dos secrets com `gh secret list`

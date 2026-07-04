@@ -1,0 +1,43 @@
+# AI Continuous Mode
+
+## Objetivo
+- Manter o ciclo autonomo em execucao sem aguardar novas instrucoes humanas entre tarefas seguras.
+- Sempre encadear: documentacao, autoauditoria, consulta ao backlog, consulta ao roadmap por fases e selecao da proxima tarefa elegivel.
+
+## Fonte de verdade
+- Backlog canonico: `tasks-queue.json`
+- Roadmap por fases: `docs/ai-phase-execution.md`
+- Prioridades do Diretor: `config/ai-orchestrator.json` e `api/orchestrator/director.php`
+
+## Regras de selecao
+- Nunca escolher tarefas que:
+  - alterem preco, desconto, frete, comissao ou pagamento
+  - publiquem campanhas
+  - exijam aprovacao humana
+  - exijam acesso manual externo
+  - impliquem deploy sem autorizacao
+- Priorizar, nesta ordem:
+  1. fase mais cedo no roadmap
+  2. prioridade do Diretor (`conversion_impact`, `seo_gap`, `catalog_readiness`)
+  3. `queue_rank`
+
+## Execucao
+- Rodar `python scripts/autonomous-continuous-cycle.py --advance`
+- O ciclo:
+  1. atualiza o relatorio de fases com `scripts/run-autonomy-phases.py`
+  2. executa a autoauditoria com `scripts/system-health-check.py`
+  3. le backlog, roadmap e prioridades do Diretor
+  4. retoma a tarefa `in_progress` selecionada pelo proprio ciclo, se existir
+  5. caso contrario, marca a proxima tarefa segura como `in_progress`
+  6. gera relatorio local em:
+     - `logs/autonomous-cycle-report.json`
+     - `logs/autonomous-cycle-report.md`
+
+## Interrupcao permitida
+- Somente quando houver:
+  - aprovacao humana obrigatoria
+  - necessidade de alterar preco
+  - necessidade de aumentar orcamento
+  - deploy dependente de autorizacao
+  - conflito tecnico sem solucao segura
+  - risco de indisponibilidade ou perda de dados
