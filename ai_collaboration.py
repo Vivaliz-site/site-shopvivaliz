@@ -132,7 +132,7 @@ def iniciar_super_agente_trio(modo: str = "diagnostico", tarefa: str = "") -> in
                 gemini=analise_gemini, contexto=contexto, tarefa=tarefa
             )
             res_claude = anthropic_client.messages.create(
-                model="claude-sonnet-4-6",
+                model="claude-3-haiku-20240307",
                 max_tokens=2000,
                 messages=[{"role": "user", "content": prompt_claude}],
             )

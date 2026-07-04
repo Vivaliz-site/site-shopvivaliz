@@ -23,6 +23,10 @@ $catalog    = svar_json('api/catalog/fallback-products.json');
 $ranking    = svar_json('autodev/data/product_ranking.json');
 $demand     = svar_json('autodev/data/demand_forecast.json');
 $roiReport  = svar_json('logs/roi-engine-report.json');
+$triSync    = svar_json('logs/tri-environment-sync.json');
+if (empty($triSync)) {
+    $triSync = svar_json('logs/autonomous-sync.json');
+}
 
 $totalProducts = count($catalog);
 $noImage = 0;
@@ -73,6 +77,23 @@ echo json_encode([
         'ml_user_id'         => is_array($mlTokenData) ? ($mlTokenData['user_id'] ?? null) : null,
         'shopee_repair_done' => is_file(svar_root() . '/utils/shopee_client.py'),
         'git_guardian_active'=> is_file(svar_root() . '/scripts/git_autonomous_agent.py'),
+    ],
+    'tri_environment_sync' => [
+        'available'        => !empty($triSync),
+        'generated_at'     => $triSync['generated_at'] ?? null,
+        'environment'      => $triSync['environment'] ?? null,
+        'status'           => $triSync['status'] ?? null,
+        'next_action'      => $triSync['nextAction'] ?? null,
+        'branch'           => $triSync['git']['branch'] ?? null,
+        'head'             => $triSync['git']['head'] ?? null,
+        'remote_head'      => $triSync['git']['remote_head'] ?? null,
+        'ahead_by'         => $triSync['git']['ahead_by'] ?? null,
+        'behind_by'        => $triSync['git']['behind_by'] ?? null,
+        'dirty_count'      => $triSync['git']['dirty_count'] ?? null,
+        'actions'          => array_slice($triSync['actions'] ?? [], 0, 5),
+        'warnings'         => array_slice($triSync['warnings'] ?? [], 0, 5),
+        'file_age_s'       => svar_file_age('logs/tri-environment-sync.json'),
+        'legacy_file_age_s' => svar_file_age('logs/autonomous-sync.json'),
     ],
     'endpoints' => [
         'autonomous_watchdog' => is_file(svar_root() . '/api/agent/autonomous-watchdog.php'),

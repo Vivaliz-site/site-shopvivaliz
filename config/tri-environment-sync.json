@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "source_of_truth": "github",
+  "primary_branch": "main",
+  "sync_branch": "origin/main",
+  "sync_interval_minutes": 5,
+  "protected_branches": [
+    "main",
+    "master"
+  ],
+  "allowed_push_prefixes": [
+    "feat/",
+    "fix/",
+    "chore/",
+    "sync/"
+  ],
+  "environment_detection": {
+    "aliases": {
+      "pc": [
+        "pc",
+        "desktop",
+        "windows",
+        "workstation",
+        "fred"
+      ],
+      "cloud": [
+        "cloud",
+        "github-actions",
+        "actions",
+        "ci"
+      ],
+      "oracle": [
+        "oracle",
+        "shopvivaliz-ai",
+        "ubuntu",
+        "vps",
+        "server"
+      ]
+    }
+  },
+  "environments": {
+    "pc": {
+      "role": "authoring",
+      "auto_pull": true,
+      "auto_push": true,
+      "allow_push_to_main": false
+    },
+    "cloud": {
+      "role": "coordinator",
+      "auto_pull": true,
+      "auto_push": false,
+      "allow_push_to_main": false
+    },
+    "oracle": {
+      "role": "runtime",
+      "auto_pull": true,
+      "auto_push": false,
+      "allow_push_to_main": false
+    }
+  }
+}

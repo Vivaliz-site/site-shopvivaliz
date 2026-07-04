@@ -21,6 +21,7 @@
         "description": "Local Windows Task Scheduler automation",
         "interval_minutes": 2,
         "components": [
+          "scripts/tri-environment-sync.js",
           "scripts/autonomous-sync.py",
           "scripts/autonomous-git-push.py",
           "scripts/autonomous-ftp-deploy.py"
@@ -52,6 +53,27 @@
       }
     },
     "sync": {
+      "tri_environment": {
+        "enabled": true,
+        "interval_minutes": 5,
+        "runner": "scripts/tri-environment-sync.js",
+        "source_of_truth": "GitHub",
+        "environments": [
+          "pc",
+          "cloud",
+          "oracle"
+        ],
+        "protected_branches": [
+          "main",
+          "master"
+        ],
+        "allowed_push_prefixes": [
+          "feat/",
+          "fix/",
+          "chore/",
+          "sync/"
+        ]
+      },
       "local_sync": {
         "enabled": true,
         "interval_minutes": 2,
@@ -103,7 +125,7 @@
     "tasks": [
       {
         "name": "ShopVivaliz-AutoSync",
-        "script": "scripts/autonomous-sync.py",
+        "script": "scripts/tri-environment-sync.js",
         "interval_minutes": 2,
         "enabled": true,
         "run_level": "Highest"
@@ -193,6 +215,7 @@
     "log_files": [
       "autonomous-sync.log",
       "autonomous-sync.json",
+      "tri-environment-sync.json",
       "autonomous-git-push.log",
       "autonomous-git-push.json",
       "autonomous-ftp-deploy.log",

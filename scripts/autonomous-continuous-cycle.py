@@ -29,6 +29,8 @@ PHASE_REPORT_JSON = LOGS_DIR / "autonomy-phase-report.json"
 HEALTH_REPORT_JSON = LOGS_DIR / "system-health-check.json"
 CYCLE_REPORT_JSON = LOGS_DIR / "autonomous-cycle-report.json"
 CYCLE_REPORT_MD = LOGS_DIR / "autonomous-cycle-report.md"
+EVENTS_LOG_JSONL = LOGS_DIR / "autonomous-cycle-events.jsonl"
+AUTONOMOUS_CYCLE_LOG = Path("scripts/autonomous-cycle-log.json")
 
 FORBIDDEN_KEYWORDS = (
     "preco",
@@ -84,6 +86,24 @@ def run_auto_audit() -> dict[str, Any]:
         "errors": report.get("errors", []),
         "warnings": report.get("warnings", []),
     }
+
+
+def git_changed_files() -> list[str]:
+    result = run_command(["git", "status", "--porcelain"])
+    if result.returncode != 0 or not result.stdout:
+        return []
+
+    paths: list[str] = []
+    for line in result.stdout.splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:].strip()
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1].strip()
+        if path:
+            paths.append(path)
+
+    return sorted(dict.fromkeys(paths))
 
 
 def phase_readiness_map(phase_report: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -228,6 +248,7 @@ def build_report(advance: bool) -> dict[str, Any]:
     phase_report = update_phase_report()
     audit = run_auto_audit()
     queue_data = load_queue()
+    changed_files = git_changed_files()
     readiness_map = phase_readiness_map(phase_report)
     selection = select_task(
         queue_data,
@@ -247,6 +268,11 @@ def build_report(advance: bool) -> dict[str, Any]:
         "advance": advance,
         "director_priorities": director_priorities,
         "auto_audit": audit,
+        "changed_files": changed_files,
+        "tests_executed": [
+            "python scripts/run-autonomy-phases.py",
+            "python scripts/system-health-check.py",
+        ],
         "backlog_snapshot": backlog_snapshot,
         "phase_summary": {
             "qa_workflow": phase_report.get("qa_workflow", {}),
@@ -257,6 +283,22 @@ def build_report(advance: bool) -> dict[str, Any]:
             "reason": selection["reason"],
             "task": selection["task"],
         },
+    }
+    task = selection.get("task")
+    report["result"] = {
+        "status": "idle" if selection["mode"] == "idle" else "active",
+        "summary": (
+            "Nenhuma tarefa segura elegível encontrada."
+            if selection["mode"] == "idle"
+            else f"Tarefa {task.get('id')} preparada em {task.get('status')}"
+        ),
+    }
+    report["next_task"] = {
+        "id": task.get("id") if task else None,
+        "title": task.get("title") if task else None,
+        "status": task.get("status") if task else None,
+        "reason": selection["reason"],
+        "mode": selection["mode"],
     }
     return report
 
@@ -275,11 +317,18 @@ def write_report(report: dict[str, Any]) -> tuple[Path, Path]:
         f"- Advance mode: `{report['advance']}`",
         f"- Auto audit: `{report['auto_audit']['status']}` (exit `{report['auto_audit']['exit_code']}`)",
         f"- Director priorities: `{', '.join(report['director_priorities'])}`",
+        f"- Result: `{report['result']['summary']}`",
         "",
         "## Backlog Snapshot",
         f"- Pending: `{report['backlog_snapshot']['pending']}`",
         f"- In progress: `{report['backlog_snapshot']['in_progress']}`",
         f"- Completed: `{report['backlog_snapshot']['completed']}`",
+        "",
+        "## Trace",
+        f"- Changed files: `{', '.join(report['changed_files']) if report['changed_files'] else 'nenhum'}`",
+        f"- Tests executed: `{', '.join(report['tests_executed'])}`",
+        f"- Next task: `{report['next_task']['id'] or 'none'}`",
+        f"- Next task reason: `{report['next_task']['reason']}`",
         "",
         "## Selection",
         f"- Mode: `{report['selection']['mode']}`",
@@ -302,6 +351,36 @@ def write_report(report: dict[str, Any]) -> tuple[Path, Path]:
             lines.append(f"- {error}")
 
     CYCLE_REPORT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    event_record = {
+        "generated_at": report["generated_at"],
+        "advance": report["advance"],
+        "changed_files": report["changed_files"],
+        "tests_executed": report["tests_executed"],
+        "result": report["result"],
+        "next_task": report["next_task"],
+        "selection": report["selection"],
+        "auto_audit": report["auto_audit"],
+    }
+    with EVENTS_LOG_JSONL.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(event_record, ensure_ascii=False) + "\n")
+
+    cycle_state = {
+        "generated_at": report["generated_at"],
+        "last_cycle_at": report["generated_at"],
+        "status": "idle" if report["selection"]["mode"] == "idle" else "running",
+        "mode": report["selection"]["mode"],
+        "advance": report["advance"],
+        "task": report["selection"].get("task"),
+        "next_task": report["next_task"],
+        "selection_reason": report["selection"]["reason"],
+        "changed_files": report["changed_files"],
+        "tests_executed": report["tests_executed"],
+        "maintenance_window": False,
+    }
+    AUTONOMOUS_CYCLE_LOG.write_text(
+        json.dumps(cycle_state, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
     return CYCLE_REPORT_JSON, CYCLE_REPORT_MD
 
 
@@ -328,6 +407,13 @@ def print_report(report: dict[str, Any], json_path: Path, md_path: Path) -> int:
     if task:
         print(f"Task: {task.get('id')} - {task.get('title')}")
         print(f"Status: {task.get('status')} | Phase: {task.get('phase', 'unphased')}")
+
+    print(
+        "Trace: "
+        f"changed_files={len(report['changed_files'])} "
+        f"tests={len(report['tests_executed'])} "
+        f"next_task={report['next_task']['id'] or 'none'}"
+    )
 
     print(f"JSON saved at: {json_path}")
     print(f"Markdown saved at: {md_path}")
