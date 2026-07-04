@@ -321,7 +321,7 @@
       "title": "Criar pagina de checkout otimizada para conversao",
       "description": "Reduzir numero de steps. One-click checkout para returning customers. Guest checkout. Guest payment option. Validacao em tempo real.",
       "priority": "high",
-      "status": "pending",
+      "status": "in_progress",
       "created_at": "2026-06-27T20:32:00Z",
       "completed_at": "2026-06-27T18:05:21.192756"
     },
@@ -459,7 +459,9 @@
       "source": "growth-mission-seed",
       "id": "task-045",
       "created_at": "2026-07-04T04:52:44.793293Z",
-      "queue_rank": 14
+      "queue_rank": 14,
+      "requires_human_approval": true,
+      "approval_scope": "ads_budget_approval"
     },
     {
       "title": "Ligar domínio público à camada web ativa",

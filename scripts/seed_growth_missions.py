@@ -58,6 +58,8 @@ MISSIONS = [
         "priority": "medium",
         "status": "pending",
         "tags": ["ads", "google-ads", "tracking"],
+        "requires_human_approval": True,
+        "approval_scope": "ads_budget_approval",
         "requires_env": [
             "GOOGLE_ADS_CUSTOMER_ID",
             "GOOGLE_ADS_DEVELOPER_TOKEN",

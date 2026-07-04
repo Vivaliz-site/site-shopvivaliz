@@ -43,5 +43,38 @@
       "pagarme": "50_requests_per_minute"
     },
     "state_change_logging": "mandatory"
+  },
+  "autonomous_architecture": {
+    "sensor": {
+      "enabled": true,
+      "collects": ["catalog", "seo", "performance", "conversion", "marketplaces"]
+    },
+    "director": {
+      "enabled": true,
+      "strategy": "revenue_engine"
+    },
+    "executor": {
+      "enabled": true,
+      "allowed_domains": ["seo", "content", "product-pages", "performance", "catalog-sync"]
+    },
+    "validator": {
+      "enabled": true,
+      "checks": ["policy_guard", "audit_trail", "result_verification"]
+    }
+  },
+  "growth_policy": {
+    "revenue_engine": {
+      "enabled": true,
+      "prioritize_by": ["conversion_impact", "seo_gap", "catalog_readiness"]
+    },
+    "learning_loop": {
+      "enabled": true,
+      "feedback_sources": ["task_queue", "reports", "catalog_metrics"]
+    },
+    "ads": {
+      "autonomous_execution": false,
+      "requires_human_approval": true,
+      "daily_budget_limit_source": "environment_or_manual_approval"
+    }
   }
 }

@@ -77,7 +77,7 @@ def carregar_contexto(modo: str) -> str:
     return contexto
 
 
-def iniciar_super_agente_trio(modo: str = "diagnostico", tarefa: str = ""):
+def iniciar_super_agente_trio(modo: str = "diagnostico", tarefa: str = "") -> int:
     config_modo = MODOS.get(modo, MODOS["diagnostico"])
     print(f"Inicializando Trio IA — Modo: {config_modo['descricao']}")
 
@@ -102,7 +102,7 @@ def iniciar_super_agente_trio(modo: str = "diagnostico", tarefa: str = ""):
 
     if not any([gemini_client, openai_client, anthropic_client]):
         print("Nenhum cliente de IA disponivel. Abortando diagnostico.")
-        sys.exit(0)
+        return 2
 
     contexto = carregar_contexto(modo)
 
@@ -175,6 +175,7 @@ def iniciar_super_agente_trio(modo: str = "diagnostico", tarefa: str = ""):
         f.write(relatorio_final)
 
     print(f"Relatorio salvo em: {nome_arquivo}")
+    return 0
 
 
 if __name__ == "__main__":
@@ -191,4 +192,4 @@ if __name__ == "__main__":
         help="Descricao da tarefa de desenvolvimento (usado no modo ecommerce)",
     )
     args = parser.parse_args()
-    iniciar_super_agente_trio(modo=args.modo, tarefa=args.tarefa)
+    raise SystemExit(iniciar_super_agente_trio(modo=args.modo, tarefa=args.tarefa))

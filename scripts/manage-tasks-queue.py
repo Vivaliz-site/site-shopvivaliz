@@ -11,6 +11,7 @@ KNOWN_STATUSES = [
     "completed",
     "blocked_missing_env",
     "blocked_manual_access",
+    "blocked_human_approval_required",
     "blocked_price_approval_required",
 ]
 

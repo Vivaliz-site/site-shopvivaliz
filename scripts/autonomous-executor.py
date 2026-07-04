@@ -14,11 +14,16 @@ from task_queue_lib import executable_pending_tasks, load_queue, save_queue, utc
 
 BLOCKED_MISSING_ENV = "blocked_missing_env"
 BLOCKED_MANUAL_ACCESS = "blocked_manual_access"
+BLOCKED_HUMAN_APPROVAL = "blocked_human_approval_required"
 BLOCKED_POLICY = "blocked_price_approval_required"
 
 
 def missing_env_vars(task: dict) -> list[str]:
     return [env for env in task.get("requires_env", []) if not os.getenv(env)]
+
+
+def requires_human_approval(task: dict) -> bool:
+    return bool(task.get("requires_human_approval"))
 
 
 def choose_next_task(queue_data: dict) -> tuple[dict | None, str | None]:
@@ -27,6 +32,12 @@ def choose_next_task(queue_data: dict) -> tuple[dict | None, str | None]:
             task["status"] = BLOCKED_MANUAL_ACCESS
             task["blocked_at"] = utc_now()
             task["blocked_reason"] = "requires_manual_access"
+            continue
+
+        if requires_human_approval(task):
+            task["status"] = BLOCKED_HUMAN_APPROVAL
+            task["blocked_at"] = utc_now()
+            task["blocked_reason"] = str(task.get("approval_scope", "human_approval_required"))
             continue
 
         missing = missing_env_vars(task)
