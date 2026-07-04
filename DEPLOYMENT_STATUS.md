@@ -1,14 +1,16 @@
 # 🚀 ShopVivaliz Medusa - Deployment Status
 
-**Data:** 03/07/2026 (round 27)
-**Status:** ⚠️ **VALIDADO LOCALMENTE — BLOQUEADO PARA PRODUÇÃO** (mesmos 5 blockers há 27 rodadas, todos exigem ação humana)
+**Data:** 04/07/2026 (round 29)
+**Status:** ⚠️ **VALIDADO LOCALMENTE — BLOQUEADO PARA PRODUÇÃO** (mesmos 5 blockers há 29 rodadas, todos exigem ação humana)
 
 > Nota: este arquivo estava desatualizado desde a rodada 7 (o registro rodada-a-rodada mais completo vive em
-> [`claude/medusa/DEPLOY-CHECKLIST.md`](claude/medusa/DEPLOY-CHECKLIST.md)). Rodada 27 (leve): nenhuma mudança de
-> código em `claude/medusa/`/`claude/api/` desde a rodada 26, todos os 5 blockers seguem inalterados. Esta é a **sexta
-> recomendação consecutiva** (rodadas 21, 23, 24, 25, 26, 27) de **pausar o agendamento automático externo** desta
-> tarefa até que o usuário resolva ao menos um blocker — em destaque, a rotação do secret Olist/Tiny vazado no
-> histórico do git (pendente desde 2026-07-01) e a criação de um Postgres gerenciado.
+> [`claude/medusa/DEPLOY-CHECKLIST.md`](claude/medusa/DEPLOY-CHECKLIST.md)). Rodada 29 (leve; renumerada de 28 para 29
+> após colisão com um commit concorrente que já usava esse número): nenhuma mudança de código em
+> `claude/medusa/`/`claude/api/` desde a rodada 28, todos os 5 blockers seguem inalterados. Esta é a **nona
+> recomendação consecutiva** (rodadas 21, 23, 24, 25, 26, 27, 28, 29) de **pausar o agendamento automático externo**
+> desta tarefa até que o usuário resolva ao menos um blocker — em destaque, a rotação do secret Olist/Tiny vazado no
+> histórico do git (pendente desde 2026-07-01) e a criação de um Postgres gerenciado. O usuário foi notificado
+> diretamente por push notification nesta rodada.
 
 Relatório detalhado, item a item: [`claude/medusa/DEPLOY-STATUS-REPORT.json`](claude/medusa/DEPLOY-STATUS-REPORT.json) e [`claude/medusa/DEPLOY-CHECKLIST.md`](claude/medusa/DEPLOY-CHECKLIST.md).
 
