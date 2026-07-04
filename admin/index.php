@@ -81,6 +81,24 @@ $codename = (string)($version['codename'] ?? '');
             <article class="admin-card">
                 <div class="admin-card-head">
                     <div>
+                        <p class="eyebrow">Marketplace</p>
+                        <h2>Mercado Livre</h2>
+                    </div>
+                    <span class="admin-pill" id="ml-status-pill">Verificando...</span>
+                </div>
+                <ul class="admin-checklist" id="ml-status-list">
+                    <li>Carregando status ML...</li>
+                </ul>
+                <div class="admin-link-list">
+                    <a class="btn btn-primary" href="/admin/mercadolivre">Painel ML</a>
+                    <a class="btn btn-secondary" href="/api/ml/login" target="_blank">Conectar OAuth</a>
+                    <a class="btn btn-secondary" href="/api/ml/products" target="_blank">Produtos JSON</a>
+                </div>
+            </article>
+
+            <article class="admin-card">
+                <div class="admin-card-head">
+                    <div>
                         <p class="eyebrow">Diagnóstico</p>
                         <h2>Saúde do site</h2>
                     </div>
@@ -159,6 +177,30 @@ $codename = (string)($version['codename'] ?? '');
         <section class="container product-grid admin-grid" id="product-grid" aria-live="polite"></section>
     </main>
 
+    <script>
+    // ML status check
+    (async () => {
+        const pill = document.getElementById('ml-status-pill');
+        const list = document.getElementById('ml-status-list');
+        try {
+            const r = await fetch('/api/ml/me', { signal: AbortSignal.timeout(5000) });
+            if (r.ok) {
+                const d = await r.json();
+                pill.textContent = 'Conectado';
+                pill.style.cssText = 'background:#dcfce7;color:#166534';
+                list.innerHTML = `<li>Conta: <strong>${d.nickname || d.email || 'OK'}</strong></li><li>ID: ${d.id || '—'}</li>`;
+            } else {
+                pill.textContent = 'Desconectado';
+                pill.style.cssText = 'background:#fee2e2;color:#991b1b';
+                list.innerHTML = '<li>Token ML não configurado ou expirado.</li>';
+            }
+        } catch(e) {
+            pill.textContent = 'Desconectado';
+            pill.style.cssText = 'background:#fee2e2;color:#991b1b';
+            list.innerHTML = '<li>Não conectado ao Mercado Livre.</li>';
+        }
+    })();
+    </script>
     <script src="/autodev/client.js"></script>
     <script src="/js/catalog.js"></script>
     <script src="/js/admin-dashboard.js"></script>

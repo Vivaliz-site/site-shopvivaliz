@@ -44,6 +44,32 @@ def main():
     print(f"   Descrição: {task_desc[:100]}...")
     print()
 
+
+    # Guardião da política autônoma
+    guard = subprocess.run(
+        [
+            sys.executable,
+            "scripts/autonomous-policy-guard.py",
+            "--title",
+            task_title,
+            "--description",
+            task_desc,
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    print(guard.stdout)
+
+    if guard.returncode != 0:
+        task["status"] = "blocked_price_approval_required"
+        task["blocked_at"] = datetime.utcnow().isoformat() + "Z"
+
+        with open(queue_file, "w", encoding="utf-8") as f:
+            json.dump(queue_data, f, indent=2, ensure_ascii=False)
+
+        print("⛔ Tarefa bloqueada pela política de preços.")
+        return 2
     # Executar Trio IA com a tarefa
     try:
         result = subprocess.run(
@@ -112,3 +138,5 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
