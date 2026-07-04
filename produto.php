@@ -120,7 +120,6 @@ $jsonLd = [
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#173B63">
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <meta name="description" content="<?= sv_esc($description) ?>">
     <meta property="og:title" content="<?= sv_esc($name) ?> | Vivaliz">
     <meta property="og:description" content="<?= sv_esc($description) ?>">
@@ -136,7 +135,7 @@ $jsonLd = [
     <nav class="navbar">
         <div class="container nav-inner">
             <a class="brand-link" href="/">
-                <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" onerror="this.src='/images/logo.svg'">
+                <span class="brand-logo">V</span>Vivaliz
             </a>
             <div class="navbar-menu">
                 <a href="/catalogo">Catálogo</a>

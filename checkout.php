@@ -35,7 +35,6 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '5511999999999';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Finalizar Pedido | Vivaliz</title>
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/checkout.css">
 </head>
@@ -43,7 +42,7 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '5511999999999';
 <nav class="navbar">
     <div class="container nav-inner">
         <a class="brand-link" href="/">
-            <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" onerror="this.src='/images/logo.svg'">
+            <span class="brand-logo">V</span>Vivaliz
         </a>
         <div class="navbar-menu">
             <a href="/catalogo">Catálogo</a>
