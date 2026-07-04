@@ -14,6 +14,11 @@
    - Rate limiting for Olist/Tiny integrations
    - Audit logging for all operations
 
+4. **Workspace Agent Bootstrap**
+   - `.vscode/settings.json` bootstraps Roo Code at workspace open
+   - `config/roo-autonomous-settings.json` auto-imports execution defaults
+   - Auto-approval is enabled for routine engineering operations with command denylist protection
+
 ## Execution Flow
 1. Trigger -> Agent Selection
 2. Context Validation
@@ -26,3 +31,4 @@
 - Financial rules enforced at orchestration level
 - Guardian of Price protection maintained
 - All changes go through Git workflow
+- Roo autonomous mode must keep write protection for workspace control files and deny direct push to `main`
