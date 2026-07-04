@@ -294,16 +294,16 @@
       "title": "Criar programa de referencia com incentivos",
       "description": "Usuarios ganham credito por referir amigos que compram. Rastrear links unicos. Pagamento automatico de bonus.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:29:00Z",
-      "completed_at": "2026-06-27T18:05:19.650161"
+      "completed_at": "2026-07-04T02:49:39Z"
     },
     {
       "id": "task-033",
       "title": "Implementar notificacoes push para estoque disponivel",
       "description": "Permitir usuarios se inscrever para notificacoes quando produto fora de estoque voltar. Enviar push automatico.",
       "priority": "low",
-      "status": "pending",
+      "status": "in_progress",
       "created_at": "2026-06-27T20:30:00Z",
       "completed_at": "2026-06-27T18:05:20.164381"
     },
@@ -369,6 +369,145 @@
       "status": "pending",
       "created_at": "2026-06-27T20:37:00Z",
       "completed_at": "2026-06-27T18:05:23.76721"
+    },
+    {
+      "title": "Ativar geração autônoma de tarefas orientadas a crescimento",
+      "description": "Configurar o orquestrador para gerar e priorizar automaticamente tarefas de crescimento, SEO, marketplace e CRO usando a fila canônica do projeto.",
+      "priority": "high",
+      "status": "pending",
+      "tags": [
+        "automation",
+        "growth",
+        "orchestrator"
+      ],
+      "source": "growth-mission-seed",
+      "id": "task-041",
+      "created_at": "2026-07-04T04:52:44.793293Z",
+      "queue_rank": 10
+    },
+    {
+      "title": "Executar otimizações autônomas para vendas",
+      "description": "Priorizar melhorias de conversão em página de produto, catálogo, checkout e captação de leads, sem alterar preços, descontos, fretes ou meios de pagamento.",
+      "priority": "high",
+      "status": "pending",
+      "tags": [
+        "cro",
+        "conversion",
+        "ux"
+      ],
+      "source": "growth-mission-seed",
+      "id": "task-042",
+      "created_at": "2026-07-04T04:52:44.793293Z",
+      "queue_rank": 11
+    },
+    {
+      "title": "Conectar catálogo com Shopee sem impacto em preço",
+      "description": "Validar integração Shopee existente, sincronizar produtos e mídia sem modificar preço, usando credenciais oficiais e rotina segura de marketplace.",
+      "priority": "high",
+      "status": "pending",
+      "tags": [
+        "marketplace",
+        "shopee",
+        "catalog"
+      ],
+      "requires_env": [
+        "SHOPEE_PARTNER_ID",
+        "SHOPEE_PARTNER_KEY",
+        "SHOPEE_SHOP_ID",
+        "SHOPEE_REFRESH_TOKEN"
+      ],
+      "source": "growth-mission-seed",
+      "id": "task-043",
+      "created_at": "2026-07-04T04:52:44.793293Z",
+      "queue_rank": 12
+    },
+    {
+      "title": "Conectar catálogo com Mercado Livre sem impacto em preço",
+      "description": "Validar OAuth e catálogo do Mercado Livre, publicar ou sincronizar anúncios sem alterar valores de venda, mantendo o Guardião de Preço intacto.",
+      "priority": "high",
+      "status": "pending",
+      "tags": [
+        "marketplace",
+        "mercado-livre",
+        "catalog"
+      ],
+      "requires_env": [
+        "ML_CLIENT_ID",
+        "ML_CLIENT_SECRET",
+        "ML_REDIRECT_URI"
+      ],
+      "source": "growth-mission-seed",
+      "id": "task-044",
+      "created_at": "2026-07-04T04:52:44.793293Z",
+      "queue_rank": 13
+    },
+    {
+      "title": "Preparar stack de Google Ads para automação",
+      "description": "Preparar base técnica para campanhas, conversões e landing pages, com validação de credenciais e rastreamento, sem alterar regras financeiras do checkout.",
+      "priority": "medium",
+      "status": "pending",
+      "tags": [
+        "ads",
+        "google-ads",
+        "tracking"
+      ],
+      "requires_env": [
+        "GOOGLE_ADS_CUSTOMER_ID",
+        "GOOGLE_ADS_DEVELOPER_TOKEN",
+        "GOOGLE_ADS_REFRESH_TOKEN"
+      ],
+      "source": "growth-mission-seed",
+      "id": "task-045",
+      "created_at": "2026-07-04T04:52:44.793293Z",
+      "queue_rank": 14
+    },
+    {
+      "title": "Ligar domínio público à camada web ativa",
+      "description": "Conectar domínio final à superfície publicada, validando apontamentos e roteamento. Esta etapa exige acesso ao provedor DNS ou domínio já gerenciado pela plataforma.",
+      "priority": "medium",
+      "status": "pending",
+      "tags": [
+        "domain",
+        "dns",
+        "deploy"
+      ],
+      "requires_manual_access": true,
+      "source": "growth-mission-seed",
+      "id": "task-046",
+      "created_at": "2026-07-04T04:52:44.794289Z",
+      "queue_rank": 15
+    },
+    {
+      "title": "Ativar SEO automático para catálogo e marketplace",
+      "description": "Executar geração automática de SEO para páginas do site e canais externos, incluindo títulos, descrições, dados estruturados e auditoria contínua.",
+      "priority": "high",
+      "status": "pending",
+      "tags": [
+        "seo",
+        "catalog",
+        "automation"
+      ],
+      "source": "growth-mission-seed",
+      "id": "task-047",
+      "created_at": "2026-07-04T04:52:44.794289Z",
+      "queue_rank": 16
+    },
+    {
+      "title": "Gerar páginas de produto dinâmicas e indexáveis",
+      "description": "Preparar rota e renderização dinâmica de páginas de produto com dados estruturados, SEO consistente, conteúdo indexável e compatibilidade com catálogo atual.",
+      "priority": "high",
+      "status": "pending",
+      "tags": [
+        "product-pages",
+        "seo",
+        "dynamic-content"
+      ],
+      "source": "growth-mission-seed",
+      "id": "task-048",
+      "created_at": "2026-07-04T04:52:44.794289Z",
+      "queue_rank": 17
     }
-  ]
+  ],
+  "version": "1.1",
+  "created_at": "2026-07-04T04:52:44.791298Z"
 }

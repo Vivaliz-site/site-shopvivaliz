@@ -5,9 +5,9 @@ Analisa projeto e sugere novas features/melhorias
 """
 import json
 import subprocess
-from datetime import datetime
-from pathlib import Path
 import os
+import sys
+from task_queue_lib import load_queue, save_queue, upsert_task
 
 def get_gemini_suggestions():
     """Gemini analisa projeto e sugere tarefas"""
@@ -79,10 +79,7 @@ Retorne JSON com 2-3 tarefas URGENTES."""
 
 def parse_and_create_tasks(suggestions):
     """Extrai tarefas e cria na fila"""
-    queue_file = Path("logs/tasks-queue.json")
-
-    with open(queue_file, "r", encoding="utf-8") as f:
-        queue_data = json.load(f)
+    queue_data = load_queue()
 
     # Extrair JSON das sugestões
     try:
@@ -100,32 +97,28 @@ def parse_and_create_tasks(suggestions):
 
     # Adicionar à fila
     created = 0
-    max_id = max([int(t['id'].split('-')[1]) for t in queue_data['queue']], default=10)
-
     for task_data in new_tasks:
         if len(queue_data['queue']) >= 20:  # Limite de 20 tarefas
             break
 
-        new_id = f"task-{str(max_id + 1).zfill(3)}"
         new_task = {
-            "id": new_id,
             "title": task_data.get('title', ''),
             "description": task_data.get('description', ''),
             "priority": task_data.get('priority', 'medium'),
             "status": "pending",
-            "created_at": datetime.utcnow().isoformat() + "Z",
-            "auto_generated": True
+            "auto_generated": True,
+            "source": "auto-task-generator",
         }
 
-        queue_data['queue'].append(new_task)
+        task_record, created_now = upsert_task(queue_data, new_task)
+        if not created_now:
+            continue
         created += 1
-        max_id += 1
 
-        print(f" Tarefa criada: {new_id} - {task_data.get('title')}")
+        print(f" Tarefa criada: {task_record.get('id')} - {task_data.get('title')}")
 
     # Salvar fila atualizada
-    with open(queue_file, "w", encoding="utf-8") as f:
-        json.dump(queue_data, f, indent=2, ensure_ascii=False)
+    save_queue(queue_data)
 
     return created
 
@@ -152,12 +145,12 @@ def main():
 
     # Commit automático
     try:
-        subprocess.run(["git", "add", "logs/tasks-queue.json"], check=True)
+        subprocess.run(["git", "add", "tasks-queue.json", "logs/tasks-queue.json"], check=True)
         subprocess.run([
             "git", "commit", "-m",
             "feat: Trio IA gerou novas tarefas autonomamente\n\nAgentes analisaram o projeto e sugeriram melhorias."
         ], check=True)
-        subprocess.run(["git", "push"], check=True)
+        subprocess.run(["git", "push", "origin", "HEAD"], check=True)
         print(" Tarefas commitadas e enviadas ao repositório")
     except Exception as e:
         print(f"  Erro ao fazer commit: {e}")

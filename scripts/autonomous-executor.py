@@ -1,45 +1,69 @@
 #!/usr/bin/env python3
 """Executor autônomo do Trio IA"""
-import json
+from __future__ import annotations
+
 import subprocess
 import sys
-import smtplib
 from datetime import datetime
 from pathlib import Path
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import argparse
+import json
+import os
 
-DEFAULT_QUEUE = {
-    "version": "1.0",
-    "created_at": datetime.utcnow().isoformat() + "Z",
-    "queue": []
-}
+from task_queue_lib import executable_pending_tasks, load_queue, save_queue, utc_now
 
-def load_queue(queue_file: Path) -> dict:
-    queue_file.parent.mkdir(parents=True, exist_ok=True)
-    if not queue_file.exists():
-        print(f"⚠️  {queue_file} não encontrado. Criando fila vazia.")
-        queue_file.write_text(json.dumps(DEFAULT_QUEUE, indent=2, ensure_ascii=False), encoding="utf-8")
-    with open(queue_file, "r", encoding="utf-8") as f:
-        return json.load(f)
+BLOCKED_MISSING_ENV = "blocked_missing_env"
+BLOCKED_MANUAL_ACCESS = "blocked_manual_access"
+BLOCKED_POLICY = "blocked_price_approval_required"
+
+
+def missing_env_vars(task: dict) -> list[str]:
+    return [env for env in task.get("requires_env", []) if not os.getenv(env)]
+
+
+def choose_next_task(queue_data: dict) -> tuple[dict | None, str | None]:
+    for task in executable_pending_tasks(queue_data):
+        if task.get("requires_manual_access"):
+            task["status"] = BLOCKED_MANUAL_ACCESS
+            task["blocked_at"] = utc_now()
+            task["blocked_reason"] = "requires_manual_access"
+            continue
+
+        missing = missing_env_vars(task)
+        if missing:
+            task["status"] = BLOCKED_MISSING_ENV
+            task["blocked_at"] = utc_now()
+            task["blocked_reason"] = f"missing_env:{','.join(missing)}"
+            continue
+
+        return task, None
+
+    return None, "no_executable_pending_tasks"
 
 def main():
-    queue_file = Path("logs/tasks-queue.json")
-    queue_data = load_queue(queue_file)
+    parser = argparse.ArgumentParser(description="Executor autônomo do Trio IA")
+    parser.add_argument("--dry-run", action="store_true", help="Seleciona e valida a próxima tarefa sem executar ai_collaboration.py")
+    args = parser.parse_args()
 
-    # Encontrar primeira tarefa pendente
-    pending_tasks = [t for t in queue_data.get("queue", []) if t["status"] == "pending"]
+    queue_data = load_queue()
+    original_snapshot = json.dumps(queue_data, ensure_ascii=False, sort_keys=True)
 
-    if not pending_tasks:
-        print("✅ Nenhuma tarefa pendente. Fila vazia ou todas completas!")
+    task, reason = choose_next_task(queue_data)
+    if json.dumps(queue_data, ensure_ascii=False, sort_keys=True) != original_snapshot:
+        save_queue(queue_data)
+
+    if not task:
+        if reason == "no_executable_pending_tasks":
+            print("[OK] Nenhuma tarefa executavel pendente. Restam apenas itens completos ou bloqueados.")
+        else:
+            print("[OK] Nenhuma tarefa pendente. Fila vazia ou todas completas!")
         return 0
 
-    task = pending_tasks[0]
     task_id = task["id"]
     task_title = task["title"]
     task_desc = task["description"]
 
-    print(f"🚀 Executando tarefa: {task_title}")
+    print(f"[EXEC] Executando tarefa: {task_title}")
     print(f"   ID: {task_id}")
     print(f"   Descrição: {task_desc[:100]}...")
     print()
@@ -62,19 +86,23 @@ def main():
     print(guard.stdout)
 
     if guard.returncode != 0:
-        task["status"] = "blocked_price_approval_required"
-        task["blocked_at"] = datetime.utcnow().isoformat() + "Z"
+        task["status"] = BLOCKED_POLICY
+        task["blocked_at"] = utc_now()
+        task["blocked_reason"] = "pricing_policy"
+        save_queue(queue_data)
 
-        with open(queue_file, "w", encoding="utf-8") as f:
-            json.dump(queue_data, f, indent=2, ensure_ascii=False)
-
-        print("⛔ Tarefa bloqueada pela política de preços.")
+        print("[BLOCKED] Tarefa bloqueada pela politica de precos.")
         return 2
+
+    if args.dry_run:
+        print("[DRY-RUN] Tarefa validada e pronta para execução autônoma.")
+        return 0
+
     # Executar Trio IA com a tarefa
     try:
         result = subprocess.run(
             [
-                "python",
+                sys.executable,
                 "ai_collaboration.py",
                 "--modo",
                 "ecommerce",
@@ -87,15 +115,14 @@ def main():
         )
 
         if result.returncode == 0:
-            print("✅ Tarefa executada com sucesso!")
+            print("[OK] Tarefa executada com sucesso!")
 
             # Marcar tarefa como completa
             task["status"] = "completed"
-            task["completed_at"] = datetime.utcnow().isoformat() + "Z"
+            task["completed_at"] = utc_now()
 
             # Salvar fila atualizada
-            with open(queue_file, "w", encoding="utf-8") as f:
-                json.dump(queue_data, f, indent=2, ensure_ascii=False)
+            save_queue(queue_data)
 
             # Commit das mudanças
             subprocess.run(["git", "add", "-A"], check=True)
@@ -115,25 +142,25 @@ def main():
                     ],
                     check=True,
                 )
-                subprocess.run(["git", "push", "origin", "HEAD:main"], check=True)
-                print("📤 Código commitado e publicado em main")
-                print("🚀 Deploy acionado automaticamente!")
+                subprocess.run(["git", "push", "origin", "HEAD"], check=True)
+                print("[PUSH] Código commitado e publicado na branch atual")
+                print("[FLOW] PR e deploy seguem o fluxo Git protegido do projeto")
             else:
-                print("ℹ️  Nenhuma mudança de código para commitar")
+                print("[INFO] Nenhuma mudanca de codigo para commitar")
 
-            print(f"✅ Tarefa {task_id} marcada como completa")
+            print(f"[OK] Tarefa {task_id} marcada como completa")
             print()
-            print("⏭️  Próxima execução em 1 hora")
+            print("[NEXT] Proxima execucao em 1 hora")
             return 0
         else:
-            print(f"❌ Erro ao executar: {result.stderr}")
+            print(f"[ERROR] Erro ao executar: {result.stderr}")
             return 1
 
     except subprocess.TimeoutExpired:
-        print("⏰ Timeout na execução (>10 min). Tentando novamente na próxima hora.")
+        print("[TIMEOUT] Execucao acima de 10 min. Tentando novamente na proxima hora.")
         return 1
     except Exception as e:
-        print(f"❌ Erro: {e}")
+        print(f"[ERROR] Erro: {e}")
         return 1
 
 if __name__ == "__main__":
