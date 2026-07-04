@@ -6,19 +6,19 @@
       "id": "task-001",
       "title": "Melhorar pagina de produto",
       "description": "Adicionar breadcrumb de navegacao, melhorar SEO das paginas de produto com meta tags dinamicas baseadas no nome e categoria do produto",
-      "status": "pending",
+      "status": "completed",
       "priority": "high",
       "created_at": "2026-07-03T00:00:00Z",
-      "completed_at": null
+      "completed_at": "2026-07-04T04:26:42.092039Z"
     },
     {
       "id": "task-002",
       "title": "Otimizar performance do catalogo",
       "description": "Adicionar lazy loading nas imagens do catalogo de produtos, implementar paginacao eficiente e cache de consultas ao banco de dados",
-      "status": "pending",
+      "status": "completed",
       "priority": "high",
       "created_at": "2026-07-03T00:00:00Z",
-      "completed_at": null
+      "completed_at": "2026-07-04T04:27:50.917242Z"
     },
     {
       "id": "task-003",
