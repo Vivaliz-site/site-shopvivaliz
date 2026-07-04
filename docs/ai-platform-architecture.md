@@ -13,6 +13,7 @@
 3. **Execution Engine**
    - Secure API gateway
    - Rate limiting for Olist/Tiny integrations
+   - Model selection for cost optimization (e.g., `gemini-2.5-flash`, `claude-3-haiku-20240307`)
    - Audit logging for all operations
 
 4. **Workspace Agent Bootstrap**
@@ -20,7 +21,12 @@
    - `config/roo-autonomous-settings.json` auto-imports execution defaults
    - Auto-approval is enabled for routine engineering operations with command denylist protection
 
-5. **Canonical Task Queue**
+5. **Tri-Environment Sync**
+   - `scripts/tri-environment-sync.js` is the canonical runtime for PC, cloud/GitHub and Oracle
+   - `config/tri-environment-sync.json` defines branch policy, environment roles and pull/push boundaries
+   - `logs/tri-environment-sync.json` and `logs/autonomous-sync.json` expose the last runtime status for monitor and report endpoints
+
+6. **Canonical Task Queue**
    - `tasks-queue.json` is the source of truth for autonomous work
    - `logs/tasks-queue.json` is mirrored for legacy scripts and reports
    - External-access tasks can be auto-blocked when required credentials are absent
@@ -44,4 +50,5 @@
 - Financial rules enforced at orchestration level
 - Guardian of Price protection maintained
 - All changes go through Git workflow
+- Synchronization must never push directly to `main`; tri-environment sync may only pull, or push approved branches
 - Roo autonomous mode must keep write protection for workspace control files and deny direct push to `main`

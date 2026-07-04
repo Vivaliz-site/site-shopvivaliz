@@ -20,7 +20,7 @@ Este repositorio usa agentes especializados para acelerar lancamento, QA, automa
 Gera ZIP cumulativo, controla versao, release notes, migrations e validacoes finais.
 
 ### QA / Self-test
-Executa lint, integridade ZIP, endpoints, webhooks, botao Comprar, CEP, checkout, frete e versao aplicada.
+Executa lint, integridade ZIP, endpoints, webhooks, botao Comprar, CEP, checkout, frete e versao aplicada. Também utiliza [`scripts/log-health-checker.py`](scripts/log-health-checker.py) para auditoria de saúde dos logs, e [`scripts/log-simulator.py`](scripts/log-simulator.py) para gerar dados de log para testes. Além disso, a auditoria verifica a presença de workflows críticos como `.github/workflows/24-7-continuous-agent.yml` e `.github/workflows/parallel-trio-executor.yml`, e seus placeholders caso estejam ausentes, para indicar a necessidade de restauração dos workflows reais. Também verifica a presença do placeholder [`api/monitor/api.php`](api/monitor/api.php) e a necessidade de restaurar a funcionalidade real do monitoramento.
 
 ### Olist / Tiny
 Cuida de OAuth, refresh token, paginacao, produtos, imagens, estoque, peso e dimensoes.
@@ -56,15 +56,20 @@ Executa testes automatizados da automacao Olist em modo teste. Deve priorizar `s
 
 ### Config Validator
 Confere caminhos obrigatorios, extensoes, mapeamentos, planilhas, imagens geradas e dependencias Python. Deve falhar cedo se faltar `mapeamento_olist_ambientadas.xlsx`, pasta `imagens_ambientadas`, Chrome/Selenium ou arquivos de configuracao local.
+**Nota:** Foi identificado que o arquivo `mapeamento_olist_ambientadas.xlsx` e a pasta `imagens_ambientadas` estao ausentes, sendo criticos para a automacao Olist/Tiny completa.
 
 ### Artifact Builder
-Gera ZIPs cumulativos da automacao, README, changelog, `.gitignore`, BATs de execucao e relatorios de validacao. Nunca inclui credenciais, caches, screenshots sensiveis, perfis Chrome, cookies ou arquivos de sessao.
+Gera ZIPs cumulativos da automacao, README, changelog, `.gitignore`, BATs de execucao e relatorios de validacao. Inclui um script local [`scripts/local-artifact-builder.py`](scripts/local-artifact-builder.py) para geracao manual de ZIPs. Nunca inclui credenciais, caches, screenshots sensiveis, perfis Chrome, cookies ou arquivos de sessao.
 
 ### Recovery Manager
 Valida retomada apos interrupcao. Deve conferir relatorios, status por SKU, arquivos ja processados e permitir continuar sem repetir itens OK, mantendo log de erros e pendencias.
 
 ### Olist Image Position Auditor
 Audita a regra de imagens no ERP: manter imagens 1 a 5, inserir Hero Shot na posicao correta, limitar resultado final a ate 6 imagens quando houver 5 ou mais imagens, e remover imagens excedentes das posicoes 7, 8, 9 em diante.
+
+
+### Criação de Testes
+São fornecidos exemplos de testes unitários em [`tests/`](tests/) para PHP (usando PHPUnit) e Python (usando `unittest`), para serem utilizados como base para novas funcionalidades.
 
 ## Agentes reais v9.2.84 no repositorio
 

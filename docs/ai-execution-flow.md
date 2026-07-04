@@ -20,7 +20,19 @@
 4. **Completion**
    - Status update to orchestrator
    - Compliance check
+   - Result verification (including unit and integration tests)
    - Audit trail finalization
+
+5. **Tri-Environment Synchronization**
+   - `scripts/tri-environment-sync.js` compares PC, cloud/GitHub and Oracle state
+   - Auto-pull is allowed when the working tree is clean
+   - Auto-push is blocked on protected branches and only allowed on approved feature-style branches
+   - Sync state is surfaced in `logs/tri-environment-sync.json`, `api/agent/autonomous-report.php` and `api/monitor/api.php`
+
+## Phase Mode
+- Autonomous growth work may be grouped into phased execution for safer progression.
+- `scripts/run-autonomy-phases.py` classifies growth tasks as local-ready, CI-ready with repo secrets, or blocked by approval/manual access.
+- Phase reports are written to `logs/autonomy-phase-report.json` and `logs/autonomy-phase-report.md`.
 
 ## Financial Safeguards
 - All price-related operations prohibited
@@ -35,6 +47,8 @@
   - Agent ID
   - Input/Output
   - Financial context
+- Autonomous cycles must also emit a structured event log in `logs/autonomous-cycle-events.jsonl` containing changed files, executed tests, chosen next task and selection reason.
+- Tri-environment sync must never push directly to `main`; any local commit drift must be reported before synchronization continues.
 - Audit trail stored in immutable format
 - Compliance verification required for all changes
 - Canonical autonomous queue lives in `tasks-queue.json` and is mirrored to `logs/tasks-queue.json` for backward compatibility

@@ -30,6 +30,8 @@ Sempre registrar:
 - resultado obtido
 - riscos identificados
 - proxima tarefa sugerida
+- rastro estruturado do ciclo em `logs/autonomous-cycle-events.jsonl`
+- motivo da escolha da proxima tarefa
 
 ## Canais Canonicos
 - Arquitetura: `docs/ai-platform-architecture.md`
@@ -38,6 +40,7 @@ Sempre registrar:
 - Roadmap por fases: `docs/ai-phase-execution.md`
 - Backlog canonico: `tasks-queue.json`
 - Prioridades do Diretor: `config/ai-orchestrator.json` e `api/orchestrator/director.php`
+- Sincronizacao triambiente: `config/tri-environment-sync.json` e `scripts/tri-environment-sync.js`
 
 ## Aplicacao
 - Esta diretriz deve ser tratada como instrucao compartilhada para todos os agentes que atuam no repositorio.
