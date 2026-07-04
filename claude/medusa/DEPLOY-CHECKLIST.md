@@ -735,6 +735,32 @@ sessão notificou o usuário diretamente por push notification nesta rodada,
 reiterando a recomendação de pausar o agendamento automático externo desta
 tarefa até que ao menos um blocker seja resolvido por ação humana.
 
+**Rodada 30 (2026-07-04, revalidação leve, execução automática agendada):**
+container efêmero novo estava novamente com HEAD destacado apontando para um
+`origin/main` local desatualizado (mesmo artefato de clone raso já visto em
+rodadas anteriores) — `git fetch origin main` + `git checkout -B main
+origin/main` resolveu sem perda de commits. `git log --oneline
+2ce16fa..970dbd0 -- claude/medusa claude/api` confirma **diff vazio**:
+nenhuma mudança em `claude/medusa/` ou `claude/api/` desde a rodada 29 (os
+únicos commits novos no repositório, `3a1a1a7`/`970dbd0`, adicionam um
+slider de banners e seção de categorias na home do site PHP legado — fora do
+escopo Medusa). PR aberta (`#89`) também fora do escopo (governança de
+agentes AI via `AGENTS.md`). Checks leves repetidos: sem marcadores de
+conflito, `package.json` válido em backend e storefront, `php -l` sem erro
+em todos os `.php` sob `claude/api/`, nenhum `.env`/`.env.local` de produção
+no repositório, teste de rede de saída para `api.supabase.com` continua
+bloqueado pelo proxy do ambiente (`CONNECT tunnel failed, response 403`), e
+o GitHub MCP desta sessão revalidado ainda sem nenhum tool de gestão de
+secrets do Actions (apenas `actions_get`/`actions_list`/`actions_run_trigger`,
+issues, PRs, arquivos, branches, secret scanning). **Nenhum bug novo
+encontrado.** Os mesmos 5 blockers de ação humana continuam inalterados há
+**30 rodadas consecutivas** (10ª rodada leve seguida sem progresso). O
+usuário já havia sido notificado por push notification na rodada 29; como
+nada mudou desde então, **nenhuma nova notificação foi enviada** nesta
+rodada, para evitar repetir um alerta sem sinal novo. Recomendação mantida:
+pausar o agendamento automático externo desta tarefa até que ao menos um dos
+5 blockers seja resolvido por ação humana.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
