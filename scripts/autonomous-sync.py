@@ -53,10 +53,12 @@ def run_js_sync():
 
         if result.returncode == 0:
             logger.info("JS sync runner completed successfully")
-            return True
+        elif result.returncode == 1:
+            logger.warning("JS sync runner completed with warning status")
+        else:
+            logger.error(f"JS sync runner completed with critical status code {result.returncode}")
 
-        logger.warning(f"JS sync runner failed with code {result.returncode}")
-        return False
+        return True
     except Exception as e:
         logger.error(f"JS sync runner error: {e}")
         return False
