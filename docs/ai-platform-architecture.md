@@ -8,6 +8,7 @@
 2. **Orchestrator**
    - config/ai-orchestrator.json defines workflow rules
    - Enforces financial boundaries and compliance
+   - Models the autonomous flow as `Sensor -> Director -> Executor -> Validator`
 
 3. **Execution Engine**
    - Secure API gateway
@@ -23,6 +24,7 @@
    - `tasks-queue.json` is the source of truth for autonomous work
    - `logs/tasks-queue.json` is mirrored for legacy scripts and reports
    - External-access tasks can be auto-blocked when required credentials are absent
+   - Budget-sensitive tasks such as Google Ads are auto-blocked until human approval exists
 
 ## Execution Flow
 1. Trigger -> Agent Selection
@@ -30,6 +32,12 @@
 3. Autonomous Execution
 4. Result Verification
 5. Audit Trail Creation
+
+## Growth Governance
+- Revenue-oriented prioritization focuses on conversion impact, SEO gaps and catalog readiness
+- Learning loop uses queue history, generated reports and catalog metrics as feedback
+- SEO, content, performance, dynamic product pages and catalog sync can run autonomously
+- Paid media execution remains approval-gated even when technical preparation is automated
 
 ## Security Compliance
 - No direct price manipulation
