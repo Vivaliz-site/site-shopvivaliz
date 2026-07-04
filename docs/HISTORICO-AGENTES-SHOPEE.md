@@ -199,6 +199,7 @@ Base URL da API: `https://api.tiny.com.br/public-api/v3`
 | 2026-07-03 (~04h UTC) | `main` (rotina agendada, sem branch dedicada) | 3º ciclo consecutivo (agora no dia seguinte): bloqueador ainda presente, ~33h após a última extração real. `optimize-shopee-listings.yml` gerou `listings/optimization-report-20260703-041044.json` com `status: error`, `"Autenticação Tiny falhou (401)."`, `total_products: 0`. Nenhuma otimização aplicada. Notificação enviada ao usuário (push) pedindo renovação manual do token, já que os 2 ciclos anteriores não resolveram o bloqueador. |
 | 2026-07-03 (~14h UTC) | `main` (rotina agendada, sem branch dedicada) | 4º ciclo consecutivo: mesmo bloqueador (token Tiny), sem renovação desde a notificação do ciclo anterior. `fetch-shopee-listings.yml` run (10:16:18Z) e `optimize-shopee-listings.yml` run (11:53:23Z) terminaram em `failure` sem gerar novo relatório — causa raiz distinta: corrida de commit concorrente entre workflows autônomos no `main` (mesma classe de bug corrigida em `a3690a2` para o CI EHA), não um novo problema de dados. Nenhuma otimização aplicada; nenhum push duplicado enviado ao usuário por não haver fato novo além do já reportado no ciclo das 04h. |
 | 2026-07-03 (~19h UTC) | `main` (rotina agendada, sem branch dedicada) | 5º ciclo consecutivo: bloqueador do token Tiny inalterado, agora ~89h desde a última extração real. Novo run de `fetch-shopee-listings.yml` (2026-07-03T17:03:16Z) também terminou em `failure` sem commitar relatório (mesmo padrão dos dois runs do ciclo das 14h). A teoria de "corrida de commit concorrente" do ciclo anterior não pôde ser confirmada nem descartada: os logs desses runs já expiraram no GitHub Actions (download retorna 404) e o domínio de blob storage dos logs está fora da allowlist de rede deste ambiente. Comparação de `run_duration_ms` entre runs (falhas: ~4s; sucessos/erros com relatório: ~19-23s) é consistente com falha rápida antes de qualquer tentativa de commit, mas não prova a causa exata. Nenhuma otimização aplicada — sem dados reais de produto não há base para decisão orientada a dados. Nenhuma notificação push enviada: nenhum fato novo que mude a ação recomendada (renovar `TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN`), já comunicada nos ciclos anteriores. |
+| 2026-07-04 (~01h UTC) | `main` (rotina agendada, sem branch dedicada) | 6º ciclo consecutivo: mudança de contexto relevante desde o ciclo anterior. Em 2026-07-03T20:06:19Z (commit `71bb308`, autor `fredmourao-ai`), o próprio usuário desabilitou 48 workflows para recuperar quota do GitHub Actions — decisão deliberada, não uma falha —, incluindo `fetch-shopee-listings.yml` e `optimize-shopee-listings.yml`, agora `on: workflow_dispatch` apenas, com o job original substituído por um `echo` de pausa. Isso significa que, mesmo após renovar o `TINY_ACCESS_TOKEN`, os dois workflows do pipeline Shopee não voltam a rodar sozinhos (perderam o trigger `schedule` e a lógica real) — é preciso reativá-los manualmente além de renovar o token. Nenhum `listings/shopee-listings-*.json` ou `optimization-report-*.json` novo desde `20260703-041044`; nenhuma credencial Tiny/Olist disponível neste ambiente de sessão para tentar extração direta fora do workflow. Nenhuma otimização aplicada. Notificação push enviada neste ciclo por haver fato novo e acionável: além do bloqueador de token (agora ~4 dias sem renovação), o pipeline em si foi pausado, e a rotina completa 6 ciclos (~30h) sem produzir nenhum valor real — recomenda-se ao usuário decidir entre reativar o pipeline (token + workflows) ou pausar esta rotina de otimização até lá. |
 
 ---
 
@@ -320,3 +321,37 @@ sem extração real (última: `shopee-listings-20260630-113006.json`, 2026-06-30
   mesma já comunicada (renovar `TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN` no ERP Tiny e no
   GitHub Secrets); não há fato novo que mude essa recomendação, apenas mais uma confirmação
   do mesmo bloqueador.
+
+### 9.5 Atualização — ciclo de 2026-07-04 ~01h UTC
+
+Sexto ciclo consecutivo. Novidade real desde o ciclo anterior: em `2026-07-03T20:06:19Z`
+(commit `71bb308fix: desabilita 48 workflows redundantes para recuperar quota GitHub Actions`,
+autor `fredmourao-ai`, ou seja o próprio usuário, não um agente autônomo), 48 workflows foram
+convertidos para `on: workflow_dispatch` apenas — entre eles `fetch-shopee-listings.yml` e
+`optimize-shopee-listings.yml`, cujo job foi substituído por um único `echo "Workflow pausado
+para economizar quota Actions."`. Mantidos ativos (fora do escopo deste agente): apenas
+`ci-autonomo-continuo.yml`, `deploy.yml` e `shopvivaliz-qa.yml`.
+
+Efeito prático para este agente de otimização:
+
+- O bloqueador de dados (token Tiny expirado desde ~2026-06-30, ~96h sem extração real) segue
+  sem renovação — nenhum secret novo, nenhum arquivo `listings/shopee-listings-*.json` ou
+  `optimization-report-*.json` desde `20260703-041044`.
+- Mesmo que o token fosse renovado agora, os dois workflows do pipeline (`fetch-shopee-listings.yml`,
+  `optimize-shopee-listings.yml`) não voltariam a rodar automaticamente: perderam o trigger
+  `schedule` e a lógica real foi substituída pelo `echo` de pausa. Reativação exige duas ações
+  manuais distintas: (1) renovar `TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN`; (2) reverter os dois
+  workflows ao conteúdo anterior a `71bb308` (ou recriá-los) e restaurar o trigger `schedule`.
+- Este ambiente de sessão (Claude Code agendado) não tem nenhuma credencial `TINY_*`/`OLIST_*`
+  configurada, então não há como tentar uma extração direta fora do workflow para contornar a
+  pausa.
+- Nenhuma otimização de título/descrição/imagem/atributo/preço foi aplicada — sem dados reais
+  de produto não há base para decisão orientada a dados, e não é escopo deste agente reverter
+  uma decisão de quota tomada pelo próprio usuário.
+
+**Notificação push enviada neste ciclo:** diferente dos ciclos 4 e 5 (sem fato novo), este
+ciclo tem duas informações acionáveis novas: (a) o pipeline foi pausado deliberadamente junto
+com outros 47 workflows, então o usuário precisa saber que reativá-lo requer mais do que só
+renovar o token; (b) a rotina de otimização já soma 6 ciclos (~30h de tentativas a cada 6h)
+sem produzir nenhuma otimização real, o que sugere considerar pausar esta rotina agendada
+específica até que o bloqueador seja resolvido, evitando ciclos vazios repetidos.
