@@ -157,111 +157,25 @@ $featuredProducts = sv_home_products();
         </div>
     </nav>
 
-    <!-- Banner Slider -->
-    <section class="banner-slider" aria-label="Promoções em destaque">
-        <div class="slider-track" id="sliderTrack">
-            <!-- Slide 1 -->
-            <div class="slide slide-1">
-                <div class="container">
-                    <div class="slide-content">
-                        <p class="slide-eyebrow">🛍️ Loja oficial Vivaliz</p>
-                        <h1>Produtos que <span>você precisa</span>,<br>entrega para todo o Brasil</h1>
-                        <p>Rodízios, ferragens, utilidades domésticas, garden e muito mais — <?= count($featuredProducts) > 0 ? '197 produtos' : 'catálogo completo' ?> com qualidade garantida.</p>
-                        <div class="slide-actions">
-                            <a href="/catalogo" class="btn-slide btn-slide-primary">Ver catálogo</a>
-                            <a href="/carrinho.php" class="btn-slide btn-slide-ghost">🛒 Carrinho</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <!-- Slide 2 -->
-            <div class="slide slide-2">
-                <div class="container">
-                    <div class="slide-content">
-                        <p class="slide-eyebrow">🔩 Ferragens & Rodízios</p>
-                        <h1>Qualidade industrial<br><span>para sua casa</span></h1>
-                        <p>Rodízios de alta durabilidade, trilhos, dobradiças e muito mais. Envio imediato para todo Brasil.</p>
-                        <div class="slide-actions">
-                            <a href="/catalogo?categoria=Rodizios" class="btn-slide btn-slide-primary">Ver rodízios</a>
-                            <a href="/catalogo?categoria=Ferragens" class="btn-slide btn-slide-ghost">Ver ferragens</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <!-- Slide 3 -->
-            <div class="slide slide-3">
-                <div class="container">
-                    <div class="slide-content">
-                        <p class="slide-eyebrow">⚡ Pagamento instantâneo</p>
-                        <h1>PIX com aprovação<br><span>imediata</span></h1>
-                        <p>Pague com PIX e tenha aprovação na hora. Cartão em até 12x e boleto bancário disponíveis.</p>
-                        <div class="slide-actions">
-                            <a href="/catalogo" class="btn-slide btn-slide-primary">Comprar agora</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- Dots -->
-        <div class="slider-dots" role="tablist" aria-label="Slides">
-            <button class="slider-dot active" data-slide="0" role="tab" aria-selected="true" aria-label="Slide 1"></button>
-            <button class="slider-dot" data-slide="1" role="tab" aria-selected="false" aria-label="Slide 2"></button>
-            <button class="slider-dot" data-slide="2" role="tab" aria-selected="false" aria-label="Slide 3"></button>
-        </div>
-        <!-- Arrows -->
-        <button class="slider-arrow slider-prev" aria-label="Slide anterior">&#8249;</button>
-        <button class="slider-arrow slider-next" aria-label="Próximo slide">&#8250;</button>
-    </section>
-
-    <!-- Categorias -->
-    <section class="categories-section">
-        <div class="container">
-            <div class="section-heading">
-                <div>
-                    <h2>Compre por categoria</h2>
-                    <p class="muted">Encontre o que precisa rapidamente.</p>
-                </div>
-                <a href="/catalogo" class="btn btn-secondary">Ver tudo</a>
-            </div>
-            <div class="categories-grid">
-                <a href="/catalogo?categoria=Rodizios" class="category-card">
-                    <span class="cat-icon">🔩</span>
-                    <strong>Rodízios</strong>
-                    <span class="cat-sub">Industrial & doméstico</span>
-                </a>
-                <a href="/catalogo?categoria=Ferragens" class="category-card">
-                    <span class="cat-icon">🔧</span>
-                    <strong>Ferragens</strong>
-                    <span class="cat-sub">Trilhos, dobradiças</span>
-                </a>
-                <a href="/catalogo?categoria=Utilidades" class="category-card">
-                    <span class="cat-icon">🏠</span>
-                    <strong>Utilidades</strong>
-                    <span class="cat-sub">Casa & cozinha</span>
-                </a>
-                <a href="/catalogo?categoria=Garden" class="category-card">
-                    <span class="cat-icon">🌱</span>
-                    <strong>Garden</strong>
-                    <span class="cat-sub">Jardim & exterior</span>
-                </a>
-                <a href="/catalogo?categoria=Organizacao" class="category-card">
-                    <span class="cat-icon">📦</span>
-                    <strong>Organização</strong>
-                    <span class="cat-sub">Caixas & suportes</span>
-                </a>
-                <a href="/catalogo" class="category-card cat-all">
-                    <span class="cat-icon">🛍️</span>
-                    <strong>Ver todos</strong>
-                    <span class="cat-sub">197 produtos</span>
-                </a>
-            </div>
-        </div>
-    </section>
-
-    <!-- Hero Section (confiança) -->
-    <section class="hero hero-trust-bar">
+    <!-- Hero Section -->
+    <section class="hero">
         <div class="container">
             <div class="hero-content">
+                <p class="eyebrow" style="color:#7dd3fc;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin:0 0 16px">
+                    🛍️ Loja oficial Vivaliz
+                </p>
+                <h1>Produtos que <span>você precisa</span>,<br>entrega para todo o Brasil</h1>
+                <p>Rodízios, ferragens, utilidades domésticas, garden e muito mais — <?= count($featuredProducts) > 0 ? '197 produtos' : 'catálogo completo' ?> com qualidade garantida.</p>
+
+                <div class="cta-buttons" style="margin-top:28px">
+                    <a href="/catalogo" class="btn btn-primary" style="background:#fff;color:#1d4ed8;font-size:15px;padding:14px 24px">
+                        Ver catálogo completo
+                    </a>
+                    <a href="/carrinho.php" class="btn" style="background:rgba(255,255,255,0.15);color:#fff;border:1.5px solid rgba(255,255,255,0.35);font-size:15px;padding:14px 24px">
+                        🛒 Meu Carrinho
+                    </a>
+                </div>
+
                 <div class="hero-trust">
                     <div class="hero-trust-item"><span>🔒</span> Compra segura</div>
                     <div class="hero-trust-item"><span>🚚</span> Entrega para todo Brasil</div>
@@ -369,55 +283,7 @@ $featuredProducts = sv_home_products();
         });
     })();
     </script>
-    <script>
-    // Banner Slider
-    (function(){
-        var track = document.getElementById('sliderTrack');
-        if (!track) return;
-        var dots  = document.querySelectorAll('.slider-dot');
-        var total = dots.length;
-        var cur   = 0;
-        var timer;
-
-        function go(idx) {
-            cur = (idx + total) % total;
-            track.style.transform = 'translateX(-' + (cur * 100) + '%)';
-            dots.forEach(function(d, i) {
-                d.classList.toggle('active', i === cur);
-                d.setAttribute('aria-selected', i === cur ? 'true' : 'false');
-            });
-        }
-
-        function next() { go(cur + 1); }
-        function prev() { go(cur - 1); }
-
-        function resetTimer() {
-            clearInterval(timer);
-            timer = setInterval(next, 5000);
-        }
-
-        dots.forEach(function(d) {
-            d.addEventListener('click', function() {
-                go(parseInt(this.getAttribute('data-slide'), 10));
-                resetTimer();
-            });
-        });
-
-        var prevBtn = document.querySelector('.slider-prev');
-        var nextBtn = document.querySelector('.slider-next');
-        if (prevBtn) prevBtn.addEventListener('click', function(){ prev(); resetTimer(); });
-        if (nextBtn) nextBtn.addEventListener('click', function(){ next(); resetTimer(); });
-
-        // Touch swipe
-        var startX = 0;
-        track.addEventListener('touchstart', function(e){ startX = e.touches[0].clientX; }, {passive:true});
-        track.addEventListener('touchend', function(e){
-            var dx = e.changedTouches[0].clientX - startX;
-            if (Math.abs(dx) > 40) { dx < 0 ? next() : prev(); resetTimer(); }
-        }, {passive:true});
-
-        resetTimer();
-    })();
-    </script>
+    <script src="/autodev/client.js"></script>
+    <script src="/js/catalog.js"></script>
 </body>
 </html>
