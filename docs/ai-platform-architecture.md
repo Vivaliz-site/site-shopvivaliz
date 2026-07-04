@@ -19,6 +19,11 @@
    - `config/roo-autonomous-settings.json` auto-imports execution defaults
    - Auto-approval is enabled for routine engineering operations with command denylist protection
 
+5. **Canonical Task Queue**
+   - `tasks-queue.json` is the source of truth for autonomous work
+   - `logs/tasks-queue.json` is mirrored for legacy scripts and reports
+   - External-access tasks can be auto-blocked when required credentials are absent
+
 ## Execution Flow
 1. Trigger -> Agent Selection
 2. Context Validation
