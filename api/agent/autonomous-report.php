@@ -22,6 +22,7 @@ function svar_file_age(string $rel): ?int {
 $catalog    = svar_json('api/catalog/fallback-products.json');
 $ranking    = svar_json('autodev/data/product_ranking.json');
 $demand     = svar_json('autodev/data/demand_forecast.json');
+$roiReport  = svar_json('logs/roi-engine-report.json');
 
 $totalProducts = count($catalog);
 $noImage = 0;
@@ -57,6 +58,14 @@ echo json_encode([
         'generated_at'=> $demand['generated_at'] ?? null,
         'count'       => count($demand['products'] ?? []),
         'file_age_s'  => svar_file_age('autodev/data/demand_forecast.json'),
+    ],
+    'roi' => [
+        'available'        => !empty($roiReport),
+        'generated_at'     => $roiReport['generated_at'] ?? null,
+        'director_basis'   => $roiReport['director_basis'] ?? null,
+        'products_loaded'  => $roiReport['summary']['products_loaded'] ?? null,
+        'top_opportunities'=> array_slice($roiReport['top_opportunities'] ?? $roiReport['priorities'] ?? [], 0, 5),
+        'task_recommendations' => array_slice($roiReport['task_recommendations'] ?? [], 0, 5),
     ],
     'integrations' => [
         'ml_oauth_connected' => is_array($mlTokenData) && !empty($mlTokenData['access_token']),
