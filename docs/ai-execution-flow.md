@@ -29,9 +29,15 @@
    - Auto-push is blocked on protected branches and only allowed on approved feature-style branches
    - Sync state is surfaced in `logs/tri-environment-sync.json`, `api/agent/autonomous-report.php` and `api/monitor/api.php`
 
+6. **Sales Flow Priority**
+   - `sales_flow` is the highest revenue dimension in the autonomous selector
+   - ROI top opportunities feed the monitor so agents can keep working on conversion, SEO, marketplace and product-page tasks first
+   - Credentials missing from the runtime are surfaced explicitly so the flow does not stall silently
+
 ## Phase Mode
 - Autonomous growth work may be grouped into phased execution for safer progression.
 - `scripts/run-autonomy-phases.py` classifies growth tasks as local-ready, CI-ready with repo secrets, or blocked by approval/manual access.
+- Tasks with `phase-*` metadata or sales-oriented tags are included in the phase report so new revenue work does not stall in the selector.
 - Phase reports are written to `logs/autonomy-phase-report.json` and `logs/autonomy-phase-report.md`.
 
 ## Financial Safeguards
