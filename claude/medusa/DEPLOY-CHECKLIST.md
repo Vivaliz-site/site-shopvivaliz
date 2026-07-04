@@ -715,6 +715,26 @@ humano) e colar a `DATABASE_URL` em `apps/backend/.env` — nenhuma automação
 consegue fazer esse passo por exigir aceite de termos/login interativo fora
 deste sandbox.
 
+**Rodada 29 (2026-07-04, revalidação leve, execução automática agendada):**
+esta sessão havia registrado sua própria revalidação leve como "rodada 28"
+antes de perceber, ao rebasear em `origin/main`, que uma sessão concorrente
+já havia empurrado o commit `64d63ec` com o mesmo rótulo (mesmo diagnóstico:
+diff vazio, blockers inalterados) — renumerada para rodada 29 para evitar
+colisão, seguindo a mesma convenção das rodadas 21/22. `git diff
+64d63ec..HEAD -- claude/medusa claude/api` confirma **diff vazio**: nenhuma
+mudança em `claude/medusa/` ou `claude/api/` desde a rodada 28. Repetidos
+apenas os checks leves: nenhum `.env`/`.env.local` de produção no
+repositório, teste de rede de saída para `api.supabase.com` continua
+bloqueado pelo proxy do ambiente (`CONNECT tunnel failed, response 403`), e
+o GitHub MCP desta sessão continua sem nenhum tool de gestão de secrets do
+Actions. **Nenhum bug novo encontrado.** Os mesmos 5 blockers de ação
+humana continuam inalterados há **29 rodadas consecutivas** (9ª rodada leve
+seguida sem progresso, incluindo esta e a rodada 28 concorrente). Dado o
+número de repetições sem nenhum progresso em nenhum dos 5 blockers, esta
+sessão notificou o usuário diretamente por push notification nesta rodada,
+reiterando a recomendação de pausar o agendamento automático externo desta
+tarefa até que ao menos um blocker seja resolvido por ação humana.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
