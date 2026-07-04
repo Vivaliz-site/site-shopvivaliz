@@ -391,7 +391,7 @@
       "title": "Executar otimizações autônomas para vendas",
       "description": "Priorizar melhorias de conversão em página de produto, catálogo, checkout e captação de leads, sem alterar preços, descontos, fretes ou meios de pagamento.",
       "priority": "high",
-      "status": "pending",
+      "status": "in_progress",
       "tags": [
         "cro",
         "conversion",
@@ -401,13 +401,16 @@
       "id": "task-042",
       "created_at": "2026-07-04T04:52:44.793293Z",
       "queue_rank": 11,
-      "phase": "phase-2-revenue"
+      "phase": "phase-2-revenue",
+      "selected_at": "2026-07-04T05:20:58.996116Z",
+      "selected_by": "autonomous-continuous-cycle",
+      "selection_reason": "phase=phase-2-revenue; readiness=ready_local; queue_rank=11; director_rank=0"
     },
     {
       "title": "Conectar catálogo com Shopee sem impacto em preço",
       "description": "Validar integração Shopee existente, sincronizar produtos e mídia sem modificar preço, usando credenciais oficiais e rotina segura de marketplace.",
       "priority": "high",
-      "status": "pending",
+      "status": "blocked_missing_env",
       "tags": [
         "marketplace",
         "shopee",
@@ -423,13 +426,15 @@
       "id": "task-043",
       "created_at": "2026-07-04T04:52:44.793293Z",
       "queue_rank": 12,
-      "phase": "phase-3-marketplaces"
+      "phase": "phase-3-marketplaces",
+      "blocked_at": "2026-07-04T05:21:08.088163Z",
+      "blocked_reason": "missing_env:SHOPEE_PARTNER_ID,SHOPEE_PARTNER_KEY,SHOPEE_SHOP_ID,SHOPEE_REFRESH_TOKEN"
     },
     {
       "title": "Conectar catálogo com Mercado Livre sem impacto em preço",
       "description": "Validar OAuth e catálogo do Mercado Livre, publicar ou sincronizar anúncios sem alterar valores de venda, mantendo o Guardião de Preço intacto.",
       "priority": "high",
-      "status": "pending",
+      "status": "blocked_missing_env",
       "tags": [
         "marketplace",
         "mercado-livre",
@@ -444,13 +449,15 @@
       "id": "task-044",
       "created_at": "2026-07-04T04:52:44.793293Z",
       "queue_rank": 13,
-      "phase": "phase-3-marketplaces"
+      "phase": "phase-3-marketplaces",
+      "blocked_at": "2026-07-04T05:21:08.088163Z",
+      "blocked_reason": "missing_env:ML_CLIENT_ID,ML_CLIENT_SECRET,ML_REDIRECT_URI"
     },
     {
       "title": "Preparar stack de Google Ads para automação",
       "description": "Preparar base técnica para campanhas, conversões e landing pages, com validação de credenciais e rastreamento, sem alterar regras financeiras do checkout.",
       "priority": "medium",
-      "status": "pending",
+      "status": "blocked_human_approval_required",
       "tags": [
         "ads",
         "google-ads",
@@ -467,13 +474,15 @@
       "queue_rank": 14,
       "requires_human_approval": true,
       "approval_scope": "ads_budget_approval",
-      "phase": "phase-4-approval-gated"
+      "phase": "phase-4-approval-gated",
+      "blocked_at": "2026-07-04T05:21:08.088163Z",
+      "blocked_reason": "ads_budget_approval"
     },
     {
       "title": "Ligar domínio público à camada web ativa",
       "description": "Conectar domínio final à superfície publicada, validando apontamentos e roteamento. Esta etapa exige acesso ao provedor DNS ou domínio já gerenciado pela plataforma.",
       "priority": "medium",
-      "status": "pending",
+      "status": "blocked_manual_access",
       "tags": [
         "domain",
         "dns",
@@ -484,7 +493,9 @@
       "id": "task-046",
       "created_at": "2026-07-04T04:52:44.794289Z",
       "queue_rank": 15,
-      "phase": "phase-4-approval-gated"
+      "phase": "phase-4-approval-gated",
+      "blocked_at": "2026-07-04T05:21:08.088163Z",
+      "blocked_reason": "requires_manual_access"
     },
     {
       "title": "Ativar SEO automático para catálogo e marketplace",
