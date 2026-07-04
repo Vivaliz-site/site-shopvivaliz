@@ -8,6 +8,7 @@
 - Backlog canonico: `tasks-queue.json`
 - Roadmap por fases: `docs/ai-phase-execution.md`
 - Prioridades do Diretor: `config/ai-orchestrator.json` e `api/orchestrator/director.php`
+- Diretriz global de coordenacao: `docs/ai-global-coordination.md`
 
 ## Regras de selecao
 - Nunca escolher tarefas que:
@@ -41,3 +42,12 @@
   - deploy dependente de autorizacao
   - conflito tecnico sem solucao segura
   - risco de indisponibilidade ou perda de dados
+
+## Reporte ao Diretor
+- Ao concluir cada atividade, registrar:
+  - tarefa concluida
+  - arquivos alterados
+  - testes executados
+  - resultado obtido
+  - riscos identificados
+  - proxima tarefa sugerida
