@@ -680,6 +680,41 @@ gerenciado por esta sessão via cron interno); a recomendação de pausar/
 espaçar a cadência precisa ser aplicada pelo usuário na configuração do
 agendador externo (workflow do GitHub Actions ou trigger equivalente).
 
+**Rodada 28 (2026-07-04, revalidação leve, execução automática agendada):**
+confirmado via `git log 3246f33..HEAD -- claude/medusa claude/api` (commit
+da rodada 27) que **nenhum arquivo sob `claude/medusa/` ou `claude/api/`
+mudou desde a rodada 27** (o único commit que casa com o pathspec é o
+próprio `234c17d`, a atualização de documentação da rodada 27); os 5 commits
+novos em `origin/main` desde então (`aa32b30`, `4d2a5bc`, `ca3e028`,
+`f0827e6`, `0ab672b` — guardião de política autônoma + painel Mercado
+Livre/endpoints products-optimizer) ficam fora do escopo Medusa/EHA-PHP.
+Repetidos apenas os checks leves: nenhum marcador de conflito de merge sob
+`claude/medusa/`/`claude/api/`, `package.json` válido (JSON) em backend e
+storefront, `php -l` sem erro em todos os `.php` sob `claude/api/`, `SETUP-
+OLIST-SECRETS.md` confirmado já com placeholders (`SEU_OLIST_CLIENT_ID_AQUI`)
+em vez de segredo real no conteúdo atual do arquivo — o vazamento documentado
+é histórico (git log), não no arquivo em `HEAD`, então o blocker de rotação/
+reescrita de histórico permanece o mesmo já descrito no `GITHUB_SECRETS_TODO.md`.
+Teste de rede de saída para `api.supabase.com` e `supabase.com` repetido:
+continua bloqueado pelo proxy do ambiente (`CONNECT tunnel failed, response
+403`, `recentRelayFailures` vazio em `/__agentproxy/status` — bloqueio é por
+`noProxy`/política do ambiente, não uma falha transitória de rede). `npm
+install`/build completo **não foi refeito** — sem sinal de mudança de código
+desde a rodada 22 (última revalidação completa), conforme recomendação já
+registrada nas rodadas 21/23/24/25/26/27. **Nenhum bug novo encontrado.** Os
+mesmos 5 blockers de ação humana continuam inalterados há **28 rodadas
+consecutivas** (7ª rodada leve seguida sem progresso). Reitera-se, pela
+sétima vez, a recomendação das rodadas 21/23/24/25/26/27: **pausar o
+agendamento automático desta tarefa** até que o usuário resolva ao menos um
+blocker. Dos 5, dois seguem sendo os mais acionáveis e não dependem de
+serviço externo algum: (a) rotacionar `OLIST_CLIENT_ID`/`OLIST_CLIENT_SECRET`
+vazados no histórico do git (`GITHUB_SECRETS_TODO.md`), pendente desde
+2026-07-01 (mais de uma semana); e (b) o usuário criar manualmente um
+Postgres gerenciado (Supabase/Neon/Railway, ~5 min, requer apenas login
+humano) e colar a `DATABASE_URL` em `apps/backend/.env` — nenhuma automação
+consegue fazer esse passo por exigir aceite de termos/login interativo fora
+deste sandbox.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
