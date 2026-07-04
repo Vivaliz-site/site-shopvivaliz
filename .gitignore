@@ -20,3 +20,6 @@ backups/
 claude-backup/
 __pycache__/
 scripts/.ftp-credentials
+.vercel/
+.env.local
+.env.*.local
