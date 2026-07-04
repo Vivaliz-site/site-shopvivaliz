@@ -27,3 +27,12 @@
 
 ## Uso no ciclo autonomo
 - O ciclo continuo pode usar esse baseline para decidir a proxima melhoria local de CRO quando `task-042` estiver em andamento.
+
+## Progresso aplicado
+- Checkout recebeu reforco explicito de compra sem cadastro obrigatorio.
+- Checkout recebeu CTA de suporte rapido por WhatsApp ao lado da conversao principal.
+- Pagina de produto recebeu bloco de confianca ao lado do CTA principal.
+- Pagina de produto recebeu caminho rapido para contato comercial antes da compra.
+- Catalogo recebeu faixa curta de confianca perto da grade de produtos.
+- Carrinho passou a informar explicitamente que o pedido fica salvo para continuar depois.
+- Home passou a expor CTA comercial explicito com mencao a WhatsApp acima da dobra.
