@@ -12,6 +12,7 @@ This repository implements the AI Engineering Platform core for site-shopvivaliz
 2. Autonomous Execution Flow
 3. Secure Configuration Management
 4. Compliance Monitoring
+5. Roo workspace bootstrap with project-scoped autonomous defaults
 
 ## Execution Protocol
 All operations must:
@@ -19,3 +20,8 @@ All operations must:
 - Maintain audit trails
 - Respect financial boundaries
 - Avoid direct production impacts
+
+## Roo Autonomous Workspace
+- Workspace startup imports `config/roo-autonomous-settings.json` through `.vscode/settings.json`
+- Auto-approval is enabled for read, write, execute, MCP and subtask flows inside the repo boundary
+- Destructive commands and any direct push to `main` stay explicitly denied

@@ -43,5 +43,67 @@
       "pagarme": "50_requests_per_minute"
     },
     "state_change_logging": "mandatory"
+  },
+  "autonomous_architecture": {
+    "sensor": {
+      "enabled": true,
+      "collects": ["catalog", "seo", "performance", "conversion", "marketplaces"]
+    },
+    "director": {
+      "enabled": true,
+      "strategy": "revenue_engine"
+    },
+    "executor": {
+      "enabled": true,
+      "allowed_domains": ["seo", "content", "product-pages", "performance", "catalog-sync"]
+    },
+    "validator": {
+      "enabled": true,
+      "checks": ["policy_guard", "audit_trail", "result_verification"]
+    }
+  },
+  "growth_policy": {
+    "revenue_engine": {
+      "enabled": true,
+      "prioritize_by": ["sales_flow", "conversion_impact", "seo_gap", "catalog_readiness"]
+    },
+    "learning_loop": {
+      "enabled": true,
+      "feedback_sources": ["task_queue", "reports", "catalog_metrics"]
+    },
+    "ads": {
+      "autonomous_execution": false,
+      "requires_human_approval": true,
+      "daily_budget_limit_source": "environment_or_manual_approval"
+    }
+  },
+  "director_global_coordination": {
+    "enabled": true,
+    "shared_agents": ["ChatGPT", "Roo", "Gemini", "Claude", "OtherActiveAgents"],
+    "continuous_operation": true,
+    "must_consult_before_next_task": ["tasks-queue.json", "docs/ai-phase-execution.md", "api/orchestrator/director.php"],
+    "must_finalize_each_task_with": [
+      "documentation_update",
+      "self_audit",
+      "audit_log",
+      "director_report"
+    ],
+    "director_report_fields": [
+      "completed_task",
+      "changed_files",
+      "tests_executed",
+      "result",
+      "risks",
+      "next_suggested_task"
+    ],
+    "forbidden_actions": [
+      "automatic_price_change",
+      "campaign_publish_without_human_approval",
+      "automatic_budget_increase",
+      "financial_actions",
+      "deploy_without_authorization",
+      "unsafe_change_without_auditability",
+      "remove_existing_functionality_without_validation"
+    ]
   }
 }

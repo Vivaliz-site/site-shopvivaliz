@@ -187,6 +187,7 @@ def check_recent_logs():
 
     log_files = [
         ('autonomous-sync.json', 'Last auto-sync'),
+        ('tri-environment-sync.json', 'Tri-environment sync'),
         ('autonomous-git-push.json', 'Last git-push'),
         ('autonomous-ftp-deploy.json', 'Last FTP deploy'),
     ]

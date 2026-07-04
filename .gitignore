@@ -20,3 +20,7 @@ backups/
 claude-backup/
 __pycache__/
 scripts/.ftp-credentials
+scripts/autonomous-cycle-log.json
+.vercel/
+.env.local
+.env.*.local

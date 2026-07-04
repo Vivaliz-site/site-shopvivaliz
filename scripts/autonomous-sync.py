@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Sincronização Autônoma Bidirecional - C:\\FRED <-> c:/user/site-shopvivaliz
-Executa a cada 2 minutos via Windows Task Scheduler
+Compatibilidade para a sincronização autônoma.
+
+O runner oficial agora é o JS tri-environment-sync.js, que mantém PC,
+nuvem/GitHub e Oracle sincronizados sem push direto para main.
 """
 import os
 import sys
@@ -24,6 +26,42 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+JS_SYNC_SCRIPT = Path("scripts/tri-environment-sync.js")
+
+def run_js_sync():
+    """Executar o runner JS oficial quando disponível."""
+    if not JS_SYNC_SCRIPT.exists():
+        return False
+
+    node = shutil.which("node") or shutil.which("node.exe")
+    if not node:
+        return False
+
+    try:
+        result = subprocess.run(
+            [node, str(JS_SYNC_SCRIPT)],
+            capture_output=True,
+            text=True,
+            cwd=CURRENT_DIR
+        )
+
+        if result.stdout:
+            print(result.stdout)
+        if result.stderr:
+            logger.warning(result.stderr.strip())
+
+        if result.returncode == 0:
+            logger.info("JS sync runner completed successfully")
+        elif result.returncode == 1:
+            logger.warning("JS sync runner completed with warning status")
+        else:
+            logger.error(f"JS sync runner completed with critical status code {result.returncode}")
+
+        return True
+    except Exception as e:
+        logger.error(f"JS sync runner error: {e}")
+        return False
 
 print("="*70)
 print("SINCRONIZACAO AUTONOMA BIDIRECIONAL v1.0")
@@ -210,6 +248,9 @@ def auto_commit_changes(changes):
         return False
 
 def main():
+    if run_js_sync():
+        return
+
     sync_report = {
         'timestamp': datetime.now().isoformat(),
         'status': 'completed',

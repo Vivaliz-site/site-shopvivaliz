@@ -43,6 +43,17 @@ header('Content-Type: text/html; charset=UTF-8');
         .btn-remove:hover { text-decoration: underline; }
         .summary-row { display: flex; justify-content: space-between; font-size: 14px; margin: 10px 0; }
         .summary-total { font-size: 18px; font-weight: 800; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px; }
+        .cart-recovery-note {
+            margin-top: 14px;
+            padding: 12px 14px;
+            border-radius: 10px;
+            background: #f8fbff;
+            border: 1px solid var(--line);
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.55;
+            font-weight: 600;
+        }
         .btn-checkout { width: 100%; padding: 15px; font-size: 16px; border-radius: 10px; margin-top: 16px; }
         .btn-continue { width: 100%; padding: 12px; font-size: 14px; border-radius: 10px; margin-top: 8px; background: transparent; border: 1.5px solid var(--line); color: var(--ink); font-weight: 700; cursor: pointer; text-align: center; text-decoration: none; display: block; }
         .btn-continue:hover { border-color: var(--brand); color: var(--brand); }
@@ -78,6 +89,9 @@ header('Content-Type: text/html; charset=UTF-8');
             <div class="summary-row"><span>Subtotal</span><strong id="cart-subtotal">—</strong></div>
             <div class="summary-row"><span>Frete</span><strong>A calcular</strong></div>
             <div class="summary-row summary-total"><span>Total estimado</span><strong id="cart-total">—</strong></div>
+            <div class="cart-recovery-note">
+                Seu carrinho fica salvo neste navegador para continuar depois, mesmo que você saia agora.
+            </div>
             <a href="/checkout.php" class="btn btn-primary btn-checkout" id="btn-checkout">Finalizar pedido</a>
             <a href="/catalogo" class="btn-continue">Continuar comprando</a>
             <div style="margin-top:20px;display:grid;gap:6px">
