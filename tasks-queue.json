@@ -528,6 +528,26 @@
       "queue_rank": 17,
       "phase": "phase-2-revenue",
       "completed_at": "2026-07-04T07:02:37.214443Z"
+    },
+    {
+      "title": "Otimizar página campeã do ROI para conversão",
+      "description": "Aplicar melhorias de copy, SEO, estrutura e CTA na página do produto de maior ROI, sem alterar preços, descontos, fretes ou meios de pagamento.",
+      "priority": "high",
+      "tags": [
+        "sales_flow",
+        "conversion",
+        "seo",
+        "product-pages"
+      ],
+      "source": "growth-mission-seed",
+      "phase": "phase-2-revenue",
+      "queue_rank": 18,
+      "id": "task-049",
+      "created_at": "2026-07-04T13:46:36.131711Z",
+      "status": "in_progress",
+      "selected_at": "2026-07-04T13:49:37.294563Z",
+      "selected_by": "autonomous-continuous-cycle",
+      "selection_reason": "phase=phase-2-revenue; readiness=ready_local; queue_rank=18; director_rank=0"
     }
   ],
   "version": "1.1",

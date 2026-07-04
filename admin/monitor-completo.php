@@ -72,6 +72,9 @@ if (empty($tri_sync)) {
     $tri_sync = monitor_read_json(__DIR__ . '/../logs/autonomous-sync.json', []);
 }
 
+$roi_report = monitor_read_json(__DIR__ . '/../logs/roi-engine-report.json', []);
+$sales_focus = $roi_report['top_opportunities'][0] ?? $roi_report['priorities'][0] ?? null;
+
 $tri_sync_status = strtolower((string)($tri_sync['status'] ?? 'unknown'));
 $tri_sync_badge = [
     'healthy' => ['label' => 'Rodando', 'color' => '#51cf66'],
@@ -351,6 +354,16 @@ $tri_sync_badge = [
                 <div>✅ Workflows: 24/7 Rodando</div>
                 <div>✅ Deploy: Automático via FTP</div>
                 <div>✅ Autonomia: 100% Ativa</div>
+            </div>
+            <div style="margin-top: 15px; padding: 14px; border-radius: 8px; background: #fff7ed; border: 1px solid #fed7aa;">
+                <strong>Foco de venda</strong><br>
+                <?php if ($sales_focus): ?>
+                    SKU: <?php echo htmlspecialchars((string)($sales_focus['sku'] ?? 'n/a')); ?> ·
+                    Ação: <?php echo htmlspecialchars((string)($sales_focus['action'] ?? 'n/a')); ?> ·
+                    Impacto: <?php echo htmlspecialchars((string)($sales_focus['impact'] ?? 'n/a')); ?>
+                <?php else: ?>
+                    ROI sem prioridade carregada no momento.
+                <?php endif; ?>
             </div>
             <div style="margin-top: 15px; padding: 14px; border-radius: 8px; background: #f8f9fa; border: 1px solid #e9ecef;">
                 <strong>Triambiente</strong><br>

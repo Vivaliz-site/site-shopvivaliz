@@ -26,9 +26,15 @@
    - `config/tri-environment-sync.json` defines branch policy, environment roles and pull/push boundaries
    - `logs/tri-environment-sync.json` and `logs/autonomous-sync.json` expose the last runtime status for monitor and report endpoints
 
-6. **Canonical Task Queue**
+6. **Sales Focus**
+   - `scripts/autonomous-continuous-cycle.py` now prioritizes `sales_flow` before other revenue dimensions
+   - `logs/roi-engine-report.json` feeds the monitor and report endpoints with the top sales opportunity
+   - Sales work stays within governance: no price edits, no budget changes, no campaign publish without approval
+
+7. **Canonical Task Queue**
    - `tasks-queue.json` is the source of truth for autonomous work
    - `logs/tasks-queue.json` is mirrored for legacy scripts and reports
+   - `scripts/run-autonomy-phases.py` includes phase-tagged and sales-tagged revenue tasks so the director can keep selecting safe growth work continuously
    - External-access tasks can be auto-blocked when required credentials are absent
    - Budget-sensitive tasks such as Google Ads are auto-blocked until human approval exists
 

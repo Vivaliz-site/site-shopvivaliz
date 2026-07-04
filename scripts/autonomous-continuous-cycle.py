@@ -22,7 +22,7 @@ PHASE_ORDER = OrderedDict(
     ]
 )
 
-DIRECTOR_PRIORITY_FALLBACK = ["conversion_impact", "seo_gap", "catalog_readiness"]
+DIRECTOR_PRIORITY_FALLBACK = ["sales_flow", "conversion_impact", "seo_gap", "catalog_readiness"]
 CURRENT_TASK_SELECTOR = "autonomous-continuous-cycle"
 LOGS_DIR = Path("logs")
 PHASE_REPORT_JSON = LOGS_DIR / "autonomy-phase-report.json"
@@ -136,7 +136,29 @@ def director_dimension(task: dict[str, Any], director_priorities: list[str]) -> 
     text = " ".join([title, description, " ".join(tags)])
 
     dimension = "catalog_readiness"
-    if {"cro", "conversion", "ux"} & tags or "convers" in text or "checkout" in text:
+    sales_markers = {
+        "sales",
+        "venda",
+        "sales-flow",
+        "roi",
+        "revenue",
+        "checkout",
+        "payment",
+        "pagamento",
+        "marketplace",
+        "shopee",
+        "mercado livre",
+        "mercadolivre",
+        "product-pages",
+        "produto",
+        "seo",
+        "cro",
+        "conversion",
+        "ux",
+    }
+    if sales_markers & tags or any(marker in text for marker in ["venda", "sales", "roi", "revenue", "checkout", "payment", "pagamento", "marketplace", "shopee", "mercado livre", "product-pages", "seo", "convers"]):
+        dimension = "sales_flow"
+    elif {"cro", "conversion", "ux"} & tags or "convers" in text or "checkout" in text:
         dimension = "conversion_impact"
     elif "seo" in tags or "seo" in text:
         dimension = "seo_gap"
@@ -248,6 +270,7 @@ def build_report(advance: bool) -> dict[str, Any]:
     phase_report = update_phase_report()
     audit = run_auto_audit()
     queue_data = load_queue()
+    roi_report = read_json(Path("logs/roi-engine-report.json"))
     changed_files = git_changed_files()
     readiness_map = phase_readiness_map(phase_report)
     selection = select_task(
@@ -277,6 +300,12 @@ def build_report(advance: bool) -> dict[str, Any]:
         "phase_summary": {
             "qa_workflow": phase_report.get("qa_workflow", {}),
             "phases": phase_report.get("phases", []),
+        },
+        "sales_focus": {
+            "available": bool(roi_report),
+            "generated_at": roi_report.get("generated_at"),
+            "top_opportunities": roi_report.get("top_opportunities", [])[:3] if isinstance(roi_report.get("top_opportunities"), list) else [],
+            "priority_modes": director_priorities,
         },
         "selection": {
             "mode": selection["mode"],

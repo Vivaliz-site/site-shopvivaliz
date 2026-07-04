@@ -31,6 +31,21 @@ MISSION_IDS = {
     "task-048",
 }
 
+REPORTABLE_TAGS = {
+    "sales_flow",
+    "conversion",
+    "seo",
+    "product-pages",
+    "roi",
+    "revenue",
+    "checkout",
+    "marketplace",
+    "shopee",
+    "mercado livre",
+    "mercadolivre",
+    "catalog",
+}
+
 
 def current_branch() -> str:
     result = subprocess.run(
@@ -108,6 +123,20 @@ def classify_task(task: dict, repo_secrets: set[str]) -> tuple[str, list[str], l
     return "blocked_missing_secret", missing_local, missing_repo
 
 
+def should_include_task(task: dict) -> bool:
+    task_id = str(task.get("id", "")).strip()
+    phase = str(task.get("phase", "")).strip()
+    tags = {str(tag).strip().lower() for tag in task.get("tags", [])}
+
+    if task_id in MISSION_IDS:
+        return True
+    if phase.startswith("phase-"):
+        return True
+    if tags & REPORTABLE_TAGS:
+        return True
+    return False
+
+
 def build_report() -> dict:
     queue = load_queue()
     repo_secrets = github_secret_names()
@@ -115,7 +144,7 @@ def build_report() -> dict:
 
     phase_rows: dict[str, list[dict]] = {phase: [] for phase in PHASE_ORDER}
     for task in queue.get("queue", []):
-        if task.get("id") not in MISSION_IDS:
+        if not should_include_task(task):
             continue
         phase = str(task.get("phase", "phase-4-approval-gated"))
         readiness, missing_local, missing_repo = classify_task(task, repo_secrets)

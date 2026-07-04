@@ -65,7 +65,7 @@
   "growth_policy": {
     "revenue_engine": {
       "enabled": true,
-      "prioritize_by": ["conversion_impact", "seo_gap", "catalog_readiness"]
+      "prioritize_by": ["sales_flow", "conversion_impact", "seo_gap", "catalog_readiness"]
     },
     "learning_loop": {
       "enabled": true,

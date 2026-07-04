@@ -96,6 +96,15 @@ MISSIONS = [
         "phase": "phase-2-revenue",
         "queue_rank": 17,
     },
+    {
+        "title": "Otimizar página campeã do ROI para conversão",
+        "description": "Aplicar melhorias de copy, SEO, estrutura e CTA na página do produto de maior ROI, sem alterar preços, descontos, fretes ou meios de pagamento.",
+        "priority": "high",
+        "tags": ["sales_flow", "conversion", "seo", "product-pages"],
+        "source": "growth-mission-seed",
+        "phase": "phase-2-revenue",
+        "queue_rank": 18,
+    },
 ]
 
 
