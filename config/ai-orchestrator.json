@@ -1,0 +1,47 @@
+{
+  "workflow": "ai-engineering-platform",
+  "version": "1.0.0",
+  "agents": {
+    "olist-sync": {
+      "enabled": true,
+      "trigger": "product_update",
+      "constraints": ["no_price_modification"]
+    },
+    "image-optimization": {
+      "enabled": true,
+      "trigger": "image_upload",
+      "constraints": ["no_price_modification"]
+    },
+    "checkout-optimization": {
+      "enabled": true,
+      "trigger": "cart_update",
+      "constraints": ["no_price_modification"]
+    },
+    "freight-calculation": {
+      "enabled": true,
+      "trigger": "shipping_request",
+      "constraints": ["no_price_modification"]
+    }
+  },
+  "financial_safeguards": {
+    "guardian_of_price": {
+      "enabled": true,
+      "enforcement_level": "strict"
+    },
+    "price_change_prohibition": true,
+    "financial_rule_enforcement": "orchestrator_level"
+  },
+  "audit_requirements": {
+    "log_all_operations": true,
+    "immutable_audit_trail": true,
+    "compliance_verification": "required"
+  },
+  "execution_policy": {
+    "isolated_environments": true,
+    "rate_limiting": {
+      "olist": "100_requests_per_minute",
+      "pagarme": "50_requests_per_minute"
+    },
+    "state_change_logging": "mandatory"
+  }
+}
