@@ -205,15 +205,20 @@ def select_task(
 
     selected = candidates[0]
     if advance:
+        selected_id = str(selected.get("id", ""))
+        persisted_task: dict[str, Any] | None = None
         for task in queue_data.get("queue", []):
-            if task.get("id") != selected.get("id"):
+            if str(task.get("id", "")) != selected_id:
                 continue
             task["status"] = "in_progress"
             task["selected_at"] = utc_now()
             task["selected_by"] = CURRENT_TASK_SELECTOR
             task["selection_reason"] = selection_reason(selected)
+            persisted_task = task
             break
         save_queue(queue_data)
+        if persisted_task is not None:
+            selected = persisted_task
 
     return {"mode": "selected", "task": selected, "reason": selection_reason(selected)}
 

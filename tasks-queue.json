@@ -391,7 +391,7 @@
       "title": "Executar otimizações autônomas para vendas",
       "description": "Priorizar melhorias de conversão em página de produto, catálogo, checkout e captação de leads, sem alterar preços, descontos, fretes ou meios de pagamento.",
       "priority": "high",
-      "status": "in_progress",
+      "status": "completed",
       "tags": [
         "cro",
         "conversion",
@@ -402,9 +402,7 @@
       "created_at": "2026-07-04T04:52:44.793293Z",
       "queue_rank": 11,
       "phase": "phase-2-revenue",
-      "selected_at": "2026-07-04T05:20:58.996116Z",
-      "selected_by": "autonomous-continuous-cycle",
-      "selection_reason": "phase=phase-2-revenue; readiness=ready_local; queue_rank=11; director_rank=0"
+      "completed_at": "2026-07-04T06:52:31.000844Z"
     },
     {
       "title": "Conectar catálogo com Shopee sem impacto em preço",
@@ -501,7 +499,7 @@
       "title": "Ativar SEO automático para catálogo e marketplace",
       "description": "Executar geração automática de SEO para páginas do site e canais externos, incluindo títulos, descrições, dados estruturados e auditoria contínua.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "tags": [
         "seo",
         "catalog",
@@ -511,13 +509,14 @@
       "id": "task-047",
       "created_at": "2026-07-04T04:52:44.794289Z",
       "queue_rank": 16,
-      "phase": "phase-2-revenue"
+      "phase": "phase-2-revenue",
+      "completed_at": "2026-07-04T06:58:07.812256Z"
     },
     {
       "title": "Gerar páginas de produto dinâmicas e indexáveis",
       "description": "Preparar rota e renderização dinâmica de páginas de produto com dados estruturados, SEO consistente, conteúdo indexável e compatibilidade com catálogo atual.",
       "priority": "high",
-      "status": "pending",
+      "status": "completed",
       "tags": [
         "product-pages",
         "seo",
@@ -527,7 +526,8 @@
       "id": "task-048",
       "created_at": "2026-07-04T04:52:44.794289Z",
       "queue_rank": 17,
-      "phase": "phase-2-revenue"
+      "phase": "phase-2-revenue",
+      "completed_at": "2026-07-04T07:02:37.214443Z"
     }
   ],
   "version": "1.1",

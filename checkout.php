@@ -73,6 +73,12 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '5511999999999';
     <!-- FORMULÁRIO -->
     <section class="checkout-card" id="checkout-section">
         <h1 class="checkout-title">Seus dados</h1>
+        <div class="checkout-reassurance" aria-label="Informações rápidas do checkout">
+            <div class="reassurance-pill">Sem cadastro obrigatório</div>
+            <div class="reassurance-copy">
+                Finalize o pedido em poucos passos. Se precisar de ajuda, nosso atendimento acompanha a confirmação por WhatsApp.
+            </div>
+        </div>
         <form id="checkout-form" class="checkout-form" novalidate>
             <div class="form-row-2">
                 <label class="form-group">
@@ -135,6 +141,12 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '5511999999999';
             <button class="btn btn-primary btn-checkout" type="submit" id="submit-btn">
                 Confirmar pedido
             </button>
+            <div class="checkout-support-inline">
+                <strong>Atendimento rápido:</strong>
+                <a href="https://wa.me/<?= htmlspecialchars($whatsapp) ?>?text=<?= rawurlencode('Oi! Preciso de ajuda para finalizar meu pedido na Vivaliz.') ?>" target="_blank" rel="noreferrer">
+                    falar no WhatsApp antes de concluir
+                </a>
+            </div>
             <div id="checkout-status" class="checkout-status-msg"></div>
         </form>
     </section>
