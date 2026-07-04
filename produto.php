@@ -68,6 +68,27 @@ function sv_qv(string $key, string $fallback = ''): string
 
 function sv_esc(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 
+function sv_truncate(string $text, int $maxLength, string $suffix = '...'): string
+{
+    if (function_exists('mb_strimwidth')) {
+        return mb_strimwidth($text, 0, $maxLength, $suffix, 'UTF-8');
+    }
+
+    if (function_exists('mb_substr')) {
+        $length = mb_strlen($text, 'UTF-8');
+        if ($length <= $maxLength) {
+            return $text;
+        }
+        return mb_substr($text, 0, max(0, $maxLength - strlen($suffix)), 'UTF-8') . $suffix;
+    }
+
+    if (strlen($text) <= $maxLength) {
+        return $text;
+    }
+
+    return substr($text, 0, max(0, $maxLength - strlen($suffix))) . $suffix;
+}
+
 /* ── resolução do produto ── */
 $slug     = sv_qv('slug');
 $resolved = $slug !== '' ? sv_product_find_slug($slug) : sv_product_find(sv_qv('sku'), sv_qv('id', sv_qv('olist_product_id')));
@@ -153,7 +174,7 @@ $jsonLd = [
         <nav class="breadcrumb" aria-label="Navegação estrutural">
             <a href="/">Início</a> › <a href="/catalogo">Catálogo</a>
             <?php if ($category !== ''): ?> › <a href="/catalogo?categoria=<?= rawurlencode($category) ?>"><?= sv_esc($category) ?></a><?php endif; ?>
-            › <span><?= sv_esc(mb_strimwidth($name, 0, 40, '…')) ?></span>
+            › <span><?= sv_esc(sv_truncate($name, 40, '…')) ?></span>
         </nav>
 
         <div class="product-detail">
