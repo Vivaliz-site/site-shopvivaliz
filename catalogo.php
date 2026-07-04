@@ -110,7 +110,6 @@ $statusText = $products
     <meta property="og:title" content="Catálogo | Vivaliz">
     <meta property="og:description" content="Explore nosso catálogo completo de produtos com qualidade e entrega rápida.">
     <meta property="og:type" content="website">
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <title>Catálogo | Vivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
 </head>
@@ -118,7 +117,7 @@ $statusText = $products
     <nav class="navbar">
         <div class="container nav-inner">
             <a class="brand-link" href="/">
-                <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" onerror="this.src='/images/logo.svg'">
+                <span class="brand-logo">V</span>Vivaliz
             </a>
             <div class="navbar-menu">
                 <a href="/">Home</a>
