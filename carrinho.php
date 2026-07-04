@@ -8,7 +8,6 @@ header('Content-Type: text/html; charset=UTF-8');
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Carrinho | Vivaliz</title>
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="/css/style.css">
     <style>
         .cart-page { padding: 36px 0 64px; }
@@ -55,7 +54,7 @@ header('Content-Type: text/html; charset=UTF-8');
 <nav class="navbar">
     <div class="container nav-inner">
         <a class="brand-link" href="/">
-            <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" onerror="this.src='/images/logo.svg'">
+            <span class="brand-logo">V</span>Vivaliz
         </a>
         <div class="navbar-menu">
             <a href="/catalogo">Catálogo</a>

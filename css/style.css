@@ -4,14 +4,8 @@
     --ink: #111827;
     --muted: #6b7280;
     --line: #e5e9f0;
-    /* Vivaliz brand palette */
-    --brand-navy: #173B63;
-    --brand-navy-dark: #0f2847;
-    --brand-green: #059669;
-    --brand-green-light: #ecfdf5;
-    /* UI tokens — using navy as primary brand */
-    --brand: #173B63;
-    --brand-strong: #0f2847;
+    --brand: #2563eb;
+    --brand-strong: #1d4ed8;
     --accent: #059669;
     --accent-bg: #ecfdf5;
     --warn: #d97706;
@@ -83,13 +77,6 @@ a {
     flex-shrink: 0;
 }
 
-/* Logo image in navbar */
-.brand-logo-img {
-    height: 44px;
-    width: auto;
-    display: block;
-}
-
 /* Cart badge in navbar */
 .nav-cart { position: relative; display: inline-flex; align-items: center; gap: 6px; }
 .cart-badge {
@@ -142,7 +129,7 @@ a {
 }
 
 .hero {
-    background: linear-gradient(135deg, var(--brand-navy-dark) 0%, var(--brand-navy) 55%, #1a5fa8 100%);
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 55%, #0ea5e9 100%);
     padding: 72px 0 56px;
     color: #fff;
     position: relative;
