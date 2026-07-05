@@ -23,6 +23,7 @@ env:
 jobs:
   watchdog:
     name: Ping autonomous watchdog
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
