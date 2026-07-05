@@ -2,6 +2,63 @@
 
 Este repositorio usa agentes especializados para acelerar lancamento, QA, automacoes Olist/Tiny, seguranca e releases cumulativos.
 
+## Diretriz global de operacao autonoma
+
+Esta diretriz deve ser considerada obrigatoria para ChatGPT, Roo, Gemini, Claude e demais agentes ativos no projeto ShopVivaliz.
+
+Todos os agentes passam a operar como uma unica equipe coordenada pelo Diretor de IA, compartilhando a mesma arquitetura, regras de governanca e prioridades.
+
+### Regras de continuidade
+
+- Nenhum agente deve aguardar nova instrucao ao concluir uma tarefa segura.
+- Ao finalizar uma tarefa, o agente deve consultar o backlog, roadmap e prioridades do Diretor.
+- O agente deve escolher automaticamente a proxima tarefa segura de maior prioridade.
+- O ciclo deve continuar enquanto existir tarefa segura, auditavel e sem dependencia de aprovacao humana.
+- Todo ciclo deve deixar rastro em log ou relatorio.
+
+### Fluxo obrigatorio ao concluir tarefa
+
+1. Atualizar documentacao quando necessario.
+2. Executar autoauditoria.
+3. Registrar em log ou relatorio:
+   - tarefa concluida;
+   - arquivos criados ou alterados;
+   - testes executados;
+   - resultado;
+   - riscos identificados;
+   - proxima tarefa escolhida ou recomendada;
+   - motivo da escolha.
+4. Consultar o Diretor antes de iniciar nova execucao.
+5. Executar automaticamente a proxima tarefa segura aprovada ou priorizada pelo Diretor.
+
+### Governanca obrigatoria
+
+- Nunca alterar precos automaticamente.
+- Nunca criar, publicar ou ativar campanhas sem aprovacao humana.
+- Nunca aumentar orcamento automaticamente.
+- Nunca executar acao financeira sem aprovacao.
+- Nunca fazer deploy sem autorizacao explicita.
+- Nunca remover funcionalidades existentes sem validacao.
+- Nunca commitar credenciais, tokens, cookies ou dados sensiveis.
+- Nunca operar sem log.
+- Nunca repetir a mesma tarefa sem avanco real.
+
+### Condicoes que exigem parada e intervencao humana
+
+O agente deve parar e solicitar intervencao humana apenas quando houver:
+
+- campanha pendente de aprovacao;
+- alteracao de preco;
+- aumento de orcamento;
+- necessidade de deploy;
+- risco de perda de dados;
+- risco de indisponibilidade;
+- conflito tecnico sem solucao segura;
+- ausencia de proxima tarefa segura;
+- erro critico.
+
+Fora dessas excecoes, a operacao deve permanecer continua, autonoma, auditavel e orientada a estabilidade, qualidade, desempenho, conversao e crescimento do projeto ShopVivaliz.
+
 ## Regras gerais
 
 - Sempre gerar atualizacoes cumulativas.
@@ -83,27 +140,3 @@ A pasta `agents/v9.2.84` materializa os agentes antes apenas conceituais:
 - `AutonomousWatchdogAgent`: orquestra todos os agentes.
 
 Endpoints apos deploy:
-
-- `/api/agent/autonomous-report.php`
-- `/api/agent/autonomous-watchdog.php`
-- `/installer/agent-handoff.php`
-
-## Fluxo padrao quando solicitado "utilize os agentes"
-
-1. `Seguranca / Segredos` valida que nenhuma credencial real sera commitada.
-2. `Config Validator` verifica arquivos, caminhos e dependencias.
-3. `Login Olist` valida somente configuracao local de login.
-4. `QA / Self-test` executa testes estaticos e de integridade.
-5. `Olist UI Regression` valida seletores e fluxo visual quando aplicavel.
-6. `Selenium Test Runner` executa modo teste/amostra quando houver ambiente local disponivel.
-7. `Olist Image Position Auditor` valida regras de posicao de imagens.
-8. `Artifact Builder` gera ZIP cumulativo e documentacao.
-9. `Release Manager` registra versao, relatorio e instrucoes finais.
-
-## Comando inicial para Codex
-
-Leia este AGENTS.md e prepare o ShopVivaliz para atualizacoes cumulativas, QA automatico, releases, OAuth Olist/Tiny, frete/checkout, imagens de produtos, self-test, automacoes Selenium/Olist e seguranca de credenciais.
-
-## Comando inicial para agentes v9.2.84
-
-Usar `agents/v9.2.84` como pacote de deploy da versao `9.2.84-resident-autonomous-watchdog`, rodar o workflow `Package ShopVivaliz v9.2.84 Agents`, revisar a issue #1 e manter as proximas mudancas cumulativas.

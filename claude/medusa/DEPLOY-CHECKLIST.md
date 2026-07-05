@@ -680,6 +680,87 @@ gerenciado por esta sessão via cron interno); a recomendação de pausar/
 espaçar a cadência precisa ser aplicada pelo usuário na configuração do
 agendador externo (workflow do GitHub Actions ou trigger equivalente).
 
+**Rodada 28 (2026-07-04, revalidação leve, execução automática agendada):**
+confirmado via `git log 3246f33..HEAD -- claude/medusa claude/api` (commit
+da rodada 27) que **nenhum arquivo sob `claude/medusa/` ou `claude/api/`
+mudou desde a rodada 27** (o único commit que casa com o pathspec é o
+próprio `234c17d`, a atualização de documentação da rodada 27); os 5 commits
+novos em `origin/main` desde então (`aa32b30`, `4d2a5bc`, `ca3e028`,
+`f0827e6`, `0ab672b` — guardião de política autônoma + painel Mercado
+Livre/endpoints products-optimizer) ficam fora do escopo Medusa/EHA-PHP.
+Repetidos apenas os checks leves: nenhum marcador de conflito de merge sob
+`claude/medusa/`/`claude/api/`, `package.json` válido (JSON) em backend e
+storefront, `php -l` sem erro em todos os `.php` sob `claude/api/`, `SETUP-
+OLIST-SECRETS.md` confirmado já com placeholders (`SEU_OLIST_CLIENT_ID_AQUI`)
+em vez de segredo real no conteúdo atual do arquivo — o vazamento documentado
+é histórico (git log), não no arquivo em `HEAD`, então o blocker de rotação/
+reescrita de histórico permanece o mesmo já descrito no `GITHUB_SECRETS_TODO.md`.
+Teste de rede de saída para `api.supabase.com` e `supabase.com` repetido:
+continua bloqueado pelo proxy do ambiente (`CONNECT tunnel failed, response
+403`, `recentRelayFailures` vazio em `/__agentproxy/status` — bloqueio é por
+`noProxy`/política do ambiente, não uma falha transitória de rede). `npm
+install`/build completo **não foi refeito** — sem sinal de mudança de código
+desde a rodada 22 (última revalidação completa), conforme recomendação já
+registrada nas rodadas 21/23/24/25/26/27. **Nenhum bug novo encontrado.** Os
+mesmos 5 blockers de ação humana continuam inalterados há **28 rodadas
+consecutivas** (7ª rodada leve seguida sem progresso). Reitera-se, pela
+sétima vez, a recomendação das rodadas 21/23/24/25/26/27: **pausar o
+agendamento automático desta tarefa** até que o usuário resolva ao menos um
+blocker. Dos 5, dois seguem sendo os mais acionáveis e não dependem de
+serviço externo algum: (a) rotacionar `OLIST_CLIENT_ID`/`OLIST_CLIENT_SECRET`
+vazados no histórico do git (`GITHUB_SECRETS_TODO.md`), pendente desde
+2026-07-01 (mais de uma semana); e (b) o usuário criar manualmente um
+Postgres gerenciado (Supabase/Neon/Railway, ~5 min, requer apenas login
+humano) e colar a `DATABASE_URL` em `apps/backend/.env` — nenhuma automação
+consegue fazer esse passo por exigir aceite de termos/login interativo fora
+deste sandbox.
+
+**Rodada 29 (2026-07-04, revalidação leve, execução automática agendada):**
+esta sessão havia registrado sua própria revalidação leve como "rodada 28"
+antes de perceber, ao rebasear em `origin/main`, que uma sessão concorrente
+já havia empurrado o commit `64d63ec` com o mesmo rótulo (mesmo diagnóstico:
+diff vazio, blockers inalterados) — renumerada para rodada 29 para evitar
+colisão, seguindo a mesma convenção das rodadas 21/22. `git diff
+64d63ec..HEAD -- claude/medusa claude/api` confirma **diff vazio**: nenhuma
+mudança em `claude/medusa/` ou `claude/api/` desde a rodada 28. Repetidos
+apenas os checks leves: nenhum `.env`/`.env.local` de produção no
+repositório, teste de rede de saída para `api.supabase.com` continua
+bloqueado pelo proxy do ambiente (`CONNECT tunnel failed, response 403`), e
+o GitHub MCP desta sessão continua sem nenhum tool de gestão de secrets do
+Actions. **Nenhum bug novo encontrado.** Os mesmos 5 blockers de ação
+humana continuam inalterados há **29 rodadas consecutivas** (9ª rodada leve
+seguida sem progresso, incluindo esta e a rodada 28 concorrente). Dado o
+número de repetições sem nenhum progresso em nenhum dos 5 blockers, esta
+sessão notificou o usuário diretamente por push notification nesta rodada,
+reiterando a recomendação de pausar o agendamento automático externo desta
+tarefa até que ao menos um blocker seja resolvido por ação humana.
+
+**Rodada 30 (2026-07-04, revalidação leve, execução automática agendada):**
+container efêmero novo estava novamente com HEAD destacado apontando para um
+`origin/main` local desatualizado (mesmo artefato de clone raso já visto em
+rodadas anteriores) — `git fetch origin main` + `git checkout -B main
+origin/main` resolveu sem perda de commits. `git log --oneline
+2ce16fa..970dbd0 -- claude/medusa claude/api` confirma **diff vazio**:
+nenhuma mudança em `claude/medusa/` ou `claude/api/` desde a rodada 29 (os
+únicos commits novos no repositório, `3a1a1a7`/`970dbd0`, adicionam um
+slider de banners e seção de categorias na home do site PHP legado — fora do
+escopo Medusa). PR aberta (`#89`) também fora do escopo (governança de
+agentes AI via `AGENTS.md`). Checks leves repetidos: sem marcadores de
+conflito, `package.json` válido em backend e storefront, `php -l` sem erro
+em todos os `.php` sob `claude/api/`, nenhum `.env`/`.env.local` de produção
+no repositório, teste de rede de saída para `api.supabase.com` continua
+bloqueado pelo proxy do ambiente (`CONNECT tunnel failed, response 403`), e
+o GitHub MCP desta sessão revalidado ainda sem nenhum tool de gestão de
+secrets do Actions (apenas `actions_get`/`actions_list`/`actions_run_trigger`,
+issues, PRs, arquivos, branches, secret scanning). **Nenhum bug novo
+encontrado.** Os mesmos 5 blockers de ação humana continuam inalterados há
+**30 rodadas consecutivas** (10ª rodada leve seguida sem progresso). O
+usuário já havia sido notificado por push notification na rodada 29; como
+nada mudou desde então, **nenhuma nova notificação foi enviada** nesta
+rodada, para evitar repetir um alerta sem sinal novo. Recomendação mantida:
+pausar o agendamento automático externo desta tarefa até que ao menos um dos
+5 blockers seja resolvido por ação humana.
+
 ## 1. Banco de dados de produção
 
 O backend Medusa precisa de PostgreSQL. Este ambiente usou um Postgres local
