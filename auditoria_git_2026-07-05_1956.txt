@@ -1,9 +1,8 @@
 On branch main
 Your branch is up to date with 'origin/main'.
 
-Changes not staged for commit:
-  (use "git add <file>..." to update what will be committed)
-  (use "git restore <file>..." to discard changes in working directory)
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
 	modified:   .claude/settings.json
 	modified:   .codex/agents/shopvivaliz-agent-500-runner.toml
 	modified:   .codex/agents/shopvivaliz-agent-test-runner.toml
@@ -294,11 +293,14 @@ Changes not staged for commit:
 	modified:   api/orders/create.php
 	modified:   api/orders/index.php
 	modified:   api/pagarme/diagnostic.php
+	new file:   api/sync/full-sync.php
 	modified:   api/webhooks/pagarme.php
 	modified:   assets/css/header.css
 	modified:   assets/images/logo/vivaliz-logo-horizontal.png
 	modified:   assets/images/logo/vivaliz-logo.svg
 	modified:   audit-report.txt
+	new file:   auditoria_git_-F_-H-M.txt
+	new file:   auditoria_git_2026-07-05_1954.txt
 	modified:   auto-configure-all-15-secrets.py
 	modified:   autodev/actions/safe_layout_applier.php
 	modified:   autodev/client.js
@@ -1351,6 +1353,7 @@ Changes not staged for commit:
 	modified:   scripts/git_autonomous_agent.py
 	modified:   scripts/health-check.py
 	modified:   scripts/heartbeat-executor.py
+	new file:   scripts/heartbeat.txt
 	modified:   scripts/ia/__init__.py
 	modified:   scripts/ia/__pycache__/__init__.cpython-314.pyc
 	modified:   scripts/ia/__pycache__/image_generator.cpython-314.pyc
@@ -2534,6 +2537,7 @@ Changes not staged for commit:
 	modified:   sync-simple.php
 	modified:   sync.php
 	modified:   tasks-queue.json
+	new file:   tatus > auditoria_git_$(date +-F_-H-M).txt
 	modified:   test-all-shopv506.php
 	modified:   test-claude-user.php
 	modified:   test-db-connection.php
@@ -2549,10 +2553,5 @@ Changes not staged for commit:
 
 Untracked files:
   (use "git add <file>..." to include in what will be committed)
-	api/sync/
-	auditoria_git_-F_-H-M.txt
-	auditoria_git_2026-07-05_1954.txt
-	scripts/heartbeat.txt
-	tatus > auditoria_git_$(date +-F_-H-M).txt
+	auditoria_git_2026-07-05_1956.txt
 
-no changes added to commit (use "git add" and/or "git commit -a")
