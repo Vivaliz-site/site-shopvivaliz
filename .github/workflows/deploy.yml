@@ -6,13 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
-  actions: write
-  checks: write
-  statuses: write
-  issues: write
-  deployments: write
+  contents: read
 
 concurrency:
   group: shopvivaliz-deploy-dev
@@ -103,6 +97,13 @@ jobs:
             "FTP_REMOTE_DIR" || MISSING=$((MISSING+1))
           
           if [ "$MISSING" -eq 0 ]; then
+            # Validar GH_REPO_TOKEN (para operações que exigem mais permissões que o GITHUB_TOKEN padrão)
+            if [ -n "${{ secrets.GH_REPO_TOKEN }}" ]; then
+              echo "Secret obrigatório ENCONTRADO: GH_REPO_TOKEN"
+            else
+              echo "::warning::Secret GH_REPO_TOKEN não configurado. Operações que exigem permissões elevadas (ex: criar webhooks) podem falhar."
+            fi
+
             echo "valid=true" >> "$GITHUB_OUTPUT"
             echo ""
             echo "✓ Todos os secrets obrigatórios foram encontrados!"
@@ -120,6 +121,7 @@ jobs:
             echo "  • FTP_PASSWORD (ou FTP_PASS)"
             echo "  • FTP_PORT (padrão: 21)"
             echo "  • FTP_REMOTE_DIR (ou FTP_TARGET_DIR / FTP_PATH)"
+            echo "  • GH_REPO_TOKEN (para operações de repositório com permissões elevadas)"
             exit 1
           fi
 
@@ -177,16 +179,16 @@ jobs:
           # Usa curl para FTP (mais seguro que ftplib)
           
           echo "Testando conexão FTP..."
-          echo "Host: ${{ steps.deploy-vars.outputs.FTP_SERVER }}"
-          echo "Port: ${{ steps.deploy-vars.outputs.FTP_PORT }}"
+          echo "Host: ***"
+          echo "Port: ${FTP_PORT_VALUE}"
           echo "User: ***"
           echo ""
           
           # Timeout: 10 segundos
-          if ! timeout 10 curl -s \
+          if ! timeout 10 curl -sS \
             --user "${FTP_USERNAME_VALUE}:${FTP_PASSWORD_VALUE}" \
-            --ftp-port "${{ steps.deploy-vars.outputs.FTP_PORT }}" \
-            "ftp://${{ steps.deploy-vars.outputs.FTP_SERVER }}/" \
+            --connect-timeout 10 \
+            "ftp://${FTP_SERVER_VALUE}:${FTP_PORT_VALUE}/" \
             --list-only \
             -o /dev/null 2>&1; then
             
@@ -207,7 +209,7 @@ jobs:
           server: ${{ env.FTP_SERVER_VALUE }}
           username: ${{ env.FTP_USERNAME_VALUE }}
           password: ${{ env.FTP_PASSWORD_VALUE }}
-          port: ${{ steps.deploy-vars.outputs.FTP_PORT }}
+          port: ${{ env.FTP_PORT_VALUE }}
           protocol: ftp
           local-dir: ./
           server-dir: ${{ env.FTP_REMOTE_DIR_VALUE }}
