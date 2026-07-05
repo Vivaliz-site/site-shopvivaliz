@@ -492,9 +492,9 @@ jobs:
                             ${{ needs.endpoints-check.result }} \
                             ${{ needs.dependency-check.result }}; do
             if [ "$job_result" == "success" ] || [ "$job_result" == "skipped" ]; then
-              ((SUCCESS_COUNT++))
+              SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
             elif [ "$job_result" == "failure" ]; then
-              ((FAIL_COUNT++))
+              FAIL_COUNT=$((FAIL_COUNT + 1))
             fi
           done
           
