@@ -151,12 +151,26 @@ jobs:
           if command -v python3 &> /dev/null; then
             while IFS= read -r yaml_file; do
               [ -n "$yaml_file" ] || continue
-              if python3 -c "from pathlib import Path; import sys; import yaml; path = Path(r'''$yaml_file''');\ntry:\n    yaml.safe_load(path.read_text(encoding='utf-8'))\nexcept Exception as exc:\n    print(f'::error::{path.name} - YAML inválido')\n    print(f'  {exc}')\n    sys.exit(1)"; then
+              if python3 - "$yaml_file" <<'PY'
+import sys
+from pathlib import Path
+
+import yaml
+
+path = Path(sys.argv[1])
+try:
+    yaml.safe_load(path.read_text(encoding="utf-8"))
+except Exception as exc:
+    print(f"::error::{path.name} - YAML inválido")
+    print(f"  {exc}")
+    raise SystemExit(1)
+PY
+              then
                 echo "✓ $(basename "$yaml_file")"
               else
                 ((YAML_ERRORS++))
               fi
-            done < <(find .github/workflows -maxdepth 1 \( -name '*.yml' -o -name '*.yaml' \) -type f | sort)
+            done < <(ls -1 .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null | sort)
 
             if [ $YAML_ERRORS -gt 0 ]; then
               echo ""
