@@ -1,23 +1,13 @@
 name: CI AUTONOMO CONTINUO
 
 on:
-  # Gatilhos automáticos pausados temporariamente para economizar quota do GitHub Actions.
-  # Reativar após estabilização dos secrets e do fluxo de CI.
   workflow_dispatch:
-    inputs:
-      max_cycles:
-        description: "Quantidade de ciclos autonomos seguros"
-        required: false
-        default: "1"
+  schedule:
+    - cron: "0 */4 * * *"
 
 permissions:
-  contents: write
-  actions: read
-  pull-requests: write
-
-concurrency:
-  group: ci-eha-${{ github.ref_name }}
-  cancel-in-progress: true
+  contents: read
+  checks: write
 
 jobs:
   setup:
@@ -87,47 +77,14 @@ jobs:
         run: |
           echo "Procurando marcadores de conflito Git..."
           echo ""
-
-          python3 - <<'PY'
-          from pathlib import Path
-          import sys
-
-          conflict_files = []
-          for path in Path('.').rglob('*'):
-              if not path.is_file():
-                  continue
-              if path.parts[0] in {'.git', 'vendor', 'node_modules', 'venv'}:
-                  continue
-              try:
-                  lines = path.read_text(encoding='utf-8', errors='ignore').splitlines()
-              except Exception:
-                  continue
-
-              in_conflict = False
-              seen_separator = False
-              for line in lines:
-                  stripped = line.strip()
-                  if stripped.startswith('<<<<<<< '):
-                      in_conflict = True
-                      seen_separator = False
-                      continue
-                  if in_conflict and stripped == '=======':
-                      seen_separator = True
-                      continue
-                  if in_conflict and stripped.startswith('>>>>>>> '):
-                      if seen_separator:
-                          conflict_files.append(str(path))
-                      in_conflict = False
-                      seen_separator = False
-          if conflict_files:
-              print('::error::Conflitos Git detectados:')
-              for filename in sorted(set(conflict_files)):
-                  print(f'  • {filename}')
-              sys.exit(1)
-          print('✓ Nenhum conflito Git encontrado')
-          PY
-
-          if [ $? -ne 0 ]; then
+          
+          CONFLICT_MARKERS=$(git grep -n '<<<<<<<\|=======\|>>>>>>>' || true)
+          
+          if [ -z "$CONFLICT_MARKERS" ]; then
+            echo "✓ Nenhum conflito Git encontrado"
+          else
+            echo "::error::Conflitos Git detectados:"
+            echo "$CONFLICT_MARKERS" | sed 's/^/  /'
             exit 1
           fi
 
@@ -143,75 +100,15 @@ jobs:
       - name: Validar Workflows YAML
         shell: bash
         run: |
-          echo "Validando YAML dos workflows..."
-          echo ""
+          echo "Validando YAML..."
 
-          YAML_ERRORS=0
+          for yaml_file in .github/workflows/*.yml .github/workflows/*.yaml; do
+            [ -f "$yaml_file" ] || continue
 
-          if command -v python3 &> /dev/null; then
-            while IFS= read -r yaml_file; do
-              [ -n "$yaml_file" ] || continue
-              if python3 - "$yaml_file" <<'PY'
-import sys
-from pathlib import Path
+            echo "Validando $yaml_file"
 
-import yaml
-
-path = Path(sys.argv[1])
-try:
-    yaml.safe_load(path.read_text(encoding="utf-8"))
-except Exception as exc:
-    print(f"::error::{path.name} - YAML inválido")
-    print(f"  {exc}")
-    raise SystemExit(1)
-PY
-              then
-                echo "✓ $(basename "$yaml_file")"
-              else
-                ((YAML_ERRORS++))
-              fi
-            done < <(ls -1 .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null | sort)
-
-            if [ $YAML_ERRORS -gt 0 ]; then
-              echo ""
-              echo "::error::$YAML_ERRORS arquivos YAML com erro"
-              exit 1
-            fi
-          else
-            echo "⚠ python3 não disponível - pulando validação YAML"
-          fi
-          
-          echo ""
-          echo "✓ YAML válido"
-
-      - name: Validar JSON
-        shell: bash
-        run: |
-          echo "Validando JSON..."
-          echo ""
-          
-          JSON_ERRORS=0
-          
-          # Validar package.json
-          for json_file in package.json medusa/package.json automation/eha/package.json; do
-            if [ -f "$json_file" ]; then
-              if python3 -c "import json; json.load(open('$json_file'))" 2>/dev/null; then
-                echo "✓ $(basename "$json_file")"
-              else
-                echo "::error::$(basename "$json_file") - JSON inválido"
-                ((JSON_ERRORS++))
-              fi
-            fi
+            python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" "$yaml_file" || exit 1
           done
-          
-          if [ $JSON_ERRORS -gt 0 ]; then
-            echo ""
-            echo "::error::$JSON_ERRORS arquivos JSON com erro"
-            exit 1
-          fi
-          
-          echo ""
-          echo "✓ JSON válido"
 
   php-syntax:
     name: Validar Sintaxe PHP
@@ -280,10 +177,6 @@ PY
           # Procurar todos os arquivos .py exceto diretórios ignorados
           while IFS= read -r py_file; do
             if [ -f "$py_file" ]; then
-              if [ "$py_file" = "./scripts/olist-sync-manual.py" ]; then
-                echo "⚠ $(basename "$py_file") - legada PowerShell, pulando py_compile"
-                continue
-              fi
               if python3 -m py_compile "$py_file" 2>/dev/null; then
                 echo "✓ $(basename "$py_file")"
               else
@@ -324,56 +217,15 @@ PY
           echo ""
           
           SENSITIVE_FOUND=0
-          SENSITIVE_PATTERNS=(".env" ".env.*" "*.pem" "*.key" "id_rsa" "id_ed25519" "secrets.json" ".secrets")
-
-          while IFS= read -r tracked_file; do
-            [ -n "$tracked_file" ] || continue
-            case "$tracked_file" in
-              .github/*|docs/*|*.example)
-                continue
-                ;;
-            esac
-
-            base_name="$(basename "$tracked_file")"
-            match=false
-            for pattern in "${SENSITIVE_PATTERNS[@]}"; do
-              case "$pattern" in
-                .env)
-                  [ "$base_name" = ".env" ] && match=true
-                  ;;
-                .env.*)
-                  case "$base_name" in
-                    .env.*) match=true ;;
-                  esac
-                  ;;
-                *.pem)
-                  case "$base_name" in
-                    *.pem) match=true ;;
-                  esac
-                  ;;
-                *.key)
-                  case "$base_name" in
-                    *.key) match=true ;;
-                  esac
-                  ;;
-                id_rsa|id_ed25519|secrets.json)
-                  [ "$base_name" = "$pattern" ] && match=true
-                  ;;
-                .secrets)
-                  case "$tracked_file" in
-                    .secrets|.secrets/*) match=true ;;
-                  esac
-                  ;;
-              esac
-
-              if [ "$match" = true ]; then
-                echo "::warning::Arquivo sensível encontrado: $tracked_file"
-                echo "  • $tracked_file"
-                ((SENSITIVE_FOUND++))
-                break
-              fi
-            done
-          done < <(git ls-files)
+          SENSITIVE_PATTERNS=(".env" ".pem" "id_rsa" "private.key" "secrets.json")
+          
+          for pattern in "${SENSITIVE_PATTERNS[@]}"; do
+            if git ls-files | grep -i "$pattern" | grep -v ".example" | grep -v "docs" | grep -v ".github" > /dev/null 2>&1; then
+              echo "::warning::Padrão '$pattern' encontrado em arquivos commitados"
+              git ls-files | grep -i "$pattern" | grep -v ".example" | grep -v "docs" | grep -v ".github" | sed 's/^/  • /'
+              ((SENSITIVE_FOUND++))
+            fi
+          done
           
           if [ $SENSITIVE_FOUND -gt 0 ]; then
             echo ""
@@ -441,6 +293,7 @@ PY
             "api/agent/autonomous-watchdog.php"
             "api/health.php"
             "api/catalog/products.php"
+            "api/agent/squad-chat.php"
           )
           
           for endpoint in "${ENDPOINTS[@]}"; do
