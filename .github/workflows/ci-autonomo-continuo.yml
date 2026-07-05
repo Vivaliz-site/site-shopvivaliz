@@ -360,7 +360,7 @@ jobs:
           
           CRED_PATTERNS=(
             'password\s*=\s*["\x27][^"\x27]+["\x27]'
-            'token\s*=\s*["\x27][^"\x27]+["\x27]'
+            '(auth|access|api|bearer|refresh|id)_token\s*=\s*["\x27][^"\x27]+["\x27]'
             'api_key\s*=\s*["\x27][^"\x27]+["\x27]'
             'secret\s*=\s*["\x27][^"\x27]+["\x27]'
           )
