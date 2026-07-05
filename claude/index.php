@@ -191,7 +191,7 @@ $total_events = count($eha_log_lines);
         Provável causa: <strong>quota GitHub Actions esgotada</strong>.
         Verifique em <a href="https://github.com/settings/billing/summary" target="_blank" style="color:#60a5fa">billing</a>
         e <a href="https://github.com/fredmourao-ai/site-shopvivaliz/settings/actions" target="_blank" style="color:#60a5fa">Actions settings</a>.
-        Fix de agendamentos já aplicado (commit 1a1a532) — economia de ~93% em runs/mês.
+        Fix aplicado: watchdog reduzido de <code>*/15</code> → <code>0 */6</code> e CI de <code>*/10</code> → <code>0 */4</code> (economia de ~95% em runs/mês). Deploy voltará após reset da cota mensal.
     </div>
     <?php endif; ?>
 
