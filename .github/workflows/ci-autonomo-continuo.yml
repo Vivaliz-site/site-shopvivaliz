@@ -7,8 +7,6 @@ on:
         description: "Quantidade de ciclos autonomos seguros"
         required: false
         default: "1"
-  schedule:
-    - cron: "0 */6 * * *"
   push:
     branches:
       - main
