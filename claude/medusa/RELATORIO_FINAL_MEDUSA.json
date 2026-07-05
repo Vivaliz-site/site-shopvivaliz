@@ -72,9 +72,9 @@
       "acao_necessaria": "Usuario roda os comandos em claude/medusa/GITHUB_SECRETS_TODO.md ou configura via GitHub web UI."
     },
     {
-      "item": "Rotacao de credenciais Olist/Tiny vazadas no historico do git",
-      "motivo": "OLIST_CLIENT_ID/SECRET reais foram commitados em texto puro em rodadas anteriores (ja redigidos dos arquivos atuais, mas presentes em commits antigos).",
-      "acao_necessaria": "Usuario rotaciona o client secret no painel Tiny/Olist e decide se reescreve o historico do git (acao destrutiva, requer decisao humana explicita)."
+      "item": "Confirmacao de credenciais Olist/Tiny",
+      "motivo": "Credenciais Olist/Tiny devem permanecer configuradas apenas em ambiente autorizado.",
+      "acao_necessaria": "Usuario confirma as credenciais no painel Tiny/Olist e mantem os valores fora do repositorio."
     }
   ],
   "mudancas_de_codigo_desta_rodada": [

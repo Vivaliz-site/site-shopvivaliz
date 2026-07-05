@@ -229,17 +229,18 @@ jobs:
           echo "Executando smoke test..."
           
           # Retry logic: tenta 3 vezes com delay de 5 segundos
-          MAX_RETRIES=3
-          RETRY_DELAY=5
+          MAX_RETRIES=3 # Número máximo de tentativas
+          RETRY_DELAY=5 # Delay em segundos entre tentativas
           
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Tentativa $i de $MAX_RETRIES..."
             
-            if curl -f \
+            # Usa curl com timeout e retry para verificar se o site está no ar
+            if curl -f -s -L \
               --max-time 10 \
               --retry 1 \
               --retry-delay 2 \
-              https://dev.shopvivaliz.com.br/ > /dev/null 2>&1; then
+              "https://dev.shopvivaliz.com.br/" > /dev/null; then
               echo "✓ Site respondendo corretamente"
               exit 0
             fi
@@ -250,13 +251,14 @@ jobs:
             fi
           done
           
-          echo "::warning::Site não respondeu após $MAX_RETRIES tentativas"
+          echo "::error::Site não respondeu após $MAX_RETRIES tentativas"
           echo "Possíveis causas:"
           echo "  • Servidor ainda processando deploy"
           echo "  • Problema de conectividade"
           echo "  • Erro na aplicação"
           echo ""
           echo "Verifique manualmente: https://dev.shopvivaliz.com.br/"
+          exit 1
 
       - name: Registrar Status do Deploy
         if: always()

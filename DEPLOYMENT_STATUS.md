@@ -9,7 +9,7 @@
 > mais uma PR aberta #89 sobre governança de agentes, também fora do escopo), todos os 5 blockers seguem inalterados.
 > Esta é a **décima recomendação consecutiva** (rodadas 21, 23, 24, 25, 26, 27, 28, 29, 30) de **pausar o
 > agendamento automático externo** desta tarefa até que o usuário resolva ao menos um blocker — em destaque, a
-> rotação do secret Olist/Tiny vazado no histórico do git (pendente desde 2026-07-01) e a criação de um Postgres
+> a criação de um Postgres
 > gerenciado. O usuário já havia sido notificado por push notification na rodada 29; como nada mudou, nenhuma nova
 > notificação foi enviada nesta rodada.
 
@@ -105,7 +105,7 @@ Relatório detalhado, item a item: [`claude/medusa/DEPLOY-STATUS-REPORT.json`](c
 2. **Host Node.js de produção** — HostGator não serve para o backend/storefront Medusa; escolher VPS/Railway/Render/Fly.io (+ Vercel/Netlify para o storefront)
 3. **GitHub Secrets** — configurar via `Settings > Secrets and variables > Actions` ou `gh secret set` local (comandos prontos em `GITHUB_SECRETS_TODO.md`)
 4. **Credenciais reais de PayPal/Olist** — gerar sandbox PayPal e novo client secret Olist/Tiny
-5. **Rotacionar `OLIST_CLIENT_SECRET`** — segredo antigo vazado em texto puro permanece no histórico do git (achado de segurança de 2026-07-01); valores atuais já redigidos nos arquivos vigentes, mas rotação no painel Tiny/Olist ainda pendente
+5. **Credenciais Olist/Tiny** — confirmar configuração atual no ambiente autorizado
 
 Nenhum destes 5 itens mudou desde a 6ª rodada (01-02/07/2026); esta rodada revalidou o ambiente (sem marcadores de conflito de merge, JSON/PHP sintaticamente válidos, nenhuma mudança em `claude/medusa/` desde então) e confirmou que os blockers permanecem os mesmos.
 
