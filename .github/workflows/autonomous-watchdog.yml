@@ -1,8 +1,8 @@
 name: Autonomous Watchdog Monitor
 
 on:
-  schedule:
-    - cron: '0 */6 * * *'
+  # Gatilhos automáticos pausados temporariamente para economizar quota do GitHub Actions.
+  # Reativar após estabilização dos secrets e do fluxo de monitoramento.
   workflow_dispatch:
     inputs:
       cycles:
@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: autonomous-watchdog-monitor
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   SHOPVIVALIZ_BASE_URL: https://dev.shopvivaliz.com.br

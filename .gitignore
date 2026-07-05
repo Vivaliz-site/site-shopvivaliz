@@ -24,6 +24,7 @@ scripts/autonomous-cycle-log.json
 .vercel/
 .env.local
 .env.*.local
+.secrets/
 
 claude-bkp/api/shopee-integration/scripts/test_final.py
 claude-bkp/api/shopee-integration/scripts/test_shopee_api.py

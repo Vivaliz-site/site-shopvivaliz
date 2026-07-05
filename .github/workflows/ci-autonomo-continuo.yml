@@ -1,13 +1,23 @@
 name: CI AUTONOMO CONTINUO
 
 on:
+  # Gatilhos automáticos pausados temporariamente para economizar quota do GitHub Actions.
+  # Reativar após estabilização dos secrets e do fluxo de CI.
   workflow_dispatch:
-  schedule:
-    - cron: "0 */4 * * *"
+    inputs:
+      max_cycles:
+        description: "Quantidade de ciclos autonomos seguros"
+        required: false
+        default: "1"
 
 permissions:
-  contents: read
-  checks: write
+  contents: write
+  actions: read
+  pull-requests: write
+
+concurrency:
+  group: ci-eha-${{ github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   setup:

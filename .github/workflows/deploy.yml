@@ -1,16 +1,8 @@
 name: Deploy Automático Seguro - Shop Vivaliz
 
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - 'claude/medusa/**'
-      - 'medusa/**'
-      - 'docs/**'
-      - 'reports/**'
-      - '**/*.md'
-      - '**/*.log'
+  # Gatilhos automáticos pausados temporariamente para economizar quota do GitHub Actions.
+  # Reativar após estabilização dos secrets e do fluxo de deploy.
   workflow_dispatch:
 
 permissions:
@@ -24,7 +16,7 @@ permissions:
 
 concurrency:
   group: shopvivaliz-deploy-dev
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   validate-secrets:
