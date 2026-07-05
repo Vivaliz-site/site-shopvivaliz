@@ -4,6 +4,29 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 */6 * * *"
+    inputs:
+      max_cycles:
+        description: "Quantidade de ciclos autonomos seguros"
+        required: false
+        default: "1"
+  schedule:
+    - cron: "0 * * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - "tasks-queue.json"
+      - "logs/tasks-queue.json"
+      - "scripts/**"
+      - "automation/eha/**"
+      - ".github/workflows/ci-autonomo-continuo.yml"
+  pull_request:
+    paths:
+      - "tasks-queue.json"
+      - "logs/tasks-queue.json"
+      - "scripts/**"
+      - "automation/eha/**"
+      - ".github/workflows/ci-autonomo-continuo.yml"
 
 permissions:
   contents: write
@@ -11,11 +34,16 @@ permissions:
 
 concurrency:
   group: ci-eha
+  pull-requests: write
+
+concurrency:
+  group: ci-eha-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     env:
       DB_HOST: ${{ secrets.DB_HOST }}
@@ -42,6 +70,18 @@ jobs:
           extensions: pdo, pdo_mysql, curl, json, mbstring
 
       - name: Install deps
+          php-version: "8.1"
+          extensions: pdo, pdo_mysql, curl, json, mbstring
+
+      - name: Validar arquivos de governanca autonoma
+        run: |
+          python -m json.tool tasks-queue.json >/dev/null
+          python -m py_compile scripts/autonomous-executor.py
+          if [ -f scripts/autonomous-policy-guard.py ]; then
+            python -m py_compile scripts/autonomous-policy-guard.py
+          fi
+
+      - name: Instalar dependencias EHA
         run: |
           if [ -f automation/eha/package.json ]; then
             cd automation/eha && npm install

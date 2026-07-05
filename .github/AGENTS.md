@@ -1,6 +1,6 @@
 # AGENTS.md — Governança de Agentes AI · ShopVivaliz
 
-> Versão 1.0 · 2026-07-03  
+> Versão 1.1 · 2026-07-04  
 > Documento oficial de governança para todos os agentes AI que operam neste repositório.  
 > **Nenhum agente pode ignorar estas regras.**
 
@@ -98,6 +98,7 @@ Smoke test pós-deploy                   ← Observability AI
 - **NUNCA** `--force` ou `--no-verify` sem autorização explícita do CTO
 - Branch naming: `feat/`, `fix/`, `hotfix/`, `chore/`, `docs/`
 - Commit messages: `type(scope): descrição` em português ou inglês
+- Commit messages em português: `feat:`, `fix:`, `chore:`, `docs:`
 - `node_modules/`, `.env`, `logs/`, `*.sql` são permanentemente ignorados (`.gitignore`)
 
 ---
@@ -127,6 +128,16 @@ Smoke test pós-deploy                   ← Observability AI
         │
 11. Observability AI valida pós-deploy (5 minutos após merge)
         │
+2. PMO AI prioriza no backlog, adiciona labels e dependências
+3. CTO AI ou Arquiteto AI define spec técnica (comentário na issue)
+4. Security AI valida a spec (impacto em segredos, LGPD, permissões)
+5. Release Manager cria branch feat/issue-{N}-{slug}
+6. Executor OpenRouter implementa seguindo a spec
+7. Executor faz push e abre PR via Release Manager
+8. QA AI executa smoke tests e valida critérios de aceite
+9. Security AI re-audita o diff do PR
+10. Release Manager faz merge se todas aprovações OK
+11. Observability AI valida pós-deploy (5 minutos após merge)
 12. PMO AI fecha a issue e atualiza backlog
 ```
 
@@ -179,6 +190,10 @@ PRICE_FIELDS = ['price', 'preco', 'valor', 'sale_price', 'markup', 'margem', 'de
 ✅ Nenhum segredo exposto em resposta HTTP
 ✅ .htaccess válido (não quebrou rotas existentes)
 ✅ Logs de erro PHP não aumentaram após deploy
+
+✅ Nenhum produto com preço negativo
+✅ Nenhum segredo exposto em resposta HTTP
+✅ PHP sem erros de sintaxe (php -l arquivo.php)
 ```
 
 ### Security (antes de todo merge)
@@ -198,6 +213,10 @@ PRICE_FIELDS = ['price', 'preco', 'valor', 'sale_price', 'markup', 'margem', 'de
 ✅ Permissões de arquivo corretas (sem 777)
 ✅ Sem SQL injection em novos endpoints
 ✅ Sem XSS em output de dados do usuário
+✅ Nenhum API key, token ou password hardcoded no diff
+✅ Arquivos protegidos intactos (deploy.yml, config/constants.php)
+✅ Sem SQL injection em novos endpoints
+✅ .env não commitado
 ```
 
 ### Deploy
@@ -329,3 +348,7 @@ logs/                              # nunca versionado
 ---
 
 *Documento mantido pelo CTO AI. Alterações requerem PR com revisão obrigatória do CTO e Security AI.*
+scripts/git_autonomous_agent.py    # Guardião de Preço + Secret Scanner
+```
+
+*Documento mantido pelo CTO AI. Alterações requerem PR com revisão do CTO e Security AI.*

@@ -1,88 +1,9 @@
 <?php
-/**
- * ShopVivaliz - Ecommerce Autônomo com Agentes IA
- * Homepage Principal
- */
-
-// Inicializar
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-ini_set('log_errors', 1);
-
-// Cabeçalhos de segurança
-header('X-Content-Type-Options: nosniff');
-header('X-Frame-Options: SAMEORIGIN');
-header('X-XSS-Protection: 1; mode=block');
-header('Referrer-Policy: strict-origin-when-cross-origin');
-header('Content-Type: text/html; charset=UTF-8');
-
-// Mercado Livre OAuth callback — ML_REDIRECT_URI aponta para a raiz do domínio
-if (isset($_GET['code']) || isset($_GET['error'])) {
-    require_once __DIR__ . '/api/ml/callback.php';
-    exit;
-}
-
-// Versão da aplicação
-$svVersion = is_file(__DIR__ . '/config/shopvivaliz-version.php') ? require __DIR__ . '/config/shopvivaliz-version.php' : array();
-define('APP_VERSION', (string)($svVersion['version'] ?? '9.2.92'));
+// Configuração Dinâmica de Ambiente
+$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.com.br';
+define('BASE_URL', $scheme . '://' . $host);
 define('APP_NAME', 'ShopVivaliz');
-if (!defined('BASE_URL')) define('BASE_URL', 'https://dev.shopvivaliz.com.br');
-
-function sv_home_products(int $limit = 8): array
-{
-    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
-    if (!is_file($jsonPath) || !is_readable($jsonPath)) return [];
-    $decoded = json_decode((string)file_get_contents($jsonPath), true);
-    if (!is_array($decoded)) return [];
-
-    // V16: ordena por commerce_score se disponível
-    $rows = array_filter($decoded, 'is_array');
-    usort($rows, function($a, $b) {
-        return ($b['commerce_score'] ?? $b['quality_score'] ?? 0) <=> ($a['commerce_score'] ?? $a['quality_score'] ?? 0);
-    });
-
-    $items = [];
-    foreach ($rows as $row) {
-        $items[] = [
-            'sku'              => trim((string)($row['sku'] ?? $row['id'] ?? 'sem-sku')),
-            'name'             => trim((string)($row['name'] ?? 'Produto Vivaliz')),
-            'image_url'        => trim((string)($row['image_url'] ?? '/favicon.ico')) ?: '/favicon.ico',
-            'price'            => (float)($row['price'] ?? 0),
-            'images_count'     => (int)($row['images_count'] ?? 0),
-            'olist_product_id' => (string)($row['olist_product_id'] ?? ''),
-            'slug'             => trim((string)($row['slug'] ?? '')),
-            'category'         => trim((string)($row['category'] ?? '')),
-        ];
-        if (count($items) >= $limit) {
-            break;
-        }
-    }
-    return $items;
-}
-
-function sv_home_esc(string $value): string
-{
-    return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
-}
-
-function sv_home_money(float $value): string
-{
-    return $value > 0 ? 'R$ ' . number_format($value, 2, ',', '.') : 'Preço sob consulta';
-}
-
-function sv_home_product_url(array $product): string
-{
-    return '/produto?' . http_build_query([
-        'sku' => $product['sku'],
-        'name' => $product['name'],
-        'image' => $product['image_url'],
-        'price' => (string)$product['price'],
-        'olist_product_id' => $product['olist_product_id'],
-    ]);
-}
-
-$featuredProducts = sv_home_products();
-
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -258,32 +179,30 @@ $featuredProducts = sv_home_products();
     </footer>
 
     <script src="/autodev/client.js"></script>
+    <title><?php echo APP_NAME; ?></title>
+    
+    <!-- SEO Dinâmico -->
+    <link rel="canonical" href="<?php echo BASE_URL; ?>/">
+    <meta property="og:url" content="<?php echo BASE_URL; ?>/">
+    <meta property="og:title" content="<?php echo APP_NAME; ?>">
+    
+    <link rel="stylesheet" href="/css/responsive.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="<?php echo BASE_URL; ?>">Início</a>
+            <a href="<?php echo BASE_URL; ?>/catalogo">Catálogo</a>
+            <a href="<?php echo BASE_URL; ?>/admin">Admin</a>
+        </nav>
+    </header>
+
+    <main>
+        <!-- Conteúdo Principal aqui -->
+    </main>
+
+    <!-- Scripts Únicos (Sem duplicação) -->
     <script src="/js/catalog.js"></script>
-    <script>
-    (function(){
-        try {
-            var cart = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
-            var count = cart.reduce(function(a,i){ return a+(i.quantity||1); }, 0);
-            var badge = document.getElementById('nav-cart-count');
-            if (badge) badge.textContent = count > 0 ? count : '';
-        } catch(e){}
-    })();
-    </script>
-    <!-- V16: signal tracker — registra views dos cards em destaque -->
-    <script>
-    (function(){
-        document.querySelectorAll('.product-card[data-sku]').forEach(function(card){
-            var sku = card.getAttribute('data-sku');
-            if(!sku) return;
-            fetch('/api/catalog/signal.php',{
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({event:'view', sku: sku})
-            }).catch(function(){});
-        });
-    })();
-    </script>
     <script src="/autodev/client.js"></script>
-    <script src="/js/catalog.js"></script>
 </body>
 </html>

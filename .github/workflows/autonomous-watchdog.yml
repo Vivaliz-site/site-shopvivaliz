@@ -1,0 +1,77 @@
+name: Autonomous Watchdog Monitor
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      cycles:
+        description: 'Number of safe watchdog cycles to request'
+        required: false
+        default: '1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: autonomous-watchdog-monitor
+  cancel-in-progress: false
+
+env:
+  SHOPVIVALIZ_BASE_URL: https://dev.shopvivaliz.com.br
+
+jobs:
+  watchdog:
+    name: Ping autonomous watchdog
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Build watchdog URL
+        id: url
+        shell: bash
+        run: |
+          CYCLES="${{ github.event.inputs.cycles || '1' }}"
+          BASE="${SHOPVIVALIZ_BASE_URL%/}"
+          URL="$BASE/api/agent/autonomous-watchdog.php?run_loop=1&cycles=$CYCLES"
+          if [ -n "${{ secrets.SHOPVIVALIZ_AGENT_KEY }}" ]; then
+            URL="$URL&agent_key=${{ secrets.SHOPVIVALIZ_AGENT_KEY }}"
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Execute watchdog
+        shell: bash
+        run: |
+          mkdir -p reports
+          HTTP_CODE=$(curl -sS -L --max-time 60 --retry 2 --retry-delay 5 \
+            -H "Accept: application/json" \
+            -o reports/autonomous-watchdog.json \
+            -w "%{http_code}" \
+            "${{ steps.url.outputs.url }}")
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat reports/autonomous-watchdog.json
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            exit 1
+          fi
+
+      - name: Validate watchdog response
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          with open('reports/autonomous-watchdog.json', 'r', encoding='utf-8') as f:
+              data = json.load(f)
+          if data.get('agent') != 'autonomous-watchdog':
+              raise SystemExit('Invalid watchdog agent response')
+          if data.get('all_ok') is False:
+              print('Watchdog alerts:', data.get('alerts', []))
+              raise SystemExit('Watchdog reported alerts')
+          print('Watchdog OK')
+          PY
+
+      - name: Upload watchdog report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autonomous-watchdog-report
+          path: reports/autonomous-watchdog.json
+          retention-days: 7
