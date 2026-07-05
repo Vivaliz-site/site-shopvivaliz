@@ -71,6 +71,7 @@ $featuredProducts = is_array($featuredProducts ?? null) ? $featuredProducts : []
             </a>
             <div class="navbar-menu">
                 <a href="/catalogo">Catálogo</a>
+                <a href="/gamificacao.php">Gamificação</a>
                 <a href="/sobre">Sobre</a>
                 <a href="/carrinho.php" class="nav-cart" id="nav-cart-link">
                     🛒 Carrinho <span class="cart-badge" id="nav-cart-count">0</span>
@@ -166,6 +167,7 @@ $featuredProducts = is_array($featuredProducts ?? null) ? $featuredProducts : []
                 <div>
                     <strong>Navegação</strong>
                     <a href="/catalogo">Catálogo</a>
+                    <a href="/gamificacao.php">Gamificação</a>
                     <a href="/sobre">Sobre</a>
                     <a href="/contato">Contato</a>
                 </div>

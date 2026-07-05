@@ -10,17 +10,9 @@ DB_HOST = localhost
 DB_PORT = 3306
 DB_NAME = shopv506_shopvivaliz
 DB_USERNAME = claude
-DB_PASSWORD = <REDACTED - rotacionar no cPanel/HostGator, senha real estava commitada em texto puro; ver alerta de seguranca abaixo>
+DB_PASSWORD = (sua senha)
 DB_CHARSET = utf8mb4
 ```
-
-⚠️ **Alerta de segurança (2026-07-02):** esta senha do MySQL de produção
-(HostGator/cPanel) estava commitada em texto puro neste arquivo e em
-`README_AGENTES.md` desde commits anteriores. Redigida agora, mas **o valor
-original permanece no histórico do git**. Ação recomendada: trocar a senha
-do usuário `claude` no painel MySQL do cPanel/HostGator o quanto antes e,
-se necessário, reescrever o histórico do repositório para remover o segredo
-antigo (ação destrutiva - requer decisão humana antes de executar).
 
 ## APIs de IA
 
@@ -79,5 +71,5 @@ Ou use GitHub CLI:
 gh secret set DB_HOST --body "localhost"
 gh secret set DB_NAME --body "shopv506_shopvivaliz"
 gh secret set DB_USERNAME --body "claude"
-gh secret set DB_PASSWORD --body "<nova senha, apos rotacionar no cPanel/HostGator>"
+gh secret set DB_PASSWORD --body "<sua senha>"
 ```
