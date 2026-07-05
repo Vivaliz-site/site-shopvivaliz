@@ -66,11 +66,31 @@ function sv_qv(string $key, string $fallback = ''): string
     return is_scalar($v) ? trim((string)$v) : $fallback;
 }
 
+function sv_product_url(array $product): string
+{
+    $slug = trim((string)($product['slug'] ?? ''));
+    if ($slug !== '') {
+        return '/produto/' . $slug;
+    }
+
+    return '/produto?' . http_build_query([
+        'sku' => trim((string)($product['sku'] ?? '')),
+        'name' => trim((string)($product['name'] ?? '')),
+        'image' => trim((string)($product['image_url'] ?? '')),
+        'price' => (string)((float)($product['price'] ?? 0)),
+        'olist_product_id' => trim((string)($product['olist_product_id'] ?? '')),
+    ]);
+}
+
 function sv_esc(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 
 /* ── resolução do produto ── */
-$slug     = sv_qv('slug');
-$resolved = $slug !== '' ? sv_product_find_slug($slug) : sv_product_find(sv_qv('sku'), sv_qv('id', sv_qv('olist_product_id')));
+$slug = sv_qv('slug');
+$requestedSku = sv_qv('sku');
+$requestedId = sv_qv('id', sv_qv('olist_product_id'));
+$resolved = $slug !== '' ? sv_product_find_slug($slug) : sv_product_find($requestedSku, $requestedId);
+$lookupRequested = $slug !== '' || $requestedSku !== '' || $requestedId !== '';
+$notFound = $lookupRequested && $resolved === [];
 
 $sku      = trim((string)($resolved['sku']             ?? '')) ?: sv_qv('sku', 'sem-sku');
 $name     = trim((string)($resolved['name']            ?? '')) ?: sv_qv('name', 'Produto Vivaliz');
@@ -85,7 +105,7 @@ $priceRaw   = (float)($resolved['price'] ?? (float)sv_qv('price', '0'));
 $priceLabel = $priceRaw > 0 ? 'R$ ' . number_format($priceRaw, 2, ',', '.') : 'Preço sob consulta';
 $canonicalUrl = 'https://dev.shopvivaliz.com.br' . ($rawSlug !== '' ? '/produto/' . $rawSlug : '/produto?sku=' . rawurlencode($sku));
 
-$related = sv_product_related($sku, $category);
+$related = $notFound ? [] : sv_product_related($sku, $category);
 
 /* ── V15: descrição automática ── */
 $description = trim((string)($resolved['description'] ?? ''));
@@ -95,24 +115,83 @@ if ($description === '') {
     $description = "Confira {$name}{$catPart}{$tagPart}. Produto de qualidade com entrega para todo o Brasil. Compre na Vivaliz.";
 }
 
-/* ── V15: JSON-LD Product ── */
-$jsonLd = [
-    '@context'    => 'https://schema.org',
-    '@type'       => 'Product',
-    'name'        => $name,
-    'image'       => $image,
-    'description' => $description,
-    'sku'         => $sku,
-    'brand'       => ['@type' => 'Brand', 'name' => 'Vivaliz'],
-    'offers'      => [
-        '@type'         => 'Offer',
-        'url'           => $canonicalUrl,
-        'priceCurrency' => 'BRL',
-        'price'         => $priceRaw > 0 ? number_format($priceRaw, 2, '.', '') : '0',
-        'availability'  => 'https://schema.org/InStock',
-        'seller'        => ['@type' => 'Organization', 'name' => 'Vivaliz'],
+if ($notFound) {
+    http_response_code(404);
+    $name = 'Produto não encontrado';
+    $description = 'O produto solicitado não foi localizado no catálogo atual da Vivaliz. Explore outras opções ou fale com a equipe comercial.';
+    $canonicalUrl = 'https://dev.shopvivaliz.com.br/catalogo';
+    $priceRaw = 0.0;
+    $priceLabel = 'Produto indisponível';
+    $tags = [];
+    $qScore = 0;
+}
+
+$breadcrumbItems = [
+    [
+        '@type' => 'ListItem',
+        'position' => 1,
+        'name' => 'Início',
+        'item' => 'https://dev.shopvivaliz.com.br/',
+    ],
+    [
+        '@type' => 'ListItem',
+        'position' => 2,
+        'name' => 'Catálogo',
+        'item' => 'https://dev.shopvivaliz.com.br/catalogo',
     ],
 ];
+
+if ($category !== '') {
+    $breadcrumbItems[] = [
+        '@type' => 'ListItem',
+        'position' => count($breadcrumbItems) + 1,
+        'name' => $category,
+        'item' => 'https://dev.shopvivaliz.com.br/catalogo?categoria=' . rawurlencode($category),
+    ];
+}
+
+$breadcrumbItems[] = [
+    '@type' => 'ListItem',
+    'position' => count($breadcrumbItems) + 1,
+    'name' => $name,
+    'item' => $canonicalUrl,
+];
+
+$breadcrumbJsonLd = [
+    '@context' => 'https://schema.org',
+    '@type' => 'BreadcrumbList',
+    'itemListElement' => $breadcrumbItems,
+];
+
+if ($notFound) {
+    $jsonLd = [
+        '@context' => 'https://schema.org',
+        '@type' => 'WebPage',
+        'name' => $name,
+        'description' => $description,
+        'url' => $canonicalUrl,
+    ];
+} else {
+    $jsonLd = [
+        '@context'       => 'https://schema.org',
+        '@type'          => 'Product',
+        'name'           => $name,
+        'image'          => $image,
+        'description'    => $description,
+        'sku'            => $sku,
+        'category'       => $category,
+        'mainEntityOfPage' => $canonicalUrl,
+        'brand'          => ['@type' => 'Brand', 'name' => 'Vivaliz'],
+        'offers'         => [
+            '@type'         => 'Offer',
+            'url'           => $canonicalUrl,
+            'priceCurrency' => 'BRL',
+            'price'         => $priceRaw > 0 ? number_format($priceRaw, 2, '.', '') : '0',
+            'availability'  => 'https://schema.org/InStock',
+            'seller'        => ['@type' => 'Organization', 'name' => 'Vivaliz'],
+        ],
+    ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -120,22 +199,29 @@ $jsonLd = [
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#173B63">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <meta name="description" content="<?= sv_esc($description) ?>">
+    <?php if ($notFound): ?>
+        <meta name="robots" content="noindex,follow">
+    <?php endif; ?>
     <meta property="og:title" content="<?= sv_esc($name) ?> | Vivaliz">
     <meta property="og:description" content="<?= sv_esc($description) ?>">
     <meta property="og:image" content="<?= sv_esc($image) ?>">
-    <meta property="og:type" content="product">
+    <meta property="og:type" content="<?= $notFound ? 'website' : 'product' ?>">
     <meta property="og:url" content="<?= sv_esc($canonicalUrl) ?>">
+    <meta property="og:site_name" content="Vivaliz">
+    <meta name="twitter:card" content="summary_large_image">
     <link rel="canonical" href="<?= sv_esc($canonicalUrl) ?>">
     <title><?= sv_esc($name) ?> | Vivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
     <script type="application/ld+json"><?= json_encode($jsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
+    <script type="application/ld+json"><?= json_encode($breadcrumbJsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
 </head>
 <body>
     <nav class="navbar">
         <div class="container nav-inner">
             <a class="brand-link" href="/">
-                <span class="brand-logo">V</span>Vivaliz
+                <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" onerror="this.src='/images/logo.svg'">
             </a>
             <div class="navbar-menu">
                 <a href="/catalogo">Catálogo</a>
@@ -156,6 +242,16 @@ $jsonLd = [
             › <span><?= sv_esc(mb_strimwidth($name, 0, 40, '…')) ?></span>
         </nav>
 
+        <?php if ($notFound): ?>
+        <section class="product-empty-state" aria-label="Produto não encontrado">
+            <h1>Produto não encontrado</h1>
+            <p class="product-description"><?= sv_esc($description) ?></p>
+            <div class="produto-actions">
+                <a class="btn btn-primary" href="/catalogo">Explorar catálogo</a>
+                <a class="btn btn-secondary" href="/contato">Falar com a equipe</a>
+            </div>
+        </section>
+        <?php else: ?>
         <div class="product-detail">
             <div class="product-detail-image">
                 <img src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" onerror="this.src='/favicon.ico'" loading="eager">
@@ -179,14 +275,24 @@ $jsonLd = [
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
+                <div class="product-confidence-box" aria-label="Informações de confiança da compra">
+                    <div class="confidence-item">🔒 Compra segura com ambiente protegido</div>
+                    <div class="confidence-item">🚚 Envio para todo o Brasil</div>
+                    <div class="confidence-item">💬 Suporte comercial antes e depois do pedido</div>
+                </div>
                 <div class="produto-actions">
                     <button class="btn btn-primary" type="button" id="buy-now">🛒 Comprar agora</button>
                     <a class="btn btn-secondary" href="/catalogo<?= $category !== '' ? '?categoria=' . rawurlencode($category) : '' ?>">← Voltar ao catálogo</a>
+                </div>
+                <div class="product-support-link">
+                    Dúvidas sobre aplicação, entrega ou compatibilidade?
+                    <a href="/contato">Fale com a equipe da Vivaliz antes de concluir.</a>
                 </div>
                 <div class="status-line" id="product-status"></div>
                 <div class="product-sku-line">SKU: <?= sv_esc($sku) ?></div>
             </div>
         </div>
+        <?php endif; ?>
     </main>
 
     <?php if (!empty($related)): ?>
@@ -194,8 +300,7 @@ $jsonLd = [
         <h2 class="related-title">Você também pode gostar</h2>
         <div class="product-grid related-grid">
             <?php foreach ($related as $rp):
-                $rUrl = $rp['slug'] !== '' ? '/produto/' . $rp['slug']
-                      : '/produto?' . http_build_query(['sku' => $rp['sku'], 'name' => $rp['name'], 'image' => $rp['image_url'], 'price' => (string)$rp['price'], 'olist_product_id' => $rp['olist_product_id']]);
+                $rUrl = sv_product_url($rp);
                 $rPayload = rawurlencode(json_encode(['sku' => $rp['sku'], 'name' => $rp['name'], 'image_url' => $rp['image_url'], 'price' => $rp['price'], 'olist_product_id' => $rp['olist_product_id']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             ?>
             <article class="product-card">
@@ -221,6 +326,9 @@ $jsonLd = [
 
     <script>
     (function () {
+        <?php if ($notFound): ?>
+        return;
+        <?php endif; ?>
         var product = {
             sku: <?= json_encode($sku, JSON_UNESCAPED_UNICODE) ?>,
             name: <?= json_encode($name, JSON_UNESCAPED_UNICODE) ?>,

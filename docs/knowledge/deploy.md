@@ -3,6 +3,11 @@
 ## Pipeline
 push to `main` → GitHub Actions `deploy.yml` → FTP via SamKirkland/FTP-Deploy-Action@v4.3.5 → HostGator → dev.shopvivaliz.com.br
 
+## Vercel
+- O repositório pode ser publicado na Vercel como camada estática usando `vercel.json`.
+- A configuração atual trata a Vercel como shell estático com `outputDirectory` apontando para `web/`.
+- O runtime principal do projeto continua fora da Vercel: PHP, automações IA e deploy operacional permanecem no fluxo GitHub Actions + FTP.
+
 ## Excludes FTP
 - `**/uploads/olist/**`
 - `**/reports/**`

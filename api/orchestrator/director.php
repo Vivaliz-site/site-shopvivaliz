@@ -84,6 +84,7 @@ $catalog      = $report['catalog']      ?? [];
 $integrations = $report['integrations'] ?? [];
 $ranking      = $report['ranking']      ?? [];
 $demand       = $report['demand']       ?? [];
+$roi          = $report['roi']          ?? [];
 
 // Regra 1: Muitos produtos com preço zero → price-sync-check urgente
 $zeroPrice = (int)($catalog['zero_price'] ?? 0);
@@ -156,6 +157,31 @@ if ($mlTokenAge > 21600 && ($integrations['ml_oauth_connected'] ?? false)) {
         'task_type' => 'watchdog',
         'priority'  => 'normal',
         'data'      => ['endpoint' => '/api/agent/autonomous-watchdog.php', 'ml_token_age_s' => $mlTokenAge],
+    ];
+}
+
+// Regra 7: ROI apontando oportunidade de venda → sales-flow
+$topOpportunity = $roi['top_opportunities'][0] ?? $roi['priorities'][0] ?? null;
+if (is_array($topOpportunity) && !empty($topOpportunity['sku'])) {
+    $decisions[] = [
+        'trigger'   => 'roi_top_opportunity',
+        'reason'    => sprintf(
+            'ROI prioriza %s em %s (%s)',
+            (string)($topOpportunity['action'] ?? 'melhoria'),
+            (string)($topOpportunity['sku'] ?? 'sku-unknown'),
+            (string)($topOpportunity['impact'] ?? 'medio')
+        ),
+        'task_type' => 'sales-flow',
+        'priority'  => 'high',
+        'data'      => [
+            'endpoint' => '/api/agent/autonomous-report.php',
+            'sku' => $topOpportunity['sku'],
+            'target' => $topOpportunity['target'] ?? null,
+            'action' => $topOpportunity['action'] ?? null,
+            'impact' => $topOpportunity['impact'] ?? null,
+            'priority_score' => $topOpportunity['priority_score'] ?? null,
+            'channel' => $topOpportunity['channel'] ?? null,
+        ],
     ];
 }
 
