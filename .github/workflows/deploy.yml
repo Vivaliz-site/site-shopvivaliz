@@ -23,7 +23,7 @@ permissions:
 
 concurrency:
   group: shopvivaliz-deploy-dev
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   web-deploy:
