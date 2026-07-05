@@ -145,17 +145,12 @@ jobs:
         run: |
           echo "Validando YAML..."
 
-          files=$(ls .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null)
+          for yaml_file in .github/workflows/*.yml .github/workflows/*.yaml; do
+            [ -f "$yaml_file" ] || continue
 
-          for yaml_file in $files; do
             echo "Validando $yaml_file"
 
-            python3 - <<EOF
-import yaml, sys
-with open("$yaml_file") as f:
-    yaml.safe_load(f)
-EOF
-
+            python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" "$yaml_file" || exit 1
           done
 
       - name: Validar JSON
