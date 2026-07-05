@@ -132,7 +132,7 @@ jobs:
           fi
 
   yaml-validation:
-    name: Validar YAML
+    name: Validar Workflows YAML
     needs: checkout
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -143,46 +143,20 @@ jobs:
       - name: Validar Workflows YAML
         shell: bash
         run: |
-          echo "Validando YAML dos workflows..."
-          echo ""
+          echo "Validando YAML..."
 
-          YAML_ERRORS=0
+          files=$(ls .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null)
 
-          if command -v python3 &> /dev/null; then
-            while IFS= read -r yaml_file; do
-              [ -n "$yaml_file" ] || continue
-              if python3 - "$yaml_file" <<'PY'
-import sys
-from pathlib import Path
+          for yaml_file in $files; do
+            echo "Validando $yaml_file"
 
-import yaml
+            python3 - <<EOF
+import yaml, sys
+with open("$yaml_file") as f:
+    yaml.safe_load(f)
+EOF
 
-path = Path(sys.argv[1])
-try:
-    yaml.safe_load(path.read_text(encoding="utf-8"))
-except Exception as exc:
-    print(f"::error::{path.name} - YAML inválido")
-    print(f"  {exc}")
-    raise SystemExit(1)
-PY
-              then
-                echo "✓ $(basename "$yaml_file")"
-              else
-                ((YAML_ERRORS++))
-              fi
-            done < <(ls -1 .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null | sort)
-
-            if [ $YAML_ERRORS -gt 0 ]; then
-              echo ""
-              echo "::error::$YAML_ERRORS arquivos YAML com erro"
-              exit 1
-            fi
-          else
-            echo "⚠ python3 não disponível - pulando validação YAML"
-          fi
-          
-          echo ""
-          echo "✓ YAML válido"
+          done
 
       - name: Validar JSON
         shell: bash
