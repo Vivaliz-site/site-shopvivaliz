@@ -29,7 +29,8 @@ class SystemHealthCheck:
             '.env.example': 'Template ENV',
             'logs/tasks-queue.json': 'Fila de tarefas',
             'api/monitor/api.php': 'API Monitor',
-            '.github/workflows/24-7-continuous-agent.yml': 'Workflow 24/7'
+            '.github/workflows/24-7-continuous-agent.yml': 'Workflow 24/7',
+            'scripts/tri-environment-sync.js': 'Runner triambiente JS'
         }
 
         all_exist = True
@@ -83,9 +84,13 @@ class SystemHealthCheck:
         print("\n3. VERIFICANDO LOGS...")
 
         log_files = {
-            'logs/execution': 'Logs de execução',
+            'logs/execution/app.log': 'Logs de execução',
             'logs/monitor-messages.log': 'Mensagens do monitor',
-            'logs/monitor-responses.jsonl': 'Respostas dos agentes'
+            'logs/monitor-responses.jsonl': 'Respostas dos agentes',
+            'logs/autonomous-cycle-events.jsonl': 'Rastro dos ciclos autônomos',
+            'logs/autonomous-cycle-report.json': 'Relatório do ciclo autônomo',
+            'logs/autonomous-cycle-report.md': 'Relatório humano do ciclo',
+            'logs/tri-environment-sync.json': 'Sincronização triambiente',
         }
 
         all_exist = False
@@ -191,7 +196,8 @@ class SystemHealthCheck:
             'scripts/real-task-executor.py': 'Executor real',
             'scripts/chat-responder.py': 'Responder chat',
             'scripts/force-execution.py': 'Força de execução',
-            'scripts/continuous-executor.py': 'Executor contínuo'
+            'scripts/continuous-executor.py': 'Executor contínuo',
+            'scripts/tri-environment-sync.js': 'Sincronização triambiente JS'
         }
 
         all_ok = True
@@ -243,25 +249,25 @@ class SystemHealthCheck:
         if self.report['errors']:
             print("ERROS ENCONTRADOS:")
             for error in self.report['errors']:
-                print(f"  ❌ {error}")
+                print(f"  [ERRO] {error}")
             print()
 
         if self.report['warnings']:
             print("AVISOS:")
             for warning in self.report['warnings']:
-                print(f"  ⚠️  {warning}")
+                print(f"  [AVISO] {warning}")
             print()
 
         # Determinar status final
         if self.report['errors']:
             self.report['status'] = 'CRITICAL'
-            status_emoji = "🔴"
+            status_emoji = "[CRITICAL]"
         elif self.report['warnings']:
             self.report['status'] = 'WARNING'
-            status_emoji = "🟡"
+            status_emoji = "[WARNING]"
         else:
             self.report['status'] = 'HEALTHY'
-            status_emoji = "🟢"
+            status_emoji = "[HEALTHY]"
 
         print(f"{status_emoji} STATUS FINAL: {self.report['status']}")
         print()

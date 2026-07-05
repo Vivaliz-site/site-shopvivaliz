@@ -4,25 +4,16 @@ import json
 import sys
 import argparse
 from datetime import datetime
-from pathlib import Path
+from task_queue_lib import load_queue, next_task_id, save_queue, utc_now
 
-QUEUE_FILE = Path("logs/tasks-queue.json")
-
-def load_queue():
-    if not QUEUE_FILE.exists():
-        return {"queue": []}
-    with open(QUEUE_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        if isinstance(data, dict) and isinstance(data.get("queue"), list):
-            return data
-        if isinstance(data, list):
-            return {"queue": data}
-        return {"queue": []}
-
-def save_queue(data):
-    QUEUE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(QUEUE_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+KNOWN_STATUSES = [
+    "pending",
+    "completed",
+    "blocked_missing_env",
+    "blocked_manual_access",
+    "blocked_human_approval_required",
+    "blocked_price_approval_required",
+]
 
 def list_tasks(status=None):
     data = load_queue()
@@ -30,6 +21,15 @@ def list_tasks(status=None):
 
     if status:
         tasks = [t for t in tasks if t["status"] == status]
+
+    tasks = sorted(
+        tasks,
+        key=lambda task: (
+            int(task.get("queue_rank", 9999)),
+            str(task.get("created_at", "")),
+            str(task.get("id", "")),
+        ),
+    )
 
     if not tasks:
         print(f"Nenhuma tarefa encontrada (status={status or 'qualquer'})")
@@ -45,17 +45,7 @@ def list_tasks(status=None):
 
 def add_task(title, description, priority="medium"):
     data = load_queue()
-
-    # Gerar ID
-    task_ids = []
-    for t in data["queue"]:
-        task_id = str(t.get("id", ""))
-        if task_id.startswith("task-"):
-            try:
-                task_ids.append(int(task_id.split("-")[1]))
-            except (IndexError, ValueError):
-                continue
-    new_id = f"task-{max(task_ids or [0]) + 1:03d}"
+    new_id = next_task_id(data)
 
     new_task = {
         "id": new_id,
@@ -63,49 +53,49 @@ def add_task(title, description, priority="medium"):
         "description": description,
         "priority": priority,
         "status": "pending",
-        "created_at": datetime.utcnow().isoformat() + "Z"
+        "created_at": utc_now()
     }
 
     data["queue"].append(new_task)
     save_queue(data)
 
-    print(f" Tarefa adicionada!")
+    print("Tarefa adicionada!")
     print(f"   ID: {new_id}")
-    print(f"   Título: {title}")
+    print(f"   Titulo: {title}")
     print(f"   Prioridade: {priority}")
 
 def remove_task(task_id):
     data = load_queue()
     data["queue"] = [t for t in data["queue"] if t["id"] != task_id]
     save_queue(data)
-    print(f" Tarefa {task_id} removida da fila")
+    print(f"Tarefa {task_id} removida da fila")
 
 def mark_task(task_id, status):
     data = load_queue()
     task = next((t for t in data["queue"] if t["id"] == task_id), None)
 
     if not task:
-        print(f" Tarefa {task_id} não encontrada")
+        print(f"Tarefa {task_id} nao encontrada")
         return
 
     task["status"] = status
     if status == "completed":
-        task["completed_at"] = datetime.utcnow().isoformat() + "Z"
+        task["completed_at"] = utc_now()
 
     save_queue(data)
-    print(f" Tarefa {task_id} marcada como {status}")
+    print(f"Tarefa {task_id} marcada como {status}")
 
 def priority(task_id, new_priority):
     data = load_queue()
     task = next((t for t in data["queue"] if t["id"] == task_id), None)
 
     if not task:
-        print(f" Tarefa {task_id} não encontrada")
+        print(f"Tarefa {task_id} nao encontrada")
         return
 
     task["priority"] = new_priority
     save_queue(data)
-    print(f" Prioridade de {task_id} alterada para {new_priority}")
+    print(f"Prioridade de {task_id} alterada para {new_priority}")
 
 def stats():
     data = load_queue()
@@ -114,11 +104,13 @@ def stats():
     total = len(tasks)
     completed = len([t for t in tasks if t["status"] == "completed"])
     pending = len([t for t in tasks if t["status"] == "pending"])
+    blocked = len([t for t in tasks if str(t.get("status", "")).startswith("blocked_")])
 
-    print(f"\n Estatísticas da Fila:")
+    print("\nEstatisticas da fila:")
     print(f"   Total: {total}")
-    print(f"    Completas: {completed}")
-    print(f"   ⏳ Pendentes: {pending}")
+    print(f"   Completas: {completed}")
+    print(f"   Pendentes: {pending}")
+    print(f"   Bloqueadas: {blocked}")
     print(f"   Taxa: {(completed/total*100):.1f}%" if total else "   Taxa: 0.0%")
     print()
 
@@ -128,7 +120,7 @@ if __name__ == "__main__":
 
     # List
     list_cmd = subparsers.add_parser("list", help="Listar tarefas")
-    list_cmd.add_argument("--status", choices=["pending", "completed"], help="Filtrar por status")
+    list_cmd.add_argument("--status", choices=KNOWN_STATUSES, help="Filtrar por status")
 
     # Add
     add_cmd = subparsers.add_parser("add", help="Adicionar tarefa")
@@ -143,7 +135,7 @@ if __name__ == "__main__":
     # Mark
     mark_cmd = subparsers.add_parser("mark", help="Marcar tarefa como completa/pendente")
     mark_cmd.add_argument("task_id", help="ID da tarefa")
-    mark_cmd.add_argument("--status", choices=["pending", "completed"], default="completed", help="Novo status")
+    mark_cmd.add_argument("--status", choices=KNOWN_STATUSES, default="completed", help="Novo status")
 
     # Priority
     priority_cmd = subparsers.add_parser("priority", help="Alterar prioridade")

@@ -36,6 +36,34 @@
     font-weight: 800;
 }
 
+.checkout-reassurance {
+    display: grid;
+    gap: 10px;
+    margin: -4px 0 18px;
+    padding: 14px 16px;
+    border: 1px solid rgba(17, 102, 216, 0.12);
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(238, 244, 255, 0.8), rgba(248, 251, 255, 0.95));
+}
+
+.reassurance-pill {
+    width: fit-content;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(17, 102, 216, 0.12);
+    color: var(--brand);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.reassurance-copy {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
 /* ── Form ── */
 .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .form-group { display: grid; gap: 6px; font-size: 14px; font-weight: 700; }
@@ -92,6 +120,27 @@
     border-radius: 10px;
     margin-top: 8px;
     letter-spacing: 0.01em;
+}
+
+.checkout-support-inline {
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.checkout-support-inline strong {
+    color: var(--ink);
+}
+
+.checkout-support-inline a {
+    color: var(--brand);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.checkout-support-inline a:hover {
+    text-decoration: underline;
 }
 
 /* ── Checkout Status ── */

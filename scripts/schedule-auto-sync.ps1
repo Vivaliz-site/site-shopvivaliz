@@ -34,7 +34,7 @@ function Create-AutoSyncTask {
     # Create task action
     $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument @"
         -NoProfile -WindowStyle Hidden -Command `
-        `"Set-Location '$Path'; python scripts/autonomous-sync.py`"
+        `"Set-Location '$Path'; if (Get-Command node -ErrorAction SilentlyContinue) { node scripts/tri-environment-sync.js } else { python scripts/autonomous-sync.py }`"
 "@
 
     # Create trigger (every 2 minutes)
@@ -49,7 +49,7 @@ function Create-AutoSyncTask {
             -Action $action `
             -Trigger $trigger `
             -Settings $settings `
-            -Description "ShopVivaliz Autonomous Sync - Synchronizes C:\FRED <-> local" `
+            -Description "ShopVivaliz Autonomous Sync - Synchronizes PC, cloud and Oracle" `
             -RunLevel Highest `
             -Force
 

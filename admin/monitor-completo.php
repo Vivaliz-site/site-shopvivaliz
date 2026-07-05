@@ -66,6 +66,21 @@ foreach (monitor_read_lines($messages_file, 3) as $line) {
     }
 }
 $recent_messages = array_reverse($recent_messages);
+
+$tri_sync = monitor_read_json(__DIR__ . '/../logs/tri-environment-sync.json', []);
+if (empty($tri_sync)) {
+    $tri_sync = monitor_read_json(__DIR__ . '/../logs/autonomous-sync.json', []);
+}
+
+$roi_report = monitor_read_json(__DIR__ . '/../logs/roi-engine-report.json', []);
+$sales_focus = $roi_report['top_opportunities'][0] ?? $roi_report['priorities'][0] ?? null;
+
+$tri_sync_status = strtolower((string)($tri_sync['status'] ?? 'unknown'));
+$tri_sync_badge = [
+    'healthy' => ['label' => 'Rodando', 'color' => '#51cf66'],
+    'warning' => ['label' => 'Lento', 'color' => '#ffd43b'],
+    'critical' => ['label' => 'Parado', 'color' => '#ff6b6b'],
+][$tri_sync_status] ?? ['label' => 'Indefinido', 'color' => '#adb5bd'];
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -266,6 +281,12 @@ $recent_messages = array_reverse($recent_messages);
                 <h3>Agentes</h3>
                 <div class="number">3</div>
             </div>
+            <div class="card">
+                <h3>Sincronização 24/7</h3>
+                <div class="number" style="font-size:1.6em;color:<?php echo htmlspecialchars($tri_sync_badge['color']); ?>;">
+                    <?php echo htmlspecialchars($tri_sync_badge['label']); ?>
+                </div>
+            </div>
         </div>
 
         <!-- TAREFAS + CHAT -->
@@ -333,6 +354,23 @@ $recent_messages = array_reverse($recent_messages);
                 <div>✅ Workflows: 24/7 Rodando</div>
                 <div>✅ Deploy: Automático via FTP</div>
                 <div>✅ Autonomia: 100% Ativa</div>
+            </div>
+            <div style="margin-top: 15px; padding: 14px; border-radius: 8px; background: #fff7ed; border: 1px solid #fed7aa;">
+                <strong>Foco de venda</strong><br>
+                <?php if ($sales_focus): ?>
+                    SKU: <?php echo htmlspecialchars((string)($sales_focus['sku'] ?? 'n/a')); ?> ·
+                    Ação: <?php echo htmlspecialchars((string)($sales_focus['action'] ?? 'n/a')); ?> ·
+                    Impacto: <?php echo htmlspecialchars((string)($sales_focus['impact'] ?? 'n/a')); ?>
+                <?php else: ?>
+                    ROI sem prioridade carregada no momento.
+                <?php endif; ?>
+            </div>
+            <div style="margin-top: 15px; padding: 14px; border-radius: 8px; background: #f8f9fa; border: 1px solid #e9ecef;">
+                <strong>Triambiente</strong><br>
+                Ambiente: <?php echo htmlspecialchars((string)($tri_sync['environment'] ?? 'desconhecido')); ?> ·
+                Branch: <?php echo htmlspecialchars((string)($tri_sync['git']['branch'] ?? 'n/a')); ?> ·
+                Ahead/Behind: <?php echo htmlspecialchars((string)($tri_sync['git']['ahead_by'] ?? 0)); ?>/<?php echo htmlspecialchars((string)($tri_sync['git']['behind_by'] ?? 0)); ?> ·
+                Próxima ação: <?php echo htmlspecialchars((string)($tri_sync['nextAction'] ?? 'n/a')); ?>
             </div>
         </div>
     </div>

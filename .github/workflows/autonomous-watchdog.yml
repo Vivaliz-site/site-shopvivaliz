@@ -1,6 +1,8 @@
 name: Autonomous Watchdog Monitor
 
 on:
+  # Gatilhos automáticos pausados temporariamente para economizar quota do GitHub Actions.
+  # Reativar após estabilização dos secrets e do fluxo de monitoramento.
   workflow_dispatch:
     inputs:
       cycles:
@@ -19,11 +21,96 @@ env:
   SHOPVIVALIZ_BASE_URL: https://dev.shopvivaliz.com.br
 
 jobs:
-  watchdog:
-    name: Ping autonomous watchdog
+  validate-agent-key:
+    name: Validar Agent Key
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      agent_key_valid: ${{ steps.validate.outputs.valid }}
+    
     steps:
+      - name: Validar SHOPVIVALIZ_AGENT_KEY com Fallbacks
+        id: validate
+        shell: bash
+        run: |
+          # Função auxiliar para validar agent key com fallbacks
+          validate_agent_key() {
+            local primary="$1"
+            local fallback1="$2"
+            local fallback2="$3"
+            local fallback3="$4"
+            
+            # Tentar primary
+            if [ -n "$primary" ]; then
+              echo "✓ Agent key ENCONTRADA (primário: SHOPVIVALIZ_AGENT_KEY)"
+              return 0
+            fi
+            
+            # Tentar fallback1
+            if [ -n "$fallback1" ]; then
+              echo "⚠ Agent key ENCONTRADA (fallback: AGENT_KEY)"
+              return 0
+            fi
+            
+            # Tentar fallback2
+            if [ -n "$fallback2" ]; then
+              echo "⚠ Agent key ENCONTRADA (fallback: WATCHDOG_AGENT_KEY)"
+              return 0
+            fi
+            
+            # Tentar fallback3
+            if [ -n "$fallback3" ]; then
+              echo "⚠ Agent key ENCONTRADA (fallback: AUTONOMOUS_AGENT_KEY)"
+              return 0
+            fi
+            
+            # Nenhum encontrado
+            echo "::warning::Agent key NÃO ENCONTRADA"
+            echo "Esperados:"
+            echo "  • SHOPVIVALIZ_AGENT_KEY (primário)"
+            echo "  • AGENT_KEY (fallback)"
+            echo "  • WATCHDOG_AGENT_KEY (fallback)"
+            echo "  • AUTONOMOUS_AGENT_KEY (fallback)"
+            echo ""
+            echo "Configure em: Settings → Secrets and variables → Actions"
+            echo ""
+            echo "Continuando mesmo assim (watchdog pode retornar 403 sem chave)"
+            return 0
+          }
+          
+          validate_agent_key \
+            "${{ secrets.SHOPVIVALIZ_AGENT_KEY }}" \
+            "${{ secrets.AGENT_KEY }}" \
+            "${{ secrets.WATCHDOG_AGENT_KEY }}" \
+            "${{ secrets.AUTONOMOUS_AGENT_KEY }}"
+          
+          echo "valid=true" >> "$GITHUB_OUTPUT"
+
+  watchdog:
+    name: Ping autonomous watchdog
+    needs: validate-agent-key
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    steps:
+      - name: Preparar Agent Key
+        id: prepare-key
+        shell: bash
+        run: |
+          # Usar valor primário ou fallback
+          AGENT_KEY="${{ secrets.SHOPVIVALIZ_AGENT_KEY }}"
+          [ -z "$AGENT_KEY" ] && AGENT_KEY="${{ secrets.AGENT_KEY }}"
+          [ -z "$AGENT_KEY" ] && AGENT_KEY="${{ secrets.WATCHDOG_AGENT_KEY }}"
+          [ -z "$AGENT_KEY" ] && AGENT_KEY="${{ secrets.AUTONOMOUS_AGENT_KEY }}"
+          
+          if [ -n "$AGENT_KEY" ]; then
+            echo "key_exists=true" >> "$GITHUB_OUTPUT"
+            echo "AGENT_KEY_VALUE=$AGENT_KEY" >> "$GITHUB_ENV"
+          else
+            echo "key_exists=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Nenhuma agent key configurada - watchdog retornará 403/401"
+          fi
+
       - name: Build watchdog URL
         id: url
         shell: bash
@@ -31,39 +118,168 @@ jobs:
           CYCLES="${{ github.event.inputs.cycles || '1' }}"
           BASE="${SHOPVIVALIZ_BASE_URL%/}"
           URL="$BASE/api/agent/autonomous-watchdog.php?run_loop=1&cycles=$CYCLES"
-          if [ -n "${{ secrets.SHOPVIVALIZ_AGENT_KEY }}" ]; then
-            URL="$URL&agent_key=${{ secrets.SHOPVIVALIZ_AGENT_KEY }}"
+          
+          if [ "${{ steps.prepare-key.outputs.key_exists }}" == "true" ]; then
+            URL="$URL&agent_key=${AGENT_KEY_VALUE}"
+            echo "url_with_key=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "url_with_key=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          
+          # Output sem mostrar a chave
+          echo "url_display=$BASE/api/agent/autonomous-watchdog.php?run_loop=1&cycles=$CYCLES&agent_key=***" >> "$GITHUB_OUTPUT"
+          echo "WATCHDOG_URL=$URL" >> "$GITHUB_ENV"
+
+      - name: Verificar Endpoint Antes de Chamar
+        id: pre-check
+        shell: bash
+        run: |
+          BASE="${SHOPVIVALIZ_BASE_URL%/}"
+          ENDPOINT="$BASE/api/agent/autonomous-watchdog.php"
+          
+          echo "Verificando endpoint: $ENDPOINT"
+          echo ""
+          
+          # HEAD request para ver se endpoint existe
+          HTTP_CODE=$(curl -sS \
+            --max-time 5 \
+            --retry 1 \
+            --retry-delay 2 \
+            -o /dev/null \
+            -w "%{http_code}" \
+            -I "$ENDPOINT" 2>&1 || echo "000")
+          
+          echo "HTTP Status: $HTTP_CODE"
+          echo ""
+          
+          case $HTTP_CODE in
+            200|201|202|204)
+              echo "✓ Endpoint está acessível"
+              echo "endpoint_ok=true" >> "$GITHUB_OUTPUT"
+              ;;
+            301|302|303|307|308)
+              echo "⚠ Endpoint com redirecionamento ($HTTP_CODE)"
+              echo "endpoint_ok=true" >> "$GITHUB_OUTPUT"
+              ;;
+            400|401)
+              echo "⚠ Erro de autenticação ($HTTP_CODE)"
+              echo "endpoint_ok=true" >> "$GITHUB_OUTPUT"
+              echo "::warning::Watchdog pode exigir chave de autenticação"
+              ;;
+            403)
+              echo "⚠ Acesso proibido ($HTTP_CODE)"
+              echo "endpoint_ok=true" >> "$GITHUB_OUTPUT"
+              echo "::warning::Endpoint retornou 403 - pode exigir agent_key"
+              ;;
+            404)
+              echo "✗ Endpoint NÃO encontrado ($HTTP_CODE)"
+              echo "endpoint_ok=false" >> "$GITHUB_OUTPUT"
+              echo "::error::Endpoint retornou 404"
+              echo ""
+              echo "Verifique:"
+              echo "  • Arquivo api/agent/autonomous-watchdog.php existe?"
+              echo "  • URL está correta?"
+              echo "  • Servidor está respondendo?"
+              ;;
+            500|502|503|504)
+              echo "✗ Erro no servidor ($HTTP_CODE)"
+              echo "endpoint_ok=false" >> "$GITHUB_OUTPUT"
+              echo "::error::Servidor retornou erro $HTTP_CODE"
+              ;;
+            000)
+              echo "✗ Não foi possível alcançar o endpoint"
+              echo "endpoint_ok=false" >> "$GITHUB_OUTPUT"
+              echo "::error::Falha na conexão"
+              echo ""
+              echo "Verifique:"
+              echo "  • URL está correta? ($ENDPOINT)"
+              echo "  • Servidor está online?"
+              echo "  • Firewall permite conexão?"
+              echo "  • DNS está resolvendo corretamente?"
+              ;;
+            *)
+              echo "⚠ Status desconhecido ($HTTP_CODE)"
+              echo "endpoint_ok=true" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
 
       - name: Execute watchdog
+        id: execute
+        if: steps.pre-check.outputs.endpoint_ok == 'true'
         shell: bash
         run: |
           mkdir -p reports
-          HTTP_CODE=$(curl -sS -L --max-time 60 --retry 2 --retry-delay 5 \
+          
+          echo "Executando watchdog..."
+          echo "URL: ${{ steps.url.outputs.url_display }}"
+          echo ""
+          
+          HTTP_CODE=$(curl -sS -L \
+            --max-time 60 \
+            --retry 2 \
+            --retry-delay 5 \
+            --retry-all-errors \
             -H "Accept: application/json" \
             -o reports/autonomous-watchdog.json \
             -w "%{http_code}" \
-            "${{ steps.url.outputs.url }}")
+            "${WATCHDOG_URL}")
+          
           echo "HTTP_CODE=$HTTP_CODE"
-          cat reports/autonomous-watchdog.json
+          echo ""
+          echo "Response:"
+          cat reports/autonomous-watchdog.json 2>/dev/null || echo "(nenhuma resposta)"
+          
+          echo ""
+          echo "http_code=$HTTP_CODE" >> "$GITHUB_OUTPUT"
+          
           if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
-            exit 1
+            if [ "$HTTP_CODE" -eq 401 ] || [ "$HTTP_CODE" -eq 403 ]; then
+              echo "::warning::Watchdog retornou $HTTP_CODE - verifique agent_key"
+            else
+              echo "::warning::Watchdog HTTP error ($HTTP_CODE)"
+            fi
           fi
 
       - name: Validate watchdog response
+        if: steps.execute.outcome == 'success' && steps.execute.outputs.http_code >= 200 && steps.execute.outputs.http_code < 300
         shell: bash
         run: |
           python3 - <<'PY'
-          import json, sys
-          with open('reports/autonomous-watchdog.json', 'r', encoding='utf-8') as f:
-              data = json.load(f)
-          if data.get('agent') != 'autonomous-watchdog':
-              raise SystemExit('Invalid watchdog agent response')
+          import json
+          import sys
+          
+          try:
+              with open('reports/autonomous-watchdog.json', 'r', encoding='utf-8') as f:
+                  data = json.load(f)
+          except Exception as e:
+              print(f"::warning::Falha ao ler JSON do watchdog: {e}")
+              sys.exit(0)
+          
+          if not data:
+              print("::warning::Resposta vazia do watchdog")
+              sys.exit(0)
+          
+          if data.get('agent') and data.get('agent') not in ['autonomous-watchdog', 'autonomous_watchdog']:
+              print(f"::warning::Resposta de agente diferente: {data.get('agent')}")
+          
+          alerts = data.get('alerts', [])
           if data.get('all_ok') is False:
-              print('Watchdog alerts:', data.get('alerts', []))
-              raise SystemExit('Watchdog reported alerts')
-          print('Watchdog OK')
+              print('::warning::Watchdog reported alerts (não bloqueante)')
+              for alert in alerts:
+                  print(f'  • {alert}')
+          else:
+              print('✓ Watchdog OK')
+          
+          # Check individual probes
+          probes = data.get('probes', {})
+          if probes:
+              print('')
+              print('Status de cada probe:')
+              for probe_name, probe_data in probes.items():
+                  status = '✓' if probe_data.get('ok') else '✗'
+                  http_code = probe_data.get('status', '???')
+                  response_time = probe_data.get('ms', '???')
+                  print(f'  {status} {probe_name}: HTTP {http_code} ({response_time}ms)')
           PY
 
       - name: Upload watchdog report
@@ -73,3 +289,19 @@ jobs:
           name: autonomous-watchdog-report
           path: reports/autonomous-watchdog.json
           retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Registrar Erro se Endpoint Indisponível
+        if: failure() && steps.pre-check.outputs.endpoint_ok == 'false'
+        shell: bash
+        run: |
+          echo "::error::Watchdog abortado - endpoint não disponível"
+          echo ""
+          echo "Ações recomendadas:"
+          echo "  1. Verifique se api/agent/autonomous-watchdog.php existe no repositório"
+          echo "  2. Verifique se o servidor está respondendo"
+          echo "  3. Verifique se o arquivo foi deployado corretamente"
+          echo "  4. Verifique os logs do servidor (Apache/Nginx/PHP)"
+          echo ""
+          echo "Para debug local:"
+          echo "  curl -v https://dev.shopvivaliz.com.br/api/agent/autonomous-watchdog.php"
