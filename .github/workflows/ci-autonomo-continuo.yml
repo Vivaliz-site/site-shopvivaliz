@@ -8,7 +8,7 @@ on:
         required: false
         default: "1"
   schedule:
-    - cron: "0 * * * *"
+    - cron: "0 */6 * * *"
   push:
     branches:
       - main
@@ -33,7 +33,7 @@ permissions:
 
 concurrency:
   group: ci-eha-${{ github.ref_name }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   validate:

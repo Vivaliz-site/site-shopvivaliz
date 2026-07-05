@@ -2,7 +2,7 @@ name: Autonomous Watchdog Monitor
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       cycles:
@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: autonomous-watchdog-monitor
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   SHOPVIVALIZ_BASE_URL: https://dev.shopvivaliz.com.br
