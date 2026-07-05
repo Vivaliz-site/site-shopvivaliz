@@ -4,8 +4,14 @@
     --ink: #111827;
     --muted: #6b7280;
     --line: #e5e9f0;
-    --brand: #2563eb;
-    --brand-strong: #1d4ed8;
+    /* Vivaliz brand palette */
+    --brand-navy: #173B63;
+    --brand-navy-dark: #0f2847;
+    --brand-green: #059669;
+    --brand-green-light: #ecfdf5;
+    /* UI tokens — using navy as primary brand */
+    --brand: #173B63;
+    --brand-strong: #0f2847;
     --accent: #059669;
     --accent-bg: #ecfdf5;
     --warn: #d97706;
@@ -77,6 +83,13 @@ a {
     flex-shrink: 0;
 }
 
+/* Logo image in navbar */
+.brand-logo-img {
+    height: 44px;
+    width: auto;
+    display: block;
+}
+
 /* Cart badge in navbar */
 .nav-cart { position: relative; display: inline-flex; align-items: center; gap: 6px; }
 .cart-badge {
@@ -129,7 +142,7 @@ a {
 }
 
 .hero {
-    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 55%, #0ea5e9 100%);
+    background: linear-gradient(135deg, var(--brand-navy-dark) 0%, var(--brand-navy) 55%, #1a5fa8 100%);
     padding: 72px 0 56px;
     color: #fff;
     position: relative;
@@ -431,6 +444,23 @@ a {
     padding: 18px 0;
 }
 
+.catalog-trust-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #f8fbff;
+}
+
+.catalog-trust-item {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.45;
+}
+
 .admin-overview {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -713,6 +743,10 @@ footer {
         grid-template-columns: 1fr;
     }
 
+    .catalog-trust-strip {
+        grid-template-columns: 1fr;
+    }
+
     .admin-overview,
     .admin-map-grid {
         grid-template-columns: 1fr;
@@ -863,10 +897,54 @@ footer {
     margin-top: 4px;
 }
 
+.product-confidence-box {
+    display: grid;
+    gap: 8px;
+    margin: 18px 0 0;
+    padding: 14px 16px;
+    border: 1px solid rgba(45, 187, 87, 0.18);
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(223, 245, 231, 0.75), rgba(255, 255, 255, 0.95));
+}
+
+.confidence-item {
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.5;
+}
+
 .produto-actions {
     display: grid;
     gap: 10px;
     margin-top: 20px;
+}
+
+.product-support-link {
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.product-support-link a {
+    color: var(--brand);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.product-support-link a:hover {
+    text-decoration: underline;
+}
+
+.product-empty-state {
+    display: grid;
+    gap: 14px;
+    padding: 24px;
+    background: #ffffff;
+    border: 1px solid rgba(23, 59, 99, 0.1);
+    border-radius: 18px;
+    box-shadow: 0 18px 40px rgba(23, 59, 99, 0.08);
 }
 
 .product-sku-line {

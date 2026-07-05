@@ -8,9 +8,16 @@ Transformar o pacote de agentes v9.2.84 em uma rotina de deploy e validacao cont
 
 ## Componentes
 
-- Workflow de QA para validar PHP e ausencia de padroes sensiveis.
+- Workflow de QA para validar PHP e ausencia de padroes sensiveis, incluindo execução de testes unitários.
 - Workflow de pacote para gerar artefato da v9.2.84.
+- Script local [`scripts/local-artifact-builder.py`](scripts/local-artifact-builder.py) para gerar ZIPs cumulativos manualmente.
 - Agente watchdog para rodar reparos, self-test, imagens Olist e relatorio.
+- Motor de ROI para priorizar conversao e crescimento sem alterar precos, descontos ou margem.
+- Script [`scripts/log-health-checker.py`](scripts/log-health-checker.py) para auditoria de saúde dos logs.
+- Script [`scripts/log-simulator.py`](scripts/log-simulator.py) para gerar dados de log para testes.
+- Arquivo [`scripts/sales-metrics.json`](scripts/sales-metrics.json) como base minima de vendas por produto.
+- Script [`scripts/roi-engine.php`](scripts/roi-engine.php) para consolidar prioridades ROI a partir de vendas, ciclos autonomos e fontes opcionais de marketplace.
+- Otimização de custos de IA através da seleção de modelos (e.g., `gemini-2.5-flash`, `claude-3-haiku-20240307`).
 - Endpoint de relatorio para acompanhamento pelo ChatGPT.
 - Handoff pos-update para disparo automatico apos deploy.
 
@@ -25,7 +32,7 @@ A configuracao de acesso ao servidor deve ficar somente nas configuracoes proteg
 3. Geracao do artefato de pacote.
 4. Envio do pacote ao servidor pelo mecanismo de deploy configurado.
 5. Execucao do handoff pos-update.
-6. Consulta ao relatorio autonomo.
+6. Execucao do motor de ROI e consulta ao relatorio autonomo.
 
 ## Confirmacoes esperadas
 

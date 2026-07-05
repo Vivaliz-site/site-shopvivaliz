@@ -79,6 +79,11 @@ function sv_catalog_money(float $value): string
     return $value > 0 ? 'R$ ' . number_format($value, 2, ',', '.') : 'Preço sob consulta';
 }
 
+function sv_catalog_base_url(): string
+{
+    return 'https://dev.shopvivaliz.com.br';
+}
+
 function sv_catalog_product_url(array $product): string
 {
     $params = http_build_query([
@@ -91,6 +96,84 @@ function sv_catalog_product_url(array $product): string
     return '/produto?' . $params;
 }
 
+function sv_catalog_product_href(array $product): string
+{
+    $slug = trim((string)($product['slug'] ?? ''));
+    return $slug !== '' ? '/produto/' . $slug : sv_catalog_product_url($product);
+}
+
+function sv_catalog_canonical_url(string $category): string
+{
+    $params = [];
+    if ($category !== '') {
+        $params['categoria'] = $category;
+    }
+
+    $query = http_build_query($params);
+    return sv_catalog_base_url() . '/catalogo' . ($query !== '' ? '?' . $query : '');
+}
+
+function sv_catalog_page_title(string $category, string $query): string
+{
+    if ($query !== '' && $category !== '') {
+        return $query . ' em ' . $category . ' | Catálogo Vivaliz';
+    }
+    if ($query !== '') {
+        return 'Busca por ' . $query . ' | Catálogo Vivaliz';
+    }
+    if ($category !== '') {
+        return $category . ' | Catálogo Vivaliz';
+    }
+    return 'Catálogo | Vivaliz';
+}
+
+function sv_catalog_meta_description(string $category, string $query, int $count): string
+{
+    $countText = $count . ' produto' . ($count === 1 ? '' : 's');
+    if ($query !== '' && $category !== '') {
+        return 'Resultados para "' . $query . '" em ' . $category . ' na Vivaliz. ' . $countText . ' com compra segura, suporte comercial e entrega para todo o Brasil.';
+    }
+    if ($query !== '') {
+        return 'Resultados de busca por "' . $query . '" no catálogo Vivaliz. Explore produtos com compra segura, suporte comercial e entrega para todo o Brasil.';
+    }
+    if ($category !== '') {
+        return 'Explore ' . $category . ' na Vivaliz. ' . $countText . ' com compra segura, atendimento comercial e entrega para todo o Brasil.';
+    }
+    return 'Catálogo de produtos Vivaliz com compra segura, suporte comercial e entrega para todo o Brasil. Explore rodízios, ferragens, utilidades e muito mais.';
+}
+
+function sv_catalog_structured_data(array $products, string $canonicalUrl, string $pageTitle, string $metaDescription): array
+{
+    $items = [];
+    foreach (array_slice($products, 0, 12) as $index => $product) {
+        $items[] = [
+            '@type' => 'ListItem',
+            'position' => $index + 1,
+            'url' => sv_catalog_base_url() . sv_catalog_product_href($product),
+            'name' => $product['name'],
+            'image' => $product['image_url'],
+        ];
+    }
+
+    return [
+        '@context' => 'https://schema.org',
+        '@type' => 'CollectionPage',
+        'name' => $pageTitle,
+        'description' => $metaDescription,
+        'url' => $canonicalUrl,
+        'isPartOf' => [
+            '@type' => 'WebSite',
+            'name' => 'Vivaliz',
+            'url' => sv_catalog_base_url() . '/',
+        ],
+        'mainEntity' => [
+            '@type' => 'ItemList',
+            'numberOfItems' => count($products),
+            'itemListElement' => $items,
+        ],
+    ];
+}
+
 $query      = sv_catalog_query();
 $category   = trim((string)($_GET['categoria'] ?? ''));
 $products   = sv_catalog_products(200, $query, $category);
@@ -99,25 +182,38 @@ $totalStr   = count($products) . ' produto' . (count($products) === 1 ? '' : 's'
 $statusText = $products
     ? $totalStr . ($category !== '' ? " em \"{$category}\"" : '') . '.'
     : ($query !== '' ? 'Nenhum produto encontrado.' : 'Catálogo não disponível no momento.');
+$pageTitle = sv_catalog_page_title($category, $query);
+$metaDescription = sv_catalog_meta_description($category, $query, count($products));
+$canonicalUrl = sv_catalog_canonical_url($category);
+$structuredData = sv_catalog_structured_data($products, $canonicalUrl, $pageTitle, $metaDescription);
+$searchNoindex = $query !== '';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Catálogo de produtos Vivaliz — rodízios, ferragens, utilidades e muito mais. Compre online com entrega rápida.">
+    <meta name="description" content="<?= sv_catalog_esc($metaDescription) ?>">
     <meta name="theme-color" content="#173B63">
-    <meta property="og:title" content="Catálogo | Vivaliz">
-    <meta property="og:description" content="Explore nosso catálogo completo de produtos com qualidade e entrega rápida.">
+    <?php if ($searchNoindex): ?>
+        <meta name="robots" content="noindex,follow">
+    <?php endif; ?>
+    <meta property="og:title" content="<?= sv_catalog_esc($pageTitle) ?>">
+    <meta property="og:description" content="<?= sv_catalog_esc($metaDescription) ?>">
     <meta property="og:type" content="website">
-    <title>Catálogo | Vivaliz</title>
+    <meta property="og:url" content="<?= sv_catalog_esc($canonicalUrl) ?>">
+    <meta property="og:site_name" content="Vivaliz">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="canonical" href="<?= sv_catalog_esc($canonicalUrl) ?>">
+    <title><?= sv_catalog_esc($pageTitle) ?></title>
     <link rel="stylesheet" href="/css/style.css">
+    <script type="application/ld+json"><?= json_encode($structuredData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
 </head>
 <body>
     <nav class="navbar">
         <div class="container nav-inner">
             <a class="brand-link" href="/">
-                <span class="brand-logo">V</span>Vivaliz
+                <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" onerror="this.src='/images/logo.svg'">
             </a>
             <div class="navbar-menu">
                 <a href="/">Home</a>
@@ -155,16 +251,18 @@ $statusText = $products
                 <?php endforeach; ?>
             </div>
             <div id="catalog-status" class="status-line"><?= sv_catalog_esc($statusText) ?></div>
+            <div class="catalog-trust-strip" aria-label="Informações de confiança do catálogo">
+                <div class="catalog-trust-item">🔒 Compra 100% segura</div>
+                <div class="catalog-trust-item">🚚 Envio para todo Brasil</div>
+                <div class="catalog-trust-item">↩️ 30 dias para troca</div>
+            </div>
         </section>
 
         <section class="container product-grid" id="product-grid" aria-live="polite">
             <?php foreach ($products as $product): ?>
                 <?php
                 $image      = $product['image_url'] !== '' ? $product['image_url'] : '/favicon.ico';
-                $slug       = $product['slug'] !== '' ? $product['slug'] : '';
-                $productUrl = $slug !== ''
-                    ? '/produto/' . $slug
-                    : sv_catalog_product_url($product);
+                $productUrl = sv_catalog_product_href($product);
                 $payload = rawurlencode(json_encode([
                     'sku'              => $product['sku'],
                     'name'             => $product['name'],

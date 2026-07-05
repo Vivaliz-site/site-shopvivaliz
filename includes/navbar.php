@@ -9,7 +9,7 @@
     <div class="container">
         <div class="navbar-brand">
             <a href="/" class="brand-lockup" style="text-decoration: none;">
-                <img src="/images/logo-vivaliz.png" alt="Vivaliz" style="height: 46px; width: auto;" onerror="this.src='/images/logo.svg'">
+                <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" onerror="this.src='/images/logo.svg'">
             </a>
         </div>
         <button class="menu-toggle" id="menuToggle">☰</button>

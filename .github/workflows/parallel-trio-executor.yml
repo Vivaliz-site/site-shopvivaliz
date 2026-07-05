@@ -1,0 +1,13 @@
+name: PAUSADO/FALTANDO - Parallel Trio Executor
+on:  # Este workflow deve ser ativado por agendamento ou outros eventos, mas está em modo placeholder.
+  workflow_dispatch:
+
+jobs:
+  placeholder_job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aviso de Workflow Faltando
+        run: |
+          echo "ATENÇÃO: Este é um workflow placeholder. O workflow original 'Parallel Trio Executor' está faltando."
+          echo "Por favor, restaure o conteúdo original deste workflow para reativar a funcionalidade."
+          exit 1 # Falha para indicar que o workflow não está funcional.

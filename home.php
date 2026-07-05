@@ -126,6 +126,7 @@ $categoryLinks = [
         .hero-kicker { display:inline-flex; width:fit-content; align-items:center; gap:8px; padding:10px 14px; border-radius:999px; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.16); font-size:12px; letter-spacing:0.1em; text-transform:uppercase; font-weight:700; }
         .hero-copy h1 { font-size:clamp(34px, 5vw, 64px); line-height:0.98; margin:18px 0; max-width:9.5ch; }
         .hero-copy p { max-width:58ch; font-size:17px; line-height:1.75; color:rgba(255,255,255,0.88); }
+        .hero-support-copy { margin-top: 16px; font-size: 15px; color: rgba(255,255,255,0.78); }
         .hero-actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:28px; }
         .hero-btn, .hero-btn-alt, .product-link { display:inline-flex; align-items:center; justify-content:center; border-radius:16px; padding:14px 18px; text-decoration:none; font-weight:800; }
         .hero-btn { background:white; color:var(--navy); }
@@ -182,9 +183,11 @@ $categoryLinks = [
                         <div class="hero-copy">
                             <h1>Produtos reais, marca certa e vitrine com identidade.</h1>
                             <p>A Vivaliz precisa vender com cara de operacao seria. Esta home foi reorientada para destacar catalogo, linhas de produto e fluxo comercial sem o visual generico que estava no ar.</p>
+                            <p class="hero-support-copy">Atendimento por WhatsApp e contato comercial rapido para quem precisa tirar duvidas antes de comprar.</p>
                         </div>
                         <div class="hero-actions">
                             <a class="hero-btn" href="/catalogo">Ver catalogo</a>
+                            <a class="hero-btn-alt" href="/contato">Chamar no WhatsApp</a>
                             <a class="hero-btn-alt" href="/contato">Falar com a Vivaliz</a>
                         </div>
                     </div>

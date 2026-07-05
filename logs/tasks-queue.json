@@ -1,9 +1,31 @@
 {
-  "version": "1.0",
-  "created_at": "2026-07-03T00:00:00Z",
   "queue": [
     {
+      "id": "task-olist-images-import",
+      "title": "Importar imagens de produtos da Olist",
+      "description": "Conectar na API Olist/Tiny ERP, baixar imagens de todos os produtos, processar e otimizar tamanho, armazenar em /uploads/products/ e atualizar tabela olist_product_images no banco de dados com URLs locais. Suportar retry automático para falhas de conexao.",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-06-27T20:16:00Z",
+      "completed_at": "2026-06-28T07:41:04.696558"
+    },
+    {
       "id": "task-001",
+      "title": "Adicionar filtro de preÃƒÂ§o na listagem de produtos",
+      "description": "Implementar filtro de preÃƒÂ§o mÃƒÂ­nimo e mÃƒÂ¡ximo com integraÃƒÂ§ÃƒÂ£o ao banco de dados MySQL. Atualizar a pÃƒÂ¡gina de listagem com Ajax para filtro em tempo real sem recarregar.",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-06-27T12:00:00Z",
+      "completed_at": "2026-06-27T20:13:54.797346"
+    },
+    {
+      "id": "task-002",
+      "title": "Implementar carrinho de compras persistente",
+      "description": "Criar sistema de carrinho com salva em sessÃƒÂ£o PHP e localStorage JS. Permitir adicionar, remover e atualizar quantidade de produtos. Integrar com banco de dados para usuÃƒÂ¡rios logados.",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-06-27T12:05:00Z",
+      "completed_at": "2026-06-27T20:13:55.315571"
       "title": "Melhorar pagina de produto",
       "description": "Adicionar breadcrumb de navegacao, melhorar SEO das paginas de produto com meta tags dinamicas baseadas no nome e categoria do produto",
       "status": "completed",
@@ -22,30 +44,529 @@
     },
     {
       "id": "task-003",
-      "title": "Implementar busca com autocomplete",
-      "description": "Criar endpoint de busca com sugestoes em tempo real usando AJAX, filtrando por nome, categoria e preco dos produtos",
-      "status": "pending",
-      "priority": "medium",
-      "created_at": "2026-07-03T00:00:00Z",
-      "completed_at": null
+      "title": "Integrar sistema de cupons de desconto",
+      "description": "Criar tabela de cupons no MySQL, validar cupons no checkout, aplicar desconto ao total. Suportar desconto percentual e valor fixo. Incluir expiraÃƒÂ§ÃƒÂ£o de cupons.",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-06-27T12:10:00Z",
+      "completed_at": "2026-06-27T20:13:55.832193"
     },
     {
       "id": "task-004",
-      "title": "Dashboard de metricas do e-commerce",
-      "description": "Expandir o dashboard /claude com graficos de visitas, conversao, produtos mais vistos e receita estimada",
-      "status": "pending",
+      "title": "Melhorar performance de carregamento das imagens",
+      "description": "Implementar lazy loading com Intersection Observer, otimizar tamanho das imagens com ImageMagick, configurar cache HTTP headers. Usar WebP com fallback para PNG/JPG.",
       "priority": "medium",
-      "created_at": "2026-07-03T00:00:00Z",
-      "completed_at": null
+      "status": "completed",
+      "created_at": "2026-06-27T12:15:00Z",
+      "completed_at": "2026-06-28T07:41:05.197347"
     },
     {
       "id": "task-005",
-      "title": "Melhorar UX do checkout",
-      "description": "Simplificar formulario de checkout, adicionar validacao em tempo real dos campos e melhorar feedback visual de erros",
-      "status": "pending",
+      "title": "Implementar busca com autocomplete",
+      "description": "Criar endpoint de busca em PHP que retorna JSON, implementar autocomplete no frontend com AJAX. Suportar busca por nome, categoria e SKU. Cache de resultados.",
       "priority": "medium",
-      "created_at": "2026-07-03T00:00:00Z",
+      "status": "completed",
+      "created_at": "2026-06-27T12:20:00Z",
+      "completed_at": "2026-06-28T07:41:05.698263"
+    },
+    {
+      "id": "task-006",
+      "title": "Adicionar sistema de avaliaÃƒÂ§ÃƒÂµes e comentÃƒÂ¡rios",
+      "description": "Criar tabelas para avaliaÃƒÂ§ÃƒÂµes de produtos (1-5 estrelas) e comentÃƒÂ¡rios. Implementar validaÃƒÂ§ÃƒÂ£o de usuÃƒÂ¡rio autenticado. Mostrar mÃƒÂ©dia de avaliaÃƒÂ§ÃƒÂµes na pÃƒÂ¡gina do produto.",
+      "priority": "medium",
+      "status": "completed",
+      "created_at": "2026-06-27T12:25:00Z",
+      "completed_at": "2026-06-28T07:47:07.061312Z",
+      "completed_by": "Gemini"
+    },
+    {
+      "id": "task-007",
+      "title": "Integrar gateway de pagamento Stripe",
+      "description": "Configurar Stripe API, criar pÃƒÂ¡gina de checkout segura, processar pagamentos, receber webhooks de confirmaÃƒÂ§ÃƒÂ£o. Suportar mÃƒÂºltiplos mÃƒÂ©todos de pagamento.",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-06-27T12:30:00Z",
+      "completed_at": "2026-06-28T08:37:05.577307Z"
+    },
+    {
+      "id": "task-008",
+      "title": "Implementar sistema de notificaÃƒÂ§ÃƒÂµes por email",
+      "description": "Configurar SMTP para enviar emails de confirmaÃƒÂ§ÃƒÂ£o de pedido, shipment tracking, e promoÃƒÂ§ÃƒÂµes. Usar templates HTML profissionais. Respeitar preferÃƒÂªncias do usuÃƒÂ¡rio.",
+      "priority": "medium",
+      "status": "completed",
+      "created_at": "2026-06-27T12:35:00Z",
+      "completed_at": "2026-06-28T10:09:13.972179Z"
+    },
+    {
+      "id": "task-009",
+      "title": "Adicionar painel de administraÃƒÂ§ÃƒÂ£o para gerenciar produtos",
+      "description": "Criar painel admin com CRUD de produtos, categorias, preÃƒÂ§os e imagens. Importar/exportar dados via CSV. Validar dados de entrada. Logs de auditoria.",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-06-27T12:40:00Z",
+      "completed_at": "2026-06-28T10:09:13.972188Z"
+    },
+    {
+      "id": "task-010",
+      "title": "Otimizar SEO do ecommerce",
+      "description": "Implementar meta tags dinÃƒÂ¢micas por produto, criar sitemap XML, adicionar structured data (Schema.org), otimizar URLs amigÃƒÂ¡veis. Melhorar velocidade de pÃƒÂ¡gina.",
+      "priority": "medium",
+      "status": "completed",
+      "created_at": "2026-06-27T12:45:00Z",
+      "completed_at": "2026-06-28T10:09:13.972190Z"
+    },
+    {
+      "id": "task-011",
+      "title": "Implementar autenticacao OAuth2",
+      "description": "Integrar login via Google e Facebook usando OAuth2. Permitir registro automatico na primeira autenticacao. Vincular contas existentes com OAuth.",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-06-27T20:08:00Z",
+      "completed_at": "2026-06-28T10:09:44.707362"
+    },
+    {
+      "id": "task-012",
+      "title": "Criar sistema de wishlist",
+      "description": "Permitir usuarios guardar produtos favoritos, compartilhar wishlist com outros usuarios. Notificar quando produto entra em promocao. Integrar com carrinho.",
+      "priority": "medium",
+      "status": "completed",
+      "created_at": "2026-06-27T20:09:00Z",
+      "completed_at": "2026-06-28T10:09:45.212679"
+    },
+    {
+      "id": "task-013",
+      "title": "Implementar recomendacoes de produtos via IA",
+      "description": "Usar machine learning para recomendar produtos baseado no historico de compras e browsing do usuario. Exibir na homepage e apos checkout.",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-06-27T20:10:00Z",
+      "completed_at": "2026-06-28T10:09:45.714170"
+    },
+    {
+      "id": "task-014",
+      "title": "Adicionar integracao com WhatsApp Business API",
+      "description": "Configurar WhatsApp Business para enviar notificacoes de pedido, status de entrega e suporte ao cliente. Permitir chat com atendimento.",
+      "priority": "medium",
+      "status": "completed",
+      "created_at": "2026-06-27T20:11:00Z",
+      "completed_at": "2026-06-28T10:10:17.708671"
+    },
+    {
+      "id": "task-015",
+      "title": "Criar programa de fidelizacao com pontos",
+      "description": "Implementar sistema de pontos por compra, permitir resgate em desconto. Leaderboard de clientes top. Bonus pontos em datas especiais.",
+      "priority": "medium",
+      "status": "completed",
+      "created_at": "2026-06-27T20:12:00Z",
+      "completed_at": "2026-06-28T10:10:18.213414"
+    },
+    {
+      "id": "task-016",
+      "title": "Integrar com sistema de ERP",
+      "description": "Conectar ecommerce com ERP para sincronizacao automatica de estoque, pedidos e faturas. Usar webhooks e APIs.",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-06-27T20:13:00Z",
+      "completed_at": "2026-06-28T10:10:18.714598"
+    },
+    {
+      "id": "task-017",
+      "title": "Implementar live chat com atendimento em tempo real",
+      "description": "Integrar live chat widget para suporte ao cliente. Usar Tawk.to, Zendesk ou similar. Transferir chats para multiplos agentes.",
+      "priority": "medium",
+      "status": "completed",
+      "created_at": "2026-06-27T20:14:00Z",
+      "completed_at": "2026-06-28T12:21:39.976489Z"
+    },
+    {
+      "id": "task-018",
+      "title": "Adicionar rastreamento de pedidos em tempo real",
+      "description": "Integrar com transportadoras (Correios, Loggi) para rastreamento automatico. Enviar notificacoes via email/SMS/WhatsApp.",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-06-27T20:15:00Z",
+      "completed_at": "2026-06-28T13:07:42.775225Z"
+    },
+    {
+      "id": "task-019",
+      "title": "Criar dashboard de analise de vendas",
+      "description": "Implementar graficos de vendas por periodo, produto mais vendido, receita, taxa de conversao. Exportar relatorios em PDF.",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-06-27T20:16:00Z",
+      "completed_at": "2026-06-28T15:54:12.662900Z"
+    },
+    {
+      "id": "task-020",
+      "title": "Implementar teste A/B para CTAs e landing pages",
+      "description": "Criar sistema para testar diferentes versoes de paginas. Medir conversao e CTR. Aplicar vencedor automaticamente.",
+      "priority": "medium",
+      "status": "completed",
+      "created_at": "2026-06-27T20:17:00Z",
+      "completed_at": "2026-06-28T15:54:12.662911Z"
+    },
+    {
+      "id": "task-021",
+      "title": "Adicionar suporte a multiplas moedas",
+      "description": "Permitir usuarios selecionar moeda (USD, EUR, BRL). Usar taxas de cambio em tempo real. Aceitar pagamento em diferentes moedas.",
+      "priority": "medium",
+      "status": "completed",
+      "created_at": "2026-06-27T20:18:00Z",
+      "completed_at": "2026-06-28T15:54:12.662912Z"
+    },
+    {
+      "id": "task-022",
+      "title": "Implementar blog integrado ao ecommerce",
+      "description": "Criar sistema de artigos para SEO. Relacionar artigos com produtos. Comentarios em artigos. Social sharing.",
+      "priority": "low",
+      "status": "completed",
+      "created_at": "2026-06-27T20:19:00Z",
+      "completed_at": "2026-06-28T16:52:40.562974Z"
+    },
+    {
+      "id": "task-023",
+      "title": "Adicionar suporte para assinaturas mensais",
+      "description": "Criar sistema de products como servico. Renovacao automatica, cancelamento facil. Integrar com Stripe subscription.",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-06-27T20:20:00Z",
+      "completed_at": "2026-06-28T20:39:02.663269Z"
+    },
+    {
+      "id": "task-024",
+      "title": "Implementar carrinho abandonado recovery",
+      "description": "Enviar email automatico quando usuario abandona carrinho. Oferecer desconto para completar compra. Rastrear taxa de resgate.",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-06-27T20:21:00Z",
+      "completed_at": "2026-06-28T20:39:02.663277Z"
+    },
+    {
+      "id": "task-025",
+      "title": "Criar marketplace para sellers terceirizados",
+      "description": "Permitir que sellers abram lojas na plataforma. Sistema de comissao. Gestao de produtos e pedidos separado.",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-06-27T20:22:00Z",
+      "completed_at": "2026-06-28T20:39:02.663279Z"
+    },
+    {
+      "id": "task-026",
+      "title": "Adicionar versao mobile app (React Native)",
+      "description": "Criar app iOS/Android com React Native. Feature parity com web. Push notifications. Suporte offline.",
+      "priority": "high",
+      "status": "completed",
+      "created_at": "2026-06-27T20:23:00Z",
+      "completed_at": "2026-06-28T20:45:53.378437Z"
+    },
+    {
+      "id": "task-027",
+      "title": "Implementar AR try-on para produtos",
+      "description": "Usar WebAR/ARKit para permitir clientes experimentar produtos (roupas, oculos, moveis) em AR antes de comprar.",
+      "priority": "medium",
+      "status": "completed",
+      "created_at": "2026-06-27T20:24:00Z",
+      "completed_at": "2026-06-29T12:50:12.327576Z"
+    },
+    {
+      "id": "task-028",
+      "title": "Criar sistema de cupons e promocoes automaticas",
+      "description": "Regras para aplicar cupons automaticamente baseado em compra anterior, valor do carrinho, fonte de trafego. Testes A/B.",
+      "priority": "medium",
+      "status": "completed",
+      "created_at": "2026-06-27T20:25:00Z",
+      "completed_at": "2026-06-29T12:50:12.327585Z"
+    },
+    {
+      "id": "task-029",
+      "title": "Adicionar integracao com Adobe Analytics",
+      "description": "Rastrear eventos de compra, visualizacoes, clicks. Criar funnels. Debugar problemas de conversao.",
+      "priority": "low",
+      "status": "completed",
+      "created_at": "2026-06-27T20:26:00Z",
+      "completed_at": "2026-06-29T12:50:12.327587Z"
+    },
+    {
+      "id": "task-030",
+      "title": "Implementar recomendacao baseada em colaboracao",
+      "description": "Usar algoritmo de filtro colaborativo para recomendar produtos. Integrar com ML service externo se necessario.",
+      "priority": "medium",
+      "status": "completed",
+      "created_at": "2026-06-27T20:27:00Z",
+      "completed_at": "2026-06-29T12:53:14.759110Z"
+    },
+    {
+      "id": "task-031",
+      "title": "Adicionar suporte para gift cards",
+      "description": "Permitir venda de gift cards, validar ao checkout. Sistema de resgate. Verificar saldo.",
+      "priority": "medium",
+      "status": "completed",
+      "created_at": "2026-06-27T20:28:00Z",
+      "completed_at": "2026-06-29T22:42:57.401970Z"
+    },
+    {
+      "id": "task-032",
+      "title": "Criar programa de referencia com incentivos",
+      "description": "Usuarios ganham credito por referir amigos que compram. Rastrear links unicos. Pagamento automatico de bonus.",
+      "priority": "medium",
+      "status": "completed",
+      "created_at": "2026-06-27T20:29:00Z",
+      "completed_at": "2026-07-04T02:49:39Z"
+    },
+    {
+      "id": "task-033",
+      "title": "Implementar notificacoes push para estoque disponivel",
+      "description": "Permitir usuarios se inscrever para notificacoes quando produto fora de estoque voltar. Enviar push automatico.",
+      "priority": "low",
+      "status": "in_progress",
+      "created_at": "2026-06-27T20:30:00Z",
+      "completed_at": "2026-06-27T18:05:20.164381"
+    },
+    {
+      "id": "task-034",
+      "title": "Adicionar integracao com Klarna (pagamento na entrega)",
+      "description": "Configurar Klarna para permitir pagamento parcelado apos receber o produto. Gerenciar autorizacoes.",
+      "priority": "medium",
+      "status": "pending",
+      "created_at": "2026-06-27T20:31:00Z",
+      "completed_at": "2026-06-27T18:05:20.677917"
+    },
+    {
+      "id": "task-035",
+      "title": "Criar pagina de checkout otimizada para conversao",
+      "description": "Reduzir numero de steps. One-click checkout para returning customers. Guest checkout. Guest payment option. Validacao em tempo real.",
+      "priority": "high",
+      "status": "in_progress",
+      "created_at": "2026-06-27T20:32:00Z",
+      "completed_at": "2026-06-27T18:05:21.192756"
+    },
+    {
+      "id": "task-036",
+      "title": "Implementar sistema de avaliacao de atendimento",
+      "description": "Apos compra, enviar survey para avaliar atendimento. Colocar notas de atendimento na plataforma de suporte.",
+      "priority": "low",
+      "status": "pending",
+      "created_at": "2026-06-27T20:33:00Z",
+      "completed_at": "2026-06-27T18:05:21.709917"
+    },
+    {
+      "id": "task-037",
+      "title": "Adicionar integracao com TikTok Shop",
+      "description": "Sincronizar produtos do ecommerce com TikTok Shop. Gerenciar pedidos centralizadamente. Explorar shoppable posts.",
+      "priority": "high",
+      "status": "pending",
+      "created_at": "2026-06-27T20:34:00Z",
+      "completed_at": "2026-06-27T18:05:22.224332"
+    },
+    {
+      "id": "task-038",
+      "title": "Implementar gamificacao (badges e achievements)",
+      "description": "Usuarios ganham badges por compras, reviews, referencias. Leaderboard mensal. Premios exclusivos para top players.",
+      "priority": "low",
+      "status": "pending",
+      "created_at": "2026-06-27T20:35:00Z",
+      "completed_at": "2026-06-27T18:05:22.7381"
+    },
+    {
+      "id": "task-039",
+      "title": "Criar sistema de notificacao de preco (price drop alerts)",
+      "description": "Usuarios definem preco alvo. Notificacao quando preco cai. Facil compra direto do alerta.",
+      "priority": "medium",
+      "status": "pending",
+      "created_at": "2026-06-27T20:36:00Z",
       "completed_at": null
+    },
+    {
+      "id": "task-040",
+      "title": "Adicionar suporte a GraphQL API",
+      "description": "Criar GraphQL endpoint para frontend queries mais eficientes. Documentacao Swagger. Rate limiting.",
+      "priority": "medium",
+      "status": "pending",
+      "created_at": "2026-06-27T20:37:00Z",
+      "completed_at": "2026-06-27T18:05:23.76721"
+    },
+    {
+      "title": "Ativar geração autônoma de tarefas orientadas a crescimento",
+      "description": "Configurar o orquestrador para gerar e priorizar automaticamente tarefas de crescimento, SEO, marketplace e CRO usando a fila canônica do projeto.",
+      "priority": "high",
+      "status": "completed",
+      "tags": [
+        "automation",
+        "growth",
+        "orchestrator"
+      ],
+      "source": "growth-mission-seed",
+      "id": "task-041",
+      "created_at": "2026-07-04T04:52:44.793293Z",
+      "queue_rank": 10,
+      "phase": "phase-1-foundation",
+      "completed_at": "2026-07-04T05:12:45.543170Z"
+    },
+    {
+      "title": "Executar otimizações autônomas para vendas",
+      "description": "Priorizar melhorias de conversão em página de produto, catálogo, checkout e captação de leads, sem alterar preços, descontos, fretes ou meios de pagamento.",
+      "priority": "high",
+      "status": "completed",
+      "tags": [
+        "cro",
+        "conversion",
+        "ux"
+      ],
+      "source": "growth-mission-seed",
+      "id": "task-042",
+      "created_at": "2026-07-04T04:52:44.793293Z",
+      "queue_rank": 11,
+      "phase": "phase-2-revenue",
+      "completed_at": "2026-07-04T06:52:31.000844Z"
+    },
+    {
+      "title": "Conectar catálogo com Shopee sem impacto em preço",
+      "description": "Validar integração Shopee existente, sincronizar produtos e mídia sem modificar preço, usando credenciais oficiais e rotina segura de marketplace.",
+      "priority": "high",
+      "status": "blocked_missing_env",
+      "tags": [
+        "marketplace",
+        "shopee",
+        "catalog"
+      ],
+      "requires_env": [
+        "SHOPEE_PARTNER_ID",
+        "SHOPEE_PARTNER_KEY",
+        "SHOPEE_SHOP_ID",
+        "SHOPEE_REFRESH_TOKEN"
+      ],
+      "source": "growth-mission-seed",
+      "id": "task-043",
+      "created_at": "2026-07-04T04:52:44.793293Z",
+      "queue_rank": 12,
+      "phase": "phase-3-marketplaces",
+      "blocked_at": "2026-07-04T05:21:08.088163Z",
+      "blocked_reason": "missing_env:SHOPEE_PARTNER_ID,SHOPEE_PARTNER_KEY,SHOPEE_SHOP_ID,SHOPEE_REFRESH_TOKEN"
+    },
+    {
+      "title": "Conectar catálogo com Mercado Livre sem impacto em preço",
+      "description": "Validar OAuth e catálogo do Mercado Livre, publicar ou sincronizar anúncios sem alterar valores de venda, mantendo o Guardião de Preço intacto.",
+      "priority": "high",
+      "status": "blocked_missing_env",
+      "tags": [
+        "marketplace",
+        "mercado-livre",
+        "catalog"
+      ],
+      "requires_env": [
+        "ML_CLIENT_ID",
+        "ML_CLIENT_SECRET",
+        "ML_REDIRECT_URI"
+      ],
+      "source": "growth-mission-seed",
+      "id": "task-044",
+      "created_at": "2026-07-04T04:52:44.793293Z",
+      "queue_rank": 13,
+      "phase": "phase-3-marketplaces",
+      "blocked_at": "2026-07-04T05:21:08.088163Z",
+      "blocked_reason": "missing_env:ML_CLIENT_ID,ML_CLIENT_SECRET,ML_REDIRECT_URI"
+    },
+    {
+      "title": "Preparar stack de Google Ads para automação",
+      "description": "Preparar base técnica para campanhas, conversões e landing pages, com validação de credenciais e rastreamento, sem alterar regras financeiras do checkout.",
+      "priority": "medium",
+      "status": "blocked_human_approval_required",
+      "tags": [
+        "ads",
+        "google-ads",
+        "tracking"
+      ],
+      "requires_env": [
+        "GOOGLE_ADS_CUSTOMER_ID",
+        "GOOGLE_ADS_DEVELOPER_TOKEN",
+        "GOOGLE_ADS_REFRESH_TOKEN"
+      ],
+      "source": "growth-mission-seed",
+      "id": "task-045",
+      "created_at": "2026-07-04T04:52:44.793293Z",
+      "queue_rank": 14,
+      "requires_human_approval": true,
+      "approval_scope": "ads_budget_approval",
+      "phase": "phase-4-approval-gated",
+      "blocked_at": "2026-07-04T05:21:08.088163Z",
+      "blocked_reason": "ads_budget_approval"
+    },
+    {
+      "title": "Ligar domínio público à camada web ativa",
+      "description": "Conectar domínio final à superfície publicada, validando apontamentos e roteamento. Esta etapa exige acesso ao provedor DNS ou domínio já gerenciado pela plataforma.",
+      "priority": "medium",
+      "status": "blocked_manual_access",
+      "tags": [
+        "domain",
+        "dns",
+        "deploy"
+      ],
+      "requires_manual_access": true,
+      "source": "growth-mission-seed",
+      "id": "task-046",
+      "created_at": "2026-07-04T04:52:44.794289Z",
+      "queue_rank": 15,
+      "phase": "phase-4-approval-gated",
+      "blocked_at": "2026-07-04T05:21:08.088163Z",
+      "blocked_reason": "requires_manual_access"
+    },
+    {
+      "title": "Ativar SEO automático para catálogo e marketplace",
+      "description": "Executar geração automática de SEO para páginas do site e canais externos, incluindo títulos, descrições, dados estruturados e auditoria contínua.",
+      "priority": "high",
+      "status": "completed",
+      "tags": [
+        "seo",
+        "catalog",
+        "automation"
+      ],
+      "source": "growth-mission-seed",
+      "id": "task-047",
+      "created_at": "2026-07-04T04:52:44.794289Z",
+      "queue_rank": 16,
+      "phase": "phase-2-revenue",
+      "completed_at": "2026-07-04T06:58:07.812256Z"
+    },
+    {
+      "title": "Gerar páginas de produto dinâmicas e indexáveis",
+      "description": "Preparar rota e renderização dinâmica de páginas de produto com dados estruturados, SEO consistente, conteúdo indexável e compatibilidade com catálogo atual.",
+      "priority": "high",
+      "status": "completed",
+      "tags": [
+        "product-pages",
+        "seo",
+        "dynamic-content"
+      ],
+      "source": "growth-mission-seed",
+      "id": "task-048",
+      "created_at": "2026-07-04T04:52:44.794289Z",
+      "queue_rank": 17,
+      "phase": "phase-2-revenue",
+      "completed_at": "2026-07-04T07:02:37.214443Z"
+    },
+    {
+      "title": "Otimizar página campeã do ROI para conversão",
+      "description": "Aplicar melhorias de copy, SEO, estrutura e CTA na página do produto de maior ROI, sem alterar preços, descontos, fretes ou meios de pagamento.",
+      "priority": "high",
+      "tags": [
+        "sales_flow",
+        "conversion",
+        "seo",
+        "product-pages"
+      ],
+      "source": "growth-mission-seed",
+      "phase": "phase-2-revenue",
+      "queue_rank": 18,
+      "id": "task-049",
+      "created_at": "2026-07-04T13:46:36.131711Z",
+      "status": "in_progress",
+      "selected_at": "2026-07-04T13:49:37.294563Z",
+      "selected_by": "autonomous-continuous-cycle",
+      "selection_reason": "phase=phase-2-revenue; readiness=ready_local; queue_rank=18; director_rank=0"
     }
+  ],
+  "version": "1.1",
+  "created_at": "2026-07-04T04:52:44.791298Z"
+}
   ]
 }
