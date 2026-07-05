@@ -11,8 +11,8 @@
     },
     {
       "id": "task-001",
-      "title": "Adicionar filtro de preÃƒÂ§o na listagem de produtos",
-      "description": "Implementar filtro de preÃƒÂ§o mÃƒÂ­nimo e mÃƒÂ¡ximo com integraÃƒÂ§ÃƒÂ£o ao banco de dados MySQL. Atualizar a pÃƒÂ¡gina de listagem com Ajax para filtro em tempo real sem recarregar.",
+      "title": "Adicionar filtro de preço na listagem de produtos",
+      "description": "Implementar filtro de preço mínimo e máximo com integração ao banco de dados MySQL. Atualizar a página de listagem com Ajax para filtro em tempo real sem recarregar.",
       "priority": "high",
       "status": "completed",
       "created_at": "2026-06-27T12:00:00Z",
@@ -21,31 +21,16 @@
     {
       "id": "task-002",
       "title": "Implementar carrinho de compras persistente",
-      "description": "Criar sistema de carrinho com salva em sessÃƒÂ£o PHP e localStorage JS. Permitir adicionar, remover e atualizar quantidade de produtos. Integrar com banco de dados para usuÃƒÂ¡rios logados.",
+      "description": "Criar sistema de carrinho com salva em sessão PHP e localStorage JS. Permitir adicionar, remover e atualizar quantidade de produtos. Integrar com banco de dados para usuários logados.",
       "priority": "high",
       "status": "completed",
       "created_at": "2026-06-27T12:05:00Z",
       "completed_at": "2026-06-27T20:13:55.315571"
-      "title": "Melhorar pagina de produto",
-      "description": "Adicionar breadcrumb de navegacao, melhorar SEO das paginas de produto com meta tags dinamicas baseadas no nome e categoria do produto",
-      "status": "completed",
-      "priority": "high",
-      "created_at": "2026-07-03T00:00:00Z",
-      "completed_at": "2026-07-04T04:26:42.092039Z"
-    },
-    {
-      "id": "task-002",
-      "title": "Otimizar performance do catalogo",
-      "description": "Adicionar lazy loading nas imagens do catalogo de produtos, implementar paginacao eficiente e cache de consultas ao banco de dados",
-      "status": "completed",
-      "priority": "high",
-      "created_at": "2026-07-03T00:00:00Z",
-      "completed_at": "2026-07-04T04:27:50.917242Z"
     },
     {
       "id": "task-003",
       "title": "Integrar sistema de cupons de desconto",
-      "description": "Criar tabela de cupons no MySQL, validar cupons no checkout, aplicar desconto ao total. Suportar desconto percentual e valor fixo. Incluir expiraÃƒÂ§ÃƒÂ£o de cupons.",
+      "description": "Criar tabela de cupons no MySQL, validar cupons no checkout, aplicar desconto ao total. Suportar desconto percentual e valor fixo. Incluir expiração de cupons.",
       "priority": "high",
       "status": "completed",
       "created_at": "2026-06-27T12:10:00Z",
@@ -71,8 +56,8 @@
     },
     {
       "id": "task-006",
-      "title": "Adicionar sistema de avaliaÃƒÂ§ÃƒÂµes e comentÃƒÂ¡rios",
-      "description": "Criar tabelas para avaliaÃƒÂ§ÃƒÂµes de produtos (1-5 estrelas) e comentÃƒÂ¡rios. Implementar validaÃƒÂ§ÃƒÂ£o de usuÃƒÂ¡rio autenticado. Mostrar mÃƒÂ©dia de avaliaÃƒÂ§ÃƒÂµes na pÃƒÂ¡gina do produto.",
+      "title": "Adicionar sistema de avaliações e comentários",
+      "description": "Criar tabelas para avaliações de produtos (1-5 estrelas) e comentários. Implementar validação de usuário autenticado. Mostrar média de avaliações na página do produto.",
       "priority": "medium",
       "status": "completed",
       "created_at": "2026-06-27T12:25:00Z",
@@ -82,7 +67,7 @@
     {
       "id": "task-007",
       "title": "Integrar gateway de pagamento Stripe",
-      "description": "Configurar Stripe API, criar pÃƒÂ¡gina de checkout segura, processar pagamentos, receber webhooks de confirmaÃƒÂ§ÃƒÂ£o. Suportar mÃƒÂºltiplos mÃƒÂ©todos de pagamento.",
+      "description": "Configurar Stripe API, criar página de checkout segura, processar pagamentos, receber webhooks de confirmação. Suportar múltiplos métodos de pagamento.",
       "priority": "high",
       "status": "completed",
       "created_at": "2026-06-27T12:30:00Z",
@@ -90,8 +75,8 @@
     },
     {
       "id": "task-008",
-      "title": "Implementar sistema de notificaÃƒÂ§ÃƒÂµes por email",
-      "description": "Configurar SMTP para enviar emails de confirmaÃƒÂ§ÃƒÂ£o de pedido, shipment tracking, e promoÃƒÂ§ÃƒÂµes. Usar templates HTML profissionais. Respeitar preferÃƒÂªncias do usuÃƒÂ¡rio.",
+      "title": "Implementar sistema de notificações por email",
+      "description": "Configurar SMTP para enviar emails de confirmação de pedido, shipment tracking, e promoções. Usar templates HTML profissionais. Respeitar preferências do usuário.",
       "priority": "medium",
       "status": "completed",
       "created_at": "2026-06-27T12:35:00Z",
@@ -99,8 +84,8 @@
     },
     {
       "id": "task-009",
-      "title": "Adicionar painel de administraÃƒÂ§ÃƒÂ£o para gerenciar produtos",
-      "description": "Criar painel admin com CRUD de produtos, categorias, preÃƒÂ§os e imagens. Importar/exportar dados via CSV. Validar dados de entrada. Logs de auditoria.",
+      "title": "Adicionar painel de administração para gerenciar produtos",
+      "description": "Criar painel admin com CRUD de produtos, categorias, preços e imagens. Importar/exportar dados via CSV. Validar dados de entrada. Logs de auditoria.",
       "priority": "high",
       "status": "completed",
       "created_at": "2026-06-27T12:40:00Z",
@@ -109,7 +94,7 @@
     {
       "id": "task-010",
       "title": "Otimizar SEO do ecommerce",
-      "description": "Implementar meta tags dinÃƒÂ¢micas por produto, criar sitemap XML, adicionar structured data (Schema.org), otimizar URLs amigÃƒÂ¡veis. Melhorar velocidade de pÃƒÂ¡gina.",
+      "description": "Implementar meta tags dinâmicas por produto, criar sitemap XML, adicionar structured data (Schema.org), otimizar URLs amigáveis. Melhorar velocidade de página.",
       "priority": "medium",
       "status": "completed",
       "created_at": "2026-06-27T12:45:00Z",
@@ -320,7 +305,7 @@
       "priority": "low",
       "status": "in_progress",
       "created_at": "2026-06-27T20:30:00Z",
-      "completed_at": "2026-06-27T18:05:20.164381"
+      "completed_at": null
     },
     {
       "id": "task-034",
@@ -329,16 +314,18 @@
       "priority": "medium",
       "status": "pending",
       "created_at": "2026-06-27T20:31:00Z",
-      "completed_at": "2026-06-27T18:05:20.677917"
+      "completed_at": null
     },
     {
       "id": "task-035",
       "title": "Criar pagina de checkout otimizada para conversao",
       "description": "Reduzir numero de steps. One-click checkout para returning customers. Guest checkout. Guest payment option. Validacao em tempo real.",
       "priority": "high",
-      "status": "in_progress",
+      "status": "completed",
       "created_at": "2026-06-27T20:32:00Z",
-      "completed_at": "2026-06-27T18:05:21.192756"
+      "completed_at": "2026-07-04T01:08:55Z",
+      "completed_by": "Claude Autonomo",
+      "notes": "Implementado: mascaras de input (telefone/CEP), auto-fill localStorage para clientes recorrentes, campo de cupom de desconto com validacao (API + fallback local), validacao em tempo real com feedback inline, indicador frete gratis para pedidos acima de R$299, CNPJ no trust bar, progresso simplificado para 3 etapas."
     },
     {
       "id": "task-036",
@@ -347,7 +334,7 @@
       "priority": "low",
       "status": "pending",
       "created_at": "2026-06-27T20:33:00Z",
-      "completed_at": "2026-06-27T18:05:21.709917"
+      "completed_at": null
     },
     {
       "id": "task-037",
@@ -356,7 +343,7 @@
       "priority": "high",
       "status": "pending",
       "created_at": "2026-06-27T20:34:00Z",
-      "completed_at": "2026-06-27T18:05:22.224332"
+      "completed_at": null
     },
     {
       "id": "task-038",
@@ -365,7 +352,7 @@
       "priority": "low",
       "status": "pending",
       "created_at": "2026-06-27T20:35:00Z",
-      "completed_at": "2026-06-27T18:05:22.7381"
+      "completed_at": null
     },
     {
       "id": "task-039",
@@ -567,6 +554,4 @@
   ],
   "version": "1.1",
   "created_at": "2026-07-04T04:52:44.791298Z"
-}
-  ]
 }
