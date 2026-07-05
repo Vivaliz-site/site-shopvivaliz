@@ -1,15 +1,8 @@
 name: Deploy Automático Seguro - Shop Vivaliz
 
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - 'reports/**'
-      - 'logs/**'
-      - '.github/ISSUE_TEMPLATE/**'
+  # Gatilhos automáticos pausados temporariamente para economizar quota do GitHub Actions.
+  # Reativar após estabilização dos secrets e do fluxo de deploy.
   workflow_dispatch:
 
 permissions:

@@ -1,28 +1,14 @@
 name: CI AUTONOMO CONTINUO
 
 on:
+  # Gatilhos automáticos pausados temporariamente para economizar quota do GitHub Actions.
+  # Reativar após estabilização dos secrets e do fluxo de CI.
   workflow_dispatch:
     inputs:
       max_cycles:
         description: "Quantidade de ciclos autonomos seguros"
         required: false
         default: "1"
-  push:
-    branches:
-      - main
-    paths:
-      - "tasks-queue.json"
-      - "logs/tasks-queue.json"
-      - "scripts/**"
-      - "automation/eha/**"
-      - ".github/workflows/ci-autonomo-continuo.yml"
-  pull_request:
-    paths:
-      - "tasks-queue.json"
-      - "logs/tasks-queue.json"
-      - "scripts/**"
-      - "automation/eha/**"
-      - ".github/workflows/ci-autonomo-continuo.yml"
 
 permissions:
   contents: write
