@@ -118,30 +118,42 @@ YAML_INVALID=0
 # Procurar comando yaml validator
 if command -v yamllint &> /dev/null; then
     log_info "yamllint disponível - validando YAMLs..."
-    for yaml_file in .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null; do
-        if [ -f "$yaml_file" ]; then
-            if yamllint "$yaml_file" > /dev/null 2>&1; then
-                log_success "$(basename "$yaml_file")"
-                ((YAML_VALID++))
-            else
-                log_error "$(basename "$yaml_file") - YAML inválido"
-                ((YAML_INVALID++))
-            fi
+    while IFS= read -r yaml_file; do
+        if yamllint "$yaml_file" > /dev/null 2>&1; then
+            log_success "$(basename "$yaml_file")"
+            ((YAML_VALID++))
+        else
+            log_error "$(basename "$yaml_file") - YAML inválido"
+            ((YAML_INVALID++))
         fi
-    done
+    done < <(find .github/workflows -maxdepth 1 \( -name '*.yml' -o -name '*.yaml' \) -type f | sort)
 elif command -v python3 &> /dev/null; then
     log_info "python3 disponível - validando YAMLs..."
-    for yaml_file in .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null; do
-        if [ -f "$yaml_file" ]; then
-            if python3 -c "import yaml; yaml.safe_load(open('$yaml_file'))" 2>/dev/null; then
-                log_success "$(basename "$yaml_file")"
-                ((YAML_VALID++))
-            else
-                log_error "$(basename "$yaml_file") - YAML inválido"
-                ((YAML_INVALID++))
-            fi
+    while IFS= read -r yaml_file; do
+        if python3 - <<PY
+from pathlib import Path
+import sys
+try:
+    import yaml
+except Exception as exc:
+    print(f"PyYAML indisponível: {exc}")
+    sys.exit(2)
+path = Path(r"""$yaml_file""")
+try:
+    yaml.safe_load(path.read_text(encoding="utf-8"))
+except Exception as exc:
+    print(f"{path.name}: YAML inválido")
+    print(f"  {exc}")
+    sys.exit(1)
+PY
+        then
+            log_success "$(basename "$yaml_file")"
+            ((YAML_VALID++))
+        else
+            log_error "$(basename "$yaml_file") - YAML inválido"
+            ((YAML_INVALID++))
         fi
-    done
+    done < <(find .github/workflows -maxdepth 1 \( -name '*.yml' -o -name '*.yaml' \) -type f | sort)
 else
     log_warning "Nenhum validador YAML disponível (yamllint/python3)"
 fi
@@ -189,6 +201,10 @@ if command -v python3 &> /dev/null; then
     
     while IFS= read -r py_file; do
         if [ -f "$py_file" ]; then
+            if [ "$py_file" = "./scripts/olist-sync-manual.py" ]; then
+                log_warning "$(basename "$py_file") - legado PowerShell, excluído da validação Python"
+                continue
+            fi
             if python3 -m py_compile "$py_file" 2>/dev/null; then
                 log_success "$(basename "$py_file")"
                 ((PY_VALID++))
@@ -210,10 +226,50 @@ echo ""
 echo -e "${BLUE}▶ Procurando por Conflitos Git${NC}"
 echo ""
 
-if git grep -q '<<<<<<<' 2>/dev/null; then
+python3 - <<'PY'
+from pathlib import Path
+import sys
+
+skip_dirs = {'.git', 'vendor', 'node_modules', 'venv'}
+conflicts = []
+
+for path in Path('.').rglob('*'):
+    if not path.is_file():
+        continue
+    if any(part in skip_dirs for part in path.parts):
+        continue
+    try:
+        lines = path.read_text(encoding='utf-8', errors='ignore').splitlines()
+    except Exception:
+        continue
+
+    in_conflict = False
+    seen_separator = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('<<<<<<< '):
+            in_conflict = True
+            seen_separator = False
+            continue
+        if in_conflict and stripped == '=======':
+            seen_separator = True
+            continue
+        if in_conflict and stripped.startswith('>>>>>>> '):
+            if seen_separator:
+                conflicts.append(str(path))
+            in_conflict = False
+            seen_separator = False
+
+if conflicts:
+    print("Conflitos Git encontrados!")
+    for file_name in sorted(set(conflicts)):
+        print(f"  • {file_name}")
+    sys.exit(1)
+
+print("Nenhum conflito Git encontrado")
+PY
+if [ $? -ne 0 ]; then
     log_error "Conflitos Git encontrados!"
-    echo "Arquivos com conflito:"
-    git grep -l '<<<<<<<' | sed 's/^/  • /'
 else
     log_success "Nenhum conflito Git encontrado"
 fi
@@ -226,16 +282,75 @@ echo ""
 echo -e "${BLUE}▶ Procurando por Arquivos Sensíveis Commitados${NC}"
 echo ""
 
-SENSITIVE_PATTERNS=(".env" "secrets" "private.key" "id_rsa" "token" ".pem")
+SENSITIVE_PATTERNS=(
+    ".env"
+    ".env.*"
+    "*.pem"
+    "*.key"
+    "id_rsa"
+    "id_ed25519"
+    "secrets.json"
+    ".secrets"
+)
 FOUND_SENSITIVE=0
 
-for pattern in "${SENSITIVE_PATTERNS[@]}"; do
-    if git ls-files | grep -i "$pattern" | grep -v ".example" | grep -v "docs" | grep -v ".github" > /dev/null 2>&1; then
-        log_error "Padrão '$pattern' encontrado em arquivos commitados (não-example)"
-        git ls-files | grep -i "$pattern" | grep -v ".example" | grep -v "docs" | grep -v ".github" | sed 's/^/  • /'
-        ((FOUND_SENSITIVE++))
-    fi
-done
+while IFS= read -r tracked_file; do
+    [ -n "$tracked_file" ] || continue
+    case "$tracked_file" in
+        .github/*|docs/*|*.example)
+            continue
+            ;;
+    esac
+
+    base_name=$(basename "$tracked_file")
+    for pattern in "${SENSITIVE_PATTERNS[@]}"; do
+        case "$pattern" in
+            .env)
+                match=true
+                [ "$base_name" = ".env" ] || match=false
+                ;;
+            .env.*)
+                match=true
+                case "$base_name" in
+                    .env.*) ;;
+                    *) match=false ;;
+                esac
+                ;;
+            *.pem)
+                match=true
+                case "$base_name" in
+                    *.pem) ;;
+                    *) match=false ;;
+                esac
+                ;;
+            *.key)
+                match=true
+                case "$base_name" in
+                    *.key) ;;
+                    *) match=false ;;
+                esac
+                ;;
+            id_rsa|id_ed25519|secrets.json)
+                match=true
+                [ "$base_name" = "$pattern" ] || match=false
+                ;;
+            .secrets)
+                match=true
+                case "$tracked_file" in
+                    .secrets|.secrets/*) ;;
+                    *) match=false ;;
+                esac
+                ;;
+        esac
+
+        if [ "${match:-false}" = true ]; then
+            log_error "Arquivo sensível encontrado: $tracked_file"
+            echo "  • $tracked_file"
+            ((FOUND_SENSITIVE++))
+            break
+        fi
+    done
+done < <(git ls-files)
 
 if [ $FOUND_SENSITIVE -eq 0 ]; then
     log_success "Nenhum arquivo sensível encontrado em arquivos commitados"
@@ -268,13 +383,6 @@ if [ -f "api/catalog/products.php" ]; then
     log_success "api/catalog/products.php encontrado"
 else
     log_warning "api/catalog/products.php NÃO encontrado"
-fi
-
-# Squad Chat endpoint
-if [ -f "api/agent/squad-chat.php" ]; then
-    log_success "api/agent/squad-chat.php encontrado"
-else
-    log_warning "api/agent/squad-chat.php NÃO encontrado"
 fi
 
 echo ""
@@ -410,7 +518,6 @@ REPORT_FILE="reports/github-actions-diagnostic-$(date +%Y%m%d_%H%M%S).txt"
     echo "  • api/agent/autonomous-watchdog.php: $([ -f 'api/agent/autonomous-watchdog.php' ] && echo 'OK' || echo 'MISSING')"
     echo "  • api/health.php: $([ -f 'api/health.php' ] && echo 'OK' || echo 'MISSING')"
     echo "  • api/catalog/products.php: $([ -f 'api/catalog/products.php' ] && echo 'OK' || echo 'MISSING')"
-    echo "  • api/agent/squad-chat.php: $([ -f 'api/agent/squad-chat.php' ] && echo 'OK' || echo 'MISSING')"
     echo ""
     echo "WORKFLOWS PRINCIPAIS:"
     for workflow in "${!MAIN_WORKFLOWS[@]}"; do
