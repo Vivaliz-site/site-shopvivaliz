@@ -1,6 +1,6 @@
 # Relatorio Trio IA — Modo: Revisão e melhoria de features do ecommerce
 
-**Tarefa:** Adicionar suporte a GraphQL API: Criar GraphQL endpoint para frontend queries mais eficientes. Documentacao Swagger. Rate limiting.
+**Tarefa:** Implementar sistema de avaliacao de atendimento: Apos compra, enviar survey para avaliar atendimento. Colocar notas de atendimento na plataforma de suporte.
 
 ---
 

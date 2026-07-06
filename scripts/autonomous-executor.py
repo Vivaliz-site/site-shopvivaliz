@@ -39,6 +39,75 @@ DEFAULT_QUEUE = {
     "queue": [],
 }
 
+ROO_HELPERS = [
+    {
+        "id": "qa-self-test",
+        "name": "Roo Auxiliar — QA / Self-test",
+        "description": "Validar logs, health checks e fluxos críticos sem alterar comportamento do ecommerce.",
+        "keywords": ["qa", "self-test", "test", "lint", "validar", "log", "health", "monitor", "verificar"],
+        "next_steps": [
+            "Validar logs e endpoints críticos sem alterar dados financeiros.",
+            "Registrar evidências do estado atual para revisão humana.",
+            "Priorizar correções de estabilidade antes de qualquer deploy.",
+        ],
+    },
+    {
+        "id": "olist-tiny",
+        "name": "Roo Auxiliar — Olist / Tiny",
+        "description": "Acompanhar sincronização de estoque, imagens e catálogo sem mexer em preços.",
+        "keywords": ["olist", "tiny", "estoque", "imagem", "imagems", "catalog", "sku", "produto", "sincroniz"],
+        "next_steps": [
+            "Conferir mapeamentos e status de importação locais.",
+            "Revisar arquivos e logs de integração sem tocar em preços.",
+            "Encaminhar discrepâncias para revisão humana antes de publicar.",
+        ],
+    },
+    {
+        "id": "frete-checkout",
+        "name": "Roo Auxiliar — Frete / Checkout",
+        "description": "Auditar fluxo de frete, CEP e checkout sem publicar campanhas ou alterar preços.",
+        "keywords": ["frete", "checkout", "cep", "carrinho", "shipping", "entrega"],
+        "next_steps": [
+            "Validar regras de cálculo de frete e mensagens de erro.",
+            "Comparar dados de origem/destino e logs de checkout.",
+            "Evitar qualquer alteração de preço ou campanha sem aprovação.",
+        ],
+    },
+    {
+        "id": "imagens-produtos",
+        "name": "Roo Auxiliar — Imagens / Produtos",
+        "description": "Revisar assets e páginas de produto sem introduzir mudanças de negócio perigosas.",
+        "keywords": ["imagem", "produto", "seo", "galeria", "hero", "page", "conteúdo"],
+        "next_steps": [
+            "Checar se existe fallback seguro de imagem ou conteúdo.",
+            "Validar SEO básico e links antes de qualquer publicação.",
+            "Manter o estado do catálogo auditável e reversível.",
+        ],
+    },
+    {
+        "id": "seguranca-segredos",
+        "name": "Roo Auxiliar — Segurança / Segredos",
+        "description": "Auditando exposição de segredos e permissões sem alterar o ambiente produtivo.",
+        "keywords": ["seguranca", "segredo", "secret", "credencial", "permiss", "token", "auth"],
+        "next_steps": [
+            "Listar arquivos e configurações sensíveis para revisão.",
+            "Conferir ausência de segredos expostos em logs e diffs.",
+            "Bloquear qualquer mudança que afete acesso sem aprovação.",
+        ],
+    },
+    {
+        "id": "release-manager",
+        "name": "Roo Auxiliar — Release Manager",
+        "description": "Preparar evidências de release, changelog e validação sem deploy automático.",
+        "keywords": ["release", "deploy", "version", "zip", "changelog", "release notes"],
+        "next_steps": [
+            "Reunir evidências de alterações e testes em um relatório claro.",
+            "Confirmar que não há deploy ou publicação automática.",
+            "Encaminhar a mudança para revisão humana antes do rollout.",
+        ],
+    },
+]
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -94,6 +163,57 @@ def select_next_task(queue_data: dict[str, Any]) -> dict[str, Any] | None:
 def slugify(value: str) -> str:
     value = re.sub(r"[^a-zA-Z0-9]+", "-", value.lower()).strip("-")
     return value[:48] or "task"
+
+
+def select_roo_helper(task: dict[str, Any]) -> dict[str, Any]:
+    text = " ".join(
+        [
+            str(task.get("title", "")),
+            " ",
+            str(task.get("description", "")),
+        ]
+    ).lower()
+    for helper in ROO_HELPERS:
+        if any(keyword in text for keyword in helper["keywords"]):
+            return helper
+    return {
+        "id": "roo-general",
+        "name": "Roo Auxiliar — Geral",
+        "description": "Fallback geral para continuidade segura quando o agente principal fica indisponível.",
+        "keywords": [],
+        "next_steps": [
+            "Registrar o estado atual da tarefa de forma auditável.",
+            "Manter a operação segura sem alterações financeiras ou de deploy.",
+            "Encaminhar a execução para revisão humana quando houver risco real.",
+        ],
+    }
+
+
+def render_roo_fallback_report(task: dict[str, Any], helper: dict[str, Any]) -> str:
+    title = task.get("title") or task.get("id") or "tarefa sem título"
+    description = task.get("description") or "Sem descrição"
+    steps = "\n".join(f"- {step}" for step in helper.get("next_steps", []))
+    return (
+        "# Roo Auxiliar — Fallback seguro\n\n"
+        f"## Tarefa: {title}\n\n"
+        f"**Descrição:** {description}\n\n"
+        f"**Roo selecionado:** {helper['name']}\n\n"
+        f"**Objetivo:** {helper['description']}\n\n"
+        "## Próximos passos seguros\n"
+        f"{steps}\n\n"
+        "## Garantias de segurança\n"
+        "- Não altera preços, campanhas ou orçamento automaticamente.\n"
+        "- Não publica deploy sem aprovação explícita.\n"
+        "- Mantém um registro auditável para revisão humana."
+    )
+
+
+def write_roo_fallback_report(task: dict[str, Any], helper: dict[str, Any]) -> str:
+    report_text = render_roo_fallback_report(task, helper)
+    report_name = f"roo_fallback_{slugify(str(task.get('id', 'task')))}_{helper['id']}.md"
+    report_path = REPORT_DIR / report_name
+    report_path.write_text(report_text, encoding="utf-8")
+    return str(report_path)
 
 
 def policy_guard(task: dict[str, Any]) -> tuple[bool, str]:
@@ -221,10 +341,17 @@ def execute_one(queue_data: dict[str, Any]) -> dict[str, Any]:
 
     status, reason = classify_ai_result(returncode, output)
     if status == "blocked_external_access_required":
+        helper = select_roo_helper(task)
+        fallback_report = write_roo_fallback_report(task, helper)
         task["status"] = "blocked_external_access_required"
         task["blocked_at"] = utc_now()
         task["blocked_reason"] = reason
+        task["roo_helper"] = helper["id"]
+        task["roo_fallback_report"] = fallback_report
         report["status"] = "blocked_external_access_required"
+        report["roo_helper"] = helper
+        report["fallback_report"] = fallback_report
+        report["events"].append(f"Roo Auxiliar acionado: {helper['name']}")
         save_queue(queue_data)
         return report
     if status == "failed":

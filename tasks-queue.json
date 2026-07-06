@@ -336,9 +336,11 @@
       "title": "Implementar sistema de avaliacao de atendimento",
       "description": "Apos compra, enviar survey para avaliar atendimento. Colocar notas de atendimento na plataforma de suporte.",
       "priority": "low",
-      "status": "pending",
+      "status": "in_progress",
       "created_at": "2026-06-27T20:33:00Z",
-      "completed_at": null
+      "completed_at": null,
+      "started_at": "2026-07-06T10:35:10Z",
+      "branch": "agent/task-036-implementar-sistema-de-avaliacao-de-atendimento"
     },
     {
       "id": "task-037",
