@@ -6,18 +6,25 @@
 
 declare(strict_types=1);
 
+header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Cache-Control: no-store');
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(204);
+$method  = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+$payload = [];
+
+if (!in_array($method, ['GET', 'POST'], true)) {
+    http_response_code(405);
+    header('Allow: GET, POST');
+    echo json_encode([
+        'status'    => 'error',
+        'endpoint'  => 'squad-chat',
+        'timestamp' => date('c'),
+        'method'    => $method,
+        'error'     => 'Method Not Allowed',
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     exit;
 }
-
-$method  = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$payload = [];
 
 if ($method === 'POST') {
     $body    = file_get_contents('php://input');

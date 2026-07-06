@@ -177,11 +177,6 @@ jobs:
           # Procurar todos os arquivos .py exceto diretórios ignorados
           while IFS= read -r py_file; do
             if [ -f "$py_file" ]; then
-              # Script legado com sintaxe PowerShell; não validar com py_compile
-              if [ "$py_file" = "./scripts/olist-sync-manual.py" ]; then
-                echo "⚠ $(basename "$py_file") - legado PowerShell, pulando py_compile"
-                continue
-              fi
               if python3 -m py_compile "$py_file" 2>/dev/null; then
                 echo "✓ $(basename "$py_file")"
               else
@@ -193,6 +188,7 @@ jobs:
           done < <(find . -name "*.py" \
             -not -path "./medusa/*" \
             -not -path "./venv/*" \
+            -not -path "./scripts/olist-sync-manual.py" \
             -not -path "./.git/*" \
             -not -path "./node_modules/*" \
             2>/dev/null)
