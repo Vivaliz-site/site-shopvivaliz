@@ -1,4 +1,3 @@
-file_put_contents('/tmp/debug_watchdog.txt', 'executou V9 ' . date('c') . PHP_EOL, FILE_APPEND);
 <?php
 
 declare(strict_types=1);
