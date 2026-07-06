@@ -59,3 +59,13 @@ echo json_encode([
     'alerts'       => $alerts,
     'probes'       => $probes,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+file_put_contents(
+    '/home/ubuntu/site-shopvivaliz/scripts/heartbeat.txt',
+    "heartbeat: " . date('c') . PHP_EOL,
+    FILE_APPEND
+);
+file_put_contents(
+    __DIR__ . '/../../scripts/heartbeat.txt',
+    date('c') . PHP_EOL,
+    FILE_APPEND
+);
