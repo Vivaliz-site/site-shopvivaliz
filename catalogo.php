@@ -208,6 +208,10 @@ $searchNoindex = $query !== '';
     <title><?= sv_catalog_esc($pageTitle) ?></title>
     <link rel="stylesheet" href="/css/style.css">
     <script type="application/ld+json"><?= json_encode($structuredData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
     <nav class="navbar">
