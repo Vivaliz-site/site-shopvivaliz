@@ -1,12 +1,22 @@
 import importlib.util
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "scripts" / "autonomous-executor.py"
+AI_MODULE_PATH = ROOT / "ai_collaboration.py"
 
 
 def load_module():
     spec = importlib.util.spec_from_file_location("autonomous_executor", MODULE_PATH)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_ai_module():
+    spec = importlib.util.spec_from_file_location("ai_collaboration", AI_MODULE_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -47,3 +57,22 @@ def test_roo_fallback_report_contains_safe_next_steps_for_each_helper():
     assert "Roo Auxiliar" in report
     assert "próximos passos seguros" in report.lower()
     assert "olist" in report.lower()
+
+
+def test_ai_collaboration_returns_blocked_when_all_providers_fail(monkeypatch):
+    module = load_ai_module()
+
+    class RaisingClient:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("quota exceeded")
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic")
+    monkeypatch.setattr(module, "genai", type("FakeGenai", (), {"Client": RaisingClient}))
+    monkeypatch.setattr(module, "OpenAI", RaisingClient)
+    monkeypatch.setattr(module, "Anthropic", RaisingClient)
+
+    result = module.iniciar_super_agente_trio(modo="diagnostico", tarefa="teste")
+
+    assert result == 2

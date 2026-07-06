@@ -149,6 +149,7 @@ def iniciar_super_agente_trio(modo: str = "diagnostico", tarefa: str = "") -> in
         return 2
 
     contexto = carregar_contexto(modo)
+    teve_resultado_valido = False
 
     # --- FASE 1: GEMINI ---
     print("[1/3] Gemini analisando arquitetura e infraestrutura...")
@@ -161,6 +162,7 @@ def iniciar_super_agente_trio(modo: str = "diagnostico", tarefa: str = "") -> in
                 contents=prompt_gemini,
             )
             analise_gemini = res_gemini.text
+            teve_resultado_valido = True
             print("  Gemini concluido.")
         except Exception as e:
             print(f"  [AVISO] Gemini falhou: {e}")
@@ -181,6 +183,7 @@ def iniciar_super_agente_trio(modo: str = "diagnostico", tarefa: str = "") -> in
                 messages=[{"role": "user", "content": prompt_claude}],
             )
             analise_claude = res_claude.content[0].text
+            teve_resultado_valido = True
             print("  Claude concluido.")
         except Exception as e:
             print(f"  [AVISO] Claude falhou: {e}")
@@ -201,11 +204,16 @@ def iniciar_super_agente_trio(modo: str = "diagnostico", tarefa: str = "") -> in
                 input=prompt_openai,
             )
             relatorio_final = res_openai.output_text
+            teve_resultado_valido = True
             print("  ChatGPT concluido.")
         except Exception as e:
             print(f"  [AVISO] ChatGPT falhou: {e}")
     else:
         print("  ChatGPT ignorado (cliente nao inicializado).")
+
+    if not teve_resultado_valido:
+        print("Nenhum provedor de IA respondeu com sucesso. Encerrando como bloqueio externo.")
+        return 2
 
     print("\n========== RELATORIO DO TRIO IA - SHOPVIVALIZ ==========\n")
     print(relatorio_final)
