@@ -1,6 +1,6 @@
 # Relatorio Trio IA — Modo: Revisão e melhoria de features do ecommerce
 
-**Tarefa:** Otimizar performance do catalogo: Adicionar lazy loading nas imagens do catalogo de produtos, implementar paginacao eficiente e cache de consultas ao banco de dados
+**Tarefa:** Adicionar suporte a GraphQL API: Criar GraphQL endpoint para frontend queries mais eficientes. Documentacao Swagger. Rate limiting.
 
 ---
 
