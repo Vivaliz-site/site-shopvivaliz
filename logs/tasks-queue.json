@@ -380,11 +380,12 @@
       "title": "Adicionar suporte a GraphQL API",
       "description": "Criar GraphQL endpoint para frontend queries mais eficientes. Documentacao Swagger. Rate limiting.",
       "priority": "medium",
-      "status": "in_progress",
+      "status": "pr_opened",
       "created_at": "2026-06-27T20:37:00Z",
-      "completed_at": "2026-06-27T18:05:23.76721",
+      "completed_at": "2026-07-06T10:29:29Z",
       "started_at": "2026-07-06T10:29:09Z",
-      "branch": "agent/task-040-adicionar-suporte-a-graphql-api"
+      "branch": "agent/task-040-adicionar-suporte-a-graphql-api",
+      "pr_url": null
     },
     {
       "title": "Ativar geração autônoma de tarefas orientadas a crescimento",
