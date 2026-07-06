@@ -12,8 +12,6 @@
     "bugfix",
     "qa",
     "documentation",
-    "deploy",
-    "rollback",
     "monitoring",
     "observability",
     "seo",
@@ -22,13 +20,17 @@
     "categories",
     "marketplace_sync_without_price",
     "erp_sync_without_price",
-    "ads_without_price_change",
+    "ads_audit_without_publish",
     "pipeline_update",
     "agent_creation",
     "dashboard_update"
   ],
   "blocked_without_manual_review": [
-    "pricing_impact"
+    "pricing_impact",
+    "deploy_or_rollback",
+    "campaign_publish_or_activation",
+    "budget_increase",
+    "financial_action"
   ],
   "pricing_impact_keywords": [
     "preco",

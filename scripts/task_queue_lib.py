@@ -51,10 +51,10 @@ def _read_queue(path: Path) -> dict[str, Any] | None:
 
 def load_queue() -> dict[str, Any]:
     root_data = _read_queue(ROOT_QUEUE_FILE)
-    legacy_data = _read_queue(LEGACY_QUEUE_FILE)
-
     if root_data:
         return root_data
+
+    legacy_data = _read_queue(LEGACY_QUEUE_FILE)
     if legacy_data:
         save_queue(legacy_data)
         return legacy_data

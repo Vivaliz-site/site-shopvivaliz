@@ -30,3 +30,4 @@ claude-bkp/api/shopee-integration/scripts/test_shopee_api.py
 claude-bkp/api/tiktok-integration/scripts/test_tiktok_api.py
 claude-bkp/medusa/apps/storefront/next-env.d.ts
 claude-bkp/medusa/apps/storefront/tsconfig.tsbuildinfo
+.secrets/

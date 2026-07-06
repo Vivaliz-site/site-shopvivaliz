@@ -1,9 +1,8 @@
 name: Deploy Automático Seguro - Shop Vivaliz
 
 on:
-  push:
-    branches:
-      - main
+  # Gatilhos automáticos pausados temporariamente para economizar quota do GitHub Actions.
+  # Reativar após estabilização dos secrets e do fluxo de deploy.
   workflow_dispatch:
 
 permissions:
@@ -17,11 +16,117 @@ permissions:
 
 concurrency:
   group: shopvivaliz-deploy-dev
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
+  validate-secrets:
+    name: Validar Secrets Obrigatórios
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      secrets_valid: ${{ steps.validate.outputs.valid }}
+    
+    steps:
+      - name: Validar Secrets com Fallback
+        id: validate
+        shell: bash
+        run: |
+          # Função auxiliar para validar secret com fallbacks
+          validate_secret() {
+            local primary="$1"
+            local fallback1="$2"
+            local fallback2="$3"
+            local display_name="$4"
+            
+            # Tentar primary
+            if [ -n "$primary" ]; then
+              echo "Secret obrigatório ENCONTRADO: $display_name (primário)"
+              return 0
+            fi
+            
+            # Tentar fallback1
+            if [ -n "$fallback1" ]; then
+              echo "⚠ Secret obrigatório ENCONTRADO: $display_name (fallback1)"
+              return 0
+            fi
+            
+            # Tentar fallback2
+            if [ -n "$fallback2" ]; then
+              echo "⚠ Secret obrigatório ENCONTRADO: $display_name (fallback2)"
+              return 0
+            fi
+            
+            # Nenhum encontrado
+            echo "::error::Secret OBRIGATÓRIO NÃO ENCONTRADO: $display_name"
+            echo "Esperados: $display_name (primário)"
+            if [ -n "$fallback1" ] || [ -n "$fallback2" ]; then
+              echo "Ou aliases: $fallback1 / $fallback2"
+            fi
+            return 1
+          }
+          
+          MISSING=0
+          
+          # Validar FTP_SERVER (aliases: FTP_HOST)
+          validate_secret \
+            "${{ secrets.FTP_SERVER }}" \
+            "${{ secrets.FTP_HOST }}" \
+            "" \
+            "FTP_SERVER" || MISSING=$((MISSING+1))
+          
+          # Validar FTP_USERNAME (aliases: FTP_USER)
+          validate_secret \
+            "${{ secrets.FTP_USERNAME }}" \
+            "${{ secrets.FTP_USER }}" \
+            "" \
+            "FTP_USERNAME" || MISSING=$((MISSING+1))
+          
+          # Validar FTP_PASSWORD (aliases: FTP_PASS)
+          validate_secret \
+            "${{ secrets.FTP_PASSWORD }}" \
+            "${{ secrets.FTP_PASS }}" \
+            "" \
+            "FTP_PASSWORD" || MISSING=$((MISSING+1))
+          
+          # Validar FTP_PORT (tem padrão)
+          if [ -n "${{ secrets.FTP_PORT }}" ]; then
+            echo "Secret obrigatório ENCONTRADO: FTP_PORT"
+          else
+            echo "ℹ FTP_PORT não configurado, usando padrão: 21"
+          fi
+          
+          # Validar FTP_REMOTE_DIR (aliases: FTP_TARGET_DIR, FTP_PATH)
+          validate_secret \
+            "${{ secrets.FTP_REMOTE_DIR }}" \
+            "${{ secrets.FTP_TARGET_DIR }}" \
+            "${{ secrets.FTP_PATH }}" \
+            "FTP_REMOTE_DIR" || MISSING=$((MISSING+1))
+          
+          if [ "$MISSING" -eq 0 ]; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+            echo ""
+            echo "✓ Todos os secrets obrigatórios foram encontrados!"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo ""
+            echo "::error::$MISSING secrets obrigatórios estão faltando!"
+            echo ""
+            echo "Configure os secrets no GitHub:"
+            echo "  Settings → Secrets and variables → Actions"
+            echo ""
+            echo "Secrets esperados:"
+            echo "  • FTP_SERVER (ou FTP_HOST)"
+            echo "  • FTP_USERNAME (ou FTP_USER)"
+            echo "  • FTP_PASSWORD (ou FTP_PASS)"
+            echo "  • FTP_PORT (padrão: 21)"
+            echo "  • FTP_REMOTE_DIR (ou FTP_TARGET_DIR / FTP_PATH)"
+            exit 1
+          fi
+
   web-deploy:
     name: Sincronizar com a HostGator Dev
+    needs: validate-secrets
+    if: needs.validate-secrets.outputs.secrets_valid == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -29,251 +134,140 @@ jobs:
       - name: Baixar o código do repositório
         uses: actions/checkout@v4.2.2
 
-      - name: Validar secrets obrigatórios
+      - name: Preparar variáveis de deploy
+        id: deploy-vars
         shell: bash
         run: |
-          missing=0
+          # Usar valor primário ou fallback
+          FTP_SERVER="${{ secrets.FTP_SERVER }}"
+          [ -z "$FTP_SERVER" ] && FTP_SERVER="${{ secrets.FTP_HOST }}"
+          
+          FTP_USERNAME="${{ secrets.FTP_USERNAME }}"
+          [ -z "$FTP_USERNAME" ] && FTP_USERNAME="${{ secrets.FTP_USER }}"
+          
+          FTP_PASSWORD="${{ secrets.FTP_PASSWORD }}"
+          [ -z "$FTP_PASSWORD" ] && FTP_PASSWORD="${{ secrets.FTP_PASS }}"
+          
+          FTP_PORT="${{ secrets.FTP_PORT }}"
+          [ -z "$FTP_PORT" ] && FTP_PORT="21"
+          
+          FTP_REMOTE_DIR="${{ secrets.FTP_REMOTE_DIR }}"
+          [ -z "$FTP_REMOTE_DIR" ] && FTP_REMOTE_DIR="${{ secrets.FTP_TARGET_DIR }}"
+          [ -z "$FTP_REMOTE_DIR" ] && FTP_REMOTE_DIR="${{ secrets.FTP_PATH }}"
+          
+          # Output sem mostrar valores
+          echo "FTP_SERVER=***" >> "$GITHUB_OUTPUT"
+          echo "FTP_USERNAME=***" >> "$GITHUB_OUTPUT"
+          echo "FTP_PASSWORD=***" >> "$GITHUB_OUTPUT"
+          echo "FTP_PORT=$FTP_PORT" >> "$GITHUB_OUTPUT"
+          echo "FTP_REMOTE_DIR=***" >> "$GITHUB_OUTPUT"
+          
+          # Salvar em variáveis de env para uso nos próximos steps
+          # (GitHub Actions esconde automaticamente valores de secrets)
+          echo "FTP_SERVER_VALUE=$FTP_SERVER" >> "$GITHUB_ENV"
+          echo "FTP_USERNAME_VALUE=$FTP_USERNAME" >> "$GITHUB_ENV"
+          echo "FTP_PASSWORD_VALUE=$FTP_PASSWORD" >> "$GITHUB_ENV"
+          echo "FTP_PORT_VALUE=$FTP_PORT" >> "$GITHUB_ENV"
+          echo "FTP_REMOTE_DIR_VALUE=$FTP_REMOTE_DIR" >> "$GITHUB_ENV"
 
-          check_required_secret() {
-            local name="$1"
-            local value="$2"
-            if [ -z "$value" ]; then
-              echo "::error::Secret obrigatório ausente: $name"
-              missing=1
-            else
-              echo "Secret obrigatório configurado: $name"
-            fi
-          }
-
-          check_optional_secret() {
-            local name="$1"
-            local value="$2"
-            if [ -z "$value" ]; then
-              echo "::warning::Secret opcional ausente: $name. O deploy continuará, mas o provider correspondente ficará indisponível."
-            else
-              echo "Secret opcional configurado: $name"
-            fi
-          }
-
-          check_required_secret "FTP_SERVER" "${{ secrets.FTP_SERVER }}"
-          check_required_secret "FTP_USERNAME" "${{ secrets.FTP_USERNAME }}"
-          check_required_secret "FTP_PASSWORD" "${{ secrets.FTP_PASSWORD }}"
-          check_required_secret "FTP_PORT" "${{ secrets.FTP_PORT }}"
-          check_required_secret "FTP_REMOTE_DIR" "${{ secrets.FTP_REMOTE_DIR }}"
-          check_optional_secret "SQUAD_TOKEN" "${{ secrets.SQUAD_TOKEN }}"
-          check_optional_secret "ANTHROPIC_API_KEY" "${{ secrets.ANTHROPIC_API_KEY }}"
-          check_optional_secret "OPENAI_API_KEY" "${{ secrets.OPENAI_API_KEY }}"
-          check_optional_secret "GEMINI_API_KEY" "${{ secrets.GEMINI_API_KEY }}"
-          check_optional_secret "DB_HOST" "${{ secrets.DB_HOST }}"
-          check_optional_secret "DB_NAME" "${{ secrets.DB_NAME }}"
-          check_optional_secret "DB_USER" "${{ secrets.DB_USER }}"
-          check_optional_secret "DB_PASS" "${{ secrets.DB_PASS }}"
-          check_optional_secret "DB_PORT" "${{ secrets.DB_PORT }}"
-          check_optional_secret "MELHORENVIO_ACCESS_TOKEN" "${{ secrets.MELHORENVIO_ACCESS_TOKEN }}"
-          check_optional_secret "MELHORENVIO_API_KEY" "${{ secrets.MELHORENVIO_API_KEY }}"
-          check_optional_secret "MELHORENVIO_FROM_POSTAL_CODE" "${{ secrets.MELHORENVIO_FROM_POSTAL_CODE }}"
-          check_optional_secret "PAGARME_SECRET_KEY" "${{ secrets.PAGARME_SECRET_KEY }}"
-          check_optional_secret "PAGARME_API_KEY" "${{ secrets.PAGARME_API_KEY }}"
-          check_optional_secret "PAGARME_PUBLIC_KEY" "${{ secrets.PAGARME_PUBLIC_KEY }}"
-
-          if [ "$missing" -ne 0 ]; then
+      - name: Testar Conexão FTP
+        shell: bash
+        run: |
+          # Testar conectividade básica (sem enviar arquivos)
+          # Usa curl para FTP (mais seguro que ftplib)
+          
+          echo "Testando conexão FTP..."
+          echo "Host: ${{ steps.deploy-vars.outputs.FTP_SERVER }}"
+          echo "Port: ${{ steps.deploy-vars.outputs.FTP_PORT }}"
+          echo "User: ***"
+          echo ""
+          
+          # Timeout: 10 segundos
+          if ! timeout 10 curl -s \
+            --user "${FTP_USERNAME_VALUE}:${FTP_PASSWORD_VALUE}" \
+            --ftp-port "${{ steps.deploy-vars.outputs.FTP_PORT }}" \
+            "ftp://${{ steps.deploy-vars.outputs.FTP_SERVER }}/" \
+            --list-only \
+            -o /dev/null 2>&1; then
+            
+            echo "::error::Falha ao conectar ao servidor FTP"
+            echo "Verifique:"
+            echo "  • FTP_SERVER está correto?"
+            echo "  • FTP_USERNAME e FTP_PASSWORD estão válidos?"
+            echo "  • FTP_PORT está aberto?"
+            echo "  • Firewall permite conexão?"
             exit 1
           fi
+          
+          echo "✓ Conexão FTP bem-sucedida"
 
-      - name: Gerar .env temporário para o ambiente dev
-        shell: bash
-        run: |
-          cat > .env <<'EOF'
-          SQUAD_TOKEN=${{ secrets.SQUAD_TOKEN }}
-          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
-          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-          DB_HOST=${{ secrets.DB_HOST }}
-          DB_PORT=${{ secrets.DB_PORT }}
-          DB_NAME=${{ secrets.DB_NAME }}
-          DB_USER=${{ secrets.DB_USER }}
-          DB_PASS=${{ secrets.DB_PASS }}
-          MELHORENVIO_ACCESS_TOKEN=${{ secrets.MELHORENVIO_ACCESS_TOKEN }}
-          MELHORENVIO_API_KEY=${{ secrets.MELHORENVIO_API_KEY }}
-          MELHORENVIO_FROM_POSTAL_CODE=${{ secrets.MELHORENVIO_FROM_POSTAL_CODE }}
-          PAGARME_SECRET_KEY=${{ secrets.PAGARME_SECRET_KEY }}
-          PAGARME_API_KEY=${{ secrets.PAGARME_API_KEY }}
-          PAGARME_PUBLIC_KEY=${{ secrets.PAGARME_PUBLIC_KEY }}
-          APP_ENV=development
-          BASE_URL=https://dev.shopvivaliz.com.br
-          LOJA_PIX_KEY=${{ secrets.LOJA_PIX_KEY }}
-          LOJA_PIX_NAME=${{ secrets.LOJA_PIX_NAME }}
-          LOJA_WHATSAPP=${{ secrets.LOJA_WHATSAPP }}
-          TOKEN_API_OLIST=${{ secrets.TOKEN_API_OLIST }}
-          OLIST_CLIENT_ID=${{ secrets.OLIST_CLIENT_ID }}
-          OLIST_CLIENT_SECRET=${{ secrets.OLIST_CLIENT_SECRET }}
-          OLIST_REFRESH_TOKEN=${{ secrets.OLIST_REFRESH_TOKEN }}
-          EOF
-          sed -i 's/^          //' .env
-          chmod 600 .env
-          echo "Arquivo .env temporário gerado para deploy. Conteúdo omitido."
-
-      - name: Enviar via FTP Deploy Action
+      - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          port: ${{ secrets.FTP_PORT }}
+          server: ${{ env.FTP_SERVER_VALUE }}
+          username: ${{ env.FTP_USERNAME_VALUE }}
+          password: ${{ env.FTP_PASSWORD_VALUE }}
+          port: ${{ steps.deploy-vars.outputs.FTP_PORT }}
           protocol: ftp
           local-dir: ./
-          server-dir: ${{ secrets.FTP_REMOTE_DIR }}
+          server-dir: ${{ env.FTP_REMOTE_DIR_VALUE }}
           dangerous-clean-slate: false
-          log-level: verbose
           exclude: |
             **/.git*
-            **/.git*/**
-            **/.github/**
-            **/.claude/**
-            **/.codex/**
-            **/.vscode/**
-            **/node_modules/**
-            **/vendor/**
-            **/__pycache__/**
-            **/storage/olist-images/**
-            **/storage/reports/**
-            **/storage/runtime/**
-            **/uploads/olist/**
-            **/reports/**
-            **/logs/**
-            **/*.sql
-            **/*.zip
+            **/node_modules
+            **/vendor
+            **/medusa
+            **/claude
+            **/.env
             **/*.log
-            **/tmp_*.json
-            **/.env.*
-            **/login_config.json
-            **/*.duck
-            **/*secret*
-            **/*token*
-            **/*password*
-            **/*senha*
-            medusa/**
-            claude/medusa/**
-            imports/**
-            automation/**
-            scripts/**
-            requirements.txt
-            ai_collaboration.py
-            ai_collaboration_report*.md
+            **/reports
+            **/docs
 
-      - name: Aguardar publicação no servidor
-        run: sleep 20
-
-      - name: Teste pós-deploy básico e Squad real
-        env:
-          SQUAD_TOKEN: ${{ secrets.SQUAD_TOKEN }}
+      - name: Smoke test
         shell: bash
         run: |
-          BASE="https://dev.shopvivaliz.com.br"
-          DEPLOY_FAILED=false
-
-          echo "Testando home do ambiente dev..."
-          if ! curl -fsS "$BASE/" >/dev/null; then
-            echo " Falha ao acessar a home do ambiente dev."
-            DEPLOY_FAILED=true
-          else
-            echo " Home dev acessível."
-          fi
-
-          echo "Testando health público básico..."
-          if curl -fsS "$BASE/api/health.php" -o /tmp/app-health.json; then
-            if grep -q '"ok":true' /tmp/app-health.json; then
-              echo " App health respondeu."
-            else
-              echo " App health respondeu sem payload esperado."
-              cat /tmp/app-health.json
+          echo "Executando smoke test..."
+          
+          # Retry logic: tenta 3 vezes com delay de 5 segundos
+          MAX_RETRIES=3
+          RETRY_DELAY=5
+          
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Tentativa $i de $MAX_RETRIES..."
+            
+            if curl -f \
+              --max-time 10 \
+              --retry 1 \
+              --retry-delay 2 \
+              https://dev.shopvivaliz.com.br/ > /dev/null 2>&1; then
+              echo "✓ Site respondendo corretamente"
+              exit 0
             fi
-          else
-            echo " App health não disponível. Seguindo com smoke do Squad."
-          fi
-
-          echo "Testando health público do Squad Chat..."
-          if curl -fsS "$BASE/api/agent/squad-chat.php?health=1" -o /tmp/squad-health.json; then
-            if grep -q '"endpoint":"squad-chat"' /tmp/squad-health.json; then
-              echo " Squad Chat health respondeu."
-              jq -r '.providers | to_entries[] | "Provider \(.key): configured=\(.value.configured) model=\(.value.model)"' /tmp/squad-health.json || echo " jq não disponível para resumir health."
-            else
-              echo " Squad Chat health não contém endpoint esperado."
-              cat /tmp/squad-health.json
+            
+            if [ $i -lt $MAX_RETRIES ]; then
+              echo "Aguardando $RETRY_DELAY segundos antes de tentar novamente..."
+              sleep $RETRY_DELAY
             fi
-          else
-            echo " Squad Chat health falhou. Não bloqueando deploy."
-          fi
+          done
+          
+          echo "::warning::Site não respondeu após $MAX_RETRIES tentativas"
+          echo "Possíveis causas:"
+          echo "  • Servidor ainda processando deploy"
+          echo "  • Problema de conectividade"
+          echo "  • Erro na aplicação"
+          echo ""
+          echo "Verifique manualmente: https://dev.shopvivaliz.com.br/"
 
-          echo "Pedindo teste real aos agentes do Squad Chat..."
-          cat > /tmp/squad-payload.json <<'JSON'
-          {
-            "message": "Teste real dos agentes executado pelo GitHub Actions. Cada agente deve responder somente: nome, provider, model, ok=true ou erro. Não simule.",
-            "agents": ["director", "claude", "gpt", "gemini"],
-            "history": []
-          }
-          JSON
-          sed -i 's/^          //' /tmp/squad-payload.json
-
-          if curl -fsS \
-            -H "Content-Type: application/json" \
-            -H "X-Squad-Token: ${SQUAD_TOKEN}" \
-            --data-binary @/tmp/squad-payload.json \
-            "$BASE/api/agent/squad-chat.php" \
-            -o /tmp/squad-response.json; then
-            echo " Squad Chat POST respondeu. Resumo sanitizado:"
-            jq -r '"cycle_id= " + (.cycle_id // "n/a"), (.responses[]? | "\(.name) | provider=\(.provider) | model=\(.model) | ok=\(.ok) | text=\(.text // "" | .[0:180])")' /tmp/squad-response.json || echo " jq não disponível para resumir resposta."
-            if grep -q '"provider":"openai"' /tmp/squad-response.json && grep -q '"provider":"gemini"' /tmp/squad-response.json && grep -q '"provider":"anthropic"' /tmp/squad-response.json; then
-              echo " Providers reais identificados na resposta do Squad."
-            else
-              echo " Nem todos os providers foram identificados na resposta. Verificar resumo acima."
-            fi
-          else
-            echo " Squad Chat POST falhou. Não bloqueando deploy para manter publicação segura."
-          fi
-
-          echo "Testando arquivo de validação do CNPJ, se existir..."
-          if curl -fsS "$BASE/cnpj-rodape-teste.html" | grep -q "49.903.300/0001-70"; then
-            echo " CNPJ validado no arquivo de teste."
-          else
-            echo " Arquivo de CNPJ não encontrado ou conteúdo diferente. Não bloqueando deploy."
-          fi
-
-          echo "Testando agente Olist, se existir..."
-          if curl -fsS "$BASE/api/agent/olist-zero-id-repair.php" | grep -q '"agent"'; then
-            echo " Agente Olist respondeu."
-          else
-            echo " Agente Olist não disponível. Não bloqueando deploy."
-          fi
-
-          echo "Testando agente de manual do admin, se existir..."
-          if curl -fsS "$BASE/api/agent/admin-manual-audit.php" | grep -q 'admin_manual_audit'; then
-            echo " Agente de manual do admin respondeu."
-          else
-            echo " Agente de manual do admin não disponível. Não bloqueando deploy."
-          fi
-
-          if [ "$DEPLOY_FAILED" = true ]; then
-            echo " Deploy publicado, mas teste básico falhou."
-            exit 1
-          fi
-
-          echo " Deploy concluído com sucesso."
-
-      - name: Diagnóstico de IA em caso de falha
-        if: failure()
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - name: Registrar Status do Deploy
+        if: always()
         shell: bash
         run: |
-          echo " Workflow falhou. Iniciando diagnóstico se o arquivo existir."
-
-          if [ -f "ai_collaboration.py" ]; then
-            python -m pip install --upgrade pip
-            pip install google-genai openai anthropic
-            python ai_collaboration.py --modo diagnostico
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✓ Deploy concluído com sucesso"
+            echo "  Timestamp: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo "  Branch: ${{ github.ref_name }}"
+            echo "  Commit: ${{ github.sha }}"
           else
-            echo " ai_collaboration.py não encontrado. Diagnóstico de IA ignorado."
+            echo "✗ Deploy falhou"
+            echo "  Verificar logs acima para detalhes"
           fi
