@@ -61,6 +61,10 @@ header('Content-Type: text/html; charset=UTF-8');
             .cart-layout { grid-template-columns: 1fr; }
         }
     </style>
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
 <nav class="navbar">
