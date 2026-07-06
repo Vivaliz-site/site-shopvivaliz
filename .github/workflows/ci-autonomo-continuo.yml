@@ -2,15 +2,65 @@ name: CI AUTONOMO CONTINUO
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
   schedule:
     - cron: "*/10 * * * *"
 
+permissions:
+  contents: read
+
 jobs:
-  build:
+  validation:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Teste
-        run: echo "CI OK"
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate PHP syntax
+        shell: bash
+        run: |
+          if find . -path './vendor' -prune -o -name '*.php' -print | grep -q .; then
+            find . -path './vendor' -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
+          else
+            echo "No PHP files found."
+          fi
+
+      - name: Validate Python syntax
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib
+          import py_compile
+          import sys
+
+          root = pathlib.Path('.')
+          files = [
+              path
+              for path in root.rglob('*.py')
+              if '.git' not in path.parts and '.venv' not in path.parts and path.name != 'olist-sync-manual.py'
+          ]
+
+          if not files:
+              print('No Python files found.')
+              sys.exit(0)
+
+          for path in files:
+              py_compile.compile(str(path), doraise=True)
+
+          print(f'Validated {len(files)} Python files.')
+          PY

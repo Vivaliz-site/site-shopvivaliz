@@ -1,10 +1,22 @@
 import os
 import sys
 import argparse
+from pathlib import Path
 
-from google import genai
-from openai import OpenAI
-from anthropic import Anthropic
+try:
+    from google import genai
+except Exception:  # pragma: no cover - runtime fallback when SDK is unavailable
+    genai = None
+
+try:
+    from openai import OpenAI
+except Exception:  # pragma: no cover - runtime fallback when SDK is unavailable
+    OpenAI = None
+
+try:
+    from anthropic import Anthropic
+except Exception:  # pragma: no cover - runtime fallback when SDK is unavailable
+    Anthropic = None
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-nano")
 OPENAI_REASONING_EFFORT = os.getenv("OPENAI_REASONING_EFFORT", "minimal")
@@ -17,6 +29,29 @@ ARQUIVOS_CONTEXTO_ECOMMERCE = [
     "admin/squad-chat.php",
     "api/agent/squad-chat.php",
 ]
+
+def load_env_file(path: str | os.PathLike[str] | None = None) -> dict[str, str]:
+    env_path = Path(path or ".env.local")
+    values: dict[str, str] = {}
+    if not env_path.exists():
+        return values
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            values[key] = value
+    for key, value in values.items():
+        if value and key not in os.environ:
+            os.environ[key] = value
+    return values
+
+
+load_env_file()
 
 MODOS = {
     "diagnostico": {
@@ -86,17 +121,26 @@ def iniciar_super_agente_trio(modo: str = "diagnostico", tarefa: str = "") -> in
     anthropic_client = None
 
     try:
-        gemini_client = genai.Client()
+        if genai is not None and os.getenv("GEMINI_API_KEY"):
+            gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        else:
+            gemini_client = None
     except Exception as e:
         print(f"  [AVISO] Falha ao inicializar Gemini: {e}")
 
     try:
-        openai_client = OpenAI()
+        if OpenAI is not None and os.getenv("OPENAI_API_KEY"):
+            openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        else:
+            openai_client = None
     except Exception as e:
         print(f"  [AVISO] Falha ao inicializar OpenAI: {e}")
 
     try:
-        anthropic_client = Anthropic()
+        if Anthropic is not None and os.getenv("ANTHROPIC_API_KEY"):
+            anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        else:
+            anthropic_client = None
     except Exception as e:
         print(f"  [AVISO] Falha ao inicializar Claude: {e}")
 

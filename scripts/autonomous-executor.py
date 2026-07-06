@@ -1,179 +1,5 @@
 #!/usr/bin/env python3
-"""Executor autônomo do Trio IA"""
-from __future__ import annotations
-
-import subprocess
-import sys
-from datetime import datetime
-from pathlib import Path
-import argparse
-import json
-import os
-
-from task_queue_lib import executable_pending_tasks, load_queue, save_queue, utc_now
-
-BLOCKED_MISSING_ENV = "blocked_missing_env"
-BLOCKED_MANUAL_ACCESS = "blocked_manual_access"
-BLOCKED_HUMAN_APPROVAL = "blocked_human_approval_required"
-BLOCKED_POLICY = "blocked_price_approval_required"
-
-
-def missing_env_vars(task: dict) -> list[str]:
-    return [env for env in task.get("requires_env", []) if not os.getenv(env)]
-
-
-def requires_human_approval(task: dict) -> bool:
-    return bool(task.get("requires_human_approval"))
-
-
-def choose_next_task(queue_data: dict) -> tuple[dict | None, str | None]:
-    for task in executable_pending_tasks(queue_data):
-        if task.get("requires_manual_access"):
-            task["status"] = BLOCKED_MANUAL_ACCESS
-            task["blocked_at"] = utc_now()
-            task["blocked_reason"] = "requires_manual_access"
-            continue
-
-        if requires_human_approval(task):
-            task["status"] = BLOCKED_HUMAN_APPROVAL
-            task["blocked_at"] = utc_now()
-            task["blocked_reason"] = str(task.get("approval_scope", "human_approval_required"))
-            continue
-
-        missing = missing_env_vars(task)
-        if missing:
-            task["status"] = BLOCKED_MISSING_ENV
-            task["blocked_at"] = utc_now()
-            task["blocked_reason"] = f"missing_env:{','.join(missing)}"
-            continue
-
-        return task, None
-
-    return None, "no_executable_pending_tasks"
-
-def main():
-    parser = argparse.ArgumentParser(description="Executor autônomo do Trio IA")
-    parser.add_argument("--dry-run", action="store_true", help="Seleciona e valida a próxima tarefa sem executar ai_collaboration.py")
-    args = parser.parse_args()
-
-    queue_data = load_queue()
-    original_snapshot = json.dumps(queue_data, ensure_ascii=False, sort_keys=True)
-
-    task, reason = choose_next_task(queue_data)
-    if json.dumps(queue_data, ensure_ascii=False, sort_keys=True) != original_snapshot:
-        save_queue(queue_data)
-
-    if not task:
-        if reason == "no_executable_pending_tasks":
-            print("[OK] Nenhuma tarefa executavel pendente. Restam apenas itens completos ou bloqueados.")
-        else:
-            print("[OK] Nenhuma tarefa pendente. Fila vazia ou todas completas!")
-        return 0
-
-    task_id = task["id"]
-    task_title = task["title"]
-    task_desc = task["description"]
-
-    print(f"[EXEC] Executando tarefa: {task_title}")
-    print(f"   ID: {task_id}")
-    print(f"   Descrição: {task_desc[:100]}...")
-    print()
-
-
-    # Guardião da política autônoma
-    guard = subprocess.run(
-        [
-            sys.executable,
-            "scripts/autonomous-policy-guard.py",
-            "--title",
-            task_title,
-            "--description",
-            task_desc,
-        ],
-        capture_output=True,
-        text=True,
-    )
-
-    print(guard.stdout)
-
-    if guard.returncode != 0:
-        task["status"] = BLOCKED_POLICY
-        task["blocked_at"] = utc_now()
-        task["blocked_reason"] = "pricing_policy"
-        save_queue(queue_data)
-
-        print("[BLOCKED] Tarefa bloqueada pela politica de precos.")
-        return 2
-
-    if args.dry_run:
-        print("[DRY-RUN] Tarefa validada e pronta para execução autônoma.")
-        return 0
-
-    # Executar Trio IA com a tarefa
-    try:
-        result = subprocess.run(
-            [
-                sys.executable,
-                "ai_collaboration.py",
-                "--modo",
-                "ecommerce",
-                "--tarefa",
-                f"{task_title}: {task_desc}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
-
-        if result.returncode == 0:
-            print("[OK] Tarefa executada com sucesso!")
-
-            # Marcar tarefa como completa
-            task["status"] = "completed"
-            task["completed_at"] = utc_now()
-
-            # Salvar fila atualizada
-            save_queue(queue_data)
-
-            # Commit das mudanças
-            subprocess.run(["git", "add", "-A"], check=True)
-
-            # Verificar se há mudanças
-            diff_result = subprocess.run(
-                ["git", "diff", "--cached", "--quiet"], capture_output=True
-            )
-
-            if diff_result.returncode != 0:
-                subprocess.run(
-                    [
-                        "git",
-                        "commit",
-                        "-m",
-                        f"feat: {task_title}\n\nExecutado automaticamente pelo Trio IA\nTask ID: {task_id}\n\nCo-Authored-By: Trio IA Autônomo <trio-autonomo@shopvivaliz.com.br>",
-                    ],
-                    check=True,
-                )
-                subprocess.run(["git", "push", "origin", "HEAD"], check=True)
-                print("[PUSH] Código commitado e publicado na branch atual")
-                print("[FLOW] PR e deploy seguem o fluxo Git protegido do projeto")
-            else:
-                print("[INFO] Nenhuma mudanca de codigo para commitar")
-
-            print(f"[OK] Tarefa {task_id} marcada como completa")
-            print()
-            print("[NEXT] Proxima execucao em 1 hora")
-            return 0
-        else:
-            print(f"[ERROR] Erro ao executar: {result.stderr}")
-            return 1
-
-    except subprocess.TimeoutExpired:
-        print("[TIMEOUT] Execucao acima de 10 min. Tentando novamente na proxima hora.")
-        return 1
-    except Exception as e:
-        print(f"[ERROR] Erro: {e}")
-        return 1
-"""Executor autonomo seguro do ShopVivaliz.
+"""Executor autônomo seguro do ShopVivaliz.
 
 Objetivo:
 - usar tasks-queue.json como fila canonica;
@@ -319,6 +145,18 @@ def run_ai_collaboration(task: dict[str, Any]) -> tuple[int, str]:
     return result.returncode, (result.stdout + "\n" + result.stderr).strip()
 
 
+def classify_ai_result(returncode: int, output: str) -> tuple[str, str]:
+    if returncode == 2:
+        reason = output or "Nenhum cliente de IA disponivel; credenciais ou SDK ausentes."
+        return "blocked_external_access_required", reason
+    if returncode == 3:
+        reason = output or "O fluxo de IA nao pode iniciar por dependencias ausentes."
+        return "blocked_external_access_required", reason
+    if returncode != 0:
+        return "failed", output or "Falha inesperada no fluxo de IA."
+    return "ok", output or "Fluxo de IA executado sem incidencias."
+
+
 def open_or_report_pr(branch: str, task: dict[str, Any]) -> str | None:
     if not os.getenv("GH_TOKEN"):
         return None
@@ -381,17 +219,18 @@ def execute_one(queue_data: dict[str, Any]) -> dict[str, Any]:
     returncode, output = run_ai_collaboration(task)
     report["events"].append(output[-4000:] if output else "sem saida do agente")
 
-    if returncode == 3:
+    status, reason = classify_ai_result(returncode, output)
+    if status == "blocked_external_access_required":
         task["status"] = "blocked_external_access_required"
         task["blocked_at"] = utc_now()
-        task["blocked_reason"] = output
+        task["blocked_reason"] = reason
         report["status"] = "blocked_external_access_required"
         save_queue(queue_data)
         return report
-    if returncode != 0:
+    if status == "failed":
         task["status"] = "pending"
         task["last_error_at"] = utc_now()
-        task["last_error"] = output[-1000:]
+        task["last_error"] = reason[-1000:]
         report["status"] = "failed"
         save_queue(queue_data)
         return report
