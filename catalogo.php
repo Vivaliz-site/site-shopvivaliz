@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 header('Content-Type: text/html; charset=UTF-8');
 
+require_once __DIR__ . '/includes/product-price-enrich.php';
+
 function sv_catalog_root(): string
 {
     return __DIR__;
@@ -42,7 +44,7 @@ function sv_catalog_products(int $limit, string $query, string $category = ''): 
         $products[] = [
             'sku'              => $sku !== '' ? $sku : (string)($row['id'] ?? 'sem-sku'),
             'name'             => $name !== '' ? $name : 'Produto Vivaliz',
-            'image_url'        => trim((string)($row['image_url'] ?? '/favicon.ico')) ?: '/favicon.ico',
+            'image_url'        => trim((string)($row['image_url'] ?? sv_catalog_default_image())) ?: sv_catalog_default_image(),
             'price'            => (float)($row['price'] ?? 0),
             'images_count'     => (int)($row['images_count'] ?? 0),
             'olist_product_id' => (string)($row['olist_product_id'] ?? ''),
@@ -74,9 +76,14 @@ function sv_catalog_esc(string $value): string
     return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 }
 
+function sv_catalog_default_image(): string
+{
+    return '/images/logo-vivaliz-square.png';
+}
+
 function sv_catalog_money(float $value): string
 {
-    return $value > 0 ? 'R$ ' . number_format($value, 2, ',', '.') : 'Preço sob consulta';
+    return $value > 0 ? 'R$ ' . number_format($value, 2, ',', '.') : 'Consulte o valor';
 }
 
 function sv_catalog_base_url(): string
@@ -184,17 +191,18 @@ function sv_catalog_structured_data(array $products, string $canonicalUrl, strin
 
 $query      = sv_catalog_query();
 $category   = trim((string)($_GET['categoria'] ?? ''));
-$products   = sv_catalog_products(200, $query, $category);
+$products   = svp_enrich_products(sv_catalog_products(200, $query, $category));
 $categories = sv_catalog_categories();
 $totalStr   = count($products) . ' produto' . (count($products) === 1 ? '' : 's');
 $statusText = $products
     ? $totalStr . ($category !== '' ? " em \"{$category}\"" : '') . '.'
-    : ($query !== '' ? 'Nenhum produto encontrado.' : 'Catálogo não disponível no momento.');
+    : ($query !== '' ? 'Nenhum produto encontrado para essa busca.' : 'Explore nossas categorias ou fale com a equipe para localizar o item ideal.');
 $pageTitle = sv_catalog_page_title($category, $query);
 $metaDescription = sv_catalog_meta_description($category, $query, count($products));
 $canonicalUrl = sv_catalog_canonical_url($category);
 $structuredData = sv_catalog_structured_data($products, $canonicalUrl, $pageTitle, $metaDescription);
 $searchNoindex = $query !== '';
+$svNavCurrent = 'catalogo';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -218,20 +226,7 @@ $searchNoindex = $query !== '';
     <script type="application/ld+json"><?= json_encode($structuredData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="container nav-inner">
-            <a class="brand-link" href="/">
-                <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" onerror="this.src='/images/logo.svg'">
-            </a>
-            <div class="navbar-menu">
-                <a href="/">Home</a>
-                <a href="/catalogo" aria-current="page">Catálogo</a>
-                <a href="/carrinho" class="nav-cart">
-                    🛒 Carrinho <span class="cart-badge" id="nav-cart-count"></span>
-                </a>
-            </div>
-        </div>
-    </nav>
+    <?php include __DIR__ . '/includes/navbar.php'; ?>
 
     <main class="catalog-page">
         <section class="catalog-header">
@@ -242,7 +237,7 @@ $searchNoindex = $query !== '';
                     <p class="muted"><?= $statusText ?></p>
                 </div>
                 <form class="catalog-search" role="search" method="get" action="/catalogo">
-                    <input id="catalog-search" name="q" type="search" placeholder="Buscar por SKU, nome ou categoria" autocomplete="off" value="<?= sv_catalog_esc($query) ?>">
+                    <input id="catalog-search" name="q" type="search" aria-label="Buscar no catálogo" autocomplete="off" value="<?= sv_catalog_esc($query) ?>">
                     <button type="submit">Buscar</button>
                 </form>
             </div>
@@ -269,7 +264,7 @@ $searchNoindex = $query !== '';
         <section class="container product-grid" id="product-grid" aria-live="polite">
             <?php foreach ($products as $product): ?>
                 <?php
-                $image      = $product['image_url'] !== '' ? $product['image_url'] : '/favicon.ico';
+                $image      = $product['image_url'] !== '' ? $product['image_url'] : sv_catalog_default_image();
                 $productUrl = sv_catalog_product_href($product);
                 $contactUrl = sv_catalog_contact_url($product);
                 $hasPrice   = (float)$product['price'] > 0;
@@ -283,7 +278,7 @@ $searchNoindex = $query !== '';
                 ?>
                 <article class="product-card">
                     <a class="product-image" href="<?= sv_catalog_esc($productUrl) ?>">
-                        <img src="<?= sv_catalog_esc($image) ?>" alt="<?= sv_catalog_esc($product['name']) ?>" loading="lazy" onerror="this.src='/favicon.ico'">
+                        <img src="<?= sv_catalog_esc($image) ?>" alt="<?= sv_catalog_esc($product['name']) ?>" loading="lazy" onerror="this.src='<?= sv_catalog_default_image() ?>'">
                     </a>
                     <div class="product-info">
                         <?php if ($product['category'] !== ''): ?>
@@ -303,7 +298,7 @@ $searchNoindex = $query !== '';
                             <?php if ($hasPrice): ?>
                                 <button class="buy-button" type="button" data-product="<?= sv_catalog_esc($payload) ?>">Comprar agora</button>
                             <?php else: ?>
-                                <a class="btn btn-primary card-link" href="<?= sv_catalog_esc($contactUrl) ?>">Solicitar preço</a>
+                                <a class="btn btn-primary card-link" href="<?= sv_catalog_esc($contactUrl) ?>">Falar com vendas</a>
                             <?php endif; ?>
                         </div>
                     </div>

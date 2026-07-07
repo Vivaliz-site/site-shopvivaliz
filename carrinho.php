@@ -63,19 +63,7 @@ header('Content-Type: text/html; charset=UTF-8');
     </style>
 </head>
 <body>
-<nav class="navbar">
-    <div class="container nav-inner">
-        <a class="brand-link" href="/">
-            <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" onerror="this.src='/images/logo.svg'">
-        </a>
-        <div class="navbar-menu">
-            <a href="/catalogo">Catálogo</a>
-            <a href="/carrinho" class="nav-cart" aria-current="page">
-                🛒 Carrinho <span class="cart-badge" id="nav-cart-count"></span>
-            </a>
-        </div>
-    </div>
-</nav>
+<?php $svNavCurrent = 'carrinho'; include __DIR__ . '/includes/navbar.php'; ?>
 
 <main class="container cart-page">
     <div class="cart-layout">
@@ -87,8 +75,17 @@ header('Content-Type: text/html; charset=UTF-8');
         <aside class="cart-card" id="cart-summary">
             <h2 class="cart-title" style="font-size:18px">Resumo do pedido</h2>
             <div class="summary-row"><span>Subtotal</span><strong id="cart-subtotal">—</strong></div>
-            <div class="summary-row"><span>Frete</span><strong>A calcular</strong></div>
+            <div class="summary-row"><span>Frete</span><strong id="cart-frete">A calcular</strong></div>
             <div class="summary-row summary-total"><span>Total estimado</span><strong id="cart-total">—</strong></div>
+            <div class="frete-calc">
+                <label for="frete-cep" style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">Calcular frete</label>
+                <div style="display:flex;gap:8px">
+                    <input type="text" id="frete-cep" aria-label="CEP para calcular o frete" maxlength="9"
+                        style="flex:1;padding:10px 12px;border-radius:8px;border:1.5px solid var(--line);font-size:13px">
+                    <button type="button" class="btn btn-secondary" id="btn-frete" style="white-space:nowrap;padding:10px 14px">Calcular</button>
+                </div>
+                <div id="frete-status" style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5"></div>
+            </div>
             <div class="cart-recovery-note">
                 Seu carrinho é salvo localmente para que você possa continuar a compra quando voltar.
             </div>
@@ -120,8 +117,14 @@ header('Content-Type: text/html; charset=UTF-8');
         try { return JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'); } catch(e) { return []; }
     }
     function saveCart(items) { localStorage.setItem('shopvivaliz_cart', JSON.stringify(items)); }
+    function saveShippingQuote(quote) {
+        localStorage.setItem('shopvivaliz_shipping_quote', JSON.stringify(quote || null));
+    }
+    function clearShippingQuote() {
+        localStorage.removeItem('shopvivaliz_shipping_quote');
+    }
     function fmtMoney(v) {
-        if (!v || isNaN(v)) return 'Preço sob consulta';
+        if (!v || isNaN(v)) return 'Consulte o valor';
         return 'R$ ' + parseFloat(v).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     }
 
@@ -139,6 +142,7 @@ header('Content-Type: text/html; charset=UTF-8');
         if (!list) return;
 
         if (!items.length) {
+            clearShippingQuote();
             list.innerHTML = '<div class="cart-empty">'
                 + '<div style="font-size:48px">🛒</div>'
                 + '<p>Seu carrinho está vazio.</p>'
@@ -159,7 +163,7 @@ header('Content-Type: text/html; charset=UTF-8');
             total += sub;
             if (price > 0) hasPrice = true;
             html += '<div class="cart-item">'
-                + '<img src="' + (it.image_url || '/favicon.ico') + '" alt="" onerror="this.src=\'/favicon.ico\'">'
+                + '<img src="' + (it.image_url || '/images/logo-vivaliz-square.png') + '" alt="" onerror="this.src=\'/images/logo-vivaliz-square.png\'">'
                 + '<div class="cart-item-info">'
                 + '<strong>' + (it.name || it.sku) + '</strong>'
                 + '<span>SKU: ' + it.sku + '</span>'
@@ -169,13 +173,13 @@ header('Content-Type: text/html; charset=UTF-8');
                 + '<button class="qty-btn" data-idx="' + idx + '" data-delta="1">+</button>'
                 + '<button class="btn-remove" data-remove="' + idx + '">Remover</button>'
                 + '</div></div>'
-                + '<div class="cart-item-price">' + (price > 0 ? fmtMoney(sub) : 'Sob consulta') + '</div>'
+                + '<div class="cart-item-price">' + (price > 0 ? fmtMoney(sub) : 'Consultar') + '</div>'
                 + '</div>';
         });
 
         list.innerHTML = html;
 
-        var fmt = hasPrice ? fmtMoney(total) : 'Sob consulta';
+        var fmt = hasPrice ? fmtMoney(total) : 'Consultar';
         if (subtotalEl) subtotalEl.textContent = fmt;
         if (totalEl) totalEl.textContent = fmt;
 
@@ -187,6 +191,7 @@ header('Content-Type: text/html; charset=UTF-8');
                 if (!items2[idx2]) return;
                 items2[idx2].quantity = Math.max(1, (items2[idx2].quantity || 1) + delta);
                 saveCart(items2);
+                clearShippingQuote();
                 render();
             });
         });
@@ -197,12 +202,115 @@ header('Content-Type: text/html; charset=UTF-8');
                 var idx2 = parseInt(btn.getAttribute('data-remove'));
                 items2.splice(idx2, 1);
                 saveCart(items2);
+                clearShippingQuote();
                 render();
             });
         });
     }
 
     render();
+
+    var freteTotal = 0;
+    var freteCalculated = false;
+
+    function updateTotalsWithFrete() {
+        var items = getCart();
+        var subtotal = items.reduce(function(a, i){ return a + (parseFloat(i.price) || 0) * (i.quantity || 1); }, 0);
+        var totalEl = document.getElementById('cart-total');
+        if (!totalEl) return;
+        if (freteCalculated && subtotal > 0) {
+            totalEl.textContent = fmtMoney(subtotal + freteTotal);
+        }
+    }
+
+    var btnFrete = document.getElementById('btn-frete');
+    var cepInput = document.getElementById('frete-cep');
+    var freteEl = document.getElementById('cart-frete');
+    var freteStatusEl = document.getElementById('frete-status');
+
+    if (cepInput) {
+        cepInput.addEventListener('input', function () {
+            var digits = cepInput.value.replace(/\D/g, '').slice(0, 8);
+            cepInput.value = digits.length > 5 ? digits.slice(0, 5) + '-' + digits.slice(5) : digits;
+        });
+    }
+
+    if (btnFrete) {
+        btnFrete.addEventListener('click', function () {
+            var items = getCart();
+            if (!items.length) {
+                if (freteStatusEl) freteStatusEl.textContent = 'Seu carrinho está vazio.';
+                return;
+            }
+
+            var cep = (cepInput ? cepInput.value : '').replace(/\D/g, '');
+            if (cep.length !== 8) {
+                if (freteStatusEl) freteStatusEl.textContent = 'Informe um CEP válido (8 dígitos).';
+                return;
+            }
+
+            btnFrete.disabled = true;
+            btnFrete.textContent = 'Calculando...';
+            if (freteStatusEl) freteStatusEl.textContent = '';
+            freteCalculated = false;
+
+            fetch('/api/melhorenvio/shipping-check.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cep: cep,
+                    items: items.map(function (item) {
+                        return {
+                            sku: item.sku || '',
+                            product_id: item.id || '',
+                            olist_product_id: item.olist_product_id || '',
+                            quantity: item.quantity || 1,
+                            price: parseFloat(item.price) || 0
+                        };
+                    })
+                })
+            })
+            .then(function (res) { return res.json().then(function (data) { return { status: res.status, data: data }; }); })
+            .catch(function () { return { status: 0, data: { ok: false, error: 'network_error' } }; })
+            .then(function (response) {
+                btnFrete.disabled = false;
+                btnFrete.textContent = 'Calcular';
+
+                if (!response.data.ok) {
+                    var err = response.data.error || 'erro_desconhecido';
+                    var messages = {
+                        missing_access_token: 'Cálculo de frete indisponível no momento. Nossa equipe confirmará o valor pelo WhatsApp.',
+                        invalid_cep: 'CEP inválido. Confira e tente novamente.',
+                        product_not_found: 'Não foi possível calcular o frete para um dos itens do carrinho.'
+                    };
+                    if (freteEl) freteEl.textContent = 'Indisponível';
+                    if (freteStatusEl) freteStatusEl.textContent = messages[err] || (response.data.message || 'Não foi possível calcular o frete agora.');
+                    clearShippingQuote();
+                    return;
+                }
+
+                var total = parseFloat(response.data.shipping_total || 0);
+                if (!(total > 0)) {
+                    if (freteEl) freteEl.textContent = 'Indisponível';
+                    if (freteStatusEl) freteStatusEl.textContent = 'Nenhuma opção de frete encontrada para este CEP.';
+                    clearShippingQuote();
+                    return;
+                }
+
+                freteTotal = total;
+                freteCalculated = true;
+                if (freteEl) freteEl.textContent = fmtMoney(total);
+                if (freteStatusEl) freteStatusEl.textContent = 'Frete calculado para ' + cepInput.value + '.';
+                saveShippingQuote({
+                    cep: cep,
+                    label: cepInput ? cepInput.value : cep,
+                    total: total,
+                    option: response.data.selected_option || null
+                });
+                updateTotalsWithFrete();
+            });
+        });
+    }
 })();
 </script>
 </body>

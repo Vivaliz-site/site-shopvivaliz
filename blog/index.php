@@ -42,8 +42,8 @@ header('Content-Type: text/html; charset=UTF-8');
 <main class="blog-shell">
     <div class="container">
         <section class="post-card" style="margin-bottom:18px;">
-            <h1>Conteudos da loja</h1>
-            <p>Espaco reservado para publicar novidades do catalogo, guias de compra e atualizacoes da operacao Vivaliz.</p>
+            <h1>Conteúdos da loja</h1>
+            <p>Dicas rápidas sobre catálogo, escolha de produtos e organização da operação comercial da Vivaliz.</p>
         </section>
         <div class="blog-grid">
             <article class="post-card">
@@ -56,7 +56,7 @@ header('Content-Type: text/html; charset=UTF-8');
             </article>
             <article class="post-card">
                 <h2>Melhoria continua da operacao</h2>
-                <p>A loja esta em processo de consolidacao de paginas, fluxos e integracoes para sair do estado experimental.</p>
+                <p>Pequenos ajustes contínuos em navegação, conteúdo e apresentação ajudam a loja a vender melhor e com menos atrito.</p>
             </article>
         </div>
     </div>

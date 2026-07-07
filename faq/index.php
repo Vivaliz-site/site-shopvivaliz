@@ -39,19 +39,19 @@ header('Content-Type: text/html; charset=UTF-8');
     <div class="container">
         <section class="faq-card">
             <h1>Perguntas frequentes</h1>
-            <p>Reunimos as orientacoes principais para compra, pagamento e acompanhamento de pedido.</p>
+            <p>Reunimos as orientações principais para compra, pagamento, frete e acompanhamento de pedido.</p>
         </section>
         <section class="faq-card">
             <h2>Como acompanho meu pedido?</h2>
-            <p>Assim que o fluxo comercial estiver completo, o acompanhamento sera informado pelos canais de atendimento e pelos registros internos do pedido.</p>
+            <p>Após a confirmação do pedido, nossa equipe informa o andamento pelos canais de atendimento cadastrados na compra.</p>
         </section>
         <section class="faq-card">
-            <h2>O frete ja e calculado na loja?</h2>
-            <p>A estrutura de frete esta em evolucao. Em alguns fluxos o calculo ainda depende de integracao e validacao de CEP.</p>
+            <h2>Como funciona o frete?</h2>
+            <p>O valor e o prazo são calculados conforme o CEP de entrega e a disponibilidade do item no momento da compra.</p>
         </section>
         <section class="faq-card">
             <h2>Posso pedir atendimento antes da compra?</h2>
-            <p>Sim. Para duvidas de compatibilidade, estoque ou prazo, use a pagina de contato.</p>
+            <p>Sim. Para dúvidas de compatibilidade, estoque ou prazo, use a página de contato e fale com a equipe da Vivaliz.</p>
         </section>
     </div>
 </main>

@@ -54,7 +54,7 @@
 
   function money(value) {
     const number = Number(value || 0);
-    if (!number) return 'Preço sob consulta';
+    if (!number) return 'Consulte o valor';
     return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
 
@@ -65,14 +65,14 @@
     if (!items.length) {
       itemsEl.innerHTML = '<div class="empty-cart">Seu carrinho está vazio.</div>';
       if (checkoutLink) checkoutLink.classList.add('disabled');
-      if (totalEl) totalEl.textContent = 'Preço sob consulta';
+      if (totalEl) totalEl.textContent = 'Consulte o valor';
       return;
     }
     if (checkoutLink) checkoutLink.classList.remove('disabled');
     itemsEl.innerHTML = items.map(function (item, index) {
       return `
         <div class="cart-item">
-          <img src="${esc(item.image_url || '/favicon.ico')}" alt="${esc(item.name)}" onerror="this.src='/favicon.ico'">
+          <img src="${esc(item.image_url || '/images/logo-vivaliz-square.png')}" alt="${esc(item.name)}" onerror="this.src='/images/logo-vivaliz-square.png'">
           <div>
             <strong>${esc(item.name)}</strong>
             <span>${esc(item.sku)} · ${money(item.price)}</span>
