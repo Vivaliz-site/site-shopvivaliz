@@ -21,7 +21,7 @@ $codename = (string)($version['codename'] ?? '');
             <div class="navbar-menu">
                 <a href="/">Loja</a>
                 <a href="/catalogo.php">Catálogo</a>
-                <a href="/checkout.php">Checkout</a>
+                <a href="/checkout">Checkout</a>
                 <a href="/admin/monitor/">Monitor</a>
             </div>
         </div>
@@ -56,7 +56,7 @@ $codename = (string)($version['codename'] ?? '');
                     <a class="btn btn-primary" href="/" target="_blank" rel="noreferrer">Abrir loja</a>
                     <a class="btn btn-secondary" href="/catalogo.php" target="_blank" rel="noreferrer">Abrir catálogo</a>
                     <a class="btn btn-secondary" href="/produto.php" target="_blank" rel="noreferrer">Abrir produto</a>
-                    <a class="btn btn-secondary" href="/checkout.php" target="_blank" rel="noreferrer">Abrir checkout</a>
+                    <a class="btn btn-secondary" href="/checkout" target="_blank" rel="noreferrer">Abrir checkout</a>
                 </div>
             </article>
 
@@ -126,7 +126,7 @@ $codename = (string)($version['codename'] ?? '');
                 <div class="admin-map-grid">
                     <div class="admin-map-item">
                         <strong>Loja pública</strong>
-                        <span>`/`, `/catalogo.php`, `/produto.php`, `/checkout.php`</span>
+                        <span>`/`, `/catalogo`, `/produto`, `/checkout`</span>
                         <small>Texto, navegação, vitrine e jornada do cliente.</small>
                     </div>
                     <div class="admin-map-item">
