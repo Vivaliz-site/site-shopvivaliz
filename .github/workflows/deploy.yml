@@ -238,7 +238,7 @@ jobs:
           protocol: ftp
           local-dir: ./
           server-dir: ${{ env.FTP_REMOTE_DIR_VALUE }}
-          dangerous-clean-slate: false
+          dangerous-clean-slate: true
           exclude: |
             .git/**
             .github/**
