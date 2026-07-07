@@ -1,8 +1,8 @@
 name: Autonomous Watchdog Monitor
 
 on:
-  # Gatilhos automáticos pausados temporariamente para economizar quota do GitHub Actions.
-  # Reativar após estabilização dos secrets e do fluxo de monitoramento.
+  schedule:
+    - cron: '*/15 * * * *'
   workflow_dispatch:
     inputs:
       cycles:
