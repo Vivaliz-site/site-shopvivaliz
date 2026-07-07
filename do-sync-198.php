@@ -28,15 +28,44 @@ if (!$db || $db->connect_error) {
     exit(json_encode(['erro' => 'Sem banco', 'config_testadas' => count($configs)]));
 }
 
-// 198 produtos
-$prods = [
-    ['PROD-0001', 'Produto Premium #1', 81.4, 'Produto de qualidade numero 1 com detalhes tecnicos', 'Calcados', 102],
-    ['PROD-0002', 'Produto Premium #2', 82.9, 'Produto de qualidade numero 2 com detalhes tecnicos', 'Acessorios', 104],
-    ['PROD-0003', 'Produto Premium #3', 84.4, 'Produto de qualidade numero 3 com detalhes tecnicos', 'Eletronicos', 106],
-    ['PROD-0004', 'Produto Premium #4', 85.9, 'Produto de qualidade numero 4 com detalhes tecnicos', 'Casa', 108],
-    ['PROD-0005', 'Produto Premium #5', 87.4, 'Produto de qualidade numero 5 com detalhes tecnicos', 'Roupas', 110],
-];
+// Carrega catálogo real de produtos do JSON de fallback
+$prods = [];
+function sv_load_catalog_products(): array
+{
+    $path = __DIR__ . '/api/catalog/fallback-products.json';
+    if (!is_file($path)) {
+        return [];
+    }
+    $data = json_decode((string) file_get_contents($path), true);
+    if (!is_array($data)) {
+        return [];
+    }
+    $products = [];
+    foreach ($data as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $sku = trim((string) ($item['sku'] ?? $item['id'] ?? ''));
+        if ($sku === '') {
+            continue;
+        }
+        $products[] = [
+            $sku,
+            trim((string) ($item['name'] ?? $item['nome'] ?? '')),
+            (float) ($item['price'] ?? $item['preco'] ?? 0),
+            trim((string) ($item['description'] ?? $item['descricao'] ?? '')),
+            trim((string) ($item['category'] ?? $item['categoria'] ?? 'Geral')),
+            max(0, (int) ($item['stock'] ?? $item['estoque'] ?? 0)),
+        ];
+    }
+    return $products;
+}
 
+$prods = sv_load_catalog_products();
+if ($prods === []) {
+    echo json_encode(['erro' => 'Não foi possível carregar o catálogo de fallback em api/catalog/fallback-products.json', 'sucesso' => false, 'ts' => date('c')]);
+    exit;
+}
 $sql = "INSERT INTO products (product_id, name, price, description, category, stock, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
 ON DUPLICATE KEY UPDATE price=VALUES(price), description=VALUES(description), category=VALUES(category), stock=VALUES(stock), updated_at=NOW()";

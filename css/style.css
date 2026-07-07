@@ -226,6 +226,7 @@ a {
     font-weight: 800;
     text-decoration: none;
     cursor: pointer;
+    transition: background 0.18s ease, transform 0.18s ease;
 }
 
 .btn-primary,
@@ -233,6 +234,13 @@ a {
 .catalog-search button {
     background: var(--brand);
     color: #fff;
+}
+
+.btn-primary:hover,
+.buy-button:hover,
+.catalog-search button:hover {
+    background: #0f2847;
+    transform: translateY(-1px);
 }
 
 .btn-primary:hover,
@@ -976,8 +984,8 @@ footer {
 
 /* V16 — footer */
 footer {
-    background: #0f1e35;
-    color: #94a3b8;
+    background: #0f2843;
+    color: #d8e2f1;
     padding: 48px 0 24px;
     margin-top: 64px;
 }
@@ -991,14 +999,14 @@ footer {
 
 .footer-cols strong {
     display: block;
-    color: white;
+    color: #f8fafc;
     margin-bottom: 12px;
     font-size: 15px;
 }
 
 .footer-cols a, .footer-cols p {
     display: block;
-    color: #94a3b8;
+    color: #cbd5e1;
     text-decoration: none;
     font-size: 14px;
     margin-bottom: 6px;
@@ -1008,11 +1016,11 @@ footer {
 .footer-cols a:hover { color: white; }
 
 .footer-copy {
-    border-top: 1px solid #1e3a5f;
+    border-top: 1px solid rgba(255,255,255,0.08);
     padding-top: 20px;
     font-size: 13px;
     text-align: center;
-    color: #64748b;
+    color: #94a3b8;
 }
 
 .related-products {
