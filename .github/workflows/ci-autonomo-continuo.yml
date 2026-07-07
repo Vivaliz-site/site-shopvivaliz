@@ -67,6 +67,7 @@ jobs:
 
   git-conflicts:
     name: Detectar Conflitos Git
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     needs: checkout
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -92,6 +93,7 @@ jobs:
 
   yaml-validation:
     name: Validar YAML
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     needs: checkout
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -115,7 +117,7 @@ jobs:
   php-syntax:
     name: Validar Sintaxe PHP
     needs: setup
-    if: needs.setup.outputs.has_php == 'true'
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' && needs.setup.outputs.has_php == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -161,7 +163,7 @@ jobs:
   python-syntax:
     name: Validar Sintaxe Python
     needs: setup
-    if: needs.setup.outputs.has_python == 'true'
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' && needs.setup.outputs.has_python == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -206,6 +208,7 @@ jobs:
 
   security-scan:
     name: Verificação de Segurança
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     needs: checkout
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -276,6 +279,7 @@ jobs:
 
   endpoints-check:
     name: Verificar Endpoints Críticos
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     needs: checkout
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -355,7 +359,7 @@ jobs:
   summary:
     name: Resumo CI
     needs: [git-conflicts, yaml-validation, php-syntax, python-syntax, security-scan, endpoints-check, dependency-check]
-    if: always()
+    if: ${{ always() && vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
