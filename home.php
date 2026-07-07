@@ -190,12 +190,11 @@ $categoryLinks = [
                         <span class="hero-kicker">Catalogo ativo Vivaliz</span>
                         <div class="hero-copy">
                             <h1>Produtos reais, marca certa e vitrine com identidade.</h1>
-                            <p>A Vivaliz precisa vender com cara de operacao seria. Esta home foi reorientada para destacar catalogo, linhas de produto e fluxo comercial sem o visual generico que estava no ar.</p>
-                            <p class="hero-support-copy">Atendimento por WhatsApp e contato comercial rapido para quem precisa tirar duvidas antes de comprar.</p>
+                            <p>A Vivaliz agora mostra um catálogo com foco em produto técnico, identidade de marca e jornada de compra clara.</p>
+                            <p class="hero-support-copy">Atendimento por WhatsApp e contato comercial rápido para dúvidas e suporte antes da compra.</p>
                         </div>
                         <div class="hero-actions">
                             <a class="hero-btn" href="/catalogo">Ver catalogo</a>
-                            <a class="hero-btn-alt" href="/contato">Chamar no WhatsApp</a>
                             <a class="hero-btn-alt" href="/contato">Falar com a Vivaliz</a>
                         </div>
                     </div>
@@ -218,7 +217,7 @@ $categoryLinks = [
                     <article class="mini-banner">
                         <strong>Operacao comercial</strong>
                         <h2>Menos tema fake. Mais pagina pronta para venda.</h2>
-                        <p>O foco aqui e consolidar vitrine, navegacao e jornada de compra antes de expandir automacoes e marketplace.</p>
+                        <p>O foco é consolidar a vitrine e a jornada de compra para deixar o site pronto para pedidos e posicionamento comercial.</p>
                         <a href="/sobre">Ver posicionamento da marca</a>
                     </article>
                 </aside>
@@ -234,7 +233,7 @@ $categoryLinks = [
                 </div>
                 <div>
                     <strong>Destaques vindos do mapeamento</strong>
-                    <p>Os cards principais usam nomes e imagens reais da base local de upload, sem Produto Premium inventado.</p>
+                    <p>Os cards principais usam nomes e imagens reais da base local de upload, evitando conteúdo genérico e test data.</p>
                 </div>
             </div>
         </div>

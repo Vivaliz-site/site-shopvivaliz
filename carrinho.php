@@ -98,7 +98,7 @@ header('Content-Type: text/html; charset=UTF-8');
             <div class="summary-row"><span>Frete</span><strong>A calcular</strong></div>
             <div class="summary-row summary-total"><span>Total estimado</span><strong id="cart-total">—</strong></div>
             <div class="cart-recovery-note">
-                Seu carrinho fica salvo neste navegador para continuar depois, mesmo que você saia agora.
+                Seu carrinho é salvo localmente para que você possa continuar a compra quando voltar.
             </div>
             <a href="/checkout.php" class="btn btn-primary btn-checkout" id="btn-checkout">Finalizar pedido</a>
             <a href="/catalogo" class="btn-continue">Continuar comprando</a>

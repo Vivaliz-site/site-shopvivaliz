@@ -50,7 +50,7 @@
   "roo-cline.commandExecutionTimeout": 600,
   "roo-cline.preventCompletionWithOpenTodos": false,
   "terminal.integrated.allowInUntrustedWorkspace": true,
-  "geminicodeassist.rules": "full acces and full permision\n\n\n",
+  "geminicodeassist.rules": "full access and full permission",
   "python-envs.pythonProjects": [
     {
       "path": ".",

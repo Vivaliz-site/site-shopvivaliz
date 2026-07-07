@@ -250,7 +250,7 @@ $searchNoindex = $query !== '';
                     <p class="muted"><?= $statusText ?></p>
                 </div>
                 <form class="catalog-search" role="search" method="get" action="/catalogo">
-                    <input id="catalog-search" name="q" type="search" placeholder="Buscar por SKU ou produto" autocomplete="off" value="<?= sv_catalog_esc($query) ?>">
+                    <input id="catalog-search" name="q" type="search" placeholder="Buscar por SKU, nome ou categoria" autocomplete="off" value="<?= sv_catalog_esc($query) ?>">
                     <button type="submit">Buscar</button>
                 </form>
             </div>
