@@ -6,6 +6,7 @@ com impacto em preco final cobrado do cliente.
 """
 
 import json
+import argparse
 import sys
 from pathlib import Path
 
@@ -43,8 +44,13 @@ def validate_task(title: str, description: str = "") -> tuple[bool, str]:
 
 
 def main() -> int:
-    title = sys.argv[1] if len(sys.argv) > 1 else ""
-    description = sys.argv[2] if len(sys.argv) > 2 else ""
+    parser = argparse.ArgumentParser(description="Guardiao da politica autonoma ShopVivaliz")
+    parser.add_argument("--title", default="", help="Titulo da tarefa")
+    parser.add_argument("--description", default="", help="Descricao da tarefa")
+    args = parser.parse_args()
+
+    title = args.title
+    description = args.description
     allowed, message = validate_task(title, description)
     print(message)
     return 0 if allowed else 2

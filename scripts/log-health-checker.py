@@ -67,14 +67,14 @@ def check_log_status():
                         report["warnings"].append(f"Não foi possível ler {path_str} para erros: {e}")
         
         report["log_checks"][path_str] = check_result
-        print(f"  [STATUS] {desc:<25}: {check_result["details"]}")
+        print(f"  [STATUS] {desc:<25}: {check_result['details']}")
 
     if report["errors"]:
         report["status"] = "CRITICAL"
     elif report["warnings"]:
         report["status"] = "WARNING"
 
-    print(f"\nStatus Geral dos Logs: {report["status"]}")
+    print(f"\nStatus Geral dos Logs: {report['status']}")
     if report["errors"]:
         print("Erros:")
         for err in report["errors"]:

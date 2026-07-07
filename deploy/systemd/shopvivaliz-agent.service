@@ -1,0 +1,26 @@
+[Unit]
+Description=ShopVivaliz 24/7 Autonomous Audit Agent
+Documentation=file:/home/ubuntu/site-shopvivaliz/AGENTS.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/site-shopvivaliz
+Environment=SHOPVIVALIZ_PROJECT_DIR=/home/ubuntu/site-shopvivaliz
+Environment=SHOPVIVALIZ_AGENT_INTERVAL_SECONDS=900
+ExecStart=/bin/bash /home/ubuntu/site-shopvivaliz/scripts/autonomous-agent-loop.sh
+Restart=always
+RestartSec=15
+KillSignal=SIGTERM
+TimeoutStopSec=45
+
+# Hard governance boundary: this service runs local audit and task selection only.
+# It must not be used for deploys, campaign publication, budget increases, or price changes.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

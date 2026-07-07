@@ -31,9 +31,9 @@ class ShopeeConnectionTester {
      * Executar todos os testes
      */
     public function runAllTests() {
-        echo "="*80 . "\n";
+        echo str_repeat("=", 80) . "\n";
         echo "TESTE DE CONEXAO: SHOPEE API\n";
-        echo "="*80 . "\n\n";
+        echo str_repeat("=", 80) . "\n\n";
 
         // Teste 1: Verificar secrets
         $this->testSecrets();
@@ -201,9 +201,9 @@ class ShopeeConnectionTester {
      * Imprimir resultado final
      */
     private function printFinalResult() {
-        echo "="*80 . "\n";
+        echo str_repeat("=", 80) . "\n";
         echo "RESULTADO FINAL\n";
-        echo "="*80 . "\n\n";
+        echo str_repeat("=", 80) . "\n\n";
 
         $conexao_ok = ($this->resultado['conexao_api']['status'] === 'OK');
         $secrets_ok = ($this->resultado['secrets_completos']);
@@ -223,7 +223,7 @@ class ShopeeConnectionTester {
             $this->resultado['status'] = 'erro';
         }
 
-        echo "\n" . "="*80 . "\n";
+        echo "\n" . str_repeat("=", 80) . "\n";
     }
 
     public function getResultado() {

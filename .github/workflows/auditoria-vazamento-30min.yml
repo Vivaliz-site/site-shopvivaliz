@@ -1,0 +1,81 @@
+name: Auditoria de Vazamento (30 min)
+
+on:
+  workflow_dispatch:
+    inputs:
+      delay_minutes:
+        description: "Aguardar quantos minutos antes de auditar"
+        required: false
+        default: "30"
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Varredura de termos de vazamento
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Aguardar janela de auditoria
+        shell: bash
+        run: |
+          set -euo pipefail
+          DELAY="${{ github.event.inputs.delay_minutes || '30' }}"
+          case "$DELAY" in
+            ''|*[!0-9]*)
+              echo "::error::delay_minutes invalido: $DELAY"
+              exit 1
+              ;;
+          esac
+          echo "Aguardando ${DELAY} minuto(s) antes da auditoria..."
+          sleep "$((DELAY * 60))"
+
+      - name: Escanear menções históricas de vazamento
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p logs
+          REPORT="logs/auditoria-vazamento-$(date -u +%Y%m%dT%H%M%SZ).txt"
+
+          PATTERN='vazad|vazamento|vazou|hist[oó]rico do git|segredo antigo|credenciais antigas|leaked secret'
+
+          # Excluir lockfiles e dependências para evitar falso positivo de "memory leaks".
+          if git grep -nEI "$PATTERN" -- \
+            ':(exclude)**/node_modules/**' \
+            ':(exclude)**/vendor/**' \
+            ':(exclude)**/package-lock.json' \
+            ':(exclude)**/pnpm-lock.yaml' \
+            ':(exclude)**/yarn.lock' \
+            ':(exclude).github/workflows/auditoria-vazamento-30min.yml' \
+            ':(exclude)docs/squad-escopo.md' \
+            ':(exclude)claude/api/agent/squad-chat.php' \
+            > "$REPORT"; then
+            echo "Foram encontradas menções suspeitas:"
+            cat "$REPORT"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "## Resultado: FALHA" >> "$GITHUB_STEP_SUMMARY"
+            echo "Menções suspeitas encontradas em vazamento histórico." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "```" >> "$GITHUB_STEP_SUMMARY"
+            cat "$REPORT" >> "$GITHUB_STEP_SUMMARY"
+            echo "```" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          else
+            echo "Nenhuma menção suspeita encontrada." | tee "$REPORT"
+            echo "## Resultado: OK" >> "$GITHUB_STEP_SUMMARY"
+            echo "Nenhuma menção suspeita de vazamento histórico foi encontrada." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload relatório
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auditoria-vazamento
+          path: logs/auditoria-vazamento-*.txt
+          retention-days: 7
