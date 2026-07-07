@@ -38,17 +38,48 @@ if (!$db) {
     ]));
 }
 
-// Array com 198 produtos inline
-$produtos = [
-    ['id' => 'PROD-0001', 'nome' => 'Produto Premium #1', 'preco' => 81.4, 'descricao' => 'Produto de qualidade numero 1 com detalhes tecnicos', 'categoria' => 'Calcados', 'estoque' => 102],
-    ['id' => 'PROD-0002', 'nome' => 'Produto Premium #2', 'preco' => 82.9, 'descricao' => 'Produto de qualidade numero 2 com detalhes tecnicos', 'categoria' => 'Acessorios', 'estoque' => 104],
-    ['id' => 'PROD-0003', 'nome' => 'Produto Premium #3', 'preco' => 84.4, 'descricao' => 'Produto de qualidade numero 3 com detalhes tecnicos', 'categoria' => 'Eletronicos', 'estoque' => 106],
-    ['id' => 'PROD-0004', 'nome' => 'Produto Premium #4', 'preco' => 85.9, 'descricao' => 'Produto de qualidade numero 4 com detalhes tecnicos', 'categoria' => 'Casa', 'estoque' => 108],
-    ['id' => 'PROD-0005', 'nome' => 'Produto Premium #5', 'preco' => 87.4, 'descricao' => 'Produto de qualidade numero 5 com detalhes tecnicos', 'categoria' => 'Roupas', 'estoque' => 110],
-    ['id' => 'PROD-0006', 'nome' => 'Produto Premium #6', 'preco' => 88.9, 'descricao' => 'Produto de qualidade numero 6 com detalhes tecnicos', 'categoria' => 'Calcados', 'estoque' => 112],
-    ['id' => 'PROD-0007', 'nome' => 'Produto Premium #7', 'preco' => 90.4, 'descricao' => 'Produto de qualidade numero 7 com detalhes tecnicos', 'categoria' => 'Acessorios', 'estoque' => 114],
-    ['id' => 'PROD-0008', 'nome' => 'Produto Premium #8', 'preco' => 91.9, 'descricao' => 'Produto de qualidade numero 8 com detalhes tecnicos', 'categoria' => 'Eletronicos', 'estoque' => 116],
-];
+// Carrega catálogo real de produtos do JSON de fallback
+$produtos = [];
+function sv_load_catalog_products(): array
+{
+    $path = __DIR__ . '/api/catalog/fallback-products.json';
+    if (!is_file($path)) {
+        return [];
+    }
+    $data = json_decode((string) file_get_contents($path), true);
+    if (!is_array($data)) {
+        return [];
+    }
+    $products = [];
+    foreach ($data as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $sku = trim((string) ($item['sku'] ?? $item['id'] ?? ''));
+        if ($sku === '') {
+            continue;
+        }
+        $products[] = [
+            'id' => $sku,
+            'nome' => trim((string) ($item['name'] ?? $item['nome'] ?? '')),
+            'preco' => (float) ($item['price'] ?? $item['preco'] ?? 0),
+            'descricao' => trim((string) ($item['description'] ?? $item['descricao'] ?? '')),
+            'categoria' => trim((string) ($item['category'] ?? $item['categoria'] ?? 'Geral')),
+            'estoque' => max(0, (int) ($item['stock'] ?? $item['estoque'] ?? 0)),
+        ];
+    }
+    return $products;
+}
+
+$produtos = sv_load_catalog_products();
+if ($produtos === []) {
+    echo json_encode([
+        'erro' => 'Não foi possível carregar o catálogo de fallback em api/catalog/fallback-products.json',
+        'config_testadas' => count($configs),
+        'timestamp' => date('c'),
+    ]);
+    exit;
+}
 
 // Inserir produtos (estendido para 198 no servidor)
 $sync = 0;
