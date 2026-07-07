@@ -1,8 +1,15 @@
 name: Deploy Automático Seguro - Shop Vivaliz
 
 on:
-  # Gatilhos automáticos pausados temporariamente para economizar quota do GitHub Actions.
-  # Reativar após estabilização dos secrets e do fluxo de deploy.
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'automation/**'
+      - '**/*.md'
+      - '.github/**'
+      - '.claude/**'
+      - '.codex/**'
   workflow_dispatch:
 
 permissions:
@@ -140,6 +147,7 @@ jobs:
       LOJA_WHATSAPP_VALUE: ${{ secrets.LOJA_WHATSAPP }}
       LOJA_PIX_KEY_VALUE: ${{ secrets.LOJA_PIX_KEY }}
       LOJA_PIX_NAME_VALUE: ${{ secrets.LOJA_PIX_NAME }}
+      RUNTIME_AGENT_KEY_VALUE: ${{ secrets.SHOPVIVALIZ_AGENT_KEY != '' && secrets.SHOPVIVALIZ_AGENT_KEY || secrets.AGENT_KEY != '' && secrets.AGENT_KEY || secrets.WATCHDOG_AGENT_KEY != '' && secrets.WATCHDOG_AGENT_KEY || secrets.AUTONOMOUS_AGENT_KEY }}
 
     steps:
       - name: Baixar o código do repositório
@@ -167,6 +175,7 @@ jobs:
               "LOJA_WHATSAPP": os.environ.get("LOJA_WHATSAPP_VALUE", ""),
               "LOJA_PIX_KEY": os.environ.get("LOJA_PIX_KEY_VALUE", ""),
               "LOJA_PIX_NAME": os.environ.get("LOJA_PIX_NAME_VALUE", ""),
+              "SHOPVIVALIZ_AGENT_KEY": os.environ.get("RUNTIME_AGENT_KEY_VALUE", ""),
           }
           for key, value in optional.items():
               if value:
@@ -245,6 +254,32 @@ jobs:
             **/.env
             **/.env.*
             **/*.log
+
+      - name: Resetar OPCache do PHP publicado
+        shell: bash
+        run: |
+          if [ -z "${RUNTIME_AGENT_KEY_VALUE}" ]; then
+            echo "::warning::Agent key ausente para reset de OPCache"
+            exit 0
+          fi
+
+          mkdir -p reports
+          RESET_URL="https://dev.shopvivaliz.com.br/api/maintenance/opcache-reset.php?agent_key=${RUNTIME_AGENT_KEY_VALUE}"
+          HTTP_CODE=$(curl -sS -L \
+            --max-time 20 \
+            --retry 2 \
+            --retry-delay 3 \
+            --retry-all-errors \
+            -H "Accept: application/json" \
+            -o reports/opcache-reset.json \
+            -w "%{http_code}" \
+            "$RESET_URL")
+
+          cat reports/opcache-reset.json
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::warning::Reset de OPCache retornou HTTP $HTTP_CODE"
+          fi
 
       - name: Smoke test
         shell: bash
