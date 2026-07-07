@@ -209,6 +209,7 @@ def render_roo_fallback_report(task: dict[str, Any], helper: dict[str, Any]) -> 
 
 
 def write_roo_fallback_report(task: dict[str, Any], helper: dict[str, Any]) -> str:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
     report_text = render_roo_fallback_report(task, helper)
     report_name = f"roo_fallback_{slugify(str(task.get('id', 'task')))}_{helper['id']}.md"
     report_path = REPORT_DIR / report_name
