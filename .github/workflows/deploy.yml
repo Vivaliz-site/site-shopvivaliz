@@ -94,12 +94,8 @@ jobs:
 
   web-deploy:
     name: Sincronizar com a HostGator Dev
-<<<<<<< HEAD
-    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
-=======
     needs: validate-secrets
-    if: needs.validate-secrets.outputs.secrets_valid == 'true'
->>>>>>> origin/main
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' && needs.validate-secrets.outputs.secrets_valid == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
