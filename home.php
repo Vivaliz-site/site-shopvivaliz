@@ -216,7 +216,7 @@ $categoryLinks = [
     </style>
 </head>
 <body>
-<?php include __DIR__ . '/includes/navbar.php'; ?>
+<?php $svNavCurrent = ''; include __DIR__ . '/includes/navbar.php'; ?>
 <main>
     <section class="hero-shell">
         <div class="container">

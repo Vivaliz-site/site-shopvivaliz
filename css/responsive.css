@@ -419,6 +419,7 @@ footer {
     box-shadow: var(--shadow);
 }
 
+.brand-card h1,
 .brand-card h2,
 .brand-card h3,
 .brand-section-head h2 {
@@ -431,6 +432,12 @@ footer {
 .brand-section-head p {
     color: var(--muted);
     line-height: 1.75;
+}
+
+.brand-card a {
+    color: var(--secondary);
+    font-weight: 700;
+    text-decoration: none;
 }
 
 .brand-section-head {
