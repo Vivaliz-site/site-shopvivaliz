@@ -20,6 +20,13 @@ function sv_me_json(int $status, array $payload): never
 
 function sv_me_env_load(): void
 {
+    // config/constants.php carrega config/runtime-secrets.php, gerado pelo
+    // deploy a partir dos GitHub Secrets (o servidor nao recebe .env via FTP).
+    $constants = sv_me_root() . '/config/constants.php';
+    if (is_file($constants)) {
+        require_once $constants;
+    }
+
     $path = sv_me_root() . '/.env';
     if (!is_file($path) || !is_readable($path)) {
         return;
