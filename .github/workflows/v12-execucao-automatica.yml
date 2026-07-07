@@ -17,7 +17,7 @@ jobs:
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
-        php-version: '8.2' # Use a versão do PHP que seu projeto requer (ex: '7.4', '8.0', '8.1', '8.2', '8.3')
+        php-version: '8.3' # Use a versão do PHP que seu projeto requer (ex: '7.4', '8.0', '8.1', '8.2', '8.3')
         extensions: curl, json # Adicione extensões PHP necessárias para seus scripts
         ini-values: post_max_size=256M, upload_max_filesize=256M # Exemplo de configurações ini
 
@@ -38,7 +38,7 @@ jobs:
 
     - name: Run Pagarme Diagnostic
       # Este passo executa o script de diagnóstico do Pagarme e passa os segredos necessários como variáveis de ambiente.
-      run: php api/pagarme/diagnostic.bkp
+      run: php api/pagarme/diagnostic.php
       env:
         PAGARME_SECRET_KEY: ${{ secrets.PAGARME_SECRET_KEY }}
         PAGARME_PUBLIC_KEY: ${{ secrets.PAGARME_PUBLIC_KEY }}

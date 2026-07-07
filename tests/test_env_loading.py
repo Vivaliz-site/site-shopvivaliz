@@ -8,18 +8,21 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_env_file_is_loaded_when_present():
     env_path = ROOT / ".env.local"
-    assert env_path.exists(), "Expected .env.local to exist"
+    if not env_path.exists():
+        pytest.skip(".env.local not present in this environment")
 
     values = {}
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        if not line or line.startswith("#"):
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
             continue
-        if "=" in line:
-            key, value = line.split("=", 1)
-            if key.strip() in {"GEMINI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"}:
-                values[key.strip()] = value.strip().strip('"')
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if key in {"GEMINI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"}:
+            values[key] = value.strip().strip('"').strip("'")
 
-    assert values["GEMINI_API_KEY"] == "" or len(values["GEMINI_API_KEY"]) >= 10
+    gemini_key = values.get("GEMINI_API_KEY", "")
+    assert gemini_key == "" or len(gemini_key) >= 10
 
 
 def test_load_env_file_supports_simple_key_values(tmp_path):

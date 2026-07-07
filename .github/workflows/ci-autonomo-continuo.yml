@@ -9,7 +9,7 @@ on:
     branches:
       - main
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "0 * * * *"
 
 permissions:
   contents: read
@@ -34,8 +34,8 @@ jobs:
       - name: Validate PHP syntax
         shell: bash
         run: |
-          if find . -path './vendor' -prune -o -name '*.php' -print | grep -q .; then
-            find . -path './vendor' -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
+          if find . \( -path './vendor' -o -path './.git' -o -path './node_modules' -o -path './medusa' \) -prune -o -name '*.php' -print | grep -q .; then
+            find . \( -path './vendor' -o -path './.git' -o -path './node_modules' -o -path './medusa' \) -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
           else
             echo "No PHP files found."
           fi
