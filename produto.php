@@ -225,14 +225,6 @@ if ($notFound) {
     <link rel="stylesheet" href="/css/style.css">
     <script type="application/ld+json"><?= json_encode($jsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
     <script type="application/ld+json"><?= json_encode($breadcrumbJsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
-    <script>
-        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/insights/script.js"></script>
-    <script>
-        window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/speed-insights/script.js"></script>
 </head>
 <body>
     <nav class="navbar">
@@ -245,7 +237,7 @@ if ($notFound) {
                 <?php if ($category !== ''): ?>
                     <a href="/catalogo?categoria=<?= rawurlencode($category) ?>"><?= sv_esc($category) ?></a>
                 <?php endif; ?>
-                <a href="/carrinho.php" class="nav-cart">
+                <a href="/carrinho" class="nav-cart">
                     🛒 Carrinho <span class="cart-badge" id="nav-cart-count"></span>
                 </a>
             </div>
@@ -377,7 +369,7 @@ if ($notFound) {
         if (buyNowButton) {
             buyNowButton.addEventListener('click', function () {
                 addToCart(product);
-                window.location.href = '/carrinho.php';
+                window.location.href = '/carrinho';
             });
         }
 
@@ -386,7 +378,7 @@ if ($notFound) {
                 try {
                     var p = JSON.parse(decodeURIComponent(this.dataset.product));
                     addToCart(p);
-                    window.location.href = '/carrinho.php';
+                    window.location.href = '/carrinho';
                 } catch(e) {}
             });
         });

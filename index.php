@@ -92,14 +92,6 @@ function sv_home_contact_url(array $product): string
       ]
     }
     </script>
-    <script>
-        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/insights/script.js"></script>
-    <script>
-        window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/speed-insights/script.js"></script>
 </head>
 <body>
     <!-- Navegação -->
@@ -112,7 +104,7 @@ function sv_home_contact_url(array $product): string
                 <a href="/catalogo">Catálogo</a>
                 <a href="/gamificacao.php">Gamificação</a>
                 <a href="/sobre">Sobre</a>
-                <a href="/carrinho.php" class="nav-cart" id="nav-cart-link">
+                <a href="/carrinho" class="nav-cart" id="nav-cart-link">
                     🛒 Carrinho <span class="cart-badge" id="nav-cart-count">0</span>
                 </a>
             </div>
@@ -134,7 +126,7 @@ function sv_home_contact_url(array $product): string
                     <a href="/catalogo" class="btn btn-primary" style="background:#fff;color:#1d4ed8;font-size:15px;padding:14px 24px">
                         Ver catálogo completo
                     </a>
-                    <a href="/carrinho.php" class="btn" style="background:rgba(255,255,255,0.15);color:#fff;border:1.5px solid rgba(255,255,255,0.35);font-size:15px;padding:14px 24px">
+                    <a href="/carrinho" class="btn" style="background:rgba(255,255,255,0.15);color:#fff;border:1.5px solid rgba(255,255,255,0.35);font-size:15px;padding:14px 24px">
                         🛒 Meu Carrinho
                     </a>
                 </div>

@@ -138,15 +138,15 @@ Todos os workflows estão em: `.github/workflows/`
 ### Main Workflows (Críticos)
 ```
 deploy.yml                          ⭐ Deploy para HostGator
-continuous-trio-executor.yml        ⭐ Executor contínuo 24/7
-ai-autonomous-executor.yml          ⭐ Executor a cada 30min
+ai-autonomous-executor.yml          ⭐ Executor contínuo 24/7
+autonomous-watchdog.yml             - Watchdog e heartbeat do ciclo
+parallel-trio-executor.yml          - 3 agentes em paralelo
 ```
 
 ### Support Workflows
 ```
 executor-watchdog.yml               - Verifica se executor está rodando
 auto-task-generator.yml             - Gera tarefas a cada 6h
-parallel-trio-executor.yml          - 3 agentes em paralelo
 monitor-chat-responder.yml          - Respostas via GitHub Issues
 shopvivaliz-qa.yml                  - QA automático
 ```

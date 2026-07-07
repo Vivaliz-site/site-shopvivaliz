@@ -20,7 +20,7 @@ header('Content-Type: text/html; charset=UTF-8');
         <div class="navbar-menu">
             <a href="/admin/">Admin</a>
             <a href="/catalogo.php">Catálogo</a>
-            <a href="/checkout.php">Checkout</a>
+            <a href="/checkout">Checkout</a>
             <a href="/admin/monitor/">Monitor</a>
         </div>
     </div>

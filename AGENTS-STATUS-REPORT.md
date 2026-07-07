@@ -135,8 +135,8 @@ Progresso: Validando arquitetura...
 | Workflow | Frequência | Status |
 |----------|-----------|--------|
 | 24-7-continuous-agent.yml | A cada 5 min | ✅ ATIVO |
+| autonomous-watchdog.yml | A cada 15 min | ✅ ATIVO |
 | ai-autonomous-executor.yml | A cada 30 min | ✅ ATIVO |
-| continuous-trio-executor.yml | A cada 30 min | ✅ ATIVO |
 | parallel-trio-executor.yml | A cada 1 hora | ✅ ATIVO |
 | deploy.yml | On push | ✅ PRONTO |
 
