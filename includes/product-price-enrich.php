@@ -9,6 +9,13 @@ declare(strict_types=1);
 
 function svp_env_load(): void
 {
+    // config/constants.php carrega config/runtime-secrets.php, gerado pelo
+    // deploy a partir dos GitHub Secrets (o servidor nao recebe .env via FTP).
+    $constants = dirname(__DIR__) . '/config/constants.php';
+    if (is_file($constants)) {
+        require_once $constants;
+    }
+
     $path = dirname(__DIR__) . '/.env';
     if (!is_file($path) || !is_readable($path)) {
         return;
