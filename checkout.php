@@ -42,6 +42,10 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '5511999999999';
         window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
     </script>
     <script defer src="/_vercel/insights/script.js"></script>
+    <script>
+        window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/speed-insights/script.js"></script>
 </head>
 <body>
 <nav class="navbar">
