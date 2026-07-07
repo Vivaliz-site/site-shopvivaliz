@@ -61,14 +61,6 @@ header('Content-Type: text/html; charset=UTF-8');
             .cart-layout { grid-template-columns: 1fr; }
         }
     </style>
-    <script>
-        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/insights/script.js"></script>
-    <script>
-        window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/speed-insights/script.js"></script>
 </head>
 <body>
 <nav class="navbar">
@@ -78,7 +70,7 @@ header('Content-Type: text/html; charset=UTF-8');
         </a>
         <div class="navbar-menu">
             <a href="/catalogo">Catálogo</a>
-            <a href="/carrinho.php" class="nav-cart" aria-current="page">
+            <a href="/carrinho" class="nav-cart" aria-current="page">
                 🛒 Carrinho <span class="cart-badge" id="nav-cart-count"></span>
             </a>
         </div>
@@ -100,7 +92,7 @@ header('Content-Type: text/html; charset=UTF-8');
             <div class="cart-recovery-note">
                 Seu carrinho é salvo localmente para que você possa continuar a compra quando voltar.
             </div>
-            <a href="/checkout.php" class="btn btn-primary btn-checkout" id="btn-checkout">Finalizar pedido</a>
+            <a href="/checkout" class="btn btn-primary btn-checkout" id="btn-checkout">Finalizar pedido</a>
             <a href="/catalogo" class="btn-continue">Continuar comprando</a>
             <div style="margin-top:20px;display:grid;gap:6px">
                 <div style="font-size:12px;color:var(--muted);font-weight:600">🔒 Compra segura</div>

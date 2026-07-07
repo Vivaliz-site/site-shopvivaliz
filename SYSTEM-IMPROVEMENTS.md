@@ -128,7 +128,7 @@ ChatGPT:  $50/mês  (0.75 por tarefa)
 
 ## 🎯 INTEGRAÇÃO NO WORKFLOW
 
-### continuous-trio-executor.yml
+### ai-autonomous-executor.yml
 
 Agora executa antes de commitar:
 

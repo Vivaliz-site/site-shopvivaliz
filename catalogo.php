@@ -216,14 +216,6 @@ $searchNoindex = $query !== '';
     <title><?= sv_catalog_esc($pageTitle) ?></title>
     <link rel="stylesheet" href="/css/style.css">
     <script type="application/ld+json"><?= json_encode($structuredData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
-    <script>
-        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/insights/script.js"></script>
-    <script>
-        window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/speed-insights/script.js"></script>
 </head>
 <body>
     <nav class="navbar">
@@ -234,7 +226,7 @@ $searchNoindex = $query !== '';
             <div class="navbar-menu">
                 <a href="/">Home</a>
                 <a href="/catalogo" aria-current="page">Catálogo</a>
-                <a href="/carrinho.php" class="nav-cart">
+                <a href="/carrinho" class="nav-cart">
                     🛒 Carrinho <span class="cart-badge" id="nav-cart-count"></span>
                 </a>
             </div>

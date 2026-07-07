@@ -18,6 +18,35 @@ function svo_root(): string
     return dirname(__DIR__, 2);
 }
 
+function svo_load_runtime_secrets(): void
+{
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+    $loaded = true;
+
+    $path = svo_root() . '/config/runtime-secrets.php';
+    if (!is_file($path) || !is_readable($path)) {
+        return;
+    }
+
+    $secrets = require $path;
+    if (!is_array($secrets)) {
+        return;
+    }
+
+    foreach ($secrets as $key => $value) {
+        if (!is_string($key) || $key === '' || getenv($key) !== false) {
+            continue;
+        }
+        $stringValue = is_scalar($value) ? (string)$value : '';
+        putenv($key . '=' . $stringValue);
+        $_ENV[$key] = $stringValue;
+        $_SERVER[$key] = $stringValue;
+    }
+}
+
 function svo_autodev_available(): bool
 {
     static $loaded = null;
@@ -49,11 +78,46 @@ function svo_order_dir(): string
     return '';
 }
 
+function svo_payment_method(string $value): string
+{
+    $normalized = strtolower(trim($value));
+    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia'];
+    return in_array($normalized, $allowed, true) ? $normalized : 'pix';
+}
+
+function svo_payment_label(string $method): string
+{
+    return match ($method) {
+        'boleto' => 'Boleto bancario',
+        'whatsapp' => 'WhatsApp',
+        'transferencia' => 'Transferencia bancaria',
+        default => 'PIX',
+    };
+}
+
+function svo_payment_instructions(string $method): string
+{
+    return match ($method) {
+        'boleto' => 'Boleto sujeito a emissao manual apos confirmacao do frete.',
+        'whatsapp' => 'Pagamento e frete serao alinhados pelo atendimento no WhatsApp.',
+        'transferencia' => 'Dados bancarios serao enviados pela equipe apos confirmacao do frete.',
+        default => 'Pagamento via PIX com confirmacao apos validacao do pedido.',
+    };
+}
+
+function svo_tiny_credentials_configured(): bool
+{
+    return svo_tiny_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN') !== ''
+        && svo_tiny_env('OLIST_CLIENT_ID', 'TINY_CLIENT_ID') !== ''
+        && svo_tiny_env('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET') !== '';
+}
+
 /* ── Tiny ERP: push de pedido via API v3 ── */
 function svo_tiny_env(string ...$keys): string {
     static $loaded = false;
     if (!$loaded) {
         $loaded = true;
+        svo_load_runtime_secrets();
         $envFile = svo_root() . '/.env';
         if (is_file($envFile)) {
             foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
@@ -112,10 +176,13 @@ function svo_tiny_get_token(): string {
 
 function svo_push_order_tiny(array $order): ?string {
     $token = svo_tiny_get_token();
-    if ($token === '') return null; // credenciais não configuradas — skip silencioso
+    if ($token === '') return null;
 
     $c = $order['customer'] ?? [];
     $cep = preg_replace('/\D/', '', (string)($c['cep'] ?? ''));
+    $paymentMethod = svo_payment_label((string)($order['payment_method'] ?? 'pix'));
+    $notes = trim((string)($order['notes'] ?? ''));
+    $obs = trim("Forma de pagamento: {$paymentMethod}\n" . $notes);
 
     $payload = [
         'numeroPedido' => $order['order_number'],
@@ -138,7 +205,7 @@ function svo_push_order_tiny(array $order): ?string {
             'quantidade'  => $i['quantity'],
             'valor'       => $i['price'],
         ], $order['items'] ?? []),
-        'obs' => $order['notes'] ?? '',
+        'obs' => $obs,
     ];
 
     $ch = curl_init('https://api.tiny.com.br/public-api/v3/pedidos');
@@ -184,6 +251,7 @@ $phone = trim((string)($body['customer_phone'] ?? ''));
 $cep = preg_replace('/\D+/', '', (string)($body['cep'] ?? ''));
 $address = trim((string)($body['address'] ?? ''));
 $notes = trim((string)($body['notes'] ?? ''));
+$paymentMethod = svo_payment_method((string)($body['payment_method'] ?? 'pix'));
 $items = is_array($body['items'] ?? null) ? $body['items'] : [];
 
 if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($notes) > 1000) {
@@ -235,6 +303,8 @@ $record = [
     ],
     'items' => $cleanItems,
     'total' => round($total, 2),
+    'payment_method' => $paymentMethod,
+    'payment_label' => svo_payment_label($paymentMethod),
     'notes' => $notes,
     'created_at' => date('c'),
     'source' => 'site_checkout',
@@ -253,6 +323,7 @@ if (svo_autodev_available()) {
     autodev_track('order_complete', [
         'order_number' => $orderNumber,
         'total' => round($total, 2),
+        'payment_method' => $paymentMethod,
         'items_count' => count($cleanItems),
         'items' => array_map(static function (array $item): array {
             return [
@@ -266,24 +337,33 @@ if (svo_autodev_available()) {
 
 // Enviar pedido ao Tiny ERP via API v3
 $tinyOrderId  = null;
-$tinyPushError = '';
-try {
-    $tinyOrderId = svo_push_order_tiny($record);
-    if ($tinyOrderId) {
-        $record['tiny_order_id'] = $tinyOrderId;
-        file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
+$tinyPushStatus = 'missing_credentials';
+if (svo_tiny_credentials_configured()) {
+    $tinyPushStatus = 'token_unavailable';
+    try {
+        $tinyOrderId = svo_push_order_tiny($record);
+        if ($tinyOrderId) {
+            $tinyPushStatus = 'ok';
+            $record['tiny_order_id'] = $tinyOrderId;
+        }
+    } catch (Throwable $e) {
+        $tinyPushStatus = $e->getMessage();
+        error_log('[OrderCreate] Tiny push error: ' . $e->getMessage());
     }
-} catch (Throwable $e) {
-    $tinyPushError = $e->getMessage();
-    error_log('[OrderCreate] Tiny push error: ' . $e->getMessage());
 }
+
+$record['tiny_push'] = $tinyPushStatus;
+file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
 
 svo_json(200, [
     'ok' => true,
     'order_number' => $orderNumber,
     'status' => 'pending_confirmation',
+    'payment_method' => $paymentMethod,
+    'payment_label' => $record['payment_label'],
     'message' => 'Pedido registrado para confirmacao manual de frete e pagamento.',
+    'payment_instructions' => svo_payment_instructions($paymentMethod),
     'storage' => str_contains($dir, 'shopvivaliz-orders') ? 'fallback_temp' : 'storage_orders',
     'tiny_order_id' => $tinyOrderId,
-    'tiny_push' => $tinyOrderId ? 'ok' : ($tinyPushError ?: 'skipped'),
+    'tiny_push' => $tinyPushStatus,
 ]);

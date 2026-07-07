@@ -64,7 +64,7 @@
             body: JSON.stringify({ event: 'cart_add', sku: product.sku, olist_product_id: product.olist_product_id || '' })
           }).catch(function () {});
           addToCart(product);
-          window.location.href = '/carrinho.php';
+          window.location.href = '/carrinho';
         } catch (error) {}
       });
     });
