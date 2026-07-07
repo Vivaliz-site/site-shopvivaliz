@@ -5,13 +5,397 @@ on:
   schedule:
     - cron: "0 */4 * * *"
 
+permissions:
+  contents: read
+  checks: write
+
 jobs:
+<<<<<<< HEAD
   build:
     if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
+=======
+  setup:
+    name: Setup CI
+>>>>>>> origin/main
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      has_php: ${{ steps.check-tools.outputs.has_php }}
+      has_python: ${{ steps.check-tools.outputs.has_python }}
+      php_version: ${{ steps.check-tools.outputs.php_version }}
+      python_version: ${{ steps.check-tools.outputs.python_version }}
+
+    steps:
+      - name: Detectar Ferramentas Disponíveis
+        id: check-tools
+        shell: bash
+        run: |
+          echo "Verificando ferramentas disponíveis..."
+          
+          if command -v php &> /dev/null; then
+            PHP_VERSION=$(php -v | head -n1)
+            echo "has_php=true" >> "$GITHUB_OUTPUT"
+            echo "php_version=$PHP_VERSION" >> "$GITHUB_OUTPUT"
+            echo "✓ PHP: $PHP_VERSION"
+          else
+            echo "has_php=false" >> "$GITHUB_OUTPUT"
+            echo "⚠ PHP não disponível"
+          fi
+          
+          if command -v python3 &> /dev/null; then
+            PYTHON_VERSION=$(python3 --version)
+            echo "has_python=true" >> "$GITHUB_OUTPUT"
+            echo "python_version=$PYTHON_VERSION" >> "$GITHUB_OUTPUT"
+            echo "✓ Python: $PYTHON_VERSION"
+          else
+            echo "has_python=false" >> "$GITHUB_OUTPUT"
+            echo "⚠ Python3 não disponível"
+          fi
+          
+          if command -v yamllint &> /dev/null; then
+            echo "✓ yamllint disponível"
+          else
+            echo "⚠ yamllint não disponível"
+          fi
+
+  checkout:
+    name: Checkout Código
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+  git-conflicts:
+    name: Detectar Conflitos Git
+    needs: checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Teste
-        run: echo "CI OK"
+      - name: Procurar Marcadores de Conflito
+        shell: bash
+        run: |
+          echo "Procurando marcadores de conflito Git..."
+          echo ""
+          
+          CONFLICT_MARKERS=$(git grep -n '^<<<<<<<\|^=======$\|^>>>>>>>' -- '*.php' '*.py' '*.js' '*.ts' '*.yml' '*.yaml' '*.json' '*.md' || true)
+          
+          if [ -z "$CONFLICT_MARKERS" ]; then
+            echo "✓ Nenhum conflito Git encontrado"
+          else
+            echo "::error::Conflitos Git detectados:"
+            echo "$CONFLICT_MARKERS" | sed 's/^/  /'
+            exit 1
+          fi
+
+  yaml-validation:
+    name: Validar YAML
+    needs: checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar Workflows YAML
+        shell: bash
+        run: |
+          echo "Validando YAML..."
+
+          for yaml_file in .github/workflows/*.yml .github/workflows/*.yaml; do
+            [ -f "$yaml_file" ] || continue
+
+            echo "Validando $yaml_file"
+
+            python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" "$yaml_file" || exit 1
+          done
+
+  php-syntax:
+    name: Validar Sintaxe PHP
+    needs: setup
+    if: needs.setup.outputs.has_php == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar Sintaxe PHP
+        shell: bash
+        run: |
+          echo "Validando sintaxe PHP..."
+          echo ""
+          
+          PHP_ERRORS=0
+          PHP_WARNINGS=0
+          
+          # Procurar todos os arquivos .php exceto diretórios ignorados
+          while IFS= read -r php_file; do
+            if [ -f "$php_file" ]; then
+              if php -l "$php_file" > /dev/null 2>&1; then
+                echo "✓ $(basename "$php_file")"
+              else
+                echo "::error::$(basename "$php_file")"
+                php -l "$php_file" 2>&1 | sed 's/^/    /'
+                PHP_ERRORS=$((PHP_ERRORS + 1))
+              fi
+            fi
+          done < <(find . -name "*.php" \
+            -not -path "./medusa/*" \
+            -not -path "./vendor/*" \
+            -not -path "./.git/*" \
+            -not -path "./node_modules/*" \
+            2>/dev/null)
+          
+          if [ $PHP_ERRORS -gt 0 ]; then
+            echo ""
+            echo "::error::$PHP_ERRORS arquivo(s) PHP com erro de sintaxe"
+            exit 1
+          fi
+          
+          echo ""
+          echo "✓ Sintaxe PHP válida"
+
+  python-syntax:
+    name: Validar Sintaxe Python
+    needs: setup
+    if: needs.setup.outputs.has_python == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar Sintaxe Python
+        shell: bash
+        run: |
+          echo "Validando sintaxe Python..."
+          echo ""
+          
+          PY_ERRORS=0
+          
+          # Procurar todos os arquivos .py exceto diretórios ignorados
+          while IFS= read -r py_file; do
+            if [ -f "$py_file" ]; then
+              if python3 -m py_compile "$py_file" 2>/dev/null; then
+                echo "✓ $(basename "$py_file")"
+              else
+                echo "::error::$(basename "$py_file")"
+                python3 -m py_compile "$py_file" 2>&1 | sed 's/^/    /'
+                PY_ERRORS=$((PY_ERRORS + 1))
+              fi
+            fi
+          done < <(find . -name "*.py" \
+            -not -path "./medusa/*" \
+            -not -path "./venv/*" \
+            -not -path "./scripts/olist-sync-manual.py" \
+            -not -path "./.git/*" \
+            -not -path "./node_modules/*" \
+            2>/dev/null)
+          
+          if [ $PY_ERRORS -gt 0 ]; then
+            echo ""
+            echo "::error::$PY_ERRORS arquivo(s) Python com erro de sintaxe"
+            exit 1
+          fi
+          
+          echo ""
+          echo "✓ Sintaxe Python válida"
+
+  security-scan:
+    name: Verificação de Segurança
+    needs: checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Procurar Arquivos Sensíveis Commitados
+        shell: bash
+        run: |
+          echo "Procurando arquivos sensíveis commitados..."
+          echo ""
+          
+          SENSITIVE_FOUND=0
+          SENSITIVE_PATTERNS=(".env" ".pem" "id_rsa" "private.key" "secrets.json")
+          
+          for pattern in "${SENSITIVE_PATTERNS[@]}"; do
+            if git ls-files | grep -i "$pattern" | grep -v ".example" | grep -v "docs" | grep -v ".github" > /dev/null 2>&1; then
+              echo "::warning::Padrão '$pattern' encontrado em arquivos commitados"
+              git ls-files | grep -i "$pattern" | grep -v ".example" | grep -v "docs" | grep -v ".github" | sed 's/^/  • /'
+              SENSITIVE_FOUND=$((SENSITIVE_FOUND + 1))
+            fi
+          done
+          
+          if [ $SENSITIVE_FOUND -gt 0 ]; then
+            echo ""
+            echo "::warning::$SENSITIVE_FOUND padrão(ões) sensível(is) encontrado(s)"
+            echo "Recomendação: Use .env.example para configurações sensíveis"
+          else
+            echo "✓ Nenhum arquivo sensível encontrado em commits"
+          fi
+
+      - name: Procurar Credenciais em Código
+        shell: bash
+        run: |
+          echo "Procurando por credenciais hardcoded..."
+          echo ""
+          
+          CRED_PATTERNS=(
+            'password\s*=\s*["\x27][^"\x27]+["\x27]'
+            'token\s*=\s*["\x27][^"\x27]+["\x27]'
+            'api_key\s*=\s*["\x27][^"\x27]+["\x27]'
+            'secret\s*=\s*["\x27][^"\x27]+["\x27]'
+          )
+          
+          FOUND=0
+          for pattern in "${CRED_PATTERNS[@]}"; do
+            if grep -r -E "$pattern" . \
+              --include="*.php" \
+              --include="*.js" \
+              --include="*.py" \
+              --exclude-dir=.git \
+              --exclude-dir=node_modules \
+              --exclude-dir=vendor \
+              --exclude-dir=medusa \
+              2>/dev/null | grep -v "test" | grep -v "example" > /dev/null 2>&1; then
+              echo "::warning::Possível credencial hardcoded encontrada (padrão: $pattern)"
+              FOUND=$((FOUND + 1))
+            fi
+          done
+          
+          if [ $FOUND -gt 0 ]; then
+            echo ""
+            echo "::warning::Revise o código acima para credenciais hardcoded"
+          else
+            echo "✓ Nenhuma credencial aparente encontrada"
+          fi
+
+  endpoints-check:
+    name: Verificar Endpoints Críticos
+    needs: checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar Existência de Endpoints
+        shell: bash
+        run: |
+          echo "Verificando endpoints críticos..."
+          echo ""
+          
+          MISSING=0
+          
+          # Endpoints que devem existir
+          declare -a ENDPOINTS=(
+            "api/agent/autonomous-watchdog.php"
+            "api/health.php"
+            "api/catalog/products.php"
+            "api/agent/squad-chat.php"
+          )
+          
+          for endpoint in "${ENDPOINTS[@]}"; do
+            if [ -f "$endpoint" ]; then
+              echo "✓ $endpoint"
+            else
+              echo "::warning::$endpoint NÃO encontrado"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+          
+          if [ $MISSING -gt 0 ]; then
+            echo ""
+            echo "::warning::$MISSING endpoint(s) não encontrado(s)"
+            echo "Alguns workflows podem falhar sem estes endpoints"
+          fi
+
+  dependency-check:
+    name: Verificar Dependências
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar package.json
+        shell: bash
+        run: |
+          echo "Verificando dependências Node.js..."
+          echo ""
+          
+          if [ -f "package.json" ]; then
+            echo "✓ package.json encontrado"
+            
+            # Verificar se tem dependências
+            if grep -q '"dependencies"' package.json; then
+              echo "  Tem dependências definidas"
+            fi
+          else
+            echo "⚠ package.json não encontrado (opcional)"
+          fi
+
+      - name: Validar composer.json
+        shell: bash
+        run: |
+          echo "Verificando dependências PHP..."
+          echo ""
+          
+          if [ -f "composer.json" ]; then
+            echo "✓ composer.json encontrado"
+          else
+            echo "⚠ composer.json não encontrado (opcional, use .env para config)"
+          fi
+
+  summary:
+    name: Resumo CI
+    needs: [git-conflicts, yaml-validation, php-syntax, python-syntax, security-scan, endpoints-check, dependency-check]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Relatório Final
+        shell: bash
+        run: |
+          echo "╔═══════════════════════════════════════════════════════════╗"
+          echo "║              RESUMO DA EXECUÇÃO CI                       ║"
+          echo "╚═══════════════════════════════════════════════════════════╝"
+          echo ""
+          
+          SUCCESS_COUNT=0
+          FAIL_COUNT=0
+          
+          # Contar resultados
+          for job_result in ${{ needs.git-conflicts.result }} \
+                            ${{ needs.yaml-validation.result }} \
+                            ${{ needs.php-syntax.result }} \
+                            ${{ needs.python-syntax.result }} \
+                            ${{ needs.security-scan.result }} \
+                            ${{ needs.endpoints-check.result }} \
+                            ${{ needs.dependency-check.result }}; do
+            if [ "$job_result" == "success" ] || [ "$job_result" == "skipped" ]; then
+              SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+            elif [ "$job_result" == "failure" ]; then
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            fi
+          done
+          
+          echo "✓ Verificações bem-sucedidas: $SUCCESS_COUNT"
+          echo "✗ Verificações com falha: $FAIL_COUNT"
+          echo ""
+          
+          if [ $FAIL_COUNT -gt 0 ]; then
+            echo "::error::CI falhou - revise os erros acima"
+            exit 1
+          else
+            echo "✓ CI passou com sucesso!"
+            exit 0
+          fi

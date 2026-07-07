@@ -1,3 +1,13 @@
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+permission_profile = ":danger-full-access"
+approvals_reviewer = "user"
+model_verbosity = "low"
+model_reasoning_effort = "low"
+
+[sandbox_workspace_write]
+network_access = true
+
 project = "ShopVivaliz"
 default_agent = "shopvivaliz-release"
 

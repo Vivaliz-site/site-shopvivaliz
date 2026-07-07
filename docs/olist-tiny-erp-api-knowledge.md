@@ -112,8 +112,8 @@ OLIST_ACCESS_TOKEN
 OLIST_REFRESH_TOKEN
 OLIST_TOKEN_URL
 TINY_API_BASE_URL
-TINY_CLIENT_ID
-TINY_CLIENT_SECRET
+OLIST_CLIENT_ID
+OLIST_CLIENT_SECRET
 TINY_REDIRECT_URI
 TINY_ACCESS_TOKEN
 TINY_REFRESH_TOKEN
@@ -176,7 +176,7 @@ GET https://api.tiny.com.br/public-api/v3/produtos?limit=1&offset=0
 Formato de teste PowerShell:
 
 ```powershell
-$token = "COLE_SEU_ACCESS_TOKEN_AQUI"
+$token = $env:OLIST_ACCESS_TOKEN
 $headersApi = @{
   Authorization = "Bearer $token"
   "Content-Type" = "application/json"

@@ -4,6 +4,7 @@ $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' :
 $host = $_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.com.br';
 define('BASE_URL', $scheme . '://' . $host);
 define('APP_NAME', 'ShopVivaliz');
+$featuredProducts = is_array($featuredProducts ?? null) ? $featuredProducts : [];
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -60,6 +61,14 @@ define('APP_NAME', 'ShopVivaliz');
       ]
     }
     </script>
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+    <script>
+        window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/speed-insights/script.js"></script>
 </head>
 <body>
     <!-- Navegação -->
@@ -70,6 +79,7 @@ define('APP_NAME', 'ShopVivaliz');
             </a>
             <div class="navbar-menu">
                 <a href="/catalogo">Catálogo</a>
+                <a href="/gamificacao.php">Gamificação</a>
                 <a href="/sobre">Sobre</a>
                 <a href="/carrinho.php" class="nav-cart" id="nav-cart-link">
                     🛒 Carrinho <span class="cart-badge" id="nav-cart-count">0</span>
@@ -86,7 +96,8 @@ define('APP_NAME', 'ShopVivaliz');
                     🛍️ Loja oficial Vivaliz
                 </p>
                 <h1>Produtos que <span>você precisa</span>,<br>entrega para todo o Brasil</h1>
-                <p>Rodízios, ferragens, utilidades domésticas, garden e muito mais — <?= count($featuredProducts) > 0 ? '197 produtos' : 'catálogo completo' ?> com qualidade garantida.</p>
+                <?php $featuredProductsCount = is_countable($featuredProducts ?? null) ? count($featuredProducts) : 0; ?>
+                <p>Rodízios, ferragens, utilidades domésticas, garden e muito mais — <?= $featuredProductsCount > 0 ? '197 produtos' : 'catálogo completo' ?> com qualidade garantida.</p>
 
                 <div class="cta-buttons" style="margin-top:28px">
                     <a href="/catalogo" class="btn btn-primary" style="background:#fff;color:#1d4ed8;font-size:15px;padding:14px 24px">
@@ -117,7 +128,7 @@ define('APP_NAME', 'ShopVivaliz');
                 </div>
                 <a href="/catalogo" class="btn btn-secondary">Ver todos</a>
             </div>
-            <div id="catalog-status" class="status-line"><?= count($featuredProducts) > 0 ? count($featuredProducts) . ' produtos em destaque carregados.' : 'Nenhum produto disponível no momento.' ?></div>
+            <div id="catalog-status" class="status-line"><?= $featuredProductsCount > 0 ? $featuredProductsCount . ' produtos em destaque carregados.' : 'Nenhum produto disponível no momento.' ?></div>
             <div class="product-grid" id="product-grid">
                 <?php foreach ($featuredProducts as $product): ?>
                     <?php
@@ -164,6 +175,7 @@ define('APP_NAME', 'ShopVivaliz');
                 <div>
                     <strong>Navegação</strong>
                     <a href="/catalogo">Catálogo</a>
+                    <a href="/gamificacao.php">Gamificação</a>
                     <a href="/sobre">Sobre</a>
                     <a href="/contato">Contato</a>
                 </div>

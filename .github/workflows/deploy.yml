@@ -1,93 +1,219 @@
 name: Deploy Automático Seguro - Shop Vivaliz
 
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - 'claude/medusa/**'
-      - 'medusa/**'
-      - 'docs/**'
-      - 'reports/**'
-      - '**/*.md'
-      - '**/*.log'
+  # Gatilhos automáticos pausados temporariamente para economizar quota do GitHub Actions.
+  # Reativar após estabilização dos secrets e do fluxo de deploy.
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
-  actions: write
-  checks: write
-  statuses: write
-  issues: write
-  deployments: write
+  contents: read
 
 concurrency:
   group: shopvivaliz-deploy-dev
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
+  validate-secrets:
+    name: Validar Secrets Obrigatórios
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      secrets_valid: ${{ steps.validate.outputs.valid }}
+    
+    steps:
+      - name: Validar Secrets com Fallback
+        id: validate
+        shell: bash
+        run: |
+          validate_secret() {
+            local value="$1"
+            local display_name="$2"
+            if [ -n "$value" ]; then
+              echo "Secret obrigatório ENCONTRADO: $display_name"
+              return 0
+            fi
+            echo "::error::Secret OBRIGATÓRIO NÃO ENCONTRADO: $display_name"
+            return 1
+          }
+          
+          MISSING=0
+          
+          # Validar secrets canônicos
+          validate_secret \
+            "${{ secrets.FTP_SERVER }}" \
+            "FTP_SERVER" || MISSING=$((MISSING+1))
+          
+          validate_secret \
+            "${{ secrets.FTP_USERNAME }}" \
+            "FTP_USERNAME" || MISSING=$((MISSING+1))
+          
+          validate_secret \
+            "${{ secrets.FTP_PASSWORD }}" \
+            "FTP_PASSWORD" || MISSING=$((MISSING+1))
+          
+          # Validar FTP_PORT (tem padrão)
+          if [ -n "${{ secrets.FTP_PORT }}" ]; then
+            echo "Secret obrigatório ENCONTRADO: FTP_PORT"
+          else
+            echo "ℹ FTP_PORT não configurado, usando padrão: 21"
+          fi
+          
+          # Validar FTP_REMOTE_DIR
+          validate_secret \
+            "${{ secrets.FTP_REMOTE_DIR }}" \
+            "FTP_REMOTE_DIR" || MISSING=$((MISSING+1))
+          
+          if [ "$MISSING" -eq 0 ]; then
+            # Validar GH_REPO_TOKEN (para operações que exigem mais permissões que o GITHUB_TOKEN padrão)
+            if [ -n "${{ secrets.GH_REPO_TOKEN }}" ]; then
+              echo "Secret obrigatório ENCONTRADO: GH_REPO_TOKEN"
+            else
+              echo "::warning::Secret GH_REPO_TOKEN não configurado. Operações que exigem permissões elevadas (ex: criar webhooks) podem falhar."
+            fi
+
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+            echo ""
+            echo "✓ Todos os secrets obrigatórios foram encontrados!"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo ""
+            echo "::error::$MISSING secrets obrigatórios estão faltando!"
+            echo ""
+            echo "Configure os secrets no GitHub:"
+            echo "  Settings → Secrets and variables → Actions"
+            echo ""
+            echo "Secrets esperados:"
+            echo "  • FTP_SERVER"
+            echo "  • FTP_USERNAME"
+            echo "  • FTP_PASSWORD"
+            echo "  • FTP_PORT (padrão: 21)"
+            echo "  • FTP_REMOTE_DIR"
+            echo "  • GH_REPO_TOKEN (para operações de repositório com permissões elevadas)"
+            exit 1
+          fi
+
   web-deploy:
     name: Sincronizar com a HostGator Dev
+<<<<<<< HEAD
     if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
+=======
+    needs: validate-secrets
+    if: needs.validate-secrets.outputs.secrets_valid == 'true'
+>>>>>>> origin/main
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      FTP_SERVER_VALUE: ${{ secrets.FTP_SERVER }}
+      FTP_USERNAME_VALUE: ${{ secrets.FTP_USERNAME }}
+      FTP_PASSWORD_VALUE: ${{ secrets.FTP_PASSWORD }}
+      FTP_PORT_VALUE: ${{ secrets.FTP_PORT }}
+      FTP_REMOTE_DIR_VALUE: ${{ secrets.FTP_REMOTE_DIR }}
 
     steps:
       - name: Baixar o código do repositório
         uses: actions/checkout@v4.2.2
 
-      - name: Validar secrets obrigatórios
+      - name: Testar Conexão FTP
         shell: bash
         run: |
-          missing=0
-
-          check_required_secret() {
-            local name="$1"
-            local value="$2"
-            if [ -z "$value" ]; then
-              echo "::error::Secret obrigatório ausente: $name"
-              missing=1
-            else
-              echo "Secret obrigatório configurado: $name"
-            fi
-          }
-
-          check_optional_secret() {
-            local name="$1"
-            local value="$2"
-            if [ -z "$value" ]; then
-              echo "::warning::Secret opcional ausente: $name. O deploy continuará, mas o provider correspondente ficará indisponível."
-            else
-              echo "Secret opcional configurado: $name"
-            fi
-          }
-
-          check_required_secret "FTP_SERVER" "${{ secrets.FTP_SERVER }}"
-          check_required_secret "FTP_USERNAME" "${{ secrets.FTP_USERNAME }}"
-          check_required_secret "FTP_PASSWORD" "${{ secrets.FTP_PASSWORD }}"
-          check_required_secret "FTP_PORT" "${{ secrets.FTP_PORT }}"
-          check_required_secret "FTP_REMOTE_DIR" "${{ secrets.FTP_REMOTE_DIR }}"
-
-          if [ "$missing" -ne 0 ]; then
+          # Testar conectividade básica (sem enviar arquivos)
+          # Usa curl para FTP (mais seguro que ftplib)
+          
+          echo "Testando conexão FTP..."
+          echo "Host: ***"
+          PORT="${FTP_PORT_VALUE:-21}"
+          echo "Port: ${PORT}"
+          echo "User: ***"
+          echo ""
+          
+          # Timeout: 10 segundos
+          if ! timeout 10 curl -sS \
+            --user "${FTP_USERNAME_VALUE}:${FTP_PASSWORD_VALUE}" \
+            --connect-timeout 10 \
+            "ftp://${FTP_SERVER_VALUE}:${PORT}/" \
+            --list-only \
+            -o /dev/null 2>&1; then
+            
+            echo "::error::Falha ao conectar ao servidor FTP"
+            echo "Verifique:"
+            echo "  • FTP_SERVER está correto?"
+            echo "  • FTP_USERNAME e FTP_PASSWORD estão válidos?"
+            echo "  • FTP_PORT está aberto?"
+            echo "  • Firewall permite conexão?"
             exit 1
           fi
+          
+          echo "✓ Conexão FTP bem-sucedida"
 
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          port: ${{ secrets.FTP_PORT }}
+          server: ${{ env.FTP_SERVER_VALUE }}
+          username: ${{ env.FTP_USERNAME_VALUE }}
+          password: ${{ env.FTP_PASSWORD_VALUE }}
+          port: ${{ env.FTP_PORT_VALUE != '' && env.FTP_PORT_VALUE || '21' }}
           protocol: ftp
           local-dir: ./
-          server-dir: ${{ secrets.FTP_REMOTE_DIR }}
+          server-dir: ${{ env.FTP_REMOTE_DIR_VALUE }}
           dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/node_modules
+            **/vendor
+            **/medusa
+            **/claude
+            **/.env
+            **/*.log
+            **/reports
+            **/docs
 
       - name: Smoke test
+        shell: bash
         run: |
-          curl -f https://dev.shopvivaliz.com.br/ || exit 1
+          echo "Executando smoke test..."
+          
+          # Retry logic: tenta 3 vezes com delay de 5 segundos
+          MAX_RETRIES=3 # Número máximo de tentativas
+          RETRY_DELAY=5 # Delay em segundos entre tentativas
+          
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Tentativa $i de $MAX_RETRIES..."
+            
+            # Usa curl com timeout e retry para verificar se o site está no ar
+            if curl -f -s -L \
+              --max-time 10 \
+              --retry 1 \
+              --retry-delay 2 \
+              "https://dev.shopvivaliz.com.br/" > /dev/null; then
+              echo "✓ Site respondendo corretamente"
+              exit 0
+            fi
+            
+            if [ $i -lt $MAX_RETRIES ]; then
+              echo "Aguardando $RETRY_DELAY segundos antes de tentar novamente..."
+              sleep $RETRY_DELAY
+            fi
+          done
+          
+          echo "::error::Site não respondeu após $MAX_RETRIES tentativas"
+          echo "Possíveis causas:"
+          echo "  • Servidor ainda processando deploy"
+          echo "  • Problema de conectividade"
+          echo "  • Erro na aplicação"
+          echo ""
+          echo "Verifique manualmente: https://dev.shopvivaliz.com.br/"
+          exit 1
 
-      - name: Done
-        run: echo "Deploy concluído"
+      - name: Registrar Status do Deploy
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✓ Deploy concluído com sucesso"
+            echo "  Timestamp: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo "  Branch: ${{ github.ref_name }}"
+            echo "  Commit: ${{ github.sha }}"
+          else
+            echo "✗ Deploy falhou"
+            echo "  Verificar logs acima para detalhes"
+          fi
