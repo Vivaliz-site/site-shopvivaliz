@@ -1,40 +1,41 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 set_time_limit(300);
+ini_set('display_errors', 0);
+error_reporting(0);
 
-// CREDENCIAIS VIA AMBIENTE
-$host = getenv('DB_HOST') ?: 'localhost';
-$port = (int) (getenv('DB_PORT') ?: 3306);
-$db = getenv('DB_NAME') ?: 'shopvivaliz';
-$user = getenv('DB_USER') ?: 'root';
-$pass = getenv('DB_PASS') ?: '';
-
-// CONECTAR
-$conn = new mysqli($host, $user, $pass, $db, $port);
-
-if ($conn->connect_error) {
-    exit(json_encode(['ok' => false, 'erro' => 'Conexão: ' . $conn->connect_error]));
+try {
+    // Utiliza o carregador de .env e a classe de banco de dados central
+    require_once __DIR__ . '/config/constants.php';
+    require_once __DIR__ . '/config/database.php';
+    $db = Database::getInstance();
+    $conn = $db->getConnection();
+    $conn->set_charset(DB_CHARSET);
+} catch (Exception $e) {
+    http_response_code(503); // Service Unavailable
+    log_error('Falha ao inicializar a sincronização', ['error' => $e->getMessage()]);
+    exit(json_encode(['ok' => false, 'erro' => 'Falha ao conectar ao banco de dados: ' . $e->getMessage()]));
 }
-
-$conn->set_charset('utf8mb4');
 
 // CRIAR TABELA SE NÃO EXISTIR
 $create_table_sql = "CREATE TABLE IF NOT EXISTS products (
     id INT AUTO_INCREMENT PRIMARY KEY,
     product_id VARCHAR(50) UNIQUE NOT NULL,
+    sku VARCHAR(50) UNIQUE NOT NULL,
     name VARCHAR(255) NOT NULL,
     price DECIMAL(10, 2) NOT NULL,
     description TEXT,
     category VARCHAR(100),
     stock INT DEFAULT 0,
     image_url VARCHAR(500),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_product_id (product_id),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_sku (sku),
     INDEX idx_category (category)
 )";
 
 if (!$conn->query($create_table_sql)) {
+    log_error('Falha ao criar tabela products', ['error' => $conn->error]);
     exit(json_encode(['ok' => false, 'erro' => 'CREATE TABLE: ' . $conn->error]));
 }
 
@@ -47,13 +48,14 @@ if (empty($produtos)) {
 }
 
 // SINCRONIZAR
-$sql = "INSERT INTO products (product_id, name, price, description, category, stock, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
-        ON DUPLICATE KEY UPDATE price=VALUES(price), description=VALUES(description), category=VALUES(category), stock=VALUES(stock), updated_at=NOW()";
+$sql = "INSERT INTO products (sku, name, price, description, category, stock, image_url, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE name=VALUES(name), price=VALUES(price), description=VALUES(description), category=VALUES(category), stock=VALUES(stock), image_url=VALUES(image_url), updated_at=NOW()";
 
 $stmt = $conn->prepare($sql);
 
 if (!$stmt) {
+    log_error('Falha ao preparar statement de sincronização', ['error' => $conn->error]);
     exit(json_encode(['ok' => false, 'erro' => 'PREPARE: ' . $conn->error]));
 }
 
@@ -61,20 +63,23 @@ $sync = 0;
 $erros = 0;
 
 foreach ($produtos as $p) {
-    $id = $p['id'] ?? '';
-    $nome = $p['nome'] ?? '';
-    $preco = (float)($p['preco'] ?? 0);
+    $sku = $p['id'] ?? '';
+    $nome = $p['nome'] ?? 'Produto sem nome';
+    $preco = (float)($p['preco'] ?? 0.0);
     $desc = $p['descricao'] ?? '';
     $cat = $p['categoria'] ?? 'Geral';
     $est = (int)($p['estoque'] ?? 0);
+    $img = $p['url_imagem'] ?? '';
 
-    if (!$id || !$nome) {
+    if (!$sku || !$nome) {
         $erros++;
         continue;
     }
 
-    if (!$stmt->bind_param('ssdssi', $id, $nome, $preco, $desc, $cat, $est)) {
+    // O tipo para 'preco' (decimal) é 'd' (double)
+    if (!$stmt->bind_param('ssdssis', $sku, $nome, $preco, $desc, $cat, $est, $img)) {
         $erros++;
+        log_error('Erro no bind_param', ['sku' => $sku, 'error' => $stmt->error]);
         continue;
     }
 
@@ -82,15 +87,16 @@ foreach ($produtos as $p) {
         $sync++;
     } else {
         $erros++;
+        log_error('Erro ao executar insert/update', ['sku' => $sku, 'error' => $stmt->error]);
     }
 }
+
+$stmt->close();
 
 // CONTAR TOTAL
 $result = $conn->query('SELECT COUNT(*) as total FROM products');
 $row = $result->fetch_assoc();
 $total = $row['total'] ?? 0;
-
-$conn->close();
 
 echo json_encode([
     'ok' => true,
