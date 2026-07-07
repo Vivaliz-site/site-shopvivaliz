@@ -15,6 +15,7 @@ concurrency:
 jobs:
   validate-secrets:
     name: Validar Secrets Obrigatórios
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -95,7 +96,7 @@ jobs:
   web-deploy:
     name: Sincronizar com a HostGator Dev
     needs: validate-secrets
-    if: needs.validate-secrets.outputs.secrets_valid == 'true'
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' && needs.validate-secrets.outputs.secrets_valid == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:

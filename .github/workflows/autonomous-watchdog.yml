@@ -23,6 +23,7 @@ env:
 jobs:
   validate-agent-key:
     name: Validar Agent Key
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
