@@ -305,16 +305,24 @@
       "priority": "low",
       "status": "in_progress",
       "created_at": "2026-06-27T20:30:00Z",
-      "completed_at": null
+      "completed_at": null,
+      "selected_by": "Codex",
+      "assumed_by": "Codex",
+      "assumed_at": "2026-07-05T21:35:00Z",
+      "progress": "Base segura implementada: inscricao de alerta por SKU, processador CLI e outbox local auditavel. Envio externo aguarda canal/credencial aprovado."
     },
     {
       "id": "task-034",
       "title": "Adicionar integracao com Klarna (pagamento na entrega)",
       "description": "Configurar Klarna para permitir pagamento parcelado apos receber o produto. Gerenciar autorizacoes.",
       "priority": "medium",
-      "status": "pending",
+      "status": "blocked_human_approval_required",
       "created_at": "2026-06-27T20:31:00Z",
-      "completed_at": null
+      "completed_at": null,
+      "requires_human_approval": true,
+      "approval_scope": "payments_approval",
+      "blocked_at": "2026-07-05T18:20:00Z",
+      "blocked_reason": "payments_approval"
     },
     {
       "id": "task-035",
@@ -332,45 +340,64 @@
       "title": "Implementar sistema de avaliacao de atendimento",
       "description": "Apos compra, enviar survey para avaliar atendimento. Colocar notas de atendimento na plataforma de suporte.",
       "priority": "low",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:33:00Z",
-      "completed_at": null
+      "completed_at": "2026-07-05T18:17:59.5758086-03:00",
+      "completed_by": "Codex",
+      "notes": "Adicionadas pagina de avaliacao de atendimento, API de recebimento e link de survey no fluxo de confirmacao do pedido."
     },
     {
       "id": "task-037",
       "title": "Adicionar integracao com TikTok Shop",
       "description": "Sincronizar produtos do ecommerce com TikTok Shop. Gerenciar pedidos centralizadamente. Explorar shoppable posts.",
       "priority": "high",
-      "status": "pending",
+      "status": "blocked_missing_env",
       "created_at": "2026-06-27T20:34:00Z",
-      "completed_at": null
+      "completed_at": null,
+      "requires_env": [
+        "TIKTOK_SERVICE_ID",
+        "TIKTOK_APP_KEY",
+        "TIKTOK_APP_SECRET",
+        "TIKTOK_ACCESS_TOKEN",
+        "TIKTOK_REFRESH_TOKEN",
+        "TIKTOK_SHOP_ID",
+        "TIKTOK_SHOP_CIPHER"
+      ],
+      "blocked_at": "2026-07-05T18:20:00Z",
+      "blocked_reason": "missing_env:TIKTOK_SERVICE_ID,TIKTOK_APP_KEY,TIKTOK_APP_SECRET,TIKTOK_ACCESS_TOKEN,TIKTOK_REFRESH_TOKEN,TIKTOK_SHOP_ID,TIKTOK_SHOP_CIPHER"
     },
     {
       "id": "task-038",
       "title": "Implementar gamificacao (badges e achievements)",
       "description": "Usuarios ganham badges por compras, reviews, referencias. Leaderboard mensal. Premios exclusivos para top players.",
       "priority": "low",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:35:00Z",
-      "completed_at": null
+      "completed_at": "2026-07-05T21:28:36.522357Z",
+      "completed_by": "Codex",
+      "completion_note": "Gamification API, page, docs and health check added."
     },
     {
       "id": "task-039",
       "title": "Criar sistema de notificacao de preco (price drop alerts)",
       "description": "Usuarios definem preco alvo. Notificacao quando preco cai. Facil compra direto do alerta.",
       "priority": "medium",
-      "status": "pending",
+      "status": "blocked_price_approval_required",
       "created_at": "2026-06-27T20:36:00Z",
-      "completed_at": null
+      "completed_at": null,
+      "blocked_at": "2026-07-05T21:21:27.945615Z",
+      "blocked_reason": "pricing_policy"
     },
     {
       "id": "task-040",
       "title": "Adicionar suporte a GraphQL API",
       "description": "Criar GraphQL endpoint para frontend queries mais eficientes. Documentacao Swagger. Rate limiting.",
       "priority": "medium",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-06-27T20:37:00Z",
-      "completed_at": "2026-06-27T18:05:23.76721"
+      "completed_at": "2026-07-05T21:25:45.750967Z",
+      "completed_by": "Codex",
+      "completion_note": "GraphQL endpoint, OpenAPI doc and health check updated."
     },
     {
       "title": "Ativar geração autônoma de tarefas orientadas a crescimento",

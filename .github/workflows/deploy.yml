@@ -6,13 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
-  actions: write
-  checks: write
-  statuses: write
-  issues: write
-  deployments: write
+  contents: read
 
 concurrency:
   group: shopvivaliz-deploy-dev
@@ -31,61 +25,30 @@ jobs:
         id: validate
         shell: bash
         run: |
-          # Função auxiliar para validar secret com fallbacks
           validate_secret() {
-            local primary="$1"
-            local fallback1="$2"
-            local fallback2="$3"
-            local display_name="$4"
-            
-            # Tentar primary
-            if [ -n "$primary" ]; then
-              echo "Secret obrigatório ENCONTRADO: $display_name (primário)"
+            local value="$1"
+            local display_name="$2"
+            if [ -n "$value" ]; then
+              echo "Secret obrigatório ENCONTRADO: $display_name"
               return 0
             fi
-            
-            # Tentar fallback1
-            if [ -n "$fallback1" ]; then
-              echo "⚠ Secret obrigatório ENCONTRADO: $display_name (fallback1)"
-              return 0
-            fi
-            
-            # Tentar fallback2
-            if [ -n "$fallback2" ]; then
-              echo "⚠ Secret obrigatório ENCONTRADO: $display_name (fallback2)"
-              return 0
-            fi
-            
-            # Nenhum encontrado
             echo "::error::Secret OBRIGATÓRIO NÃO ENCONTRADO: $display_name"
-            echo "Esperados: $display_name (primário)"
-            if [ -n "$fallback1" ] || [ -n "$fallback2" ]; then
-              echo "Ou aliases: $fallback1 / $fallback2"
-            fi
             return 1
           }
           
           MISSING=0
           
-          # Validar FTP_SERVER (aliases: FTP_HOST)
+          # Validar secrets canônicos
           validate_secret \
             "${{ secrets.FTP_SERVER }}" \
-            "${{ secrets.FTP_HOST }}" \
-            "" \
             "FTP_SERVER" || MISSING=$((MISSING+1))
           
-          # Validar FTP_USERNAME (aliases: FTP_USER)
           validate_secret \
             "${{ secrets.FTP_USERNAME }}" \
-            "${{ secrets.FTP_USER }}" \
-            "" \
             "FTP_USERNAME" || MISSING=$((MISSING+1))
           
-          # Validar FTP_PASSWORD (aliases: FTP_PASS)
           validate_secret \
             "${{ secrets.FTP_PASSWORD }}" \
-            "${{ secrets.FTP_PASS }}" \
-            "" \
             "FTP_PASSWORD" || MISSING=$((MISSING+1))
           
           # Validar FTP_PORT (tem padrão)
@@ -95,14 +58,19 @@ jobs:
             echo "ℹ FTP_PORT não configurado, usando padrão: 21"
           fi
           
-          # Validar FTP_REMOTE_DIR (aliases: FTP_TARGET_DIR, FTP_PATH)
+          # Validar FTP_REMOTE_DIR
           validate_secret \
             "${{ secrets.FTP_REMOTE_DIR }}" \
-            "${{ secrets.FTP_TARGET_DIR }}" \
-            "${{ secrets.FTP_PATH }}" \
             "FTP_REMOTE_DIR" || MISSING=$((MISSING+1))
           
           if [ "$MISSING" -eq 0 ]; then
+            # Validar GH_REPO_TOKEN (para operações que exigem mais permissões que o GITHUB_TOKEN padrão)
+            if [ -n "${{ secrets.GH_REPO_TOKEN }}" ]; then
+              echo "Secret obrigatório ENCONTRADO: GH_REPO_TOKEN"
+            else
+              echo "::warning::Secret GH_REPO_TOKEN não configurado. Operações que exigem permissões elevadas (ex: criar webhooks) podem falhar."
+            fi
+
             echo "valid=true" >> "$GITHUB_OUTPUT"
             echo ""
             echo "✓ Todos os secrets obrigatórios foram encontrados!"
@@ -115,11 +83,12 @@ jobs:
             echo "  Settings → Secrets and variables → Actions"
             echo ""
             echo "Secrets esperados:"
-            echo "  • FTP_SERVER (ou FTP_HOST)"
-            echo "  • FTP_USERNAME (ou FTP_USER)"
-            echo "  • FTP_PASSWORD (ou FTP_PASS)"
+            echo "  • FTP_SERVER"
+            echo "  • FTP_USERNAME"
+            echo "  • FTP_PASSWORD"
             echo "  • FTP_PORT (padrão: 21)"
-            echo "  • FTP_REMOTE_DIR (ou FTP_TARGET_DIR / FTP_PATH)"
+            echo "  • FTP_REMOTE_DIR"
+            echo "  • GH_REPO_TOKEN (para operações de repositório com permissões elevadas)"
             exit 1
           fi
 
@@ -129,46 +98,16 @@ jobs:
     if: needs.validate-secrets.outputs.secrets_valid == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      FTP_SERVER_VALUE: ${{ secrets.FTP_SERVER }}
+      FTP_USERNAME_VALUE: ${{ secrets.FTP_USERNAME }}
+      FTP_PASSWORD_VALUE: ${{ secrets.FTP_PASSWORD }}
+      FTP_PORT_VALUE: ${{ secrets.FTP_PORT }}
+      FTP_REMOTE_DIR_VALUE: ${{ secrets.FTP_REMOTE_DIR }}
 
     steps:
       - name: Baixar o código do repositório
         uses: actions/checkout@v4.2.2
-
-      - name: Preparar variáveis de deploy
-        id: deploy-vars
-        shell: bash
-        run: |
-          # Usar valor primário ou fallback
-          FTP_SERVER="${{ secrets.FTP_SERVER }}"
-          [ -z "$FTP_SERVER" ] && FTP_SERVER="${{ secrets.FTP_HOST }}"
-          
-          FTP_USERNAME="${{ secrets.FTP_USERNAME }}"
-          [ -z "$FTP_USERNAME" ] && FTP_USERNAME="${{ secrets.FTP_USER }}"
-          
-          FTP_PASSWORD="${{ secrets.FTP_PASSWORD }}"
-          [ -z "$FTP_PASSWORD" ] && FTP_PASSWORD="${{ secrets.FTP_PASS }}"
-          
-          FTP_PORT="${{ secrets.FTP_PORT }}"
-          [ -z "$FTP_PORT" ] && FTP_PORT="21"
-          
-          FTP_REMOTE_DIR="${{ secrets.FTP_REMOTE_DIR }}"
-          [ -z "$FTP_REMOTE_DIR" ] && FTP_REMOTE_DIR="${{ secrets.FTP_TARGET_DIR }}"
-          [ -z "$FTP_REMOTE_DIR" ] && FTP_REMOTE_DIR="${{ secrets.FTP_PATH }}"
-          
-          # Output sem mostrar valores
-          echo "FTP_SERVER=***" >> "$GITHUB_OUTPUT"
-          echo "FTP_USERNAME=***" >> "$GITHUB_OUTPUT"
-          echo "FTP_PASSWORD=***" >> "$GITHUB_OUTPUT"
-          echo "FTP_PORT=$FTP_PORT" >> "$GITHUB_OUTPUT"
-          echo "FTP_REMOTE_DIR=***" >> "$GITHUB_OUTPUT"
-          
-          # Salvar em variáveis de env para uso nos próximos steps
-          # (GitHub Actions esconde automaticamente valores de secrets)
-          echo "FTP_SERVER_VALUE=$FTP_SERVER" >> "$GITHUB_ENV"
-          echo "FTP_USERNAME_VALUE=$FTP_USERNAME" >> "$GITHUB_ENV"
-          echo "FTP_PASSWORD_VALUE=$FTP_PASSWORD" >> "$GITHUB_ENV"
-          echo "FTP_PORT_VALUE=$FTP_PORT" >> "$GITHUB_ENV"
-          echo "FTP_REMOTE_DIR_VALUE=$FTP_REMOTE_DIR" >> "$GITHUB_ENV"
 
       - name: Testar Conexão FTP
         shell: bash
@@ -177,16 +116,17 @@ jobs:
           # Usa curl para FTP (mais seguro que ftplib)
           
           echo "Testando conexão FTP..."
-          echo "Host: ${{ steps.deploy-vars.outputs.FTP_SERVER }}"
-          echo "Port: ${{ steps.deploy-vars.outputs.FTP_PORT }}"
+          echo "Host: ***"
+          PORT="${FTP_PORT_VALUE:-21}"
+          echo "Port: ${PORT}"
           echo "User: ***"
           echo ""
           
           # Timeout: 10 segundos
-          if ! timeout 10 curl -s \
+          if ! timeout 10 curl -sS \
             --user "${FTP_USERNAME_VALUE}:${FTP_PASSWORD_VALUE}" \
-            --ftp-port "${{ steps.deploy-vars.outputs.FTP_PORT }}" \
-            "ftp://${{ steps.deploy-vars.outputs.FTP_SERVER }}/" \
+            --connect-timeout 10 \
+            "ftp://${FTP_SERVER_VALUE}:${PORT}/" \
             --list-only \
             -o /dev/null 2>&1; then
             
@@ -207,7 +147,7 @@ jobs:
           server: ${{ env.FTP_SERVER_VALUE }}
           username: ${{ env.FTP_USERNAME_VALUE }}
           password: ${{ env.FTP_PASSWORD_VALUE }}
-          port: ${{ steps.deploy-vars.outputs.FTP_PORT }}
+          port: ${{ env.FTP_PORT_VALUE != '' && env.FTP_PORT_VALUE || '21' }}
           protocol: ftp
           local-dir: ./
           server-dir: ${{ env.FTP_REMOTE_DIR_VALUE }}
@@ -229,17 +169,18 @@ jobs:
           echo "Executando smoke test..."
           
           # Retry logic: tenta 3 vezes com delay de 5 segundos
-          MAX_RETRIES=3
-          RETRY_DELAY=5
+          MAX_RETRIES=3 # Número máximo de tentativas
+          RETRY_DELAY=5 # Delay em segundos entre tentativas
           
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Tentativa $i de $MAX_RETRIES..."
             
-            if curl -f \
+            # Usa curl com timeout e retry para verificar se o site está no ar
+            if curl -f -s -L \
               --max-time 10 \
               --retry 1 \
               --retry-delay 2 \
-              https://dev.shopvivaliz.com.br/ > /dev/null 2>&1; then
+              "https://dev.shopvivaliz.com.br/" > /dev/null; then
               echo "✓ Site respondendo corretamente"
               exit 0
             fi
@@ -250,13 +191,14 @@ jobs:
             fi
           done
           
-          echo "::warning::Site não respondeu após $MAX_RETRIES tentativas"
+          echo "::error::Site não respondeu após $MAX_RETRIES tentativas"
           echo "Possíveis causas:"
           echo "  • Servidor ainda processando deploy"
           echo "  • Problema de conectividade"
           echo "  • Erro na aplicação"
           echo ""
           echo "Verifique manualmente: https://dev.shopvivaliz.com.br/"
+          exit 1
 
       - name: Registrar Status do Deploy
         if: always()
