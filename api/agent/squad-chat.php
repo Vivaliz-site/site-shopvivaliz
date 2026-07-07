@@ -1,0 +1,45 @@
+<?php
+/**
+ * Squad Chat API - ShopVivaliz
+ * Endpoint para comunicação entre agentes autônomos
+ */
+
+declare(strict_types=1);
+
+header_remove('X-Powered-By');
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
+
+$method  = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+$payload = [];
+
+if (!in_array($method, ['GET', 'POST'], true)) {
+    http_response_code(405);
+    header('Allow: GET, POST');
+    echo json_encode([
+        'status'    => 'error',
+        'endpoint'  => 'squad-chat',
+        'timestamp' => date('c'),
+        'method'    => $method,
+        'error'     => 'Method Not Allowed',
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($method === 'POST') {
+    $body    = file_get_contents('php://input');
+    $payload = json_decode($body, true) ?? [];
+}
+
+$response = [
+    'status'    => 'ok',
+    'endpoint'  => 'squad-chat',
+    'timestamp' => date('c'),
+    'method'    => $method,
+];
+
+if (!empty($payload)) {
+    $response['received'] = $payload;
+}
+
+echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
