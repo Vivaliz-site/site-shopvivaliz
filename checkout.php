@@ -150,9 +150,9 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '5511999999999';
                 Confirmar pedido
             </button>
             <div class="checkout-support-inline">
-                <strong>Atendimento rápido:</strong>
-                <a href="https://wa.me/<?= htmlspecialchars($whatsapp) ?>?text=<?= rawurlencode('Oi! Preciso de ajuda para finalizar meu pedido na Vivaliz.') ?>" target="_blank" rel="noreferrer">
-                    falar no WhatsApp antes de concluir
+                <strong>Atendimento ágil:</strong>
+                <a href="https://wa.me/<?= htmlspecialchars($whatsapp) ?>?text=<?= rawurlencode('Olá! Preciso de ajuda para finalizar meu pedido na Vivaliz.') ?>" target="_blank" rel="noreferrer">
+                    fale no WhatsApp antes de concluir
                 </a>
             </div>
             <div id="checkout-status" class="checkout-status-msg"></div>
