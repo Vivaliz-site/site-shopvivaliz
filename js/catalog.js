@@ -1,8 +1,11 @@
 (function () {
+  const catalogPage = document.querySelector('.catalog-page');
   const grid = document.getElementById('product-grid');
   const status = document.getElementById('catalog-status');
   const form = document.querySelector('.catalog-search');
   const input = document.getElementById('catalog-search');
+  const params = new URLSearchParams(window.location.search);
+  const initialCategory = String(params.get('categoria') || params.get('category') || '').trim();
 
   function esc(value) {
     return String(value || '').replace(/[&<>"']/g, function (char) {
@@ -21,10 +24,58 @@
     if (counter) counter.textContent = String(value);
   }
 
+  function readCart() {
+    try {
+      const value = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
+      return Array.isArray(value) ? value : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function updateCartBadge(items) {
+    const badge = document.getElementById('nav-cart-count');
+    if (!badge) return;
+    const count = items.reduce(function (total, item) {
+      return total + Number(item.quantity || 1);
+    }, 0);
+    badge.textContent = count > 0 ? String(count) : '';
+  }
+
+  function addToCart(product) {
+    const items = readCart();
+    const existing = items.find(function (item) { return item.sku === product.sku; });
+    if (existing) existing.quantity = Number(existing.quantity || 1) + 1;
+    else items.push(Object.assign({}, product, { quantity: 1 }));
+    localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+    updateCartBadge(items);
+  }
+
+  function bindBuyButtons(scope) {
+    (scope || document).querySelectorAll('[data-product]').forEach(function (button) {
+      if (button.dataset.bound === '1') return;
+      button.dataset.bound = '1';
+      button.addEventListener('click', function () {
+        try {
+          const product = JSON.parse(decodeURIComponent(button.getAttribute('data-product') || '{}'));
+          fetch('/api/catalog/signal.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'cart_add', sku: product.sku, olist_product_id: product.olist_product_id || '' })
+          }).catch(function () {});
+          addToCart(product);
+          window.location.href = '/carrinho.php';
+        } catch (error) {}
+      });
+    });
+  }
+
   function card(product) {
     const image = product.image_url || '/favicon.ico';
     const sku = product.sku || product.olist_product_id || 'sem-sku';
     const images = Number(product.images_count || 0);
+    const category = String(product.category || '').trim();
+    const slug = String(product.slug || '').trim();
     const payload = {
       sku: sku,
       name: product.name || sku,
@@ -33,18 +84,23 @@
       olist_product_id: product.olist_product_id || ''
     };
     const encoded = encodeURIComponent(JSON.stringify(payload));
-    const productUrl = '/produto?sku=' + encodeURIComponent(payload.sku)
-      + '&name=' + encodeURIComponent(payload.name)
-      + '&image=' + encodeURIComponent(payload.image_url)
-      + '&price=' + encodeURIComponent(String(payload.price))
-      + '&olist_product_id=' + encodeURIComponent(payload.olist_product_id);
+    const hasPrice = payload.price > 0;
+    const productUrl = slug
+      ? '/produto/' + encodeURIComponent(slug)
+      : '/produto?sku=' + encodeURIComponent(payload.sku)
+        + '&name=' + encodeURIComponent(payload.name)
+        + '&image=' + encodeURIComponent(payload.image_url)
+        + '&price=' + encodeURIComponent(String(payload.price))
+        + '&olist_product_id=' + encodeURIComponent(payload.olist_product_id);
+    const contactUrl = '/contato?sku=' + encodeURIComponent(payload.sku)
+      + '&produto=' + encodeURIComponent(payload.name);
     return `
       <article class="product-card">
-        <a class="product-image" href="${esc(image)}" target="_blank" rel="noreferrer">
+        <a class="product-image" href="${esc(productUrl)}">
           <img src="${esc(image)}" alt="${esc(product.name)}" loading="lazy" onerror="this.src='/favicon.ico'">
         </a>
         <div class="product-info">
-          <div class="product-sku">${esc(sku)}</div>
+          ${category ? `<div class="product-category">${esc(category)}</div>` : ''}
           <h2>${esc(product.name)}</h2>
           <div class="product-meta">
             <span>${esc(money(product.price))}</span>
@@ -52,17 +108,22 @@
           </div>
           <div class="card-actions">
             <a class="btn btn-secondary card-link" href="${esc(productUrl)}">Ver detalhes</a>
-            <button class="buy-button" type="button" data-product="${encoded}">Comprar agora</button>
+            ${hasPrice
+              ? `<button class="buy-button" type="button" data-product="${encoded}">Comprar agora</button>`
+              : `<a class="btn btn-primary card-link" href="${esc(contactUrl)}">Solicitar preço</a>`}
           </div>
         </div>
       </article>`;
   }
 
-  async function loadCatalog(query) {
+  async function loadCatalog(query, category) {
     if (!grid || !status) return;
+    const activeCategory = String(category || '').trim();
     status.textContent = 'Carregando catálogo...';
     grid.innerHTML = '';
-    const url = '/api/catalog/products.php?limit=200' + (query ? '&q=' + encodeURIComponent(query) : '');
+    const url = '/api/catalog/products.php?limit=200'
+      + (query ? '&q=' + encodeURIComponent(query) : '')
+      + (activeCategory ? '&category=' + encodeURIComponent(activeCategory) : '');
     try {
       const response = await fetch(url, { cache: 'no-store' });
       const data = await response.json();
@@ -73,38 +134,27 @@
         setCount(0);
         return;
       }
-      status.textContent = `${products.length} produto${products.length === 1 ? '' : 's'} carregado${products.length === 1 ? '' : 's'} de ${data.source || 'catálogo'}.`;
+      status.textContent = `${products.length} produto${products.length === 1 ? '' : 's'} carregado${products.length === 1 ? '' : 's'}${activeCategory ? ' em "' + activeCategory + '"' : ''}.`;
       setCount(products.length);
       grid.innerHTML = products.map(card).join('');
-      grid.querySelectorAll('[data-product]').forEach(function (button) {
-        button.addEventListener('click', function () {
-          const product = JSON.parse(decodeURIComponent(button.getAttribute('data-product') || '{}'));
-          // V16: signal cart_add
-          fetch('/api/catalog/signal.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ event: 'cart_add', sku: product.sku, olist_product_id: product.olist_product_id || '' })
-          }).catch(function () {});
-          const items = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
-          const existing = items.find(function (item) { return item.sku === product.sku; });
-          if (existing) existing.quantity += 1;
-          else items.push(Object.assign(product, { quantity: 1 }));
-          localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
-          var badge = document.getElementById('nav-cart-count');
-          if (badge) badge.textContent = items.reduce(function(a,i){ return a+(i.quantity||1); }, 0);
-          window.location.href = '/carrinho.php';
-        });
-      });
+      bindBuyButtons(grid);
     } catch (error) {
       status.textContent = 'Não foi possível carregar o catálogo agora.';
       setCount(0);
     }
   }
 
+  updateCartBadge(readCart());
+  bindBuyButtons(document);
+
+  if (!catalogPage || !grid || !status) {
+    return;
+  }
+
   if (form) {
     form.addEventListener('submit', function (event) {
       event.preventDefault();
-      loadCatalog(input ? input.value.trim() : '');
+      loadCatalog(input ? input.value.trim() : '', initialCategory);
     });
   }
 
@@ -116,10 +166,10 @@
         if (window.AutoDev && typeof window.AutoDev.track === 'function' && input.value.trim().length >= 2) {
           window.AutoDev.track('search', { query: input.value.trim(), path: window.location.pathname });
         }
-        loadCatalog(input.value.trim());
+        loadCatalog(input.value.trim(), initialCategory);
       }, 250);
     });
   }
 
-  loadCatalog('');
+  loadCatalog(input ? input.value.trim() : '', initialCategory);
 })();

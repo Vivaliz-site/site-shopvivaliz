@@ -82,6 +82,14 @@ function sv_product_url(array $product): string
     ]);
 }
 
+function sv_product_contact_url(string $sku, string $name): string
+{
+    return '/contato?' . http_build_query([
+        'sku' => $sku,
+        'produto' => $name,
+    ]);
+}
+
 function sv_esc(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 
 /* ── resolução do produto ── */
@@ -103,6 +111,7 @@ $rawSlug  = trim((string)($resolved['slug'] ?? ''));
 
 $priceRaw   = (float)($resolved['price'] ?? (float)sv_qv('price', '0'));
 $priceLabel = $priceRaw > 0 ? 'R$ ' . number_format($priceRaw, 2, ',', '.') : 'Preço sob consulta';
+$contactUrl = sv_product_contact_url($sku, $name);
 $canonicalUrl = 'https://dev.shopvivaliz.com.br' . ($rawSlug !== '' ? '/produto/' . $rawSlug : '/produto?sku=' . rawurlencode($sku));
 
 $related = $notFound ? [] : sv_product_related($sku, $category);
@@ -289,7 +298,11 @@ if ($notFound) {
                     <div class="confidence-item">💬 Suporte comercial antes e depois do pedido</div>
                 </div>
                 <div class="produto-actions">
-                    <button class="btn btn-primary" type="button" id="buy-now">🛒 Comprar agora</button>
+                    <?php if ($priceRaw > 0): ?>
+                        <button class="btn btn-primary" type="button" id="buy-now">🛒 Comprar agora</button>
+                    <?php else: ?>
+                        <a class="btn btn-primary" href="<?= sv_esc($contactUrl) ?>">Solicitar preço</a>
+                    <?php endif; ?>
                     <a class="btn btn-secondary" href="/catalogo<?= $category !== '' ? '?categoria=' . rawurlencode($category) : '' ?>">← Voltar ao catálogo</a>
                 </div>
                 <div class="product-support-link">
@@ -309,6 +322,8 @@ if ($notFound) {
         <div class="product-grid related-grid">
             <?php foreach ($related as $rp):
                 $rUrl = sv_product_url($rp);
+                $rContactUrl = sv_product_contact_url((string)$rp['sku'], (string)$rp['name']);
+                $rHasPrice = (float)$rp['price'] > 0;
                 $rPayload = rawurlencode(json_encode(['sku' => $rp['sku'], 'name' => $rp['name'], 'image_url' => $rp['image_url'], 'price' => $rp['price'], 'olist_product_id' => $rp['olist_product_id']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             ?>
             <article class="product-card">
@@ -323,7 +338,11 @@ if ($notFound) {
                     <div class="product-price"><?= sv_esc($rp['price'] > 0 ? 'R$ ' . number_format($rp['price'], 2, ',', '.') : 'Preço sob consulta') ?></div>
                     <div class="card-actions">
                         <a class="btn btn-secondary card-link" href="<?= sv_esc($rUrl) ?>">Ver detalhes</a>
-                        <button class="buy-button" type="button" data-product="<?= sv_esc($rPayload) ?>">Comprar</button>
+                        <?php if ($rHasPrice): ?>
+                            <button class="buy-button" type="button" data-product="<?= sv_esc($rPayload) ?>">Comprar</button>
+                        <?php else: ?>
+                            <a class="btn btn-primary card-link" href="<?= sv_esc($rContactUrl) ?>">Solicitar preço</a>
+                        <?php endif; ?>
                     </div>
                 </div>
             </article>
@@ -354,10 +373,13 @@ if ($notFound) {
             return items;
         }
 
-        document.getElementById('buy-now').addEventListener('click', function () {
-            addToCart(product);
-            window.location.href = '/carrinho.php';
-        });
+        var buyNowButton = document.getElementById('buy-now');
+        if (buyNowButton) {
+            buyNowButton.addEventListener('click', function () {
+                addToCart(product);
+                window.location.href = '/carrinho.php';
+            });
+        }
 
         document.querySelectorAll('.buy-button[data-product]').forEach(function(btn) {
             btn.addEventListener('click', function() {

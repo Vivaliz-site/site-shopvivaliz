@@ -62,6 +62,22 @@ jobs:
           validate_secret \
             "${{ secrets.FTP_REMOTE_DIR }}" \
             "FTP_REMOTE_DIR" || MISSING=$((MISSING+1))
+
+          validate_secret \
+            "${{ secrets.DB_HOST }}" \
+            "DB_HOST" || MISSING=$((MISSING+1))
+
+          validate_secret \
+            "${{ secrets.DB_NAME }}" \
+            "DB_NAME" || MISSING=$((MISSING+1))
+
+          validate_secret \
+            "${{ secrets.DB_USER }}" \
+            "DB_USER" || MISSING=$((MISSING+1))
+
+          validate_secret \
+            "${{ secrets.DB_PASS }}" \
+            "DB_PASS" || MISSING=$((MISSING+1))
           
           if [ "$MISSING" -eq 0 ]; then
             # Validar GH_REPO_TOKEN (para operações que exigem mais permissões que o GITHUB_TOKEN padrão)
@@ -88,6 +104,10 @@ jobs:
             echo "  • FTP_PASSWORD"
             echo "  • FTP_PORT (padrão: 21)"
             echo "  • FTP_REMOTE_DIR"
+            echo "  • DB_HOST"
+            echo "  • DB_NAME"
+            echo "  • DB_USER"
+            echo "  • DB_PASS"
             echo "  • GH_REPO_TOKEN (para operações de repositório com permissões elevadas)"
             exit 1
           fi
@@ -104,10 +124,48 @@ jobs:
       FTP_PASSWORD_VALUE: ${{ secrets.FTP_PASSWORD }}
       FTP_PORT_VALUE: ${{ secrets.FTP_PORT }}
       FTP_REMOTE_DIR_VALUE: ${{ secrets.FTP_REMOTE_DIR }}
+      DB_HOST_VALUE: ${{ secrets.DB_HOST }}
+      DB_PORT_VALUE: ${{ secrets.DB_PORT }}
+      DB_NAME_VALUE: ${{ secrets.DB_NAME }}
+      DB_USER_VALUE: ${{ secrets.DB_USER }}
+      DB_PASS_VALUE: ${{ secrets.DB_PASS }}
 
     steps:
       - name: Baixar o código do repositório
         uses: actions/checkout@v4.2.2
+
+      - name: Gerar arquivo de runtime com secrets do servidor
+        shell: bash
+        run: |
+          cat > config/runtime-secrets.php <<'PHP'
+          <?php
+          return [
+              'APP_ENV' => 'production',
+              'DB_HOST' => '__DB_HOST__',
+              'DB_PORT' => '__DB_PORT__',
+              'DB_NAME' => '__DB_NAME__',
+              'DB_USER' => '__DB_USER__',
+              'DB_PASS' => '__DB_PASS__',
+          ];
+          PHP
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          path = Path("config/runtime-secrets.php")
+          text = path.read_text(encoding="utf-8")
+          replacements = {
+              "__DB_HOST__": os.environ["DB_HOST_VALUE"],
+              "__DB_PORT__": os.environ.get("DB_PORT_VALUE", "3306") or "3306",
+              "__DB_NAME__": os.environ["DB_NAME_VALUE"],
+              "__DB_USER__": os.environ["DB_USER_VALUE"],
+              "__DB_PASS__": os.environ["DB_PASS_VALUE"],
+          }
+          for key, value in replacements.items():
+              text = text.replace(key, value.replace("\\", "\\\\").replace("'", "\\'"))
+          path.write_text(text, encoding="utf-8")
+          PY
 
       - name: Testar Conexão FTP
         shell: bash
