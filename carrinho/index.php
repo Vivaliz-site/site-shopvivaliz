@@ -53,7 +53,7 @@ header('Content-Type: text/html; charset=UTF-8');
     </style>
 </head>
 <body>
-<?php include __DIR__ . '/../includes/navbar.php'; ?>
+<?php $svNavCurrent = 'carrinho'; include __DIR__ . '/../includes/navbar.php'; ?>
 <main class="cart-shell">
     <div class="container">
         <div class="cart-header">
@@ -71,7 +71,7 @@ header('Content-Type: text/html; charset=UTF-8');
 
     function money(value) {
         const n = Number(value || 0);
-        if (!n) return 'Preço sob consulta';
+        if (!n) return 'Consulte o valor';
         return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
 
