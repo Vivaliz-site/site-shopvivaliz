@@ -134,6 +134,13 @@ jobs:
       DB_NAME_VALUE: ${{ secrets.DB_NAME != '' && secrets.DB_NAME || secrets.DB_DATABASE }}
       DB_USER_VALUE: ${{ secrets.DB_USER != '' && secrets.DB_USER || secrets.DB_USERNAME }}
       DB_PASS_VALUE: ${{ secrets.DB_PASS != '' && secrets.DB_PASS || secrets.DB_PASSWORD }}
+      OLIST_ACCESS_TOKEN_VALUE: ${{ secrets.OLIST_ACCESS_TOKEN != '' && secrets.OLIST_ACCESS_TOKEN || secrets.TINY_ACCESS_TOKEN }}
+      OLIST_REFRESH_TOKEN_VALUE: ${{ secrets.OLIST_REFRESH_TOKEN != '' && secrets.OLIST_REFRESH_TOKEN || secrets.TINY_REFRESH_TOKEN }}
+      OLIST_CLIENT_ID_VALUE: ${{ secrets.OLIST_CLIENT_ID != '' && secrets.OLIST_CLIENT_ID || secrets.TINY_CLIENT_ID }}
+      OLIST_CLIENT_SECRET_VALUE: ${{ secrets.OLIST_CLIENT_SECRET != '' && secrets.OLIST_CLIENT_SECRET || secrets.TINY_CLIENT_SECRET }}
+      LOJA_WHATSAPP_VALUE: ${{ secrets.LOJA_WHATSAPP }}
+      LOJA_PIX_KEY_VALUE: ${{ secrets.LOJA_PIX_KEY }}
+      LOJA_PIX_NAME_VALUE: ${{ secrets.LOJA_PIX_NAME }}
 
     steps:
       - name: Baixar o código do repositório
@@ -154,6 +161,13 @@ jobs:
               "DB_NAME": os.environ.get("DB_NAME_VALUE", ""),
               "DB_USER": os.environ.get("DB_USER_VALUE", ""),
               "DB_PASS": os.environ.get("DB_PASS_VALUE", ""),
+              "OLIST_ACCESS_TOKEN": os.environ.get("OLIST_ACCESS_TOKEN_VALUE", ""),
+              "OLIST_REFRESH_TOKEN": os.environ.get("OLIST_REFRESH_TOKEN_VALUE", ""),
+              "OLIST_CLIENT_ID": os.environ.get("OLIST_CLIENT_ID_VALUE", ""),
+              "OLIST_CLIENT_SECRET": os.environ.get("OLIST_CLIENT_SECRET_VALUE", ""),
+              "LOJA_WHATSAPP": os.environ.get("LOJA_WHATSAPP_VALUE", ""),
+              "LOJA_PIX_KEY": os.environ.get("LOJA_PIX_KEY_VALUE", ""),
+              "LOJA_PIX_NAME": os.environ.get("LOJA_PIX_NAME_VALUE", ""),
           }
           for key, value in optional.items():
               if value:

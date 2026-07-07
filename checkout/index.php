@@ -3,6 +3,61 @@ declare(strict_types=1);
 
 header('Content-Type: text/html; charset=UTF-8');
 
+$runtimeSecretsFile = dirname(__DIR__) . '/config/runtime-secrets.php';
+if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
+    $runtimeSecrets = require $runtimeSecretsFile;
+    if (is_array($runtimeSecrets)) {
+        foreach ($runtimeSecrets as $key => $value) {
+            if (!is_string($key) || $key === '' || getenv($key) !== false) {
+                continue;
+            }
+            $stringValue = is_scalar($value) ? (string)$value : '';
+            putenv($key . '=' . $stringValue);
+            $_ENV[$key] = $stringValue;
+        }
+    }
+}
+
+function sv_checkout_env(string ...$keys): string
+{
+    static $loaded = false;
+    if (!$loaded) {
+        $loaded = true;
+        $path = dirname(__DIR__) . '/.env';
+        if (is_file($path) && is_readable($path)) {
+            foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+                $line = trim($line);
+                if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
+                    continue;
+                }
+                [$key, $value] = explode('=', $line, 2);
+                $key = trim($key);
+                $value = trim(trim($value), "\"'");
+                if ($key !== '' && getenv($key) === false) {
+                    putenv($key . '=' . $value);
+                    $_ENV[$key] = $value;
+                }
+            }
+        }
+    }
+
+    foreach ($keys as $key) {
+        $value = getenv($key);
+        if (is_string($value) && $value !== '') {
+            return $value;
+        }
+        if (isset($_ENV[$key]) && is_string($_ENV[$key]) && $_ENV[$key] !== '') {
+            return $_ENV[$key];
+        }
+    }
+
+    return '';
+}
+
+$pixKey = sv_checkout_env('LOJA_PIX_KEY') ?: 'contato@vivaliz.com.br';
+$pixName = sv_checkout_env('LOJA_PIX_NAME') ?: 'Vivaliz Store';
+$whatsapp = sv_checkout_env('LOJA_WHATSAPP') ?: '5511999999999';
+
 $pedidoCriado = false;
 $pedidoId = null;
 
@@ -29,6 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
             'timestamp' => date('c'),
             'cliente' => $cliente,
             'items' => $items,
+            'payment_method' => trim((string)($_POST['payment_method'] ?? 'pix')),
             'status' => 'pendente_atendimento',
             'source' => 'checkout_site',
         ];
@@ -94,6 +150,13 @@ Content-Type: text/plain; charset=UTF-8");
         $pedidoCriado = true;
     }
 }
+
+$paymentOptions = [
+    'pix' => ['title' => 'PIX', 'desc' => 'Aprovacao imediata'],
+    'boleto' => ['title' => 'Boleto', 'desc' => 'Emissao apos confirmacao do frete'],
+    'whatsapp' => ['title' => 'WhatsApp', 'desc' => 'Atendimento assistido'],
+    'transferencia' => ['title' => 'Transferencia', 'desc' => 'TED / DOC'],
+];
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -189,6 +252,40 @@ Content-Type: text/plain; charset=UTF-8");
             border-color: #1F3A70;
             box-shadow: 0 0 0 3px rgba(31, 58, 112, 0.12);
         }
+        .payment-options {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .payment-option {
+            display: flex;
+        }
+        .payment-option input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .payment-option-box {
+            width: 100%;
+            border: 1px solid #cbd5e1;
+            border-radius: 14px;
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: border-color .2s, box-shadow .2s, background .2s;
+        }
+        .payment-option input:checked + .payment-option-box {
+            border-color: #1F3A70;
+            box-shadow: 0 0 0 3px rgba(31, 58, 112, 0.12);
+            background: #f8fbff;
+        }
+        .payment-option-box strong {
+            display: block;
+            color: #0f172a;
+            margin-bottom: 4px;
+        }
+        .payment-option-box small {
+            color: #64748b;
+        }
         .summary-list {
             display: grid;
             gap: 12px;
@@ -247,6 +344,24 @@ Content-Type: text/plain; charset=UTF-8");
             color: #1F3A70;
             margin-bottom: 12px;
         }
+        .status-message {
+            margin-top: 12px;
+            font-size: 14px;
+        }
+        .status-message.err {
+            color: #b91c1c;
+        }
+        .status-message.ok {
+            color: #166534;
+        }
+        .payment-help {
+            margin-top: 16px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: #f8fafc;
+            color: #475569;
+            line-height: 1.6;
+        }
         @media (max-width: 900px) {
             .checkout-layout {
                 grid-template-columns: 1fr;
@@ -254,6 +369,9 @@ Content-Type: text/plain; charset=UTF-8");
         }
         @media (max-width: 640px) {
             .form-grid {
+                grid-template-columns: 1fr;
+            }
+            .payment-options {
                 grid-template-columns: 1fr;
             }
         }
@@ -350,11 +468,25 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                     </section>
 
                     <section class="form-section">
-                        <h2>Confirmacao</h2>
-                        <p class="muted">O pedido sera salvo com os itens do carrinho e encaminhado para atendimento comercial.</p>
+                        <h2>Forma de pagamento</h2>
+                        <div class="payment-options">
+                            <?php foreach ($paymentOptions as $value => $option): ?>
+                                <label class="payment-option">
+                                    <input type="radio" name="payment_method" value="<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $value === 'pix' ? 'checked' : ''; ?>>
+                                    <span class="payment-option-box">
+                                        <strong><?php echo htmlspecialchars($option['title'], ENT_QUOTES, 'UTF-8'); ?></strong>
+                                        <small><?php echo htmlspecialchars($option['desc'], ENT_QUOTES, 'UTF-8'); ?></small>
+                                    </span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                        <div class="payment-help">
+                            PIX mostra a chave imediatamente. Boleto e transferencia seguem para confirmacao manual de frete e emissao pela equipe.
+                        </div>
                     </section>
 
-                    <button class="primary-btn" type="submit">Confirmar pedido</button>
+                    <button class="primary-btn" type="submit" id="checkout-submit">Confirmar pedido</button>
+                    <div class="status-message" id="checkout-status" aria-live="polite"></div>
                 </form>
 
                 <aside class="summary-panel">
@@ -379,9 +511,22 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
         const totalNode = document.getElementById('checkout-total');
         const payloadNode = document.getElementById('cart-payload');
         const form = document.getElementById('checkout-form');
+        const statusNode = document.getElementById('checkout-status');
+        const submitNode = document.getElementById('checkout-submit');
+        const pixKey = <?php echo json_encode($pixKey, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+        const pixName = <?php echo json_encode($pixName, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+        const whatsapp = <?php echo json_encode($whatsapp, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+        const paymentLabels = {
+            pix: 'PIX',
+            boleto: 'Boleto bancario',
+            whatsapp: 'WhatsApp',
+            transferencia: 'Transferencia bancaria'
+        };
 
         function money(value) {
-            return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            const amount = Number(value || 0);
+            if (!amount) return 'Preco sob consulta';
+            return amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         }
 
         function readCart() {
@@ -425,8 +570,102 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
         if (totalNode) totalNode.textContent = money(total);
         if (payloadNode) payloadNode.value = JSON.stringify(items);
 
-        form.addEventListener('submit', function () {
-            localStorage.removeItem('shopvivaliz_cart');
+        function setStatus(message, type) {
+            if (!statusNode) return;
+            statusNode.textContent = message;
+            statusNode.className = 'status-message' + (type ? ' ' + type : '');
+        }
+
+        function buildWhatsappLink(orderNumber, totalLabel, paymentMethod) {
+            const text = encodeURIComponent(
+                'Ola! Acabei de fazer um pedido na Vivaliz.\n' +
+                'Numero: ' + orderNumber + '\n' +
+                'Pagamento: ' + (paymentLabels[paymentMethod] || paymentMethod) + '\n' +
+                'Total: ' + totalLabel + '\n' +
+                'Aguardo confirmacao de frete e pagamento.'
+            );
+            return 'https://wa.me/' + String(whatsapp || '').replace(/\D/g, '') + '?text=' + text;
+        }
+
+        function renderSuccess(response, paymentMethod) {
+            const totalLabel = money(total);
+            const whatsappLink = buildWhatsappLink(response.order_number, totalLabel, paymentMethod);
+            const tinySyncNote = response.tiny_order_id
+                ? '<p class="muted">Pedido sincronizado com o ERP. Codigo Tiny: <strong>' + response.tiny_order_id + '</strong></p>'
+                : '<p class="muted">Importacao ERP: <strong>' + (response.tiny_push || 'nao informado') + '</strong></p>';
+
+            let paymentBlock = '<p class="muted">' + (response.payment_instructions || 'Pedido registrado com sucesso.') + '</p>';
+            if (paymentMethod === 'pix') {
+                paymentBlock += '<div class="payment-help"><strong>Chave PIX:</strong> ' + pixKey + '<br><strong>Beneficiario:</strong> ' + pixName + '</div>';
+            } else if (paymentMethod === 'boleto') {
+                paymentBlock += '<div class="payment-help"><strong>Boleto:</strong> a equipe vai emitir o boleto apos confirmar frete, estoque e dados do pedido.</div>';
+            }
+
+            content.innerHTML = ''
+                + '<section class="success-panel">'
+                + '<h2>Pedido recebido com sucesso</h2>'
+                + '<p class="muted">Seu pedido foi registrado e entrou na fila de atendimento da Vivaliz.</p>'
+                + '<div class="order-code">' + response.order_number + '</div>'
+                + paymentBlock
+                + tinySyncNote
+                + '<div style="display:grid;gap:12px;margin-top:16px;">'
+                + '<a class="primary-btn" href="' + whatsappLink + '" target="_blank" rel="noreferrer" style="background:#25D366;">📱 Falar no WhatsApp</a>'
+                + '<a class="ghost-btn" href="/catalogo">Voltar ao catalogo</a>'
+                + '</div>'
+                + '</section>';
+        }
+
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            if (!items.length) {
+                setStatus('Nao ha itens no carrinho.', 'err');
+                return;
+            }
+
+            submitNode.disabled = true;
+            submitNode.textContent = 'Enviando...';
+            setStatus('', '');
+
+            const formData = new FormData(form);
+            const payload = {
+                customer_name: formData.get('nome') || '',
+                customer_email: formData.get('email') || '',
+                customer_phone: formData.get('telefone') || '',
+                cep: formData.get('cep') || '',
+                address: [
+                    formData.get('endereco') || '',
+                    formData.get('numero') || '',
+                    formData.get('complemento') || '',
+                    formData.get('cidade') || ''
+                ].filter(Boolean).join(', '),
+                notes: '',
+                payment_method: formData.get('payment_method') || 'pix',
+                items: items
+            };
+
+            fetch('/api/orders/create.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(function (response) { return response.json(); })
+            .then(function (response) {
+                submitNode.disabled = false;
+                submitNode.textContent = 'Confirmar pedido';
+                if (!response.ok) {
+                    setStatus(response.error || 'Erro ao registrar pedido.', 'err');
+                    return;
+                }
+
+                localStorage.removeItem('shopvivaliz_cart');
+                renderSuccess(response, payload.payment_method);
+            })
+            .catch(function () {
+                submitNode.disabled = false;
+                submitNode.textContent = 'Confirmar pedido';
+                setStatus('Erro de conexao. Tente novamente.', 'err');
+            });
         });
     })();
 </script>

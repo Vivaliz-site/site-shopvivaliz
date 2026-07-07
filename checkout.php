@@ -2,6 +2,21 @@
 declare(strict_types=1);
 header('Content-Type: text/html; charset=UTF-8');
 
+$runtimeSecretsFile = __DIR__ . '/config/runtime-secrets.php';
+if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
+    $runtimeSecrets = require $runtimeSecretsFile;
+    if (is_array($runtimeSecrets)) {
+        foreach ($runtimeSecrets as $key => $value) {
+            if (!is_string($key) || $key === '' || getenv($key) !== false) {
+                continue;
+            }
+            $stringValue = is_scalar($value) ? (string)$value : '';
+            putenv($key . '=' . $stringValue);
+            $_ENV[$key] = $stringValue;
+        }
+    }
+}
+
 /* PIX key e WhatsApp vindos de .env ou config */
 function sv_co_env(string ...$keys): string {
     static $loaded = false;
@@ -38,14 +53,6 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '5511999999999';
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/checkout.css">
-    <script>
-        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/insights/script.js"></script>
-    <script>
-        window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
-    </script>
-    <script defer src="/_vercel/speed-insights/script.js"></script>
 </head>
 <body>
 <nav class="navbar">
@@ -55,7 +62,7 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '5511999999999';
         </a>
         <div class="navbar-menu">
             <a href="/catalogo">Catálogo</a>
-            <a href="/carrinho.php" class="nav-cart">
+            <a href="/carrinho" class="nav-cart">
                 🛒 Carrinho <span class="cart-badge" id="nav-cart-count">0</span>
             </a>
         </div>
@@ -121,6 +128,14 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '5511999999999';
                         <span class="pay-icon">⚡</span>
                         <strong>PIX</strong>
                         <small>Aprovação imediata</small>
+                    </span>
+                </label>
+                <label class="payment-opt">
+                    <input type="radio" name="payment_method" value="boleto">
+                    <span class="payment-opt-box">
+                        <span class="pay-icon">🧾</span>
+                        <strong>Boleto</strong>
+                        <small>Emissao apos confirmacao</small>
                     </span>
                 </label>
                 <label class="payment-opt">
@@ -342,6 +357,12 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '5511999999999';
                 document.getElementById('pix-modal').hidden = false;
             } else {
                 document.getElementById('order-number-msg').textContent = 'Pedido ' + d.order_number;
+                var successCopy = document.querySelector('#success-modal p:not(#order-number-msg)');
+                if (successCopy) {
+                    successCopy.textContent = method === 'boleto'
+                        ? 'Nossa equipe vai emitir o boleto apos confirmar frete e estoque.'
+                        : 'Em breve entraremos em contato para confirmar frete e pagamento.';
+                }
                 document.getElementById('success-wpp-link').href = wppLink;
                 document.getElementById('success-modal').hidden = false;
             }
