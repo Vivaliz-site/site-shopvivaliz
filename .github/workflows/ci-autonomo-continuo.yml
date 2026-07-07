@@ -10,13 +10,9 @@ permissions:
   checks: write
 
 jobs:
-<<<<<<< HEAD
-  build:
-    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
-=======
   setup:
     name: Setup CI
->>>>>>> origin/main
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
