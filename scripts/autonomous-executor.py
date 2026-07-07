@@ -181,8 +181,6 @@ Objetivo:
 - abrir branch/PR para tarefas seguras;
 - deixar relatorio auditavel mesmo quando nao ha chave de IA ou mudancas.
 """
-from __future__ import annotations
-
 import argparse
 import json
 import os
@@ -455,5 +453,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
 
