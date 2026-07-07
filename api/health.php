@@ -47,6 +47,9 @@ $checks = [
     'Espaco em disco acima de 10%' => $diskTotal === 0 ? true : (($diskFree / $diskTotal) >= 0.10),
     'Config versao presente' => is_file($root . '/config/shopvivaliz-version.php'),
     'Catalogo API presente' => is_file($root . '/api/catalog/products.php'),
+    'GraphQL API presente' => is_file($root . '/api/graphql.php'),
+    'Gamificacao API presente' => is_file($root . '/api/gamification/status.php'),
+    'Gamificacao pagina presente' => is_file($root . '/gamificacao.php'),
     'Admin dashboard JS presente' => is_file($root . '/js/admin-dashboard.js'),
     'Monitor admin presente' => is_file($root . '/admin/monitor/index.php'),
 ];
