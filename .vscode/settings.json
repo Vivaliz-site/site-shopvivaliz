@@ -48,5 +48,14 @@
     "diskpart"
   ],
   "roo-cline.commandExecutionTimeout": 600,
-  "roo-cline.preventCompletionWithOpenTodos": false
+  "roo-cline.preventCompletionWithOpenTodos": false,
+  "terminal.integrated.allowInUntrustedWorkspace": true,
+  "geminicodeassist.rules": "full acces and full permision\n\n\n",
+  "python-envs.pythonProjects": [
+    {
+      "path": ".",
+      "envManager": "ms-python.python:venv",
+      "packageManager": "ms-python.python:pip"
+    }
+  ]
 }

@@ -15,7 +15,7 @@
     "alwaysAllowModeSwitch": true,
     "alwaysAllowSubtasks": true,
     "alwaysAllowExecute": true,
-    "alwaysAllowFollowupQuestions": false,
+    "alwaysAllowFollowupQuestions": true,
     "followupAutoApproveTimeoutMs": 15000,
     "allowedCommands": [
       "git status",

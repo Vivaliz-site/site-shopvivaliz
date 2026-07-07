@@ -51,6 +51,10 @@ $secrets = @{
 
     # GitHub
     "GH_REPO_TOKEN" = ""  # ghp_...
+
+    # Pagarme
+    "PAGARME_SECRET_KEY" = "" # sk_test_... ou sk_live_...
+    "PAGARME_PUBLIC_KEY" = "" # pk_test_... ou pk_live_...
 }
 
 Write-Host "`n📝 CREDENCIAIS NECESSÁRIAS:" -ForegroundColor Yellow
@@ -104,6 +108,16 @@ Write-Host "`n🔟 EMAIL_PASSWORD (Gmail App Password)"
 Write-Host "   Obter em: https://myaccount.google.com/app-passwords"
 $email_pass = Read-Host "   Valor"
 if ($email_pass) { $secrets["EMAIL_PASSWORD"] = $email_pass }
+
+Write-Host "`n1️⃣1️⃣ PAGARME_SECRET_KEY"
+Write-Host "   Obter em: Dashboard Pagarme → Configurações → Chaves de API"
+$pagarme_secret = Read-Host "   Valor"
+if ($pagarme_secret) { $secrets["PAGARME_SECRET_KEY"] = $pagarme_secret }
+
+Write-Host "`n1️⃣2️⃣ PAGARME_PUBLIC_KEY"
+Write-Host "   Obter em: Dashboard Pagarme → Configurações → Chaves de API"
+$pagarme_public = Read-Host "   Valor"
+if ($pagarme_public) { $secrets["PAGARME_PUBLIC_KEY"] = $pagarme_public }
 
 # Configurar secrets no GitHub
 Write-Host "`n═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan

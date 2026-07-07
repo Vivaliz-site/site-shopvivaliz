@@ -1,6 +1,6 @@
 # Relatorio Trio IA — Modo: Revisão e melhoria de features do ecommerce
 
-**Tarefa:** Otimizar performance do catalogo: Adicionar lazy loading nas imagens do catalogo de produtos, implementar paginacao eficiente e cache de consultas ao banco de dados
+**Tarefa:** Implementar sistema de avaliacao de atendimento: Apos compra, enviar survey para avaliar atendimento. Colocar notas de atendimento na plataforma de suporte.
 
 ---
 

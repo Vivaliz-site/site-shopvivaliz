@@ -413,7 +413,7 @@ if (($_GET['health'] ?? '') === '1') {
             'openai' => ['configured' => $openaiKey !== '', 'model' => $openaiModel],
             'gemini' => ['configured' => $geminiKey !== '', 'model' => $geminiModel],
         ],
-        'agents' => ['director', 'claude', 'gpt', 'gemini'],
+        'agents' => ['director', 'claude', 'gpt', 'gemini', 'roo_director', 'roo_claude', 'roo_gpt', 'roo_gemini'],
     ]);
 }
 
@@ -550,6 +550,35 @@ PAPÉIS QUE VOCÊ EXERCE:
 
 CAPACIDADE DE AÇÃO AUTÔNOMA: Você pode criar issues no GitHub com [CRIAR_ISSUE titulo="..." corpo="..."]. Seja proativo — identifique oportunidades de melhoria no catálogo, SEO e UX e registre-as. Responda em português.',
     ],
+];
+
+// Adicionando agentes "Roo" como backups ou assistentes
+$agentConfigs['roo_director'] = [
+    'name' => 'Roo - Diretor · DevOps · Segurança',
+    'provider' => 'anthropic',
+    'model' => $anthropicModel,
+    'system' => 'Você é um agente "Roo" que atua como backup ou assistente do Diretor. ' . $agentConfigs['director']['system'],
+];
+
+$agentConfigs['roo_claude'] = [
+    'name' => 'Roo - Arquiteto · QA',
+    'provider' => 'anthropic',
+    'model' => $anthropicModel,
+    'system' => 'Você é um agente "Roo" que atua como backup ou assistente do Arquiteto e QA. ' . $agentConfigs['claude']['system'],
+];
+
+$agentConfigs['roo_gpt'] = [
+    'name' => 'Roo - Olist · Checkout · Pagamentos · BI',
+    'provider' => 'openai',
+    'model' => $openaiModel,
+    'system' => 'Você é um agente "Roo" que atua como backup ou assistente do agente de Olist, Checkout, Pagamentos e BI. ' . $agentConfigs['gpt']['system'],
+];
+
+$agentConfigs['roo_gemini'] = [
+    'name' => 'Roo - Catálogo · Imagens · UX · SEO',
+    'provider' => 'gemini',
+    'model' => $geminiModel,
+    'system' => 'Você é um agente "Roo" que atua como backup ou assistente do agente de Catálogo, Imagens, UX e SEO. ' . $agentConfigs['gemini']['system'],
 ];
 
 // Contexto do repositório para todos os agentes
