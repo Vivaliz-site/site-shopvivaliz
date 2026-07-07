@@ -359,7 +359,7 @@ jobs:
   summary:
     name: Resumo CI
     needs: [git-conflicts, yaml-validation, php-syntax, python-syntax, security-scan, endpoints-check, dependency-check]
-    if: ${{ always() && vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' && always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
