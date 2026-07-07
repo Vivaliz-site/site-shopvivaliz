@@ -3,6 +3,22 @@
  * Constantes Globais - ShopVivaliz
  */
 
+$runtimeSecretsFile = __DIR__ . '/runtime-secrets.php';
+if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
+    $runtimeSecrets = require $runtimeSecretsFile;
+    if (is_array($runtimeSecrets)) {
+        foreach ($runtimeSecrets as $key => $value) {
+            if (!is_string($key) || $key === '' || getenv($key) !== false) {
+                continue;
+            }
+            $stringValue = is_scalar($value) ? (string)$value : '';
+            putenv($key . '=' . $stringValue);
+            $_ENV[$key] = $stringValue;
+            $_SERVER[$key] = $stringValue;
+        }
+    }
+}
+
 // Ambiente
 define('ENVIRONMENT', getenv('APP_ENV') ?: 'development');
 define('DEBUG_MODE', ENVIRONMENT === 'development');

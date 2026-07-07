@@ -15,6 +15,9 @@ AddCharset UTF-8 .html .txt .php .json
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # Nunca expor arquivos internos de configuracao
+    RewriteRule ^config/ - [F,L]
+
     # Mantem o dashboard operacional isolado na subpasta /claude/
     RewriteRule ^claude/?$ claude/index.php [L]
     RewriteRule ^claude/(.*)$ claude/$1 [L]

@@ -102,6 +102,14 @@ function sv_catalog_product_href(array $product): string
     return $slug !== '' ? '/produto/' . $slug : sv_catalog_product_url($product);
 }
 
+function sv_catalog_contact_url(array $product): string
+{
+    return '/contato?' . http_build_query([
+        'sku' => $product['sku'] ?? '',
+        'produto' => $product['name'] ?? '',
+    ]);
+}
+
 function sv_catalog_canonical_url(string $category): string
 {
     $params = [];
@@ -271,6 +279,8 @@ $searchNoindex = $query !== '';
                 <?php
                 $image      = $product['image_url'] !== '' ? $product['image_url'] : '/favicon.ico';
                 $productUrl = sv_catalog_product_href($product);
+                $contactUrl = sv_catalog_contact_url($product);
+                $hasPrice   = (float)$product['price'] > 0;
                 $payload = rawurlencode(json_encode([
                     'sku'              => $product['sku'],
                     'name'             => $product['name'],
@@ -298,7 +308,11 @@ $searchNoindex = $query !== '';
                         <?php endif; ?>
                         <div class="card-actions">
                             <a class="btn btn-secondary card-link" href="<?= sv_catalog_esc($productUrl) ?>">Ver detalhes</a>
-                            <button class="buy-button" type="button" data-product="<?= sv_catalog_esc($payload) ?>">Comprar agora</button>
+                            <?php if ($hasPrice): ?>
+                                <button class="buy-button" type="button" data-product="<?= sv_catalog_esc($payload) ?>">Comprar agora</button>
+                            <?php else: ?>
+                                <a class="btn btn-primary card-link" href="<?= sv_catalog_esc($contactUrl) ?>">Solicitar preço</a>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </article>

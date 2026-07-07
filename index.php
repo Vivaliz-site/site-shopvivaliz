@@ -1,10 +1,41 @@
 <?php
+declare(strict_types=1);
+
 // Configuração Dinâmica de Ambiente
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $host = $_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.com.br';
 define('BASE_URL', $scheme . '://' . $host);
 define('APP_NAME', 'ShopVivaliz');
 $featuredProducts = is_array($featuredProducts ?? null) ? $featuredProducts : [];
+
+function sv_home_esc(string $value): string
+{
+    return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+}
+
+function sv_home_money(float $value): string
+{
+    return $value > 0 ? 'R$ ' . number_format($value, 2, ',', '.') : 'Preço sob consulta';
+}
+
+function sv_home_product_url(array $product): string
+{
+    return '/produto?' . http_build_query([
+        'sku' => (string)($product['sku'] ?? ''),
+        'name' => (string)($product['name'] ?? ''),
+        'image' => (string)($product['image_url'] ?? ''),
+        'price' => (string)($product['price'] ?? 0),
+        'olist_product_id' => (string)($product['olist_product_id'] ?? ''),
+    ]);
+}
+
+function sv_home_contact_url(array $product): string
+{
+    return '/contato?' . http_build_query([
+        'sku' => (string)($product['sku'] ?? ''),
+        'produto' => (string)($product['name'] ?? ''),
+    ]);
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -135,6 +166,8 @@ $featuredProducts = is_array($featuredProducts ?? null) ? $featuredProducts : []
                     $image      = $product['image_url'] !== '' ? $product['image_url'] : '/favicon.ico';
                     $pSlug      = $product['slug'] ?? '';
                     $productUrl = $pSlug !== '' ? '/produto/' . $pSlug : sv_home_product_url($product);
+                    $contactUrl = sv_home_contact_url($product);
+                    $hasPrice   = (float)($product['price'] ?? 0) > 0;
                     $payload    = rawurlencode(json_encode([
                         'sku'              => $product['sku'],
                         'name'             => $product['name'],
@@ -155,7 +188,11 @@ $featuredProducts = is_array($featuredProducts ?? null) ? $featuredProducts : []
                             <div class="product-price"><?= sv_home_esc(sv_home_money((float)$product['price'])) ?></div>
                             <div class="card-actions">
                                 <a class="btn btn-secondary card-link" href="<?= sv_home_esc($productUrl) ?>">Ver detalhes</a>
-                                <button class="buy-button" type="button" data-product="<?= sv_home_esc($payload) ?>">Comprar agora</button>
+                                <?php if ($hasPrice): ?>
+                                    <button class="buy-button" type="button" data-product="<?= sv_home_esc($payload) ?>">Comprar agora</button>
+                                <?php else: ?>
+                                    <a class="btn btn-primary card-link" href="<?= sv_home_esc($contactUrl) ?>">Solicitar preço</a>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </article>
@@ -191,30 +228,6 @@ $featuredProducts = is_array($featuredProducts ?? null) ? $featuredProducts : []
     </footer>
 
     <script src="/autodev/client.js"></script>
-    <title><?php echo APP_NAME; ?></title>
-    
-    <!-- SEO Dinâmico -->
-    <link rel="canonical" href="<?php echo BASE_URL; ?>/">
-    <meta property="og:url" content="<?php echo BASE_URL; ?>/">
-    <meta property="og:title" content="<?php echo APP_NAME; ?>">
-    
-    <link rel="stylesheet" href="/css/responsive.css">
-</head>
-<body>
-    <header>
-        <nav>
-            <a href="<?php echo BASE_URL; ?>">Início</a>
-            <a href="<?php echo BASE_URL; ?>/catalogo">Catálogo</a>
-            <a href="<?php echo BASE_URL; ?>/admin">Admin</a>
-        </nav>
-    </header>
-
-    <main>
-        <!-- Conteúdo Principal aqui -->
-    </main>
-
-    <!-- Scripts Únicos (Sem duplicação) -->
     <script src="/js/catalog.js"></script>
-    <script src="/autodev/client.js"></script>
 </body>
 </html>
