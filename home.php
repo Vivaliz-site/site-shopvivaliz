@@ -170,6 +170,14 @@ $categoryLinks = [
         @media (max-width:1100px) { .hero-grid, .categories-grid, .products-grid, .footer-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
         @media (max-width:820px) { .hero-grid, .categories-grid, .products-grid, .value-strip, .footer-grid, .hero-metrics { grid-template-columns:1fr; } .hero-card { padding:28px; min-height:auto; } .section-head { flex-direction:column; align-items:start; } }
     </style>
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+    <script>
+        window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/speed-insights/script.js"></script>
 </head>
 <body>
 <?php include __DIR__ . '/includes/navbar.php'; ?>

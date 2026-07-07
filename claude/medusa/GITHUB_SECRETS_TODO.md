@@ -32,9 +32,9 @@ gh secret set PAYPAL_CLIENT_ID --body "<pendente>"
 gh secret set PAYPAL_CLIENT_SECRET --body "<pendente>"
 
 # Olist ERP (já usado pelo site PHP legado - reaproveitar os mesmos valores,
-# porém ROTACIONADOS - ver alerta de segurança abaixo)
-gh secret set OLIST_CLIENT_ID --body "<novo client id gerado no painel Tiny/Olist>"
-gh secret set OLIST_CLIENT_SECRET --body "<novo client secret, após rotação>"
+# conforme valores autorizados)
+gh secret set OLIST_CLIENT_ID --body "<client id autorizado>"
+gh secret set OLIST_CLIENT_SECRET --body "<client secret autorizado>"
 gh secret set OLIST_WEBHOOK_SECRET --body "$(openssl rand -base64 32)"
 
 # Bridge Medusa <-> EHA (ver claude/api/medusa-webhook.php e
@@ -53,14 +53,3 @@ O `OLIST_WEBHOOK_SECRET` deve ser o **mesmo valor** em três lugares:
 3. Configuração do webhook do lado da Olist/Tiny, se a API deles suportar
    assinatura de payload (verificar na documentação da Olist)
 
-## ⚠️ Alerta de segurança: rotacionar credenciais Olist/Tiny
-
-Um `OLIST_CLIENT_ID` / `OLIST_CLIENT_SECRET` reais estavam commitados em texto
-puro em vários arquivos do repositório (`SETUP-OLIST-SECRETS.md`,
-`GITHUB-SECRETS-TO-ADD.md`, scripts em `scripts/olist-*.py`, etc.) e em
-`.tokens/olist-oauth-code.txt` (um authorization code OAuth). Esta sessão
-redigiu os valores dos arquivos atuais e removeu `.tokens/` do controle de
-versão, mas **o segredo permanece no histórico do git** (commits antigos).
-Recomendação: rotacionar o `CLIENT_SECRET` no painel Tiny/Olist assim que
-possível e, se necessário, reescrever o histórico do repositório para remover
-o segredo antigo (ação destrutiva - requer decisão humana antes de executar).
