@@ -8,16 +8,21 @@ $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' :
 $host = $_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.com.br';
 define('BASE_URL', $scheme . '://' . $host);
 define('APP_NAME', 'ShopVivaliz');
-$featuredProducts = is_array($featuredProducts ?? null) ? $featuredProducts : [];
+require_once __DIR__ . '/includes/product-price-enrich.php';
 
 function sv_home_esc(string $value): string
 {
     return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 }
 
+function sv_home_default_image(): string
+{
+    return '/images/logo-vivaliz-square.png';
+}
+
 function sv_home_money(float $value): string
 {
-    return $value > 0 ? 'R$ ' . number_format($value, 2, ',', '.') : 'Preço sob consulta';
+    return $value > 0 ? 'R$ ' . number_format($value, 2, ',', '.') : 'Consulte o valor';
 }
 
 function sv_home_product_url(array $product): string
@@ -38,6 +43,91 @@ function sv_home_contact_url(array $product): string
         'produto' => (string)($product['name'] ?? ''),
     ]);
 }
+
+function sv_home_featured_products(int $limit = 8): array
+{
+    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
+    if (!is_file($jsonPath) || !is_readable($jsonPath)) {
+        return [];
+    }
+
+    $decoded = json_decode((string)file_get_contents($jsonPath), true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $products = [];
+    foreach ($decoded as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+
+        $image = trim((string)($row['image_url'] ?? ''));
+        if ($image === '') {
+            continue;
+        }
+
+        $products[] = [
+            'sku' => trim((string)($row['sku'] ?? (string)($row['id'] ?? ''))),
+            'name' => trim((string)($row['name'] ?? 'Produto Vivaliz')),
+            'image_url' => $image,
+            'price' => (float)($row['price'] ?? 0),
+            'olist_product_id' => (string)($row['olist_product_id'] ?? $row['id'] ?? ''),
+            'category' => trim((string)($row['category'] ?? '')),
+            'slug' => trim((string)($row['slug'] ?? '')),
+        ];
+
+        if (count($products) >= $limit) {
+            break;
+        }
+    }
+
+    return svp_enrich_products($products);
+}
+
+function sv_home_catalog_count(): int
+{
+    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
+    if (!is_file($jsonPath) || !is_readable($jsonPath)) {
+        return 0;
+    }
+
+    $decoded = json_decode((string)file_get_contents($jsonPath), true);
+    return is_array($decoded) ? count($decoded) : 0;
+}
+
+function sv_home_banners(): array
+{
+    return [
+        [
+            'eyebrow' => 'Vitrine Vivaliz',
+            'title' => 'Rodizios, ferragens e utilidades com visual mais claro.',
+            'text' => 'Uma home pensada para destacar produtos reais, leitura rápida no celular e navegação direta até a compra.',
+            'primary' => ['label' => 'Explorar catálogo', 'href' => '/catalogo'],
+            'secondary' => ['label' => 'Falar com vendas', 'href' => '/contato'],
+        ],
+        [
+            'eyebrow' => 'Compra assistida',
+            'title' => 'Atendimento comercial rápido para dúvidas, prazos e orçamento.',
+            'text' => 'Quando precisar confirmar compatibilidade, quantidade ou disponibilidade, a equipe da Vivaliz entra no fluxo sem atrito.',
+            'primary' => ['label' => 'Ver produtos', 'href' => '/catalogo'],
+            'secondary' => ['label' => 'Abrir contato', 'href' => '/contato'],
+        ],
+        [
+            'eyebrow' => 'Entrega nacional',
+            'title' => 'Mais confiança visual para comprar de qualquer lugar do Brasil.',
+            'text' => 'Cards organizados, identidade consistente e acesso rápido ao carrinho para acelerar a jornada em desktop e mobile.',
+            'primary' => ['label' => 'Ir ao carrinho', 'href' => '/carrinho'],
+            'secondary' => ['label' => 'Conhecer a marca', 'href' => '/sobre'],
+        ],
+    ];
+}
+
+$featuredProducts = sv_home_featured_products(8);
+$featuredProductsCount = count($featuredProducts);
+$catalogCount = sv_home_catalog_count();
+$heroBanners = sv_home_banners();
+$svNavCurrent = '';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -96,22 +186,7 @@ function sv_home_contact_url(array $product): string
     </script>
 </head>
 <body>
-    <!-- Navegação -->
-    <nav class="navbar">
-        <div class="container nav-inner">
-            <a class="brand-link" href="/">
-                <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" onerror="this.src='/images/logo.svg'">
-            </a>
-            <div class="navbar-menu">
-                <a href="/catalogo">Catálogo</a>
-                <a href="/gamificacao.php">Gamificação</a>
-                <a href="/sobre">Sobre</a>
-                <a href="/carrinho" class="nav-cart" id="nav-cart-link">
-                    🛒 Carrinho <span class="cart-badge" id="nav-cart-count">0</span>
-                </a>
-            </div>
-        </div>
-    </nav>
+    <?php include __DIR__ . '/includes/navbar.php'; ?>
 
     <!-- Hero Section -->
     <section class="hero">
@@ -121,8 +196,7 @@ function sv_home_contact_url(array $product): string
                     🛍️ Loja oficial Vivaliz
                 </p>
                 <h1>Produtos que <span>você precisa</span>,<br>entrega para todo o Brasil</h1>
-                <?php $featuredProductsCount = is_countable($featuredProducts ?? null) ? count($featuredProducts) : 0; ?>
-                <p>Rodízios, ferragens, utilidades domésticas, garden e muito mais — <?= $featuredProductsCount > 0 ? '197 produtos' : 'catálogo completo' ?> com qualidade garantida.</p>
+                <p>Rodízios, ferragens, utilidades domésticas e itens para casa com catálogo organizado, atendimento rápido e navegação simples no celular.</p>
 
                 <div class="cta-buttons" style="margin-top:28px">
                     <a href="/catalogo" class="btn btn-primary" style="background:#fff;color:#1d4ed8;font-size:15px;padding:14px 24px">
@@ -143,21 +217,50 @@ function sv_home_contact_url(array $product): string
         </div>
     </section>
 
+    <section class="hero-carousel-section">
+        <div class="container">
+            <div class="hero-carousel" id="hero-carousel" aria-label="Banners em destaque">
+                <div class="hero-carousel-track">
+                    <?php foreach ($heroBanners as $index => $banner): ?>
+                        <article class="hero-slide<?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>">
+                            <span class="hero-slide-eyebrow"><?= sv_home_esc($banner['eyebrow']) ?></span>
+                            <h2><?= sv_home_esc($banner['title']) ?></h2>
+                            <p><?= sv_home_esc($banner['text']) ?></p>
+                            <div class="hero-slide-actions">
+                                <a href="<?= sv_home_esc($banner['primary']['href']) ?>" class="btn btn-primary"><?= sv_home_esc($banner['primary']['label']) ?></a>
+                                <a href="<?= sv_home_esc($banner['secondary']['href']) ?>" class="btn btn-secondary"><?= sv_home_esc($banner['secondary']['label']) ?></a>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+                <div class="hero-carousel-controls" aria-label="Controles do banner">
+                    <button type="button" class="hero-carousel-arrow" data-dir="-1" aria-label="Banner anterior">‹</button>
+                    <div class="hero-carousel-dots">
+                        <?php foreach ($heroBanners as $index => $banner): ?>
+                            <button type="button" class="hero-carousel-dot<?= $index === 0 ? ' is-active' : '' ?>" data-dot="<?= $index ?>" aria-label="Ir para banner <?= $index + 1 ?>"></button>
+                        <?php endforeach; ?>
+                    </div>
+                    <button type="button" class="hero-carousel-arrow" data-dir="1" aria-label="Próximo banner">›</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Produtos em destaque -->
     <section class="home-products">
         <div class="container">
             <div class="section-heading">
                 <div>
                     <h2>Catálogo em destaque</h2>
-                    <p class="muted">Seleção especial de produtos disponíveis agora.</p>
+                    <p class="muted">Seleção com imagens reais e acesso rápido às linhas mais procuradas.</p>
                 </div>
                 <a href="/catalogo" class="btn btn-secondary">Ver todos</a>
             </div>
-            <div id="catalog-status" class="status-line"><?= $featuredProductsCount > 0 ? $featuredProductsCount . ' produtos em destaque carregados.' : 'Nenhum produto disponível no momento.' ?></div>
+            <div id="catalog-status" class="status-line"><?= $catalogCount > 0 ? $catalogCount . ' produtos disponíveis no catálogo.' : 'Explore nossas linhas e fale com a equipe para atendimento comercial.' ?></div>
             <div class="product-grid" id="product-grid">
                 <?php foreach ($featuredProducts as $product): ?>
                     <?php
-                    $image      = $product['image_url'] !== '' ? $product['image_url'] : '/favicon.ico';
+                    $image      = $product['image_url'] !== '' ? $product['image_url'] : sv_home_default_image();
                     $pSlug      = $product['slug'] ?? '';
                     $productUrl = $pSlug !== '' ? '/produto/' . $pSlug : sv_home_product_url($product);
                     $contactUrl = sv_home_contact_url($product);
@@ -172,7 +275,7 @@ function sv_home_contact_url(array $product): string
                     ?>
                     <article class="product-card" data-sku="<?= sv_home_esc($product['sku']) ?>">
                         <a class="product-image" href="<?= sv_home_esc($productUrl) ?>">
-                            <img src="<?= sv_home_esc($image) ?>" alt="<?= sv_home_esc($product['name']) ?>" loading="lazy" onerror="this.src='/favicon.ico'">
+                            <img src="<?= sv_home_esc($image) ?>" alt="<?= sv_home_esc($product['name']) ?>" loading="lazy" onerror="this.src='<?= sv_home_default_image() ?>'">
                         </a>
                         <div class="product-info">
                             <?php if (!empty($product['category'])): ?>
@@ -185,7 +288,7 @@ function sv_home_contact_url(array $product): string
                                 <?php if ($hasPrice): ?>
                                     <button class="buy-button" type="button" data-product="<?= sv_home_esc($payload) ?>">Comprar agora</button>
                                 <?php else: ?>
-                                    <a class="btn btn-primary card-link" href="<?= sv_home_esc($contactUrl) ?>">Solicitar preço</a>
+                                    <a class="btn btn-primary card-link" href="<?= sv_home_esc($contactUrl) ?>">Falar com vendas</a>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -223,5 +326,50 @@ function sv_home_contact_url(array $product): string
 
     <script src="/autodev/client.js"></script>
     <script src="/js/catalog.js"></script>
+    <script>
+    (function () {
+        var root = document.getElementById('hero-carousel');
+        if (!root) return;
+        var slides = Array.prototype.slice.call(root.querySelectorAll('.hero-slide'));
+        var dots = Array.prototype.slice.call(root.querySelectorAll('.hero-carousel-dot'));
+        var arrows = Array.prototype.slice.call(root.querySelectorAll('.hero-carousel-arrow'));
+        var current = 0;
+        var timer = null;
+
+        function show(index) {
+            current = (index + slides.length) % slides.length;
+            slides.forEach(function (slide, slideIndex) {
+                slide.classList.toggle('is-active', slideIndex === current);
+            });
+            dots.forEach(function (dot, dotIndex) {
+                dot.classList.toggle('is-active', dotIndex === current);
+            });
+        }
+
+        function restart() {
+            clearInterval(timer);
+            timer = setInterval(function () {
+                show(current + 1);
+            }, 5000);
+        }
+
+        dots.forEach(function (dot, index) {
+            dot.addEventListener('click', function () {
+                show(index);
+                restart();
+            });
+        });
+
+        arrows.forEach(function (arrow) {
+            arrow.addEventListener('click', function () {
+                show(current + Number(arrow.getAttribute('data-dir') || '1'));
+                restart();
+            });
+        });
+
+        show(0);
+        restart();
+    })();
+    </script>
 </body>
 </html>

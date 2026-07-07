@@ -15,7 +15,6 @@ function svp_env_load(): void
     if (is_file($constants)) {
         require_once $constants;
     }
-
     $path = dirname(__DIR__) . '/.env';
     if (!is_file($path) || !is_readable($path)) {
         return;
