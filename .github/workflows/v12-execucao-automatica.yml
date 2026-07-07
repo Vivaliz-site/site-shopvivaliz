@@ -38,7 +38,7 @@ jobs:
 
     - name: Run Pagarme Diagnostic
       # Este passo executa o script de diagnóstico do Pagarme e passa os segredos necessários como variáveis de ambiente.
-      run: php api/pagarme/diagnostic.bkp
+      run: php api/pagarme/diagnostic.php
       env:
         PAGARME_SECRET_KEY: ${{ secrets.PAGARME_SECRET_KEY }}
         PAGARME_PUBLIC_KEY: ${{ secrets.PAGARME_PUBLIC_KEY }}
