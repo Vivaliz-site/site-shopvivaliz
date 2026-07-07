@@ -61,6 +61,10 @@ $featuredProducts = is_array($featuredProducts ?? null) ? $featuredProducts : []
       ]
     }
     </script>
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
     <!-- Navegação -->
