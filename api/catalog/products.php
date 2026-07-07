@@ -199,15 +199,33 @@ Accept: application/json
 function svcat_db_products(mysqli $db, int $limit, string $q): array
 {
     $products = [];
-    if (svcat_table_exists($db, 'olist_products')) {
+    if (svcat_table_exists($db, 'products')) {
         $where = '';
         $params = [];
         if ($q !== '') {
-            $where = 'WHERE UPPER(COALESCE(sku, "")) LIKE UPPER(?) OR UPPER(COALESCE(name, "")) LIKE UPPER(?)';
+            $where = 'WHERE p.active = 1 AND (UPPER(COALESCE(p.sku, "")) LIKE UPPER(?) OR UPPER(COALESCE(p.name, "")) LIKE UPPER(?))';
             $like = '%' . $q . '%';
             $params = [$like, $like];
+        } else {
+            $where = 'WHERE p.active = 1';
         }
-        $sql = "SELECT id, sku, olist_product_id, olist_id, name, primary_image_url AS image_url, images_count, image_sync_status FROM olist_products {$where} ORDER BY (primary_image_url IS NULL OR primary_image_url = '') ASC, updated_at DESC, id DESC LIMIT ?";
+        $sql = "SELECT
+                    p.id,
+                    p.sku,
+                    op.olist_product_id,
+                    op.olist_id,
+                    p.name,
+                    p.description,
+                    p.price,
+                    p.stock,
+                    COALESCE(NULLIF(op.primary_image_url, ''), p.image_url) AS image_url,
+                    COALESCE(op.images_count, 0) AS images_count,
+                    COALESCE(op.image_sync_status, 'active') AS image_sync_status
+                FROM products p
+                LEFT JOIN olist_products op ON op.sku = p.sku
+                {$where}
+                ORDER BY (COALESCE(op.primary_image_url, p.image_url) IS NULL OR COALESCE(op.primary_image_url, p.image_url) = '') ASC, p.updated_at DESC, p.id DESC
+                LIMIT ?";
         $stmt = $db->prepare($sql);
         if ($stmt) {
             if ($params) {
@@ -221,15 +239,33 @@ function svcat_db_products(mysqli $db, int $limit, string $q): array
         }
     }
 
-    if (!$products && svcat_table_exists($db, 'products')) {
+    if (!$products && svcat_table_exists($db, 'olist_products')) {
         $where = 'WHERE active = 1';
         $params = [];
         if ($q !== '') {
-            $where .= ' AND (UPPER(COALESCE(sku, "")) LIKE UPPER(?) OR UPPER(COALESCE(name, "")) LIKE UPPER(?))';
+            $where = 'WHERE (UPPER(COALESCE(op.sku, "")) LIKE UPPER(?) OR UPPER(COALESCE(op.name, "")) LIKE UPPER(?))';
             $like = '%' . $q . '%';
             $params = [$like, $like];
+        } else {
+            $where = '';
         }
-        $sql = "SELECT id, sku, name, description, price, stock, image_url FROM products {$where} ORDER BY updated_at DESC, id DESC LIMIT ?";
+        $sql = "SELECT
+                    op.id,
+                    op.sku,
+                    op.olist_product_id,
+                    op.olist_id,
+                    op.name,
+                    COALESCE(p.description, '') AS description,
+                    COALESCE(p.price, 0) AS price,
+                    COALESCE(p.stock, 0) AS stock,
+                    COALESCE(NULLIF(op.primary_image_url, ''), p.image_url) AS image_url,
+                    op.images_count,
+                    op.image_sync_status
+                FROM olist_products op
+                LEFT JOIN products p ON p.sku = op.sku
+                {$where}
+                ORDER BY (op.primary_image_url IS NULL OR op.primary_image_url = '') ASC, op.updated_at DESC, op.id DESC
+                LIMIT ?";
         $stmt = $db->prepare($sql);
         if ($stmt) {
             if ($params) $stmt->bind_param('ssi', $params[0], $params[1], $limit);
