@@ -7,8 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  find-real-docroot:
-    name: Buscar todas as pastas candidatas a docroot
+  recheck:
+    name: Reconferir runtime-secrets.php
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -16,16 +16,13 @@ jobs:
       FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
       FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
       FTP_PORT: ${{ secrets.FTP_PORT }}
+      FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
     steps:
-      - name: Listar TODAS as pastas na raiz e em public_html
+      - name: Verificar se ainda existe via FTP
         shell: bash
         run: |
           PORT="${FTP_PORT:-21}"
-
-          echo "=== raiz completa (com tipo, ls -la style) ==="
+          REMOTE="${FTP_REMOTE_DIR%/}"
           curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-            "ftp://${FTP_SERVER}:${PORT}/" --connect-timeout 15 --max-time 30
-
-          echo "=== dentro de public_html (ls -la style) ==="
-          curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-            "ftp://${FTP_SERVER}:${PORT}/public_html/" --connect-timeout 15 --max-time 30
+            "ftp://${FTP_SERVER}:${PORT}${REMOTE}/config/" --list-only \
+            --connect-timeout 15 --max-time 30
