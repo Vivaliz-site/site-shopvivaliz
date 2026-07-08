@@ -149,11 +149,6 @@ jobs:
       LOJA_PIX_KEY_VALUE: ${{ secrets.LOJA_PIX_KEY }}
       LOJA_PIX_NAME_VALUE: ${{ secrets.LOJA_PIX_NAME }}
       RUNTIME_AGENT_KEY_VALUE: ${{ secrets.SHOPVIVALIZ_AGENT_KEY != '' && secrets.SHOPVIVALIZ_AGENT_KEY || secrets.AGENT_KEY != '' && secrets.AGENT_KEY || secrets.WATCHDOG_AGENT_KEY != '' && secrets.WATCHDOG_AGENT_KEY || secrets.AUTONOMOUS_AGENT_KEY }}
-      MELHORENVIO_ACCESS_TOKEN_VALUE: ${{ secrets.MELHORENVIO_ACCESS_TOKEN != '' && secrets.MELHORENVIO_ACCESS_TOKEN || secrets.SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN }}
-      MELHORENVIO_FROM_POSTAL_CODE_VALUE: ${{ secrets.MELHORENVIO_FROM_POSTAL_CODE }}
-      ML_CLIENT_ID_VALUE: ${{ secrets.ML_CLIENT_ID }}
-      ML_CLIENT_SECRET_VALUE: ${{ secrets.ML_CLIENT_SECRET }}
-      ML_REDIRECT_URI_VALUE: ${{ secrets.ML_REDIRECT_URI }}
 
     steps:
       - name: Baixar o código do repositório
@@ -182,11 +177,6 @@ jobs:
               "LOJA_PIX_KEY": os.environ.get("LOJA_PIX_KEY_VALUE", ""),
               "LOJA_PIX_NAME": os.environ.get("LOJA_PIX_NAME_VALUE", ""),
               "SHOPVIVALIZ_AGENT_KEY": os.environ.get("RUNTIME_AGENT_KEY_VALUE", ""),
-              "MELHORENVIO_ACCESS_TOKEN": os.environ.get("MELHORENVIO_ACCESS_TOKEN_VALUE", ""),
-              "MELHORENVIO_FROM_POSTAL_CODE": os.environ.get("MELHORENVIO_FROM_POSTAL_CODE_VALUE", ""),
-              "ML_CLIENT_ID": os.environ.get("ML_CLIENT_ID_VALUE", ""),
-              "ML_CLIENT_SECRET": os.environ.get("ML_CLIENT_SECRET_VALUE", ""),
-              "ML_REDIRECT_URI": os.environ.get("ML_REDIRECT_URI_VALUE", ""),
           }
           for key, value in optional.items():
               if value:
@@ -199,7 +189,7 @@ jobs:
           for key, value in values.items():
               lines.append(f"    '{key}' => '{export(value)}',")
           lines.append("];")
-          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          path.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
           PY
 
       - name: Testar Conexão FTP
@@ -260,49 +250,11 @@ jobs:
             docs/**
             logs/**
             tests/**
-            storage/**
-            imports/**
-            automation/**
-            automations/**
-            artifacts/**
-            claude-backup/**
-            claude-bkp/**
             **/__pycache__/**
             **/*.pyc
             **/.env
             **/.env.*
             **/*.log
-
-      - name: Subir config/runtime-secrets.php via FTP direto
-        shell: bash
-        run: |
-          # config/runtime-secrets.php e gerado dinamicamente neste job e
-          # nunca esta rastreado pelo git, entao a FTP-Deploy-Action (que
-          # sincroniza a partir do estado do git) nunca o envia. Sobe esse
-          # arquivo especifico manualmente logo apos o sync principal.
-          PORT="${FTP_PORT_VALUE:-21}"
-          REMOTE="${FTP_REMOTE_DIR_VALUE%/}"
-
-          echo "=== conteudo local (tamanho) ==="
-          ls -la config/runtime-secrets.php
-          wc -l config/runtime-secrets.php
-
-          echo "=== URL de destino ==="
-          echo "ftp://${FTP_SERVER_VALUE}:${PORT}${REMOTE}/config/runtime-secrets.php"
-
-          echo "=== upload ==="
-          curl -v --ftp-create-dirs \
-            -T config/runtime-secrets.php \
-            "ftp://${FTP_SERVER_VALUE}:${PORT}${REMOTE}/config/runtime-secrets.php" \
-            --user "${FTP_USERNAME_VALUE}:${FTP_PASSWORD_VALUE}" \
-            --connect-timeout 15 --max-time 30 2>&1 | grep -v "^ftp://\|Authorization\|USER \|PASS " | sed "s/${FTP_PASSWORD_VALUE}/***/g"
-
-          echo "=== confirmando via listagem FTP logo em seguida ==="
-          curl -sS --user "${FTP_USERNAME_VALUE}:${FTP_PASSWORD_VALUE}" \
-            "ftp://${FTP_SERVER_VALUE}:${PORT}${REMOTE}/config/" --list-only \
-            --connect-timeout 15 --max-time 30
-
-          echo "config/runtime-secrets.php enviado"
 
       - name: Resetar OPCache do PHP publicado
         shell: bash

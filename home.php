@@ -10,50 +10,6 @@ header('X-Frame-Options: SAMEORIGIN');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Content-Type: text/html; charset=UTF-8');
 
-require_once __DIR__ . '/includes/product-price-enrich.php';
-
-/**
- * A planilha de mapeamento de imagens nao carrega preco. Cruza por sku
- * com o catalogo estatico (fallback-products.json) para trazer o preco
- * mais recente antes do enriquecimento via banco.
- */
-function home_apply_catalog_price(array $products): array
-{
-    if ($products === []) {
-        return $products;
-    }
-
-    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
-    if (!is_file($jsonPath) || !is_readable($jsonPath)) {
-        return $products;
-    }
-
-    $decoded = json_decode((string)file_get_contents($jsonPath), true);
-    if (!is_array($decoded)) {
-        return $products;
-    }
-
-    $priceBySku = [];
-    foreach ($decoded as $row) {
-        if (!is_array($row)) {
-            continue;
-        }
-        $sku = trim((string)($row['sku'] ?? ''));
-        if ($sku !== '') {
-            $priceBySku[$sku] = (float)($row['price'] ?? 0);
-        }
-    }
-
-    foreach ($products as $index => $product) {
-        $sku = trim((string)($product['sku'] ?? ''));
-        if ($sku !== '' && isset($priceBySku[$sku])) {
-            $products[$index]['price'] = $priceBySku[$sku];
-        }
-    }
-
-    return $products;
-}
-
 function home_read_mapping_products(int $limit = 8): array
 {
     $path = __DIR__ . '/uploads/olist_imagens_site_mapeamento.csv';
@@ -133,11 +89,11 @@ function home_product_tags(string $name): array
     return array_values(array_unique($tags));
 }
 
-$featuredProducts = svp_enrich_products(home_apply_catalog_price(home_read_mapping_products(8)));
+$featuredProducts = home_read_mapping_products(8);
 $metrics = [
-    'itens' => 'Selecao organizada',
-    'imagens' => 'Imagens reais',
-    'operacao' => 'Compra assistida',
+    'itens' => '198 produtos mapeados',
+    'imagens' => 'Galerias vinculadas',
+    'operacao' => 'Catalogo em consolidacao',
 ];
 $categoryLinks = [
     ['title' => 'Rodizios', 'query' => 'rodizio', 'note' => 'Modelos com gel, freio e alta carga'],
@@ -216,18 +172,18 @@ $categoryLinks = [
     </style>
 </head>
 <body>
-<?php $svNavCurrent = ''; include __DIR__ . '/includes/navbar.php'; ?>
+<?php include __DIR__ . '/includes/navbar.php'; ?>
 <main>
     <section class="hero-shell">
         <div class="container">
             <div class="hero-grid">
                 <article class="hero-card">
                     <div>
-                        <span class="hero-kicker">Loja oficial Vivaliz</span>
+                        <span class="hero-kicker">Catalogo ativo Vivaliz</span>
                         <div class="hero-copy">
-                            <h1>Produtos para casa, ferragens e utilidades com visual mais limpo no celular.</h1>
-                            <p>Explore uma vitrine direta, com imagens reais, categorias objetivas e acesso rápido aos produtos mais buscados da Vivaliz.</p>
-                            <p class="hero-support-copy">Atendimento comercial ágil para dúvidas, orçamento e apoio antes da compra.</p>
+                            <h1>Produtos reais, marca certa e vitrine com identidade.</h1>
+                            <p>A Vivaliz agora mostra um catálogo com foco em produto técnico, identidade de marca e jornada de compra clara.</p>
+                            <p class="hero-support-copy">Atendimento por WhatsApp e contato comercial rápido para dúvidas e suporte antes da compra.</p>
                         </div>
                         <div class="hero-actions">
                             <a class="hero-btn" href="/catalogo">Ver catalogo</a>
@@ -245,31 +201,31 @@ $categoryLinks = [
                 </article>
                 <aside class="hero-side">
                     <article class="mini-banner">
-                        <strong>Categorias em destaque</strong>
-                        <h2>Rodízios, ferragens e utilidades para casa em uma navegação mais clara.</h2>
-                        <p>Os principais blocos da vitrine priorizam imagens reais, leitura rápida e acesso direto aos produtos.</p>
+                        <strong>Linhas com mais demanda</strong>
+                        <h2>Rodizios, ferragens e itens de casa com imagem vinculada.</h2>
+                        <p>Os melhores blocos para tracao inicial do site estao sendo puxados da mesma base que mapeia imagens reais para a operacao.</p>
                         <a href="/catalogo?q=rodizio">Explorar rodizios</a>
                     </article>
                     <article class="mini-banner">
-                        <strong>Compra assistida</strong>
-                        <h2>Atendimento rápido para escolher, comprar e acompanhar o pedido.</h2>
-                        <p>Quando precisar de ajuda com compatibilidade, prazo ou quantidade, a equipe comercial responde direto pelos canais da loja.</p>
+                        <strong>Operacao comercial</strong>
+                        <h2>Menos tema fake. Mais pagina pronta para venda.</h2>
+                        <p>O foco é consolidar a vitrine e a jornada de compra para deixar o site pronto para pedidos e posicionamento comercial.</p>
                         <a href="/sobre">Ver posicionamento da marca</a>
                     </article>
                 </aside>
             </div>
             <div class="value-strip">
                 <div>
-                    <strong>Identidade mais consistente</strong>
-                    <p>Logo, cores e blocos principais seguem a linguagem visual da Vivaliz em toda a vitrine.</p>
+                    <strong>Logo oficial aplicado</strong>
+                    <p>A home agora usa o arquivo de identidade da Vivaliz em vez de um simbolo improvisado.</p>
                 </div>
                 <div>
-                    <strong>Categorias mais objetivas</strong>
-                    <p>Os atalhos da home direcionam para linhas de produto que fazem sentido no catálogo atual.</p>
+                    <strong>Categorias com contexto</strong>
+                    <p>As entradas da vitrine deixam de simular moda e passam a refletir linhas reais mais proximas do catalogo atual.</p>
                 </div>
                 <div>
-                    <strong>Destaques com imagens reais</strong>
-                    <p>Os cards principais usam produtos da base atual da loja para evitar visual genérico.</p>
+                    <strong>Destaques vindos do mapeamento</strong>
+                    <p>Os cards principais usam nomes e imagens reais da base local de upload, evitando conteúdo genérico e test data.</p>
                 </div>
             </div>
         </div>
@@ -279,7 +235,7 @@ $categoryLinks = [
             <div class="section-head">
                 <div>
                     <h2>Categorias em foco</h2>
-                    <p>Atalhos pensados para facilitar a navegação e reduzir o caminho até o produto certo.</p>
+                    <p>Atalhos orientados para as linhas que fazem sentido no catalogo atual, usando busca direta no acervo de produtos.</p>
                 </div>
                 <a href="/catalogo">Abrir todo o catalogo</a>
             </div>
@@ -299,7 +255,7 @@ $categoryLinks = [
             <div class="section-head">
                 <div>
                     <h2>Produtos em destaque</h2>
-                    <p>Seleção inicial com nomes, imagens e preços alinhados ao catálogo atual da loja.</p>
+                    <p>Selecao inicial com imagem principal vinculada no site e nomes reais vindos do mapeamento local de produtos.</p>
                 </div>
                 <a href="/catalogo">Ver todos</a>
             </div>
@@ -327,7 +283,7 @@ $categoryLinks = [
                     <?php endforeach; ?>
                 </div>
             <?php else: ?>
-                <div class="empty-products">Novos destaques estarão disponíveis aqui em breve.</div>
+                <div class="empty-products">O mapeamento local ainda nao retornou produtos em destaque.</div>
             <?php endif; ?>
         </div>
     </section>
@@ -336,7 +292,7 @@ $categoryLinks = [
     <div class="container footer-grid">
         <div>
             <img src="/images/logo-vivaliz.png" alt="Vivaliz" style="height:42px;width:auto;margin-bottom:12px;" onerror="this.src='/images/logo.svg'">
-            <p>Vitrine digital da Vivaliz com foco em navegação clara, apresentação profissional e apoio à compra.</p>
+            <p>Vitrine digital da Vivaliz em consolidacao, com foco em navegacao, catalogo e consistencia visual para venda online.</p>
         </div>
         <div>
             <h3>Navegacao</h3>

@@ -5,32 +5,8 @@
  * Acesse /admin/squad-chat.php em vez de /admin/squad-chat.html.
  */
 declare(strict_types=1);
+require_once dirname(__DIR__) . '/config/bootstrap-env.php';
 
-function squad_admin_env_load(string $path): void
-{
-    if (!is_file($path) || !is_readable($path)) {
-        return;
-    }
-    $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    if (!is_array($lines)) {
-        return;
-    }
-    foreach ($lines as $line) {
-        $line = trim($line);
-        if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
-            continue;
-        }
-        [$key, $value] = explode('=', $line, 2);
-        $key   = trim($key);
-        $value = trim(trim($value), "\"'");
-        if ($key !== '' && getenv($key) === false) {
-            putenv($key . '=' . $value);
-            $_ENV[$key] = $value;
-        }
-    }
-}
-
-squad_admin_env_load(dirname(__DIR__) . '/.env');
 $serverToken = getenv('SQUAD_TOKEN') ?: '';
 
 header('Content-Type: text/html; charset=utf-8');
