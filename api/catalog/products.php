@@ -106,6 +106,19 @@ function svcat_get(array $row, array $keys, string $default = ''): string
 
 function svcat_env_value(string $key): string
 {
+    svcat_env_load();
+
+    $runtimeSecrets = svcat_root() . '/config/runtime-secrets.php';
+    if (is_file($runtimeSecrets) && is_readable($runtimeSecrets)) {
+        $secrets = require $runtimeSecrets;
+        if (is_array($secrets) && isset($secrets[$key]) && is_scalar($secrets[$key])) {
+            $value = trim((string)$secrets[$key]);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+    }
+
     $envFile = svcat_root() . '/.env';
     if (is_file($envFile)) {
         foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
@@ -115,6 +128,18 @@ function svcat_env_value(string $key): string
             if (trim($k) === $key) return trim(trim($v), "\"'");
         }
     }
+
+    $tokensFile = svcat_root() . '/storage/private/tokens.json';
+    if (is_file($tokensFile) && is_readable($tokensFile)) {
+        $tokens = json_decode((string)file_get_contents($tokensFile), true);
+        if (is_array($tokens) && isset($tokens[$key]) && is_scalar($tokens[$key])) {
+            $value = trim((string)$tokens[$key]);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+    }
+
     return (string)getenv($key);
 }
 

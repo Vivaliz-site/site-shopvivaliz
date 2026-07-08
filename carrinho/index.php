@@ -37,6 +37,11 @@ header('Content-Type: text/html; charset=UTF-8');
         .summary-panel h2 { color:var(--navy); margin-bottom:16px; }
         .summary-row { display:flex; justify-content:space-between; gap:16px; padding:10px 0; color:#475569; border-bottom:1px solid #eef2f7; }
         .summary-total { font-size:22px; color:#0f172a; font-weight:700; padding-top:18px; border-bottom:none; }
+        .shipping-box { margin-top:16px; padding-top:16px; border-top:1px solid #eef2f7; display:grid; gap:10px; }
+        .shipping-box label { font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.04em; }
+        .shipping-inline { display:flex; gap:8px; }
+        .shipping-input { flex:1; padding:12px 14px; border:1px solid #cbd5e1; border-radius:10px; font:inherit; }
+        .shipping-status { font-size:13px; color:#64748b; line-height:1.5; min-height:20px; }
         .summary-actions { display:grid; gap:12px; margin-top:22px; }
         .empty-state { padding:48px 24px; text-align:center; color:#64748b; }
         .empty-state h2 { color:var(--navy); margin-bottom:10px; }
@@ -68,6 +73,7 @@ header('Content-Type: text/html; charset=UTF-8');
 (function () {
     const root = document.getElementById('cart-root');
     const toast = document.getElementById('cart-toast');
+    const initialShippingQuote = readShippingQuote();
 
     function money(value) {
         const n = Number(value || 0);
@@ -90,7 +96,47 @@ header('Content-Type: text/html; charset=UTF-8');
 
     function writeCart(items) {
         localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+        clearShippingQuote();
+        clearShippingFeedback();
         render();
+    }
+
+    function readShippingQuote() {
+        try {
+            const value = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
+            return value && typeof value === 'object' ? value : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function saveShippingQuote(quote) {
+        localStorage.setItem('shopvivaliz_shipping_quote', JSON.stringify(quote || null));
+    }
+
+    function clearShippingQuote() {
+        localStorage.removeItem('shopvivaliz_shipping_quote');
+    }
+
+    function readShippingFeedback() {
+        try {
+            return String(localStorage.getItem('shopvivaliz_shipping_feedback') || '');
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function saveShippingFeedback(message) {
+        localStorage.setItem('shopvivaliz_shipping_feedback', String(message || ''));
+    }
+
+    function clearShippingFeedback() {
+        localStorage.removeItem('shopvivaliz_shipping_feedback');
+    }
+
+    function formatCep(value) {
+        const digits = String(value || '').replace(/\D/g, '').slice(0, 8);
+        return digits.length > 5 ? digits.slice(0, 5) + '-' + digits.slice(5) : digits;
     }
 
     function render() {
@@ -100,13 +146,19 @@ header('Content-Type: text/html; charset=UTF-8');
             return;
         }
         const subtotal = items.reduce(function (s, i) { return s + Number(i.price || 0) * Number(i.quantity || 1); }, 0);
+        const shippingQuote = readShippingQuote();
+        const shippingFeedback = readShippingFeedback();
+        const shippingTotal = Number(shippingQuote && shippingQuote.shipping_total || 0);
+        const shippingLabel = shippingQuote && shippingQuote.selected_option
+            ? [shippingQuote.selected_option.company, shippingQuote.selected_option.name].filter(Boolean).join(' - ')
+            : '';
         root.innerHTML = '<div class="cart-layout"><section class="cart-panel"><table class="cart-table"><thead><tr><th>Produto</th><th>Preço</th><th>Qtd</th><th>Subtotal</th><th></th></tr></thead><tbody>' +
             items.map(function (item, idx) {
                 const img = item.image_url || item.image || '/images/logo-vivaliz-square.png';
                 const qty = Math.max(1, Number(item.quantity || 1));
                 return '<tr><td data-label="Produto"><div class="item-line"><img class="item-thumb" src="' + img + '" alt="' + (item.name || 'Produto') + '" onerror="this.src=\'/images/logo-vivaliz-square.png\'"><div><div class="item-title">' + (item.name || 'Produto Vivaliz') + '</div><div class="item-sku">' + (item.sku || '') + '</div></div></div></td><td data-label="Preço">' + money(item.price) + '</td><td data-label="Qtd"><input class="qty-input" type="number" min="1" value="' + qty + '" data-index="' + idx + '" data-role="quantity"></td><td data-label="Subtotal">' + money(Number(item.price || 0) * qty) + '</td><td><button class="remove-btn" data-index="' + idx + '" data-role="remove">✕</button></td></tr>';
             }).join('') +
-            '</tbody></table></section><aside class="summary-panel"><h2>Resumo</h2><div class="summary-row"><span>Itens</span><strong>' + items.reduce(function (s, i) { return s + Number(i.quantity || 1); }, 0) + '</strong></div><div class="summary-row"><span>Subtotal</span><strong>' + money(subtotal) + '</strong></div><div class="summary-row"><span>Frete</span><strong>A calcular</strong></div><div class="summary-row summary-total"><span>Total</span><span>' + money(subtotal) + '</span></div><div class="summary-actions"><a class="primary-btn" href="/checkout">Ir para o checkout</a><a class="ghost-btn" href="/catalogo">Continuar comprando</a></div></aside></div>';
+            '</tbody></table></section><aside class="summary-panel"><h2>Resumo</h2><div class="summary-row"><span>Itens</span><strong>' + items.reduce(function (s, i) { return s + Number(i.quantity || 1); }, 0) + '</strong></div><div class="summary-row"><span>Subtotal</span><strong>' + money(subtotal) + '</strong></div><div class="summary-row"><span>Frete</span><strong>' + (shippingTotal > 0 ? money(shippingTotal) : 'A calcular') + '</strong></div><div class="summary-row summary-total"><span>Total</span><span>' + money(subtotal + shippingTotal) + '</span></div><div class="shipping-box"><label for="shipping-cep">Calcular frete</label><div class="shipping-inline"><input class="shipping-input" id="shipping-cep" type="text" inputmode="numeric" maxlength="9" placeholder="Digite o CEP" value="' + formatCep(shippingQuote && shippingQuote.cep || '') + '"><button class="ghost-btn" type="button" id="shipping-calc">Calcular</button></div><div class="shipping-status" id="shipping-status">' + (shippingLabel ? 'Opcao atual: ' + shippingLabel : (shippingFeedback || 'Informe o CEP para calcular o frete.')) + '</div></div><div class="summary-actions"><a class="primary-btn" href="/checkout">Ir para o checkout</a><a class="ghost-btn" href="/catalogo">Continuar comprando</a></div></aside></div>';
 
         root.querySelectorAll('[data-role="quantity"]').forEach(function (input) {
             input.addEventListener('change', function () {
@@ -128,6 +180,73 @@ header('Content-Type: text/html; charset=UTF-8');
                 showToast('Item removido.');
             });
         });
+
+        const shippingCep = document.getElementById('shipping-cep');
+        const shippingCalc = document.getElementById('shipping-calc');
+        const shippingStatus = document.getElementById('shipping-status');
+        if (shippingCep) {
+            shippingCep.addEventListener('input', function () {
+                shippingCep.value = formatCep(shippingCep.value);
+            });
+        }
+        if (shippingCalc && shippingCep) {
+            shippingCalc.addEventListener('click', function () {
+                const cep = String(shippingCep.value || '').replace(/\D/g, '');
+                if (cep.length !== 8) {
+                    if (shippingStatus) shippingStatus.textContent = 'Informe um CEP valido com 8 digitos.';
+                    return;
+                }
+
+                shippingCalc.setAttribute('disabled', 'disabled');
+                shippingCalc.textContent = 'Calculando...';
+                if (shippingStatus) shippingStatus.textContent = 'Consultando frete...';
+
+                fetch('/api/melhorenvio/shipping-check.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cep: cep,
+                        items: items.map(function (item) {
+                            return {
+                                sku: item.sku || '',
+                                product_id: item.id || '',
+                                olist_product_id: item.olist_product_id || '',
+                                quantity: item.quantity || 1,
+                                price: Number(item.price || 0)
+                            };
+                        })
+                    })
+                })
+                .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+                .then(function (result) {
+                    shippingCalc.removeAttribute('disabled');
+                    shippingCalc.textContent = 'Calcular';
+
+                    if (!result.ok || !result.data || !result.data.ok || !result.data.selected_option) {
+                        clearShippingQuote();
+                        saveShippingFeedback(result.data && (result.data.message || result.data.error) ? String(result.data.message || result.data.error) : 'Nao foi possivel calcular o frete agora.');
+                        render();
+                        return;
+                    }
+
+                    saveShippingQuote({
+                        cep: cep,
+                        shipping_total: Number(result.data.shipping_total || 0),
+                        selected_option: result.data.selected_option || null,
+                        provider: result.data.provider || 'melhorenvio'
+                    });
+                    clearShippingFeedback();
+                    render();
+                    showToast('Frete atualizado.');
+                })
+                .catch(function () {
+                    shippingCalc.removeAttribute('disabled');
+                    shippingCalc.textContent = 'Calcular';
+                    saveShippingFeedback('Erro ao consultar o frete.');
+                    render();
+                });
+            });
+        }
     }
 
     render();
