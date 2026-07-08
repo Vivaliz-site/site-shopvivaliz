@@ -207,7 +207,7 @@ if ($token === '') {
     ]);
 }
 
-$result = svsc_post_json('https://www.melhorenvio.com.br/api/v2/me/shipment/calculate', $payload, $token);
+$result = svsc_post_json(me_api_base() . '/api/v2/me/shipment/calculate', $payload, $token);
 $options = [];
 foreach ((array)($result['body'] ?? []) as $option) {
     if (!is_array($option) || !empty($option['error'])) {

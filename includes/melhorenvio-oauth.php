@@ -67,13 +67,31 @@ function me_exchange_code(string $code): array {
     $clientSecret = me_oauth_env('MELHORENVIO_CLIENT_SECRET');
     $redirectUri = me_oauth_env('MELHORENVIO_REDIRECT_URI') ?: 'https://dev.shopvivaliz.com.br/api/melhorenvio/webhook.php';
 
-    return me_oauth_post('https://www.melhorenvio.com.br/oauth/token', [
+    $fields = [
         'grant_type' => 'authorization_code',
         'client_id' => $clientId,
         'client_secret' => $clientSecret,
         'redirect_uri' => $redirectUri,
         'code' => $code,
-    ]);
+    ];
+
+    $result = me_oauth_post('https://www.melhorenvio.com.br/oauth/token', $fields);
+    if (!empty($result['access_token'])) {
+        $result['_token_host'] = 'production';
+        return $result;
+    }
+
+    // App registrado na area de desenvolvimento (app.melhorenvio.com.br/integracoes/area-dev)
+    // usa o endpoint de sandbox, nao o de producao.
+    if (($result['error'] ?? '') === 'invalid_client') {
+        $sandboxResult = me_oauth_post('https://sandbox.melhorenvio.com.br/oauth/token', $fields);
+        if (!empty($sandboxResult['access_token'])) {
+            $sandboxResult['_token_host'] = 'sandbox';
+            return $sandboxResult;
+        }
+    }
+
+    return $result;
 }
 
 function me_refresh_if_needed(): ?array {
@@ -88,12 +106,16 @@ function me_refresh_if_needed(): ?array {
     $refresh = $tokens['refresh_token'] ?? '';
     if ($refresh === '') return $tokens;
 
-    $resp = me_oauth_post('https://www.melhorenvio.com.br/oauth/token', [
+    $refreshFields = [
         'grant_type' => 'refresh_token',
         'client_id' => me_oauth_env('MELHORENVIO_CLIENT_ID'),
         'client_secret' => me_oauth_env('MELHORENVIO_CLIENT_SECRET'),
         'refresh_token' => $refresh,
-    ]);
+    ];
+    $tokenHost = str_contains((string)($tokens['_token_host'] ?? ''), 'sandbox')
+        ? 'https://sandbox.melhorenvio.com.br/oauth/token'
+        : 'https://www.melhorenvio.com.br/oauth/token';
+    $resp = me_oauth_post($tokenHost, $refreshFields);
 
     if (!isset($resp['access_token'])) {
         return $tokens; // refresh falhou, mantem o que tinha
@@ -143,4 +165,11 @@ function me_current_access_token(): ?string {
         return (string)$tokens['access_token'];
     }
     return null;
+}
+
+/** Host base da API (sandbox ou producao) conforme onde o token atual foi emitido. */
+function me_api_base(): string {
+    $tokens = me_read_tokens();
+    $host = (string)($tokens['_token_host'] ?? 'production');
+    return $host === 'sandbox' ? 'https://sandbox.melhorenvio.com.br' : 'https://www.melhorenvio.com.br';
 }
