@@ -210,24 +210,32 @@ header('Content-Type: text/html; charset=UTF-8');
 
     render();
 
-    var freteTotal = 0;
-    var freteCalculated = false;
+var freteTotal = 0;
+var freteCalculated = false;
 
-    function updateTotalsWithFrete() {
-        var items = getCart();
-        var subtotal = items.reduce(function(a, i){ return a + (parseFloat(i.price) || 0) * (i.quantity || 1); }, 0);
-        var totalEl = document.getElementById('cart-total');
-        if (!totalEl) return;
-        if (freteCalculated && subtotal > 0) {
-            totalEl.textContent = fmtMoney(subtotal + freteTotal);
-        }
+function updateTotalsWithFrete() {
+    var items = getCart();
+    var subtotal = items.reduce(function(a, i){ return a + (parseFloat(i.price) || 0) * (i.quantity || 1); }, 0);
+    var totalEl = document.getElementById('cart-total');
+    if (!totalEl) return;
+    if (freteCalculated && subtotal > 0) {
+        totalEl.textContent = fmtMoney(subtotal + freteTotal);
     }
+}
 
-    var btnFrete = document.getElementById('btn-frete');
-    var cepInput = document.getElementById('frete-cep');
-    var freteEl = document.getElementById('cart-frete');
-    var freteStatusEl = document.getElementById('frete-status');
+var btnFrete = document.getElementById('btn-frete');
+var cepInput = document.getElementById('frete-cep');
+var freteEl = document.getElementById('cart-frete');
+var freteStatusEl = document.getElementById('frete-status');
 
+var storedQuote = getShippingQuote();
+if (storedQuote && Number(storedQuote.total || 0) > 0) {
+    freteTotal = Number(storedQuote.total || 0);
+    freteCalculated = true;
+    if (cepInput && storedQuote.label) cepInput.value = storedQuote.label;
+    if (freteEl) freteEl.textContent = fmtMoney(freteTotal);
+    updateTotalsWithFrete();
+}
     if (cepInput) {
         cepInput.addEventListener('input', function () {
             var digits = cepInput.value.replace(/\D/g, '').slice(0, 8);
