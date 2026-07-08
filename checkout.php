@@ -343,9 +343,9 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
             var totalFmt = fmtMoney(total);
             var name = fd.get('customer_name') || '';
             var phone = (fd.get('customer_phone')||'').replace(/\D/g,'');
-            var wppMsg = encodeURIComponent('Olá! Acabei de fazer um pedido na Vivaliz.\nNº: ' + d.order_number + '\nNome: ' + name + '\nTotal: ' + (total > 0 ? totalFmt : 'Consultar') + '\nFavor confirmar frete e pagamento.');
-            var wppLink = 'https://wa.me/' + WPP_NUM + '?text=' + wppMsg;
-
+var wppMsg = encodeURIComponent('Olá! Acabei de fazer um pedido na Vivaliz.\nNº: ' + d.order_number + '\nNome: ' + name + '\nTotal: ' + (total > 0 ? totalFmt : 'Consultar') + '\nFavor confirmar frete e pagamento.');
+var wppNumber = String(WPP_NUM || '').replace(/\D/g, '');
+var wppLink = wppNumber ? ('https://wa.me/' + wppNumber + '?text=' + wppMsg) : '/contato';
             clearCart();
             clearShippingQuote();
             renderCart();
