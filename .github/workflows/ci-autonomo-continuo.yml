@@ -398,6 +398,6 @@ jobs:
             echo "::error::CI falhou - revise os erros acima"
             exit 1
           else
-            echo "✓ CI passou com sucesso!"
-            exit 0
+           echo "✓ CI passou com sucesso!"
+           exit 0
           fi
