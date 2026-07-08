@@ -2,74 +2,122 @@ name: CI AUTONOMO CONTINUO
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
   schedule:
-    - cron: "0 * * * *"
+    - cron: "0 */4 * * *"
 
 permissions:
   contents: read
+  checks: write
 
 jobs:
-  validation:
+  setup:
+    name: Setup CI
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      has_php: ${{ steps.check-tools.outputs.has_php }}
+      has_python: ${{ steps.check-tools.outputs.has_python }}
+      php_version: ${{ steps.check-tools.outputs.php_version }}
+      python_version: ${{ steps.check-tools.outputs.python_version }}
+
+    steps:
+      - name: Detectar Ferramentas Disponíveis
+        id: check-tools
+        shell: bash
+        run: |
+          echo "Verificando ferramentas disponíveis..."
+          
+          if command -v php &> /dev/null; then
+            PHP_VERSION=$(php -v | head -n1)
+            echo "has_php=true" >> "$GITHUB_OUTPUT"
+            echo "php_version=$PHP_VERSION" >> "$GITHUB_OUTPUT"
+            echo "✓ PHP: $PHP_VERSION"
+          else
+            echo "has_php=false" >> "$GITHUB_OUTPUT"
+            echo "⚠ PHP não disponível"
+          fi
+          
+          if command -v python3 &> /dev/null; then
+            PYTHON_VERSION=$(python3 --version)
+            echo "has_python=true" >> "$GITHUB_OUTPUT"
+            echo "python_version=$PYTHON_VERSION" >> "$GITHUB_OUTPUT"
+            echo "✓ Python: $PYTHON_VERSION"
+          else
+            echo "has_python=false" >> "$GITHUB_OUTPUT"
+            echo "⚠ Python3 não disponível"
+          fi
+          
+          if command -v yamllint &> /dev/null; then
+            echo "✓ yamllint disponível"
+          else
+            echo "⚠ yamllint não disponível"
+          fi
+
+  checkout:
+    name: Checkout Código
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+  git-conflicts:
+    name: Detectar Conflitos Git
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
+    needs: checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Validate PHP syntax
+      - name: Procurar Marcadores de Conflito
         shell: bash
         run: |
-          if find . \( -path './vendor' -o -path './.git' -o -path './node_modules' -o -path './medusa' \) -prune -o -name '*.php' -print | grep -q .; then
-            find . \( -path './vendor' -o -path './.git' -o -path './node_modules' -o -path './medusa' \) -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
+          echo "Procurando marcadores de conflito Git..."
+          echo ""
+          
+          CONFLICT_MARKERS=$(git grep -n '^<<<<<<<\|^=======$\|^>>>>>>>' -- '*.php' '*.py' '*.js' '*.ts' '*.yml' '*.yaml' '*.json' '*.md' || true)
+          
+          if [ -z "$CONFLICT_MARKERS" ]; then
+            echo "✓ Nenhum conflito Git encontrado"
           else
-            echo "No PHP files found."
+            echo "::error::Conflitos Git detectados:"
+            echo "$CONFLICT_MARKERS" | sed 's/^/  /'
+            exit 1
           fi
 
-      - name: Validate Python syntax
+  yaml-validation:
+    name: Validar YAML
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
+    needs: checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar Workflows YAML
         shell: bash
         run: |
-          python - <<'PY'
-          import pathlib
-          import py_compile
-          import sys
+          echo "Validando YAML..."
 
-          root = pathlib.Path('.')
-          files = [
-              path
-              for path in root.rglob('*.py')
-              if '.git' not in path.parts and '.venv' not in path.parts and path.name != 'olist-sync-manual.py'
-          ]
+          for yaml_file in .github/workflows/*.yml .github/workflows/*.yaml; do
+            [ -f "$yaml_file" ] || continue
 
-          if not files:
-              print('No Python files found.')
-              sys.exit(0)
+            echo "Validando $yaml_file"
 
-          for path in files:
-              py_compile.compile(str(path), doraise=True)
+            python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" "$yaml_file" || exit 1
+          done
 
-<<<<<<< HEAD
-          print(f'Validated {len(files)} Python files.')
-          PY
-=======
   php-syntax:
     name: Validar Sintaxe PHP
     needs: setup
-    if: needs.setup.outputs.has_php == 'true'
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' && needs.setup.outputs.has_php == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -115,7 +163,7 @@ jobs:
   python-syntax:
     name: Validar Sintaxe Python
     needs: setup
-    if: needs.setup.outputs.has_python == 'true'
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' && needs.setup.outputs.has_python == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -160,6 +208,7 @@ jobs:
 
   security-scan:
     name: Verificação de Segurança
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     needs: checkout
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -230,6 +279,7 @@ jobs:
 
   endpoints-check:
     name: Verificar Endpoints Críticos
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     needs: checkout
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -270,6 +320,7 @@ jobs:
 
   dependency-check:
     name: Verificar Dependências
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -308,7 +359,7 @@ jobs:
   summary:
     name: Resumo CI
     needs: [git-conflicts, yaml-validation, php-syntax, python-syntax, security-scan, endpoints-check, dependency-check]
-    if: always()
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' && always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -350,4 +401,3 @@ jobs:
             echo "✓ CI passou com sucesso!"
             exit 0
           fi
->>>>>>> 5a1ff9e46242115f5a82a1f745476f1fbf685d5d

@@ -174,6 +174,8 @@ foreach ($items as $item) {
     }
     $products[] = [
         'id' => $product['id'],
+        'sku' => $product['sku'],
+        'name' => $product['name'],
         'width' => $product['width'],
         'height' => $product['height'],
         'length' => $product['length'],
@@ -183,7 +185,8 @@ foreach ($items as $item) {
     ];
 }
 
-$token = svsc_env(
+require_once dirname(__DIR__, 2) . '/includes/melhorenvio-oauth.php';
+$token = me_current_access_token() ?: svsc_env(
     'MELHORENVIO_ACCESS_TOKEN',
     'SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN',
     'MELHORENVIO_API_KEY',
@@ -206,7 +209,7 @@ if ($token === '') {
     ]);
 }
 
-$result = svsc_post_json('https://www.melhorenvio.com.br/api/v2/me/shipment/calculate', $payload, $token);
+$result = svsc_post_json(me_api_base() . '/api/v2/me/shipment/calculate', $payload, $token);
 $options = [];
 foreach ((array)($result['body'] ?? []) as $option) {
     if (!is_array($option) || !empty($option['error'])) {

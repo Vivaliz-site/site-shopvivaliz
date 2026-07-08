@@ -1,15 +1,10 @@
 name: Deploy Automático Seguro - Shop Vivaliz
 
+# Desativado o gatilho automatico em push: a producao real e a VM Oracle
+# (dev.shopvivaliz.com.br -> 137.131.156.17, sincronizada via cron
+# git-auto-sync.py), nao o HostGator. Mantido workflow_dispatch para
+# rodar manualmente se o HostGator voltar a ser usado no futuro.
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - 'automation/**'
-      - '**/*.md'
-      - '.github/**'
-      - '.claude/**'
-      - '.codex/**'
   workflow_dispatch:
 
 permissions:
@@ -22,6 +17,7 @@ concurrency:
 jobs:
   validate-secrets:
     name: Validar Secrets Obrigatórios
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -126,7 +122,7 @@ jobs:
   web-deploy:
     name: Sincronizar com a HostGator Dev
     needs: validate-secrets
-    if: needs.validate-secrets.outputs.secrets_valid == 'true'
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' && needs.validate-secrets.outputs.secrets_valid == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:

@@ -1,0 +1,27 @@
+{
+    "order_number": "SV20260707160509129",
+    "status": "pending_confirmation",
+    "customer": {
+        "name": "Teste V2 Local",
+        "email": "teste-v2-local@example.com",
+        "phone": "(11) 93333-9999",
+        "cep": "35500025",
+        "address": "Rua Local, 1, Centro, Divinopolis/MG"
+    },
+    "items": [
+        {
+            "sku": "SKU-V2",
+            "name": "Produto V2",
+            "quantity": 1,
+            "price": 10.5,
+            "olist_product_id": "1"
+        }
+    ],
+    "total": 10.5,
+    "payment_method": "boleto",
+    "payment_label": "Boleto bancario",
+    "notes": "Teste local do endpoint v2",
+    "created_at": "2026-07-07T16:05:09+00:00",
+    "source": "site_checkout",
+    "tiny_push": "missing_credentials"
+}
