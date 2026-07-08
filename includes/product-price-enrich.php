@@ -48,11 +48,11 @@ function svp_db(): ?mysqli
         require_once $constants;
     }
 
-    $host = defined('DB_HOST') ? DB_HOST : (getenv('DB_HOST') ?: 'localhost');
-    $port = (int)(defined('DB_PORT') ? DB_PORT : (getenv('DB_PORT') ?: 3306));
-    $name = defined('DB_NAME') ? DB_NAME : (getenv('DB_NAME') ?: '');
-    $user = defined('DB_USER') ? DB_USER : (getenv('DB_USER') ?: '');
-    $pass = defined('DB_PASS') ? DB_PASS : (getenv('DB_PASS') ?: '');
+$host = getenv('DB_HOST') ?: (defined('DB_HOST') ? DB_HOST : 'localhost');
+$port = (int)(getenv('DB_PORT') ?: (defined('DB_PORT') ? DB_PORT : 3306));
+$name = getenv('DB_NAME') ?: (defined('DB_NAME') ? DB_NAME : '');
+$user = getenv('DB_USER') ?: (defined('DB_USER') ? DB_USER : '');
+$pass = getenv('DB_PASS') ?: (defined('DB_PASS') ? DB_PASS : '');
     if ($name === '' || $user === '') {
         return null;
     }
