@@ -1,9 +1,39 @@
-name: PAUSADO - Sync Olist 6h
-# Desabilitado 2026-07-03: quota GitHub Actions esgotada
+name: Sincronizar Olist (a cada 6 horas)
+
 on:
+  schedule:
+    # A cada 6 horas: 00:00, 06:00, 12:00, 18:00 UTC
+    - cron: '0 0,6,12,18 * * *'
   workflow_dispatch:
+
 jobs:
-  pausado:
+  sync-olist:
     runs-on: ubuntu-latest
+
     steps:
-      - run: echo "Workflow pausado para economizar quota Actions."
+      - uses: actions/checkout@v3
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+
+      - name: Sincronizar com Olist
+        env:
+          OLIST_CLIENT_ID: ${{ secrets.OLIST_CLIENT_ID }}
+          OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
+          TINY_TOKEN: ${{ secrets.TINY_TOKEN }}
+          MEDUSA_BACKEND_URL: ${{ secrets.MEDUSA_BACKEND_URL }}
+        run: |
+          php claude/api/sync-olist-products.php
+
+      - name: Fazer commit de produtos sincronizados
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "Autonomous Sync"
+
+          if [[ -n $(git status -s) ]]; then
+            git add -A
+            git commit -m "chore: sincronizar produtos com Olist (automático)"
+            git push
+          fi
