@@ -174,6 +174,8 @@ foreach ($items as $item) {
     }
     $products[] = [
         'id' => $product['id'],
+        'sku' => $product['sku'],
+        'name' => $product['name'],
         'width' => $product['width'],
         'height' => $product['height'],
         'length' => $product['length'],
