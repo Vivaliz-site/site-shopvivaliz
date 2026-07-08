@@ -7,8 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  debug-ftp:
-    name: Diagnosticar caminho FTP real
+  debug-public-html:
+    name: Investigar public_html
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -18,26 +18,19 @@ jobs:
       FTP_PORT: ${{ secrets.FTP_PORT }}
       FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
     steps:
-      - name: Listar raiz FTP e diretorio configurado
+      - name: Investigar public_html e conteudo real servido
         shell: bash
         run: |
           PORT="${FTP_PORT:-21}"
-          echo "=== FTP_REMOTE_DIR (tamanho e repr) ==="
-          echo -n "$FTP_REMOTE_DIR" | wc -c
-          echo -n "$FTP_REMOTE_DIR" | od -c | head -3
 
-          echo "=== listagem da raiz FTP (login home) ==="
+          echo "=== listagem de FTP_REMOTE_DIR/public_html/ ==="
           curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-            "ftp://${FTP_SERVER}:${PORT}/" --list-only --connect-timeout 15 --max-time 30 || echo "FALHOU listagem raiz"
+            "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/public_html/" --list-only --connect-timeout 15 --max-time 30 || echo "FALHOU listagem public_html"
 
-          echo "=== listagem de FTP_REMOTE_DIR ==="
+          echo "=== catalogo.php dentro de public_html (tamanho) ==="
           curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-            "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/" --list-only --connect-timeout 15 --max-time 30 || echo "FALHOU listagem FTP_REMOTE_DIR"
+            "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/public_html/catalogo.php" -o /dev/null -w "size=%{size_download} http_code=%{http_code}\n" --connect-timeout 15 --max-time 30 || echo "nao existe ou falhou"
 
-          echo "=== verificando se index.php/catalogo.php estao onde esperado ==="
+          echo "=== api/gamification dentro de public_html ==="
           curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-            "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/catalogo.php" -o /dev/null -w "catalogo.php remoto: %{size_download} bytes, http_code=%{http_code}\n" --connect-timeout 15 --max-time 30 || echo "FALHOU check catalogo.php"
-
-          echo "=== checando api/gamification/ que subi ==="
-          curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-            "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/api/gamification/" --list-only --connect-timeout 15 --max-time 30 || echo "FALHOU listagem api/gamification"
+            "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/public_html/api/gamification/" --list-only --connect-timeout 15 --max-time 30 || echo "nao existe ou falhou"
