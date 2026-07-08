@@ -7,6 +7,26 @@
 header('Content-Type: application/json; charset=utf-8');
 set_time_limit(900);
 
+// .env nao e carregado automaticamente pelo Apache -- outros endpoints do
+// projeto (ex: includes/melhorenvio-oauth.php) fazem esse parse manual.
+function olist_cb_env_load(): void {
+    static $loaded = false;
+    if ($loaded) return;
+    $loaded = true;
+    $constants = __DIR__ . '/../config/constants.php';
+    if (is_file($constants)) require_once $constants;
+    $envFile = __DIR__ . '/../.env';
+    if (!is_file($envFile)) return;
+    foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
+        [$k, $v] = explode('=', $line, 2);
+        $k = trim($k); $v = trim(trim($v), "\"'");
+        if ($k !== '' && getenv($k) === false) { putenv("$k=$v"); $_ENV[$k] = $v; }
+    }
+}
+olist_cb_env_load();
+
 $code = $_GET['code'] ?? null;
 $error = $_GET['error'] ?? null;
 
