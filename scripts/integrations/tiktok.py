@@ -4,17 +4,24 @@ Integração TikTok Shop - Atualizar produtos automaticamente
 """
 
 import os
+import sys
 import json
 import requests
 import argparse
-from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.tiktok_client import TikTokClient  # noqa: E402
+
 
 class TikTokIntegration:
     def __init__(self):
-        self.access_token = os.getenv('TIKTOK_ACCESS_TOKEN', '')
-        self.shop_id = os.getenv('TIKTOK_SHOP_ID', '')
-        self.api_base = os.getenv('TIKTOK_API_BASE_URL', 'https://open-api.tiktokglobalshop.com')
         self.products_api_url = os.getenv('SHOPVIVALIZ_PRODUCTS_API_URL', '')
+        try:
+            self._client = TikTokClient()
+        except KeyError as exc:
+            self._client = None
+            self._missing_env = str(exc).strip("'\"")
 
     def update_all_products(self):
         """Atualiza todos os produtos automaticamente"""
@@ -108,51 +115,37 @@ class TikTokIntegration:
             return []
 
     def _update_product_title(self, product_id, title):
-        """Atualiza titulo do produto via API. Levanta excecao em falha real
-        (nao mascara erro como sucesso) -- o chamador conta falhas."""
-        if not self.access_token:
-            print(f"    [SIMULADO] Titulo: {product_id} (sem TIKTOK_ACCESS_TOKEN)")
+        """Atualiza titulo do produto via TikTokClient. Levanta excecao em
+        falha real (nao mascara erro como sucesso) -- o chamador conta
+        falhas."""
+        if self._client is None:
+            print(f"    [SIMULADO] Titulo: {product_id} (sem {self._missing_env})")
             return True
-
-        url = f"{self.api_base}/shop/api/product/update"
-        headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.access_token}'}
-        payload = {'product_id': int(product_id), 'title': title}
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
-        if response.status_code != 200:
-            raise RuntimeError(f"TikTok update title falhou: HTTP {response.status_code}: {response.text[:300]}")
+        self._client.update_product(str(product_id), title=title)
         print(f"    [ENVIADO] Titulo atualizado")
         return True
 
     def _update_product_description(self, product_id, description):
-        """Atualiza descricao do produto via API. Levanta excecao em falha real."""
-        if not self.access_token:
-            print(f"    [SIMULADO] Descricao: {product_id} (sem TIKTOK_ACCESS_TOKEN)")
+        """Atualiza descricao do produto via TikTokClient. Levanta excecao
+        em falha real."""
+        if self._client is None:
+            print(f"    [SIMULADO] Descricao: {product_id} (sem {self._missing_env})")
             return True
-
-        url = f"{self.api_base}/shop/api/product/update"
-        headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.access_token}'}
-        payload = {'product_id': int(product_id), 'description': description}
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
-        if response.status_code != 200:
-            raise RuntimeError(f"TikTok update description falhou: HTTP {response.status_code}: {response.text[:300]}")
+        self._client.update_product(str(product_id), description=description)
         print(f"    [ENVIADO] Descricao atualizada")
         return True
 
     def _update_product_images(self, product_id, images):
-        """Atualiza imagens do produto via API. Levanta excecao em falha real."""
+        """Atualiza imagens do produto via TikTokClient. Levanta excecao
+        em falha real."""
         if not images:
             return False
 
-        if not self.access_token:
-            print(f"    [SIMULADO] Imagens: {len(images)} (sem TIKTOK_ACCESS_TOKEN)")
+        if self._client is None:
+            print(f"    [SIMULADO] Imagens: {len(images)} (sem {self._missing_env})")
             return True
 
-        url = f"{self.api_base}/shop/api/product/update/images"
-        headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.access_token}'}
-        payload = {'product_id': int(product_id), 'images': images[:4]}
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
-        if response.status_code != 200:
-            raise RuntimeError(f"TikTok update images falhou: HTTP {response.status_code}: {response.text[:300]}")
+        self._client.update_product(str(product_id), image_urls=images[:4])
         print(f"    [ENVIADO] Imagens: {len(images)} uploads")
         return True
 
