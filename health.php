@@ -16,8 +16,8 @@ header('X-XSS-Protection: 1; mode=block');
 
 try {
     // Carrega as constantes e a configuração do banco de dados de forma segura
-    require_once dirname(__DIR__, 3) . '/config/constants.php';
-    require_once CONFIG_PATH . '/database.php';
+require_once __DIR__ . '/config/constants.php';
+require_once __DIR__ . '/config/database.php';
 
     // Tenta obter uma instância do banco de dados
     $db_instance = Database::getInstance();
