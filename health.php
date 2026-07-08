@@ -58,7 +58,7 @@ try {
         ],
     ];
 
-} catch (Exception $e) {
+} catch (Throwable $e) {
     http_response_code(500); // Internal Server Error
     $response = [
         'ok' => false,
