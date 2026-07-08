@@ -56,7 +56,7 @@ function sv_checkout_env(string ...$keys): string
 
 $pixKey = sv_checkout_env('LOJA_PIX_KEY') ?: 'contato@vivaliz.com.br';
 $pixName = sv_checkout_env('LOJA_PIX_NAME') ?: 'Vivaliz Store';
-$whatsapp = sv_checkout_env('LOJA_WHATSAPP');
+$whatsapp = sv_checkout_env('LOJA_WHATSAPP') ?: '5511999999999';
 
 $pedidoCriado = false;
 $pedidoId = null;
@@ -378,7 +378,7 @@ $paymentOptions = [
     </style>
 </head>
 <body>
-<?php $svNavCurrent = 'checkout'; include __DIR__ . '/../includes/navbar.php'; ?>
+<?php include __DIR__ . '/../includes/navbar.php'; ?>
 <main class="checkout-shell">
     <div class="container">
         <?php if ($pedidoCriado): ?>
@@ -392,19 +392,13 @@ $paymentOptions = [
                 $wppMsg = rawurlencode("Ola! Fiz um pedido na Vivaliz (ID: {$pedidoId}).
 Itens: {$wppItems}
 Aguardo confirmacao e dados de pagamento. Obrigado!");
-                $wppTel = preg_replace('/\D+/', '', $whatsapp);
+                $wppTel = defined('LOJA_WHATSAPP') ? LOJA_WHATSAPP : '5511999999999';
                 ?>
                 <div style="display:grid;gap:12px;margin-top:16px;">
-                    <?php if ($wppTel !== ''): ?>
-                        <a class="primary-btn" href="https://wa.me/<?= $wppTel ?>?text=<?= $wppMsg ?>" target="_blank" rel="noreferrer"
-                           style="background:#25D366;border-radius:12px;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;">
-                            📱 Confirmar pelo WhatsApp
-                        </a>
-                    <?php else: ?>
-                        <a class="primary-btn" href="/contato" style="border-radius:12px;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;">
-                            Falar com a equipe
-                        </a>
-                    <?php endif; ?>
+                    <a class="primary-btn" href="https://wa.me/<?= $wppTel ?>?text=<?= $wppMsg ?>" target="_blank" rel="noreferrer"
+                       style="background:#25D366;border-radius:12px;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;">
+                        📱 Confirmar pelo WhatsApp
+                    </a>
                     <a class="ghost-btn" href="/catalogo" style="border-radius:12px;text-decoration:none;display:flex;align-items:center;justify-content:center;">Voltar ao catálogo</a>
                 </div>
             </section>
@@ -583,8 +577,6 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
         }
 
         function buildWhatsappLink(orderNumber, totalLabel, paymentMethod) {
-            const number = String(whatsapp || '').replace(/\D/g, '');
-            if (!number) return '/contato';
             const text = encodeURIComponent(
                 'Ola! Acabei de fazer um pedido na Vivaliz.\n' +
                 'Numero: ' + orderNumber + '\n' +
@@ -592,7 +584,7 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 'Total: ' + totalLabel + '\n' +
                 'Aguardo confirmacao de frete e pagamento.'
             );
-            return 'https://wa.me/' + number + '?text=' + text;
+            return 'https://wa.me/' + String(whatsapp || '').replace(/\D/g, '') + '?text=' + text;
         }
 
         function renderSuccess(response, paymentMethod) {
@@ -617,7 +609,7 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 + paymentBlock
                 + tinySyncNote
                 + '<div style="display:grid;gap:12px;margin-top:16px;">'
-                + '<a class="primary-btn" href="' + whatsappLink + '"' + (whatsappLink === '/contato' ? '' : ' target="_blank" rel="noreferrer"') + ' style="background:' + (whatsappLink === '/contato' ? '#1F3A70' : '#25D366') + ';">' + (whatsappLink === '/contato' ? 'Falar com a equipe' : '📱 Falar no WhatsApp') + '</a>'
+                + '<a class="primary-btn" href="' + whatsappLink + '" target="_blank" rel="noreferrer" style="background:#25D366;">📱 Falar no WhatsApp</a>'
                 + '<a class="ghost-btn" href="/catalogo">Voltar ao catalogo</a>'
                 + '</div>'
                 + '</section>';

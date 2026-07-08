@@ -42,7 +42,7 @@ function sv_co_env(string ...$keys): string {
 
 $pixKey      = sv_co_env('LOJA_PIX_KEY')     ?: 'contato@vivaliz.com.br';
 $pixName     = sv_co_env('LOJA_PIX_NAME')    ?: 'Vivaliz Store';
-$whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
+$whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '5511999999999';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -55,7 +55,19 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
     <link rel="stylesheet" href="/css/checkout.css">
 </head>
 <body>
-<?php $svNavCurrent = 'checkout'; include __DIR__ . '/includes/navbar.php'; ?>
+<nav class="navbar">
+    <div class="container nav-inner">
+        <a class="brand-link" href="/">
+            <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" onerror="this.src='/images/logo.svg'">
+        </a>
+        <div class="navbar-menu">
+            <a href="/catalogo">Catálogo</a>
+            <a href="/carrinho" class="nav-cart">
+                🛒 Carrinho <span class="cart-badge" id="nav-cart-count">0</span>
+            </a>
+        </div>
+    </div>
+</nav>
 
 <div class="checkout-progress">
     <div class="container">
@@ -86,26 +98,26 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
             <div class="form-row-2">
                 <label class="form-group">
                     <span>Nome completo *</span>
-                    <input name="customer_name" maxlength="120" required autocomplete="name" aria-label="Nome completo">
+                    <input name="customer_name" maxlength="120" required autocomplete="name" placeholder="João Silva">
                 </label>
                 <label class="form-group">
                     <span>E-mail *</span>
-                    <input name="customer_email" type="email" maxlength="160" required autocomplete="email" aria-label="E-mail">
+                    <input name="customer_email" type="email" maxlength="160" required autocomplete="email" placeholder="joao@email.com">
                 </label>
             </div>
             <div class="form-row-2">
                 <label class="form-group">
                     <span>Telefone / WhatsApp *</span>
-                    <input name="customer_phone" maxlength="20" required autocomplete="tel" aria-label="Telefone ou WhatsApp">
+                    <input name="customer_phone" maxlength="20" required autocomplete="tel" placeholder="(11) 99999-9999">
                 </label>
                 <label class="form-group">
                     <span>CEP *</span>
-                    <input name="cep" id="cep-input" inputmode="numeric" maxlength="9" required autocomplete="postal-code" aria-label="CEP">
+                    <input name="cep" id="cep-input" inputmode="numeric" maxlength="9" required autocomplete="postal-code" placeholder="00000-000">
                 </label>
             </div>
             <label class="form-group">
                 <span>Endereço completo *</span>
-                <input name="address" id="address-input" maxlength="300" required autocomplete="street-address" aria-label="Endereço completo">
+                <input name="address" id="address-input" maxlength="300" required autocomplete="street-address" placeholder="Rua, número, complemento, bairro, cidade/UF">
             </label>
 
             <div class="payment-select-title">Forma de pagamento *</div>
@@ -146,7 +158,7 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
 
             <label class="form-group">
                 <span>Observações</span>
-                <textarea name="notes" rows="3" maxlength="1000" aria-label="Observações do pedido"></textarea>
+                <textarea name="notes" rows="3" maxlength="1000" placeholder="Horário de entrega, referência de endereço, cor preferida…"></textarea>
             </label>
 
             <button class="btn btn-primary btn-checkout" type="submit" id="submit-btn">
@@ -174,7 +186,7 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
             </div>
             <div class="summary-row">
                 <span>Frete</span>
-                <strong id="cart-shipping">A calcular</strong>
+                <strong>Calculado na confirmação</strong>
             </div>
             <div class="summary-row summary-total">
                 <span>Total estimado</span>
@@ -239,13 +251,9 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
     function getCart() {
         try { return JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'); } catch(e) { return []; }
     }
-    function getShippingQuote() {
-        try { return JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null'); } catch(e) { return null; }
-    }
     function clearCart() { localStorage.removeItem('shopvivaliz_cart'); }
-    function clearShippingQuote() { localStorage.removeItem('shopvivaliz_shipping_quote'); }
     function fmtMoney(v) {
-        if (!v || isNaN(v)) return 'Consulte o valor';
+        if (!v || isNaN(v)) return 'Preço sob consulta';
         return 'R$ ' + parseFloat(v).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     }
 
@@ -255,15 +263,12 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
         var el = document.getElementById('cart-items');
         var subEl = document.getElementById('cart-subtotal');
         var totEl = document.getElementById('cart-total');
-        var shippingEl = document.getElementById('cart-shipping');
         var badge = document.getElementById('nav-cart-count');
         if (!el) return;
 
         var total = 0;
         var hasPrice = false;
         var html = '';
-        var quote = getShippingQuote();
-        var shippingTotal = quote && Number(quote.total || 0) > 0 ? Number(quote.total || 0) : 0;
 
         if (!items.length) {
             html = '<p class="empty-cart">Carrinho vazio. <a href="/catalogo">Ver produtos</a></p>';
@@ -274,19 +279,18 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
                 total += sub;
                 if (price > 0) hasPrice = true;
                 html += '<div class="summary-item">'
-                    + '<img src="' + (it.image_url || '/images/logo-vivaliz-square.png') + '" alt="" onerror="this.src=\'/images/logo-vivaliz-square.png\'">'
+                    + '<img src="' + (it.image_url || '/favicon.ico') + '" alt="" onerror="this.src=\'/favicon.ico\'">'
                     + '<div class="summary-item-info">'
                     + '<strong>' + (it.name || it.sku) + '</strong>'
-                    + '<span>Qtd: ' + (it.quantity || 1) + ' &nbsp;|&nbsp; ' + (price > 0 ? fmtMoney(sub) : 'Consultar') + '</span>'
+                    + '<span>Qtd: ' + (it.quantity || 1) + ' &nbsp;|&nbsp; ' + (price > 0 ? fmtMoney(sub) : 'Sob consulta') + '</span>'
                     + '</div></div>';
             });
         }
 
         el.innerHTML = html;
-        var fmt = hasPrice ? fmtMoney(total) : 'Consultar';
+        var fmt = hasPrice ? fmtMoney(total) : 'Preço sob consulta';
         if (subEl) subEl.textContent = fmt;
-        if (shippingEl) shippingEl.textContent = shippingTotal > 0 ? fmtMoney(shippingTotal) : 'A calcular';
-        if (totEl) totEl.textContent = hasPrice ? fmtMoney(total + shippingTotal) : 'Consultar';
+        if (totEl) totEl.textContent = fmt;
         if (badge) badge.textContent = items.reduce(function(a,i){ return a+(i.quantity||1); }, 0);
     }
 
@@ -337,17 +341,14 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
             if (!d.ok) { status.textContent = d.error || 'Erro ao registrar pedido.'; status.className='checkout-status-msg err'; return; }
 
             var method = fd.get('payment_method') || 'pix';
-            var shippingQuote = getShippingQuote();
-            var shippingTotal = shippingQuote && Number(shippingQuote.total || 0) > 0 ? Number(shippingQuote.total || 0) : 0;
-            var total = getCart().reduce(function(a,i){ return a+(parseFloat(i.price)||0)*(i.quantity||1); }, 0) + shippingTotal;
+            var total = getCart().reduce(function(a,i){ return a+(parseFloat(i.price)||0)*(i.quantity||1); }, 0);
             var totalFmt = fmtMoney(total);
             var name = fd.get('customer_name') || '';
             var phone = (fd.get('customer_phone')||'').replace(/\D/g,'');
-            var wppMsg = encodeURIComponent('Olá! Acabei de fazer um pedido na Vivaliz.\nNº: ' + d.order_number + '\nNome: ' + name + '\nTotal: ' + (total > 0 ? totalFmt : 'Consultar') + '\nFavor confirmar frete e pagamento.');
+            var wppMsg = encodeURIComponent('Olá! Acabei de fazer um pedido na Vivaliz.\nNº: ' + d.order_number + '\nNome: ' + name + '\nTotal: ' + (total > 0 ? totalFmt : 'Preço sob consulta') + '\nFavor confirmar frete e pagamento.');
             var wppLink = 'https://wa.me/' + WPP_NUM + '?text=' + wppMsg;
 
             clearCart();
-            clearShippingQuote();
             renderCart();
 
             if (method === 'pix') {
