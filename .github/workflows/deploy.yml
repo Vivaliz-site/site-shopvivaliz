@@ -129,7 +129,7 @@ jobs:
     needs: validate-secrets
     if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' && needs.validate-secrets.outputs.secrets_valid == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     env:
       FTP_SERVER_VALUE: ${{ secrets.FTP_SERVER }}
       FTP_USERNAME_VALUE: ${{ secrets.FTP_USERNAME }}
@@ -238,7 +238,7 @@ jobs:
           protocol: ftp
           local-dir: ./
           server-dir: ${{ env.FTP_REMOTE_DIR_VALUE }}
-          dangerous-clean-slate: true
+          dangerous-clean-slate: false
           exclude: |
             .git/**
             .github/**
