@@ -11,7 +11,7 @@ try {
     $db = Database::getInstance();
     $conn = $db->getConnection();
     $conn->set_charset(DB_CHARSET);
-} catch (Exception $e) {
+} catch (Throwable $e) {
     http_response_code(503); // Service Unavailable
     log_error('Falha ao inicializar a sincronização', ['error' => $e->getMessage()]);
     exit(json_encode(['ok' => false, 'erro' => 'Falha ao conectar ao banco de dados: ' . $e->getMessage()]));
