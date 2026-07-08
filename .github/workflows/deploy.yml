@@ -254,6 +254,13 @@ jobs:
             docs/**
             logs/**
             tests/**
+            storage/**
+            imports/**
+            automation/**
+            automations/**
+            artifacts/**
+            claude-backup/**
+            claude-bkp/**
             **/__pycache__/**
             **/*.pyc
             **/.env
