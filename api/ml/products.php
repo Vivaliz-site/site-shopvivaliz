@@ -15,6 +15,17 @@ header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store');
 header('Access-Control-Allow-Origin: *');
 
+if (($_GET['debug_php'] ?? '') === '1') {
+    echo json_encode(['php_version' => PHP_VERSION, 'ok' => true]);
+    exit;
+}
+register_shutdown_function(function () {
+    $err = error_get_last();
+    if ($err && ($_GET['debug_errors'] ?? '') === '1') {
+        echo json_encode(['fatal' => $err['message'], 'file' => basename($err['file']), 'line' => $err['line']], JSON_UNESCAPED_UNICODE);
+    }
+});
+
 $catalogPath = dirname(__DIR__) . '/catalog/fallback-products.json';
 if (!is_file($catalogPath)) {
     http_response_code(503);
