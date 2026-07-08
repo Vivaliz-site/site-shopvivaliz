@@ -7,8 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  debug-public-html:
-    name: Investigar public_html
+  debug-dev-folder:
+    name: Investigar public_html/dev
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -18,19 +18,24 @@ jobs:
       FTP_PORT: ${{ secrets.FTP_PORT }}
       FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
     steps:
-      - name: Investigar public_html e conteudo real servido
+      - name: Investigar public_html/dev
         shell: bash
         run: |
           PORT="${FTP_PORT:-21}"
+          BASE="${FTP_REMOTE_DIR}/public_html/dev"
 
-          echo "=== listagem de FTP_REMOTE_DIR/public_html/ ==="
+          echo "=== listagem de public_html/dev/ ==="
           curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-            "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/public_html/" --list-only --connect-timeout 15 --max-time 30 || echo "FALHOU listagem public_html"
+            "ftp://${FTP_SERVER}:${PORT}${BASE}/" --list-only --connect-timeout 15 --max-time 30 || echo "FALHOU"
 
-          echo "=== catalogo.php dentro de public_html (tamanho) ==="
+          echo "=== catalogo.php dentro de public_html/dev ==="
           curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-            "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/public_html/catalogo.php" -o /dev/null -w "size=%{size_download} http_code=%{http_code}\n" --connect-timeout 15 --max-time 30 || echo "nao existe ou falhou"
+            "ftp://${FTP_SERVER}:${PORT}${BASE}/catalogo.php" -o /dev/null -w "size=%{size_download} http_code=%{http_code}\n" --connect-timeout 15 --max-time 30 || echo "nao existe"
 
-          echo "=== api/gamification dentro de public_html ==="
+          echo "=== api/gamification dentro de public_html/dev ==="
           curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-            "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/public_html/api/gamification/" --list-only --connect-timeout 15 --max-time 30 || echo "nao existe ou falhou"
+            "ftp://${FTP_SERVER}:${PORT}${BASE}/api/gamification/" --list-only --connect-timeout 15 --max-time 30 || echo "nao existe"
+
+          echo "=== .htaccess dentro de public_html/dev ==="
+          curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
+            "ftp://${FTP_SERVER}:${PORT}${BASE}/.htaccess" -o /dev/null -w "size=%{size_download} http_code=%{http_code}\n" --connect-timeout 15 --max-time 30 || echo "nao existe"
