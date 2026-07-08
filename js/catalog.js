@@ -15,7 +15,7 @@
 
   function money(value) {
     const number = Number(value || 0);
-    if (!number) return 'Preço sob consulta';
+    if (!number) return 'Consulte o valor';
     return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
 
@@ -71,7 +71,7 @@
   }
 
   function card(product) {
-    const image = product.image_url || '/favicon.ico';
+    const image = product.image_url || '/images/logo-vivaliz-square.png';
     const sku = product.sku || product.olist_product_id || 'sem-sku';
     const images = Number(product.images_count || 0);
     const category = String(product.category || '').trim();
@@ -97,7 +97,7 @@
     return `
       <article class="product-card">
         <a class="product-image" href="${esc(productUrl)}">
-          <img src="${esc(image)}" alt="${esc(product.name)}" loading="lazy" onerror="this.src='/favicon.ico'">
+          <img src="${esc(image)}" alt="${esc(product.name)}" loading="lazy" onerror="this.src='/images/logo-vivaliz-square.png'">
         </a>
         <div class="product-info">
           ${category ? `<div class="product-category">${esc(category)}</div>` : ''}
@@ -110,7 +110,7 @@
             <a class="btn btn-secondary card-link" href="${esc(productUrl)}">Ver detalhes</a>
             ${hasPrice
               ? `<button class="buy-button" type="button" data-product="${encoded}">Comprar agora</button>`
-              : `<a class="btn btn-primary card-link" href="${esc(contactUrl)}">Solicitar preço</a>`}
+              : `<a class="btn btn-primary card-link" href="${esc(contactUrl)}">Falar com vendas</a>`}
           </div>
         </div>
       </article>`;

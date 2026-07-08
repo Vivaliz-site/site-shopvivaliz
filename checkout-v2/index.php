@@ -54,9 +54,26 @@ function sv_checkout_env(string ...$keys): string
     return '';
 }
 
+function sv_checkout_shipping_note(float $shippingTotal, string $shippingLabel): string
+{
+    if ($shippingTotal <= 0 && $shippingLabel === '') {
+        return '';
+    }
+
+    $parts = [];
+    if ($shippingLabel !== '') {
+        $parts[] = 'Frete: ' . $shippingLabel;
+    }
+    if ($shippingTotal > 0) {
+        $parts[] = 'Valor do frete: R$ ' . number_format($shippingTotal, 2, ',', '.');
+    }
+
+    return implode(' | ', $parts);
+}
+
 $pixKey = sv_checkout_env('LOJA_PIX_KEY') ?: 'contato@vivaliz.com.br';
 $pixName = sv_checkout_env('LOJA_PIX_NAME') ?: 'Vivaliz Store';
-$whatsapp = sv_checkout_env('LOJA_WHATSAPP') ?: '5511999999999';
+$whatsapp = sv_checkout_env('LOJA_WHATSAPP');
 
 $pedidoCriado = false;
 $pedidoId = null;
@@ -309,6 +326,19 @@ $paymentOptions = [
             font-weight: 700;
             color: #0f172a;
         }
+        .summary-meta {
+            display: grid;
+            gap: 10px;
+            margin-top: 18px;
+            padding-top: 18px;
+            border-top: 1px solid #e2e8f0;
+        }
+        .summary-meta-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            color: #475569;
+        }
         .muted {
             color: #64748b;
         }
@@ -378,7 +408,7 @@ $paymentOptions = [
     </style>
 </head>
 <body>
-<?php include __DIR__ . '/../includes/navbar.php'; ?>
+<?php $svNavCurrent = 'checkout'; include __DIR__ . '/../includes/navbar.php'; ?>
 <main class="checkout-shell">
     <div class="container">
         <?php if ($pedidoCriado): ?>
@@ -392,13 +422,19 @@ $paymentOptions = [
                 $wppMsg = rawurlencode("Ola! Fiz um pedido na Vivaliz (ID: {$pedidoId}).
 Itens: {$wppItems}
 Aguardo confirmacao e dados de pagamento. Obrigado!");
-                $wppTel = defined('LOJA_WHATSAPP') ? LOJA_WHATSAPP : '5511999999999';
+                $wppTel = preg_replace('/\D+/', '', $whatsapp);
                 ?>
                 <div style="display:grid;gap:12px;margin-top:16px;">
-                    <a class="primary-btn" href="https://wa.me/<?= $wppTel ?>?text=<?= $wppMsg ?>" target="_blank" rel="noreferrer"
-                       style="background:#25D366;border-radius:12px;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;">
-                        📱 Confirmar pelo WhatsApp
-                    </a>
+                    <?php if ($wppTel !== ''): ?>
+                        <a class="primary-btn" href="https://wa.me/<?= $wppTel ?>?text=<?= $wppMsg ?>" target="_blank" rel="noreferrer"
+                           style="background:#25D366;border-radius:12px;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;">
+                            📱 Confirmar pelo WhatsApp
+                        </a>
+                    <?php else: ?>
+                        <a class="primary-btn" href="/contato" style="border-radius:12px;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;">
+                            Falar com a equipe
+                        </a>
+                    <?php endif; ?>
                     <a class="ghost-btn" href="/catalogo" style="border-radius:12px;text-decoration:none;display:flex;align-items:center;justify-content:center;">Voltar ao catálogo</a>
                 </div>
             </section>
@@ -492,6 +528,11 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 <aside class="summary-panel">
                     <h2>Resumo do pedido</h2>
                     <div id="checkout-summary" class="summary-list"></div>
+                    <div class="summary-meta">
+                        <div class="summary-meta-row"><span>Subtotal</span><strong id="checkout-subtotal">R$ 0,00</strong></div>
+                        <div class="summary-meta-row"><span>Frete</span><strong id="checkout-shipping">A calcular</strong></div>
+                        <div class="summary-meta-row"><span>Entrega</span><strong id="checkout-shipping-label">A confirmar</strong></div>
+                    </div>
                     <div class="summary-total">
                         <span>Total</span>
                         <span id="checkout-total">R$ 0,00</span>
@@ -508,6 +549,9 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
         const content = document.getElementById('checkout-content');
         const emptyState = document.getElementById('checkout-empty');
         const summary = document.getElementById('checkout-summary');
+        const subtotalNode = document.getElementById('checkout-subtotal');
+        const shippingNode = document.getElementById('checkout-shipping');
+        const shippingLabelNode = document.getElementById('checkout-shipping-label');
         const totalNode = document.getElementById('checkout-total');
         const payloadNode = document.getElementById('cart-payload');
         const form = document.getElementById('checkout-form');
@@ -538,9 +582,19 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
             }
         }
 
+        function readShippingQuote() {
+            try {
+                const value = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
+                return value && typeof value === 'object' ? value : null;
+            } catch (error) {
+                return null;
+            }
+        }
+
         const items = readCart().filter(function (item) {
             return item && item.name;
         });
+        const shippingQuote = readShippingQuote();
 
         if (!items.length) {
             if (content) content.hidden = true;
@@ -548,9 +602,14 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
             return;
         }
 
-        const total = items.reduce(function (sum, item) {
+        const subtotal = items.reduce(function (sum, item) {
             return sum + (Number(item.price || 0) * Number(item.quantity || 1));
         }, 0);
+        const shippingTotal = Number(shippingQuote && shippingQuote.shipping_total || 0);
+        const grandTotal = subtotal + shippingTotal;
+        const shippingLabel = shippingQuote && shippingQuote.selected_option
+            ? [shippingQuote.selected_option.company, shippingQuote.selected_option.name].filter(Boolean).join(' - ')
+            : '';
 
         if (summary) {
             summary.innerHTML = items.map(function (item) {
@@ -567,7 +626,10 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
             }).join('');
         }
 
-        if (totalNode) totalNode.textContent = money(total);
+        if (subtotalNode) subtotalNode.textContent = money(subtotal);
+        if (shippingNode) shippingNode.textContent = shippingTotal > 0 ? money(shippingTotal) : 'A calcular';
+        if (shippingLabelNode) shippingLabelNode.textContent = shippingLabel || 'A confirmar';
+        if (totalNode) totalNode.textContent = money(grandTotal);
         if (payloadNode) payloadNode.value = JSON.stringify(items);
 
         function setStatus(message, type) {
@@ -577,6 +639,8 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
         }
 
         function buildWhatsappLink(orderNumber, totalLabel, paymentMethod) {
+            const number = String(whatsapp || '').replace(/\D/g, '');
+            if (!number) return '/contato';
             const text = encodeURIComponent(
                 'Ola! Acabei de fazer um pedido na Vivaliz.\n' +
                 'Numero: ' + orderNumber + '\n' +
@@ -584,15 +648,18 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 'Total: ' + totalLabel + '\n' +
                 'Aguardo confirmacao de frete e pagamento.'
             );
-            return 'https://wa.me/' + String(whatsapp || '').replace(/\D/g, '') + '?text=' + text;
+            return 'https://wa.me/' + number + '?text=' + text;
         }
 
         function renderSuccess(response, paymentMethod) {
-            const totalLabel = money(total);
+            const totalLabel = money(grandTotal);
             const whatsappLink = buildWhatsappLink(response.order_number, totalLabel, paymentMethod);
             const tinySyncNote = response.tiny_order_id
                 ? '<p class="muted">Pedido sincronizado com o ERP. Codigo Tiny: <strong>' + response.tiny_order_id + '</strong></p>'
                 : '<p class="muted">Importacao ERP: <strong>' + (response.tiny_push || 'nao informado') + '</strong></p>';
+            const shippingBlock = response.shipping_total > 0
+                ? '<div class="payment-help"><strong>Frete confirmado:</strong> ' + money(response.shipping_total) + (response.shipping_label ? '<br><strong>Entrega:</strong> ' + response.shipping_label : '') + '</div>'
+                : '';
 
             let paymentBlock = '<p class="muted">' + (response.payment_instructions || 'Pedido registrado com sucesso.') + '</p>';
             if (paymentMethod === 'pix') {
@@ -607,9 +674,10 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 + '<p class="muted">Seu pedido foi registrado e entrou na fila de atendimento da Vivaliz.</p>'
                 + '<div class="order-code">' + response.order_number + '</div>'
                 + paymentBlock
+                + shippingBlock
                 + tinySyncNote
                 + '<div style="display:grid;gap:12px;margin-top:16px;">'
-                + '<a class="primary-btn" href="' + whatsappLink + '" target="_blank" rel="noreferrer" style="background:#25D366;">📱 Falar no WhatsApp</a>'
+                + '<a class="primary-btn" href="' + whatsappLink + '"' + (whatsappLink === '/contato' ? '' : ' target="_blank" rel="noreferrer"') + ' style="background:' + (whatsappLink === '/contato' ? '#1F3A70' : '#25D366') + ';">' + (whatsappLink === '/contato' ? 'Falar com a equipe' : '📱 Falar no WhatsApp') + '</a>'
                 + '<a class="ghost-btn" href="/catalogo">Voltar ao catalogo</a>'
                 + '</div>'
                 + '</section>';
@@ -641,7 +709,11 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 ].filter(Boolean).join(', '),
                 notes: '',
                 payment_method: formData.get('payment_method') || 'pix',
-                items: items
+                items: items,
+                shipping_total: shippingTotal,
+                shipping_label: shippingLabel,
+                shipping_service: shippingQuote && shippingQuote.selected_option ? (shippingQuote.selected_option.id || '') : '',
+                shipping_cep: shippingQuote && shippingQuote.cep ? shippingQuote.cep : ''
             };
 
             fetch('/api/orders/create-v2.php', {

@@ -3,6 +3,185 @@ declare(strict_types=1);
 header('Content-Type: text/html; charset=UTF-8');
 
 /* ── helpers ── */
+function sv_product_default_image(): string
+{
+    return '/images/logo-vivaliz-square.png';
+}
+
+function sv_product_env_load(): void
+{
+    $path = __DIR__ . '/.env';
+    if (!is_file($path) || !is_readable($path)) {
+        return;
+    }
+
+    foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
+            continue;
+        }
+
+        [$key, $value] = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim(trim($value), "\"'");
+        if ($key !== '' && getenv($key) === false) {
+            putenv($key . '=' . $value);
+        }
+    }
+}
+
+function sv_product_db(): ?mysqli
+{
+    if (!class_exists('mysqli') || !function_exists('mysqli_report')) {
+        return null;
+    }
+
+    sv_product_env_load();
+    $constants = __DIR__ . '/config/constants.php';
+    if (is_file($constants)) {
+        require_once $constants;
+    }
+
+    $host = defined('DB_HOST') ? DB_HOST : (getenv('DB_HOST') ?: 'localhost');
+    $port = (int)(defined('DB_PORT') ? DB_PORT : (getenv('DB_PORT') ?: 3306));
+    $name = defined('DB_NAME') ? DB_NAME : (getenv('DB_NAME') ?: '');
+    $user = defined('DB_USER') ? DB_USER : (getenv('DB_USER') ?: '');
+    $pass = defined('DB_PASS') ? DB_PASS : (getenv('DB_PASS') ?: '');
+    if ($name === '' || $user === '') {
+        return null;
+    }
+
+    mysqli_report(MYSQLI_REPORT_OFF);
+    $db = @new mysqli((string)$host, (string)$user, (string)$pass, (string)$name, $port);
+    if ($db->connect_errno) {
+        return null;
+    }
+
+    $db->set_charset('utf8mb4');
+    return $db;
+}
+
+function sv_product_db_row(?mysqli $db, string $sku, string $id): array
+{
+    if (!$db instanceof mysqli || ($sku === '' && $id === '')) {
+        return [];
+    }
+
+    $sql = "SELECT
+                p.id,
+                p.sku,
+                COALESCE(op.olist_product_id, '') AS olist_product_id,
+                COALESCE(op.olist_id, '') AS olist_id,
+                COALESCE(NULLIF(p.name, ''), NULLIF(op.name, ''), '') AS name,
+                COALESCE(NULLIF(p.description, ''), '') AS description,
+                COALESCE(p.price, 0) AS price,
+                COALESCE(p.stock, 0) AS stock,
+                COALESCE(NULLIF(op.primary_image_url, ''), NULLIF(p.image_url, ''), '') AS image_url
+            FROM products p
+            LEFT JOIN olist_products op ON op.sku = p.sku
+            WHERE (? <> '' AND p.sku = ?)
+               OR (? <> '' AND (op.olist_product_id = ? OR op.olist_id = ?))
+            ORDER BY p.updated_at DESC, p.id DESC
+            LIMIT 1";
+    $stmt = $db->prepare($sql);
+    if (!$stmt) {
+        return [];
+    }
+
+    $stmt->bind_param('sssss', $sku, $sku, $id, $id, $id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result ? ($result->fetch_assoc() ?: []) : [];
+    $stmt->close();
+
+    return is_array($row) ? $row : [];
+}
+
+function sv_product_merge_db(array $product, array $dbRow): array
+{
+    if ($dbRow === []) {
+        return $product;
+    }
+
+    foreach (['sku', 'name', 'description', 'olist_product_id'] as $field) {
+        if (trim((string)($dbRow[$field] ?? '')) !== '') {
+            $product[$field] = (string)$dbRow[$field];
+        }
+    }
+
+    if (trim((string)($dbRow['image_url'] ?? '')) !== '') {
+        $product['image_url'] = (string)$dbRow['image_url'];
+    }
+
+    if ((float)($dbRow['price'] ?? 0) > 0) {
+        $product['price'] = (float)$dbRow['price'];
+    }
+
+    if (array_key_exists('stock', $dbRow)) {
+        $product['stock'] = (int)$dbRow['stock'];
+    }
+
+    return $product;
+}
+
+function sv_product_enrich(array $product, string $requestedSku = '', string $requestedId = ''): array
+{
+    $sku = trim((string)($product['sku'] ?? '')) ?: trim($requestedSku);
+    $id = trim((string)($product['olist_product_id'] ?? $product['id'] ?? '')) ?: trim($requestedId);
+    $db = sv_product_db();
+    if (!$db instanceof mysqli) {
+        return $product;
+    }
+
+    $enriched = sv_product_merge_db($product, sv_product_db_row($db, $sku, $id));
+    $db->close();
+
+    return $enriched;
+}
+
+function sv_product_enrich_many(array $products): array
+{
+    if ($products === []) {
+        return [];
+    }
+
+    $db = sv_product_db();
+    if (!$db instanceof mysqli) {
+        return $products;
+    }
+
+    foreach ($products as $index => $product) {
+        if (!is_array($product)) {
+            continue;
+        }
+
+        $sku = trim((string)($product['sku'] ?? ''));
+        $id = trim((string)($product['olist_product_id'] ?? $product['id'] ?? ''));
+        $products[$index] = sv_product_merge_db($product, sv_product_db_row($db, $sku, $id));
+    }
+
+    $db->close();
+    return $products;
+}
+
+function sv_product_trim(string $value, int $width, string $suffix = '...'): string
+{
+    if ($width <= 0) {
+        return '';
+    }
+
+    if (function_exists('mb_strimwidth')) {
+        return mb_strimwidth($value, 0, $width, $suffix);
+    }
+
+    if (strlen($value) <= $width) {
+        return $value;
+    }
+
+    $cut = max(0, $width - strlen($suffix));
+    return rtrim(substr($value, 0, $cut)) . $suffix;
+}
+
 function sv_product_catalog(): array
 {
     static $data = null;
@@ -25,7 +204,7 @@ function sv_product_related(string $sku, string $category, int $limit = 4): arra
         $entry = [
             'sku'              => trim((string)($row['sku'] ?? '')),
             'name'             => trim((string)($row['name'] ?? 'Produto Vivaliz')),
-            'image_url'        => trim((string)($row['image_url'] ?? '/favicon.ico')) ?: '/favicon.ico',
+            'image_url'        => trim((string)($row['image_url'] ?? sv_product_default_image())) ?: sv_product_default_image(),
             'price'            => (float)($row['price'] ?? 0),
             'olist_product_id' => (string)($row['olist_product_id'] ?? ''),
             'slug'             => trim((string)($row['slug'] ?? '')),
@@ -97,12 +276,13 @@ $slug = sv_qv('slug');
 $requestedSku = sv_qv('sku');
 $requestedId = sv_qv('id', sv_qv('olist_product_id'));
 $resolved = $slug !== '' ? sv_product_find_slug($slug) : sv_product_find($requestedSku, $requestedId);
+$resolved = sv_product_enrich($resolved, $requestedSku, $requestedId);
 $lookupRequested = $slug !== '' || $requestedSku !== '' || $requestedId !== '';
 $notFound = $lookupRequested && $resolved === [];
 
 $sku      = trim((string)($resolved['sku']             ?? '')) ?: sv_qv('sku', 'sem-sku');
 $name     = trim((string)($resolved['name']            ?? '')) ?: sv_qv('name', 'Produto Vivaliz');
-$image    = trim((string)($resolved['image_url']       ?? '')) ?: sv_qv('image', '/favicon.ico');
+$image    = trim((string)($resolved['image_url']       ?? '')) ?: sv_qv('image', sv_product_default_image());
 $olistId  = trim((string)($resolved['olist_product_id']?? '')) ?: sv_qv('olist_product_id');
 $category = trim((string)($resolved['category']        ?? ''));
 $tags     = is_array($resolved['tags'] ?? null) ? $resolved['tags'] : [];
@@ -110,11 +290,12 @@ $qScore   = (int)($resolved['quality_score'] ?? 0);
 $rawSlug  = trim((string)($resolved['slug'] ?? ''));
 
 $priceRaw   = (float)($resolved['price'] ?? (float)sv_qv('price', '0'));
-$priceLabel = $priceRaw > 0 ? 'R$ ' . number_format($priceRaw, 2, ',', '.') : 'Preço sob consulta';
+$priceLabel = $priceRaw > 0 ? 'R$ ' . number_format($priceRaw, 2, ',', '.') : 'Consulte o valor';
 $contactUrl = sv_product_contact_url($sku, $name);
 $canonicalUrl = 'https://dev.shopvivaliz.com.br' . ($rawSlug !== '' ? '/produto/' . $rawSlug : '/produto?sku=' . rawurlencode($sku));
 
-$related = $notFound ? [] : sv_product_related($sku, $category);
+$related = $notFound ? [] : sv_product_enrich_many(sv_product_related($sku, $category));
+$svNavCurrent = 'produto';
 
 /* ── V15: descrição automática ── */
 $description = trim((string)($resolved['description'] ?? ''));
@@ -227,28 +408,13 @@ if ($notFound) {
     <script type="application/ld+json"><?= json_encode($breadcrumbJsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="container nav-inner">
-            <a class="brand-link" href="/">
-                <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" onerror="this.src='/images/logo.svg'">
-            </a>
-            <div class="navbar-menu">
-                <a href="/catalogo">Catálogo</a>
-                <?php if ($category !== ''): ?>
-                    <a href="/catalogo?categoria=<?= rawurlencode($category) ?>"><?= sv_esc($category) ?></a>
-                <?php endif; ?>
-                <a href="/carrinho" class="nav-cart">
-                    🛒 Carrinho <span class="cart-badge" id="nav-cart-count"></span>
-                </a>
-            </div>
-        </div>
-    </nav>
+    <?php include __DIR__ . '/includes/navbar.php'; ?>
 
     <main class="container produto-layout">
         <nav class="breadcrumb" aria-label="Navegação estrutural">
             <a href="/">Início</a> › <a href="/catalogo">Catálogo</a>
             <?php if ($category !== ''): ?> › <a href="/catalogo?categoria=<?= rawurlencode($category) ?>"><?= sv_esc($category) ?></a><?php endif; ?>
-            › <span><?= sv_esc(mb_strimwidth($name, 0, 40, '…')) ?></span>
+            › <span><?= sv_esc(sv_product_trim($name, 40, '...')) ?></span>
         </nav>
 
         <?php if ($notFound): ?>
@@ -263,7 +429,7 @@ if ($notFound) {
         <?php else: ?>
         <div class="product-detail">
             <div class="product-detail-image">
-                <img src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" onerror="this.src='/favicon.ico'" loading="eager">
+                <img src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" onerror="this.src='<?= sv_product_default_image() ?>'" loading="eager">
             </div>
             <div class="product-detail-copy">
                 <?php if ($category !== ''): ?>
@@ -274,7 +440,7 @@ if ($notFound) {
                 <div class="product-price-block">
                     <span class="product-price-label"><?= sv_esc($priceLabel) ?></span>
                     <?php if ($priceRaw === 0.0): ?>
-                        <span class="price-hint">Entre em contato para obter o preço</span>
+                        <span class="price-hint">Fale com a equipe para confirmar valor e disponibilidade</span>
                     <?php endif; ?>
                 </div>
                 <?php if (!empty($tags)): ?>
@@ -293,7 +459,7 @@ if ($notFound) {
                     <?php if ($priceRaw > 0): ?>
                         <button class="btn btn-primary" type="button" id="buy-now">🛒 Comprar agora</button>
                     <?php else: ?>
-                        <a class="btn btn-primary" href="<?= sv_esc($contactUrl) ?>">Solicitar preço</a>
+                        <a class="btn btn-primary" href="<?= sv_esc($contactUrl) ?>">Falar com vendas</a>
                     <?php endif; ?>
                     <a class="btn btn-secondary" href="/catalogo<?= $category !== '' ? '?categoria=' . rawurlencode($category) : '' ?>">← Voltar ao catálogo</a>
                 </div>
@@ -320,20 +486,20 @@ if ($notFound) {
             ?>
             <article class="product-card">
                 <a class="product-image" href="<?= sv_esc($rUrl) ?>">
-                    <img src="<?= sv_esc($rp['image_url']) ?>" alt="<?= sv_esc($rp['name']) ?>" loading="lazy" onerror="this.src='/favicon.ico'">
+                    <img src="<?= sv_esc($rp['image_url']) ?>" alt="<?= sv_esc($rp['name']) ?>" loading="lazy" onerror="this.src='<?= sv_product_default_image() ?>'">
                 </a>
                 <div class="product-info">
                     <?php if ($rp['category'] !== ''): ?>
                         <div class="product-category"><?= sv_esc($rp['category']) ?></div>
                     <?php endif; ?>
                     <h3><?= sv_esc($rp['name']) ?></h3>
-                    <div class="product-price"><?= sv_esc($rp['price'] > 0 ? 'R$ ' . number_format($rp['price'], 2, ',', '.') : 'Preço sob consulta') ?></div>
+                    <div class="product-price"><?= sv_esc($rp['price'] > 0 ? 'R$ ' . number_format($rp['price'], 2, ',', '.') : 'Consulte o valor') ?></div>
                     <div class="card-actions">
                         <a class="btn btn-secondary card-link" href="<?= sv_esc($rUrl) ?>">Ver detalhes</a>
                         <?php if ($rHasPrice): ?>
                             <button class="buy-button" type="button" data-product="<?= sv_esc($rPayload) ?>">Comprar</button>
                         <?php else: ?>
-                            <a class="btn btn-primary card-link" href="<?= sv_esc($rContactUrl) ?>">Solicitar preço</a>
+                            <a class="btn btn-primary card-link" href="<?= sv_esc($rContactUrl) ?>">Falar com vendas</a>
                         <?php endif; ?>
                     </div>
                 </div>
