@@ -17,28 +17,6 @@ try {
     exit(json_encode(['ok' => false, 'erro' => 'Falha ao conectar ao banco de dados: ' . $e->getMessage()]));
 }
 
-// CRIAR TABELA SE NÃO EXISTIR
-$create_table_sql = "CREATE TABLE IF NOT EXISTS products (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    product_id VARCHAR(50) UNIQUE NOT NULL,
-    sku VARCHAR(50) UNIQUE NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    price DECIMAL(10, 2) NOT NULL,
-    description TEXT,
-    category VARCHAR(100),
-    stock INT DEFAULT 0,
-    image_url VARCHAR(500),
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_sku (sku),
-    INDEX idx_category (category)
-)";
-
-if (!$conn->query($create_table_sql)) {
-    log_error('Falha ao criar tabela products', ['error' => $conn->error]);
-    exit(json_encode(['ok' => false, 'erro' => 'CREATE TABLE: ' . $conn->error]));
-}
-
 // CARREGAR 198 PRODUTOS
 include __DIR__ . '/olist/produtos-olist-array.php';
 $produtos = $GLOBALS['produtos_olist'] ?? [];
