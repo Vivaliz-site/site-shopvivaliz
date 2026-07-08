@@ -119,11 +119,115 @@ path.write_text("\n".join(lines) + "\n", encoding="utf-8")  # Quebra de linha re
 
 ---
 
+## 📋 IMPLEMENTAÇÕES DE SECRETS HOJE (2026-07-08)
+
+### ✅ O QUE FOI CRIADO/IMPLEMENTADO
+
+#### 1. **Sistema Centralizado de Secrets** 
+**Arquivo:** `config/secrets.py` (800+ linhas)
+- Centraliza 150+ variáveis de configuração
+- Implementa `load_env_file()` para parsing manual de .env
+- Função `get_all_secrets()` exporta todas as configurações
+- Função `validate_secrets()` valida que secrets obrigatórios existem
+- Função `mask_secret()` mascara valores em logs
+- 13 seções organizadas: IA APIs, Shopee, Amazon, Olist, TikTok, FTP, Email, Payment, etc
+
+**Como usar:**
+```python
+from config.secrets import SHOPEE_API_KEY, FTP_PASSWORD
+```
+
+#### 2. **Bootstrap Environment**
+**Arquivo:** `config/bootstrap-env.php`
+- Carrega secrets do `config/runtime-secrets.php` (gerado em deploy)
+- Fallback para `config/runtime-secrets-default.php` se arquivo real não existe
+- Função `sv_bootstrap_env_assign()` atribui variáveis com segurança
+- Função `sv_bootstrap_env()` inicializa um única vez
+
+**Como usar:**
+```php
+require_once __DIR__ . '/config/bootstrap-env.php';
+sv_bootstrap_env();
+echo getenv('FTP_PASSWORD'); // Carregado automaticamente
+```
+
+#### 3. **Geração Dinâmica de Secrets em Deploy**
+**Arquivo:** `.github/workflows/deploy.yml` (linhas 149-193)
+- Gera `config/runtime-secrets.php` no job com valores dos GitHub Secrets
+- Arquivo nunca é commitado (no .gitignore)
+- Gerado apenas em tempo de deploy
+- **BUG CORRIGIDO HOJE:** linha 192 tinha `\\n` em vez de `\n`
+
+#### 4. **Sincronização de Secrets do GitHub**
+**Arquivos criados:**
+- `scripts/sincronizar_secrets_github.py` - Script Python cross-platform
+- `scripts/sincronizar_secrets_github.sh` - Script Bash para Linux/Cloud
+- Gera `.env.local` local com secrets do GitHub Secrets
+
+#### 5. **Validação Automática de Secrets**
+**Arquivo:** `scripts/validar_secrets.py`
+- Valida que TODOS os secrets obrigatórios estão configurados
+- Mascara valores sensíveis em output
+- Executa em cada deploy
+
+#### 6. **Auto-Sync de Secrets**
+**Para Windows:**
+- `scripts/setup_auto_sync.ps1` - Cria Task Scheduler
+- `scripts/auto_sync_git.ps1` - Sync a cada 5 minutos
+- Sincroniza secrets + git pull/push
+
+**Para Linux/Cloud:**
+- `scripts/setup-auto-sync-linux.sh` - Instala systemd service
+- `scripts/auto-sincronizar.sh` - Daemon que sincroniza a cada 5 minutos
+
+### ⚠️ O QUE FOI TENTADO (E FALHOU)
+
+#### ❌ Adicionar Meta Tags/SEO
+- Criado `api/seo/meta-tags.php`
+- Adicionado `sitemap-generator.php`
+- **PROBLEMA:** Causou HTTP 500 no servidor (arquivo não deployou corretamente)
+- **SOLUÇÃO:** Revertido por enquanto até FTP funcionar
+
+#### ❌ API Olist Sincronização
+- Criado `api/olist/sync-orders.php`
+- **PROBLEMA:** Mesma questão de deploy
+- **SOLUÇÃO:** Revertido por enquanto
+
+### 🔑 SECRETS CRÍTICOS HOJE CORRIGIDOS
+
+| Secret | Valor Correto | Notas |
+|--------|---------------|-------|
+| FTP_SERVER | ftp.shopvivaliz.com.br | Host HostGator |
+| FTP_USERNAME | dev5@dev.shopvivaliz.com.br | Usuário FTP |
+| FTP_PORT | 21 | FTP puro (não FTPS 2121) |
+| FTP_REMOTE_DIR | /public_html/dev/ | Não inclua /home1/shop506 |
+| FTP_PASSWORD | *** | Sincronizado com GitHub Secrets |
+
+### 📚 ARQUIVOS CRIADOS PARA DOCUMENTAÇÃO
+
+- `PLANO-IMPLEMENTACAO-SEGURA.md` - Estratégia incremental
+- `RELATORIO-FINAL-TAREFAS-2026-07-08.md` - Resumo técnico
+- `RESUMO-EXECUCAO-HOJE.md` - O que foi feito
+- `STATUS-FINAL-DIAGNOSTICO.md` - Diagnóstico do problema
+- `INSTRUCOES-PARA-AGENTES.md` - Este arquivo
+- `PLANO-FINALIZACAO-2026-07-08.md` - Plano de fechamento
+
+### ✅ LIÇÕES APRENDIDAS
+
+1. **Secrets devem estar APENAS no GitHub Secrets** - nunca hardcoded
+2. **config/runtime-secrets.php é gerado em deploy** - não deve estar no git
+3. **FTP_PORT deve ser 21** - não 2121 (protocol: ftp não suporta FTPS)
+4. **FTP_REMOTE_DIR é simples** - /public_html/dev/, não caminhos complexos
+5. **Bug de escaping newline** - `\n` não `\\n` na geração de PHP
+
+---
+
 ## 📝 Contato
 
 Se precisar alterar esses valores:
 - Confirme com Frederico (@fredmourao-ai) antes
 - Teste em branch separada primeiro
 - Abra uma PR para revisão antes de mergear
+- Use **SEMPRE** GitHub Secrets, nunca hardcode no código
 
 **Nunca committar secrets reais no git!** Usar sempre GitHub Secrets.
