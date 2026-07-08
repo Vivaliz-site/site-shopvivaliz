@@ -267,6 +267,22 @@ jobs:
             **/.env.*
             **/*.log
 
+      - name: Subir config/runtime-secrets.php via FTP direto
+        shell: bash
+        run: |
+          # config/runtime-secrets.php e gerado dinamicamente neste job e
+          # nunca esta rastreado pelo git, entao a FTP-Deploy-Action (que
+          # sincroniza a partir do estado do git) nunca o envia. Sobe esse
+          # arquivo especifico manualmente logo apos o sync principal.
+          PORT="${FTP_PORT_VALUE:-21}"
+          REMOTE="${FTP_REMOTE_DIR_VALUE%/}"
+          curl -sS --ftp-create-dirs \
+            -T config/runtime-secrets.php \
+            "ftp://${FTP_SERVER_VALUE}:${PORT}${REMOTE}/config/runtime-secrets.php" \
+            --user "${FTP_USERNAME_VALUE}:${FTP_PASSWORD_VALUE}" \
+            --connect-timeout 15 --max-time 30
+          echo "config/runtime-secrets.php enviado"
+
       - name: Resetar OPCache do PHP publicado
         shell: bash
         run: |
