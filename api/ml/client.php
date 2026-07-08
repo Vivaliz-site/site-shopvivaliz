@@ -8,8 +8,22 @@ declare(strict_types=1);
 
 function ml_root(): string { return dirname(__DIR__, 2); }
 
+function ml_load_runtime_secrets(): void {
+    static $loaded = false;
+    if ($loaded) return;
+    $loaded = true;
+
+    // config/constants.php carrega config/runtime-secrets.php, gerado pelo
+    // deploy a partir dos GitHub Secrets (o servidor nao recebe .env via FTP).
+    $constants = ml_root() . '/config/constants.php';
+    if (is_file($constants)) {
+        require_once $constants;
+    }
+}
+
 function ml_env(string ...$keys): string {
     static $loaded = false;
+    ml_load_runtime_secrets();
     if (!$loaded) {
         $loaded = true;
         $f = ml_root() . '/.env';
@@ -127,4 +141,34 @@ function ml_http_get(string $url): array {
     $data = json_decode($body, true);
     if (!is_array($data)) throw new RuntimeException("ML resposta inválida: $body");
     return $data;
+}
+
+/**
+ * POST/PUT autenticado com corpo JSON, usado pela API de Items do ML
+ * (a ml_http_post existente e so para o form-urlencoded do OAuth).
+ */
+function ml_http_json(string $method, string $url, ?array $payload = null): array {
+    $tokens = ml_refresh_if_needed();
+    $ch = curl_init($url);
+    $opts = [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 25,
+        CURLOPT_CUSTOMREQUEST  => strtoupper($method),
+        CURLOPT_HTTPHEADER     => [
+            "Authorization: Bearer {$tokens['access_token']}",
+            'Content-Type: application/json',
+        ],
+    ];
+    if ($payload !== null) {
+        $opts[CURLOPT_POSTFIELDS] = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    curl_setopt_array($ch, $opts);
+    $body   = (string)curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    $data = json_decode($body, true);
+    if ($status < 200 || $status >= 300) {
+        throw new RuntimeException("ML $method $url HTTP $status: " . substr($body, 0, 500));
+    }
+    return is_array($data) ? $data : [];
 }
