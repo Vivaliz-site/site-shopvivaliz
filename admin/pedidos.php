@@ -55,9 +55,11 @@ if (is_file($pedidosFile) && is_readable($pedidosFile)) {
         <?php foreach ($pedidos as $p):
             $cliente = $p['cliente'] ?? [];
             $items   = $p['items']   ?? [];
-            $total   = array_reduce($items, function ($s, $i) {
+            $subtotal = array_reduce($items, function ($s, $i) {
                 return $s + (float)($i['price'] ?? 0) * (int)($i['quantity'] ?? 1);
             }, 0.0);
+            $shippingTotal = (float)($p['shipping_total'] ?? 0);
+            $total = $subtotal + $shippingTotal;
             $dt = $p['timestamp'] ?? '';
             try { $dtFmt = (new DateTime($dt))->format('d/m/Y H:i'); } catch (\Throwable $e) { $dtFmt = $dt; }
             $wppItems = implode(', ', array_map(fn($i) => $i['name'] . ' x' . ($i['quantity'] ?? 1), $items));
@@ -95,11 +97,25 @@ if (is_file($pedidosFile) && is_readable($pedidosFile)) {
                     </tr>
                     <?php endforeach; ?>
                     <tr class="total-row">
+                        <td colspan="4" style="text-align:right;padding-right:16px;">SUBTOTAL</td>
+                        <td><?= $subtotal > 0 ? 'R$ ' . number_format($subtotal, 2, ',', '.') : 'sob consulta' ?></td>
+                    </tr>
+                    <tr class="total-row">
+                        <td colspan="4" style="text-align:right;padding-right:16px;">FRETE</td>
+                        <td><?= $shippingTotal > 0 ? 'R$ ' . number_format($shippingTotal, 2, ',', '.') : 'a confirmar' ?></td>
+                    </tr>
+                    <tr class="total-row">
                         <td colspan="4" style="text-align:right;padding-right:16px;">TOTAL</td>
                         <td><?= $total > 0 ? 'R$ ' . number_format($total, 2, ',', '.') : 'sob consulta' ?></td>
                     </tr>
                 </tbody>
             </table>
+            <?php if (!empty($p['shipping_label'])): ?>
+                <p style="margin-top:12px;font-size:13px;color:#475569;"><strong>Entrega:</strong> <?= htmlspecialchars((string)$p['shipping_label']) ?></p>
+            <?php endif; ?>
+            <?php if (!empty($p['tiny_order_id']) || !empty($p['tiny_push'])): ?>
+                <p style="margin-top:8px;font-size:13px;color:#475569;"><strong>ERP:</strong> <?= htmlspecialchars((string)($p['tiny_order_id'] ?: $p['tiny_push'])) ?></p>
+            <?php endif; ?>
             <?php if ($wppTel): ?>
             <a class="wpp-btn" href="https://wa.me/<?= htmlspecialchars($wppTel) ?>?text=<?= $wppMsg ?>" target="_blank" rel="noreferrer">📱 Contatar pelo WhatsApp</a>
             <?php endif; ?>

@@ -78,6 +78,44 @@ function svo_order_dir(): string
     return '';
 }
 
+function svo_append_legacy_order_log(array $order): void
+{
+    $logDir = svo_root() . '/logs';
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0755, true);
+    }
+
+    $entry = [
+        'id' => $order['order_number'] ?? '',
+        'timestamp' => $order['created_at'] ?? date('c'),
+        'cliente' => [
+            'nome' => $order['customer']['name'] ?? '',
+            'email' => $order['customer']['email'] ?? '',
+            'telefone' => $order['customer']['phone'] ?? '',
+            'endereco' => $order['customer']['address'] ?? '',
+            'numero' => '',
+            'complemento' => '',
+            'cidade' => '',
+            'cep' => $order['customer']['cep'] ?? '',
+        ],
+        'items' => $order['items'] ?? [],
+        'payment_method' => $order['payment_method'] ?? 'pix',
+        'status' => 'pendente_atendimento',
+        'source' => 'checkout_site_api',
+        'shipping_total' => round((float)($order['shipping_total'] ?? 0), 2),
+        'shipping_label' => (string)($order['shipping_label'] ?? ''),
+        'tiny_order_id' => (string)($order['tiny_order_id'] ?? ''),
+        'tiny_push' => (string)($order['tiny_push'] ?? ''),
+        'total' => round((float)($order['total'] ?? 0), 2),
+    ];
+
+    @file_put_contents(
+        $logDir . '/pedidos.jsonl',
+        json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
+        FILE_APPEND | LOCK_EX
+    );
+}
+
 function svo_payment_method(string $value): string
 {
     $normalized = strtolower(trim($value));
@@ -252,6 +290,10 @@ $cep = preg_replace('/\D+/', '', (string)($body['cep'] ?? ''));
 $address = trim((string)($body['address'] ?? ''));
 $notes = trim((string)($body['notes'] ?? ''));
 $paymentMethod = svo_payment_method((string)($body['payment_method'] ?? 'pix'));
+$shippingTotal = max(0.0, (float)($body['shipping_total'] ?? 0));
+$shippingLabel = trim((string)($body['shipping_label'] ?? ''));
+$shippingService = trim((string)($body['shipping_service'] ?? ''));
+$shippingCep = preg_replace('/\D+/', '', (string)($body['shipping_cep'] ?? $cep));
 $items = is_array($body['items'] ?? null) ? $body['items'] : [];
 
 if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($notes) > 1000) {
@@ -267,7 +309,7 @@ if (count($items) > 100) {
 }
 
 $cleanItems = [];
-$total = 0.0;
+$itemsTotal = 0.0;
 foreach ($items as $item) {
     if (!is_array($item)) continue;
     $sku = trim((string)($item['sku'] ?? ''));
@@ -276,7 +318,7 @@ foreach ($items as $item) {
     $price = max(0.0, (float)($item['price'] ?? 0));
     if (strlen($sku) > 80 || strlen($itemName) > 220) continue;
     if ($sku === '' || $itemName === '') continue;
-    $total += $price * $quantity;
+    $itemsTotal += $price * $quantity;
     $cleanItems[] = [
         'sku' => $sku,
         'name' => $itemName,
@@ -290,6 +332,22 @@ if (!$cleanItems) {
     svo_json(422, ['ok' => false, 'error' => 'empty_items']);
 }
 
+$notesParts = [];
+if ($notes !== '') {
+    $notesParts[] = $notes;
+}
+if ($shippingLabel !== '' || $shippingTotal > 0) {
+    $shippingNote = trim(implode(' | ', array_filter([
+        $shippingLabel !== '' ? 'Frete: ' . $shippingLabel : '',
+        $shippingTotal > 0 ? 'Valor do frete: R$ ' . number_format($shippingTotal, 2, ',', '.') : '',
+    ])));
+    if ($shippingNote !== '') {
+        $notesParts[] = $shippingNote;
+    }
+}
+
+$grandTotal = $itemsTotal + $shippingTotal;
+
 $orderNumber = 'SV' . date('YmdHis') . random_int(100, 999);
 $record = [
     'order_number' => $orderNumber,
@@ -302,10 +360,15 @@ $record = [
         'address' => $address,
     ],
     'items' => $cleanItems,
-    'total' => round($total, 2),
+    'items_total' => round($itemsTotal, 2),
+    'shipping_total' => round($shippingTotal, 2),
+    'shipping_label' => $shippingLabel,
+    'shipping_service' => $shippingService,
+    'shipping_cep' => $shippingCep,
+    'total' => round($grandTotal, 2),
     'payment_method' => $paymentMethod,
     'payment_label' => svo_payment_label($paymentMethod),
-    'notes' => $notes,
+    'notes' => implode("\n", $notesParts),
     'created_at' => date('c'),
     'source' => 'site_checkout',
 ];
@@ -322,7 +385,7 @@ if (file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESC
 if (svo_autodev_available()) {
     autodev_track('order_complete', [
         'order_number' => $orderNumber,
-        'total' => round($total, 2),
+        'total' => round($grandTotal, 2),
         'payment_method' => $paymentMethod,
         'items_count' => count($cleanItems),
         'items' => array_map(static function (array $item): array {
@@ -354,6 +417,7 @@ if (svo_tiny_credentials_configured()) {
 
 $record['tiny_push'] = $tinyPushStatus;
 file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
+svo_append_legacy_order_log($record);
 
 svo_json(200, [
     'ok' => true,
@@ -366,4 +430,8 @@ svo_json(200, [
     'storage' => str_contains($dir, 'shopvivaliz-orders') ? 'fallback_temp' : 'storage_orders',
     'tiny_order_id' => $tinyOrderId,
     'tiny_push' => $tinyPushStatus,
+    'subtotal' => round($itemsTotal, 2),
+    'shipping_total' => round($shippingTotal, 2),
+    'shipping_label' => $shippingLabel,
+    'total' => round($grandTotal, 2),
 ]);

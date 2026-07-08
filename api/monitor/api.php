@@ -23,21 +23,67 @@ function monitor_file_age(string $relPath): ?int {
     return is_file($path) ? (int)(time() - filemtime($path)) : null;
 }
 
+function monitor_read_first_json(array $relPaths, array $fallback = []): array {
+    foreach ($relPaths as $relPath) {
+        $data = monitor_read_json($relPath, []);
+        if ($data !== []) {
+            return $data;
+        }
+    }
+
+    return $fallback;
+}
+
+function monitor_queue_candidates(): array {
+    return [
+        'tasks-queue.json',
+        'logs/tasks-queue.json',
+    ];
+}
+
+function monitor_read_queue(): array {
+    foreach (monitor_queue_candidates() as $relPath) {
+        $data = monitor_read_json($relPath, []);
+        if ($data === []) {
+            continue;
+        }
+
+        if (array_is_list($data)) {
+            return ['tasks' => $data, 'source' => $relPath];
+        }
+
+        $queue = $data['queue'] ?? null;
+        if (is_array($queue) && array_is_list($queue)) {
+            return ['tasks' => $queue, 'source' => $relPath];
+        }
+    }
+
+    return ['tasks' => [], 'source' => null];
+}
+
+function monitor_count_tasks(array $tasks, array $statuses): int {
+    return count(array_filter($tasks, static function ($task) use ($statuses): bool {
+        $status = strtolower((string)($task['status'] ?? ''));
+        return in_array($status, $statuses, true);
+    }));
+}
+
 function getStatus(): array {
     $action = $_GET['action'] ?? 'status';
-    $triSync = monitor_read_json('logs/tri-environment-sync.json', []);
-    if (empty($triSync)) {
-        $triSync = monitor_read_json('logs/autonomous-sync.json', []);
-    }
+    $triSync = monitor_read_first_json([
+        'logs/tri-environment-sync.json',
+        'logs/autonomous-sync.json',
+    ], []);
     $cycle = monitor_read_json('logs/autonomous-cycle-report.json', []);
-    $tasksQueue = monitor_read_json('logs/tasks-queue.json', []);
-    $tasks = is_array($tasksQueue) && array_is_list($tasksQueue) ? $tasksQueue : ($tasksQueue['queue'] ?? $tasksQueue);
-    if (!is_array($tasks)) {
-        $tasks = [];
-    }
+    $queueState = monitor_read_queue();
+    $tasks = $queueState['tasks'];
+    $queueSource = $queueState['source'];
 
     $triStatus = strtolower((string)($triSync['status'] ?? 'unknown'));
     $isRunning = $triStatus === 'healthy' || $triStatus === 'warning';
+    $pendingCount = monitor_count_tasks($tasks, ['pending']);
+    $activeCount = monitor_count_tasks($tasks, ['assigned', 'running', 'in_progress']);
+    $completedCount = monitor_count_tasks($tasks, ['completed', 'done']);
 
     switch ($action) {
         case 'status':
@@ -58,6 +104,14 @@ function getStatus(): array {
                     'next_action' => $triSync['nextAction'] ?? null,
                     'status' => $triStatus,
                 ],
+                'queue' => [
+                    'source' => $queueSource,
+                    'source_file_age_s' => $queueSource ? monitor_file_age($queueSource) : null,
+                    'total' => count($tasks),
+                    'pending' => $pendingCount,
+                    'active' => $activeCount,
+                    'completed' => $completedCount,
+                ],
                 'details' => [
                     'cycle_status' => $cycle['status'] ?? null,
                     'cycle_generated_at' => $cycle['generated_at'] ?? null,
@@ -68,16 +122,18 @@ function getStatus(): array {
             return [
                 'status' => 'ok',
                 'message' => 'Tasks API conectada à fila canônica',
+                'source' => $queueSource,
                 'tasks' => array_slice($tasks, 0, 25),
-                'queue_file_age_s' => monitor_file_age('logs/tasks-queue.json'),
+                'queue_file_age_s' => $queueSource ? monitor_file_age($queueSource) : null,
             ];
         case 'logs':
             return [
                 'status' => 'ok',
                 'message' => 'Logs API conectada ao rastro autônomo',
                 'logs' => [
-                    'tri_environment_sync' => monitor_read_json('logs/tri-environment-sync.json', []),
+                    'tri_environment_sync' => $triSync,
                     'autonomous_cycle_report' => monitor_read_json('logs/autonomous-cycle-report.json', []),
+                    'queue_source' => $queueSource,
                 ],
             ];
         default:
