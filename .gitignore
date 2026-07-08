@@ -32,3 +32,9 @@ claude-bkp/medusa/apps/storefront/next-env.d.ts
 claude-bkp/medusa/apps/storefront/tsconfig.tsbuildinfo
 .secrets/
 .aider*
+
+# Segurança: Nunca committar secrets gerados em deploy
+config/runtime-secrets.php
+config/runtime-secrets*.php
+.env.production
+.env.production.local
