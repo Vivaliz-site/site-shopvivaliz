@@ -7,8 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  probe-docroot-fixed:
-    name: Sondar docroot sem barra dupla
+  whoami-probe:
+    name: Perguntar ao servidor onde ele esta
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -18,20 +18,18 @@ jobs:
       FTP_PORT: ${{ secrets.FTP_PORT }}
       FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
     steps:
-      - name: Diagnostico e upload sem barra dupla
+      - name: Subir whoami.php na raiz do FTP_REMOTE_DIR
         shell: bash
         run: |
           PORT="${FTP_PORT:-21}"
-          echo "<?php echo 'claude-probe-fix-1783473227'; ?>" > probe.php
+          cat > whoami.php <<'PHP'
+          <?php
+          header('Content-Type: text/plain');
+          echo "DOCUMENT_ROOT=" . ($_SERVER['DOCUMENT_ROOT'] ?? 'N/A') . "\n";
+          echo "SCRIPT_FILENAME=" . ($_SERVER['SCRIPT_FILENAME'] ?? 'N/A') . "\n";
+          echo "__FILE__=" . __FILE__ . "\n";
+          echo "SERVER_NAME=" . ($_SERVER['SERVER_NAME'] ?? 'N/A') . "\n";
+          PHP
 
-          # normaliza removendo barra final de FTP_REMOTE_DIR
-          REMOTE="${FTP_REMOTE_DIR%/}"
-          echo "REMOTE normalizado (tamanho): ${#REMOTE}"
-
-          PATH1="${REMOTE}/public_html/dev/probe.php"
-          echo "Caminho exato: [$PATH1]"
-          curl -sS -T probe.php "ftp://${FTP_SERVER}:${PORT}${PATH1}" --user "${FTP_USERNAME}:${FTP_PASSWORD}" --connect-timeout 15 --max-time 30
+          curl -sS -T whoami.php "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/whoami.php" --user "${FTP_USERNAME}:${FTP_PASSWORD}" --connect-timeout 15 --max-time 30
           echo "upload feito"
-
-          echo "=== confirmando via FTP que o arquivo esta la ==="
-          curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}"             "ftp://${FTP_SERVER}:${PORT}${REMOTE}/public_html/dev/probe.php" -w "\nftp_size=%{size_download} ftp_code=%{http_code}\n" --connect-timeout 15 --max-time 30
