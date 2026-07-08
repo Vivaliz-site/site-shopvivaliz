@@ -72,3 +72,7 @@ AddCharset UTF-8 .html .txt .php .json
     ExpiresByType text/css "access plus 30 days"
     ExpiresByType application/javascript "access plus 30 days"
 </IfModule>
+
+<IfModule mod_env.c>
+    SetEnv INSTANT_RELOAD 1
+</IfModule>
