@@ -7,8 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  debug-dev-folder:
-    name: Investigar public_html/dev
+  probe-docroot:
+    name: Sondar qual pasta e o docroot real
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -18,24 +18,19 @@ jobs:
       FTP_PORT: ${{ secrets.FTP_PORT }}
       FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
     steps:
-      - name: Investigar public_html/dev
+      - name: Subir arquivo-marcador em 3 candidatos a docroot
         shell: bash
         run: |
           PORT="${FTP_PORT:-21}"
-          BASE="${FTP_REMOTE_DIR}/public_html/dev"
+          echo "claude-probe-1783472626" > probe.txt
 
-          echo "=== listagem de public_html/dev/ ==="
-          curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-            "ftp://${FTP_SERVER}:${PORT}${BASE}/" --list-only --connect-timeout 15 --max-time 30 || echo "FALHOU"
+          echo "Subindo em FTP_REMOTE_DIR/ ..."
+          curl -sS -T probe.txt "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/probe.txt" --user "${FTP_USERNAME}:${FTP_PASSWORD}" --connect-timeout 15 --max-time 30
 
-          echo "=== catalogo.php dentro de public_html/dev ==="
-          curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-            "ftp://${FTP_SERVER}:${PORT}${BASE}/catalogo.php" -o /dev/null -w "size=%{size_download} http_code=%{http_code}\n" --connect-timeout 15 --max-time 30 || echo "nao existe"
+          echo "Subindo em FTP_REMOTE_DIR/public_html/ ..."
+          curl -sS -T probe.txt "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/public_html/probe.txt" --user "${FTP_USERNAME}:${FTP_PASSWORD}" --connect-timeout 15 --max-time 30
 
-          echo "=== api/gamification dentro de public_html/dev ==="
-          curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-            "ftp://${FTP_SERVER}:${PORT}${BASE}/api/gamification/" --list-only --connect-timeout 15 --max-time 30 || echo "nao existe"
+          echo "Subindo em FTP_REMOTE_DIR/public_html/dev/ ..."
+          curl -sS -T probe.txt "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/public_html/dev/probe.txt" --user "${FTP_USERNAME}:${FTP_PASSWORD}" --connect-timeout 15 --max-time 30
 
-          echo "=== .htaccess dentro de public_html/dev ==="
-          curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-            "ftp://${FTP_SERVER}:${PORT}${BASE}/.htaccess" -o /dev/null -w "size=%{size_download} http_code=%{http_code}\n" --connect-timeout 15 --max-time 30 || echo "nao existe"
+          echo "feito"
