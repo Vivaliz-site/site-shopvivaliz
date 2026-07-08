@@ -150,6 +150,9 @@ jobs:
       RUNTIME_AGENT_KEY_VALUE: ${{ secrets.SHOPVIVALIZ_AGENT_KEY != '' && secrets.SHOPVIVALIZ_AGENT_KEY || secrets.AGENT_KEY != '' && secrets.AGENT_KEY || secrets.WATCHDOG_AGENT_KEY != '' && secrets.WATCHDOG_AGENT_KEY || secrets.AUTONOMOUS_AGENT_KEY }}
       MELHORENVIO_ACCESS_TOKEN_VALUE: ${{ secrets.MELHORENVIO_ACCESS_TOKEN != '' && secrets.MELHORENVIO_ACCESS_TOKEN || secrets.SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN }}
       MELHORENVIO_FROM_POSTAL_CODE_VALUE: ${{ secrets.MELHORENVIO_FROM_POSTAL_CODE }}
+      ML_CLIENT_ID_VALUE: ${{ secrets.ML_CLIENT_ID }}
+      ML_CLIENT_SECRET_VALUE: ${{ secrets.ML_CLIENT_SECRET }}
+      ML_REDIRECT_URI_VALUE: ${{ secrets.ML_REDIRECT_URI }}
 
     steps:
       - name: Baixar o código do repositório
@@ -180,6 +183,9 @@ jobs:
               "SHOPVIVALIZ_AGENT_KEY": os.environ.get("RUNTIME_AGENT_KEY_VALUE", ""),
               "MELHORENVIO_ACCESS_TOKEN": os.environ.get("MELHORENVIO_ACCESS_TOKEN_VALUE", ""),
               "MELHORENVIO_FROM_POSTAL_CODE": os.environ.get("MELHORENVIO_FROM_POSTAL_CODE_VALUE", ""),
+              "ML_CLIENT_ID": os.environ.get("ML_CLIENT_ID_VALUE", ""),
+              "ML_CLIENT_SECRET": os.environ.get("ML_CLIENT_SECRET_VALUE", ""),
+              "ML_REDIRECT_URI": os.environ.get("ML_REDIRECT_URI_VALUE", ""),
           }
           for key, value in optional.items():
               if value:
