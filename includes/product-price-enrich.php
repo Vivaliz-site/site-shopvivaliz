@@ -90,9 +90,16 @@ function svp_bulk_price_stock(?mysqli $db, array $skus): array
         return [];
     }
 
-    $types = str_repeat('s', count($skus));
-    $stmt->bind_param($types, ...$skus);
-    $stmt->execute();
+$types = str_repeat('s', count($skus));
+$params = [$types];
+foreach (array_keys($skus) as $i) {
+    $params[] = &$skus[$i];
+}
+if (!call_user_func_array([$stmt, 'bind_param'], $params)) {
+    $stmt->close();
+    return [];
+}
+$stmt->execute();
     $result = $stmt->get_result();
 
     $out = [];
