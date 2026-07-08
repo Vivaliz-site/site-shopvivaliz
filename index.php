@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+// Secrets sincronizados com GitHub - FTP pronto para deploy
 require_once __DIR__ . '/config/bootstrap-env.php';
 
 // Configuração Dinâmica de Ambiente
