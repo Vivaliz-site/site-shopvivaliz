@@ -1,0 +1,63 @@
+name: Sincronizacao Cirurgica de Arquivos (uso unico)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync-missing-files:
+    name: Subir arquivos especificos ausentes via FTP
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FTP_SERVER: ${{ secrets.FTP_SERVER }}
+      FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      FTP_PORT: ${{ secrets.FTP_PORT }}
+      FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+    steps:
+      - name: Baixar o codigo do repositorio
+        uses: actions/checkout@v4.2.2
+
+      - name: Subir arquivos especificos via curl FTP
+        shell: bash
+        run: |
+          set -e
+          PORT="${FTP_PORT:-21}"
+          REMOTE="${FTP_REMOTE_DIR%/}"
+
+          FILES=(
+            ".htaccess"
+            "gamificacao.php"
+            "api/gamification/status.php"
+            "api/maintenance/opcache-reset.php"
+            "checkout-v2/index.php"
+            "api/orders/create-v2.php"
+            "carrinho/index.php"
+            "carrinho.php"
+            "catalogo.php"
+            "home.php"
+            "produto.php"
+            "includes/product-price-enrich.php"
+            "api/melhorenvio/shipping-check.php"
+            "api/melhorenvio/diagnostic.php"
+          )
+
+          for f in "${FILES[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "AVISO: $f nao existe localmente, pulando"
+              continue
+            fi
+            echo "Enviando $f ..."
+            curl -sS --ftp-create-dirs \
+              -T "$f" \
+              "ftp://${FTP_SERVER}:${PORT}${REMOTE}/${f}" \
+              --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
+              --connect-timeout 15 \
+              --max-time 60
+            echo "  OK: $f"
+          done
+
+          echo "Sincronizacao cirurgica concluida."
