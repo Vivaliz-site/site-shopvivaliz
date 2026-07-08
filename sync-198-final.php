@@ -48,9 +48,9 @@ if (empty($produtos)) {
 }
 
 // SINCRONIZAR
-$sql = "INSERT INTO products (sku, name, price, description, category, stock, image_url, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-        ON DUPLICATE KEY UPDATE name=VALUES(name), price=VALUES(price), description=VALUES(description), category=VALUES(category), stock=VALUES(stock), image_url=VALUES(image_url), updated_at=NOW()";
+$sql = "INSERT INTO products (sku, name, price, description, stock, image_url, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE name=VALUES(name), price=VALUES(price), description=VALUES(description), stock=VALUES(stock), image_url=VALUES(image_url), updated_at=NOW()";
 
 $stmt = $conn->prepare($sql);
 
