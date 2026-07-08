@@ -7,10 +7,10 @@ permissions:
   contents: read
 
 jobs:
-  sync-missing-files:
-    name: Subir arquivos especificos ausentes via FTP
+  debug-ftp:
+    name: Diagnosticar caminho FTP real
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     env:
       FTP_SERVER: ${{ secrets.FTP_SERVER }}
       FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
@@ -18,46 +18,26 @@ jobs:
       FTP_PORT: ${{ secrets.FTP_PORT }}
       FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
     steps:
-      - name: Baixar o codigo do repositorio
-        uses: actions/checkout@v4.2.2
-
-      - name: Subir arquivos especificos via curl FTP
+      - name: Listar raiz FTP e diretorio configurado
         shell: bash
         run: |
-          set -e
           PORT="${FTP_PORT:-21}"
-          REMOTE="${FTP_REMOTE_DIR%/}"
+          echo "=== FTP_REMOTE_DIR (tamanho e repr) ==="
+          echo -n "$FTP_REMOTE_DIR" | wc -c
+          echo -n "$FTP_REMOTE_DIR" | od -c | head -3
 
-          FILES=(
-            ".htaccess"
-            "gamificacao.php"
-            "api/gamification/status.php"
-            "api/maintenance/opcache-reset.php"
-            "checkout-v2/index.php"
-            "api/orders/create-v2.php"
-            "carrinho/index.php"
-            "carrinho.php"
-            "catalogo.php"
-            "home.php"
-            "produto.php"
-            "includes/product-price-enrich.php"
-            "api/melhorenvio/shipping-check.php"
-            "api/melhorenvio/diagnostic.php"
-          )
+          echo "=== listagem da raiz FTP (login home) ==="
+          curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
+            "ftp://${FTP_SERVER}:${PORT}/" --list-only --connect-timeout 15 --max-time 30 || echo "FALHOU listagem raiz"
 
-          for f in "${FILES[@]}"; do
-            if [ ! -f "$f" ]; then
-              echo "AVISO: $f nao existe localmente, pulando"
-              continue
-            fi
-            echo "Enviando $f ..."
-            curl -sS --ftp-create-dirs \
-              -T "$f" \
-              "ftp://${FTP_SERVER}:${PORT}${REMOTE}/${f}" \
-              --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
-              --connect-timeout 15 \
-              --max-time 60
-            echo "  OK: $f"
-          done
+          echo "=== listagem de FTP_REMOTE_DIR ==="
+          curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
+            "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/" --list-only --connect-timeout 15 --max-time 30 || echo "FALHOU listagem FTP_REMOTE_DIR"
 
-          echo "Sincronizacao cirurgica concluida."
+          echo "=== verificando se index.php/catalogo.php estao onde esperado ==="
+          curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
+            "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/catalogo.php" -o /dev/null -w "catalogo.php remoto: %{size_download} bytes, http_code=%{http_code}\n" --connect-timeout 15 --max-time 30 || echo "FALHOU check catalogo.php"
+
+          echo "=== checando api/gamification/ que subi ==="
+          curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
+            "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/api/gamification/" --list-only --connect-timeout 15 --max-time 30 || echo "FALHOU listagem api/gamification"
