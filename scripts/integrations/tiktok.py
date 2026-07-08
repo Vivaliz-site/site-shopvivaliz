@@ -108,70 +108,53 @@ class TikTokIntegration:
             return []
 
     def _update_product_title(self, product_id, title):
-        """Atualiza titulo do produto via API"""
-        try:
-            if not self.access_token:
-                print(f"    [ENVIADO] Titulo: {product_id} (simulado)")
-                return True
-
-            url = f"{self.api_base}/shop/api/product/update"
-            headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.access_token}'}
-            payload = {'product_id': int(product_id), 'title': title}
-            response = requests.post(url, json=payload, headers=headers, timeout=30)
-            if response.status_code == 200:
-                print(f"    [ENVIADO] Titulo atualizado")
-                return True
-            else:
-                print(f"    [ENVIADO] Titulo (status {response.status_code})")
-                return True
-        except:
-            print(f"    [ENVIADO] Titulo (simulado)")
+        """Atualiza titulo do produto via API. Levanta excecao em falha real
+        (nao mascara erro como sucesso) -- o chamador conta falhas."""
+        if not self.access_token:
+            print(f"    [SIMULADO] Titulo: {product_id} (sem TIKTOK_ACCESS_TOKEN)")
             return True
+
+        url = f"{self.api_base}/shop/api/product/update"
+        headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.access_token}'}
+        payload = {'product_id': int(product_id), 'title': title}
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        if response.status_code != 200:
+            raise RuntimeError(f"TikTok update title falhou: HTTP {response.status_code}: {response.text[:300]}")
+        print(f"    [ENVIADO] Titulo atualizado")
+        return True
 
     def _update_product_description(self, product_id, description):
-        """Atualiza descricao do produto via API"""
-        try:
-            if not self.access_token:
-                print(f"    [ENVIADO] Descricao: {product_id} (simulado)")
-                return True
-
-            url = f"{self.api_base}/shop/api/product/update"
-            headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.access_token}'}
-            payload = {'product_id': int(product_id), 'description': description}
-            response = requests.post(url, json=payload, headers=headers, timeout=30)
-            if response.status_code == 200:
-                print(f"    [ENVIADO] Descricao atualizada")
-                return True
-            else:
-                print(f"    [ENVIADO] Descricao (status {response.status_code})")
-                return True
-        except:
-            print(f"    [ENVIADO] Descricao (simulado)")
+        """Atualiza descricao do produto via API. Levanta excecao em falha real."""
+        if not self.access_token:
+            print(f"    [SIMULADO] Descricao: {product_id} (sem TIKTOK_ACCESS_TOKEN)")
             return True
 
+        url = f"{self.api_base}/shop/api/product/update"
+        headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.access_token}'}
+        payload = {'product_id': int(product_id), 'description': description}
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        if response.status_code != 200:
+            raise RuntimeError(f"TikTok update description falhou: HTTP {response.status_code}: {response.text[:300]}")
+        print(f"    [ENVIADO] Descricao atualizada")
+        return True
+
     def _update_product_images(self, product_id, images):
-        """Atualiza imagens do produto via API"""
+        """Atualiza imagens do produto via API. Levanta excecao em falha real."""
         if not images:
             return False
 
-        try:
-            if not self.access_token:
-                print(f"    [ENVIADO] Imagens: {len(images)} (simulado)")
-                return True
-
-            url = f"{self.api_base}/shop/api/product/update/images"
-            headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.access_token}'}
-            payload = {'product_id': int(product_id), 'images': images[:4]}
-            response = requests.post(url, json=payload, headers=headers, timeout=30)
-            if response.status_code == 200:
-                print(f"    [ENVIADO] Imagens: {len(images)} uploads")
-                return True
-            else:
-                print(f"    [ENVIADO] Imagens (status {response.status_code})")
-                return True
-        except:
-            print(f"    [ENVIADO] Imagens: {len(images)} (simulado)")
+        if not self.access_token:
+            print(f"    [SIMULADO] Imagens: {len(images)} (sem TIKTOK_ACCESS_TOKEN)")
             return True
+
+        url = f"{self.api_base}/shop/api/product/update/images"
+        headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.access_token}'}
+        payload = {'product_id': int(product_id), 'images': images[:4]}
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        if response.status_code != 200:
+            raise RuntimeError(f"TikTok update images falhou: HTTP {response.status_code}: {response.text[:300]}")
+        print(f"    [ENVIADO] Imagens: {len(images)} uploads")
+        return True
 
 # CLI
 if __name__ == '__main__':
