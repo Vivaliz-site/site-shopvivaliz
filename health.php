@@ -44,7 +44,7 @@ require_once __DIR__ . '/config/database.php';
 
     $response = [
         'ok' => ($db_status === 'ok' && $storage_status === 'ok'),
-        'status' => 'healthy',
+        'status' => ($db_status === 'ok' && $storage_status === 'ok') ? 'healthy' : 'degraded',
         'timestamp' => date('c'),
         'version' => defined('APP_VERSION') ? APP_VERSION : 'unknown',
         'environment' => ENVIRONMENT,
