@@ -1,3 +1,3 @@
 <?php
-echo "PHP Extension Dir: " . PHP_EXTENSION_DIR . "
-";
+http_response_code(404);
+exit;
