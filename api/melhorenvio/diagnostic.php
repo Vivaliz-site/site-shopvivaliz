@@ -156,10 +156,12 @@ function sv_me_request(string $url, array $payload, ?string $token): array
 }
 
 sv_me_env_load();
+require_once sv_me_root() . '/includes/melhorenvio-oauth.php';
 
 $postalCode = preg_replace('/\D+/', '', (string)($_GET['cep'] ?? $_POST['cep'] ?? '35500025'));
 
-$token = sv_me_env('MELHORENVIO_ACCESS_TOKEN')
+$token = me_current_access_token()
+    ?: sv_me_env('MELHORENVIO_ACCESS_TOKEN')
     ?: sv_me_env('SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN')
     ?: sv_me_env('MELHORENVIO_API_KEY')
     ?: sv_me_env('SHOPVIVALIZ_MELHORENVIO_API_KEY');
