@@ -7,8 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  whoami-probe:
-    name: Perguntar ao servidor onde ele esta
+  find-real-docroot:
+    name: Buscar todas as pastas candidatas a docroot
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -16,20 +16,16 @@ jobs:
       FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
       FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
       FTP_PORT: ${{ secrets.FTP_PORT }}
-      FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
     steps:
-      - name: Subir whoami.php na raiz do FTP_REMOTE_DIR
+      - name: Listar TODAS as pastas na raiz e em public_html
         shell: bash
         run: |
           PORT="${FTP_PORT:-21}"
-          cat > whoami.php <<'PHP'
-          <?php
-          header('Content-Type: text/plain');
-          echo "DOCUMENT_ROOT=" . ($_SERVER['DOCUMENT_ROOT'] ?? 'N/A') . "\n";
-          echo "SCRIPT_FILENAME=" . ($_SERVER['SCRIPT_FILENAME'] ?? 'N/A') . "\n";
-          echo "__FILE__=" . __FILE__ . "\n";
-          echo "SERVER_NAME=" . ($_SERVER['SERVER_NAME'] ?? 'N/A') . "\n";
-          PHP
 
-          curl -sS -T whoami.php "ftp://${FTP_SERVER}:${PORT}${FTP_REMOTE_DIR}/whoami.php" --user "${FTP_USERNAME}:${FTP_PASSWORD}" --connect-timeout 15 --max-time 30
-          echo "upload feito"
+          echo "=== raiz completa (com tipo, ls -la style) ==="
+          curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
+            "ftp://${FTP_SERVER}:${PORT}/" --connect-timeout 15 --max-time 30
+
+          echo "=== dentro de public_html (ls -la style) ==="
+          curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
+            "ftp://${FTP_SERVER}:${PORT}/public_html/" --connect-timeout 15 --max-time 30
