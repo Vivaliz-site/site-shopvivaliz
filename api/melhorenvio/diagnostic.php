@@ -188,7 +188,7 @@ $payload = array(
     )
 );
 
-$url = 'https://www.melhorenvio.com.br/api/v2/me/shipment/calculate';
+$url = me_api_base() . '/api/v2/me/shipment/calculate';
 $result = sv_me_request($url, $payload, $token);
 
 sv_me_json($result['status'], array(
