@@ -183,7 +183,8 @@ foreach ($items as $item) {
     ];
 }
 
-$token = svsc_env(
+require_once dirname(__DIR__, 2) . '/includes/melhorenvio-oauth.php';
+$token = me_current_access_token() ?: svsc_env(
     'MELHORENVIO_ACCESS_TOKEN',
     'SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN',
     'MELHORENVIO_API_KEY',
