@@ -103,13 +103,26 @@ function me_refresh_if_needed(): ?array {
 }
 
 function me_oauth_post(string $url, array $fields): array {
+    // Melhor Envio rejeita client_id/client_secret no corpo com
+    // "invalid_client" -- exige HTTP Basic Auth (padrao OAuth2 para
+    // clientes confidenciais). Envia dos dois jeitos: Basic Auth no
+    // header, e sem client_id/client_secret duplicado no corpo.
+    $clientId = (string)($fields['client_id'] ?? '');
+    $clientSecret = (string)($fields['client_secret'] ?? '');
+    unset($fields['client_id'], $fields['client_secret']);
+
+    $headers = ['Content-Type: application/x-www-form-urlencoded', 'Accept: application/json'];
+    if ($clientId !== '' && $clientSecret !== '') {
+        $headers[] = 'Authorization: Basic ' . base64_encode($clientId . ':' . $clientSecret);
+    }
+
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => http_build_query($fields),
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 20,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded', 'Accept: application/json'],
+        CURLOPT_HTTPHEADER => $headers,
     ]);
     $body = (string)curl_exec($ch);
     $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
@@ -119,6 +132,7 @@ function me_oauth_post(string $url, array $fields): array {
     if (!is_array($data)) {
         return ['error' => 'invalid_response', 'status' => $status, 'raw' => substr($body, 0, 300)];
     }
+    $data['_http_status'] = $status;
     return $data;
 }
 
