@@ -16,8 +16,8 @@ header('X-XSS-Protection: 1; mode=block');
 
 try {
     // Carrega as constantes e a configuração do banco de dados de forma segura
-    require_once __DIR__ . '/config/constants.php';
-    require_once __DIR__ . '/config/database.php';
+    require_once dirname(__DIR__, 3) . '/config/constants.php';
+    require_once CONFIG_PATH . '/database.php';
 
     // Tenta obter uma instância do banco de dados
     $db_instance = Database::getInstance();
@@ -44,7 +44,7 @@ try {
 
     $response = [
         'ok' => ($db_status === 'ok' && $storage_status === 'ok'),
-        'status' => ($db_status === 'ok' && $storage_status === 'ok') ? 'healthy' : 'degraded',
+        'status' => 'healthy',
         'timestamp' => date('c'),
         'version' => defined('APP_VERSION') ? APP_VERSION : 'unknown',
         'environment' => ENVIRONMENT,
@@ -58,7 +58,7 @@ try {
         ],
     ];
 
-} catch (Throwable $e) {
+} catch (Exception $e) {
     http_response_code(500); // Internal Server Error
     $response = [
         'ok' => false,

@@ -33,10 +33,62 @@ function monitor_read_lines(string $path, int $limit = 5): array
     return array_slice($lines, -$limit);
 }
 
+function monitor_read_first_json(array $paths, array $fallback = []): array
+{
+    foreach ($paths as $path) {
+        $data = monitor_read_json($path, []);
+        if ($data !== []) {
+            return $data;
+        }
+    }
+
+    return $fallback;
+}
+
+function monitor_read_queue_state(): array
+{
+    $root = realpath(dirname(__DIR__)) ?: dirname(__DIR__);
+    $candidates = [
+        __DIR__ . '/../tasks-queue.json',
+        __DIR__ . '/../logs/tasks-queue.json',
+    ];
+
+    foreach ($candidates as $path) {
+        $data = monitor_read_json($path, []);
+        if ($data === []) {
+            continue;
+        }
+
+        $resolved = realpath($path) ?: $path;
+        $source = str_replace('\\', '/', ltrim(str_replace($root . DIRECTORY_SEPARATOR, '', $resolved), '\\/'));
+
+        if (array_is_list($data)) {
+            return ['tasks' => $data, 'source' => $source];
+        }
+
+        $queue = $data['queue'] ?? null;
+        if (is_array($queue) && array_is_list($queue)) {
+            return ['tasks' => $queue, 'source' => $source];
+        }
+    }
+
+    return ['tasks' => [], 'source' => null];
+}
+
+function monitor_count_tasks(array $tasks, array $statuses): int
+{
+    return count(array_filter($tasks, static function ($task) use ($statuses): bool {
+        $status = strtolower((string)($task['status'] ?? ''));
+        return in_array($status, $statuses, true);
+    }));
+}
+
 // Carregar tarefas
-$tasks_queue = monitor_read_json(__DIR__ . '/../logs/tasks-queue.json', []);
-$pending_count = count(array_filter($tasks_queue, fn($t) => $t['status'] === 'pending'));
-$assigned_count = count(array_filter($tasks_queue, fn($t) => $t['status'] === 'assigned'));
+$queue_state = monitor_read_queue_state();
+$tasks_queue = $queue_state['tasks'];
+$queue_source = $queue_state['source'];
+$pending_count = monitor_count_tasks($tasks_queue, ['pending']);
+$assigned_count = monitor_count_tasks($tasks_queue, ['assigned', 'running', 'in_progress']);
 $total_tasks = count($tasks_queue);
 
 // Carregar respostas
@@ -67,10 +119,10 @@ foreach (monitor_read_lines($messages_file, 3) as $line) {
 }
 $recent_messages = array_reverse($recent_messages);
 
-$tri_sync = monitor_read_json(__DIR__ . '/../logs/tri-environment-sync.json', []);
-if (empty($tri_sync)) {
-    $tri_sync = monitor_read_json(__DIR__ . '/../logs/autonomous-sync.json', []);
-}
+$tri_sync = monitor_read_first_json([
+    __DIR__ . '/../logs/tri-environment-sync.json',
+    __DIR__ . '/../logs/autonomous-sync.json',
+], []);
 
 $roi_report = monitor_read_json(__DIR__ . '/../logs/roi-engine-report.json', []);
 $sales_focus = $roi_report['top_opportunities'][0] ?? $roi_report['priorities'][0] ?? null;
@@ -294,6 +346,9 @@ $tri_sync_badge = [
             <!-- PAINEL DE TAREFAS -->
             <div class="panel">
                 <h2>📋 Fila de Tarefas</h2>
+                <?php if ($queue_source): ?>
+                    <p style="color:#64748b;margin-bottom:14px;font-size:.92em;">Fonte atual: <?php echo htmlspecialchars($queue_source); ?></p>
+                <?php endif; ?>
                 <?php if (empty($tasks_queue)): ?>
                     <div class="empty">Nenhuma tarefa enfileirada</div>
                 <?php else: ?>

@@ -11,7 +11,7 @@ try {
     $db = Database::getInstance();
     $conn = $db->getConnection();
     $conn->set_charset(DB_CHARSET);
-} catch (Throwable $e) {
+} catch (Exception $e) {
     http_response_code(503); // Service Unavailable
     log_error('Falha ao inicializar a sincronização', ['error' => $e->getMessage()]);
     exit(json_encode(['ok' => false, 'erro' => 'Falha ao conectar ao banco de dados: ' . $e->getMessage()]));
@@ -20,6 +20,7 @@ try {
 // CRIAR TABELA SE NÃO EXISTIR
 $create_table_sql = "CREATE TABLE IF NOT EXISTS products (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id VARCHAR(50) UNIQUE NOT NULL,
     sku VARCHAR(50) UNIQUE NOT NULL,
     name VARCHAR(255) NOT NULL,
     price DECIMAL(10, 2) NOT NULL,
@@ -47,9 +48,9 @@ if (empty($produtos)) {
 }
 
 // SINCRONIZAR
-$sql = "INSERT INTO products (sku, name, price, description, stock, image_url, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
-        ON DUPLICATE KEY UPDATE name=VALUES(name), price=VALUES(price), description=VALUES(description), stock=VALUES(stock), image_url=VALUES(image_url), updated_at=NOW()";
+$sql = "INSERT INTO products (sku, name, price, description, category, stock, image_url, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE name=VALUES(name), price=VALUES(price), description=VALUES(description), category=VALUES(category), stock=VALUES(stock), image_url=VALUES(image_url), updated_at=NOW()";
 
 $stmt = $conn->prepare($sql);
 

@@ -1,3 +1,5 @@
 <?php
-http_response_code(404);
-exit;
+echo "PHP Prefix: " . PHP_PREFIX . "
+";
+echo "PHP_BINDIR: " . PHP_BINDIR . "
+";

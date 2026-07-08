@@ -1,15 +1,10 @@
 name: Deploy Automático Seguro - Shop Vivaliz
 
+# Desativado o gatilho automatico em push: a producao real e a VM Oracle
+# (dev.shopvivaliz.com.br -> 137.131.156.17, sincronizada via cron
+# git-auto-sync.py), nao o HostGator. Mantido workflow_dispatch para
+# rodar manualmente se o HostGator voltar a ser usado no futuro.
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - 'automation/**'
-      - '**/*.md'
-      - '.github/**'
-      - '.claude/**'
-      - '.codex/**'
   workflow_dispatch:
 
 permissions:
@@ -22,6 +17,7 @@ concurrency:
 jobs:
   validate-secrets:
     name: Validar Secrets Obrigatórios
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -126,7 +122,7 @@ jobs:
   web-deploy:
     name: Sincronizar com a HostGator Dev
     needs: validate-secrets
-    if: needs.validate-secrets.outputs.secrets_valid == 'true'
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' && needs.validate-secrets.outputs.secrets_valid == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -150,6 +146,9 @@ jobs:
       RUNTIME_AGENT_KEY_VALUE: ${{ secrets.SHOPVIVALIZ_AGENT_KEY != '' && secrets.SHOPVIVALIZ_AGENT_KEY || secrets.AGENT_KEY != '' && secrets.AGENT_KEY || secrets.WATCHDOG_AGENT_KEY != '' && secrets.WATCHDOG_AGENT_KEY || secrets.AUTONOMOUS_AGENT_KEY }}
       MELHORENVIO_ACCESS_TOKEN_VALUE: ${{ secrets.MELHORENVIO_ACCESS_TOKEN != '' && secrets.MELHORENVIO_ACCESS_TOKEN || secrets.SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN }}
       MELHORENVIO_FROM_POSTAL_CODE_VALUE: ${{ secrets.MELHORENVIO_FROM_POSTAL_CODE }}
+      ML_CLIENT_ID_VALUE: ${{ secrets.ML_CLIENT_ID }}
+      ML_CLIENT_SECRET_VALUE: ${{ secrets.ML_CLIENT_SECRET }}
+      ML_REDIRECT_URI_VALUE: ${{ secrets.ML_REDIRECT_URI }}
 
     steps:
       - name: Baixar o código do repositório
@@ -180,6 +179,9 @@ jobs:
               "SHOPVIVALIZ_AGENT_KEY": os.environ.get("RUNTIME_AGENT_KEY_VALUE", ""),
               "MELHORENVIO_ACCESS_TOKEN": os.environ.get("MELHORENVIO_ACCESS_TOKEN_VALUE", ""),
               "MELHORENVIO_FROM_POSTAL_CODE": os.environ.get("MELHORENVIO_FROM_POSTAL_CODE_VALUE", ""),
+              "ML_CLIENT_ID": os.environ.get("ML_CLIENT_ID_VALUE", ""),
+              "ML_CLIENT_SECRET": os.environ.get("ML_CLIENT_SECRET_VALUE", ""),
+              "ML_REDIRECT_URI": os.environ.get("ML_REDIRECT_URI_VALUE", ""),
           }
           for key, value in optional.items():
               if value:

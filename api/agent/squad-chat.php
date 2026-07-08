@@ -6,6 +6,8 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
+
 header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
