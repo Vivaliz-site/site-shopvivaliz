@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/../includes/admin-guard.php';
 
 header('Content-Type: text/html; charset=UTF-8');
 $version = is_file(__DIR__ . '/../config/shopvivaliz-version.php') ? require __DIR__ . '/../config/shopvivaliz-version.php' : [];
