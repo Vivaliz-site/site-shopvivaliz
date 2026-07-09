@@ -123,6 +123,38 @@ function sv_home_banners(): array
     ];
 }
 
+function sv_home_category_icon(string $category): string
+{
+    // Evita mb_strtolower (extensao mbstring pode nao estar disponivel no
+    // servidor); stripos() ja faz comparacao case-insensitive por keyword.
+    $map = [
+        'ferrament' => '🛠️',
+        'rodízio' => '⚙️',
+        'rodizio' => '⚙️',
+        'jardim' => '🌿',
+        'floreira' => '🪴',
+        'banheiro' => '🚿',
+        'cozinha' => '🍽️',
+        'elétric' => '💡',
+        'eletric' => '💡',
+        'organiza' => '🗄️',
+        'caixa' => '📦',
+        'limpeza' => '🧽',
+        'segurança' => '🔒',
+        'seguranca' => '🔒',
+        'utilidade' => '🏠',
+        'pintura' => '🎨',
+        'construção' => '🧱',
+        'construcao' => '🧱',
+    ];
+    foreach ($map as $needle => $icon) {
+        if (stripos($category, $needle) !== false) {
+            return $icon;
+        }
+    }
+    return '📦';
+}
+
 function sv_home_top_categories(int $limit = 8): array
 {
     $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
@@ -153,6 +185,7 @@ function sv_home_top_categories(int $limit = 8): array
         $result[] = [
             'name' => $category,
             'count' => $count,
+            'icon' => sv_home_category_icon($category),
             'href' => '/catalogo?categoria=' . rawurlencode($category),
         ];
         if (count($result) >= $limit) {
@@ -302,8 +335,9 @@ $svNavCurrent = '';
                     <div class="home-scroller-track categories-track">
                         <?php foreach ($homeCategories as $category): ?>
                             <a class="category-slide" href="<?= sv_home_esc($category['href']) ?>">
+                                <span class="category-slide-icon" aria-hidden="true"><?= sv_home_esc($category['icon']) ?></span>
                                 <strong><?= sv_home_esc($category['name']) ?></strong>
-                                <span><?= (int)$category['count'] ?> itens</span>
+                                <span class="category-slide-count"><?= (int)$category['count'] ?> itens</span>
                             </a>
                         <?php endforeach; ?>
                     </div>
