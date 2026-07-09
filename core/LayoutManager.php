@@ -309,4 +309,171 @@ class LayoutManager {
 
         return $this->save($pageId, $config, $pageType);
     }
+
+    // ── A/B TESTING ──
+
+    /**
+     * Criar uma variante de um layout
+     */
+    public function createVariant(string $pageId, string $variantName, array $config, float $trafficPercent = 50.0): ?int {
+        try {
+            $layout = $this->getByPageId($pageId);
+            if (!$layout) {
+                return null;
+            }
+
+            $layoutId = $layout['id'];
+            $variantKey = "ab_variant_" . strtolower(preg_replace('/[^a-z0-9]/i', '_', $pageId . '_' . $variantName));
+            $configJson = json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+            $stmt = $this->db->prepare(
+                'INSERT INTO page_layout_variants (layout_id, page_id, variant_name, variant_key, traffic_percent, config, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?)'
+            );
+
+            $result = $stmt->execute([
+                $layoutId,
+                $pageId,
+                $variantName,
+                $variantKey,
+                $trafficPercent,
+                $configJson,
+                $this->userId
+            ]);
+
+            return $result ? $this->db->lastInsertId() : null;
+        } catch (\PDOException $e) {
+            error_log("LayoutManager::createVariant error: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Obter todas as variantes de um layout
+     */
+    public function getVariants(string $pageId, bool $activeOnly = false): array {
+        try {
+            $sql = 'SELECT * FROM page_layout_variants WHERE page_id = ?';
+            if ($activeOnly) {
+                $sql .= ' AND active = 1';
+            }
+            $sql .= ' ORDER BY traffic_percent DESC, created_at DESC';
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([$pageId]);
+
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+            foreach ($rows as &$row) {
+                $row['config'] = json_decode($row['config'], true);
+                $row['ctr'] = $row['impressions'] > 0 ? round(($row['conversions'] / $row['impressions']) * 100, 2) : 0;
+            }
+
+            return $rows;
+        } catch (\PDOException $e) {
+            error_log("LayoutManager::getVariants error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Selecionar variante para um visitante (determinístico via hash)
+     * Retorna: {variant_id, variant_name, config}
+     */
+    public function selectVariantForRequest(string $pageId, string $sessionHash): ?array {
+        try {
+            $variants = $this->getVariants($pageId, true);
+
+            if (empty($variants)) {
+                return null;
+            }
+
+            // Hash determinístico (sempre mesmo visitor → sempre mesma variante)
+            $hashValue = (crc32($sessionHash) & 0x7fffffff) % 10000;
+            $accumulated = 0;
+
+            foreach ($variants as $variant) {
+                $accumulated += ($variant['traffic_percent'] * 100);
+                if ($hashValue < $accumulated) {
+                    return [
+                        'variant_id' => $variant['id'],
+                        'variant_name' => $variant['variant_name'],
+                        'variant_key' => $variant['variant_key'],
+                        'config' => $variant['config']
+                    ];
+                }
+            }
+
+            // Fallback (nunca deve acontecer)
+            return [
+                'variant_id' => $variants[0]['id'],
+                'variant_name' => $variants[0]['variant_name'],
+                'variant_key' => $variants[0]['variant_key'],
+                'config' => $variants[0]['config']
+            ];
+        } catch (\PDOException $e) {
+            error_log("LayoutManager::selectVariantForRequest error: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Registrar impressão de variante
+     */
+    public function recordImpression(int $variantId): bool {
+        try {
+            $stmt = $this->db->prepare(
+                'UPDATE page_layout_variants SET impressions = impressions + 1 WHERE id = ?'
+            );
+            return $stmt->execute([$variantId]);
+        } catch (\PDOException $e) {
+            error_log("LayoutManager::recordImpression error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Registrar conversão (pedido realizado)
+     */
+    public function recordConversion(int $variantId, float $value = 0): bool {
+        try {
+            $stmt = $this->db->prepare(
+                'UPDATE page_layout_variants
+                SET conversions = conversions + 1,
+                    revenue = revenue + ?
+                WHERE id = ?'
+            );
+            return $stmt->execute([$value, $variantId]);
+        } catch (\PDOException $e) {
+            error_log("LayoutManager::recordConversion error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Atualizar percentual de tráfego
+     */
+    public function updateVariantTraffic(int $variantId, float $trafficPercent): bool {
+        try {
+            $stmt = $this->db->prepare(
+                'UPDATE page_layout_variants SET traffic_percent = ? WHERE id = ?'
+            );
+            return $stmt->execute([$trafficPercent, $variantId]);
+        } catch (\PDOException $e) {
+            error_log("LayoutManager::updateVariantTraffic error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Deletar variante
+     */
+    public function deleteVariant(int $variantId): bool {
+        try {
+            $stmt = $this->db->prepare('DELETE FROM page_layout_variants WHERE id = ?');
+            return $stmt->execute([$variantId]);
+        } catch (\PDOException $e) {
+            error_log("LayoutManager::deleteVariant error: " . $e->getMessage());
+            return false;
+        }
+    }
 }
