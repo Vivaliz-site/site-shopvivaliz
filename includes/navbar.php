@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+if (session_status() === PHP_SESSION_NONE) {
+    @session_start();
+}
+
 $svNavCurrent = $svNavCurrent ?? trim((string)parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH), '/');
 $svNavCurrent = preg_replace('#^index\.php$#', '', $svNavCurrent);
 
@@ -11,6 +15,10 @@ $svNavLinks = [
     ['href' => '/contato', 'label' => 'Contato', 'match' => ['contato']],
     ['href' => '/carrinho', 'label' => 'Carrinho', 'match' => ['carrinho', 'checkout']],
 ];
+
+$svLoggedIn = !empty($_SESSION['user_id']);
+$svUserName = trim((string)($_SESSION['user_name'] ?? ''));
+$svUserFirstName = $svUserName !== '' ? explode(' ', $svUserName)[0] : 'Minha conta';
 ?>
 <nav class="navbar">
     <div class="container nav-inner">
@@ -30,6 +38,12 @@ $svNavLinks = [
                     <?php endif; ?>
                 </a>
             <?php endforeach; ?>
+            <?php if ($svLoggedIn): ?>
+                <a href="/meus-pedidos.php" class="nav-account-link"<?= $svNavCurrent === 'meus-pedidos.php' ? ' aria-current="page"' : '' ?>>👤 <?= htmlspecialchars($svUserFirstName, ENT_QUOTES, 'UTF-8') ?></a>
+                <a href="/auth/logout.php">Sair</a>
+            <?php else: ?>
+                <a href="/auth/login.php" class="nav-account-link">Entrar</a>
+            <?php endif; ?>
         </div>
     </div>
 </nav>
