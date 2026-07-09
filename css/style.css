@@ -141,6 +141,18 @@ a {
     color: var(--brand);
 }
 
+.navbar-menu a.nav-account-link {
+    color: #fff;
+    background: var(--brand);
+    padding: 8px 16px;
+    border-radius: 999px;
+}
+
+.navbar-menu a.nav-account-link:hover {
+    background: var(--brand-strong);
+    color: #fff;
+}
+
 .menu-toggle {
     display: none;
     width: 44px;
