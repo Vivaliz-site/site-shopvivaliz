@@ -1,6 +1,9 @@
 name: ShopVivaliz QA
 
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -26,6 +29,39 @@ jobs:
           else
             echo "No PHP files yet."
           fi
+      - name: "Bloquear CSS wildcard de layout (ex: [class*=hero])"
+        run: |
+          # Lista de prefixos "estruturais" (secoes/layout inteiros) que ja causaram
+          # bug real em producao quando usados com [class*=...] (ver CHANGELOG.md).
+          # Wildcards em classes de componente pequeno (card, badge, grid...) ja
+          # existem no projeto e sao debito tecnico conhecido, nao bloqueado aqui.
+          PADRAO='\[class\s*\*=\s*"(hero|banner|section|page|layout|container)'
+          if grep -rEn "$PADRAO" --include='*.css' .; then
+            echo ""
+            echo "ERRO: selector CSS coringa estrutural encontrado acima (ex: [class*=hero])."
+            echo "Esse padrao ja quebrou a home em producao (ver CHANGELOG.md) - casa com"
+            echo "qualquer classe que contenha a substring, inclusive secoes aninhadas nao"
+            echo "relacionadas. Use selectores exatos para classes de layout/secao."
+            exit 1
+          fi
+          echo "OK: nenhum selector CSS coringa estrutural encontrado."
       - name: Repository safety reminder
         run: |
           echo "Security review remains required before merge. Do not commit credentials or production dumps."
+
+  live-smoke-test:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - name: Verificar footer e ausencia de bug visual conhecido na home
+        run: |
+          html=$(curl -sL https://dev.shopvivaliz.com.br/)
+          if ! echo "$html" | grep -q 'footer-cols'; then
+            echo "ERRO: footer nao encontrado na home ao vivo."
+            exit 1
+          fi
+          if echo "$html" | grep -q 'class="hero-slide is-active"[^>]*style="[^"]*linear-gradient'; then
+            echo "ERRO: possivel regressao do bug de gradiente duplicado no hero."
+            exit 1
+          fi
+          echo "OK: home ao vivo passou no smoke test."
