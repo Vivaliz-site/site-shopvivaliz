@@ -3,9 +3,43 @@
  * Constantes Globais - ShopVivaliz
  */
 
-// Parser unico de runtime-secrets.php + .env (evita logica duplicada
-// espalhada pelo projeto). Ver config/bootstrap-env.php.
-require_once __DIR__ . '/bootstrap-env.php';
+$runtimeSecretsFile = __DIR__ . '/runtime-secrets.php';
+if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
+    $runtimeSecrets = require $runtimeSecretsFile;
+    if (is_array($runtimeSecrets)) {
+        foreach ($runtimeSecrets as $key => $value) {
+            if (!is_string($key) || $key === '' || getenv($key) !== false) {
+                continue;
+            }
+            $stringValue = is_scalar($value) ? (string)$value : '';
+            putenv($key . '=' . $stringValue);
+            $_ENV[$key] = $stringValue;
+            $_SERVER[$key] = $stringValue;
+        }
+    }
+}
+
+// Producao (VM Oracle) usa .env real em vez de runtime-secrets.php
+// (mecanismo antigo do deploy FTP do HostGator). Mesmo parser usado
+// em varios pontos do projeto (includes/melhorenvio-oauth.php etc.).
+$envFile = dirname(__DIR__) . '/.env';
+if (is_file($envFile) && is_readable($envFile)) {
+    foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) {
+            continue;
+        }
+        [$key, $value] = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim(trim($value), "\"'");
+        if ($key === '' || getenv($key) !== false) {
+            continue;
+        }
+        putenv($key . '=' . $value);
+        $_ENV[$key] = $value;
+        $_SERVER[$key] = $value;
+    }
+}
 
 // Ambiente
 define('ENVIRONMENT', getenv('APP_ENV') ?: 'development');
