@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../../includes/admin-guard.php';
 /**
  * Gerenciamento de Automações
  * Criar, editar, ativar/desativar automações
