@@ -272,9 +272,9 @@ $svNavCurrent = '';
 </head>
 <body>
     <?php include __DIR__ . '/includes/navbar.php'; ?>
-    <section class="hero-carousel-section" style="background: red; padding: 20px; margin: 20px 0;">
+    <section class="hero-carousel-section">
         <div class="container">
-            <div class="hero-carousel" id="hero-carousel" aria-label="Banners em destaque" style="background: yellow !important; min-height: 300px;">
+            <div class="hero-carousel" id="hero-carousel" aria-label="Banners em destaque">
                 <div class="hero-carousel-track">
                     <?php foreach ($heroBanners as $index => $banner): ?>
                         <article class="hero-slide<?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>">
