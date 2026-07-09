@@ -201,6 +201,8 @@ Base URL da API: `https://api.tiny.com.br/public-api/v3`
 | 2026-07-03 (~19h UTC) | `main` (rotina agendada, sem branch dedicada) | 5º ciclo consecutivo: bloqueador do token Tiny inalterado, agora ~89h desde a última extração real. Novo run de `fetch-shopee-listings.yml` (2026-07-03T17:03:16Z) também terminou em `failure` sem commitar relatório (mesmo padrão dos dois runs do ciclo das 14h). A teoria de "corrida de commit concorrente" do ciclo anterior não pôde ser confirmada nem descartada: os logs desses runs já expiraram no GitHub Actions (download retorna 404) e o domínio de blob storage dos logs está fora da allowlist de rede deste ambiente. Comparação de `run_duration_ms` entre runs (falhas: ~4s; sucessos/erros com relatório: ~19-23s) é consistente com falha rápida antes de qualquer tentativa de commit, mas não prova a causa exata. Nenhuma otimização aplicada — sem dados reais de produto não há base para decisão orientada a dados. Nenhuma notificação push enviada: nenhum fato novo que mude a ação recomendada (renovar `TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN`), já comunicada nos ciclos anteriores. |
 | 2026-07-04 (~01h UTC) | `main` (rotina agendada, sem branch dedicada) | 6º ciclo consecutivo: mudança de contexto relevante desde o ciclo anterior. Em 2026-07-03T20:06:19Z (commit `71bb308`, autor `fredmourao-ai`), o próprio usuário desabilitou 48 workflows para recuperar quota do GitHub Actions — decisão deliberada, não uma falha —, incluindo `fetch-shopee-listings.yml` e `optimize-shopee-listings.yml`, agora `on: workflow_dispatch` apenas, com o job original substituído por um `echo` de pausa. Isso significa que, mesmo após renovar o `TINY_ACCESS_TOKEN`, os dois workflows do pipeline Shopee não voltam a rodar sozinhos (perderam o trigger `schedule` e a lógica real) — é preciso reativá-los manualmente além de renovar o token. Nenhum `listings/shopee-listings-*.json` ou `optimization-report-*.json` novo desde `20260703-041044`; nenhuma credencial Tiny/Olist disponível neste ambiente de sessão para tentar extração direta fora do workflow. Nenhuma otimização aplicada. Notificação push enviada neste ciclo por haver fato novo e acionável: além do bloqueador de token (agora ~4 dias sem renovação), o pipeline em si foi pausado, e a rotina completa 6 ciclos (~30h) sem produzir nenhum valor real — recomenda-se ao usuário decidir entre reativar o pipeline (token + workflows) ou pausar esta rotina de otimização até lá. |
 | 2026-07-05 (~04h UTC) | `main` (rotina agendada, sem branch dedicada) | 7º ciclo consecutivo, ~28h após o ciclo anterior (maior intervalo que os 6h nominais, sem run intermediário registrado). Ambos os bloqueadores seguem idênticos ao ciclo 6: token Tiny sem renovação (`shopee-listings-20260702-181749.json`, o mais recente com conteúdo real, ainda mostra `401` e `total_products: 0`; nenhum arquivo novo desde `optimization-report-20260703-041044.json`) e os workflows `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` seguem pausados (`on: workflow_dispatch`) desde `71bb308`. Nenhum secret `TINY_*`/`OLIST_*` neste ambiente de sessão. Nenhuma otimização aplicada — sem dados reais não há base para decisão orientada a dados. Nenhuma notificação push enviada: nenhum fato novo além do já comunicado no ciclo 6 (mesma recomendação: renovar o token e reativar os dois workflows, ou pausar esta rotina até lá). |
+| 2026-07-07 (~19h UTC) | `main` (rotina agendada, sem branch dedicada) | 8º ciclo consecutivo, ~63h após o ciclo anterior (maior gap ainda que os 6h nominais — nenhum run intermediário registrado). Estado idêntico ao ciclo 7: `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` seguem `on: workflow_dispatch` apenas (commit `6e32ce0` de 2026-07-05 tocou o modo/permissões de dezenas de arquivos, incluindo `sync-shopee-6h.yml`, mas não reverteu a pausa nem reativou o `schedule`); nenhum `listings/shopee-listings-*.json` ou `optimization-report-*.json` novo desde `20260703-041044`; nenhum secret `TINY_*`/`OLIST_*`/`SHOPEE_*` neste ambiente de sessão. Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada — sem dados reais não há base para decisão orientada a dados. Nenhuma notificação push enviada: nenhum fato novo além do já comunicado nos ciclos 6 e 7 (mesma recomendação: renovar o token Tiny e reativar os dois workflows, ou pausar esta rotina agendada até que o bloqueador seja resolvido). |
+| 2026-07-08 (~19h UTC) | `main` (rotina agendada, sem branch dedicada) | 9º ciclo consecutivo. Fato novo desde o ciclo 8: em `2026-07-08T09:54:33-03:00` (commit `e714686`, PR #153, autor `fredmourao-ai`) o usuário reativou `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` com o trigger `schedule` restaurado (resolve o bloqueador secundário descrito nos ciclos 6-8). O primeiro run automático após a reativação (`fetch-shopee-listings.yml`, 2026-07-08T17:12:37Z, commit `dd4d439`) já confirma que o pipeline volta a executar sozinho, mas gerou `listings/shopee-listings-20260708-171237.json` com `status: partial`, `total_products: 0` e o mesmo erro `"Autenticação falhou (401). Token inválido ou expirado."` — ou seja, o bloqueador primário (token Tiny) permanece sem renovação, agora ~8 dias desde a última extração real (`20260630-113006.json`). Nenhum `optimization-report-*.json` novo desde `20260703-041044`. Nenhuma credencial `TINY_*`/`OLIST_*` neste ambiente de sessão para tentar renovação direta. Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada — sem dados reais não há base para decisão orientada a dados. Notificação push enviada neste ciclo: há fato novo e acionável (pipeline reativado com sucesso, mas ainda bloqueado só pelo token — a ação restante do usuário é unicamente renovar `TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN`). |
 
 ---
 
@@ -356,3 +358,37 @@ com outros 47 workflows, então o usuário precisa saber que reativá-lo requer 
 renovar o token; (b) a rotina de otimização já soma 6 ciclos (~30h de tentativas a cada 6h)
 sem produzir nenhuma otimização real, o que sugere considerar pausar esta rotina agendada
 específica até que o bloqueador seja resolvido, evitando ciclos vazios repetidos.
+
+### 9.6 Atualização — ciclo de 2026-07-08 (~19h UTC), 9º ciclo
+
+Bloqueador secundário (pipeline pausado, seções 9.5 e ciclos 6-8) **resolvido**: o commit
+`e714686` (PR #153, 2026-07-08T09:54:33-03:00, autor `fredmourao-ai`) restaurou o trigger
+`schedule` em `fetch-shopee-listings.yml` (`0 */6 * * *`) e `optimize-shopee-listings.yml`
+(`0 3 * * *`), revertendo a pausa aplicada em `71bb308`.
+
+Confirmação prática: o primeiro run agendado após a reativação já ocorreu
+(`fetch-shopee-listings.yml`, 2026-07-08T17:12:37Z, commit `dd4d439`) e o pipeline
+volta a commitar sozinho em `listings/`. Porém o resultado desse run mostra que o
+**bloqueador primário permanece**:
+
+- `listings/shopee-listings-20260708-171237.json`: `secrets_check.token_available: true`
+  (o secret `TINY_ACCESS_TOKEN` existe), mas `status: partial`, `total_products: 0`,
+  erro `"Autenticação falhou (401). Token inválido ou expirado."` — idêntico ao erro
+  observado desde `20260701-114213.json` (ciclo de 2026-07-01/02).
+- Nenhum `listings/optimization-report-*.json` novo desde `20260703-041044` (`optimize-shopee-listings.yml`
+  ainda não teve run novo desde a reativação no momento deste ciclo).
+- Não há lógica de refresh automático de token nos workflows nem no
+  `ShopeeListingsExtractorAgent.php` — ambos apenas repassam `TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN`
+  como env vars; um 401 não dispara troca automática do refresh token.
+- Nenhuma credencial `TINY_*`/`OLIST_*` neste ambiente de sessão para tentar renovação direta
+  ou testar o refresh token fora do workflow.
+- Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada — sem dados reais de
+  produto (~8 dias sem sincronização real, desde `20260630-113006.json`) não há base para
+  decisão orientada a dados.
+
+**Notificação push enviada neste ciclo:** fato novo e acionável — o pipeline voltou a rodar
+sozinho (a reativação dos workflows funcionou), mas a extração automática confirma que o
+único bloqueador restante é a renovação manual de `TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN`
+no ERP Tiny + GitHub Secrets. Diferente dos ciclos 7/8 (sem fato novo, sem push), aqui há uma
+mudança de estado real que o usuário provavelmente quer saber: o esforço de reativar os
+workflows não foi em vão, mas não basta sozinho.

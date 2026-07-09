@@ -1,0 +1,28 @@
+name: Sincronizacao Cirurgica de Arquivos (uso unico)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recheck:
+    name: Reconferir runtime-secrets.php
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      FTP_SERVER: ${{ secrets.FTP_SERVER }}
+      FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      FTP_PORT: ${{ secrets.FTP_PORT }}
+      FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+    steps:
+      - name: Verificar se ainda existe via FTP
+        shell: bash
+        run: |
+          PORT="${FTP_PORT:-21}"
+          REMOTE="${FTP_REMOTE_DIR%/}"
+          curl -sS --user "${FTP_USERNAME}:${FTP_PASSWORD}" \
+            "ftp://${FTP_SERVER}:${PORT}${REMOTE}/config/" --list-only \
+            --connect-timeout 15 --max-time 30

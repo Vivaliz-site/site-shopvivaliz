@@ -4,16 +4,16 @@
  */
 
 :root {
-    --primary: #22c55e;
-    --secondary: #1e3a5f;
-    --secondary-strong: #142a44;
+    --primary: #2dbb57;
+    --secondary: #173b63;
+    --secondary-strong: #102e4d;
     --success: #10b981;
     --danger: #ef4444;
     --warning: #f59e0b;
     --dark: #102033;
-    --light: #f2f7fb;
+    --light: #f6f9fc;
     --surface: #ffffff;
-    --border: #d8e3f0;
+    --border: #dbe5ef;
     --muted: #5e7188;
     --shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
     --shadow-soft: 0 10px 26px rgba(23, 59, 99, 0.08);
@@ -31,9 +31,8 @@ html, body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color: var(--dark);
     background:
-        radial-gradient(circle at top left, rgba(34, 197, 94, 0.08), transparent 26%),
-        radial-gradient(circle at top right, rgba(30, 58, 95, 0.06), transparent 24%),
-        linear-gradient(180deg, #f7fbff 0%, #f2f7fb 100%);
+        radial-gradient(circle at top left, rgba(45, 187, 87, 0.08), transparent 26%),
+        linear-gradient(180deg, #f8fbfd 0%, #f3f7fb 100%);
 }
 
 /* ============================================
@@ -60,7 +59,7 @@ body {
     top: 0;
     z-index: 100;
     backdrop-filter: blur(14px);
-    box-shadow: 0 12px 30px rgba(20, 42, 68, 0.07);
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
 }
 
 .nav-inner,
@@ -128,7 +127,7 @@ body {
 
 .navbar-menu a[aria-current="page"] {
     color: var(--secondary);
-    background: #e7f1fb;
+    background: #eaf2fb;
 }
 
 .cart-badge {
@@ -328,8 +327,8 @@ footer {
 
 .brand-hero-card {
     background:
-        radial-gradient(circle at top right, rgba(34, 197, 94, 0.24), transparent 28%),
-        linear-gradient(135deg, var(--secondary-strong) 0%, var(--secondary) 58%, #2a5d95 125%);
+        radial-gradient(circle at top right, rgba(45, 187, 87, 0.24), transparent 28%),
+        linear-gradient(135deg, var(--secondary-strong) 0%, var(--secondary) 58%, #2a6cb1 125%);
     color: white;
     border-radius: 28px;
     padding: 28px 22px;
@@ -513,7 +512,7 @@ footer {
     margin-top: 14px;
     padding: 14px 16px;
     border-radius: 16px;
-    background: #eff7ff;
+    background: #eef6ff;
     border: 1px solid rgba(23,59,99,0.08);
     color: var(--muted);
 }
