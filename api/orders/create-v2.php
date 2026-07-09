@@ -18,6 +18,32 @@ function svo_root(): string
     return dirname(__DIR__, 2);
 }
 
+/** Mapa sku -> estoque atual, lido do catalogo (fonte usada pelo storefront). */
+function svo_stock_map(): array
+{
+    static $map = null;
+    if ($map !== null) {
+        return $map;
+    }
+    $map = [];
+    $path = svo_root() . '/api/catalog/fallback-products.json';
+    if (is_file($path) && is_readable($path)) {
+        $catalog = json_decode((string)file_get_contents($path), true);
+        if (is_array($catalog)) {
+            foreach ($catalog as $product) {
+                if (!is_array($product)) {
+                    continue;
+                }
+                $sku = trim((string)($product['sku'] ?? ''));
+                if ($sku !== '') {
+                    $map[$sku] = (int)($product['stock'] ?? 0);
+                }
+            }
+        }
+    }
+    return $map;
+}
+
 function svo_load_runtime_secrets(): void
 {
     static $loaded = false;
@@ -330,6 +356,32 @@ foreach ($items as $item) {
 
 if (!$cleanItems) {
     svo_json(422, ['ok' => false, 'error' => 'empty_items']);
+}
+
+// Bloqueia venda de item sem estoque suficiente (validacao no servidor).
+$stockMap = svo_stock_map();
+$stockIssues = [];
+foreach ($cleanItems as $ci) {
+    if (!array_key_exists($ci['sku'], $stockMap)) {
+        continue;
+    }
+    $available = $stockMap[$ci['sku']];
+    if ($available <= 0 || $ci['quantity'] > $available) {
+        $stockIssues[] = [
+            'sku' => $ci['sku'],
+            'name' => $ci['name'],
+            'requested' => $ci['quantity'],
+            'available' => max(0, $available),
+        ];
+    }
+}
+if ($stockIssues) {
+    svo_json(409, [
+        'ok' => false,
+        'error' => 'insufficient_stock',
+        'message' => 'Um ou mais itens do carrinho nao tem estoque suficiente.',
+        'items' => $stockIssues,
+    ]);
 }
 
 $notesParts = [];

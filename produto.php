@@ -117,7 +117,10 @@ function sv_product_merge_db(array $product, array $dbRow): array
         $product['price'] = (float)$dbRow['price'];
     }
 
-    if (array_key_exists('stock', $dbRow)) {
+    // So sobrescreve quando o banco tiver estoque > 0 -- a tabela local
+    // pode estar desatualizada (0 default) enquanto o catalogo estatico
+    // ja tem o valor real sincronizado direto da Tiny.
+    if ((int)($dbRow['stock'] ?? 0) > 0) {
         $product['stock'] = (int)$dbRow['stock'];
     }
 
@@ -206,6 +209,7 @@ function sv_product_related(string $sku, string $category, int $limit = 4): arra
             'name'             => trim((string)($row['name'] ?? 'Produto Vivaliz')),
             'image_url'        => trim((string)($row['image_url'] ?? sv_product_default_image())) ?: sv_product_default_image(),
             'price'            => (float)($row['price'] ?? 0),
+            'stock'            => (int)($row['stock'] ?? 0),
             'olist_product_id' => (string)($row['olist_product_id'] ?? ''),
             'slug'             => trim((string)($row['slug'] ?? '')),
             'category'         => $rowCat,
@@ -290,6 +294,7 @@ $qScore   = (int)($resolved['quality_score'] ?? 0);
 $rawSlug  = trim((string)($resolved['slug'] ?? ''));
 
 $priceRaw   = (float)($resolved['price'] ?? (float)sv_qv('price', '0'));
+$stockRaw   = (int)($resolved['stock'] ?? 0);
 $priceLabel = $priceRaw > 0 ? 'R$ ' . number_format($priceRaw, 2, ',', '.') : 'Consulte o valor';
 $contactUrl = sv_product_contact_url($sku, $name);
 $canonicalUrl = 'https://dev.shopvivaliz.com.br' . ($rawSlug !== '' ? '/produto/' . $rawSlug : '/produto?sku=' . rawurlencode($sku));
@@ -441,6 +446,8 @@ if ($notFound) {
                     <span class="product-price-label"><?= sv_esc($priceLabel) ?></span>
                     <?php if ($priceRaw === 0.0): ?>
                         <span class="price-hint">Fale com a equipe para confirmar valor e disponibilidade</span>
+                    <?php elseif ($stockRaw <= 0): ?>
+                        <span class="out-of-stock-badge">Esgotado</span>
                     <?php endif; ?>
                 </div>
                 <?php if (!empty($tags)): ?>
@@ -456,8 +463,10 @@ if ($notFound) {
                     <div class="confidence-item">💬 Suporte comercial antes e depois do pedido</div>
                 </div>
                 <div class="produto-actions">
-                    <?php if ($priceRaw > 0): ?>
+                    <?php if ($priceRaw > 0 && $stockRaw > 0): ?>
                         <button class="btn btn-primary" type="button" id="buy-now">🛒 Comprar agora</button>
+                    <?php elseif ($priceRaw > 0 && $stockRaw <= 0): ?>
+                        <button class="btn btn-disabled" type="button" disabled>Esgotado</button>
                     <?php else: ?>
                         <a class="btn btn-primary" href="<?= sv_esc($contactUrl) ?>">Falar com vendas</a>
                     <?php endif; ?>
@@ -481,12 +490,14 @@ if ($notFound) {
             <?php foreach ($related as $rp):
                 $rUrl = sv_product_url($rp);
                 $rContactUrl = sv_product_contact_url((string)$rp['sku'], (string)$rp['name']);
-                $rHasPrice = (float)$rp['price'] > 0;
-                $rPayload = rawurlencode(json_encode(['sku' => $rp['sku'], 'name' => $rp['name'], 'image_url' => $rp['image_url'], 'price' => $rp['price'], 'olist_product_id' => $rp['olist_product_id']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+                $rStock = (int)($rp['stock'] ?? 0);
+                $rHasPrice = (float)$rp['price'] > 0 && $rStock > 0;
+                $rPayload = rawurlencode(json_encode(['sku' => $rp['sku'], 'name' => $rp['name'], 'image_url' => $rp['image_url'], 'price' => $rp['price'], 'olist_product_id' => $rp['olist_product_id'], 'stock' => $rStock], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             ?>
-            <article class="product-card">
+            <article class="product-card<?= $rStock <= 0 ? ' is-out-of-stock' : '' ?>">
                 <a class="product-image" href="<?= sv_esc($rUrl) ?>">
                     <img src="<?= sv_esc($rp['image_url']) ?>" alt="<?= sv_esc($rp['name']) ?>" loading="lazy" onerror="this.src='<?= sv_product_default_image() ?>'">
+                    <?php if ($rStock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                 </a>
                 <div class="product-info">
                     <?php if ($rp['category'] !== ''): ?>
@@ -498,6 +509,8 @@ if ($notFound) {
                         <a class="btn btn-secondary card-link" href="<?= sv_esc($rUrl) ?>">Ver detalhes</a>
                         <?php if ($rHasPrice): ?>
                             <button class="buy-button" type="button" data-product="<?= sv_esc($rPayload) ?>">Comprar</button>
+                        <?php elseif ($rStock <= 0): ?>
+                            <button class="btn btn-disabled card-link" type="button" disabled>Esgotado</button>
                         <?php else: ?>
                             <a class="btn btn-primary card-link" href="<?= sv_esc($rContactUrl) ?>">Falar com vendas</a>
                         <?php endif; ?>

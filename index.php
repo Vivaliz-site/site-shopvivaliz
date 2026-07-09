@@ -72,6 +72,7 @@ function sv_home_featured_products(int $limit = 8): array
             'name' => trim((string)($row['name'] ?? 'Produto Vivaliz')),
             'image_url' => $image,
             'price' => (float)($row['price'] ?? 0),
+            'stock' => (int)($row['stock'] ?? 0),
             'olist_product_id' => (string)($row['olist_product_id'] ?? $row['id'] ?? ''),
             'category' => trim((string)($row['category'] ?? '')),
             'slug' => trim((string)($row['slug'] ?? '')),
@@ -368,18 +369,21 @@ $svNavCurrent = '';
                             $pSlug      = $product['slug'] ?? '';
                             $productUrl = $pSlug !== '' ? '/produto/' . $pSlug : sv_home_product_url($product);
                             $contactUrl = sv_home_contact_url($product);
-                            $hasPrice   = (float)($product['price'] ?? 0) > 0;
+                            $stock      = (int)($product['stock'] ?? 0);
+                            $hasPrice   = (float)($product['price'] ?? 0) > 0 && $stock > 0;
                             $payload    = rawurlencode(json_encode([
                                 'sku'              => $product['sku'],
                                 'name'             => $product['name'],
                                 'image_url'        => $image,
                                 'price'            => $product['price'],
                                 'olist_product_id' => $product['olist_product_id'],
+                                'stock'            => $stock,
                             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
                             ?>
-                            <article class="product-card" data-sku="<?= sv_home_esc($product['sku']) ?>">
+                            <article class="product-card<?= $stock <= 0 ? ' is-out-of-stock' : '' ?>" data-sku="<?= sv_home_esc($product['sku']) ?>">
                                 <a class="product-image" href="<?= sv_home_esc($productUrl) ?>">
                                     <img src="<?= sv_home_esc($image) ?>" alt="<?= sv_home_esc($product['name']) ?>" loading="lazy" onerror="this.src='<?= sv_home_default_image() ?>'">
+                                    <?php if ($stock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                                 </a>
                                 <div class="product-info">
                                     <?php if (!empty($product['category'])): ?>
@@ -391,6 +395,8 @@ $svNavCurrent = '';
                                         <a class="btn btn-secondary card-link" href="<?= sv_home_esc($productUrl) ?>">Ver detalhes</a>
                                         <?php if ($hasPrice): ?>
                                             <button class="buy-button" type="button" data-product="<?= sv_home_esc($payload) ?>">Comprar agora</button>
+                                        <?php elseif ($stock <= 0): ?>
+                                            <button class="btn btn-disabled card-link" type="button" disabled>Esgotado</button>
                                         <?php else: ?>
                                             <a class="btn btn-primary card-link" href="<?= sv_home_esc($contactUrl) ?>">Falar com vendas</a>
                                         <?php endif; ?>

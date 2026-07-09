@@ -749,7 +749,14 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 submitNode.disabled = false;
                 submitNode.textContent = 'Confirmar pedido';
                 if (!response.ok) {
-                    setStatus(response.error || 'Erro ao registrar pedido.', 'err');
+                    if (response.error === 'insufficient_stock' && Array.isArray(response.items)) {
+                        var details = response.items.map(function (it) {
+                            return it.name + ' (disponivel: ' + it.available + ', pedido: ' + it.requested + ')';
+                        }).join('; ');
+                        setStatus('Estoque insuficiente: ' + details + '. Ajuste as quantidades no carrinho.', 'err');
+                        return;
+                    }
+                    setStatus(response.message || response.error || 'Erro ao registrar pedido.', 'err');
                     return;
                 }
 
