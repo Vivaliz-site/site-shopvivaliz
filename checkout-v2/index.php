@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 header('Content-Type: text/html; charset=UTF-8');
 
 $runtimeSecretsFile = dirname(__DIR__) . '/config/runtime-secrets.php';
