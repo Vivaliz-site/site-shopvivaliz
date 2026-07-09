@@ -547,8 +547,38 @@ a {
     box-shadow: var(--shadow-hover);
 }
 
+.product-card.is-out-of-stock .product-image img {
+    opacity: 0.55;
+}
+
+.out-of-stock-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 5px 10px;
+    border-radius: 999px;
+    z-index: 1;
+}
+
+.btn-disabled {
+    background: #e5e9f0;
+    color: #9aa5b5;
+    cursor: not-allowed;
+}
+
+.btn-disabled:hover {
+    background: #e5e9f0;
+}
+
 .product-image {
     display: block;
+    position: relative;
     aspect-ratio: 1 / 1;
     background: #f3f5fb;
     overflow: hidden;

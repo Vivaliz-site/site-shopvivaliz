@@ -142,7 +142,13 @@ function svp_enrich_products(array $products): array
         if ($bySku[$sku]['price'] > 0) {
             $products[$index]['price'] = $bySku[$sku]['price'];
         }
-        $products[$index]['stock'] = $bySku[$sku]['stock'];
+        // So sobrescreve estoque quando o banco tiver valor maior que zero --
+        // a tabela products local pode estar desatualizada/nunca sincronizada
+        // (stock=0 default) enquanto o catalogo (fallback-products.json) ja
+        // tem o valor real vindo direto da Tiny.
+        if ($bySku[$sku]['stock'] > 0) {
+            $products[$index]['stock'] = $bySku[$sku]['stock'];
+        }
     }
 
     return $products;
