@@ -399,9 +399,12 @@ a {
     grid-auto-flow: column;
     gap: 14px;
     overflow-x: auto;
+    overflow-y: hidden;
     scroll-snap-type: x mandatory;
     scrollbar-width: thin;
     padding: 8px 2px 8px 2px;
+    width: 100%;
+    min-width: 0;
 }
 
 .home-scroller-track > * {
