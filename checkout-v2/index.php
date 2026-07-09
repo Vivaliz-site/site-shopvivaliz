@@ -204,6 +204,9 @@ $paymentOptions = [
             gap: 24px;
             margin-top: 24px;
         }
+        .checkout-layout[hidden] {
+            display: none;
+        }
         .form-panel,
         .summary-panel,
         .success-panel {
