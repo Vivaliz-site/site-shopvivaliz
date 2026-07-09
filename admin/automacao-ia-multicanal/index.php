@@ -1,10 +1,11 @@
 <?php
+declare(strict_types=1);
+require_once __DIR__ . '/../../includes/admin-guard.php';
 /**
  * Painel de Administração - Automação IA Multi-Canal
  * Sistema para gerenciar cadastro de produtos em múltiplos canais
  * com textos e imagens otimizados por IA
  */
-declare(strict_types=1);
 
 session_start();
 
