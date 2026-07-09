@@ -392,3 +392,64 @@ sozinho (a reativação dos workflows funcionou), mas a extração automática c
 no ERP Tiny + GitHub Secrets. Diferente dos ciclos 7/8 (sem fato novo, sem push), aqui há uma
 mudança de estado real que o usuário provavelmente quer saber: o esforço de reativar os
 workflows não foi em vão, mas não basta sozinho.
+
+### 9.7 Atualização — ciclo de 2026-07-09 (~13h UTC), 10º ciclo
+
+Bloqueador primário (token Tiny expirado, seções 9-9.6) **resolvido**: fora do ciclo agendado,
+um commit de fix (`fix(shopee): priorizar refresh OAuth2 sobre token estático`) mudou a
+resolução de credencial no extractor para priorizar `TINY_REFRESH_TOKEN`/OAuth2 em vez do
+`TINY_ACCESS_TOKEN` estático. Dois runs de `fetch-shopee-listings.yml` via `workflow_dispatch`
+em 2026-07-09T01:15:08Z e 01:16:38Z confirmam a correção na prática:
+`listings/shopee-listings-20260709-011652.json` tem `status: success`,
+`secrets_check: {"token_source": "oauth2_refresh", "token_refreshed": true}` e
+`total_products: 1058` — a primeira extração real de catálogo desde `20260630-113006.json`
+(~9 dias parado).
+
+Dois bloqueadores **novos** surgiram, ambos confirmados via logs reais do GitHub Actions
+(`mcp__github__get_job_logs`), não suposição:
+
+- **Corrida de commit no `fetch-shopee-listings.yml`**: o run agendado seguinte
+  (run `29014701374`, 2026-07-09T11:23:41Z) extraiu os dados com sucesso (18000 inserções
+  preparadas para commit), mas o `git push` final foi rejeitado —
+  `! [rejected] main -> main (fetch first)` — porque o bot de heartbeat deste repositório
+  (`scripts/heartbeat.txt`, commits `auto: sincronizar HH:MM:SS` a cada ~5 min) avançou o
+  `main` remoto entre o checkout do job e o push. Isso confirma a teoria de "corrida de commit
+  concorrente" já levantada (sem prova) no ciclo de 2026-07-03 na seção 9.3 — agora com log
+  de erro explícito. O resultado extraído nesse run específico foi perdido (não commitado).
+- **`optimize-shopee-listings.yml` cancelado, não com falha de auth**: o run agendado de
+  2026-07-09T12:41:10Z (job `optimize`) não terminou com erro de token — a conclusão do job
+  foi `cancelled` após ~15min20s de execução, sem logs de falha específicos. Não há
+  `timeout-minutes` nem `concurrency` configurados no workflow; a causa mais provável é
+  cancelamento por limite de cota/orçamento de GitHub Actions do repositório (já visto em
+  commit anterior `b02fe8a fix: evitar falhas de actions com budget bloqueado`) combinado com
+  o tempo real necessário para processar 1058 produtos sequencialmente (cada um com uma
+  chamada de IA + delays de 500ms/300ms entre produtos — cerca de 15-35min só de delays fixos
+  para o catálogo completo). Nenhum `optimization-report-*.json` novo foi commitado neste
+  ciclo; o mais recente continua sendo `20260703-041044` (que já era `status: error`,
+  `total_products: 0`).
+
+**Achado estrutural, não um blocker temporário:** o pipeline real (`ShopeeListingsExtractorAgent`
++ `ShopeeListingsOptimizationAgent`) só lê/escreve dados de catálogo do ERP Tiny (nome, preço,
+estoque, categoria, imagens) e reescreve título/descrição/atributos/ordem de imagem via IA
+genérica — o próprio agente de otimização documenta `NÃO altera preços`. Não existe, em
+nenhum workflow ou script deste repositório, integração com a API de performance/analytics do
+Shopee Open Platform (CTR, taxa de conversão, dados de vendas por SKU) — os secrets que essa
+integração exigiria (`SHOPEE_PARTNER_ID`, `SHOPEE_PARTNER_KEY`, `SHOPEE_SHOP_ID`,
+`SHOPEE_ACCESS_TOKEN`, conforme `scripts/shopee-readiness-report.py`) não aparecem em nenhum
+workflow deste repo. Ou seja: mesmo com o bloqueador de token resolvido, as instruções desta
+rotina agendada (calcular CTR real, testar preço, comparar concorrentes, reordenar imagens por
+engagement) permanecem tecnicamente inexequíveis com o pipeline atual — o que existe é reescrita
+de título/descrição por IA a partir de dados de catálogo, sem qualquer métrica de performance
+real de anúncio. Nenhuma otimização foi aplicada e nenhum dado de CTR/conversão/venda foi
+inventado neste ciclo.
+
+**Notificação push enviada neste ciclo:** três fatos novos e acionáveis — (1) o bloqueador de
+9 ciclos (token Tiny) está resolvido e a extração de catálogo volta a funcionar; (2) mas o
+commit automático do próprio pipeline está perdendo runs por causa de conflito de push com o
+bot de heartbeat de 5 em 5 minutos deste repositório — vale considerar dar um `retry`/`pull
+--rebase` antes do push nesses workflows, ou reduzir a frequência do heartbeat; (3) o job de
+otimização está sendo cancelado (provavelmente cota do Actions ou tempo de execução), então
+mesmo com catálogo disponível a IA não chega a rodar; e (4), estrutural — a rotina descrita
+para este agente (CTR, conversão, teste de preço) não é implementável com a integração atual,
+que é limitada a título/descrição via IA sobre dados do Tiny, sem qualquer fonte real de
+métricas de performance do Shopee.
