@@ -191,6 +191,7 @@ $svNavCurrent = '';
 
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/assets/css/visual-improvements-v2.css">
+    <link rel="stylesheet" href="/assets/css/navbar-auth-buttons.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">

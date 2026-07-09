@@ -1,0 +1,103 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Navbar Auth Buttons — Login / Criar Conta
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nav-auth-buttons {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* Base button */
+.nav-btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* Primary button — Criar Conta */
+.nav-btn-primary {
+  background: linear-gradient(135deg, #007BFF 0%, #0056b3 100%);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.25);
+}
+
+.nav-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 123, 255, 0.35);
+  background: linear-gradient(135deg, #0056b3 0%, #003d82 100%);
+}
+
+.nav-btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.25);
+}
+
+/* Outline button — Entrar */
+.nav-btn-outline {
+  background: transparent;
+  color: #007BFF;
+  border: 2px solid #007BFF;
+}
+
+.nav-btn-outline:hover {
+  background: #f0f7ff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.15);
+}
+
+.nav-btn-outline:active {
+  transform: translateY(0);
+}
+
+/* Responsive — Mobile/Tablet */
+@media (max-width: 768px) {
+  .nav-auth-buttons {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+    margin-left: 0;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e5e9f0;
+  }
+
+  .nav-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  .nav-btn-primary {
+    order: 2; /* Botão primário em baixo */
+  }
+
+  .nav-btn-outline {
+    order: 1;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .nav-auth-buttons {
+    gap: 10px;
+  }
+
+  .nav-btn {
+    padding: 9px 14px;
+    font-size: 12px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Fim — navbar-auth-buttons.css
+   ═══════════════════════════════════════════════════════════════════════════ */

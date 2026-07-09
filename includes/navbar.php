@@ -30,6 +30,16 @@ $svNavLinks = [
                     <?php endif; ?>
                 </a>
             <?php endforeach; ?>
+
+            <!-- Botão de Conta/Login -->
+            <div class="nav-auth-buttons">
+                <a href="/login" class="nav-btn nav-btn-outline">
+                    👤 Entrar
+                </a>
+                <a href="/cadastro" class="nav-btn nav-btn-primary">
+                    ✨ Criar Conta
+                </a>
+            </div>
         </div>
     </div>
 </nav>
