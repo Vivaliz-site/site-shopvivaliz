@@ -121,10 +121,51 @@ function sv_home_banners(): array
     ];
 }
 
+function sv_home_top_categories(int $limit = 8): array
+{
+    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
+    if (!is_file($jsonPath) || !is_readable($jsonPath)) {
+        return [];
+    }
+
+    $decoded = json_decode((string)file_get_contents($jsonPath), true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $counts = [];
+    foreach ($decoded as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $category = trim((string)($row['category'] ?? ''));
+        if ($category === '') {
+            continue;
+        }
+        $counts[$category] = ($counts[$category] ?? 0) + 1;
+    }
+
+    arsort($counts);
+    $result = [];
+    foreach ($counts as $category => $count) {
+        $result[] = [
+            'name' => $category,
+            'count' => $count,
+            'href' => '/catalogo?categoria=' . rawurlencode($category),
+        ];
+        if (count($result) >= $limit) {
+            break;
+        }
+    }
+
+    return $result;
+}
+
 $featuredProducts = sv_home_featured_products(8);
 $featuredProductsCount = count($featuredProducts);
 $catalogCount = sv_home_catalog_count();
 $heroBanners = sv_home_banners();
+$homeCategories = sv_home_top_categories(10);
 $svNavCurrent = '';
 ?>
 <!DOCTYPE html>
@@ -190,17 +231,17 @@ $svNavCurrent = '';
     <section class="hero">
         <div class="container">
             <div class="hero-content">
-                <p class="eyebrow" style="color:#7dd3fc;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin:0 0 16px">
+                <p class="eyebrow hero-kicker">
                     🛍️ Loja oficial Vivaliz
                 </p>
                 <h1>Produtos que <span>você precisa</span>,<br>entrega para todo o Brasil</h1>
                 <p>Rodízios, ferragens, utilidades domésticas e itens para casa com catálogo organizado, atendimento rápido e navegação simples no celular.</p>
 
-                <div class="cta-buttons" style="margin-top:28px">
-                    <a href="/catalogo" class="btn btn-primary" style="background:#fff;color:#1d4ed8;font-size:15px;padding:14px 24px">
+                <div class="cta-buttons hero-cta">
+                    <a href="/catalogo" class="btn btn-hero-primary">
                         Ver catálogo completo
                     </a>
-                    <a href="/carrinho" class="btn" style="background:rgba(255,255,255,0.15);color:#fff;border:1.5px solid rgba(255,255,255,0.35);font-size:15px;padding:14px 24px">
+                    <a href="/carrinho" class="btn btn-hero-secondary">
                         🛒 Meu Carrinho
                     </a>
                 </div>
@@ -244,6 +285,32 @@ $svNavCurrent = '';
         </div>
     </section>
 
+    <section class="home-categories home-products">
+        <div class="container">
+            <div class="section-heading">
+                <div>
+                    <h2>Categorias em destaque</h2>
+                    <p class="muted">Navegue por linhas reais do catálogo com acesso rápido.</p>
+                </div>
+                <a href="/catalogo" class="btn btn-secondary">Ver catálogo</a>
+            </div>
+            <?php if ($homeCategories): ?>
+                <div class="home-scroller" data-scroller>
+                    <button type="button" class="home-scroller-arrow" data-dir="-1" aria-label="Categorias anteriores">‹</button>
+                    <div class="home-scroller-track categories-track">
+                        <?php foreach ($homeCategories as $category): ?>
+                            <a class="category-slide" href="<?= sv_home_esc($category['href']) ?>">
+                                <strong><?= sv_home_esc($category['name']) ?></strong>
+                                <span><?= (int)$category['count'] ?> itens</span>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                    <button type="button" class="home-scroller-arrow" data-dir="1" aria-label="Próximas categorias">›</button>
+                </div>
+            <?php endif; ?>
+        </div>
+    </section>
+
     <!-- Produtos em destaque -->
     <section class="home-products">
         <div class="container">
@@ -255,44 +322,50 @@ $svNavCurrent = '';
                 <a href="/catalogo" class="btn btn-secondary">Ver todos</a>
             </div>
             <div id="catalog-status" class="status-line"><?= $catalogCount > 0 ? $catalogCount . ' produtos disponíveis no catálogo.' : 'Explore nossas linhas e fale com a equipe para atendimento comercial.' ?></div>
-            <div class="product-grid" id="product-grid">
-                <?php foreach ($featuredProducts as $product): ?>
-                    <?php
-                    $image      = $product['image_url'] !== '' ? $product['image_url'] : sv_home_default_image();
-                    $pSlug      = $product['slug'] ?? '';
-                    $productUrl = $pSlug !== '' ? '/produto/' . $pSlug : sv_home_product_url($product);
-                    $contactUrl = sv_home_contact_url($product);
-                    $hasPrice   = (float)($product['price'] ?? 0) > 0;
-                    $payload    = rawurlencode(json_encode([
-                        'sku'              => $product['sku'],
-                        'name'             => $product['name'],
-                        'image_url'        => $image,
-                        'price'            => $product['price'],
-                        'olist_product_id' => $product['olist_product_id'],
-                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-                    ?>
-                    <article class="product-card" data-sku="<?= sv_home_esc($product['sku']) ?>">
-                        <a class="product-image" href="<?= sv_home_esc($productUrl) ?>">
-                            <img src="<?= sv_home_esc($image) ?>" alt="<?= sv_home_esc($product['name']) ?>" loading="lazy" onerror="this.src='<?= sv_home_default_image() ?>'">
-                        </a>
-                        <div class="product-info">
-                            <?php if (!empty($product['category'])): ?>
-                                <div class="product-category"><?= sv_home_esc($product['category']) ?></div>
-                            <?php endif; ?>
-                            <h2><?= sv_home_esc($product['name']) ?></h2>
-                            <div class="product-price"><?= sv_home_esc(sv_home_money((float)$product['price'])) ?></div>
-                            <div class="card-actions">
-                                <a class="btn btn-secondary card-link" href="<?= sv_home_esc($productUrl) ?>">Ver detalhes</a>
-                                <?php if ($hasPrice): ?>
-                                    <button class="buy-button" type="button" data-product="<?= sv_home_esc($payload) ?>">Comprar agora</button>
-                                <?php else: ?>
-                                    <a class="btn btn-primary card-link" href="<?= sv_home_esc($contactUrl) ?>">Falar com vendas</a>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </article>
-                <?php endforeach; ?>
-            </div>
+            <?php if ($featuredProducts): ?>
+                <div class="home-scroller" data-scroller>
+                    <button type="button" class="home-scroller-arrow" data-dir="-1" aria-label="Produtos anteriores">‹</button>
+                    <div class="home-scroller-track products-track" id="product-grid">
+                        <?php foreach ($featuredProducts as $product): ?>
+                            <?php
+                            $image      = $product['image_url'] !== '' ? $product['image_url'] : sv_home_default_image();
+                            $pSlug      = $product['slug'] ?? '';
+                            $productUrl = $pSlug !== '' ? '/produto/' . $pSlug : sv_home_product_url($product);
+                            $contactUrl = sv_home_contact_url($product);
+                            $hasPrice   = (float)($product['price'] ?? 0) > 0;
+                            $payload    = rawurlencode(json_encode([
+                                'sku'              => $product['sku'],
+                                'name'             => $product['name'],
+                                'image_url'        => $image,
+                                'price'            => $product['price'],
+                                'olist_product_id' => $product['olist_product_id'],
+                            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+                            ?>
+                            <article class="product-card" data-sku="<?= sv_home_esc($product['sku']) ?>">
+                                <a class="product-image" href="<?= sv_home_esc($productUrl) ?>">
+                                    <img src="<?= sv_home_esc($image) ?>" alt="<?= sv_home_esc($product['name']) ?>" loading="lazy" onerror="this.src='<?= sv_home_default_image() ?>'">
+                                </a>
+                                <div class="product-info">
+                                    <?php if (!empty($product['category'])): ?>
+                                        <div class="product-category"><?= sv_home_esc($product['category']) ?></div>
+                                    <?php endif; ?>
+                                    <h2><?= sv_home_esc($product['name']) ?></h2>
+                                    <div class="product-price"><?= sv_home_esc(sv_home_money((float)$product['price'])) ?></div>
+                                    <div class="card-actions">
+                                        <a class="btn btn-secondary card-link" href="<?= sv_home_esc($productUrl) ?>">Ver detalhes</a>
+                                        <?php if ($hasPrice): ?>
+                                            <button class="buy-button" type="button" data-product="<?= sv_home_esc($payload) ?>">Comprar agora</button>
+                                        <?php else: ?>
+                                            <a class="btn btn-primary card-link" href="<?= sv_home_esc($contactUrl) ?>">Falar com vendas</a>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                    <button type="button" class="home-scroller-arrow" data-dir="1" aria-label="Próximos produtos">›</button>
+                </div>
+            <?php endif; ?>
         </div>
     </section>
 
@@ -367,6 +440,20 @@ $svNavCurrent = '';
 
         show(0);
         restart();
+    })();
+
+    (function () {
+        var scrollers = document.querySelectorAll('[data-scroller]');
+        scrollers.forEach(function (wrap) {
+            var track = wrap.querySelector('.home-scroller-track');
+            if (!track) return;
+            wrap.querySelectorAll('.home-scroller-arrow').forEach(function (arrow) {
+                arrow.addEventListener('click', function () {
+                    var dir = Number(arrow.getAttribute('data-dir') || '1');
+                    track.scrollBy({ left: dir * Math.max(260, track.clientWidth * 0.82), behavior: 'smooth' });
+                });
+            });
+        });
     })();
     </script>
 </body>

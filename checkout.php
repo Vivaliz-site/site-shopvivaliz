@@ -220,7 +220,7 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
         <div class="modal-icon">🎉</div>
         <h2>Pedido registrado!</h2>
         <p id="order-number-msg" style="font-weight:700;color:#0f8f62;font-size:18px"></p>
-        <p>Em breve entraremos em contato para confirmar frete e pagamento.</p>
+        <p>Nossa equipe comercial já seguirá com a confirmação de frete e pagamento.</p>
         <div class="modal-actions">
             <a id="success-wpp-link" href="#" target="_blank" class="btn btn-wpp">
                 💬 Falar no WhatsApp
@@ -360,7 +360,7 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
                 if (successCopy) {
                     successCopy.textContent = method === 'boleto'
                         ? 'Nossa equipe vai emitir o boleto apos confirmar frete e estoque.'
-                        : 'Em breve entraremos em contato para confirmar frete e pagamento.';
+                        : 'Nossa equipe comercial já seguirá com a confirmação de frete e pagamento.';
                 }
                 document.getElementById('success-wpp-link').href = wppLink;
                 document.getElementById('success-modal').hidden = false;
