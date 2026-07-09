@@ -1,4 +1,5 @@
 <?php
+// SYNC TEST: 2026-07-09 14:00:00 - Updated homepage layout
 declare(strict_types=1);
 
 require_once __DIR__ . '/config/bootstrap-env.php';
