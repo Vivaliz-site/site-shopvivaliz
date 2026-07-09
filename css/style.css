@@ -1390,7 +1390,7 @@ footer {
     .card-actions { gap: 6px; }
     .btn, .catalog-search button, .buy-button { padding: 11px 14px; }
     .related-grid { grid-template-columns: 1fr; }
-    .hero-carousel-track { min-height: 0; }
+    .hero-carousel-track { min-height: 240px; }
     .hero-slide { padding: 22px 18px; }
     .hero-slide h2 { max-width: none; font-size: 28px; }
     .hero-slide p { font-size: 15px; }
