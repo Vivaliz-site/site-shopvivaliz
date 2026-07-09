@@ -43,6 +43,11 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^api/maintenance/opcache-reset/?$ api/maintenance/opcache-reset.php [L,QSA]
     RewriteRule ^admin/mercadolivre/?$ admin/mercadolivre.php [L]
 
+    # Admin pages — permitir acesso direto
+    RewriteRule ^admin/template-editor/?$ admin/template-editor.php [L]
+    RewriteRule ^admin/editor-visual/?$ admin/editor-visual.php [L]
+    RewriteRule ^admin/editor-teste/?$ admin/editor-teste.php [L]
+
     # Rotas principais da loja
     RewriteRule ^$ index.php [L]
     RewriteRule ^home/?$ home.php [L]
