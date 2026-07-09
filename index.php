@@ -272,36 +272,6 @@ $svNavCurrent = '';
 </head>
 <body>
     <?php include __DIR__ . '/includes/navbar.php'; ?>
-
-    <!-- Hero Section -->
-    <section class="hero">
-        <div class="container">
-            <div class="hero-content">
-                <p class="eyebrow hero-kicker">
-                    🛍️ Loja oficial Vivaliz
-                </p>
-                <h1>Produtos que <span>você precisa</span>,<br>entrega para todo o Brasil</h1>
-                <p>Rodízios, ferragens, utilidades domésticas e itens para casa com catálogo organizado, atendimento rápido e navegação simples no celular.</p>
-
-                <div class="cta-buttons hero-cta">
-                    <a href="/catalogo" class="btn btn-hero-primary">
-                        Ver catálogo completo
-                    </a>
-                    <a href="/carrinho" class="btn btn-hero-secondary">
-                        🛒 Meu Carrinho
-                    </a>
-                </div>
-
-                <div class="hero-trust">
-                    <div class="hero-trust-item"><span>🔒</span> Compra segura</div>
-                    <div class="hero-trust-item"><span>🚚</span> Entrega para todo Brasil</div>
-                    <div class="hero-trust-item"><span>⚡</span> PIX com aprovação imediata</div>
-                    <div class="hero-trust-item"><span>↩️</span> 30 dias para troca</div>
-                </div>
-            </div>
-        </div>
-    </section>
-
     <section class="hero-carousel-section">
         <div class="container">
             <div class="hero-carousel" id="hero-carousel" aria-label="Banners em destaque">
