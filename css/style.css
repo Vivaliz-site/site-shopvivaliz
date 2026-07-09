@@ -386,6 +386,67 @@ a {
     font-weight: 700;
 }
 
+.home-scroller {
+    display: grid;
+    grid-template-columns: 44px 1fr 44px;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.home-scroller-track {
+    display: grid;
+    grid-auto-flow: column;
+    gap: 14px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: thin;
+    padding: 8px 2px 8px 2px;
+}
+
+.home-scroller-track > * {
+    scroll-snap-align: start;
+}
+
+.home-scroller-arrow {
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    border: 1px solid rgba(30,58,95,0.18);
+    background: #fff;
+    color: var(--brand);
+    font-size: 24px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.category-slide {
+    min-width: 220px;
+    border-radius: 14px;
+    border: 1px solid rgba(30,58,95,0.12);
+    background: linear-gradient(135deg, #f3f9ff 0%, #ffffff 100%);
+    text-decoration: none;
+    padding: 16px 14px;
+    display: grid;
+    gap: 6px;
+}
+
+.category-slide strong {
+    color: var(--brand);
+    font-size: 15px;
+}
+
+.category-slide span {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.products-track .product-card {
+    min-width: 260px;
+    max-width: 260px;
+}
+
 .section-heading {
     display: flex;
     align-items: end;
@@ -1238,6 +1299,16 @@ footer {
     .hero-slide p { font-size: 15px; }
     .hero-slide-actions { display: grid; grid-template-columns: 1fr; }
     .hero-carousel-controls { padding: 12px 16px 16px; }
+    .home-scroller {
+        grid-template-columns: 1fr;
+    }
+    .home-scroller-arrow {
+        display: none;
+    }
+    .products-track .product-card {
+        min-width: 82vw;
+        max-width: 82vw;
+    }
 }
 
 @media (max-width: 420px) {
@@ -1249,4 +1320,135 @@ footer {
     .related-grid { grid-template-columns: 1fr; }
     .product-info h2 { font-size: 15px; }
     .card-actions { grid-template-columns: 1fr; }
+}
+
+/* Brand refresh v2026-07 - identidade visual baseada na logo */
+:root {
+    --brand: #1e3a5f;
+    --brand-strong: #152c49;
+    --brand-navy: #1e3a5f;
+    --brand-navy-dark: #142a44;
+    --accent: #22c55e;
+    --accent-bg: #ecfdf3;
+    --line: #d8e3f0;
+    --bg: #f2f7fb;
+}
+
+body {
+    background:
+        radial-gradient(circle at 0 0, rgba(30, 58, 95, 0.08), transparent 22%),
+        radial-gradient(circle at 100% 0, rgba(34, 197, 94, 0.07), transparent 18%),
+        var(--bg);
+}
+
+.navbar {
+    border-bottom: 1px solid rgba(30, 58, 95, 0.12);
+    box-shadow: 0 12px 28px rgba(20, 42, 68, 0.06);
+}
+
+.navbar-menu a {
+    border-radius: 10px;
+    padding: 9px 12px;
+}
+
+.navbar-menu a:hover,
+.navbar-menu a[aria-current="page"] {
+    background: #edf4fb;
+}
+
+.hero-kicker {
+    color: #9ddcff;
+    font-size: 13px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0 0 16px;
+}
+
+.hero-cta {
+    margin-top: 28px;
+}
+
+.btn-hero-primary,
+.btn-hero-secondary {
+    padding: 14px 24px;
+    font-size: 15px;
+}
+
+.btn-hero-primary {
+    background: #ffffff;
+    color: var(--brand);
+}
+
+.btn-hero-primary:hover {
+    background: #f3f9ff;
+}
+
+.btn-hero-secondary {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    border: 1.5px solid rgba(255,255,255,0.35);
+}
+
+.btn-hero-secondary:hover {
+    background: rgba(255,255,255,0.23);
+}
+
+.hero-carousel,
+.product-card,
+.agent-card,
+.stat-item,
+.admin-card {
+    border-radius: 16px;
+}
+
+.product-card {
+    border: 1px solid rgba(30, 58, 95, 0.12);
+}
+
+.product-card:hover {
+    transform: translateY(-6px);
+}
+
+.product-category {
+    color: var(--accent);
+}
+
+.buy-button,
+.btn-primary,
+.catalog-search button {
+    background: linear-gradient(135deg, var(--brand) 0%, #25558d 100%);
+}
+
+.buy-button:hover,
+.btn-primary:hover,
+.catalog-search button:hover {
+    background: linear-gradient(135deg, var(--brand-strong) 0%, #214a7a 100%);
+}
+
+.btn-secondary {
+    background: #edf4fb;
+    border: 1px solid rgba(30, 58, 95, 0.14);
+}
+
+.catalog-header {
+    background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+}
+
+.catalog-trust-strip {
+    background: linear-gradient(180deg, #f3f9ff 0%, #ffffff 100%);
+    border: 1px solid rgba(30, 58, 95, 0.1);
+}
+
+@media (max-width: 760px) {
+    .hero-cta {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .btn-hero-primary,
+    .btn-hero-secondary {
+        width: 100%;
+        text-align: center;
+    }
 }

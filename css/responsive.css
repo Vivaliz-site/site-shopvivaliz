@@ -417,6 +417,13 @@ footer {
     border-radius: 22px;
     padding: 22px 18px;
     box-shadow: var(--shadow);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.brand-card:hover,
+.brand-post-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 18px 38px rgba(20, 42, 68, 0.12);
 }
 
 .brand-card h1,
@@ -439,6 +446,7 @@ footer {
     font-weight: 700;
     text-decoration: none;
 }
+
 .brand-section-head {
     margin-bottom: 16px;
 }
@@ -520,6 +528,7 @@ footer {
     border-radius: 22px;
     padding: 20px 18px;
     box-shadow: var(--shadow-soft);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .brand-post-card h2 {

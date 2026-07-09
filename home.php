@@ -327,7 +327,7 @@ $categoryLinks = [
                     <?php endforeach; ?>
                 </div>
             <?php else: ?>
-                <div class="empty-products">Novos destaques estarão disponíveis aqui em breve.</div>
+                <div class="empty-products">Estamos atualizando a vitrine com novas seleções. Fale com a equipe para receber recomendações imediatas.</div>
             <?php endif; ?>
         </div>
     </section>
