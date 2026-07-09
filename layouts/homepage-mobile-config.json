@@ -1,0 +1,116 @@
+{
+  "page_id": "homepage_mobile",
+  "type": "homepage",
+  "viewport": "mobile",
+  "meta": {
+    "title": "Vivaliz | Loja Online",
+    "description": "Loja online com produtos de qualidade",
+    "og_image": "/images/logo-vivaliz-square.png"
+  },
+  "sections": [
+    {
+      "id": "announcement_bar_mobile",
+      "type": "AnnouncementBar",
+      "props": {
+        "text": "🎉 10% OFF - PRIMEIRACOMPRA",
+        "link": "/cupons",
+        "close_button": true
+      },
+      "styles": {
+        "backgroundColor": "#ff0055",
+        "color": "#ffffff",
+        "fontSize": "13px",
+        "padding": "10px 16px"
+      }
+    },
+    {
+      "id": "hero_carousel_mobile",
+      "type": "ImageCarousel",
+      "props": {
+        "images": [
+          "/images/banner-desconto-10-mobile.jpg",
+          "/images/banner-casa-jardim-mobile.jpg"
+        ],
+        "autoplay": true,
+        "interval": 5,
+        "responsive": true
+      },
+      "styles": {
+        "width": "100%",
+        "maxWidth": "100vw",
+        "margin": "0"
+      }
+    },
+    {
+      "id": "spacer_mobile_01",
+      "type": "DynamicSpacer",
+      "props": {
+        "height": "20px"
+      }
+    },
+    {
+      "id": "countdown_mobile",
+      "type": "CountdownTimer",
+      "props": {
+        "title": "⚡ Oferta válida por:",
+        "end_date": "2026-12-31"
+      },
+      "styles": {
+        "margin": "16px",
+        "fontSize": "13px",
+        "padding": "16px"
+      }
+    },
+    {
+      "id": "category_carousel_mobile",
+      "type": "CategoryCarousel",
+      "props": {
+        "limit": 8
+      },
+      "styles": {
+        "gap": "12px",
+        "padding": "16px"
+      }
+    },
+    {
+      "id": "promo_ribbon_mobile",
+      "type": "PromoRibbon",
+      "props": {
+        "text": "✨ LANÇAMENTOS DA SEMANA"
+      },
+      "styles": {
+        "fontSize": "14px",
+        "padding": "10px 16px",
+        "margin": "16px"
+      }
+    },
+    {
+      "id": "product_grid_mobile",
+      "type": "ProductGrid",
+      "props": {
+        "columns": 2,
+        "limit": 8,
+        "category": ""
+      },
+      "styles": {
+        "gridTemplateColumns": "repeat(2, 1fr)",
+        "gap": "12px",
+        "padding": "16px"
+      }
+    },
+    {
+      "id": "spacer_mobile_02",
+      "type": "DynamicSpacer",
+      "props": {
+        "height": "40px"
+      }
+    },
+    {
+      "id": "footer_mobile",
+      "type": "GlobalFooter",
+      "styles": {
+        "padding": "30px 16px"
+      }
+    }
+  ]
+}

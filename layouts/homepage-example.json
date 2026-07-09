@@ -1,0 +1,92 @@
+{
+  "page_id": "homepage",
+  "type": "homepage",
+  "meta": {
+    "title": "Vivaliz | Loja Online - Rodízios, Ferragens e Utilidades",
+    "description": "Loja online com produtos de qualidade. Rodízios, ferragens, utilidades e muito mais. Compre com segurança.",
+    "og_image": "/images/logo-vivaliz-square.png"
+  },
+  "sections": [
+    {
+      "id": "announcement_bar_01",
+      "type": "AnnouncementBar",
+      "props": {
+        "text": "🎉 USE PRIMEIRACOMPRA E GANHE 10% OFF | FRETE GRÁTIS ACIMA DE R$ 100",
+        "link": "/cupons",
+        "close_button": true
+      },
+      "styles": {
+        "backgroundColor": "#ff0055",
+        "color": "#ffffff"
+      }
+    },
+    {
+      "id": "hero_banner_01",
+      "type": "HeroBanner",
+      "props": {
+        "title": "Produtos que você precisa, com entrega para todo o Brasil",
+        "subtitle": "Rodízios, ferragens, utilidades domésticas e itens para casa com catálogo organizado",
+        "cta_text": "Explorar catálogo",
+        "cta_url": "/catalogo",
+        "image": "/images/hero-background.jpg",
+        "overlay_opacity": 0.3
+      },
+      "styles": {
+        "minHeight": "500px"
+      }
+    },
+    {
+      "id": "countdown_01",
+      "type": "CountdownTimer",
+      "props": {
+        "title": "⚡ Oferta válida por:",
+        "end_date": "2026-12-31"
+      }
+    },
+    {
+      "id": "category_carousel_01",
+      "type": "CategoryCarousel",
+      "props": {
+        "limit": 10
+      }
+    },
+    {
+      "id": "promo_ribbon_01",
+      "type": "PromoRibbon",
+      "props": {
+        "text": "✨ LANÇAMENTOS DA SEMANA - Veja novos produtos!"
+      }
+    },
+    {
+      "id": "product_grid_01",
+      "type": "ProductGrid",
+      "props": {
+        "columns": 4,
+        "limit": 12,
+        "category": ""
+      }
+    },
+    {
+      "id": "spacer_01",
+      "type": "DynamicSpacer",
+      "props": {
+        "height": "60px"
+      }
+    },
+    {
+      "id": "divider_01",
+      "type": "Divider"
+    },
+    {
+      "id": "product_carousel_01",
+      "type": "ProductCarousel",
+      "props": {
+        "limit": 12
+      }
+    },
+    {
+      "id": "footer_01",
+      "type": "GlobalFooter"
+    }
+  ]
+}

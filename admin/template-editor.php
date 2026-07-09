@@ -4,36 +4,87 @@ declare(strict_types=1);
 // Admin guard
 require_once __DIR__ . '/../includes/admin-guard.php';
 
-// Get list of editable templates
-$templates = [
-    'index.php' => ['name' => 'Homepage', 'description' => 'Página inicial do site'],
-    'catalogo.php' => ['name' => 'Catálogo', 'description' => 'Página de listagem de produtos'],
-    'sobre.php' => ['name' => 'Sobre', 'description' => 'Página sobre a empresa'],
-    'contato.php' => ['name' => 'Contato', 'description' => 'Página de contato'],
-    'carrinho/index.php' => ['name' => 'Carrinho', 'description' => 'Página do carrinho'],
+// Inicializar sistema de editor visual
+require_once __DIR__ . '/../core/init-editor.php';
+
+use Core\BlockRegistry;
+use Core\DynamicRenderer;
+
+// Layouts disponíveis
+$layouts = [
+    'homepage' => ['name' => 'Homepage', 'description' => 'Página inicial', 'icon' => '🏠'],
+    'catalogo' => ['name' => 'Catálogo', 'description' => 'Listagem de produtos', 'icon' => '📦'],
+    'sobre' => ['name' => 'Sobre', 'description' => 'Página sobre a empresa', 'icon' => '👥'],
+    'contato' => ['name' => 'Contato', 'description' => 'Página de contato', 'icon' => '📞'],
 ];
 
-$currentTemplate = $_GET['template'] ?? 'index.php';
-$templatePath = __DIR__ . '/../' . $currentTemplate;
+$currentLayout = $_GET['layout'] ?? 'homepage';
+$layoutPath = __DIR__ . '/../layouts/' . $currentLayout . '-config.json';
 
-// Security check
-if (!isset($templates[$currentTemplate]) || !file_exists($templatePath)) {
-    $currentTemplate = 'index.php';
-    $templatePath = __DIR__ . '/../index.php';
+// Validar layout
+if (!isset($layouts[$currentLayout])) {
+    $currentLayout = 'homepage';
+    $layoutPath = __DIR__ . '/../layouts/homepage-config.json';
 }
 
-$content = file_get_contents($templatePath);
+// Carregar layout
+$layoutContent = [];
+$message = null;
+$messageType = 'info';
 
-// Handle save
+if (file_exists($layoutPath)) {
+    $content = file_get_contents($layoutPath);
+    $layoutContent = json_decode($content, true);
+} else {
+    // Usar exemplo como padrão
+    if (file_exists(__DIR__ . '/../layouts/homepage-example.json')) {
+        $layoutContent = json_decode(file_get_contents(__DIR__ . '/../layouts/homepage-example.json'), true);
+    }
+}
+
+// Handle save via API (não mais escrita direta em arquivo)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save') {
-    $newContent = $_POST['content'] ?? '';
+    $layoutJson = $_POST['layout_json'] ?? '{}';
+    $decoded = json_decode($layoutJson, true);
 
-    if (file_put_contents($templatePath, $newContent)) {
-        $message = '✓ Template atualizado com sucesso!';
-        $messageType = 'success';
-        $content = $newContent;
+    if (json_last_error() === JSON_ERROR_NONE) {
+        // Chamar API para salvar (com fallback a arquivo se BD indisponível)
+        $payload = json_encode([
+            'page_id' => $currentLayout,
+            'config' => $decoded,
+            'page_type' => $_POST['page_type'] ?? 'homepage',
+            'viewport' => $_POST['viewport'] ?? 'both',
+            'publish' => (bool)($_POST['publish'] ?? false)
+        ]);
+
+        $ch = curl_init(__DIR__ . '/../api/admin/layouts-save.php');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HEADER => false,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_POSTFIELDS => $payload,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Cookie: ' . session_name() . '=' . session_id()
+            ]
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $result = json_decode($response, true);
+
+        if ($httpCode === 200 && ($result['ok'] ?? false)) {
+            $message = '✓ Layout salvo com sucesso! (Fonte: ' . ($result['saved_to'] ?? 'unknown') . ')';
+            $messageType = 'success';
+            $layoutContent = $decoded;
+        } else {
+            $message = '✗ Erro ao salvar: ' . ($result['error'] ?? 'Erro desconhecido');
+            $messageType = 'error';
+        }
     } else {
-        $message = '✗ Erro ao salvar template';
+        $message = '✗ JSON inválido: ' . json_last_error_msg();
         $messageType = 'error';
     }
 }
@@ -311,38 +362,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         <?php endif; ?>
 
         <div class="main-content">
-            <!-- Sidebar com lista de templates -->
+            <!-- Sidebar com lista de layouts -->
             <div class="sidebar">
-                <div class="sidebar-header">Templates</div>
+                <div class="sidebar-header">🎨 Layouts</div>
                 <ul class="template-list">
-                    <?php foreach ($templates as $path => $meta): ?>
+                    <?php foreach ($layouts as $key => $meta): ?>
                         <li class="template-item">
-                            <a href="?template=<?php echo urlencode($path); ?>"
-                               class="<?php echo $currentTemplate === $path ? 'active' : ''; ?>">
-                                <span class="template-name"><?php echo htmlspecialchars($meta['name']); ?></span>
+                            <a href="?layout=<?php echo urlencode($key); ?>"
+                               class="<?php echo $currentLayout === $key ? 'active' : ''; ?>">
+                                <span class="template-name"><?php echo htmlspecialchars($meta['icon'] . ' ' . $meta['name']); ?></span>
                                 <span class="template-desc"><?php echo htmlspecialchars($meta['description']); ?></span>
                             </a>
                         </li>
                     <?php endforeach; ?>
                 </ul>
+
+                <div style="border-top: 1px solid #e5e9f0; padding: 15px; margin-top: 15px;">
+                    <div class="sidebar-header">📦 Blocos Disponíveis</div>
+                    <div style="font-size: 12px; line-height: 1.6;">
+                        <?php
+                        $categories = BlockRegistry::getCategories();
+                        foreach ($categories as $category):
+                            $blocks = BlockRegistry::getByCategory($category);
+                        ?>
+                            <div style="margin-top: 10px;">
+                                <strong style="color: #173B63; display: block; margin-bottom: 5px;"><?php echo htmlspecialchars($category); ?></strong>
+                                <?php foreach ($blocks as $name => $config): ?>
+                                    <div style="padding: 4px 8px; background: #f8f9fa; border-radius: 4px; margin-bottom: 4px; cursor: help;" title="<?php echo htmlspecialchars($config['description']); ?>">
+                                        <?php echo htmlspecialchars($config['icon'] . ' ' . $name); ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
             </div>
 
             <!-- Editor -->
             <div class="editor-wrapper">
                 <div class="editor-toolbar">
-                    <h2><?php echo htmlspecialchars($templates[$currentTemplate]['name'] ?? 'Template'); ?></h2>
+                    <h2><?php echo htmlspecialchars($layouts[$currentLayout]['name'] ?? 'Layout'); ?></h2>
+                    <button type="button" class="btn btn-secondary" onclick="validateLayout()">✓ Validar</button>
                     <button type="button" class="btn btn-secondary" onclick="togglePreview()">👁️ Preview</button>
-                    <button type="button" class="btn btn-primary" onclick="saveTemplate()">💾 Salvar</button>
+                    <button type="button" class="btn btn-primary" onclick="saveLayout()">💾 Salvar</button>
                 </div>
 
                 <div class="editor-content">
                     <div class="editor-split">
-                        <!-- Editor de código -->
+                        <!-- Editor JSON -->
                         <div class="editor-pane">
-                            <div class="pane-header">📄 Código HTML/PHP</div>
+                            <div class="pane-header">📋 JSON Layout</div>
                             <form method="POST" id="editor-form">
                                 <input type="hidden" name="action" value="save">
-                                <textarea name="content" id="code-editor" placeholder="Edite o template aqui..."><?php echo htmlspecialchars($content); ?></textarea>
+                                <textarea name="layout_json" id="json-editor" placeholder="Edite o layout em JSON..."><?php echo htmlspecialchars(json_encode($layoutContent, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></textarea>
                             </form>
                             <div class="char-count">
                                 <span id="char-count">0</span> caracteres
@@ -354,7 +426,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                             <div class="pane-header">👁️ Preview</div>
                             <div class="preview" id="preview-pane">
                                 <p style="text-align: center; color: #999; padding: 20px;">
-                                    O preview será atualizado após salvar
+                                    Clique em "Preview" para gerar a visualização
                                 </p>
                             </div>
                         </div>
@@ -365,53 +437,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     </div>
 
     <script>
-        const codeEditor = document.getElementById('code-editor');
+        const jsonEditor = document.getElementById('json-editor');
         const charCountEl = document.getElementById('char-count');
         const editorForm = document.getElementById('editor-form');
+        const previewPane = document.getElementById('preview-pane');
 
         // Atualizar contagem de caracteres
-        codeEditor.addEventListener('input', function() {
+        jsonEditor.addEventListener('input', function() {
             charCountEl.textContent = this.value.length.toLocaleString('pt-BR');
         });
 
-        // Atualizar preview em tempo real
-        codeEditor.addEventListener('input', function() {
-            updatePreview();
-        });
-
-        function updatePreview() {
-            const preview = document.getElementById('preview-pane');
-            // Nota: Preview completo requer renderização real no servidor
-            const lines = codeEditor.value.split('\n').length;
-            preview.innerHTML = `<p style="padding: 20px; color: #666; font-size: 13px;">
-                <strong>${lines}</strong> linhas editadas<br>
-                <em>Clique em "Salvar" para ver o preview real</em>
-            </p>`;
+        function validateLayout() {
+            try {
+                const json = JSON.parse(jsonEditor.value);
+                alert('✓ JSON válido! ' + (json.sections ? json.sections.length : 0) + ' seção(ões).');
+            } catch (e) {
+                alert('✗ Erro de JSON:\n' + e.message);
+            }
         }
 
         function togglePreview() {
-            // Toggle entre preview e editor
             const split = document.querySelector('.editor-split');
             if (split.style.gridTemplateColumns === '1fr') {
                 split.style.gridTemplateColumns = '1fr 1fr';
+                generatePreview();
             } else {
                 split.style.gridTemplateColumns = '1fr';
             }
         }
 
-        function saveTemplate() {
-            if (confirm('Deseja salvar as alterações? Esta ação não pode ser desfeita.')) {
-                editorForm.submit();
+        function generatePreview() {
+            try {
+                const json = JSON.parse(jsonEditor.value);
+                if (!json.sections || json.sections.length === 0) {
+                    previewPane.innerHTML = '<p style="padding: 20px; color: #999;">Nenhuma seção definida</p>';
+                    return;
+                }
+
+                let html = '<div style="padding: 20px; font-size: 12px; line-height: 1.6;">';
+                html += '<strong style="color: #173B63; display: block; margin-bottom: 10px;">Estrutura do Layout:</strong>';
+
+                json.sections.forEach((section, idx) => {
+                    const blockType = section.type || 'Unknown';
+                    const blockId = section.id || 'unnamed';
+                    html += `<div style="padding: 8px; background: #f8f9fa; margin-bottom: 8px; border-left: 3px solid #173B63;">
+                        ${idx + 1}. <strong>${blockType}</strong><br>
+                        <code style="font-size: 11px; color: #666;">#${blockId}</code>
+                    </div>`;
+                });
+
+                html += '</div>';
+                previewPane.innerHTML = html;
+            } catch (e) {
+                previewPane.innerHTML = '<p style="padding: 20px; color: #d97706;"><strong>Erro:</strong> ' + e.message + '</p>';
+            }
+        }
+
+        function saveLayout() {
+            try {
+                JSON.parse(jsonEditor.value);
+                if (confirm('Deseja salvar o layout? Esta ação não pode ser desfeita.')) {
+                    editorForm.submit();
+                }
+            } catch (e) {
+                alert('✗ JSON inválido, não pode salvar:\n' + e.message);
             }
         }
 
         // Inicializar contagem
-        charCountEl.textContent = codeEditor.value.length.toLocaleString('pt-BR');
-
-        // Auto-save a cada 2 minutos (opcional)
-        // setInterval(() => {
-        //     console.log('Auto-save: não implementado');
-        // }, 120000);
+        charCountEl.textContent = jsonEditor.value.length.toLocaleString('pt-BR');
     </script>
 </body>
 </html>
