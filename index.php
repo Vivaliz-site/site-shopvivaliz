@@ -1,5 +1,4 @@
 <?php
-// SYNC TEST: 2026-07-09 11:50 - Removed old hero section completely
 declare(strict_types=1);
 
 require_once __DIR__ . '/config/bootstrap-env.php';
@@ -233,9 +232,9 @@ $svNavCurrent = '';
 
     <title>Vivaliz | Loja Online</title>
 
-    <link rel="stylesheet" href="/css/style.css?v=2026-07-09-1506">
-    <link rel="stylesheet" href="/css/category-images.css?v=2026-07-09-1506">
-    <link rel="stylesheet" href="/css/visual-enhancements.css?v=2026-07-09-1506">
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/category-images.css">
+    <link rel="stylesheet" href="/css/visual-enhancements.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -272,9 +271,39 @@ $svNavCurrent = '';
 </head>
 <body>
     <?php include __DIR__ . '/includes/navbar.php'; ?>
-    <section class="hero-carousel-section" style="background: red; padding: 20px; margin: 20px 0;">
+
+    <!-- Hero Section -->
+    <section class="hero">
         <div class="container">
-            <div class="hero-carousel" id="hero-carousel" aria-label="Banners em destaque" style="background: yellow !important; min-height: 300px;">
+            <div class="hero-content">
+                <p class="eyebrow hero-kicker">
+                    🛍️ Loja oficial Vivaliz
+                </p>
+                <h1>Produtos que <span>você precisa</span>,<br>entrega para todo o Brasil</h1>
+                <p>Rodízios, ferragens, utilidades domésticas e itens para casa com catálogo organizado, atendimento rápido e navegação simples no celular.</p>
+
+                <div class="cta-buttons hero-cta">
+                    <a href="/catalogo" class="btn btn-hero-primary">
+                        Ver catálogo completo
+                    </a>
+                    <a href="/carrinho" class="btn btn-hero-secondary">
+                        🛒 Meu Carrinho
+                    </a>
+                </div>
+
+                <div class="hero-trust">
+                    <div class="hero-trust-item"><span>🔒</span> Compra segura</div>
+                    <div class="hero-trust-item"><span>🚚</span> Entrega para todo Brasil</div>
+                    <div class="hero-trust-item"><span>⚡</span> PIX com aprovação imediata</div>
+                    <div class="hero-trust-item"><span>↩️</span> 30 dias para troca</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="hero-carousel-section">
+        <div class="container">
+            <div class="hero-carousel" id="hero-carousel" aria-label="Banners em destaque">
                 <div class="hero-carousel-track">
                     <?php foreach ($heroBanners as $index => $banner): ?>
                         <article class="hero-slide<?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>">
