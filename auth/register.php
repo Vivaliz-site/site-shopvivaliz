@@ -54,7 +54,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     // Criar novo usuário
                     $password_hash = password_hash($password, PASSWORD_BCRYPT);
-                    $cpf = ''; // Será preenchido depois no checkout
+                    // NULL, nao string vazia: cpf tem UNIQUE KEY no schema,
+                    // e '' colide para todo cadastro sem CPF (preenchido
+                    // depois no checkout). NULL nao conflita com NULL.
+                    $cpf = null;
                     $phone = '';
 
                     $insert = $db->prepare(
@@ -76,6 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         } catch (Exception $e) {
+            error_log('[auth/register] ' . $e->getMessage());
             $error = 'Erro ao conectar ao banco de dados';
         }
     }
