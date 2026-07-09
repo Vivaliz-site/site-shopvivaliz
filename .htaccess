@@ -12,9 +12,6 @@
 # Charset UTF-8
 AddCharset UTF-8 .html .txt .php .json
 
-# Pagina 404 com a identidade da loja em vez do erro generico do Apache
-ErrorDocument 404 /404.php
-
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
