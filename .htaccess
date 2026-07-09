@@ -1,9 +1,7 @@
-# ShopVivaliz - Apache configuration
-# Last updated: 2026-07-09
-# Performance & Security Best Practices
+# ShopVivaliz - Apache routing
 
-# === SECURITY: Block sensitive files ===
-<FilesMatch "^(\.env|\.env\.|\.htaccess|\.git|composer\.(json|lock)|package\.json|webpack\.config)">
+# Bloquear acesso a arquivos sensiveis
+<FilesMatch "^(\.env|\.htaccess)$">
     Require all denied
 </FilesMatch>
 
@@ -11,56 +9,8 @@
     Require all denied
 </FilesMatch>
 
-# === SECURITY: Prevent directory listings ===
-Options -Indexes
-
-# === CHARSET: UTF-8 for all text files ===
-AddCharset UTF-8 .html .txt .php .json .xml .css .js .svg
-
-# === ERROR PAGES: Brand-aware error pages ===
-ErrorDocument 404 /404.php
-ErrorDocument 500 /500.php
-ErrorDocument 503 /503.php
-
-# === HEADERS: Security & Performance ===
-<IfModule mod_headers.c>
-    # HTTPS enforcement
-    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-
-    # Clickjacking protection
-    Header always set X-Frame-Options "DENY"
-
-    # MIME type sniffing protection
-    Header always set X-Content-Type-Options "nosniff"
-
-    # XSS protection
-    Header always set X-XSS-Protection "1; mode=block"
-
-    # Referrer Policy
-    Header always set Referrer-Policy "strict-origin-when-cross-origin"
-
-    # Feature Policy (Permissions Policy)
-    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
-
-    # Remove server info
-    Header always unset X-Powered-By
-    Header unset X-Powered-By
-
-    # Enable CORS for fonts
-    <FilesMatch "\.(woff|woff2|ttf|otf|eot)$">
-        Header set Access-Control-Allow-Origin "*"
-    </FilesMatch>
-
-    # Cache busting for versioned assets
-    <FilesMatch "\.(js|css|webp|woff2)$">
-        Header set Cache-Control "public, max-age=31536000, immutable"
-    </FilesMatch>
-
-    # Short-lived cache for HTML
-    <FilesMatch "\.html$">
-        Header set Cache-Control "public, max-age=3600"
-    </FilesMatch>
-</IfModule>
+# Charset UTF-8
+AddCharset UTF-8 .html .txt .php .json
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
