@@ -126,42 +126,41 @@ function sv_home_banners(): array
 
 function sv_home_category_icon(string $category): string
 {
-    // Evita mb_strtolower (extensao mbstring pode nao estar disponivel no
-    // servidor); stripos() ja faz comparacao case-insensitive por keyword.
+    // Mapeia categorias para classes CSS ou ícones SVG
     $map = [
-        'ferrament' => '🛠️',
-        'rodízio' => '⚙️',
-        'rodizio' => '⚙️',
-        'jardim' => '🌿',
-        'floreira' => '🪴',
-        'banheiro' => '🚿',
-        'cozinha' => '🍽️',
-        'automotiv' => '🚗',
-        'elétric' => '💡',
-        'eletric' => '💡',
-        'cadeado' => '🔐',
-        'segurança' => '🔒',
-        'seguranca' => '🔒',
-        'armário' => '🗄️',
-        'armario' => '🗄️',
-        'organiza' => '🗄️',
-        'fixação' => '🔩',
-        'fixacao' => '🔩',
-        'ferragem' => '🔩',
-        'caixa' => '📦',
-        'limpeza' => '🧽',
-        'utilidade' => '🏠',
-        'pintura' => '🎨',
-        'construção' => '🧱',
-        'construcao' => '🧱',
-        'pet' => '🐾',
+        'ferrament' => 'category-tools',
+        'rodízio' => 'category-wheels',
+        'rodizio' => 'category-wheels',
+        'jardim' => 'category-garden',
+        'floreira' => 'category-plants',
+        'banheiro' => 'category-bathroom',
+        'cozinha' => 'category-kitchen',
+        'automotiv' => 'category-auto',
+        'elétric' => 'category-electric',
+        'eletric' => 'category-electric',
+        'cadeado' => 'category-locks',
+        'segurança' => 'category-security',
+        'seguranca' => 'category-security',
+        'armário' => 'category-storage',
+        'armario' => 'category-storage',
+        'organiza' => 'category-storage',
+        'fixação' => 'category-hardware',
+        'fixacao' => 'category-hardware',
+        'ferragem' => 'category-hardware',
+        'caixa' => 'category-boxes',
+        'limpeza' => 'category-cleaning',
+        'utilidade' => 'category-utilities',
+        'pintura' => 'category-paint',
+        'construção' => 'category-construction',
+        'construcao' => 'category-construction',
+        'pet' => 'category-pets',
     ];
-    foreach ($map as $needle => $icon) {
+    foreach ($map as $needle => $icon_class) {
         if (stripos($category, $needle) !== false) {
-            return $icon;
+            return $icon_class;
         }
     }
-    return '📦';
+    return 'category-default';
 }
 
 function sv_home_top_categories(int $limit = 8): array
@@ -234,6 +233,7 @@ $svNavCurrent = '';
     <title>Vivaliz | Loja Online</title>
 
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/category-images.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -344,7 +344,9 @@ $svNavCurrent = '';
                     <div class="home-scroller-track categories-track">
                         <?php foreach ($homeCategories as $category): ?>
                             <a class="category-slide" href="<?= sv_home_esc($category['href']) ?>">
-                                <span class="category-slide-icon" aria-hidden="true"><?= sv_home_esc($category['icon']) ?></span>
+                                <div class="category-slide-image-wrapper">
+                                    <div class="category-slide-icon <?= sv_home_esc($category['icon']) ?>" aria-hidden="true"></div>
+                                </div>
                                 <strong><?= sv_home_esc($category['name']) ?></strong>
                                 <span class="category-slide-count"><?= (int)$category['count'] ?> itens</span>
                             </a>
