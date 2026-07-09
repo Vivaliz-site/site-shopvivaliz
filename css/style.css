@@ -610,17 +610,22 @@ a {
 
 .product-detail {
     display: grid;
-    grid-template-columns: 220px minmax(0, 1fr);
-    gap: 18px;
+    grid-template-columns: minmax(320px, 480px) minmax(0, 1fr);
+    gap: 40px;
     align-items: start;
     margin-bottom: 18px;
 }
 
 .product-detail-image {
+    position: sticky;
+    top: 90px;
     aspect-ratio: 1 / 1;
-    background: #eef1f6;
-    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
     overflow: hidden;
+    padding: 24px;
 }
 
 .product-detail-image img {
@@ -633,6 +638,7 @@ a {
 .product-detail-copy {
     display: grid;
     gap: 10px;
+    padding-top: 4px;
 }
 
 .catalog-page {
@@ -1054,6 +1060,12 @@ footer {
 
     .product-detail {
         grid-template-columns: 1fr;
+    }
+
+    .product-detail-image {
+        position: static;
+        max-width: 420px;
+        margin: 0 auto;
     }
 
     .hero {
