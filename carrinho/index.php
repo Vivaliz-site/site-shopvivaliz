@@ -43,8 +43,9 @@ header('Content-Type: text/html; charset=UTF-8');
         .shipping-input { flex:1; padding:12px 14px; border:1px solid #cbd5e1; border-radius:10px; font:inherit; }
         .shipping-status { font-size:13px; color:#64748b; line-height:1.5; min-height:20px; }
         .summary-actions { display:grid; gap:12px; margin-top:22px; }
-        .empty-state { padding:48px 24px; text-align:center; color:#64748b; }
-        .empty-state h2 { color:var(--navy); margin-bottom:10px; }
+        .empty-state { padding:64px 24px; text-align:center; color:#64748b; }
+        .empty-state-icon { width:72px; height:72px; margin:0 auto 20px; border-radius:999px; background:#ecfdf5; display:flex; align-items:center; justify-content:center; font-size:32px; }
+        .empty-state h2 { color:var(--navy); margin-bottom:10px; font-size:22px; }
         .toast { position:fixed; right:20px; bottom:20px; background:#0f172a; color:white; padding:12px 16px; border-radius:12px; opacity:0; transform:translateY(12px); transition:opacity .2s,transform .2s; z-index:999; }
         .toast.show { opacity:1; transform:translateY(0); }
         @media (max-width:900px) { .cart-layout { grid-template-columns:1fr; } }
@@ -142,7 +143,7 @@ header('Content-Type: text/html; charset=UTF-8');
     function render() {
         const items = readCart();
         if (!items.length) {
-            root.innerHTML = '<section class="cart-panel empty-state"><h2>Seu carrinho está vazio</h2><p>Adicione produtos no catálogo para continuar a compra.</p><div class="summary-actions" style="max-width:320px;margin:24px auto 0;"><a class="primary-btn" href="/catalogo">Ir para o catálogo</a></div></section>';
+            root.innerHTML = '<section class="cart-panel empty-state"><div class="empty-state-icon">🛒</div><h2>Seu carrinho está vazio</h2><p>Adicione produtos no catálogo para continuar a compra.</p><div class="summary-actions" style="max-width:320px;margin:24px auto 0;"><a class="primary-btn" href="/catalogo">Ir para o catálogo</a></div></section>';
             return;
         }
         const subtotal = items.reduce(function (s, i) { return s + Number(i.price || 0) * Number(i.quantity || 1); }, 0);
