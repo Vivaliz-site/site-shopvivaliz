@@ -14,18 +14,10 @@
 # === SECURITY: Prevent directory listings ===
 Options -Indexes
 
-# === SECURITY: Disable PHP execution in upload directories ===
-<Directory ~"^.*/(uploads|tmp|temp)">
-    php_flag engine off
-    AddType text/plain .php .php3 .php4 .php5 .phtml
-</Directory>
-
 # === CHARSET: UTF-8 for all text files ===
 AddCharset UTF-8 .html .txt .php .json .xml .css .js .svg
 
 # === ERROR PAGES: Brand-aware error pages ===
-ErrorDocument 400 /400.php
-ErrorDocument 403 /403.php
 ErrorDocument 404 /404.php
 ErrorDocument 500 /500.php
 ErrorDocument 503 /503.php
