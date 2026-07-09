@@ -51,8 +51,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['user_name'] = $user['name'];
                     $_SESSION['user_email'] = $user['email'];
 
-                    // Atualizar last_login
-                    $update = $db->prepare('UPDATE users SET last_login = NOW() WHERE id = ?');
+                    // Atualizar updated_at (coluna last_login nao existe no schema)
+                    $update = $db->prepare('UPDATE users SET updated_at = NOW() WHERE id = ?');
                     if ($update) {
                         $update->bind_param('i', $user['id']);
                         $update->execute();
@@ -65,6 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         } catch (Exception $e) {
+            error_log('[auth/login] ' . $e->getMessage());
             $error = 'Erro ao conectar ao banco de dados';
         }
     }
