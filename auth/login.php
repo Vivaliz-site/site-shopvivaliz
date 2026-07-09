@@ -3,15 +3,23 @@ declare(strict_types=1);
 
 session_start();
 
+// So aceita redirects internos (comeca com "/", nunca "//" que seria
+// interpretado como URL absoluta por outro host -- evita open redirect).
+$redirectTo = (string)($_GET['redirect'] ?? $_POST['redirect'] ?? '/');
+if ($redirectTo === '' || $redirectTo[0] !== '/' || str_starts_with($redirectTo, '//')) {
+    $redirectTo = '/';
+}
+
 // Se já está logado, redireciona para home
 if (!empty($_SESSION['user_id'])) {
-    header('Location: /');
+    header('Location: ' . $redirectTo);
     exit;
 }
 
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
+require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../config/database.php';
 
 $error = '';
@@ -43,20 +51,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['user_name'] = $user['name'];
                     $_SESSION['user_email'] = $user['email'];
 
-                    // Atualizar last_login
-                    $update = $db->prepare('UPDATE users SET last_login = NOW() WHERE id = ?');
+                    // Atualizar updated_at (coluna last_login nao existe no schema)
+                    $update = $db->prepare('UPDATE users SET updated_at = NOW() WHERE id = ?');
                     if ($update) {
                         $update->bind_param('i', $user['id']);
                         $update->execute();
                     }
 
-                    header('Location: /');
+                    header('Location: ' . $redirectTo);
                     exit;
                 } else {
                     $error = 'Email ou senha incorretos';
                 }
             }
         } catch (Exception $e) {
+            error_log('[auth/login] ' . $e->getMessage());
             $error = 'Erro ao conectar ao banco de dados';
         }
     }
@@ -241,6 +250,7 @@ $apple_redirect_uri = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.co
         <?php endif; ?>
 
         <form method="POST">
+            <input type="hidden" name="redirect" value="<?= htmlspecialchars($redirectTo, ENT_QUOTES, 'UTF-8') ?>">
             <div class="form-group">
                 <label for="email">Email</label>
                 <input type="email" id="email" name="email" required

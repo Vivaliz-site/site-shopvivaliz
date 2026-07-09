@@ -19,6 +19,28 @@ if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
     }
 }
 
+// Producao (VM Oracle) usa .env real em vez de runtime-secrets.php
+// (mecanismo antigo do deploy FTP do HostGator). Mesmo parser usado
+// em varios pontos do projeto (includes/melhorenvio-oauth.php etc.).
+$envFile = dirname(__DIR__) . '/.env';
+if (is_file($envFile) && is_readable($envFile)) {
+    foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) {
+            continue;
+        }
+        [$key, $value] = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim(trim($value), "\"'");
+        if ($key === '' || getenv($key) !== false) {
+            continue;
+        }
+        putenv($key . '=' . $value);
+        $_ENV[$key] = $value;
+        $_SERVER[$key] = $value;
+    }
+}
+
 // Ambiente
 define('ENVIRONMENT', getenv('APP_ENV') ?: 'development');
 define('DEBUG_MODE', ENVIRONMENT === 'development');

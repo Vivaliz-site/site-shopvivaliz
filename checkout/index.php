@@ -1,6 +1,13 @@
 <?php
 declare(strict_types=1);
 
+// Precisa iniciar antes de qualquer output; a pagina imprime bastante HTML
+// (todo o <head>) antes de incluir includes/navbar.php, entao o
+// session_start() de la dentro chega tarde demais (headers ja enviados).
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 header('Content-Type: text/html; charset=UTF-8');
 
 $runtimeSecretsFile = dirname(__DIR__) . '/config/runtime-secrets.php';
@@ -335,6 +342,19 @@ $paymentOptions = [
             color: #1F3A70;
             border: 1px solid #cbd5e1;
         }
+        .checkout-login-hint {
+            background: #ecfdf5;
+            border: 1px solid rgba(5, 150, 105, 0.25);
+            color: #065f46;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            margin-bottom: 18px;
+        }
+        .checkout-login-hint a {
+            color: #047857;
+            font-weight: 700;
+        }
         .checkout-empty {
             padding: 32px;
             text-align: center;
@@ -406,6 +426,12 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
             <h1>Checkout</h1>
             <p class="muted">Finalize seus dados para transformar o carrinho em pedido.</p>
 
+            <?php if (empty($svLoggedIn)): ?>
+                <div class="checkout-login-hint">
+                    Já é cliente? <a href="/auth/login.php?redirect=/checkout">Faça login</a> para agilizar o preenchimento dos seus dados.
+                </div>
+            <?php endif; ?>
+
             <div id="checkout-empty" class="checkout-empty" hidden>
                 <h2>Nao ha itens no carrinho</h2>
                 <p>Adicione produtos antes de seguir para a finalizacao.</p>
@@ -422,13 +448,13 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                         <div class="form-grid full">
                             <div class="field">
                                 <label for="nome">Nome completo</label>
-                                <input type="text" id="nome" name="nome" required>
+                                <input type="text" id="nome" name="nome" value="<?= htmlspecialchars($svUserName ?? '', ENT_QUOTES, 'UTF-8') ?>" required>
                             </div>
                         </div>
                         <div class="form-grid">
                             <div class="field">
                                 <label for="email">E-mail</label>
-                                <input type="email" id="email" name="email" required>
+                                <input type="email" id="email" name="email" value="<?= htmlspecialchars($_SESSION['user_email'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required>
                             </div>
                             <div class="field">
                                 <label for="telefone">Telefone</label>
