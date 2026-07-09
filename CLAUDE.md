@@ -1,45 +1,50 @@
 # ShopVivaliz - Sistema Integrado de Automação
 
-> Última atualização: 2026-07-03  
+> Última atualização: 2026-07-09 (revisado para bater com o estado real do repo — ver CHANGELOG.md)  
 > Responsável: fredmourao-ai + Claude Code Autonomous  
-> Status: ✅ Produção - Pipeline de Deploy Automático Ativo
+> Status: ✅ Produção - deploy real via VM Oracle (não FTP, ver abaixo)  
+> Repositório real: **https://github.com/Vivaliz-site/site-shopvivaliz** (não `fredmourao-ai/site-shopvivaliz`)
 
 ---
 
 ## 📊 Visão Geral do Sistema
 
-ShopVivaliz é um **e-commerce de alto rendimento** com automação completa de:
-- **Deploy:** FTP automático em push para `main`
-- **Validação:** QA lint a cada push + auto-fix a cada 30 min
-- **Execução de Tarefas:** Fila autônoma executada a cada 30 min
-- **Agentes IA:** Trio (Gemini → Claude → ChatGPT) para análise e implementação
+ShopVivaliz é um **e-commerce de alto rendimento** com automação de:
+- **Deploy:** VM Oracle Cloud (`dev.shopvivaliz.com.br`, IP `137.131.156.17`) roda um cron
+  (`git-auto-sync.py`, `*/30 * * * *`) que faz `git fetch` + `reset --hard` na `main` — é essa VM
+  que serve o site diretamente, não FTP/HostGator.
+- **Validação:** QA lint dispara em push/PR (`shopvivaliz-qa.yml`)
+- **Execução de Tarefas:** Fila autônoma (`tasks-queue.json`), múltiplos workflows agendados
+- **Agentes IA:** múltiplos agentes autônomos (Claude Code, e outros) commitam direto no repo —
+  ver nota de risco abaixo
 
-### 🏗️ Arquitetura de Duas Camadas
+### 🏗️ Arquitetura Real de Deploy
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                  GitHub (Fonte de Verdade)                  │
-│  ✓ Secrets configurados (FTP, APIs)                        │
-│  ✓ Workflows habilitados (4 críticos)                       │
-│  ✓ Branch protection em main (merge only)                   │
+│  main branch — sem branch protection forte observada         │
 └────────────────────┬────────────────────────────────────────┘
-                     │
-         ┌───────────┴───────────┐
-         │                       │
-    ┌────▼─────────┐    ┌───────▼────────┐
-    │   Ambiente A │    │  Ambiente B    │
-    │  C:\FRED\    │    │  c:/user/      │
-    │ site-*       │    │ site-*         │
-    │ (Local Dev)  │    │ (CI Helper)    │
-    └────┬─────────┘    └────┬───────────┘
-         │                    │
-         └────────┬───────────┘
-                  │
-           ┌──────▼──────┐
-           │  FTP Deploy │
-           │ HostGator   │
-           └─────────────┘
+                     │  cron pull a cada 30min (git-auto-sync.py)
+                     ▼
+           ┌─────────────────────┐
+           │  VM Oracle Cloud     │
+           │  137.131.156.17      │
+           │  dev.shopvivaliz.*   │  ← serve o site diretamente
+           │  (Apache + PHP)      │     (nao ha FTP/HostGator ativo)
+           └─────────────────────┘
 ```
+
+**FTP/HostGator (`deploy.yml`, `auto-ftp-deploy.yml`) está desativado** — só roda via
+`workflow_dispatch` manual, não em push. O comentário no próprio `deploy.yml` confirma: "a producao
+real e a VM Oracle... nao o HostGator".
+
+⚠️ **Risco conhecido:** o repositório tem **59 workflows** em `.github/workflows/` (não 4), muitos
+com nomes sobrepostos (`autonomous-cycle.yml`, `autonomous-orchestrator.yml`,
+`autonomous-proactive.yml`, `ci-autonomo-continuo.yml`, etc.) — sinal de que múltiplos agentes
+diferentes já criaram automações redundantes sem consolidar. Isso já causou bugs reais em produção
+(ver `CHANGELOG.md`: CSS wildcard quebrando a home, footer com dados inventados). Antes de criar um
+novo workflow, verifique se um já não faz a mesma coisa.
 
 ---
 
@@ -138,42 +143,34 @@ Todos configurados em `Settings > Secrets and variables > Actions`:
 
 ---
 
-## ⚙️ Workflows Críticos (Ordem de Execução)
+## ⚙️ Workflows Principais (não é a lista completa — são 59 arquivos)
 
 ### 1️⃣ `shopvivaliz-qa.yml` - Validação na Admissão
-- **Triggers:** Push para main, pull_request
-- **Tempo:** 5 minutos
-- **Ação:** Lint PHP, validar sintaxe
-- **Falha:** Bloqueia merge automático
-- **Status:** ✅ **ATIVO**
+- **Triggers:** Push para main, pull_request, workflow_dispatch
+- **Ação:** Lint PHP, bloqueia selector CSS wildcard estrutural (`[class*=hero]` etc — ver
+  CHANGELOG.md), smoke test ao vivo do footer/hero na home após push
+- **Status:** ✅ **ATIVO** (corrigido em 2026-07-09 — antes só disparava via workflow_dispatch
+  manual, nunca automaticamente, apesar do que este arquivo dizia)
 
 ### 2️⃣ `auto-validation-and-fix.yml` - Auto-Fix de Issues
 - **Triggers:** Schedule a cada 30 min, push para main
-- **Tempo:** 15 minutos
-- **Ação:** 
-  - Analisa código
-  - Detecta issues
-  - Auto-commit de fixes
-- **Status:** ✅ **ATIVO**
+- **Ação:** Analisa código, detecta issues, auto-commit de fixes
+- **Status:** ✅ **ATIVO** — mas sem hooks de teste real; já introduziu regressões (ver CHANGELOG.md)
 
-### 3️⃣ `deploy.yml` - Deploy em Produção
-- **Triggers:** Push para main (após QA passar)
-- **Tempo:** 10 minutos
-- **Ação:**
-  - Conecta FTP
-  - Sincroniza arquivos com HostGator
-  - Verifica health check
-- **Status:** ✅ **ATIVO**
+### 3️⃣ `deploy.yml` / `auto-ftp-deploy.yml` - Deploy FTP HostGator
+- **Status:** ❌ **DESATIVADO** (só `workflow_dispatch` manual). A produção real roda na VM Oracle
+  via cron `git-auto-sync.py`, não FTP. Mantido no repo só para caso o HostGator volte a ser usado.
 
 ### 4️⃣ `ai-autonomous-executor.yml` - Executor de Tarefas
 - **Triggers:** Schedule a cada 30 min
-- **Tempo:** 20 minutos
-- **Ação:**
-  - Lê fila de tarefas
-  - Chama APIs de IA
-  - Implementa mudanças
-  - Auto-commit resultado
+- **Ação:** Lê `tasks-queue.json`, chama APIs de IA, implementa mudanças, auto-commit
 - **Status:** ✅ **ATIVO**
+
+### Deploy real (fora do GitHub Actions)
+- Cron na VM Oracle (`/home/ubuntu/site-shopvivaliz/git-auto-sync.py`, `*/30 * * * *`): faz
+  `git fetch` + `reset --hard origin/main`. É isso que efetivamente coloca código em produção.
+- Para forçar deploy imediato sem esperar o cron: `ssh -i <chave> ubuntu@137.131.156.17
+  "cd /home/ubuntu/site-shopvivaliz && python3 git-auto-sync.py"`
 
 ---
 
@@ -306,9 +303,11 @@ Se algo não funcionar:
 2. Verificar erro específico conforme Troubleshooting acima
 3. Se necessário, rodar: `git fetch && git pull origin main`
 
-**Repositório:** https://github.com/fredmourao-ai/site-shopvivaliz  
+**Repositório:** https://github.com/Vivaliz-site/site-shopvivaliz  
 **Live Site:** https://dev.shopvivaliz.com.br/  
-**Admin Monitor:** https://dev.shopvivaliz.com.br/admin/monitor/
+**Admin Monitor:** https://dev.shopvivaliz.com.br/admin/monitor/  
+**Histórico de bugs resolvidos:** `CHANGELOG.md` (raiz do repo) — consulte antes de investigar algo
+que parece já ter sido corrigido.
 
 ---
 
