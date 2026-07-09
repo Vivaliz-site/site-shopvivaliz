@@ -14,17 +14,6 @@ $svNavLinks = [
     ['href' => '/sobre', 'label' => 'Sobre', 'match' => ['sobre']],
     ['href' => '/contato', 'label' => 'Contato', 'match' => ['contato']],
     ['href' => '/carrinho', 'label' => 'Carrinho', 'match' => ['carrinho', 'checkout']],
-    [
-        'label' => 'Políticas',
-        'dropdown' => true,
-        'match' => ['termos', 'politica-privacidade', 'politica-devolucoes', 'politica-entrega'],
-        'items' => [
-            ['href' => '/termos.php', 'label' => 'Termos e Condições'],
-            ['href' => '/politica-privacidade.php', 'label' => 'Política de Privacidade'],
-            ['href' => '/politica-devolucoes.php', 'label' => 'Trocas e Devoluções'],
-            ['href' => '/politica-entrega.php', 'label' => 'Política de Entrega'],
-        ]
-    ],
 ];
 
 $svLoggedIn = !empty($_SESSION['user_id']);
@@ -42,28 +31,12 @@ $svUserFirstName = $svUserName !== '' ? explode(' ', $svUserName)[0] : 'Minha co
         <div class="navbar-menu" id="navMenu">
             <?php foreach ($svNavLinks as $link): ?>
                 <?php $isCurrent = in_array($svNavCurrent, $link['match'], true); ?>
-                <?php if (!empty($link['dropdown'])): ?>
-                    <div class="navbar-dropdown">
-                        <button class="navbar-dropdown-toggle"<?= $isCurrent ? ' aria-current="page"' : '' ?>>
-                            <?= htmlspecialchars($link['label'], ENT_QUOTES, 'UTF-8') ?>
-                            <span aria-hidden="true">▼</span>
-                        </button>
-                        <div class="navbar-dropdown-menu">
-                            <?php foreach ($link['items'] as $item): ?>
-                                <a href="<?= htmlspecialchars($item['href'], ENT_QUOTES, 'UTF-8') ?>">
-                                    <?= htmlspecialchars($item['label'], ENT_QUOTES, 'UTF-8') ?>
-                                </a>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                <?php else: ?>
-                    <a href="<?= htmlspecialchars($link['href'], ENT_QUOTES, 'UTF-8') ?>"<?= $isCurrent ? ' aria-current="page"' : '' ?>>
-                        <?= htmlspecialchars($link['label'], ENT_QUOTES, 'UTF-8') ?>
-                        <?php if ($link['href'] === '/carrinho'): ?>
-                            <span class="cart-badge" id="nav-cart-count"></span>
-                        <?php endif; ?>
-                    </a>
-                <?php endif; ?>
+                <a href="<?= htmlspecialchars($link['href'], ENT_QUOTES, 'UTF-8') ?>"<?= $isCurrent ? ' aria-current="page"' : '' ?>>
+                    <?= htmlspecialchars($link['label'], ENT_QUOTES, 'UTF-8') ?>
+                    <?php if ($link['href'] === '/carrinho'): ?>
+                        <span class="cart-badge" id="nav-cart-count"></span>
+                    <?php endif; ?>
+                </a>
             <?php endforeach; ?>
             <?php if ($svLoggedIn): ?>
                 <a href="/meus-pedidos.php" class="nav-account-link"<?= $svNavCurrent === 'meus-pedidos.php' ? ' aria-current="page"' : '' ?>>👤 <?= htmlspecialchars($svUserFirstName, ENT_QUOTES, 'UTF-8') ?></a>
@@ -91,35 +64,6 @@ $svUserFirstName = $svUserName !== '' ? explode(' ', $svUserName)[0] : 'Minha co
             navMenu.classList.remove('active');
             menuToggle.setAttribute('aria-expanded', 'false');
         });
-    });
-
-    // Dropdown menu functionality
-    var dropdownToggles = navMenu.querySelectorAll('.navbar-dropdown-toggle');
-    dropdownToggles.forEach(function (toggle) {
-        toggle.addEventListener('click', function (e) {
-            e.preventDefault();
-            var dropdown = toggle.closest('.navbar-dropdown');
-            var menu = dropdown.querySelector('.navbar-dropdown-menu');
-            var isActive = menu.classList.toggle('active');
-
-            // Close other dropdowns
-            dropdownToggles.forEach(function (otherToggle) {
-                if (otherToggle !== toggle) {
-                    var otherMenu = otherToggle.closest('.navbar-dropdown').querySelector('.navbar-dropdown-menu');
-                    otherMenu.classList.remove('active');
-                }
-            });
-        });
-    });
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', function (e) {
-        if (!e.target.closest('.navbar-dropdown')) {
-            dropdownToggles.forEach(function (toggle) {
-                var menu = toggle.closest('.navbar-dropdown').querySelector('.navbar-dropdown-menu');
-                menu.classList.remove('active');
-            });
-        }
     });
 })();
 </script>
