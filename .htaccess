@@ -48,6 +48,15 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^admin/editor-visual/?$ admin/editor-visual.php [L]
     RewriteRule ^admin/editor-teste/?$ admin/editor-teste.php [L]
 
+    # Rotas de Autenticação
+    RewriteRule ^login/?$ login/index.php [L]
+    RewriteRule ^cadastro/?$ cadastro/index.php [L]
+    RewriteRule ^minha-conta/?$ minha-conta/index.php [L]
+
+    # APIs de Autenticação
+    RewriteRule ^api/auth/check/?$ api/auth/check.php [L]
+    RewriteRule ^api/logout/?$ api/logout/index.php [L]
+
     # Rotas principais da loja
     RewriteRule ^$ index.php [L]
     RewriteRule ^home/?$ home.php [L]

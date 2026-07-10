@@ -59,6 +59,23 @@
   transform: translateY(0);
 }
 
+/* Secondary button — Logout / Perfil */
+.nav-btn-secondary {
+  background: #F5F5F5;
+  color: #333333;
+  border: 1px solid #DDDDDD;
+}
+
+.nav-btn-secondary:hover {
+  background: #E8E8E8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.nav-btn-secondary:active {
+  transform: translateY(0);
+}
+
 /* Responsive — Mobile/Tablet */
 @media (max-width: 768px) {
   .nav-auth-buttons {
