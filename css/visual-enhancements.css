@@ -177,7 +177,7 @@ section > h2 {
    GRADE DE PRODUTOS
    ============================================================================ */
 
-.products-grid, [class*="grid"] {
+.products-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 1.5rem;
@@ -185,14 +185,14 @@ section > h2 {
 }
 
 @media (max-width: 768px) {
-    .products-grid, [class*="grid"] {
+    .products-grid {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
         gap: 1rem;
     }
 }
 
 @media (max-width: 480px) {
-    .products-grid, [class*="grid"] {
+    .products-grid {
         grid-template-columns: repeat(2, 1fr);
         gap: 0.75rem;
     }
