@@ -191,39 +191,66 @@ jobs:
           time curl -sL -o /dev/null -w 'HTTP %{http_code} em %{time_total}s\n' https://dev.shopvivaliz.com.br/ || exit 1
 
   # ============ ESTÁGIO 3: DEPLOY ============
-  # Não dispara via GitHub Actions. Deploy real é via cron na VM Oracle.
-  # Este estágio apenas valida que o repo está pronto e registra a intenção.
-  deploy-ready:
-    name: Deploy Ready (Sync Oracle VM)
+  # Deploy imediato para Oracle VM via SSH após testes passarem
+  deploy:
+    name: Deploy (Sync Oracle VM Immediately)
     runs-on: ubuntu-latest
     needs: [validate, test]
     if: success()
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
 
-      - name: Log Deployment Intent
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.ORACLE_VM_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          # Desabilita host key checking para não bloquear
+          echo "StrictHostKeyChecking no" >> ~/.ssh/config
+          echo "UserKnownHostsFile=/dev/null" >> ~/.ssh/config
+
+      - name: Sync Oracle VM (git-auto-sync.py)
+        run: |
+          ssh -i ~/.ssh/id_rsa ubuntu@137.131.156.17 << 'SSH_EOF'
+          cd /home/ubuntu/site-shopvivaliz
+          python3 git-auto-sync.py
+          exit_code=$?
+
+          echo "=========================================="
+          echo "Deploy Status"
+          echo "=========================================="
+          echo "Commit: ${{ github.sha }}"
+          echo "Deployed at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Sync exit code: $exit_code"
+          echo "=========================================="
+
+          exit $exit_code
+          SSH_EOF
+
+      - name: Log Deployment Success
+        if: success()
         run: |
           cat > deployment-log-${{ github.sha }}.txt << 'EOF'
           ========================================
-          Deployment Ready
+          ✅ DEPLOYMENT SUCCESSFUL
           ========================================
           Commit: ${{ github.sha }}
           Author: ${{ github.actor }}
           Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-          Validation: PASSED
-          Tests: PASSED
-          Status: Ready for sync on Oracle VM
+          Validation: ✅ PASSED
+          Tests: ✅ PASSED
+          Deploy: ✅ SYNCED TO ORACLE VM
 
-          Oracle VM cron (*/30 * * * *) sincronizará main nos próximos 30 min.
-          Para deploy imediato, execute:
-          ssh -i <key> ubuntu@137.131.156.17 "cd /home/ubuntu/site-shopvivaliz && python3 git-auto-sync.py"
-
+          Site is now live at: https://dev.shopvivaliz.com.br/
           ========================================
           EOF
           cat deployment-log-${{ github.sha }}.txt
 
       - name: Upload Deployment Log as Artifact
+        if: always()
         uses: actions/upload-artifact@v3
         with:
           name: deployment-log-${{ github.sha }}
