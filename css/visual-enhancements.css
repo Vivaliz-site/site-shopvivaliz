@@ -260,7 +260,7 @@ section > h2 {
    ============================================================================ */
 
 .home-scroller,
-[class*="scroller"] {
+.home-scroller {
     position: relative;
     overflow: hidden;
     border-radius: 8px;
