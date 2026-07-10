@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../includes/admin-guard.php';
 /**
  * Monitor Completo - Dashboard + Tarefas + Chat
  * Tudo em um único painel
