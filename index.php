@@ -218,6 +218,9 @@ $svNavCurrent = '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Vivaliz - Loja online com produtos de qualidade. Rodízios, ferragens, utilidades e muito mais. Compre com segurança.">
     <meta name="theme-color" content="#173B63">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <meta property="og:title" content="Vivaliz | Loja Online">
     <meta property="og:description" content="Catálogo com produtos de qualidade. Compre online com entrega rápida.">
     <meta property="og:image" content="/images/logo-vivaliz-square.png">
