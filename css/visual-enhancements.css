@@ -82,14 +82,14 @@ button:active {
 }
 
 /* Cards */
-.card, [class*="card"], [class*="slide"] {
+.card {
     border-radius: 8px;
     overflow: hidden;
     transition: var(--transition);
     box-shadow: var(--shadow-sm);
 }
 
-.card:hover, [class*="card"]:hover, [class*="slide"]:hover {
+.card:hover {
     box-shadow: var(--shadow-lg);
     transform: translateY(-2px);
 }
