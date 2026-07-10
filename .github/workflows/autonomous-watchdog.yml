@@ -1,4 +1,8 @@
 name: Autonomous Watchdog Monitor
+# 2026-07-10: agora e o UNICO workflow que chama api/agent/autonomous-watchdog.php.
+# Antes, 24-7-continuous-agent.yml (*/5min), ai-autonomous-executor.yml (*/30min)
+# e parallel-trio-executor.yml (hourly) chamavam o mesmo endpoint em paralelo -
+# foram pausados (nao deletados) e apontam para este arquivo.
 
 on:
   schedule:
