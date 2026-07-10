@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../includes/admin-guard.php';
 /**
  * Reparador Automático de Catálogo Olist
  * Vincular 196 produtos e suas imagens corretamente
