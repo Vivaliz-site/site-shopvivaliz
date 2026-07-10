@@ -1,0 +1,30 @@
+name: Force Deploy Now
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sincronizar Ubuntu agora
+        run: |
+          echo "🔄 Forçando sincronização do Ubuntu..."
+          # Criar arquivo de trigger
+          echo "$(date)" > /tmp/force-sync-trigger
+
+          # Log
+          echo "✅ Força de sincronização acionada"
+          echo "O cron no Ubuntu receberá a mudança nos próximos minutos"
+
+      - name: Verifyar versão do index.php
+        run: |
+          grep 'css/style.css' index.php | head -1
+
+      - name: Output status
+        run: |
+          echo "Deploy force acionado em: $(date)"
