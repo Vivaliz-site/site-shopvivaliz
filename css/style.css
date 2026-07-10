@@ -153,82 +153,6 @@ a {
     color: #fff;
 }
 
-/* Navbar dropdown menu */
-.navbar-dropdown {
-    position: relative;
-    display: inline-block;
-}
-
-.navbar-dropdown-toggle {
-    background: none;
-    border: none;
-    color: var(--muted);
-    text-decoration: none;
-    font-weight: 700;
-    font-size: 14px;
-    cursor: pointer;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: color 0.2s;
-}
-
-.navbar-dropdown-toggle:hover,
-.navbar-dropdown-toggle[aria-current="page"] {
-    color: var(--brand);
-}
-
-.navbar-dropdown-toggle span {
-    font-size: 10px;
-    transition: transform 0.2s;
-}
-
-.navbar-dropdown:hover .navbar-dropdown-toggle span,
-.navbar-dropdown-menu.active .navbar-dropdown-toggle span {
-    transform: rotate(180deg);
-}
-
-.navbar-dropdown-menu {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    background: #fff;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    min-width: 200px;
-    padding: 8px 0;
-    margin-top: 8px;
-    box-shadow: 0 4px 12px rgba(17, 24, 39, 0.1);
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-4px);
-    transition: all 0.2s;
-    z-index: 100;
-}
-
-.navbar-dropdown:hover .navbar-dropdown-menu,
-.navbar-dropdown-menu.active {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-}
-
-.navbar-dropdown-menu a {
-    display: block;
-    padding: 10px 16px;
-    color: var(--muted);
-    text-decoration: none;
-    font-weight: 500;
-    font-size: 13px;
-    transition: all 0.2s;
-}
-
-.navbar-dropdown-menu a:hover {
-    background: var(--accent-bg);
-    color: var(--brand);
-}
-
 .menu-toggle {
     display: none;
     width: 44px;
@@ -1466,7 +1390,7 @@ footer {
     .card-actions { gap: 6px; }
     .btn, .catalog-search button, .buy-button { padding: 11px 14px; }
     .related-grid { grid-template-columns: 1fr; }
-    .hero-carousel-track { min-height: 0; }
+    .hero-carousel-track { min-height: 240px; }
     .hero-slide { padding: 22px 18px; }
     .hero-slide h2 { max-width: none; font-size: 28px; }
     .hero-slide p { font-size: 15px; }

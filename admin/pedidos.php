@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-@include_once __DIR__ . '/../config/constants.php';
+require_once __DIR__ . '/../includes/admin-guard.php';
 header('Content-Type: text/html; charset=UTF-8');
 
 // Leitura dos pedidos do arquivo JSONL

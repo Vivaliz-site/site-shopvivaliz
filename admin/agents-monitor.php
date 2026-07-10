@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/../includes/admin-guard.php';
 
 // Simple read-only monitoring panel for ShopVivaliz agents
 

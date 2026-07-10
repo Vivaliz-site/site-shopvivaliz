@@ -324,31 +324,6 @@ section > h2 {
 .home-scroller-arrow[data-dir="1"] { right: 10px; }
 
 /* ============================================================================
-   BANNER E HERO
-   ============================================================================ */
-
-.hero, .banner, [class*="hero"], [class*="banner"] {
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-    color: white;
-    padding: 3rem 2rem;
-    border-radius: 8px;
-    margin: 2rem 0;
-    text-align: center;
-    box-shadow: var(--shadow-lg);
-}
-
-.hero h1, .banner h1 {
-    color: white;
-    font-size: 2rem;
-    margin-bottom: 1rem;
-}
-
-.hero p, .banner p {
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 1.1rem;
-}
-
-/* ============================================================================
    FOOTER
    ============================================================================ */
 
