@@ -232,9 +232,9 @@ $svNavCurrent = '';
 
     <title>Vivaliz | Loja Online</title>
 
-    <link rel="stylesheet" href="/css/style.css">
-    <link rel="stylesheet" href="/css/category-images.css">
-    <link rel="stylesheet" href="/css/visual-enhancements.css">
+    <link rel="stylesheet" href="/css/style.css?v=2026-07-09-1515">
+    <link rel="stylesheet" href="/css/category-images.css?v=2026-07-09-1515">
+    <link rel="stylesheet" href="/css/visual-enhancements.css?v=2026-07-09-1515">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
