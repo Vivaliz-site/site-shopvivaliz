@@ -7,6 +7,9 @@ header('Cache-Control: no-store');
 $raw = file_get_contents('php://input') ?: '';
 $eventId = 'olist:' . md5($raw !== '' ? $raw : json_encode($_REQUEST));
 
+// Processar webhook antes de responder
+require_once __DIR__ . '/webhook-processor.php';
+
 echo json_encode([
     'ok' => true,
     'provider' => 'olist',
