@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../includes/admin-guard.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $host = getenv('DB_HOST') ?: 'localhost';

@@ -1,5 +1,4 @@
 <?php
-// SYNC TEST: 2026-07-09 11:50 - Removed old hero section completely
 declare(strict_types=1);
 
 require_once __DIR__ . '/config/bootstrap-env.php';
@@ -233,9 +232,9 @@ $svNavCurrent = '';
 
     <title>Vivaliz | Loja Online</title>
 
-    <link rel="stylesheet" href="/css/style.css?v=2026-07-09-1506">
-    <link rel="stylesheet" href="/css/category-images.css?v=2026-07-09-1506">
-    <link rel="stylesheet" href="/css/visual-enhancements.css?v=2026-07-09-1506">
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/category-images.css">
+    <link rel="stylesheet" href="/css/visual-enhancements.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -272,6 +271,36 @@ $svNavCurrent = '';
 </head>
 <body>
     <?php include __DIR__ . '/includes/navbar.php'; ?>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <p class="eyebrow hero-kicker">
+                    🛍️ Loja oficial Vivaliz
+                </p>
+                <h1>Produtos que <span>você precisa</span>,<br>entrega para todo o Brasil</h1>
+                <p>Rodízios, ferragens, utilidades domésticas e itens para casa com catálogo organizado, atendimento rápido e navegação simples no celular.</p>
+
+                <div class="cta-buttons hero-cta">
+                    <a href="/catalogo" class="btn btn-hero-primary">
+                        Ver catálogo completo
+                    </a>
+                    <a href="/carrinho" class="btn btn-hero-secondary">
+                        🛒 Meu Carrinho
+                    </a>
+                </div>
+
+                <div class="hero-trust">
+                    <div class="hero-trust-item"><span>🔒</span> Compra segura</div>
+                    <div class="hero-trust-item"><span>🚚</span> Entrega para todo Brasil</div>
+                    <div class="hero-trust-item"><span>⚡</span> PIX com aprovação imediata</div>
+                    <div class="hero-trust-item"><span>↩️</span> 30 dias para troca</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <section class="hero-carousel-section">
         <div class="container">
             <div class="hero-carousel" id="hero-carousel" aria-label="Banners em destaque">
@@ -394,30 +423,7 @@ $svNavCurrent = '';
     </section>
 
     <!-- Footer -->
-    <footer>
-        <div class="container">
-            <div class="footer-cols">
-                <div>
-                    <strong>Vivaliz</strong>
-                    <p>Qualidade e entrega rápida para todo o Brasil.</p>
-                </div>
-                <div>
-                    <strong>Navegação</strong>
-                    <a href="/catalogo">Catálogo</a>
-                    <a href="/gamificacao.php">Gamificação</a>
-                    <a href="/sobre">Sobre</a>
-                    <a href="/contato">Contato</a>
-                </div>
-                <div>
-                    <strong>Atendimento</strong>
-                    <a href="/contato">Fale conosco</a>
-                    <a href="/faq">Dúvidas frequentes</a>
-                    <a href="/politica-privacidade">Privacidade</a>
-                </div>
-            </div>
-            <p class="footer-copy">&copy; 2026 Vivaliz. Todos os direitos reservados.</p>
-        </div>
-    </footer>
+    <?php include __DIR__ . '/includes/footer.php'; ?>
 
     <script src="/autodev/client.js"></script>
     <script src="/js/catalog.js"></script>

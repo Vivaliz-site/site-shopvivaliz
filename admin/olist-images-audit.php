@@ -1,12 +1,12 @@
 <?php
+declare(strict_types=1);
+require_once __DIR__ . '/../includes/admin-guard.php';
 /**
  * v9.2.86 - Auditoria de imagens Olist por SKU.
  *
  * Esta tela nao deve exibir credenciais. Ela apenas lista produtos sem imagem local
  * e orienta a importacao por SKU usando o cadastro ERP/Olist como origem oficial.
  */
-
-declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/product-image-resolver.php';
 
