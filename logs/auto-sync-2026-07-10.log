@@ -1923,3 +1923,180 @@ Fast-forward
  create mode 100644 tests/fixtures.ts
 [2026-07-10 21:52:38] ✅ Git pull OK
 [2026-07-10 21:52:38] 📝 Commitando mudanças...
+[main ab79982] auto: sincronizar 2026-07-10 21:52:38
+ 118 files changed, 14118 insertions(+), 10817 deletions(-)
+ create mode 100644 .env.local
+ create mode 100644 AUDITORIA-COMPLETA.md
+ create mode 100644 AUDITORIA-ESTRUTURA.md
+ create mode 100644 AUDITORIA-PIPELINES.md
+ create mode 100644 RELATORIO-VERIFICACAO-PROFUNDA.md
+ delete mode 100755 agents/v9.2.84/database/migrations/20260625_9284_autonomous_report_agents.sql
+ create mode 100644 api/catalog/clean-deleted.php
+ create mode 100644 api/catalog/fallback-products.json.backup
+ create mode 100644 api/catalog/fallback-products.json.backup.1783719044
+ create mode 100644 api/catalog/remove-product.php
+ create mode 100644 api/ml/_bootstrap.php
+ create mode 100644 api/olist/refresh-token.php
+ create mode 100644 audit-report.txt
+ create mode 100644 check-db.php
+ delete mode 100755 claude-backup/api/agent/admin-manual-audit.php
+ delete mode 100755 claude-backup/api/agent/agent-version-compiler.php
+ delete mode 100755 claude-backup/api/agent/ai-image-jobs.php
+ delete mode 100755 claude-backup/api/agent/autonomous-suite-v1.php
+ delete mode 100755 claude-backup/api/agent/designer-visual-audit.php
+ delete mode 100755 claude-backup/api/agent/olist-image-sheet-compare.php
+ delete mode 100755 claude-backup/api/agent/olist-images-import-v2.php
+ delete mode 100755 claude-backup/api/agent/olist-zero-id-repair.php
+ delete mode 100755 claude-backup/api/agent/project-director.php
+ delete mode 100755 claude-backup/api/agent/squad-canary.txt
+ delete mode 100755 claude-backup/api/agent/squad-chat.php
+ delete mode 100755 claude-backup/api/catalog/products.php
+ delete mode 100755 claude-backup/api/get-produtos-198.php
+ delete mode 100755 claude-backup/api/get-tasks.php
+ delete mode 100755 claude-backup/api/health.php
+ delete mode 100755 claude-backup/api/melhorenvio/diagnostic.php
+ delete mode 100755 claude-backup/api/monitor/api.php
+ delete mode 100755 claude-backup/api/monitor/chat-history.php
+ delete mode 100755 claude-backup/api/monitor/chat-stream.php
+ delete mode 100755 claude-backup/api/monitor/chat-webhook.php
+ delete mode 100755 claude-backup/api/monitor/get-responses.php
+ delete mode 100755 claude-backup/api/monitor/simple-chat.php
+ delete mode 100755 claude-backup/api/monitor/tasks-api.php
+ delete mode 100755 claude-backup/api/monitor/tasks-command.php
+ delete mode 100755 claude-backup/api/monitor/upload-attachment.php
+ delete mode 100755 claude-backup/api/olist/auto-sync.php
+ delete mode 100755 claude-backup/api/olist/diagnostic-full.php
+ delete mode 100755 claude-backup/api/olist/diagnostic.php
+ delete mode 100755 claude-backup/api/olist/product-obter-v2.php
+ delete mode 100755 claude-backup/api/olist/products-proxy.php
+ delete mode 100755 claude-backup/api/olist/token-refresh.php
+ delete mode 100755 claude-backup/api/pipeline/master-autonomo.php
+ delete mode 100755 claude-backup/api/pipeline/v12-execucao-global.php
+ delete mode 100755 claude-backup/api/pipeline/v13-estrategia-autonoma.php
+ delete mode 100755 claude-backup/api/products-list.php
+ delete mode 100755 claude-backup/api/produtos.php
+ delete mode 100755 claude-backup/api/shopee-integration/.gitignore
+ delete mode 100755 claude-backup/api/shopee-integration/API_REFERENCE.md
+ delete mode 100755 claude-backup/api/shopee-integration/README.md
+ delete mode 100755 claude-backup/api/shopee-integration/SETUP_GUIDE.md
+ delete mode 100755 claude-backup/api/shopee-integration/scripts/run_playwright.py
+ delete mode 100755 claude-backup/api/shopee-integration/scripts/test_final.py
+ delete mode 100755 claude-backup/api/shopee-integration/scripts/test_shopee_api.py
+ delete mode 100755 claude-backup/api/shopee/atualizar-completo.php
+ delete mode 100755 claude-backup/api/shopee/upload-imagens-batch.php
+ delete mode 100755 claude-backup/api/shopee/validar-imagens.php
+ delete mode 100755 claude-backup/api/simple-agent-chat-hybrid.php
+ delete mode 100755 claude-backup/api/simple-agent-chat.php
+ delete mode 100755 claude-backup/api/tiktok-integration/.gitignore
+ delete mode 100755 claude-backup/api/tiktok-integration/API_REFERENCE.md
+ delete mode 100755 claude-backup/api/tiktok-integration/README.md
+ delete mode 100755 claude-backup/api/tiktok-integration/SETUP_GUIDE.md
+ delete mode 100755 claude-backup/api/tiktok-integration/scripts/test_tiktok_api.py
+ delete mode 100755 claude-backup/carrinho/index.php
+ delete mode 100755 claude-backup/catalogo/index-backup.php
+ delete mode 100755 claude-backup/catalogo/index.php
+ delete mode 100755 claude-backup/checkout/index.php
+ delete mode 100755 claude-backup/produto.php
+ delete mode 100755 claude/medusa/apps/storefront/next-env.d.ts
+ delete mode 100755 claude/medusa/apps/storefront/tsconfig.tsbuildinfo
+ create mode 100644 config/__pycache__/__init__.cpython-310.pyc
+ create mode 100644 config/__pycache__/secrets.cpython-310.pyc
+ create mode 100644 continuous-report.md
+ create mode 100644 docs/olist-tiny-erp-api-knowledge.md
+ create mode 100644 fix-database.php
+ create mode 100644 html/.env
+ create mode 100644 logs/auto-sync-2026-07-10.log
+ delete mode 100644 logs/tasks-queue.json
+ create mode 100644 produto.php.bak
+ delete mode 100755 scripts/__pycache__/ab_test_images.cpython-314.pyc
+ delete mode 100755 scripts/__pycache__/advanced-features.cpython-314.pyc
+ delete mode 100755 scripts/__pycache__/auto_optimize_images.cpython-314.pyc
+ delete mode 100755 scripts/__pycache__/autonomous-executor.cpython-314.pyc
+ delete mode 100755 scripts/__pycache__/chat-responder.cpython-314.pyc
+ delete mode 100755 scripts/__pycache__/continuous-executor.cpython-314.pyc
+ delete mode 100755 scripts/__pycache__/generate_ai_images.cpython-314.pyc
+ delete mode 100755 scripts/__pycache__/generate_shopee_sheet.cpython-314.pyc
+ delete mode 100755 scripts/__pycache__/import_shopee.cpython-314.pyc
+ delete mode 100755 scripts/__pycache__/main.cpython-314.pyc
+ delete mode 100755 scripts/__pycache__/observability-suite.cpython-314.pyc
+ delete mode 100755 scripts/__pycache__/parallel-executor.cpython-314.pyc
+ delete mode 100755 scripts/__pycache__/process_images.cpython-314.pyc
+ delete mode 100755 scripts/__pycache__/send_email.cpython-314.pyc
+ delete mode 100755 scripts/__pycache__/seo_generator.cpython-314.pyc
+ delete mode 100755 scripts/__pycache__/upload_images.cpython-314.pyc
+ delete mode 100755 scripts/abtest/__pycache__/__init__.cpython-314.pyc
+ delete mode 100755 scripts/abtest/__pycache__/ab_tester.cpython-314.pyc
+ delete mode 100755 scripts/analytics/__pycache__/__init__.cpython-314.pyc
+ delete mode 100755 scripts/analytics/__pycache__/performance_tracker.cpython-314.pyc
+ delete mode 100755 scripts/ia/__pycache__/__init__.cpython-314.pyc
+ delete mode 100755 scripts/ia/__pycache__/image_generator.cpython-314.pyc
+ delete mode 100755 scripts/priority/__pycache__/__init__.cpython-314.pyc
+ delete mode 100755 scripts/priority/__pycache__/prioritizer.cpython-314.pyc
+ delete mode 100755 scripts/seo/__pycache__/__init__.cpython-314.pyc
+ delete mode 100755 scripts/seo/__pycache__/seo_generator.cpython-314.pyc
+ mode change 100644 => 100755 storage/commerce_signals.json
+ create mode 100755 storage/logs/app.log
+ mode change 100644 => 100755 storage/orders/SV20260707160509129.json
+ mode change 100644 => 100755 storage/orders/SV20260709010912678.json
+ create mode 100755 storage/private/melhorenvio-tokens.json
+ create mode 100644 teste-produto.php
+ create mode 100644 teste-produto2.php
+ create mode 100644 update-fallback-prices.php
+[2026-07-10 21:52:38] ✅ Commit OK
+[2026-07-10 21:52:38] 📤 Enviando 1 commit(s)...
+To https://github.com/Vivaliz-site/site-shopvivaliz.git
+   f401b37..ab79982  main -> main
+[2026-07-10 21:52:40] ✅ Push OK
+[2026-07-10 21:52:40] ✅ Ciclo concluído
+[2026-07-10 21:52:40] ⏰ Próximo em 5 minutos...
+[2026-07-10 21:57:40] 
+[2026-07-10 21:57:40] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-07-10 21:57:40] 🔄 Sincronizando secrets do GitHub...
+============================================================
+🔐 ShopVivaliz - Sincronizador de Secrets (Linux/macOS)
+============================================================
+
+Verificando GitHub CLI...
+✓ GitHub CLI encontrado
+
+📝 Gerando .env.local...
+✓ Criado: /home/ubuntu/site-shopvivaliz/.env.local
+
+============================================================
+✅ SINCRONIZAÇÃO CONCLUÍDA!
+============================================================
+
+Próximos passos:
+  1. Validar secrets: python3 scripts/validar_secrets.py
+  2. Ativar auto-sync: bash scripts/auto_sync_git.ps1
+
+[2026-07-10 21:57:40] ✅ Secrets sincronizados com sucesso
+[SECURITY] ShopVivaliz - Validador de Secrets
+============================================================
+
+[ERROR] ERRO - Secrets obrigatórios faltando:
+
+  ❌ ANTHROPIC_API_KEY (Claude API) - AUSENTE
+  ❌ SHOPEE_PARTNER_ID (Shopee Partner ID) - AUSENTE
+  ❌ SHOPEE_PARTNER_KEY (Shopee Partner Key) - AUSENTE
+
+📝 Solução:
+  1. Copie .env.example para .env.local
+  2. Preencha os valores reais em .env.local
+  3. Execute este validador novamente
+
+  Variáveis obrigatórias:
+    • ANTHROPIC_API_KEY: Claude API
+    • SHOPEE_PARTNER_ID: Shopee Partner ID
+    • SHOPEE_PARTNER_KEY: Shopee Partner Key
+    • FTP_SERVER: FTP Server
+    • FTP_USERNAME: FTP Username
+    • FTP_PASSWORD: FTP Password
+    • MAIL_PASS: Email Password
+[2026-07-10 21:57:40] ⚠️  Validação teve aviso (continuando...)
+[2026-07-10 21:57:40] 🔄 Sincronizando repositório...
+From https://github.com/Vivaliz-site/site-shopvivaliz
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+[2026-07-10 21:57:40] ✅ Git pull OK
+[2026-07-10 21:57:40] 📝 Commitando mudanças...
