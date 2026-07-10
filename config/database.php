@@ -276,6 +276,47 @@ function create_tables() {
             INDEX idx_abs_sku (sku),
             INDEX idx_abs_status (status)
         )',
+
+        // Variantes de layouts de página para A/B testing
+        'CREATE TABLE IF NOT EXISTS page_layout_variants (
+            id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            page_id         VARCHAR(100)  NOT NULL,
+            variant_name    VARCHAR(100)  NOT NULL,
+            variant_type    VARCHAR(40)   NOT NULL DEFAULT "control",
+            config_json     JSON          NULL,
+            impressions     INT           NOT NULL DEFAULT 0,
+            clicks          INT           NOT NULL DEFAULT 0,
+            conversions     INT           NOT NULL DEFAULT 0,
+            revenue         DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+            status          VARCHAR(40)   NOT NULL DEFAULT "active",
+            created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at      DATETIME      NULL,
+            started_at      DATETIME      NULL,
+            ended_at        DATETIME      NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_plv_page_variant (page_id, variant_name),
+            INDEX idx_plv_page (page_id),
+            INDEX idx_plv_status (status),
+            INDEX idx_plv_created (created_at)
+        )',
+
+        // Histórico de eventos de A/B testing (impressões, cliques, conversões)
+        'CREATE TABLE IF NOT EXISTS ab_test_events (
+            id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            variant_id      BIGINT UNSIGNED NOT NULL,
+            page_id         VARCHAR(100)  NOT NULL,
+            event_type      VARCHAR(40)   NOT NULL,
+            session_id      VARCHAR(100)  NULL,
+            user_agent      VARCHAR(500)  NULL,
+            referer         VARCHAR(1000) NULL,
+            created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            INDEX idx_ate_variant (variant_id),
+            INDEX idx_ate_page (page_id),
+            INDEX idx_ate_event (event_type),
+            INDEX idx_ate_created (created_at),
+            FOREIGN KEY (variant_id) REFERENCES page_layout_variants(id) ON DELETE CASCADE
+        )',
     ];
 
     foreach ($tables as $table_sql) {

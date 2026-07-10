@@ -98,25 +98,31 @@ function sv_home_banners(): array
 {
     return [
         [
+            'theme' => 'blue',
             'eyebrow' => 'Vitrine Vivaliz',
             'title' => 'Rodizios, ferragens e utilidades com visual mais claro.',
             'text' => 'Uma home pensada para destacar produtos reais, leitura rápida no celular e navegação direta até a compra.',
             'primary' => ['label' => 'Explorar catálogo', 'href' => '/catalogo'],
             'secondary' => ['label' => 'Falar com vendas', 'href' => '/contato'],
+            'icon' => '📦',
         ],
         [
+            'theme' => 'green',
             'eyebrow' => 'Compra assistida',
             'title' => 'Atendimento comercial rápido para dúvidas, prazos e orçamento.',
             'text' => 'Quando precisar confirmar compatibilidade, quantidade ou disponibilidade, a equipe da Vivaliz entra no fluxo sem atrito.',
             'primary' => ['label' => 'Ver produtos', 'href' => '/catalogo'],
             'secondary' => ['label' => 'Abrir contato', 'href' => '/contato'],
+            'icon' => '💬',
         ],
         [
+            'theme' => 'amber',
             'eyebrow' => 'Entrega nacional',
             'title' => 'Mais confiança visual para comprar de qualquer lugar do Brasil.',
             'text' => 'Cards organizados, identidade consistente e acesso rápido ao carrinho para acelerar a jornada em desktop e mobile.',
             'primary' => ['label' => 'Ir ao carrinho', 'href' => '/carrinho'],
             'secondary' => ['label' => 'Conhecer a marca', 'href' => '/sobre'],
+            'icon' => '🚚',
         ],
     ];
 }
@@ -263,13 +269,18 @@ $svNavCurrent = '';
             <div class="hero-carousel" id="hero-carousel" aria-label="Banners em destaque">
                 <div class="hero-carousel-track">
                     <?php foreach ($heroBanners as $index => $banner): ?>
-                        <article class="hero-slide<?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>">
-                            <span class="hero-slide-eyebrow"><?= sv_home_esc($banner['eyebrow']) ?></span>
-                            <h2><?= sv_home_esc($banner['title']) ?></h2>
-                            <p><?= sv_home_esc($banner['text']) ?></p>
-                            <div class="hero-slide-actions">
-                                <a href="<?= sv_home_esc($banner['primary']['href']) ?>" class="btn btn-primary"><?= sv_home_esc($banner['primary']['label']) ?></a>
-                                <a href="<?= sv_home_esc($banner['secondary']['href']) ?>" class="btn btn-secondary"><?= sv_home_esc($banner['secondary']['label']) ?></a>
+                        <article class="hero-slide hero-slide--<?= sv_home_esc($banner['theme'] ?? 'blue') ?><?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>" data-theme="<?= sv_home_esc($banner['theme'] ?? 'blue') ?>">
+                            <div class="hero-slide-content">
+                                <?php if (!empty($banner['icon'])): ?>
+                                    <div class="hero-slide-icon"><?= sv_home_esc($banner['icon']) ?></div>
+                                <?php endif; ?>
+                                <span class="hero-slide-eyebrow"><?= sv_home_esc($banner['eyebrow']) ?></span>
+                                <h2><?= sv_home_esc($banner['title']) ?></h2>
+                                <p><?= sv_home_esc($banner['text']) ?></p>
+                                <div class="hero-slide-actions">
+                                    <a href="<?= sv_home_esc($banner['primary']['href']) ?>" class="btn btn-primary"><?= sv_home_esc($banner['primary']['label']) ?></a>
+                                    <a href="<?= sv_home_esc($banner['secondary']['href']) ?>" class="btn btn-secondary"><?= sv_home_esc($banner['secondary']['label']) ?></a>
+                                </div>
                             </div>
                         </article>
                     <?php endforeach; ?>

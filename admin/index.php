@@ -113,6 +113,21 @@ $codename = (string)($version['codename'] ?? '');
             <article class="admin-card">
                 <div class="admin-card-head">
                     <div>
+                        <p class="eyebrow">Análise de Dados</p>
+                        <h2>A/B Testing Dashboard</h2>
+                    </div>
+                </div>
+                <p class="muted">Acompanhe performance de variantes de página: CTR, conversões, receita e histórico em tempo real.</p>
+                <div class="admin-link-list">
+                    <a class="btn btn-primary" href="/admin/ab-testing/" target="_blank" rel="noreferrer">Dashboard A/B Testing</a>
+                    <a class="btn btn-secondary" href="/admin/performance/" target="_blank" rel="noreferrer">Performance Analytics</a>
+                    <a class="btn btn-secondary" href="/admin/layout-history/" target="_blank" rel="noreferrer">Layout History</a>
+                </div>
+            </article>
+
+            <article class="admin-card">
+                <div class="admin-card-head">
+                    <div>
                         <p class="eyebrow">Diagnóstico</p>
                         <h2>Saúde do site</h2>
                     </div>

@@ -24,7 +24,7 @@ try {
     $input = json_decode(file_get_contents('php://input'), true);
 
     $pageId = $input['page_id'] ?? null;
-    $hash = $input['commit_hash'] ?? null;
+    $hash = $input['commit_hash'] ?? $input['hash'] ?? null;
 
     if (!$pageId || !$hash) {
         throw new Exception('Missing required fields: page_id, commit_hash');
