@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/../includes/admin-guard.php';
 /**
  * Admin › Mercado Livre
  * Painel de gerenciamento de integração ML — issues #59, #60, #66

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../includes/admin-guard.php';
 /**
  * Sincroniza todos os produtos de olist_products para products
  * Simples e direto - sem dependências complexas

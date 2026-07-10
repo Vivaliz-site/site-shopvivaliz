@@ -42,5 +42,6 @@ header('Content-Type: text/html; charset=UTF-8');
         </section>
     </div>
 </main>
+<?php include __DIR__ . '/../includes/footer.php'; ?>
 </body>
 </html>
