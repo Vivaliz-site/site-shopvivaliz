@@ -369,7 +369,7 @@ footer h3 {
    LOADING E ESTADOS
    ============================================================================ */
 
-.skeleton, [class*="skeleton"] {
+.skeleton {
     background: #e8e8e8;
     min-height: 20px;
     border-radius: 4px;
