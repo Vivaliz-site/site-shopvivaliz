@@ -266,8 +266,7 @@ section > h2 {
     border-radius: 8px;
 }
 
-.home-scroller-track,
-[class*="track"] {
+.home-scroller-track {
     display: flex;
     gap: 1rem;
     overflow-x: auto;
