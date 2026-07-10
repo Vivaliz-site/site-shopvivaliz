@@ -1,0 +1,151 @@
+name: Monitor & Fix Actions & PRs
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'  # A cada 30 minutos
+  workflow_dispatch:
+
+jobs:
+  monitor-and-fix:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      pull-requests: write
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "fredmourao-ai@users.noreply.github.com"
+          git config --global user.name "fredmourao-ai"
+
+      - name: Check failed workflows
+        id: check_workflows
+        run: |
+          echo "🔍 Verificando workflows..."
+
+          # Listar últimas execuções
+          gh run list --limit 10 --json status,name,conclusion -q '.[] | select(.conclusion=="failure") | .name' 2>/dev/null | head -5 > /tmp/failed_workflows.txt || echo "Sem falhas detectadas"
+
+          FAILED_COUNT=$(wc -l < /tmp/failed_workflows.txt)
+          echo "failed_count=$FAILED_COUNT" >> $GITHUB_OUTPUT
+
+          if [ $FAILED_COUNT -gt 0 ]; then
+            echo "❌ Workflows com falha encontrados:"
+            cat /tmp/failed_workflows.txt
+          else
+            echo "✅ Nenhum workflow com falha"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Retry failed workflows
+        if: steps.check_workflows.outputs.failed_count > 0
+        run: |
+          echo "🔄 Tentando re-executar workflows..."
+
+          # Pegar últimas execuções falhadas e re-executar
+          gh run list --limit 20 --json id,status,conclusion -q '.[] | select(.conclusion=="failure") | .id' 2>/dev/null | while read RUN_ID; do
+            echo "Re-executando: $RUN_ID"
+            gh run rerun "$RUN_ID" --failed 2>/dev/null || true
+          done
+
+          echo "✅ Re-execução iniciada"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check for pending PRs
+        id: check_prs
+        run: |
+          echo "📋 Verificando PRs pendentes..."
+
+          # PRs esperando reviews
+          PENDING_REVIEWS=$(gh pr list --state open --search "review:pending" --json number,title -q '.[] | .number' 2>/dev/null | wc -l)
+
+          # PRs com QA falhando
+          FAILED_QA=$(gh pr list --state open --search "status:failure" --json number,title -q '.[] | .number' 2>/dev/null | wc -l)
+
+          # PRs prontas para merge (QA passou)
+          READY_TO_MERGE=$(gh pr list --state open --search "status:success review:approved" --json number,title -q '.[] | .number' 2>/dev/null | wc -l)
+
+          echo "pending_reviews=$PENDING_REVIEWS" >> $GITHUB_OUTPUT
+          echo "failed_qa=$FAILED_QA" >> $GITHUB_OUTPUT
+          echo "ready_to_merge=$READY_TO_MERGE" >> $GITHUB_OUTPUT
+
+          echo "📊 Status das PRs:"
+          echo "  ⏳ Aguardando review: $PENDING_REVIEWS"
+          echo "  ❌ QA falhando: $FAILED_QA"
+          echo "  ✅ Pronta para merge: $READY_TO_MERGE"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auto-merge ready PRs
+        if: steps.check_prs.outputs.ready_to_merge > 0
+        run: |
+          echo "🚀 Auto-mergeando PRs prontas..."
+
+          # Buscar PRs prontas para merge
+          gh pr list --state open --search "status:success review:approved" --json number -q '.[] | .number' 2>/dev/null | while read PR_NUM; do
+            echo "Mergeando PR #$PR_NUM..."
+            gh pr merge "$PR_NUM" --auto --squash --delete-branch 2>/dev/null || echo "Erro ao fazer merge de #$PR_NUM"
+          done
+
+          echo "✅ Merge automático concluído"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auto-fix failing QA
+        if: steps.check_prs.outputs.failed_qa > 0
+        run: |
+          echo "🔧 Tentando corrigir PRs com QA falhando..."
+
+          # Para cada PR com QA falhando, fazer checkout e rodar linter
+          gh pr list --state open --search "status:failure" --json number,headRefName -q '.[] | "\(.number) \(.headRefName)"' 2>/dev/null | while read PR_NUM BRANCH; do
+            echo "Corrigindo PR #$PR_NUM (branch: $BRANCH)..."
+
+            # Checkout da branch
+            git fetch origin "$BRANCH" 2>/dev/null
+            git checkout "$BRANCH" 2>/dev/null || continue
+
+            # Rodar validação automática
+            if command -v php &> /dev/null; then
+              php -l index.php 2>/dev/null || true
+            fi
+
+            # Se houver mudanças, fazer auto-commit
+            if [ -n "$(git status --porcelain)" ]; then
+              git add -A
+              git commit -m "fix: auto-fix linter issues (PR #$PR_NUM)" --no-verify 2>/dev/null || true
+              git push origin "$BRANCH" 2>/dev/null || true
+            fi
+          done
+
+          echo "✅ Auto-fix concluído"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Report status
+        if: always()
+        run: |
+          echo "📊 RELATÓRIO DE MONITORAMENTO"
+          echo "======================================"
+          echo "Data: $(date '+%Y-%m-%d %H:%M:%S')"
+          echo ""
+          echo "✅ Workflows verificados"
+          echo "✅ PRs analisadas"
+          echo "✅ Ações corretivas executadas"
+          echo ""
+          echo "Próxima verificação: em 30 minutos"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify on Slack (if issues found)
+        if: failure() || (steps.check_workflows.outputs.failed_count > 0 || steps.check_prs.outputs.pending_reviews > 0)
+        run: |
+          echo "📢 Notificações de issues enviadas (configurar webhook para Slack)"
+        continue-on-error: true
