@@ -1,0 +1,51 @@
+name: Auto-Commit Changes
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'  # A cada 30 minutos
+  workflow_dispatch:
+
+jobs:
+  auto-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "fredmourao-ai@users.noreply.github.com"
+          git config --global user.name "fredmourao-ai"
+
+      - name: Check for changes
+        id: changes
+        run: |
+          git status --porcelain
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Auto-commit if changes exist
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          git add -A
+          git commit -m "auto: sincronizar $(date '+%Y-%m-%d %H:%M:%S')" || echo "Nada para commitar"
+
+      - name: Auto-push
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          git push origin main || git push origin main --force-with-lease
+
+      - name: Trigger Deploy if pushed
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          gh workflow run shopvivaliz-qa.yml
+          gh workflow run deploy.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
