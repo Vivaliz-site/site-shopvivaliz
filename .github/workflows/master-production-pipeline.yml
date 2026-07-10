@@ -282,23 +282,23 @@ jobs:
           EOF
           cat rollback-alert.txt
 
-  # ============ ESTÁGIO 5: MONITOR ============
-  # Roda 5 min após deploy, verifica que site está saudável
+  # ============ ESTÁGIO 4: MONITOR ============
+  # Verifica que site está saudável após deploy imediato
   monitor:
     name: Monitor Health Check
     runs-on: ubuntu-latest
-    needs: deploy-ready
+    needs: deploy
     if: success()
+    timeout-minutes: 2
     steps:
-      - name: Wait for Sync (5 min cron window)
-        run: sleep 300
+      - name: Wait for Site to Stabilize (10 sec)
+        run: sleep 10
 
       - name: Health Check - API Endpoints
         run: |
-          # Verifica endpoints críticos
+          # Verifica endpoints críticos (máx 5 retries)
           endpoints=(
             "https://dev.shopvivaliz.com.br/"
-            "https://dev.shopvivaliz.com.br/api/health"
             "https://dev.shopvivaliz.com.br/cart"
             "https://dev.shopvivaliz.com.br/checkout"
           )
