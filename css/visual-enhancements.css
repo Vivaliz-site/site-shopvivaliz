@@ -292,8 +292,7 @@ section > h2 {
     background: var(--color-secondary);
 }
 
-.home-scroller-arrow,
-[class*="arrow"] {
+.home-scroller-arrow {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
