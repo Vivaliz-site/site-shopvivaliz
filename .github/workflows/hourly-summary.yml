@@ -67,14 +67,14 @@ jobs:
                   tasks = []
 
           # 4. Montar resumo
-          summary = f"""# ShopVivaliz Hourly Summary
-
-**{current_hour}**
-
-## 📊 Activity
-
-### Commits ({len(commits)} made)
-"""
+          # (Construido linha a linha com \n explicito, em vez de uma string
+          # multi-linha crua, porque linhas sem indentacao dentro de um bloco
+          # "run: |" do YAML quebram o parser - foi exatamente isso que
+          # deixava este workflow falhando em toda execucao.)
+          summary = "# ShopVivaliz Hourly Summary\n\n"
+          summary += f"**{current_hour}**\n\n"
+          summary += "## 📊 Activity\n\n"
+          summary += f"### Commits ({len(commits)} made)\n"
           if commits:
               for commit in commits[:10]:  # Top 10
                   if commit:
