@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test.describe('Página de Pedidos', () => {
   const baseUrl = 'https://dev.shopvivaliz.com.br';

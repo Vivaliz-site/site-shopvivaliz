@@ -244,9 +244,12 @@ jobs:
           git config user.email "ci@shopvivaliz.local"
           git config user.name "CI Rollback Bot"
 
-          # Revert para commit anterior
-          git revert HEAD --no-edit || git reset --hard HEAD~1
-          git push origin main --force || echo "Revert não foi possível via push (proteção de branch?)"
+          # Revert seguro: cria um commit novo desfazendo o anterior, nunca
+          # reescreve o historico com --force. Com varios agentes commitando
+          # em main ao mesmo tempo, um force-push poderia apagar commits
+          # legitimos de outra pessoa/agente que chegaram nesse meio-tempo.
+          git revert HEAD --no-edit
+          git push origin main || echo "Nao foi possivel enviar o revert (branch pode ter avancado - revisar manualmente)."
 
           cat > rollback-alert.txt << 'EOF'
           ⚠️  ROLLBACK EXECUTADO
