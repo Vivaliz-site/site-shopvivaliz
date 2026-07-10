@@ -33,12 +33,43 @@ $svNavLinks = [
 
             <!-- Botão de Conta/Login -->
             <div class="nav-auth-buttons">
-                <a href="/login" class="nav-btn nav-btn-outline">
-                    👤 Entrar
-                </a>
-                <a href="/cadastro" class="nav-btn nav-btn-primary">
-                    ✨ Criar Conta
-                </a>
+                <?php
+                    // Verificar se está logado (incluindo auth-helpers se necessário)
+                    if (!function_exists('is_logged_in')) {
+                        $authHelpersPath = __DIR__ . '/../config/auth-helpers.php';
+                        if (is_file($authHelpersPath)) {
+                            require_once $authHelpersPath;
+                        }
+                    }
+
+                    if (function_exists('is_logged_in') && is_logged_in()):
+                        $user = get_current_user();
+                        $displayName = $user['name'] ?? $_SESSION['user_name'] ?? 'Usuário';
+                ?>
+                    <a href="/minha-conta" class="nav-btn nav-btn-outline">
+                        👤 <?php echo htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8'); ?>
+                    </a>
+                    <form method="POST" action="/login" style="display: inline;">
+                        <input type="hidden" name="action" value="logout">
+                        <button type="submit" class="nav-btn nav-btn-secondary" onclick="
+                            fetch('/api/logout', {method: 'POST'}).then(() => {
+                                window.location.href = '/';
+                            }).catch(() => {
+                                window.location.href = '/';
+                            });
+                            return false;
+                        ">
+                            🚪 Sair
+                        </button>
+                    </form>
+                <?php else: ?>
+                    <a href="/login" class="nav-btn nav-btn-outline">
+                        👤 Entrar
+                    </a>
+                    <a href="/cadastro" class="nav-btn nav-btn-primary">
+                        ✨ Criar Conta
+                    </a>
+                <?php endif; ?>
             </div>
         </div>
     </div>
