@@ -6,8 +6,11 @@ name: Master Production Pipeline 24/7
 # Rollback automático se algum estágio falhar.
 
 on:
-  push:
-    branches: [main]
+  # DESATIVADO 2026-07-10 (incidente): o gatilho automatico "push: [main]"
+  # foi a causa de DOIS resets destrutivos em main hoje (2795+ arquivos
+  # apagados cada vez) - o estagio de rollback disparava sozinho quando o
+  # estagio de teste falhava. So workflow_dispatch (manual) ate isso ser
+  # investigado a fundo e o rollback provado seguro.
   workflow_dispatch:
     inputs:
       force_deploy:
@@ -239,17 +242,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Revert Commit
+      - name: Alert Only (rollback automatico desativado apos incidente)
         run: |
-          git config user.email "ci@shopvivaliz.local"
-          git config user.name "CI Rollback Bot"
-
-          # Revert seguro: cria um commit novo desfazendo o anterior, nunca
-          # reescreve o historico com --force. Com varios agentes commitando
-          # em main ao mesmo tempo, um force-push poderia apagar commits
-          # legitimos de outra pessoa/agente que chegaram nesse meio-tempo.
-          git revert HEAD --no-edit
-          git push origin main || echo "Nao foi possivel enviar o revert (branch pode ter avancado - revisar manualmente)."
+          echo "::warning::Testes falharam apos push em main. Rollback automatico"
+          echo "::warning::foi DESATIVADO em 2026-07-10 porque essa mesma automacao"
+          echo "::warning::apagou 2795+ arquivos de main duas vezes no mesmo dia."
+          echo "::warning::Revise manualmente o commit ${{ github.sha }} e decida"
+          echo "::warning::se um revert e necessario (git revert HEAD --no-edit,"
+          echo "::warning::nunca reset --hard nem push --force)."
 
           cat > rollback-alert.txt << 'EOF'
           ⚠️  ROLLBACK EXECUTADO
