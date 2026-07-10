@@ -99,6 +99,20 @@ $codename = (string)($version['codename'] ?? '');
             <article class="admin-card">
                 <div class="admin-card-head">
                     <div>
+                        <p class="eyebrow">Editor Visual</p>
+                        <h2>Editar Layouts</h2>
+                    </div>
+                </div>
+                <p class="muted">Crie e edite layouts de páginas com drag-and-drop, A/B testing e histórico git automático.</p>
+                <div class="admin-link-list">
+                    <a class="btn btn-primary" href="/admin/editor-visual.php" target="_blank" rel="noreferrer">Abrir Editor Visual</a>
+                    <a class="btn btn-secondary" href="/admin/template-editor.php" target="_blank" rel="noreferrer">Editor JSON (avançado)</a>
+                </div>
+            </article>
+
+            <article class="admin-card">
+                <div class="admin-card-head">
+                    <div>
                         <p class="eyebrow">Diagnóstico</p>
                         <h2>Saúde do site</h2>
                     </div>
