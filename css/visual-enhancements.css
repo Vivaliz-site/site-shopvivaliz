@@ -386,7 +386,7 @@ footer h3 {
     100% { background-position: -200% 0; }
 }
 
-.empty-state, [class*="empty"] {
+.empty-state {
     text-align: center;
     padding: 3rem 1rem;
     color: #999;
