@@ -1,3 +1,0 @@
-Teste de deploy automatico
-Data: 2026-07-03
-Acionado via ChatGPT/GitHub connector.

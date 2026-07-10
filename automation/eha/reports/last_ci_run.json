@@ -1,9 +1,0 @@
-{
-  "run_number": 222,
-  "run_id": "28648924264",
-  "eha_status": "READY_FOR_PRODUCTION",
-  "event": "schedule",
-  "sha": "886f8cc97aed5c59914d3cac86f2c9dda74b3d7d",
-  "timestamp": "2026-07-03T08:39:18Z",
-  "url": "https://github.com/fredmourao-ai/site-shopvivaliz/actions/runs/28648924264"
-}

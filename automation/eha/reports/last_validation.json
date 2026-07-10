@@ -1,8 +1,0 @@
-{
-    "status": "READY_FOR_PRODUCTION",
-    "checkout_ok": true,
-    "api_ok": true,
-    "db_ok": true,
-    "pages_ok": true,
-    "timestamp": "2026-07-03T08:39:18+00:00"
-}
