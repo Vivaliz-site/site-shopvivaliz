@@ -1,0 +1,56 @@
+name: Auto-Push & Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - final/hero-fix
+      - validate/**
+  schedule:
+    - cron: '*/15 * * * *'  # Push a cada 15 minutos se houver mudanças
+
+jobs:
+  auto-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "fredmourao-ai@users.noreply.github.com"
+          git config --global user.name "fredmourao-ai"
+
+      - name: Check for unpushed commits
+        id: check
+        run: |
+          UNPUSHED=$(git log origin/main..main --oneline | wc -l)
+          echo "unpushed=$UNPUSHED" >> $GITHUB_OUTPUT
+          if [ "$UNPUSHED" -gt 0 ]; then
+            echo "🔄 Found $UNPUSHED unpushed commits"
+          fi
+
+      - name: Force push to main (if behind)
+        if: steps.check.outputs.unpushed > 0
+        run: |
+          git push origin main --force-with-lease || git push origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger QA workflow
+        if: success()
+        run: |
+          gh workflow run shopvivaliz-qa.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger Deploy workflow
+        if: success()
+        run: |
+          gh workflow run deploy.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

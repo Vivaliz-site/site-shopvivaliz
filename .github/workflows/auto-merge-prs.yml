@@ -1,0 +1,36 @@
+name: Auto-Merge PRs
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+  workflow_dispatch:
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auto-approve and merge PR
+        if: github.event.pull_request.user.login == 'fredmourao-ai' || github.actor == 'github-actions[bot]'
+        run: |
+          gh pr merge ${{ github.event.pull_request.number }} \
+            --auto \
+            --squash \
+            --delete-branch \
+            || gh pr merge ${{ github.event.pull_request.number }} \
+            --squash \
+            --delete-branch || echo "PR merge already in progress or not ready"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge if not already set
+        run: |
+          gh pr view ${{ github.event.pull_request.number }} --json autoMergeRequest -q '.autoMergeRequest' | grep -q null && \
+          gh pr merge ${{ github.event.pull_request.number }} --auto --squash || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

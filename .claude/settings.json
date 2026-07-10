@@ -15,5 +15,34 @@
     ],
     "deny": [],
     "defaultMode": "bypassPermissions"
-  }
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command // empty' | grep -q 'git commit' && (cd c:\\site-shopvivaliz && git push origin HEAD --force-with-lease 2>/dev/null || true) || true",
+            "statusMessage": "📤 Pushing to origin...",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd c:\\site-shopvivaliz && (git diff --quiet || (echo 'Staged changes detected'; git status -s | head -3)) 2>/dev/null || true",
+            "statusMessage": "🔍 Checking for auto-merge PRs...",
+            "async": true
+          }
+        ]
+      }
+    ]
+  },
+  "autoMemoryEnabled": true
 }
