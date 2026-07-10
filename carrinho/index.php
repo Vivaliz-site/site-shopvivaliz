@@ -253,5 +253,6 @@ header('Content-Type: text/html; charset=UTF-8');
     render();
 })();
 </script>
+<?php include __DIR__ . '/../includes/footer.php'; ?>
 </body>
 </html>

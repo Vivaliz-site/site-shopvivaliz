@@ -706,5 +706,6 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
     })();
 </script>
 <?php endif; ?>
+<?php include __DIR__ . '/../includes/footer.php'; ?>
 </body>
 </html>
