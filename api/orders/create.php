@@ -250,7 +250,7 @@ function svo_push_order_tiny(array $order): ?string {
 
     $payload = [
         'numeroPedido' => $order['order_number'],
-        'situacao'     => ['id' => 1], // Aberto
+        'situacao'     => 1, // Aberto
         'cliente'      => [
             'nome'  => $c['name']  ?? '',
             'email' => $c['email'] ?? '',
