@@ -19,10 +19,12 @@ $svNavLinks = [
 $svLoggedIn = !empty($_SESSION['user_id']);
 $svUserName = trim((string)($_SESSION['user_name'] ?? ''));
 $svUserFirstName = $svUserName !== '' ? explode(' ', $svUserName)[0] : 'Minha conta';
+$svIsProduct = $svNavCurrent === 'produto';
 $svIsCatalog = in_array($svNavCurrent, ['catalogo', 'produtos', 'produto'], true);
 ?>
 <link rel="stylesheet" href="/css/shopvivaliz-visual-v3.css?v=3.0.0">
 <?php if ($svIsCatalog): ?><link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=4.0.0"><?php endif; ?>
+<?php if ($svIsProduct): ?><link rel="stylesheet" href="/css/product-conversion-v5.css?v=5.0.0"><?php endif; ?>
 <nav class="navbar sv-navbar">
     <div class="container nav-inner">
         <a href="/" class="brand-link" aria-label="Ir para a home da Vivaliz">
@@ -62,3 +64,4 @@ $svIsCatalog = in_array($svNavCurrent, ['catalogo', 'produtos', 'produto'], true
 </script>
 <script src="/js/shopvivaliz-visual-v3.js?v=3.0.0" defer></script>
 <?php if ($svIsCatalog): ?><script src="/js/catalog-conversion-v4.js?v=4.0.0" defer></script><?php endif; ?>
+<?php if ($svIsProduct): ?><script src="/js/product-conversion-v5.js?v=5.0.0" defer></script><?php endif; ?>
