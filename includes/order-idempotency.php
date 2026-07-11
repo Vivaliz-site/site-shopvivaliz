@@ -25,11 +25,32 @@ function svoi_dir(): string {
     return '';
 }
 
+function svoi_path(string $key): string {
+    $dir = svoi_dir();
+    return $dir === '' ? '' : $dir . '/' . hash('sha256', $key) . '.lock';
+}
+
+function svoi_cleanup(int $ttl = 900): void {
+    $dir = svoi_dir();
+    if ($dir === '') return;
+    foreach (glob($dir . '/*.lock') ?: [] as $file) {
+        if (is_file($file) && (time() - (int)filemtime($file)) >= $ttl) @unlink($file);
+    }
+}
+
 function svoi_claim(string $key, int $ttl = 900): bool {
     if ($key === '') return false;
-    $dir = svoi_dir();
-    if ($dir === '') return false;
-    $path = $dir . '/' . hash('sha256', $key) . '.lock';
-    if (is_file($path) && (time() - (int)filemtime($path)) < $ttl) return false;
-    return file_put_contents($path, (string)time(), LOCK_EX) !== false;
+    svoi_cleanup($ttl);
+    $path = svoi_path($key);
+    if ($path === '') return false;
+    $handle = @fopen($path, 'x');
+    if ($handle === false) return false;
+    fwrite($handle, json_encode(['created_at'=>time(),'key_hash'=>hash('sha256',$key)]));
+    fclose($handle);
+    return true;
+}
+
+function svoi_release(string $key): void {
+    $path = svoi_path($key);
+    if ($path !== '' && is_file($path)) @unlink($path);
 }
