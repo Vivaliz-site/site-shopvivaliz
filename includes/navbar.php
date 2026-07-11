@@ -19,8 +19,10 @@ $svNavLinks = [
 $svLoggedIn = !empty($_SESSION['user_id']);
 $svUserName = trim((string)($_SESSION['user_name'] ?? ''));
 $svUserFirstName = $svUserName !== '' ? explode(' ', $svUserName)[0] : 'Minha conta';
+$svIsCatalog = in_array($svNavCurrent, ['catalogo', 'produtos', 'produto'], true);
 ?>
 <link rel="stylesheet" href="/css/shopvivaliz-visual-v3.css?v=3.0.0">
+<?php if ($svIsCatalog): ?><link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=4.0.0"><?php endif; ?>
 <nav class="navbar sv-navbar">
     <div class="container nav-inner">
         <a href="/" class="brand-link" aria-label="Ir para a home da Vivaliz">
@@ -59,3 +61,4 @@ $svUserFirstName = $svUserName !== '' ? explode(' ', $svUserName)[0] : 'Minha co
 (function(){var menuToggle=document.getElementById('menuToggle');var navMenu=document.getElementById('navMenu');if(!menuToggle||!navMenu)return;menuToggle.addEventListener('click',function(){var isOpen=navMenu.classList.toggle('active');menuToggle.setAttribute('aria-expanded',isOpen?'true':'false');});navMenu.querySelectorAll('a').forEach(function(link){link.addEventListener('click',function(){navMenu.classList.remove('active');menuToggle.setAttribute('aria-expanded','false');});});})();
 </script>
 <script src="/js/shopvivaliz-visual-v3.js?v=3.0.0" defer></script>
+<?php if ($svIsCatalog): ?><script src="/js/catalog-conversion-v4.js?v=4.0.0" defer></script><?php endif; ?>
