@@ -54,6 +54,9 @@ assert_status 200 "${BASE_URL}/api/catalog/category-images.php"
 assert_status 200 "${BASE_URL}/api/catalog/image-health.php"
 assert_status 200 "${BASE_URL}/api/catalog/valid-image-products.php"
 assert_status 422 "${BASE_URL}/api/catalog/image-by-product.php"
+assert_status 200 "${BASE_URL}/api/catalog/stock-health.php"
+assert_status 200 "${BASE_URL}/api/catalog/products-in-stock.php"
+assert_status 422 "${BASE_URL}/api/catalog/stock-by-product.php"
 
 assert_contains "${BASE_URL}/catalogo.php" "Catálogo"
 assert_contains "${BASE_URL}/carrinho.php" "Carrinho"
@@ -61,6 +64,8 @@ assert_contains "${BASE_URL}/checkout.php" "checkout-form"
 assert_contains "${BASE_URL}/api/catalog/category-images.php" '"ok":true'
 assert_contains "${BASE_URL}/api/catalog/image-health.php" '"image_health"'
 assert_contains "${BASE_URL}/api/catalog/valid-image-products.php" '"products"'
+assert_contains "${BASE_URL}/api/catalog/stock-health.php" '"stock_health"'
+assert_contains "${BASE_URL}/api/catalog/products-in-stock.php" '"products"'
 
 assert_status 405 "${BASE_URL}/api/orders/create-validated.php"
 assert_status 405 "${BASE_URL}/api/melhorenvio/shipping-check-v2.php"
