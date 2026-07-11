@@ -32,7 +32,7 @@ $svIsCatalog = in_array($svNavCurrent, ['catalogo', 'produtos', 'produto'], true
 <link rel="stylesheet" href="/css/loading-states-v21.css?v=21.0.0">
 <link rel="stylesheet" href="/css/network-status-v22.css?v=22.0.0">
 <link rel="stylesheet" href="/css/print-v27.css?v=27.0.0" media="print">
-<?php if ($svIsHome): ?><link rel="stylesheet" href="/css/home-polish-v17.css?v=17.0.0"><?php endif; ?>
+<?php if ($svIsHome): ?><link rel="stylesheet" href="/css/home-polish-v17.css?v=17.0.0"><link rel="stylesheet" href="/css/category-real-images-v51.css?v=51.0.0"><?php endif; ?>
 <?php if ($svIsCatalog): ?><link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=4.0.0"><?php endif; ?>
 <?php if ($svIsProduct): ?><link rel="stylesheet" href="/css/product-conversion-v5.css?v=5.0.0"><?php endif; ?>
 <?php if ($svIsCart): ?><link rel="stylesheet" href="/css/cart-polish-v14.css?v=14.0.0"><?php endif; ?>
@@ -88,6 +88,7 @@ $svIsCatalog = in_array($svNavCurrent, ['catalogo', 'produtos', 'produto'], true
 <script src="/js/offline-status-v22.js?v=22.0.0" defer></script>
 <script src="/js/storefront-events-v26.js?v=26.0.0" defer></script>
 <script src="/js/install-prompt-v29.js?v=29.0.0" defer></script>
+<?php if ($svIsHome): ?><script src="/js/category-real-images-v51.js?v=51.0.0" defer></script><?php endif; ?>
 <?php if ($svIsCatalog): ?><script src="/js/catalog-conversion-v4.js?v=4.0.0" defer></script><script src="/js/search-enhancements-v25.js?v=25.0.0" defer></script><?php endif; ?>
 <?php if ($svIsProduct): ?><script src="/js/product-conversion-v5.js?v=5.0.0" defer></script><script src="/js/product-schema-v16.js?v=16.0.0" defer></script><script src="/js/recently-viewed-v24.js?v=24.0.0" defer></script><?php endif; ?>
 <?php if ($svIsCheckout): ?><script src="/js/checkout-conversion-v6.js?v=6.0.0" defer></script><script src="/js/checkout-resilience-v15.js?v=15.0.0" defer></script><?php endif; ?>
