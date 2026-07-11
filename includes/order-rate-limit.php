@@ -1,11 +1,21 @@
 <?php
 declare(strict_types=1);
 
-function svorl_client_key(): string {
-    $forwarded = trim((string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));
+function svorl_client_ip(): string {
     $remote = trim((string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
-    $ip = $forwarded !== '' ? trim(explode(',', $forwarded)[0]) : $remote;
-    return hash('sha256', $ip . '|' . (string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
+    $trustedProxy = filter_var((string)getenv('SHOPVIVALIZ_TRUST_PROXY'), FILTER_VALIDATE_BOOLEAN);
+    if ($trustedProxy) {
+        $forwarded = trim((string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));
+        if ($forwarded !== '') {
+            $candidate = trim(explode(',', $forwarded)[0]);
+            if (filter_var($candidate, FILTER_VALIDATE_IP)) return $candidate;
+        }
+    }
+    return filter_var($remote, FILTER_VALIDATE_IP) ? $remote : 'unknown';
+}
+
+function svorl_client_key(): string {
+    return hash('sha256', svorl_client_ip() . '|' . (string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
 }
 
 function svorl_allow(int $limit = 10, int $window = 300): bool {
