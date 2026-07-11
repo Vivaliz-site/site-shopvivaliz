@@ -1,0 +1,3 @@
+<?php
+declare(strict_types=1);
+$doc=(string)@file_get_contents('docs/knowledge/updater.md');$required=['versão mínima compatível','backup','SQLs e migrations automaticamente','idempotente','reparos de vínculo','testes rápidos'];$errors=[];foreach($required as $needle){if(!str_contains($doc,$needle))$errors[]="updater contract missing: $needle";}if($errors){fwrite(STDERR,implode(PHP_EOL,$errors).PHP_EOL);exit(1);}echo "Updater contract validation passed.\n";
