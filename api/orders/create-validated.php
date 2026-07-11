@@ -8,6 +8,9 @@ header('Cache-Control: no-store');
 
 require_once dirname(__DIR__, 2) . '/includes/product-price-enrich.php';
 require_once dirname(__DIR__, 2) . '/includes/order-authoritative.php';
+require_once dirname(__DIR__, 2) . '/includes/order-request-context.php';
+require_once dirname(__DIR__, 2) . '/includes/order-idempotency.php';
+require_once dirname(__DIR__, 2) . '/includes/order-rate-limit.php';
 
 function svq_fail(int $status, string $error, string $message, array $extra = []): never {
     http_response_code($status);
@@ -30,6 +33,7 @@ function svq_secret(): string {
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') svq_fail(405,'method_not_allowed','Método não permitido.');
+if (!svorl_allow()) svq_fail(429,'rate_limit_exceeded','Muitas tentativas de criação de pedido. Aguarde alguns minutos.');
 $raw = file_get_contents('php://input') ?: '';
 if (strlen($raw) > 200000) svq_fail(413,'payload_too_large','O pedido excede o tamanho permitido.');
 $body = json_decode($raw, true);
@@ -69,5 +73,10 @@ $fingerprintItems = array_map(static fn(array $item): array => [
 $fingerprint = ['cep'=>$shippingCep,'items'=>$fingerprintItems,'service_id'=>$serviceId,'price'=>$shippingTotal,'expires_at'=>$expiresAt];
 $expected = hash_hmac('sha256', json_encode($fingerprint, JSON_UNESCAPED_SLASHES), svq_secret());
 if (!hash_equals($expected, $quoteId)) svq_fail(409,'shipping_quote_invalid','O valor do frete foi alterado ou não corresponde à cotação. Calcule novamente.');
+
+$idempotencyKey = svoi_key($body, $resolved['items']);
+if (!svoi_claim($idempotencyKey)) svq_fail(409,'duplicate_order_request','Este pedido já está sendo processado ou foi enviado recentemente.');
+svorc_set($body, $resolved['items']);
+$GLOBALS['shopvivaliz_order_raw'] = $raw;
 
 require __DIR__ . '/create.php';
