@@ -1,0 +1,30 @@
+# Padroes (regex, um por linha) que marcam uma mudanca como "area sensivel".
+# Se um diff de staging->main tocar qualquer arquivo que bata com um destes
+# padroes, a promocao automatica (promote-staging-to-main.yml) e BLOQUEADA
+# e espera revisao humana - mesmo que todos os testes passem. Isso vale
+# para pagamento, credenciais/segredos, dados de cliente e configuracao de
+# acesso, conforme combinado com o dono do projeto.
+#
+# Linhas comecando com # sao comentario e sao ignoradas.
+
+# Pagamento (Pagar.me e qualquer coisa de checkout/cobranca)
+^api/pagarme/
+^api/orders/
+checkout
+
+# Credenciais e segredos
+^config/
+\.env
+secret
+credential
+runtime-secrets
+
+# Dados de cliente
+^storage/orders/
+^api/webhooks/
+
+# Configuracao de acesso / CI-CD que controla quem pode publicar
+^\.github/workflows/
+^\.github/sensitive-paths\.txt$
+CODEOWNERS
+branch-protection
