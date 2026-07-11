@@ -33,8 +33,8 @@ $svIsCatalog = in_array($svNavCurrent, ['catalogo', 'produtos', 'produto'], true
 <link rel="stylesheet" href="/css/network-status-v22.css?v=22.0.0">
 <link rel="stylesheet" href="/css/print-v27.css?v=27.0.0" media="print">
 <?php if ($svIsHome): ?><link rel="stylesheet" href="/css/home-polish-v17.css?v=17.0.0"><link rel="stylesheet" href="/css/category-real-images-v52.css?v=52.0.0"><?php endif; ?>
-<?php if ($svIsCatalog): ?><link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=4.0.0"><link rel="stylesheet" href="/css/product-image-integrity-v63.css?v=63.0.0"><link rel="stylesheet" href="/css/price-integrity-v73.css?v=73.0.0"><?php endif; ?>
-<?php if ($svIsProduct): ?><link rel="stylesheet" href="/css/product-conversion-v5.css?v=5.0.0"><link rel="stylesheet" href="/css/product-image-integrity-v63.css?v=63.0.0"><link rel="stylesheet" href="/css/price-integrity-v73.css?v=73.0.0"><?php endif; ?>
+<?php if ($svIsCatalog): ?><link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=4.0.0"><link rel="stylesheet" href="/css/product-image-integrity-v63.css?v=63.0.0"><link rel="stylesheet" href="/css/price-integrity-v73.css?v=73.0.0"><link rel="stylesheet" href="/css/stock-integrity-v83.css?v=83.0.0"><?php endif; ?>
+<?php if ($svIsProduct): ?><link rel="stylesheet" href="/css/product-conversion-v5.css?v=5.0.0"><link rel="stylesheet" href="/css/product-image-integrity-v63.css?v=63.0.0"><link rel="stylesheet" href="/css/price-integrity-v73.css?v=73.0.0"><link rel="stylesheet" href="/css/stock-integrity-v83.css?v=83.0.0"><?php endif; ?>
 <?php if ($svIsCart): ?><link rel="stylesheet" href="/css/cart-polish-v14.css?v=14.0.0"><?php endif; ?>
 <?php if ($svIsCheckout): ?><link rel="stylesheet" href="/css/checkout-conversion-v6.css?v=6.0.0"><?php endif; ?>
 <?php if ($svIsCart || $svIsCheckout): ?><link rel="stylesheet" href="/css/shipping-v7.css?v=7.0.0"><?php endif; ?>
@@ -89,8 +89,8 @@ $svIsCatalog = in_array($svNavCurrent, ['catalogo', 'produtos', 'produto'], true
 <script src="/js/storefront-events-v26.js?v=26.0.0" defer></script>
 <script src="/js/install-prompt-v29.js?v=29.0.0" defer></script>
 <?php if ($svIsHome): ?><script src="/js/category-real-images-v52.js?v=52.0.0" defer></script><?php endif; ?>
-<?php if ($svIsCatalog): ?><script src="/js/catalog-conversion-v4.js?v=4.0.0" defer></script><script src="/js/search-enhancements-v25.js?v=25.0.0" defer></script><script src="/js/catalog-image-integrity-v62.js?v=62.0.0" defer></script><script src="/js/catalog-price-integrity-v72.js?v=72.0.0" defer></script><?php endif; ?>
-<?php if ($svIsProduct): ?><script src="/js/product-conversion-v5.js?v=5.0.0" defer></script><script src="/js/product-schema-v16.js?v=16.0.0" defer></script><script src="/js/recently-viewed-v24.js?v=24.0.0" defer></script><script src="/js/product-image-integrity-v63.js?v=63.0.0" defer></script><script src="/js/product-price-integrity-v73.js?v=73.0.0" defer></script><?php endif; ?>
+<?php if ($svIsCatalog): ?><script src="/js/catalog-conversion-v4.js?v=4.0.0" defer></script><script src="/js/search-enhancements-v25.js?v=25.0.0" defer></script><script src="/js/catalog-image-integrity-v62.js?v=62.0.0" defer></script><script src="/js/catalog-price-integrity-v72.js?v=72.0.0" defer></script><script src="/js/catalog-stock-integrity-v82.js?v=82.0.0" defer></script><?php endif; ?>
+<?php if ($svIsProduct): ?><script src="/js/product-conversion-v5.js?v=5.0.0" defer></script><script src="/js/product-schema-v16.js?v=16.0.0" defer></script><script src="/js/recently-viewed-v24.js?v=24.0.0" defer></script><script src="/js/product-image-integrity-v63.js?v=63.0.0" defer></script><script src="/js/product-price-integrity-v73.js?v=73.0.0" defer></script><script src="/js/product-stock-integrity-v83.js?v=83.0.0" defer></script><?php endif; ?>
 <?php if ($svIsCheckout): ?><script src="/js/checkout-conversion-v6.js?v=6.0.0" defer></script><script src="/js/checkout-resilience-v15.js?v=15.0.0" defer></script><?php endif; ?>
 <?php if ($svIsCart): ?><script src="/js/cart-shipping-v7.js?v=7.0.0" defer></script><?php endif; ?>
 <?php if ($svIsCheckout): ?><script src="/js/checkout-shipping-v7.js?v=7.0.0" defer></script><?php endif; ?>
