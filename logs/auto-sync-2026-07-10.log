@@ -4327,3 +4327,73 @@ Fast-forward
  create mode 100644 docs/knowledge/updater.md
 [2026-07-11 00:54:18] ✅ Git pull OK
 [2026-07-11 00:54:18] 📝 Commitando mudanças...
+[2026-07-11 01:04:23] 
+[2026-07-11 01:04:23] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-07-11 01:04:23] 🔄 Sincronizando secrets do GitHub...
+============================================================
+🔐 ShopVivaliz - Sincronizador de Secrets (Linux/macOS)
+============================================================
+
+Verificando GitHub CLI...
+✓ GitHub CLI encontrado
+
+📝 Gerando .env.local...
+✓ Criado: /home/ubuntu/site-shopvivaliz/.env.local
+
+============================================================
+✅ SINCRONIZAÇÃO CONCLUÍDA!
+============================================================
+
+Próximos passos:
+  1. Validar secrets: python3 scripts/validar_secrets.py
+  2. Ativar auto-sync: bash scripts/auto_sync_git.ps1
+
+[2026-07-11 01:04:23] ✅ Secrets sincronizados com sucesso
+[SECURITY] ShopVivaliz - Validador de Secrets
+============================================================
+
+[ERROR] ERRO - Secrets obrigatórios faltando:
+
+  ❌ ANTHROPIC_API_KEY (Claude API) - AUSENTE
+  ❌ SHOPEE_PARTNER_ID (Shopee Partner ID) - AUSENTE
+  ❌ SHOPEE_PARTNER_KEY (Shopee Partner Key) - AUSENTE
+
+📝 Solução:
+  1. Copie .env.example para .env.local
+  2. Preencha os valores reais em .env.local
+  3. Execute este validador novamente
+
+  Variáveis obrigatórias:
+    • ANTHROPIC_API_KEY: Claude API
+    • SHOPEE_PARTNER_ID: Shopee Partner ID
+    • SHOPEE_PARTNER_KEY: Shopee Partner Key
+    • FTP_SERVER: FTP Server
+    • FTP_USERNAME: FTP Username
+    • FTP_PASSWORD: FTP Password
+    • MAIL_PASS: Email Password
+[2026-07-11 01:04:23] ⚠️  Validação teve aviso (continuando...)
+[2026-07-11 01:04:23] 🔄 Sincronizando repositório...
+From https://github.com/Vivaliz-site/site-shopvivaliz
+ * branch            main       -> FETCH_HEAD
+   c1d74bb..3ee8685  main       -> origin/main
+Updating c1d74bb..3ee8685
+Fast-forward
+ api/catalog/category-images.php                | 52 ++++++++++++++++++++++++++
+ api/catalog/image-health.php                   | 44 ++++++++++++++++++++++
+ css/category-real-images-v52.css               |  1 +
+ docs/knowledge/image-policy.md                 | 28 ++++++++++++++
+ includes/navbar.php                            |  4 +-
+ js/category-real-images-v52.js                 | 45 ++++++++++++++++++++++
+ scripts/quality/run-all.php                    |  2 +-
+ scripts/quality/validate-category-images.php   | 29 ++++++++++++++
+ scripts/quality/validate-storefront-assets.php |  2 +-
+ tests/storefront-smoke.sh                      |  4 ++
+ 10 files changed, 207 insertions(+), 4 deletions(-)
+ create mode 100644 api/catalog/category-images.php
+ create mode 100644 api/catalog/image-health.php
+ create mode 100644 css/category-real-images-v52.css
+ create mode 100644 docs/knowledge/image-policy.md
+ create mode 100644 js/category-real-images-v52.js
+ create mode 100644 scripts/quality/validate-category-images.php
+[2026-07-11 01:04:24] ✅ Git pull OK
+[2026-07-11 01:04:24] 📝 Commitando mudanças...
