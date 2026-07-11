@@ -12,6 +12,12 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 - [`updater.md`](updater.md) — atualizações cumulativas, migrations e reparos automáticos.
 - [`data-integrity.md`](data-integrity.md) — integridade de catálogo, imagens, pedidos e banco.
 - [`testing.md`](testing.md) — testes mínimos, fluxo de compra e pós-deploy.
+- [`image-policy.md`](image-policy.md) — política sem placeholders e imagens reais por categoria.
+- [`product-images.md`](product-images.md) — critérios de imagens válidas por produto.
+- [`pricing-integrity.md`](pricing-integrity.md) — integridade de preços comerciais.
+- [`stock-integrity.md`](stock-integrity.md) — disponibilidade e bloqueio de itens esgotados.
+- [`cart-integrity.md`](cart-integrity.md) — validação server-side do carrinho.
+- [`order-integrity.md`](order-integrity.md) — validação autoritativa de itens, preço, estoque e frete.
 
 Outros documentos existentes na pasta podem registrar versões, dispositivos, decisões históricas e referências específicas.
 
