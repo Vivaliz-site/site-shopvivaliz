@@ -15,18 +15,12 @@ php -S 127.0.0.1:8099 -t . >/tmp/shopvivaliz-php-server.log 2>&1 &
 PHP_SERVER_PID=$!
 
 for _ in $(seq 1 30); do
-  if curl -fsS "${BASE_URL}/index.php" >/dev/null; then
-    break
-  fi
+  if curl -fsS "${BASE_URL}/index.php" >/dev/null; then break; fi
   sleep 1
 done
 
 assert_status() {
-  local expected="$1"
-  local url="$2"
-  local method="${3:-GET}"
-  local payload="${4:-}"
-  local status
+  local expected="$1" url="$2" method="${3:-GET}" payload="${4:-}" status
   if [[ "${method}" == "POST" ]]; then
     status=$(curl -sS -o /tmp/sv-response.json -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data "${payload}" "${url}")
   else
@@ -40,11 +34,7 @@ assert_status() {
   fi
 }
 
-assert_contains() {
-  local url="$1"
-  local needle="$2"
-  curl -fsS "${url}" | grep -Fq "${needle}"
-}
+assert_contains() { curl -fsS "$1" | grep -Fq "$2"; }
 
 assert_status 200 "${BASE_URL}/index.php"
 assert_status 200 "${BASE_URL}/catalogo.php"
@@ -57,6 +47,8 @@ assert_status 422 "${BASE_URL}/api/catalog/image-by-product.php"
 assert_status 200 "${BASE_URL}/api/catalog/stock-health.php"
 assert_status 200 "${BASE_URL}/api/catalog/products-in-stock.php"
 assert_status 422 "${BASE_URL}/api/catalog/stock-by-product.php"
+assert_status 405 "${BASE_URL}/api/cart/validate.php"
+assert_status 422 "${BASE_URL}/api/cart/validate.php" POST '{}'
 
 assert_contains "${BASE_URL}/catalogo.php" "Catálogo"
 assert_contains "${BASE_URL}/carrinho.php" "Carrinho"
