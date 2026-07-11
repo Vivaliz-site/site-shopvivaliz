@@ -35,6 +35,7 @@ assert_status() {
 }
 
 assert_contains() { curl -fsS "$1" | grep -Fq "$2"; }
+assert_contains_allow_error() { curl -sS "$1" | grep -Fq "$2"; }
 
 assert_status 200 "${BASE_URL}/index.php"
 assert_status 200 "${BASE_URL}/catalogo.php"
@@ -49,6 +50,7 @@ assert_status 200 "${BASE_URL}/api/catalog/products-in-stock.php"
 assert_status 422 "${BASE_URL}/api/catalog/stock-by-product.php"
 assert_status 405 "${BASE_URL}/api/cart/validate.php"
 assert_status 422 "${BASE_URL}/api/cart/validate.php" POST '{}'
+assert_status 503 "${BASE_URL}/api/orders/health.php"
 
 assert_contains "${BASE_URL}/catalogo.php" "Catálogo"
 assert_contains "${BASE_URL}/carrinho.php" "Carrinho"
@@ -58,6 +60,7 @@ assert_contains "${BASE_URL}/api/catalog/image-health.php" '"image_health"'
 assert_contains "${BASE_URL}/api/catalog/valid-image-products.php" '"products"'
 assert_contains "${BASE_URL}/api/catalog/stock-health.php" '"stock_health"'
 assert_contains "${BASE_URL}/api/catalog/products-in-stock.php" '"products"'
+assert_contains_allow_error "${BASE_URL}/api/orders/health.php" '"endpoint":"orders"'
 
 assert_status 405 "${BASE_URL}/api/orders/create-validated.php"
 assert_status 405 "${BASE_URL}/api/melhorenvio/shipping-check-v2.php"

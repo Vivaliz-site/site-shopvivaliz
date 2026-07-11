@@ -7,10 +7,11 @@ header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
 require_once dirname(__DIR__, 2) . '/includes/product-price-enrich.php';
+require_once dirname(__DIR__, 2) . '/includes/order-authoritative.php';
 
-function svq_fail(int $status, string $error, string $message): never {
+function svq_fail(int $status, string $error, string $message, array $extra = []): never {
     http_response_code($status);
-    echo json_encode(['ok'=>false,'error'=>$error,'message'=>$message], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode(array_merge(['ok'=>false,'error'=>$error,'message'=>$message], $extra), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 function svq_env(string ...$keys): string {
@@ -23,68 +24,50 @@ function svq_env(string ...$keys): string {
     return '';
 }
 function svq_secret(): string {
-    return svq_env('APP_KEY','SHOPVIVALIZ_APP_KEY','QUOTE_SIGNING_KEY') ?: hash('sha256', dirname(__DIR__, 2) . '|shopvivaliz-shipping-v2');
-}
-function svq_catalog(): array {
-    $path = dirname(__DIR__, 2) . '/api/catalog/fallback-products.json';
-    $decoded = is_file($path) ? json_decode((string)file_get_contents($path), true) : [];
-    return is_array($decoded) ? $decoded : [];
-}
-function svq_catalog_map(): array {
-    $map = [];
-    foreach (svq_catalog() as $row) {
-        if (!is_array($row)) continue;
-        $sku = trim((string)($row['sku'] ?? ''));
-        if ($sku !== '') $map[strtolower($sku)] = $row;
-    }
-    return $map;
+    $secret = svq_env('APP_KEY','SHOPVIVALIZ_APP_KEY','QUOTE_SIGNING_KEY');
+    if ($secret === '') svq_fail(503,'quote_signing_key_missing','A chave de assinatura de frete não está configurada.');
+    return $secret;
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') svq_fail(405,'method_not_allowed','Método não permitido.');
 $raw = file_get_contents('php://input') ?: '';
+if (strlen($raw) > 200000) svq_fail(413,'payload_too_large','O pedido excede o tamanho permitido.');
 $body = json_decode($raw, true);
 if (!is_array($body)) svq_fail(400,'invalid_json','Dados do pedido inválidos.');
+
+$requestedItems = is_array($body['items'] ?? null) ? $body['items'] : [];
+if ($requestedItems === []) svq_fail(422,'empty_items','O carrinho está vazio.');
+$resolved = svoa_resolve_items($requestedItems);
+if ($resolved['errors'] !== []) svq_fail(409,'order_items_invalid','Preço, estoque ou produto inválido.', ['items'=>$resolved['errors']]);
+
+$authoritativeBySku = [];
+foreach ($resolved['items'] as $item) $authoritativeBySku[strtolower((string)$item['sku'])] = $item;
+foreach ($requestedItems as $item) {
+    if (!is_array($item)) continue;
+    $sku = strtolower(trim((string)($item['sku'] ?? '')));
+    $server = $authoritativeBySku[$sku] ?? null;
+    if (!is_array($server)) svq_fail(404,'product_not_found','Um produto não foi encontrado.');
+    $clientPrice = round((float)($item['price'] ?? 0), 2);
+    if (abs($clientPrice - (float)$server['price']) > 0.009) svq_fail(409,'item_price_mismatch','O preço de um item foi alterado. Atualize o carrinho.', ['sku'=>$server['sku']]);
+}
 
 $shippingTotal = round(max(0.0, (float)($body['shipping_total'] ?? 0)), 2);
 $shippingCep = preg_replace('/\D+/', '', (string)($body['shipping_cep'] ?? $body['cep'] ?? ''));
 $serviceId = trim((string)($body['shipping_service'] ?? ''));
 $quoteId = trim((string)($body['shipping_quote_id'] ?? ''));
 $expiresAt = (int)($body['shipping_expires_at'] ?? 0);
-
-if ($shippingTotal > 0 || $serviceId !== '' || $quoteId !== '') {
-    if (strlen($shippingCep) !== 8 || $serviceId === '' || $quoteId === '' || $expiresAt <= 0) {
-        svq_fail(422,'invalid_shipping_quote','A cotação de frete está incompleta. Calcule novamente no carrinho.');
-    }
-    if ($expiresAt < time()) {
-        svq_fail(409,'shipping_quote_expired','A cotação de frete expirou. Calcule novamente no carrinho.');
-    }
-
-    $catalog = svq_catalog_map();
-    $fingerprintItems = [];
-    foreach ((array)($body['items'] ?? []) as $item) {
-        if (!is_array($item)) continue;
-        $sku = trim((string)($item['sku'] ?? ''));
-        $row = $catalog[strtolower($sku)] ?? null;
-        if (!is_array($row)) svq_fail(404,'product_not_found','Um produto do carrinho não foi encontrado para validar o frete.');
-        $fingerprintItems[] = [
-            'sku' => (string)($row['sku'] ?? $sku),
-            'quantity' => max(1, min(99, (int)($item['quantity'] ?? 1))),
-            'price' => round(max(1.0, (float)($row['price'] ?? 0)), 2),
-        ];
-    }
-    if ($fingerprintItems === []) svq_fail(422,'empty_items','O carrinho está vazio.');
-
-    $fingerprint = [
-        'cep' => $shippingCep,
-        'items' => $fingerprintItems,
-        'service_id' => $serviceId,
-        'price' => $shippingTotal,
-        'expires_at' => $expiresAt,
-    ];
-    $expected = hash_hmac('sha256', json_encode($fingerprint, JSON_UNESCAPED_SLASHES), svq_secret());
-    if (!hash_equals($expected, $quoteId)) {
-        svq_fail(409,'shipping_quote_invalid','O valor do frete foi alterado ou não corresponde à cotação. Calcule novamente.');
-    }
+if (strlen($shippingCep) !== 8 || $shippingTotal <= 0 || $serviceId === '' || $quoteId === '' || $expiresAt <= 0) {
+    svq_fail(422,'shipping_quote_required','Selecione uma cotação de frete válida antes de finalizar.');
 }
+if ($expiresAt < time()) svq_fail(409,'shipping_quote_expired','A cotação de frete expirou. Calcule novamente no carrinho.');
+
+$fingerprintItems = array_map(static fn(array $item): array => [
+    'sku' => (string)$item['sku'],
+    'quantity' => (int)$item['quantity'],
+    'price' => round((float)$item['price'], 2),
+], $resolved['items']);
+$fingerprint = ['cep'=>$shippingCep,'items'=>$fingerprintItems,'service_id'=>$serviceId,'price'=>$shippingTotal,'expires_at'=>$expiresAt];
+$expected = hash_hmac('sha256', json_encode($fingerprint, JSON_UNESCAPED_SLASHES), svq_secret());
+if (!hash_equals($expected, $quoteId)) svq_fail(409,'shipping_quote_invalid','O valor do frete foi alterado ou não corresponde à cotação. Calcule novamente.');
 
 require __DIR__ . '/create.php';
