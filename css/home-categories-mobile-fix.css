@@ -1,0 +1,11 @@
+/* Correção isolada para categorias da Home em telas pequenas. */
+.home-categories .home-scroller{overflow:visible;min-height:188px}
+.home-categories .categories-track{display:flex!important;gap:12px;overflow-x:auto;overflow-y:hidden;padding:8px 44px 14px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;min-height:172px}
+.home-categories .category-slide{display:flex!important;flex:0 0 148px;min-width:148px;min-height:154px;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:14px 10px;background:#fff;border:1px solid #e5e9f0;border-radius:14px;box-shadow:0 2px 12px rgba(17,24,39,.08);text-align:center;text-decoration:none;color:#111827;scroll-snap-align:start;visibility:visible!important;opacity:1!important}
+.home-categories .category-slide-image-wrapper{width:64px;height:64px;display:grid;place-items:center;border-radius:16px;background:#eef4ff}
+.home-categories .category-slide-icon{width:38px;height:38px;display:block;background:#173b63;border-radius:12px;position:relative}
+.home-categories .category-slide strong{display:block;max-width:100%;font-size:14px;line-height:1.25;overflow-wrap:anywhere}
+.home-categories .category-slide-count{font-size:12px;color:#6b7280}
+.home-categories .home-scroller-arrow{display:flex!important;z-index:20}
+@media(max-width:640px){.home-categories .container{width:min(100% - 20px,1180px)}.home-categories .section-heading{align-items:flex-start}.home-categories .section-heading .btn{white-space:nowrap}.home-categories .categories-track{padding-left:8px;padding-right:8px}.home-categories .home-scroller-arrow{display:none!important}.home-categories .category-slide{flex-basis:42vw;min-width:138px}}
+@media(prefers-reduced-motion:reduce){.home-categories .categories-track{scroll-behavior:auto}}
