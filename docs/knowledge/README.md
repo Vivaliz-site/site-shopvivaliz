@@ -21,6 +21,8 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 - [`order-request-security.md`](order-request-security.md) — contexto único, idempotência, rate limit e prevenção de pedidos duplicados.
 - [`order-processing.md`](order-processing.md) — locks atômicos, limpeza automática e proxy confiável.
 - [`order-context.md`](order-context.md) — leitura única do corpo e processamento somente após validação.
+- [`official-site.md`](official-site.md) — uso do domínio oficial como fonte institucional e comercial.
+- [`legal-source-map.md`](legal-source-map.md) — correspondência entre páginas oficiais e arquivos legais locais.
 
 Outros documentos existentes na pasta podem registrar versões, dispositivos, decisões históricas e referências específicas.
 
@@ -31,6 +33,7 @@ Outros documentos existentes na pasta podem registrar versões, dispositivos, de
 3. Valide o módulo correspondente no código.
 4. Use `testing.md` para reproduzir.
 5. Consulte `deploy.md` quando houver diferença entre repositório e produção.
-6. Registre lacunas na documentação ao encontrar comportamento novo.
+6. Consulte `official-site.md` quando a dúvida envolver conteúdo institucional, termos, categorias ou meios de pagamento.
+7. Registre lacunas na documentação ao encontrar comportamento novo.
 
 A documentação não substitui evidência do código, logs, banco, workflow ou resposta do servidor.
