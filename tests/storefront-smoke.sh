@@ -50,10 +50,14 @@ assert_status 200 "${BASE_URL}/index.php"
 assert_status 200 "${BASE_URL}/catalogo.php"
 assert_status 200 "${BASE_URL}/carrinho.php"
 assert_status 200 "${BASE_URL}/checkout.php"
+assert_status 200 "${BASE_URL}/api/catalog/category-images.php"
+assert_status 200 "${BASE_URL}/api/catalog/image-health.php"
 
 assert_contains "${BASE_URL}/catalogo.php" "Catálogo"
 assert_contains "${BASE_URL}/carrinho.php" "Carrinho"
 assert_contains "${BASE_URL}/checkout.php" "checkout-form"
+assert_contains "${BASE_URL}/api/catalog/category-images.php" '"ok":true'
+assert_contains "${BASE_URL}/api/catalog/image-health.php" '"image_health"'
 
 assert_status 405 "${BASE_URL}/api/orders/create-validated.php"
 assert_status 405 "${BASE_URL}/api/melhorenvio/shipping-check-v2.php"
