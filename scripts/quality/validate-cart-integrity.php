@@ -1,0 +1,3 @@
+<?php
+declare(strict_types=1);
+$required=['api/cart/validate.php','js/cart-server-validation-v92.js','js/checkout-cart-freshness-v93.js','css/cart-integrity-v94.css'];$errors=[];foreach($required as $file){$path=__DIR__.'/../../'.$file;if(!is_file($path))$errors[]="missing: $file";elseif(filesize($path)===0)$errors[]="empty: $file";}$endpoint=(string)@file_get_contents(__DIR__.'/../../api/cart/validate.php');foreach(['empty_cart','product_not_found','invalid_price','insufficient_stock'] as $token){if(!str_contains($endpoint,$token))$errors[]="cart endpoint missing: $token";}if($errors){fwrite(STDERR,implode(PHP_EOL,$errors).PHP_EOL);exit(1);}echo "Cart integrity validation passed.\n";
