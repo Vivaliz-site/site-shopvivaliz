@@ -1,0 +1,79 @@
+name: Storefront Quality
+
+on:
+  pull_request:
+    paths:
+      - '**/*.php'
+      - '**/*.js'
+      - '**/*.css'
+      - '.htaccess'
+      - '.github/workflows/storefront-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - '**/*.php'
+      - '**/*.js'
+      - '**/*.css'
+      - '.htaccess'
+
+permissions:
+  contents: read
+
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: Validate PHP syntax
+        run: |
+          set -e
+          find . -type f -name '*.php' \
+            -not -path './vendor/*' \
+            -not -path './node_modules/*' \
+            -print0 | xargs -0 -n1 php -l
+
+  storefront-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate canonical routes and required assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'RewriteRule ^carrinho/?$ carrinho.php [L]' .htaccess
+          grep -Fq 'RewriteRule ^checkout/?$ checkout.php [L]' .htaccess
+          test -f css/shopvivaliz-visual-v3.css
+          test -f css/catalog-conversion-v4.css
+          test -f css/product-conversion-v5.css
+          test -f css/checkout-conversion-v6.css
+          test -f css/shipping-v7.css
+          test -f js/shopvivaliz-visual-v3.js
+          test -f js/catalog-conversion-v4.js
+          test -f js/product-conversion-v5.js
+          test -f js/checkout-conversion-v6.js
+          test -f js/cart-shipping-v7.js
+          test -f js/checkout-shipping-v7.js
+          test -f api/melhorenvio/shipping-check-v2.php
+          grep -Fq '/api/melhorenvio/shipping-check-v2.php' js/cart-shipping-v7.js
+          grep -Fq 'shipping_quote_id' js/checkout-shipping-v7.js
+
+  javascript-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Validate storefront JavaScript syntax
+        run: |
+          set -e
+          node --check js/shopvivaliz-visual-v3.js
+          node --check js/catalog-conversion-v4.js
+          node --check js/product-conversion-v5.js
+          node --check js/checkout-conversion-v6.js
+          node --check js/cart-shipping-v7.js
+          node --check js/checkout-shipping-v7.js
