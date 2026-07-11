@@ -8,6 +8,23 @@
 
 ---
 
+## 2026-07-11 — Wildcards CSS reintroduzidos 10x, skeleton/hero quebrado recorrentemente
+
+- **Sintoma:** Hero section, categorias, e cards renderizando com layout destruído — acontecia múltiplas vezes por dia.
+- **Causa real:** Wildcard CSS `[class*="..."]` estava sendo reintroduzido continuamente em `css/visual-enhancements.css`.
+  O problema havia sido corrigido em 2026-07-09 (PR #226), mas agentes ou processos automáticos reabriam o arquivo
+  e reintroduziam o padrão perigoso.
+- **Correção PERMANENTE:** 
+  1. Instalado **pre-commit hook** (`.git/hooks/pre-commit`) que BLOQUEIA commits contendo `[class*=`, `[id*=`, etc.
+  2. Criado documento `CSS-WILDCARD-PREVENTION.md` com guia completo e checklist
+  3. Adicionada regra no Git Guardian para detecção secundária
+- **Onde:** `.git/hooks/pre-commit`, `CSS-WILDCARD-PREVENTION.md`, `CHANGELOG.md`
+- **Lição:** Wildcard CSS é uma **armadilha recorrente**. O hook agora torna impossível commitar wildcards,
+  mesmo que um agente/automação tente. Se precisar usar atributo-wildcard (raro), use `:is()` ou `:where()`
+  com seletores exatos, nunca `[class*=...]` direto.
+
+---
+
 ## 2026-07-09 — Home page com faixas laranja/azul empilhadas, carousel encolhido
 
 - **Sintoma:** hero e carousel da home renderizando com múltiplas faixas de gradiente laranja/azul
