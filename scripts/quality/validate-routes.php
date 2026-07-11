@@ -1,0 +1,3 @@
+<?php
+declare(strict_types=1);
+$htaccess=(string)@file_get_contents('.htaccess');$required=['RewriteRule ^carrinho/?$ carrinho.php [L]','RewriteRule ^checkout/?$ checkout.php [L]','RewriteRule ^api/orders/create\.php$ api/orders/create-validated.php [L]','RewriteRule ^produto/?$ produto.php [L]'];$errors=[];foreach($required as $rule){if(!str_contains($htaccess,$rule))$errors[]="missing route: $rule";}if($errors){fwrite(STDERR,implode(PHP_EOL,$errors).PHP_EOL);exit(1);}echo "Route validation passed.\n";
