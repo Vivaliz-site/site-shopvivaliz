@@ -19,6 +19,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 - [`cart-integrity.md`](cart-integrity.md) — validação server-side do carrinho.
 - [`order-integrity.md`](order-integrity.md) — validação autoritativa de itens, preço, estoque e frete.
 - [`order-request-security.md`](order-request-security.md) — contexto único, idempotência, rate limit e prevenção de pedidos duplicados.
+- [`order-processing.md`](order-processing.md) — locks atômicos, limpeza automática e proxy confiável.
 
 Outros documentos existentes na pasta podem registrar versões, dispositivos, decisões históricas e referências específicas.
 
