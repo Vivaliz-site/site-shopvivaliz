@@ -20846,3 +20846,80 @@ From https://github.com/Vivaliz-site/site-shopvivaliz
 Already up to date.
 [2026-07-11 23:54:01] ✅ Git pull OK
 [2026-07-11 23:54:01] 📝 Commitando mudanças...
+[main 9471993] auto: sincronizar 2026-07-11 23:54:01
+ 3 files changed, 69 insertions(+)
+[2026-07-11 23:54:01] ✅ Commit OK
+[2026-07-11 23:54:01] 📤 Enviando 1 commit(s)...
+To https://github.com/Vivaliz-site/site-shopvivaliz.git
+   4715dd5..9471993  main -> main
+[2026-07-11 23:54:03] ✅ Push OK
+[2026-07-11 23:54:03] ✅ Ciclo concluído
+[2026-07-11 23:54:03] ⏰ Próximo em 5 minutos...
+[2026-07-11 23:59:03] 
+[2026-07-11 23:59:03] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-07-11 23:59:03] 🔄 Sincronizando secrets do GitHub...
+============================================================
+🔐 ShopVivaliz - Sincronizador de Secrets (Linux/macOS)
+============================================================
+
+Verificando GitHub CLI...
+✓ GitHub CLI encontrado
+
+📝 Gerando .env.local...
+✓ Criado: /home/ubuntu/site-shopvivaliz/.env.local
+
+============================================================
+✅ SINCRONIZAÇÃO CONCLUÍDA!
+============================================================
+
+Próximos passos:
+  1. Validar secrets: python3 scripts/validar_secrets.py
+  2. Ativar auto-sync: bash scripts/auto_sync_git.ps1
+
+[2026-07-11 23:59:03] ✅ Secrets sincronizados com sucesso
+[SECURITY] ShopVivaliz - Validador de Secrets
+============================================================
+
+[ERROR] ERRO - Secrets obrigatórios faltando:
+
+  ❌ ANTHROPIC_API_KEY (Claude API) - AUSENTE
+  ❌ SHOPEE_PARTNER_ID (Shopee Partner ID) - AUSENTE
+  ❌ SHOPEE_PARTNER_KEY (Shopee Partner Key) - AUSENTE
+
+📝 Solução:
+  1. Copie .env.example para .env.local
+  2. Preencha os valores reais em .env.local
+  3. Execute este validador novamente
+
+  Variáveis obrigatórias:
+    • ANTHROPIC_API_KEY: Claude API
+    • SHOPEE_PARTNER_ID: Shopee Partner ID
+    • SHOPEE_PARTNER_KEY: Shopee Partner Key
+    • FTP_SERVER: FTP Server
+    • FTP_USERNAME: FTP Username
+    • FTP_PASSWORD: FTP Password
+    • MAIL_PASS: Email Password
+[2026-07-11 23:59:03] ⚠️  Validação teve aviso (continuando...)
+[2026-07-11 23:59:03] 🔄 Sincronizando repositório...
+From https://github.com/Vivaliz-site/site-shopvivaliz
+ * branch            main       -> FETCH_HEAD
+   9471993..feefb41  main       -> origin/main
+Updating 9471993..feefb41
+Fast-forward
+ .github/sensitive-paths.txt                      |  30 +++++
+ .github/workflows/master-production-pipeline.yml |  67 ++++++---
+ .github/workflows/promote-staging-to-main.yml    | 107 +++++++++++++++
+ .github/workflows/real-e2e-gate.yml              |  64 +++++++++
+ QUICK-STATUS.md                                  |  96 +++++++++++++
+ SETUP-ORACLE-VM-SSH.md                           | 130 ++++++++++++++++++
+ VM-IMPROVEMENTS-2026-07-10.md                    | 165 +++++++++++++++++++++++
+ tests/fluxo-compra.spec.ts                       | 101 ++++++--------
+ 8 files changed, 680 insertions(+), 80 deletions(-)
+ create mode 100644 .github/sensitive-paths.txt
+ create mode 100644 .github/workflows/promote-staging-to-main.yml
+ create mode 100644 .github/workflows/real-e2e-gate.yml
+ create mode 100644 QUICK-STATUS.md
+ create mode 100644 SETUP-ORACLE-VM-SSH.md
+ create mode 100644 VM-IMPROVEMENTS-2026-07-10.md
+[2026-07-11 23:59:04] ✅ Git pull OK
+[2026-07-11 23:59:04] 📝 Commitando mudanças...
