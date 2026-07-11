@@ -6,7 +6,10 @@ on:
       - '**/*.php'
       - '**/*.js'
       - '**/*.css'
+      - '**/*.md'
       - '.htaccess'
+      - 'tests/**'
+      - 'scripts/quality/**'
       - '.github/workflows/storefront-quality.yml'
   push:
     branches: [main]
@@ -14,7 +17,10 @@ on:
       - '**/*.php'
       - '**/*.js'
       - '**/*.css'
+      - '**/*.md'
       - '.htaccess'
+      - 'tests/**'
+      - 'scripts/quality/**'
 
 permissions:
   contents: read
@@ -61,6 +67,17 @@ jobs:
           grep -Fq '/api/melhorenvio/shipping-check-v2.php' js/cart-shipping-v7.js
           grep -Fq 'shipping_quote_id' js/checkout-shipping-v7.js
 
+  quality-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: Run ShopVivaliz quality gates
+        run: php scripts/quality/run-all.php
+
   javascript-syntax:
     runs-on: ubuntu-latest
     steps:
@@ -71,9 +88,15 @@ jobs:
       - name: Validate storefront JavaScript syntax
         run: |
           set -e
-          node --check js/shopvivaliz-visual-v3.js
-          node --check js/catalog-conversion-v4.js
-          node --check js/product-conversion-v5.js
-          node --check js/checkout-conversion-v6.js
-          node --check js/cart-shipping-v7.js
-          node --check js/checkout-shipping-v7.js
+          find js -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+
+  storefront-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: Run storefront smoke tests
+        run: bash tests/storefront-smoke.sh

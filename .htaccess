@@ -27,6 +27,9 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^storage/ - [F,L]
     RewriteRule ^logs/ - [F,L]
 
+    # Valida frete no servidor antes de criar o pedido
+    RewriteRule ^api/orders/create\.php$ api/orders/create-validated.php [L]
+
     # Mantem o dashboard operacional isolado na subpasta /claude/
     RewriteRule ^claude/?$ claude/index.php [L]
     RewriteRule ^claude/(.*)$ claude/$1 [L]
