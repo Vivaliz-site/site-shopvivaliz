@@ -1,0 +1,106 @@
+.home-categories .home-scroller{
+  display:grid;
+  grid-template-columns:44px minmax(0,1fr) 44px;
+  gap:10px;
+  align-items:center;
+  overflow:visible;
+}
+
+.home-categories .home-scroller-track{
+  display:grid;
+  grid-auto-flow:column;
+  grid-auto-columns:minmax(168px, 220px);
+  gap:14px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding:8px 2px 12px;
+  scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;
+}
+
+.home-categories .category-slide{
+  display:grid;
+  min-width:0;
+  width:100%;
+  grid-template-rows:auto auto auto;
+  gap:8px;
+  scroll-snap-align:start;
+  visibility:visible;
+  opacity:1;
+}
+
+.home-categories .category-slide-image-wrapper{
+  position:relative;
+  width:100%;
+  height:150px;
+  margin-bottom:8px;
+  overflow:hidden;
+  border-radius:14px;
+  background:linear-gradient(135deg,#f5f9fc 0%,#e9f4ee 100%);
+}
+
+.home-categories .category-slide-icon,
+.home-categories .category-slide-real-image{
+  display:block;
+  width:100%;
+  height:100%;
+}
+
+.home-categories .category-slide-icon{
+  border-radius:0;
+  background-size:cover;
+  background-position:center;
+}
+
+.home-categories .category-slide-real-image{
+  object-fit:contain;
+  padding:10px;
+  background:#fff;
+}
+
+.home-categories .category-slide strong,
+.home-categories .category-slide-count{
+  display:block;
+  overflow-wrap:anywhere;
+}
+
+.home-categories .home-scroller-arrow{
+  position:static;
+  transform:none;
+  flex:0 0 auto;
+}
+
+@media (max-width:720px){
+  .home-categories .section-heading .btn{
+    width:100%;
+    text-align:center;
+  }
+
+  .home-categories .home-scroller{
+    display:block;
+    overflow:visible;
+  }
+
+  .home-categories .home-scroller-track{
+    grid-auto-columns:minmax(76vw, 290px);
+    padding:6px 0 14px;
+    scrollbar-width:none;
+  }
+
+  .home-categories .home-scroller-track::-webkit-scrollbar{
+    display:none;
+  }
+
+  .home-categories .home-scroller-arrow{
+    display:none;
+  }
+
+  .home-categories .category-slide{
+    min-height:245px;
+    padding:16px;
+  }
+
+  .home-categories .category-slide-image-wrapper{
+    height:155px;
+  }
+}
