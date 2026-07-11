@@ -20,6 +20,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 - [`order-integrity.md`](order-integrity.md) — validação autoritativa de itens, preço, estoque e frete.
 - [`order-request-security.md`](order-request-security.md) — contexto único, idempotência, rate limit e prevenção de pedidos duplicados.
 - [`order-processing.md`](order-processing.md) — locks atômicos, limpeza automática e proxy confiável.
+- [`order-context.md`](order-context.md) — leitura única do corpo e processamento somente após validação.
 
 Outros documentos existentes na pasta podem registrar versões, dispositivos, decisões históricas e referências específicas.
 
