@@ -77,6 +77,5 @@ if (!hash_equals($expected, $quoteId)) svq_fail(409,'shipping_quote_invalid','O 
 $idempotencyKey = svoi_key($body, $resolved['items']);
 if (!svoi_claim($idempotencyKey)) svq_fail(409,'duplicate_order_request','Este pedido já está sendo processado ou foi enviado recentemente.');
 svorc_set($body, $resolved['items']);
-$GLOBALS['shopvivaliz_order_raw'] = $raw;
 
-require __DIR__ . '/create.php';
+require __DIR__ . '/process-validated.php';
