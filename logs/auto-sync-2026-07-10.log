@@ -4169,3 +4169,85 @@ Fast-forward
  create mode 100644 tests/storefront-smoke.sh
 [2026-07-11 00:44:13] ✅ Git pull OK
 [2026-07-11 00:44:13] 📝 Commitando mudanças...
+[main 03926e2] auto: sincronizar 2026-07-11 00:44:13
+ 2 files changed, 95 insertions(+)
+[2026-07-11 00:44:13] ✅ Commit OK
+[2026-07-11 00:44:13] 📤 Enviando 1 commit(s)...
+To https://github.com/Vivaliz-site/site-shopvivaliz.git
+   23d81b0..03926e2  main -> main
+[2026-07-11 00:44:15] ✅ Push OK
+[2026-07-11 00:44:15] ✅ Ciclo concluído
+[2026-07-11 00:44:15] ⏰ Próximo em 5 minutos...
+[2026-07-11 00:49:15] 
+[2026-07-11 00:49:15] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-07-11 00:49:15] 🔄 Sincronizando secrets do GitHub...
+============================================================
+🔐 ShopVivaliz - Sincronizador de Secrets (Linux/macOS)
+============================================================
+
+Verificando GitHub CLI...
+✓ GitHub CLI encontrado
+
+📝 Gerando .env.local...
+✓ Criado: /home/ubuntu/site-shopvivaliz/.env.local
+
+============================================================
+✅ SINCRONIZAÇÃO CONCLUÍDA!
+============================================================
+
+Próximos passos:
+  1. Validar secrets: python3 scripts/validar_secrets.py
+  2. Ativar auto-sync: bash scripts/auto_sync_git.ps1
+
+[2026-07-11 00:49:15] ✅ Secrets sincronizados com sucesso
+[SECURITY] ShopVivaliz - Validador de Secrets
+============================================================
+
+[ERROR] ERRO - Secrets obrigatórios faltando:
+
+  ❌ ANTHROPIC_API_KEY (Claude API) - AUSENTE
+  ❌ SHOPEE_PARTNER_ID (Shopee Partner ID) - AUSENTE
+  ❌ SHOPEE_PARTNER_KEY (Shopee Partner Key) - AUSENTE
+
+📝 Solução:
+  1. Copie .env.example para .env.local
+  2. Preencha os valores reais em .env.local
+  3. Execute este validador novamente
+
+  Variáveis obrigatórias:
+    • ANTHROPIC_API_KEY: Claude API
+    • SHOPEE_PARTNER_ID: Shopee Partner ID
+    • SHOPEE_PARTNER_KEY: Shopee Partner Key
+    • FTP_SERVER: FTP Server
+    • FTP_USERNAME: FTP Username
+    • FTP_PASSWORD: FTP Password
+    • MAIL_PASS: Email Password
+[2026-07-11 00:49:15] ⚠️  Validação teve aviso (continuando...)
+[2026-07-11 00:49:15] 🔄 Sincronizando repositório...
+From https://github.com/Vivaliz-site/site-shopvivaliz
+ * branch            main       -> FETCH_HEAD
+   03926e2..e936a13  main       -> origin/main
+Updating 03926e2..e936a13
+Fast-forward
+ css/loading-states-v21.css    |  1 +
+ css/network-status-v22.css    |  1 +
+ css/print-v27.css             |  1 +
+ includes/navbar.php           | 11 +++++++++--
+ js/cart-persistence-v23.js    |  1 +
+ js/install-prompt-v29.js      |  1 +
+ js/offline-status-v22.js      |  1 +
+ js/recently-viewed-v24.js     |  1 +
+ js/search-enhancements-v25.js |  1 +
+ js/storefront-events-v26.js   |  1 +
+ 10 files changed, 18 insertions(+), 2 deletions(-)
+ create mode 100644 css/loading-states-v21.css
+ create mode 100644 css/network-status-v22.css
+ create mode 100644 css/print-v27.css
+ create mode 100644 js/cart-persistence-v23.js
+ create mode 100644 js/install-prompt-v29.js
+ create mode 100644 js/offline-status-v22.js
+ create mode 100644 js/recently-viewed-v24.js
+ create mode 100644 js/search-enhancements-v25.js
+ create mode 100644 js/storefront-events-v26.js
+[2026-07-11 00:49:16] ✅ Git pull OK
+[2026-07-11 00:49:16] 📝 Commitando mudanças...
