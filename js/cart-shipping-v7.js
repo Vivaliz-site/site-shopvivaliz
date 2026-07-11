@@ -9,6 +9,7 @@
   function money(v){return 'R$ '+Number(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');}
   function subtotal(){return cart().reduce(function(sum,item){return sum+(Number(item.price)||0)*(Number(item.quantity)||1);},0);}
   function save(quote){localStorage.setItem('shopvivaliz_shipping_quote',JSON.stringify(quote));}
+  function makeQuote(option,cep){return{cep:cep,total:Number(option.price)||0,option:option,label:(option.company?option.company+' - ':'')+(option.name||'Frete'),quote_id:option.quote_id||'',expires_at:Number(option.expires_at)||0,provider:'melhorenvio'};}
   function renderOptions(options,cep){
     if(!status)return;
     status.innerHTML='';
@@ -19,10 +20,7 @@
       label.className='sv-shipping-option';
       label.innerHTML='<input type="radio" name="sv_shipping_option" '+(index===0?'checked':'')+'><span><strong>'+String(option.name||option.company||'Frete')+'</strong><small>'+(option.delivery_time?('Entrega em até '+option.delivery_time+' dias úteis'):'Prazo informado no checkout')+'</small></span><b>'+money(option.price)+'</b>';
       label.querySelector('input').addEventListener('change',function(){
-        var quote=JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote')||'{}');
-        quote.total=Number(option.price)||0;
-        quote.option=option;
-        quote.label=(option.company?option.company+' - ':'')+(option.name||'Frete');
+        var quote=makeQuote(option,cep);
         save(quote);
         if(frete)frete.textContent=money(quote.total);
         if(totalEl)totalEl.textContent=money(subtotal()+quote.total);
@@ -46,7 +44,7 @@
         if(!result.ok||!result.data.ok){localStorage.removeItem('shopvivaliz_shipping_quote');if(frete)frete.textContent='Indisponível';if(status)status.textContent=result.data.message||'Não foi possível calcular o frete agora.';return;}
         var options=result.data.shipping_options||[];
         var selected=result.data.selected_option||options[0];
-        var quote={cep:cep,total:Number(selected.price)||0,option:selected,label:(selected.company?selected.company+' - ':'')+(selected.name||'Frete'),quote_id:result.data.quote_id||'',expires_at:Number(result.data.expires_at)||0,provider:'melhorenvio'};
+        var quote=makeQuote(selected,cep);
         save(quote);
         if(frete)frete.textContent=money(quote.total);
         if(totalEl)totalEl.textContent=money(subtotal()+quote.total);
