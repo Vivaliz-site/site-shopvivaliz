@@ -7,6 +7,7 @@ on:
       - '**/*.js'
       - '**/*.css'
       - '.htaccess'
+      - 'tests/**'
       - '.github/workflows/storefront-quality.yml'
   push:
     branches: [main]
@@ -15,6 +16,7 @@ on:
       - '**/*.js'
       - '**/*.css'
       - '.htaccess'
+      - 'tests/**'
 
 permissions:
   contents: read
@@ -46,6 +48,7 @@ jobs:
           set -euo pipefail
           grep -Fq 'RewriteRule ^carrinho/?$ carrinho.php [L]' .htaccess
           grep -Fq 'RewriteRule ^checkout/?$ checkout.php [L]' .htaccess
+          grep -Fq 'RewriteRule ^api/orders/create\.php$ api/orders/create-validated.php [L]' .htaccess
           test -f css/shopvivaliz-visual-v3.css
           test -f css/catalog-conversion-v4.css
           test -f css/product-conversion-v5.css
@@ -58,8 +61,10 @@ jobs:
           test -f js/cart-shipping-v7.js
           test -f js/checkout-shipping-v7.js
           test -f api/melhorenvio/shipping-check-v2.php
+          test -f api/orders/create-validated.php
           grep -Fq '/api/melhorenvio/shipping-check-v2.php' js/cart-shipping-v7.js
           grep -Fq 'shipping_quote_id' js/checkout-shipping-v7.js
+          grep -Fq 'hash_equals' api/orders/create-validated.php
 
   javascript-syntax:
     runs-on: ubuntu-latest
@@ -77,3 +82,14 @@ jobs:
           node --check js/checkout-conversion-v6.js
           node --check js/cart-shipping-v7.js
           node --check js/checkout-shipping-v7.js
+
+  storefront-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: Run storefront smoke tests
+        run: bash tests/storefront-smoke.sh
