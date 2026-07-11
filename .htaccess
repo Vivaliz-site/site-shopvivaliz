@@ -12,11 +12,20 @@
 # Charset UTF-8
 AddCharset UTF-8 .html .txt .php .json
 
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    Header always set X-Frame-Options "SAMEORIGIN"
+</IfModule>
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Nunca expor arquivos internos de configuracao
+    # Nunca expor arquivos internos de configuracao e operacao
     RewriteRule ^config/ - [F,L]
+    RewriteRule ^storage/ - [F,L]
+    RewriteRule ^logs/ - [F,L]
 
     # Mantem o dashboard operacional isolado na subpasta /claude/
     RewriteRule ^claude/?$ claude/index.php [L]
@@ -48,8 +57,8 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^home/?$ home.php [L]
     RewriteRule ^produtos/?$ catalogo.php [L]
     RewriteRule ^catalogo/?$ catalogo.php [L]
-    RewriteRule ^carrinho/?$ carrinho/index.php [L]
-    RewriteRule ^checkout/?$ checkout-v2/index.php [L]
+    RewriteRule ^carrinho/?$ carrinho.php [L]
+    RewriteRule ^checkout/?$ checkout.php [L]
     RewriteRule ^sobre/?$ sobre/index.php [L]
     RewriteRule ^contato/?$ contato/index.php [L]
     RewriteRule ^faq/?$ faq/index.php [L]
@@ -61,7 +70,7 @@ AddCharset UTF-8 .html .txt .php .json
 </IfModule>
 
 <IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json image/svg+xml
 </IfModule>
 
 <IfModule mod_expires.c>
@@ -69,6 +78,8 @@ AddCharset UTF-8 .html .txt .php .json
     ExpiresByType image/jpeg "access plus 30 days"
     ExpiresByType image/png "access plus 30 days"
     ExpiresByType image/webp "access plus 30 days"
+    ExpiresByType image/avif "access plus 30 days"
+    ExpiresByType image/svg+xml "access plus 30 days"
     ExpiresByType text/css "access plus 30 days"
     ExpiresByType application/javascript "access plus 30 days"
 </IfModule>
