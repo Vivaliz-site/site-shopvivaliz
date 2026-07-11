@@ -218,6 +218,9 @@ $svNavCurrent = '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Vivaliz - Loja online com produtos de qualidade. Rodízios, ferragens, utilidades e muito mais. Compre com segurança.">
     <meta name="theme-color" content="#173B63">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <meta property="og:title" content="Vivaliz | Loja Online">
     <meta property="og:description" content="Catálogo com produtos de qualidade. Compre online com entrega rápida.">
     <meta property="og:image" content="/images/logo-vivaliz-square.png">
@@ -232,10 +235,10 @@ $svNavCurrent = '';
 
     <title>Vivaliz | Loja Online</title>
 
-    <link rel="stylesheet" href="/css/style.css?v=1783682044?v=2026-07-09-1506">
-    <link rel="stylesheet" href="/css/category-images.css?v=2026-07-09-1506">
-    <link rel="stylesheet" href="/css/visual-enhancements.css?v=2026-07-09-1506">
-    <link rel="stylesheet" href="/css/visual-improvements-2026.css?v=2026-07-10-1400">
+    <link rel="stylesheet" href="/css/style.css?v=2026-07-10-1130-WILDCARD-FIX">
+    <link rel="stylesheet" href="/css/category-images.css?v=2026-07-10-1130-WILDCARD-FIX">
+    <link rel="stylesheet" href="/css/visual-enhancements.css?v=2026-07-10-1130-WILDCARD-FIX">
+    <link rel="stylesheet" href="/css/visual-improvements-2026.css?v=2026-07-10-1130-WILDCARD-FIX">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
