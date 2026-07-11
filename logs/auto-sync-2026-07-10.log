@@ -4720,3 +4720,80 @@ Fast-forward
  create mode 100644 scripts/quality/validate-cart-integrity.php
 [2026-07-11 01:24:36] ✅ Git pull OK
 [2026-07-11 01:24:36] 📝 Commitando mudanças...
+[main ac26525] auto: sincronizar 2026-07-11 01:24:36
+ 2 files changed, 87 insertions(+)
+[2026-07-11 01:24:36] ✅ Commit OK
+[2026-07-11 01:24:36] 📤 Enviando 1 commit(s)...
+To https://github.com/Vivaliz-site/site-shopvivaliz.git
+   cb42f84..ac26525  main -> main
+[2026-07-11 01:24:38] ✅ Push OK
+[2026-07-11 01:24:38] ✅ Ciclo concluído
+[2026-07-11 01:24:38] ⏰ Próximo em 5 minutos...
+[2026-07-11 01:29:38] 
+[2026-07-11 01:29:38] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-07-11 01:29:38] 🔄 Sincronizando secrets do GitHub...
+============================================================
+🔐 ShopVivaliz - Sincronizador de Secrets (Linux/macOS)
+============================================================
+
+Verificando GitHub CLI...
+✓ GitHub CLI encontrado
+
+📝 Gerando .env.local...
+✓ Criado: /home/ubuntu/site-shopvivaliz/.env.local
+
+============================================================
+✅ SINCRONIZAÇÃO CONCLUÍDA!
+============================================================
+
+Próximos passos:
+  1. Validar secrets: python3 scripts/validar_secrets.py
+  2. Ativar auto-sync: bash scripts/auto_sync_git.ps1
+
+[2026-07-11 01:29:38] ✅ Secrets sincronizados com sucesso
+[SECURITY] ShopVivaliz - Validador de Secrets
+============================================================
+
+[ERROR] ERRO - Secrets obrigatórios faltando:
+
+  ❌ ANTHROPIC_API_KEY (Claude API) - AUSENTE
+  ❌ SHOPEE_PARTNER_ID (Shopee Partner ID) - AUSENTE
+  ❌ SHOPEE_PARTNER_KEY (Shopee Partner Key) - AUSENTE
+
+📝 Solução:
+  1. Copie .env.example para .env.local
+  2. Preencha os valores reais em .env.local
+  3. Execute este validador novamente
+
+  Variáveis obrigatórias:
+    • ANTHROPIC_API_KEY: Claude API
+    • SHOPEE_PARTNER_ID: Shopee Partner ID
+    • SHOPEE_PARTNER_KEY: Shopee Partner Key
+    • FTP_SERVER: FTP Server
+    • FTP_USERNAME: FTP Username
+    • FTP_PASSWORD: FTP Password
+    • MAIL_PASS: Email Password
+[2026-07-11 01:29:38] ⚠️  Validação teve aviso (continuando...)
+[2026-07-11 01:29:38] 🔄 Sincronizando repositório...
+From https://github.com/Vivaliz-site/site-shopvivaliz
+ * branch            main       -> FETCH_HEAD
+   ac26525..bcb3872  main       -> origin/main
+Updating ac26525..bcb3872
+Fast-forward
+ api/orders/create-validated.php                 | 87 ++++++++++---------------
+ api/orders/health.php                           | 13 ++++
+ docs/knowledge/README.md                        |  6 ++
+ docs/knowledge/order-integrity.md               | 39 +++++++++++
+ includes/order-authoritative.php                | 49 ++++++++++++++
+ scripts/quality/run-all.php                     |  2 +-
+ scripts/quality/validate-endpoint-contracts.php |  2 +-
+ scripts/quality/validate-knowledge.php          |  2 +-
+ scripts/quality/validate-order-integrity.php    |  6 ++
+ tests/storefront-smoke.sh                       |  3 +
+ 10 files changed, 154 insertions(+), 55 deletions(-)
+ create mode 100644 api/orders/health.php
+ create mode 100644 docs/knowledge/order-integrity.md
+ create mode 100644 includes/order-authoritative.php
+ create mode 100644 scripts/quality/validate-order-integrity.php
+[2026-07-11 01:29:39] ✅ Git pull OK
+[2026-07-11 01:29:39] 📝 Commitando mudanças...
