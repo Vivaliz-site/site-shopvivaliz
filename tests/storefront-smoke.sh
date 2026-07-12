@@ -10,11 +10,12 @@ cleanup() {
   if [ $exit_code -ne 0 ]; then
     echo "=== ERROR: Script exited with code $exit_code ==="
     echo "=== PHP Server Logs ==="
-    cat "$TMPDIR/shopvivaliz-php-server.log" 2>/dev/null || true
+    [ -f "$TMPDIR/shopvivaliz-php-server.log" ] && cat "$TMPDIR/shopvivaliz-php-server.log" || true
   fi
   if [[ -n "${PHP_SERVER_PID}" ]] && kill -0 "${PHP_SERVER_PID}" 2>/dev/null; then
     kill "${PHP_SERVER_PID}" || true
   fi
+  rm -rf "$TMPDIR" 2>/dev/null || true
 }
 trap cleanup EXIT
 
