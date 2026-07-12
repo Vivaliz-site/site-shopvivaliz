@@ -12,6 +12,8 @@ export default defineConfig({
   ],
   use: {
     baseURL: 'https://dev.shopvivaliz.com.br',
+    actionTimeout: 10 * 1000,
+    navigationTimeout: 25 * 1000,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -25,6 +27,8 @@ export default defineConfig({
   ],
 
   webServer: undefined,
-  globalTimeout: 30 * 60 * 1000,
-  timeout: 5 * 60 * 1000,
+  // Must finish before the 15-minute GitHub Actions job timeout. Individual
+  // pages must fail fast instead of hanging forever on `networkidle`.
+  globalTimeout: 12 * 60 * 1000,
+  timeout: 45 * 1000,
 });

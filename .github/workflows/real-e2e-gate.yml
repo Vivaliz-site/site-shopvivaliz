@@ -46,7 +46,7 @@ jobs:
 
       - name: Rodar suite E2E completa
         id: run_tests
-        run: npx playwright test --reporter=list,html
+        run: timeout --signal=TERM --kill-after=30s 12m npx playwright test --reporter=list,html
         continue-on-error: true
 
       - name: Upload relatorio HTML
