@@ -82,18 +82,12 @@ jobs:
           cp tasks-queue-activate.json tasks-queue.json
           
           git add tasks-queue.json tasks-queue-activate.json
-          git commit -m "feat: ativar integrações Shopee, Mercado Livre, Google Ads 24/7
-
-- SHOPEE: Sincronizar catálogo e pedidos
-- MERCADO LIVRE: Integração completa de catálogo
-- GOOGLE ADS: Setup para automação de campanhas
-- AUDITORIA: Monitoramento contínuo 24/7
-
-Credenciais validadas nos GitHub Secrets.
-Execução contínua a cada 6 horas.
-
-Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>" && \
-          git push origin main || echo "Branch já atualizada"
+          if git diff --cached --quiet; then
+            echo "Sem alteracoes na fila."
+          else
+            git commit -m "feat: ativar integracoes 24/7"
+            git push origin main || echo "Branch ja atualizada"
+          fi
 
       - name: ✅ Status Final
         run: |

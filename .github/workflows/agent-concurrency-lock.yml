@@ -55,7 +55,7 @@ jobs:
           path: .agent-locks/
           retention-days: 1
 
-release-lock:
+  release-lock:
     runs-on: ubuntu-latest
     needs: acquire-lock
     if: needs.acquire-lock.outputs.lock_acquired == 'true'
