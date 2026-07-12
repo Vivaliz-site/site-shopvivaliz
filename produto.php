@@ -467,8 +467,8 @@ if ($notFound) {
                 </div>
                 <div class="produto-actions">
                     <?php if ($priceRaw > 0 && $stockRaw > 0): ?>
-                        <button class="btn btn-primary btn-large btn-cta" type="button" id="buy-now" style="width: 100%; font-size: 1.2rem; font-weight: bold; background-color: #28a745; border-color: #28a745; box-shadow: 0 4px 6px rgba(40,167,69,0.3); transition: transform 0.2s, box-shadow 0.2s;">
-                            ✅ COMPRAR AGORA
+                        <button class="btn btn-primary btn-large btn-cta btn-premium" type="button" id="buy-now" style="width: 100%; font-size: 1.2rem;">
+                            🛒 COMPRAR AGORA
                         </button>
                     <?php elseif ($priceRaw > 0 && $stockRaw <= 0): ?>
                         <div class="stock-alert-form" id="stock-alert-form" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;">
