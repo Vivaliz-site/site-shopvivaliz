@@ -38,6 +38,20 @@
                     <a href="/contato">Fale Conosco</a>
                 </div>
             </div>
-            <p class="footer-copy">&copy; <?= date('Y') ?> Vivaliz. Todos os direitos reservados.</p>
+
+            <!-- Dados Obrigatórios da Empresa (Lei nº 12.842/2013) -->
+            <div class="footer-legal" style="border-top: 1px solid #ddd; margin-top: 20px; padding-top: 15px; font-size: 12px; color: #999; line-height: 1.6;">
+                <p style="margin: 0 0 8px 0;">
+                    <strong><?= htmlspecialchars($companyName) ?></strong> |
+                    CNPJ: <?= htmlspecialchars($companyCNPJ) ?> |
+                    Telefone: <?= htmlspecialchars($companyPhone) ?> |
+                    E-mail: <a href="mailto:<?= htmlspecialchars($companyEmail) ?>" style="color: #999; text-decoration: none;"><?= htmlspecialchars($companyEmail) ?></a>
+                </p>
+                <p style="margin: 0;">
+                    Endereço: <?= htmlspecialchars($companyAddress) ?>
+                </p>
+            </div>
+
+            <p class="footer-copy" style="margin-top: 15px;">&copy; <?= date('Y') ?> <?= htmlspecialchars($companyName) ?>. Todos os direitos reservados.</p>
         </div>
     </footer>
