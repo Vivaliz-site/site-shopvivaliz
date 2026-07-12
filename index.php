@@ -230,6 +230,7 @@ $svNavCurrent = '';
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Vivaliz | Loja Online">
     <meta name="twitter:description" content="Catálogo com produtos de qualidade. Compre online com entrega rápida.">
+    <meta name="twitter:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square.png">
     <link rel="canonical" href="https://shopvivaliz.com.br/">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
 
