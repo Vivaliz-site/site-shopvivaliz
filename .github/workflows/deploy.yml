@@ -206,7 +206,7 @@ jobs:
           echo "Testando conexão FTP..."
           echo "Host: ***"
           RAW_SERVER="$(printf '%s' "${FTP_SERVER_VALUE}" | tr -d '\r\n\t ' )"
-          RAW_PORT="$(printf '%s' "${FTP_PORT_VALUE:-21}" | tr -d '\r\n\t ' )"
+          RAW_PORT="$(printf '%s' "${FTP_PORT_VALUE:-21}" | tr -cd '0-9')"
           PORT="${RAW_PORT:-21}"
           echo "Port: ${PORT}"
           echo "User: ***"
@@ -251,7 +251,7 @@ jobs:
         shell: bash
         run: |
           RAW_SERVER="$(printf '%s' "${FTP_SERVER_VALUE}" | tr -d '\r\n\t ' )"
-          RAW_PORT="$(printf '%s' "${FTP_PORT_VALUE:-21}" | tr -d '\r\n\t ' )"
+          RAW_PORT="$(printf '%s' "${FTP_PORT_VALUE:-21}" | tr -cd '0-9')"
           RAW_DIR="$(printf '%s' "${FTP_REMOTE_DIR_VALUE}" | tr -d '\r' )"
 
           FTP_HOST="${RAW_SERVER#ftp://}"
