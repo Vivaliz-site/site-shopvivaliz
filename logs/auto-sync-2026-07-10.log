@@ -27255,3 +27255,129 @@ From https://github.com/Vivaliz-site/site-shopvivaliz
 Already up to date.
 [2026-07-12 08:34:19] ✅ Git pull OK
 [2026-07-12 08:34:19] 📝 Commitando mudanças...
+[main fcefe666] auto: sincronizar 2026-07-12 08:34:19
+ 1 file changed, 60 insertions(+)
+[2026-07-12 08:34:19] ✅ Commit OK
+[2026-07-12 08:34:19] 📤 Enviando 1 commit(s)...
+To https://github.com/Vivaliz-site/site-shopvivaliz.git
+   f174751d..fcefe666  main -> main
+[2026-07-12 08:34:21] ✅ Push OK
+[2026-07-12 08:34:21] ✅ Ciclo concluído
+[2026-07-12 08:34:21] ⏰ Próximo em 5 minutos...
+[2026-07-12 08:39:21] 
+[2026-07-12 08:39:21] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-07-12 08:39:21] 🔄 Sincronizando secrets do GitHub...
+============================================================
+🔐 ShopVivaliz - Sincronizador de Secrets (Linux/macOS)
+============================================================
+
+Verificando GitHub CLI...
+✓ GitHub CLI encontrado
+
+📝 Gerando .env.local...
+✓ Criado: /home/ubuntu/site-shopvivaliz/.env.local
+
+============================================================
+✅ SINCRONIZAÇÃO CONCLUÍDA!
+============================================================
+
+Próximos passos:
+  1. Validar secrets: python3 scripts/validar_secrets.py
+  2. Ativar auto-sync: bash scripts/auto_sync_git.ps1
+
+[2026-07-12 08:39:21] ✅ Secrets sincronizados com sucesso
+[SECURITY] ShopVivaliz - Validador de Secrets
+============================================================
+
+[ERROR] ERRO - Secrets obrigatórios faltando:
+
+  ❌ ANTHROPIC_API_KEY (Claude API) - AUSENTE
+  ❌ SHOPEE_PARTNER_ID (Shopee Partner ID) - AUSENTE
+  ❌ SHOPEE_PARTNER_KEY (Shopee Partner Key) - AUSENTE
+
+📝 Solução:
+  1. Copie .env.example para .env.local
+  2. Preencha os valores reais em .env.local
+  3. Execute este validador novamente
+
+  Variáveis obrigatórias:
+    • ANTHROPIC_API_KEY: Claude API
+    • SHOPEE_PARTNER_ID: Shopee Partner ID
+    • SHOPEE_PARTNER_KEY: Shopee Partner Key
+    • FTP_SERVER: FTP Server
+    • FTP_USERNAME: FTP Username
+    • FTP_PASSWORD: FTP Password
+    • MAIL_PASS: Email Password
+[2026-07-12 08:39:21] ⚠️  Validação teve aviso (continuando...)
+[2026-07-12 08:39:21] 🔄 Sincronizando repositório...
+From https://github.com/Vivaliz-site/site-shopvivaliz
+ * branch              main       -> FETCH_HEAD
+   fcefe666..27f4da7a  main       -> origin/main
+Updating fcefe666..27f4da7a
+Fast-forward
+ .claude/launch.json                          |  11 +
+ .vscode/settings.json                        |   3 +-
+ AUDIT-REPORT-2026-07-12.md                   | 169 +++++
+ AUDITORIA-24-7-README.md                     | 349 +++++++++++
+ AUDITORIA-AUTONOMA-2026-07-12.md             | 330 ++++++++++
+ AUDITORIA-BROWSER-2026-07-12.md              | 242 ++++++++
+ CHANGELOG.md                                 |  47 ++
+ MELHORIAS-VISUAIS-2026-07-12.md              | 443 ++++++++++++++
+ RELATORIO-FINAL-AUDITORIA-2026-07-12.md      | 312 ++++++++++
+ api/catalog/stock-by-product.php             |  64 +-
+ api/graphql.php                              |   3 +
+ api/melhorenvio/webhook.php                  |   5 +-
+ api/olist/webhook-health.php                 |  65 ++
+ api/olist/webhook-processor.php              |  38 +-
+ api/olist/webhook.php                        |   5 +
+ api/webhooks/pagarme.php                     |   5 +
+ auth/login.php                               |   1 +
+ auth/register.php                            |   1 +
+ checkout/index.php                           |   5 +
+ config/database.php                          |   3 +-
+ css/dazzle-v1.css                            | 738 ++++++++++++++++++++++
+ css/premium-ui-framework.css                 | 576 +++++++++++++++++
+ includes/analytics-tracking.php              |  18 +-
+ includes/header.php                          |   1 +
+ includes/navbar.php                          |   8 +-
+ includes/premium-footer.php                  | 225 +++++++
+ includes/premium-header.php                  | 144 +++++
+ includes/recaptcha-helper.php                |  56 ++
+ index.php                                    |   9 +-
+ js/dazzle-v1.js                              | 126 ++++
+ meus-pedidos.php                             |   1 +
+ produto.php                                  |   2 +-
+ public/assets/liz-assistant/liz-assistant.js |   2 +-
+ public_html/admin/monitor-24-7-premium.html  | 885 +++++++++++++++++++++++++++
+ public_html/admin/monitor-24-7.html          | 460 ++++++++++++++
+ public_html/api/auditoria-monitor.php        | 147 +++++
+ scripts/auditoria-24-7.py                    | 404 ++++++++++++
+ scripts/instalar-auditoria-cron.sh           |  32 +
+ setup-shopvivaliz-mcp.ps1                    | 169 +++++
+ shopvivaliz-mcp-server.py                    |  28 +
+ tests/e2e-journey.spec.js                    |  76 +--
+ tests/precos-catalogo.spec.ts                |  17 +-
+ 42 files changed, 6136 insertions(+), 89 deletions(-)
+ create mode 100644 .claude/launch.json
+ create mode 100644 AUDIT-REPORT-2026-07-12.md
+ create mode 100644 AUDITORIA-24-7-README.md
+ create mode 100644 AUDITORIA-AUTONOMA-2026-07-12.md
+ create mode 100644 AUDITORIA-BROWSER-2026-07-12.md
+ create mode 100644 MELHORIAS-VISUAIS-2026-07-12.md
+ create mode 100644 RELATORIO-FINAL-AUDITORIA-2026-07-12.md
+ create mode 100644 api/olist/webhook-health.php
+ create mode 100644 css/dazzle-v1.css
+ create mode 100644 css/premium-ui-framework.css
+ create mode 100644 includes/premium-footer.php
+ create mode 100644 includes/premium-header.php
+ create mode 100644 includes/recaptcha-helper.php
+ create mode 100644 js/dazzle-v1.js
+ create mode 100644 public_html/admin/monitor-24-7-premium.html
+ create mode 100644 public_html/admin/monitor-24-7.html
+ create mode 100644 public_html/api/auditoria-monitor.php
+ create mode 100644 scripts/auditoria-24-7.py
+ create mode 100644 scripts/instalar-auditoria-cron.sh
+ create mode 100644 setup-shopvivaliz-mcp.ps1
+ create mode 100644 shopvivaliz-mcp-server.py
+[2026-07-12 08:39:22] ✅ Git pull OK
+[2026-07-12 08:39:22] 📝 Commitando mudanças...
