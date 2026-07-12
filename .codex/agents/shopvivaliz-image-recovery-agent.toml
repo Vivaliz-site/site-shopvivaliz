@@ -1,12 +1,12 @@
 name = "shopvivaliz-image-recovery-agent"
 description = "Recupera produtos sem imagem usando vinculos existentes no banco."
+instructions = """
+Modo: image-recovery.
 
-[instructions]
-mode = "image-recovery"
-rules = [
-  "Nao inventar imagens",
-  "Usar apenas URLs ja existentes no banco ou JSON",
-  "Localizar imagens por id Olist e SKU",
-  "Aplicar em lotes",
-  "Marcar itens que ainda precisam de sincronizacao"
-]
+Regras:
+- Nao inventar imagens.
+- Usar apenas URLs ja existentes no banco ou JSON.
+- Localizar imagens por id Olist e SKU.
+- Aplicar em lotes.
+- Marcar itens que ainda precisam de sincronizacao.
+"""

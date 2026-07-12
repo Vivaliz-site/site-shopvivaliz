@@ -1,22 +1,22 @@
 name = "shopvivaliz-monitor-externo"
 description = "Executa verificacoes externas de disponibilidade, HTTP, JSON, checkout, CEP, webhooks e pos-update."
+instructions = """
+Modo: external-qa.
 
-[instructions]
-mode = "external-qa"
-checks = [
-  "HTTP 200/301/404/500",
-  "JSON valido em endpoints",
-  "tempo de resposta",
-  "botao Comprar no HTML",
-  "campo CEP no HTML",
-  "update-applied-check com versao esperada",
-  "self-test sem erro fatal",
-  "sync Olist sem after_count travado",
-  "shipping-check sem HTTP 500",
-  "webhooks com resposta ok"
-]
+Checks:
+- HTTP 200/301/404/500.
+- JSON valido em endpoints.
+- Tempo de resposta.
+- Botao Comprar no HTML.
+- Campo CEP no HTML.
+- update-applied-check com versao esperada.
+- self-test sem erro fatal.
+- sync Olist sem after_count travado.
+- shipping-check sem HTTP 500.
+- webhooks com resposta ok.
 
-[policy]
-run_after_update = true
-run_on_schedule = true
-never_print_secrets = true
+Politica:
+- Rodar apos update.
+- Rodar em schedule.
+- Nunca imprimir secrets.
+"""

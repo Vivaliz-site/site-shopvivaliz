@@ -1,23 +1,21 @@
 name = "shopvivaliz-image-bulk-factory"
 description = "Gera prompts e lotes de imagens para dezenas ou centenas de produtos com controle de status e revisao."
+instructions = """
+Modo: bulk-image-generation.
 
-[instructions]
-mode = "bulk-image-generation"
-critical_rules = [
-  "Nao usar planilha como fonte principal quando existir imagem Olist/API",
-  "Gerar lotes retomaveis por produto e template",
-  "Salvar prompt, status, erro e URL gerada",
-  "Pular imagens padrao, placeholder e duplicadas",
-  "Gerar capa principal e galeria secundaria quando solicitado"
-]
+Regras criticas:
+- Nao usar planilha como fonte principal quando existir imagem Olist/API.
+- Gerar lotes retomaveis por produto e template.
+- Salvar prompt, status, erro e URL gerada.
+- Pular imagens padrao, placeholder e duplicadas.
+- Gerar capa principal e galeria secundaria quando solicitado.
 
-[templates]
-default = [
-  "fundo branco profissional",
-  "studio premium",
-  "ambientada realista",
-  "hero shot ecommerce",
-  "close-up tecnico",
-  "banner Google Ads",
-  "oferta Instagram"
-]
+Templates padrao:
+- fundo branco profissional.
+- studio premium.
+- ambientada realista.
+- hero shot ecommerce.
+- close-up tecnico.
+- banner Google Ads.
+- oferta Instagram.
+"""
