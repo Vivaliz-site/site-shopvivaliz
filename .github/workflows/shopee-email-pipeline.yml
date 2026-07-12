@@ -2,9 +2,8 @@ name: Shopee Email Pipeline
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
+    # Manual trigger only - secrets not configured yet
+    # To enable push-triggered: set SMTP_HOST, SMTP_USER, SHOPEE_PARTNER_ID in GitHub Secrets
 
 jobs:
   shopeedelivery:
