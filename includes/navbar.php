@@ -194,7 +194,7 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 #sv-liz-panel, #sv-liz-panel.open {
   top: 10px !important;
   bottom: 10px !important;
-  height: calc(100vh - 20px) !important;
+  height: calc(100dvh - 20px) !important;
   max-height: none !important;
   width: 380px !important;
 }
