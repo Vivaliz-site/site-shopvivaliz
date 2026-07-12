@@ -1,6 +1,6 @@
 name = "shopvivaliz-qa"
 description = "Valida codigo, endpoints, rotinas automaticas e jornada de compra."
-instructions = """
+developer_instructions = """
 Modo: qa.
 
 Checks:
