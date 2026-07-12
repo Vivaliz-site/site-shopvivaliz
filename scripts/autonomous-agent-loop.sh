@@ -3,6 +3,7 @@ set -u
 
 PROJECT_DIR="${SHOPVIVALIZ_PROJECT_DIR:-/home/ubuntu/site-shopvivaliz}"
 LOG_FILE="${SHOPVIVALIZ_AGENT_LOG:-$PROJECT_DIR/logs/autonomous-agent.log}"
+EXECUTION_LOG_FILE="${SHOPVIVALIZ_AGENT_EXECUTION_LOG:-$PROJECT_DIR/logs/execution/autonomous-cycle.log}"
 INTERVAL_SECONDS="${SHOPVIVALIZ_AGENT_INTERVAL_SECONDS:-60}"
 LOCK_FILE="${SHOPVIVALIZ_AGENT_LOCK:-/tmp/shopvivaliz-agent.lock}"
 STOP_FILE="${SHOPVIVALIZ_AGENT_STOP_FILE:-$PROJECT_DIR/.agent-stop}"
@@ -23,6 +24,7 @@ fi
 
 mkdir -p "$PROJECT_DIR/logs" "$PROJECT_DIR/logs/execution"
 touch "$LOG_FILE"
+touch "$EXECUTION_LOG_FILE"
 cd "$PROJECT_DIR" || exit 1
 exec >> "$LOG_FILE" 2>&1
 
@@ -46,7 +48,9 @@ trap 'shutdown_requested=1; log "Shutdown signal received; finishing current cyc
 
 run_cycle() {
   log "Cycle started."
+  printf '[%s] %s\n' "$(ts)" "Cycle started." >> "$EXECUTION_LOG_FILE"
   log "Governance active: no price changes, no campaign publishing, no budget increases, no deploys, no financial actions."
+  printf '[%s] %s\n' "$(ts)" "Governance active: no price changes, no campaign publishing, no budget increases, no deploys, no financial actions." >> "$EXECUTION_LOG_FILE"
 
   if [ -f "$STOP_FILE" ]; then
     log "Stop file found at $STOP_FILE; cycle skipped."
@@ -96,6 +100,7 @@ run_cycle() {
   fi
 
   log "Cycle finished."
+  printf '[%s] %s\n' "$(ts)" "Cycle finished." >> "$EXECUTION_LOG_FILE"
   return "$cycle_exit"
 }
 
