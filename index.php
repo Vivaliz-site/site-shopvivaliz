@@ -614,6 +614,43 @@ $svNavCurrent = '';
             });
         });
     })();
+
+    // Banner Slide Auto-Advance
+    (function () {
+        var bannerSlides = document.querySelectorAll('.swiper#banner-slide .swiper-slide');
+        var paginationDots = document.querySelectorAll('.swiper#banner-slide .swiper-pagination .swiper-pagination-bullet');
+        var nextBtn = document.querySelector('.swiper#banner-slide .swiper-button-next');
+        var prevBtn = document.querySelector('.swiper#banner-slide .swiper-button-prev');
+
+        if (bannerSlides.length === 0) return;
+
+        var current = 0;
+        var timer = null;
+
+        function show(index) {
+            current = (index + bannerSlides.length) % bannerSlides.length;
+            bannerSlides.forEach(function (slide) { slide.classList.remove('is-active'); });
+            paginationDots.forEach(function (dot) { dot.classList.remove('is-active'); });
+            bannerSlides[current].classList.add('is-active');
+            if (paginationDots[current]) paginationDots[current].classList.add('is-active');
+        }
+
+        function next() { show(current + 1); restart(); }
+        function prev() { show(current - 1); restart(); }
+        function restart() {
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(next, 5000);
+        }
+
+        if (nextBtn) nextBtn.addEventListener('click', next);
+        if (prevBtn) prevBtn.addEventListener('click', prev);
+        paginationDots.forEach(function (dot, i) {
+            dot.addEventListener('click', function () { show(i); restart(); });
+        });
+
+        show(0);
+        restart();
+    })();
     </script>
 </body>
 </html>
