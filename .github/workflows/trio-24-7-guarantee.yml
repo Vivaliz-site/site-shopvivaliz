@@ -1,116 +1,68 @@
-name: 🤖 Trio 24/7 Guarantee - Claude + Gemini + GPT Contínuos
+name: Trio 24/7 Guarantee - Runtime Validation
 
 on:
   schedule:
-    # Executar a cada 10 minutos para garantir cobertura total
     - cron: '*/10 * * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+env:
+  SHOPVIVALIZ_BASE_URL: https://dev.shopvivaliz.com.br
+
 jobs:
-  trio-dispatch:
-    name: Dispatcher Trio de Agentes
+  validate-runtime:
+    name: Validar cobertura real 24/7
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    timeout-minutes: 6
 
     steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
-
-      - name: 🤖 Ativar Claude 24/7
+      - name: Coletar relatorio autonomo
+        shell: bash
         run: |
-          echo "════════════════════════════════════════"
-          echo "🟢 CLAUDE - ATIVADO 24/7"
-          echo "════════════════════════════════════════"
-          echo ""
-          echo "[Claude] Processando tarefas..."
-          echo "• Analisando tasks-queue.json"
-          echo "• Verificando integrações (Shopee, ML, Google Ads)"
-          echo "• Monitorando qualidade"
-          echo "• Corrigindo erros"
-          echo "• Status: ✅ ATIVO"
-          echo ""
-          
-          # Marcar que Claude está processando
-          mkdir -p .agent-activity
-          echo "claude:$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> .agent-activity/active-agents.log
+          mkdir -p reports
+          curl -sS -L \
+            --max-time 45 \
+            --retry 2 \
+            --retry-delay 5 \
+            --retry-all-errors \
+            -H "Accept: application/json" \
+            -o reports/autonomous-report.json \
+            "${SHOPVIVALIZ_BASE_URL%/}/api/agent/autonomous-report.php"
+          cat reports/autonomous-report.json
 
-      - name: 🤖 Ativar Gemini 24/7
+      - name: Validar saude do runtime
+        shell: bash
         run: |
-          echo "════════════════════════════════════════"
-          echo "🟢 GEMINI - ATIVADO 24/7"
-          echo "════════════════════════════════════════"
-          echo ""
-          echo "[Gemini] Processando sincronizações..."
-          echo "• Sincronizando Shopee (250+ SKUs)"
-          echo "• Sincronizando Mercado Livre (250+ produtos)"
-          echo "• Auditando integrações"
-          echo "• Gerenciando pedidos"
-          echo "• Status: ✅ ATIVO"
-          echo ""
-          
-          # Marcar que Gemini está processando
-          echo "gemini:$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> .agent-activity/active-agents.log
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
 
-      - name: 🤖 Ativar GPT 24/7
-        run: |
-          echo "════════════════════════════════════════"
-          echo "🟢 GPT/OpenAI - ATIVADO 24/7"
-          echo "════════════════════════════════════════"
-          echo ""
-          echo "[GPT] Processando análises e fallback..."
-          echo "• Fallback para Claude (se necessário)"
-          echo "• Fallback para Gemini (se necessário)"
-          echo "• Análises especiais"
-          echo "• Suporte em demanda"
-          echo "• Status: ✅ ATIVO"
-          echo ""
-          
-          # Marcar que GPT está processando
-          echo "gpt:$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> .agent-activity/active-agents.log
+          payload = json.loads(Path("reports/autonomous-report.json").read_text(encoding="utf-8"))
+          cycle = payload.get("autonomous_cycle", {})
+          health = payload.get("system_health", {})
 
-      - name: 🔄 Verificar Cobertura 24/7
-        run: |
-          echo "════════════════════════════════════════"
-          echo "📊 COBERTURA TRIO 24/7"
-          echo "════════════════════════════════════════"
-          echo ""
-          echo "Agentes Ativos:"
-          cat .agent-activity/active-agents.log
-          echo ""
-          echo "✅ Claude: Processando"
-          echo "✅ Gemini: Processando"
-          echo "✅ GPT: Processando"
-          echo ""
-          echo "Total Agentes: 3/3 ATIVO"
-          echo "Cobertura: 100%"
-          echo "Próxima ativação: +10 minutos"
-          echo "Status Geral: ✅ 24/7 GARANTIDO"
+          if payload.get("agent") != "autonomous-report":
+              raise SystemExit("relatorio autonomo invalido")
+          if not cycle.get("available"):
+              raise SystemExit("ciclo autonomo indisponivel")
+          if cycle.get("file_age_s") is None or int(cycle["file_age_s"]) > 3600:
+              raise SystemExit(f"ciclo autonomo stale: {cycle.get('file_age_s')}")
+          if health.get("status") not in {"HEALTHY", "WARNING"}:
+              raise SystemExit(f"saude critica: {health.get('status')}")
 
-      - name: 📝 Registrar Atividade
-        run: |
-          git config user.email "agente-autonomo@shopvivaliz.com.br"
-          git config user.name "Agente Autonomo ShopVivaliz"
-          
-          git add .agent-activity/ 2>/dev/null || true
-          git commit -m "auto: ativação trio 24/7 - $(date -u +%Y-%m-%d\ %H:%M:%S)Z" 2>/dev/null || echo "Atividade registrada"
+          print("24/7 real OK")
+          print("cycle_status=", cycle.get("status"))
+          print("cycle_mode=", cycle.get("mode"))
+          print("cycle_age_s=", cycle.get("file_age_s"))
+          print("health=", health.get("status"))
+          PY
 
-      - name: ✅ Notificação Final
-        run: |
-          echo ""
-          echo "════════════════════════════════════════"
-          echo "✅ TRIO 24/7 - OPERAÇÃO GARANTIDA"
-          echo "════════════════════════════════════════"
-          echo ""
-          echo "🟢 Claude: ✅ Ativo"
-          echo "🟢 Gemini: ✅ Ativo"
-          echo "🟢 GPT: ✅ Ativo"
-          echo ""
-          echo "Próxima verificação: +10 minutos"
-          echo "Uptime esperado: 99.9%"
-          echo ""
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trio-24-7-runtime-${{ github.run_id }}
+          path: reports/autonomous-report.json
+          if-no-files-found: ignore
