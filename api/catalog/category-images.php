@@ -6,9 +6,9 @@ header('Cache-Control: public, max-age=300');
 header('X-Content-Type-Options: nosniff');
 
 function svci_normalize(string $value): string {
-    $value = trim(mb_strtolower($value, 'UTF-8'));
-    $converted = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
-    return preg_replace('/\s+/', ' ', is_string($converted) ? $converted : $value) ?: '';
+    $value = trim(function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value));
+    $converted = function_exists('iconv') ? @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value) : $value;
+    return preg_replace('/\s+/', ' ', is_string($converted) && $converted !== '' ? $converted : $value) ?: '';
 }
 
 function svci_valid_image(string $value): bool {
