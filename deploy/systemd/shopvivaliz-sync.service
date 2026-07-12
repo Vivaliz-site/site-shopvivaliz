@@ -1,0 +1,22 @@
+[Unit]
+Description=ShopVivaliz Canonical Auto Sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/site-shopvivaliz
+Environment=SHOPVIVALIZ_SYNC_BRANCH=feat/dazzle-visual-v1
+Environment=SHOPVIVALIZ_SYNC_INTERVAL_SECONDS=300
+ExecStart=/bin/bash /home/ubuntu/site-shopvivaliz/scripts/auto-sincronizar.sh
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

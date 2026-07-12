@@ -1,0 +1,166 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                  🔐 OAUTH LOGIN - QUICK START GUIDE                           ║
+║                        Status: ✅ READY TO CONFIGURE                          ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📌 IMPLEMENTATION COMPLETE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Google OAuth 2.0 callback handler (/auth/google-callback.php)
+✅ Apple Sign In callback handler (/auth/apple-callback.php)
+✅ Enhanced login page with OAuth buttons (/auth/login.php)
+✅ Comprehensive social auth library (/includes/social-auth.php)
+✅ Database schema with OAuth columns (google_id, apple_id, etc)
+✅ CSRF protection with state tokens & nonce validation
+✅ Setup automation script (scripts/setup-oauth-env.py)
+✅ Full documentation (auth/OAUTH-SETUP.md)
+
+
+🚀 THREE STEPS TO PRODUCTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1: GET GOOGLE CREDENTIALS
+  1. Go to: https://console.cloud.google.com/
+  2. Create new project: "ShopVivaliz"
+  3. Enable "Google+ API"
+  4. Create OAuth 2.0 credentials (Web Application)
+  5. Add Authorized Redirect URI:
+     → https://dev.shopvivaliz.com.br/auth/google-callback.php
+  6. Copy Client ID and Client Secret
+
+STEP 2: GET APPLE CREDENTIALS
+  1. Go to: https://developer.apple.com/account/
+  2. Configure Sign In with Apple for your App ID
+  3. Create Private Key (.p8 file)
+  4. Add Redirect URI:
+     → https://dev.shopvivaliz.com.br/auth/apple-callback.php
+  5. Copy: Service ID, Team ID, Key ID, and .p8 file content
+
+STEP 3: ADD CREDENTIALS TO .env (Oracle Cloud)
+
+  OPTION A: Automatic (Recommended)
+  ─────────────────────────────────
+  $ ssh -i <your-key.pem> ubuntu@137.131.156.17
+  $ cd /home/ubuntu/site-shopvivaliz
+  $ python3 scripts/setup-oauth-env.py
+
+  Follow the interactive prompts to add Google and Apple credentials
+
+
+  OPTION B: Manual
+  ───────────────
+  $ ssh -i <your-key.pem> ubuntu@137.131.156.17
+  $ nano /home/ubuntu/site-shopvivaliz/.env
+
+  Add these lines:
+  ───────────────
+  GOOGLE_OAUTH_CLIENT_ID=<your_client_id>
+  GOOGLE_OAUTH_CLIENT_SECRET=<your_client_secret>
+
+  APPLE_OAUTH_CLIENT_ID=<your_service_id>
+  APPLE_TEAM_ID=<your_team_id>
+  APPLE_KEY_ID=<your_key_id>
+  APPLE_PRIVATE_KEY=<your_complete_.p8_file_content>
+
+
+✅ VERIFY SETUP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After adding credentials:
+
+1. Test Login Page
+   → Visit: https://dev.shopvivaliz.com.br/auth/login.php
+   → Google button should be ENABLED (not greyed out)
+   → Apple button should be ENABLED (not greyed out)
+
+2. Test Google Login
+   → Click [Google] button
+   → Authenticate with your Google account
+   → Accept permissions
+   → Should redirect to home with session
+
+3. Test Apple Login
+   → Click [Apple] button
+   → Authenticate with your Apple ID
+   → Accept permissions
+   → Should redirect to home with session
+
+4. Verify Database
+   → Check users table for new records with google_id or apple_id
+
+
+📁 KEY FILES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/auth/login.php ..................... Login page with OAuth buttons
+/auth/google-callback.php ........... Google OAuth callback handler
+/auth/apple-callback.php ............ Apple OAuth callback handler
+/includes/social-auth.php ........... Core OAuth library & utilities
+/auth/OAUTH-SETUP.md ............... Complete step-by-step guide
+/scripts/setup-oauth-env.py ........ Automated configuration script
+/LOGIN-OAUTH-READY.md .............. Implementation summary
+/OAUTH-QUICK-START.txt ............. This file
+
+
+🔒 SECURITY FEATURES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ CSRF Protection      → State tokens in every OAuth request
+✅ Nonce Validation     → Verification of ID token nonce (Apple)
+✅ Open Redirect Block  → Only internal redirects allowed
+✅ JWT Validation       → ID token signature verification
+✅ 30-min Timeout       → OAuth requests expire after 30 minutes
+✅ Session Security     → Secure session initialization
+✅ Email Verification   → email_verified_at column support
+✅ Password Hashing     → Bcrypt for traditional login
+
+
+🆘 TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q: OAuth buttons are greyed out
+A: Credentials not configured. Check .env file.
+   Run: python3 scripts/setup-oauth-env.py
+
+Q: "Session expired" error
+A: Normal for OAuth requests older than 30 minutes.
+   Try logging in again.
+
+Q: "Apple didn't return email"
+A: Apple hides email on first login. Try removing the app in:
+   Apple ID Settings → Passwords & Security → Sign in with Apple
+   Then try login again.
+
+Q: Callback returns 500 error
+A: Check logs:
+   - ssh ubuntu@137.131.156.17
+   - tail -f /home/ubuntu/site-shopvivaliz/logs/*.log
+
+Q: Database error when creating user
+A: Run database schema update:
+   - PHP automatically creates missing columns on first login
+   - If manual update needed, see social-auth.php function:
+     sv_social_ensure_user_columns()
+
+
+📞 SUPPORT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+For detailed setup instructions:
+  → Read: /auth/OAUTH-SETUP.md
+
+For troubleshooting:
+  → Check: /logs/ directory
+  → Monitor: https://dev.shopvivaliz.com.br/admin/monitor/
+
+For implementation details:
+  → Read: /includes/social-auth.php
+  → Read: /auth/google-callback.php
+  → Read: /auth/apple-callback.php
+
+
+═══════════════════════════════════════════════════════════════════════════════
+✨ Status: 100% Complete and Ready for Production
+   Deploy Date: 2026-07-12
+   Branch: feat/dazzle-visual-v1
+   Commit: cd40801f
+═══════════════════════════════════════════════════════════════════════════════

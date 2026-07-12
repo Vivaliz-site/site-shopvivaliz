@@ -1,104 +1,149 @@
 #!/usr/bin/env python3
-"""Auto-sync + Deploy: busca origin/main, faz hard reset, e sincroniza
-com servidor via FTP. Roda a cada 30min via cron."""
-import subprocess
+"""Sincroniza o checkout local com a branch canonica sem criar commits locais.
+
+Uso principal:
+- Ubuntu/Oracle Cloud: manter o checkout publicado alinhado com a branch remota
+- Ambientes auxiliares: diagnosticar divergencia sem inventar historico local
+"""
+from __future__ import annotations
+
+import json
 import logging
-import sys
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 REPO_DIR = Path(__file__).resolve().parent
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(message)s',
-)
+DEFAULT_BRANCH = os.getenv("SHOPVIVALIZ_SYNC_BRANCH", "feat/dazzle-visual-v1")
+STATUS_FILE = REPO_DIR / "logs" / "tri-environment-sync.json"
+PRESERVE_PATHS = {
+    ".env.local",
+    "logs",
+    "storage/private",
+    ".agent-heartbeats",
+    "reports/hourly",
+}
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 log = logging.getLogger(__name__)
 
 
-def run(cmd, env=None):
-    return subprocess.run(
-        cmd, cwd=REPO_DIR, capture_output=True, text=True, timeout=60, env=env or os.environ.copy()
+def run(cmd: list[str], *, check: bool = False) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        cmd,
+        cwd=REPO_DIR,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=os.environ.copy(),
     )
+    if check and result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "command failed")
+    return result
 
 
-def deploy_via_ftp():
-    """Tenta sincronizar via FTP usando credentials de environment"""
-    ftp_server = os.getenv('FTP_SERVER')
-    ftp_user = os.getenv('FTP_USERNAME')
-    ftp_pass = os.getenv('FTP_PASSWORD')
-    ftp_port = os.getenv('FTP_PORT', '21')
-    ftp_dir = os.getenv('FTP_REMOTE_DIR', '/public_html')
-
-    if not all([ftp_server, ftp_user, ftp_pass]):
-        log.warning('FTP credentials não encontrados, pulando deploy')
-        return False
-
-    # Tenta lftp
-    lftp_cmd = f"""
-    lftp -u {ftp_user},{ftp_pass} -p {ftp_port} {ftp_server} <<EOF
-    set sftp:auto-confirm yes
-    mirror -R --delete {REPO_DIR}/ {ftp_dir}/
-    quit
-EOF
-    """
-
-    log.info('Tentando deploy via LFTP...')
-    result = run(['bash', '-c', lftp_cmd])
-    if result.returncode == 0:
-        log.info('Deploy via LFTP sucesso')
-        return True
-    else:
-        log.warning('LFTP falhou: %s', result.stderr[:200])
-        return False
+def ensure_logs_dir() -> None:
+    STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 
-def deploy_via_rsync():
-    """Tenta sincronizar via rsync para diretório local"""
+def git_output(args: list[str]) -> str:
+    return run(["git", *args], check=True).stdout.strip()
+
+
+def tracked_dirty_paths() -> list[str]:
+    status = run(["git", "status", "--porcelain"]).stdout.splitlines()
+    paths: list[str] = []
+    for line in status:
+        if not line:
+            continue
+        path = line[3:].strip()
+        if path:
+            paths.append(path)
+    return paths
+
+
+def unsafe_dirty_paths(paths: list[str]) -> list[str]:
+    unsafe: list[str] = []
+    for path in paths:
+        normalized = path.replace("\\", "/")
+        if normalized in PRESERVE_PATHS:
+            continue
+        if any(normalized == keep or normalized.startswith(keep + "/") for keep in PRESERVE_PATHS):
+            continue
+        unsafe.append(normalized)
+    return unsafe
+
+
+def write_status(payload: dict[str, object]) -> None:
+    ensure_logs_dir()
+    STATUS_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def main() -> int:
+    branch = DEFAULT_BRANCH
+    ensure_logs_dir()
+    log.info("Auto-sync iniciado para branch canonica %s", branch)
+
     try:
-        # Tenta rsync para diretório padrão
-        result = run(['rsync', '-avz', '--delete', f'{REPO_DIR}/', '/var/www/shopvivaliz/'])
-        if result.returncode == 0:
-            log.info('Deploy via rsync sucesso')
-            return True
-    except Exception as e:
-        log.warning('Rsync indisponível: %s', str(e))
-    return False
+        run(["git", "fetch", "origin", branch], check=True)
+        local_sha = git_output(["rev-parse", "HEAD"])
+        remote_sha = git_output(["rev-parse", f"origin/{branch}"])
+        current_branch = git_output(["branch", "--show-current"])
+        dirty = tracked_dirty_paths()
+        unsafe = unsafe_dirty_paths(dirty)
+
+        payload: dict[str, object] = {
+            "ok": True,
+            "branch": current_branch,
+            "canonical_branch": branch,
+            "local_sha": local_sha,
+            "remote_sha": remote_sha,
+            "dirty_paths": dirty,
+            "unsafe_dirty_paths": unsafe,
+            "action": "noop",
+        }
+
+        if current_branch != branch:
+            payload["ok"] = False
+            payload["action"] = "blocked-wrong-branch"
+            payload["message"] = f"checkout atual em {current_branch}, esperado {branch}"
+            write_status(payload)
+            log.error(payload["message"])
+            return 2
+
+        if unsafe:
+            payload["ok"] = False
+            payload["action"] = "blocked-unsafe-dirty-tree"
+            payload["message"] = "working tree contem alteracoes rastreadas fora das areas preservadas"
+            write_status(payload)
+            log.error("%s: %s", payload["message"], ", ".join(unsafe))
+            return 3
+
+        if local_sha == remote_sha:
+            payload["message"] = "checkout ja alinhado com a branch canonica"
+            write_status(payload)
+            log.info(payload["message"])
+            return 0
+
+        run(["git", "reset", "--hard", f"origin/{branch}"], check=True)
+        payload["action"] = "hard-reset-to-canonical"
+        payload["local_sha_after"] = git_output(["rev-parse", "HEAD"])
+        payload["message"] = "checkout alinhado via hard reset para a branch canonica"
+        write_status(payload)
+        log.info(payload["message"])
+        return 0
+    except Exception as exc:  # pragma: no cover - exec path
+        payload = {
+            "ok": False,
+            "branch": branch,
+            "action": "error",
+            "message": str(exc),
+        }
+        write_status(payload)
+        log.error("Auto-sync falhou: %s", exc)
+        return 1
 
 
-def main():
-    log.info('Git auto-sync + Deploy iniciado')
-
-    # 1. Fetch latest
-    fetch = run(['git', 'fetch', 'origin', 'main'])
-    if fetch.returncode != 0:
-        log.error('Falha no fetch: %s', fetch.stderr.strip()[:300])
-        sys.exit(1)
-
-    local = run(['git', 'rev-parse', 'HEAD']).stdout.strip()
-    remote = run(['git', 'rev-parse', 'origin/main']).stdout.strip()
-
-    if local == remote:
-        log.info('Ja atualizado (%s)', local[:8])
-        return
-
-    # 2. Reset para remote
-    log.info('Atualizando %s -> %s', local[:8], remote[:8])
-    reset = run(['git', 'reset', '--hard', 'origin/main'])
-    if reset.returncode != 0:
-        log.error('Falha no reset: %s', reset.stderr.strip()[:300])
-        sys.exit(1)
-
-    log.info('Repositório sincronizado: %s', remote[:8])
-
-    # 3. Deploy para servidor
-    log.info('Iniciando sincronização com servidor...')
-    deployed = deploy_via_rsync() or deploy_via_ftp()
-
-    if deployed:
-        log.info('Deploy concluído com sucesso')
-    else:
-        log.warning('Nenhum método de deploy funcionou, archivos locais foram atualizados')
-
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    raise SystemExit(main())
