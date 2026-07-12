@@ -23,14 +23,14 @@ done
 assert_status() {
   local expected="$1" url="$2" method="${3:-GET}" payload="${4:-}" status
   if [[ "${method}" == "POST" ]]; then
-    status=$(curl -sS -o /tmp/sv-response.json -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data "${payload}" "${url}")
+    status=$(curl -sS -o "$TMPDIR/sv-response.json" -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data "${payload}" "${url}")
   else
-    status=$(curl -sS -o /tmp/sv-response.html -w '%{http_code}' "${url}")
+    status=$(curl -sS -o "$TMPDIR/sv-response.html" -w '%{http_code}' "${url}")
   fi
   if [[ "${status}" != "${expected}" ]]; then
     echo "Expected ${expected}, got ${status}: ${url}"
-    cat /tmp/sv-response.json 2>/dev/null || true
-    cat /tmp/sv-response.html 2>/dev/null || true
+    cat "$TMPDIR/sv-response.json" 2>/dev/null || true
+    cat "$TMPDIR/sv-response.html" 2>/dev/null || true
     exit 1
   fi
 }
