@@ -24,6 +24,11 @@ $svIsProduct = $svNavCurrent === 'produto';
 $svIsCheckout = $svNavCurrent === 'checkout';
 $svIsCart = $svNavCurrent === 'carrinho';
 $svIsCatalog = in_array($svNavCurrent, ['catalogo', 'produtos', 'produto'], true);
+$svCompanyProfile = @include dirname(__DIR__) . '/config/company-profile.php';
+$svWhatsappRaw = is_array($svCompanyProfile) ? (string)($svCompanyProfile['social_media']['whatsapp'] ?? '') : '';
+$svWhatsappDigits = preg_replace('/\D+/', '', $svWhatsappRaw);
+$svWhatsappMessage = rawurlencode('Ola! Vim pelo site da ShopVivaliz e gostaria de falar com a equipe.');
+$svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?text={$svWhatsappMessage}" : '/contato';
 ?>
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0b4f88">
@@ -56,6 +61,72 @@ $svIsCatalog = in_array($svNavCurrent, ['catalogo', 'produtos', 'produto'], true
 <?php if ($svIsCart): ?><script src="/js/cart-shipping-v7.js?v=7.0.0" defer></script><script src="/js/cart-server-validation-v92.js?v=92.0.0" defer></script><?php endif; ?>
 <?php if ($svIsCheckout): ?><script src="/js/checkout-conversion-v6.js?v=6.0.0" defer></script><script src="/js/checkout-resilience-v15.js?v=15.0.0" defer></script><script src="/js/checkout-shipping-v7.js?v=7.0.0" defer></script><script src="/js/checkout-cart-freshness-v93.js?v=93.0.0" defer></script><script src="/js/checkout-idempotency-v122.js?v=122.0.0" defer></script><?php endif; ?>
 
+<style>
+.sv-whatsapp-float{
+    position:fixed;
+    right:18px;
+    bottom:18px;
+    z-index:1200;
+    display:inline-flex;
+    align-items:center;
+    gap:10px;
+    min-height:56px;
+    padding:0 18px;
+    border-radius:999px;
+    background:#25d366;
+    color:#fff;
+    text-decoration:none;
+    font-weight:800;
+    box-shadow:0 16px 36px rgba(8, 15, 33, 0.22);
+    transition:transform .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.sv-whatsapp-float:hover{
+    transform:translateY(-2px);
+    background:#1fb85a;
+    box-shadow:0 20px 40px rgba(8, 15, 33, 0.26);
+}
+.sv-whatsapp-float:focus-visible{
+    outline:3px solid rgba(37,211,102,.28);
+    outline-offset:3px;
+}
+.sv-whatsapp-float__icon{
+    width:34px;
+    height:34px;
+    border-radius:999px;
+    background:rgba(255,255,255,.18);
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-size:18px;
+    flex:0 0 34px;
+}
+.sv-whatsapp-float__text{
+    display:flex;
+    flex-direction:column;
+    line-height:1.05;
+}
+.sv-whatsapp-float__text small{
+    font-size:11px;
+    font-weight:700;
+    opacity:.9;
+}
+.sv-whatsapp-float__text strong{
+    font-size:14px;
+    font-weight:800;
+}
+@media (max-width: 640px){
+    .sv-whatsapp-float{
+        right:14px;
+        bottom:14px;
+        min-height:52px;
+        padding:0 14px;
+    }
+    .sv-whatsapp-float__text small{
+        display:none;
+    }
+}
+</style>
+
 <!-- Mini-Cart Side Drawer -->
 <div class="mini-cart-overlay" id="mini-cart-overlay"></div>
 <div class="mini-cart-drawer" id="mini-cart-drawer">
@@ -82,3 +153,15 @@ $svIsCatalog = in_array($svNavCurrent, ['catalogo', 'produtos', 'produto'], true
 <!-- Liz Assistant Premium Mascot Widget -->
 <link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css">
 <script src="/public/assets/liz-assistant/liz-assistant.js" defer></script>
+
+<a
+    class="sv-whatsapp-float"
+    href="<?= htmlspecialchars($svWhatsappLink, ENT_QUOTES, 'UTF-8') ?>"
+    <?= $svWhatsappDigits !== '' ? 'target="_blank" rel="noopener"' : '' ?>
+    aria-label="Falar com a ShopVivaliz no WhatsApp">
+    <span class="sv-whatsapp-float__icon" aria-hidden="true">W</span>
+    <span class="sv-whatsapp-float__text">
+        <small>Atendimento rapido</small>
+        <strong>WhatsApp</strong>
+    </span>
+</a>
