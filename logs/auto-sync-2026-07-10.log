@@ -21343,3 +21343,111 @@ From https://github.com/Vivaliz-site/site-shopvivaliz
 Already up to date.
 [2026-07-12 00:34:25] ✅ Git pull OK
 [2026-07-12 00:34:25] 📝 Commitando mudanças...
+[main bdf61b0] auto: sincronizar 2026-07-12 00:34:25
+ 2 files changed, 68 insertions(+)
+[2026-07-12 00:34:25] ✅ Commit OK
+[2026-07-12 00:34:25] 📤 Enviando 1 commit(s)...
+To https://github.com/Vivaliz-site/site-shopvivaliz.git
+   29c062a..bdf61b0  main -> main
+[2026-07-12 00:34:27] ✅ Push OK
+[2026-07-12 00:34:27] ✅ Ciclo concluído
+[2026-07-12 00:34:27] ⏰ Próximo em 5 minutos...
+[2026-07-12 00:39:27] 
+[2026-07-12 00:39:27] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-07-12 00:39:27] 🔄 Sincronizando secrets do GitHub...
+============================================================
+🔐 ShopVivaliz - Sincronizador de Secrets (Linux/macOS)
+============================================================
+
+Verificando GitHub CLI...
+✓ GitHub CLI encontrado
+
+📝 Gerando .env.local...
+✓ Criado: /home/ubuntu/site-shopvivaliz/.env.local
+
+============================================================
+✅ SINCRONIZAÇÃO CONCLUÍDA!
+============================================================
+
+Próximos passos:
+  1. Validar secrets: python3 scripts/validar_secrets.py
+  2. Ativar auto-sync: bash scripts/auto_sync_git.ps1
+
+[2026-07-12 00:39:27] ✅ Secrets sincronizados com sucesso
+[SECURITY] ShopVivaliz - Validador de Secrets
+============================================================
+
+[ERROR] ERRO - Secrets obrigatórios faltando:
+
+  ❌ ANTHROPIC_API_KEY (Claude API) - AUSENTE
+  ❌ SHOPEE_PARTNER_ID (Shopee Partner ID) - AUSENTE
+  ❌ SHOPEE_PARTNER_KEY (Shopee Partner Key) - AUSENTE
+
+📝 Solução:
+  1. Copie .env.example para .env.local
+  2. Preencha os valores reais em .env.local
+  3. Execute este validador novamente
+
+  Variáveis obrigatórias:
+    • ANTHROPIC_API_KEY: Claude API
+    • SHOPEE_PARTNER_ID: Shopee Partner ID
+    • SHOPEE_PARTNER_KEY: Shopee Partner Key
+    • FTP_SERVER: FTP Server
+    • FTP_USERNAME: FTP Username
+    • FTP_PASSWORD: FTP Password
+    • MAIL_PASS: Email Password
+[2026-07-12 00:39:27] ⚠️  Validação teve aviso (continuando...)
+[2026-07-12 00:39:27] 🔄 Sincronizando repositório...
+From https://github.com/Vivaliz-site/site-shopvivaliz
+ * branch            main       -> FETCH_HEAD
+   bdf61b0..8d5c8c3  main       -> origin/main
+Updating bdf61b0..8d5c8c3
+Fast-forward
+ .github/hooks/pre-commit-no-wildcards.sh           |   37 +
+ .github/workflows/autonomous-code-agent-24-7.yml   |  135 +++
+ .github/workflows/autonomous-watchdog.yml          |   94 +-
+ .github/workflows/shopee-email-pipeline.yml        |    5 +-
+ .github/workflows/stock-alerts-email-cron.yml      |   37 +
+ CHANGELOG.md                                       |   17 +
+ CSS-WILDCARD-PREVENTION.md                         |  140 +++
+ RESOLUCAO-COMPLETA-2026-07-11.md                   |  141 +++
+ api/agent/autonomous-watchdog.php                  |  143 ++-
+ api/agent/squad-chat.php                           |    6 +
+ api/catalog/category-images.php                    |    6 +-
+ api/catalog/fallback-products.json                 |   16 +-
+ api/catalog/stock-alert.php                        |   87 ++
+ config/database.php                                |   14 +
+ docs/TASK-033-FASE2-IMPLEMENTATION.md              |  167 +++
+ migrations/20260712_add_stock_alerts_table.sql     |   21 +
+ .../screenshots/homepage-1783816342.png            |  Bin 0 -> 494392 bytes
+ playwright-report/visual-test-report.json          |   22 +
+ produto.php                                        |   56 +-
+ scripts/autonomous-change-guard.py                 |   52 +
+ scripts/autonomous-policy-guard.py                 |   24 +-
+ scripts/autonomous-provider-failover.sh            |   68 ++
+ scripts/main.py                                    |    1 +
+ scripts/olist-sync-manual.py                       |    1 -
+ scripts/quality/validate-sensitive-data.php        |   44 +-
+ scripts/stock-alerts-email-cron.py                 |  174 +++
+ scripts/system-health-check.py                     |    5 +-
+ scripts/test-checkout-api.py                       |   38 +
+ tasks-queue.json                                   | 1162 ++++++++++----------
+ test-homepage-visual.py                            |    2 +-
+ tests/storefront-smoke.sh                          |   11 +-
+ 31 files changed, 2002 insertions(+), 724 deletions(-)
+ create mode 100644 .github/hooks/pre-commit-no-wildcards.sh
+ create mode 100644 .github/workflows/autonomous-code-agent-24-7.yml
+ create mode 100644 .github/workflows/stock-alerts-email-cron.yml
+ create mode 100644 CSS-WILDCARD-PREVENTION.md
+ create mode 100644 RESOLUCAO-COMPLETA-2026-07-11.md
+ create mode 100644 api/catalog/stock-alert.php
+ create mode 100644 docs/TASK-033-FASE2-IMPLEMENTATION.md
+ create mode 100644 migrations/20260712_add_stock_alerts_table.sql
+ create mode 100644 playwright-report/screenshots/homepage-1783816342.png
+ create mode 100644 playwright-report/visual-test-report.json
+ create mode 100644 scripts/autonomous-change-guard.py
+ create mode 100644 scripts/autonomous-provider-failover.sh
+ create mode 100644 scripts/stock-alerts-email-cron.py
+ create mode 100644 scripts/test-checkout-api.py
+[2026-07-12 00:39:28] ✅ Git pull OK
+[2026-07-12 00:39:28] 📝 Commitando mudanças...
