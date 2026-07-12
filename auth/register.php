@@ -91,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cadastro - ShopVivaliz</title>
-    <link rel="stylesheet" href="/css/dazzle-v1.css?v=1.1.0">
+    <link rel="stylesheet" href="/css/dazzle-v1.css?v=1.2.0">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
