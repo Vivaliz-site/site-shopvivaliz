@@ -41,6 +41,9 @@ header('Content-Type: text/html; charset=UTF-8');
         .bubble.user{background:#dbeafe;color:#1e3a8a}.bubble.agent{background:#fff;color:#0f172a;border:1px solid #e2e8f0}
         .thread-form{display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:12px}
         .thread-form textarea{min-height:94px;border:1px solid #cbd5e1;border-radius:14px;padding:12px;resize:vertical}
+        .thread-status{margin-top:10px;font-size:13px;color:#475569;min-height:20px}
+        .thread-status.success{color:#166534}
+        .thread-status.error{color:#991b1b}
         .log-pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e5e7eb;border-radius:14px;padding:12px;font-size:12px;max-height:260px;overflow:auto}
         .agent-timeline{margin-top:12px;background:#0f172a;border-radius:14px;padding:10px 12px;max-height:190px;overflow:auto;border:1px solid #1e293b}
         .timeline-line{font:12px/1.45 Consolas,Monaco,monospace;color:#dbeafe;padding:4px 0;border-bottom:1px solid rgba(148,163,184,.14)}
@@ -123,6 +126,7 @@ header('Content-Type: text/html; charset=UTF-8');
                             <textarea id="thread-message" placeholder="Envie uma instrução direta para o agente selecionado..."></textarea>
                             <button class="ops-btn primary" type="submit">Enviar</button>
                         </form>
+                        <div class="thread-status" id="thread-status"></div>
                     </div>
                 </div>
             </article>
@@ -143,6 +147,11 @@ header('Content-Type: text/html; charset=UTF-8');
     const state = { agents: [], commands: [], responses: [], selectedAgent: 'claude' };
 
     function byId(id){ return document.getElementById(id); }
+    function setThreadStatus(text, kind){
+        const node = byId('thread-status');
+        node.textContent = text || '';
+        node.className = 'thread-status' + (kind ? ' ' + kind : '');
+    }
     function pill(node, text, kind){
         node.textContent = text;
         node.className = 'ops-pill ' + (kind || '');
@@ -267,10 +276,18 @@ header('Content-Type: text/html; charset=UTF-8');
             renderQueue(tasks.tasks || [], tasks.source || null);
             renderEvents(state.commands, state.responses);
             pill(byId('chat-pill'), 'Online', 'success');
+            const latestResponse = (state.responses || []).filter(function(item){
+                const agent = String(item.agent || item.agent_id || '').toLowerCase();
+                return agent === state.selectedAgent || (state.selectedAgent === 'gpt' && agent === 'chatgpt');
+            }).slice(-1)[0];
+            if (latestResponse) {
+                setThreadStatus('Ultima resposta recebida em ' + String(latestResponse.timestamp || latestResponse.created_at || '').replace('T', ' ').replace('Z', ''), 'success');
+            }
         } catch (error) {
             pill(byId('overall-pill'), 'Falha', 'error');
             pill(byId('chat-pill'), 'Falha', 'error');
             byId('events-log').textContent = String(error);
+            setThreadStatus('Falha ao atualizar dados do monitor.', 'error');
         }
     }
 
@@ -279,16 +296,18 @@ header('Content-Type: text/html; charset=UTF-8');
         const message = byId('thread-message').value.trim();
         if (!message) return;
         const agentId = state.selectedAgent;
-        byId('thread-message').value = '';
         try{
+            setThreadStatus('Enviando comando para ' + agentId + '...', '');
             await readJson('/api/monitor/api.php?action=send-command', {
                 method: 'POST',
                 headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({agent_id: agentId, message: message, source: 'central-agentes'})
             });
+            byId('thread-message').value = '';
+            setThreadStatus('Comando enviado. Aguardando resposta do agente...', 'success');
             await loadAll();
         } catch (error) {
-            alert('Falha ao enviar comando: ' + error.message);
+            setThreadStatus('Falha ao enviar comando: ' + error.message, 'error');
         }
     });
 
