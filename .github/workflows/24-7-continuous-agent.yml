@@ -1,27 +1,82 @@
-name: PAUSADO - 24-7 Continuous Agent
-# Desabilitado 2026-07-10: consolidado em autonomous-watchdog.yml.
-# Este workflow rodava a cada 5 min chamando o MESMO endpoint que
-# ai-autonomous-executor.yml, parallel-trio-executor.yml e
-# autonomous-watchdog.yml (api/agent/autonomous-watchdog.php?run_loop=1) -
-# eram 4 workflows fazendo a mesma chamada em cadencias diferentes.
-# Mantido so o autonomous-watchdog.yml (roda a cada 15 min e e o mais
-# completo: valida agent key, checa o endpoint antes de chamar, sobe
-# relatorio como artifact).
-#
-# Para reativar, troque o bloco "on:" abaixo por:
-#   on:
-#     schedule:
-#       - cron: '*/5 * * * *'
-#     workflow_dispatch:
-#       inputs:
-#         cycles:
-#           description: 'Quantidade de ciclos seguros do watchdog'
-#           required: false
-#           default: '1'
+name: 24-7 Continuous Agent
+
 on:
+  schedule:
+    - cron: '*/5 * * * *'
   workflow_dispatch:
+    inputs:
+      cycles:
+        description: 'Quantidade de ciclos seguros do watchdog'
+        required: false
+        default: '1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: continuous-agent-24-7
+  cancel-in-progress: true
+
+env:
+  SHOPVIVALIZ_BASE_URL: https://dev.shopvivaliz.com.br
+
 jobs:
-  pausado:
+  run-watchdog-loop:
+    name: Executar loop contínuo do watchdog
     runs-on: ubuntu-latest
+    timeout-minutes: 6
+
     steps:
-      - run: echo "Consolidado em autonomous-watchdog.yml. Rode manualmente via workflow_dispatch se precisar."
+      - name: Preparar URL do watchdog
+        shell: bash
+        run: |
+          CYCLES="${{ github.event.inputs.cycles || '1' }}"
+          AGENT_KEY="${{ secrets.SHOPVIVALIZ_AGENT_KEY }}"
+          [ -z "$AGENT_KEY" ] && AGENT_KEY="${{ secrets.AGENT_KEY }}"
+          [ -z "$AGENT_KEY" ] && AGENT_KEY="${{ secrets.WATCHDOG_AGENT_KEY }}"
+          [ -z "$AGENT_KEY" ] && AGENT_KEY="${{ secrets.AUTONOMOUS_AGENT_KEY }}"
+
+          URL="${SHOPVIVALIZ_BASE_URL%/}/api/agent/autonomous-watchdog.php?run_loop=1&cycles=$CYCLES"
+          if [ -n "$AGENT_KEY" ]; then
+            URL="$URL&agent_key=$AGENT_KEY"
+          fi
+
+          echo "WATCHDOG_URL=$URL" >> "$GITHUB_ENV"
+          echo "WATCHDOG_URL_DISPLAY=${SHOPVIVALIZ_BASE_URL%/}/api/agent/autonomous-watchdog.php?run_loop=1&cycles=$CYCLES&agent_key=***" >> "$GITHUB_ENV"
+
+      - name: Chamar watchdog 24/7
+        shell: bash
+        run: |
+          mkdir -p reports
+          echo "Chamando: $WATCHDOG_URL_DISPLAY"
+
+          HTTP_CODE=$(curl -sS -L \
+            --max-time 60 \
+            --retry 2 \
+            --retry-delay 5 \
+            --retry-all-errors \
+            -H "Accept: application/json" \
+            -o reports/watchdog-24-7.json \
+            -w "%{http_code}" \
+            "$WATCHDOG_URL")
+
+          echo "HTTP_CODE=$HTTP_CODE"
+          cat reports/watchdog-24-7.json
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::error::Watchdog retornou HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+      - name: Validar resposta JSON
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("reports/watchdog-24-7.json").read_text(encoding="utf-8"))
+          if "probes" not in payload:
+              raise SystemExit("Resposta do watchdog sem campo probes")
+          print("Watchdog OK:", payload.get("generated_at", "sem-data"))
+          PY
