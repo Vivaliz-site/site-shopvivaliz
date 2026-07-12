@@ -215,7 +215,12 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 }
 .sv-hero video { height: 138px !important; width: auto !important; }
 
-.sv-msgs { flex: 1 1 auto !important; }
+.sv-msgs { flex: 1 1 auto !important; padding-top: 4px !important; padding-bottom: 8px !important; }
+.sv-quick { padding: 4px 18px 4px !important; }
+.sv-quick button { padding: 4px 10px !important; font-size: 13px !important; }
+.sv-form { padding: 6px 18px 10px !important; }
+.sv-form input { padding: 10px 14px !important; height: 42px !important; }
+.sv-form button { min-height: 42px !important; padding: 0 16px !important; }
 
 @media(max-width: 600px) {
   #sv-liz-panel, #sv-liz-panel.open {
