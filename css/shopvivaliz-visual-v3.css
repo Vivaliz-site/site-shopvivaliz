@@ -505,3 +505,26 @@ body {
   box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
 }
 
+
+/* Logo Enhancement */
+.brand-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  padding: 6px 16px;
+  border-radius: 16px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+  transition: transform 0.3s ease;
+  margin-left: 10px;
+}
+.brand-link:hover {
+  transform: translateY(-2px) scale(1.02);
+}
+.brand-logo-img {
+  mix-blend-mode: normal; /* Override any global multiply */
+  max-height: 40px;
+  width: auto;
+  object-fit: contain;
+}
+
