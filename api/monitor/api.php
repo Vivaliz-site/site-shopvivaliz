@@ -262,6 +262,14 @@ function monitor_agent_activity(array $tasks, array $cycle): array
         $agentMessages = monitor_filter_by_agent($messages, $agentId, $aliases);
         $agentResponses = monitor_filter_by_agent($responses, $agentId, $aliases);
 
+        $processedCommandIds = [];
+        foreach ($agentResponses as $response) {
+            $commandId = (string)($response['command_id'] ?? '');
+            if ($commandId !== '') {
+                $processedCommandIds[$commandId] = true;
+            }
+        }
+
         $agents[] = [
             'id' => $agentId,
             'name' => $labels[$agentId] ?? strtoupper($agentId),
@@ -269,7 +277,13 @@ function monitor_agent_activity(array $tasks, array $cycle): array
             'heartbeat' => $heartbeats[$agentId] ?? ['alive' => false, 'age_s' => null, 'last_heartbeat' => null, 'tasks_processed' => 0],
             'assigned_tasks' => array_slice($assignedTasks, 0, 5),
             'current_focus' => $assignedTasks[0]['title'] ?? ($currentTask['title'] ?? 'Aguardando tarefa'),
-            'command_backlog' => count(array_filter($agentCommands, static fn(array $row): bool => (($row['status'] ?? 'queued') === 'queued'))),
+            'command_backlog' => count(array_filter($agentCommands, static function (array $row) use ($processedCommandIds): bool {
+                $commandId = (string)($row['id'] ?? '');
+                if ($commandId !== '' && isset($processedCommandIds[$commandId])) {
+                    return false;
+                }
+                return (($row['status'] ?? 'queued') === 'queued');
+            })),
             'latest_command' => $agentCommands ? $agentCommands[array_key_last($agentCommands)] : null,
             'latest_message' => $agentMessages ? $agentMessages[array_key_last($agentMessages)] : null,
             'latest_response' => $agentResponses ? $agentResponses[array_key_last($agentResponses)] : null,
