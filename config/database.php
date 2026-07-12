@@ -276,6 +276,20 @@ function create_tables() {
             INDEX idx_abs_sku (sku),
             INDEX idx_abs_status (status)
         )',
+
+        // Alertas de estoque (Task-033)
+        'CREATE TABLE IF NOT EXISTS stock_alerts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            sku VARCHAR(191) NOT NULL,
+            email VARCHAR(255) NOT NULL,
+            unsubscribe_token VARCHAR(64) NOT NULL,
+            status VARCHAR(40) NOT NULL DEFAULT "pending",
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_stock_alert_sku_email (sku, email),
+            INDEX idx_stock_alert_sku_status (sku, status),
+            INDEX idx_stock_alert_token (unsubscribe_token)
+        )',
     ];
 
     foreach ($tables as $table_sql) {

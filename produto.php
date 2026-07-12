@@ -463,9 +463,19 @@ if ($notFound) {
                 </div>
                 <div class="produto-actions">
                     <?php if ($priceRaw > 0 && $stockRaw > 0): ?>
-                        <button class="btn btn-primary" type="button" id="buy-now">🛒 Comprar agora</button>
+                        <button class="btn btn-primary btn-large btn-cta" type="button" id="buy-now" style="width: 100%; font-size: 1.2rem; font-weight: bold; background-color: #28a745; border-color: #28a745; box-shadow: 0 4px 6px rgba(40,167,69,0.3); transition: transform 0.2s, box-shadow 0.2s;">
+                            ✅ COMPRAR AGORA
+                        </button>
                     <?php elseif ($priceRaw > 0 && $stockRaw <= 0): ?>
-                        <button class="btn btn-disabled" type="button" disabled>Esgotado</button>
+                        <div class="stock-alert-form" id="stock-alert-form" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;">
+                            <h4 style="margin-top: 0; color: #d9534f;">Produto Esgotado 😢</h4>
+                            <p style="font-size: 0.9em; margin-bottom: 10px;">Mas não se preocupe! Insira seu e-mail abaixo e avisaremos assim que chegar.</p>
+                            <form id="frm-stock-alert" style="display: flex; gap: 10px;">
+                                <input type="email" id="alert-email" placeholder="Seu melhor e-mail" required style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                                <button type="submit" class="btn btn-primary" style="padding: 10px 15px; background: #007bff; border: none; color: #fff; border-radius: 4px; cursor: pointer;">Avise-me!</button>
+                            </form>
+                            <div id="alert-msg" style="margin-top: 10px; font-size: 0.9em; display: none;"></div>
+                        </div>
                     <?php else: ?>
                         <a class="btn btn-primary" href="<?= sv_esc($contactUrl) ?>">Falar com vendas</a>
                     <?php endif; ?>
@@ -570,6 +580,44 @@ if ($notFound) {
             var b = document.getElementById('nav-cart-count');
             if (b) b.textContent = n > 0 ? n : '';
         } catch(e){}
+    })();
+    <script>
+    (function() {
+        var frm = document.getElementById('frm-stock-alert');
+        if (frm) {
+            frm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                var email = document.getElementById('alert-email').value;
+                var msgBox = document.getElementById('alert-msg');
+                var btn = frm.querySelector('button');
+                
+                btn.disabled = true;
+                btn.textContent = 'Enviando...';
+                msgBox.style.display = 'none';
+                
+                fetch('/api/catalog/stock-alert.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sku: product.sku, email: email })
+                })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    msgBox.style.display = 'block';
+                    msgBox.style.color = data.ok ? 'green' : 'red';
+                    msgBox.textContent = data.message || data.error;
+                    if (data.ok) frm.reset();
+                })
+                .catch(function(err) {
+                    msgBox.style.display = 'block';
+                    msgBox.style.color = 'red';
+                    msgBox.textContent = 'Erro ao enviar. Tente novamente.';
+                })
+                .finally(function() {
+                    btn.disabled = false;
+                    btn.textContent = 'Avise-me!';
+                });
+            });
+        }
     })();
     </script>
     <?php include __DIR__ . '/includes/footer.php'; ?>
