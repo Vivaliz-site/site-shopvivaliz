@@ -192,12 +192,29 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 <style>
 /* CRITICAL LIZ E BUTTON OVERRIDES VIA INLINE STYLE PARA FURAR CACHE CDN */
 #sv-liz-panel, #sv-liz-panel.open {
-  top: 24px !important;
-  bottom: 24px !important;
-  height: calc(100vh - 48px) !important;
+  top: 10px !important;
+  bottom: 10px !important;
+  height: calc(100vh - 20px) !important;
   max-height: none !important;
   width: 380px !important;
 }
+
+.sv-head {
+  min-height: 50px !important;
+  height: 50px !important;
+  padding: 8px 14px !important;
+  flex: 0 0 50px !important;
+}
+.sv-head img { width: 70px !important; }
+.sv-head strong { font-size: 14px !important; }
+
+.sv-hero {
+  height: 70px !important;
+  flex: 0 0 70px !important;
+}
+.sv-hero video { height: 80px !important; }
+
+.sv-msgs { flex: 1 1 auto !important; }
 
 @media(max-width: 600px) {
   #sv-liz-panel, #sv-liz-panel.open {
