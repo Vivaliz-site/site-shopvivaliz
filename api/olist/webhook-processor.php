@@ -41,9 +41,11 @@ try {
     if ($db->connect_error) throw new Exception("DB: " . $db->connect_error);
     $db->set_charset('utf8mb4');
 } catch (Exception $e) {
-    log_event('error_db_connect', ['message' => $e->getMessage()]);
-    http_response_code(500);
-    die(json_encode(['ok' => false, 'error' => 'database']));
+    log_event('error_db_connect', ['message' => $e->getMessage(), 'errno' => $db->connect_errno ?? -1]);
+    http_response_code(503);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['ok' => false, 'error' => 'database_unavailable'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
 }
 
 // Receber webhook
