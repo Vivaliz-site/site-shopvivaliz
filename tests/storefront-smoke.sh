@@ -100,8 +100,8 @@ assert_status() {
   fi
 }
 
-assert_contains() { curl -fsS "$1" | grep -Fq "$2"; }
-assert_contains_allow_error() { curl -sS "$1" | grep -Fq "$2"; }
+assert_contains() { curl -fsS "$1" | grep -F "$2" >/dev/null; }
+assert_contains_allow_error() { curl -sS "$1" | grep -F "$2" >/dev/null; }
 
 assert_status 200 "${BASE_URL}/index.php"
 assert_status 200 "${BASE_URL}/catalogo.php"
