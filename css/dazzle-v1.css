@@ -655,6 +655,30 @@ summary:focus-visible {
 }
 
 /* ==========================================================
+   24b. MINI-CART DRAWER — vidro e profundidade
+   ========================================================== */
+.mini-cart-overlay {
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.mini-cart-drawer {
+  box-shadow: -12px 0 48px rgba(7, 52, 93, .22);
+}
+
+.mini-cart-header {
+  border-bottom: 2px solid transparent;
+  border-image: linear-gradient(90deg, var(--dz-blue-bright), var(--dz-green)) 1;
+}
+
+.mini-cart-header h3 {
+  background: linear-gradient(120deg, var(--dz-blue), var(--dz-green-deep));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ==========================================================
    25. KEYFRAMES EXTRAS
    ========================================================== */
 @keyframes dz-faq-open {
