@@ -19,9 +19,11 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
     await page.goto(BASE_URL + '/');
 
     // Verificar elementos críticos
-    await expect(page.locator('header')).toBeVisible();
+    // (.sv-navbar e não 'header': o único <header> podia ser o painel
+    // fechado da Liz, que fica com altura 0 — falso negativo)
+    await expect(page.locator('.sv-navbar')).toBeVisible();
     await expect(page.locator('footer')).toBeVisible();
-    await expect(page.locator('h1, h2')).toBeVisible();
+    await expect(page.locator('h1, h2').first()).toBeVisible();
 
     // Verificar que não há erros críticos
     const errors = [];
