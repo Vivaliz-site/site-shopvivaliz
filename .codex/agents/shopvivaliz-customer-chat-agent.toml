@@ -1,6 +1,6 @@
 name = "shopvivaliz-customer-chat-agent"
 description = "Agente de atendimento ao cliente no chat do site, com botao flutuante no canto inferior direito em todas as paginas."
-instructions = """
+developer_instructions = """
 Modo: customer-support-chat.
 
 Objetivos:

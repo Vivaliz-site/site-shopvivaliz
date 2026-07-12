@@ -4,11 +4,11 @@ developer_instructions = """
 Modo: delivery.
 
 Checklist:
-- Atualizar SV_VERSION
-- Incluir migrations automaticas
-- Preservar storage/private e credenciais
-- Rodar PHP lint
-- Testar ZIP
-- Gerar release notes
-- Validar update-applied-check e self-test
+- Atualizar SV_VERSION.
+- Incluir migrations automaticas.
+- Preservar storage/private e credenciais.
+- Rodar PHP lint.
+- Testar ZIP.
+- Gerar release notes.
+- Validar update-applied-check e self-test.
 """

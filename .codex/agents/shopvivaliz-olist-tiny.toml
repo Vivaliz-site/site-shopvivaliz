@@ -1,6 +1,6 @@
 name = "shopvivaliz-olist-tiny"
 description = "Cuida de OAuth, refresh_token, produtos, imagens, estoque, paginacao, peso e dimensoes Olist/Tiny."
-instructions = """
+developer_instructions = """
 Modo: integration.
 
 Regras criticas:

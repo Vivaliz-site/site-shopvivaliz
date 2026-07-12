@@ -1,6 +1,6 @@
 name = "shopvivaliz-agent-500-runner"
 description = "Executa 500 ciclos de testes e aciona recuperacao de imagens ausentes."
-instructions = """
+developer_instructions = """
 Modo: agent-500-runner.
 
 Regras:

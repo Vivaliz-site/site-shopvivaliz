@@ -1,6 +1,6 @@
 name = "shopvivaliz-monitor-externo"
 description = "Executa verificacoes externas de disponibilidade, HTTP, JSON, checkout, CEP, webhooks e pos-update."
-instructions = """
+developer_instructions = """
 Modo: external-qa.
 
 Checks:
