@@ -12,21 +12,21 @@
 ## Credenciais Shopee
 
 ### Sandbox Account
-- **Shop ID**: 227695582
-- **Partner ID**: 1237032
-- **Shop Account**: SANDBOX.b6fb03003426929be0c1
-- **Shop Password**: 56194122e737c5cd
+- **Shop ID**: `[definir via secrets]`
+- **Partner ID**: `[definir via secrets]`
+- **Shop Account**: `[configurar localmente]`
+- **Shop Password**: `[configurar localmente]`
 - **Regiao**: SG -> BR (Brasil)
 
 ### API Keys
-- **Test Partner Key**: `shpk574f454f6a756e534e7476726b67727a5242554c76736d4b56567769554d`
-- **Test API Key**: `shpk574445f6a756e534e7476726b87f72a5242554c76736d4b65657f769554d`
+- **Test Partner Key**: `[definir via secrets]`
+- **Test API Key**: `[definir via secrets]`
 
 ### OAuth Tokens (Válidos por ~4 horas)
 ```
-Authorization Code: 46705950714d6f455775517942704a53
-Access Token: 535a586d674844627874525179787554
-Refresh Token: 4f59435665486e4b5a51596e46656e4f
+Authorization Code: [definir via secrets]
+Access Token: [definir via secrets]
+Refresh Token: [definir via secrets]
 Expiration: 14213 segundos (~4 horas)
 ```
 
@@ -42,22 +42,22 @@ Expiration: 14213 segundos (~4 horas)
 SMTP_HOST = smtp0101.titan.email
 SMTP_PORT = 465
 SMTP_USER = gpt@shopvivaliz.com.br
-SMTP_PASS = Chagosnik@13
+SMTP_PASS = [configurar no GitHub Secrets]
 EMAIL_FROM = gpt@shopvivaliz.com.br
 EMAIL_TO = fredmourao@gmail.com
 ```
 
 ### Shopee Secrets
 ```
-SHOPEE_SHOP_ID = 227695582
-SHOPEE_ACCESS_TOKEN = 535a586d674844627874525179787554
-SHOPEE_REFRESH_TOKEN = 4f59435665486e4b5a51596e46656e4f
-SHOPEE_AUTH_CODE = 46705950714d6f455775517942704a53
-SHOPEE_TEST_PARTNER_ID = 1237032
-SHOPEE_TEST_PARTNER_KEY = shpk574f454f6a756e534e7476726b67727a5242554c76736d4b56567769554d
-SHOPEE_SANDBOX_USER = SANDBOX.b6fb03003426929be0c1
-SHOPEE_SANDBOX_PASS = 56194122e737c5cd
-SHOPEE_TEST_API_KEY = shpk574445f6a756e534e7476726b87f72a5242554c76736d4b65657f769554d
+SHOPEE_SHOP_ID = [definir via secrets]
+SHOPEE_ACCESS_TOKEN = [definir via secrets]
+SHOPEE_REFRESH_TOKEN = [definir via secrets]
+SHOPEE_AUTH_CODE = [definir via secrets]
+SHOPEE_TEST_PARTNER_ID = [definir via secrets]
+SHOPEE_TEST_PARTNER_KEY = [definir via secrets]
+SHOPEE_SANDBOX_USER = [configurar localmente]
+SHOPEE_SANDBOX_PASS = [configurar localmente]
+SHOPEE_TEST_API_KEY = [definir via secrets]
 ```
 
 ### Todos os 33 Secrets Copiados
@@ -119,10 +119,10 @@ if sys.platform == 'win32':
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-PARTNER_ID = 1237032
-PARTNER_KEY = "shpk574f454f6a756e534e7476726b67727a5242554c76736d4b56567769554d"
-USER = "SANDBOX.b6fb03003426929be0c1"
-PASS = "56194122e737c5cd"
+PARTNER_ID = os.getenv("SHOPEE_TEST_PARTNER_ID", "")
+PARTNER_KEY = os.getenv("SHOPEE_TEST_PARTNER_KEY", "")
+USER = os.getenv("SHOPEE_SANDBOX_USER", "")
+PASS = os.getenv("SHOPEE_SANDBOX_PASS", "")
 REDIRECT = "https://dev.shopvivaliz.com.br"
 AUTH = "https://openplatform.sandbox.test-stable.shopee.sg/api/v2/shop/auth_partner"
 
@@ -251,11 +251,11 @@ import hmac
 import hashlib
 import requests
 
-PARTNER_ID = 1237032
-PARTNER_KEY = "shpk574f454f6a756e534e7476726b67727a5242554c76736d4b56567769554d"
+PARTNER_ID = os.getenv("SHOPEE_TEST_PARTNER_ID", "")
+PARTNER_KEY = os.getenv("SHOPEE_TEST_PARTNER_KEY", "")
 
-CODE = "46705950714d6f455775517942704a53"
-SHOP_ID = 227695582
+CODE = os.getenv("SHOPEE_AUTH_CODE", "")
+SHOP_ID = os.getenv("SHOPEE_SHOP_ID", "")
 
 PATH = "/api/v2/auth/token/get"
 
@@ -311,12 +311,12 @@ python scripts/get_token.py
 **Resposta esperada:**
 ```json
 {
-  "access_token": "535a586d674844627874525179787554",
-  "refresh_token": "4f59435665486e4b5a51596e46656e4f",
+  "access_token": "[token_exemplo]",
+  "refresh_token": "[refresh_token_exemplo]",
   "expire_in": 14213,
   "request_id": "e3e3e7f35565bda9b133567c32520a00",
   "merchant_id_list": [],
-  "shop_id_list": [227695582],
+  "shop_id_list": ["[shop_id]"],
   "supplier_id_list": [],
   "user_id_list": [5835321926],
   "error": "",
@@ -337,10 +337,10 @@ import hashlib
 import requests
 import json
 
-PARTNER_ID = 1237032
-PARTNER_KEY = "shpk574f454f6a756e534e7476726b67727a5242554c76736d4b56567769554d"
-ACCESS_TOKEN = "535a586d674844627874525179787554"
-SHOP_ID = 227695582
+PARTNER_ID = os.getenv("SHOPEE_TEST_PARTNER_ID", "")
+PARTNER_KEY = os.getenv("SHOPEE_TEST_PARTNER_KEY", "")
+ACCESS_TOKEN = os.getenv("SHOPEE_ACCESS_TOKEN", "")
+SHOP_ID = os.getenv("SHOPEE_SHOP_ID", "")
 
 BASE_URL = "https://openplatform.sandbox.test-stable.shopee.sg"
 
@@ -460,15 +460,15 @@ python scripts/test_shopee_api.py
 ```
 POST /api/v2/auth/token/get
 Query params:
-  - partner_id: 1237032
+  - partner_id: [partner_id]
   - timestamp: Unix timestamp
   - sign: HMAC-SHA256
 
 Body:
 {
   "code": "authorization_code",
-  "shop_id": 227695582,
-  "partner_id": 1237032
+  "shop_id": [shop_id],
+  "partner_id": [partner_id]
 }
 
 Response:
@@ -483,33 +483,33 @@ Response:
 ```
 GET /api/v2/shop/get_shop_info
 Query params:
-  - partner_id: 1237032
+  - partner_id: [partner_id]
   - timestamp: Unix timestamp
   - sign: HMAC-SHA256
   - access_token: xxxxx
-  - shop_id: 227695582
+  - shop_id: [shop_id]
 ```
 
 #### 3. Listar Categorias
 ```
 GET /api/v2/product/get_categories
 Query params:
-  - partner_id: 1237032
+  - partner_id: [partner_id]
   - timestamp: Unix timestamp
   - sign: HMAC-SHA256
   - access_token: xxxxx
-  - shop_id: 227695582
+  - shop_id: [shop_id]
 ```
 
 #### 4. Buscar Produtos
 ```
 GET /api/v2/product/search_product
 Query params:
-  - partner_id: 1237032
+  - partner_id: [partner_id]
   - timestamp: Unix timestamp
   - sign: HMAC-SHA256
   - access_token: xxxxx
-  - shop_id: 227695582
+  - shop_id: [shop_id]
 ```
 
 ---
@@ -531,8 +531,8 @@ sign = HMAC_SHA256(
 import hmac
 import hashlib
 
-PARTNER_ID = 1237032
-PARTNER_KEY = "shpk574f454f6a756e534e7476726b67727a5242554c76736d4b56567769554d"
+PARTNER_ID = os.getenv("SHOPEE_TEST_PARTNER_ID", "")
+PARTNER_KEY = os.getenv("SHOPEE_TEST_PARTNER_KEY", "")
 path = "/api/v2/auth/token/get"
 timestamp = 1782745222
 
