@@ -39,6 +39,11 @@ body::after {
   color: var(--dz-ink);
 }
 
+/* Âncoras não ficam escondidas atrás da navbar sticky */
+html {
+  scroll-padding-top: 90px;
+}
+
 /* Scrollbar refinada */
 ::-webkit-scrollbar { width: 11px; height: 11px; }
 ::-webkit-scrollbar-track { background: #eef3f8; }
