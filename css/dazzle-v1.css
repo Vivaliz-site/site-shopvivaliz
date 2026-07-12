@@ -683,7 +683,13 @@ summary:focus-visible {
   .btn-hero-primary::before,
   .btn-checkout::before,
   .main-buy-button::before,
-  .cart-badge {
+  .cart-badge,
+  .error-code,
+  .error-shell,
+  .cart-empty,
+  .checkout-empty,
+  .product-empty-state,
+  .dz-ripple {
     animation: none !important;
   }
 
