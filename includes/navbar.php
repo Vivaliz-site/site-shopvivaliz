@@ -70,14 +70,15 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 <style>
 .sv-whatsapp-float{
     position:fixed;
-    right:18px;
-    bottom:18px;
+    left:20px;
+    bottom:20px;
     z-index:1200;
     display:inline-flex;
     align-items:center;
-    gap:10px;
-    min-height:56px;
-    padding:0 18px;
+    justify-content:center;
+    width:60px;
+    height:60px;
+    padding:0;
     border-radius:999px;
     background:#25d366;
     color:#fff;
@@ -98,13 +99,14 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 .sv-whatsapp-float__icon{
     width:34px;
     height:34px;
-    border-radius:999px;
-    background:rgba(255,255,255,.18);
     display:inline-flex;
     align-items:center;
     justify-content:center;
-    font-size:18px;
-    flex:0 0 34px;
+}
+.sv-whatsapp-float__icon svg {
+    width: 100%;
+    height: 100%;
+    fill: #ffffff;
 }
 .sv-whatsapp-float__text{
     display:flex;
@@ -122,10 +124,10 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 }
 @media (max-width: 640px){
     .sv-whatsapp-float{
-        right:14px;
+        left:14px;
         bottom:14px;
-        min-height:52px;
-        padding:0 14px;
+        width:52px;
+        height:52px;
     }
     .sv-whatsapp-float__text small{
         display:none;
@@ -182,9 +184,7 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
     href="<?= htmlspecialchars($svWhatsappLink, ENT_QUOTES, 'UTF-8') ?>"
     <?= $svWhatsappDigits !== '' ? 'target="_blank" rel="noopener"' : '' ?>
     aria-label="Falar com a ShopVivaliz no WhatsApp">
-    <span class="sv-whatsapp-float__icon" aria-hidden="true">W</span>
-    <span class="sv-whatsapp-float__text">
-        <small>Atendimento rapido</small>
-        <strong>WhatsApp</strong>
+    <span class="sv-whatsapp-float__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12.01 2.01c-5.5 0-9.98 4.47-9.98 9.98 0 1.95.55 3.84 1.58 5.48L2.01 22l4.63-1.57a9.92 9.92 0 0 0 5.37 1.56c5.5 0 9.98-4.48 9.98-9.99 0-5.51-4.48-9.99-9.98-9.99zm5.34 14.36c-.23.64-1.34 1.22-1.85 1.28-.51.06-1.12.18-3.15-.66-2.42-1.01-3.95-3.48-4.07-3.64-.12-.16-.97-1.3-.97-2.48s.62-1.74.84-1.98c.22-.24.47-.29.63-.29s.32.01.46.01c.14 0 .34-.05.53.4.2.47.69 1.68.75 1.8.06.12.1.26.02.41s-.12.24-.24.36c-.12.12-.26.26-.37.36-.12.11-.25.24-.12.47.12.22.56.93 1.2 1.51.83.74 1.54.97 1.77 1.09.23.12.36.1.49-.05.13-.15.56-.65.71-.87.15-.22.3-.18.5-.11.2.07 1.29.61 1.51.72.22.11.37.17.42.26.06.1.06.56-.17 1.2z"/></svg>
     </span>
 </a>
