@@ -166,8 +166,9 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
   test('✅ Liz mascote carrega', async ({ page }) => {
     await page.goto(BASE_URL + '/');
 
-    // Procurar widget Liz
-    const liz = page.locator('[class*="liz"], [id*="liz"], [class*="mascote"], [class*="assistant"]');
+    // Procurar widget Liz pelo id do launcher (seletor amplo antigo casava
+    // com 2+ elementos e estourava strict mode do Playwright)
+    const liz = page.locator('#sv-liz-launcher').first();
 
     if (await liz.isVisible()) {
       console.log('✅ Liz mascote visível');
