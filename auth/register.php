@@ -13,6 +13,7 @@ ini_set('display_errors', '0');
 
 require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/social-auth.php';
 
 $error = '';
 $success = '';
@@ -84,6 +85,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+$google_auth_url = sv_social_google_auth_url('register', '/');
+$apple_auth_url = sv_social_apple_auth_url('register', '/');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -299,13 +302,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="divider">OU</div>
 
-        <a href="/auth/google-callback.php?action=register" class="social-button">
+        <?php if ($google_auth_url !== ''): ?>
+        <a href="<?= htmlspecialchars($google_auth_url, ENT_QUOTES, 'UTF-8') ?>" class="social-button">
             <span>●</span> Cadastrar com Google
         </a>
+        <?php endif; ?>
 
-        <a href="/auth/apple-callback.php?action=register" class="social-button">
+        <?php if ($apple_auth_url !== ''): ?>
+        <a href="<?= htmlspecialchars($apple_auth_url, ENT_QUOTES, 'UTF-8') ?>" class="social-button">
             <span>●</span> Cadastrar com Apple
         </a>
+        <?php endif; ?>
 
         <div class="footer-link">
             Já tem conta? <a href="/auth/login.php">Faça login</a>

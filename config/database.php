@@ -300,6 +300,54 @@ function create_tables() {
         }
     }
 
+    $userColumns = [];
+    $columnsResult = $db->query("SHOW COLUMNS FROM users");
+    if ($columnsResult instanceof mysqli_result) {
+        while ($column = $columnsResult->fetch_assoc()) {
+            $field = (string)($column['Field'] ?? '');
+            if ($field !== '') {
+                $userColumns[$field] = true;
+            }
+        }
+    }
+
+    $userAlterations = [
+        'google_id' => "ALTER TABLE users ADD COLUMN google_id VARCHAR(255) NULL AFTER password_hash",
+        'apple_id' => "ALTER TABLE users ADD COLUMN apple_id VARCHAR(255) NULL AFTER google_id",
+        'avatar_url' => "ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500) NULL AFTER apple_id",
+        'email_verified_at' => "ALTER TABLE users ADD COLUMN email_verified_at DATETIME NULL AFTER avatar_url",
+    ];
+
+    foreach ($userAlterations as $column => $sql) {
+        if (!isset($userColumns[$column]) && !$db->query($sql)) {
+            log_error('Failed to alter users table', ['column' => $column, 'error' => $db->error]);
+            return false;
+        }
+    }
+
+    $userIndexes = [];
+    $indexResult = $db->query("SHOW INDEX FROM users");
+    if ($indexResult instanceof mysqli_result) {
+        while ($index = $indexResult->fetch_assoc()) {
+            $name = (string)($index['Key_name'] ?? '');
+            if ($name !== '') {
+                $userIndexes[$name] = true;
+            }
+        }
+    }
+
+    $userIndexAlterations = [
+        'idx_users_google_id' => "ALTER TABLE users ADD UNIQUE KEY idx_users_google_id (google_id)",
+        'idx_users_apple_id' => "ALTER TABLE users ADD UNIQUE KEY idx_users_apple_id (apple_id)",
+    ];
+
+    foreach ($userIndexAlterations as $index => $sql) {
+        if (!isset($userIndexes[$index]) && !$db->query($sql)) {
+            log_error('Failed to create users social index', ['index' => $index, 'error' => $db->error]);
+            return false;
+        }
+    }
+
     return true;
 }
 
