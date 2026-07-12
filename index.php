@@ -223,13 +223,14 @@ $svNavCurrent = '';
     <meta http-equiv="Expires" content="0">
     <meta property="og:title" content="Vivaliz | Loja Online">
     <meta property="og:description" content="Catálogo com produtos de qualidade. Compre online com entrega rápida.">
-    <meta property="og:image" content="/images/logo-vivaliz-square.png">
+    <meta property="og:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square.png">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://shopvivaliz.com.br/">
     <meta property="og:site_name" content="ShopVivaliz">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Vivaliz | Loja Online">
     <meta name="twitter:description" content="Catálogo com produtos de qualidade. Compre online com entrega rápida.">
+    <meta name="twitter:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square.png">
     <link rel="canonical" href="https://shopvivaliz.com.br/">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
 
@@ -471,7 +472,7 @@ $svNavCurrent = '';
                     <div class="testimonial-stars"><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span></div>
                     <p style="font-size: 14px; color: #4b5563; line-height: 1.7; margin-bottom: 20px;">"Comprei rodízios em gel para o meu armário e a qualidade é fantástica! O deslizamento é suave e silencioso. Entrega muito rápida."</p>
                     <div class="testimonial-author" style="display: flex; align-items: center; gap: 12px;">
-                        <img class="testimonial-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&q=80" alt="Ana Paula">
+                        <img class="testimonial-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&q=80" loading="lazy" decoding="async" alt="Ana Paula">
                         <div>
                             <strong style="display: block; font-size: 14px; color: #111;">Ana Paula M.</strong>
                             <span style="font-size: 12px; color: #9ca3af;">São Paulo - SP</span>
@@ -482,7 +483,7 @@ $svNavCurrent = '';
                     <div class="testimonial-stars"><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span></div>
                     <p style="font-size: 14px; color: #4b5563; line-height: 1.7; margin-bottom: 20px;">"Excelente atendimento! O suporte tirou minhas dúvidas sobre a compatibilidade do engate rápido para mangueira. Indico a todos!"</p>
                     <div class="testimonial-author" style="display: flex; align-items: center; gap: 12px;">
-                        <img class="testimonial-avatar" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&q=80" alt="Marcos Silva">
+                        <img class="testimonial-avatar" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&q=80" loading="lazy" decoding="async" alt="Marcos Silva">
                         <div>
                             <strong style="display: block; font-size: 14px; color: #111;">Marcos Silva T.</strong>
                             <span style="font-size: 12px; color: #9ca3af;">Curitiba - PR</span>
@@ -493,7 +494,7 @@ $svNavCurrent = '';
                     <div class="testimonial-stars"><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span></div>
                     <p style="font-size: 14px; color: #4b5563; line-height: 1.7; margin-bottom: 20px;">"As caixas organizadoras superaram minhas expectativas. Super resistentes e bonitas. Site fácil de comprar pelo celular e seguro."</p>
                     <div class="testimonial-author" style="display: flex; align-items: center; gap: 12px;">
-                        <img class="testimonial-avatar" src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&h=100&fit=crop&q=80" alt="Julia Costa">
+                        <img class="testimonial-avatar" src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&h=100&fit=crop&q=80" loading="lazy" decoding="async" alt="Julia Costa">
                         <div>
                             <strong style="display: block; font-size: 14px; color: #111;">Julia Costa F.</strong>
                             <span style="font-size: 12px; color: #9ca3af;">Belo Horizonte - MG</span>

@@ -8,6 +8,53 @@
 
 ---
 
+## 2026-07-12 — php-lint quebrado no CI por sintaxe JSON em array PHP
+
+- **Sintoma:** job `php-lint` falhando em todos os PRs com `Parse error: unexpected token ":"` .
+- **Causa real:** `includes/analytics-tracking.php` linha 196 — um agente escreveu array PHP com
+  sintaxe JSON (`'chave': valor`) em vez de `'chave' => valor` no payload do TikTok Pixel.
+- **Correção:** trocado `:` por `=>` nas 9 chaves do array `$payload` (linhas 196–207).
+  As linhas 271–272 com `:` são JavaScript dentro de heredoc — válidas, não mexer.
+- **Onde:** `includes/analytics-tracking.php`, PR #274.
+- **Lição:** rodar `php -l` localmente em qualquer PHP gerado por IA antes de commitar.
+
+## 2026-07-12 — Suite Playwright E2E falhando (5 testes) e bloqueando promoção de código
+
+- **Sintoma:** job "Playwright E2E" falhando em todo PR com 5 testes quebrados; os testes rodam
+  contra a PRODUÇÃO (`https://dev.shopvivaliz.com.br`), não contra o código do PR.
+- **Causas reais (uma por teste):**
+  1. *Homepage*: `locator('header')` pegava o único `<header>` da página — o cabeçalho interno
+     do painel FECHADO da Liz (altura 0 = "hidden"). A navbar real era `<nav>`, não `<header>`.
+  2. *Navegação de categorias*: asserção `not.toContain(BASE_URL + '/')` é impossível de passar —
+     toda URL do site contém esse prefixo.
+  3. *Carrinho*: clicar no link do carrinho abre o mini-cart drawer (sem mudar URL) → falso negativo.
+  4. *Liz mascote*: seletor `[class*="liz"], [id*="liz"]...` casava 2+ elementos → strict mode violation.
+  5. *Preços válidos*: varria a página toda com `text=/R\$ .../` e casava o subtotal "R$ 0,00" do
+     mini-cart vazio.
+- **Correções:** navbar agora é `<header class="navbar sv-navbar"><nav class="container nav-inner">`
+  (semântica correta, sticky preservado — classes CSS inalteradas); `<header class="sv-head">` da Liz
+  virou `<div>`; testes reescritos com seletores determinísticos (`.sv-navbar`, `#sv-liz-launcher`,
+  `.product-price`) e asserções possíveis. Suite completa: 16/16 passando localmente contra produção.
+- **Onde:** `includes/navbar.php`, `public/assets/liz-assistant/liz-assistant.js`,
+  `tests/e2e-journey.spec.js`, `tests/precos-catalogo.spec.ts`, PR #274.
+- **Lição:** testes E2E que rodam contra produção precisam de seletores específicos (id/classe do
+  projeto), nunca genéricos (`header`, `[class*=...]`) — o DOM de produção muda a cada deploy de
+  outro agente.
+
+## 2026-07-12 — Camada visual global "dazzle-v1" (melhoria, não bug)
+
+- **O que:** polish visual site-wide via `css/dazzle-v1.css` + `js/dazzle-v1.js`, carregados em
+  `includes/navbar.php` (todas as páginas principais), `includes/header.php` (políticas legais),
+  `meus-pedidos.php` e `auth/login.php` / `auth/register.php`.
+- **Design seguro:** sem seletores `[class*=...]` (ver entrada 2026-07-11), só polish aditivo
+  (hover/animação/sombra), sem resets de layout, `prefers-reduced-motion` respeitado, reveal ao
+  scroll com failsafe de 4s (nada fica invisível se o IntersectionObserver falhar) e itens de
+  carrossel horizontal excluídos do reveal.
+- **Onde:** `css/dazzle-v1.css`, `js/dazzle-v1.js`, PR #274. Para evoluir o visual, edite esses
+  dois arquivos e faça bump do query string `?v=` nos três pontos de include.
+
+---
+
 ## 2026-07-11 — Wildcards CSS reintroduzidos 10x, skeleton/hero quebrado recorrentemente
 
 - **Sintoma:** Hero section, categorias, e cards renderizando com layout destruído — acontecia múltiplas vezes por dia.

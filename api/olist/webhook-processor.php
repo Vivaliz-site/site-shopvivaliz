@@ -31,19 +31,33 @@ if (is_file($env_file)) {
 }
 
 // Tentar banco de dados
+$db = null;
 try {
-    $db = new mysqli(
-        getenv('DB_HOST') ?: 'localhost',
-        getenv('DB_USER') ?: 'root',
-        getenv('DB_PASS') ?: '',
-        getenv('DB_NAME') ?: 'shopvivaliz'
-    );
-    if ($db->connect_error) throw new Exception("DB: " . $db->connect_error);
+    $host = getenv('DB_HOST') ?: 'localhost';
+    $user = getenv('DB_USER') ?: 'root';
+    $pass = getenv('DB_PASS') ?: '';
+    $name = getenv('DB_NAME') ?: 'shopvivaliz';
+
+    $db = @new mysqli($host, $user, $pass, $name);
+    if (!$db || $db->connect_error) {
+        throw new Exception("DB Connection failed: " . ($db->connect_error ?? 'Unknown error'));
+    }
     $db->set_charset('utf8mb4');
 } catch (Exception $e) {
-    log_event('error_db_connect', ['message' => $e->getMessage()]);
-    http_response_code(500);
-    die(json_encode(['ok' => false, 'error' => 'database']));
+    log_event('error_db_connect', [
+        'message' => $e->getMessage(),
+        'errno' => $db->connect_errno ?? -1,
+        'host' => $host ?? 'unknown',
+        'name' => $name ?? 'unknown'
+    ]);
+    http_response_code(503);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'ok' => false,
+        'error' => 'database_unavailable',
+        'message' => 'Banco de dados indisponível'
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
 }
 
 // Receber webhook
@@ -51,7 +65,9 @@ $payload = json_decode((string)file_get_contents('php://input'), true) ?: [];
 
 if (!$payload) {
     http_response_code(400);
-    die(json_encode(['ok' => false, 'error' => 'empty_payload']));
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['ok' => false, 'error' => 'empty_payload'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
 }
 
 $event_type = $payload['event'] ?? $payload['type'] ?? '';
