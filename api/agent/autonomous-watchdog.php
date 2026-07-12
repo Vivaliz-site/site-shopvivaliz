@@ -2,6 +2,27 @@
 
 declare(strict_types=1);
 
+// Bootstrap .env early so auth can resolve runtime secrets on Apache/FPM and CLI.
+(static function (): void {
+    $envFile = dirname(__DIR__, 2) . '/.env';
+    if (!is_file($envFile)) {
+        return;
+    }
+    foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) {
+            continue;
+        }
+        [$key, $value] = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim(trim($value), '"\'');
+        if ($key !== '' && getenv($key) === false) {
+            putenv($key . '=' . $value);
+            $_SERVER[$key] = $value;
+        }
+    }
+})();
+
 header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -21,13 +42,30 @@ function svaw_header(string $name): string
 
 function svaw_expected_key(): string
 {
-    foreach (['SHOPVIVALIZ_AGENT_KEY', 'AGENT_KEY', 'WATCHDOG_AGENT_KEY', 'AUTONOMOUS_AGENT_KEY'] as $name) {
+    foreach (['SHOPVIVALIZ_AGENT_KEY', 'AGENT_KEY', 'WATCHDOG_AGENT_KEY', 'AUTONOMOUS_AGENT_KEY', 'CRON_SECRET', 'APP_KEY', 'SHOPVIVALIZ_APP_KEY'] as $name) {
         $value = getenv($name);
         if (is_string($value) && trim($value) !== '') {
             return trim($value);
         }
         if (isset($_SERVER[$name]) && trim((string)$_SERVER[$name]) !== '') {
             return trim((string)$_SERVER[$name]);
+        }
+    }
+    return '';
+}
+
+function svaw_provided_key(): string
+{
+    foreach ([
+        svaw_header('X-ShopVivaliz-Agent-Key'),
+        svaw_header('X-Agent-Key'),
+        trim((string)($_GET['agent_key'] ?? '')),
+        trim((string)($_POST['agent_key'] ?? '')),
+        trim((string)($_GET['secret'] ?? '')),
+        trim((string)($_POST['secret'] ?? '')),
+    ] as $candidate) {
+        if ($candidate !== '') {
+            return $candidate;
         }
     }
     return '';
@@ -63,14 +101,9 @@ if ($expectedKey === '') {
     svaw_reply(503, ['ok' => false, 'agent' => 'autonomous_watchdog', 'error' => 'agent_key_not_configured']);
 }
 
-$providedKey = svaw_header('X-ShopVivaliz-Agent-Key');
+$providedKey = svaw_provided_key();
 if ($providedKey === '' || !hash_equals($expectedKey, $providedKey)) {
     svaw_reply(401, ['ok' => false, 'agent' => 'autonomous_watchdog', 'error' => 'unauthorized']);
-}
-
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
-    header('Allow: POST');
-    svaw_reply(405, ['ok' => false, 'agent' => 'autonomous_watchdog', 'error' => 'method_not_allowed']);
 }
 
 $root = dirname(__DIR__, 2);
@@ -87,10 +120,10 @@ $body = file_get_contents('php://input');
 $input = json_decode(is_string($body) ? $body : '', true);
 if (!is_array($input)) $input = [];
 $options = [
-    'run_loop' => true,
-    'cycles' => max(1, min(10, (int)($input['cycles'] ?? 1))),
-    'chunk_size' => max(1, min(25, (int)($input['chunk_size'] ?? 10))),
-    'image_limit' => max(1, min(500, (int)($input['image_limit'] ?? 100))),
+    'run_loop' => (bool)($input['run_loop'] ?? $_POST['run_loop'] ?? $_GET['run_loop'] ?? true),
+    'cycles' => max(1, min(10, (int)($input['cycles'] ?? $_POST['cycles'] ?? $_GET['cycles'] ?? 1))),
+    'chunk_size' => max(1, min(25, (int)($input['chunk_size'] ?? $_POST['chunk_size'] ?? $_GET['chunk_size'] ?? 10))),
+    'image_limit' => max(1, min(500, (int)($input['image_limit'] ?? $_POST['image_limit'] ?? $_GET['image_limit'] ?? 100))),
 ];
 
 try {
