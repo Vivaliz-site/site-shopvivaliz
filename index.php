@@ -135,13 +135,13 @@ function sv_home_banners(): array
     return [
         [
             'alt' => 'Banner Vivaliz com 10% de desconto na primeira compra',
-            'image' => '/public/assets/home-banners/banner-primeira-compra.png',
+            'image' => '/public/assets/home-banners/banner-primeira-compra.jpg',
             'primary' => ['label' => 'Explorar catálogo', 'href' => '/catalogo'],
             'secondary' => ['label' => 'Falar com vendas', 'href' => '/contato'],
         ],
         [
             'alt' => 'Banner Vivaliz para casa, jardim e organização',
-            'image' => '/public/assets/home-banners/banner-casa-estilo.png',
+            'image' => '/public/assets/home-banners/banner-casa-estilo.jpg',
             'primary' => ['label' => 'Ver produtos', 'href' => '/catalogo'],
             'secondary' => ['label' => 'Abrir contato', 'href' => '/contato'],
         ],
