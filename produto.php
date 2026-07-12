@@ -436,7 +436,7 @@ if ($notFound) {
         </section>
         <?php else: ?>
         <div class="product-detail">
-            <div class="product-detail-image">
+            <div class="product-detail-image skeleton hover-zoom-container">
                 <img src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" onerror="this.src='<?= sv_product_default_image() ?>'" loading="eager">
             </div>
             <div class="product-detail-copy">
@@ -444,8 +444,16 @@ if ($notFound) {
                     <div class="product-category"><?= sv_esc($category) ?></div>
                 <?php endif; ?>
                 <h1><?= sv_esc($name) ?></h1>
+                <div style="color: #fbbf24; font-size: 14px; margin-bottom: 10px;">
+                    ★★★★★ <span style="color: #6b7280; font-size: 12px; margin-left: 5px;">(4.9/5 - Excelente)</span>
+                </div>
                 <p class="product-description"><?= sv_esc($description) ?></p>
                 <div class="product-price-block">
+                    <?php if ($stockRaw > 0 && $stockRaw <= 5): ?>
+                        <div class="urgency-tag">
+                            <i>🔥</i> Apenas <?= $stockRaw ?> unidades restantes!
+                        </div>
+                    <?php endif; ?>
                     <span class="product-price-label"><?= sv_esc($priceLabel) ?></span>
                     <?php if ($priceRaw === 0.0): ?>
                         <span class="price-hint">Fale com a equipe para confirmar valor e disponibilidade</span>
@@ -467,9 +475,14 @@ if ($notFound) {
                 </div>
                 <div class="produto-actions">
                     <?php if ($priceRaw > 0 && $stockRaw > 0): ?>
-                        <button class="btn btn-primary btn-large btn-cta btn-premium" type="button" id="buy-now" style="width: 100%; font-size: 1.2rem;">
+                        <button class="btn btn-primary btn-large btn-cta btn-premium main-buy-button" type="button" id="buy-now" style="width: 100%; font-size: 1.2rem;">
                             🛒 COMPRAR AGORA
                         </button>
+                        <div class="trust-badges-container">
+                            <div class="trust-badge-item"><span>🔒</span> <span>Pagamento 100% Seguro</span></div>
+                            <div class="trust-badge-item"><span>🛡️</span> <span>Garantia de 30 dias</span></div>
+                            <div class="trust-badge-item"><span>🚚</span> <span>Devolução Grátis</span></div>
+                        </div>
                     <?php elseif ($priceRaw > 0 && $stockRaw <= 0): ?>
                         <div class="stock-alert-form" id="stock-alert-form" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;">
                             <h4 style="margin-top: 0; color: #d9534f;">Produto Esgotado 😢</h4>
@@ -624,6 +637,24 @@ if ($notFound) {
         }
     })();
     </script>
+    <div id="social-proof-popup">
+        <div class="proof-icon">🛍️</div>
+        <div class="proof-content">
+            <p class="proof-text"></p>
+            <p class="proof-time"></p>
+        </div>
+        <button class="proof-close">&times;</button>
+    </div>
+
+    <div class="sticky-buy-wrapper">
+        <div class="sticky-buy-info">
+            <span class="sticky-buy-title"><?= sv_esc($name) ?></span>
+            <span class="sticky-buy-price"><?= sv_esc($priceLabel) ?></span>
+        </div>
+        <button class="btn btn-primary btn-comprar" onclick="document.getElementById('buy-now').click()">Comprar</button>
+    </div>
+
+    <script src="/js/cro-interactions.js"></script>
     <?php include __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>

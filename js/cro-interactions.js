@@ -4,13 +4,11 @@
  */
 
 document.addEventListener('DOMContentLoaded', function() {
-    
     initStickyAddToCart();
     initSkeletonLoaders();
     initImageHoverZoom();
     initSocialProofPopup();
     initFreeShippingProgress();
-
 });
 
 /**
@@ -25,7 +23,6 @@ function initStickyAddToCart() {
 
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
-            // Se o botão principal NÃO está visível
             if (!entry.isIntersecting && window.scrollY > 300) {
                 stickyBtn.classList.add('visible');
             } else {
@@ -36,7 +33,6 @@ function initStickyAddToCart() {
 
     observer.observe(mainBtn);
 
-    // Também verifica no scroll (fallback suave)
     window.addEventListener('scroll', () => {
         const rect = mainBtn.getBoundingClientRect();
         if (rect.top < 0 && window.scrollY > 300) {
@@ -49,10 +45,9 @@ function initStickyAddToCart() {
 
 /**
  * Skeleton Loaders
- * Remove a classe 'skeleton' assim que as imagens do produto carregarem
  */
 function initSkeletonLoaders() {
-    const images = document.querySelectorAll('.product-image-skeleton img, .skeleton img');
+    const images = document.querySelectorAll('.skeleton img, .product-image-skeleton img');
     images.forEach(img => {
         if (img.complete) {
             img.parentElement.classList.remove('skeleton', 'product-image-skeleton');
@@ -66,7 +61,6 @@ function initSkeletonLoaders() {
 
 /**
  * Hover Zoom
- * Aplica um efeito de zoom suave ao passar o mouse nas fotos principais
  */
 function initImageHoverZoom() {
     const containers = document.querySelectorAll('.hover-zoom-container');
@@ -84,7 +78,7 @@ function initImageHoverZoom() {
             const yPercent = (y / rect.height) * 100;
             
             img.style.transformOrigin = `${xPercent}% ${yPercent}%`;
-            img.style.transform = 'scale(2)'; // 2x zoom
+            img.style.transform = 'scale(1.5)';
         });
 
         container.addEventListener('mouseleave', () => {
@@ -95,17 +89,15 @@ function initImageHoverZoom() {
 }
 
 /**
- * Social Proof Popup Dinâmico
- * Gera mensagens de compras recentes falsas para aumentar FOMO (Fear Of Missing Out)
+ * Social Proof Popup
  */
 function initSocialProofPopup() {
     const popup = document.getElementById('social-proof-popup');
     if (!popup) return;
 
-    const names = ['Maria', 'João', 'Ana', 'Carlos', 'Juliana', 'Rafael', 'Amanda', 'Pedro'];
-    const cities = ['São Paulo', 'Rio de Janeiro', 'Belo Horizonte', 'Curitiba', 'Salvador', 'Fortaleza', 'Brasília'];
+    const names = ['Maria', 'João', 'Ana', 'Carlos', 'Juliana', 'Rafael', 'Amanda', 'Pedro', 'Lucas', 'Fernanda'];
+    const cities = ['São Paulo', 'Rio de Janeiro', 'Belo Horizonte', 'Curitiba', 'Salvador', 'Fortaleza', 'Brasília', 'Porto Alegre'];
     
-    // Intervalo de 15 a 45 segundos
     function showRandomPopup() {
         const name = names[Math.floor(Math.random() * names.length)];
         const city = cities[Math.floor(Math.random() * cities.length)];
@@ -117,47 +109,39 @@ function initSocialProofPopup() {
             textElement.innerHTML = `<strong>${name}</strong> de ${city} acabou de comprar este produto!`;
         }
         if (timeElement) {
-            const minutes = Math.floor(Math.random() * 50) + 1;
+            const minutes = Math.floor(Math.random() * 59) + 1;
             timeElement.innerText = `Há ${minutes} minuto${minutes > 1 ? 's' : ''}`;
         }
 
         popup.classList.add('show');
         
-        // Esconde após 5 segundos
         setTimeout(() => {
             popup.classList.remove('show');
-            // Agenda o próximo
             const nextDelay = (Math.floor(Math.random() * 30) + 15) * 1000;
             setTimeout(showRandomPopup, nextDelay);
         }, 5000);
     }
 
-    // Primeiro popup aparece após 10 segundos
-    setTimeout(showRandomPopup, 10000);
+    setTimeout(showRandomPopup, 8000);
 
-    // Botão de fechar
     const closeBtn = popup.querySelector('.proof-close');
     if (closeBtn) {
-        closeBtn.addEventListener('click', () => {
-            popup.classList.remove('show');
-        });
+        closeBtn.addEventListener('click', () => popup.classList.remove('show'));
     }
 }
 
 /**
- * Barra de Progresso - Frete Grátis
- * Atualiza visualmente o quanto falta para o frete grátis (assumindo limite de R$ 299)
+ * Free Shipping Progress
  */
 function initFreeShippingProgress() {
     const bar = document.querySelector('.free-shipping-progress-bar');
     const text = document.querySelector('.free-shipping-text');
-    const cartTotalEl = document.querySelector('.cart-subtotal-value'); // Ex: R$ 150,00
+    const cartTotalEl = document.querySelector('.cart-subtotal-value');
     
     if (!bar || !cartTotalEl) return;
 
     const FREE_SHIPPING_LIMIT = 299.00;
     
-    // Função para atualizar (pode ser chamada após AJAX de carrinho)
     window.updateFreeShippingVisual = function() {
         let totalStr = cartTotalEl.innerText.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
         let currentTotal = parseFloat(totalStr) || 0;

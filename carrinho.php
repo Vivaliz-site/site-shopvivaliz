@@ -73,8 +73,14 @@ header('Content-Type: text/html; charset=UTF-8');
         </div>
 
         <aside class="cart-card" id="cart-summary">
+            <div class="free-shipping-container">
+                <div class="free-shipping-text">Calculando frete grátis...</div>
+                <div class="free-shipping-progress-wrapper">
+                    <div class="free-shipping-progress-bar"></div>
+                </div>
+            </div>
             <h2 class="cart-title" style="font-size:18px">Resumo do pedido</h2>
-            <div class="summary-row"><span>Subtotal</span><strong id="cart-subtotal">—</strong></div>
+            <div class="summary-row"><span>Subtotal</span><strong id="cart-subtotal" class="cart-subtotal-value">—</strong></div>
             <div class="summary-row"><span>Frete</span><strong id="cart-frete">A calcular</strong></div>
             <div class="summary-row summary-total"><span>Total estimado</span><strong id="cart-total">—</strong></div>
             <div class="frete-calc">
@@ -182,6 +188,10 @@ header('Content-Type: text/html; charset=UTF-8');
         var fmt = hasPrice ? fmtMoney(total) : 'Consultar';
         if (subtotalEl) subtotalEl.textContent = fmt;
         if (totalEl) totalEl.textContent = fmt;
+        
+        if (typeof window.updateFreeShippingVisual === 'function') {
+            window.updateFreeShippingVisual();
+        }
 
         list.querySelectorAll('.qty-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
@@ -313,5 +323,6 @@ header('Content-Type: text/html; charset=UTF-8');
     }
 })();
 </script>
+<script src="/js/cro-interactions.js"></script>
 </body>
 </html>
