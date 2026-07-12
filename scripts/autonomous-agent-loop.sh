@@ -21,7 +21,7 @@ if [ ! -d "$PROJECT_DIR" ]; then
   exit 1
 fi
 
-mkdir -p "$PROJECT_DIR/logs"
+mkdir -p "$PROJECT_DIR/logs" "$PROJECT_DIR/logs/execution"
 touch "$LOG_FILE"
 cd "$PROJECT_DIR" || exit 1
 exec >> "$LOG_FILE" 2>&1
