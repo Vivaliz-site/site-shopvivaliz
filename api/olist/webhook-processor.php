@@ -65,7 +65,9 @@ $payload = json_decode((string)file_get_contents('php://input'), true) ?: [];
 
 if (!$payload) {
     http_response_code(400);
-    die(json_encode(['ok' => false, 'error' => 'empty_payload']));
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['ok' => false, 'error' => 'empty_payload'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
 }
 
 $event_type = $payload['event'] ?? $payload['type'] ?? '';
