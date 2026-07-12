@@ -8,6 +8,11 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Gerar CSRF token para o formulário de checkout
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 header('Content-Type: text/html; charset=UTF-8');
 
 $runtimeSecretsFile = dirname(__DIR__) . '/config/runtime-secrets.php';

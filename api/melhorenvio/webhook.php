@@ -8,9 +8,10 @@ header('Cache-Control: no-store');
 // usuario autorizar o app. Troca o codigo por access_token/refresh_token
 // e salva em storage/private/melhorenvio-tokens.json (mesmo padrao usado
 // para o Mercado Livre em api/ml/client.php).
-if (isset($_GET['code']) && $_GET['code'] !== '') {
+if (isset($_GET['code']) && is_string($_GET['code']) && $_GET['code'] !== '') {
     require_once dirname(__DIR__, 2) . '/includes/melhorenvio-oauth.php';
-    $result = me_exchange_code((string)$_GET['code']);
+    $code = trim((string)$_GET['code']);
+    $result = me_exchange_code($code);
     if (!empty($result['access_token'])) {
         me_save_tokens($result);
         echo json_encode([
