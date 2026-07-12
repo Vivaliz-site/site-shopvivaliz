@@ -1,0 +1,107 @@
+name: Promote Staging to Main (apos testes reais passarem)
+
+# "Diretor" automatico: roda a suite Playwright real (nao lint) contra
+# staging e, se tudo passar, promove staging para main com um merge commit
+# normal (git merge --ff-only ou merge commit comum). NUNCA faz reset,
+# revert automatico ou push --force - essas acoes causaram um incidente
+# real em 2026-07-10 (repositorio inteiro apagado duas vezes por um
+# workflow anterior que fazia isso). Qualquer falha aqui apenas para o
+# workflow e avisa; nao tenta "consertar" main sozinho.
+#
+# Mudancas em areas sensiveis (pagamento, credenciais, dados de cliente,
+# configuracao de acesso) NAO devem ser promovidas por este workflow -
+# ver .github/sensitive-paths.txt. Se o diff tocar essas areas, o merge
+# e bloqueado e fica esperando revisao humana.
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-staging-to-main
+  cancel-in-progress: false
+
+jobs:
+  check-sensitive-paths:
+    name: Verificar se ha mudanca em area sensivel
+    runs-on: ubuntu-latest
+    outputs:
+      blocked: ${{ steps.check.outputs.blocked }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Diff staging vs main contra lista de paths sensiveis
+        id: check
+        run: |
+          if ! git diff --name-only origin/main...origin/staging > /tmp/changed_files.txt 2>/dev/null; then
+            echo "blocked=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BLOCKED=false
+          if [ -s /tmp/changed_files.txt ] && [ -f .github/sensitive-paths.txt ]; then
+            while IFS= read -r pattern; do
+              [ -z "$pattern" ] && continue
+              [[ "$pattern" == \#* ]] && continue
+              if grep -qE "$pattern" /tmp/changed_files.txt; then
+                echo "::warning::Arquivo sensivel casou com padrao '$pattern' - promocao bloqueada, precisa de revisao humana"
+                BLOCKED=true
+              fi
+            done < .github/sensitive-paths.txt
+          fi
+          echo "blocked=$BLOCKED" >> "$GITHUB_OUTPUT"
+
+  e2e-gate:
+    name: Rodar portao de testes reais em staging
+    needs: check-sensitive-paths
+    if: needs.check-sensitive-paths.outputs.blocked == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: staging
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependencias
+        run: |
+          npm install --no-save @playwright/test
+          npx playwright install --with-deps chromium
+
+      - name: Rodar suite E2E completa
+        run: npx playwright test --reporter=list
+
+  promote:
+    name: Merge staging -> main (sem force, sem reset)
+    needs: [check-sensitive-paths, e2e-gate]
+    if: needs.check-sensitive-paths.outputs.blocked == 'false' && needs.e2e-gate.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge staging em main (merge commit normal)
+        run: |
+          git config user.email "director-bot@shopvivaliz.local"
+          git config user.name "Director Bot (promote staging->main)"
+
+          if git merge --no-ff origin/staging -m "auto: promover staging para main (testes reais passaram)"; then
+            git push origin main
+            echo "Promovido com sucesso."
+          else
+            echo "::error::Merge de staging em main teve conflito. Nao vou forcar nada - parando aqui para revisao manual."
+            git merge --abort || true
+            exit 1
+          fi
