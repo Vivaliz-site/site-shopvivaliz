@@ -239,6 +239,7 @@ $svNavCurrent = '';
     <link rel="stylesheet" href="/css/category-images.css?v=2026-07-10-1130-WILDCARD-FIX">
     <link rel="stylesheet" href="/css/visual-enhancements.css?v=2026-07-10-1130-WILDCARD-FIX">
     <link rel="stylesheet" href="/css/visual-improvements-2026.css?v=2026-07-10-1130-WILDCARD-FIX">
+    <link rel="stylesheet" href="/css/premium-theme.css?v=2026-07-11">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -396,7 +397,7 @@ $svNavCurrent = '';
                             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
                             ?>
                             <article class="product-card<?= $stock <= 0 ? ' is-out-of-stock' : '' ?>" data-sku="<?= sv_home_esc($product['sku']) ?>">
-                                <a class="product-image" href="<?= sv_home_esc($productUrl) ?>">
+                                <a class="product-image-container" href="<?= sv_home_esc($productUrl) ?>">
                                     <img src="<?= sv_home_esc($image) ?>" alt="<?= sv_home_esc($product['name']) ?>" loading="lazy" onerror="this.src='<?= sv_home_default_image() ?>'">
                                     <?php if ($stock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                                 </a>
@@ -406,15 +407,15 @@ $svNavCurrent = '';
                                     <?php endif; ?>
                                     <h2><?= sv_home_esc($product['name']) ?></h2>
                                     <div class="product-price"><?= sv_home_esc(sv_home_money((float)$product['price'])) ?></div>
-                                    <div class="card-actions">
-                                        <a class="btn btn-secondary card-link" href="<?= sv_home_esc($productUrl) ?>">Ver detalhes</a>
+                                    <div class="card-actions" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
                                         <?php if ($hasPrice): ?>
-                                            <button class="buy-button" type="button" data-product="<?= sv_home_esc($payload) ?>">Comprar agora</button>
+                                            <button class="buy-button btn-premium" type="button" data-product="<?= sv_home_esc($payload) ?>">Comprar agora</button>
                                         <?php elseif ($stock <= 0): ?>
-                                            <button class="btn btn-disabled card-link" type="button" disabled>Esgotado</button>
+                                            <button class="btn btn-disabled btn-premium card-link" style="background: #999; box-shadow: none;" type="button" disabled>Esgotado</button>
                                         <?php else: ?>
-                                            <a class="btn btn-primary card-link" href="<?= sv_home_esc($contactUrl) ?>">Falar com vendas</a>
+                                            <a class="btn btn-primary btn-premium card-link" href="<?= sv_home_esc($contactUrl) ?>">Falar com vendas</a>
                                         <?php endif; ?>
+                                        <a class="btn btn-secondary card-link" style="text-align: center; text-decoration: none; color: var(--color-primary); font-weight: 600; padding: 0.5rem; border-radius: var(--radius-full); background: rgba(0,102,204,0.05);" href="<?= sv_home_esc($productUrl) ?>">Ver detalhes</a>
                                     </div>
                                 </div>
                             </article>

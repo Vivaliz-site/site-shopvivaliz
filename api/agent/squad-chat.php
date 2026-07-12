@@ -2,6 +2,7 @@
 /**
  * Squad Chat API - ShopVivaliz
  * Endpoint para comunicação entre agentes autônomos
+ * Contract: health, providers
  */
 
 declare(strict_types=1);
