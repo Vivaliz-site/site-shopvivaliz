@@ -404,3 +404,26 @@ body.page-loaded {
 .product-card:hover .product-image img {
     transform: scale(1.05);
 }
+
+/* ==========================================================================
+   13. FAQ & TESTIMONIALS HOME IMPROVEMENTS
+   ========================================================================== */
+details.faq-item summary {
+    outline: none;
+    user-select: none;
+}
+details.faq-item[open] .faq-icon {
+    transform: rotate(45deg);
+    color: #ff5722 !important;
+}
+.faq-icon {
+    transition: transform 0.3s ease, color 0.3s ease;
+    display: inline-block;
+}
+.testimonial-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.testimonial-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.08) !important;
+}
