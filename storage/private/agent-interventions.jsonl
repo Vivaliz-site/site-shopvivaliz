@@ -1,0 +1,1 @@
+{"id": "cmd-test-001", "agent_id": "gemini", "message": "Priorizar esta tarefa e reavaliar antes de seguir", "source": "local-test", "created_at": "2026-07-12T21:07:11.186468Z", "status": "queued", "kind": "human-intervention"}
