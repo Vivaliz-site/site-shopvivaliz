@@ -38,6 +38,12 @@ $response = [
     'endpoint'  => 'squad-chat',
     'timestamp' => date('c'),
     'method'    => $method,
+    'health'    => 'ok',
+    'providers' => [
+        'openai' => (getenv('OPENAI_API_KEY') ?: '') !== '',
+        'gemini' => (getenv('GEMINI_API_KEY') ?: '') !== '',
+        'anthropic' => (getenv('ANTHROPIC_API_KEY') ?: '') !== '',
+    ],
 ];
 
 if (!empty($payload)) {
