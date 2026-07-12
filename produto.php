@@ -570,11 +570,10 @@ if ($notFound) {
             return items;
         }
 
-        var buyNowButton = document.getElementById('buy-now');
         if (buyNowButton) {
             buyNowButton.addEventListener('click', function () {
                 addToCart(product);
-                window.location.href = '/carrinho';
+                if(window.openMiniCart){window.openMiniCart();}else{window.location.href='/carrinho';}
             });
         }
 
@@ -583,7 +582,7 @@ if ($notFound) {
                 try {
                     var p = JSON.parse(decodeURIComponent(this.dataset.product));
                     addToCart(p);
-                    window.location.href = '/carrinho';
+                    if(window.openMiniCart){window.openMiniCart();}else{window.location.href='/carrinho';}
                 } catch(e) {}
             });
         });
