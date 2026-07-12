@@ -60,26 +60,16 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
   test('✅ Navegação de categorias funciona', async ({ page }) => {
     await page.goto(BASE_URL + '/');
 
-    // Procurar menu ou categorias
-    const menuItems = page.locator('nav a, [class*="menu"] a, [class*="category"] a');
-    const count = await menuItems.count();
+    // Clicar no link do catálogo no menu principal (determinístico).
+    // A asserção antiga (`not.toContain(BASE_URL + '/')`) era impossível de
+    // passar: toda URL do site contém o prefixo BASE_URL + '/'.
+    const catalogLink = page.locator('.sv-navbar a[href="/catalogo"]').first();
+    await expect(catalogLink).toBeVisible();
+    await catalogLink.click();
+    await page.waitForLoadState('domcontentloaded');
 
-    if (count > 0) {
-      const firstLink = menuItems.first();
-      const href = await firstLink.getAttribute('href');
-
-      if (href && !href.includes('javascript')) {
-        await firstLink.click();
-        await page.waitForLoadState('networkidle');
-
-        const currentUrl = page.url();
-        expect(currentUrl).not.toContain(BASE_URL + '/'); // Deve ter mudado
-
-        console.log('✅ Navegação OK');
-      }
-    } else {
-      console.log('⚠️ Menu não encontrado');
-    }
+    expect(page.url()).toContain('/catalogo');
+    console.log('✅ Navegação OK');
   });
 
   test('✅ Produtos carregam corretamente', async ({ page }) => {
