@@ -277,3 +277,23 @@
   transform: translateY(0);
 }
 
+
+/* LIZ SUPER OVERRIDE FOR FULL HEIGHT */
+#sv-liz-panel, #sv-liz-panel.open {
+  top: 24px !important;
+  bottom: 24px !important;
+  height: auto !important;
+  max-height: none !important;
+  width: 400px !important;
+}
+
+@media(max-width: 600px) {
+  #sv-liz-panel, #sv-liz-panel.open {
+    top: 10px !important;
+    bottom: 10px !important;
+    left: 10px !important;
+    right: 10px !important;
+    width: auto !important;
+  }
+}
+
