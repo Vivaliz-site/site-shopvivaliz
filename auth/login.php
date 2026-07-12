@@ -21,6 +21,7 @@ ini_set('display_errors', '0');
 
 require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/social-auth.php';
 
 $error = '';
 $email = '';
@@ -71,21 +72,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// OAuth URLs
-$google_client_id = getenv('GOOGLE_OAUTH_CLIENT_ID') ?: '';
-$google_redirect_uri = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.com.br') . '/auth/google-callback.php';
-$google_auth_url = $google_client_id ? 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
-    'client_id' => $google_client_id,
-    'redirect_uri' => $google_redirect_uri,
-    'response_type' => 'code',
-    'scope' => 'openid email profile',
-    'state' => bin2hex(random_bytes(16)),
-]) : '';
-
-$apple_client_id = getenv('APPLE_OAUTH_CLIENT_ID') ?: '';
-$apple_team_id = getenv('APPLE_TEAM_ID') ?: '';
-$apple_key_id = getenv('APPLE_KEY_ID') ?: '';
-$apple_redirect_uri = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.com.br') . '/auth/apple-callback.php';
+$google_auth_url = sv_social_google_auth_url('login', $redirectTo);
+$apple_auth_url = sv_social_apple_auth_url('login', $redirectTo);
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -271,7 +259,7 @@ $apple_redirect_uri = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.co
         <div class="divider">OU</div>
 
         <div class="social-buttons">
-            <?php if ($google_auth_url): ?>
+            <?php if ($google_auth_url !== ''): ?>
             <a href="<?php echo htmlspecialchars($google_auth_url); ?>" class="btn-social">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"></circle>
@@ -280,8 +268,8 @@ $apple_redirect_uri = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.co
             </a>
             <?php endif; ?>
 
-            <?php if ($apple_client_id): ?>
-            <a href="<?php echo htmlspecialchars($apple_redirect_uri); ?>?action=login" class="btn-social">
+            <?php if ($apple_auth_url !== ''): ?>
+            <a href="<?php echo htmlspecialchars($apple_auth_url); ?>" class="btn-social">
                 <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12.3 12.033c-.348 0-.895.04-1.36.04-2.48 0-4.86-.91-6.7-2.59-.22-.2-.05-.55.18-.48.76.18 1.84.3 2.6.3.46 0 .92-.04 1.38-.04 2.48 0 4.86.91 6.7 2.59.22.2.05.55-.18.48z"></path>
                 </svg>
