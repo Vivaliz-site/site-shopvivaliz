@@ -163,3 +163,98 @@ function initFreeShippingProgress() {
 
     window.updateFreeShippingVisual();
 }
+
+/**
+ * Mini-Cart (Side Drawer)
+ */
+function initMiniCart() {
+    const cartLink = document.getElementById('nav-cart-link');
+    const overlay = document.getElementById('mini-cart-overlay');
+    const drawer = document.getElementById('mini-cart-drawer');
+    const closeBtn = document.getElementById('mini-cart-close');
+    
+    if (!drawer) return;
+    
+    function openCart(e) {
+        if (e) e.preventDefault();
+        drawer.classList.add('open');
+        if (overlay) overlay.classList.add('open');
+        renderMiniCart();
+    }
+    
+    function closeCart() {
+        drawer.classList.remove('open');
+        if (overlay) overlay.classList.remove('open');
+    }
+    
+    if (cartLink) {
+        cartLink.addEventListener('click', openCart);
+    }
+    if (closeBtn) closeBtn.addEventListener('click', closeCart);
+    if (overlay) overlay.addEventListener('click', closeCart);
+    
+    // Expose globally to be called when items are added to cart via AJAX
+    window.openMiniCart = openCart;
+}
+
+function renderMiniCart() {
+    const body = document.getElementById('mini-cart-body');
+    const totalEl = document.getElementById('mini-cart-total-value');
+    if (!body) return;
+    
+    let items = [];
+    try { items = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'); } catch(e) {}
+    
+    if (items.length === 0) {
+        body.innerHTML = '<p style="text-align:center; padding: 20px;">Seu carrinho está vazio.</p>';
+        if (totalEl) totalEl.innerText = 'R$ 0,00';
+        return;
+    }
+    
+    let html = '';
+    let total = 0;
+    items.forEach(function(item) {
+        const price = parseFloat(item.price) || 0;
+        const qty = parseInt(item.quantity) || 1;
+        total += price * qty;
+        html += `<div class="mini-cart-item" style="display:flex; gap:10px; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+            <img src="${item.image_url}" style="width:60px; height:60px; object-fit:cover; border-radius:8px;">
+            <div style="flex:1;">
+                <div style="font-size:13px; font-weight:bold; margin-bottom:5px;">${item.name}</div>
+                <div style="font-size:12px; color:#666;">${qty}x R$ ${price.toFixed(2).replace('.', ',')}</div>
+            </div>
+        </div>`;
+    });
+    body.innerHTML = html;
+    if (totalEl) totalEl.innerText = 'R$ ' + total.toFixed(2).replace('.', ',');
+    
+    // Update free shipping bar inside mini cart
+    const FREE_SHIPPING_LIMIT = 299.00;
+    const bar = document.getElementById('mini-cart-shipping-bar');
+    const text = document.getElementById('mini-cart-shipping-text');
+    if (bar) {
+        let pct = (total / FREE_SHIPPING_LIMIT) * 100;
+        if (pct > 100) pct = 100;
+        bar.style.width = pct + '%';
+        if (total >= FREE_SHIPPING_LIMIT) {
+            bar.style.backgroundColor = '#10b981';
+            if (text) text.innerHTML = '🎉 Você ganhou <strong>Frete Grátis!</strong>';
+        } else {
+            bar.style.backgroundColor = '#f59e0b';
+            if (text) text.innerHTML = `Faltam <strong>R$ ${(FREE_SHIPPING_LIMIT - total).toFixed(2).replace('.', ',')}</strong> para Frete Grátis`;
+        }
+    }
+}
+
+/**
+ * Page Transitions (Fade-In)
+ */
+function initPageTransitions() {
+    document.body.classList.add('page-loaded');
+}
+
+// Add these to existing DOMContentLoaded listener:
+document.addEventListener('DOMContentLoaded', function() {
+    initMiniCart();
+    initPageTransitions();
+});

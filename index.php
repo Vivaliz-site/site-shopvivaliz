@@ -426,6 +426,91 @@ $svNavCurrent = '';
         </div>
     </section>
 
+    <!-- Testimonials Section -->
+    <section class="home-testimonials" style="padding: 60px 0; background: #fafafa; border-top: 1px solid #eee;">
+        <div class="container">
+            <div class="section-heading" style="text-align: center; margin-bottom: 40px; display: block;">
+                <h2 style="font-size: 28px; font-weight: 900; color: #0b4f88; margin-bottom: 10px; text-align: center;">O que nossos clientes dizem</h2>
+                <p class="muted" style="text-align: center; color: #666;">Confira a opinião de quem já comprou e aprovou nossos produtos e atendimento.</p>
+            </div>
+            <div class="testimonials-grid" style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;">
+                <div class="testimonial-card" style="flex: 1; min-width: 280px; max-width: 360px; background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #f0f0f0; transition: transform 0.3s ease;">
+                    <div class="testimonial-stars" style="color: #ffb300; font-size: 18px; margin-bottom: 12px;">★★★★★</div>
+                    <p style="font-size: 14px; color: #444; line-height: 1.6; margin-bottom: 20px;">"Comprei rodízios em gel para o meu armário e a qualidade é fantástica! O deslizamento é suave e silencioso. Entrega muito rápida."</p>
+                    <div class="testimonial-author" style="display: flex; align-items: center; gap: 12px;">
+                        <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&q=80" alt="Ana Paula" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover;">
+                        <div>
+                            <strong style="display: block; font-size: 14px; color: #111;">Ana Paula M.</strong>
+                            <span style="font-size: 12px; color: #888;">São Paulo - SP</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="testimonial-card" style="flex: 1; min-width: 280px; max-width: 360px; background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #f0f0f0; transition: transform 0.3s ease;">
+                    <div class="testimonial-stars" style="color: #ffb300; font-size: 18px; margin-bottom: 12px;">★★★★★</div>
+                    <p style="font-size: 14px; color: #444; line-height: 1.6; margin-bottom: 20px;">"Excelente atendimento! O suporte tirou minhas dúvidas sobre a compatibilidade do engate rápido para mangueira. Indico a todos!"</p>
+                    <div class="testimonial-author" style="display: flex; align-items: center; gap: 12px;">
+                        <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&q=80" alt="Marcos Silva" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover;">
+                        <div>
+                            <strong style="display: block; font-size: 14px; color: #111;">Marcos Silva T.</strong>
+                            <span style="font-size: 12px; color: #888;">Curitiba - PR</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="testimonial-card" style="flex: 1; min-width: 280px; max-width: 360px; background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #f0f0f0; transition: transform 0.3s ease;">
+                    <div class="testimonial-stars" style="color: #ffb300; font-size: 18px; margin-bottom: 12px;">★★★★★</div>
+                    <p style="font-size: 14px; color: #444; line-height: 1.6; margin-bottom: 20px;">"As caixas organizadoras superaram minhas expectativas. Super resistentes e bonitas. Site fácil de comprar pelo celular e seguro."</p>
+                    <div class="testimonial-author" style="display: flex; align-items: center; gap: 12px;">
+                        <img src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&h=100&fit=crop&q=80" alt="Julia Costa" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover;">
+                        <div>
+                            <strong style="display: block; font-size: 14px; color: #111;">Julia Costa F.</strong>
+                            <span style="font-size: 12px; color: #888;">Belo Horizonte - MG</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="home-faq" style="padding: 60px 0; background: white; border-top: 1px solid #eee;">
+        <div class="container" style="max-width: 800px; margin: 0 auto;">
+            <div class="section-heading" style="text-align: center; margin-bottom: 40px; display: block;">
+                <h2 style="font-size: 28px; font-weight: 900; color: #0b4f88; margin-bottom: 10px; text-align: center;">Perguntas Frequentes</h2>
+                <p class="muted" style="text-align: center; color: #666;">Tire suas dúvidas rápidas sobre envio, pagamentos e garantia.</p>
+            </div>
+            <div class="faq-list" style="display: flex; flex-direction: column; gap: 15px;">
+                <details class="faq-item" style="background: #f9f9f9; padding: 15px 20px; border-radius: 10px; cursor: pointer; border: 1px solid #eee;">
+                    <summary style="font-weight: bold; font-size: 16px; color: #333; list-style: none; display: flex; justify-content: space-between; align-items: center;">
+                        Qual é o prazo de entrega?
+                        <span class="faq-icon" style="font-size: 18px; color: #0b4f88;">+</span>
+                    </summary>
+                    <p style="margin-top: 10px; font-size: 14px; color: #666; line-height: 1.5; cursor: default;">O prazo de entrega varia conforme o seu CEP e a modalidade de frete escolhida. Você pode calcular o prazo e o valor exato diretamente no carrinho de compras informando seu CEP.</p>
+                </details>
+                <details class="faq-item" style="background: #f9f9f9; padding: 15px 20px; border-radius: 10px; cursor: pointer; border: 1px solid #eee;">
+                    <summary style="font-weight: bold; font-size: 16px; color: #333; list-style: none; display: flex; justify-content: space-between; align-items: center;">
+                        Como funciona a garantia de 30 dias?
+                        <span class="faq-icon" style="font-size: 18px; color: #0b4f88;">+</span>
+                    </summary>
+                    <p style="margin-top: 10px; font-size: 14px; color: #666; line-height: 1.5; cursor: default;">Oferecemos 30 dias para devolução ou troca sem burocracia se você não estiver 100% satisfeito com o produto. O item deve estar na embalagem original e sem indícios de uso.</p>
+                </details>
+                <details class="faq-item" style="background: #f9f9f9; padding: 15px 20px; border-radius: 10px; cursor: pointer; border: 1px solid #eee;">
+                    <summary style="font-weight: bold; font-size: 16px; color: #333; list-style: none; display: flex; justify-content: space-between; align-items: center;">
+                        Quais são as formas de pagamento aceitas?
+                        <span class="faq-icon" style="font-size: 18px; color: #0b4f88;">+</span>
+                    </summary>
+                    <p style="margin-top: 10px; font-size: 14px; color: #666; line-height: 1.5; cursor: default;">Aceitamos PIX (com desconto e aprovação imediata), cartões de crédito em até 6x sem juros ou boleto bancário.</p>
+                </details>
+                <details class="faq-item" style="background: #f9f9f9; padding: 15px 20px; border-radius: 10px; cursor: pointer; border: 1px solid #eee;">
+                    <summary style="font-weight: bold; font-size: 16px; color: #333; list-style: none; display: flex; justify-content: space-between; align-items: center;">
+                        Posso rastrear meu pedido?
+                        <span class="faq-icon" style="font-size: 18px; color: #0b4f88;">+</span>
+                    </summary>
+                    <p style="margin-top: 10px; font-size: 14px; color: #666; line-height: 1.5; cursor: default;">Sim! Assim que o seu pedido for despachado, você receberá por e-mail o código de rastreamento para acompanhar a entrega passo a passo.</p>
+                </details>
+            </div>
+        </div>
+    </section>
+
     <!-- Footer -->
     <?php include __DIR__ . '/includes/footer.php'; ?>
 
@@ -490,9 +575,5 @@ $svNavCurrent = '';
         });
     })();
     </script>
-
-    <!-- Liz Assistant Widget -->
-    <link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css">
-    <script src="/public/assets/liz-assistant/liz-assistant.js"></script>
 </body>
 </html>

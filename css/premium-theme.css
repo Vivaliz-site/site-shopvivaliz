@@ -301,3 +301,129 @@
 .free-shipping-progress-bar.bg-success {
     background: #10b981 !important;
 }
+
+/* ==========================================================================
+   9. MINI-CART (SIDE DRAWER)
+   ========================================================================== */
+.mini-cart-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+    z-index: 99999;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+.mini-cart-overlay.open {
+    opacity: 1;
+    visibility: visible;
+}
+.mini-cart-drawer {
+    position: fixed;
+    top: 0; right: -400px;
+    width: 100%; max-width: 400px;
+    height: 100vh;
+    background: #fff;
+    z-index: 100000;
+    box-shadow: -5px 0 25px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    transition: right 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+}
+.mini-cart-drawer.open {
+    right: 0;
+}
+.mini-cart-header {
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.mini-cart-header h3 { margin: 0; font-size: 18px; }
+#mini-cart-close {
+    background: none; border: none; font-size: 28px; cursor: pointer; color: #999;
+}
+#mini-cart-close:hover { color: #333; }
+.mini-cart-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+.mini-cart-footer {
+    padding: 20px;
+    border-top: 1px solid #eee;
+    background: #fafafa;
+}
+.mini-cart-subtotal {
+    display: flex;
+    justify-content: space-between;
+    font-size: 16px;
+    margin-bottom: 15px;
+}
+
+/* ==========================================================================
+   10. STICKY HEADER & GLASSMORPHISM
+   ========================================================================== */
+.sv-navbar {
+    position: sticky;
+    top: 0;
+    z-index: 9000;
+    background: rgba(25, 118, 210, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    transition: background 0.3s ease, padding 0.3s ease;
+}
+
+/* ==========================================================================
+   11. PAGE FADE-IN TRANSITION
+   ========================================================================== */
+body {
+    opacity: 0;
+    transition: opacity 0.4s ease-in-out;
+}
+body.page-loaded {
+    opacity: 1;
+}
+
+/* ==========================================================================
+   12. ENHANCED PRODUCT CARDS
+   ========================================================================== */
+.product-card {
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+}
+.product-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+}
+.product-image img {
+    transition: transform 0.5s ease;
+}
+.product-card:hover .product-image img {
+    transform: scale(1.05);
+}
+
+/* ==========================================================================
+   13. FAQ & TESTIMONIALS HOME IMPROVEMENTS
+   ========================================================================== */
+details.faq-item summary {
+    outline: none;
+    user-select: none;
+}
+details.faq-item[open] .faq-icon {
+    transform: rotate(45deg);
+    color: #ff5722 !important;
+}
+.faq-icon {
+    transition: transform 0.3s ease, color 0.3s ease;
+    display: inline-block;
+}
+.testimonial-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.testimonial-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.08) !important;
+}
