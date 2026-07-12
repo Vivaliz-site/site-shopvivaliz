@@ -575,9 +575,5 @@ $svNavCurrent = '';
         });
     })();
     </script>
-
-    <!-- Liz Assistant Widget -->
-    <link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css">
-    <script src="/public/assets/liz-assistant/liz-assistant.js"></script>
 </body>
 </html>
