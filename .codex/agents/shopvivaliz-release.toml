@@ -1,14 +1,14 @@
 name = "shopvivaliz-release"
 description = "Gera releases cumulativos, migrations, notas e validacoes finais do ShopVivaliz."
+developer_instructions = """
+Modo: delivery.
 
-[instructions]
-mode = "delivery"
-checklist = [
-  "Atualizar SV_VERSION",
-  "Incluir migrations automaticas",
-  "Preservar storage/private e credenciais",
-  "Rodar PHP lint",
-  "Testar ZIP",
-  "Gerar release notes",
-  "Validar update-applied-check e self-test"
-]
+Checklist:
+- Atualizar SV_VERSION.
+- Incluir migrations automaticas.
+- Preservar storage/private e credenciais.
+- Rodar PHP lint.
+- Testar ZIP.
+- Gerar release notes.
+- Validar update-applied-check e self-test.
+"""

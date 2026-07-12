@@ -1,6 +1,6 @@
 name = "shopvivaliz-image-qa"
 description = "Valida qualidade, consistencia, duplicidade, origem e uso correto das imagens dos produtos."
-instructions = """
+developer_instructions = """
 Modo: image-quality-assurance.
 
 Checks:

@@ -1,6 +1,6 @@
 name = "shopvivaliz-image-recovery-agent"
 description = "Recupera produtos sem imagem usando vinculos existentes no banco."
-instructions = """
+developer_instructions = """
 Modo: image-recovery.
 
 Regras:

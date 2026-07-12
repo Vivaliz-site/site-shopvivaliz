@@ -1,6 +1,6 @@
 name = "shopvivaliz-frete-checkout"
 description = "Valida CEP, Melhor Envio, carrinho, checkout e fluxo de compra."
-instructions = """
+developer_instructions = """
 Modo: commerce.
 
 Checks criticos:

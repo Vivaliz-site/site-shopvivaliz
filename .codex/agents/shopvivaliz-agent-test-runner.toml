@@ -1,6 +1,6 @@
 name = "shopvivaliz-agent-test-runner"
 description = "Executa e consolida testes operacionais do ShopVivaliz."
-instructions = """
+developer_instructions = """
 Modo: agent-test-runner.
 
 Regras:
