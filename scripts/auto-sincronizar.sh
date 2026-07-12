@@ -1,114 +1,76 @@
 #!/bin/bash
 #
-# Auto-sincronização automática (Linux/Ubuntu/Cloud)
-# ===================================================
-#
-# Roda como daemon sincronizando secrets a cada 5 minutos
-# Coloque em ~/.bashrc ou crontab para rodar no boot
+# ShopVivaliz auto-sync canonico
+# Mantem o checkout do servidor alinhado com a branch remota oficial.
+# Nao cria commits locais e nao faz push a partir do servidor.
 #
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_FILE="${SCRIPT_DIR}/logs/auto-sync-$(date +%Y-%m-%d).log"
-ENV_FILE="${SCRIPT_DIR}/.env.local"
+SYNC_BRANCH="${SHOPVIVALIZ_SYNC_BRANCH:-feat/dazzle-visual-v1}"
+SYNC_INTERVAL_SECONDS="${SHOPVIVALIZ_SYNC_INTERVAL_SECONDS:-300}"
+STATUS_FILE="${SCRIPT_DIR}/logs/tri-environment-sync.json"
 
-# Criar diretório de logs
 mkdir -p "${SCRIPT_DIR}/logs"
 
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
-# Sincronizar secrets
 sync_secrets() {
-    log "🔄 Sincronizando secrets do GitHub..."
-
+    log "Sincronizando .env.local seguro"
     cd "$SCRIPT_DIR"
 
-    # Verificar gh CLI
-    if ! command -v gh &> /dev/null; then
-        log "❌ GitHub CLI não está instalado. Pulando sincronização."
-        return 1
-    fi
-
-    # Sincronizar
     if bash scripts/sincronizar_secrets_github.sh >> "$LOG_FILE" 2>&1; then
-        log "✅ Secrets sincronizados com sucesso"
-
-        # Validar (não fazer fail se falhar)
-        if python3 scripts/validar_secrets.py >> "$LOG_FILE" 2>&1; then
-            log "✅ Validação passou"
-        else
-            log "⚠️  Validação teve aviso (continuando...)"
-        fi
-        return 0
+        log "OK .env.local atualizado"
     else
-        log "❌ Erro ao sincronizar"
-        return 1
+        log "AVISO falha ao atualizar .env.local"
+    fi
+
+    if [ -f scripts/validar_secrets.py ]; then
+        if python3 scripts/validar_secrets.py >> "$LOG_FILE" 2>&1; then
+            log "OK validacao de secrets"
+        else
+            log "AVISO validacao de secrets com alertas"
+        fi
     fi
 }
 
-# Sincronizar git
 sync_git() {
-    log "🔄 Sincronizando repositório..."
-
+    log "Alinhando checkout com origin/${SYNC_BRANCH}"
     cd "$SCRIPT_DIR"
 
-    # Pull
-    if git pull origin main >> "$LOG_FILE" 2>&1; then
-        log "✅ Git pull OK"
-    else
-        log "⚠️  Git pull teve aviso"
+    if ! python3 git-auto-sync.py >> "$LOG_FILE" 2>&1; then
+        log "ERRO git-auto-sync.py falhou"
+        [ -f "$STATUS_FILE" ] && tail -n 20 "$STATUS_FILE" | tee -a "$LOG_FILE"
+        return 1
     fi
 
-    # Commit local
-    if git diff-index --quiet HEAD -- 2>/dev/null; then
-        log "✓ Sem mudanças locais"
-    else
-        log "📝 Commitando mudanças..."
-        git add -A
-        if git commit -m "auto: sincronizar $(date +'%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE" 2>&1; then
-            log "✅ Commit OK"
-        fi
+    if [ -f "$STATUS_FILE" ]; then
+        log "OK status salvo em logs/tri-environment-sync.json"
     fi
 
-    # Push
-    COMMITS=$(git rev-list --count origin/main..HEAD)
-    if [ "$COMMITS" -gt 0 ]; then
-        log "📤 Enviando $COMMITS commit(s)..."
-        if git push origin main >> "$LOG_FILE" 2>&1; then
-            log "✅ Push OK"
-        else
-            log "⚠️  Push teve aviso"
-        fi
-    fi
+    return 0
 }
 
-# Main loop
 main() {
-    log "🚀 Auto-Sync iniciado"
-    log "   Repositório: $SCRIPT_DIR"
-    log "   Log: $LOG_FILE"
-    log "   Intervalo: 5 minutos"
+    log "Auto-Sync canonico iniciado"
+    log "Repositorio: $SCRIPT_DIR"
+    log "Branch canonica: $SYNC_BRANCH"
+    log "Intervalo: ${SYNC_INTERVAL_SECONDS}s"
 
     while true; do
         log ""
         log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-        # Sincronizar
         sync_secrets
-        sync_git
-
-        log "✅ Ciclo concluído"
-        log "⏰ Próximo em 5 minutos..."
-
-        sleep 300
+        sync_git || true
+        log "Ciclo concluido"
+        sleep "$SYNC_INTERVAL_SECONDS"
     done
 }
 
-# Trap signals
-trap "log '⏹️  Auto-Sync parado'; exit 0" SIGTERM SIGINT
+trap "log 'Auto-Sync parado'; exit 0" SIGTERM SIGINT
 
-# Executar
 main
