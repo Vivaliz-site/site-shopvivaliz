@@ -142,7 +142,7 @@ jobs:
           cat LOAD_TEST_REPORT.md
 
       - name: 📤 Upload Results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: load-test-results
           path: |

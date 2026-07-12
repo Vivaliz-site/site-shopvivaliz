@@ -65,7 +65,7 @@ jobs:
           php scripts/metrics-proactive-monitor.php
 
       - name: Upload Dashboard
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: metrics-dashboard
           path: admin/agent-metrics-dashboard-realtime.html
@@ -260,7 +260,7 @@ jobs:
           cat SYSTEM_STATUS.md
 
       - name: Upload Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: system-status-report
           path: SYSTEM_STATUS.md
