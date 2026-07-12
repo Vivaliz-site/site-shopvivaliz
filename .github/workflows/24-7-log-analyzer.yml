@@ -72,7 +72,7 @@ jobs:
           git push origin main || echo "Nenhuma mudança para commitaar"
 
       - name: 📊 Upload Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: llm-analysis-report
           path: LLM_ANALYSIS_REPORT.md
