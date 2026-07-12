@@ -1,0 +1,107 @@
+<?php
+declare(strict_types=1);
+
+header('Content-Type: application/xml; charset=UTF-8');
+
+$official = __DIR__ . '/config/official-site.php';
+$officialData = is_file($official) ? (@include $official) : [];
+$baseUrl = is_array($officialData) && trim((string)($officialData['base_url'] ?? '')) !== ''
+    ? rtrim((string)$officialData['base_url'], '/')
+    : 'https://www.shopvivaliz.com.br';
+
+$catalog = __DIR__ . '/api/catalog/fallback-products.json';
+$products = is_file($catalog) ? (json_decode((string)file_get_contents($catalog), true) ?: []) : [];
+
+function gm_xml(string $value): string
+{
+    return htmlspecialchars($value, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+}
+
+function gm_lower(string $value): string
+{
+    return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+}
+
+function gm_brand(array $product): string
+{
+    $name = gm_lower(trim((string)($product['name'] ?? '')));
+    $tags = array_map(
+        static fn ($tag): string => gm_lower(trim((string)$tag)),
+        is_array($product['tags'] ?? null) ? $product['tags'] : []
+    );
+
+    foreach (['soprano', 'gedore', 'astra', 'fercar', 'papaiz', 'japi', 'aquatools'] as $brand) {
+        if (str_contains($name, $brand) || in_array($brand, $tags, true)) {
+            return ucfirst($brand);
+        }
+    }
+
+    return 'Vivaliz';
+}
+
+function gm_gtin(array $product): string
+{
+    foreach (['gtin', 'ean', 'barcode'] as $field) {
+        $value = preg_replace('/\D+/', '', trim((string)($product[$field] ?? '')));
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    return '';
+}
+
+echo '<?xml version="1.0" encoding="UTF-8"?>' . PHP_EOL;
+echo '<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">' . PHP_EOL;
+echo '<channel>' . PHP_EOL;
+echo '<title>ShopVivaliz Google Merchant Feed</title>' . PHP_EOL;
+echo '<link>' . gm_xml($baseUrl) . '</link>' . PHP_EOL;
+echo '<description>Feed de produtos da ShopVivaliz para Google Merchant Center.</description>' . PHP_EOL;
+
+foreach ($products as $product) {
+    if (!is_array($product)) {
+        continue;
+    }
+
+    $id = trim((string)($product['sku'] ?? $product['olist_product_id'] ?? $product['id'] ?? ''));
+    $slug = trim((string)($product['slug'] ?? ''));
+    $name = trim((string)($product['name'] ?? ''));
+    $description = trim((string)($product['description'] ?? ''));
+    $image = trim((string)($product['image_url'] ?? ''));
+    $price = (float)($product['price'] ?? 0);
+    $stock = (int)($product['stock'] ?? 0);
+
+    if ($id === '' || $slug === '' || $name === '' || $image === '' || $price <= 0) {
+        continue;
+    }
+
+    if ($description === '') {
+        $description = 'Produto ShopVivaliz com entrega para todo o Brasil.';
+    }
+
+    $brand = gm_brand($product);
+    $gtin = gm_gtin($product);
+    $link = $baseUrl . '/produto/' . $slug;
+    $availability = $stock > 0 ? 'in stock' : 'out of stock';
+
+    echo '<item>' . PHP_EOL;
+    echo '<g:id>' . gm_xml($id) . '</g:id>' . PHP_EOL;
+    echo '<title>' . gm_xml($name) . '</title>' . PHP_EOL;
+    echo '<description>' . gm_xml($description) . '</description>' . PHP_EOL;
+    echo '<link>' . gm_xml($link) . '</link>' . PHP_EOL;
+    echo '<g:image_link>' . gm_xml($image) . '</g:image_link>' . PHP_EOL;
+    echo '<g:availability>' . gm_xml($availability) . '</g:availability>' . PHP_EOL;
+    echo '<g:price>' . gm_xml(number_format($price, 2, '.', '') . ' BRL') . '</g:price>' . PHP_EOL;
+    echo '<g:condition>new</g:condition>' . PHP_EOL;
+    echo '<g:brand>' . gm_xml($brand) . '</g:brand>' . PHP_EOL;
+    echo '<g:mpn>' . gm_xml($id) . '</g:mpn>' . PHP_EOL;
+    if ($gtin !== '') {
+        echo '<g:gtin>' . gm_xml($gtin) . '</g:gtin>' . PHP_EOL;
+    } else {
+        echo '<g:identifier_exists>no</g:identifier_exists>' . PHP_EOL;
+    }
+    echo '</item>' . PHP_EOL;
+}
+
+echo '</channel>' . PHP_EOL;
+echo '</rss>' . PHP_EOL;

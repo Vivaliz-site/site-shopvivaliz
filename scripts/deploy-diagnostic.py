@@ -51,6 +51,8 @@ class DeployDiagnostic:
             "scripts/continuous-executor.py",
             ".github/workflows/deploy.yml",
             "scripts/deploy-validator.py",
+            "config/secrets-groups.json",
+            "docs/secrets-inventory.md",
         ]
 
         for file in files_to_check:
