@@ -374,7 +374,7 @@ if ($notFound) {
     http_response_code(404);
     $name = 'Produto não encontrado';
     $description = 'O produto solicitado não foi localizado no catálogo atual da Vivaliz. Explore outras opções ou fale com a equipe comercial.';
-    $canonicalUrl = 'https://dev.shopvivaliz.com.br/catalogo';
+    $canonicalUrl = $baseUrl . '/catalogo';
     $priceRaw = 0.0;
     $priceLabel = 'Produto indisponível';
     $tags = [];
@@ -386,13 +386,13 @@ $breadcrumbItems = [
         '@type' => 'ListItem',
         'position' => 1,
         'name' => 'Início',
-        'item' => 'https://dev.shopvivaliz.com.br/',
+        'item' => $baseUrl . '/',
     ],
     [
         '@type' => 'ListItem',
         'position' => 2,
         'name' => 'Catálogo',
-        'item' => 'https://dev.shopvivaliz.com.br/catalogo',
+        'item' => $baseUrl . '/catalogo',
     ],
 ];
 
@@ -401,7 +401,7 @@ if ($category !== '') {
         '@type' => 'ListItem',
         'position' => count($breadcrumbItems) + 1,
         'name' => $category,
-        'item' => 'https://dev.shopvivaliz.com.br/catalogo?categoria=' . rawurlencode($category),
+        'item' => $baseUrl . '/catalogo?categoria=' . rawurlencode($category),
     ];
 }
 
