@@ -1,8 +1,13 @@
 <?php
 declare(strict_types=1);
 
+header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
 
 $raw = file_get_contents('php://input') ?: '';
 $eventId = 'olist:' . md5($raw !== '' ? $raw : json_encode($_REQUEST));
