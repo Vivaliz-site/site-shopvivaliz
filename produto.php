@@ -408,6 +408,10 @@ if ($notFound) {
     <link rel="canonical" href="<?= sv_esc($canonicalUrl) ?>">
     <title><?= sv_esc($name) ?> | Vivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/premium-theme.css?v=2026-07-11">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script type="application/ld+json"><?= json_encode($jsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
     <script type="application/ld+json"><?= json_encode($breadcrumbJsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
 </head>
