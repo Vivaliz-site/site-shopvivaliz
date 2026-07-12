@@ -24,6 +24,50 @@
         onScroll();
     }
 
+    /* Botão "voltar ao topo" */
+    var backTop = document.createElement('button');
+    backTop.className = 'dz-back-top';
+    backTop.type = 'button';
+    backTop.setAttribute('aria-label', 'Voltar ao topo');
+    backTop.innerHTML = '↑';
+    document.body.appendChild(backTop);
+    backTop.addEventListener('click', function () {
+        window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+    });
+    var onBackTopScroll = function () {
+        backTop.classList.toggle('dz-show', window.scrollY > 600);
+    };
+    window.addEventListener('scroll', onBackTopScroll, { passive: true });
+    onBackTopScroll();
+
+    /* Fade-in de imagens de produto ao carregar */
+    document.querySelectorAll('.product-card img, .product-detail-image img').forEach(function (img) {
+        if (img.complete) { return; }
+        img.classList.add('dz-img-wait');
+        var done = function () { img.classList.add('dz-img-loaded'); img.classList.remove('dz-img-wait'); };
+        img.addEventListener('load', done, { once: true });
+        img.addEventListener('error', done, { once: true });
+        // Failsafe: nunca deixar imagem invisível
+        setTimeout(done, 3000);
+    });
+
+    /* Ripple nos CTAs principais */
+    if (!reduceMotion) {
+        document.addEventListener('click', function (ev) {
+            var btn = ev.target.closest('.btn-primary, .btn-hero-primary, .primary-btn, .btn-checkout, .buy-button, .main-buy-button, .brand-btn');
+            if (!btn) { return; }
+            var rect = btn.getBoundingClientRect();
+            var size = Math.max(rect.width, rect.height);
+            var ripple = document.createElement('span');
+            ripple.className = 'dz-ripple';
+            ripple.style.width = ripple.style.height = size + 'px';
+            ripple.style.left = (ev.clientX - rect.left - size / 2) + 'px';
+            ripple.style.top = (ev.clientY - rect.top - size / 2) + 'px';
+            btn.appendChild(ripple);
+            setTimeout(function () { ripple.remove(); }, 600);
+        });
+    }
+
     /* Reveal ao scroll */
     if (reduceMotion || !('IntersectionObserver' in window)) {
         return;
