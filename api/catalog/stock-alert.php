@@ -71,7 +71,6 @@ try {
         http_response_code(201);
         echo json_encode(['ok' => true, 'message' => 'Cadastrado com sucesso! Avisaremos você.']);
     } else {
-        // Se der erro de duplicate key (1062)
         if ($db->errno === 1062) {
             http_response_code(200);
             echo json_encode(['ok' => true, 'message' => 'Você já está cadastrado para ser avisado sobre este produto!']);
