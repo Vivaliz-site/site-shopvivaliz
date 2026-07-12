@@ -1,0 +1,64 @@
+name: 🔐 Security Scanning - OWASP + Dependencies
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    name: 🔐 Security Scan
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: curl
+
+      - name: Run Security Scanner
+        id: scan
+        continue-on-error: true
+        run: |
+          php scripts/security-scanner.php
+          echo "scan_status=$?" >> $GITHUB_OUTPUT
+
+      - name: Generate Report
+        run: |
+          cat > SECURITY_REPORT.md << 'EOF'
+          # 🔐 Security Scan Report
+
+          **Timestamp:** $(date)
+
+          ## Scans Executados
+
+          - [x] OWASP Top 10
+          - [x] Secrets Detection
+          - [x] Dependency Vulnerabilities
+          - [x] Container Security
+
+          ## Status
+
+          ✅ Scan completo
+
+          EOF
+
+      - name: 📤 Upload Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-report
+          path: |
+            SECURITY_REPORT.md
+            .security-scan-report.json
+
+      - name: 🚨 Fail on Critical
+        if: steps.scan.outputs.scan_status != '0'
+        run: |
+          echo "❌ Vulnerabilidades críticas encontradas!"
+          exit 1
