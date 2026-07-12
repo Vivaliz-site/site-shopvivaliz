@@ -42,6 +42,10 @@ header('Content-Type: text/html; charset=UTF-8');
         .thread-form{display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:12px}
         .thread-form textarea{min-height:94px;border:1px solid #cbd5e1;border-radius:14px;padding:12px;resize:vertical}
         .log-pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e5e7eb;border-radius:14px;padding:12px;font-size:12px;max-height:260px;overflow:auto}
+        .agent-timeline{margin-top:12px;background:#0f172a;border-radius:14px;padding:10px 12px;max-height:190px;overflow:auto;border:1px solid #1e293b}
+        .timeline-line{font:12px/1.45 Consolas,Monaco,monospace;color:#dbeafe;padding:4px 0;border-bottom:1px solid rgba(148,163,184,.14)}
+        .timeline-line:last-child{border-bottom:0}
+        .timeline-empty{font:12px/1.45 Consolas,Monaco,monospace;color:#94a3b8}
         @media (max-width: 1080px){.ops-grid,.chat-layout{grid-template-columns:1fr}.ops-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
         @media (max-width: 680px){.ops-shell{padding:16px 12px 40px}.ops-kpis{grid-template-columns:1fr}.ops-head{display:block}}
     </style>
@@ -64,7 +68,7 @@ header('Content-Type: text/html; charset=UTF-8');
         <div>
             <p class="eyebrow">Operação autônoma</p>
             <h1>Central de Agentes</h1>
-            <p class="muted">Status ao vivo, backlog real, heartbeat individual e comunicação direta com cada agente.</p>
+            <p class="muted">Status ao vivo, backlog real, heartbeat individual, timeline interna e comunicação direta com cada agente.</p>
         </div>
         <div class="agent-actions">
             <button class="ops-btn secondary" id="refresh-all" type="button">Atualizar agora</button>
@@ -136,7 +140,7 @@ header('Content-Type: text/html; charset=UTF-8');
 
 <script>
 (function(){
-    const state = { agents: [], commands: [], messages: [], responses: [], selectedAgent: 'claude' };
+    const state = { agents: [], commands: [], responses: [], selectedAgent: 'claude' };
 
     function byId(id){ return document.getElementById(id); }
     function pill(node, text, kind){
@@ -165,19 +169,26 @@ header('Content-Type: text/html; charset=UTF-8');
             tabs.innerHTML = '';
             return;
         }
+
         host.innerHTML = state.agents.map(function(agent){
             const hb = agent.heartbeat || {};
             const status = hb.alive ? 'ATIVO' : 'SEM BATIMENTO';
             const statusKind = hb.alive ? 'success' : 'error';
+            const timeline = (agent.passos_execucao || []).slice().reverse().map(function(step){
+                return '<div class="timeline-line">'+esc(step.label || step.message || '')+'</div>';
+            }).join('') || '<div class="timeline-empty">Sem passos recentes.</div>';
+
             return '<div class="agent-item">'+
                 '<div class="agent-top">'+
                     '<div><strong>'+esc(agent.name)+'</strong><div class="agent-meta">'+esc(agent.role)+'</div></div>'+
                     '<span class="ops-pill '+statusKind+'">'+status+'</span>'+
                 '</div>'+
                 '<div class="agent-meta">Heartbeat: '+esc(hb.last_heartbeat || 'nunca')+' | idade: '+esc(hb.age_s ?? '-')+'s | tarefas processadas: '+esc(hb.tasks_processed ?? 0)+'</div>'+
-                '<div class="agent-task"><strong>Foco:</strong> '+esc(agent.current_focus || 'Aguardando')+'</div>'+
+                '<div class="agent-task"><strong>Foco:</strong> '+esc(agent.current_focus || hb.current_focus || 'Aguardando')+'</div>'+
+                '<div class="agent-note"><strong>Ação atual:</strong> '+esc(agent.current_action || 'Aguardando')+'</div>'+
                 '<div class="agent-note"><strong>Backlog de comandos:</strong> '+esc(agent.command_backlog ?? 0)+'</div>'+
                 '<div class="agent-note"><strong>Última resposta:</strong> '+esc(agent.latest_response ? (agent.latest_response.message || agent.latest_response.reply || agent.latest_response.answer || '') : 'sem resposta ainda')+'</div>'+
+                '<div class="agent-timeline">'+timeline+'</div>'+
             '</div>';
         }).join('');
 
@@ -199,7 +210,7 @@ header('Content-Type: text/html; charset=UTF-8');
         const log = byId('thread-log');
         const selected = state.selectedAgent;
         const relevant = []
-            .concat(state.messages.filter(x => (x.agent_id || '').toLowerCase() === selected).map(x => ({type:'user', ts:x.created_at, text:x.message})))
+            .concat(state.commands.filter(x => (x.agent_id || '').toLowerCase() === selected).map(x => ({type:'user', ts:x.created_at, text:x.message})))
             .concat(state.responses.filter(x => {
                 const agent = String(x.agent || x.agent_id || '').toLowerCase();
                 return agent === selected || (selected === 'gpt' && agent === 'chatgpt');
@@ -220,8 +231,8 @@ header('Content-Type: text/html; charset=UTF-8');
         byId('queue-log').textContent = JSON.stringify({source: source, tasks: tasks}, null, 2);
     }
 
-    function renderEvents(messages){
-        byId('events-log').textContent = JSON.stringify(messages.slice(-25), null, 2);
+    function renderEvents(commands, responses){
+        byId('events-log').textContent = JSON.stringify(commands.concat(responses).slice(-25), null, 2);
     }
 
     async function loadAll(){
@@ -239,13 +250,12 @@ header('Content-Type: text/html; charset=UTF-8');
             byId('kpi-active').textContent = queue.active ?? '-';
             byId('kpi-completed').textContent = queue.completed ?? '-';
             byId('kpi-source').textContent = queue.source || 'sem fonte';
-            byId('overall-note').textContent = 'Ciclo: ' + (status.details?.cycle_status || 'n/d') + ' | branch: ' + (status.tri_environment_sync?.branch || 'n/d');
+            byId('overall-note').textContent = 'Ciclo: ' + (status.details?.cycle_status || 'n/d') + ' | fonte fila: ' + (queue.source || 'n/d');
             pill(byId('overall-pill'), (status.autonomous_status?.status || 'unknown').toUpperCase(), status.autonomous_status?.status === 'healthy' ? 'success' : (status.autonomous_status?.status === 'warning' ? 'warn' : 'error'));
             pill(byId('queue-pill'), 'Fonte: ' + (tasks.source || 'n/d'), 'success');
 
             state.agents = agents.agents || [];
             state.commands = messages.commands || [];
-            state.messages = messages.messages || [];
             state.responses = messages.responses || [];
             if (!state.agents.find(agent => agent.id === state.selectedAgent) && state.agents[0]) {
                 state.selectedAgent = state.agents[0].id;
@@ -255,7 +265,7 @@ header('Content-Type: text/html; charset=UTF-8');
             renderAgents();
             renderThread();
             renderQueue(tasks.tasks || [], tasks.source || null);
-            renderEvents(state.commands.concat(state.responses));
+            renderEvents(state.commands, state.responses);
             pill(byId('chat-pill'), 'Online', 'success');
         } catch (error) {
             pill(byId('overall-pill'), 'Falha', 'error');
@@ -298,7 +308,7 @@ header('Content-Type: text/html; charset=UTF-8');
     });
 
     loadAll();
-    setInterval(loadAll, 15000);
+    setInterval(loadAll, 2000);
 })();
 </script>
 </body>
