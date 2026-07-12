@@ -278,31 +278,21 @@ $svNavCurrent = '';
 <body>
     <?php include __DIR__ . '/includes/navbar.php'; ?>
 
-    <!-- Hero Section -->
-    <section class="hero">
-        <div class="container">
-            <div class="hero-content">
-                <div class="hero-free-shipping-badge">
-                    🚚 Frete Grátis acima de R$ 150 para Sul e Sudeste
+    <!-- Hero Banner Slide Section -->
+    <section class="banner-slide-section">
+        <div class="swiper" id="banner-slide">
+            <div class="swiper-wrapper">
+                <div class="swiper-slide">
+                    <img src="/assets/images/banners/banner1.jpg" alt="Banner 1 - Vivaliz">
                 </div>
-                <p class="eyebrow hero-kicker">
-                    🛍️ Loja oficial Vivaliz
-                </p>
-                <h1>Produtos que <span class="gradient-word">você precisa</span>,<br>entrega para todo o Brasil</h1>
-                <p>Rodízios, ferragens, utilidades domésticas e itens para casa com catálogo organizado, atendimento rápido e navegação simples no celular.</p>
-
-                <div class="cta-buttons hero-cta" style="margin-top: 28px;">
-                    <a href="/catalogo" class="btn btn-hero-primary">
-                        🛍️ Ver catálogo completo
-                    </a>
-                    <a href="/carrinho" class="btn btn-hero-secondary">
-                        🛒 Meu Carrinho
-                    </a>
+                <div class="swiper-slide">
+                    <img src="/assets/images/banners/banner2.jpg" alt="Banner 2 - Vivaliz">
                 </div>
             </div>
+            <div class="swiper-pagination"></div>
+            <div class="swiper-button-prev"></div>
+            <div class="swiper-button-next"></div>
         </div>
-    </section>
-
     </section>
 
     <!-- Trust Bar -->
