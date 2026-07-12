@@ -152,39 +152,39 @@ function sv_home_category_icon(string $category): string
 {
     // Mapeia categorias para classes CSS ou ícones SVG
     $map = [
-        'ferrament' => 'category-tools',
-        'rodízio' => 'category-wheels',
-        'rodizio' => 'category-wheels',
-        'jardim' => 'category-garden',
-        'floreira' => 'category-plants',
-        'banheiro' => 'category-bathroom',
-        'cozinha' => 'category-kitchen',
-        'automotiv' => 'category-auto',
-        'elétric' => 'category-electric',
-        'eletric' => 'category-electric',
-        'cadeado' => 'category-locks',
-        'segurança' => 'category-security',
-        'seguranca' => 'category-security',
-        'armário' => 'category-storage',
-        'armario' => 'category-storage',
-        'organiza' => 'category-storage',
-        'fixação' => 'category-hardware',
-        'fixacao' => 'category-hardware',
-        'ferragem' => 'category-hardware',
-        'caixa' => 'category-boxes',
-        'limpeza' => 'category-cleaning',
-        'utilidade' => 'category-utilities',
-        'pintura' => 'category-paint',
-        'construção' => 'category-construction',
-        'construcao' => 'category-construction',
-        'pet' => 'category-pets',
+        'ferrament' => 'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?w=400&h=400&fit=crop',
+        'rodízio' => 'https://images.unsplash.com/photo-1584347781198-6bb7507fc36d?w=400&h=400&fit=crop',
+        'rodizio' => 'https://images.unsplash.com/photo-1584347781198-6bb7507fc36d?w=400&h=400&fit=crop',
+        'jardim' => 'https://images.unsplash.com/photo-1416879598555-2572fa82eb0e?w=400&h=400&fit=crop',
+        'floreira' => 'https://images.unsplash.com/photo-1416879598555-2572fa82eb0e?w=400&h=400&fit=crop',
+        'banheiro' => 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&h=400&fit=crop',
+        'cozinha' => 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=400&h=400&fit=crop',
+        'automotiv' => 'https://images.unsplash.com/photo-1502877338595-a28068ce8638?w=400&h=400&fit=crop',
+        'elétric' => 'https://images.unsplash.com/photo-1555664424-778a1e5e1b48?w=400&h=400&fit=crop',
+        'eletric' => 'https://images.unsplash.com/photo-1555664424-778a1e5e1b48?w=400&h=400&fit=crop',
+        'cadeado' => 'https://images.unsplash.com/photo-1555921015-5532091f6026?w=400&h=400&fit=crop',
+        'segurança' => 'https://images.unsplash.com/photo-1555921015-5532091f6026?w=400&h=400&fit=crop',
+        'seguranca' => 'https://images.unsplash.com/photo-1555921015-5532091f6026?w=400&h=400&fit=crop',
+        'armário' => 'https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=400&h=400&fit=crop',
+        'armario' => 'https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=400&h=400&fit=crop',
+        'organiza' => 'https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=400&h=400&fit=crop',
+        'fixação' => 'https://images.unsplash.com/photo-1586864387967-d02ef85d93e8?w=400&h=400&fit=crop',
+        'fixacao' => 'https://images.unsplash.com/photo-1586864387967-d02ef85d93e8?w=400&h=400&fit=crop',
+        'ferragem' => 'https://images.unsplash.com/photo-1586864387967-d02ef85d93e8?w=400&h=400&fit=crop',
+        'caixa' => 'https://images.unsplash.com/photo-1601597111158-2fceff292cdc?w=400&h=400&fit=crop',
+        'limpeza' => 'https://images.unsplash.com/photo-1585421514284-efb74c2b69ba?w=400&h=400&fit=crop',
+        'utilidade' => 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&h=400&fit=crop',
+        'pintura' => 'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=400&h=400&fit=crop',
+        'construção' => 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=400&h=400&fit=crop',
+        'construcao' => 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=400&h=400&fit=crop',
+        'pet' => 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=400&h=400&fit=crop',
     ];
-    foreach ($map as $needle => $icon_class) {
+    foreach ($map as $needle => $img_url) {
         if (stripos($category, $needle) !== false) {
-            return $icon_class;
+            return $img_url;
         }
     }
-    return 'category-default';
+    return 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=400&fit=crop';
 }
 
 function sv_home_top_categories(int $limit = 8): array
@@ -436,7 +436,7 @@ $svNavCurrent = '';
                         <?php foreach ($homeCategories as $category): ?>
                             <a class="category-slide" href="<?= sv_home_esc($category['href']) ?>">
                                 <div class="category-slide-image-wrapper">
-                                    <div class="category-slide-icon <?= sv_home_esc($category['icon']) ?>" aria-hidden="true"></div>
+                                    <img src="<?= sv_home_esc($category['icon']) ?>" alt="<?= sv_home_esc($category['name']) ?>" class="category-slide-img" loading="lazy">
                                 </div>
                                 <strong><?= sv_home_esc($category['name']) ?></strong>
                                 <span class="category-slide-count"><?= (int)$category['count'] ?> itens</span>
