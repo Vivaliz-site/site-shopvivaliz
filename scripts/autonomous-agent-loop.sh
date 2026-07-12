@@ -3,7 +3,7 @@ set -u
 
 PROJECT_DIR="${SHOPVIVALIZ_PROJECT_DIR:-/home/ubuntu/site-shopvivaliz}"
 LOG_FILE="${SHOPVIVALIZ_AGENT_LOG:-$PROJECT_DIR/logs/autonomous-agent.log}"
-INTERVAL_SECONDS="${SHOPVIVALIZ_AGENT_INTERVAL_SECONDS:-900}"
+INTERVAL_SECONDS="${SHOPVIVALIZ_AGENT_INTERVAL_SECONDS:-60}"
 LOCK_FILE="${SHOPVIVALIZ_AGENT_LOCK:-/tmp/shopvivaliz-agent.lock}"
 STOP_FILE="${SHOPVIVALIZ_AGENT_STOP_FILE:-$PROJECT_DIR/.agent-stop}"
 
@@ -80,6 +80,12 @@ run_cycle() {
   python3 scripts/autonomous-continuous-cycle.py --advance
   cycle_exit="$?"
   log "Autonomous continuous cycle exit_code=$cycle_exit."
+
+  if [ -f "scripts/autonomous-executor.py" ]; then
+    python3 scripts/autonomous-executor.py --max-cycles 1 || log "WARNING autonomous executor reported issues."
+  else
+    log "WARNING scripts/autonomous-executor.py not found."
+  fi
 
   if [ -f "scripts/agent-operations-worker.py" ]; then
     python3 scripts/agent-operations-worker.py || log "WARNING agent operations worker reported issues."
