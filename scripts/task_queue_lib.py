@@ -24,9 +24,57 @@ def utc_now() -> str:
     return datetime.utcnow().isoformat() + "Z"
 
 
+def _task_from_external(item: dict[str, Any], index: int) -> dict[str, Any]:
+    task_id = str(item.get("id") or item.get("task_id") or f"external-{index:03d}")
+    priority = str(item.get("priority") or "medium").lower()
+    if priority not in PRIORITY_ORDER:
+        priority = "medium"
+
+    normalized = {
+        "id": task_id,
+        "title": item.get("title") or item.get("action") or task_id,
+        "description": item.get("description") or "",
+        "priority": priority,
+        "status": item.get("status") or "pending",
+        "created_at": item.get("created_at") or utc_now(),
+        "source": item.get("source") or "external-task-format",
+        "tags": item.get("tags") or [],
+    }
+
+    if "requires_env" in item:
+        normalized["requires_env"] = item.get("requires_env") or []
+    elif "requires_secrets" in item:
+        normalized["requires_env"] = item.get("requires_secrets") or []
+
+    if "requires_human_approval" in item:
+        normalized["requires_human_approval"] = bool(item.get("requires_human_approval"))
+
+    if "requires_manual_access" in item:
+        normalized["requires_manual_access"] = bool(item.get("requires_manual_access"))
+
+    for key in (
+        "phase",
+        "queue_rank",
+        "type",
+        "action",
+        "assigned_to",
+        "estimated_hours",
+        "metadata",
+    ):
+        if key in item:
+            normalized[key] = item.get(key)
+
+    return normalized
+
+
 def _normalize(data: Any) -> dict[str, Any]:
     if isinstance(data, dict) and isinstance(data.get("queue"), list):
         normalized = deepcopy(data)
+    elif isinstance(data, dict) and isinstance(data.get("tasks"), list):
+        normalized = {
+            "queue": [_task_from_external(task, index) for index, task in enumerate(data.get("tasks", []), start=1)],
+            "metadata": deepcopy(data.get("metadata", {})),
+        }
     elif isinstance(data, list):
         normalized = {"queue": data}
     else:

@@ -6,6 +6,7 @@ import os
 import json
 from pathlib import Path
 from datetime import datetime
+from task_queue_lib import load_queue
 
 class SystemHealthCheck:
     def __init__(self):
@@ -50,13 +51,10 @@ class SystemHealthCheck:
         print("\n2. VERIFICANDO FILA DE TAREFAS...")
 
         try:
-            queue_path = Path('tasks-queue.json') if Path('tasks-queue.json').exists() else Path('logs/tasks-queue.json')
-            with queue_path.open(encoding='utf-8') as f:
-                queue = json.load(f)
-
-            tasks = queue['queue'] if isinstance(queue, dict) and 'queue' in queue else queue
+            queue = load_queue()
+            tasks = queue.get('queue', [])
             if not isinstance(tasks, list):
-                raise ValueError('Formato de fila inválido')
+                raise ValueError('Formato de fila invalido')
 
             total = len(tasks)
             completed = len([t for t in tasks if t['status'] == 'completed'])
