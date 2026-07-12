@@ -134,28 +134,16 @@ function sv_home_banners(): array
 {
     return [
         [
-            'eyebrow' => 'Ambiente profissional',
-            'title' => 'Rodízios, ferragens e utilidades com leitura rápida e compra direta.',
-            'text' => 'Uma vitrine mais limpa para destacar linhas reais do catálogo, comparar opções e avançar sem atrito no desktop ou no celular.',
-            'highlights' => ['Catálogo visual', 'Compra assistida', 'Entrega nacional'],
+            'alt' => 'Banner Vivaliz com 10% de desconto na primeira compra',
+            'image' => '/public/assets/home-banners/banner-primeira-compra.png',
             'primary' => ['label' => 'Explorar catálogo', 'href' => '/catalogo'],
             'secondary' => ['label' => 'Falar com vendas', 'href' => '/contato'],
         ],
         [
-            'eyebrow' => 'Linhas em destaque',
-            'title' => 'Banners pensados para vender melhor as categorias mais buscadas.',
-            'text' => 'A nova home aproxima o cliente dos produtos certos com destaque visual, contexto comercial e acesso rápido para orçamento ou carrinho.',
-            'highlights' => ['Mais contexto', 'Mais clareza', 'Mais conversão'],
+            'alt' => 'Banner Vivaliz para casa, jardim e organização',
+            'image' => '/public/assets/home-banners/banner-casa-estilo.png',
             'primary' => ['label' => 'Ver produtos', 'href' => '/catalogo'],
             'secondary' => ['label' => 'Abrir contato', 'href' => '/contato'],
-        ],
-        [
-            'eyebrow' => 'Atendimento Vivaliz',
-            'title' => 'Mais confiança visual para comprar de qualquer lugar do Brasil.',
-            'text' => 'Cards organizados, navegação consistente e apoio comercial rápido para compatibilidade, prazos e decisão de compra com mais segurança.',
-            'highlights' => ['WhatsApp rápido', 'Fluxo mobile', 'Jornada consistente'],
-            'primary' => ['label' => 'Ir ao carrinho', 'href' => '/carrinho'],
-            'secondary' => ['label' => 'Conhecer a marca', 'href' => '/sobre'],
         ],
     ];
 }
@@ -234,12 +222,6 @@ $featuredProducts = sv_home_featured_products(8);
 $featuredProductsCount = count($featuredProducts);
 $catalogCount = sv_home_catalog_count();
 $heroBanners = sv_home_banners();
-$heroBannerProducts = array_values(array_slice($featuredProducts, 0, 6));
-if ($heroBannerProducts !== []) {
-    while (count($heroBannerProducts) < 6) {
-        $heroBannerProducts[] = $heroBannerProducts[count($heroBannerProducts) % max(1, count($heroBannerProducts))];
-    }
-}
 $homeCategories = sv_home_top_categories(10);
 $svNavCurrent = '';
 ?>
@@ -376,52 +358,10 @@ $svNavCurrent = '';
             <div class="hero-carousel" id="hero-carousel" aria-label="Banners em destaque">
                 <div class="hero-carousel-track">
                     <?php foreach ($heroBanners as $index => $banner): ?>
-                        <?php
-                        $bannerProducts = array_slice($heroBannerProducts, $index * 2, 2);
-                        if ($bannerProducts === [] && $heroBannerProducts !== []) {
-                            $bannerProducts = array_slice($heroBannerProducts, 0, 2);
-                        }
-                        ?>
-                        <article class="hero-slide<?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>">
-                            <div class="hero-slide-overlay"></div>
-                            <div class="hero-slide-content">
-                                <span class="hero-slide-eyebrow"><?= sv_home_esc($banner['eyebrow']) ?></span>
-                                <h2><?= sv_home_esc($banner['title']) ?></h2>
-                                <p><?= sv_home_esc($banner['text']) ?></p>
-                                <?php if (!empty($banner['highlights']) && is_array($banner['highlights'])): ?>
-                                    <div class="hero-slide-highlights" aria-label="Destaques do banner">
-                                        <?php foreach ($banner['highlights'] as $highlight): ?>
-                                            <span><?= sv_home_esc((string)$highlight) ?></span>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php endif; ?>
-                                <div class="hero-slide-actions">
-                                    <a href="<?= sv_home_esc($banner['primary']['href']) ?>" class="btn btn-primary"><?= sv_home_esc($banner['primary']['label']) ?></a>
-                                    <a href="<?= sv_home_esc($banner['secondary']['href']) ?>" class="btn btn-secondary"><?= sv_home_esc($banner['secondary']['label']) ?></a>
-                                </div>
-                            </div>
-                            <?php if ($bannerProducts): ?>
-                                <div class="hero-slide-product-stack" aria-label="Produtos reais em destaque">
-                                    <?php foreach ($bannerProducts as $stackProduct): ?>
-                                        <?php
-                                        $stackImage = $stackProduct['image_url'] !== '' ? $stackProduct['image_url'] : sv_home_default_image();
-                                        $stackUrl = !empty($stackProduct['slug']) ? '/produto/' . $stackProduct['slug'] : sv_home_product_url($stackProduct);
-                                        ?>
-                                        <a class="hero-slide-product-card" href="<?= sv_home_esc($stackUrl) ?>">
-                                            <div class="hero-slide-product-image">
-                                                <img src="<?= sv_home_esc($stackImage) ?>" alt="<?= sv_home_esc($stackProduct['name']) ?>" loading="lazy" onerror="this.src='<?= sv_home_default_image() ?>'">
-                                            </div>
-                                            <div class="hero-slide-product-copy">
-                                                <?php if (!empty($stackProduct['category'])): ?>
-                                                    <span><?= sv_home_esc($stackProduct['category']) ?></span>
-                                                <?php endif; ?>
-                                                <strong><?= sv_home_esc($stackProduct['name']) ?></strong>
-                                                <small><?= sv_home_esc(sv_home_money((float)($stackProduct['price'] ?? 0))) ?></small>
-                                            </div>
-                                        </a>
-                                    <?php endforeach; ?>
-                                </div>
-                            <?php endif; ?>
+                        <article class="hero-slide hero-image-slide<?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>">
+                            <a class="hero-image-link" href="<?= sv_home_esc($banner['primary']['href']) ?>">
+                                <img src="<?= sv_home_esc($banner['image']) ?>" alt="<?= sv_home_esc($banner['alt']) ?>" class="hero-banner-image" loading="<?= $index === 0 ? 'eager' : 'lazy' ?>">
+                            </a>
                         </article>
                     <?php endforeach; ?>
                 </div>
