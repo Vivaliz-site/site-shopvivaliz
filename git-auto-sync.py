@@ -23,6 +23,8 @@ PRESERVE_PATHS = {
     "storage/private",
     ".agent-heartbeats",
     "reports/hourly",
+    "tasks-queue.json",
+    "config/__pycache__",
 }
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
