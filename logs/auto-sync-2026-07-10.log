@@ -23897,3 +23897,68 @@ Fast-forward
  5 files changed, 202 insertions(+), 50 deletions(-)
 [2026-07-12 03:56:29] ✅ Git pull OK
 [2026-07-12 03:56:30] 📝 Commitando mudanças...
+[2026-07-12 04:01:32] 
+[2026-07-12 04:01:32] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-07-12 04:01:32] 🔄 Sincronizando secrets do GitHub...
+============================================================
+🔐 ShopVivaliz - Sincronizador de Secrets (Linux/macOS)
+============================================================
+
+Verificando GitHub CLI...
+✓ GitHub CLI encontrado
+
+📝 Gerando .env.local...
+✓ Criado: /home/ubuntu/site-shopvivaliz/.env.local
+
+============================================================
+✅ SINCRONIZAÇÃO CONCLUÍDA!
+============================================================
+
+Próximos passos:
+  1. Validar secrets: python3 scripts/validar_secrets.py
+  2. Ativar auto-sync: bash scripts/auto_sync_git.ps1
+
+[2026-07-12 04:01:32] ✅ Secrets sincronizados com sucesso
+[SECURITY] ShopVivaliz - Validador de Secrets
+============================================================
+
+[ERROR] ERRO - Secrets obrigatórios faltando:
+
+  ❌ ANTHROPIC_API_KEY (Claude API) - AUSENTE
+  ❌ SHOPEE_PARTNER_ID (Shopee Partner ID) - AUSENTE
+  ❌ SHOPEE_PARTNER_KEY (Shopee Partner Key) - AUSENTE
+
+📝 Solução:
+  1. Copie .env.example para .env.local
+  2. Preencha os valores reais em .env.local
+  3. Execute este validador novamente
+
+  Variáveis obrigatórias:
+    • ANTHROPIC_API_KEY: Claude API
+    • SHOPEE_PARTNER_ID: Shopee Partner ID
+    • SHOPEE_PARTNER_KEY: Shopee Partner Key
+    • FTP_SERVER: FTP Server
+    • FTP_USERNAME: FTP Username
+    • FTP_PASSWORD: FTP Password
+    • MAIL_PASS: Email Password
+[2026-07-12 04:01:32] ⚠️  Validação teve aviso (continuando...)
+[2026-07-12 04:01:32] 🔄 Sincronizando repositório...
+From https://github.com/Vivaliz-site/site-shopvivaliz
+ * branch              main       -> FETCH_HEAD
+   a4c4cc50..0c8811c8  main       -> origin/main
+Updating a4c4cc50..0c8811c8
+Fast-forward
+ .codex/agents/shopvivaliz-agent-500-runner.toml    | 18 +++++-----
+ .codex/agents/shopvivaliz-agent-test-runner.toml   | 38 ++++++++++------------
+ .codex/agents/shopvivaliz-customer-chat-agent.toml | 32 +++++++++---------
+ .codex/agents/shopvivaliz-frete-checkout.toml      | 20 ++++++------
+ .codex/agents/shopvivaliz-image-bulk-factory.toml  | 36 ++++++++++----------
+ .../shopvivaliz-image-creative-director.toml       | 26 ++++++++-------
+ .codex/agents/shopvivaliz-image-qa.toml            | 24 +++++++-------
+ .../agents/shopvivaliz-image-recovery-agent.toml   | 18 +++++-----
+ .codex/agents/shopvivaliz-monitor-externo.toml     | 36 ++++++++++----------
+ .codex/agents/shopvivaliz-olist-tiny.toml          | 18 +++++-----
+ .codex/agents/shopvivaliz-qa.toml                  | 26 +++++++--------
+ 11 files changed, 145 insertions(+), 147 deletions(-)
+[2026-07-12 04:01:33] ✅ Git pull OK
+[2026-07-12 04:01:33] 📝 Commitando mudanças...
