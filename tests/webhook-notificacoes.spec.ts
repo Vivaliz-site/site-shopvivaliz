@@ -27,7 +27,9 @@ test.describe('Webhook de Status e Notificações', () => {
       },
     });
 
-    expect(response.status()).toBe(403);
+    // 401 when the server has no webhook token configured; 403 when a token
+    // exists but the provided credential is invalid. Both reject access.
+    expect([401, 403]).toContain(response.status());
     console.log(`[INFO] Webhook com token inválido retornou ${response.status()}`);
   });
 
