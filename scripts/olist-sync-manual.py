@@ -50,7 +50,6 @@ try:
 
     print("\n[4] Acessando página de sincronização...")
 
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     session = requests.Session()
     session.verify = False
 
