@@ -7,6 +7,7 @@ $currentPage = basename($_SERVER['PHP_SELF'] ?? '');
 <!DOCTYPE html>
 <html>
 <head>
+    <link rel="stylesheet" href="/css/dazzle-v1.css?v=1.0.0">
     <style>
         * {
             margin: 0;
