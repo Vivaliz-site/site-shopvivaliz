@@ -81,6 +81,10 @@ run_cycle() {
   cycle_exit="$?"
   log "Autonomous continuous cycle exit_code=$cycle_exit."
 
+  if [ -f "scripts/agent-operations-worker.py" ]; then
+    python3 scripts/agent-operations-worker.py || log "WARNING agent operations worker reported issues."
+  fi
+
   if [ -f "scripts/log-health-checker.py" ]; then
     python3 scripts/log-health-checker.py || log "WARNING log health checker reported issues."
   fi
