@@ -200,19 +200,20 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 }
 
 .sv-head {
-  min-height: 50px !important;
-  height: 50px !important;
-  padding: 8px 14px !important;
-  flex: 0 0 50px !important;
+  min-height: 40px !important;
+  height: 40px !important;
+  padding: 4px 10px !important;
+  flex: 0 0 40px !important;
 }
-.sv-head img { width: 70px !important; }
-.sv-head strong { font-size: 14px !important; }
+.sv-head img { width: 60px !important; padding: 2px !important; }
+.sv-head strong { font-size: 13px !important; }
+.sv-close { width: 32px !important; height: 32px !important; font-size: 20px !important; }
 
 .sv-hero {
-  height: 70px !important;
-  flex: 0 0 70px !important;
+  height: 118px !important;
+  flex: 0 0 118px !important;
 }
-.sv-hero video { height: 80px !important; }
+.sv-hero video { height: 138px !important; width: auto !important; }
 
 .sv-msgs { flex: 1 1 auto !important; }
 
