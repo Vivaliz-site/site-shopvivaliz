@@ -371,3 +371,9 @@
   width: auto !important;
 }
 
+
+/* FIX MOBILE VIEWPORT HEIGHT */
+#sv-liz-panel, #sv-liz-panel.open {
+  height: calc(100dvh - 20px) !important;
+}
+
