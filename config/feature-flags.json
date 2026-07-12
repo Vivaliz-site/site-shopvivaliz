@@ -1,0 +1,20 @@
+{
+  "new-checkout-flow": {
+    "enabled": false,
+    "canary_mode": false,
+    "rollout_percentage": 0,
+    "description": "Novo fluxo de checkout com melhorias UX"
+  },
+  "product-recommendations": {
+    "enabled": true,
+    "canary_mode": false,
+    "rollout_percentage": 100,
+    "description": "Recomendações de produtos via ML"
+  },
+  "mascote-liz": {
+    "enabled": true,
+    "canary_mode": false,
+    "rollout_percentage": 100,
+    "description": "Widget de mascote Liz"
+  }
+}
