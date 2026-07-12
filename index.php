@@ -459,11 +459,7 @@ $svNavCurrent = '';
                 </div>
                 <a href="/catalogo" class="btn btn-secondary">Ver catálogo</a>
             </div>
-            <div class="home-trust-note home-trust-note-categories" aria-label="Destaques das categorias">
-                <span>Linhas organizadas para compra rápida</span>
-                <span>Imagens reais do catálogo</span>
-                <span>Atendimento comercial ativo</span>
-            </div>
+
             <?php if ($homeCategories): ?>
                 <div class="home-scroller" data-scroller>
                     <button type="button" class="home-scroller-arrow" data-dir="-1" aria-label="Categorias anteriores">‹</button>
