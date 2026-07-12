@@ -1,9 +1,0 @@
-name: PAUSADO - Setup Branch Protection
-# Desabilitado 2026-07-03: quota GitHub Actions esgotada
-on:
-  workflow_dispatch:
-jobs:
-  pausado:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Workflow pausado para economizar quota Actions."
