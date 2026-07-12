@@ -585,7 +585,11 @@
       "auto_generated": true,
       "source": "real-project-signals",
       "id": "task-050",
-      "created_at": "2026-07-12T20:46:43.112298Z"
+      "created_at": "2026-07-12T20:46:43.112298Z",
+      "assigned_to": [
+        "gemini"
+      ],
+      "assignment_updated_at": "2026-07-12T20:50:57Z"
     },
     {
       "title": "Corrigir falhas concretas do validador de deploy",
@@ -595,7 +599,11 @@
       "auto_generated": true,
       "source": "real-project-signals",
       "id": "task-051",
-      "created_at": "2026-07-12T20:46:43.112298Z"
+      "created_at": "2026-07-12T20:46:43.112298Z",
+      "assigned_to": [
+        "claude"
+      ],
+      "assignment_updated_at": "2026-07-12T20:50:57Z"
     },
     {
       "title": "Reparar produtos reais do catalogo sem imagem valida",
@@ -605,7 +613,11 @@
       "auto_generated": true,
       "source": "real-project-signals",
       "id": "task-052",
-      "created_at": "2026-07-12T20:46:43.112298Z"
+      "created_at": "2026-07-12T20:46:43.112298Z",
+      "assigned_to": [
+        "gemini"
+      ],
+      "assignment_updated_at": "2026-07-12T20:50:57Z"
     }
   ],
   "version": "1.1",
