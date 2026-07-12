@@ -1,3 +1,14 @@
+    <?php
+    $companyProfile = @include(dirname(__DIR__) . '/config/company-profile.php') ?: [];
+    $companyName = $companyProfile['fantasy_name'] ?? 'Vivaliz';
+    $companyEmail = $companyProfile['email'] ?? 'atendimento@shopvivaliz.com.br';
+    $companyPhone = $companyProfile['phone'] ?? '(37) 99937-4112';
+    $companyCNPJ = $companyProfile['cnpj'] ?? '49.903.300/0001-70';
+    $companyAddress = ($companyProfile['address'] ?? 'RUA CAMPINA VERDE') . ', ' .
+                      ($companyProfile['number'] ?? '841') . ' - ' .
+                      ($companyProfile['city'] ?? 'Divinópolis') . ', ' .
+                      ($companyProfile['state'] ?? 'MG');
+    ?>
     <footer>
         <div class="container">
             <div class="footer-cols">
