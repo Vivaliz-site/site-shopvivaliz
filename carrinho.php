@@ -97,6 +97,13 @@ header('Content-Type: text/html; charset=UTF-8');
             </div>
             <a href="/checkout" class="btn btn-primary btn-checkout" id="btn-checkout">Finalizar pedido</a>
             <a href="/catalogo" class="btn-continue">Continuar comprando</a>
+            <div class="sv-trust-badge">
+                <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+                <div>
+                    <strong>Compra 100% Segura</strong><br>
+                    <span>Ambiente criptografado com Checkout PIX rápido.</span>
+                </div>
+            </div>
             <div style="margin-top:20px;display:grid;gap:6px">
                 <div style="font-size:12px;color:var(--muted);font-weight:600">🔒 Compra segura</div>
                 <div style="font-size:12px;color:var(--muted);font-weight:600">🚚 Envio para todo Brasil</div>
