@@ -610,6 +610,11 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
             statusNode.className = 'status-message' + (type ? ' ' + type : '');
         }
 
+        function hiddenValue(name) {
+            const field = form.querySelector('input[name="' + name + '"]');
+            return field ? String(field.value || '') : '';
+        }
+
         function buildWhatsappLink(orderNumber, totalLabel, paymentMethod) {
             const text = encodeURIComponent(
                 'Ola! Acabei de fazer um pedido na Vivaliz.\n' +
@@ -624,9 +629,10 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
         function renderSuccess(response, paymentMethod) {
             const totalLabel = money(total);
             const whatsappLink = buildWhatsappLink(response.order_number, totalLabel, paymentMethod);
-            const tinySyncNote = response.tiny_order_id
+            const tinySyncOk = response.tiny_order_id && response.tiny_push === 'ok';
+            const tinySyncNote = tinySyncOk
                 ? '<p class="muted">Pedido sincronizado com o ERP. Codigo Tiny: <strong>' + response.tiny_order_id + '</strong></p>'
-                : '<p class="muted">Importacao ERP: <strong>' + (response.tiny_push || 'nao informado') + '</strong></p>';
+                : '<p class="muted">Importacao ERP pendente. Status tecnico: <strong>' + (response.tiny_push || 'nao informado') + '</strong></p>';
 
             let paymentBlock = '<p class="muted">' + (response.payment_instructions || 'Pedido registrado com sucesso.') + '</p>';
             if (paymentMethod === 'pix') {
@@ -675,6 +681,10 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 ].filter(Boolean).join(', '),
                 notes: '',
                 payment_method: formData.get('payment_method') || 'pix',
+                shipping_total: Number(hiddenValue('shipping_total') || 0),
+                shipping_label: hiddenValue('shipping_label'),
+                shipping_service: hiddenValue('shipping_service'),
+                shipping_cep: hiddenValue('shipping_cep') || (formData.get('cep') || ''),
                 items: items
             };
 
@@ -695,7 +705,10 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                         setStatus('Estoque insuficiente: ' + details + '. Ajuste as quantidades no carrinho.', 'err');
                         return;
                     }
-                    setStatus(response.message || response.error || 'Erro ao registrar pedido.', 'err');
+                    const fallback = window.svCheckoutErrorMessage
+                        ? window.svCheckoutErrorMessage(response.error, response.message)
+                        : (response.message || response.error || 'Erro ao registrar pedido.');
+                    setStatus(fallback, 'err');
                     return;
                 }
 
