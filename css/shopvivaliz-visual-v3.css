@@ -345,3 +345,54 @@ body {
   }
 }
 
+
+/* Product Page Enhancements */
+.product-detail-image {
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: #f8fafc;
+}
+
+[data-theme="dark"] .product-detail-image {
+  background: #1e293b;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  border-color: #334155;
+}
+
+/* Sticky Buy Button Modernization */
+.sticky-buy-wrapper {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.85);
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.05);
+  border-radius: 24px 24px 0 0;
+  padding: 16px 24px;
+}
+
+[data-theme="dark"] .sticky-buy-wrapper {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.sticky-buy-wrapper .btn-comprar {
+  border-radius: 999px;
+  padding: 12px 32px;
+  box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+}
+
+
+/* Hero Banner Ken Burns Effect */
+.hero-slide {
+  overflow: hidden;
+}
+.hero-slide img {
+  transition: transform 6s ease;
+  transform: scale(1.0);
+}
+.hero-slide.is-active img {
+  transform: scale(1.08);
+}
+
