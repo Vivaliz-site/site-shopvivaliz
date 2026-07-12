@@ -183,7 +183,7 @@ function monitor_heartbeat_status(): array
 
 function monitor_agent_commands_file(): string
 {
-    return monitor_storage_dir() . '/agent-commands.jsonl';
+    return monitor_logs_dir() . '/agent-commands.jsonl';
 }
 
 function monitor_agent_messages_file(): string
