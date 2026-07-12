@@ -160,25 +160,23 @@ def build_agent_reply(agent_id: str, command: dict[str, Any], queue: dict[str, A
 
 def process_commands(queue: dict[str, Any]) -> int:
     rows = read_jsonl(COMMANDS_FILE)
-    changed = False
+    existing_responses = {
+        str(row.get("command_id", ""))
+        for row in read_jsonl(RESPONSES_FILE)
+        if row.get("command_id")
+    }
     processed = 0
     for row in rows:
         if row.get("status") != "queued":
             continue
+        if str(row.get("id", "")) in existing_responses:
+            continue
         agent_id = str(row.get("agent_id", "")).lower()
         if agent_id not in AGENTS:
-            row["status"] = "invalid_agent"
-            row["processed_at"] = utc_now()
-            changed = True
             continue
         reply = build_agent_reply(agent_id, row, queue)
         append_jsonl(RESPONSES_FILE, reply)
-        row["status"] = "processed"
-        row["processed_at"] = utc_now()
-        changed = True
         processed += 1
-    if changed:
-        write_jsonl(COMMANDS_FILE, rows)
     return processed
 
 
