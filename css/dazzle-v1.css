@@ -492,7 +492,187 @@ body::after {
 }
 
 /* ==========================================================
-   16. ACESSIBILIDADE — respeita usuários sensíveis a movimento
+   16. FAQ — accordion suave
+   ========================================================== */
+.faq-item summary {
+  cursor: pointer;
+  transition: color .25s var(--dz-ease);
+}
+
+.faq-item summary:hover {
+  color: var(--dz-blue-bright);
+}
+
+.faq-item[open] .faq-body {
+  animation: dz-faq-open .35s var(--dz-ease);
+}
+
+.faq-icon {
+  display: inline-block;
+  transition: transform .3s var(--dz-ease);
+}
+
+.faq-item[open] .faq-icon {
+  transform: rotate(45deg);
+}
+
+/* ==========================================================
+   17. CARROSSEL DO HERO — controles refinados
+   ========================================================== */
+.hero-carousel-arrow {
+  transition: transform .25s var(--dz-ease), background-color .25s var(--dz-ease), box-shadow .25s var(--dz-ease);
+}
+
+.hero-carousel-arrow:hover {
+  transform: scale(1.15);
+  box-shadow: 0 6px 18px rgba(7, 52, 93, .3);
+}
+
+.hero-carousel-arrow:active {
+  transform: scale(.95);
+}
+
+.hero-carousel-dot {
+  transition: transform .25s var(--dz-ease), background-color .25s var(--dz-ease), width .25s var(--dz-ease);
+}
+
+.hero-carousel-dot:hover {
+  transform: scale(1.3);
+}
+
+.hero-carousel-dot.is-active {
+  background: linear-gradient(90deg, var(--dz-blue-bright), var(--dz-green));
+}
+
+/* ==========================================================
+   18. PÁGINAS DE ERRO (404/500) — acabamento
+   ========================================================== */
+.error-code {
+  background: linear-gradient(120deg, var(--dz-blue-bright), var(--dz-green));
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: dz-gradient-slide 5s linear infinite;
+}
+
+.error-shell {
+  animation: dz-fade-up .6s var(--dz-ease);
+}
+
+/* ==========================================================
+   19. ESTADOS VAZIOS — mais acolhedores
+   ========================================================== */
+.cart-empty,
+.checkout-empty,
+.product-empty-state {
+  animation: dz-fade-up .5s var(--dz-ease);
+}
+
+/* ==========================================================
+   20. BOTÃO VOLTAR AO TOPO (criado por js/dazzle-v1.js)
+   ========================================================== */
+.dz-back-top {
+  position: fixed;
+  right: 22px;
+  bottom: 96px;
+  width: 46px;
+  height: 46px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--dz-blue-bright), var(--dz-blue-deep));
+  color: #fff;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 950;
+  box-shadow: 0 8px 24px rgba(7, 52, 93, .3);
+  opacity: 0;
+  transform: translateY(14px);
+  pointer-events: none;
+  transition: opacity .3s var(--dz-ease), transform .3s var(--dz-ease), box-shadow .3s var(--dz-ease);
+}
+
+.dz-back-top.dz-show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.dz-back-top:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--dz-shadow-glow);
+}
+
+/* ==========================================================
+   21. RIPPLE NOS BOTÕES (span criado por js/dazzle-v1.js)
+   ========================================================== */
+.dz-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .45);
+  transform: scale(0);
+  animation: dz-ripple-anim .55s var(--dz-ease) forwards;
+  pointer-events: none;
+}
+
+/* ==========================================================
+   22. IMAGENS — fade-in ao carregar (classe via JS)
+   ========================================================== */
+.dz-img-wait {
+  opacity: 0;
+}
+
+.dz-img-loaded {
+  opacity: 1;
+  transition: opacity .45s var(--dz-ease);
+}
+
+/* ==========================================================
+   23. FOCO VISÍVEL — navegação por teclado
+   ========================================================== */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid rgba(30, 122, 201, .55);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ==========================================================
+   24. FOOTER — links animados
+   ========================================================== */
+.footer-cols a {
+  transition: color .25s var(--dz-ease), padding-left .25s var(--dz-ease);
+}
+
+.footer-cols a:hover {
+  color: var(--dz-blue-bright);
+  padding-left: 4px;
+}
+
+/* ==========================================================
+   25. KEYFRAMES EXTRAS
+   ========================================================== */
+@keyframes dz-faq-open {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes dz-fade-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes dz-ripple-anim {
+  to { transform: scale(3.2); opacity: 0; }
+}
+
+/* ==========================================================
+   26. ACESSIBILIDADE — respeita usuários sensíveis a movimento
    ========================================================== */
 @media (prefers-reduced-motion: reduce) {
   .hero::before,
