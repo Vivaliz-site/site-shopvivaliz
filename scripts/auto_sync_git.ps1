@@ -70,8 +70,26 @@ function Write-Log {
 function Invoke-GitSync {
     Write-Log "🔄 Iniciando sincronização..." "INFO"
 
+    $AgentLockStream = $null
+
     try {
         Push-Location $RepositoryPath
+
+        # Coordinate with coding agents. Never stage a working tree while an
+        # agent is reading/editing/testing it.
+        $AgentLockPath = Join-Path $RepositoryPath ".git/shopvivaliz-agent-edit.lock"
+        $AgentLockStream = [System.IO.File]::Open(
+            $AgentLockPath,
+            [System.IO.FileMode]::OpenOrCreate,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::ReadWrite
+        )
+        try {
+            $AgentLockStream.Lock(0, 1)
+        } catch {
+            Write-Log "⏸️ Agente editando o repositorio; sincronizacao adiada." "WARN"
+            return $false
+        }
 
         # 1. Verificar se tem mudanças não commitadas
         Write-Log "📋 Verificando status local..." "INFO"
@@ -139,6 +157,10 @@ function Invoke-GitSync {
         Write-Log "❌ Erro durante sincronização: $_" "ERROR"
         return $false
     } finally {
+        if ($null -ne $AgentLockStream) {
+            try { $AgentLockStream.Unlock(0, 1) } catch {}
+            $AgentLockStream.Dispose()
+        }
         Pop-Location
     }
 }
