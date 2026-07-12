@@ -193,18 +193,18 @@ class AnalyticsTracking {
             if (!$tiktokEvent) continue;
 
             $payload = [
-                'event': $tiktokEvent,
-                'event_id': uniqid(),
-                'timestamp': date('Y-m-d H:i:s'),
-                'context': [
-                    'user': [
-                        'external_id': $this->getUserId(),
+                'event' => $tiktokEvent,
+                'event_id' => uniqid(),
+                'timestamp' => date('Y-m-d H:i:s'),
+                'context' => [
+                    'user' => [
+                        'external_id' => $this->getUserId(),
                     ],
-                    'page': [
-                        'url': 'https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'],
+                    'page' => [
+                        'url' => 'https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'],
                     ]
                 ],
-                'properties': $event['params'],
+                'properties' => $event['params'],
             ];
 
             $ch = curl_init('https://track.tiktok.com/v1/events');
