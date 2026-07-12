@@ -2,8 +2,7 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:8099}"
-TMPDIR="./.tmp-smoke"
-mkdir -p "$TMPDIR"
+TMPDIR="${TMPDIR:-/tmp}"
 PHP_SERVER_PID=""
 
 cleanup() {
