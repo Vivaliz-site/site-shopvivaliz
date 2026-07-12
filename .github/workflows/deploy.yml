@@ -205,16 +205,25 @@ jobs:
           
           echo "Testando conexão FTP..."
           echo "Host: ***"
-          PORT="${FTP_PORT_VALUE:-21}"
+          RAW_SERVER="$(printf '%s' "${FTP_SERVER_VALUE}" | tr -d '\r\n\t ' )"
+          RAW_PORT="$(printf '%s' "${FTP_PORT_VALUE:-21}" | tr -d '\r\n\t ' )"
+          PORT="${RAW_PORT:-21}"
           echo "Port: ${PORT}"
           echo "User: ***"
           echo ""
-          FTP_HOST="${FTP_SERVER_VALUE#ftp://}"
+
+          FTP_HOST="${RAW_SERVER#ftp://}"
           FTP_HOST="${FTP_HOST#ftps://}"
           FTP_HOST="${FTP_HOST%%/*}"
+          FTP_HOST="${FTP_HOST%%:*}"
 
           if [ -z "$FTP_HOST" ] || [[ "$FTP_HOST" == *"://"* ]]; then
             echo "::error::FTP_SERVER invalido. Use apenas o host, exemplo: ftp.shopvivaliz.com.br"
+            exit 1
+          fi
+
+          if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
+            echo "::error::FTP_PORT invalido. Use apenas numeros, exemplo: 21"
             exit 1
           fi
           
@@ -237,16 +246,37 @@ jobs:
           
           echo "✓ Conexão FTP bem-sucedida"
 
+      - name: Normalizar Parâmetros FTP
+        id: ftp-normalize
+        shell: bash
+        run: |
+          RAW_SERVER="$(printf '%s' "${FTP_SERVER_VALUE}" | tr -d '\r\n\t ' )"
+          RAW_PORT="$(printf '%s' "${FTP_PORT_VALUE:-21}" | tr -d '\r\n\t ' )"
+          RAW_DIR="$(printf '%s' "${FTP_REMOTE_DIR_VALUE}" | tr -d '\r' )"
+
+          FTP_HOST="${RAW_SERVER#ftp://}"
+          FTP_HOST="${FTP_HOST#ftps://}"
+          FTP_HOST="${FTP_HOST%%/*}"
+          FTP_HOST="${FTP_HOST%%:*}"
+
+          if [ -z "$RAW_DIR" ]; then
+            RAW_DIR="/"
+          fi
+
+          echo "server=${FTP_HOST}" >> "$GITHUB_OUTPUT"
+          echo "port=${RAW_PORT:-21}" >> "$GITHUB_OUTPUT"
+          echo "remote_dir=${RAW_DIR}" >> "$GITHUB_OUTPUT"
+
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ env.FTP_SERVER_VALUE }}
+          server: ${{ steps.ftp-normalize.outputs.server }}
           username: ${{ env.FTP_USERNAME_VALUE }}
           password: ${{ env.FTP_PASSWORD_VALUE }}
-          port: ${{ env.FTP_PORT_VALUE != '' && env.FTP_PORT_VALUE || '21' }}
+          port: ${{ steps.ftp-normalize.outputs.port }}
           protocol: ftp
           local-dir: ./
-          server-dir: ${{ env.FTP_REMOTE_DIR_VALUE }}
+          server-dir: ${{ steps.ftp-normalize.outputs.remote_dir }}
           dangerous-clean-slate: false
           exclude: |
             .git/**

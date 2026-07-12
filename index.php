@@ -134,23 +134,26 @@ function sv_home_banners(): array
 {
     return [
         [
-            'eyebrow' => 'Vitrine Vivaliz',
-            'title' => 'Rodizios, ferragens e utilidades com visual mais claro.',
-            'text' => 'Uma home pensada para destacar produtos reais, leitura rápida no celular e navegação direta até a compra.',
+            'eyebrow' => 'Ambiente profissional',
+            'title' => 'Rodízios, ferragens e utilidades com leitura rápida e compra direta.',
+            'text' => 'Uma vitrine mais limpa para destacar linhas reais do catálogo, comparar opções e avançar sem atrito no desktop ou no celular.',
+            'highlights' => ['Catálogo visual', 'Compra assistida', 'Entrega nacional'],
             'primary' => ['label' => 'Explorar catálogo', 'href' => '/catalogo'],
             'secondary' => ['label' => 'Falar com vendas', 'href' => '/contato'],
         ],
         [
-            'eyebrow' => 'Compra assistida',
-            'title' => 'Atendimento comercial rápido para dúvidas, prazos e orçamento.',
-            'text' => 'Quando precisar confirmar compatibilidade, quantidade ou disponibilidade, a equipe da Vivaliz entra no fluxo sem atrito.',
+            'eyebrow' => 'Linhas em destaque',
+            'title' => 'Banners pensados para vender melhor as categorias mais buscadas.',
+            'text' => 'A nova home aproxima o cliente dos produtos certos com destaque visual, contexto comercial e acesso rápido para orçamento ou carrinho.',
+            'highlights' => ['Mais contexto', 'Mais clareza', 'Mais conversão'],
             'primary' => ['label' => 'Ver produtos', 'href' => '/catalogo'],
             'secondary' => ['label' => 'Abrir contato', 'href' => '/contato'],
         ],
         [
-            'eyebrow' => 'Entrega nacional',
+            'eyebrow' => 'Atendimento Vivaliz',
             'title' => 'Mais confiança visual para comprar de qualquer lugar do Brasil.',
-            'text' => 'Cards organizados, identidade consistente e acesso rápido ao carrinho para acelerar a jornada em desktop e mobile.',
+            'text' => 'Cards organizados, navegação consistente e apoio comercial rápido para compatibilidade, prazos e decisão de compra com mais segurança.',
+            'highlights' => ['WhatsApp rápido', 'Fluxo mobile', 'Jornada consistente'],
             'primary' => ['label' => 'Ir ao carrinho', 'href' => '/carrinho'],
             'secondary' => ['label' => 'Conhecer a marca', 'href' => '/sobre'],
         ],
@@ -231,6 +234,12 @@ $featuredProducts = sv_home_featured_products(8);
 $featuredProductsCount = count($featuredProducts);
 $catalogCount = sv_home_catalog_count();
 $heroBanners = sv_home_banners();
+$heroBannerProducts = array_values(array_slice($featuredProducts, 0, 6));
+if ($heroBannerProducts !== []) {
+    while (count($heroBannerProducts) < 6) {
+        $heroBannerProducts[] = $heroBannerProducts[count($heroBannerProducts) % max(1, count($heroBannerProducts))];
+    }
+}
 $homeCategories = sv_home_top_categories(10);
 $svNavCurrent = '';
 ?>
@@ -367,14 +376,52 @@ $svNavCurrent = '';
             <div class="hero-carousel" id="hero-carousel" aria-label="Banners em destaque">
                 <div class="hero-carousel-track">
                     <?php foreach ($heroBanners as $index => $banner): ?>
+                        <?php
+                        $bannerProducts = array_slice($heroBannerProducts, $index * 2, 2);
+                        if ($bannerProducts === [] && $heroBannerProducts !== []) {
+                            $bannerProducts = array_slice($heroBannerProducts, 0, 2);
+                        }
+                        ?>
                         <article class="hero-slide<?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>">
-                            <span class="hero-slide-eyebrow"><?= sv_home_esc($banner['eyebrow']) ?></span>
-                            <h2><?= sv_home_esc($banner['title']) ?></h2>
-                            <p><?= sv_home_esc($banner['text']) ?></p>
-                            <div class="hero-slide-actions">
-                                <a href="<?= sv_home_esc($banner['primary']['href']) ?>" class="btn btn-primary"><?= sv_home_esc($banner['primary']['label']) ?></a>
-                                <a href="<?= sv_home_esc($banner['secondary']['href']) ?>" class="btn btn-secondary"><?= sv_home_esc($banner['secondary']['label']) ?></a>
+                            <div class="hero-slide-overlay"></div>
+                            <div class="hero-slide-content">
+                                <span class="hero-slide-eyebrow"><?= sv_home_esc($banner['eyebrow']) ?></span>
+                                <h2><?= sv_home_esc($banner['title']) ?></h2>
+                                <p><?= sv_home_esc($banner['text']) ?></p>
+                                <?php if (!empty($banner['highlights']) && is_array($banner['highlights'])): ?>
+                                    <div class="hero-slide-highlights" aria-label="Destaques do banner">
+                                        <?php foreach ($banner['highlights'] as $highlight): ?>
+                                            <span><?= sv_home_esc((string)$highlight) ?></span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                                <div class="hero-slide-actions">
+                                    <a href="<?= sv_home_esc($banner['primary']['href']) ?>" class="btn btn-primary"><?= sv_home_esc($banner['primary']['label']) ?></a>
+                                    <a href="<?= sv_home_esc($banner['secondary']['href']) ?>" class="btn btn-secondary"><?= sv_home_esc($banner['secondary']['label']) ?></a>
+                                </div>
                             </div>
+                            <?php if ($bannerProducts): ?>
+                                <div class="hero-slide-product-stack" aria-label="Produtos reais em destaque">
+                                    <?php foreach ($bannerProducts as $stackProduct): ?>
+                                        <?php
+                                        $stackImage = $stackProduct['image_url'] !== '' ? $stackProduct['image_url'] : sv_home_default_image();
+                                        $stackUrl = !empty($stackProduct['slug']) ? '/produto/' . $stackProduct['slug'] : sv_home_product_url($stackProduct);
+                                        ?>
+                                        <a class="hero-slide-product-card" href="<?= sv_home_esc($stackUrl) ?>">
+                                            <div class="hero-slide-product-image">
+                                                <img src="<?= sv_home_esc($stackImage) ?>" alt="<?= sv_home_esc($stackProduct['name']) ?>" loading="lazy" onerror="this.src='<?= sv_home_default_image() ?>'">
+                                            </div>
+                                            <div class="hero-slide-product-copy">
+                                                <?php if (!empty($stackProduct['category'])): ?>
+                                                    <span><?= sv_home_esc($stackProduct['category']) ?></span>
+                                                <?php endif; ?>
+                                                <strong><?= sv_home_esc($stackProduct['name']) ?></strong>
+                                                <small><?= sv_home_esc(sv_home_money((float)($stackProduct['price'] ?? 0))) ?></small>
+                                            </div>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
                         </article>
                     <?php endforeach; ?>
                 </div>
@@ -399,6 +446,11 @@ $svNavCurrent = '';
                     <p class="muted">Navegue por linhas reais do catálogo com acesso rápido.</p>
                 </div>
                 <a href="/catalogo" class="btn btn-secondary">Ver catálogo</a>
+            </div>
+            <div class="home-trust-note home-trust-note-categories" aria-label="Destaques das categorias">
+                <span>Linhas organizadas para compra rápida</span>
+                <span>Imagens reais do catálogo</span>
+                <span>Atendimento comercial ativo</span>
             </div>
             <?php if ($homeCategories): ?>
                 <div class="home-scroller" data-scroller>
@@ -431,6 +483,11 @@ $svNavCurrent = '';
                 <a href="/catalogo" class="btn btn-secondary">Ver todos</a>
             </div>
             <div id="catalog-status" class="status-line"><?= $catalogCount > 0 ? $catalogCount . ' produtos disponíveis no catálogo.' : 'Explore nossas linhas e fale com a equipe para atendimento comercial.' ?></div>
+            <div class="home-trust-note home-trust-note-products" aria-label="Destaques do catálogo">
+                <span>Produtos com navegação direta</span>
+                <span>Compra assistida por canal comercial</span>
+                <span>Curadoria das linhas mais buscadas</span>
+            </div>
             <?php if ($featuredProducts): ?>
                 <div class="home-scroller" data-scroller>
                     <button type="button" class="home-scroller-arrow" data-dir="-1" aria-label="Produtos anteriores">‹</button>
@@ -484,43 +541,45 @@ $svNavCurrent = '';
     </section>
 
     <!-- Testimonials Section -->
-    <section class="home-testimonials" style="padding: 72px 0; background: #f8faff; border-top: 1px solid #e5e9f0;">
+    <section class="home-testimonials home-section-shell home-section-soft">
         <div class="container">
-            <div class="section-heading sv-reveal" style="margin-bottom: 48px; display: block; text-align: center;">
-                <h2 style="font-size: 30px; font-weight: 900; color: #111827; margin-bottom: 10px; padding-left: 0;">O que nossos clientes dizem</h2>
-                <p class="muted" style="text-align: center; color: #6b7280;">Confira a opinião de quem já comprou e aprovou nossos produtos e atendimento.</p>
+            <div class="section-heading section-heading-centered sv-reveal home-section-intro">
+                <div>
+                    <h2>O que nossos clientes dizem</h2>
+                    <p class="muted">Confira a opinião de quem já comprou e aprovou nossos produtos e atendimento.</p>
+                </div>
             </div>
-            <div class="testimonials-grid" style="display: flex; gap: 24px; flex-wrap: wrap; justify-content: center;">
-                <div class="testimonial-card sv-reveal sv-reveal-delay-1" style="flex: 1; min-width: 280px; max-width: 360px;">
+            <div class="testimonials-grid">
+                <div class="testimonial-card sv-reveal sv-reveal-delay-1">
                     <div class="testimonial-stars"><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span></div>
-                    <p style="font-size: 14px; color: #4b5563; line-height: 1.7; margin-bottom: 20px;">"Comprei rodízios em gel para o meu armário e a qualidade é fantástica! O deslizamento é suave e silencioso. Entrega muito rápida."</p>
-                    <div class="testimonial-author" style="display: flex; align-items: center; gap: 12px;">
+                    <p>"Comprei rodízios em gel para o meu armário e a qualidade é fantástica! O deslizamento é suave e silencioso. Entrega muito rápida."</p>
+                    <div class="testimonial-author">
                         <img class="testimonial-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&q=80" loading="lazy" decoding="async" alt="Ana Paula">
                         <div>
-                            <strong style="display: block; font-size: 14px; color: #111;">Ana Paula M.</strong>
-                            <span style="font-size: 12px; color: #9ca3af;">São Paulo - SP</span>
+                            <strong>Ana Paula M.</strong>
+                            <span>São Paulo - SP</span>
                         </div>
                     </div>
                 </div>
-                <div class="testimonial-card sv-reveal sv-reveal-delay-2" style="flex: 1; min-width: 280px; max-width: 360px;">
+                <div class="testimonial-card sv-reveal sv-reveal-delay-2">
                     <div class="testimonial-stars"><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span></div>
-                    <p style="font-size: 14px; color: #4b5563; line-height: 1.7; margin-bottom: 20px;">"Excelente atendimento! O suporte tirou minhas dúvidas sobre a compatibilidade do engate rápido para mangueira. Indico a todos!"</p>
-                    <div class="testimonial-author" style="display: flex; align-items: center; gap: 12px;">
+                    <p>"Excelente atendimento! O suporte tirou minhas dúvidas sobre a compatibilidade do engate rápido para mangueira. Indico a todos!"</p>
+                    <div class="testimonial-author">
                         <img class="testimonial-avatar" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&q=80" loading="lazy" decoding="async" alt="Marcos Silva">
                         <div>
-                            <strong style="display: block; font-size: 14px; color: #111;">Marcos Silva T.</strong>
-                            <span style="font-size: 12px; color: #9ca3af;">Curitiba - PR</span>
+                            <strong>Marcos Silva T.</strong>
+                            <span>Curitiba - PR</span>
                         </div>
                     </div>
                 </div>
-                <div class="testimonial-card sv-reveal sv-reveal-delay-3" style="flex: 1; min-width: 280px; max-width: 360px;">
+                <div class="testimonial-card sv-reveal sv-reveal-delay-3">
                     <div class="testimonial-stars"><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span></div>
-                    <p style="font-size: 14px; color: #4b5563; line-height: 1.7; margin-bottom: 20px;">"As caixas organizadoras superaram minhas expectativas. Super resistentes e bonitas. Site fácil de comprar pelo celular e seguro."</p>
-                    <div class="testimonial-author" style="display: flex; align-items: center; gap: 12px;">
+                    <p>"As caixas organizadoras superaram minhas expectativas. Super resistentes e bonitas. Site fácil de comprar pelo celular e seguro."</p>
+                    <div class="testimonial-author">
                         <img class="testimonial-avatar" src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&h=100&fit=crop&q=80" loading="lazy" decoding="async" alt="Julia Costa">
                         <div>
-                            <strong style="display: block; font-size: 14px; color: #111;">Julia Costa F.</strong>
-                            <span style="font-size: 12px; color: #9ca3af;">Belo Horizonte - MG</span>
+                            <strong>Julia Costa F.</strong>
+                            <span>Belo Horizonte - MG</span>
                         </div>
                     </div>
                 </div>
@@ -529,13 +588,15 @@ $svNavCurrent = '';
     </section>
 
     <!-- FAQ Section -->
-    <section class="home-faq" style="padding: 72px 0; background: white; border-top: 1px solid #e5e9f0;">
-        <div class="container" style="max-width: 800px; margin: 0 auto;">
-            <div class="section-heading sv-reveal" style="text-align: center; margin-bottom: 48px; display: block;">
-                <h2 style="font-size: 30px; font-weight: 900; color: #111827; margin-bottom: 10px; padding-left: 0;">Perguntas Frequentes</h2>
-                <p class="muted" style="text-align: center; color: #6b7280;">Tire suas dúvidas rápidas sobre envio, pagamentos e garantia.</p>
+    <section class="home-faq home-section-shell">
+        <div class="container home-faq-container">
+            <div class="section-heading section-heading-centered sv-reveal home-section-intro">
+                <div>
+                    <h2>Perguntas frequentes</h2>
+                    <p class="muted">Tire suas dúvidas rápidas sobre envio, pagamentos e garantia.</p>
+                </div>
             </div>
-            <div class="faq-list" style="display: flex; flex-direction: column; gap: 12px;">
+            <div class="faq-list">
                 <details class="faq-item sv-reveal sv-reveal-delay-1">
                     <summary>
                         Qual é o prazo de entrega?
