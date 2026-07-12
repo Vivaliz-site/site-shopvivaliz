@@ -16,6 +16,7 @@
                     <strong>Atendimento</strong>
                     <a href="/contato">Fale conosco</a>
                     <a href="/faq">Dúvidas frequentes</a>
+                    <a href="/termos.php">Termos e Condições</a>
                     <a href="/politica-privacidade">Privacidade</a>
                 </div>
             </div>
