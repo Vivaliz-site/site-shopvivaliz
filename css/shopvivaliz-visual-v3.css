@@ -61,7 +61,7 @@ body::before {
 }
 .hero-card::after {
   content: ""; position: absolute; right: 1.5%; bottom: -4px; width: min(43%,430px); height: 92%;
-  background: url('/assets/brand/liz-principal.svg') center bottom / contain no-repeat;
+  background: url('/public/assets/liz-assistant/liz-avatar.png') center bottom / contain no-repeat;
   filter: drop-shadow(0 24px 35px rgba(0,0,0,.22)); z-index: -1;
 }
 .hero-copy { max-width: 61%; }
@@ -132,7 +132,7 @@ body::before {
 footer { position: relative; overflow: hidden; }
 footer::after {
   content: ""; position: absolute; right: 3%; bottom: -48px; width: 170px; height: 230px;
-  background: url('/assets/brand/liz-acenando.svg') center / contain no-repeat; opacity: .16; pointer-events: none;
+  background: url('/public/assets/liz-assistant/liz-avatar.png') center / contain no-repeat; opacity: .16; pointer-events: none;
 }
 
 @media (min-width: 821px) {
