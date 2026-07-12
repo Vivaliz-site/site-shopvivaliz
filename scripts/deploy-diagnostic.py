@@ -49,7 +49,8 @@ class DeployDiagnostic:
             "admin/monitor/index.html",
             "api/monitor/api.php",
             "scripts/continuous-executor.py",
-            ".github/workflows/deploy.yml"
+            ".github/workflows/deploy.yml",
+            "scripts/deploy-validator.py",
         ]
 
         for file in files_to_check:

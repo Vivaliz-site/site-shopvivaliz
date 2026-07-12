@@ -362,6 +362,30 @@ jobs:
           echo "Verifique manualmente: https://dev.shopvivaliz.com.br/"
           exit 1
 
+      - name: Validar Deploy Publicado
+        shell: bash
+        run: |
+          python3 scripts/deploy-validator.py \
+            --url "https://dev.shopvivaliz.com.br/" \
+            --report "reports/deploy-validation.json" \
+            --expect "/public/assets/liz-assistant/liz-assistant.css" \
+            --expect "/public/assets/liz-assistant/liz-assistant.js" \
+            --expect "hero-slide-product-card" \
+            --expect "Categorias em destaque" \
+            --expect "Catálogo em destaque" \
+            --reject "Erro interno" \
+            --reject "Exception"
+
+      - name: Exibir Relatorio do Validador
+        if: always()
+        shell: bash
+        run: |
+          if [ -f reports/deploy-validation.json ]; then
+            cat reports/deploy-validation.json
+          else
+            echo "::warning::Relatorio do validador de deploy nao foi gerado"
+          fi
+
       - name: Registrar Status do Deploy
         if: always()
         shell: bash
