@@ -206,7 +206,19 @@ function renderMiniCart() {
     try { items = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'); } catch(e) {}
     
     if (items.length === 0) {
-        body.innerHTML = '<p style="text-align:center; padding: 20px;">Seu carrinho está vazio.</p>';
+        body.innerHTML = `
+            <div class="empty-cart-container" style="text-align:center; padding: 40px 20px; display:flex; flex-direction:column; align-items:center; gap:15px;">
+                <div class="empty-cart-icon" style="width: 80px; height: 80px; background: rgba(11, 79, 136, 0.05); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#0b4f88" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="animation: empty-bag-float 3s ease-in-out infinite;">
+                        <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <path d="M16 10a4 4 0 0 1-8 0"></path>
+                    </svg>
+                </div>
+                <h3 style="font-size: 16px; margin: 0; color: #333;">Seu carrinho está vazio</h3>
+                <p style="font-size: 13px; color: #666; margin: 0 0 10px 0;">Adicione itens do catálogo para começar suas compras.</p>
+                <a href="/catalogo" class="btn btn-primary" style="display:inline-block; padding: 10px 24px; font-size:13px; font-weight:bold; border-radius:999px; background:#0b4f88; color:white; text-decoration:none; transition: all 0.2s ease;">Explorar Catálogo</a>
+            </div>`;
         if (totalEl) totalEl.innerText = 'R$ 0,00';
         return;
     }
