@@ -458,6 +458,136 @@ footer h3 {
 }
 
 /* ============================================================================
+   BANNER SLIDE - SWIPER
+   ============================================================================ */
+
+.banner-slide-section {
+    width: 100%;
+    overflow: hidden;
+    background: #f5f5f5;
+    margin-bottom: 0;
+}
+
+.swiper#banner-slide {
+    width: 100%;
+    height: auto;
+    background: #f5f5f5;
+}
+
+.swiper#banner-slide .swiper-wrapper {
+    width: 100%;
+    height: auto;
+}
+
+.swiper#banner-slide .swiper-slide {
+    width: 100%;
+    height: auto;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.swiper#banner-slide .swiper-slide.is-active {
+    display: flex;
+}
+
+.swiper#banner-slide .swiper-slide img {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: cover;
+}
+
+.swiper#banner-slide .swiper-pagination {
+    bottom: 15px;
+}
+
+.swiper#banner-slide .swiper-pagination-bullet {
+    width: 12px;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.5);
+    opacity: 0.7;
+    margin: 0 5px;
+}
+
+.swiper#banner-slide .swiper-pagination-bullet.is-active,
+.swiper#banner-slide .swiper-pagination-bullet.swiper-pagination-bullet-active {
+    background: rgba(255, 255, 255, 1);
+    opacity: 1;
+}
+
+.swiper#banner-slide .swiper-button-prev,
+.swiper#banner-slide .swiper-button-next {
+    width: 44px;
+    height: 44px;
+    background: rgba(0, 0, 0, 0.3);
+    color: white;
+    border-radius: 50%;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.swiper#banner-slide .swiper-button-prev:hover,
+.swiper#banner-slide .swiper-button-next:hover {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.swiper#banner-slide .swiper-button-prev::after,
+.swiper#banner-slide .swiper-button-next::after {
+    content: '';
+    font-size: 16px;
+}
+
+/* Responsive Banner Sizes */
+@media (min-width: 1200px) {
+    .swiper#banner-slide .swiper-slide img {
+        height: 500px;
+        object-fit: cover;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1199px) {
+    .swiper#banner-slide .swiper-slide img {
+        height: 400px;
+        object-fit: cover;
+    }
+}
+
+@media (max-width: 768px) {
+    .swiper#banner-slide .swiper-slide img {
+        height: 300px;
+        object-fit: cover;
+    }
+    .swiper#banner-slide .swiper-button-prev,
+    .swiper#banner-slide .swiper-button-next {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .swiper#banner-slide .swiper-slide img {
+        height: 250px;
+        object-fit: cover;
+    }
+    .swiper#banner-slide .swiper-pagination {
+        bottom: 10px;
+    }
+    .swiper#banner-slide .swiper-button-prev,
+    .swiper#banner-slide .swiper-button-next {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+}
+
+/* ============================================================================
    ACESSIBILIDADE
    ============================================================================ */
 
