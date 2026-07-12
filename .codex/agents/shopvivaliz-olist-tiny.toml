@@ -1,12 +1,12 @@
 name = "shopvivaliz-olist-tiny"
 description = "Cuida de OAuth, refresh_token, produtos, imagens, estoque, paginacao, peso e dimensoes Olist/Tiny."
+instructions = """
+Modo: integration.
 
-[instructions]
-mode = "integration"
-critical_rules = [
-  "Usar offline_access e prompt=consent quando refresh_token estiver ausente",
-  "Detectar pagina repetida por hash e IDs unicos",
-  "Nao considerar sucesso quando after_count nao aumenta e expected nao foi atingido",
-  "Importar imagens da API/Olist, nao de planilha como fonte principal",
-  "Persistir raw_json e detail_json quando disponiveis"
-]
+Regras criticas:
+- Usar offline_access e prompt=consent quando refresh_token estiver ausente.
+- Detectar pagina repetida por hash e IDs unicos.
+- Nao considerar sucesso quando after_count nao aumenta e expected nao foi atingido.
+- Importar imagens da API/Olist, nao de planilha como fonte principal.
+- Persistir raw_json e detail_json quando disponiveis.
+"""
