@@ -23962,3 +23962,83 @@ Fast-forward
  11 files changed, 145 insertions(+), 147 deletions(-)
 [2026-07-12 04:01:33] ✅ Git pull OK
 [2026-07-12 04:01:33] 📝 Commitando mudanças...
+[main 930eb4db] auto: sincronizar 2026-07-12 04:01:33
+ 1 file changed, 65 insertions(+)
+[2026-07-12 04:01:33] ✅ Commit OK
+[2026-07-12 04:01:33] 📤 Enviando 1 commit(s)...
+To https://github.com/Vivaliz-site/site-shopvivaliz.git
+   0c8811c8..930eb4db  main -> main
+[2026-07-12 04:01:35] ✅ Push OK
+[2026-07-12 04:01:35] ✅ Ciclo concluído
+[2026-07-12 04:01:35] ⏰ Próximo em 5 minutos...
+[2026-07-12 04:06:35] 
+[2026-07-12 04:06:35] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-07-12 04:06:35] 🔄 Sincronizando secrets do GitHub...
+============================================================
+🔐 ShopVivaliz - Sincronizador de Secrets (Linux/macOS)
+============================================================
+
+Verificando GitHub CLI...
+✓ GitHub CLI encontrado
+
+📝 Gerando .env.local...
+✓ Criado: /home/ubuntu/site-shopvivaliz/.env.local
+
+============================================================
+✅ SINCRONIZAÇÃO CONCLUÍDA!
+============================================================
+
+Próximos passos:
+  1. Validar secrets: python3 scripts/validar_secrets.py
+  2. Ativar auto-sync: bash scripts/auto_sync_git.ps1
+
+[2026-07-12 04:06:35] ✅ Secrets sincronizados com sucesso
+[SECURITY] ShopVivaliz - Validador de Secrets
+============================================================
+
+[ERROR] ERRO - Secrets obrigatórios faltando:
+
+  ❌ ANTHROPIC_API_KEY (Claude API) - AUSENTE
+  ❌ SHOPEE_PARTNER_ID (Shopee Partner ID) - AUSENTE
+  ❌ SHOPEE_PARTNER_KEY (Shopee Partner Key) - AUSENTE
+
+📝 Solução:
+  1. Copie .env.example para .env.local
+  2. Preencha os valores reais em .env.local
+  3. Execute este validador novamente
+
+  Variáveis obrigatórias:
+    • ANTHROPIC_API_KEY: Claude API
+    • SHOPEE_PARTNER_ID: Shopee Partner ID
+    • SHOPEE_PARTNER_KEY: Shopee Partner Key
+    • FTP_SERVER: FTP Server
+    • FTP_USERNAME: FTP Username
+    • FTP_PASSWORD: FTP Password
+    • MAIL_PASS: Email Password
+[2026-07-12 04:06:35] ⚠️  Validação teve aviso (continuando...)
+[2026-07-12 04:06:35] 🔄 Sincronizando repositório...
+From https://github.com/Vivaliz-site/site-shopvivaliz
+ * branch              main       -> FETCH_HEAD
+   930eb4db..fb1a1585  main       -> origin/main
+Updating 930eb4db..fb1a1585
+Fast-forward
+ api/hotspot-endpoint.php          |  71 ++++++++
+ includes/analytics-tracking.php   | 329 ++++++++++++++++++++++++++++++++++++++
+ js/cro-interactions.js            |  14 +-
+ public/hotspot-tracker.js         | 198 +++++++++++++++++++++++
+ public/manifest.json              |  86 ++++++++++
+ public/service-worker.js          | 213 ++++++++++++++++++++++++
+ scripts/performance-optimizer.php | 217 +++++++++++++++++++++++++
+ scripts/seo-generator.php         | 229 ++++++++++++++++++++++++++
+ scripts/whatsapp-integration.php  | 186 +++++++++++++++++++++
+ 9 files changed, 1542 insertions(+), 1 deletion(-)
+ create mode 100644 api/hotspot-endpoint.php
+ create mode 100644 includes/analytics-tracking.php
+ create mode 100644 public/hotspot-tracker.js
+ create mode 100644 public/manifest.json
+ create mode 100644 public/service-worker.js
+ create mode 100644 scripts/performance-optimizer.php
+ create mode 100644 scripts/seo-generator.php
+ create mode 100644 scripts/whatsapp-integration.php
+[2026-07-12 04:06:36] ✅ Git pull OK
+[2026-07-12 04:06:36] 📝 Commitando mudanças...
