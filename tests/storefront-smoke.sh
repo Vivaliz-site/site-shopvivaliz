@@ -7,6 +7,12 @@ mkdir -p "$TMPDIR"
 PHP_SERVER_PID=""
 
 cleanup() {
+  local exit_code=$?
+  if [ $exit_code -ne 0 ]; then
+    echo "=== ERROR: Script exited with code $exit_code ==="
+    echo "=== PHP Server Logs ==="
+    cat "$TMPDIR/shopvivaliz-php-server.log" 2>/dev/null || true
+  fi
   if [[ -n "${PHP_SERVER_PID}" ]] && kill -0 "${PHP_SERVER_PID}" 2>/dev/null; then
     kill "${PHP_SERVER_PID}" || true
   fi
