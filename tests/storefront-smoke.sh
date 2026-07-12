@@ -2,8 +2,7 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:8099}"
-TMPDIR="$(pwd)/.tmp-smoke"
-mkdir -p "$TMPDIR"
+TMPDIR=$(mktemp -d) || TMPDIR="/tmp"
 PHP_SERVER_PID=""
 
 cleanup() {
@@ -11,11 +10,12 @@ cleanup() {
   if [ $exit_code -ne 0 ]; then
     echo "=== ERROR: Script exited with code $exit_code ==="
     echo "=== PHP Server Logs ==="
-    cat "$TMPDIR/shopvivaliz-php-server.log" 2>/dev/null || true
+    [ -f "$TMPDIR/shopvivaliz-php-server.log" ] && cat "$TMPDIR/shopvivaliz-php-server.log" || true
   fi
   if [[ -n "${PHP_SERVER_PID}" ]] && kill -0 "${PHP_SERVER_PID}" 2>/dev/null; then
     kill "${PHP_SERVER_PID}" || true
   fi
+  rm -rf "$TMPDIR" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -100,8 +100,8 @@ assert_status() {
   fi
 }
 
-assert_contains() { curl -fsS "$1" | grep -Fq "$2"; }
-assert_contains_allow_error() { curl -sS "$1" | grep -Fq "$2"; }
+assert_contains() { curl -fsS "$1" | grep -F "$2" >/dev/null; }
+assert_contains_allow_error() { curl -sS "$1" | grep -F "$2" >/dev/null; }
 
 assert_status 200 "${BASE_URL}/index.php"
 assert_status 200 "${BASE_URL}/catalogo.php"
