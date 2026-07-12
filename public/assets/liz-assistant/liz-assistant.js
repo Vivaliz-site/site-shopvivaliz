@@ -6,6 +6,7 @@
     <button id="sv-liz-launcher" type="button" aria-label="Abrir assistente Liz" aria-controls="sv-liz-panel" aria-expanded="false">
       <img src="/public/assets/liz-assistant/liz-avatar.png" alt="Liz">
     </button>
+    <div id="sv-liz-bubble">Ei! Vi que você tem produtos no carrinho. Finalize agora com 5% de desconto via PIX! 💸</div>
     <section id="sv-liz-panel" role="dialog" aria-modal="false" aria-label="Liz - Assistente Virtual">
       <div class="sv-head">
         <img src="/public/assets/liz-assistant/logo-oficial.svg" alt="ShopVivaliz">
@@ -99,4 +100,23 @@
     .catch(() => {
       root.dataset.health = 'offline';
     });
+
+  // Cart Abandonment Recovery (Exit Intent)
+  let abandonmentTriggered = false;
+  document.addEventListener('mouseleave', event => {
+    if (event.clientY <= 0 && !abandonmentTriggered && !panel.classList.contains('open')) {
+      try {
+        const cart = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
+        if (cart.length > 0) {
+          abandonmentTriggered = true;
+          const bubble = root.querySelector('#sv-liz-bubble');
+          if (bubble) {
+            bubble.classList.add('show-bubble');
+            setTimeout(() => bubble.classList.remove('show-bubble'), 8000);
+          }
+        }
+      } catch (err) {}
+    }
+  });
+
 })();
