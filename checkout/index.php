@@ -685,6 +685,8 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 shipping_label: hiddenValue('shipping_label'),
                 shipping_service: hiddenValue('shipping_service'),
                 shipping_cep: hiddenValue('shipping_cep') || (formData.get('cep') || ''),
+                shipping_quote_id: hiddenValue('shipping_quote_id'),
+                shipping_expires_at: Number(hiddenValue('shipping_expires_at') || 0),
                 items: items
             };
 
