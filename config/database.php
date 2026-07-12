@@ -35,7 +35,8 @@ class Database {
             }
         } catch (Exception $e) {
             log_error('Database connection failed', ['error' => $e->getMessage()]);
-            throw $e;
+            // Não expor detalhes da exceção ao usuário
+            throw new Exception('Banco de dados indisponível. Contate o suporte.');
         }
     }
 
