@@ -7,6 +7,7 @@ Executa o pipeline item a item, com fallback e sem travar por erro individual.
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
 from automation.pipeline_orchestrator import PipelineOrchestrator
 
 
