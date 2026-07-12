@@ -22,19 +22,22 @@ test.describe('Catálogo - Preços', () => {
   });
 
   test('deve exibir preços válidos (maior que zero)', async ({ page }) => {
-    // Procurar por padrão de preço: R$ XX,XX
+    // Só preços de PRODUTO (.product-price). O padrão amplo antigo varria a
+    // página toda e casava com o subtotal "R$ 0,00" do mini-cart vazio.
     const prices = await page.$$eval(
-      'text=/R\\$ \\d+[.,]\\d{2}/',
-      elements => elements.map(el => el.textContent)
+      '.product-price',
+      elements => elements.map(el => el.textContent ?? '')
     );
 
-    console.log(`[INFO] Preços encontrados: ${prices.slice(0, 5).join(', ')}`);
+    const priced = prices.filter(p => /R\$ \d+[.,]\d{2}/.test(p));
+    console.log(`[INFO] Preços encontrados: ${priced.slice(0, 5).join(', ')}`);
 
-    expect(prices.length).toBeGreaterThan(0);
+    expect(priced.length).toBeGreaterThan(0);
 
     // Todos devem ser maiores que 0
-    prices.forEach(price => {
-      const cleaned = price?.replace('R$ ', '').replace(',', '.') || '0';
+    priced.forEach(price => {
+      const match = price.match(/R\$ (\d+(?:\.\d{3})*,\d{2}|\d+\.\d{2})/);
+      const cleaned = (match ? match[1] : '0').replace(/\.(?=\d{3})/g, '').replace(',', '.');
       const value = parseFloat(cleaned);
       expect(value).toBeGreaterThan(0);
     });
