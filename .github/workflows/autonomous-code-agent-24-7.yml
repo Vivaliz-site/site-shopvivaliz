@@ -20,6 +20,8 @@ jobs:
     timeout-minutes: 55
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GH_TOKEN: ${{ github.token }}
 
     steps:
@@ -35,17 +37,25 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Validate credential
+      - name: Validate provider pool
         shell: bash
         run: |
-          if [ -z "$OPENAI_API_KEY" ]; then
-            echo "::error::OPENAI_API_KEY não configurada"
+          available=0
+          for key in OPENAI_API_KEY GEMINI_API_KEY ANTHROPIC_API_KEY; do
+            if [ -n "${!key:-}" ]; then
+              echo "::add-mask::${!key}"
+              available=$((available + 1))
+            else
+              echo "::warning::$key não configurada; failover reduzido"
+            fi
+          done
+          if [ "$available" -eq 0 ]; then
+            echo "::error::Nenhum provedor de IA configurado"
             exit 1
           fi
-          echo "::add-mask::$OPENAI_API_KEY"
 
       - name: Install coding agent
-        run: npm install --global @openai/codex
+        run: npm install --global @openai/codex @google/gemini-cli @anthropic-ai/claude-code
 
       - name: Create isolated branch
         shell: bash
@@ -57,7 +67,7 @@ jobs:
       - name: Execute one real autonomous improvement
         shell: bash
         run: |
-          codex exec --full-auto --json --output-last-message logs/codex-last-message.txt "$(cat <<'PROMPT'
+          cat > "$RUNNER_TEMP/autonomous-agent-prompt.txt" <<'PROMPT'
           Você é o agente autônomo residente do ShopVivaliz. Trabalhe no repositório real; não simule, não invente arquivos ou testes e não marque tarefa como concluída sem evidência.
 
           Leia AGENTS.md, tasks-queue.json, roadmap, relatórios de saúde e o código. Faça autoauditoria, escolha exatamente uma correção ou melhoria segura de maior prioridade e implemente-a de verdade. Se não houver tarefa pendente, descubra um erro reproduzível, falha de teste, vulnerabilidade, problema de estabilidade, desempenho, acessibilidade, SEO ou conversão e corrija-o.
@@ -66,7 +76,7 @@ jobs:
 
           Execute testes proporcionais à mudança. Deixe no working tree somente uma melhoria real e seu teste/documentação necessária. Se não conseguir produzir mudança verificável, não altere a fila e finalize sem fabricar resultado.
           PROMPT
-          )"
+          bash scripts/autonomous-provider-failover.sh "$RUNNER_TEMP/autonomous-agent-prompt.txt"
 
       - name: Require auditable source change
         id: diff
@@ -118,7 +128,8 @@ jobs:
         with:
           name: autonomous-code-agent-${{ github.run_id }}
           path: |
-            logs/codex-last-message.txt
+            logs/autonomous-provider-attempts.jsonl
+            logs/autonomous-provider-output.txt
             logs/system-health-check.json
           if-no-files-found: ignore
           retention-days: 14
