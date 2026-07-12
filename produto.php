@@ -400,7 +400,7 @@ if ($notFound) {
     <?php endif; ?>
     <meta property="og:title" content="<?= sv_esc($name) ?> | Vivaliz">
     <meta property="og:description" content="<?= sv_esc($description) ?>">
-    <meta property="og:image" content="<?= sv_esc($image) ?>">
+    <meta property="og:image" content="<?= sv_esc(str_starts_with($image, 'http') ? $image : 'https://shopvivaliz.com.br' . $image) ?>">
     <meta property="og:type" content="<?= $notFound ? 'website' : 'product' ?>">
     <meta property="og:url" content="<?= sv_esc($canonicalUrl) ?>">
     <meta property="og:site_name" content="Vivaliz">
