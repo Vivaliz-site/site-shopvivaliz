@@ -25,7 +25,7 @@ except ImportError:
     SELENIUM_AVAILABLE = False
     print("⚠️  Selenium não instalado. Use: pip install selenium")
 
-SITE_URL = "https://dev.shopvivaliz.com.br/"
+SITE_URL = "http://127.0.0.1:8888/"
 SCREENSHOT_DIR = "./playwright-report/screenshots"
 REPORT_FILE = "./playwright-report/visual-test-report.json"
 
