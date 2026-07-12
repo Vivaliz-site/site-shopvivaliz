@@ -9,8 +9,7 @@ def get_status():
     return {
         "status": "running",
         "project": "ShopVivaliz",
-        "version": "2.0",
-        "root": "C:/site-shopvivaliz"
+        "version": "2.0"
     }
 
 def main():
