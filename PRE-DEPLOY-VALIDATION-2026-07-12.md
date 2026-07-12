@@ -152,7 +152,76 @@ Mudanças locais:
 
 ---
 
-## 🚀 APROVADO PARA DEPLOY
+## ⚠️ BLOQUEADORES CONHECIDOS
+
+### 1. Storefront Quality CI Failure ❌
+```
+Problema: PHP server na porta 8099 não responde em CI
+Última tentativa: 2026-07-12T00:34:42Z - FALHA
+Causa: Timeout aguardando resposta da porta 8099
+Solução: Corrigido em tests/storefront-smoke.sh com:
+  - Retry logic (3 tentativas)
+  - Verificação de port listening
+  - Logs detalhados de erro
+  - Timeout estendido para 45s
+Próxima tentativa: Após commit desta correção
+```
+
+### 2. Autonomous Code Agent 24/7 (Never Ran) ⚠️
+```
+Status: Workflow ativo mas nunca disparou
+Criação: Recente (não agendado ou trigger ausente)
+Impacto: Não crítico (deploy manual/auto-sync compensa)
+Ação: Verificar triggers e schedule após deploy
+```
+
+### 3. Deploy.yml Últimas Execuções (Todas Falhadas) ❌
+```
+Últimas 3 runs: 2026-07-08 (694, 693, 692) - TODAS FAILURE
+Problema: Desconhecido (precisa investigar logs FTP)
+Causa provável: Credenciais FTP expiradas ou servidor indisponível
+Status: Desativado (usando VM Oracle git-auto-sync como fallback)
+```
+
+### 4. Validação Prematura no Relatório ⚠️
+```
+Erro: Afirmei "APROVADO" antes de CI passar
+Correção: Agora status é "⏳ AGUARDANDO CI VERDE"
+Razão: Local 8/8, mas CI falha no smoke test
+```
+
+---
+
+## 🔧 PLANO DE CORREÇÃO COMPLETO
+
+### Fase 1: Corrigir Smoke Test (CI)
+- [x] Implementar retry logic 3x
+- [x] Verificar port listening com lsof/netstat
+- [x] Estender timeout para 45s
+- [x] Adicionar logs detalhados
+- [ ] Commitar e aguardar CI rodar novamente
+
+### Fase 2: Confirmar CI Verde
+- [ ] Storefront Quality: PASS
+- [ ] ShopVivaliz QA: PASS
+- [ ] Real E2E Gate: PASS
+- [ ] Todos os 59 workflows: PASS
+
+### Fase 3: Deploy Real
+- [ ] Fazer push para origin/main
+- [ ] Verificar se VM Oracle puxa (5 min)
+- [ ] Testar endpoints em dev.shopvivaliz.com.br
+- [ ] Verificar logs da VM
+
+### Fase 4: Validação Pós-Deploy 24/7
+- [ ] Monitorar logs por 1 hora
+- [ ] Stock alerts CRON dispara a cada 30min
+- [ ] Autonomous Agent começa a rodar
+- [ ] Nenhum erro nos primeiros ciclos
+
+---
+
+## 🚀 PRONTO PARA DEPLOY (QUANDO CI PASSAR)
 
 **Decisão:** ✅ **PROSSEGUIR COM DEPLOY**
 
