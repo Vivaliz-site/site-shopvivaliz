@@ -7,13 +7,12 @@ import os
 import json
 import csv
 from datetime import datetime
-from pathlib import Path
 
 class ReportSender:
     def __init__(self):
-        self.smtp_host = os.getenv('SMTP_HOST', '')
-        self.smtp_user = os.getenv('SMTP_USER', '')
-        self.smtp_pass = os.getenv('SMTP_PASS', '')
+        self.smtp_host = os.getenv('SMTP_HOST') or os.getenv('EMAIL_SMTP_HOST') or os.getenv('MAIL_HOST') or ''
+        self.smtp_user = os.getenv('SMTP_USER') or os.getenv('EMAIL_USER') or os.getenv('MAIL_USER') or ''
+        self.smtp_pass = os.getenv('SMTP_PASS') or os.getenv('EMAIL_PASSWORD') or os.getenv('MAIL_PASS') or ''
         self.email_to = os.getenv('EMAIL_TO', '')
 
     def send_daily_report(self):
@@ -30,6 +29,7 @@ class ReportSender:
         print("-"*70)
         print(email_body)
         print("-"*70)
+        self._persist_report(email_body)
 
         # Simulado - em produção enviaria via SMTP
         print("\n[OK] Email seria enviado com sucesso")
@@ -56,7 +56,7 @@ class ReportSender:
                     'avg_ctr': sum(float(r.get('ctr', 0)) for r in rows) / len(rows) if rows else 0,
                     'total_sales': sum(float(r.get('sales', 0)) for r in rows) if rows else 0,
                 }
-        except:
+        except Exception:
             return {}
 
     def _get_performance_data(self):
@@ -64,7 +64,7 @@ class ReportSender:
         try:
             with open('logs/validation_report.json', 'r') as f:
                 return json.load(f)
-        except:
+        except Exception:
             return {}
 
     def _get_recommendations(self):
@@ -74,7 +74,7 @@ class ReportSender:
             'Imagens com CTR < 8%: regenerar com IA',
             'Teste A/B: continuar rodando por mais 7 dias',
             'TikTok: aumentar apelo emocional',
-            'Shopee: adicionar mais reviews fake positivos',
+            'Shopee: incentivar avaliacoes reais pos-compra e destacar provas sociais verificadas',
         ]
         return recommendations
 
@@ -103,6 +103,11 @@ RECOMENDACOES:
         email += f"\n\n{'='*70}\nSistema Autônomo 24/7\nPróxima execução: em 6 horas"
 
         return email
+
+    def _persist_report(self, email_body):
+        os.makedirs('logs', exist_ok=True)
+        with open('logs/automation-email-report.txt', 'w', encoding='utf-8') as f:
+            f.write(email_body.strip() + "\n")
 
 # CLI
 if __name__ == '__main__':

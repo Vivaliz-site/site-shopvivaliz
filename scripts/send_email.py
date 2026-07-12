@@ -39,10 +39,14 @@ def find_attachment() -> Path:
 
 
 def build_message(from_addr: str, to_addr: str, attachment_path: Path) -> EmailMessage:
+    recipients = [item.strip() for item in to_addr.split(',') if item.strip()]
+    if not recipients or any('@' not in item or '.' not in item for item in recipients):
+        raise ValueError('Invalid EMAIL_TO recipients')
+
     msg = EmailMessage()
     msg['Subject'] = 'Planilha Shopee Gerada - ShopVivaliz'
     msg['From'] = from_addr
-    msg['To'] = to_addr
+    msg['To'] = ', '.join(recipients)
     msg.set_content('Segue em anexo a planilha pronta para importação na Shopee.')
 
     with attachment_path.open('rb') as f:
@@ -72,10 +76,10 @@ def send_email(msg: EmailMessage, host: str, port: int, user: str, password: str
 
 def main(argv=None) -> int:
     try:
-        smtp_host = get_env_variable('SMTP_HOST', ['EMAIL_SMTP_HOST'])
-        smtp_port = int(get_env_variable('SMTP_PORT', ['EMAIL_SMTP_PORT']))
-        smtp_user = get_env_variable('SMTP_USER', ['EMAIL_USER'])
-        smtp_pass = get_env_variable('SMTP_PASS', ['EMAIL_PASSWORD'])
+        smtp_host = get_env_variable('SMTP_HOST', ['EMAIL_SMTP_HOST', 'MAIL_HOST'])
+        smtp_port = int(get_env_variable('SMTP_PORT', ['EMAIL_SMTP_PORT', 'MAIL_PORT']))
+        smtp_user = get_env_variable('SMTP_USER', ['EMAIL_USER', 'MAIL_USER'])
+        smtp_pass = get_env_variable('SMTP_PASS', ['EMAIL_PASSWORD', 'MAIL_PASS'])
         email_from = get_env_variable('EMAIL_FROM')
         email_to = get_env_variable('EMAIL_TO')
     except EnvironmentError as exc:

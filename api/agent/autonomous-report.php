@@ -24,11 +24,25 @@ function svar_env_present(string $key): bool {
     return is_string($value) && trim($value) !== '';
 }
 
+function svar_any_env_present(array $keys): bool {
+    foreach ($keys as $key) {
+        if (svar_env_present($key)) return true;
+    }
+    return false;
+}
+
 $catalog    = svar_json('api/catalog/fallback-products.json');
 $ranking    = svar_json('autodev/data/product_ranking.json');
 $demand     = svar_json('autodev/data/demand_forecast.json');
 $roiReport  = svar_json('logs/roi-engine-report.json');
 $triSync    = svar_json('logs/tri-environment-sync.json');
+$emailReport = svar_root() . '/logs/email-activity-report.txt';
+$automationEmailReport = svar_root() . '/logs/automation-email-report.txt';
+$emailConfigCheck = svar_json('logs/email-config-check.json');
+$systemHealth = svar_json('logs/system-health-check.json');
+$deployDiagnostic = svar_json('logs/deploy-diagnostic.json');
+$codexRoundsReport = svar_root() . '/logs/codex-50-rounds-report.md';
+$checkoutOptimizerReport = svar_json('logs/checkout-optimizer-report.json');
 if (empty($triSync)) {
     $triSync = svar_json('logs/autonomous-sync.json');
 }
@@ -38,6 +52,10 @@ $salesShippingKeys = ['MELHORENVIO_ACCESS_TOKEN', 'MELHORENVIO_API_KEY', 'MELHOR
 $salesPaymentKeys = ['PAGARME_SECRET_KEY', 'PAGARME_API_KEY', 'PAGARME_PUBLIC_KEY'];
 $salesMarketplaceKeys = ['SHOPEE_PARTNER_ID', 'SHOPEE_PARTNER_KEY', 'SHOPEE_SHOP_ID', 'SHOPEE_REFRESH_TOKEN', 'ML_CLIENT_ID', 'ML_CLIENT_SECRET', 'ML_REDIRECT_URI'];
 $salesMissingKeys = array_values(array_filter(array_merge($salesCoreKeys, $salesShippingKeys, $salesPaymentKeys, $salesMarketplaceKeys), fn($key) => !svar_env_present($key)));
+$emailConfigured = svar_any_env_present(['SMTP_HOST', 'EMAIL_SMTP_HOST', 'MAIL_HOST'])
+    && svar_any_env_present(['SMTP_USER', 'EMAIL_USER', 'MAIL_USER'])
+    && svar_any_env_present(['SMTP_PASS', 'EMAIL_PASSWORD', 'MAIL_PASS'])
+    && svar_env_present('EMAIL_TO');
 
 $totalProducts = count($catalog);
 $noImage = 0;
@@ -110,6 +128,41 @@ echo json_encode([
         'warnings'         => array_slice($triSync['warnings'] ?? [], 0, 5),
         'file_age_s'       => svar_file_age('logs/tri-environment-sync.json'),
         'legacy_file_age_s' => svar_file_age('logs/autonomous-sync.json'),
+    ],
+    'email_report' => [
+        'available' => is_file($emailReport),
+        'file_age_s' => svar_file_age('logs/email-activity-report.txt'),
+        'automation_report_available' => is_file($automationEmailReport),
+        'automation_report_file_age_s' => svar_file_age('logs/automation-email-report.txt'),
+        'config_check_available' => !empty($emailConfigCheck),
+        'config_check_ok' => $emailConfigCheck['ok'] ?? null,
+        'smtp_configured' => $emailConfigured,
+        'recipients_configured' => svar_env_present('EMAIL_TO'),
+    ],
+    'system_health' => [
+        'available' => !empty($systemHealth),
+        'status' => $systemHealth['status'] ?? null,
+        'errors' => count($systemHealth['errors'] ?? []),
+        'warnings' => count($systemHealth['warnings'] ?? []),
+        'file_age_s' => svar_file_age('logs/system-health-check.json'),
+    ],
+    'deploy_diagnostic' => [
+        'available' => !empty($deployDiagnostic),
+        'ok' => $deployDiagnostic['ok'] ?? null,
+        'issues' => array_slice($deployDiagnostic['issues'] ?? [], 0, 5),
+        'warnings' => array_slice($deployDiagnostic['warnings'] ?? [], 0, 5),
+        'file_age_s' => svar_file_age('logs/deploy-diagnostic.json'),
+    ],
+    'codex_rounds' => [
+        'available' => is_file($codexRoundsReport),
+        'file_age_s' => svar_file_age('logs/codex-50-rounds-report.md'),
+    ],
+    'checkout_optimizer' => [
+        'available' => !empty($checkoutOptimizerReport),
+        'generated_at' => $checkoutOptimizerReport['generated_at'] ?? null,
+        'checkout_ready' => $checkoutOptimizerReport['checkout_ready'] ?? null,
+        'critical_issues' => array_slice($checkoutOptimizerReport['signals']['critical_issues'] ?? [], 0, 5),
+        'warnings' => array_slice($checkoutOptimizerReport['signals']['warnings'] ?? [], 0, 5),
     ],
     'endpoints' => [
         'autonomous_watchdog' => is_file(svar_root() . '/api/agent/autonomous-watchdog.php'),

@@ -6,21 +6,24 @@ Envia notificações de email quando produtos voltam ao estoque
 
 import os
 import sys
-import json
 import sqlite3
 import smtplib
+from html import escape
 from datetime import datetime
 from pathlib import Path
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 # Configurações
 DB_PATH = Path(__file__).parent.parent / "data" / "shopvivaliz.db"
-SMTP_HOST = os.getenv("SMTP_HOST", "localhost")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASS = os.getenv("SMTP_PASS", "")
-EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@shopvivaliz.com.br")
+SMTP_HOST = os.getenv("SMTP_HOST") or os.getenv("EMAIL_SMTP_HOST") or os.getenv("MAIL_HOST") or "localhost"
+try:
+    SMTP_PORT = int(os.getenv("SMTP_PORT") or os.getenv("EMAIL_SMTP_PORT") or os.getenv("MAIL_PORT") or "587")
+except ValueError:
+    SMTP_PORT = 587
+SMTP_USER = os.getenv("SMTP_USER") or os.getenv("EMAIL_USER") or os.getenv("MAIL_USER") or ""
+SMTP_PASS = os.getenv("SMTP_PASS") or os.getenv("EMAIL_PASSWORD") or os.getenv("MAIL_PASS") or ""
+EMAIL_FROM = os.getenv("EMAIL_FROM") or SMTP_USER or "noreply@shopvivaliz.com.br"
 
 # Template HTML do email
 EMAIL_TEMPLATE = """
@@ -97,6 +100,10 @@ def get_back_in_stock_alerts():
 
 def send_email(email_to, product_name, sku, unsubscribe_token):
     """Enviar email de notificação"""
+    if "@" not in str(email_to) or "." not in str(email_to):
+        print(f"[AVISO] Email invalido ignorado: {email_to}")
+        return False
+
     if not SMTP_USER or not SMTP_PASS:
         print(f"[AVISO] Credenciais SMTP não configuradas - skipando envio real")
         return False
@@ -107,16 +114,22 @@ def send_email(email_to, product_name, sku, unsubscribe_token):
         msg["From"] = EMAIL_FROM
         msg["To"] = email_to
 
-        html = EMAIL_TEMPLATE.format(
-            product_name=product_name,
-            sku=sku,
-            unsubscribe_token=unsubscribe_token
+        html_body = EMAIL_TEMPLATE.format(
+            product_name=escape(str(product_name)),
+            sku=escape(str(sku)),
+            unsubscribe_token=escape(str(unsubscribe_token))
         )
 
-        msg.attach(MIMEText(html, "html"))
+        msg.attach(MIMEText(html_body, "html"))
 
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.starttls()
+        if SMTP_PORT == 465:
+            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30)
+        else:
+            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30)
+
+        with server:
+            if SMTP_PORT != 465:
+                server.starttls()
             server.login(SMTP_USER, SMTP_PASS)
             server.send_message(msg)
 

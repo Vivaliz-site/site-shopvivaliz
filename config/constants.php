@@ -124,12 +124,12 @@ define('CACHE_TTL', 3600); // 1 hora
 define('CACHE_DRIVER', 'file'); // file, redis, memcached
 
 // Email
-define('MAIL_HOST', getenv('MAIL_HOST') ?: 'smtp.titan.email');
-define('MAIL_PORT', getenv('MAIL_PORT') ?: 465);
-define('MAIL_USER', getenv('MAIL_USER') ?: 'agentes@shopvivaliz.com.br');
-define('MAIL_PASS', getenv('MAIL_PASS') ?: '');
-define('MAIL_FROM', 'ShopVivaliz <noreply@shopvivaliz.com.br>');
-define('MAIL_REPLY_TO', 'support@shopvivaliz.com.br');
+define('MAIL_HOST', getenv('SMTP_HOST') ?: getenv('EMAIL_SMTP_HOST') ?: getenv('MAIL_HOST') ?: 'smtp.titan.email');
+define('MAIL_PORT', getenv('SMTP_PORT') ?: getenv('EMAIL_SMTP_PORT') ?: getenv('MAIL_PORT') ?: 465);
+define('MAIL_USER', getenv('SMTP_USER') ?: getenv('EMAIL_USER') ?: getenv('MAIL_USER') ?: 'agentes@shopvivaliz.com.br');
+define('MAIL_PASS', getenv('SMTP_PASS') ?: getenv('EMAIL_PASSWORD') ?: getenv('MAIL_PASS') ?: '');
+define('MAIL_FROM', getenv('EMAIL_FROM') ?: 'ShopVivaliz <noreply@shopvivaliz.com.br>');
+define('MAIL_REPLY_TO', getenv('EMAIL_REPLY_TO') ?: getenv('EMAIL_FROM') ?: 'support@shopvivaliz.com.br');
 
 // Integrações
 define('OLIST_ENABLED', true);
@@ -142,7 +142,7 @@ define('MELHORENVIO_ENABLED', true);
 define('FTP_ENABLED', true);
 define('FTP_HOST', getenv('FTP_SERVER') ?: '');
 define('FTP_USER', getenv('FTP_USERNAME') ?: '');
-define('FTP_PASS', getenv('FTP_PASSWORD') ?: '');
+define('FTP_PASS', getenv('FTP_PASSWORD') ?: getenv('FTP_PASS') ?: '');
 define('FTP_PORT', getenv('FTP_PORT') ?: 21);
 define('FTP_DIR', getenv('FTP_REMOTE_DIR') ?: '/');
 

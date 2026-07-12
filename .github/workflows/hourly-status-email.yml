@@ -1,9 +1,10 @@
 name: PAUSADO - Hourly Status Email
-# Desabilitado 2026-07-03: quota GitHub Actions esgotada
+# Desabilitado 2026-07-03: quota GitHub Actions esgotada.
+# Workflow canonico atual: .github/workflows/eight-hour-status-email.yml (relatorio 4h).
 on:
   workflow_dispatch:
 jobs:
   pausado:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Workflow pausado para economizar quota Actions."
+      - run: echo "Workflow pausado. Use o relatorio 4h para envio automatico por email."

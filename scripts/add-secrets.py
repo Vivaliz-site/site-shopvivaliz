@@ -10,9 +10,16 @@ REPO = "fredmourao-ai/site-shopvivaliz"
 DEFAULTS = {
     "EMAIL_SMTP_HOST": "smtp.titan.email",
     "EMAIL_SMTP_PORT": "465",
+    "SMTP_HOST": "smtp.titan.email",
+    "SMTP_PORT": "465",
+    "EMAIL_TO": "fredmourao@gmail.com,atendimento@shopvivaliz.com.br",
 }
 
 SECRETS = [
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_USER",
+    "SMTP_PASS",
     "EMAIL_USER",
     "EMAIL_PASSWORD",
     "EMAIL_TO",
@@ -41,7 +48,11 @@ def main():
     success_count = 0
 
     for name in SECRETS:
-        value = input(f"Informe o valor para {name}: ").strip()
+        default = DEFAULTS.get(name, "")
+        prompt = f"Informe o valor para {name}"
+        if default:
+            prompt += f" [{default}]"
+        value = input(prompt + ": ").strip() or default
         if not value:
             print(f"  Pulando {name} (valor vazio)")
             continue

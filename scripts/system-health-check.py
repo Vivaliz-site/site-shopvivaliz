@@ -30,7 +30,8 @@ class SystemHealthCheck:
             'tasks-queue.json': 'Fila de tarefas canônica',
             'api/monitor/api.php': 'API Monitor',
             '.github/workflows/24-7-continuous-agent.yml': 'Workflow 24/7',
-            'scripts/tri-environment-sync.js': 'Runner triambiente JS'
+            'scripts/tri-environment-sync.js': 'Runner triambiente JS',
+            'scripts/automation/validate_email_config.py': 'Validador email'
         }
 
         all_exist = True
@@ -222,7 +223,8 @@ class SystemHealthCheck:
             'AUDITORIA-ESTRUTURA.md': 'Auditoria',
             'AGENTS-STATUS-REPORT.md': 'Status agentes',
             'OLIST-IMAGES-IMPORT-PLAN.md': 'Plano Olist',
-            'DEPLOY-TROUBLESHOOTING.md': 'Troubleshooting'
+            'DEPLOY-TROUBLESHOOTING.md': 'Troubleshooting',
+            'docs/email-secrets-aliases.md': 'Aliases email'
         }
 
         all_ok = True

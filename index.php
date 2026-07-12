@@ -20,6 +20,55 @@ function sv_home_default_image(): string
     return '/images/logo-vivaliz-square.png';
 }
 
+function sv_home_catalog_source_rows(): array
+{
+    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
+    if (is_file($jsonPath) && is_readable($jsonPath)) {
+        $decoded = json_decode((string)file_get_contents($jsonPath), true);
+        if (is_array($decoded) && $decoded !== []) {
+            return $decoded;
+        }
+    }
+
+    $csvPath = __DIR__ . '/uploads/olist_imagens_site_mapeamento.csv';
+    if (!is_file($csvPath) || !is_readable($csvPath)) {
+        return [];
+    }
+
+    $rows = [];
+    $handle = fopen($csvPath, 'r');
+    if (!$handle) {
+        return [];
+    }
+
+    $header = fgetcsv($handle);
+    if (!is_array($header)) {
+        fclose($handle);
+        return [];
+    }
+
+    while (($line = fgetcsv($handle)) !== false) {
+        if (!is_array($line) || $line === []) {
+            continue;
+        }
+        $assoc = [];
+        foreach ($header as $i => $column) {
+            $key = trim((string)$column);
+            if ($key === '') {
+                continue;
+            }
+            $assoc[$key] = $line[$i] ?? '';
+        }
+        if (($assoc['image_url'] ?? '') === '') {
+            continue;
+        }
+        $rows[] = $assoc;
+    }
+
+    fclose($handle);
+    return $rows;
+}
+
 function sv_home_money(float $value): string
 {
     return $value > 0 ? 'R$ ' . number_format($value, 2, ',', '.') : 'Consulte o valor';
@@ -46,23 +95,13 @@ function sv_home_contact_url(array $product): string
 
 function sv_home_featured_products(int $limit = 8): array
 {
-    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
-    if (!is_file($jsonPath) || !is_readable($jsonPath)) {
-        return [];
-    }
-
-    $decoded = json_decode((string)file_get_contents($jsonPath), true);
-    if (!is_array($decoded)) {
-        return [];
-    }
-
     $products = [];
-    foreach ($decoded as $row) {
+    foreach (sv_home_catalog_source_rows() as $row) {
         if (!is_array($row)) {
             continue;
         }
 
-        $image = trim((string)($row['image_url'] ?? ''));
+        $image = trim((string)($row['image_url'] ?? $row['image'] ?? ''));
         if ($image === '') {
             continue;
         }
@@ -88,13 +127,7 @@ function sv_home_featured_products(int $limit = 8): array
 
 function sv_home_catalog_count(): int
 {
-    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
-    if (!is_file($jsonPath) || !is_readable($jsonPath)) {
-        return 0;
-    }
-
-    $decoded = json_decode((string)file_get_contents($jsonPath), true);
-    return is_array($decoded) ? count($decoded) : 0;
+    return count(sv_home_catalog_source_rows());
 }
 
 function sv_home_banners(): array
@@ -165,18 +198,8 @@ function sv_home_category_icon(string $category): string
 
 function sv_home_top_categories(int $limit = 8): array
 {
-    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
-    if (!is_file($jsonPath) || !is_readable($jsonPath)) {
-        return [];
-    }
-
-    $decoded = json_decode((string)file_get_contents($jsonPath), true);
-    if (!is_array($decoded)) {
-        return [];
-    }
-
     $counts = [];
-    foreach ($decoded as $row) {
+    foreach (sv_home_catalog_source_rows() as $row) {
         if (!is_array($row)) {
             continue;
         }

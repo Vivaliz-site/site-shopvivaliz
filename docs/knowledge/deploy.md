@@ -50,7 +50,13 @@ jobs:
           php-version: '8.2'
           coverage: none
       - name: PHP lint
-        run: find . -type f -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
+        shell: bash
+        run: |
+          while IFS= read -r -d '' file; do
+            echo "::group::php -l $file"
+            php -l "$file"
+            echo "::endgroup::"
+          done < <(find . -type f -name '*.php' -not -path './vendor/*' -print0)
       - name: Validate required knowledge
         run: |
           test -f docs/knowledge/project.md

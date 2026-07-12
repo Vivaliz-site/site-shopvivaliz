@@ -6,6 +6,7 @@ import subprocess
 import os
 import json
 from pathlib import Path
+from urllib.parse import urlparse
 
 class DeployDiagnostic:
     def __init__(self):
@@ -20,6 +21,13 @@ class DeployDiagnostic:
         ftp_user = os.getenv('FTP_USERNAME')
         ftp_pass = os.getenv('FTP_PASSWORD')
         ftp_dir = os.getenv('FTP_REMOTE_DIR')
+
+        if ftp_host and "://" in ftp_host:
+            parsed = urlparse(ftp_host)
+            if parsed.hostname:
+                self.warnings.append(f" FTP_SERVER contem protocolo; prefira apenas: {parsed.hostname}")
+            else:
+                self.issues.append(" FTP_SERVER invalido: use apenas o host FTP")
 
         if not ftp_host:
             self.issues.append(" FTP_SERVER não configurado nos secrets")
@@ -67,6 +75,8 @@ class DeployDiagnostic:
         ]
 
         missing = [s for s in required_secrets if not os.getenv(s)]
+        if os.getenv('SMTP_USER') and os.getenv('SMTP_PASS'):
+            missing = [s for s in missing if s not in ('EMAIL_USER', 'EMAIL_PASSWORD')]
 
         if missing:
             print(f"   Secrets faltando: {', '.join(missing)}")
@@ -83,7 +93,7 @@ class DeployDiagnostic:
         for wf in workflows:
             try:
                 # Verificar se é YAML válido
-                with open(wf) as f:
+                with open(wf, encoding='utf-8', errors='replace') as f:
                     content = f.read()
                     if "on:" in content and "jobs:" in content:
                         print(f"   {wf.name}")
@@ -150,6 +160,16 @@ class DeployDiagnostic:
 
         print("=" * 60)
 
+        Path("logs").mkdir(exist_ok=True)
+        Path("logs/deploy-diagnostic.json").write_text(
+            json.dumps({
+                "ok": len(self.issues) == 0,
+                "issues": self.issues,
+                "warnings": self.warnings,
+            }, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
         return len(self.issues) == 0
 
     def run_all_checks(self):
@@ -168,7 +188,7 @@ class DeployDiagnostic:
         success = self.generate_report()
 
         if not success:
-            print("\n💡 SOLUÇÕES:\n")
+            print("\nSOLUCOES:\n")
             print("1. Verifique os secrets no GitHub:")
             print("   https://github.com/seu-repo/settings/secrets/actions\n")
             print("2. Certifique-se de que FTP_REMOTE_DIR = /\n")

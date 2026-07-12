@@ -209,12 +209,20 @@ jobs:
           echo "Port: ${PORT}"
           echo "User: ***"
           echo ""
+          FTP_HOST="${FTP_SERVER_VALUE#ftp://}"
+          FTP_HOST="${FTP_HOST#ftps://}"
+          FTP_HOST="${FTP_HOST%%/*}"
+
+          if [ -z "$FTP_HOST" ] || [[ "$FTP_HOST" == *"://"* ]]; then
+            echo "::error::FTP_SERVER invalido. Use apenas o host, exemplo: ftp.shopvivaliz.com.br"
+            exit 1
+          fi
           
           # Timeout: 10 segundos
           if ! timeout 10 curl -sS \
             --user "${FTP_USERNAME_VALUE}:${FTP_PASSWORD_VALUE}" \
             --connect-timeout 10 \
-            "ftp://${FTP_SERVER_VALUE}:${PORT}/" \
+            "ftp://${FTP_HOST}:${PORT}/" \
             --list-only \
             -o /dev/null 2>&1; then
             

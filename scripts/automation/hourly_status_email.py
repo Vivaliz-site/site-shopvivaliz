@@ -69,10 +69,10 @@ class SmtpNotConfiguredError(Exception):
 
 
 def send_email(subject: str, body: str) -> None:
-    smtp_host = env("SMTP_HOST", env("EMAIL_SMTP_HOST"))
-    smtp_port = int(env("SMTP_PORT", env("EMAIL_SMTP_PORT") or "465"))
-    smtp_user = env("SMTP_USER", env("EMAIL_USER"))
-    smtp_pass = env("SMTP_PASS", env("EMAIL_PASSWORD"))
+    smtp_host = env("SMTP_HOST", env("EMAIL_SMTP_HOST", env("MAIL_HOST")))
+    smtp_port = int(env("SMTP_PORT", env("EMAIL_SMTP_PORT", env("MAIL_PORT") or "465")))
+    smtp_user = env("SMTP_USER", env("EMAIL_USER", env("MAIL_USER")))
+    smtp_pass = env("SMTP_PASS", env("EMAIL_PASSWORD", env("MAIL_PASS")))
     email_from = env("EMAIL_FROM", smtp_user)
     email_to = env("EMAIL_TO")
 

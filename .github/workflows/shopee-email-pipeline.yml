@@ -36,6 +36,10 @@ jobs:
           EMAIL_SMTP_PORT: ${{ secrets.EMAIL_SMTP_PORT }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          MAIL_HOST: ${{ secrets.MAIL_HOST }}
+          MAIL_PORT: ${{ secrets.MAIL_PORT }}
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS }}
           FTP_HOST: ${{ secrets.FTP_HOST || secrets.FTP_SERVER }}
           FTP_SERVER: ${{ secrets.FTP_SERVER || secrets.FTP_HOST }}
           FTP_USER: ${{ secrets.FTP_USER || secrets.FTP_USERNAME }}

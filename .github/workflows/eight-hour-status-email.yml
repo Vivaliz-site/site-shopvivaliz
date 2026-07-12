@@ -1,30 +1,44 @@
-name: "Relatório de Atividade 8h (Email)"
+name: "Relatorio de Atividade 4h (Email)"
 
 on:
   schedule:
-    - cron: '0 */8 * * *'
+    - cron: '0 */4 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   send-report:
+    name: Enviar Relatorio de Atividade 4h
     runs-on: ubuntu-latest
-    name: Enviar Relatório de Atividade 8h
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-node@v3 # Utilizando node ou python? setup-python é melhor.
-        # Na verdade, python já vem pré-instalado em runners do ubuntu-latest! Mas configurar explicitamente é bom.
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+
+      - name: Validar configuracao de email
+        env:
+          EMAIL_SMTP_HOST: ${{ secrets.EMAIL_SMTP_HOST }}
+          EMAIL_SMTP_PORT: ${{ secrets.EMAIL_SMTP_PORT }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          MAIL_HOST: ${{ secrets.MAIL_HOST }}
+          MAIL_PORT: ${{ secrets.MAIL_PORT }}
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_TO: "fredmourao@gmail.com,atendimento@shopvivaliz.com.br"
+        run: python scripts/automation/validate_email_config.py
 
       - name: Enviar email
         env:
@@ -32,6 +46,28 @@ jobs:
           EMAIL_SMTP_PORT: ${{ secrets.EMAIL_SMTP_PORT }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          EMAIL_TO: "fredmourao@gmail.com"
-        run: |
-          python scripts/automation/eight_hour_status_email.py
+          MAIL_HOST: ${{ secrets.MAIL_HOST }}
+          MAIL_PORT: ${{ secrets.MAIL_PORT }}
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_TO: "fredmourao@gmail.com,atendimento@shopvivaliz.com.br"
+          REPORT_WINDOW_HOURS: "4"
+          REPORT_BASE_URL: "https://dev.shopvivaliz.com.br"
+          REPORT_LOG_PATH: "logs/email-activity-report.txt"
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python scripts/automation/eight_hour_status_email.py
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: activity-email-report-${{ github.run_id }}
+          path: |
+            logs/email-activity-report.txt
+            logs/email-config-check.json
+          if-no-files-found: ignore

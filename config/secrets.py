@@ -21,7 +21,7 @@ Validação:
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import logging
 
 # ============================================================================
@@ -29,6 +29,15 @@ import logging
 # ============================================================================
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def first_env(*names: str, default: str = "") -> str:
+    """Return the first non-empty environment value from a list of aliases."""
+    for name in names:
+        value = os.getenv(name)
+        if value is not None and value.strip() != "":
+            return value.strip()
+    return default
 
 # ============================================================================
 # CARREGAMENTO MANUAL DE .env (SEM DEPENDÊNCIA)
@@ -69,7 +78,8 @@ ENV_FILES = [
 for env_file in ENV_FILES:
     if env_file.exists():
         env_vars = load_env_file(env_file)
-        os.environ.update(env_vars)
+        for key, value in env_vars.items():
+            os.environ.setdefault(key, value)
         logger.debug(f"✓ Carregado: {env_file}")
 
 # ============================================================================
@@ -148,22 +158,22 @@ TIKTOK_SHOP_ID = os.getenv("TIKTOK_SHOP_ID", "").strip()
 # ============================================================================
 # SEÇÃO 6: FTP (Deploy e Sincronização)
 # ============================================================================
-FTP_SERVER = os.getenv("FTP_SERVER", "").strip()
-FTP_HOST = os.getenv("FTP_HOST", FTP_SERVER).strip()  # Alias para FTP_SERVER
-FTP_USERNAME = os.getenv("FTP_USERNAME", "").strip()
-FTP_USER = os.getenv("FTP_USER", FTP_USERNAME).strip()  # Alias
-FTP_PASSWORD = os.getenv("FTP_PASSWORD", "").strip()
-FTP_PASS = os.getenv("FTP_PASS", FTP_PASSWORD).strip()  # Alias
+FTP_SERVER = first_env("FTP_SERVER", "FTP_HOST")
+FTP_HOST = first_env("FTP_HOST", "FTP_SERVER")
+FTP_USERNAME = first_env("FTP_USERNAME", "FTP_USER")
+FTP_USER = first_env("FTP_USER", "FTP_USERNAME")
+FTP_PASSWORD = first_env("FTP_PASSWORD", "FTP_PASS")
+FTP_PASS = first_env("FTP_PASS", "FTP_PASSWORD")
 FTP_PORT = int(os.getenv("FTP_PORT", "21"))
 FTP_REMOTE_DIR = os.getenv("FTP_REMOTE_DIR", "/public_html")
 
 # ============================================================================
 # SEÇÃO 7: EMAIL (SMTP - Titan Email)
 # ============================================================================
-MAIL_HOST = os.getenv("MAIL_HOST", "smtp.titan.email")
-MAIL_PORT = int(os.getenv("MAIL_PORT", "465"))
-MAIL_USER = os.getenv("MAIL_USER", "agentes@shopvivaliz.com.br")
-MAIL_PASS = os.getenv("MAIL_PASS", "").strip()
+MAIL_HOST = first_env("SMTP_HOST", "EMAIL_SMTP_HOST", "MAIL_HOST", default="smtp.titan.email")
+MAIL_PORT = int(first_env("SMTP_PORT", "EMAIL_SMTP_PORT", "MAIL_PORT", default="465"))
+MAIL_USER = first_env("SMTP_USER", "EMAIL_USER", "MAIL_USER", default="agentes@shopvivaliz.com.br")
+MAIL_PASS = first_env("SMTP_PASS", "EMAIL_PASSWORD", "MAIL_PASS")
 EMAIL_FROM = os.getenv("EMAIL_FROM", MAIL_USER)
 EMAIL_TO = os.getenv("EMAIL_TO", "").strip()
 
@@ -175,7 +185,7 @@ SMTP_PASS = os.getenv("SMTP_PASS", MAIL_PASS)
 EMAIL_SMTP_HOST = os.getenv("EMAIL_SMTP_HOST", MAIL_HOST)
 EMAIL_SMTP_PORT = int(os.getenv("EMAIL_SMTP_PORT", str(MAIL_PORT)))
 EMAIL_USER = os.getenv("EMAIL_USER", MAIL_USER)
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", MAIL_PASS)
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", SMTP_PASS or MAIL_PASS)
 
 # ============================================================================
 # SEÇÃO 8: PAGAMENTO (Pagar.me)
@@ -280,6 +290,13 @@ REQUIRED_SECRETS = {
     "MAIL_PASS": "Email Password",
 }
 
+REQUIRED_SECRET_ALIASES = {
+    "FTP_SERVER": ["FTP_SERVER", "FTP_HOST"],
+    "FTP_USERNAME": ["FTP_USERNAME", "FTP_USER"],
+    "FTP_PASSWORD": ["FTP_PASSWORD", "FTP_PASS"],
+    "MAIL_PASS": ["SMTP_PASS", "EMAIL_PASSWORD", "MAIL_PASS"],
+}
+
 def validate_secrets() -> tuple[bool, list[str]]:
     """
     Valida se TODOS os secrets obrigatórios estão presentes.
@@ -290,7 +307,11 @@ def validate_secrets() -> tuple[bool, list[str]]:
     errors = []
 
     for key, description in REQUIRED_SECRETS.items():
-        value = globals().get(key, "").strip()
+        value = ""
+        for alias in REQUIRED_SECRET_ALIASES.get(key, [key]):
+            value = str(globals().get(alias, "")).strip()
+            if value:
+                break
         if not value:
             errors.append(f"❌ {key} ({description}) - AUSENTE")
         else:

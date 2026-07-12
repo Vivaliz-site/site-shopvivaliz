@@ -104,7 +104,19 @@ jobs:
         shell: bash
         run: |
           python -m py_compile scripts/*.py
-          find . -path './vendor' -prune -o -path './node_modules' -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
+          found=0
+          while IFS= read -r -d '' file; do
+            found=1
+            echo "::group::php -l $file"
+            if ! php -l "$file"; then
+              echo "::error file=$file::PHP lint failed"
+              exit 1
+            fi
+            echo "::endgroup::"
+          done < <(find . -path './vendor' -prune -o -path './node_modules' -prune -o -name '*.php' -print0)
+          if [ "$found" -eq 0 ]; then
+            echo "No PHP files found for lint."
+          fi
           php scripts/quality/run-all.php
           python scripts/system-health-check.py
 
