@@ -56,25 +56,25 @@
 .sv-head{
   background:linear-gradient(135deg,var(--sv-blue),#2563EB);
   color:#fff;
-  min-height:104px;
-  padding:18px 22px;
+  min-height:82px;
+  padding:12px 18px;
   display:flex;
   align-items:center;
-  gap:16px;
+  gap:12px;
   flex-shrink:0;
 }
 
 .sv-head img{
-  width:132px;
-  max-width:34%;
+  width:104px;
+  max-width:28%;
   background:#fff;
-  border-radius:10px;
-  padding:6px;
+  border-radius:8px;
+  padding:4px;
 }
 
 .sv-head strong{
   min-width:0;
-  font-size:20px;
+  font-size:18px;
   line-height:1.2;
 }
 
@@ -217,16 +217,16 @@
   }
 
   .sv-head{
-    min-height:86px;
-    padding:14px 16px;
+    min-height:72px;
+    padding:10px 14px;
   }
 
   .sv-head img{
-    width:108px;
+    width:88px;
   }
 
   .sv-head strong{
-    font-size:17px;
+    font-size:16px;
   }
 
   .sv-form{
