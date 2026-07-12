@@ -59,6 +59,15 @@ function sv_home_catalog_source_rows(): array
             }
             $assoc[$key] = $line[$i] ?? '';
         }
+        if (isset($assoc['site_url']) && $assoc['site_url'] !== '') {
+            $assoc['image_url'] = $assoc['site_url'];
+        } elseif (isset($assoc['original_url_olist']) && $assoc['original_url_olist'] !== '') {
+            $assoc['image_url'] = $assoc['original_url_olist'];
+        }
+        if (isset($assoc['nome_produto']) && $assoc['nome_produto'] !== '') {
+            $assoc['name'] = $assoc['nome_produto'];
+        }
+
         if (($assoc['image_url'] ?? '') === '') {
             continue;
         }
@@ -366,28 +375,36 @@ $svNavCurrent = '';
     <div class="trust-bar" role="list" aria-label="Diferenciais da ShopVivaliz">
         <div class="trust-bar-inner">
             <div class="trust-bar-item" role="listitem">
-                <span class="trust-bar-icon">🔒</span>
+                <span class="trust-bar-icon" style="color: #10b981;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                </span>
                 <div class="trust-bar-text">
                     <strong>Compra 100% Segura</strong>
                     <span>Dados protegidos com criptografia SSL</span>
                 </div>
             </div>
             <div class="trust-bar-item" role="listitem">
-                <span class="trust-bar-icon">🚚</span>
+                <span class="trust-bar-icon" style="color: #10b981;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+                </span>
                 <div class="trust-bar-text">
                     <strong>Entrega em Todo o Brasil</strong>
                     <span>Via transportadoras parceiras de confiança</span>
                 </div>
             </div>
             <div class="trust-bar-item" role="listitem">
-                <span class="trust-bar-icon">⚡</span>
+                <span class="trust-bar-icon" style="color: #10b981;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                </span>
                 <div class="trust-bar-text">
                     <strong>PIX com aprovação imediata</strong>
                     <span>Pague via PIX, cartão ou boleto</span>
                 </div>
             </div>
             <div class="trust-bar-item" role="listitem">
-                <span class="trust-bar-icon">↩️</span>
+                <span class="trust-bar-icon" style="color: #10b981;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
+                </span>
                 <div class="trust-bar-text">
                     <strong>7 dias para Troca</strong>
                     <span>Devolução simples sem burocracia</span>
@@ -476,12 +493,6 @@ $svNavCurrent = '';
                     <p class="muted">Seleção com imagens reais e acesso rápido às linhas mais procuradas.</p>
                 </div>
                 <a href="/catalogo" class="btn btn-secondary">Ver todos</a>
-            </div>
-            <div id="catalog-status" class="status-line"><?= $catalogCount > 0 ? $catalogCount . ' produtos disponíveis no catálogo.' : 'Explore nossas linhas e fale com a equipe para atendimento comercial.' ?></div>
-            <div class="home-trust-note home-trust-note-products" aria-label="Destaques do catálogo">
-                <span>Produtos com navegação direta</span>
-                <span>Compra assistida por canal comercial</span>
-                <span>Curadoria das linhas mais buscadas</span>
             </div>
             <?php if ($featuredProducts): ?>
                 <div class="home-scroller" data-scroller>
