@@ -1546,3 +1546,17 @@ body {
   font-size: 14px !important;
 }
 
+
+/* SUPER TINY BUTTONS */
+.card-actions .btn, .card-actions .buy-button {
+  padding: 4px 10px !important;
+  font-size: 12px !important;
+  min-height: 28px !important;
+  height: 32px !important;
+  line-height: 32px !important;
+  border-radius: 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+

@@ -297,3 +297,13 @@
   }
 }
 
+
+/* FIX HEIGHT FOR REAL */
+#sv-liz-panel, #sv-liz-panel.open {
+  top: 24px !important;
+  bottom: 24px !important;
+  height: calc(100vh - 48px) !important;
+  max-height: none !important;
+  width: 380px !important;
+}
+

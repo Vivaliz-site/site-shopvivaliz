@@ -159,7 +159,7 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 </div>
 
 <!-- Liz Assistant Premium Mascot Widget -->
-<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=3.0">
+<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=4.0">
 <script src="/public/assets/liz-assistant/liz-assistant.js"></script>
 
 <script>
@@ -194,9 +194,9 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 #sv-liz-panel, #sv-liz-panel.open {
   top: 24px !important;
   bottom: 24px !important;
-  height: auto !important;
+  height: calc(100vh - 48px) !important;
   max-height: none !important;
-  width: 400px !important;
+  width: 380px !important;
 }
 
 @media(max-width: 600px) {
@@ -218,10 +218,12 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 }
 
 .card-actions .btn, .card-actions .buy-button, .card-actions button {
-  padding: 8px 14px !important;
-  font-size: 13px !important;
-  min-height: 34px !important;
-  border-radius: 6px !important;
+  padding: 4px 10px !important;
+  font-size: 12px !important;
+  min-height: 28px !important;
+  height: 32px !important;
+  line-height: 32px !important;
+  border-radius: 4px !important;
 }
 
 .sv-form button {
