@@ -8,6 +8,30 @@
 
 ---
 
+## 2026-07-12 — php-lint quebrado no CI por sintaxe JSON em array PHP
+
+- **Sintoma:** job `php-lint` falhando em todos os PRs com `Parse error: unexpected token ":"` .
+- **Causa real:** `includes/analytics-tracking.php` linha 196 — um agente escreveu array PHP com
+  sintaxe JSON (`'chave': valor`) em vez de `'chave' => valor` no payload do TikTok Pixel.
+- **Correção:** trocado `:` por `=>` nas 9 chaves do array `$payload` (linhas 196–207).
+  As linhas 271–272 com `:` são JavaScript dentro de heredoc — válidas, não mexer.
+- **Onde:** `includes/analytics-tracking.php`, PR #274.
+- **Lição:** rodar `php -l` localmente em qualquer PHP gerado por IA antes de commitar.
+
+## 2026-07-12 — Camada visual global "dazzle-v1" (melhoria, não bug)
+
+- **O que:** polish visual site-wide via `css/dazzle-v1.css` + `js/dazzle-v1.js`, carregados em
+  `includes/navbar.php` (todas as páginas principais), `includes/header.php` (políticas legais),
+  `meus-pedidos.php` e `auth/login.php` / `auth/register.php`.
+- **Design seguro:** sem seletores `[class*=...]` (ver entrada 2026-07-11), só polish aditivo
+  (hover/animação/sombra), sem resets de layout, `prefers-reduced-motion` respeitado, reveal ao
+  scroll com failsafe de 4s (nada fica invisível se o IntersectionObserver falhar) e itens de
+  carrossel horizontal excluídos do reveal.
+- **Onde:** `css/dazzle-v1.css`, `js/dazzle-v1.js`, PR #274. Para evoluir o visual, edite esses
+  dois arquivos e faça bump do query string `?v=` nos três pontos de include.
+
+---
+
 ## 2026-07-11 — Wildcards CSS reintroduzidos 10x, skeleton/hero quebrado recorrentemente
 
 - **Sintoma:** Hero section, categorias, e cards renderizando com layout destruído — acontecia múltiplas vezes por dia.
