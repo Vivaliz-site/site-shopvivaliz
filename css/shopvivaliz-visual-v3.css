@@ -163,3 +163,100 @@ footer::after {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+
+/* App-like Mobile Bottom Navigation */
+.sv-mobile-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.06);
+  z-index: 99995;
+  justify-content: space-around;
+  padding: 8px 12px;
+  padding-bottom: env(safe-area-inset-bottom, 8px);
+}
+
+.sv-mobile-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #64748b;
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 500;
+  gap: 4px;
+}
+
+.sv-mobile-nav-item.active {
+  color: #0F172A;
+}
+
+.sv-mobile-nav-icon {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+
+@media (max-width: 768px) {
+  .sv-mobile-nav {
+    display: flex;
+  }
+  body {
+    padding-bottom: 70px;
+  }
+}
+
+
+/* Dark Mode Theme */
+:root {
+  --bg-color: #ffffff;
+  --text-color: #333333;
+  --card-bg: #ffffff;
+}
+
+[data-theme="dark"] {
+  --bg-color: #0F172A;
+  --text-color: #e2e8f0;
+  --card-bg: #1e293b;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 0.3s, color 0.3s;
+}
+
+[data-theme="dark"] .product-card,
+[data-theme="dark"] .category-slide,
+[data-theme="dark"] .sv-mobile-nav {
+  background-color: var(--card-bg);
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .product-info h2 {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .nav-links a {
+  color: #e2e8f0;
+}
+
+/* Dark mode toggle button */
+.sv-theme-toggle {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sv-theme-toggle svg { width: 20px; height: 20px; fill: currentColor; }
+
