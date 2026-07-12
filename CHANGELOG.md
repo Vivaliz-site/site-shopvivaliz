@@ -18,6 +18,29 @@
 - **Onde:** `includes/analytics-tracking.php`, PR #274.
 - **Lição:** rodar `php -l` localmente em qualquer PHP gerado por IA antes de commitar.
 
+## 2026-07-12 — Suite Playwright E2E falhando (5 testes) e bloqueando promoção de código
+
+- **Sintoma:** job "Playwright E2E" falhando em todo PR com 5 testes quebrados; os testes rodam
+  contra a PRODUÇÃO (`https://dev.shopvivaliz.com.br`), não contra o código do PR.
+- **Causas reais (uma por teste):**
+  1. *Homepage*: `locator('header')` pegava o único `<header>` da página — o cabeçalho interno
+     do painel FECHADO da Liz (altura 0 = "hidden"). A navbar real era `<nav>`, não `<header>`.
+  2. *Navegação de categorias*: asserção `not.toContain(BASE_URL + '/')` é impossível de passar —
+     toda URL do site contém esse prefixo.
+  3. *Carrinho*: clicar no link do carrinho abre o mini-cart drawer (sem mudar URL) → falso negativo.
+  4. *Liz mascote*: seletor `[class*="liz"], [id*="liz"]...` casava 2+ elementos → strict mode violation.
+  5. *Preços válidos*: varria a página toda com `text=/R\$ .../` e casava o subtotal "R$ 0,00" do
+     mini-cart vazio.
+- **Correções:** navbar agora é `<header class="navbar sv-navbar"><nav class="container nav-inner">`
+  (semântica correta, sticky preservado — classes CSS inalteradas); `<header class="sv-head">` da Liz
+  virou `<div>`; testes reescritos com seletores determinísticos (`.sv-navbar`, `#sv-liz-launcher`,
+  `.product-price`) e asserções possíveis. Suite completa: 16/16 passando localmente contra produção.
+- **Onde:** `includes/navbar.php`, `public/assets/liz-assistant/liz-assistant.js`,
+  `tests/e2e-journey.spec.js`, `tests/precos-catalogo.spec.ts`, PR #274.
+- **Lição:** testes E2E que rodam contra produção precisam de seletores específicos (id/classe do
+  projeto), nunca genéricos (`header`, `[class*=...]`) — o DOM de produção muda a cada deploy de
+  outro agente.
+
 ## 2026-07-12 — Camada visual global "dazzle-v1" (melhoria, não bug)
 
 - **O que:** polish visual site-wide via `css/dazzle-v1.css` + `js/dazzle-v1.js`, carregados em
