@@ -8,10 +8,42 @@ header('Content-Type: text/html; charset=UTF-8');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor do Dev - ShopVivaliz</title>
+    <title>Central de Agentes - ShopVivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
     <style>
-        .monitor-wrap{max-width:1180px;margin:0 auto;padding:28px 18px 56px}.monitor-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:22px}.monitor-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.monitor-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px;box-shadow:0 10px 24px rgba(15,23,42,.08)}.monitor-card h2{margin:0 0 10px;font-size:22px}.monitor-pill{display:inline-flex;border-radius:999px;padding:7px 11px;font-weight:800;background:#e5e7eb;color:#111827}.monitor-pill[data-state="success"]{background:#dcfce7;color:#166534}.monitor-pill[data-state="warning"]{background:#fef3c7;color:#92400e}.monitor-pill[data-state="error"]{background:#fee2e2;color:#991b1b}.monitor-list{margin:12px 0 0;padding-left:20px;color:#4b5563}.monitor-list li{margin:7px 0}.monitor-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}.monitor-pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e5e7eb;border-radius:12px;padding:12px;max-height:260px;overflow:auto;font-size:12px}.muted-small{color:#6b7280;font-size:13px}@media(max-width:900px){.monitor-grid{grid-template-columns:1fr}.monitor-head{display:block}.monitor-wrap{padding:18px 12px 44px}.monitor-card{padding:15px}.monitor-card h2{font-size:20px}}
+        .ops-shell{max-width:1380px;margin:0 auto;padding:24px 18px 48px}
+        .ops-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px}
+        .ops-grid{display:grid;grid-template-columns:1.05fr 1.35fr;gap:16px}
+        .ops-stack{display:grid;gap:16px}
+        .ops-card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;box-shadow:0 14px 32px rgba(15,23,42,.08);padding:18px}
+        .ops-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+        .ops-title h2,.ops-title h3{margin:0}
+        .ops-pill{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:7px 12px;font-weight:700;background:#e5e7eb;color:#111827}
+        .ops-pill.success{background:#dcfce7;color:#166534}.ops-pill.warn{background:#fef3c7;color:#92400e}.ops-pill.error{background:#fee2e2;color:#991b1b}
+        .ops-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+        .ops-kpi{border:1px solid #e5e7eb;border-radius:14px;padding:14px;background:#f8fafc}
+        .ops-kpi strong{display:block;font-size:28px;line-height:1;margin-bottom:6px}
+        .agents-list{display:grid;gap:12px}
+        .agent-item{border:1px solid #e5e7eb;border-radius:16px;padding:14px;background:#fff}
+        .agent-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}
+        .agent-meta{font-size:13px;color:#64748b}
+        .agent-task,.agent-note{font-size:14px;color:#0f172a;margin-top:8px}
+        .agent-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+        .agent-actions button,.ops-btn{border:0;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer}
+        .ops-btn.primary{background:#1d4ed8;color:#fff}.ops-btn.secondary{background:#e2e8f0;color:#0f172a}.ops-btn.success{background:#16a34a;color:#fff}
+        .chat-layout{display:grid;grid-template-columns:320px 1fr;gap:14px}
+        .agent-tabs{display:grid;gap:8px}
+        .agent-tab{border:1px solid #cbd5e1;background:#fff;border-radius:14px;padding:12px;text-align:left;cursor:pointer}
+        .agent-tab.active{border-color:#1d4ed8;box-shadow:0 0 0 2px rgba(29,78,216,.14)}
+        .agent-thread{border:1px solid #e5e7eb;border-radius:16px;padding:14px;background:#f8fafc;min-height:420px;display:flex;flex-direction:column}
+        .thread-log{flex:1;overflow:auto;display:grid;gap:10px;max-height:420px;padding-right:4px}
+        .bubble{border-radius:14px;padding:10px 12px;font-size:14px;line-height:1.45}
+        .bubble.user{background:#dbeafe;color:#1e3a8a}.bubble.agent{background:#fff;color:#0f172a;border:1px solid #e2e8f0}
+        .thread-form{display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:12px}
+        .thread-form textarea{min-height:94px;border:1px solid #cbd5e1;border-radius:14px;padding:12px;resize:vertical}
+        .log-pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e5e7eb;border-radius:14px;padding:12px;font-size:12px;max-height:260px;overflow:auto}
+        @media (max-width: 1080px){.ops-grid,.chat-layout{grid-template-columns:1fr}.ops-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+        @media (max-width: 680px){.ops-shell{padding:16px 12px 40px}.ops-kpis{grid-template-columns:1fr}.ops-head{display:block}}
     </style>
 </head>
 <body>
@@ -22,93 +54,251 @@ header('Content-Type: text/html; charset=UTF-8');
             <a href="/admin/">Admin</a>
             <a href="/catalogo.php">Catálogo</a>
             <a href="/checkout">Checkout</a>
-            <a href="/admin/monitor/">Monitor</a>
+            <a href="/admin/monitor/">Central de Agentes</a>
         </div>
     </div>
 </nav>
-<main class="monitor-wrap">
-    <section class="monitor-head">
+
+<main class="ops-shell">
+    <section class="ops-head">
         <div>
-            <p class="eyebrow">Operação técnica</p>
-            <h1>Monitor do Dev</h1>
-            <p class="muted">Ambiente Ubuntu, Apache/PHP, health checks, watchdog, filas, backlog, roadmap e status do agente de desenvolvimento.</p>
+            <p class="eyebrow">Operação autônoma</p>
+            <h1>Central de Agentes</h1>
+            <p class="muted">Status ao vivo, backlog real, heartbeat individual e comunicação direta com cada agente.</p>
         </div>
-        <button class="btn btn-primary" id="refresh-monitor" type="button">Atualizar agora</button>
+        <div class="agent-actions">
+            <button class="ops-btn secondary" id="refresh-all" type="button">Atualizar agora</button>
+            <button class="ops-btn success" id="generate-tasks" type="button">Gerar novas tarefas</button>
+        </div>
     </section>
 
-    <section class="monitor-grid" aria-live="polite">
-        <article class="monitor-card">
-            <div class="admin-card-head">
-                <h2>Ambiente Ubuntu</h2>
-                <span class="monitor-pill" id="env-pill">Carregando...</span>
-            </div>
-            <ul class="monitor-list" id="env-list"><li>Consultando /api/health.php...</li></ul>
-            <div class="monitor-actions">
-                <a class="btn btn-secondary" href="/api/health.php" target="_blank" rel="noreferrer">JSON health</a>
-            </div>
-        </article>
+    <section class="ops-grid">
+        <div class="ops-stack">
+            <article class="ops-card">
+                <div class="ops-title">
+                    <h2>Visão Geral</h2>
+                    <span class="ops-pill" id="overall-pill">Carregando</span>
+                </div>
+                <div class="ops-kpis">
+                    <div class="ops-kpi"><span>Fila total</span><strong id="kpi-total">-</strong><small id="kpi-source">sem fonte</small></div>
+                    <div class="ops-kpi"><span>Pendentes</span><strong id="kpi-pending">-</strong><small>tarefas a atacar</small></div>
+                    <div class="ops-kpi"><span>Ativas</span><strong id="kpi-active">-</strong><small>em execução</small></div>
+                    <div class="ops-kpi"><span>Concluídas</span><strong id="kpi-completed">-</strong><small>já entregues</small></div>
+                </div>
+                <div class="agent-note" id="overall-note" style="margin-top:12px">Aguardando leitura do monitor.</div>
+            </article>
 
-        <article class="monitor-card">
-            <div class="admin-card-head">
-                <h2>Agente de desenvolvimento</h2>
-                <span class="monitor-pill" id="dev-pill">Carregando...</span>
-            </div>
-            <ul class="monitor-list" id="dev-list"><li>Consultando status do agente...</li></ul>
-            <div class="monitor-actions">
-                <a class="btn btn-secondary" href="/api/monitor/dev-status.php" target="_blank" rel="noreferrer">JSON dev</a>
-                <a class="btn btn-secondary" href="/admin/squad-chat.php" target="_blank" rel="noreferrer">Squad Chat</a>
-                <a class="btn btn-secondary" href="/admin/ai-pipeline.html" target="_blank" rel="noreferrer">AI Pipeline</a>
-            </div>
-        </article>
+            <article class="ops-card">
+                <div class="ops-title">
+                    <h2>Agentes ao Vivo</h2>
+                    <span class="ops-pill" id="agents-pill">...</span>
+                </div>
+                <div class="agents-list" id="agents-list"></div>
+            </article>
 
-        <article class="monitor-card">
-            <div class="admin-card-head">
-                <h2>Tempo real VS Code/Codex</h2>
-                <span class="monitor-pill" id="rt-pill">Pronto</span>
-            </div>
-            <p class="muted-small">Comandos recomendados no terminal do servidor:</p>
-            <pre class="monitor-pre">tail -f /home/ubuntu/site-shopvivaliz/logs/watchdog.log
-tail -f /home/ubuntu/site-shopvivaliz/logs/dev-agent.log
-tail -f /var/log/apache2/error.log</pre>
-        </article>
+            <article class="ops-card">
+                <div class="ops-title">
+                    <h2>Eventos Recentes</h2>
+                    <span class="ops-pill success">Stream</span>
+                </div>
+                <pre class="log-pre" id="events-log">Carregando histórico...</pre>
+            </article>
+        </div>
+
+        <div class="ops-stack">
+            <article class="ops-card">
+                <div class="ops-title">
+                    <h2>Falar com um agente</h2>
+                    <span class="ops-pill" id="chat-pill">Pronto</span>
+                </div>
+                <div class="chat-layout">
+                    <div class="agent-tabs" id="agent-tabs"></div>
+                    <div class="agent-thread">
+                        <div class="thread-log" id="thread-log"></div>
+                        <form class="thread-form" id="thread-form">
+                            <textarea id="thread-message" placeholder="Envie uma instrução direta para o agente selecionado..."></textarea>
+                            <button class="ops-btn primary" type="submit">Enviar</button>
+                        </form>
+                    </div>
+                </div>
+            </article>
+
+            <article class="ops-card">
+                <div class="ops-title">
+                    <h2>Fila canônica</h2>
+                    <span class="ops-pill" id="queue-pill">...</span>
+                </div>
+                <pre class="log-pre" id="queue-log">Carregando fila...</pre>
+            </article>
+        </div>
     </section>
 </main>
+
 <script>
 (function(){
-    function setPill(id, text, state){var n=document.getElementById(id); if(!n) return; n.textContent=text; n.dataset.state=state || 'warning';}
-    function setList(id, items){var n=document.getElementById(id); if(!n) return; n.innerHTML=items.map(function(x){return '<li>'+x+'</li>';}).join('');}
-    async function readJson(url){var r=await fetch(url,{cache:'no-store'}); var t=await r.text(); try{return {http:r.status,json:JSON.parse(t)}}catch(e){return {http:r.status,json:null,raw:t}}}
-    function yn(v){return v ? 'OK' : 'Atenção';}
-    async function load(){
-        try{
-            var health=await readJson('/api/health.php');
-            var h=health.json || {};
-            setPill('env-pill', h.ok ? 'Operacional' : 'Atenção', h.ok ? 'success' : 'warning');
-            setList('env-list', [
-                'HTTP health: '+health.http,
-                'PHP: '+((h.php && h.php.version) || 'n/d'),
-                'Servidor: '+((h.server && h.server.software) || 'n/d'),
-                'Disco usado: '+((h.disk && h.disk.used_percent) || 'n/d')+'%',
-                'Logs graváveis: '+yn(h.checks && h.checks['Diretorio logs gravavel']),
-                'Monitor presente: '+yn(h.checks && h.checks['Monitor admin presente'])
-            ]);
-        }catch(e){setPill('env-pill','Falhou','error');setList('env-list',['Não foi possível carregar /api/health.php.']);}
-        try{
-            var dev=await readJson('/api/monitor/dev-status.php');
-            var d=dev.json || {};
-            setPill('dev-pill', d.ok ? 'Operacional' : 'Atenção', d.ok ? 'success' : 'warning');
-            setList('dev-list', [
-                'HTTP dev-status: '+dev.http,
-                'Watchdog: '+yn(d.checks && d.checks['Watchdog configurado']),
-                'Backlog: '+yn(d.checks && d.checks['Backlog localizado']),
-                'Roadmap: '+yn(d.checks && d.checks['Roadmap localizado']),
-                'Logs graváveis: '+yn(d.checks && d.checks['Diretorio logs gravavel'])
-            ]);
-        }catch(e){setPill('dev-pill','Falhou','error');setList('dev-list',['Não foi possível carregar o status do agente.']);}
-        setPill('rt-pill','Pronto','success');
+    const state = { agents: [], commands: [], messages: [], responses: [], selectedAgent: 'claude' };
+
+    function byId(id){ return document.getElementById(id); }
+    function pill(node, text, kind){
+        node.textContent = text;
+        node.className = 'ops-pill ' + (kind || '');
     }
-    document.getElementById('refresh-monitor').addEventListener('click', load);
-    load();
+    function esc(value){
+        return String(value ?? '').replace(/[&<>"']/g, function(ch){
+            return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[ch];
+        });
+    }
+    async function readJson(url, options){
+        const response = await fetch(url, Object.assign({cache:'no-store'}, options || {}));
+        const text = await response.text();
+        let json = null;
+        try { json = JSON.parse(text); } catch (e) {}
+        if (!response.ok) throw new Error((json && json.message) || ('HTTP ' + response.status));
+        return json;
+    }
+
+    function renderAgents(){
+        const host = byId('agents-list');
+        const tabs = byId('agent-tabs');
+        if (!state.agents.length){
+            host.innerHTML = '<div class="agent-item">Nenhum agente encontrado.</div>';
+            tabs.innerHTML = '';
+            return;
+        }
+        host.innerHTML = state.agents.map(function(agent){
+            const hb = agent.heartbeat || {};
+            const status = hb.alive ? 'ATIVO' : 'SEM BATIMENTO';
+            const statusKind = hb.alive ? 'success' : 'error';
+            return '<div class="agent-item">'+
+                '<div class="agent-top">'+
+                    '<div><strong>'+esc(agent.name)+'</strong><div class="agent-meta">'+esc(agent.role)+'</div></div>'+
+                    '<span class="ops-pill '+statusKind+'">'+status+'</span>'+
+                '</div>'+
+                '<div class="agent-meta">Heartbeat: '+esc(hb.last_heartbeat || 'nunca')+' | idade: '+esc(hb.age_s ?? '-')+'s | tarefas processadas: '+esc(hb.tasks_processed ?? 0)+'</div>'+
+                '<div class="agent-task"><strong>Foco:</strong> '+esc(agent.current_focus || 'Aguardando')+'</div>'+
+                '<div class="agent-note"><strong>Backlog de comandos:</strong> '+esc(agent.command_backlog ?? 0)+'</div>'+
+                '<div class="agent-note"><strong>Última resposta:</strong> '+esc(agent.latest_response ? (agent.latest_response.message || agent.latest_response.reply || agent.latest_response.answer || '') : 'sem resposta ainda')+'</div>'+
+            '</div>';
+        }).join('');
+
+        tabs.innerHTML = state.agents.map(function(agent){
+            const active = state.selectedAgent === agent.id ? ' active' : '';
+            return '<button class="agent-tab'+active+'" data-agent="'+esc(agent.id)+'"><strong>'+esc(agent.name)+'</strong><br><span class="agent-meta">'+esc(agent.role)+'</span></button>';
+        }).join('');
+
+        tabs.querySelectorAll('[data-agent]').forEach(function(button){
+            button.addEventListener('click', function(){
+                state.selectedAgent = button.getAttribute('data-agent');
+                renderAgents();
+                renderThread();
+            });
+        });
+    }
+
+    function renderThread(){
+        const log = byId('thread-log');
+        const selected = state.selectedAgent;
+        const relevant = []
+            .concat(state.messages.filter(x => (x.agent_id || '').toLowerCase() === selected).map(x => ({type:'user', ts:x.created_at, text:x.message})))
+            .concat(state.responses.filter(x => {
+                const agent = String(x.agent || x.agent_id || '').toLowerCase();
+                return agent === selected || (selected === 'gpt' && agent === 'chatgpt');
+            }).map(x => ({type:'agent', ts:x.timestamp || x.created_at, text:x.message || x.reply || x.answer || ''})))
+            .sort((a,b) => String(a.ts || '').localeCompare(String(b.ts || '')));
+
+        if (!relevant.length){
+            log.innerHTML = '<div class="bubble agent">Nenhuma conversa registrada com este agente ainda.</div>';
+            return;
+        }
+        log.innerHTML = relevant.map(function(item){
+            return '<div class="bubble '+(item.type === 'user' ? 'user' : 'agent')+'"><strong>'+(item.type === 'user' ? 'Você' : 'Agente')+'</strong><br>'+esc(item.text)+'</div>';
+        }).join('');
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function renderQueue(tasks, source){
+        byId('queue-log').textContent = JSON.stringify({source: source, tasks: tasks}, null, 2);
+    }
+
+    function renderEvents(messages){
+        byId('events-log').textContent = JSON.stringify(messages.slice(-25), null, 2);
+    }
+
+    async function loadAll(){
+        try{
+            const [status, agents, messages, tasks] = await Promise.all([
+                readJson('/api/monitor/api.php?action=status'),
+                readJson('/api/monitor/api.php?action=agents'),
+                readJson('/api/monitor/api.php?action=messages'),
+                readJson('/api/monitor/api.php?action=tasks')
+            ]);
+
+            const queue = status.queue || {};
+            byId('kpi-total').textContent = queue.total ?? '-';
+            byId('kpi-pending').textContent = queue.pending ?? '-';
+            byId('kpi-active').textContent = queue.active ?? '-';
+            byId('kpi-completed').textContent = queue.completed ?? '-';
+            byId('kpi-source').textContent = queue.source || 'sem fonte';
+            byId('overall-note').textContent = 'Ciclo: ' + (status.details?.cycle_status || 'n/d') + ' | branch: ' + (status.tri_environment_sync?.branch || 'n/d');
+            pill(byId('overall-pill'), (status.autonomous_status?.status || 'unknown').toUpperCase(), status.autonomous_status?.status === 'healthy' ? 'success' : (status.autonomous_status?.status === 'warning' ? 'warn' : 'error'));
+            pill(byId('queue-pill'), 'Fonte: ' + (tasks.source || 'n/d'), 'success');
+
+            state.agents = agents.agents || [];
+            state.commands = messages.commands || [];
+            state.messages = messages.messages || [];
+            state.responses = messages.responses || [];
+            if (!state.agents.find(agent => agent.id === state.selectedAgent) && state.agents[0]) {
+                state.selectedAgent = state.agents[0].id;
+            }
+
+            pill(byId('agents-pill'), state.agents.length + ' agentes', 'success');
+            renderAgents();
+            renderThread();
+            renderQueue(tasks.tasks || [], tasks.source || null);
+            renderEvents(state.commands.concat(state.responses));
+            pill(byId('chat-pill'), 'Online', 'success');
+        } catch (error) {
+            pill(byId('overall-pill'), 'Falha', 'error');
+            pill(byId('chat-pill'), 'Falha', 'error');
+            byId('events-log').textContent = String(error);
+        }
+    }
+
+    byId('thread-form').addEventListener('submit', async function(event){
+        event.preventDefault();
+        const message = byId('thread-message').value.trim();
+        if (!message) return;
+        const agentId = state.selectedAgent;
+        byId('thread-message').value = '';
+        try{
+            await readJson('/api/monitor/api.php?action=send-command', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({agent_id: agentId, message: message, source: 'central-agentes'})
+            });
+            await loadAll();
+        } catch (error) {
+            alert('Falha ao enviar comando: ' + error.message);
+        }
+    });
+
+    byId('refresh-all').addEventListener('click', loadAll);
+    byId('generate-tasks').addEventListener('click', async function(){
+        try{
+            const result = await readJson('/api/monitor/api.php?action=generate-tasks', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({source: 'central-agentes'})
+            });
+            alert(result.message || 'Geração executada.');
+            await loadAll();
+        } catch (error) {
+            alert('Falha ao gerar tarefas: ' + error.message);
+        }
+    });
+
+    loadAll();
+    setInterval(loadAll, 15000);
 })();
 </script>
 </body>

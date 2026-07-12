@@ -1,161 +1,187 @@
 #!/usr/bin/env python3
 """
-Auto Task Generator - Agentes criam tarefas autonomamente
-Analisa projeto e sugere novas features/melhorias
+Auto Task Generator - gera novas tarefas reais a partir de sinais do projeto
+e, quando disponivel, complementa com sugestoes de IA.
 """
 import json
-import subprocess
 import os
-import sys
+import re
+import subprocess
+from pathlib import Path
+
 from task_queue_lib import load_queue, save_queue, upsert_task
 
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def read_json(path: Path, default):
+    if not path.exists():
+        return default
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        return data if isinstance(data, type(default)) else default
+    except Exception:
+        return default
+
+
+def project_signal_tasks():
+    signals = []
+    health = read_json(ROOT / 'logs' / 'system-health-check.json', {})
+    cycle = read_json(ROOT / 'logs' / 'autonomous-cycle-report.json', {})
+    tri = read_json(ROOT / 'logs' / 'tri-environment-sync.json', {})
+    deploy = read_json(ROOT / 'logs' / 'deploy-diagnostic.json', {})
+    catalog = read_json(ROOT / 'api' / 'catalog' / 'fallback-products.json', [])
+
+    if health.get('status') not in (None, 'HEALTHY'):
+        signals.append({
+            "title": "Resolver anomalias reais detectadas no health check",
+            "description": "Investigar e corrigir erros ou warnings apontados em logs/system-health-check.json para manter a operacao autonoma estavel.",
+            "priority": "high",
+        })
+
+    if cycle.get('selection', {}).get('mode') == 'idle':
+        signals.append({
+            "title": "Gerar backlog autonomo novo quando a fila entrar em idle",
+            "description": "O ciclo autonomo entrou em idle. Criar missoes seguras e executaveis com base em sinais reais do projeto para manter evolucao continua.",
+            "priority": "high",
+        })
+
+    if tri and tri.get('status') not in ('healthy', 'warning'):
+        signals.append({
+            "title": "Restaurar telemetria triambiente no monitor operacional",
+            "description": "Corrigir ou repopular o status de sincronizacao entre local, GitHub e Ubuntu para devolver visibilidade real ao monitor.",
+            "priority": "high",
+        })
+
+    if deploy.get('ok') is False:
+        signals.append({
+            "title": "Corrigir falhas concretas do validador de deploy",
+            "description": "Tratar os problemas apontados em logs/deploy-diagnostic.json para impedir deploy com erro silencioso.",
+            "priority": "high",
+        })
+
+    if isinstance(catalog, list):
+        no_image = sum(
+            1 for item in catalog
+            if isinstance(item, dict) and str(item.get('image_url', '')).strip() in ('', '/favicon.ico')
+        )
+        if no_image > 0:
+            signals.append({
+                "title": "Reparar produtos reais do catalogo sem imagem valida",
+                "description": f"Foram encontrados {no_image} produtos sem imagem valida no catalogo fallback; revisar cobertura visual desses SKUs.",
+                "priority": "high",
+            })
+
+    return signals[:8]
+
+
 def get_gemini_suggestions():
-    """Gemini analisa projeto e sugere tarefas"""
     try:
         import google.generativeai as genai
 
-        genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+        api_key = os.getenv('GEMINI_API_KEY', '').strip()
+        if not api_key:
+            return None
+
+        genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-1.5-flash')
+        prompt = """Voce esta analisando o projeto ShopVivaliz.
 
-        prompt = """Você é um arquiteto de software analisando um ecommerce ShopVivaliz.
+Considere que a fila precisa de tarefas novas, seguras e executaveis.
+Retorne ate 3 tarefas reais que aumentem conversao, confiabilidade ou observabilidade.
 
-Analize o que já foi implementado e sugira 3 novas tarefas/features de ALTA PRIORIDADE que faltam:
-
-Já implementado:
-- Filtro de preço 
-- Em desenvolvimento: Carrinho persistente
-
-Requisitos:
-- Features que aumentem conversão
-- Melhorias de UX/performance
-- Integrações importantes
-
-Retorne JSON com:
+Formato JSON:
 {
   "tasks": [
-    {"title": "...", "description": "...", "priority": "high"},
-    ...
+    {"title": "...", "description": "...", "priority": "high"}
   ]
-}
-
-Seja específico e técnico."""
-
+}"""
         response = model.generate_content(prompt)
         return response.text
-    except Exception as e:
-        print(f" Gemini error: {e}")
+    except Exception as exc:
+        print(f"Gemini error: {exc}")
         return None
 
+
 def get_claude_analysis():
-    """Claude valida e refina as sugestões"""
     try:
         from anthropic import Anthropic
+
+        if not os.getenv('ANTHROPIC_API_KEY', '').strip():
+            return None
 
         client = Anthropic()
         message = client.messages.create(
             model="claude-3-5-sonnet-20241022",
             max_tokens=1024,
-            messages=[
-                {
-                    "role": "user",
-                    "content": """Você é um revisor técnico. Analise o ShopVivaliz ecommerce.
-
-Que features CRÍTICAS faltam para um ecommerce estar pronto para produção?
-
-Priorize:
-1. Segurança
-2. Conversão
-3. Performance
-4. Conformidade legal
-
-Retorne JSON com 2-3 tarefas URGENTES."""
-                }
-            ]
+            messages=[{
+                "role": "user",
+                "content": """Analise o ecommerce ShopVivaliz e retorne ate 3 tarefas urgentes, seguras e auditaveis.
+Priorize operacao, monitoramento, checkout e marketplace.
+Responda em JSON no formato {"tasks":[...]}."""
+            }],
         )
         return message.content[0].text
-    except Exception as e:
-        print(f" Claude error: {e}")
+    except Exception as exc:
+        print(f"Claude error: {exc}")
         return None
 
-def parse_and_create_tasks(suggestions):
-    """Extrai tarefas e cria na fila"""
-    queue_data = load_queue()
 
-    # Extrair JSON das sugestões
+def parse_tasks_blob(blob):
+    if not blob:
+        return []
     try:
-        import re
-        json_match = re.search(r'\{.*\}', suggestions, re.DOTALL)
-        if json_match:
-            tasks_data = json.loads(json_match.group())
-            new_tasks = tasks_data.get('tasks', [])
-        else:
-            print(" Nenhuma sugestão estruturada recebida")
-            return 0
-    except json.JSONDecodeError:
-        print(" Erro ao parsear JSON das sugestões")
-        return 0
+        match = re.search(r'\{.*\}', blob, re.DOTALL)
+        if not match:
+            return []
+        payload = json.loads(match.group())
+        tasks = payload.get('tasks', [])
+        return tasks if isinstance(tasks, list) else []
+    except Exception:
+        return []
 
-    # Adicionar à fila
+
+def append_tasks(task_rows, source):
+    queue = load_queue()
     created = 0
-    for task_data in new_tasks:
-        if len(queue_data['queue']) >= 20:  # Limite de 20 tarefas
-            break
-
+    for task_data in task_rows:
         new_task = {
             "title": task_data.get('title', ''),
             "description": task_data.get('description', ''),
             "priority": task_data.get('priority', 'medium'),
             "status": "pending",
             "auto_generated": True,
-            "source": "auto-task-generator",
+            "source": source,
         }
-
-        task_record, created_now = upsert_task(queue_data, new_task)
-        if not created_now:
-            continue
-        created += 1
-
-        print(f" Tarefa criada: {task_record.get('id')} - {task_data.get('title')}")
-
-    # Salvar fila atualizada
-    save_queue(queue_data)
-
+        _, created_now = upsert_task(queue, new_task)
+        if created_now:
+            created += 1
+    save_queue(queue)
     return created
 
+
 def main():
-    print(" Auto Task Generator - Agentes sugerindo novas tarefas\n")
+    print("Auto Task Generator - criando tarefas autonomamente")
 
-    # Gemini sugere
-    print("  Gemini analisando projeto...")
-    gemini_suggestions = get_gemini_suggestions()
+    real_created = append_tasks(project_signal_tasks(), 'real-project-signals')
+    print(f"{real_created} tarefas criadas a partir de sinais reais")
 
-    if gemini_suggestions:
-        print(" Gemini forneceu sugestões")
-        created = parse_and_create_tasks(gemini_suggestions)
-        print(f" {created} tarefas criadas por Gemini\n")
+    gemini_created = append_tasks(parse_tasks_blob(get_gemini_suggestions()), 'auto-task-generator-gemini')
+    if gemini_created:
+        print(f"{gemini_created} tarefas criadas por Gemini")
 
-    # Claude valida
-    print("  Claude validando...")
-    claude_analysis = get_claude_analysis()
+    claude_created = append_tasks(parse_tasks_blob(get_claude_analysis()), 'auto-task-generator-claude')
+    if claude_created:
+        print(f"{claude_created} tarefas criadas por Claude")
 
-    if claude_analysis:
-        print(" Claude forneceu análise")
-        created = parse_and_create_tasks(claude_analysis)
-        print(f" {created} tarefas criadas por Claude\n")
+    total_created = real_created + gemini_created + claude_created
+    print(f"Total de tarefas novas: {total_created}")
 
-    # Commit automático
     try:
         subprocess.run(["git", "add", "tasks-queue.json", "logs/tasks-queue.json"], check=True)
-        subprocess.run([
-            "git", "commit", "-m",
-            "feat: Trio IA gerou novas tarefas autonomamente\n\nAgentes analisaram o projeto e sugeriram melhorias."
-        ], check=True)
-        subprocess.run(["git", "push", "origin", "HEAD"], check=True)
-        print(" Tarefas commitadas e enviadas ao repositório")
-    except Exception as e:
-        print(f"  Erro ao fazer commit: {e}")
+    except Exception as exc:
+        print(f"Git add warning: {exc}")
 
-    print("\n Sistema de auto-geração de tarefas operacional!")
 
 if __name__ == "__main__":
     main()
