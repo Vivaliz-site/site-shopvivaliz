@@ -27381,3 +27381,63 @@ Fast-forward
  create mode 100644 shopvivaliz-mcp-server.py
 [2026-07-12 08:39:22] ✅ Git pull OK
 [2026-07-12 08:39:22] 📝 Commitando mudanças...
+[main fb438f73] auto: sincronizar 2026-07-12 08:39:22
+ 1 file changed, 126 insertions(+)
+[2026-07-12 08:39:22] ✅ Commit OK
+[2026-07-12 08:39:22] 📤 Enviando 1 commit(s)...
+To https://github.com/Vivaliz-site/site-shopvivaliz.git
+   27f4da7a..fb438f73  main -> main
+[2026-07-12 08:39:24] ✅ Push OK
+[2026-07-12 08:39:24] ✅ Ciclo concluído
+[2026-07-12 08:39:24] ⏰ Próximo em 5 minutos...
+[2026-07-12 08:44:24] 
+[2026-07-12 08:44:24] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-07-12 08:44:24] 🔄 Sincronizando secrets do GitHub...
+============================================================
+🔐 ShopVivaliz - Sincronizador de Secrets (Linux/macOS)
+============================================================
+
+Verificando GitHub CLI...
+✓ GitHub CLI encontrado
+
+📝 Gerando .env.local...
+✓ Criado: /home/ubuntu/site-shopvivaliz/.env.local
+
+============================================================
+✅ SINCRONIZAÇÃO CONCLUÍDA!
+============================================================
+
+Próximos passos:
+  1. Validar secrets: python3 scripts/validar_secrets.py
+  2. Ativar auto-sync: bash scripts/auto_sync_git.ps1
+
+[2026-07-12 08:44:24] ✅ Secrets sincronizados com sucesso
+[SECURITY] ShopVivaliz - Validador de Secrets
+============================================================
+
+[ERROR] ERRO - Secrets obrigatórios faltando:
+
+  ❌ ANTHROPIC_API_KEY (Claude API) - AUSENTE
+  ❌ SHOPEE_PARTNER_ID (Shopee Partner ID) - AUSENTE
+  ❌ SHOPEE_PARTNER_KEY (Shopee Partner Key) - AUSENTE
+
+📝 Solução:
+  1. Copie .env.example para .env.local
+  2. Preencha os valores reais em .env.local
+  3. Execute este validador novamente
+
+  Variáveis obrigatórias:
+    • ANTHROPIC_API_KEY: Claude API
+    • SHOPEE_PARTNER_ID: Shopee Partner ID
+    • SHOPEE_PARTNER_KEY: Shopee Partner Key
+    • FTP_SERVER: FTP Server
+    • FTP_USERNAME: FTP Username
+    • FTP_PASSWORD: FTP Password
+    • MAIL_PASS: Email Password
+[2026-07-12 08:44:24] ⚠️  Validação teve aviso (continuando...)
+[2026-07-12 08:44:24] 🔄 Sincronizando repositório...
+From https://github.com/Vivaliz-site/site-shopvivaliz
+ * branch              main       -> FETCH_HEAD
+Already up to date.
+[2026-07-12 08:44:25] ✅ Git pull OK
+[2026-07-12 08:44:25] 📝 Commitando mudanças...
