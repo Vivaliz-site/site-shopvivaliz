@@ -57,5 +57,13 @@
       "auto_push": false,
       "allow_push_to_main": false
     }
+  },
+  "triad_sync": {
+    "ubuntu_server": {
+      "host": "137.131.156.17",
+      "user": "ubuntu",
+      "repo_path": "/home/ubuntu/site-shopvivaliz",
+      "ssh_key_windows": "C:\\Users\\FRED\\Downloads\\ssh-key-2026-07-04.key"
+    }
   }
 }
