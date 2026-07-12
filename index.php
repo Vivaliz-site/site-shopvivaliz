@@ -250,7 +250,7 @@ $svNavCurrent = '';
 
     <title>Vivaliz | Loja Online</title>
 
-    <link rel="stylesheet" href="/css/style.css?v=2026-07-12-FIX">
+    <link rel="stylesheet" href="/css/style.css?v=2026-07-12-FIX-2">
     <link rel="stylesheet" href="/css/category-images.css?v=2026-07-10-1130-WILDCARD-FIX">
     <link rel="stylesheet" href="/css/visual-enhancements.css?v=2026-07-10-1130-WILDCARD-FIX">
     <link rel="stylesheet" href="/css/visual-improvements-2026.css?v=2026-07-10-1130-WILDCARD-FIX">
