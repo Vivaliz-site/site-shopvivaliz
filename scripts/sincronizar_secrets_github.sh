@@ -1,99 +1,91 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# Sincronizador de Secrets do GitHub (Linux/macOS)
-# ================================================
+# ShopVivaliz - gerador seguro de .env.local
 #
-# Sincroniza secrets do GitHub Actions para .env.local
-# Funciona em Ubuntu, macOS, Cloud, etc.
-#
-# Uso:
-#   bash scripts/sincronizar_secrets_github.sh
-#
-# Requer:
-#   - GitHub CLI (gh) instalado e autenticado
+# Este script nao le secrets do GitHub, porque o GitHub CLI nao permite
+# recuperar valores secretos. Ele cria um .env.local a partir do ambiente
+# atual, mantendo campos sensiveis vazios quando nao estiverem definidos.
 
-set -e
+set -euo pipefail
 
 echo "============================================================"
-echo "🔐 ShopVivaliz - Sincronizador de Secrets (Linux/macOS)"
+echo "ShopVivaliz - Gerador seguro de .env.local"
 echo "============================================================"
 echo ""
 
-# Verificar gh CLI
-echo "Verificando GitHub CLI..."
-if ! command -v gh &> /dev/null; then
-    echo "❌ GitHub CLI (gh) não está instalado!"
-    echo "   Instale com: https://cli.github.com"
-    exit 1
-fi
+env_or_default() {
+  local key="$1"
+  local fallback="${2:-}"
+  local value="${!key:-}"
+  if [ -n "$value" ]; then
+    printf '%s' "$value"
+  else
+    printf '%s' "$fallback"
+  fi
+}
 
-echo "✓ GitHub CLI encontrado"
-echo ""
+MAIL_HOST_VALUE="$(env_or_default MAIL_HOST smtp.titan.email)"
+MAIL_PORT_VALUE="$(env_or_default MAIL_PORT 465)"
+MAIL_USER_VALUE="$(env_or_default MAIL_USER agentes@shopvivaliz.com.br)"
+MAIL_PASS_VALUE="$(env_or_default MAIL_PASS)"
 
-# Criar .env.local
-echo "📝 Gerando .env.local..."
-
-cat > .env.local << 'EOF'
-# ShopVivaliz - Secrets do GitHub
-# Gerado automaticamente via: bash scripts/sincronizar_secrets_github.sh
-# NÃO COMMITAR ESTE ARQUIVO!
+cat > .env.local <<EOF
+# ShopVivaliz - ambiente local
+# Gerado por: bash scripts/sincronizar_secrets_github.sh
+# Nao commitar este arquivo.
 
 # Banco de Dados
-DB_HOST=localhost
-DB_PORT=3306
-DB_NAME=shopv506_shopvivaliz
-DB_USER=claude
-DB_PASS=
+DB_HOST=$(env_or_default DB_HOST localhost)
+DB_PORT=$(env_or_default DB_PORT 3306)
+DB_NAME=$(env_or_default DB_NAME)
+DB_USER=$(env_or_default DB_USER)
+DB_PASS=$(env_or_default DB_PASS)
 
 # FTP Deploy
-FTP_SERVER=ftp.shopvivaliz.com.br
-FTP_USERNAME=dev5@dev.shopvivaliz.com.br
-FTP_PASSWORD=I#FQ1;m8{1g?
-FTP_PORT=21
-FTP_REMOTE_DIR=/home1/shop506/public_html/dev
+FTP_SERVER=$(env_or_default FTP_SERVER)
+FTP_USERNAME=$(env_or_default FTP_USERNAME)
+FTP_PASSWORD=$(env_or_default FTP_PASSWORD)
+FTP_PORT=$(env_or_default FTP_PORT 21)
+FTP_REMOTE_DIR=$(env_or_default FTP_REMOTE_DIR)
 
-# Email SMTP (Titan)
-MAIL_HOST=smtp.titan.email
-MAIL_PORT=465
-MAIL_USER=agentes@shopvivaliz.com.br
-MAIL_PASS=Chagosnik@13
+# Email SMTP
+MAIL_HOST=$MAIL_HOST_VALUE
+MAIL_PORT=$MAIL_PORT_VALUE
+MAIL_USER=$MAIL_USER_VALUE
+MAIL_PASS=$MAIL_PASS_VALUE
 
-# Email (aliases)
-EMAIL_SMTP_HOST=smtp.titan.email
-EMAIL_SMTP_PORT=465
-EMAIL_USER=agentes@shopvivaliz.com.br
-EMAIL_PASSWORD=Chagosnik@13
+# Email SMTP - aliases aceitos pelos workflows/scripts
+SMTP_HOST=$(env_or_default SMTP_HOST "$MAIL_HOST_VALUE")
+SMTP_PORT=$(env_or_default SMTP_PORT "$MAIL_PORT_VALUE")
+SMTP_USER=$(env_or_default SMTP_USER "$MAIL_USER_VALUE")
+SMTP_PASS=$(env_or_default SMTP_PASS "$MAIL_PASS_VALUE")
+EMAIL_SMTP_HOST=$(env_or_default EMAIL_SMTP_HOST "$MAIL_HOST_VALUE")
+EMAIL_SMTP_PORT=$(env_or_default EMAIL_SMTP_PORT "$MAIL_PORT_VALUE")
+EMAIL_USER=$(env_or_default EMAIL_USER "$MAIL_USER_VALUE")
+EMAIL_PASSWORD=$(env_or_default EMAIL_PASSWORD "$MAIL_PASS_VALUE")
+EMAIL_FROM=$(env_or_default EMAIL_FROM "$MAIL_USER_VALUE")
+EMAIL_TO=$(env_or_default EMAIL_TO "fredmourao@gmail.com,atendimento@shopvivaliz.com.br")
 
-# APIs de IA - Sincronizadas do GitHub Secrets
-ANTHROPIC_API_KEY=
-GEMINI_API_KEY=
-OPENAI_API_KEY=
+# APIs de IA
+ANTHROPIC_API_KEY=$(env_or_default ANTHROPIC_API_KEY)
+GEMINI_API_KEY=$(env_or_default GEMINI_API_KEY)
+OPENAI_API_KEY=$(env_or_default OPENAI_API_KEY)
 
-# Shopee - Sincronizadas do GitHub Secrets
-SHOPEE_PARTNER_ID=
-SHOPEE_PARTNER_KEY=
-SHOPEE_SHOP_ID=
-SHOPEE_ACCESS_TOKEN=
-SHOPEE_REFRESH_TOKEN=
-
-# Integrações
-OLIST_ACCESS_TOKEN=
-TIKTOK_ACCESS_TOKEN=
-MELHORENVIO_ACCESS_TOKEN=
+# Marketplaces e integracoes
+SHOPEE_PARTNER_ID=$(env_or_default SHOPEE_PARTNER_ID)
+SHOPEE_PARTNER_KEY=$(env_or_default SHOPEE_PARTNER_KEY)
+SHOPEE_SHOP_ID=$(env_or_default SHOPEE_SHOP_ID)
+SHOPEE_ACCESS_TOKEN=$(env_or_default SHOPEE_ACCESS_TOKEN)
+SHOPEE_REFRESH_TOKEN=$(env_or_default SHOPEE_REFRESH_TOKEN)
+OLIST_ACCESS_TOKEN=$(env_or_default OLIST_ACCESS_TOKEN)
+TIKTOK_ACCESS_TOKEN=$(env_or_default TIKTOK_ACCESS_TOKEN)
+MELHORENVIO_ACCESS_TOKEN=$(env_or_default MELHORENVIO_ACCESS_TOKEN)
 
 # Ambiente
-APP_ENV=development
-APP_DEBUG=true
-APP_URL=https://dev.shopvivaliz.com.br
+APP_ENV=$(env_or_default APP_ENV development)
+APP_DEBUG=$(env_or_default APP_DEBUG true)
+APP_URL=$(env_or_default APP_URL https://dev.shopvivaliz.com.br)
 EOF
 
-echo "✓ Criado: $(pwd)/.env.local"
-echo ""
-echo "============================================================"
-echo "✅ SINCRONIZAÇÃO CONCLUÍDA!"
-echo "============================================================"
-echo ""
-echo "Próximos passos:"
-echo "  1. Validar secrets: python3 scripts/validar_secrets.py"
-echo "  2. Ativar auto-sync: bash scripts/auto_sync_git.ps1"
-echo ""
+echo "Criado: $(pwd)/.env.local"
+echo "OK: nenhum segredo real foi gravado no script."

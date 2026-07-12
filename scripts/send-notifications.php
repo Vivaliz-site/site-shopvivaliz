@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/mailer.php';
 /**
  * Notificador de Impedimentos - Trio IA
  * Envia emails quando há bloqueios ou erros
@@ -11,7 +12,7 @@ class TriaNotifier {
 
     public function __construct() {
         $this->emailTo = getenv('EMAIL_TO') ?: getenv('NOTIFY_EMAIL_TO') ?: '';
-        $this->emailFrom = getenv('EMAIL_FROM') ?: getenv('EMAIL_USER') ?: 'trio-ia@shopvivaliz.com.br';
+        $this->emailFrom = getenv('EMAIL_FROM') ?: getenv('SMTP_USER') ?: getenv('EMAIL_USER') ?: getenv('MAIL_USER') ?: 'trio-ia@shopvivaliz.com.br';
         $this->logFile = __DIR__ . '/../logs/notifications.log';
         @mkdir(dirname($this->logFile), 0755, true);
     }
@@ -128,7 +129,11 @@ class TriaNotifier {
         $this->log($type, $title, $subject);
 
         // Enviar email (usar função mail do PHP ou SMTP)
-        $result = @mail($this->emailTo, $subject, $body, $headerStr);
+        if (function_exists('send_email')) {
+            $result = send_email($this->emailTo, $subject, $body);
+        } else {
+            $result = @mail($this->emailTo, $subject, $body, $headerStr);
+        }
 
         if ($result) {
             $this->log($type, $title, 'Email enviado com sucesso');
@@ -143,6 +148,12 @@ class TriaNotifier {
      * Construir corpo do email
      */
     private function buildEmailBody($data) {
+        foreach (['title', 'description', 'error', 'task_id', 'action_required', 'status_url', 'timestamp'] as $key) {
+            if (isset($data[$key]) && !is_array($data[$key])) {
+                $data[$key] = htmlspecialchars((string)$data[$key], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            }
+        }
+
         $type = $data['type'] ?? 'info';
 
         $html = <<<HTML

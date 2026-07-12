@@ -7,13 +7,13 @@
 function get_mailer_config(): array
 {
     return [
-        'from_email' => getenv('EMAIL_FROM') ?: getenv('MAIL_USER') ?: 'agentes@shopvivaliz.com.br',
+        'from_email' => getenv('EMAIL_FROM') ?: getenv('SMTP_USER') ?: getenv('EMAIL_USER') ?: getenv('MAIL_USER') ?: 'agentes@shopvivaliz.com.br',
         'from_name' => 'ShopVivaliz',
-        'smtp_host' => getenv('MAIL_HOST') ?: getenv('EMAIL_SMTP_HOST') ?: 'smtp.titan.email',
-        'smtp_port' => (int)(getenv('MAIL_PORT') ?: getenv('EMAIL_SMTP_PORT') ?: 465),
-        'smtp_user' => getenv('MAIL_USER') ?: getenv('EMAIL_USER') ?: 'agentes@shopvivaliz.com.br',
-        'smtp_pass' => getenv('MAIL_PASS') ?: getenv('EMAIL_PASSWORD') ?: '',
-        'smtp_secure' => 'ssl',
+        'smtp_host' => getenv('SMTP_HOST') ?: getenv('EMAIL_SMTP_HOST') ?: getenv('MAIL_HOST') ?: 'smtp.titan.email',
+        'smtp_port' => (int)(getenv('SMTP_PORT') ?: getenv('EMAIL_SMTP_PORT') ?: getenv('MAIL_PORT') ?: 465),
+        'smtp_user' => getenv('SMTP_USER') ?: getenv('EMAIL_USER') ?: getenv('MAIL_USER') ?: 'agentes@shopvivaliz.com.br',
+        'smtp_pass' => getenv('SMTP_PASS') ?: getenv('EMAIL_PASSWORD') ?: getenv('MAIL_PASS') ?: '',
+        'smtp_secure' => ((int)(getenv('SMTP_PORT') ?: getenv('EMAIL_SMTP_PORT') ?: getenv('MAIL_PORT') ?: 465) === 465) ? 'ssl' : 'tls',
     ];
 }
 
@@ -45,6 +45,7 @@ function send_email_phpmailer(
         $mail->Port = $config['smtp_port'];
         $mail->SMTPSecure = $config['smtp_secure'];
         $mail->SMTPAuth = true;
+        $mail->Timeout = 30;
         $mail->Username = $config['smtp_user'];
         $mail->Password = $config['smtp_pass'];
 

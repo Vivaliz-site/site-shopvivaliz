@@ -21,8 +21,8 @@ class AnalyticsTracking {
             'name' => 'page_view',
             'params' => [
                 'page_title' => $page_title,
-                'page_location' => $_SERVER['HTTP_HOST'] . $page_path,
-                'page_referrer' => $_SERVER['HTTP_REFERER'] ?? '',
+                'page_location' => $this->buildAbsoluteUrl($page_path),
+                'page_referrer' => (string)($_SERVER['HTTP_REFERER'] ?? ''),
             ]
         ];
     }
@@ -80,6 +80,7 @@ class AnalyticsTracking {
             'name' => 'search',
             'params' => [
                 'search_term' => $search_term,
+                'results_count' => (int)$results_count,
             ]
         ];
     }
@@ -112,6 +113,11 @@ class AnalyticsTracking {
     }
 
     private function sendToGA4() {
+        $ga4Secret = getenv('GA4_SECRET') ?: '';
+        if ($this->ga4_id === '' || $this->ga4_id === 'G-XXXXXXXXXX' || $ga4Secret === '') {
+            return;
+        }
+
         $payload = [];
 
         foreach ($this->events as $event) {
@@ -120,7 +126,7 @@ class AnalyticsTracking {
                 'params' => array_merge(
                     $event['params'],
                     [
-                        'session_id' => session_id(),
+                        'session_id' => $this->getSessionId(),
                         'timestamp_micros' => (int)(microtime(true) * 1000000),
                         'user_id' => $this->getUserId(),
                     ]
@@ -138,7 +144,7 @@ class AnalyticsTracking {
                 'events' => $payload,
             ]),
             CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-            CURLOPT_URL => "https://www.google-analytics.com/mp/collect?measurement_id={$this->ga4_id}&api_secret=" . getenv('GA4_SECRET', true)
+            CURLOPT_URL => "https://www.google-analytics.com/mp/collect?measurement_id={$this->ga4_id}&api_secret={$ga4Secret}"
         ]);
 
         curl_exec($ch);
@@ -147,7 +153,10 @@ class AnalyticsTracking {
 
     private function sendToFacebookPixel() {
         // Facebook Conversion API
-        $accessToken = getenv('FACEBOOK_ACCESS_TOKEN');
+        $accessToken = getenv('FACEBOOK_ACCESS_TOKEN') ?: '';
+        if ($this->facebook_pixel === '' || $accessToken === '') {
+            return;
+        }
 
         foreach ($this->events as $event) {
             $facebookEvent = $this->mapToFacebookEvent($event['name']);
@@ -161,8 +170,8 @@ class AnalyticsTracking {
                         'event_time' => time(),
                         'action_source' => 'website',
                         'user_data' => [
-                            'em' => hash('sha256', $_SESSION['user_email'] ?? ''),
-                            'ph' => hash('sha256', $_SESSION['user_phone'] ?? ''),
+                            'em' => hash('sha256', (string)($_SESSION['user_email'] ?? '')),
+                            'ph' => hash('sha256', (string)($_SESSION['user_phone'] ?? '')),
                         ],
                         'custom_data' => $event['params'],
                     ]
@@ -185,7 +194,10 @@ class AnalyticsTracking {
 
     private function sendToTikTokPixel() {
         // TikTok Pixel
-        $accessToken = getenv('TIKTOK_PIXEL_TOKEN');
+        $accessToken = getenv('TIKTOK_PIXEL_TOKEN') ?: '';
+        if ($this->tiktok_pixel === '' || $accessToken === '') {
+            return;
+        }
 
         foreach ($this->events as $event) {
             $tiktokEvent = $this->mapToTikTokEvent($event['name']);
@@ -201,7 +213,7 @@ class AnalyticsTracking {
                         'external_id' => $this->getUserId(),
                     ],
                     'page' => [
-                        'url' => 'https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'],
+                        'url' => $this->buildAbsoluteUrl((string)($_SERVER['REQUEST_URI'] ?? '/')),
                     ]
                 ],
                 'properties' => $event['params'],
@@ -250,17 +262,46 @@ class AnalyticsTracking {
     private function getClientId() {
         if (empty($_COOKIE['_ga'])) {
             $_COOKIE['_ga'] = bin2hex(random_bytes(8));
-            setcookie('_ga', $_COOKIE['_ga'], time() + 63072000);
+            setcookie('_ga', $_COOKIE['_ga'], [
+                'expires' => time() + 63072000,
+                'path' => '/',
+                'secure' => $this->isHttps(),
+                'httponly' => false,
+                'samesite' => 'Lax',
+            ]);
         }
         return $_COOKIE['_ga'];
+    }
+
+    private function getSessionId() {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            return session_id();
+        }
+
+        return $this->getClientId();
     }
 
     private function getUserId() {
         return $_SESSION['user_id'] ?? $this->getClientId();
     }
 
+    private function buildAbsoluteUrl($path) {
+        $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
+        $normalizedPath = '/' . ltrim((string)$path, '/');
+        return ($this->isHttps() ? 'https://' : 'http://') . $host . $normalizedPath;
+    }
+
+    private function isHttps() {
+        $https = strtolower((string)($_SERVER['HTTPS'] ?? ''));
+        $forwarded = strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+        return $https === 'on' || $https === '1' || $forwarded === 'https';
+    }
+
     public function getTrackingCode() {
-        return <<<JS
+        $blocks = [];
+
+        if ($this->ga4_id !== '' && $this->ga4_id !== 'G-XXXXXXXXXX') {
+            $blocks[] = <<<JS
 <!-- GA4 -->
 <script async src="https://www.googletagmanager.com/gtag/js?id={$this->ga4_id}"></script>
 <script>
@@ -272,7 +313,11 @@ class AnalyticsTracking {
     'cookie_flags': 'SameSite=None;Secure'
   });
 </script>
+JS;
+        }
 
+        if ($this->facebook_pixel !== '') {
+            $blocks[] = <<<JS
 <!-- Facebook Pixel -->
 <script>
   !function(f,b,e,v,n,t,s)
@@ -288,7 +333,11 @@ class AnalyticsTracking {
 </script>
 <noscript><img height="1" width="1" style="display:none"
   src="https://www.facebook.com/tr?id={$this->facebook_pixel}&ev=PageView&noscript=1" /></noscript>
+JS;
+        }
 
+        if ($this->tiktok_pixel !== '') {
+            $blocks[] = <<<JS
 <!-- TikTok Pixel -->
 <script>
   !function (w, d, t) {
@@ -298,6 +347,9 @@ class AnalyticsTracking {
   ttq.track('PageView');
 </script>
 JS;
+        }
+
+        return implode("\n\n", $blocks);
     }
 }
 
@@ -321,8 +373,16 @@ function track_purchase($order) {
     $GLOBALS['analytics']->trackPurchase($order);
 }
 
+function track_search($searchTerm, $resultsCount = 0) {
+    $GLOBALS['analytics']->trackSearch($searchTerm, $resultsCount);
+}
+
 function send_analytics() {
     $GLOBALS['analytics']->sendEvents();
+}
+
+function get_tracking_code() {
+    return $GLOBALS['analytics']->getTrackingCode();
 }
 
 // Auto-send on shutdown

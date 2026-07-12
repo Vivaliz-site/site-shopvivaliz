@@ -46,10 +46,22 @@ jobs:
       - name: Validate PHP syntax
         run: |
           set -e
-          find . -type f -name '*.php' \
+          found=0
+          while IFS= read -r -d '' file; do
+            found=1
+            echo "::group::php -l $file"
+            if ! php -l "$file"; then
+              echo "::error file=$file::PHP lint failed"
+              exit 1
+            fi
+            echo "::endgroup::"
+          done < <(find . -type f -name '*.php' \
             -not -path './vendor/*' \
             -not -path './node_modules/*' \
-            -print0 | xargs -0 -n1 php -l
+            -print0)
+          if [ "$found" -eq 0 ]; then
+            echo "No PHP files found."
+          fi
 
   quality-gates:
     runs-on: ubuntu-latest

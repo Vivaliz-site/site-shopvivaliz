@@ -1,8 +1,6 @@
 <?php
 declare(strict_types=1);
 
-header('Content-Type: text/html; charset=UTF-8');
-
 require_once __DIR__ . '/config/bootstrap-env.php';
 
 // Configuração Dinâmica de Ambiente
@@ -20,6 +18,55 @@ function sv_home_esc(string $value): string
 function sv_home_default_image(): string
 {
     return '/images/logo-vivaliz-square.png';
+}
+
+function sv_home_catalog_source_rows(): array
+{
+    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
+    if (is_file($jsonPath) && is_readable($jsonPath)) {
+        $decoded = json_decode((string)file_get_contents($jsonPath), true);
+        if (is_array($decoded) && $decoded !== []) {
+            return $decoded;
+        }
+    }
+
+    $csvPath = __DIR__ . '/uploads/olist_imagens_site_mapeamento.csv';
+    if (!is_file($csvPath) || !is_readable($csvPath)) {
+        return [];
+    }
+
+    $rows = [];
+    $handle = fopen($csvPath, 'r');
+    if (!$handle) {
+        return [];
+    }
+
+    $header = fgetcsv($handle);
+    if (!is_array($header)) {
+        fclose($handle);
+        return [];
+    }
+
+    while (($line = fgetcsv($handle)) !== false) {
+        if (!is_array($line) || $line === []) {
+            continue;
+        }
+        $assoc = [];
+        foreach ($header as $i => $column) {
+            $key = trim((string)$column);
+            if ($key === '') {
+                continue;
+            }
+            $assoc[$key] = $line[$i] ?? '';
+        }
+        if (($assoc['image_url'] ?? '') === '') {
+            continue;
+        }
+        $rows[] = $assoc;
+    }
+
+    fclose($handle);
+    return $rows;
 }
 
 function sv_home_money(float $value): string
@@ -48,23 +95,13 @@ function sv_home_contact_url(array $product): string
 
 function sv_home_featured_products(int $limit = 8): array
 {
-    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
-    if (!is_file($jsonPath) || !is_readable($jsonPath)) {
-        return [];
-    }
-
-    $decoded = json_decode((string)file_get_contents($jsonPath), true);
-    if (!is_array($decoded)) {
-        return [];
-    }
-
     $products = [];
-    foreach ($decoded as $row) {
+    foreach (sv_home_catalog_source_rows() as $row) {
         if (!is_array($row)) {
             continue;
         }
 
-        $image = trim((string)($row['image_url'] ?? ''));
+        $image = trim((string)($row['image_url'] ?? $row['image'] ?? ''));
         if ($image === '') {
             continue;
         }
@@ -90,13 +127,7 @@ function sv_home_featured_products(int $limit = 8): array
 
 function sv_home_catalog_count(): int
 {
-    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
-    if (!is_file($jsonPath) || !is_readable($jsonPath)) {
-        return 0;
-    }
-
-    $decoded = json_decode((string)file_get_contents($jsonPath), true);
-    return is_array($decoded) ? count($decoded) : 0;
+    return count(sv_home_catalog_source_rows());
 }
 
 function sv_home_banners(): array
@@ -167,18 +198,8 @@ function sv_home_category_icon(string $category): string
 
 function sv_home_top_categories(int $limit = 8): array
 {
-    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
-    if (!is_file($jsonPath) || !is_readable($jsonPath)) {
-        return [];
-    }
-
-    $decoded = json_decode((string)file_get_contents($jsonPath), true);
-    if (!is_array($decoded)) {
-        return [];
-    }
-
     $counts = [];
-    foreach ($decoded as $row) {
+    foreach (sv_home_catalog_source_rows() as $row) {
         if (!is_array($row)) {
             continue;
         }
@@ -280,21 +301,31 @@ $svNavCurrent = '';
 <body>
     <?php include __DIR__ . '/includes/navbar.php'; ?>
 
-    <!-- Hero Banner Slide Section -->
-    <section class="banner-slide-section">
-        <div class="swiper" id="banner-slide">
-            <div class="swiper-wrapper">
-                <div class="swiper-slide">
-                    <img src="/assets/images/banners/banner1.jpg" alt="Banner 1 - Vivaliz">
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-free-shipping-badge">
+                    🚚 Frete Grátis acima de R$ 150 para Sul e Sudeste
                 </div>
-                <div class="swiper-slide">
-                    <img src="/assets/images/banners/banner2.jpg" alt="Banner 2 - Vivaliz">
+                <p class="eyebrow hero-kicker">
+                    🛍️ Loja oficial Vivaliz
+                </p>
+                <h1>Produtos que <span class="gradient-word">você precisa</span>,<br>entrega para todo o Brasil</h1>
+                <p>Rodízios, ferragens, utilidades domésticas e itens para casa com catálogo organizado, atendimento rápido e navegação simples no celular.</p>
+
+                <div class="cta-buttons hero-cta" style="margin-top: 28px;">
+                    <a href="/catalogo" class="btn btn-hero-primary">
+                        🛍️ Ver catálogo completo
+                    </a>
+                    <a href="/carrinho" class="btn btn-hero-secondary">
+                        🛒 Meu Carrinho
+                    </a>
                 </div>
             </div>
-            <div class="swiper-pagination"></div>
-            <div class="swiper-button-prev"></div>
-            <div class="swiper-button-next"></div>
         </div>
+    </section>
+
     </section>
 
     <!-- Trust Bar -->
@@ -615,43 +646,6 @@ $svNavCurrent = '';
                 });
             });
         });
-    })();
-
-    // Banner Slide Auto-Advance
-    (function () {
-        var bannerSlides = document.querySelectorAll('.swiper#banner-slide .swiper-slide');
-        var paginationDots = document.querySelectorAll('.swiper#banner-slide .swiper-pagination .swiper-pagination-bullet');
-        var nextBtn = document.querySelector('.swiper#banner-slide .swiper-button-next');
-        var prevBtn = document.querySelector('.swiper#banner-slide .swiper-button-prev');
-
-        if (bannerSlides.length === 0) return;
-
-        var current = 0;
-        var timer = null;
-
-        function show(index) {
-            current = (index + bannerSlides.length) % bannerSlides.length;
-            bannerSlides.forEach(function (slide) { slide.classList.remove('is-active'); });
-            paginationDots.forEach(function (dot) { dot.classList.remove('is-active'); });
-            bannerSlides[current].classList.add('is-active');
-            if (paginationDots[current]) paginationDots[current].classList.add('is-active');
-        }
-
-        function next() { show(current + 1); restart(); }
-        function prev() { show(current - 1); restart(); }
-        function restart() {
-            if (timer) clearTimeout(timer);
-            timer = setTimeout(next, 5000);
-        }
-
-        if (nextBtn) nextBtn.addEventListener('click', next);
-        if (prevBtn) prevBtn.addEventListener('click', prev);
-        paginationDots.forEach(function (dot, i) {
-            dot.addEventListener('click', function () { show(i); restart(); });
-        });
-
-        show(0);
-        restart();
     })();
     </script>
 </body>
