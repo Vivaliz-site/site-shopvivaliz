@@ -255,10 +255,19 @@ $svNavCurrent = 'catalogo';
                 <?php endforeach; ?>
             </div>
             <div id="catalog-status" class="status-line"><?= sv_catalog_esc($statusText) ?></div>
-            <div class="catalog-trust-strip" aria-label="Informações de confiança do catálogo">
-                <div class="catalog-trust-item">🔒 Compra 100% segura</div>
-                <div class="catalog-trust-item">🚚 Envio para todo Brasil</div>
-                <div class="catalog-trust-item">↩️ 30 dias para troca</div>
+            <div class="catalog-trust-strip" aria-label="Informações de confiança do catálogo" style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px;">
+                <div class="catalog-trust-item" style="display: flex; align-items: center; gap: 6px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    <span>Compra 100% segura</span>
+                </div>
+                <div class="catalog-trust-item" style="display: flex; align-items: center; gap: 6px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+                    <span>Envio para todo Brasil</span>
+                </div>
+                <div class="catalog-trust-item" style="display: flex; align-items: center; gap: 6px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
+                    <span>7 dias para troca</span>
+                </div>
             </div>
         </section>
 
