@@ -1,6 +1,27 @@
 <?php
 declare(strict_types=1);
 
+// Bootstrap .env for public diagnostics that depend on runtime secrets.
+(static function (): void {
+    $envFile = dirname(__DIR__, 2) . '/.env';
+    if (!is_file($envFile)) {
+        return;
+    }
+    foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) {
+            continue;
+        }
+        [$key, $value] = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim(trim($value), '"\'');
+        if ($key !== '' && getenv($key) === false) {
+            putenv($key . '=' . $value);
+            $_SERVER[$key] = $value;
+        }
+    }
+})();
+
 header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -36,6 +57,7 @@ $ranking    = svar_json('autodev/data/product_ranking.json');
 $demand     = svar_json('autodev/data/demand_forecast.json');
 $roiReport  = svar_json('logs/roi-engine-report.json');
 $triSync    = svar_json('logs/tri-environment-sync.json');
+$cycleLog   = svar_json('scripts/autonomous-cycle-log.json');
 $emailReport = svar_root() . '/logs/email-activity-report.txt';
 $automationEmailReport = svar_root() . '/logs/automation-email-report.txt';
 $emailConfigCheck = svar_json('logs/email-config-check.json');
@@ -145,6 +167,14 @@ echo json_encode([
         'errors' => count($systemHealth['errors'] ?? []),
         'warnings' => count($systemHealth['warnings'] ?? []),
         'file_age_s' => svar_file_age('logs/system-health-check.json'),
+    ],
+    'autonomous_cycle' => [
+        'available' => !empty($cycleLog),
+        'status' => $cycleLog['status'] ?? null,
+        'mode' => $cycleLog['mode'] ?? null,
+        'last_cycle_at' => $cycleLog['last_cycle_at'] ?? null,
+        'selection_reason' => $cycleLog['selection_reason'] ?? null,
+        'file_age_s' => svar_file_age('scripts/autonomous-cycle-log.json'),
     ],
     'deploy_diagnostic' => [
         'available' => !empty($deployDiagnostic),
