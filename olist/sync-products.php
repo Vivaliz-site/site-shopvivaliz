@@ -265,39 +265,100 @@ function svs_normalize(array $p, string $source): array {
     ];
 }
 
-/* ── Merge: preserva campos V14 (slug, quality_score, tags, category) ── */
-function svs_merge_catalog(array $fetched, string $catalogPath): array {
-    $existing = [];
+/* ── Espelho: a lista final deve ser a lista ativa retornada pela Tiny/Olist ── */
+function svs_catalog_key(array $product): string {
+    $id = trim((string)($product['olist_product_id'] ?? $product['id'] ?? ''));
+    if ($id !== '') return 'id:' . $id;
+    $sku = trim((string)($product['sku'] ?? ''));
+    return $sku !== '' ? 'sku:' . strtoupper($sku) : '';
+}
+
+function svs_existing_catalog_indexes(string $catalogPath): array {
+    $byId = [];
+    $bySku = [];
+    $rows = [];
     if (is_file($catalogPath)) {
         $raw = json_decode((string)file_get_contents($catalogPath), true);
         if (is_array($raw)) {
             foreach ($raw as $p) {
                 if (!is_array($p)) continue;
-                $key = (string)($p['olist_product_id'] ?? $p['sku'] ?? '');
-                if ($key !== '') $existing[$key] = $p;
+                $rows[] = $p;
+                $id = trim((string)($p['olist_product_id'] ?? $p['id'] ?? ''));
+                $sku = trim((string)($p['sku'] ?? ''));
+                if ($id !== '') $byId[$id] = $p;
+                if ($sku !== '') $bySku[strtoupper($sku)] = $p;
             }
         }
     }
+    return ['rows' => $rows, 'by_id' => $byId, 'by_sku' => $bySku];
+}
 
+function svs_mirror_catalog(array $fetched, string $catalogPath): array {
+    $existing = svs_existing_catalog_indexes($catalogPath);
+    $mirrored = [];
+    $seen = [];
     foreach ($fetched as $new) {
-        $key = $new['olist_product_id'] ?: $new['sku'];
+        if (!is_array($new)) continue;
+        $key = svs_catalog_key($new);
         if ($key === '') continue;
-        $old    = $existing[$key] ?? [];
+
+        $id = trim((string)($new['olist_product_id'] ?? ''));
+        $sku = trim((string)($new['sku'] ?? ''));
+        $old = [];
+        if ($id !== '' && isset($existing['by_id'][$id])) {
+            $old = $existing['by_id'][$id];
+        } elseif ($sku !== '' && isset($existing['by_sku'][strtoupper($sku)])) {
+            $old = $existing['by_sku'][strtoupper($sku)];
+        }
+
         $merged = array_merge($old, $new);
-        // preservar campos calculados localmente se o Tiny não trouxe
-        foreach (['slug', 'quality_score', 'quality_label', 'tags'] as $f) {
+
+        // Preservar enriquecimentos locais quando a API nao traz esses campos.
+        foreach (['slug', 'quality_score', 'quality_label', 'tags', 'images_count'] as $f) {
             if (isset($old[$f]) && ($new[$f] ?? '') === '') {
                 $merged[$f] = $old[$f];
             }
         }
-        // preservar category local se o Tiny não enviou nada
-        if (isset($old['category']) && ($new['category'] ?? '') === '') {
-            $merged['category'] = $old['category'];
+
+        foreach (['category', 'description', 'image_url'] as $f) {
+            if (isset($old[$f]) && trim((string)($new[$f] ?? '')) === '') {
+                $merged[$f] = $old[$f];
+            }
         }
-        $existing[$key] = $merged;
+
+        if (((float)($new['price'] ?? 0)) <= 0 && isset($old['price'])) {
+            $merged['price'] = $old['price'];
+        }
+
+        if (!isset($seen[$key])) {
+            $seen[$key] = true;
+            $mirrored[] = $merged;
+        }
     }
 
-    return array_values($existing);
+    return $mirrored;
+}
+
+function svs_removed_products(array $mirrored, string $catalogPath): array {
+    $existing = svs_existing_catalog_indexes($catalogPath)['rows'];
+    $live = [];
+    foreach ($mirrored as $product) {
+        $key = svs_catalog_key($product);
+        if ($key !== '') $live[$key] = true;
+    }
+
+    $removed = [];
+    foreach ($existing as $product) {
+        $key = svs_catalog_key($product);
+        if ($key !== '' && !isset($live[$key])) {
+            $removed[] = [
+                'olist_product_id' => (string)($product['olist_product_id'] ?? $product['id'] ?? ''),
+                'sku' => (string)($product['sku'] ?? ''),
+                'name' => (string)($product['name'] ?? ''),
+            ];
+        }
+    }
+    return $removed;
 }
 
 /* ════════════════════════ MAIN ════════════════════════ */
@@ -344,15 +405,20 @@ if (is_file($catalogPath)) {
 $catalog    = [];
 $saved      = false;
 $afterCount = $beforeCount;
+$removedProducts = [];
+
+if (count($fetched) > 0) {
+    $catalog    = svs_mirror_catalog($fetched, $catalogPath);
+    $afterCount = count($catalog);
+    $removedProducts = svs_removed_products($catalog, $catalogPath);
+}
 
 if (count($fetched) > 0 && !$dryRun) {
-    $catalog    = svs_merge_catalog($fetched, $catalogPath);
-    $afterCount = count($catalog);
     $tmp        = $catalogPath . '.tmp';
     if (file_put_contents($tmp, json_encode($catalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), LOCK_EX) !== false) {
         rename($tmp, $catalogPath);
         $saved = true;
-        svs_log("Catálogo salvo: $beforeCount → $afterCount produtos");
+        svs_log("Catálogo espelhado: $beforeCount → $afterCount produtos; removidos=" . count($removedProducts));
 
         // gravar log de sync para admin
         $syncLog = svs_root() . '/logs/olist-sync-history.jsonl';
@@ -362,6 +428,7 @@ if (count($fetched) > 0 && !$dryRun) {
             'before'  => $beforeCount,
             'after'   => $afterCount,
             'fetched' => count($fetched),
+            'removed' => count($removedProducts),
             'errors'  => $errors,
         ], JSON_UNESCAPED_UNICODE) . PHP_EOL, FILE_APPEND);
     } else {
@@ -376,6 +443,8 @@ svs_json($ok ? 200 : 207, [
     'fetched'      => count($fetched),
     'before_count' => $beforeCount,
     'after_count'  => $afterCount,
+    'removed_count'=> count($removedProducts),
+    'removed_sample'=> array_slice($removedProducts, 0, 50),
     'dry_run'      => $dryRun,
     'saved'        => $saved,
     'errors'       => $errors,
