@@ -11,7 +11,7 @@ from task_queue_lib import load_queue, save_queue
 
 ROOT = Path(__file__).resolve().parents[1]
 HEARTBEAT_DIR = ROOT / ".agent-heartbeats"
-COMMANDS_FILE = ROOT / "storage" / "private" / "agent-commands.jsonl"
+COMMANDS_FILE = ROOT / "logs" / "agent-commands.jsonl"
 RESPONSES_FILE = ROOT / "logs" / "monitor-responses.jsonl"
 MESSAGES_FILE = ROOT / "logs" / "monitor-messages.log"
 
