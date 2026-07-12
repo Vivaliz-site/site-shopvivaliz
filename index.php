@@ -279,11 +279,48 @@ $svNavCurrent = '';
           "@type": "Store",
           "name": "Vivaliz",
           "url": "https://shopvivaliz.com.br",
-          "description": "Loja online com produtos de qualidade. Rodízios, ferragens, utilidades e muito mais.",
-          "priceRange": "R$",
-          "currenciesAccepted": "BRL",
-          "paymentAccepted": "PIX, Cartão de Crédito, Boleto",
-          "areaServed": "BR"
+          "image": "https://shopvivaliz.com.br/images/logo-vivaliz-square.png",
+          "telephone": "+55-37-99937-4112",
+          "priceRange": "$$",
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "RUA CAMPINA VERDE, 841",
+            "addressLocality": "SAO JOSE - Divinópolis",
+            "addressRegion": "MG",
+            "postalCode": "35501-236",
+            "addressCountry": "BR"
+          }
+        },
+        {
+          "@type": "ItemList",
+          "name": "Produtos em Destaque",
+          "itemListElement": [
+            <?php 
+              $seoItems = [];
+              $position = 1;
+              foreach (array_slice($featuredProducts ?? [], 0, 10) as $p) {
+                  $img = trim((string)($p['image_url'] ?? ''));
+                  $url = 'https://shopvivaliz.com.br/produto/' . ($p['slug'] ?? $p['sku']);
+                  $seoItems[] = '{
+                    "@type": "ListItem",
+                    "position": ' . $position++ . ',
+                    "item": {
+                      "@type": "Product",
+                      "name": "' . htmlspecialchars((string)$p['name'], ENT_QUOTES) . '",
+                      "url": "' . $url . '",
+                      "image": "' . $img . '",
+                      "offers": {
+                        "@type": "Offer",
+                        "priceCurrency": "BRL",
+                        "price": "' . (float)($p['price'] ?? 0) . '",
+                        "availability": "https://schema.org/' . (($p['stock'] ?? 0) > 0 ? 'InStock' : 'OutOfStock') . '"
+                      }
+                    }
+                  }';
+              }
+              echo implode(",\n            ", $seoItems);
+            ?>
+          ]
         }
       ]
     }
