@@ -27,7 +27,7 @@ class SystemHealthCheck:
             'config/database.php': 'Banco de dados',
             '.htaccess': 'Segurança',
             '.env.example': 'Template ENV',
-            'logs/tasks-queue.json': 'Fila de tarefas',
+            'tasks-queue.json': 'Fila de tarefas canônica',
             'api/monitor/api.php': 'API Monitor',
             '.github/workflows/24-7-continuous-agent.yml': 'Workflow 24/7',
             'scripts/tri-environment-sync.js': 'Runner triambiente JS'
@@ -50,7 +50,8 @@ class SystemHealthCheck:
         print("\n2. VERIFICANDO FILA DE TAREFAS...")
 
         try:
-            with open('logs/tasks-queue.json') as f:
+            queue_path = Path('tasks-queue.json') if Path('tasks-queue.json').exists() else Path('logs/tasks-queue.json')
+            with queue_path.open(encoding='utf-8') as f:
                 queue = json.load(f)
 
             tasks = queue['queue'] if isinstance(queue, dict) and 'queue' in queue else queue
