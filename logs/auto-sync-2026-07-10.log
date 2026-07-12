@@ -21815,3 +21815,127 @@ From https://github.com/Vivaliz-site/site-shopvivaliz
 Already up to date.
 [2026-07-12 01:09:47] ✅ Git pull OK
 [2026-07-12 01:09:47] 📝 Commitando mudanças...
+[main 9af0922] auto: sincronizar 2026-07-12 01:09:47
+ 2 files changed, 66 insertions(+)
+[2026-07-12 01:09:47] ✅ Commit OK
+[2026-07-12 01:09:47] 📤 Enviando 1 commit(s)...
+To https://github.com/Vivaliz-site/site-shopvivaliz.git
+   987d450..9af0922  main -> main
+[2026-07-12 01:09:49] ✅ Push OK
+[2026-07-12 01:09:49] ✅ Ciclo concluído
+[2026-07-12 01:09:49] ⏰ Próximo em 5 minutos...
+[2026-07-12 01:14:49] 
+[2026-07-12 01:14:49] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2026-07-12 01:14:49] 🔄 Sincronizando secrets do GitHub...
+============================================================
+🔐 ShopVivaliz - Sincronizador de Secrets (Linux/macOS)
+============================================================
+
+Verificando GitHub CLI...
+✓ GitHub CLI encontrado
+
+📝 Gerando .env.local...
+✓ Criado: /home/ubuntu/site-shopvivaliz/.env.local
+
+============================================================
+✅ SINCRONIZAÇÃO CONCLUÍDA!
+============================================================
+
+Próximos passos:
+  1. Validar secrets: python3 scripts/validar_secrets.py
+  2. Ativar auto-sync: bash scripts/auto_sync_git.ps1
+
+[2026-07-12 01:14:49] ✅ Secrets sincronizados com sucesso
+[SECURITY] ShopVivaliz - Validador de Secrets
+============================================================
+
+[ERROR] ERRO - Secrets obrigatórios faltando:
+
+  ❌ ANTHROPIC_API_KEY (Claude API) - AUSENTE
+  ❌ SHOPEE_PARTNER_ID (Shopee Partner ID) - AUSENTE
+  ❌ SHOPEE_PARTNER_KEY (Shopee Partner Key) - AUSENTE
+
+📝 Solução:
+  1. Copie .env.example para .env.local
+  2. Preencha os valores reais em .env.local
+  3. Execute este validador novamente
+
+  Variáveis obrigatórias:
+    • ANTHROPIC_API_KEY: Claude API
+    • SHOPEE_PARTNER_ID: Shopee Partner ID
+    • SHOPEE_PARTNER_KEY: Shopee Partner Key
+    • FTP_SERVER: FTP Server
+    • FTP_USERNAME: FTP Username
+    • FTP_PASSWORD: FTP Password
+    • MAIL_PASS: Email Password
+[2026-07-12 01:14:49] ⚠️  Validação teve aviso (continuando...)
+[2026-07-12 01:14:49] 🔄 Sincronizando repositório...
+From https://github.com/Vivaliz-site/site-shopvivaliz
+ * branch            main       -> FETCH_HEAD
+   9af0922..67697e6  main       -> origin/main
+Updating 9af0922..67697e6
+Fast-forward
+ .github/workflows/autonomous-code-agent-24-7.yml   |   7 +-
+ .github/workflows/real-e2e-gate.yml                |   2 +-
+ .gitignore                                         |   4 +
+ AGENTS.md                                          |   8 +
+ api/webhooks/order-status-update.php               |  25 +--
+ css/visual-enhancements.css                        |   4 +
+ .../12e387016ad992c7c25794079ea4e74604966042.md    |  23 ---
+ .../78485ad26ab49de2007fe98b0854715a58aaf5b6.png   | Bin 4254 -> 0 bytes
+ playwright-report/index.html                       |  90 ----------
+ .../screenshots/homepage-1783816342.png            | Bin 494392 -> 0 bytes
+ playwright-report/visual-test-report.json          |  22 ---
+ playwright.config.ts                               |  10 +-
+ scripts/agent-exclusive-run.py                     |  72 ++++++++
+ scripts/auto_sync_git.ps1                          |  22 +++
+ test-results/.last-run.json                        |   7 -
+ test-results/CHROME_NORMAL_1.png                   | Bin 676919 -> 0 bytes
+ test-results/FINAL_TEST.png                        | Bin 676986 -> 0 bytes
+ test-results/HOMEPAGE_FIXED.png                    | Bin 717128 -> 0 bytes
+ test-results/RESOLVED.txt                          |   3 -
+ test-results/after-cache-bust.png                  | Bin 568508 -> 0 bytes
+ test-results/debug-full-page.png                   | Bin 568435 -> 0 bytes
+ test-results/debug-styles.png                      | Bin 417420 -> 0 bytes
+ test-results/homepage-final-validation.png         | Bin 639510 -> 0 bytes
+ test-results/homepage-validation.png               | Bin 1992838 -> 0 bytes
+ test-results/real-browser-view.png                 | Bin 568435 -> 0 bytes
+ test-results/seu-chrome-real.png                   | Bin 678195 -> 0 bytes
+ test-results/skeleton-fixed.png                    | Bin 639510 -> 0 bytes
+ .../error-context.md                               | 197 ---------------------
+ .../test-failed-1.png                              | Bin 420210 -> 0 bytes
+ .../video.webm                                     | Bin 7065385 -> 0 bytes
+ .../error-context.md"                              |  23 ---
+ .../test-failed-1.png"                             | Bin 4254 -> 0 bytes
+ tests/autenticacao.spec.ts                         |   2 +-
+ tests/fluxo-compra.spec.ts                         |   6 +-
+ tests/meus-pedidos.spec.ts                         |   2 +-
+ tests/precos-catalogo.spec.ts                      |   8 +-
+ tests/webhook-notificacoes.spec.ts                 |   2 +-
+ 37 files changed, 148 insertions(+), 391 deletions(-)
+ delete mode 100644 playwright-report/data/12e387016ad992c7c25794079ea4e74604966042.md
+ delete mode 100644 playwright-report/data/78485ad26ab49de2007fe98b0854715a58aaf5b6.png
+ delete mode 100644 playwright-report/index.html
+ delete mode 100644 playwright-report/screenshots/homepage-1783816342.png
+ delete mode 100644 playwright-report/visual-test-report.json
+ create mode 100644 scripts/agent-exclusive-run.py
+ delete mode 100644 test-results/.last-run.json
+ delete mode 100644 test-results/CHROME_NORMAL_1.png
+ delete mode 100644 test-results/FINAL_TEST.png
+ delete mode 100644 test-results/HOMEPAGE_FIXED.png
+ delete mode 100644 test-results/RESOLVED.txt
+ delete mode 100644 test-results/after-cache-bust.png
+ delete mode 100644 test-results/debug-full-page.png
+ delete mode 100644 test-results/debug-styles.png
+ delete mode 100644 test-results/homepage-final-validation.png
+ delete mode 100644 test-results/homepage-validation.png
+ delete mode 100644 test-results/real-browser-view.png
+ delete mode 100644 test-results/seu-chrome-real.png
+ delete mode 100644 test-results/skeleton-fixed.png
+ delete mode 100644 test-results/validacao-producao-2026-07-87cc5--tags-devem-estar-presentes-chromium/error-context.md
+ delete mode 100644 test-results/validacao-producao-2026-07-87cc5--tags-devem-estar-presentes-chromium/test-failed-1.png
+ delete mode 100644 test-results/validacao-producao-2026-07-87cc5--tags-devem-estar-presentes-chromium/video.webm
+ delete mode 100644 "test-results/validacao-producao-2026-07-deca4-org-JSON-LD-deve-ser-v\303\241lido-chromium/error-context.md"
+ delete mode 100644 "test-results/validacao-producao-2026-07-deca4-org-JSON-LD-deve-ser-v\303\241lido-chromium/test-failed-1.png"
+[2026-07-12 01:14:50] ✅ Git pull OK
+[2026-07-12 01:14:51] 📝 Commitando mudanças...
