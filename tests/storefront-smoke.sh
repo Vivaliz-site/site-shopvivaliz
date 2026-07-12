@@ -12,11 +12,39 @@ cleanup() {
 }
 trap cleanup EXIT
 
-php -S 127.0.0.1:8099 -t . >"$TMPDIR/shopvivaliz-php-server.log" 2>&1 &
-PHP_SERVER_PID=$!
+# Start PHP server with retry logic
+MAX_RETRIES=3
+for attempt in $(seq 1 $MAX_RETRIES); do
+  echo "Starting PHP server (attempt $attempt/$MAX_RETRIES)..."
+  php -S 127.0.0.1:8099 -t . >"$TMPDIR/shopvivaliz-php-server.log" 2>&1 &
+  PHP_SERVER_PID=$!
+  sleep 2
 
-for _ in $(seq 1 30); do
-  if curl -fsS "${BASE_URL}/index.php" >/dev/null; then break; fi
+  # Check if server is listening
+  if lsof -i :8099 >/dev/null 2>&1 || netstat -tuln 2>/dev/null | grep -q 8099; then
+    echo "✓ PHP server started (PID: $PHP_SERVER_PID)"
+    break
+  else
+    if [ $attempt -lt $MAX_RETRIES ]; then
+      echo "⚠️  Port 8099 not responding, retrying..."
+      kill $PHP_SERVER_PID 2>/dev/null || true
+      sleep 1
+    fi
+  fi
+done
+
+# Wait for server to be ready
+for retry in $(seq 1 45); do
+  if curl -fsS "${BASE_URL}/index.php" >/dev/null 2>&1; then
+    echo "✓ Server ready after $retry attempts"
+    break
+  fi
+  if [ $retry -eq 45 ]; then
+    echo "❌ Server failed to start after 45 attempts"
+    echo "Server logs:"
+    cat "$TMPDIR/shopvivaliz-php-server.log"
+    exit 1
+  fi
   sleep 1
 done
 
