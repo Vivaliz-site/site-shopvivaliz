@@ -462,3 +462,46 @@ body {
   color: #94a3b8;
 }
 
+
+/* Apple-style Spotlight Glow Effect on Cards */
+.product-card {
+  position: relative;
+  /* Ensure variables exist even before hover */
+  --mouse-x: 50%;
+  --mouse-y: 50%;
+}
+.product-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    800px circle at var(--mouse-x) var(--mouse-y),
+    rgba(255, 255, 255, 0.1),
+    transparent 40%
+  );
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 2;
+}
+.product-card:hover::before {
+  opacity: 1;
+}
+
+[data-theme="dark"] .product-card::before {
+  background: radial-gradient(
+    800px circle at var(--mouse-x) var(--mouse-y),
+    rgba(255, 255, 255, 0.08),
+    transparent 40%
+  );
+}
+
+/* Interactive Add to Cart Success State */
+.buy-button.btn-success {
+  background: #10b981 !important; /* Tailwind Green 500 */
+  color: #fff !important;
+  transform: scale(1.05);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+

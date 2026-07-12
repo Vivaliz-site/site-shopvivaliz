@@ -685,6 +685,61 @@ $svNavCurrent = '';
             });
         });
     })();
+
+    // Premium Micro-interactions: Apple-style Glow & Animated Cart Button
+    (function() {
+        // Spotlight Effect
+        var cards = document.querySelectorAll('.product-card');
+        cards.forEach(function(card) {
+            card.addEventListener('mousemove', function(e) {
+                var rect = card.getBoundingClientRect();
+                var x = e.clientX - rect.left;
+                var y = e.clientY - rect.top;
+                card.style.setProperty('--mouse-x', x + 'px');
+                card.style.setProperty('--mouse-y', y + 'px');
+            });
+        });
+
+        // Add to Cart Micro-interaction
+        document.querySelectorAll('.buy-button[data-product]').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                var originalText = btn.innerHTML;
+                
+                // Add success state
+                btn.classList.add('btn-success');
+                btn.innerHTML = '✔ Adicionado!';
+                
+                // Fetch product payload & add to cart visually
+                try {
+                    var p = JSON.parse(decodeURIComponent(btn.dataset.product));
+                    var items = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
+                    var ex = items.find(function(i){ return i.sku === p.sku; });
+                    if (ex) ex.quantity = (ex.quantity || 1) + 1;
+                    else items.push(Object.assign({}, p, { quantity: 1 }));
+                    localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+                    
+                    // Update cart badge dynamically without refresh
+                    var badge = document.getElementById('nav-cart-count');
+                    if (badge) {
+                        var totalCount = items.reduce(function(a, i){ return a + (i.quantity || 1); }, 0);
+                        badge.textContent = totalCount;
+                        // Little pop animation on badge
+                        badge.style.transform = 'scale(1.4)';
+                        setTimeout(function() { badge.style.transform = 'scale(1)'; }, 200);
+                    }
+                } catch(err) {}
+
+                // Revert button and redirect after delay
+                setTimeout(function() {
+                    btn.classList.remove('btn-success');
+                    btn.innerHTML = originalText;
+                    if(window.openMiniCart) window.openMiniCart();
+                    else window.location.href = '/carrinho';
+                }, 750);
+            });
+        });
+    })();
     </script>
 </body>
 </html>
