@@ -535,20 +535,38 @@ if ($notFound) {
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
-                <div class="product-confidence-box" aria-label="Informações de confiança da compra">
-                    <div class="confidence-item">🔒 Compra segura com ambiente protegido</div>
-                    <div class="confidence-item">🚚 Envio para todo o Brasil</div>
-                    <div class="confidence-item">💬 Suporte comercial antes e depois do pedido</div>
+                <div class="product-confidence-box" aria-label="Informações de confiança da compra" style="display: flex; flex-direction: column; gap: 10px; margin: 20px 0; padding: 15px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                    <div class="confidence-item" style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: #334155;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        <span>Compra segura com ambiente protegido</span>
+                    </div>
+                    <div class="confidence-item" style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: #334155;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+                        <span>Envio para todo o Brasil</span>
+                    </div>
+                    <div class="confidence-item" style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: #334155;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                        <span>Suporte comercial antes e depois do pedido</span>
+                    </div>
                 </div>
                 <div class="produto-actions">
                     <?php if ($priceRaw > 0 && $stockRaw > 0): ?>
                         <button class="btn btn-primary btn-large btn-cta btn-premium main-buy-button" type="button" id="buy-now" style="width: 100%; font-size: 1.2rem;">
                             🛒 COMPRAR AGORA
                         </button>
-                        <div class="trust-badges-container">
-                            <div class="trust-badge-item"><span>🔒</span> <span>Pagamento 100% Seguro</span></div>
-                            <div class="trust-badge-item"><span>🛡️</span> <span>Garantia de 30 dias</span></div>
-                            <div class="trust-badge-item"><span>🚚</span> <span>Devolução Grátis</span></div>
+                        <div class="trust-badges-container" style="display: flex; justify-content: space-between; margin-top: 15px; gap: 10px; flex-wrap: wrap;">
+                            <div class="trust-badge-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #64748b;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                                <span>Pagamento 100% Seguro</span>
+                            </div>
+                            <div class="trust-badge-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #64748b;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                                <span>Garantia de Fábrica</span>
+                            </div>
+                            <div class="trust-badge-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #64748b;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
+                                <span>7 dias para Devolução</span>
+                            </div>
                         </div>
                     <?php elseif ($priceRaw > 0 && $stockRaw <= 0): ?>
                         <div class="stock-alert-form" id="stock-alert-form" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;">
