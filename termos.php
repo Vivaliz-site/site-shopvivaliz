@@ -17,7 +17,7 @@ $state = $company['state'] ?? 'MG';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Termos e Condicoes - <?= htmlspecialchars($fantasyName) ?></title>
+    <title>Termos de Uso - <?= htmlspecialchars($fantasyName) ?></title>
     <link rel="stylesheet" href="/css/style.css">
     <style>
         .legal-page { max-width: 920px; margin: 40px auto; padding: 40px 20px; line-height: 1.8; color: #1f2937; }
@@ -31,53 +31,78 @@ $state = $company['state'] ?? 'MG';
 <body>
     <?php include __DIR__ . '/includes/header.php'; ?>
     <div class="legal-page">
-        <h1>Termos e Condicoes</h1>
+        <h1>Termos e Condicoes de Uso</h1>
         <div class="legal-intro">
-            <p><strong>Ultima atualizacao:</strong> 12 de julho de 2026</p>
-            <p>Estes Termos disciplinam o uso do site <?= htmlspecialchars($fantasyName) ?> e as compras realizadas em nossa loja online, operada por <?= htmlspecialchars($legalName) ?>, CNPJ <?= htmlspecialchars($cnpj) ?>.</p>
+            <p><strong>Ultima atualizacao:</strong> Julho de 2026</p>
+            <p>Estes Termos e Condicoes regulam o acesso, a navegacao e as compras realizadas no site <?= htmlspecialchars($fantasyName) ?>, operado por <?= htmlspecialchars($legalName) ?>, inscrita no CNPJ sob o numero <?= htmlspecialchars($cnpj) ?>.</p>
+            <p>Ao acessar, navegar, cadastrar-se ou concluir um pedido em nossa plataforma, o usuario declara que leu, compreendeu e concorda com as regras previstas neste documento.</p>
         </div>
 
-        <h2>1. Sobre a loja</h2>
-        <p>A <?= htmlspecialchars($fantasyName) ?> atua no comercio eletronico com foco em utilidades, organizacao, casa, jardim, ferramentas e categorias relacionadas apresentadas no storefront oficial da marca.</p>
+        <h2>1. Identificacao da plataforma</h2>
+        <p>A <?= htmlspecialchars($fantasyName) ?> atua no comercio eletronico de produtos para casa, jardinagem, decoracao, organizacao, ferramentas, utilidades e categorias relacionadas apresentadas em seu catalogo online.</p>
 
         <h2>2. Aceitacao dos termos</h2>
-        <p>Ao navegar no site, realizar cadastro ou concluir um pedido, voce declara que leu e concorda com estes Termos, com a Politica de Privacidade e com a Politica de Trocas, Devolucoes e Entrega.</p>
+        <p>O uso do site implica a aceitacao integral destes Termos, bem como das politicas complementares publicadas na plataforma, incluindo Politica de Privacidade, Politica de Trocas e Devolucoes e Politica de Entrega.</p>
+        <p>Caso o usuario nao concorde com qualquer disposicao aqui estabelecida, recomenda-se que nao utilize o site nem realize compras pela plataforma.</p>
 
-        <h2>3. Cadastro e responsabilidade do cliente</h2>
-        <p>O cliente deve informar dados corretos, completos e atualizados para compra, faturamento, entrega e atendimento. O uso indevido de dados de terceiros ou informacoes falsas pode levar ao cancelamento do pedido.</p>
+        <h2>3. Cadastro e responsabilidade do usuario</h2>
+        <p>Para determinadas funcionalidades e para a realizacao de compras, o usuario devera fornecer informacoes verdadeiras, completas e atualizadas.</p>
+        <ul>
+            <li>manter seus dados cadastrais corretos e atualizados;</li>
+            <li>preservar a confidencialidade de senhas e credenciais de acesso;</li>
+            <li>utilizar apenas dados proprios ou devidamente autorizados;</li>
+            <li>informar imediatamente qualquer uso indevido de sua conta.</li>
+        </ul>
+        <p>A loja podera suspender, restringir ou cancelar cadastros que apresentem indicios de fraude, dados inconsistentes ou uso em desacordo com a legislacao vigente.</p>
 
-        <h2>4. Produtos, imagens e disponibilidade</h2>
-        <p>Buscamos apresentar fotos, descricoes e caracteristicas dos produtos com clareza. Ainda assim, pequenas variacoes visuais podem ocorrer conforme lote, iluminacao, tela utilizada pelo cliente ou atualizacoes do fabricante.</p>
-        <p>A disponibilidade de estoque, o sortimento e as condicoes comerciais podem ser ajustados sem aviso previo, sempre respeitando pedidos ja confirmados quando houver viabilidade operacional.</p>
+        <h2>4. Produtos, informacoes e disponibilidade</h2>
+        <p>A <?= htmlspecialchars($fantasyName) ?> busca manter informacoes precisas sobre caracteristicas, especificacoes, imagens, disponibilidade e condicoes comerciais dos produtos anunciados.</p>
+        <p>Podem ocorrer, no entanto, erros materiais de digitacao, atraso de atualizacao, divergencias de fornecedor ou indisponibilidade superveniente de estoque, hipoteses em que a loja podera corrigir as informacoes ou revisar a viabilidade do pedido.</p>
+        <p>As imagens possuem carater ilustrativo e podem apresentar variacoes de cor, escala, acabamento ou tonalidade em funcao do lote, do fabricante ou do dispositivo utilizado pelo cliente.</p>
 
-        <h2>5. Precos e formas de pagamento</h2>
-        <p>Os precos exibidos no site valem para compras online e podem ser alterados a qualquer momento antes da conclusao do pedido. A aprovacao do pagamento e feita pelos meios disponibilizados na plataforma, incluindo modalidades divulgadas no ecossistema oficial da loja, como cartao e Pix.</p>
+        <h2>5. Precos e condicoes comerciais</h2>
+        <p>Os precos e condicoes exibidos no site podem ser alterados sem aviso previo antes da conclusao da compra, respeitando-se os pedidos efetivamente registrados e confirmados dentro dos criterios operacionais da plataforma.</p>
+        <p>Promocoes, campanhas e ofertas especiais podem ter regras especificas, prazo determinado, limitacao de estoque e restricoes de elegibilidade.</p>
 
-        <h2>6. Confirmacao e processamento do pedido</h2>
-        <p>O recebimento automatico do pedido nao representa aprovacao definitiva. O pedido pode passar por validacoes cadastrais, de pagamento, antifraude, disponibilidade e logistica antes da expedicao.</p>
+        <h2>6. Pagamentos</h2>
+        <p>Os pagamentos poderao ser realizados pelas modalidades disponibilizadas no momento da compra. A aprovacao de cada transacao esta sujeita a analise, validacao e politicas dos respectivos meios de pagamento, intermediadores financeiros, operadores antifraude e instituicoes responsaveis pelo processamento.</p>
+        <p>A loja podera cancelar ou revisar pedidos em caso de suspeita de fraude, inconsistencias cadastrais, falha na confirmacao do pagamento ou indisponibilidade operacional do meio escolhido.</p>
 
-        <h2>7. Entrega</h2>
-        <p>Realizamos envios para todo o Brasil. O prazo estimado de entrega e informado durante a compra e pode variar conforme CEP, transportadora, forma de pagamento e disponibilidade do item.</p>
+        <h2>7. Confirmacao do pedido</h2>
+        <p>O recebimento automatico do pedido nao representa aprovacao definitiva da compra. O pedido pode passar por etapas de validacao cadastral, conferencia de estoque, confirmacao de frete, verificacao antifraude, conciliacao de pagamento e processamento interno antes da expedicao.</p>
 
-        <h2>8. Trocas, devolucoes e reembolsos</h2>
-        <p>Os procedimentos de arrependimento, defeito, avaria, divergencia de item e reembolso seguem a pagina <a href="/politica-devolucoes.php">Politica de Trocas e Devolucoes</a>, observando o Codigo de Defesa do Consumidor.</p>
+        <h2>8. Entrega dos produtos</h2>
+        <p>Os prazos e valores de frete sao informados durante o processo de compra e podem variar de acordo com o CEP de destino, peso, dimensoes, quantidade de itens, modalidade selecionada e disponibilidade em estoque.</p>
+        <p>A contagem do prazo de entrega inicia-se apos a confirmacao do pagamento e o processamento do pedido. Eventuais atrasos causados por fatores externos, operadores logisticos, indisponibilidade momentanea de transportadora, caso fortuito ou forca maior nao configuram descumprimento automatico por parte da loja.</p>
 
-        <h2>9. Privacidade e uso de dados</h2>
-        <p>O tratamento de dados pessoais ocorre conforme a <a href="/politica-privacidade.php">Politica de Privacidade</a>, com uso voltado a atendimento, faturamento, entrega, comunicacoes da compra e melhoria da experiencia no site.</p>
+        <h2>9. Trocas, devolucoes e cancelamentos</h2>
+        <p>As regras aplicaveis a direito de arrependimento, devolucao por defeito, avaria, desacordo com o pedido, reembolso e cancelamento observam a legislacao brasileira e as condicoes descritas na <a href="/politica-devolucoes.php">Politica de Trocas e Devolucoes</a>.</p>
 
-        <h2>10. Propriedade intelectual</h2>
-        <p>Elementos visuais, textos, marcas, logotipos, organizacao do catalogo e demais conteudos do site nao podem ser reproduzidos, copiados ou explorados comercialmente sem autorizacao previa.</p>
+        <h2>10. Privacidade e protecao de dados</h2>
+        <p>O tratamento de dados pessoais do usuario ocorre de acordo com a legislacao aplicavel e com a <a href="/politica-privacidade.php">Politica de Privacidade</a> publicada pela plataforma.</p>
+        <p>Ao utilizar o site, o usuario declara ciencia das praticas de coleta, uso, armazenamento e compartilhamento de dados necessarios ao funcionamento da operacao.</p>
 
-        <h2>11. Atendimento</h2>
-        <p>Em caso de duvidas sobre pedidos, politicas ou uso da plataforma, entre em contato pelos canais oficiais da loja:</p>
+        <h2>11. Propriedade intelectual</h2>
+        <p>Textos, imagens, marcas, logotipos, layouts, fotografias, elementos visuais, organizacao do catalogo e demais conteudos da plataforma sao protegidos pela legislacao de propriedade intelectual e nao podem ser reproduzidos, copiados, distribuidos ou explorados sem autorizacao previa e expressa.</p>
+
+        <h2>12. Limitacao de responsabilidade</h2>
+        <p>A <?= htmlspecialchars($fantasyName) ?> nao sera responsavel por danos decorrentes de uso inadequado dos produtos, informacoes incorretas fornecidas pelo usuario, falhas de conexao, indisponibilidades temporarias de terceiros ou eventos tecnicos fora de seu controle razoavel.</p>
+        <p>A plataforma tambem nao garante disponibilidade ininterrupta do site, podendo haver pausas para manutencao, atualizacoes, melhorias tecnicas ou correcoes de seguranca.</p>
+
+        <h2>13. Alteracoes destes termos</h2>
+        <p>Estes Termos podem ser atualizados a qualquer momento para adequacao legal, tecnica, operacional ou comercial. A versao vigente sera sempre a publicada nesta pagina e passara a produzir efeitos a partir de sua disponibilizacao no site.</p>
+
+        <h2>14. Legislacao aplicavel e foro</h2>
+        <p>Estes Termos sao regidos pela legislacao brasileira, em especial pelo Codigo de Defesa do Consumidor, pelo Marco Civil da Internet, pela LGPD e pelas demais normas aplicaveis ao comercio eletronico.</p>
+        <p>Fica eleito o foro do domicilio do consumidor para dirimir eventuais controversias decorrentes da utilizacao da plataforma, nos termos da legislacao aplicavel.</p>
+
+        <h2>15. Contato</h2>
+        <p>Em caso de duvidas, sugestoes ou solicitacoes relacionadas ao uso da plataforma, entre em contato pelos canais oficiais da loja:</p>
         <ul>
             <li>E-mail: <a href="mailto:<?= htmlspecialchars($email) ?>"><?= htmlspecialchars($email) ?></a></li>
             <li>Telefone: <a href="tel:<?= preg_replace('/\D/', '', $phone) ?>"><?= htmlspecialchars($phone) ?></a></li>
             <li>Base operacional: <?= htmlspecialchars($city) ?> - <?= htmlspecialchars($state) ?></li>
         </ul>
-
-        <h2>12. Legislacao aplicavel</h2>
-        <p>Estes Termos sao regidos pela legislacao brasileira, em especial pelo Codigo de Defesa do Consumidor e pelas normas aplicaveis ao comercio eletronico.</p>
     </div>
     <?php include __DIR__ . '/includes/footer.php'; ?>
 </body>

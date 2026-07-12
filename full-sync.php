@@ -6,6 +6,7 @@ ini_set('display_errors', '1');
 header('Content-Type: application/json; charset=utf-8');
 set_time_limit(300);
 
+require_once __DIR__ . '/config/constants.php';
 require_once __DIR__ . '/config/database.php';
 
 function full_sync_json(int $code, array $payload): never
