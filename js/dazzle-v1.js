@@ -51,15 +51,32 @@
                 observer.unobserve(entry.target);
             }
         });
-    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
+    }, { rootMargin: '120px 0px -8% 0px', threshold: 0.01 });
 
+    var observed = [];
     items.forEach(function (el, i) {
+        // Itens de carrossel horizontal ficam de fora (podem estar fora da
+        // tela no eixo X e nunca "entrar" verticalmente).
+        if (el.closest('.home-scroller-track, .products-track, .categories-track, .hero-carousel-track')) {
+            return;
+        }
         // Só esconde elementos abaixo da dobra; o que já está visível fica como está.
         var rect = el.getBoundingClientRect();
         if (rect.top > window.innerHeight * 0.9) {
             el.classList.add('dz-will-reveal');
             el.style.transitionDelay = ((i % 4) * 70) + 'ms';
             observer.observe(el);
+            observed.push(el);
         }
     });
+
+    // Failsafe: nada pode ficar invisível para sempre.
+    setTimeout(function () {
+        observed.forEach(function (el) {
+            if (!el.classList.contains('dz-in')) {
+                el.classList.add('dz-in');
+                observer.unobserve(el);
+            }
+        });
+    }, 4000);
 })();
