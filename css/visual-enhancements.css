@@ -261,6 +261,10 @@ section > h2 {
 
 .home-scroller,
 .home-scroller {
+    /* Arrows below are absolutely positioned, so this cannot keep the
+       three-column grid declared by style.css (44px/1fr/44px). Otherwise
+       the track is auto-placed in the first 44px column and covers clicks. */
+    display: block;
     position: relative;
     overflow: hidden;
     border-radius: 8px;

@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 
 test.describe('Webhook de Status e Notificações', () => {
-  const baseUrl = 'https://dev.shopvivaliz.com.br';
+  const baseUrl = process.env.E2E_BASE_URL || 'https://dev.shopvivaliz.com.br';
   const webhookUrl = `${baseUrl}/api/webhooks/order-status-update.php`;
 
   test('webhook sem token deve retornar 401', async ({ request }) => {

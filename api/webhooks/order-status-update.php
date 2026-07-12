@@ -6,8 +6,9 @@ ini_set('display_errors', '0');
 
 header('Content-Type: application/json; charset=utf-8');
 
-require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../scripts/mailer.php';
+// Authentication and payload validation must not depend on database startup.
+// This guarantees deterministic 4xx responses even during a DB outage.
+require_once __DIR__ . '/../../config/bootstrap-env.php';
 
 // Validar token do webhook
 $webhook_token = getenv('OLIST_WEBHOOK_TOKEN') ?: getenv('ERP_WEBHOOK_TOKEN') ?: '';
@@ -36,20 +37,24 @@ if (!is_array($data)) {
     exit;
 }
 
+$olist_order_id = $data['order_id'] ?? $data['olist_id'] ?? $data['id'] ?? '';
+$status = $data['status'] ?? $data['order_status'] ?? '';
+if (empty($olist_order_id) || empty($status)) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Missing required fields']);
+    exit;
+}
+
+require_once __DIR__ . '/../../config/constants.php';
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../scripts/mailer.php';
+
 try {
     $db = Database::getInstance()->getConnection();
 
     // Mapear IDs: olist_order_id -> pedido_id
-    $olist_order_id = $data['order_id'] ?? $data['olist_id'] ?? $data['id'] ?? '';
-    $status = $data['status'] ?? $data['order_status'] ?? '';
     $tracking = $data['tracking_number'] ?? $data['tracking'] ?? '';
     $estimated_delivery = $data['estimated_delivery_date'] ?? '';
-
-    if (empty($olist_order_id) || empty($status)) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Missing required fields']);
-        exit;
-    }
 
     // Mapear status do Olist para nosso sistema
     $status_map = [

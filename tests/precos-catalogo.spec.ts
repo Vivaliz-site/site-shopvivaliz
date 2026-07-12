@@ -3,7 +3,7 @@ import { test, expect } from './fixtures';
 test.describe('Catálogo - Preços', () => {
   test.beforeEach(async ({ page }) => {
     // Abrir homepage
-    await page.goto('https://dev.shopvivaliz.com.br/', { waitUntil: 'networkidle' });
+    await page.goto('/', { waitUntil: 'networkidle' });
   });
 
   test('deve exibir preços nos produtos da homepage', async ({ page }) => {
@@ -42,9 +42,9 @@ test.describe('Catálogo - Preços', () => {
 
   test('produtos especiais devem ter preços corretos', async ({ page }) => {
     // Procurar por produto específico
-    const rodizioBotao = page.locator('text=Rodízio').first();
-    if (await rodizioBotao.isVisible()) {
-      const priceText = await rodizioBotao.locator('..').locator('text=/R\\$/').textContent();
+    const rodizioCard = page.locator('#product-grid .product-card:has-text("Rodízio")').first();
+    if (await rodizioCard.isVisible()) {
+      const priceText = await rodizioCard.locator('.product-price').textContent();
       expect(priceText).toMatch(/R\$ \d+[.,]\d{2}/);
     }
   });
