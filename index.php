@@ -223,7 +223,7 @@ $svNavCurrent = '';
     <meta http-equiv="Expires" content="0">
     <meta property="og:title" content="Vivaliz | Loja Online">
     <meta property="og:description" content="Catálogo com produtos de qualidade. Compre online com entrega rápida.">
-    <meta property="og:image" content="/images/logo-vivaliz-square.png">
+    <meta property="og:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square.png">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://shopvivaliz.com.br/">
     <meta property="og:site_name" content="ShopVivaliz">
