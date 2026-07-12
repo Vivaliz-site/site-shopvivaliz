@@ -544,26 +544,8 @@ footer h3 {
     font-size: 16px;
 }
 
-/* Responsive Banner Sizes */
-@media (min-width: 1200px) {
-    .swiper#banner-slide .swiper-slide img {
-        height: 500px;
-        object-fit: cover;
-    }
-}
-
-@media (min-width: 769px) and (max-width: 1199px) {
-    .swiper#banner-slide .swiper-slide img {
-        height: 400px;
-        object-fit: cover;
-    }
-}
-
+/* Responsive - Controle apenas dos botões, aspect-ratio mantém proporção */
 @media (max-width: 768px) {
-    .swiper#banner-slide .swiper-slide img {
-        height: 300px;
-        object-fit: cover;
-    }
     .swiper#banner-slide .swiper-button-prev,
     .swiper#banner-slide .swiper-button-next {
         width: 36px;
@@ -573,10 +555,6 @@ footer h3 {
 }
 
 @media (max-width: 480px) {
-    .swiper#banner-slide .swiper-slide img {
-        height: 250px;
-        object-fit: cover;
-    }
     .swiper#banner-slide .swiper-pagination {
         bottom: 10px;
     }
