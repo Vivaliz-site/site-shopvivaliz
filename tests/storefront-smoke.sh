@@ -2,8 +2,7 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:8099}"
-TMPDIR="${TMPDIR:-/tmp}"
-# Ensure TMPDIR is writable (CI uses /tmp, local may override)
+TMPDIR=$(mktemp -d) || TMPDIR="/tmp"
 PHP_SERVER_PID=""
 
 cleanup() {
