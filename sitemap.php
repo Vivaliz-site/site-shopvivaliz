@@ -1,11 +1,15 @@
 <?php
 declare(strict_types=1);
 header('Content-Type: application/xml; charset=UTF-8');
-header('X-Robots-Tag: noindex');
 
-$base    = 'https://dev.shopvivaliz.com.br';
-$today   = date('Y-m-d');
+$official = __DIR__ . '/config/official-site.php';
+$officialData = is_file($official) ? (@include $official) : [];
+$base = is_array($officialData) && trim((string)($officialData['base_url'] ?? '')) !== ''
+    ? rtrim((string)$officialData['base_url'], '/')
+    : 'https://www.shopvivaliz.com.br';
 $catalog = __DIR__ . '/api/catalog/fallback-products.json';
+$catalogMTime = is_file($catalog) ? (int)@filemtime($catalog) : time();
+$today   = date('Y-m-d', $catalogMTime > 0 ? $catalogMTime : time());
 $products = is_file($catalog) ? (json_decode((string)file_get_contents($catalog), true) ?: []) : [];
 
 function sx(string $s): string { return htmlspecialchars($s, ENT_XML1, 'UTF-8'); }
@@ -18,6 +22,11 @@ $pages = [
     ['loc' => '/catalogo',  'priority' => '0.9', 'freq' => 'daily'],
     ['loc' => '/sobre',     'priority' => '0.5', 'freq' => 'monthly'],
     ['loc' => '/contato',   'priority' => '0.5', 'freq' => 'monthly'],
+    ['loc' => '/faq',       'priority' => '0.5', 'freq' => 'monthly'],
+    ['loc' => '/termos.php', 'priority' => '0.3', 'freq' => 'yearly'],
+    ['loc' => '/politica-privacidade.php', 'priority' => '0.3', 'freq' => 'yearly'],
+    ['loc' => '/politica-devolucoes.php', 'priority' => '0.3', 'freq' => 'yearly'],
+    ['loc' => '/politica-entrega.php', 'priority' => '0.3', 'freq' => 'yearly'],
     ['loc' => '/blog',      'priority' => '0.6', 'freq' => 'weekly'],
 ];
 
@@ -54,6 +63,8 @@ foreach ($products as $product) {
     $slug = trim((string)($product['slug'] ?? ''));
     if ($slug === '') continue;
     $image = trim((string)($product['image_url'] ?? ''));
+    $price = (float)($product['price'] ?? 0);
+    if ($price <= 0 || $image === '') continue;
     echo "  <url>\n";
     echo '    <loc>' . sx("{$base}/produto/{$slug}") . "</loc>\n";
     echo "    <lastmod>{$today}</lastmod>\n";

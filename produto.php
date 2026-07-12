@@ -7,6 +7,29 @@ function sv_product_default_image(): string
     return '/images/logo-vivaliz-square.png';
 }
 
+function sv_lower(string $value): string
+{
+    return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+}
+
+function sv_official_base_url(): string
+{
+    static $base = null;
+    if ($base !== null) {
+        return $base;
+    }
+
+    $official = __DIR__ . '/config/official-site.php';
+    $fallback = 'https://www.shopvivaliz.com.br';
+    if (!is_file($official)) {
+        return $base = $fallback;
+    }
+
+    $data = @include $official;
+    $value = is_array($data) ? trim((string)($data['base_url'] ?? '')) : '';
+    return $base = ($value !== '' ? rtrim($value, '/') : $fallback);
+}
+
 function sv_product_env_load(): void
 {
     $path = __DIR__ . '/.env';
@@ -242,6 +265,40 @@ function sv_product_find(string $sku, string $id): array
     return [];
 }
 
+function sv_product_infer_brand(array $product): string
+{
+    $name = sv_lower(trim((string)($product['name'] ?? '')));
+    $tags = array_map(
+        static fn ($tag): string => sv_lower(trim((string)$tag)),
+        is_array($product['tags'] ?? null) ? $product['tags'] : []
+    );
+
+    foreach (['soprano', 'gedore', 'astra', 'fercar', 'papaiz', 'japi', 'aquatools'] as $brand) {
+        if (str_contains($name, $brand) || in_array($brand, $tags, true)) {
+            return ucfirst($brand);
+        }
+    }
+
+    return 'Vivaliz';
+}
+
+function sv_product_gtin(array $product): string
+{
+    foreach (['gtin', 'ean', 'barcode'] as $field) {
+        $value = preg_replace('/\D+/', '', trim((string)($product[$field] ?? '')));
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    return '';
+}
+
+function sv_product_availability(int $stock): string
+{
+    return $stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
+}
+
 function sv_qv(string $key, string $fallback = ''): string
 {
     $v = $_GET[$key] ?? $fallback;
@@ -294,9 +351,13 @@ $rawSlug  = trim((string)($resolved['slug'] ?? ''));
 
 $priceRaw   = (float)($resolved['price'] ?? (float)sv_qv('price', '0'));
 $stockRaw   = (int)($resolved['stock'] ?? 0);
+$brandName  = sv_product_infer_brand($resolved);
+$gtin       = sv_product_gtin($resolved);
+$availability = sv_product_availability($stockRaw);
 $priceLabel = $priceRaw > 0 ? 'R$ ' . number_format($priceRaw, 2, ',', '.') : 'Consulte o valor';
 $contactUrl = sv_product_contact_url($sku, $name);
-$canonicalUrl = 'https://dev.shopvivaliz.com.br' . ($rawSlug !== '' ? '/produto/' . $rawSlug : '/produto?sku=' . rawurlencode($sku));
+$baseUrl = sv_official_base_url();
+$canonicalUrl = $baseUrl . ($rawSlug !== '' ? '/produto/' . $rawSlug : '/produto?sku=' . rawurlencode($sku));
 
 $related = $notFound ? [] : sv_product_enrich_many(sv_product_related($sku, $category));
 $svNavCurrent = 'produto';
@@ -370,21 +431,27 @@ if ($notFound) {
         '@context'       => 'https://schema.org',
         '@type'          => 'Product',
         'name'           => $name,
-        'image'          => $image,
+        'image'          => [$image],
         'description'    => $description,
         'sku'            => $sku,
+        'mpn'            => $sku,
         'category'       => $category,
         'mainEntityOfPage' => $canonicalUrl,
-        'brand'          => ['@type' => 'Brand', 'name' => 'Vivaliz'],
+        'brand'          => ['@type' => 'Brand', 'name' => $brandName],
         'offers'         => [
             '@type'         => 'Offer',
             'url'           => $canonicalUrl,
             'priceCurrency' => 'BRL',
             'price'         => $priceRaw > 0 ? number_format($priceRaw, 2, '.', '') : '0',
-            'availability'  => 'https://schema.org/InStock',
-            'seller'        => ['@type' => 'Organization', 'name' => 'Vivaliz'],
+            'availability'  => $availability,
+            'itemCondition' => 'https://schema.org/NewCondition',
+            'seller'        => ['@type' => 'Organization', 'name' => 'Shopvivaliz'],
         ],
     ];
+
+    if ($gtin !== '') {
+        $jsonLd['gtin'] = $gtin;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -400,7 +467,7 @@ if ($notFound) {
     <?php endif; ?>
     <meta property="og:title" content="<?= sv_esc($name) ?> | Vivaliz">
     <meta property="og:description" content="<?= sv_esc($description) ?>">
-    <meta property="og:image" content="<?= sv_esc(str_starts_with($image, 'http') ? $image : 'https://shopvivaliz.com.br' . $image) ?>">
+    <meta property="og:image" content="<?= sv_esc(str_starts_with($image, 'http') ? $image : $baseUrl . $image) ?>">
     <meta property="og:type" content="<?= $notFound ? 'website' : 'product' ?>">
     <meta property="og:url" content="<?= sv_esc($canonicalUrl) ?>">
     <meta property="og:site_name" content="Vivaliz">
@@ -570,6 +637,7 @@ if ($notFound) {
             return items;
         }
 
+        var buyNowButton = document.getElementById('buy-now');
         if (buyNowButton) {
             buyNowButton.addEventListener('click', function () {
                 addToCart(product);
@@ -597,6 +665,7 @@ if ($notFound) {
             if (b) b.textContent = n > 0 ? n : '';
         } catch(e){}
     })();
+    </script>
     <script>
     (function() {
         var frm = document.getElementById('frm-stock-alert');
