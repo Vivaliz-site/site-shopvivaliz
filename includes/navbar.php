@@ -192,9 +192,9 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 <style>
 /* CRITICAL LIZ E BUTTON OVERRIDES VIA INLINE STYLE PARA FURAR CACHE CDN */
 #sv-liz-panel, #sv-liz-panel.open {
-  top: 10px !important;
-  bottom: 10px !important;
-  height: calc(100dvh - 20px) !important;
+  top: 4px !important;
+  bottom: 4px !important;
+  height: calc(100dvh - 8px) !important;
   max-height: none !important;
   width: 380px !important;
 }
