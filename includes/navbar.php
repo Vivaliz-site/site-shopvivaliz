@@ -188,3 +188,47 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
         <svg viewBox="0 0 24 24"><path d="M12.01 2.01c-5.5 0-9.98 4.47-9.98 9.98 0 1.95.55 3.84 1.58 5.48L2.01 22l4.63-1.57a9.92 9.92 0 0 0 5.37 1.56c5.5 0 9.98-4.48 9.98-9.99 0-5.51-4.48-9.99-9.98-9.99zm5.34 14.36c-.23.64-1.34 1.22-1.85 1.28-.51.06-1.12.18-3.15-.66-2.42-1.01-3.95-3.48-4.07-3.64-.12-.16-.97-1.3-.97-2.48s.62-1.74.84-1.98c.22-.24.47-.29.63-.29s.32.01.46.01c.14 0 .34-.05.53.4.2.47.69 1.68.75 1.8.06.12.1.26.02.41s-.12.24-.24.36c-.12.12-.26.26-.37.36-.12.11-.25.24-.12.47.12.22.56.93 1.2 1.51.83.74 1.54.97 1.77 1.09.23.12.36.1.49-.05.13-.15.56-.65.71-.87.15-.22.3-.18.5-.11.2.07 1.29.61 1.51.72.22.11.37.17.42.26.06.1.06.56-.17 1.2z"/></svg>
     </span>
 </a>
+
+<style>
+/* CRITICAL LIZ E BUTTON OVERRIDES VIA INLINE STYLE PARA FURAR CACHE CDN */
+#sv-liz-panel, #sv-liz-panel.open {
+  top: 24px !important;
+  bottom: 24px !important;
+  height: auto !important;
+  max-height: none !important;
+  width: 400px !important;
+}
+
+@media(max-width: 600px) {
+  #sv-liz-panel, #sv-liz-panel.open {
+    top: 10px !important;
+    bottom: 10px !important;
+    left: 10px !important;
+    right: 10px !important;
+    width: auto !important;
+  }
+}
+
+.btn, .buy-button, .btn-primary, .btn-secondary, button.buy-button {
+  padding: 10px 18px !important;
+  font-size: 14px !important;
+  height: auto !important;
+  min-height: 38px !important;
+  line-height: 1.2 !important;
+}
+
+.card-actions .btn, .card-actions .buy-button, .card-actions button {
+  padding: 8px 14px !important;
+  font-size: 13px !important;
+  min-height: 34px !important;
+  border-radius: 6px !important;
+}
+
+.sv-form button {
+  padding: 0 16px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  font-size: 14px !important;
+}
+</style>
+
