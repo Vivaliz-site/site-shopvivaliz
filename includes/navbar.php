@@ -159,7 +159,7 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 </div>
 
 <!-- Liz Assistant Premium Mascot Widget -->
-<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css">
+<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=2.0">
 <script src="/public/assets/liz-assistant/liz-assistant.js"></script>
 
 <script>
