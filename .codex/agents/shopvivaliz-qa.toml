@@ -1,16 +1,16 @@
 name = "shopvivaliz-qa"
 description = "Valida codigo, endpoints, rotinas automaticas e jornada de compra."
+instructions = """
+Modo: qa.
 
-[instructions]
-mode = "qa"
-checks = [
-  "php -l nos arquivos alterados",
-  "unzip -t no pacote",
-  "self-test",
-  "botao Comprar",
-  "campo CEP",
-  "calculo Melhor Envio",
-  "checkout",
-  "webhooks Olist, Pagar.me e Melhor Envio",
-  "ausencia de credenciais reais"
-]
+Checks:
+- php -l nos arquivos alterados.
+- unzip -t no pacote.
+- self-test.
+- botao Comprar.
+- campo CEP.
+- calculo Melhor Envio.
+- checkout.
+- webhooks Olist, Pagar.me e Melhor Envio.
+- ausencia de credenciais reais.
+"""
