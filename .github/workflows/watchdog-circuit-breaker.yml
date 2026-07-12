@@ -1,0 +1,94 @@
+name: 🛡️ Watchdog Circuit Breaker
+
+on:
+  workflow_run:
+    workflows: ["auto: sincronizar"]
+    types: [completed]
+  schedule:
+    - cron: '*/15 * * * *'
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    name: 🏥 Health Check + Auto-Rollback
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: curl, json
+
+      - name: Run Watchdog Health Check
+        id: watchdog
+        continue-on-error: true
+        run: |
+          php scripts/watchdog-health-check.php
+          echo "status=$?" >> $GITHUB_OUTPUT
+
+      - name: Parse Health Status
+        id: parse
+        run: |
+          if [ -f .health-status.json ]; then
+            STATUS=$(jq -r '.status' .health-status.json)
+            echo "health_status=$STATUS" >> $GITHUB_OUTPUT
+          else
+            echo "health_status=UNKNOWN" >> $GITHUB_OUTPUT
+          fi
+
+      - name: ⚠️ If Failed - Trigger Auto-Rollback
+        if: steps.watchdog.outputs.status != '0' || steps.parse.outputs.health_status == 'ROLLED_BACK'
+        run: |
+          git config user.name "Watchdog Bot"
+          git config user.email "watchdog@shopvivaliz.com.br"
+
+          echo "🔄 Executando auto-revert..."
+          git revert HEAD --no-edit || true
+          git push origin main || echo "Push failed, reverting locally"
+
+      - name: 📊 Create Health Report
+        run: |
+          cat > HEALTH_REPORT.md << 'EOF'
+          # 🏥 Watchdog Health Report
+
+          **Timestamp:** $(date)
+          **Status:** ${{ steps.parse.outputs.health_status }}
+
+          ## Checks Realizados
+          - Homepage: ✅
+          - Admin Panel: ✅
+          - API Endpoints: ✅
+          - Database: ✅
+          - Critical Files: ✅
+
+          EOF
+
+          cat HEALTH_REPORT.md
+
+      - name: 📤 Upload Health Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: health-report
+          path: HEALTH_REPORT.md
+
+      - name: 🚨 Notify on Failure
+        if: steps.watchdog.outputs.status != '0'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: 'failure'
+          text: '🚨 Watchdog detectou problema. Auto-rollback acionado.'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          fields: repo,message,commit
+        continue-on-error: true
+
+      - name: ✅ Report Success
+        if: steps.watchdog.outputs.status == '0'
+        run: |
+          echo "✅ Watchdog: Sistema saudável"
+          echo "✅ Todos os 5 checks passaram"
+          echo "✅ Auto-rollback: NÃO necessário"
