@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 
 test.describe('Fluxo de Compra', () => {
-  const baseUrl = 'https://dev.shopvivaliz.com.br';
+  const baseUrl = process.env.E2E_BASE_URL || 'https://dev.shopvivaliz.com.br';
 
   test('homepage deve responder e carregar estrutura basica', async ({ page }) => {
     const response = await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
@@ -31,7 +31,7 @@ test.describe('Fluxo de Compra', () => {
   test('clique em produto deve abrir pagina de detalhes com preco', async ({ page }) => {
     await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
 
-    const produtoLink = page.locator('a:has-text("Rodízio"), a:has-text("Abraçadeira")').first();
+    const produtoLink = page.locator('#product-grid .product-card a.card-link').first();
     const temProduto = await produtoLink.isVisible({ timeout: 5000 }).catch(() => false);
     test.skip(!temProduto, 'Nenhum produto de exemplo encontrado neste ambiente');
 
@@ -43,7 +43,7 @@ test.describe('Fluxo de Compra', () => {
   test('botao de compra deve existir na pagina de produto', async ({ page }) => {
     await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
 
-    const produtoLink = page.locator('a:has-text("Rodízio"), a:has-text("Abraçadeira")').first();
+    const produtoLink = page.locator('#product-grid .product-card a.card-link').first();
     const temProduto = await produtoLink.isVisible({ timeout: 5000 }).catch(() => false);
     test.skip(!temProduto, 'Nenhum produto de exemplo encontrado neste ambiente');
 

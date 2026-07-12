@@ -10,7 +10,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: autonomous-code-agent-24-7
+  group: shopvivaliz-autonomous-code-edit
   cancel-in-progress: false
 
 jobs:
@@ -76,7 +76,10 @@ jobs:
 
           Execute testes proporcionais à mudança. Deixe no working tree somente uma melhoria real e seu teste/documentação necessária. Se não conseguir produzir mudança verificável, não altere a fila e finalize sem fabricar resultado.
           PROMPT
-          bash scripts/autonomous-provider-failover.sh "$RUNNER_TEMP/autonomous-agent-prompt.txt"
+          python scripts/agent-exclusive-run.py \
+            --owner "github-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --timeout 3000 -- \
+            bash scripts/autonomous-provider-failover.sh "$RUNNER_TEMP/autonomous-agent-prompt.txt"
 
       - name: Require auditable source change
         id: diff

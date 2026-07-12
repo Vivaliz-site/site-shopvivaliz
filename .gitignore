@@ -38,3 +38,7 @@ config/runtime-secrets.php
 config/runtime-secrets*.php
 .env.production
 .env.production.local
+
+# Playwright runtime artifacts belong in CI artifacts, never in source control.
+test-results/
+playwright-report/

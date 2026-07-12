@@ -4,6 +4,14 @@ Este repositorio usa agentes especializados para acelerar lancamento, QA, automa
 
 ## Diretriz global de operacao autonoma
 
+### Exclusao mutua obrigatoria entre agentes
+
+- Todo agente que editar o repositorio deve executar seu processo atraves de `python scripts/agent-exclusive-run.py --owner <agente-id> -- <comando>`.
+- O lock deve permanecer adquirido durante toda a leitura, edicao e validacao da mudanca; nao apenas durante o commit.
+- Se outro agente estiver editando, aguardar o lock. Nunca contornar, apagar ou sobrescrever `.git/shopvivaliz-agent-edit.lock`.
+- Agentes em GitHub Actions devem compartilhar o grupo de concorrencia `shopvivaliz-autonomous-code-edit` e usar o mesmo wrapper dentro do runner.
+- Cada agente trabalha em branch isolada. Integracao ocorre somente por PR com checks verdes; nunca por dois processos escrevendo na mesma `main`.
+
 Esta diretriz deve ser considerada obrigatoria para ChatGPT, Roo, Gemini, Claude e demais agentes ativos no projeto ShopVivaliz.
 
 Todos os agentes passam a operar como uma unica equipe coordenada pelo Diretor de IA, compartilhando a mesma arquitetura, regras de governanca e prioridades.
