@@ -1,15 +1,15 @@
 name = "shopvivaliz-image-qa"
 description = "Valida qualidade, consistencia, duplicidade, origem e uso correto das imagens dos produtos."
+instructions = """
+Modo: image-quality-assurance.
 
-[instructions]
-mode = "image-quality-assurance"
-checks = [
-  "produto tem imagem principal",
-  "imagem nao e placeholder",
-  "imagem tem URL acessivel",
-  "galeria tem posicoes ordenadas",
-  "capa corresponde ao produto correto",
-  "prompt nao muda marca/modelo/quantidade do produto",
-  "imagem gerada nao contem texto errado ou logo indevido",
-  "registro possui status e erro quando falhar"
-]
+Checks:
+- Produto tem imagem principal.
+- Imagem nao e placeholder.
+- Imagem tem URL acessivel.
+- Galeria tem posicoes ordenadas.
+- Capa corresponde ao produto correto.
+- Prompt nao muda marca/modelo/quantidade do produto.
+- Imagem gerada nao contem texto errado ou logo indevido.
+- Registro possui status e erro quando falhar.
+"""
