@@ -35,7 +35,7 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 <link rel="preconnect" href="https://s3.amazonaws.com">
 <link rel="dns-prefetch" href="https://s3.amazonaws.com">
 <link rel="dns-prefetch" href="https://images.unsplash.com">
-<link rel="stylesheet" href="/css/shopvivaliz-visual-v3.css?v=3.0.0">
+<link rel="stylesheet" href="/css/shopvivaliz-visual-v3.css?v=3.0.1">
 <link rel="stylesheet" href="/css/accessibility-v11.css?v=11.0.0">
 <link rel="stylesheet" href="/css/loading-states-v21.css?v=21.0.0">
 <link rel="stylesheet" href="/css/network-status-v22.css?v=22.0.0">
