@@ -12,37 +12,67 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Start PHP server with retry logic
-MAX_RETRIES=3
-for attempt in $(seq 1 $MAX_RETRIES); do
-  echo "Starting PHP server (attempt $attempt/$MAX_RETRIES)..."
-  php -S 127.0.0.1:8099 -t . >"$TMPDIR/shopvivaliz-php-server.log" 2>&1 &
-  PHP_SERVER_PID=$!
-  sleep 2
+# Check prerequisites
+echo "Checking prerequisites..."
+if ! command -v php &> /dev/null; then
+  echo "ERROR: PHP not found"
+  exit 1
+fi
 
-  # Check if server is listening
-  if lsof -i :8099 >/dev/null 2>&1 || netstat -tuln 2>/dev/null | grep -q 8099; then
-    echo "✓ PHP server started (PID: $PHP_SERVER_PID)"
+# Kill any existing process on 8099
+if lsof -i :8099 >/dev/null 2>&1; then
+  echo "Killing existing process on port 8099..."
+  lsof -i :8099 | awk 'NR!=1 {print $2}' | xargs kill -9 2>/dev/null || true
+  sleep 1
+fi
+
+# Start PHP server in background
+echo "Starting PHP built-in server on 127.0.0.1:8099..."
+php -S 127.0.0.1:8099 -t . >"$TMPDIR/shopvivaliz-php-server.log" 2>&1 &
+PHP_SERVER_PID=$!
+echo "PHP Server PID: $PHP_SERVER_PID"
+
+# Give it time to start
+sleep 3
+
+# Verify server is actually running
+if ! kill -0 $PHP_SERVER_PID 2>/dev/null; then
+  echo "ERROR: PHP server process died immediately"
+  echo "=== PHP Server Logs ==="
+  cat "$TMPDIR/shopvivaliz-php-server.log"
+  exit 1
+fi
+
+# Wait for port to be listening (max 30 seconds)
+echo "Waiting for port 8099 to be listening..."
+for attempt in $(seq 1 30); do
+  if lsof -i :8099 >/dev/null 2>&1 || netstat -tuln 2>/dev/null | grep -q ":8099 "; then
+    echo "✓ Port 8099 is listening"
     break
-  else
-    if [ $attempt -lt $MAX_RETRIES ]; then
-      echo "⚠️  Port 8099 not responding, retrying..."
-      kill $PHP_SERVER_PID 2>/dev/null || true
-      sleep 1
-    fi
   fi
+  if [ $attempt -eq 30 ]; then
+    echo "ERROR: Port 8099 still not listening after 30 seconds"
+    echo "=== PHP Server Logs ==="
+    cat "$TMPDIR/shopvivaliz-php-server.log"
+    exit 1
+  fi
+  sleep 1
 done
 
-# Wait for server to be ready
-for retry in $(seq 1 45); do
-  if curl -fsS "${BASE_URL}/index.php" >/dev/null 2>&1; then
-    echo "✓ Server ready after $retry attempts"
+# Test connectivity (max 45 seconds)
+echo "Testing server connectivity..."
+for attempt in $(seq 1 45); do
+  if curl -fsS "${BASE_URL}/index.php" -o /dev/null 2>/dev/null; then
+    echo "✓ Server responding to HTTP requests"
     break
   fi
-  if [ $retry -eq 45 ]; then
-    echo "❌ Server failed to start after 45 attempts"
-    echo "Server logs:"
+  if [ $attempt -eq 45 ]; then
+    echo "ERROR: Server not responding after 45 attempts"
+    echo "=== PHP Server Logs ==="
     cat "$TMPDIR/shopvivaliz-php-server.log"
+    echo "=== Network Status ==="
+    netstat -tuln 2>/dev/null | grep 8099 || echo "Port 8099 not listening"
+    lsof -i :8099 2>/dev/null || echo "No process on port 8099"
     exit 1
   fi
   sleep 1
