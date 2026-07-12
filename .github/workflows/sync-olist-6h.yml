@@ -1,39 +1,78 @@
-name: Sincronizar Olist (a cada 6 horas)
+name: Sincronizar Olist/Tiny (espelho do catalogo)
 
 on:
   schedule:
-    # A cada 6 horas: 00:00, 06:00, 12:00, 18:00 UTC
-    - cron: '0 0,6,12,18 * * *'
+    # A cada 2 horas para manter access/refresh token e catalogo vivos.
+    - cron: '0 */2 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-olist-catalog-mirror
+  cancel-in-progress: false
 
 jobs:
   sync-olist:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.1'
+          php-version: '8.3'
 
-      - name: Sincronizar com Olist
+      - name: Sincronizar catalogo como espelho da Olist/Tiny
         env:
           OLIST_CLIENT_ID: ${{ secrets.OLIST_CLIENT_ID }}
           OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
-          TINY_TOKEN: ${{ secrets.TINY_TOKEN }}
-          MEDUSA_BACKEND_URL: ${{ secrets.MEDUSA_BACKEND_URL }}
+          OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
+          OLIST_ACCESS_TOKEN: ${{ secrets.OLIST_ACCESS_TOKEN }}
+          OLIST_API_TOKEN: ${{ secrets.OLIST_API_TOKEN }}
+          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
+          TINY_CLIENT_ID: ${{ secrets.TINY_CLIENT_ID }}
+          TINY_CLIENT_SECRET: ${{ secrets.TINY_CLIENT_SECRET }}
+          TINY_REFRESH_TOKEN: ${{ secrets.TINY_REFRESH_TOKEN }}
+          TINY_ACCESS_TOKEN: ${{ secrets.TINY_ACCESS_TOKEN }}
+          TINY_API_TOKEN: ${{ secrets.TINY_API_TOKEN }}
         run: |
-          php claude/api/sync-olist-products.php
+          mkdir -p logs
+          php olist/sync-products.php > logs/olist-live-sync-response.json
+          cat logs/olist-live-sync-response.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("logs/olist-live-sync-response.json").read_text(encoding="utf-8"))
+          if payload.get("ok") is not True:
+              raise SystemExit(f"sync failed: {payload}")
+          fetched = int(payload.get("fetched") or 0)
+          after = int(payload.get("after_count") or 0)
+          if fetched <= 0 or after <= 0:
+              raise SystemExit(f"sync returned empty catalog: {payload}")
+          print(f"Catalogo espelhado: fetched={fetched} after={after} removed={payload.get('removed_count')}")
+          PY
 
-      - name: Fazer commit de produtos sincronizados
+      - name: Validar catalogo sincronizado
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "Autonomous Sync"
+          php scripts/quality/validate-product-prices.php
+          php scripts/quality/validate-product-stock.php
+          php scripts/quality/validate-product-images.php
 
-          if [[ -n $(git status -s) ]]; then
-            git add -A
-            git commit -m "chore: sincronizar produtos com Olist (automático)"
+      - name: Fazer commit do catalogo espelhado
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [[ -n "$(git status --short api/catalog/fallback-products.json)" ]]; then
+            git add api/catalog/fallback-products.json
+            git commit -m "chore: espelhar catalogo Olist/Tiny"
             git push
+          else
+            echo "Sem alteracoes no catalogo."
           fi
