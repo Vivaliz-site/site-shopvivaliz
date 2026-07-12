@@ -22,6 +22,11 @@
                 <div>
                     <strong>Vivaliz</strong>
                     <p>Qualidade e entrega rápida para todo o Brasil.</p>
+                    <div style="margin-top: 15px; display: flex; gap: 15px;">
+                        <a href="https://instagram.com/shopvivaliz" target="_blank" rel="noopener" title="Instagram" style="color: #e4405f; text-decoration: none; font-size: 20px;">📷</a>
+                        <a href="https://facebook.com/shopvivaliz" target="_blank" rel="noopener" title="Facebook" style="color: #1877f2; text-decoration: none; font-size: 20px;">f</a>
+                        <a href="https://tiktok.com/@shop_vivaliz" target="_blank" rel="noopener" title="TikTok" style="color: #000; text-decoration: none; font-size: 20px;">♪</a>
+                    </div>
                 </div>
 
                 <div>
