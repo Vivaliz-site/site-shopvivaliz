@@ -576,6 +576,36 @@
       "selected_at": "2026-07-04T13:49:37.294563Z",
       "selected_by": "autonomous-continuous-cycle",
       "selection_reason": "phase=phase-2-revenue; readiness=ready_local; queue_rank=18; director_rank=0"
+    },
+    {
+      "title": "Gerar backlog autonomo novo quando a fila entrar em idle",
+      "description": "O ciclo autonomo entrou em idle. Criar missoes seguras e executaveis com base em sinais reais do projeto para manter evolucao continua.",
+      "priority": "high",
+      "status": "pending",
+      "auto_generated": true,
+      "source": "real-project-signals",
+      "id": "task-050",
+      "created_at": "2026-07-12T20:46:43.112298Z"
+    },
+    {
+      "title": "Corrigir falhas concretas do validador de deploy",
+      "description": "Tratar os problemas apontados em logs/deploy-diagnostic.json para impedir deploy com erro silencioso.",
+      "priority": "high",
+      "status": "pending",
+      "auto_generated": true,
+      "source": "real-project-signals",
+      "id": "task-051",
+      "created_at": "2026-07-12T20:46:43.112298Z"
+    },
+    {
+      "title": "Reparar produtos reais do catalogo sem imagem valida",
+      "description": "Foram encontrados 1 produtos sem imagem valida no catalogo fallback; revisar cobertura visual desses SKUs.",
+      "priority": "high",
+      "status": "pending",
+      "auto_generated": true,
+      "source": "real-project-signals",
+      "id": "task-052",
+      "created_at": "2026-07-12T20:46:43.112298Z"
     }
   ],
   "version": "1.1",
