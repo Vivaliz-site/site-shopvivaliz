@@ -1,204 +1,39 @@
-name: 🤖 Maestro 24/7 Real - Agentes Autônomos
+name: PAUSADO - Maestro 24/7 Real substituido
+
+# Pausado em 2026-07-11.
+# Motivo: este workflow continha uma etapa de simulacao de agentes e gerava
+# relatorio de atividade sem executar correcao real no codigo. Para manter a
+# validacao honesta, ele fica disponivel apenas para auditoria manual.
+#
+# Fluxos reais que continuam responsaveis pela operacao automatizada:
+# - .github/workflows/autonomous-code-agent-24-7.yml
+# - .github/workflows/autonomous-watchdog.yml
+# - .github/workflows/monitor-actions-and-prs.yml
+# - .github/workflows/shopvivaliz-qa.yml
+# - .github/workflows/storefront-quality.yml
 
 on:
-  schedule:
-    # Executar a cada 3 horas (cobertura 24/7)
-    - cron: '0 */3 * * *'
   workflow_dispatch:
-    inputs:
-      task_type:
-        description: 'Tipo de tarefa'
-        required: false
-        default: 'all'
+
+permissions:
+  contents: read
 
 jobs:
-  maestro:
-    name: Coordenador de Agentes
+  paused:
+    name: Workflow pausado por simulacao
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
     steps:
-      - name: 📥 Checkout código
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 🐍 Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: 📦 Instalar dependências
+      - name: Explicar substituicao
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          pip install anthropic openai google-generativeai requests pyyaml
+          cat <<'EOF'
+          Este workflow foi pausado porque continha simulacao de agentes.
 
-      - name: 🔍 Analisar estado do projeto
-        id: analyze
-        run: |
-          echo "Starting project analysis..."
-          
-          # Contar issues abertas
-          OPEN_ISSUES=$(gh issue list --state open --json number | wc -l)
-          echo "open_issues=$OPEN_ISSUES" >> $GITHUB_OUTPUT
-          
-          # Verificar últimos commits
-          LAST_COMMIT=$(git log -1 --pretty=format:"%h - %s")
-          echo "last_commit=$LAST_COMMIT" >> $GITHUB_OUTPUT
-          
-          # Verificar branches
-          BRANCHES=$(git branch -r | wc -l)
-          echo "branches=$BRANCHES" >> $GITHUB_OUTPUT
-          
-          echo "✅ Análise concluída"
-
-      - name: 🎯 Gerar tarefas de melhoria
-        id: tasks
-        run: python << 'PYTHON_SCRIPT'
-import json
-import os
-from datetime import datetime
-
-tasks = {
-    "improvements": [
-        {
-            "id": "perf-001",
-            "type": "performance",
-            "title": "Otimizar carregamento da homepage",
-            "description": "Reduzir time to first paint em 20%",
-            "priority": "high",
-            "assigned_to": ["claude"],
-            "estimated_hours": 2
-        },
-        {
-            "id": "sec-001",
-            "type": "security",
-            "title": "Auditar dependências de segurança",
-            "description": "Verificar vulnerabilidades em packages",
-            "priority": "high",
-            "assigned_to": ["claude"],
-            "estimated_hours": 1
-        },
-        {
-            "id": "bug-001",
-            "type": "bugfix",
-            "title": "Corrigir erros de validação no checkout",
-            "description": "Mensagens de erro duplicadas no formulário",
-            "priority": "medium",
-            "assigned_to": ["claude"],
-            "estimated_hours": 1.5
-        },
-        {
-            "id": "test-001",
-            "type": "testing",
-            "title": "Aumentar cobertura de testes",
-            "description": "Adicionar testes para API de checkout",
-            "priority": "medium",
-            "assigned_to": ["claude"],
-            "estimated_hours": 2
-        },
-        {
-            "id": "docs-001",
-            "type": "documentation",
-            "title": "Documentar endpoints da API",
-            "description": "OpenAPI spec para /api/products, /api/orders",
-            "priority": "low",
-            "assigned_to": ["claude"],
-            "estimated_hours": 2
-        }
-    ],
-    "metadata": {
-        "generated_at": datetime.now().isoformat(),
-        "timestamp": datetime.now().timestamp(),
-        "total_tasks": 5,
-        "estimated_total_hours": 8.5
-    }
-}
-
-with open('tasks-queue-maestro.json', 'w') as f:
-    json.dump(tasks, f, indent=2)
-
-print("✅ Tarefas geradas:")
-for task in tasks["improvements"]:
-    print(f"  - {task['id']}: {task['title']} ({task['priority']})")
-PYTHON_SCRIPT
-
-      - name: 🚀 Executar agentes em paralelo
-        id: agents
-        run: |
-          echo "🤖 Iniciando agentes autônomos..."
-          
-          # Simular execução de agentes (em produção seria chamadas reais à API)
-          cat > agent-runner.sh << 'AGENT_SCRIPT'
-          #!/bin/bash
-          
-          echo "Agent 1: Code Optimizer"
-          echo "  ✓ Analisando performance"
-          echo "  ✓ Identificando gargalos"
-          
-          echo "Agent 2: Security Auditor"
-          echo "  ✓ Escaneando vulnerabilidades"
-          echo "  ✓ Verificando dependências"
-          
-          echo "Agent 3: Test Generator"
-          echo "  ✓ Gerando testes"
-          echo "  ✓ Calculando cobertura"
-          
-          echo "✅ Agentes completados"
-          AGENT_SCRIPT
-          
-          chmod +x agent-runner.sh
-          ./agent-runner.sh
-
-      - name: 📊 Gerar relatório de atividade
-        run: |
-          cat > ACTIVITY-REPORT.md << 'REPORT'
-          # 📊 Relatório de Atividade - Agentes 24/7
-          
-          **Data:** $(date)
-          **Status:** ✅ ATIVO
-          
-          ## Agentes em Operação
-          - 🤖 Code Optimizer (Melhorias de Performance)
-          - 🔒 Security Auditor (Análise de Segurança)
-          - ✅ Test Generator (Cobertura de Testes)
-          - 📝 Doc Writer (Documentação)
-          - 🐛 Bug Hunter (Correção de Erros)
-          
-          ## Tarefas Processadas
-          - ✓ 5 tarefas aguardando
-          - ✓ Prioridade: High → Medium → Low
-          - ✓ Tempo estimado: ~8.5 horas
-          
-          ## Próximas Execuções
-          - Próxima verificação: em 3 horas
-          - Foco: Análise de cobertura de testes
-          - Modo: Contínuo 24/7
-          
-          ---
-          *Gerado automaticamente pelo Maestro 24/7*
-          REPORT
-          
-          cat ACTIVITY-REPORT.md
-
-      - name: 💾 Commit de atividades
-        run: |
-          git config user.email "agente-autonomo@shopvivaliz.com.br"
-          git config user.name "Agente Autonomo ShopVivaliz"
-          git add tasks-queue-maestro.json ACTIVITY-REPORT.md 2>/dev/null || true
-          git commit -m "auto: atividade de agentes 24/7 - $(date +'%Y-%m-%d %H:%M:%S')" 2>/dev/null || echo "Nada para committar"
-          git push origin main 2>/dev/null || echo "Push failed - branch pode estar atualizado"
-
-      - name: ✅ Notificar conclusão
-        run: |
-          echo "🎉 Ciclo de agentes 24/7 concluído!"
-          echo "📋 Próxima execução em 3 horas"
+          Nada aqui executa melhoria, correcao ou relatorio 24/7.
+          Use os workflows reais do projeto:
+          - Autonomous Code Agent 24/7
+          - Autonomous Watchdog Monitor
+          - Monitor & Fix Actions & PRs
+          - ShopVivaliz QA
+          - Storefront Quality
+          EOF
