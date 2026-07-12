@@ -427,3 +427,22 @@ details.faq-item[open] .faq-icon {
     transform: translateY(-5px);
     box-shadow: 0 10px 25px rgba(0,0,0,0.08) !important;
 }
+
+/* ==========================================================================
+   14. MICRO-INTERACTION BUTTON & BADGE PULSE
+   ========================================================================== */
+.btn-success-added {
+    background: #10b981 !important;
+    border-color: #10b981 !important;
+    color: white !important;
+    transform: scale(0.95);
+    transition: all 0.2s ease;
+}
+@keyframes pulse-badge {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.4); background-color: #ef4444; }
+    100% { transform: scale(1); }
+}
+.badge-pulse {
+    animation: pulse-badge 0.4s ease-out;
+}

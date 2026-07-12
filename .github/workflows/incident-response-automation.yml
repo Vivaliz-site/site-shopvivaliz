@@ -1,0 +1,42 @@
+name: 🚨 Incident Response Automation
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  monitor-and-respond:
+    runs-on: ubuntu-latest
+    name: 🚨 Auto-Response
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+
+      - name: Run Incident Response
+        id: incident
+        continue-on-error: true
+        run: |
+          php scripts/incident-response.php
+          echo "response_status=$?" >> $GITHUB_OUTPUT
+
+      - name: 🔔 Notify on Incident
+        if: steps.incident.outputs.response_status != '0'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: 'failure'
+          text: '🚨 Incident detectado e playbook executado automaticamente'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        continue-on-error: true
+
+      - name: ✅ Report Status
+        if: steps.incident.outputs.response_status == '0'
+        run: |
+          echo "✅ Nenhum incidente detectado"
+          echo "✅ Sistema saudável"

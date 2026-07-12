@@ -40,6 +40,11 @@
       return total + Number(item.quantity || 1);
     }, 0);
     badge.textContent = count > 0 ? String(count) : '';
+    if (count > 0) {
+      badge.classList.remove('badge-pulse');
+      void badge.offsetWidth; // trigger reflow
+      badge.classList.add('badge-pulse');
+    }
   }
 
   function addToCart(product) {
@@ -63,7 +68,19 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ event: 'cart_add', sku: product.sku, olist_product_id: product.olist_product_id || '' })
           }).catch(function () {});
+          
+          // Visual success feedback
+          const originalText = button.innerHTML;
+          button.innerHTML = "✓ Adicionado!";
+          button.classList.add('btn-success-added');
+          
           addToCart(product);
+          
+          setTimeout(function() {
+            button.innerHTML = originalText;
+            button.classList.remove('btn-success-added');
+          }, 1500);
+          
           if(window.openMiniCart){window.openMiniCart();}else{window.location.href='/carrinho';}
         } catch (error) {}
       });
