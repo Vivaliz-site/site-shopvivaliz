@@ -1,4 +1,4 @@
-name: Sincronizar Olist/Tiny (espelho do catalogo)
+name: Sincronizar Olist/Tiny - Auto-Renew Token (2h)
 
 on:
   schedule:
