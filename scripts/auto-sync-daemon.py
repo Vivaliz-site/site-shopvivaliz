@@ -27,12 +27,12 @@ def run_cmd(cmd: str, desc: str = "") -> bool:
     try:
         result = subprocess.run(cmd, shell=True, cwd=REPO_DIR, capture_output=True, text=True, timeout=30)
         if result.returncode != 0:
-            log(f"❌ {desc}: {result.stderr[:200]}")
+            log(f"[FAIL] {desc}: {result.stderr[:200]}")
             return False
-        log(f"✅ {desc}")
+        log(f"[OK] {desc}")
         return True
     except Exception as e:
-        log(f"❌ {desc}: {str(e)[:100]}")
+        log(f"[FAIL] {desc}: {str(e)[:100]}")
         return False
 
 def sync_cycle():
