@@ -59,7 +59,12 @@ def build_report() -> str:
         lines += ["⚪ Status do Sistema: Offline ou Indisponível (Dev/Staging)", ""]
 
     # Atividade do Git nas últimas 8 horas
-    commits_8h = run(["git", "log", "--since='8 hours ago'", "--oneline"])
+    commit_shas = [
+        line.strip()
+        for line in run(["git", "log", "--since=8 hours ago", "--format=%H"]).splitlines()
+        if line.strip()
+    ]
+    commits_8h = run(["git", "log", "--since=8 hours ago", "--oneline"])
     lines += ["📝 Commits realizados nas últimas 8 horas:"]
     if commits_8h:
         lines += [f"  {line}" for line in commits_8h.splitlines()]
@@ -67,12 +72,17 @@ def build_report() -> str:
         lines += ["  Nenhum commit detectado nas últimas 8 horas (agentes ociosos ou em standby)."]
     lines += [""]
 
-    # Arquivos alterados nas últimas 8 horas
-    # Fallback para HEAD~1 se der erro ou não houver commits
-    files_8h = run(["git", "diff", "--name-only", "--since='8 hours ago'"])
-    if not files_8h:
+    # Arquivos alterados pelos commits das últimas 8 horas (via SHAs de git log + git show)
+    if commit_shas:
+        changed_files = set()
+        for sha in commit_shas:
+            out = run(["git", "show", "--name-only", "--format=", sha])
+            changed_files.update(f.strip() for f in out.splitlines() if f.strip())
+        files_8h = "\n".join(sorted(changed_files))
+    else:
+        # Fallback: sem commits nas últimas 8h, mostra o último commit existente
         files_8h = run(["git", "diff", "--name-only", "HEAD~1..HEAD"])
-    
+
     lines += ["📂 Arquivos modificados recentemente:"]
     if files_8h:
         lines += [f"  - {line}" for line in files_8h.splitlines()]
@@ -108,10 +118,20 @@ def send_email(subject: str, body: str) -> None:
     email_from = env("EMAIL_FROM", smtp_user)
     email_to = env("EMAIL_TO", "fredmourao@gmail.com")
 
-    if not all([smtp_host, smtp_user, smtp_pass, email_to]):
-        raise SmtpNotConfiguredError(
-            f"SMTP secrets não configurados completos (host={smtp_host}, user={smtp_user}, to={email_to})"
-        )
+    missing = [
+        name
+        for name, value in [
+            ("SMTP_HOST/EMAIL_SMTP_HOST", smtp_host),
+            ("SMTP_USER/EMAIL_USER", smtp_user),
+            ("SMTP_PASS/EMAIL_PASSWORD", smtp_pass),
+            ("EMAIL_TO", email_to),
+        ]
+        if not value
+    ]
+    if missing:
+        raise SmtpNotConfiguredError(f"Secrets SMTP ausentes: {', '.join(missing)}")
+
+    print(f"Enviando relatório via {smtp_host}:{smtp_port} para {email_to}")
 
     msg = EmailMessage()
     msg["Subject"] = subject
@@ -141,8 +161,8 @@ def main() -> int:
         print("Relatório enviado por email com sucesso.")
         return 0
     except SmtpNotConfiguredError as exc:
-        print(f"[AVISO] {exc}", file=sys.stderr)
-        return 0
+        print(f"[ERRO] {exc}", file=sys.stderr)
+        return 1
     except Exception as exc:
         print(f"Falha ao enviar relatório: {exc}", file=sys.stderr)
         return 1
