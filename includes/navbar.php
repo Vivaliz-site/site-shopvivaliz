@@ -159,6 +159,46 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
     </div>
 </div>
 
+<!-- Mobile Sticky Bottom Navigation Bar -->
+<div class="sv-mobile-nav-bar" role="navigation" aria-label="Navegação mobile rápida">
+    <a href="/" class="<?= $svNavCurrent === 'home' ? 'active' : '' ?>" aria-label="Ir para a home">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-label">Início</span>
+    </a>
+    <a href="/catalogo" class="<?= $svNavCurrent === 'catalogo' ? 'active' : '' ?>" aria-label="Ver catálogo">
+        <span class="nav-icon">🔍</span>
+        <span class="nav-label">Buscar</span>
+    </a>
+    <a href="#" onclick="if(window.openMiniCart){window.openMiniCart(); return false;}else{window.location.href='/carrinho'; return false;}" aria-label="Abrir carrinho">
+        <span class="nav-icon" style="position:relative; display:inline-block;">
+            🛒
+            <span class="cart-badge mini-cart-badge-count" id="mobile-cart-count" style="position:absolute; top:-6px; right:-8px; background:#ef4444; color:#fff; font-size:10px; font-weight:bold; border-radius:50%; width:16px; height:16px; display:none; align-items:center; justify-content:center; border:1px solid #fff; padding:0; line-height:16px; min-height:16px;"></span>
+        </span>
+        <span class="nav-label">Carrinho</span>
+    </a>
+    <a href="<?= htmlspecialchars($svWhatsappLink, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" aria-label="Falar no WhatsApp">
+        <span class="nav-icon">💬</span>
+        <span class="nav-label">WhatsApp</span>
+    </a>
+    <a href="#" onclick="var p=document.getElementById('sv-liz-panel'); if(p){p.classList.add('open'); document.body.classList.add('sv-liz-is-open');} return false;" aria-label="Abrir assistente Liz">
+        <span class="nav-icon">🤖</span>
+        <span class="nav-label">Liz</span>
+    </a>
+</div>
+
+<!-- Exit-Intent Recovery Pop-up (Recuperação de Carrinho) -->
+<div class="exit-intent-overlay" id="exit-intent-overlay" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.4); backdrop-filter:blur(4px); z-index:100000; align-items:center; justify-content:center;">
+    <div class="exit-intent-modal" style="background:#fff; border:1.5px solid #e2e8f0; border-radius:24px; max-width:440px; width:90%; padding:32px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25); text-align:center; position:relative; font-family:'Inter',system-ui,-apple-system,sans-serif; animation: popupEntrance 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;">
+        <button type="button" id="exit-intent-close" style="position:absolute; top:16px; right:16px; border:0; background:#f1f5f9; width:32px; height:32px; border-radius:50%; font-size:18px; cursor:pointer; color:#64748b; display:flex; align-items:center; justify-content:center; transition:background 0.2s;">&times;</button>
+        <div style="font-size:40px; margin-bottom:16px;">🎁</div>
+        <h2 style="font-size:22px; font-weight:800; color:#0f172a; margin:0 0 10px; letter-spacing:-0.02em;">Espere! Não vá embora ainda...</h2>
+        <p style="font-size:14px; color:#64748b; line-height:1.5; margin:0 0 20px;">Identificamos itens salvos no seu carrinho. Conclua seu pedido nos próximos 15 minutos e garanta **5% de desconto extra** com o cupom abaixo:</p>
+        <div style="background:#f8fafc; border:2px dashed #0b4f88; padding:12px 18px; border-radius:12px; font-weight:800; font-size:18px; color:#0b4f88; letter-spacing:0.05em; display:inline-block; margin-bottom:20px; user-select:all; cursor:pointer;" title="Clique para copiar" id="exit-intent-coupon">VOLTEI5</div>
+        <div id="exit-intent-timer" style="font-size:12px; color:#ef4444; font-weight:700; margin-bottom:20px;">Oferta expira em: 15:00</div>
+        <button type="button" class="btn btn-primary" onclick="if(window.openMiniCart){window.openMiniCart(); document.getElementById('exit-intent-overlay').style.display='none';}else{window.location.href='/carrinho';}" style="width:100%; padding:14px; font-weight:700; border-radius:12px; cursor:pointer;">Ver Meu Carrinho</button>
+    </div>
+</div>
+
 <!-- Liz Assistant Premium Mascot Widget -->
 <link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=5.0">
 <script src="/public/assets/liz-assistant/liz-assistant.js"></script>
