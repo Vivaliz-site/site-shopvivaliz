@@ -76,13 +76,23 @@ def build_report() -> str:
         if len(shas) > 1:
             files_8h = run(["git", "diff", "--name-only", f"{shas[-1]}..{shas[0]}"])
         else:
-            files_8h = run(["git", "diff", "--name-only", f"{shas[0]}~1..{shas[0]}"])
+            # Apenas um commit nas últimas 8h — comparar com pai se existir
+            try:
+                # Tentar com ~1 (pode falhar se for primeiro commit)
+                files_8h = run(["git", "diff", "--name-only", f"{shas[0]}~1..{shas[0]}"])
+            except:
+                # Se falhar, mostrar arquivos do commit único
+                files_8h = run(["git", "show", "--name-only", "--format=", shas[0]])
     else:
         files_8h = ""
 
     # Fallback se nenhum commit nas últimas 8 horas
     if not files_8h:
-        files_8h = run(["git", "diff", "--name-only", "HEAD~1..HEAD"])
+        try:
+            files_8h = run(["git", "diff", "--name-only", "HEAD~1..HEAD"])
+        except:
+            # Se HEAD~1 não existir, tentar show no HEAD
+            files_8h = run(["git", "show", "--name-only", "--format=", "HEAD"])
     
     lines += ["📂 Arquivos modificados recentemente:"]
     if files_8h:
