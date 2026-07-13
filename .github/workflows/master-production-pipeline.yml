@@ -81,7 +81,8 @@ jobs:
           FAKE_PHONE='55\s*(11|21|31|85|9)\s*999(9{4,}|0{4,})'
           FAKE_EMAIL='(test|fake|dummy|lorem)@'
 
-          if git diff HEAD~1 HEAD --name-only 2>/dev/null | xargs -r grep -E "$FAKE_PHONE|$FAKE_EMAIL" 2>/dev/null; then
+          changed_files="$(git diff HEAD~1 HEAD --name-only 2>/dev/null | grep -v '^\.github/workflows/master-production-pipeline\.yml$' || true)"
+          if [ -n "$changed_files" ] && printf '%s\n' "$changed_files" | xargs -r grep -E "$FAKE_PHONE|$FAKE_EMAIL" 2>/dev/null; then
             echo "❌ ERRO: dados fake detectados (telefone/email dummy)"
             exit 1
           fi
