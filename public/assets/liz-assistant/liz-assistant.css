@@ -194,7 +194,7 @@
 
 /* Hero Mascot Container */
 .sv-hero {
-  height: 110px;
+  height: 135px;
   background: linear-gradient(180deg, rgba(241, 245, 249, 0.8) 0%, rgba(226, 232, 240, 0.4) 100%);
   display: flex;
   align-items: flex-end;
@@ -204,7 +204,7 @@
 }
 
 .sv-hero video {
-  height: 125px;
+  height: 135px;
   object-fit: contain;
 }
 
@@ -370,7 +370,7 @@
   }
 
   .sv-hero {
-    height: 80px;
+    height: 95px;
   }
 
   .sv-hero video {
