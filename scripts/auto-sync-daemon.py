@@ -39,13 +39,18 @@ def sync_cycle():
     """Uma iteração de sincronização."""
     log("[SYNC] Iniciando ciclo de sync...")
 
+    # Get current branch
+    branch_result = subprocess.run("git rev-parse --abbrev-ref HEAD", shell=True, cwd=REPO_DIR, capture_output=True, text=True)
+    branch = branch_result.stdout.strip() if branch_result.returncode == 0 else "main"
+
     # 1. Pull para trazer mudanças da outra estação
-    if run_cmd("git fetch origin && git pull origin $(git rev-parse --abbrev-ref HEAD) --no-edit", "Pull remoto"):
+    if run_cmd(f"git fetch origin && git pull origin {branch} --no-edit", "Pull remoto"):
         # 2. Commit pendências locais
-        run_cmd("git add -A && git diff --cached --quiet || git commit -m \"auto: sync $(date '+%Y-%m-%d %H:%M:%S')\"", "Auto-commit local")
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        run_cmd(f"git add -A && git commit -m \"auto: sync {ts}\"", "Auto-commit local")
 
         # 3. Push para compartilhar com outra estação
-        run_cmd("git push origin $(git rev-parse --abbrev-ref HEAD) --no-verify", "Push remoto")
+        run_cmd(f"git push origin {branch} --no-verify", "Push remoto")
 
     log("[SYNC] Ciclo concluido")
 
