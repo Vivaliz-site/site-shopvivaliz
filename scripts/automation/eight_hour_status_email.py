@@ -152,10 +152,11 @@ def main() -> int:
         print("Relatório enviado por email com sucesso.")
         return 0
     except SmtpNotConfiguredError as exc:
-        print(f"[AVISO] {exc}", file=sys.stderr)
-        return 0
+        print(f"[ERRO] {exc}", file=sys.stderr)
+        print("[ERRO] Secrets SMTP não configurados — impossível enviar relatório.", file=sys.stderr)
+        return 1
     except Exception as exc:
-        print(f"Falha ao enviar relatório: {exc}", file=sys.stderr)
+        print(f"[ERRO] Falha ao enviar relatório: {exc}", file=sys.stderr)
         return 1
 
 
