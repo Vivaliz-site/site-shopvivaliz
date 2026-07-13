@@ -39,6 +39,7 @@ jobs:
           MAIL_PASS: ${{ secrets.EMAIL_PASSWORD || secrets.SMTP_PASS }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO || 'fredmourao@gmail.com,atendimento@shopvivaliz.com.br' }}
+          EMAIL_AGENTES_SECRET: ${{ secrets.EMAIL_AGENTES_SECRET }}
         run: python scripts/automation/validate_email_config.py
 
       - name: Gerar e enviar relatorio pelo sender central
@@ -62,6 +63,7 @@ jobs:
           MAIL_PASS: ${{ secrets.EMAIL_PASSWORD || secrets.SMTP_PASS }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO || 'fredmourao@gmail.com,atendimento@shopvivaliz.com.br' }}
+          EMAIL_AGENTES_SECRET: ${{ secrets.EMAIL_AGENTES_SECRET }}
         run: python scripts/automation/eight_hour_status_email.py
 
       - name: Upload report artifact
