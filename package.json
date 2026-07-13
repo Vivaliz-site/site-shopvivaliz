@@ -3,5 +3,9 @@
     "@anthropic-ai/sdk": "^0.106.0",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "playwright": "^1.61.1"
   }
 }

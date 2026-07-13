@@ -36,16 +36,16 @@ function Log($Message) {
 function SyncOnce {
     Set-Location $repo
 
-    Log "════════════════════════════════════════════════════════════════"
-    Log "▶ SYNC INICIADO"
+    Log "=========================================================================="
+    Log ">> SYNC INICIADO"
 
     try {
         # Pull com rebase e autostash
         Log "[1] Executando git fetch..."
-        & git fetch --prune origin
+        git fetch --prune origin 2>&1 | ForEach-Object { Log "    $_" }
 
-        $behind = & git rev-list --count "HEAD..origin/main"
-        $ahead = & git rev-list --count "origin/main..HEAD"
+        $behind = (git rev-list --count "HEAD..origin/main" 2>$null)
+        $ahead = (git rev-list --count "origin/main..HEAD" 2>$null)
 
         Log "    Status: ahead=$ahead, behind=$behind"
 
