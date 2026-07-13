@@ -238,6 +238,13 @@ function initMiniCart() {
                 const count = items.reduce(function(sum, item) { return sum + (Number(item.quantity) || 1); }, 0);
                 badge.textContent = count > 0 ? String(count) : '';
             }
+            // Update mobile navigation badge
+            const mobileBadge = document.getElementById('mobile-cart-count');
+            if (mobileBadge) {
+                const count = items.reduce(function(sum, item) { return sum + (Number(item.quantity) || 1); }, 0);
+                mobileBadge.textContent = count > 0 ? String(count) : '';
+                mobileBadge.style.display = count > 0 ? 'inline-flex' : 'none';
+            }
             
             renderMiniCart();
         });
@@ -298,20 +305,62 @@ function renderMiniCart() {
     body.innerHTML = html;
     if (totalEl) totalEl.innerText = 'R$ ' + total.toFixed(2).replace('.', ',');
     
-    // Update free shipping bar inside mini cart
-    const FREE_SHIPPING_LIMIT = 299.00;
+    // Update multi-level gamification rewards track inside mini cart
+    const GOAL_COUPON = 150.00;
+    const GOAL_SHIPPING = 299.00;
     const bar = document.getElementById('mini-cart-shipping-bar');
     const text = document.getElementById('mini-cart-shipping-text');
+    const marker150 = document.getElementById('goal-150-marker');
+    const marker299 = document.getElementById('goal-299-marker');
+    
     if (bar) {
-        let pct = (total / FREE_SHIPPING_LIMIT) * 100;
+        let pct = (total / GOAL_SHIPPING) * 100;
         if (pct > 100) pct = 100;
         bar.style.width = pct + '%';
-        if (total >= FREE_SHIPPING_LIMIT) {
-            bar.style.backgroundColor = '#10b981';
-            if (text) text.innerHTML = '🎉 Você ganhou <strong>Frete Grátis!</strong>';
+        
+        // Handle Level 1 Goal (R$ 150)
+        if (total >= GOAL_COUPON) {
+            if (marker150) {
+                marker150.style.borderColor = '#3b82f6';
+                marker150.style.background = '#3b82f6';
+                marker150.style.color = '#fff';
+                marker150.style.transform = 'translateX(-50%) scale(1.2)';
+            }
         } else {
-            bar.style.backgroundColor = '#f59e0b';
-            if (text) text.innerHTML = `Faltam <strong>R$ ${(FREE_SHIPPING_LIMIT - total).toFixed(2).replace('.', ',')}</strong> para Frete Grátis`;
+            if (marker150) {
+                marker150.style.borderColor = '#cbd5e1';
+                marker150.style.background = '#fff';
+                marker150.style.color = '#000';
+                marker150.style.transform = 'translateX(-50%) scale(1)';
+            }
+        }
+        
+        // Handle Level 2 Goal (R$ 299)
+        if (total >= GOAL_SHIPPING) {
+            if (marker299) {
+                marker299.style.borderColor = '#10b981';
+                marker299.style.background = '#10b981';
+                marker299.style.color = '#fff';
+                marker299.style.transform = 'scale(1.2)';
+            }
+        } else {
+            if (marker299) {
+                marker299.style.borderColor = '#cbd5e1';
+                marker299.style.background = '#fff';
+                marker299.style.color = '#000';
+                marker299.style.transform = 'scale(1)';
+            }
+        }
+        
+        // Set dynamic gamification status messages
+        if (total >= GOAL_SHIPPING) {
+            if (text) text.innerHTML = '🎉 <strong>Nível Máximo!</strong> Você ganhou <strong>Frete Grátis</strong> e o cupom <strong>VIVALIZ5</strong>!';
+        } else if (total >= GOAL_COUPON) {
+            const rem = (GOAL_SHIPPING - total).toFixed(2).replace('.', ',');
+            if (text) text.innerHTML = `🎁 <strong>Cupom VIVALIZ5 Liberado!</strong> Faltam <strong>R$ ${rem}</strong> para ganhar <strong>Frete Grátis</strong>!`;
+        } else {
+            const rem = (GOAL_COUPON - total).toFixed(2).replace('.', ',');
+            if (text) text.innerHTML = `Faltam <strong>R$ ${rem}</strong> para desbloquear o cupom de <strong>5% de desconto</strong>!`;
         }
     }
 }
@@ -323,8 +372,78 @@ function initPageTransitions() {
     document.body.classList.add('page-loaded');
 }
 
+/**
+ * Exit-Intent Recovery Pop-up Logic
+ */
+function initExitIntent() {
+    const overlay = document.getElementById('exit-intent-overlay');
+    const closeBtn = document.getElementById('exit-intent-close');
+    const couponEl = document.getElementById('exit-intent-coupon');
+    const timerEl = document.getElementById('exit-intent-timer');
+    
+    if (!overlay) return;
+    
+    if (sessionStorage.getItem('sv_exit_intent_shown') === '1') return;
+    
+    let timerInterval;
+    function startTimer(durationSeconds) {
+        let remaining = durationSeconds;
+        function updateTimer() {
+            const min = Math.floor(remaining / 60);
+            const sec = remaining % 60;
+            if (timerEl) {
+                timerEl.textContent = `Oferta expira em: ${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+            }
+            if (remaining <= 0) {
+                clearInterval(timerInterval);
+                if (timerEl) timerEl.textContent = 'Oferta expirada!';
+            }
+            remaining--;
+        }
+        updateTimer();
+        timerInterval = setInterval(updateTimer, 1000);
+    }
+    
+    function showPopup() {
+        let items = [];
+        try { items = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'); } catch(e) {}
+        if (items.length === 0) return;
+        
+        overlay.classList.add('open');
+        sessionStorage.setItem('sv_exit_intent_shown', '1');
+        startTimer(15 * 60); // 15 min
+    }
+    
+    function closePopup() {
+        overlay.classList.remove('open');
+        clearInterval(timerInterval);
+    }
+    
+    document.addEventListener('mouseleave', function(e) {
+        if (e.clientY < 5) {
+            showPopup();
+        }
+    });
+    
+    if (closeBtn) closeBtn.addEventListener('click', closePopup);
+    if (overlay) overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) closePopup();
+    });
+    
+    if (couponEl) {
+        couponEl.addEventListener('click', function() {
+            navigator.clipboard.writeText(couponEl.textContent.trim()).then(function() {
+                const orig = couponEl.textContent;
+                couponEl.textContent = 'Copiado!';
+                setTimeout(function() { couponEl.textContent = orig; }, 1500);
+            });
+        });
+    }
+}
+
 // Add these to existing DOMContentLoaded listener:
 document.addEventListener('DOMContentLoaded', function() {
     initMiniCart();
     initPageTransitions();
+    initExitIntent();
 });
