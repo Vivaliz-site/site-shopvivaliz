@@ -340,6 +340,8 @@ $svNavCurrent = '';
       ]
     }
     </script>
+
+    <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
 </head>
 <body>
     <?php include __DIR__ . '/includes/navbar.php'; ?>
