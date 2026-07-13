@@ -1,0 +1,225 @@
+openapi: 3.0.0
+info:
+  title: ShopVivaliz API
+  description: Enterprise Multi-Agent Orchestration Platform
+  version: 3.0.0
+  contact:
+    name: ShopVivaliz Team
+    url: https://github.com/Vivaliz-site/site-shopvivaliz
+
+servers:
+  - url: http://localhost:8000
+    description: API Gateway (Kong)
+  - url: http://localhost:5000
+    description: Direct Agent API
+
+paths:
+  /agents:
+    get:
+      summary: List all registered agents
+      tags: [Agents]
+      responses:
+        200:
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Agent'
+    
+    post:
+      summary: Register new agent
+      tags: [Agents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                webhook_url:
+                  type: string
+                capabilities:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        201:
+          description: Agent registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agent:
+                    $ref: '#/components/schemas/Agent'
+
+  /messages/send:
+    post:
+      summary: Send message between agents
+      tags: [Messages]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from_agent:
+                  type: string
+                to_agent:
+                  type: string
+                type:
+                  type: string
+                data:
+                  type: object
+                priority:
+                  type: string
+                  enum: [low, normal, high]
+      responses:
+        200:
+          description: Message queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message_id:
+                    type: string
+                  status:
+                    type: string
+
+  /messages/inbox:
+    get:
+      summary: Get agent inbox
+      tags: [Messages]
+      parameters:
+        - name: agent_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Agent messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+
+  /events/broadcast:
+    post:
+      summary: Broadcast event to agents
+      tags: [Events]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event:
+                  type: object
+                agent_type:
+                  type: string
+      responses:
+        200:
+          description: Event broadcast
+
+  /health:
+    get:
+      summary: Health check
+      tags: [System]
+      responses:
+        200:
+          description: System healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      tags: [Monitoring]
+      responses:
+        200:
+          description: Metrics in Prometheus format
+          content:
+            text/plain:
+              schema:
+                type: string
+
+components:
+  schemas:
+    Agent:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+        webhook_url:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+        registered_at:
+          type: string
+          format: date-time
+
+    Message:
+      type: object
+      properties:
+        message_id:
+          type: string
+        from_agent:
+          type: string
+        to_agent:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+        data:
+          type: object
+        priority:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
