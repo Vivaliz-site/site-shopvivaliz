@@ -14,9 +14,12 @@ def log(msg: str):
     """Log com timestamp."""
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_msg = f"[{ts}] {msg}"
-    print(log_msg)
+    try:
+        print(log_msg)
+    except UnicodeEncodeError:
+        print(log_msg.encode('utf-8', 'ignore').decode('utf-8'))
     LOG_FILE.parent.mkdir(exist_ok=True)
-    with open(LOG_FILE, "a") as f:
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(log_msg + "\n")
 
 def run_cmd(cmd: str, desc: str = "") -> bool:
