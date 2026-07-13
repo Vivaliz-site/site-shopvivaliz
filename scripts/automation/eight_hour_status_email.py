@@ -260,15 +260,67 @@ class SmtpNotConfiguredError(Exception):
     """Raised when SMTP configuration is incomplete."""
 
 
-def send_email(subject: str, body: str) -> None:
-    smtp_host = env("SMTP_HOST", env("EMAIL_SMTP_HOST", env("MAIL_HOST")))
-    smtp_port = int(env("SMTP_PORT", env("EMAIL_SMTP_PORT", env("MAIL_PORT") or "465")))
-    smtp_user = env("SMTP_USER", env("EMAIL_USER", env("MAIL_USER")))
-    smtp_pass = env("SMTP_PASS", env("EMAIL_PASSWORD", env("MAIL_PASS")))
-    email_from = env("EMAIL_FROM", smtp_user)
-    email_to = env("EMAIL_TO", DEFAULT_RECIPIENTS)
+def first_non_empty(*values: str) -> str:
+    for value in values:
+        if value and value.strip():
+            return value.strip()
+    return ""
 
-    if not all([smtp_host, smtp_user, smtp_pass, email_to]):
+
+def smtp_candidates() -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    ports = [
+        env("SMTP_PORT"),
+        env("EMAIL_SMTP_PORT"),
+        env("MAIL_PORT"),
+        "465",
+    ]
+    candidate_rows = [
+        {
+            "label": "smtp_primary",
+            "host": first_non_empty(env("SMTP_HOST"), env("EMAIL_SMTP_HOST"), env("MAIL_HOST")),
+            "port": first_non_empty(*ports),
+            "user": env("SMTP_USER"),
+            "password": env("SMTP_PASS"),
+        },
+        {
+            "label": "email_alias",
+            "host": first_non_empty(env("EMAIL_SMTP_HOST"), env("SMTP_HOST"), env("MAIL_HOST")),
+            "port": first_non_empty(env("EMAIL_SMTP_PORT"), env("SMTP_PORT"), env("MAIL_PORT"), "465"),
+            "user": env("EMAIL_USER"),
+            "password": env("EMAIL_PASSWORD"),
+        },
+        {
+            "label": "mail_alias",
+            "host": first_non_empty(env("MAIL_HOST"), env("SMTP_HOST"), env("EMAIL_SMTP_HOST")),
+            "port": first_non_empty(env("MAIL_PORT"), env("SMTP_PORT"), env("EMAIL_SMTP_PORT"), "465"),
+            "user": env("MAIL_USER"),
+            "password": env("MAIL_PASS"),
+        },
+    ]
+
+    seen: set[tuple[str, str, str, str]] = set()
+    for row in candidate_rows:
+        normalized = (
+            row["host"],
+            row["port"],
+            row["user"],
+            row["password"],
+        )
+        if not all(normalized):
+            continue
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        candidates.append(row)
+    return candidates
+
+
+def send_email(subject: str, body: str) -> None:
+    email_to = env("EMAIL_TO", DEFAULT_RECIPIENTS)
+    configured_from = env("EMAIL_FROM")
+
+    if not email_to:
         raise SmtpNotConfiguredError(
             "SMTP incompleto: configure host, usuario, senha e destinatarios."
         )
@@ -277,22 +329,47 @@ def send_email(subject: str, body: str) -> None:
     if not recipients or any("@" not in item or "." not in item for item in recipients):
         raise SmtpNotConfiguredError("Destinatarios de email invalidos em EMAIL_TO.")
 
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = email_from
-    msg["To"] = ", ".join(recipients)
-    msg.set_content(body)
+    candidates = smtp_candidates()
+    if not candidates:
+        raise SmtpNotConfiguredError(
+            "SMTP incompleto: nenhuma combinacao valida de host, usuario e senha foi encontrada."
+        )
 
-    if smtp_port == 465:
-        server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30)
-    else:
-        server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+    last_error: Exception | None = None
+    for candidate in candidates:
+        smtp_host = candidate["host"]
+        smtp_port = int(candidate["port"])
+        smtp_user = candidate["user"]
+        smtp_pass = candidate["password"]
+        email_from = first_non_empty(configured_from, smtp_user)
 
-    with server:
-        if smtp_port != 465:
-            server.starttls()
-        server.login(smtp_user, smtp_pass)
-        server.send_message(msg)
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = email_from
+        msg["To"] = ", ".join(recipients)
+        msg["X-ShopVivaliz-SMTP-Profile"] = candidate["label"]
+        msg.set_content(body)
+
+        try:
+            if smtp_port == 465:
+                server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30)
+            else:
+                server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+
+            with server:
+                if smtp_port != 465:
+                    server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+            print(f"Envio SMTP concluido com perfil {candidate['label']}.")
+            return
+        except Exception as exc:
+            last_error = exc
+            continue
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("Falha desconhecida ao enviar email.")
 
 
 def main() -> int:
