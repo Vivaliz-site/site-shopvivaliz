@@ -51,17 +51,17 @@ def sync_cycle():
 
 def main():
     """Daemon contínuo."""
-    log("🚀 Auto-sync daemon iniciado (intervalo: {}s)".format(SYNC_INTERVAL))
+    log("[START] Auto-sync daemon iniciado (intervalo: {}s)".format(SYNC_INTERVAL))
 
     try:
         while True:
             sync_cycle()
             time.sleep(SYNC_INTERVAL)
     except KeyboardInterrupt:
-        log("⛔ Daemon parado pelo usuário")
+        log("[STOP] Daemon parado pelo usuário")
         sys.exit(0)
     except Exception as e:
-        log(f"💥 Erro fatal: {e}")
+        log(f"[ERROR] Erro fatal: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
