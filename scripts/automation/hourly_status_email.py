@@ -74,10 +74,10 @@ def send_email(subject: str, body: str) -> None:
     smtp_user = env("SMTP_USER", env("EMAIL_USER"))
     smtp_pass = env("SMTP_PASS", env("EMAIL_PASSWORD"))
     email_from = env("EMAIL_FROM", smtp_user)
-    email_to = env("EMAIL_TO")
+    email_to = env("EMAIL_TO", "fredmourao@gmail.com")
 
     if not all([smtp_host, smtp_user, smtp_pass, email_to]):
-        raise SmtpNotConfiguredError("SMTP/EMAIL secrets não configurados — skipping")
+        raise SmtpNotConfiguredError("SMTP/EMAIL secrets não configurados — impossível enviar email")
 
     msg = EmailMessage()
     msg["Subject"] = subject
