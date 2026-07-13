@@ -8,6 +8,7 @@ import OnboardingCta from "@modules/order/components/onboarding-cta"
 import OrderDetails from "@modules/order/components/order-details"
 import ShippingDetails from "@modules/order/components/shipping-details"
 import PaymentDetails from "@modules/order/components/payment-details"
+import { OrderTracker } from "@components/OrderTracker"
 import { HttpTypes } from "@medusajs/types"
 
 type OrderCompletedTemplateProps = {
