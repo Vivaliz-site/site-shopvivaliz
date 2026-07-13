@@ -23,8 +23,11 @@ function svi_connect_load_env(string $path): void
 
 svi_connect_load_env(dirname(__DIR__) . '/.env');
 
-$clientId = getenv('OLIST_CLIENT_ID') ?: getenv('TINY_CLIENT_ID') ?: '';
-$redirectUri = getenv('OLIST_REDIRECT_URI') ?: getenv('TINY_REDIRECT_URI') ?: 'https://dev.shopvivaliz.com.br/olist/callback.php';
+$clientId = getenv('OLIST_CLIENT_ID') ?: getenv('TINY_CLIENT_ID') ?: getenv('CLIENT_ID_API_OLIST') ?: '';
+$redirectUri = getenv('OLIST_REDIRECT_URI')
+    ?: getenv('URL_REDIRCT_OLIST')
+    ?: getenv('TINY_REDIRECT_URI')
+    ?: 'https://dev.shopvivaliz.com.br/olist/callback.php';
 
 if ($clientId === '') {
     http_response_code(500);
