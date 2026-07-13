@@ -753,6 +753,62 @@ if ($notFound) {
         <button class="btn btn-primary btn-comprar" onclick="document.getElementById('buy-now').click()">Comprar</button>
     </div>
 
+    <script>
+    (function() {
+        // 1. Gallery Switcher Logic
+        const thumbs = document.querySelectorAll('.thumb-btn');
+        const mainImg = document.getElementById('main-product-image');
+        
+        thumbs.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                thumbs.forEach(function(t) {
+                    t.classList.remove('active');
+                    t.style.borderColor = '#e2e8f0';
+                });
+                btn.classList.add('active');
+                btn.style.borderColor = '#0b4f88';
+                
+                if (mainImg) {
+                    mainImg.style.transition = 'opacity 0.15s ease';
+                    mainImg.style.opacity = '0.3';
+                    setTimeout(function() {
+                        mainImg.src = btn.getAttribute('data-src');
+                        mainImg.style.opacity = '1';
+                    }, 150);
+                }
+            });
+        });
+
+        // 2. Interactive Zoom Lens Logic
+        const container = document.getElementById('product-zoom-box');
+        const img = container ? container.querySelector('img') : null;
+        
+        if (container && img) {
+            container.style.overflow = 'hidden';
+            container.style.position = 'relative';
+            container.style.cursor = 'zoom-in';
+            img.style.transition = 'transform 0.1s ease, transform-origin 0.1s ease';
+            
+            container.addEventListener('mousemove', function(e) {
+                const rect = container.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const xPercent = (x / rect.width) * 100;
+                const yPercent = (y / rect.height) * 100;
+                
+                img.style.transformOrigin = xPercent + '% ' + yPercent + '%';
+                img.style.transform = 'scale(1.4)';
+            });
+            
+            container.addEventListener('mouseleave', function() {
+                img.style.transform = 'scale(1)';
+                img.style.transformOrigin = 'center center';
+            });
+        }
+    })();
+    </script>
+
     <script src="/js/cro-interactions.js"></script>
     <?php include __DIR__ . '/includes/footer.php'; ?>
 </body>
