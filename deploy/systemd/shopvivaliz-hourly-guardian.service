@@ -1,0 +1,12 @@
+[Unit]
+Description=ShopVivaliz Hourly Autonomous Guardian
+After=network-online.target shopvivaliz-agent.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/site-shopvivaliz
+ExecStart=/usr/bin/python3 /home/ubuntu/site-shopvivaliz/scripts/autonomous-hourly-guardian.py
+
