@@ -1,0 +1,192 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║     🔥 NOTIFICAÇÃO - TESTES AUTÔNOMOS PRÉ-PRODUÇÃO INICIADOS 🔥            ║
+║                                                                            ║
+║  Para: Todos os Agentes (Claude, Gemini, GPT e demais IA)                 ║
+║  Data: 2026-07-12                                                          ║
+║  Status: ATIVO - Vocês têm AUTONOMIA COMPLETA                             ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+📋 SITUAÇÃO ATUAL:
+
+  ✅ Google OAuth - COMPLETO (credenciais reais)
+  ✅ Google Ads Tracking - ATIVO (GA4 em Next.js)
+  ✅ Backend - FUNCIONAL
+  ❌ FRETE NÃO ESTAVA FUNCIONANDO - INVESTIGAR + CORRIGIR ← PRIORIDADE
+  ⚠️  Checkout - PRECISA DE TESTE COMPLETO
+  ⚠️  Estoque - PRECISA DE VALIDAÇÃO
+  ⚠️  Pagamentos - PRECISA DE TESTE PARA TODAS AS FORMAS
+
+═══════════════════════════════════════════════════════════════════════════
+
+🎯 OBJETIVO:
+
+  Deixar ShopVivaliz 100% PRONTO PARA PRODUÇÃO COM ZERO BUGS CRÍTICOS
+
+═══════════════════════════════════════════════════════════════════════════
+
+🔒 AUTORIZAÇÃO DADA:
+
+  ✅ Vocês podem EDITAR código
+  ✅ Vocês podem COMMITAR mudanças
+  ✅ Vocês podem TOMAR DECISÕES
+  ✅ Vocês podem CHAMAR UM AO OUTRO para ajudar
+  ✅ Vocês podem INVESTIGAR e CORRIGIR qualquer coisa
+
+  REGRA: Se veem problema → FIXAM problema
+
+═══════════════════════════════════════════════════════════════════════════
+
+📋 TAREFAS CRÍTICAS (DEVEM FAZER HOJE):
+
+  1. FRETE / SHIPPING
+     - Encontrar POR QUE não está funcionando
+     - Corrigir o bug
+     - Testar em 3 CEPs diferentes
+     - Commitar a correção
+
+  2. CHECKOUT COMPLETO (Ponta-a-ponta)
+     - Produto → Carrinho → Checkout → Pagamento → Confirmação
+     - Testar cada etapa
+     - Se quebrar algo → FIXAR
+
+  3. ESTOQUE / INVENTORY
+     - Verificar se atualiza após compra
+     - Verificar sync com Olist/Shopee
+     - Se não funcionar → IMPLEMENTAR
+
+  4. PAGAMENTOS
+     - Testar PIX
+     - Testar Cartão (Pagar.me)
+     - Testar outros métodos
+     - Se falhar → CORRIGIR
+
+═══════════════════════════════════════════════════════════════════════════
+
+💼 COMO TRABALHAR:
+
+  1. Escolham um tópico cada um
+  2. INVESTIGUEM o código
+  3. SE ENCONTRAREM BUG → FIXEM
+  4. TESTEM a correção
+  5. COMMITEM com mensagem clara
+  6. CONTINUEM TESTANDO
+
+  Não esperem instruções detalhadas.
+  Vocês têm o código, sabem programar.
+  APENAS FAÇAM FUNCIONAR.
+
+═══════════════════════════════════════════════════════════════════════════
+
+🚀 AUTONOMIA SIGNIFICA:
+
+  NÃO ESPEREM CONFIRMAÇÃO PARA:
+  - Corrigir bug óbvio ❌ ERRADO
+  - Testar funcionalidade ✅ CERTO
+  - Fazer commit ✅ CERTO (se código funcionando)
+  - Chamar outro agente ✅ CERTO
+  - Tomar decisão técnica ✅ CERTO
+
+  ESPEREM CONFIRMAÇÃO PARA:
+  - Remover feature existente ❌ RARO
+  - Mudar arquitetura ❌ RARO
+  - Decisões de negócio ❌ SÓ SE CRÍTICO
+
+═══════════════════════════════════════════════════════════════════════════
+
+⏱️  TIMELINE:
+
+  HOJE (0-8h):
+  [ ] Frete funciona
+  [ ] Checkout básico OK
+  [ ] Estoque atualiza
+
+  AMANHÃ (8-24h):
+  [ ] Todos pagamentos funcionam
+  [ ] Performance OK
+  [ ] Segurança OK
+
+  DIA 3 (24-48h):
+  [ ] Zero bugs conhecidos
+  [ ] Pronto para produção
+  [ ] Agentes prontos para "GO LIVE"
+
+═══════════════════════════════════════════════════════════════════════════
+
+📊 DEFINIÇÃO DE "PRONTO PARA PRODUÇÃO":
+
+  ✅ Frete funciona 100%
+  ✅ Pedido completo funciona
+  ✅ Estoque atualiza
+  ✅ Pagamentos processam
+  ✅ Confirmação envia
+  ✅ Performance < 2s
+  ✅ Zero vulnerabilidades óbvias
+  ✅ Agentes confiantes
+
+═══════════════════════════════════════════════════════════════════════════
+
+🎯 MENTALIDADE CORRETA:
+
+  ❌ "Será que posso fazer isso?"
+  ✅ "Vou fazer isso"
+
+  ❌ "Devo perguntar?"
+  ✅ "Vou agir e reportar depois"
+
+  ❌ "Será que está certo?"
+  ✅ "Testei, funcionou, é correto"
+
+═══════════════════════════════════════════════════════════════════════════
+
+📞 COMUNICAÇÃO ENTRE VOCÊS:
+
+  Se encontrarem algo que outro agente está mexendo:
+  "Oi Claude, estou fixando frete, não altere checkout.php por 10min"
+
+  Simples assim.
+
+═══════════════════════════════════════════════════════════════════════════
+
+📋 RECURSOS DISPONÍVEIS:
+
+  ✅ Código completo
+  ✅ Git repo
+  ✅ Database
+  ✅ Oracle Cloud acesso
+  ✅ Documentação
+  ✅ Permissão total
+  ✅ Tempo de trabalho
+
+═══════════════════════════════════════════════════════════════════════════
+
+🔥 COMEÇAR AGORA:
+
+  1. Vocês têm INSTRUÇÕES-AGENTES-TESTE.md
+  2. Vocês têm este arquivo
+  3. Vocês têm ACESSO completo
+  4. APENAS FAÇAM FUNCIONAR
+
+═══════════════════════════════════════════════════════════════════════════
+
+LEMBREM:
+
+  Isto não é um exercício de teste.
+  É um projeto REAL que vai para PRODUÇÃO.
+  Clientes REAIS vão usar.
+  DINHEIRO REAL está em jogo.
+
+  Façam com qualidade.
+  Façam com cuidado.
+  Mas FAÇAM.
+
+═══════════════════════════════════════════════════════════════════════════
+
+Status: 🟢 VOCÊS TÊM AUTONOMIA TOTAL
+Data Início: 2026-07-12
+Data Deadline: 2026-07-14 (48h)
+Prioridade: MÁXIMA
+
+🚀 LET'S MAKE THIS WORK! 🚀
+
+═══════════════════════════════════════════════════════════════════════════
