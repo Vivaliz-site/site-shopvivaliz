@@ -20,6 +20,13 @@ def run(cmd: list[str]) -> str:
     return (result.stdout or result.stderr or "").strip()
 
 
+def run_ok(cmd: list[str]) -> str:
+    """Like run(), but returns "" instead of stderr text on a non-zero exit —
+    avoids treating git error messages (e.g. from a shallow clone) as data."""
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
 def fetch_status_json(base_url: str = "https://shopvivaliz.com.br") -> dict:
     import urllib.request
     import json
@@ -57,7 +64,7 @@ def build_report() -> str:
         run(["git", "log", "--oneline", "-n", "5"]),
         "",
         "Arquivos tocados no ultimo commit:",
-        run(["git", "diff", "--name-only", "HEAD~1..HEAD"]) or "Sem diff de commit disponivel.",
+        run_ok(["git", "diff", "--name-only", "HEAD~1..HEAD"]) or "Sem diff de commit disponivel.",
         "",
         "Dashboard: https://shopvivaliz.com.br/claude/dashboard/",
     ]

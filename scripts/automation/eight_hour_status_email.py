@@ -23,6 +23,16 @@ def run(cmd: list[str]) -> str:
         return f"Erro ao rodar comando {cmd}: {e}"
 
 
+def run_ok(cmd: list[str]) -> str:
+    """Like run(), but returns "" instead of stderr text on a non-zero exit —
+    avoids treating git error messages (e.g. from a shallow clone) as data."""
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        return result.stdout.strip() if result.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
 def fetch_status_json(base_url: str = "https://shopvivaliz.com.br") -> dict:
     import urllib.request
     import json
@@ -61,10 +71,10 @@ def build_report() -> str:
     # Atividade do Git nas últimas 8 horas
     commit_shas = [
         line.strip()
-        for line in run(["git", "log", "--since=8 hours ago", "--format=%H"]).splitlines()
+        for line in run_ok(["git", "log", "--since=8 hours ago", "--format=%H"]).splitlines()
         if line.strip()
     ]
-    commits_8h = run(["git", "log", "--since=8 hours ago", "--oneline"])
+    commits_8h = run_ok(["git", "log", "--since=8 hours ago", "--oneline"])
     lines += ["📝 Commits realizados nas últimas 8 horas:"]
     if commits_8h:
         lines += [f"  {line}" for line in commits_8h.splitlines()]
@@ -76,12 +86,12 @@ def build_report() -> str:
     if commit_shas:
         changed_files = set()
         for sha in commit_shas:
-            out = run(["git", "show", "--name-only", "--format=", sha])
+            out = run_ok(["git", "show", "--name-only", "--format=", sha])
             changed_files.update(f.strip() for f in out.splitlines() if f.strip())
         files_8h = "\n".join(sorted(changed_files))
     else:
-        # Fallback: sem commits nas últimas 8h, mostra o último commit existente
-        files_8h = run(["git", "diff", "--name-only", "HEAD~1..HEAD"])
+        # Fallback: sem commits nas últimas 8h, mostra o último commit existente (se houver)
+        files_8h = run_ok(["git", "diff", "--name-only", "HEAD~1..HEAD"])
 
     lines += ["📂 Arquivos modificados recentemente:"]
     if files_8h:
