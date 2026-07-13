@@ -129,11 +129,18 @@ class SystemHealthCheck:
 
                 with open(api_file) as f:
                     content = f.read()
-                    if '<?php' in content and 'getStatus' in content:
-                        print(f"  [OK] PHP API syntax válido")
+                    if (
+                        '<?php' in content
+                        and 'monitor_response' in content
+                        and "case 'agents'" in content
+                        and "case 'send-command'" in content
+                    ):
+                        print("  [OK] API Monitor schema atual reconhecido")
                         api_ok = True
                     else:
-                        self.report['warnings'].append("API PHP pode ter sintaxe inválida")
+                        self.report['warnings'].append(
+                            "API Monitor encontrada, mas schema atual nao foi reconhecido pelo health check"
+                        )
             else:
                 self.report['errors'].append("API Monitor não encontrada")
         except Exception as e:
