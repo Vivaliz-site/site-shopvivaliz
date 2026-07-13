@@ -5,17 +5,17 @@
 
 ## Completed
 
-- Removed extraneous root packages with `npm prune`:
-  - `playwright`
-  - `playwright-core`
+- Repaired the root Node manifest to declare Playwright tooling explicitly:
   - `@playwright/test`
+  - `playwright`
+- Reinstalled the root dependencies so the workspace is consistent.
 
 ## Verification
 
 - `npm ls --depth=0` now reports only declared root dependencies.
-- `git status --short` is clean.
+- `package.json` and `package-lock.json` are aligned.
 
 ## Risk Notes
 
-- Playwright is still used in other repo subprojects and scripts, but not declared in the root `package.json`.
-- No tracked project files were changed.
+- Playwright is still used in other repo subprojects and scripts, but now the root manifest covers the root-level tests and scripts too.
+- Tracked project files were updated only in the dependency manifests and this report.
