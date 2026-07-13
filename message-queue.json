@@ -1,0 +1,29 @@
+{
+  "messages": [
+    {
+      "message_id": "57b4a8bd",
+      "from_agent": "claude-1",
+      "to_agent": "gemini-1",
+      "type": "task",
+      "data": {
+        "action": "analyze",
+        "data": "test"
+      },
+      "priority": "high",
+      "status": "processing",
+      "created_at": "2026-07-13T19:21:45.282828"
+    },
+    {
+      "message_id": "679f4bac",
+      "from_agent": "gemini-1",
+      "to_agent": "gpt-1",
+      "type": "result",
+      "data": {
+        "analysis": "done"
+      },
+      "priority": "normal",
+      "status": "pending",
+      "created_at": "2026-07-13T19:21:45.285132"
+    }
+  ]
+}
