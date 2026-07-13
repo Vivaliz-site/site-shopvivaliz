@@ -107,6 +107,7 @@ class MCPCloudManager:
     def __init__(self):
         """Inicializar gerenciador."""
         self.servers: Dict[str, MCPClient] = {}
+        self.server_meta: Dict[str, Dict[str, Any]] = {}
         self.load_server_config()
 
     def load_server_config(self):
@@ -131,17 +132,32 @@ class MCPCloudManager:
             with open(config_file, "w") as f:
                 json.dump(config, f, indent=2)
 
-        for name, url in config.get("servers", {}).items():
+        for name, entry in config.get("servers", {}).items():
+            if isinstance(entry, dict):
+                url = entry.get("url", "")
+                meta = entry
+            else:
+                url = entry
+                meta = {"url": entry}
+
+            if not url:
+                continue
+
             self.servers[name] = MCPClient(url)
+            self.server_meta[name] = meta
 
     def list_available_servers(self) -> Dict[str, Dict[str, Any]]:
         """Listar servidores disponíveis e seu status."""
         result = {}
         for name, client in self.servers.items():
             health = client.health_check()
+            meta = self.server_meta.get(name, {})
             result[name] = {
                 "url": client.server_url,
                 "status": "online" if "status" in health else "offline",
+                "enabled": meta.get("enabled", True),
+                "environment": meta.get("environment"),
+                "location": meta.get("location"),
                 "health": health,
             }
         return result
