@@ -22,10 +22,13 @@ def log(msg: str):
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(log_msg + "\n")
 
-def run_cmd(cmd: str, desc: str = "") -> bool:
+def run_cmd(cmd: str, desc: str = "", env_override: dict = None) -> bool:
     """Executa comando e retorna sucesso."""
     try:
-        result = subprocess.run(cmd, shell=True, cwd=REPO_DIR, capture_output=True, text=True, timeout=30)
+        env = os.environ.copy()
+        if env_override:
+            env.update(env_override)
+        result = subprocess.run(cmd, shell=True, cwd=REPO_DIR, capture_output=True, text=True, timeout=30, env=env)
         if result.returncode != 0:
             log(f"[FAIL] {desc}: {result.stderr[:200]}")
             return False
