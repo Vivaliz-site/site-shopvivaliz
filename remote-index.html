@@ -502,6 +502,12 @@
             <div class="section-heading sv-reveal" style="text-align: center; margin-bottom: 48px; display: block;">
                 <h2 style="font-size: 30px; font-weight: 900; color: #111827; margin-bottom: 10px; padding-left: 0;">Perguntas Frequentes</h2>
                 <p class="muted" style="text-align: center; color: #6b7280;">Tire suas dúvidas rápidas sobre envio, pagamentos e garantia.</p>
+                <!-- FAQ Search Bar -->
+                <div style="max-width: 460px; margin: 16px auto 0; width: 100%;">
+                    <input type="text" id="faq-search-input" placeholder="Pesquisar dúvidas comuns..." 
+                           style="width:100%; padding:12px 18px; border-radius:12px; border:1.5px solid #e2e8f0; font-size:14px; color:#1e293b; background:#f8fafc; transition: all 0.25s ease;"
+                           aria-label="Pesquisar perguntas frequentes">
+                </div>
             </div>
             <div class="faq-list" style="display: flex; flex-direction: column; gap: 12px;">
                 <details class="faq-item sv-reveal sv-reveal-delay-1">
@@ -533,6 +539,33 @@
                     <p class="faq-body">Sim! Assim que o pedido for despachado, você receberá por e-mail o código de rastreamento para acompanhar cada etapa da entrega em tempo real.</p>
                 </details>
             </div>
+            
+            <!-- FAQ Accordion Search Filter Script -->
+            <script>
+            (function() {
+                var searchInput = document.getElementById('faq-search-input');
+                var items = document.querySelectorAll('.faq-item');
+                if (!searchInput || !items.length) return;
+                
+                searchInput.addEventListener('input', function() {
+                    var query = searchInput.value.toLowerCase().trim();
+                    items.forEach(function(item) {
+                        var question = item.querySelector('summary').textContent.toLowerCase();
+                        var answer = item.querySelector('.faq-body').textContent.toLowerCase();
+                        if (question.indexOf(query) !== -1 || answer.indexOf(query) !== -1) {
+                            item.style.display = 'block';
+                            if (query.length > 2) {
+                                item.setAttribute('open', '');
+                            } else {
+                                item.removeAttribute('open');
+                            }
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+                });
+            })();
+            </script>
         </div>
     </section>
 
