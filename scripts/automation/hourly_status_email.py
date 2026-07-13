@@ -99,7 +99,7 @@ def send_email(subject: str, body: str) -> None:
 
 def main() -> int:
     report = build_report()
-    subject = f"[ShopVivaliz] Status horario - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    subject = f"[ShopVivaliz] Status horário - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
 
     print(report)
     try:
@@ -107,10 +107,11 @@ def main() -> int:
         print("Email enviado com sucesso.")
         return 0
     except SmtpNotConfiguredError as exc:
-        print(f"[AVISO] {exc}", file=sys.stderr)
-        return 0  # não é falha — secrets simplesmente não configurados
+        print(f"[ERRO] {exc}", file=sys.stderr)
+        print("[ERRO] Secrets SMTP não configurados — impossível enviar email.", file=sys.stderr)
+        return 1
     except Exception as exc:
-        print(f"Falha ao enviar email: {exc}", file=sys.stderr)
+        print(f"[ERRO] Falha ao enviar email: {exc}", file=sys.stderr)
         return 1
 
 
