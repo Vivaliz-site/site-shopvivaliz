@@ -316,6 +316,78 @@ def smtp_candidates() -> list[dict[str, Any]]:
     return candidates
 
 
+def parse_email_agentes_secret() -> dict[str, str]:
+    raw = env("EMAIL_AGENTES_SECRET")
+    if not raw:
+        return {}
+
+    parsed: dict[str, str] = {}
+    candidates = [raw]
+    try:
+        decoded = urllib.parse.unquote(raw)
+        if decoded != raw:
+            candidates.append(decoded)
+    except Exception:
+        pass
+
+    for candidate in candidates:
+        stripped = candidate.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("{") and stripped.endswith("}"):
+            try:
+                data = json.loads(stripped)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(data, dict):
+                for key, value in data.items():
+                    if isinstance(value, str):
+                        parsed[str(key)] = value
+                return parsed
+        if stripped.startswith("re_"):
+            return {"provider": "resend", "api_key": stripped}
+
+    return parsed
+
+
+def send_via_resend(subject: str, body: str, recipients: list[str]) -> bool:
+    parsed = parse_email_agentes_secret()
+    api_key = first_non_empty(
+        parsed.get("api_key", ""),
+        parsed.get("resend_api_key", ""),
+        parsed.get("token", ""),
+    )
+    provider = first_non_empty(parsed.get("provider", ""), "resend" if api_key.startswith("re_") else "")
+    if provider.lower() != "resend" or not api_key:
+        return False
+
+    from_email = first_non_empty(
+        parsed.get("from", ""),
+        parsed.get("from_email", ""),
+        env("EMAIL_FROM"),
+        "onboarding@resend.dev",
+    )
+    payload = {
+        "from": from_email,
+        "to": recipients,
+        "subject": subject,
+        "text": body,
+    }
+    request = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        response.read()
+    print("Envio concluido via Resend fallback.")
+    return True
+
+
 def send_email(subject: str, body: str) -> None:
     email_to = env("EMAIL_TO", DEFAULT_RECIPIENTS)
     configured_from = env("EMAIL_FROM")
@@ -366,6 +438,12 @@ def send_email(subject: str, body: str) -> None:
         except Exception as exc:
             last_error = exc
             continue
+
+    try:
+        if send_via_resend(subject, body, recipients):
+            return
+    except Exception as exc:
+        last_error = exc
 
     if last_error is not None:
         raise last_error
