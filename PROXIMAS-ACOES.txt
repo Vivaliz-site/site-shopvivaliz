@@ -1,0 +1,100 @@
+🚀 PRÓXIMAS AÇÕES - COPIAR E COLAR
+
+═══════════════════════════════════════════════════════════════════════════
+
+AÇÃO 1: Adicionar Credenciais ao Oracle Cloud (30 min)
+───────────────────────────────────────────────────────
+
+ssh -i ~/Downloads/ssh-key-2026-07-04.key ubuntu@137.131.156.17
+cd /home/ubuntu/site-shopvivaliz
+nano .env
+
+# Adicione estas linhas:
+GA4_ID=G-XXXXXXXXXX              # Obter em analytics.google.com
+GA4_SECRET=abc123...             # Gerar em GA4 Admin
+GOOGLE_ADS_CONVERSION_ID=123456  # Obter em ads.google.com
+
+# Salvar: Ctrl+X, Y, Enter
+
+═══════════════════════════════════════════════════════════════════════════
+
+AÇÃO 2: Obter Google Analytics 4 ID (5 min)
+────────────────────────────────────────────
+
+1. Ir para: https://analytics.google.com
+2. Clicar em "Administrador" (engrenagem)
+3. Selecionar propriedade "ShopVivaliz"
+4. Em "Instalação de dados", clicar em "Fluxos de dados"
+5. Copiar "Measurement ID" (formato: G-XXXXXXXXXX)
+
+═══════════════════════════════════════════════════════════════════════════
+
+AÇÃO 3: Obter Google Analytics 4 Secret (5 min)
+───────────────────────────────────────────────
+
+1. No mesmo fluxo de dados, clicar em "Segredos de medição"
+2. Clicar em "Criar segredo"
+3. Nomear "ShopVivaliz"
+4. Copiar o valor (token longo)
+
+═══════════════════════════════════════════════════════════════════════════
+
+AÇÃO 4: Obter Google Ads Conversion ID (5 min)
+──────────────────────────────────────────────
+
+1. Ir para: https://ads.google.com
+2. Clicar em "Ferramentas" → "Conversões"
+3. Clicar em "+ Conversão"
+4. Tipo: "Pedido / Compra"
+5. Nome: "Purchase"
+6. Copiar "Conversion ID"
+
+═══════════════════════════════════════════════════════════════════════════
+
+AÇÃO 5: Testar Tracking (10 min)
+────────────────────────────────
+
+1. Instalar "Google Tag Assistant": https://tagassistant.google.com/
+2. Visitar: https://dev.shopvivaliz.com.br
+3. Procurar por "Google Analytics" na Tag Assistant
+4. Clicar em "Analytics" → Deve mostrar seu GA4_ID ✅
+
+═══════════════════════════════════════════════════════════════════════════
+
+AÇÃO 6: Verificar em GA4 (2 min)
+────────────────────────────────
+
+1. Ir para: https://analytics.google.com
+2. Clicar em "Relatórios em tempo real"
+3. Visitar seu site em outra aba
+4. Deve aparecer "1 usuário ativo" em tempo real ✅
+
+═══════════════════════════════════════════════════════════════════════════
+
+TODA ESSA SEQUÊNCIA LEVA NO MÁXIMO 1 HORA!
+
+Depois disso:
+✅ Google Ads tracking está 100% ativo
+✅ Conversões começam a ser rastreadas
+✅ Está pronto para lançar campanhas
+
+═══════════════════════════════════════════════════════════════════════════
+
+DOCUMENTOS DE REFERÊNCIA:
+
+Completo: GOOGLE-ADS-AUDIT.md
+Setup: GOOGLE-ADS-SETUP.md
+Comunicado: COMUNICADO-AGENTES-PRODUCAO.md
+
+═══════════════════════════════════════════════════════════════════════════
+
+SUPORTE:
+
+Se algo não funcionar:
+1. Verificar logs: tail -f /home/ubuntu/site-shopvivaliz/logs/*
+2. Revisar error_log: tail -f /var/log/apache2/error.log
+3. Testar credenciais: echo $GA4_ID (no servidor)
+
+═══════════════════════════════════════════════════════════════════════════
+
+🚀 VAMOS LANÇAR! 🚀
