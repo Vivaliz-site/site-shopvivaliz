@@ -192,7 +192,7 @@ $token = me_current_access_token() ?: svsc_env(
     'MELHORENVIO_API_KEY',
     'SHOPVIVALIZ_MELHORENVIO_API_KEY'
 );
-$fromPostalCode = preg_replace('/\D+/', '', svsc_env('MELHORENVIO_FROM_POSTAL_CODE', 'SHOPVIVALIZ_FROM_POSTAL_CODE')) ?: '35500000';
+$fromPostalCode = preg_replace('/\D+/', '', svsc_env('MELHORENVIO_FROM_POSTAL_CODE', 'SHOPVIVALIZ_FROM_POSTAL_CODE')) ?: '35501236';
 $payload = [
     'from' => ['postal_code' => $fromPostalCode],
     'to' => ['postal_code' => $cep],
