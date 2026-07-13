@@ -20,6 +20,7 @@ import urllib.error
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CATALOG_PATH = os.path.join(ROOT, "api", "catalog", "fallback-products.json")
 TOKEN_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
+REPORT_PATH = os.path.join(ROOT, "logs", "sync-stock-tiny-report.json")
 
 
 def load_env():
@@ -50,7 +51,14 @@ def http_post(url, fields):
     except urllib.error.HTTPError as e:
         body = e.read().decode(errors="replace")
         print(f"ERRO HTTP {e.code} ao renovar token: {body[:300]}", file=sys.stderr)
-        return {}
+        return {"_http_error": e.code, "_body": body[:1000]}
+
+
+def save_report(payload):
+    os.makedirs(os.path.dirname(REPORT_PATH), exist_ok=True)
+    with open(REPORT_PATH, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+        f.write("\n")
 
 
 def resolve_token():
@@ -66,7 +74,25 @@ def resolve_token():
             "refresh_token": refresh_token,
         })
         if resp.get("access_token"):
-            return resp["access_token"]
+            return {
+                "token": resp["access_token"],
+                "source": "oauth_refresh",
+                "refresh_ok": True,
+            }
+        if resp.get("_http_error"):
+            decoded = {}
+            try:
+                decoded = json.loads(resp.get("_body") or "{}")
+            except Exception:
+                decoded = {}
+            return {
+                "token": None,
+                "source": "oauth_refresh",
+                "refresh_ok": False,
+                "http_error": resp.get("_http_error"),
+                "oauth_error": decoded.get("error", ""),
+                "oauth_error_description": decoded.get("error_description", ""),
+            }
 
     static_token = (
         os.environ.get("TINY_ACCESS_TOKEN")
@@ -74,7 +100,17 @@ def resolve_token():
         or os.environ.get("OLIST_ACCESS_TOKEN")
         or ""
     )
-    return static_token or None
+    if static_token:
+        return {
+            "token": static_token,
+            "source": "static_token",
+            "refresh_ok": False,
+        }
+    return {
+        "token": None,
+        "source": "none",
+        "refresh_ok": False,
+    }
 
 
 def fetch_stock(product_id, token, retries=5):
@@ -110,9 +146,39 @@ def fetch_stock(product_id, token, retries=5):
 
 def main():
     load_env()
-    token = resolve_token()
+    token_info = resolve_token()
+    token = token_info.get("token")
     if not token:
+        save_report({
+            "ok": False,
+            "stage": "resolve_token",
+            "token_source": token_info.get("source"),
+            "refresh_ok": token_info.get("refresh_ok"),
+            "http_error": token_info.get("http_error"),
+            "oauth_error": token_info.get("oauth_error"),
+            "oauth_error_description": token_info.get("oauth_error_description"),
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        })
         print("ERRO: nenhuma credencial Tiny disponivel (refresh ou token estatico)", file=sys.stderr)
+        sys.exit(1)
+
+    if (
+        token_info.get("source") == "oauth_refresh"
+        and token_info.get("refresh_ok") is False
+        and token_info.get("oauth_error") == "invalid_grant"
+    ):
+        save_report({
+            "ok": False,
+            "stage": "resolve_token",
+            "token_source": token_info.get("source"),
+            "refresh_ok": False,
+            "http_error": token_info.get("http_error"),
+            "oauth_error": token_info.get("oauth_error"),
+            "oauth_error_description": token_info.get("oauth_error_description"),
+            "action_required": "Regenerar refresh token valido nos secrets OLIST_/TINY_.",
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        })
+        print("ERRO: refresh token invalido/inativo; abortando antes de disparar 401 em massa.", file=sys.stderr)
         sys.exit(1)
 
     with open(CATALOG_PATH, encoding="utf-8") as f:
@@ -142,6 +208,17 @@ def main():
     with open(CATALOG_PATH, "w", encoding="utf-8") as f:
         json.dump(catalog, f, ensure_ascii=False, indent=2)
         f.write("\n")
+
+    save_report({
+        "ok": errors <= len(catalog) * 0.5,
+        "stage": "sync_complete",
+        "token_source": token_info.get("source"),
+        "refresh_ok": token_info.get("refresh_ok"),
+        "catalog_size": len(catalog),
+        "updated": updated,
+        "errors": errors,
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    })
 
     print(f"Concluido: {updated} produtos com estoque atualizado, {errors} erros.")
     if errors > len(catalog) * 0.5:
