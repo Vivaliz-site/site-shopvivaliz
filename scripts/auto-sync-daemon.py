@@ -43,21 +43,25 @@ def sync_cycle():
     """Uma iteração de sincronização."""
     log("[SYNC] Iniciando ciclo de sync...")
 
-    # Get current branch
-    branch_result = subprocess.run("git rev-parse --abbrev-ref HEAD", shell=True, cwd=REPO_DIR, capture_output=True, text=True)
-    branch = branch_result.stdout.strip() if branch_result.returncode == 0 else "main"
+    # Get current branch - more robust for Windows
+    try:
+        branch_result = subprocess.run("git branch --show-current", shell=True, cwd=REPO_DIR, capture_output=True, text=True, timeout=10)
+        branch = branch_result.stdout.strip() if branch_result.returncode == 0 else "main"
+    except:
+        branch = "main"
 
     # Allow daemon to bypass git hooks
     daemon_env = {"AUTO_SYNC_DAEMON": "1", "ALLOW_AUTO_PUSH": "1"}
 
     # 1. Pull para trazer mudanças da outra estação
-    if run_cmd(f"git fetch origin && git pull origin {branch} --no-edit", "Pull remoto"):
-        # 2. Commit pendências locais
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        run_cmd(f"git add -A && git commit -m \"auto: sync {ts}\"", "Auto-commit local", env_override=daemon_env)
-
-        # 3. Push para compartilhar com outra estação
-        run_cmd(f"git push origin {branch} --no-verify", "Push remoto", env_override=daemon_env)
+    if run_cmd(f"git fetch origin", "Fetch remoto"):
+        if run_cmd(f"git pull origin {branch} --no-edit 2>/dev/null || git pull --no-edit", "Pull remoto"):
+            # 2. Commit pendências locais
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if run_cmd(f"git add -A", "Stage files"):
+                run_cmd(f"git commit -m \"auto: sync {ts}\"", "Auto-commit local", env_override=daemon_env)
+                # 3. Push para compartilhar com outra estação
+                run_cmd(f"git push origin {branch} --no-verify", "Push remoto", env_override=daemon_env)
 
     log("[SYNC] Ciclo concluido")
 
