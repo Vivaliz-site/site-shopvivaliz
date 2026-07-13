@@ -97,6 +97,70 @@
       "schedule": "*/30 * * * *",
       "estimated_hours": 0.5,
       "created_at": "2026-07-12T03:00:00Z"
+    },
+    {
+      "task_id": "INFRA-AUTO-SYNC-001",
+      "type": "infrastructure",
+      "action": "setup_auto_sync_ubuntu",
+      "title": "Configurar Auto-Sync Automático no Ubuntu (VM Oracle)",
+      "description": "Implementar script de sincronização automática a cada 30 minutos na VM Oracle Cloud (137.131.156.17) igual ao que foi implementado localmente no Windows",
+      "priority": "critical",
+      "status": "pending",
+      "assigned_to": ["claude"],
+      "steps": [
+        "1. SSH para ubuntu@137.131.156.17",
+        "2. Criar /home/ubuntu/site-shopvivaliz/scripts/local-auto-sync.sh (versão Linux do PS1)",
+        "3. Configurar cron job: */30 * * * * /home/ubuntu/site-shopvivaliz/scripts/local-auto-sync.sh",
+        "4. Testar uma execução",
+        "5. Verificar logs em /home/ubuntu/site-shopvivaliz/logs/",
+        "6. Fazer commit e push das mudanças"
+      ],
+      "requires_secrets": ["SSH_KEY_UBUNTU", "GITHUB_TOKEN"],
+      "estimated_hours": 1,
+      "created_at": "2026-07-13T20:30:00Z"
+    },
+    {
+      "task_id": "INFRA-AUTO-SYNC-002",
+      "type": "infrastructure",
+      "action": "setup_auto_sync_github_workflow",
+      "title": "Configurar Auto-Sync via GitHub Actions Workflow",
+      "description": "Criar workflow que faz sync automático entre branches (pull de main, commit de atualizações, push) a cada 30 minutos direto no GitHub",
+      "priority": "critical",
+      "status": "pending",
+      "assigned_to": ["claude"],
+      "steps": [
+        "1. Criar .github/workflows/auto-sync-main.yml",
+        "2. Schedule: 0 */0.5 * * * (a cada 30 min)",
+        "3. Workflow steps: fetch, pull com rebase, push",
+        "4. Testar disparo manual",
+        "5. Verificar logs do workflow",
+        "6. Commit e documentar"
+      ],
+      "requires_secrets": ["GITHUB_TOKEN"],
+      "estimated_hours": 1,
+      "created_at": "2026-07-13T20:30:00Z"
+    },
+    {
+      "task_id": "INFRA-AUTO-SYNC-003",
+      "type": "infrastructure",
+      "action": "setup_auto_sync_remote_station",
+      "title": "Configurar Auto-Sync em Outra Estação",
+      "description": "Replicar configuração de auto-sync (local-auto-sync.ps1 + Task Scheduler) em outra máquina Windows ou estação de trabalho da rede",
+      "priority": "high",
+      "status": "pending",
+      "assigned_to": ["claude"],
+      "steps": [
+        "1. Identificar IP/hostname da outra estação (verificar CLAUDE.md ou documentação)",
+        "2. Clonar repositório em c:\\site-shopvivaliz ou caminho equivalente",
+        "3. Copiar scripts\\local-auto-sync.ps1 e scripts\\local-auto-sync-loop.ps1",
+        "4. Executar criação de tarefa agendada (Windows Task Scheduler)",
+        "5. Testar primeira sincronização",
+        "6. Verificar logs",
+        "7. Documentar IP/hostname e status no CLAUDE.md"
+      ],
+      "requires_secrets": ["GITHUB_TOKEN"],
+      "estimated_hours": 1.5,
+      "created_at": "2026-07-13T20:30:00Z"
     }
   ]
 }
