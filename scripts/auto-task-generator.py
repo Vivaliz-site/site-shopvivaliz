@@ -84,13 +84,12 @@ def project_signal_tasks():
 
 
 def get_gemini_suggestions():
+    api_key = os.getenv('GEMINI_API_KEY', '').strip()
+    if not api_key:
+        return None
+
     try:
         import google.generativeai as genai
-
-        api_key = os.getenv('GEMINI_API_KEY', '').strip()
-        if not api_key:
-            return None
-
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-1.5-flash')
         prompt = """Voce esta analisando o projeto ShopVivaliz.
@@ -106,18 +105,20 @@ Formato JSON:
 }"""
         response = model.generate_content(prompt)
         return response.text
+    except ModuleNotFoundError:
+        print("Gemini skipped: runtime google.generativeai indisponivel neste ambiente")
+        return None
     except Exception as exc:
         print(f"Gemini error: {exc}")
         return None
 
 
 def get_claude_analysis():
+    if not os.getenv('ANTHROPIC_API_KEY', '').strip():
+        return None
+
     try:
         from anthropic import Anthropic
-
-        if not os.getenv('ANTHROPIC_API_KEY', '').strip():
-            return None
-
         client = Anthropic()
         message = client.messages.create(
             model="claude-3-5-sonnet-20241022",
@@ -130,6 +131,9 @@ Responda em JSON no formato {"tasks":[...]}."""
             }],
         )
         return message.content[0].text
+    except ModuleNotFoundError:
+        print("Claude skipped: runtime anthropic indisponivel neste ambiente")
+        return None
     except Exception as exc:
         print(f"Claude error: {exc}")
         return None
@@ -186,7 +190,7 @@ def main():
     print(f"Total de tarefas novas: {total_created}")
 
     try:
-        subprocess.run(["git", "add", "tasks-queue.json", "logs/tasks-queue.json"], check=True)
+        subprocess.run(["git", "add", "tasks-queue.json"], check=True)
     except Exception as exc:
         print(f"Git add warning: {exc}")
 
