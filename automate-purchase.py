@@ -42,7 +42,9 @@ SCREENSHOTS_DIR.mkdir(exist_ok=True)
 def log_message(msg: str, level="INFO"):
     """Log com timestamp"""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_line = f"[{timestamp}] [{level}] {msg}"
+    # Remove emojis para Windows PowerShell compatibility
+    msg_clean = msg.encode('ascii', 'ignore').decode('ascii')
+    log_line = f"[{timestamp}] [{level}] {msg_clean}"
     print(log_line)
 
     # Salvar em arquivo
