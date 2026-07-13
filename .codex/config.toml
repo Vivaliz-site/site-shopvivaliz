@@ -3,7 +3,9 @@ sandbox_mode = "danger-full-access"
 permission_profile = ":danger-full-access"
 approvals_reviewer = "user"
 model_verbosity = "low"
-model_reasoning_effort = "low"
+model_reasoning_effort = "high"
+personality = "friendly"
+web_search = "live"
 
 [sandbox_workspace_write]
 network_access = true
@@ -22,6 +24,16 @@ require_php_lint = true
 require_zip_integrity = true
 require_self_test = true
 require_no_secrets = true
+
+[features]
+apps = true
+goals = true
+hooks = true
+multi_agent = true
+personality = true
+remote_plugin = true
+shell_tool = true
+unified_exec = true
 
 [paths]
 app = "app"

@@ -17,7 +17,15 @@ param(
 
 $ErrorActionPreference = "Continue"
 
-$repo = "c:\site-shopvivaliz"
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+try {
+    $repo = (git rev-parse --show-toplevel 2>$null).Trim()
+} catch {
+    $repo = $scriptRoot
+}
+if ([string]::IsNullOrWhiteSpace($repo)) {
+    $repo = $scriptRoot
+}
 $logsDir = "$repo\logs"
 
 if (-not (Test-Path $logsDir)) {
@@ -46,8 +54,6 @@ function SyncOnce {
 
         $behind = (git rev-list --count "HEAD..origin/main" 2>$null)
         $ahead = (git rev-list --count "origin/main..HEAD" 2>$null)
-
-        Log "    Status: ahead=$ahead, behind=$behind"
 
         Log "    Status: ahead=$ahead behind=$behind"
 
