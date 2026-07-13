@@ -72,6 +72,15 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
     </div>
 </div>
 
+<div class="container">
+    <div class="checkout-timer-banner" style="background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:12px 18px; display:flex; align-items:center; gap:12px; margin-top:24px; font-family:'Inter',sans-serif; margin-bottom:-8px; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.05);">
+        <span style="font-size:20px;">⏱️</span>
+        <div style="flex:1; font-size:13px; color:#92400e; font-weight:700; line-height: 1.4;">
+            Garanta o seu estoque! Os produtos no seu carrinho estão reservados por <strong id="checkout-timer-display" style="color:#b45309; font-size:14px;">15:00</strong> minutos.
+        </div>
+    </div>
+</div>
+
 <main class="container checkout-layout" style="padding-top:28px;padding-bottom:56px">
 
     <!-- FORMULÁRIO -->
@@ -383,6 +392,39 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
     };
 
     renderCart();
+
+    /* Timer regressivo de reserva */
+    (function() {
+        var duration = 15 * 60; // 15 minutos em segundos
+        var display = document.getElementById('checkout-timer-display');
+        if (!display) return;
+        
+        var timer = duration, minutes, seconds;
+        var interval = setInterval(function () {
+            minutes = parseInt(String(timer / 60), 10);
+            seconds = parseInt(String(timer % 60), 10);
+
+            minutes = minutes < 10 ? "0" + minutes : minutes;
+            seconds = seconds < 10 ? "0" + seconds : seconds;
+
+            display.textContent = minutes + ":" + seconds;
+
+            if (--timer < 0) {
+                clearInterval(interval);
+                display.textContent = "00:00";
+                var banner = document.querySelector('.checkout-timer-banner');
+                if (banner) {
+                    banner.style.background = '#fef2f2';
+                    banner.style.borderColor = '#fee2e2';
+                    var txtDiv = banner.querySelector('div');
+                    if (txtDiv) {
+                        txtDiv.style.color = '#991b1b';
+                        txtDiv.innerHTML = '⚠️ O tempo de reserva do seu carrinho expirou, mas você ainda pode finalizar a compra!';
+                    }
+                }
+            }
+        }, 1000);
+    })();
 })();
 </script>
 </body>
