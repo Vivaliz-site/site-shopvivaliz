@@ -54,11 +54,13 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def append_jsonl(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", newline="\n") as handle:
         handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 def state_update(**updates: Any) -> None:
+    ensure_storage()
     state: dict[str, Any] = {}
     if STATE_FILE.exists():
         try:
@@ -72,6 +74,7 @@ def state_update(**updates: Any) -> None:
 
 
 def tool_post_message(arguments: dict[str, Any]) -> dict[str, Any]:
+    ensure_storage()
     sender = str(arguments.get("from") or arguments.get("sender") or "unknown").strip() or "unknown"
     recipient = str(arguments.get("to") or arguments.get("recipient") or "*").strip() or "*"
     title = str(arguments.get("title") or arguments.get("subject") or "").strip()
@@ -115,6 +118,7 @@ def state_get(key: str, default: Any = None) -> Any:
 
 
 def tool_read_messages(arguments: dict[str, Any]) -> dict[str, Any]:
+    ensure_storage()
     recipient = str(arguments.get("recipient") or "*").strip() or "*"
     thread = str(arguments.get("thread") or "").strip()
     limit = int(arguments.get("limit") or 20)
@@ -150,6 +154,7 @@ def tool_read_messages(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def tool_status(arguments: dict[str, Any]) -> dict[str, Any]:
+    ensure_storage()
     try:
         branch = os.popen("git branch --show-current").read().strip()
         head = os.popen("git rev-parse HEAD").read().strip()
