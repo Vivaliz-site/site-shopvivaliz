@@ -7,6 +7,7 @@ import os
 import smtplib
 import subprocess
 import sys
+import base64
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -329,6 +330,13 @@ def parse_email_agentes_secret() -> dict[str, str]:
             candidates.append(decoded)
     except Exception:
         pass
+    try:
+        padded = raw + "=" * (-len(raw) % 4)
+        decoded_base64 = base64.b64decode(padded).decode("utf-8", errors="ignore").strip()
+        if decoded_base64 and decoded_base64 not in candidates:
+            candidates.append(decoded_base64)
+    except Exception:
+        pass
 
     for candidate in candidates:
         stripped = candidate.strip()
@@ -348,6 +356,32 @@ def parse_email_agentes_secret() -> dict[str, str]:
             return {"provider": "resend", "api_key": stripped}
 
     return parsed
+
+
+def secret_diagnostics() -> dict[str, Any]:
+    raw = env("EMAIL_AGENTES_SECRET")
+    parsed = parse_email_agentes_secret()
+    keys = sorted(parsed.keys())
+    api_key = first_non_empty(
+        parsed.get("api_key", ""),
+        parsed.get("resend_api_key", ""),
+        parsed.get("token", ""),
+    )
+    provider = first_non_empty(
+        parsed.get("provider", ""),
+        "resend" if api_key.startswith("re_") else "",
+    )
+    return {
+        "present": bool(raw),
+        "length": len(raw),
+        "starts_with_re": raw.startswith("re_"),
+        "starts_with_json": raw.lstrip().startswith("{"),
+        "looks_urlencoded": "%" in raw,
+        "parsed_keys": keys,
+        "provider": provider or "unknown",
+        "has_api_key": bool(api_key),
+        "api_key_prefix": api_key[:3] if api_key else "",
+    }
 
 
 def send_via_resend(subject: str, body: str, recipients: list[str]) -> bool:
@@ -414,6 +448,11 @@ def send_email(subject: str, body: str) -> None:
         smtp_user = candidate["user"]
         smtp_pass = candidate["password"]
         email_from = first_non_empty(configured_from, smtp_user)
+        print(
+            "Tentando envio SMTP "
+            f"perfil={candidate['label']} host={smtp_host} port={smtp_port} "
+            f"user_len={len(smtp_user)} pass_len={len(smtp_pass)}"
+        )
 
         msg = EmailMessage()
         msg["Subject"] = subject
@@ -436,13 +475,17 @@ def send_email(subject: str, body: str) -> None:
             print(f"Envio SMTP concluido com perfil {candidate['label']}.")
             return
         except Exception as exc:
+            print(f"Falha SMTP no perfil {candidate['label']}: {exc}")
             last_error = exc
             continue
 
     try:
+        diagnostics = secret_diagnostics()
+        print(f"Diagnostico EMAIL_AGENTES_SECRET: {json.dumps(diagnostics, ensure_ascii=False)}")
         if send_via_resend(subject, body, recipients):
             return
     except Exception as exc:
+        print(f"Falha no fallback EMAIL_AGENTES_SECRET: {exc}")
         last_error = exc
 
     if last_error is not None:
@@ -452,6 +495,21 @@ def send_email(subject: str, body: str) -> None:
 
 def main() -> int:
     load_env_files([".env", ".env.local"])
+    if env_flag("REPORT_EMAIL_DEBUG_ONLY"):
+        print(json.dumps({
+            "smtp_candidates": [
+                {
+                    "label": row["label"],
+                    "host": row["host"],
+                    "port": row["port"],
+                    "user_len": len(row["user"]),
+                    "pass_len": len(row["password"]),
+                }
+                for row in smtp_candidates()
+            ],
+            "secret_diagnostics": secret_diagnostics(),
+        }, ensure_ascii=False, indent=2))
+        return 0
     hours = report_window_hours()
     report = build_report()
     subject = (
