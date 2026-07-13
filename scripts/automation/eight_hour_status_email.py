@@ -59,7 +59,7 @@ def build_report() -> str:
         lines += ["⚪ Status do Sistema: Offline ou Indisponível (Dev/Staging)", ""]
 
     # Atividade do Git nas últimas 8 horas
-    commits_8h = run(["git", "log", "--since='8 hours ago'", "--oneline"])
+    commits_8h = run(["git", "log", "--since=8 hours ago", "--oneline"])
     lines += ["📝 Commits realizados nas últimas 8 horas:"]
     if commits_8h:
         lines += [f"  {line}" for line in commits_8h.splitlines()]
@@ -68,8 +68,19 @@ def build_report() -> str:
     lines += [""]
 
     # Arquivos alterados nas últimas 8 horas
-    # Fallback para HEAD~1 se der erro ou não houver commits
-    files_8h = run(["git", "diff", "--name-only", "--since='8 hours ago'"])
+    # Calcular usando commits das últimas 8 horas
+    commit_shas = run(["git", "log", "--since=8 hours ago", "--format=%H"])
+    if commit_shas:
+        # Pegar o primeiro e último SHA
+        shas = commit_shas.splitlines()
+        if len(shas) > 1:
+            files_8h = run(["git", "diff", "--name-only", f"{shas[-1]}..{shas[0]}"])
+        else:
+            files_8h = run(["git", "diff", "--name-only", f"{shas[0]}~1..{shas[0]}"])
+    else:
+        files_8h = ""
+
+    # Fallback se nenhum commit nas últimas 8 horas
     if not files_8h:
         files_8h = run(["git", "diff", "--name-only", "HEAD~1..HEAD"])
     
