@@ -151,10 +151,19 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
             <span>Subtotal:</span>
             <strong id="mini-cart-total-value">R$ 0,00</strong>
         </div>
-        <div class="free-shipping-progress-wrapper" style="margin-bottom:10px;">
-            <div class="free-shipping-progress-bar" id="mini-cart-shipping-bar"></div>
+        <!-- Multi-Level Gamification Rewards Progress Track -->
+        <div class="gamification-rewards-container" style="margin-top: 10px; margin-bottom: 12px; font-family:'Inter',sans-serif;">
+            <div class="free-shipping-text" id="mini-cart-shipping-text" style="font-size:12px; text-align:center; margin-bottom:8px; line-height: 1.4; color: #475569;">Calculando suas recompensas...</div>
+            <div class="free-shipping-progress-wrapper" style="position:relative; height:8px; background:#e2e8f0; border-radius:999px; overflow:visible; margin-bottom:12px;">
+                <div class="free-shipping-progress-bar" id="mini-cart-shipping-bar" style="position:absolute; left:0; top:0; height:100%; width:0%; background:linear-gradient(90deg, #3b82f6, #10b981); border-radius:999px; transition:width 0.3s ease;"></div>
+                <!-- Goal 1 Marker: R$ 150 -->
+                <div class="gamification-goal-marker" id="goal-150-marker" title="Meta R$ 150: Cupom VIVALIZ5"
+                     style="position:absolute; left:50%; top:-4px; width:16px; height:16px; border-radius:50%; background:#fff; border:2.5px solid #cbd5e1; transform:translateX(-50%); display:flex; align-items:center; justify-content:center; font-size:8px; z-index:2; transition:all 0.3s; cursor:pointer;">🎁</div>
+                <!-- Goal 2 Marker: R$ 299 -->
+                <div class="gamification-goal-marker" id="goal-299-marker" title="Meta R$ 299: Frete Grátis"
+                     style="position:absolute; right:0; top:-4px; width:16px; height:16px; border-radius:50%; background:#fff; border:2.5px solid #cbd5e1; display:flex; align-items:center; justify-content:center; font-size:8px; z-index:2; transition:all 0.3s; cursor:pointer;">🚚</div>
+            </div>
         </div>
-        <p class="free-shipping-text" id="mini-cart-shipping-text" style="font-size:12px;text-align:center;margin-bottom:10px;"></p>
         <a href="/carrinho" class="btn btn-primary btn-large" style="width:100%; display:block; text-align:center;">Ir para o Checkout</a>
     </div>
 </div>
