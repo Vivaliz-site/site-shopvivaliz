@@ -53,6 +53,7 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/checkout.css">
+    <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
 </head>
 <body>
 <?php $svNavCurrent = 'checkout'; include __DIR__ . '/includes/navbar.php'; ?>
