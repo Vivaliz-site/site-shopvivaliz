@@ -73,7 +73,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $google_auth_url = sv_social_google_auth_url('login', $redirectTo);
-$apple_auth_url = sv_social_apple_auth_url('login', $redirectTo);
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
