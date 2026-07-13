@@ -615,7 +615,7 @@
       "title": "Corrigir falhas concretas do validador de deploy",
       "description": "Tratar os problemas apontados em logs/deploy-diagnostic.json para impedir deploy com erro silencioso.",
       "priority": "high",
-      "status": "completed",
+      "status": "pending",
       "auto_generated": true,
       "source": "real-project-signals",
       "id": "task-051",
@@ -642,7 +642,7 @@
       "title": "Reparar produtos reais do catalogo sem imagem valida",
       "description": "Foram encontrados 1 produtos sem imagem valida no catalogo fallback; revisar cobertura visual desses SKUs.",
       "priority": "high",
-      "status": "completed",
+      "status": "pending",
       "auto_generated": true,
       "source": "real-project-signals",
       "id": "task-052",
@@ -726,7 +726,7 @@
       "title": "Ajustar robots e sitemap para dominio principal e Merchant/SEO",
       "description": "Garantir robots.txt publico correto, apontamento de sitemap para dominio principal e base SEO consistente.",
       "priority": "high",
-      "status": "pending",
+      "status": "in_progress",
       "source": "autonomous-seo-analysis",
       "type": "seo",
       "action": "seo_sitemap_validation",
@@ -756,7 +756,10 @@
         }
       },
       "id": "task-054",
-      "created_at": "2026-07-12T22:12:15.689784Z"
+      "created_at": "2026-07-12T22:12:15.689784Z",
+      "selected_at": "2026-07-13T16:43:12.009643Z",
+      "selected_by": "autonomous-continuous-cycle",
+      "selection_reason": "phase=unphased; readiness=ready_local; queue_rank=na; director_rank=0"
     },
     {
       "title": "Validar refresh automatico de token Olist/Tiny em janela de 2 horas",

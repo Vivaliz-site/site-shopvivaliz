@@ -21,45 +21,47 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
-      - name: Validar configuracao de email
+      - name: Validar configuracao do sender
         env:
-          EMAIL_SMTP_HOST: ${{ secrets.EMAIL_SMTP_HOST }}
-          EMAIL_SMTP_PORT: ${{ secrets.EMAIL_SMTP_PORT }}
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          MAIL_HOST: ${{ secrets.MAIL_HOST }}
-          MAIL_PORT: ${{ secrets.MAIL_PORT }}
-          MAIL_USER: ${{ secrets.MAIL_USER }}
-          MAIL_PASS: ${{ secrets.MAIL_PASS }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          EMAIL_TO: "fredmourao@gmail.com,atendimento@shopvivaliz.com.br"
+          EMAIL_SMTP_HOST: ${{ secrets.EMAIL_SMTP_HOST }}
+          EMAIL_SMTP_PORT: ${{ secrets.EMAIL_SMTP_PORT }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          MAIL_HOST: ${{ secrets.EMAIL_SMTP_HOST || secrets.SMTP_HOST }}
+          MAIL_PORT: ${{ secrets.EMAIL_SMTP_PORT || secrets.SMTP_PORT }}
+          MAIL_USER: ${{ secrets.EMAIL_USER || secrets.SMTP_USER }}
+          MAIL_PASS: ${{ secrets.EMAIL_PASSWORD || secrets.SMTP_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO || 'fredmourao@gmail.com,atendimento@shopvivaliz.com.br' }}
         run: python scripts/automation/validate_email_config.py
 
-      - name: Enviar email
+      - name: Gerar e enviar relatorio pelo sender central
         env:
-          EMAIL_SMTP_HOST: ${{ secrets.EMAIL_SMTP_HOST }}
-          EMAIL_SMTP_PORT: ${{ secrets.EMAIL_SMTP_PORT }}
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          MAIL_HOST: ${{ secrets.MAIL_HOST }}
-          MAIL_PORT: ${{ secrets.MAIL_PORT }}
-          MAIL_USER: ${{ secrets.MAIL_USER }}
-          MAIL_PASS: ${{ secrets.MAIL_PASS }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          EMAIL_TO: "fredmourao@gmail.com,atendimento@shopvivaliz.com.br"
           REPORT_WINDOW_HOURS: "4"
           REPORT_BASE_URL: "https://dev.shopvivaliz.com.br"
           REPORT_LOG_PATH: "logs/email-activity-report.txt"
-          GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_SMTP_HOST: ${{ secrets.EMAIL_SMTP_HOST }}
+          EMAIL_SMTP_PORT: ${{ secrets.EMAIL_SMTP_PORT }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          MAIL_HOST: ${{ secrets.EMAIL_SMTP_HOST || secrets.SMTP_HOST }}
+          MAIL_PORT: ${{ secrets.EMAIL_SMTP_PORT || secrets.SMTP_PORT }}
+          MAIL_USER: ${{ secrets.EMAIL_USER || secrets.SMTP_USER }}
+          MAIL_PASS: ${{ secrets.EMAIL_PASSWORD || secrets.SMTP_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO || 'fredmourao@gmail.com,atendimento@shopvivaliz.com.br' }}
         run: python scripts/automation/eight_hour_status_email.py
 
       - name: Upload report artifact
