@@ -36,10 +36,10 @@ shell_tool = true
 unified_exec = true
 
 [mcp_servers.codex_bridge]
-command = "codex"
-args = ["mcp-server"]
+command = "python"
+args = ["scripts/codex-mesh-bridge.py"]
 enabled = true
-required = false
+required = true
 startup_timeout_sec = 30
 tool_timeout_sec = 120
 default_tools_approval_mode = "prompt"
