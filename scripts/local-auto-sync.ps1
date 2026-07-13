@@ -94,7 +94,7 @@ Log "   Log: $logFile"
 if ($OneTime) {
     Log "   Modo: Uma unica execucao"
     $result = SyncOnce
-    exit ($result ? 0 : 1)
+    if ($result) { exit 0 } else { exit 1 }
 } else {
     Log "   Modo: Continuo (infinito)"
     Log "   Para parar: Ctrl+C"
