@@ -866,3 +866,82 @@ footer .footer-legal div[style] { color: rgba(255,255,255,0.4) !important; }
 .sv-skeleton-title { height: 16px; width: 85%; margin-bottom: 8px; }
 .sv-skeleton-price { height: 20px; width: 45%; margin-bottom: 12px; }
 .sv-skeleton-btn { height: 32px; width: 100%; border-radius: 6px; }
+
+
+/* ======================================================================
+   16. MOBILE BOTTOM NAVIGATION BAR & ACCESSIBILITY
+   ====================================================================== */
+.sv-mobile-nav-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(226, 232, 240, 0.8);
+    display: none;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 99990;
+    box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.04);
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.sv-mobile-nav-bar a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 600;
+    gap: 4px;
+    flex: 1;
+    height: 100%;
+    transition: color 0.2s ease;
+}
+
+.sv-mobile-nav-bar a .nav-icon {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.sv-mobile-nav-bar a.active {
+    color: #0b4f88;
+}
+
+@media (max-width: 768px) {
+    .sv-mobile-nav-bar {
+        display: flex;
+    }
+    /* Add extra padding at the bottom of the body so content is not cut off by the bar */
+    body {
+        padding-bottom: 74px !important;
+    }
+}
+
+/* ======================================================================
+   17. EXIT-INTENT MODAL ANIMATIONS
+   ====================================================================== */
+@keyframes popupEntrance {
+    from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+#exit-intent-close:hover {
+    background: #e2e8f0 !important;
+    color: #0f172a !important;
+}
+
+.exit-intent-overlay.open {
+    display: flex !important;
+}
