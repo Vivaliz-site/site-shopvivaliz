@@ -199,7 +199,7 @@ PAGARME_PUBLIC_KEY = os.getenv("PAGARME_PUBLIC_KEY", "").strip()
 # ============================================================================
 MELHORENVIO_ACCESS_TOKEN = os.getenv("MELHORENVIO_ACCESS_TOKEN", "").strip()
 MELHORENVIO_API_KEY = os.getenv("MELHORENVIO_API_KEY", "").strip()
-MELHORENVIO_FROM_POSTAL_CODE = os.getenv("MELHORENVIO_FROM_POSTAL_CODE", "35500000")
+MELHORENVIO_FROM_POSTAL_CODE = os.getenv("MELHORENVIO_FROM_POSTAL_CODE", "35501236")
 
 # ============================================================================
 # SEÇÃO 10: SEGURANÇA E TOKENS
