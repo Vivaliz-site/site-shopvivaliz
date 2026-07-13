@@ -18,7 +18,7 @@ from typing import Dict, List, Any, Optional
 DB_PATH = Path(__file__).parent.parent / "shopvivaliz.db"
 
 
-class ShopVivaliz DB:
+class ShopVivalizDB:
     """Database manager para ShopVivaliz."""
 
     def __init__(self, db_path: Path = DB_PATH):
