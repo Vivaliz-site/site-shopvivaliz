@@ -37,7 +37,7 @@ def run_cmd(cmd: str, desc: str = "") -> bool:
 
 def sync_cycle():
     """Uma iteração de sincronização."""
-    log("🔄 Iniciando ciclo de sync...")
+    log("[SYNC] Iniciando ciclo de sync...")
 
     # 1. Pull para trazer mudanças da outra estação
     if run_cmd("git fetch origin && git pull origin $(git rev-parse --abbrev-ref HEAD) --no-edit", "Pull remoto"):
@@ -47,7 +47,7 @@ def sync_cycle():
         # 3. Push para compartilhar com outra estação
         run_cmd("git push origin $(git rev-parse --abbrev-ref HEAD) --no-verify", "Push remoto")
 
-    log("✅ Ciclo concluído\n")
+    log("[SYNC] Ciclo concluido")
 
 def main():
     """Daemon contínuo."""
