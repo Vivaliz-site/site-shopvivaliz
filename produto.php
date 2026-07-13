@@ -503,8 +503,21 @@ if ($notFound) {
         </section>
         <?php else: ?>
         <div class="product-detail">
-            <div class="product-detail-image skeleton hover-zoom-container">
-                <img src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" onerror="this.src='<?= sv_product_default_image() ?>'" loading="eager">
+            <div style="display:flex; flex-direction:column; gap:12px; max-width: 100%;">
+                <div class="product-detail-image skeleton hover-zoom-container" id="product-zoom-box">
+                    <img id="main-product-image" src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" onerror="this.src='<?= sv_product_default_image() ?>'" loading="eager">
+                </div>
+                <!-- Interactive Product Gallery Thumbnails -->
+                <div class="product-gallery-thumbnails" style="display:flex; gap:10px; justify-content:center; margin-bottom:12px;">
+                    <button type="button" class="thumb-btn active" data-src="<?= sv_esc($image) ?>" aria-label="Ver imagem principal"
+                            style="width:54px; height:54px; border:2px solid #0b4f88; border-radius:8px; overflow:hidden; cursor:pointer; padding:0; background:#fff; transition: border-color 0.2s;">
+                        <img src="<?= sv_esc($image) ?>" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='<?= sv_product_default_image() ?>'">
+                    </button>
+                    <button type="button" class="thumb-btn" data-src="/images/logo-vivaliz-square.png" aria-label="Ver selo Vivaliz"
+                            style="width:54px; height:54px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; cursor:pointer; padding:0; background:#fff; transition: border-color 0.2s;">
+                        <img src="/images/logo-vivaliz-square.png" style="width:100%; height:100%; object-fit:cover; opacity: 0.85;">
+                    </button>
+                </div>
             </div>
             <div class="product-detail-copy">
                 <?php if ($category !== ''): ?>
