@@ -1,22 +1,58 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:14-alpine
-    container_name: shopvivaliz-medusa-db
-    environment:
-      POSTGRES_USER: medusa
-      POSTGRES_PASSWORD: medusa123
-      POSTGRES_DB: shopvivaliz_medusa
+  agent-api:
+    build: .
+    container_name: shopvivaliz-agent-api
     ports:
-      - "5432:5432"
+      - "5000:5000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-shopvivaliz-secret-key}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U medusa"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      - ./logs:/app/logs
+      - ./shopvivaliz.db:/app/shopvivaliz.db
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: shopvivaliz-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: shopvivaliz-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=shopvivaliz123
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: shopvivaliz-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
 
 volumes:
-  postgres_data:
+  prometheus-data:
+  grafana-data:
+  redis-data:
+
+networks:
+  default:
+    name: shopvivaliz-net
