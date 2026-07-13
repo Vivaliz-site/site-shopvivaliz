@@ -18,9 +18,9 @@ if (is_file($env_file)) {
     }
 }
 
-$clientId = getenv('OLIST_CLIENT_ID');
-$clientSecret = getenv('OLIST_CLIENT_SECRET');
-$refreshToken = getenv('OLIST_REFRESH_TOKEN');
+$clientId = getenv('OLIST_CLIENT_ID') ?: getenv('TINY_CLIENT_ID') ?: getenv('CLIENT_ID_API_OLIST');
+$clientSecret = getenv('OLIST_CLIENT_SECRET') ?: getenv('TINY_CLIENT_SECRET') ?: getenv('CLIENT_SECRET_OLIST');
+$refreshToken = getenv('OLIST_REFRESH_TOKEN') ?: getenv('TINY_REFRESH_TOKEN');
 
 if (!$clientId || !$clientSecret || !$refreshToken) {
     die("Missing Olist credentials in .env\n");
@@ -52,16 +52,24 @@ if ($httpCode === 200) {
     if (isset($data['access_token'])) {
         // Save tokens
         $envContent = file_get_contents($env_file);
-        $envContent = preg_replace(
-            '/^OLIST_ACCESS_TOKEN=.*/m',
-            'OLIST_ACCESS_TOKEN=' . $data['access_token'],
-            $envContent
-        );
-        $envContent = preg_replace(
-            '/^OLIST_REFRESH_TOKEN=.*/m',
-            'OLIST_REFRESH_TOKEN=' . $data['refresh_token'],
-            $envContent
-        );
+        $replacements = [
+            'OLIST_ACCESS_TOKEN' => $data['access_token'],
+            'OLIST_REFRESH_TOKEN' => $data['refresh_token'],
+            'TINY_ACCESS_TOKEN' => $data['access_token'],
+            'TINY_REFRESH_TOKEN' => $data['refresh_token'],
+        ];
+        foreach ($replacements as $key => $value) {
+            if (preg_match('/^' . preg_quote($key, '/') . '=.*/m', $envContent)) {
+                $envContent = preg_replace(
+                    '/^' . preg_quote($key, '/') . '=.*/m',
+                    $key . '=' . $value,
+                    $envContent
+                );
+            } else {
+                $envContent .= rtrim($envContent) === '' ? '' : PHP_EOL;
+                $envContent .= $key . '=' . $value;
+            }
+        }
         file_put_contents($env_file, $envContent);
         echo "✓ Tokens refreshed and saved\n";
     }
