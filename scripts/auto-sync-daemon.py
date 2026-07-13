@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Auto-sync daemon - sincroniza repositório a cada 30 segundos (desenvolvimento) ou 30 minutos (produção)."""
+import os
 import subprocess
 import time
 import sys
