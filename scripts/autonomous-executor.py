@@ -38,6 +38,7 @@ STEP_EVENTS_FILE = AUTONOMOUS_DIR / "agent-steps.jsonl"
 STATUS_FILE = AUTONOMOUS_DIR / "live-status.json"
 REPORT_FILE = LOGS_DIR / "autonomous-cycle-report.json"
 REPORT_EVENTS_FILE = LOGS_DIR / "autonomous-cycle-events.jsonl"
+EMAIL_CONFIG_FILE = LOGS_DIR / "email-config-check.json"
 
 SITE_URL = os.getenv("SHOPVIVALIZ_SITE_URL", "https://www.shopvivaliz.com.br")
 QUEUE_LOW_WATERMARK = int(os.getenv("AUTONOMOUS_QUEUE_LOW_WATERMARK", "3"))
@@ -147,6 +148,15 @@ def recent_learning(limit: int = 80) -> list[dict[str, Any]]:
     return rows[-limit:]
 
 
+def recent_task_titles(lessons: list[dict[str, Any]], *, window: int = 20) -> set[str]:
+    titles: set[str] = set()
+    for lesson in lessons[-window:]:
+        title = str(lesson.get("task_title") or "").strip().lower()
+        if title:
+            titles.add(title)
+    return titles
+
+
 def pending_tasks(queue: dict[str, Any]) -> list[dict[str, Any]]:
     return [task for task in queue.get("queue", []) if str(task.get("status", "")).lower() == "pending"]
 
@@ -227,6 +237,17 @@ def token_signals() -> dict[str, Any]:
     }
 
 
+def email_signals() -> dict[str, Any]:
+    report = read_json(EMAIL_CONFIG_FILE, {})
+    checks = report.get("checks", {}) if isinstance(report, dict) else {}
+    return {
+        "exists": bool(report),
+        "ok": bool(report.get("ok", False)),
+        "checks": checks if isinstance(checks, dict) else {},
+        "recipient_count": int(report.get("recipient_count", 0) or 0),
+    }
+
+
 def command_exists_in_learning(title: str, lessons: list[dict[str, Any]]) -> bool:
     target = re.sub(r"\s+", " ", title.strip().lower())
     for lesson in lessons:
@@ -240,6 +261,8 @@ def generate_tasks_from_signals(queue: dict[str, Any], lessons: list[dict[str, A
     created: list[dict[str, Any]] = []
     signals = site_signals()
     tokens = token_signals()
+    email = email_signals()
+    learned_titles = recent_task_titles(lessons)
 
     diagnostics_task = {
         "title": "Executar auditoria autonoma ponta a ponta do site publico",
@@ -252,7 +275,7 @@ def generate_tasks_from_signals(queue: dict[str, Any], lessons: list[dict[str, A
         "assigned_to": ["gpt"],
         "metadata": {"signals": signals},
     }
-    if not command_exists_in_learning(diagnostics_task["title"], lessons):
+    if diagnostics_task["title"].lower() not in learned_titles and not command_exists_in_learning(diagnostics_task["title"], lessons):
         _, inserted = upsert_task(queue, diagnostics_task)
         if inserted:
             created.append(diagnostics_task)
@@ -322,6 +345,22 @@ def generate_tasks_from_signals(queue: dict[str, Any], lessons: list[dict[str, A
             "assigned_to": ["claude"],
             "requires_env": ["OLIST_CLIENT_ID", "OLIST_CLIENT_SECRET"],
             "metadata": tokens,
+        }
+        _, inserted = upsert_task(queue, task)
+        if inserted:
+            created.append(task)
+
+    if email["exists"] and not email["ok"]:
+        task = {
+            "title": "Restaurar configuracao real de email do 24/7",
+            "description": "A telemetria mostra que o canal SMTP nao esta totalmente valido; revisar aliases, destinatarios e autenticacao.",
+            "priority": "high",
+            "status": "pending",
+            "source": "autonomous-integration-analysis",
+            "type": "integration",
+            "action": "email_delivery_health_check",
+            "assigned_to": ["gpt"],
+            "metadata": email,
         }
         _, inserted = upsert_task(queue, task)
         if inserted:
@@ -461,6 +500,19 @@ def execute_task(agent_id: str, task: dict[str, Any]) -> dict[str, Any]:
         output["tests"].append("urlopen(home)")
         output["home_status_code"] = status_code
         output["has_org_jsonld"] = '"@type":"organization"' in body.lower() or '"@type": "organization"' in body.lower()
+    elif action == "email_delivery_health_check":
+        emit_step(agent_id, "Validando configuracao do email autonomo e aliases SMTP", task=task)
+        result = run([sys.executable, str(ROOT / "scripts" / "automation" / "validate_email_config.py")], timeout=120)
+        output["tests"].append("python scripts/automation/validate_email_config.py")
+        output["exit_code"] = result.returncode
+        output["stdout_tail"] = result.stdout[-2000:]
+        output["stderr_tail"] = result.stderr[-2000:]
+        output["email"] = read_json(EMAIL_CONFIG_FILE, {})
+        if result.returncode != 0:
+            output["status"] = "failed"
+            output["summary"] = "Configuracao de email ainda requer correcao."
+        else:
+            output["summary"] = "Configuracao de email validada com sucesso."
     else:
         emit_step(agent_id, "Executando diagnostico generico orientado por fila", task=task)
         result = run([sys.executable, str(ROOT / "scripts" / "system-health-check.py")], timeout=240)
@@ -512,6 +564,8 @@ def execute_cycle(queue: dict[str, Any]) -> dict[str, Any]:
         "generated_tasks": [task.get("title") for task in generated_tasks],
         "selection": {"task": task, "reason": "next_executable_pending_task" if task else "queue_empty_after_generation"},
         "status": "idle",
+        "email_health": email_signals(),
+        "learning_tail": [row.get("summary") for row in lessons[-5:]],
     }
 
     if task is None:

@@ -30,6 +30,7 @@ def project_signal_tasks():
     cycle = read_json(ROOT / 'logs' / 'autonomous-cycle-report.json', {})
     tri = read_json(ROOT / 'logs' / 'tri-environment-sync.json', {})
     deploy = read_json(ROOT / 'logs' / 'deploy-diagnostic.json', {})
+    email = read_json(ROOT / 'logs' / 'email-config-check.json', {})
     catalog = read_json(ROOT / 'api' / 'catalog' / 'fallback-products.json', [])
 
     if health.get('status') not in (None, 'HEALTHY'):
@@ -57,6 +58,13 @@ def project_signal_tasks():
         signals.append({
             "title": "Corrigir falhas concretas do validador de deploy",
             "description": "Tratar os problemas apontados em logs/deploy-diagnostic.json para impedir deploy com erro silencioso.",
+            "priority": "high",
+        })
+
+    if email and not email.get('ok', False):
+        signals.append({
+            "title": "Restaurar configuracao real de email do 24/7",
+            "description": "Validar aliases SMTP/MAIL/EMAIL, destinatarios e autenticacao para que os relatorios autonomos voltem a ser entregues.",
             "priority": "high",
         })
 

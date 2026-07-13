@@ -20,8 +20,28 @@ DEFAULT_RECIPIENTS = "fredmourao@gmail.com,atendimento@shopvivaliz.com.br"
 DEFAULT_REPORT_LOG = "logs/email-activity-report.txt"
 
 
+def load_env_files(paths: list[str]) -> None:
+    for raw_path in paths:
+        path = Path(raw_path)
+        if not path.exists():
+            continue
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip("\"'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
 def env(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
+
+
+def env_flag(name: str) -> bool:
+    return env(name).lower() in {"1", "true", "yes", "on"}
 
 
 def report_window_hours() -> int:
@@ -276,6 +296,7 @@ def send_email(subject: str, body: str) -> None:
 
 
 def main() -> int:
+    load_env_files([".env", ".env.local"])
     hours = report_window_hours()
     report = build_report()
     subject = (
@@ -285,6 +306,9 @@ def main() -> int:
 
     print(report)
     persist_report(report)
+    if env_flag("REPORT_SKIP_EMAIL"):
+        print("Envio por email ignorado por REPORT_SKIP_EMAIL.")
+        return 0
     try:
         send_email(subject, report)
         print("Relatorio enviado por email com sucesso.")

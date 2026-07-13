@@ -7,6 +7,22 @@ import os
 from pathlib import Path
 
 
+def load_env_files(paths: list[str]) -> None:
+    for raw_path in paths:
+        path = Path(raw_path)
+        if not path.exists():
+            continue
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip("\"'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
 def first_env(*names: str) -> tuple[str, str]:
     for name in names:
         value = os.getenv(name, "").strip()
@@ -15,7 +31,8 @@ def first_env(*names: str) -> tuple[str, str]:
     return "", ""
 
 
-def main() -> int:
+def inspect_config() -> dict:
+    load_env_files([".env", ".env.local"])
     host_name, host = first_env("SMTP_HOST", "EMAIL_SMTP_HOST", "MAIL_HOST")
     port_name, port = first_env("SMTP_PORT", "EMAIL_SMTP_PORT", "MAIL_PORT")
     user_name, user = first_env("SMTP_USER", "EMAIL_USER", "MAIL_USER")
@@ -48,6 +65,11 @@ def main() -> int:
         "checks": checks,
         "recipient_count": len(recipient_list),
     }
+    return report
+
+
+def main() -> int:
+    report = inspect_config()
 
     Path("logs").mkdir(exist_ok=True)
     Path("logs/email-config-check.json").write_text(
@@ -55,7 +77,7 @@ def main() -> int:
         encoding="utf-8",
     )
     print(json.dumps(report, indent=2, ensure_ascii=False))
-    return 0 if ok else 1
+    return 0 if report.get("ok") else 1
 
 
 if __name__ == "__main__":
