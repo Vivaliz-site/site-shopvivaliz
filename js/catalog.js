@@ -137,7 +137,22 @@
     if (!grid || !status) return;
     const activeCategory = String(category || '').trim();
     status.textContent = 'Carregando catálogo...';
-    grid.innerHTML = '';
+    
+    // Inject visual skeleton loaders during fetching
+    grid.innerHTML = `
+      <div class="product-card sv-skeleton-card" style="box-shadow:none; border:1px solid #e2e8f0; opacity:0.8;">
+        <div class="sv-skeleton sv-skeleton-image" style="height: 180px; width: 100%; border-radius: 8px; margin-bottom: 12px;"></div>
+        <div class="product-info" style="padding: 12px 0 0 0;">
+          <div class="sv-skeleton sv-skeleton-title" style="width: 35%; height: 12px; margin-bottom: 8px;"></div>
+          <div class="sv-skeleton sv-skeleton-title" style="width: 85%; height: 16px; margin-bottom: 12px;"></div>
+          <div class="sv-skeleton sv-skeleton-price" style="width: 40%; height: 20px; margin-bottom: 12px;"></div>
+          <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <div class="sv-skeleton sv-skeleton-btn" style="flex: 1; height: 32px;"></div>
+            <div class="sv-skeleton sv-skeleton-btn" style="flex: 1; height: 32px;"></div>
+          </div>
+        </div>
+      </div>
+    `.repeat(6);
     const url = '/api/catalog/products.php?limit=200'
       + (query ? '&q=' + encodeURIComponent(query) : '')
       + (activeCategory ? '&category=' + encodeURIComponent(activeCategory) : '');

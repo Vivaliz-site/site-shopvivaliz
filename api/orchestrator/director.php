@@ -71,6 +71,18 @@ $reportUrl = $baseUrl . '/api/agent/autonomous-report.php';
 $report    = odir_http_get($reportUrl);
 
 if (!is_array($report) || isset($report['error'])) {
+    odir_log('HTTP request failed. Falling back to local file.');
+    $localReportFile = dirname(__DIR__, 2) . '/logs/autonomous-cycle-report.json';
+    if (is_file($localReportFile)) {
+        $localData = json_decode((string)file_get_contents($localReportFile), true);
+        if (is_array($localData)) {
+            $report = $localData;
+            odir_log('Successfully loaded report fallback from local file.');
+        }
+    }
+}
+
+if (!is_array($report) || isset($report['error'])) {
     $err = ['ok' => false, 'error' => 'Falha ao obter relatório', 'detail' => $report];
     odir_log('erro: falha ao obter relatório');
     echo json_encode($err, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);

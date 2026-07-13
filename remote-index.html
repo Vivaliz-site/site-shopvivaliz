@@ -23,11 +23,11 @@
 
     <title>Vivaliz | Loja Online</title>
 
-    <link rel="stylesheet" href="/css/style.css?v=2026-07-10-1130-WILDCARD-FIX">
-    <link rel="stylesheet" href="/css/category-images.css?v=2026-07-10-1130-WILDCARD-FIX">
-    <link rel="stylesheet" href="/css/visual-enhancements.css?v=2026-07-10-1130-WILDCARD-FIX">
-    <link rel="stylesheet" href="/css/visual-improvements-2026.css?v=2026-07-10-1130-WILDCARD-FIX">
-    <link rel="stylesheet" href="/css/premium-visual-v2.css?v=2026-07-12-v2">
+    <link rel="stylesheet" href="/css/style.css?v=2026-07-13-v4">
+    <link rel="stylesheet" href="/css/category-images.css?v=2026-07-13-v4">
+    <link rel="stylesheet" href="/css/visual-enhancements.css?v=2026-07-13-v4">
+    <link rel="stylesheet" href="/css/visual-improvements-2026.css?v=2026-07-13-v4">
+    <link rel="stylesheet" href="/css/premium-visual-v2.css?v=2026-07-13-v4">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -168,6 +168,16 @@
                             <span class="hero-slide-eyebrow">Vitrine Vivaliz</span>
                             <h2>Rodizios, ferragens e utilidades com visual mais claro.</h2>
                             <p>Uma home pensada para destacar produtos reais, leitura rápida no celular e navegação direta até a compra.</p>
+                            
+                            <!-- Premium E-Commerce Search Bar -->
+                            <div class="hero-search-container" style="margin-bottom: 20px;">
+                                <form action="/catalogo" method="GET" class="hero-search-form">
+                                    <span class="hero-search-icon">🔍</span>
+                                    <input type="text" name="busca" placeholder="O que você está procurando hoje? Ex: rodízios, ferramentas..." required>
+                                    <button type="submit">Buscar</button>
+                                </form>
+                            </div>
+
                             <div class="hero-slide-actions">
                                 <a href="/catalogo" class="btn btn-primary">Explorar catálogo</a>
                                 <a href="/contato" class="btn btn-secondary">Falar com vendas</a>
@@ -466,6 +476,22 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Premium Newsletter Section -->
+    <section class="home-newsletter">
+        <div class="container">
+            <div class="newsletter-card">
+                <div class="newsletter-info">
+                    <h2>Fique por dentro das novidades 📩</h2>
+                    <p>Receba ofertas exclusivas, cupons de desconto e dicas de organização diretamente no seu e-mail.</p>
+                </div>
+                <form class="newsletter-form" onsubmit="event.preventDefault(); alert('Inscrição realizada com sucesso! Aproveite seus benefícios.'); this.reset();">
+                    <input type="email" placeholder="Digite seu melhor e-mail" required aria-label="Seu endereço de e-mail">
+                    <button type="submit" class="btn btn-primary">Inscrever-se</button>
+                </form>
             </div>
         </div>
     </section>

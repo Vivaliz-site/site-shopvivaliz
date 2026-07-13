@@ -46,6 +46,15 @@ REPORTABLE_TAGS = {
     "catalog",
 }
 
+AUTONOMOUS_SOURCES = {
+    "autonomous-site-analysis",
+    "autonomous-seo-analysis",
+    "autonomous-integration-analysis",
+    "real-project-signals",
+    "auto-task-generator-gemini",
+    "auto-task-generator-claude",
+}
+
 
 def current_branch() -> str:
     result = subprocess.run(
@@ -133,6 +142,10 @@ def should_include_task(task: dict) -> bool:
     if phase.startswith("phase-"):
         return True
     if tags & REPORTABLE_TAGS:
+        return True
+    if task.get("auto_generated"):
+        return True
+    if str(task.get("source", "")).strip().lower() in AUTONOMOUS_SOURCES:
         return True
     return False
 

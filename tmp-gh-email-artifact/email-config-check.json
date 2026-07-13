@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "sources": {
+    "host": "SMTP_HOST",
+    "port": "SMTP_PORT",
+    "user": "SMTP_USER",
+    "password": "SMTP_PASS",
+    "recipients": "EMAIL_TO",
+    "sender": "EMAIL_FROM"
+  },
+  "checks": {
+    "host": true,
+    "port": true,
+    "user": true,
+    "password": true,
+    "recipients": true,
+    "sender": true
+  },
+  "recipient_count": 1
+}
