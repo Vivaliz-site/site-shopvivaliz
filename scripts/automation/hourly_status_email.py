@@ -65,7 +65,7 @@ def build_report() -> str:
 
 
 class SmtpNotConfiguredError(Exception):
-    """Raised when SMTP secrets are missing — not a real failure."""
+    """Raised when SMTP secrets are missing."""
 
 
 def send_email(subject: str, body: str) -> None:
@@ -76,8 +76,20 @@ def send_email(subject: str, body: str) -> None:
     email_from = env("EMAIL_FROM", smtp_user)
     email_to = env("EMAIL_TO")
 
-    if not all([smtp_host, smtp_user, smtp_pass, email_to]):
-        raise SmtpNotConfiguredError("SMTP/EMAIL secrets não configurados — skipping")
+    missing = [
+        name
+        for name, value in [
+            ("SMTP_HOST/EMAIL_SMTP_HOST", smtp_host),
+            ("SMTP_USER/EMAIL_USER", smtp_user),
+            ("SMTP_PASS/EMAIL_PASSWORD", smtp_pass),
+            ("EMAIL_TO", email_to),
+        ]
+        if not value
+    ]
+    if missing:
+        raise SmtpNotConfiguredError(f"Secrets SMTP ausentes: {', '.join(missing)}")
+
+    print(f"Enviando status via {smtp_host}:{smtp_port} para {email_to}")
 
     msg = EmailMessage()
     msg["Subject"] = subject
@@ -107,8 +119,8 @@ def main() -> int:
         print("Email enviado com sucesso.")
         return 0
     except SmtpNotConfiguredError as exc:
-        print(f"[AVISO] {exc}", file=sys.stderr)
-        return 0  # não é falha — secrets simplesmente não configurados
+        print(f"[ERRO] {exc}", file=sys.stderr)
+        return 1
     except Exception as exc:
         print(f"Falha ao enviar email: {exc}", file=sys.stderr)
         return 1
