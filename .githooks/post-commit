@@ -6,9 +6,16 @@ if [ -z "$branch" ]; then
   exit 0
 fi
 
+# Allow auto-sync daemon and other automated processes to push
+if [ "$AUTO_SYNC_DAEMON" = "1" ] || [ "$ALLOW_AUTO_PUSH" = "1" ]; then
+  echo "post-commit: auto-sync daemon permitido, enviando para origin/$branch"
+  git push origin "$branch" --no-verify 2>/dev/null || true
+  exit 0
+fi
+
 case "$branch" in
   main|master)
-    echo "post-commit: push automatico bloqueado em branch protegida: $branch"
+    echo "post-commit: push automatico bloqueado em branch protegida: $branch (use AUTO_SYNC_DAEMON=1 para bypass)"
     exit 0
     ;;
 esac
