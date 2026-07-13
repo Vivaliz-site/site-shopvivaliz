@@ -31,6 +31,14 @@ CYCLE_REPORT_JSON = LOGS_DIR / "autonomous-cycle-report.json"
 CYCLE_REPORT_MD = LOGS_DIR / "autonomous-cycle-report.md"
 EVENTS_LOG_JSONL = LOGS_DIR / "autonomous-cycle-events.jsonl"
 AUTONOMOUS_CYCLE_LOG = Path("scripts/autonomous-cycle-log.json")
+AUTONOMOUS_READY_SOURCES = {
+    "autonomous-site-analysis",
+    "autonomous-seo-analysis",
+    "autonomous-integration-analysis",
+    "real-project-signals",
+    "auto-task-generator-gemini",
+    "auto-task-generator-claude",
+}
 
 FORBIDDEN_KEYWORDS = (
     "preco",
@@ -75,6 +83,32 @@ def load_director_priorities() -> list[str]:
 def update_phase_report() -> dict[str, Any]:
     run_command([sys.executable, "scripts/run-autonomy-phases.py"])
     return read_json(PHASE_REPORT_JSON)
+
+
+def maybe_generate_backlog(queue_data: dict[str, Any]) -> dict[str, Any]:
+    pending_tasks = [task for task in queue_data.get("queue", []) if task.get("status") == "pending"]
+    if len(pending_tasks) >= 3:
+        return {
+            "triggered": False,
+            "reason": "pending_threshold_satisfied",
+            "pending_before": len(pending_tasks),
+            "exit_code": 0,
+        }
+
+    result = run_command([sys.executable, "scripts/auto-task-generator.py"])
+    refreshed_queue = load_queue()
+    pending_after = len(
+        [task for task in refreshed_queue.get("queue", []) if task.get("status") == "pending"]
+    )
+    return {
+        "triggered": True,
+        "reason": "pending_below_threshold",
+        "pending_before": len(pending_tasks),
+        "pending_after": pending_after,
+        "exit_code": result.returncode,
+        "stdout_tail": result.stdout.strip().splitlines()[-5:],
+        "stderr_tail": result.stderr.strip().splitlines()[-5:],
+    }
 
 
 def run_auto_audit() -> dict[str, Any]:
@@ -180,6 +214,23 @@ def current_autonomous_task(queue_data: dict[str, Any]) -> dict[str, Any] | None
     return None
 
 
+def inferred_readiness(task: dict[str, Any], readiness_state: str) -> str:
+    if readiness_state != "unknown":
+        return readiness_state
+
+    task_source = str(task.get("source", "")).strip().lower()
+    if not task.get("auto_generated") and task_source not in AUTONOMOUS_READY_SOURCES:
+        return readiness_state
+
+    if task.get("requires_human_approval") or task.get("requires_manual_access"):
+        return readiness_state
+
+    required_env = [str(env).strip() for env in task.get("requires_env", []) if str(env).strip()]
+    if required_env:
+        return "ready_ci_with_repo_secrets_inferred"
+    return "ready_local_inferred"
+
+
 def eligible_pending_tasks(
     queue_data: dict[str, Any],
     readiness_map: dict[str, dict[str, Any]],
@@ -189,13 +240,21 @@ def eligible_pending_tasks(
     for task in executable_pending_tasks(queue_data):
         task_id = str(task.get("id", ""))
         readiness = readiness_map.get(task_id, {})
-        readiness_state = str(readiness.get("readiness", "unknown"))
+        readiness_state = inferred_readiness(
+            task,
+            str(readiness.get("readiness", "unknown")),
+        )
 
         if task.get("requires_human_approval") or task.get("requires_manual_access"):
             continue
         if forbidden_by_governance(task):
             continue
-        if readiness_state not in {"ready_local", "ready_ci_with_repo_secrets"}:
+        if readiness_state not in {
+            "ready_local",
+            "ready_ci_with_repo_secrets",
+            "ready_local_inferred",
+            "ready_ci_with_repo_secrets_inferred",
+        }:
             continue
 
         enriched = dict(task)
@@ -262,14 +321,21 @@ def select_task(
         if persisted_task is not None:
             selected = persisted_task
 
-    return {"mode": "selected", "task": selected, "reason": selection_reason(selected)}
+    return {
+        "mode": "selected",
+        "task": selected,
+        "reason": str(selected.get("selection_reason") or selection_reason(selected)),
+    }
 
 
 def build_report(advance: bool) -> dict[str, Any]:
     director_priorities = load_director_priorities()
-    phase_report = update_phase_report()
     audit = run_auto_audit()
     queue_data = load_queue()
+    backlog_generation = maybe_generate_backlog(queue_data)
+    if backlog_generation.get("triggered"):
+        queue_data = load_queue()
+    phase_report = update_phase_report()
     roi_report = read_json(Path("logs/roi-engine-report.json"))
     changed_files = git_changed_files()
     readiness_map = phase_readiness_map(phase_report)
@@ -293,9 +359,11 @@ def build_report(advance: bool) -> dict[str, Any]:
         "auto_audit": audit,
         "changed_files": changed_files,
         "tests_executed": [
+            "python scripts/auto-task-generator.py",
             "python scripts/run-autonomy-phases.py",
             "python scripts/system-health-check.py",
         ],
+        "backlog_generation": backlog_generation,
         "backlog_snapshot": backlog_snapshot,
         "phase_summary": {
             "qa_workflow": phase_report.get("qa_workflow", {}),
@@ -348,6 +416,12 @@ def write_report(report: dict[str, Any]) -> tuple[Path, Path]:
         f"- Director priorities: `{', '.join(report['director_priorities'])}`",
         f"- Result: `{report['result']['summary']}`",
         "",
+        "## Backlog Generation",
+        f"- Triggered: `{report['backlog_generation'].get('triggered')}`",
+        f"- Reason: `{report['backlog_generation'].get('reason')}`",
+        f"- Pending before: `{report['backlog_generation'].get('pending_before', 'na')}`",
+        f"- Pending after: `{report['backlog_generation'].get('pending_after', report['backlog_snapshot']['pending'])}`",
+        "",
         "## Backlog Snapshot",
         f"- Pending: `{report['backlog_snapshot']['pending']}`",
         f"- In progress: `{report['backlog_snapshot']['in_progress']}`",
@@ -386,6 +460,7 @@ def write_report(report: dict[str, Any]) -> tuple[Path, Path]:
         "changed_files": report["changed_files"],
         "tests_executed": report["tests_executed"],
         "result": report["result"],
+        "backlog_generation": report["backlog_generation"],
         "next_task": report["next_task"],
         "selection": report["selection"],
         "auto_audit": report["auto_audit"],
@@ -402,6 +477,7 @@ def write_report(report: dict[str, Any]) -> tuple[Path, Path]:
         "task": report["selection"].get("task"),
         "next_task": report["next_task"],
         "selection_reason": report["selection"]["reason"],
+        "backlog_generation": report["backlog_generation"],
         "changed_files": report["changed_files"],
         "tests_executed": report["tests_executed"],
         "maintenance_window": False,

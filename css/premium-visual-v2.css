@@ -598,3 +598,271 @@ footer .footer-legal div[style] { color: rgba(255,255,255,0.4) !important; }
         grid-template-columns: 1fr;
     }
 }
+
+
+/* ======================================================================
+   12. HERO SEARCH BAR — glassmorphism panel, focus glow, button elevation
+   ====================================================================== */
+.hero-search-container {
+    max-width: 580px;
+    margin: 28px 0 0;
+    width: 100%;
+}
+
+.hero-search-form {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1.5px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    padding: 6px 6px 6px 16px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+}
+
+.hero-search-form:focus-within {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 16px 40px rgba(13, 148, 136, 0.25), 0 0 0 4px rgba(255, 255, 255, 0.15);
+}
+
+.hero-search-icon {
+    font-size: 18px;
+    margin-right: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    pointer-events: none;
+}
+
+.hero-search-form input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: 0;
+    color: #fff;
+    font-size: 15px;
+    font-family: inherit;
+    padding: 10px 0;
+}
+
+.hero-search-form input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.hero-search-form input:focus {
+    outline: none;
+}
+
+.hero-search-form button {
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: #fff;
+    border: 0;
+    border-radius: 12px;
+    padding: 10px 22px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hero-search-form button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(16, 185, 129, 0.4);
+}
+
+@media (max-width: 640px) {
+    .hero-search-container {
+        margin: 20px 0 0;
+    }
+    .hero-search-form {
+        padding: 4px;
+        border-radius: 12px;
+    }
+    .hero-search-form input {
+        font-size: 14px;
+        padding: 8px 6px;
+    }
+    .hero-search-icon {
+        display: none;
+    }
+    .hero-search-form button {
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+}
+
+/* ======================================================================
+   13. PRODUCT RATINGS & SPRING CARDS
+   ====================================================================== */
+.product-card {
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.product-rating {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 8px 0 4px;
+    font-size: 12px;
+}
+
+.product-rating .stars {
+    color: #f59e0b;
+    font-size: 14px;
+}
+
+.product-rating strong {
+    color: #374151;
+    font-weight: 700;
+}
+
+.product-rating .reviews-count {
+    color: #9ca3af;
+}
+
+/* ======================================================================
+   14. NEWSLETTER PREMIUM
+   ====================================================================== */
+.home-newsletter {
+    padding: 48px 0 24px;
+}
+
+.newsletter-card {
+    background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    padding: 40px 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 40px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    position: relative;
+    overflow: hidden;
+}
+
+.newsletter-card::after {
+    content: '';
+    position: absolute;
+    bottom: -60px;
+    left: -60px;
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.newsletter-info {
+    max-width: 500px;
+    color: #fff;
+}
+
+.newsletter-info h2 {
+    font-size: 26px;
+    font-weight: 800;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+}
+
+.newsletter-info p {
+    font-size: 14px;
+    color: #94a3b8;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.newsletter-form {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+    max-width: 440px;
+}
+
+.newsletter-form input {
+    flex: 1;
+    min-width: 0;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 14px;
+    color: #fff;
+    transition: all 0.3s ease;
+}
+
+.newsletter-form input::placeholder {
+    color: #64748b;
+}
+
+.newsletter-form input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05);
+}
+
+.newsletter-form button {
+    background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+    color: #fff;
+    border: 0;
+    border-radius: 12px;
+    padding: 14px 24px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 6px 18px rgba(16, 185, 129, 0.2);
+}
+
+.newsletter-form button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(16, 185, 129, 0.35);
+}
+
+@media (max-width: 900px) {
+    .newsletter-card {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 32px;
+        gap: 24px;
+    }
+    .newsletter-info h2 {
+        font-size: 22px;
+    }
+    .newsletter-form {
+        max-width: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .newsletter-form {
+        flex-direction: column;
+    }
+    .newsletter-form button {
+        padding: 12px;
+    }
+}
+
+
+/* ======================================================================
+   15. SKELETON LOADERS — elegant shimmer effect for grid lists loading
+   ====================================================================== */
+@keyframes svShimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.sv-skeleton {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%);
+    background-size: 200% 100%;
+    animation: svShimmer 1.5s infinite linear;
+    border-radius: 8px;
+}
+
+.sv-skeleton-image { height: 160px; width: 100%; margin-bottom: 12px; }
+.sv-skeleton-title { height: 16px; width: 85%; margin-bottom: 8px; }
+.sv-skeleton-price { height: 20px; width: 45%; margin-bottom: 12px; }
+.sv-skeleton-btn { height: 32px; width: 100%; border-radius: 6px; }

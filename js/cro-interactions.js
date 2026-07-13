@@ -172,6 +172,7 @@ function initMiniCart() {
     const overlay = document.getElementById('mini-cart-overlay');
     const drawer = document.getElementById('mini-cart-drawer');
     const closeBtn = document.getElementById('mini-cart-close');
+    const body = document.getElementById('mini-cart-body');
     
     if (!drawer) return;
     
@@ -192,6 +193,55 @@ function initMiniCart() {
     }
     if (closeBtn) closeBtn.addEventListener('click', closeCart);
     if (overlay) overlay.addEventListener('click', closeCart);
+    
+    // Bind quantity and remove click actions
+    if (body) {
+        body.addEventListener('click', function(e) {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            
+            const itemEl = btn.closest('.mini-cart-item');
+            if (!itemEl) return;
+            
+            const sku = itemEl.getAttribute('data-sku');
+            const action = btn.getAttribute('data-action');
+            
+            let items = [];
+            try { items = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'); } catch(err) {}
+            
+            if (action === 'remove') {
+                items = items.filter(function(item) { return item.sku !== sku; });
+            } else {
+                const item = items.find(function(item) { return item.sku === sku; });
+                if (item) {
+                    if (action === 'inc') {
+                        item.quantity = (parseInt(item.quantity) || 1) + 1;
+                    } else if (action === 'dec') {
+                        const newQty = (parseInt(item.quantity) || 1) - 1;
+                        if (newQty <= 0) {
+                            items = items.filter(function(item) { return item.sku !== sku; });
+                        } else {
+                            item.quantity = newQty;
+                        }
+                    }
+                }
+            }
+            
+            localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+            
+            // Dispatch event so other components (badge, cart page) sync
+            window.dispatchEvent(new CustomEvent('shopvivaliz:cart-updated', { detail: { items: items } }));
+            
+            // Update nav badge count
+            const badge = document.getElementById('nav-cart-count');
+            if (badge) {
+                const count = items.reduce(function(sum, item) { return sum + (Number(item.quantity) || 1); }, 0);
+                badge.textContent = count > 0 ? String(count) : '';
+            }
+            
+            renderMiniCart();
+        });
+    }
     
     // Expose globally to be called when items are added to cart via AJAX
     window.openMiniCart = openCart;
@@ -229,11 +279,19 @@ function renderMiniCart() {
         const price = parseFloat(item.price) || 0;
         const qty = parseInt(item.quantity) || 1;
         total += price * qty;
-        html += `<div class="mini-cart-item" style="display:flex; gap:10px; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
-            <img src="${item.image_url}" style="width:60px; height:60px; object-fit:cover; border-radius:8px;">
-            <div style="flex:1;">
-                <div style="font-size:13px; font-weight:bold; margin-bottom:5px;">${item.name}</div>
-                <div style="font-size:12px; color:#666;">${qty}x R$ ${price.toFixed(2).replace('.', ',')}</div>
+        html += `<div class="mini-cart-item" data-sku="${item.sku}" style="display:flex; gap:12px; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 12px; align-items: center;">
+            <img src="${item.image_url}" style="width:56px; height:56px; object-fit:cover; border-radius:8px; background:#f8fafc; border:1px solid #eee;">
+            <div style="flex:1; min-width:0;">
+                <div style="font-size:13px; font-weight:bold; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${item.name}">${item.name}</div>
+                <div style="font-size:13px; color:#0b4f88; font-weight:700; margin-bottom:6px;">R$ ${price.toFixed(2).replace('.', ',')}</div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <div style="display:flex; align-items:center; border:1.5px solid #e2e8f0; border-radius:6px; overflow:hidden; background:#fff;">
+                        <button class="mini-cart-qty-btn" data-action="dec" style="width:24px; height:24px; border:0; background:#f8fafc; font-weight:bold; cursor:pointer; color:#1e293b; transition:background 0.2s;">-</button>
+                        <span style="padding:0 8px; font-size:12px; font-weight:700; min-width:14px; text-align:center; color:#1e293b;">${qty}</span>
+                        <button class="mini-cart-qty-btn" data-action="inc" style="width:24px; height:24px; border:0; background:#f8fafc; font-weight:bold; cursor:pointer; color:#1e293b; transition:background 0.2s;">+</button>
+                    </div>
+                    <button class="mini-cart-remove-btn" data-action="remove" style="background:none; border:none; color:#dc2626; font-size:11px; font-weight:700; cursor:pointer; padding:4px 8px; border-radius:4px; transition:background 0.2s;">Remover</button>
+                </div>
             </div>
         </div>`;
     });

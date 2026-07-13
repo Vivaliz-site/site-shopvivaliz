@@ -1,0 +1,35 @@
+RELATORIO DE ATIVIDADE AUTONOMA
+Gerado em: 13/07/2026 17:16:23 UTC
+Janela analisada: ultimas 4 horas
+
+1. STATUS 24/7
+Catálogo: 197 produtos | sem imagem: 1 | preço zero: 0
+ROI report disponível: não
+Tri-sync: status=None | branch=None | dirty=None
+Sales flow pronto agora: não
+Email SMTP configurado: não
+Health check: HEALTHY | erros=0 | avisos=0
+Deploy diagnostic: pendente/indisponivel
+Relatorio Codex recente: não
+Credenciais ausentes para fluxo de vendas: LOJA_PIX_KEY, LOJA_PIX_NAME, LOJA_WHATSAPP, MELHORENVIO_API_KEY, PAGARME_SECRET_KEY, PAGARME_API_KEY, PAGARME_PUBLIC_KEY, SHOPEE_PARTNER_ID
+
+2. GITHUB ACTIONS RECENTES
+Execuções nas últimas 4 horas: 13
+Sucessos: 8 | Falhas: 4 | Em andamento: 1
+- 13/07 17:16 | Relatorio de Atividade 4h (Email) | None | Relatório de Atividade 8h (Email)
+- 13/07 17:15 | .github/workflows/sync-oracle-vm-secrets.yml | failure | fix: harden 24-7 email sender path
+- 13/07 17:03 | Autonomous Watchdog Monitor | success | Autonomous Watchdog Monitor
+- 13/07 17:02 | 24-7 Continuous Agent | success | 24-7 Continuous Agent
+- 13/07 17:02 | Promote Staging to Main (apos testes reais passarem) | success | Promote Staging to Main (apos testes reais passarem)
+- 13/07 14:45 | Relatório de Atividade 8h (Email) | failure | Relatório de Atividade 8h (Email)
+- 13/07 14:16 | Relatório de Atividade 8h (Email) | failure | Relatório de Atividade 8h (Email)
+- 13/07 14:16 | ShopVivaliz QA | success | fix: resolver entrega de relatórios 24/7 por email (#278)
+
+3. SAUDE LOCAL DO REPOSITORIO
+Sem `logs/system-health-check.json` local para resumir.
+
+4. COMMITS E MUDANCAS RECENTES
+Commits locais nas últimas 4 horas:
+- 5cf386a fix: harden 24-7 email sender path
+
+ShopVivaliz 24/7 - relatorio automatizado por email.
