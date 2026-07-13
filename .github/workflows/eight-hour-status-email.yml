@@ -17,14 +17,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-node@v3 # Utilizando node ou python? setup-python é melhor.
-        # Na verdade, python já vem pré-instalado em runners do ubuntu-latest! Mas configurar explicitamente é bom.
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+
+      - name: Validar secrets obrigatórios
+        env:
+          EMAIL_SMTP_HOST: ${{ secrets.EMAIL_SMTP_HOST }}
+          EMAIL_SMTP_PORT: ${{ secrets.EMAIL_SMTP_PORT }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: |
+          missing=()
+          [ -z "$EMAIL_SMTP_HOST" ] && missing+=(EMAIL_SMTP_HOST)
+          [ -z "$EMAIL_SMTP_PORT" ] && missing+=(EMAIL_SMTP_PORT)
+          [ -z "$EMAIL_USER" ] && missing+=(EMAIL_USER)
+          [ -z "$EMAIL_PASSWORD" ] && missing+=(EMAIL_PASSWORD)
+          [ -z "$EMAIL_FROM" ] && missing+=(EMAIL_FROM)
+          [ -z "$EMAIL_TO" ] && missing+=(EMAIL_TO)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Secrets obrigatórios ausentes: ${missing[*]}"
+            exit 1
+          fi
+          echo "Todos os secrets obrigatórios estão presentes."
 
       - name: Enviar email
         env:
@@ -32,6 +50,7 @@ jobs:
           EMAIL_SMTP_PORT: ${{ secrets.EMAIL_SMTP_PORT }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          EMAIL_TO: "fredmourao@gmail.com"
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
         run: |
           python scripts/automation/eight_hour_status_email.py
