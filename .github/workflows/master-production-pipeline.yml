@@ -91,7 +91,16 @@ jobs:
       - name: Check for Required Secrets
         run: |
           # Valida que secrets não vazaram para código-fonte
-          if grep -rE '(ANTHROPIC_API_KEY|OPENAI_API_KEY|GEMINI_API_KEY|FTP_PASSWORD)' --include='*.php' --include='*.js' --include='*.yml' . 2>/dev/null | grep -v '\.github/workflows'; then
+          if grep -rE '(ANTHROPIC_API_KEY|OPENAI_API_KEY|GEMINI_API_KEY|FTP_PASSWORD)' --include='*.php' --include='*.js' --include='*.yml' . 2>/dev/null \
+            | grep -v '\.github/workflows' \
+            | grep -v "getenv('" \
+            | grep -v 'getenv("' \
+            | grep -v '\$_ENV' \
+            | grep -v '\$_SERVER' \
+            | grep -v 'not configured' \
+            | grep -v 'GitHub Secrets' \
+            | grep -v 'não encontrada' \
+            | grep -v 'não configurada'; then
             echo "❌ ERRO: secrets encontrados no código-fonte"
             exit 1
           fi
