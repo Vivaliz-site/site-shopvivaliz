@@ -96,6 +96,7 @@ def append_event(payload: dict[str, Any]) -> None:
 def main() -> int:
     report, queue, decision = inspect_state()
     actions: list[dict[str, Any]] = []
+    post_recovery_decision = decision
 
     if decision.stale or decision.idle or decision.no_pending:
         gen = run(["python3", "scripts/auto-task-generator.py"])
@@ -128,7 +129,12 @@ def main() -> int:
             }
         )
 
-        restart_needed = decision.stale or all(step.get("exit_code", 1) != 0 for step in actions)
+        report, queue, post_recovery_decision = inspect_state()
+        restart_needed = (
+            decision.stale
+            or post_recovery_decision.idle
+            or all(step.get("exit_code", 1) != 0 for step in actions)
+        )
         if restart_needed and shutil.which("sudo") and os.name != "nt":
             restart = run(["sudo", "systemctl", "restart", "shopvivaliz-agent.service"])
             actions.append(
@@ -139,6 +145,7 @@ def main() -> int:
                     "stderr_tail": restart.stderr.strip().splitlines()[-5:],
                 }
             )
+            report, queue, post_recovery_decision = inspect_state()
 
     payload = {
         "generated_at": utc_now().isoformat().replace("+00:00", "Z"),
@@ -147,6 +154,12 @@ def main() -> int:
             "stale": decision.stale,
             "no_pending": decision.no_pending,
             "reason": decision.reason,
+        },
+        "post_recovery": {
+            "idle": post_recovery_decision.idle,
+            "stale": post_recovery_decision.stale,
+            "no_pending": post_recovery_decision.no_pending,
+            "reason": post_recovery_decision.reason,
         },
         "report_generated_at": report.get("generated_at"),
         "queue_size": len(queue.get("queue", [])) if isinstance(queue, dict) else 0,
