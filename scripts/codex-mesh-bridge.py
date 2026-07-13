@@ -279,14 +279,6 @@ def handle_request(payload: dict[str, Any]) -> dict[str, Any] | None:
 def main() -> int:
     ensure_storage()
     state_update(last_start=now_iso())
-    print(json.dumps({
-        "jsonrpc": "2.0",
-        "method": "notifications/log",
-        "params": {
-            "level": "info",
-            "message": "ShopVivaliz Codex mesh bridge started",
-        },
-    }), flush=True)
 
     for raw in sys.stdin:
         raw = raw.strip()
