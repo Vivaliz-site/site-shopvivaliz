@@ -41,6 +41,7 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 <link rel="stylesheet" href="/css/network-status-v22.css?v=22.0.0">
 <link rel="stylesheet" href="/css/print-v27.css?v=27.0.0" media="print">
 <link rel="stylesheet" href="/css/premium-theme.css?v=2026-07-12">
+<link rel="stylesheet" href="/css/premium-visual-v2.css?v=2026-07-13-v4">
 <link rel="stylesheet" href="/css/dazzle-v1.css?v=1.2.0">
 <?php if ($svIsHome): ?><link rel="stylesheet" href="/css/home-polish-v17.css?v=17.0.0"><link rel="stylesheet" href="/css/category-real-images-v52.css?v=52.0.0"><?php endif; ?>
 <?php if ($svIsCatalog): ?><link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=4.0.0"><link rel="stylesheet" href="/css/product-image-integrity-v63.css?v=63.0.0"><link rel="stylesheet" href="/css/price-integrity-v73.css?v=73.0.0"><link rel="stylesheet" href="/css/stock-integrity-v83.css?v=83.0.0"><?php endif; ?>
@@ -159,7 +160,7 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 </div>
 
 <!-- Liz Assistant Premium Mascot Widget -->
-<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=4.0">
+<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=5.0">
 <script src="/public/assets/liz-assistant/liz-assistant.js"></script>
 
 <script>
@@ -192,35 +193,12 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 <style>
 /* CRITICAL LIZ E BUTTON OVERRIDES VIA INLINE STYLE PARA FURAR CACHE CDN */
 #sv-liz-panel, #sv-liz-panel.open {
-  top: 4px !important;
-  bottom: 4px !important;
-  height: calc(100dvh - 8px) !important;
+  top: 12px !important;
+  bottom: 12px !important;
+  height: calc(100dvh - 24px) !important;
   max-height: none !important;
-  width: 380px !important;
+  width: 460px !important;
 }
-
-.sv-head {
-  min-height: 40px !important;
-  height: 40px !important;
-  padding: 4px 10px !important;
-  flex: 0 0 40px !important;
-}
-.sv-head img { width: 60px !important; padding: 2px !important; }
-.sv-head strong { font-size: 13px !important; }
-.sv-close { width: 32px !important; height: 32px !important; font-size: 20px !important; }
-
-.sv-hero {
-  height: 118px !important;
-  flex: 0 0 118px !important;
-}
-.sv-hero video { height: 138px !important; width: auto !important; }
-
-.sv-msgs { flex: 1 1 auto !important; padding-top: 4px !important; padding-bottom: 8px !important; }
-.sv-quick { padding: 4px 18px 4px !important; }
-.sv-quick button { padding: 4px 10px !important; font-size: 13px !important; }
-.sv-form { padding: 6px 18px 10px !important; }
-.sv-form input { padding: 10px 14px !important; height: 42px !important; }
-.sv-form button { min-height: 42px !important; padding: 0 16px !important; }
 
 @media(max-width: 600px) {
   #sv-liz-panel, #sv-liz-panel.open {
@@ -229,6 +207,7 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
     left: 10px !important;
     right: 10px !important;
     width: auto !important;
+    height: calc(100dvh - 20px) !important;
   }
 }
 
@@ -247,13 +226,6 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
   height: 32px !important;
   line-height: 32px !important;
   border-radius: 4px !important;
-}
-
-.sv-form button {
-  padding: 0 16px !important;
-  height: 40px !important;
-  min-height: 40px !important;
-  font-size: 14px !important;
 }
 </style>
 
