@@ -175,12 +175,20 @@ function aij_list_jobs(mysqli $db): never
                FROM ai_image_jobs j
                LEFT JOIN ai_image_job_items i ON i.job_id = j.id";
     if ($status !== '') {
-        $escaped = $db->real_escape_string($status);
-        $sql    .= " WHERE j.status = '$escaped'";
+        $sql    .= " WHERE j.status = ?";
     }
     $sql .= " GROUP BY j.id ORDER BY j.created_at DESC LIMIT $limit";
     $rows = [];
-    $result = $db->query($sql);
+
+    if ($status !== '') {
+        $stmt = $db->prepare($sql);
+        $stmt->bind_param('s', $status);
+        $stmt->execute();
+        $result = $stmt->get_result();
+    } else {
+        $result = $db->query($sql);
+    }
+
     while ($row = $result->fetch_assoc()) $rows[] = $row;
     aij_json(200, ['ok' => true, 'total' => count($rows), 'jobs' => $rows]);
 }
