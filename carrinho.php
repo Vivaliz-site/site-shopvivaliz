@@ -10,6 +10,7 @@ header('Content-Type: text/html; charset=UTF-8');
     <title>Carrinho | Vivaliz</title>
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/shipping-v7.css">
     <style>
         .cart-page { padding: 36px 0 64px; }
         .cart-layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; }
