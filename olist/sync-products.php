@@ -61,42 +61,67 @@ function svs_save_tokens(string $access, string $refresh): void {
     ], JSON_PRETTY_PRINT), LOCK_EX);
 }
 
-/* ── HTTP helpers ── */
+/* ── HTTP helpers (usando stream contexts em vez de cURL) ── */
 function svs_http_get(string $url, array $headers = [], int $timeout = 45): array {
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => $timeout,
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_MAXREDIRS      => 3,
-        CURLOPT_HTTPHEADER     => $headers,
+    $ctx = stream_context_create([
+        'http' => [
+            'method'        => 'GET',
+            'header'        => implode("\r\n", $headers) . "\r\n",
+            'timeout'       => $timeout,
+            'ignore_errors' => true,
+        ],
+        'ssl' => [
+            'verify_peer' => true,
+            'verify_peer_name' => true,
+        ],
     ]);
-    $body   = curl_exec($ch);
-    $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-    $err    = curl_error($ch);
-    curl_close($ch);
+
+    $body = @file_get_contents($url, false, $ctx);
+    $status = 0;
+    $err = '';
+
+    if ($http_response_header ?? null) {
+        preg_match('/HTTP\/\d\.\d (\d{3})/', $http_response_header[0], $m);
+        $status = (int)($m[1] ?? 0);
+    } else {
+        $status = 500;
+        $err = 'No response headers';
+    }
+
     return ['status' => $status, 'body' => is_string($body) ? $body : '', 'error' => $err];
 }
 
 function svs_http_post(string $url, array $fields, array $extraHeaders = []): array {
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => http_build_query($fields),
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 30,
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_HTTPHEADER     => array_merge(
-            ['Content-Type: application/x-www-form-urlencoded'],
-            $extraHeaders
-        ),
+    $data = http_build_query($fields);
+    $headers = array_merge(
+        ['Content-Type: application/x-www-form-urlencoded', 'Content-Length: ' . strlen($data)],
+        $extraHeaders
+    );
+
+    $ctx = stream_context_create([
+        'http' => [
+            'method'        => 'POST',
+            'header'        => implode("\r\n", $headers) . "\r\n",
+            'content'       => $data,
+            'timeout'       => 30,
+            'ignore_errors' => true,
+        ],
+        'ssl' => [
+            'verify_peer' => true,
+            'verify_peer_name' => true,
+        ],
     ]);
-    $body   = curl_exec($ch);
-    $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-    curl_close($ch);
+
+    $body = @file_get_contents($url, false, $ctx);
+    $status = 0;
+
+    if ($http_response_header ?? null) {
+        preg_match('/HTTP\/\d\.\d (\d{3})/', $http_response_header[0], $m);
+        $status = (int)($m[1] ?? 0);
+    } else {
+        $status = 500;
+    }
+
     return ['status' => $status, 'body' => is_string($body) ? $body : ''];
 }
 
