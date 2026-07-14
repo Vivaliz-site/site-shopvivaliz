@@ -1,0 +1,21 @@
+✅ PAYMENT ID PRONTO PARA VALIDAÇÃO MERCADO PAGO
+
+PAYMENT ID:
+17840676240002657620
+
+Status: Pronto para validação
+Criado em: 2026-07-14 19:20:25
+Ambiente: PRODUÇÃO
+
+Credenciais verificadas:
+✅ Access Token: APP_USR-4763908325265919-07141...
+✅ Public Key: APP_USR-c2a29ee1-fb4c-4740-916...
+
+INSTRUÇÕES:
+1. Acesse: https://www.mercadopago.com.br/developers/
+2. Suas integrações → ShopVivaliz
+3. Testar a integração
+4. Cole: 17840676240002657620
+5. Avaliar qualidade
+
+Sistema de produção configurado e pronto! 🚀
