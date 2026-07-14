@@ -34,7 +34,7 @@ function svop_order_dir(): string
 function svop_payment_method(string $value): string
 {
     $normalized = strtolower(trim($value));
-    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia'];
+    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia', 'mercado_pago', 'pagarme'];
     return in_array($normalized, $allowed, true) ? $normalized : 'pix';
 }
 
@@ -44,6 +44,8 @@ function svop_payment_label(string $method): string
         'boleto' => 'Boleto bancario',
         'whatsapp' => 'WhatsApp',
         'transferencia' => 'Transferencia bancaria',
+        'mercado_pago' => 'Mercado Pago',
+        'pagarme' => 'Pagar.me',
         default => 'PIX',
     };
 }
@@ -54,6 +56,8 @@ function svop_payment_instructions(string $method): string
         'boleto' => 'Boleto sujeito a emissao manual apos confirmacao do frete.',
         'whatsapp' => 'Pagamento e frete serao alinhados pelo atendimento no WhatsApp.',
         'transferencia' => 'Dados bancarios serao enviados pela equipe apos confirmacao do frete.',
+        'mercado_pago' => 'Link de pagamento do Mercado Pago sera enviado apos confirmacao do frete.',
+        'pagarme' => 'Link de pagamento do Pagar.me sera enviado apos confirmacao do frete.',
         default => 'Pagamento via PIX com confirmacao apos validacao do pedido.',
     };
 }
