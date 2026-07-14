@@ -86,7 +86,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
         'endereco' => trim((string)($_POST['endereco'] ?? '')),
         'numero' => trim((string)($_POST['numero'] ?? '')),
         'complemento' => trim((string)($_POST['complemento'] ?? '')),
+        'bairro' => trim((string)($_POST['bairro'] ?? '')),
         'cidade' => trim((string)($_POST['cidade'] ?? '')),
+        'uf' => trim((string)($_POST['uf'] ?? '')),
         'cep' => trim((string)($_POST['cep'] ?? '')),
     ];
     $itemsPayload = json_decode((string)($_POST['cart_payload'] ?? '[]'), true);
@@ -146,9 +148,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
 ";
         $body .= "Telefone: {$cliente['telefone']}
 ";
-        $body .= "Endereco: {$cliente['endereco']}, {$cliente['numero']} {$cliente['complemento']}
+        $body .= "Endereco: {$cliente['endereco']}, {$cliente['numero']} {$cliente['complemento']} - {$cliente['bairro']}
 ";
-        $body .= "Cidade/CEP: {$cliente['cidade']} - {$cliente['cep']}
+        $body .= "Cidade/UF/CEP: {$cliente['cidade']}/{$cliente['uf']} - {$cliente['cep']}
 
 ";
         $body .= "ITENS
@@ -497,12 +499,22 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                         </div>
                         <div class="form-grid">
                             <div class="field">
+                                <label for="bairro">Bairro</label>
+                                <input type="text" id="bairro" name="bairro">
+                            </div>
+                            <div class="field">
+                                <label for="uf">Estado (UF)</label>
+                                <input type="text" id="uf" name="uf" maxlength="2">
+                            </div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="field">
                                 <label for="cidade">Cidade</label>
                                 <input type="text" id="cidade" name="cidade" required>
                             </div>
                             <div class="field">
                                 <label for="cep">CEP</label>
-                                <input type="text" id="cep" name="cep" required>
+                                <input type="text" id="cep" name="cep" inputmode="numeric" maxlength="9" required>
                             </div>
                         </div>
                     </section>
@@ -661,6 +673,28 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 + '</section>';
         }
 
+        const cepInput = document.getElementById('cep');
+        if (cepInput) {
+            cepInput.addEventListener('blur', function () {
+                const cep = this.value.replace(/\D/g, '');
+                if (cep.length !== 8) return;
+                fetch('https://viacep.com.br/ws/' + cep + '/json/')
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d.erro) return;
+                        const enderecoField = document.getElementById('endereco');
+                        const bairroField = document.getElementById('bairro');
+                        const cidadeField = document.getElementById('cidade');
+                        const ufField = document.getElementById('uf');
+                        if (enderecoField && !enderecoField.value) enderecoField.value = d.logradouro || '';
+                        if (bairroField && !bairroField.value) bairroField.value = d.bairro || '';
+                        if (cidadeField && !cidadeField.value) cidadeField.value = d.localidade || '';
+                        if (ufField && !ufField.value) ufField.value = d.uf || '';
+                    })
+                    .catch(function () {});
+            });
+        }
+
         form.addEventListener('submit', function (event) {
             event.preventDefault();
 
@@ -683,7 +717,9 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                     formData.get('endereco') || '',
                     formData.get('numero') || '',
                     formData.get('complemento') || '',
-                    formData.get('cidade') || ''
+                    formData.get('bairro') || '',
+                    formData.get('cidade') || '',
+                    formData.get('uf') || ''
                 ].filter(Boolean).join(', '),
                 notes: '',
                 payment_method: formData.get('payment_method') || 'pix',
