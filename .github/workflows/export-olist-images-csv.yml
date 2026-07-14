@@ -28,7 +28,7 @@ jobs:
           python3 scripts/export-olist-images-csv.py
 
       - name: Enviar CSV como artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: olist-images-export
           path: |
