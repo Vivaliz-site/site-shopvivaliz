@@ -14,6 +14,16 @@ permissions:
   statuses: write
 
 jobs:
+  workflow-lint:
+    name: GitHub Actions syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: Actionlint
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
+
   php-lint:
     runs-on: ubuntu-latest
     steps:

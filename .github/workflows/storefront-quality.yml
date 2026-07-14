@@ -22,14 +22,6 @@ on:
       - 'tests/**'
       - 'scripts/quality/**'
   workflow_dispatch:
-    paths:
-      - '**/*.php'
-      - '**/*.js'
-      - '**/*.css'
-      - '**/*.md'
-      - '.htaccess'
-      - 'tests/**'
-      - 'scripts/quality/**'
 
 permissions:
   contents: read

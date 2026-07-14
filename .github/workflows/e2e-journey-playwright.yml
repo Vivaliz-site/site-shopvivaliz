@@ -120,8 +120,9 @@ jobs:
         with:
           status: 'failure'
           text: '❌ E2E Tests falharam. Verificar Playwright Report.'
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
           fields: repo,message
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
         continue-on-error: true
 
       - name: ✅ Report Success

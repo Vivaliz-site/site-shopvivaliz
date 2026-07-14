@@ -1,244 +1,48 @@
-name: E2E Teste Completo - Compra + Email + ERP
+name: E2E seguro de producao
 
 on:
   schedule:
-    # Roda a cada 6 horas (00:00, 06:00, 12:00, 18:00 UTC)
-    - cron: '0 0,6,12,18 * * *'
-  workflow_dispatch:  # Permite executar manualmente
+    - cron: "0 0,6,12,18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-safe-e2e
+  cancel-in-progress: false
 
 jobs:
   e2e-test:
+    name: Jornada sem cobranca
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
+    timeout-minutes: 20
+    env:
+      E2E_BASE_URL: https://dev.shopvivaliz.com.br
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: '3.11'
+          node-version: "22"
+          cache: npm
 
-      - name: Install Playwright
-        run: |
-          pip install --upgrade pip
-          pip install playwright asyncio
-          playwright install chromium
+      - name: Instalar dependencias
+        run: npm ci
 
-      - name: Criar E2E Test Script
-        run: |
-          cat > test_e2e_complete.py << 'SCRIPT'
-import asyncio
-import json
-from datetime import datetime
-from pathlib import Path
+      - name: Instalar Chromium
+        run: npx playwright install --with-deps chromium
 
-try:
-    from playwright.async_api import async_playwright
-except ImportError:
-    print("[ERRO] Playwright nao importado")
-    exit(1)
+      - name: Executar jornada segura
+        run: npx playwright test tests/e2e-journey.spec.js --project=chromium --reporter=list,html
 
-SITE = "https://dev.shopvivaliz.com.br/"
-REPORT_DIR = Path("e2e-reports")
-REPORT_DIR.mkdir(exist_ok=True)
-
-CLIENT = {
-    "name": "Teste Automático ShopVivaliz",
-    "email": "fredmourao@gmail.com",
-    "phone": "37999374112",
-    "cpf": "00000000000",
-    "zip": "35500006",
-    "street": "Rua Teste, 123",
-    "city": "Divinopolis",
-    "state": "MG",
-}
-
-async def test_e2e():
-    report = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "site": SITE,
-        "tests": {
-            "site_online": False,
-            "produto_carregado": False,
-            "carrinho_ok": False,
-            "checkout_ok": False,
-            "boleto_gerado": False,
-            "email_enviado": False,
-        },
-        "resultado": "FALHA",
-        "detalhes": []
-    }
-
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-
-        try:
-            # [1] SITE ONLINE
-            print("[1/6] Verificando se site esta online...")
-            await page.goto(SITE, wait_until="domcontentloaded", timeout=30000)
-            report["tests"]["site_online"] = True
-            report["detalhes"].append("✅ Site respondeu com sucesso")
-
-            # [2] PRODUTO CARREGADO
-            print("[2/6] Procurando produtos...")
-            try:
-                await page.wait_for_selector("a[href*='produto']", timeout=10000)
-                products = await page.query_selector_all("a[href*='produto']")
-                if products:
-                    await products[0].click()
-                    await page.wait_for_load_state("domcontentloaded")
-                    report["tests"]["produto_carregado"] = True
-                    report["detalhes"].append("✅ Produto encontrado e clicado")
-            except Exception as e:
-                report["detalhes"].append(f"❌ Produto: {str(e)[:100]}")
-
-            # [3] CARRINHO
-            print("[3/6] Adicionando ao carrinho...")
-            try:
-                add_btns = [
-                    "button:has-text('Adicionar ao Carrinho')",
-                    "button:has-text('Comprar')",
-                ]
-                for selector in add_btns:
-                    try:
-                        btn = await page.query_selector(selector)
-                        if btn:
-                            await btn.click()
-                            report["tests"]["carrinho_ok"] = True
-                            report["detalhes"].append("✅ Adicionado ao carrinho")
-                            break
-                    except:
-                        continue
-            except Exception as e:
-                report["detalhes"].append(f"❌ Carrinho: {str(e)[:100]}")
-
-            # [4] CHECKOUT
-            print("[4/6] Iniciando checkout...")
-            try:
-                checkout_btns = [
-                    "button:has-text('Finalizar Compra')",
-                    "button:has-text('Comprar')",
-                ]
-                for selector in checkout_btns:
-                    try:
-                        btn = await page.query_selector(selector)
-                        if btn:
-                            await btn.click()
-                            await page.wait_for_load_state("domcontentloaded", timeout=10000)
-                            report["tests"]["checkout_ok"] = True
-                            report["detalhes"].append("✅ Checkout iniciado")
-                            break
-                    except:
-                        continue
-            except Exception as e:
-                report["detalhes"].append(f"❌ Checkout: {str(e)[:100]}")
-
-            # [5] BOLETO
-            print("[5/6] Gerando boleto...")
-            try:
-                boleto_btns = [
-                    "button:has-text('Gerar Boleto')",
-                    "button:has-text('Confirmar')",
-                ]
-                for selector in boleto_btns:
-                    try:
-                        btn = await page.query_selector(selector)
-                        if btn:
-                            await btn.click()
-                            await page.wait_for_timeout(3000)
-                            report["tests"]["boleto_gerado"] = True
-                            report["detalhes"].append("✅ Boleto gerado")
-                            break
-                    except:
-                        continue
-            except Exception as e:
-                report["detalhes"].append(f"❌ Boleto: {str(e)[:100]}")
-
-            # [6] VALIDAR RESULTADO
-            print("[6/6] Validando resultado...")
-            html = await page.content()
-
-            if "Pedido" in html or "pedido" in html.lower():
-                report["tests"]["email_enviado"] = True
-                report["detalhes"].append("✅ Email deve ser enviado")
-
-            # Resultado final
-            tests_passed = sum(1 for v in report["tests"].values() if v is True)
-            if tests_passed >= 4:  # Pelo menos 4 de 6
-                report["resultado"] = "SUCESSO"
-            else:
-                report["resultado"] = "FALHA"
-
-        except Exception as e:
-            report["detalhes"].append(f"❌ ERRO GERAL: {str(e)[:200]}")
-            report["resultado"] = "ERRO"
-
-        finally:
-            await browser.close()
-
-    return report
-
-async def main():
-    report = await test_e2e()
-
-    # Salvar relatório
-    report_file = REPORT_DIR / f"e2e-{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
-    report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False))
-    print(f"\n📋 Relatório: {report_file}")
-
-    # Imprimir resultado
-    print("\n" + "="*60)
-    print(f"RESULTADO: {report['resultado']}")
-    print("="*60)
-    for detail in report["detalhes"]:
-        print(detail)
-    print("="*60)
-
-    # Retornar codigo apropriado
-    if report["resultado"] == "SUCESSO":
-        exit(0)
-    else:
-        exit(1)
-
-if __name__ == "__main__":
-    asyncio.run(main())
-SCRIPT
-          chmod +x test_e2e_complete.py
-
-      - name: Executar Teste E2E
-        id: e2e
-        run: python test_e2e_complete.py
-        continue-on-error: true
-
-      - name: Upload Relatório
+      - name: Publicar relatorio
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: e2e-reports
-          path: e2e-reports/
+          name: e2e-seguro-producao
+          path: playwright-report/
           retention-days: 30
-
-      - name: Alert se Falhar
-        if: failure() || steps.e2e.outcome == 'failure'
-        run: |
-          echo "🚨 TESTE E2E FALHOU!"
-          echo "Verifique o relatório nos artifacts"
-          exit 1
-
-  notify:
-    needs: e2e-test
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Resultado
-        run: |
-          if [ "${{ needs.e2e-test.result }}" = "success" ]; then
-            echo "✅ TESTE E2E PASSOU"
-            echo "Compra completa foi bem-sucedida!"
-          else
-            echo "❌ TESTE E2E FALHOU"
-            echo "Verifique os logs para detalhes"
-          fi
+          if-no-files-found: warn

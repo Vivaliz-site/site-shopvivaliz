@@ -1,5 +1,7 @@
 # ShopVivaliz - Apache routing
 
+Options -Indexes
+
 # Bloquear acesso a arquivos sensiveis
 <FilesMatch "^(\.env(?:\..*)?|\.htaccess|tasks-queue\.json|mcp-servers\.json|package(?:-lock)?\.json)$">
     Require all denied
@@ -18,6 +20,7 @@ AddCharset UTF-8 .html .txt .php .json
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
     Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
 </IfModule>
 
 # Uniform session-cookie protection for every PHP entry point. Lax preserves
@@ -38,6 +41,11 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^config/ - [F,L]
     RewriteRule ^storage/ - [F,L]
     RewriteRule ^logs/ - [F,L]
+    RewriteRule ^(?:\.git|\.env(?:\.|$)|\.claude|\.codex|\.github|\.githooks|\.vscode|\.tmp_shopvivaliz|__pycache__|scripts|tests|test-results|deploy|docs|reports|scratch|olist|automation|automations|autodev|core|dashboards|imports|kong|listings|medusa|migrations|planilhas|public_html|release-notes|tools|utils|CheckoutPageOptimizer)(?:/|$) - [F,L,NC]
+    RewriteRule ^(?:debug|test|teste|check|gen-token)[^/]*$ - [F,L,NC]
+    RewriteRule ^(?:setup-webhooks|update-fallback-prices)\.php$ - [F,L,NC]
+    RewriteRule ^sync(?:[-a-z0-9]*)?\.php$ - [F,L,NC]
+    RewriteRule ^api/(?:debug-version\.php|catalog/test-normalize\.php|(?:pagarme|melhorenvio|olist)/diagnostic(?:-full)?\.php|sync-cache-endpoint\.php|sync/full-sync\.php)$ - [F,L,NC]
 
     # Valida frete no servidor antes de criar o pedido
     RewriteRule ^api/orders/create\.php$ api/orders/create-validated.php [L]
