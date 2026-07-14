@@ -487,16 +487,22 @@ $cache_exists = is_file($cache_file);
 $cache_fresh = $cache_exists && (time() - filemtime($cache_file)) < 86400; // 24 horas
 $cache_used = false;
 
+error_log("[products.php] cache_file={$cache_file}, exists={$cache_exists}, fresh={$cache_fresh}");
+
 if ($cache_exists && $cache_fresh) {
     $cache_content = @file_get_contents($cache_file);
     if ($cache_content) {
         $cache_data = json_decode($cache_content, true);
+        error_log("[products.php] cache_data keys: " . json_encode(array_keys($cache_data ?? [])));
         if (isset($cache_data['itens']) && is_array($cache_data['itens'])) {
+            error_log("[products.php] Found " . count($cache_data['itens']) . " items in cache");
             foreach ($cache_data['itens'] as $item) {
                 $all_erp[] = normalize_product($item);
             }
             $cache_used = true;
         }
+    } else {
+        error_log("[products.php] Failed to read cache file");
     }
 }
 
