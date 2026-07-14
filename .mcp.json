@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "codex-mesh-bridge": {
+      "command": "python",
+      "args": ["scripts/codex-mesh-bridge.py"]
+    }
+  }
+}
