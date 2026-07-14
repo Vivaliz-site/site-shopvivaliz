@@ -1,0 +1,24 @@
+[Unit]
+Description=ShopVivaliz Olist Catalog Detail Sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/site-shopvivaliz
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /home/ubuntu/site-shopvivaliz/daemon-sync-products.py --interval 300 --workers 4
+Restart=always
+RestartSec=30
+TimeoutStopSec=30
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
