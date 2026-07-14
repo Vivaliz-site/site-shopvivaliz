@@ -2,6 +2,24 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../includes/admin-guard.php';
 require_once __DIR__ . '/../config/bootstrap-env.php';
+require_once __DIR__ . '/../includes/csrf.php';
+
+function svi_env_upsert(string $path, string $key, string $value): bool {
+    if (!preg_match('/^[A-Z][A-Z0-9_]*$/', $key) || str_contains($value, "\n") || str_contains($value, "\r")) return false;
+    $lines = is_file($path) ? file($path, FILE_IGNORE_NEW_LINES) : [];
+    if (!is_array($lines)) $lines = [];
+    $replacement = $key . '=' . $value;
+    $found = false;
+    foreach ($lines as &$line) {
+        if (preg_match('/^\s*' . preg_quote($key, '/') . '\s*=/', (string)$line)) {
+            $line = $replacement;
+            $found = true;
+        }
+    }
+    unset($line);
+    if (!$found) $lines[] = $replacement;
+    return file_put_contents($path, implode(PHP_EOL, $lines) . PHP_EOL, LOCK_EX) !== false;
+}
 
 $integrations = [
     'facebook' => [
@@ -28,15 +46,23 @@ $integrations = [
 ];
 
 $message = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['save_integration'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('admin-integrations', $_POST['csrf_token'] ?? null)) {
+    $message = 'Sessão expirada. Recarregue a página.';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['save_integration'])) {
     $integration = $_POST['integration'] ?? '';
     $field = $_POST['field'] ?? '';
     $value = $_POST['value'] ?? '';
 
-    if (isset($integrations[$integration][$field])) {
+    if (isset($integrations[$integration]['fields'][$field])) {
         $envVar = $integrations[$integration]['fields'][$field]['env'];
-        file_put_contents(__DIR__ . '/../.env', "\n$envVar=$value", FILE_APPEND);
-        $message = "✅ Integração '$integration' atualizada!";
+        $value = trim((string)$value);
+        if ($value === '***REDACTED***') {
+            $message = 'Nenhuma alteração: informe um novo valor para substituir o segredo atual.';
+        } elseif (!svi_env_upsert(__DIR__ . '/../.env', $envVar, $value)) {
+            $message = 'Não foi possível salvar a integração com segurança.';
+        } else {
+            $message = "✅ Integração '$integration' atualizada!";
+        }
     }
 }
 ?>
@@ -156,6 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['save_integration']))
                 <div class="card">
                     <div class="card-title"><?= htmlspecialchars($integration['name']) ?></div>
                     <form method="POST">
+                        <?= sv_csrf_input('admin-integrations') ?>
                         <?php foreach ($integration['fields'] as $fieldKey => $field): ?>
                             <div class="form-group">
                                 <label><?= htmlspecialchars($field['label']) ?></label>

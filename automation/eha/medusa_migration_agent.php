@@ -198,9 +198,9 @@ function apply_medusa_safe_steps(string $backendRoot, string $storefrontRoot): a
             'ADMIN_CORS=http://localhost:9000,http://127.0.0.1:9000,http://localhost:5173',
             'AUTH_CORS=http://localhost:9000,http://127.0.0.1:9000,http://localhost:8000',
             'REDIS_URL=redis://localhost:6379',
-            'JWT_SECRET=shopvivaliz_medusa_jwt_dev',
-            'COOKIE_SECRET=shopvivaliz_medusa_cookie_dev',
-            'DATABASE_URL=postgres://postgres:postgres@localhost:5432/shopvivaliz_medusa',
+            'JWT_SECRET=' . bin2hex(random_bytes(32)),
+            'COOKIE_SECRET=' . bin2hex(random_bytes(32)),
+            'DATABASE_URL=postgres://localhost:5432/shopvivaliz_medusa',
             'DB_NAME=shopvivaliz_medusa',
             '',
         ]);

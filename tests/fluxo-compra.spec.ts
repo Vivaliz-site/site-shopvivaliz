@@ -12,7 +12,7 @@ test.describe('Fluxo de Compra', () => {
   test('produto na homepage deve ter preco valido (ou catalogo deve informar vazio)', async ({ page }) => {
     await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
 
-    const produtoLink = page.locator('[class*="produto"]').first();
+    const produtoLink = page.locator('#product-grid .product-card').first();
     const temProduto = await produtoLink.isVisible({ timeout: 5000 }).catch(() => false);
 
     if (!temProduto) {

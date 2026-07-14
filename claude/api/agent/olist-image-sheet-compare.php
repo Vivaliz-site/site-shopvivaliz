@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 header_remove('X-Powered-By');
+require_once dirname(__DIR__, 3) . '/includes/admin-guard.php';
+require_once dirname(__DIR__, 3) . '/includes/csrf.php';
 
 function svic_root(): string { return dirname(__DIR__, 2); }
 
@@ -197,9 +199,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo '<!doctype html><meta charset="utf-8"><title>Comparar imagens Olist x ShopVivaliz</title>';
     echo '<h1>Agente comparador de imagens Olist</h1>';
     echo '<p>Use somente a planilha exportada hoje, pois as imagens da Olist mudam diariamente.</p>';
-    echo '<form method="post" enctype="multipart/form-data"><input type="file" name="sheet" accept=".xlsx" required> <button>Comparar</button></form>';
+    echo '<form method="post" enctype="multipart/form-data">' . sv_csrf_input('olist-image-compare') . '<input type="file" name="sheet" accept=".xlsx" required> <button>Comparar</button></form>';
     echo '<p>Modo seguro: gera conferencia JSON e nao altera imagens automaticamente.</p>';
     exit;
+}
+
+if (!sv_csrf_valid('olist-image-compare', $_POST['csrf_token'] ?? null)) {
+    svic_json(['ok'=>false,'error'=>'csrf_invalid'], 419);
 }
 
 if (empty($_FILES['sheet']['tmp_name'])) svic_json(array('ok'=>false,'error'=>'missing_sheet'), 400);

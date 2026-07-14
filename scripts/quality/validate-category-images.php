@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
 
-$path = __DIR__ . '/../../api/catalog/fallback-products.json';
-$products = is_file($path) ? json_decode((string) file_get_contents($path), true) : [];
+require_once __DIR__ . '/../../includes/catalog-runtime.php';
+$products = svcr_products();
 $errors = [];
 $categories = [];
 

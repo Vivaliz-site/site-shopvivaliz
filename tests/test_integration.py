@@ -7,16 +7,23 @@ Testes de integração entre múltiplos agentes.
 
 import pytest
 import json
+import os
 import time
 import requests
 from datetime import datetime
 from typing import Dict, Any
 from pathlib import Path
 
+AGENT_REGISTRY_URL = os.getenv("AGENT_REGISTRY_URL", "").rstrip("/")
+pytestmark = pytest.mark.skipif(
+    not AGENT_REGISTRY_URL,
+    reason="Set AGENT_REGISTRY_URL to run the external agent-registry integration suite",
+)
+
 class TestAgentRegistry:
     """Testes do Agent Registry."""
 
-    API_URL = "http://localhost:5000"
+    API_URL = AGENT_REGISTRY_URL or "http://localhost:5000"
     TIMEOUT = 10
 
     def test_register_agent(self):
@@ -60,7 +67,7 @@ class TestAgentRegistry:
 class TestMessageQueue:
     """Testes da Message Queue."""
 
-    API_URL = "http://localhost:5000"
+    API_URL = AGENT_REGISTRY_URL or "http://localhost:5000"
     TIMEOUT = 10
 
     def test_send_message(self):
@@ -111,7 +118,7 @@ class TestMessageQueue:
 class TestMultiAgentWorkflow:
     """Testes de workflow multi-agente."""
 
-    API_URL = "http://localhost:5000"
+    API_URL = AGENT_REGISTRY_URL or "http://localhost:5000"
     TIMEOUT = 30
 
     def test_agent_collaboration_chain(self):
@@ -204,7 +211,7 @@ class TestMultiAgentWorkflow:
 class TestDatabasePersistence:
     """Testes de persistência de dados."""
 
-    API_URL = "http://localhost:5000"
+    API_URL = AGENT_REGISTRY_URL or "http://localhost:5000"
     TIMEOUT = 10
 
     def test_message_persists(self):
@@ -259,7 +266,7 @@ class TestDatabasePersistence:
 class TestErrorHandling:
     """Testes de tratamento de erros."""
 
-    API_URL = "http://localhost:5000"
+    API_URL = AGENT_REGISTRY_URL or "http://localhost:5000"
     TIMEOUT = 10
 
     def test_invalid_message_format(self):
@@ -303,7 +310,7 @@ class TestErrorHandling:
 class TestPerformance:
     """Testes de performance."""
 
-    API_URL = "http://localhost:5000"
+    API_URL = AGENT_REGISTRY_URL or "http://localhost:5000"
     TIMEOUT = 30
 
     def test_message_latency(self):

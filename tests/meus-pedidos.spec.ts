@@ -21,6 +21,7 @@ test.describe('Página de Pedidos', () => {
     // Deve retornar erro 302 (redirect) ou sucesso (200)
     const status = response?.status() || 302;
     console.log(`[INFO] Status da página de pedidos: ${status}`);
+    expect(status).toBeLessThan(500);
   });
 
   test('header deve mostrar nome do usuário quando logado', async ({ page }) => {
@@ -28,6 +29,7 @@ test.describe('Página de Pedidos', () => {
     // Em um teste real, precisaríamos ter um usuário de teste
 
     const response = await page.goto(`${baseUrl}/meus-pedidos.php`, { waitUntil: 'domcontentloaded' });
+    expect(response?.status()).toBeLessThan(500);
 
     // Procurar por elementos de header
     const userInfo = page.locator('[class*="user"], text=Olá').first();

@@ -9,6 +9,7 @@ $host = $_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.com.br';
 define('BASE_URL', $scheme . '://' . $host);
 define('APP_NAME', 'ShopVivaliz');
 require_once __DIR__ . '/includes/product-price-enrich.php';
+require_once __DIR__ . '/includes/catalog-runtime.php';
 
 function sv_home_esc(string $value): string
 {
@@ -22,6 +23,9 @@ function sv_home_default_image(): string
 
 function sv_home_catalog_source_rows(): array
 {
+    $runtime = svcr_products();
+    if ($runtime !== []) return $runtime;
+
     $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
     if (is_file($jsonPath) && is_readable($jsonPath)) {
         $decoded = json_decode((string)file_get_contents($jsonPath), true);
@@ -315,7 +319,7 @@ $svNavCurrent = '';
               $position = 1;
               foreach (array_slice($featuredProducts ?? [], 0, 10) as $p) {
                   $img = trim((string)($p['image_url'] ?? ''));
-                  $url = 'https://shopvivaliz.com.br/produto/' . ($p['slug'] ?? $p['sku']);
+                  $url = 'https://shopvivaliz.com.br' . sv_home_product_url($p);
                   $seoItems[] = '{
                     "@type": "ListItem",
                     "position": ' . $position++ . ',

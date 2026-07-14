@@ -5,6 +5,7 @@ header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
+require_once dirname(__DIR__, 2) . '/includes/catalog-runtime.php';
 
 function svo_json(int $status, array $payload): never
 {
@@ -26,10 +27,8 @@ function svo_stock_map(): array
         return $map;
     }
     $map = [];
-    $path = svo_root() . '/api/catalog/fallback-products.json';
-    if (is_file($path) && is_readable($path)) {
-        $catalog = json_decode((string)file_get_contents($path), true);
-        if (is_array($catalog)) {
+    $catalog = svcr_products();
+    if ($catalog !== []) {
             foreach ($catalog as $product) {
                 if (!is_array($product)) {
                     continue;
@@ -39,7 +38,6 @@ function svo_stock_map(): array
                     $map[$sku] = (int)($product['stock'] ?? 0);
                 }
             }
-        }
     }
     return $map;
 }

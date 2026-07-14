@@ -1,16 +1,17 @@
 <?php
 declare(strict_types=1);
 header('Content-Type: application/xml; charset=UTF-8');
+require_once __DIR__ . '/includes/catalog-runtime.php';
 
 $official = __DIR__ . '/config/official-site.php';
 $officialData = is_file($official) ? (@include $official) : [];
 $base = is_array($officialData) && trim((string)($officialData['base_url'] ?? '')) !== ''
     ? rtrim((string)$officialData['base_url'], '/')
     : 'https://www.shopvivaliz.com.br';
-$catalog = __DIR__ . '/api/catalog/fallback-products.json';
+$catalog = __DIR__ . '/storage/products-cache-ativos.json';
 $catalogMTime = is_file($catalog) ? (int)@filemtime($catalog) : time();
 $today   = date('Y-m-d', $catalogMTime > 0 ? $catalogMTime : time());
-$products = is_file($catalog) ? (json_decode((string)file_get_contents($catalog), true) ?: []) : [];
+$products = svcr_products();
 
 function sx(string $s): string { return htmlspecialchars($s, ENT_XML1, 'UTF-8'); }
 
