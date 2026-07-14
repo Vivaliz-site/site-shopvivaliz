@@ -61,28 +61,39 @@ $client_secret = getenv('OLIST_CLIENT_SECRET') ?: die('ERRO: OLIST_CLIENT_SECRET
 $redirect_uri = 'https://dev.shopvivaliz.com.br/olist/callback.php';
 
 try {
-    // TROCAR CODIGO POR TOKEN
+    // TROCAR CODIGO POR TOKEN (sem curl - usando file_get_contents)
     log_msg("Trocando codigo por token...");
 
-    $ch = curl_init("https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token");
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => http_build_query([
-            'grant_type' => 'authorization_code',
-            'client_id' => $client_id,
-            'client_secret' => $client_secret,
-            'code' => $code,
-            'redirect_uri' => $redirect_uri
-        ]),
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded']
+    $token_url = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token";
+    $post_data = http_build_query([
+        'grant_type' => 'authorization_code',
+        'client_id' => $client_id,
+        'client_secret' => $client_secret,
+        'code' => $code,
+        'redirect_uri' => $redirect_uri
     ]);
 
-    $response = curl_exec($ch);
-    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
+            'content' => $post_data,
+            'timeout' => 30,
+        ],
+        'https' => [
+            'method' => 'POST',
+            'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
+            'content' => $post_data,
+            'timeout' => 30,
+        ]
+    ]);
+
+    $response = @file_get_contents($token_url, false, $context);
+    $status = isset($http_response_header) ? intval(explode(' ', $http_response_header[0])[1]) : 0;
+
+    if (!$response) {
+        $status = 0;
+    }
 
     if ($status != 200) {
         log_msg("ERRO: Status $status ao trocar codigo");
