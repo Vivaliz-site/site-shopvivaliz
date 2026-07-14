@@ -9,7 +9,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_FILE="${SCRIPT_DIR}/logs/auto-sync-$(date +%Y-%m-%d).log"
-SYNC_BRANCH="${SHOPVIVALIZ_SYNC_BRANCH:-feat/dazzle-visual-v1}"
+SYNC_BRANCH="${SHOPVIVALIZ_SYNC_BRANCH:-main}"
 SYNC_INTERVAL_SECONDS="${SHOPVIVALIZ_SYNC_INTERVAL_SECONDS:-300}"
 STATUS_FILE="${SCRIPT_DIR}/logs/tri-environment-sync.json"
 
