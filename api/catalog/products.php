@@ -478,21 +478,33 @@ $q = trim((string)($_GET['q'] ?? ''));
 $products = [];
 $all_erp = [];
 
-$page = 1;
-$max_pages = 50;
-while ($page <= $max_pages) {
-    $items = fetch_erp_products($page, 100);
-    if (!is_array($items) || empty($items)) {
-        break;
+// Tentar ler do cache JSON primeiro (mais rápido)
+$cache_file = svcat_root() . '/storage/products-cache.json';
+if (is_file($cache_file) && (time() - filemtime($cache_file)) < 3600) {
+    $cache_data = json_decode((string)file_get_contents($cache_file), true);
+    if (isset($cache_data['itens']) && is_array($cache_data['itens'])) {
+        foreach ($cache_data['itens'] as $item) {
+            $all_erp[] = normalize_product($item);
+        }
     }
-    foreach ($items as $item) {
-        $all_erp[] = normalize_product($item);
+} else {
+    // Fallback: buscar da API
+    $page = 1;
+    $max_pages = 50;
+    while ($page <= $max_pages) {
+        $items = fetch_erp_products($page, 100);
+        if (!is_array($items) || empty($items)) {
+            break;
+        }
+        foreach ($items as $item) {
+            $all_erp[] = normalize_product($item);
+        }
+        if (count($items) < 100) {
+            break;
+        }
+        $page++;
+        usleep(500000);
     }
-    if (count($items) < 100) {
-        break;
-    }
-    $page++;
-    usleep(500000);
 }
 
 if ($q !== '') {
