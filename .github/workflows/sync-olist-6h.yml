@@ -3,7 +3,7 @@ name: Sincronizar Olist/Tiny - Auto-Renew Token (2h)
 on:
   schedule:
     # ATIVO: A cada 5 MINUTOS para renovar token automaticamente
-    - cron: '*/5 * * * *'
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -76,3 +76,4 @@ jobs:
           else
             echo "Sem alteracoes no catalogo."
           fi
+

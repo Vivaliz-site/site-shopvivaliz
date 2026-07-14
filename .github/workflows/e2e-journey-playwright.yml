@@ -2,7 +2,7 @@ name: 🤖 E2E Journey Tests (Playwright)
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
   push:
     paths:
@@ -130,3 +130,4 @@ jobs:
           echo "✅ E2E Tests: PASSED"
           echo "✅ Jornada do usuário validada"
           echo "✅ Checkout funcionando"
+

@@ -102,3 +102,4 @@ jobs:
           echo ""
           echo "Próxima sincronização: em 6 horas"
           echo "Agentes: Claude + Gemini processando"
+

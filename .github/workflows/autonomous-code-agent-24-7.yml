@@ -2,7 +2,7 @@ name: Autonomous Code Agent 24/7
 
 on:
   schedule:
-    - cron: '7 * * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -148,3 +148,4 @@ jobs:
             logs/system-health-check.json
           if-no-files-found: ignore
           retention-days: 14
+
