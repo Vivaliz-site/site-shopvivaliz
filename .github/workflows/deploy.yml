@@ -152,7 +152,7 @@ jobs:
 
     steps:
       - name: Baixar o código do repositório
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v7
 
       - name: Gerar arquivo de runtime com secrets do servidor
         shell: bash

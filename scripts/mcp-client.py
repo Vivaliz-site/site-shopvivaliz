@@ -150,12 +150,24 @@ class MCPCloudManager:
         """Listar servidores disponíveis e seu status."""
         result = {}
         for name, client in self.servers.items():
-            health = client.health_check()
             meta = self.server_meta.get(name, {})
+            enabled = meta.get("enabled", True)
+            if not enabled:
+                result[name] = {
+                    "url": client.server_url,
+                    "status": "disabled",
+                    "enabled": False,
+                    "environment": meta.get("environment"),
+                    "location": meta.get("location"),
+                    "health": {"status": "disabled"},
+                }
+                continue
+
+            health = client.health_check()
             result[name] = {
                 "url": client.server_url,
                 "status": "online" if "status" in health else "offline",
-                "enabled": meta.get("enabled", True),
+                "enabled": True,
                 "environment": meta.get("environment"),
                 "location": meta.get("location"),
                 "health": health,
@@ -170,6 +182,45 @@ class MCPCloudManager:
             result = client.execute_tool(tool_name, params)
             results[name] = result
         return results
+
+
+def validate_server_config(config_path: str) -> Dict[str, Any]:
+    """Validar a configuração sem depender de servidores privados estarem online."""
+    errors = []
+    try:
+        with open(config_path, "r", encoding="utf-8") as config_file:
+            config = json.load(config_file)
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"valid": False, "errors": [str(exc)]}
+
+    servers = config.get("servers")
+    if not isinstance(servers, dict) or not servers:
+        errors.append("'servers' deve ser um objeto não vazio")
+        servers = {}
+
+    for name, server in servers.items():
+        if not isinstance(server, dict):
+            errors.append(f"{name}: configuração deve ser um objeto")
+            continue
+        parsed_url = urlparse(server.get("url", ""))
+        if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+            errors.append(f"{name}: URL HTTP(S) inválida")
+        for field in ("environment", "location"):
+            if not isinstance(server.get(field), str) or not server[field].strip():
+                errors.append(f"{name}: campo '{field}' ausente ou inválido")
+        if not isinstance(server.get("enabled"), bool):
+            errors.append(f"{name}: campo 'enabled' deve ser booleano")
+
+    return {
+        "valid": not errors,
+        "servers": len(servers),
+        "enabled": sum(
+            1
+            for server in servers.values()
+            if isinstance(server, dict) and server.get("enabled") is True
+        ),
+        "errors": errors,
+    }
 
 
 def main():
@@ -210,10 +261,23 @@ def main():
         "--list-servers", action="store_true", help="Listar servidores conhecidos"
     )
     parser.add_argument(
+        "--validate-config",
+        action="store_true",
+        help="Validar mcp-servers.json sem acessar a rede",
+    )
+    parser.add_argument(
         "--broadcast", action="store_true", help="Executar em todos os servidores"
     )
 
     args = parser.parse_args()
+
+    if args.validate_config:
+        config_path = os.path.join(
+            os.path.dirname(__file__), "..", "mcp-servers.json"
+        )
+        result = validate_server_config(config_path)
+        print(json.dumps(result, indent=2))
+        sys.exit(0 if result["valid"] else 1)
 
     # Normalizar URL do servidor
     if "://" not in args.server:
@@ -225,14 +289,17 @@ def main():
     if args.health:
         result = client.health_check()
         print(json.dumps(result, indent=2))
+        sys.exit(1 if "error" in result else 0)
 
     elif args.list_resources:
         result = client.list_resources()
         print(json.dumps(result, indent=2))
+        sys.exit(1 if "error" in result else 0)
 
     elif args.read_resource:
         result = client.read_resource(args.read_resource)
         print(json.dumps(result, indent=2))
+        sys.exit(1 if "error" in result else 0)
 
     elif args.write_resource:
         name, file_path = args.write_resource
@@ -240,10 +307,12 @@ def main():
             content = f.read()
         result = client.write_resource(name, content)
         print(json.dumps(result, indent=2))
+        sys.exit(1 if "error" in result else 0)
 
     elif args.list_tools:
         result = client.list_tools()
         print(json.dumps(result, indent=2))
+        sys.exit(1 if "error" in result else 0)
 
     elif args.execute_tool:
         tool_name, params_json = args.execute_tool
@@ -254,6 +323,7 @@ def main():
             sys.exit(1)
         result = client.execute_tool(tool_name, params)
         print(json.dumps(result, indent=2))
+        sys.exit(1 if "error" in result else 0)
 
     elif args.list_servers:
         manager = MCPCloudManager()
