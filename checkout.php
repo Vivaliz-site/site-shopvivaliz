@@ -129,11 +129,27 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
                     </span>
                 </label>
                 <label class="payment-opt">
+                    <input type="radio" name="payment_method" value="mercado_pago">
+                    <span class="payment-opt-box">
+                        <span class="pay-icon">💳</span>
+                        <strong>Mercado Pago</strong>
+                        <small>Cartão, Boleto, PIX</small>
+                    </span>
+                </label>
+                <label class="payment-opt">
+                    <input type="radio" name="payment_method" value="pagarme">
+                    <span class="payment-opt-box">
+                        <span class="pay-icon">🔒</span>
+                        <strong>Pagar.me</strong>
+                        <small>Cartão de crédito</small>
+                    </span>
+                </label>
+                <label class="payment-opt">
                     <input type="radio" name="payment_method" value="boleto">
                     <span class="payment-opt-box">
                         <span class="pay-icon">🧾</span>
                         <strong>Boleto</strong>
-                        <small>Emissao apos confirmacao</small>
+                        <small>Emissão após confirmação</small>
                     </span>
                 </label>
                 <label class="payment-opt">
