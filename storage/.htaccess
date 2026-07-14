@@ -1,6 +1,1 @@
-Options +FollowSymLinks
-RewriteEngine On
-
-<Files "*.json">
-    Allow from all
-</Files>
+Require all denied
