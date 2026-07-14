@@ -318,19 +318,38 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
 
     /* CEP auto-fill via ViaCEP */
     var cepInput = document.getElementById('cep-input');
-    if (cepInput) {
-        cepInput.addEventListener('blur', function () {
-            var cep = this.value.replace(/\D/g,'');
-            if (cep.length !== 8) return;
-            fetch('https://viacep.com.br/ws/' + cep + '/json/')
-                .then(function(r){ return r.json(); })
-                .then(function(d){
-                    if (d.erro) return;
-                    var addr = document.getElementById('address-input');
-                    if (addr && !addr.value) {
-                        addr.value = d.logradouro + ', ' + d.bairro + ', ' + d.localidade + '/' + d.uf;
+    function fetchAddress(cep) {
+        fetch('https://viacep.com.br/ws/' + cep + '/json/')
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (d.erro) return;
+                var addr = document.getElementById('address-input');
+                if (addr) {
+                    var addressStr = [d.logradouro, d.bairro, d.localidade + '/' + d.uf].filter(Boolean).join(', ');
+                    if (addressStr) {
+                        addr.value = addressStr;
+                        addr.focus();
                     }
-                }).catch(function(){});
+                }
+            }).catch(function(){});
+    }
+    if (cepInput) {
+        cepInput.addEventListener('input', function () {
+            var val = this.value.replace(/\D/g, '');
+            if (val.length > 5) {
+                this.value = val.substring(0, 5) + '-' + val.substring(5, 8);
+            } else {
+                this.value = val;
+            }
+            if (val.length === 8) {
+                fetchAddress(val);
+            }
+        });
+        cepInput.addEventListener('blur', function () {
+            var val = this.value.replace(/\D/g, '');
+            if (val.length === 8) {
+                fetchAddress(val);
+            }
         });
     }
 
@@ -351,6 +370,19 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
         var payload = { items: items };
         fd.forEach(function(v,k){ payload[k] = v; });
 
+        // Add shipping quote details
+        try {
+            var q = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
+            if (q) {
+                payload['shipping_total'] = Number(q.total) || 0;
+                payload['shipping_label'] = q.label || '';
+                payload['shipping_service'] = q.option && q.option.id ? q.option.id : '';
+                payload['shipping_cep'] = q.cep || payload['cep'] || '';
+                payload['shipping_quote_id'] = q.quote_id || '';
+                payload['shipping_expires_at'] = Number(q.expires_at) || 0;
+            }
+        } catch (err) {}
+
         fetch('/api/orders/create.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -360,7 +392,7 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
         .then(function(d) {
             btn.disabled = false;
             btn.textContent = 'Confirmar pedido';
-            if (!d.ok) { status.textContent = d.error || 'Erro ao registrar pedido.'; status.className='checkout-status-msg err'; return; }
+            if (!d.ok) { status.textContent = d.message || d.error || 'Erro ao registrar pedido.'; status.className='checkout-status-msg err'; return; }
 
             var method = fd.get('payment_method') || 'pix';
             var shippingQuote = getShippingQuote();
