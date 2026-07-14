@@ -2,8 +2,8 @@ name: Sincronizar Olist/Tiny - Auto-Renew Token (2h)
 
 on:
   schedule:
-    # TESTE: A cada 2 MINUTOS (depois voltar para */2 * * * *)
-    - cron: '*/2 * * * *'
+    # ATIVO: A cada 5 MINUTOS para renovar token automaticamente
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:
