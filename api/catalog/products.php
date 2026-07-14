@@ -46,10 +46,12 @@ function fetch_erp_products(int $page = 1, int $limit = 100): array
         return [];
     }
 
-    $url = "https://api.tiny.com.br/api/v2/produtos?pagina={$page}&limite={$limit}";
+    // API V3 (Tiny Public API)
+    $offset = ($page - 1) * $limit;
+    $url = "https://api.tiny.com.br/public-api/v3/produtos?limit={$limit}&offset={$offset}";
 
     $context = stream_context_create([
-        'http' => [
+        'https' => [
             'method' => 'GET',
             'header' => "Authorization: Bearer {$token}\r\nAccept: application/json\r\n",
             'timeout' => 15,
@@ -62,6 +64,12 @@ function fetch_erp_products(int $page = 1, int $limit = 100): array
     }
 
     $data = json_decode($response, true);
+
+    // V3 retorna em 'itens' dentro de resposta estruturada
+    if (isset($data['itens']) && is_array($data['itens'])) {
+        return $data['itens'];
+    }
+
     return is_array($data) ? $data : [];
 }
 
