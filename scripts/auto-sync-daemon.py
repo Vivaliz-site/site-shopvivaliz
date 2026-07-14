@@ -1,5 +1,18 @@
 #!/usr/bin/env python3
-"""Auto-sync daemon - sincroniza repositório a cada 30 segundos (desenvolvimento) ou 30 minutos (produção)."""
+"""
+[DESABILITADO 2026-07-14] Auto-sync daemon foi substituído por git-auto-sync.py na VM Oracle.
+Este script tinha erro de git `abbrev-ref` não reconhecido. A sincronização real ocorre via:
+- git-auto-sync.py (VM Oracle - executado pelo cron a cada 30 min)
+- Não use este daemon localmente; conflita com git push via GitHub Actions
+"""
+
+import sys
+print("[INFO] Este daemon foi desabilitado. Use git-auto-sync.py na VM Oracle em vez disso.")
+sys.exit(0)
+
+# Código original desabilitado (mantido para histórico)
+if False:  # DISABLED
+    """Auto-sync daemon - sincroniza repositório a cada 30 segundos (desenvolvimento) ou 30 minutos (produção)."""
 import os
 import subprocess
 import time
