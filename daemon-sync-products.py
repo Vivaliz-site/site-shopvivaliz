@@ -19,7 +19,7 @@ def get_token():
     return None
 
 def fetch_products_active():
-    """Buscar TODOS os produtos ATIVOS do ERP"""
+    """Buscar TODOS os produtos ATIVOS do ERP via API V3"""
     token = get_token()
     if not token:
         print("[!] Token não encontrado!")
@@ -45,12 +45,22 @@ def fetch_products_active():
         if 'itens' not in data or not data['itens']:
             break
 
-        # Filtrar APENAS ativos (situacao == 'A')
+        # Filtrar APENAS ativos (situacao == 'A') e normalizar estoque
+        active_count = 0
         for item in data['itens']:
             if item.get('situacao') == 'A':
-                all_products.append(item)
+                # CRÍTICO: Extrair estoque_disponivel do campo estoque.quantidade
+                # Se não existir, usa 0 (para evitar erro na API)
+                if 'estoque' in item and isinstance(item['estoque'], dict):
+                    quantidade = item['estoque'].get('quantidade', 0)
+                    item['estoque_disponivel'] = quantidade if quantidade else 0
+                else:
+                    item['estoque_disponivel'] = 0
 
-        print(f"[+] Offset {offset}: {len([i for i in data['itens'] if i.get('situacao') == 'A'])} ativos")
+                all_products.append(item)
+                active_count += 1
+
+        print(f"[+] Offset {offset}: {active_count} ativos (total: {len(all_products)})")
 
         if len(data['itens']) < limit:
             break
