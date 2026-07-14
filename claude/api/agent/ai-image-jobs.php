@@ -248,7 +248,9 @@ function aij_register_job(mysqli $db, array $body): never
             $errors   = count(array_filter($items, fn($i) => ($i['status'] ?? '') === 'error'));
             $status   = $errors === count($items) ? 'failed' : ($uploaded > 0 ? 'partial' : 'pending');
 
-            $db->query("UPDATE ai_image_jobs SET status = '$status', generated_at = NOW(), updated_at = NOW() WHERE id = $job_id");
+            $ustmt = $db->prepare('UPDATE ai_image_jobs SET status = ?, generated_at = NOW(), updated_at = NOW() WHERE id = ?');
+            $ustmt->bind_param('si', $status, $job_id);
+            $ustmt->execute();
         }
 
         $db->commit();
