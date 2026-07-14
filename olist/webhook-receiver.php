@@ -51,7 +51,7 @@ $sync_events = ['produto.criado', 'produto.atualizado', 'produto.alterado', 'pre
 
 if (in_array($event_type, $sync_events) || strpos($event_type, 'produto') !== false) {
     // Disparar sincronização
-    exec('php ' . dirname(__DIR__) . '/olist/sync-direct-tiny.php > /dev/null 2>&1 &');
+    exec('php ' . dirname(__DIR__) . '/olist/sync-on-webhook.php > /dev/null 2>&1 &');
 
     http_response_code(200);
     echo json_encode([
