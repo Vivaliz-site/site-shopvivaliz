@@ -10,6 +10,7 @@ header('Content-Type: text/html; charset=UTF-8');
     <title>Carrinho | Vivaliz</title>
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/shipping-v7.css">
     <style>
         .cart-page { padding: 36px 0 64px; }
         .cart-layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; }
@@ -125,16 +126,10 @@ header('Content-Type: text/html; charset=UTF-8');
 </footer>
 
 <script>
+// Legacy shipping handler removed - now using cart-shipping-v7.js
 (function () {
     function getCart() {
         try { return JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'); } catch(e) { return []; }
-    }
-    function saveCart(items) { localStorage.setItem('shopvivaliz_cart', JSON.stringify(items)); }
-    function saveShippingQuote(quote) {
-        localStorage.setItem('shopvivaliz_shipping_quote', JSON.stringify(quote || null));
-    }
-    function clearShippingQuote() {
-        localStorage.removeItem('shopvivaliz_shipping_quote');
     }
     function fmtMoney(v) {
         if (!v || isNaN(v)) return 'Consulte o valor';
@@ -227,109 +222,23 @@ header('Content-Type: text/html; charset=UTF-8');
 
     render();
 
-    var freteTotal = 0;
-    var freteCalculated = false;
-
-    function updateTotalsWithFrete() {
-        var items = getCart();
-        var subtotal = items.reduce(function(a, i){ return a + (parseFloat(i.price) || 0) * (i.quantity || 1); }, 0);
-        var totalEl = document.getElementById('cart-total');
-        if (!totalEl) return;
-        if (freteCalculated && subtotal > 0) {
-            totalEl.textContent = fmtMoney(subtotal + freteTotal);
+    // Update total based on shipping quote if already calculated
+    function updateTotalFromQuote() {
+        var quote = null;
+        try { quote = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null'); } catch(e) {}
+        if (quote && quote.total > 0) {
+            var items = getCart();
+            var subtotal = items.reduce(function(a, i){ return a + (parseFloat(i.price) || 0) * (i.quantity || 1); }, 0);
+            var totalEl = document.getElementById('cart-total');
+            if (totalEl) totalEl.textContent = fmtMoney(subtotal + quote.total);
+            var freteEl = document.getElementById('cart-frete');
+            if (freteEl) freteEl.textContent = fmtMoney(quote.total);
         }
     }
-
-    var btnFrete = document.getElementById('btn-frete');
-    var cepInput = document.getElementById('frete-cep');
-    var freteEl = document.getElementById('cart-frete');
-    var freteStatusEl = document.getElementById('frete-status');
-
-    if (cepInput) {
-        cepInput.addEventListener('input', function () {
-            var digits = cepInput.value.replace(/\D/g, '').slice(0, 8);
-            cepInput.value = digits.length > 5 ? digits.slice(0, 5) + '-' + digits.slice(5) : digits;
-        });
-    }
-
-    if (btnFrete) {
-        btnFrete.addEventListener('click', function () {
-            var items = getCart();
-            if (!items.length) {
-                if (freteStatusEl) freteStatusEl.textContent = 'Seu carrinho está vazio.';
-                return;
-            }
-
-            var cep = (cepInput ? cepInput.value : '').replace(/\D/g, '');
-            if (cep.length !== 8) {
-                if (freteStatusEl) freteStatusEl.textContent = 'Informe um CEP válido (8 dígitos).';
-                return;
-            }
-
-            btnFrete.disabled = true;
-            btnFrete.textContent = 'Calculando...';
-            if (freteStatusEl) freteStatusEl.textContent = '';
-            freteCalculated = false;
-
-            fetch('/api/melhorenvio/shipping-check.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    cep: cep,
-                    items: items.map(function (item) {
-                        return {
-                            sku: item.sku || '',
-                            product_id: item.id || '',
-                            olist_product_id: item.olist_product_id || '',
-                            quantity: item.quantity || 1,
-                            price: parseFloat(item.price) || 0
-                        };
-                    })
-                })
-            })
-            .then(function (res) { return res.json().then(function (data) { return { status: res.status, data: data }; }); })
-            .catch(function () { return { status: 0, data: { ok: false, error: 'network_error' } }; })
-            .then(function (response) {
-                btnFrete.disabled = false;
-                btnFrete.textContent = 'Calcular';
-
-                if (!response.data.ok) {
-                    var err = response.data.error || 'erro_desconhecido';
-                    var messages = {
-                        missing_access_token: 'Cálculo de frete indisponível no momento. Nossa equipe confirmará o valor pelo WhatsApp.',
-                        invalid_cep: 'CEP inválido. Confira e tente novamente.',
-                        product_not_found: 'Não foi possível calcular o frete para um dos itens do carrinho.'
-                    };
-                    if (freteEl) freteEl.textContent = 'Indisponível';
-                    if (freteStatusEl) freteStatusEl.textContent = messages[err] || (response.data.message || 'Não foi possível calcular o frete agora.');
-                    clearShippingQuote();
-                    return;
-                }
-
-                var total = parseFloat(response.data.shipping_total || 0);
-                if (!(total > 0)) {
-                    if (freteEl) freteEl.textContent = 'Indisponível';
-                    if (freteStatusEl) freteStatusEl.textContent = 'Nenhuma opção de frete encontrada para este CEP.';
-                    clearShippingQuote();
-                    return;
-                }
-
-                freteTotal = total;
-                freteCalculated = true;
-                if (freteEl) freteEl.textContent = fmtMoney(total);
-                if (freteStatusEl) freteStatusEl.textContent = 'Frete calculado para ' + cepInput.value + '.';
-                saveShippingQuote({
-                    cep: cep,
-                    label: cepInput ? cepInput.value : cep,
-                    total: total,
-                    option: response.data.selected_option || null
-                });
-                updateTotalsWithFrete();
-            });
-        });
-    }
+    updateTotalFromQuote();
 })();
 </script>
 <script src="/js/cro-interactions.js"></script>
+<script src="/js/cart-shipping-v7.js"></script>
 </body>
 </html>
