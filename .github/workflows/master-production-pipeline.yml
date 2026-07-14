@@ -155,13 +155,36 @@ jobs:
           response = urllib.request.urlopen('https://dev.shopvivaliz.com.br/')
           html = response.read().decode('utf-8')
 
-          # Verifica se há múltiplas seções hero com gradient (sintoma do bug CSS wildcard)
-          hero_blocks = re.findall(r'class="[^"]*hero[^"]*"[^>]*style="[^"]*linear-gradient', html)
-          if len(hero_blocks) > 1:
-              print(f"❌ ERRO: {len(hero_blocks)} hero blocks com gradient encontrados (esperado ≤1)")
+          def classes(tag):
+              match = re.search(r'class=["\']([^"\']*)["\']', tag, re.I)
+              return set(match.group(1).split()) if match else set()
+
+          # Há uma hero principal e um carrossel separado. Cada slide pode ter
+          # seu próprio overlay em gradiente; isso não é duplicação de layout.
+          section_tags = re.findall(r'<section\b[^>]*>', html, re.I)
+          primary_heroes = [tag for tag in section_tags if 'hero' in classes(tag)]
+          slide_tags = re.findall(r'<(?:article|div)\b[^>]*>', html, re.I)
+          hero_slides = [tag for tag in slide_tags if 'hero-slide' in classes(tag)]
+          gradient_overlays = [
+              tag for tag in slide_tags
+              if 'hero-overlay' in classes(tag) and 'linear-gradient' in tag.lower()
+          ]
+
+          if len(primary_heroes) != 1:
+              print(f"❌ ERRO: {len(primary_heroes)} seções .hero principais (esperado 1)")
               exit(1)
 
-          print("✓ No duplicate gradients")
+          if len(gradient_overlays) > len(hero_slides):
+              print(
+                  f"❌ ERRO: {len(gradient_overlays)} overlays para "
+                  f"{len(hero_slides)} slides"
+              )
+              exit(1)
+
+          print(
+              f"✓ Hero structure OK: 1 principal, "
+              f"{len(hero_slides)} slides, {len(gradient_overlays)} overlays"
+          )
           EOF
 
       - name: Regression Test - Footer Data Real
