@@ -47,9 +47,9 @@ async def main():
     print(f"\n[+] Client ID: {client_id[:50]}...")
     print(f"[+] Redirect: {redirect_uri}")
 
-    # Credenciais - substitua 'PASSWORD' pela senha real antes de executar
+    # Credenciais - CONFIGURE ANTES DE USAR
     email = "atendimento@shopvivaliz.com.br"
-    password = "PASSWORD"  # USAR SENHA REAL
+    password = "CONFIGURE_SENHA_AQUI"
 
     print(f"\n[*] Usando: {email}")
 
