@@ -1,6 +1,13 @@
 name: 🔐 Security Scanning - OWASP + Dependencies
 
 on:
+  pull_request:
+    paths:
+      - 'requirements.txt'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/security-scanner.php'
+      - '.github/workflows/security-scanning.yml'
   push:
     branches: [main]
   schedule:
@@ -21,6 +28,24 @@ jobs:
         with:
           php-version: '8.2'
           extensions: curl
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+
+      - name: Audit Python dependencies
+        run: |
+          python -m pip install --disable-pip-version-check pip-audit
+          python -m pip_audit -r requirements.txt
+
+      - name: Audit production Node dependencies
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Run Security Scanner
         id: scan
