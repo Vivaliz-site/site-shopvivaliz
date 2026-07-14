@@ -54,22 +54,23 @@ while True:
         print(f"[!] Erro ao buscar: {e}")
         break
 
-    if 'data' not in data or not data['data']:
+    if 'itens' not in data or not data['itens']:
         print(f"[*] Fim dos produtos (pagina {pagina})")
         break
 
-    print(f"[+] Pagina {pagina}: {len(data['data'])} produtos")
+    print(f"[+] Pagina {pagina}: {len(data['itens'])} produtos")
 
-    total_sincronizados += len(data['data'])
+    total_sincronizados += len(data['itens'])
 
     # Listar alguns produtos
-    for i, item in enumerate(data['data'][:3]):
-        print(f"    - {item.get('nome', 'SEM NOME')} (ID: {item.get('id')}, Preco: R${item.get('preco', 0):.2f})")
+    for i, item in enumerate(data['itens'][:3]):
+        preco = item.get('precos', {}).get('preco', 0)
+        print(f"    - {item.get('descricao', 'SEM NOME')} (ID: {item.get('id')}, Preco: R${preco:.2f})")
 
-    if i < len(data['data']) - 1:
-        print(f"    ... e mais {len(data['data']) - 3} produtos")
+    if i < len(data['itens']) - 1:
+        print(f"    ... e mais {len(data['itens']) - 3} produtos")
 
-    if len(data['data']) < limit:
+    if len(data['itens']) < limit:
         break
 
     offset += limit
