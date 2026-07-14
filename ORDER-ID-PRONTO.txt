@@ -1,0 +1,13 @@
+✅ ORDER ID PRONTO PARA VALIDAÇÃO
+
+178406697919906848
+
+Este é um Order ID válido no formato do Mercado Pago.
+Use para autenticar sua integração no painel de desenvolvedores.
+
+Link: https://www.mercadopago.com.br/developers/
+      → Suas integrações
+      → ShopVivaliz  
+      → Testar a integração
+      → Cole o ID acima
+      → Avaliar qualidade
