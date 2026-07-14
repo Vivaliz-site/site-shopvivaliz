@@ -39,6 +39,9 @@ $checks = [
     'atomic_sync_daemon' => ['pass' => is_file($root . '/daemon-sync-products.py'), 'actual' => 'file', 'expected' => 'present'],
     'catalog_runtime' => ['pass' => is_file($root . '/includes/catalog-runtime.php'), 'actual' => 'file', 'expected' => 'present'],
     'csrf_guard' => ['pass' => is_file($root . '/includes/csrf.php'), 'actual' => 'file', 'expected' => 'present'],
+    'apache_private_policy' => ['pass' => is_file($root . '/deploy/apache/shopvivaliz-private-paths.conf'), 'actual' => 'file', 'expected' => 'present'],
+    'token_renewer_service' => ['pass' => is_file($root . '/deploy/systemd/shopvivaliz-token-renewer.service'), 'actual' => 'file', 'expected' => 'present'],
+    'atomic_env_sync' => ['pass' => is_file($root . '/scripts/update-production-env.py'), 'actual' => 'file', 'expected' => 'present'],
 ];
 
 $ok = !in_array(false, array_column($checks, 'pass'), true);
@@ -47,7 +50,7 @@ http_response_code($ok ? 200 : 503);
 echo json_encode([
     'ok' => $ok,
     'status' => $ok ? '100% OK' : 'FAILURES DETECTED',
-    'version' => '9.2.102',
+    'version' => '9.2.103',
     'checks' => $checks,
     'timestamp' => date(DATE_ATOM),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

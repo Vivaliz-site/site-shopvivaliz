@@ -50,15 +50,16 @@ if ! kill -0 $PHP_SERVER_PID 2>/dev/null; then
   exit 1
 fi
 
-# Wait for port to be listening (max 30 seconds)
-echo "Waiting for port 8099 to be listening..."
+# Wait for the HTTP listener itself. This works on Linux CI and Git Bash on
+# Windows, where netstat/lsof output formats differ.
+echo "Waiting for the storefront listener..."
 for attempt in $(seq 1 30); do
-  if lsof -i :8099 >/dev/null 2>&1 || netstat -tuln 2>/dev/null | grep -q ":8099 "; then
-    echo "✓ Port 8099 is listening"
+  if curl -fsS "${BASE_URL}/index.php" -o /dev/null 2>/dev/null; then
+    echo "✓ Storefront listener is responding"
     break
   fi
   if [ $attempt -eq 30 ]; then
-    echo "ERROR: Port 8099 still not listening after 30 seconds"
+    echo "ERROR: Storefront listener did not respond after 30 seconds"
     echo "=== PHP Server Logs ==="
     cat "$TMPDIR/shopvivaliz-php-server.log"
     exit 1
@@ -100,6 +101,16 @@ assert_status() {
   fi
 }
 
+assert_status_one_of() {
+  local allowed="$1" url="$2" status
+  status=$(curl -sS -o "$TMPDIR/sv-response.json" -w '%{http_code}' "${url}")
+  if [[ " ${allowed} " != *" ${status} "* ]]; then
+    echo "Expected one of [${allowed}], got ${status}: ${url}"
+    cat "$TMPDIR/sv-response.json" 2>/dev/null || true
+    exit 1
+  fi
+}
+
 assert_contains() { curl -fsS "$1" | grep -F "$2" >/dev/null; }
 assert_contains_allow_error() { curl -sS "$1" | grep -F "$2" >/dev/null; }
 
@@ -116,7 +127,9 @@ assert_status 200 "${BASE_URL}/api/catalog/products-in-stock.php"
 assert_status 422 "${BASE_URL}/api/catalog/stock-by-product.php"
 assert_status 405 "${BASE_URL}/api/cart/validate.php"
 assert_status 422 "${BASE_URL}/api/cart/validate.php" POST '{}'
-assert_status 503 "${BASE_URL}/api/orders/health.php"
+# A configured signing key yields 200; a clean CI checkout intentionally yields
+# 503 while still returning the same structured health contract.
+assert_status_one_of "200 503" "${BASE_URL}/api/orders/health.php"
 assert_status 200 "${BASE_URL}/api/orders/security-health.php"
 assert_status 200 "${BASE_URL}/api/orders/idempotency-health.php"
 assert_status 200 "${BASE_URL}/api/orders/context-health.php"
