@@ -24,6 +24,15 @@
     if (counter) counter.textContent = String(value);
   }
 
+  function customerStatus(query, category) {
+    const term = String(query || '').trim();
+    const activeCategory = String(category || '').trim();
+    if (term && activeCategory) return `Resultados para “${term}” em ${activeCategory}`;
+    if (term) return `Resultados para “${term}”`;
+    if (activeCategory) return `Confira as opções em ${activeCategory}`;
+    return 'Escolha seus produtos e compre com segurança';
+  }
+
   function readCart() {
     try {
       const value = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
@@ -42,7 +51,7 @@
     badge.textContent = count > 0 ? String(count) : '';
     if (count > 0) {
       badge.classList.remove('badge-pulse');
-      void badge.offsetWidth; // trigger reflow
+      void badge.offsetWidth;
       badge.classList.add('badge-pulse');
     }
   }
@@ -68,20 +77,20 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ event: 'cart_add', sku: product.sku, olist_product_id: product.olist_product_id || '' })
           }).catch(function () {});
-          
-          // Visual success feedback
+
           const originalText = button.innerHTML;
-          button.innerHTML = "✓ Adicionado!";
+          button.innerHTML = '✓ Adicionado ao carrinho';
           button.classList.add('btn-success-added');
-          
+
           addToCart(product);
-          
-          setTimeout(function() {
+
+          setTimeout(function () {
             button.innerHTML = originalText;
             button.classList.remove('btn-success-added');
           }, 1500);
-          
-          if(window.openMiniCart){window.openMiniCart();}else{window.location.href='/carrinho';}
+
+          if (window.openMiniCart) window.openMiniCart();
+          else window.location.href = '/carrinho';
         } catch (error) {}
       });
     });
@@ -90,7 +99,6 @@
   function card(product) {
     const image = product.image_url || '/images/logo-vivaliz-square.png';
     const sku = product.sku || product.olist_product_id || 'sem-sku';
-    const images = Number(product.images_count || 0);
     const category = String(product.category || '').trim();
     const slug = String(product.slug || '').trim();
     const payload = {
@@ -119,10 +127,7 @@
         <div class="product-info">
           ${category ? `<div class="product-category">${esc(category)}</div>` : ''}
           <h2>${esc(product.name)}</h2>
-          <div class="product-meta">
-            <span>${esc(money(product.price))}</span>
-            <span>${images} imagem${images === 1 ? '' : 's'}</span>
-          </div>
+          <div class="product-price">${esc(money(product.price))}</div>
           <div class="card-actions">
             <a class="btn btn-secondary card-link" href="${esc(productUrl)}">Ver detalhes</a>
             ${hasPrice
@@ -136,9 +141,8 @@
   async function loadCatalog(query, category) {
     if (!grid || !status) return;
     const activeCategory = String(category || '').trim();
-    status.textContent = 'Carregando catálogo...';
-    
-    // Inject visual skeleton loaders during fetching
+    status.textContent = 'Preparando as melhores opções para você...';
+
     grid.innerHTML = `
       <div class="product-card sv-skeleton-card" style="box-shadow:none; border:1px solid #e2e8f0; opacity:0.8;">
         <div class="sv-skeleton sv-skeleton-image" style="height: 180px; width: 100%; border-radius: 8px; margin-bottom: 12px;"></div>
@@ -162,16 +166,20 @@
       if (!response.ok || data.ok === false) throw new Error(data.error || 'catalog_error');
       const products = Array.isArray(data.products) ? data.products : [];
       if (!products.length) {
-        status.textContent = query ? 'Nenhum produto encontrado para a busca.' : 'Nenhum produto encontrado no catálogo.';
+        status.textContent = query
+          ? 'Não encontramos esse produto. Tente outro nome ou explore as categorias.'
+          : 'Novos produtos estarão disponíveis em breve.';
+        grid.innerHTML = '';
         setCount(0);
         return;
       }
-      status.textContent = `${products.length} produto${products.length === 1 ? '' : 's'} carregado${products.length === 1 ? '' : 's'}${activeCategory ? ' em "' + activeCategory + '"' : ''}.`;
+      status.textContent = customerStatus(query, activeCategory);
       setCount(products.length);
       grid.innerHTML = products.map(card).join('');
       bindBuyButtons(grid);
     } catch (error) {
-      status.textContent = 'Não foi possível carregar o catálogo agora.';
+      status.textContent = 'Não conseguimos exibir os produtos agora. Tente novamente em instantes.';
+      grid.innerHTML = '';
       setCount(0);
     }
   }
@@ -179,9 +187,9 @@
   updateCartBadge(readCart());
   bindBuyButtons(document);
 
-  if (!catalogPage || !grid || !status) {
-    return;
-  }
+  if (!catalogPage || !grid || !status) return;
+
+  status.textContent = customerStatus(input ? input.value.trim() : '', initialCategory);
 
   if (form) {
     form.addEventListener('submit', function (event) {
