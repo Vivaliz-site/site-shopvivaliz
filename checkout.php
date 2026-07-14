@@ -384,9 +384,13 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
                 document.getElementById('order-number-msg').textContent = 'Pedido ' + d.order_number;
                 var successCopy = document.querySelector('#success-modal p:not(#order-number-msg)');
                 if (successCopy) {
-                    successCopy.textContent = method === 'boleto'
-                        ? 'Nossa equipe vai emitir o boleto apos confirmar frete e estoque.'
-                        : 'Nossa equipe comercial já seguirá com a confirmação de frete e pagamento.';
+                    if (d.payment_instructions) {
+                        successCopy.textContent = d.payment_instructions;
+                    } else {
+                        successCopy.textContent = method === 'boleto'
+                            ? 'Nossa equipe vai emitir o boleto apos confirmar frete e estoque.'
+                            : 'Nossa equipe comercial já seguirá com a confirmação de frete e pagamento.';
+                    }
                 }
                 document.getElementById('success-wpp-link').href = wppLink;
                 document.getElementById('success-modal').hidden = false;
