@@ -1,21 +1,17 @@
-tree acbc281e58b0b85fad30f19786ae9de2d51d044a
-parent b8c031eb98a6abed2f82b4eefde041cf1b2b7665
-author fredmourao-ai <fredmourao@gmail.com> 1782585435 -0300
-committer fredmourao-ai <fredmourao@gmail.com> 1782585435 -0300
+tree 3c80699116814d094c0aec891cd5fbb54dba8781
+parent 58999202bb78ecfc19f458fc77f615a6d597231b
+author fredmourao-ai <fredmourao@gmail.com> 1782592876 -0300
+committer fredmourao-ai <fredmourao@gmail.com> 1782592876 -0300
 
-docs: guia de resolução de erros no deploy
+fix: remover emojis de todos os workflows YAML
 
-Adicionado guia com:
-- Checklist de secrets
-- Valores corretos para HostGator
-- Passo a passo de diagnóstico
-- Soluções para erros comuns
-  • Connection refused
-  • Authentication failed
-  • Permission denied
-  • server-dir should be a folder
+Emojis causavam erros de sintaxe YAML nos seguintes workflows:
+- ai-autonomous-executor.yml
+- auto-task-generator.yml
+- continuous-trio-executor.yml
+- executor-watchdog.yml
+- deploy-squad-chat.yml
+- deploy.yml
+- parallel-trio-executor.yml
 
-Próximos passos:
-1. Verifique GitHub Secrets
-2. Confirme valores FTP
-3. Retry o deploy
+Todos os workflows agora têm sintaxe YAML válida e podem executar sem erros.
