@@ -194,7 +194,7 @@
 
 /* Hero Mascot Container */
 .sv-hero {
-  height: 135px;
+  height: 145px;
   background: linear-gradient(180deg, rgba(241, 245, 249, 0.8) 0%, rgba(226, 232, 240, 0.4) 100%);
   display: flex;
   align-items: flex-end;
@@ -204,8 +204,9 @@
 }
 
 .sv-hero video {
-  height: 135px;
+  height: 145px;
   object-fit: contain;
+  transform: translateY(12px);
 }
 
 /* Messages Area */
@@ -370,11 +371,12 @@
   }
 
   .sv-hero {
-    height: 95px;
+    height: 110px;
   }
 
   .sv-hero video {
-    height: 95px;
+    height: 110px;
+    transform: translateY(8px);
   }
 
   .sv-msgs {
