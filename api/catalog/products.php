@@ -497,8 +497,12 @@ if ($cache_exists && $cache_fresh) {
         if (isset($cache_data['itens']) && is_array($cache_data['itens'])) {
             error_log("[products.php] Found " . count($cache_data['itens']) . " items in cache");
             foreach ($cache_data['itens'] as $item) {
-                $all_erp[] = normalize_product($item);
+                // FILTER: Only include active products (situacao === 'A')
+                if (isset($item['situacao']) && $item['situacao'] === 'A') {
+                    $all_erp[] = normalize_product($item);
+                }
             }
+            error_log("[products.php] After filtering: " . count($all_erp) . " active items");
             $cache_used = true;
         }
     } else {
