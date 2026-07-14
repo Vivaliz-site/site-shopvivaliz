@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 header('Content-Type: application/xml; charset=UTF-8');
+require_once __DIR__ . '/includes/catalog-runtime.php';
 
 $official = __DIR__ . '/config/official-site.php';
 $officialData = is_file($official) ? (@include $official) : [];
@@ -9,8 +10,7 @@ $baseUrl = is_array($officialData) && trim((string)($officialData['base_url'] ??
     ? rtrim((string)$officialData['base_url'], '/')
     : 'https://www.shopvivaliz.com.br';
 
-$catalog = __DIR__ . '/api/catalog/fallback-products.json';
-$products = is_file($catalog) ? (json_decode((string)file_get_contents($catalog), true) ?: []) : [];
+$products = svcr_products();
 
 function gm_xml(string $value): string
 {

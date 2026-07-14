@@ -27,9 +27,9 @@ function svq_env(string ...$keys): string {
     return '';
 }
 function svq_secret(): string {
-    $secret = svq_env('APP_KEY','SHOPVIVALIZ_APP_KEY','QUOTE_SIGNING_KEY');
-    if ($secret !== '') return $secret;
-    return hash('sha256', dirname(__DIR__, 2) . '|shopvivaliz-shipping-v2');
+    $secret = svq_env('QUOTE_SIGNING_KEY','APP_KEY','SHOPVIVALIZ_APP_KEY','SHOPVIVALIZ_AGENT_KEY');
+    if ($secret === '') svq_fail(503,'quote_signing_key_missing','A assinatura segura de frete não está configurada. Tente novamente em instantes.');
+    return $secret;
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') svq_fail(405,'method_not_allowed','Método não permitido.');

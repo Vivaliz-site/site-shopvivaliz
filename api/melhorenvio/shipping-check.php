@@ -7,6 +7,7 @@ header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
 require_once dirname(__DIR__, 2) . '/includes/product-price-enrich.php';
+require_once dirname(__DIR__, 2) . '/includes/catalog-runtime.php';
 
 function svsc_root(): string
 {
@@ -44,17 +45,7 @@ function svsc_body(): array
 
 function svsc_catalog_product(string $productId, string $sku): array
 {
-    $jsonPath = svsc_root() . '/api/catalog/fallback-products.json';
-    if (!is_file($jsonPath) || !is_readable($jsonPath)) {
-        return [];
-    }
-
-    $decoded = json_decode((string)file_get_contents($jsonPath), true);
-    if (!is_array($decoded)) {
-        return [];
-    }
-
-    foreach ($decoded as $row) {
+    foreach (svcr_products() as $row) {
         if (!is_array($row)) {
             continue;
         }
@@ -70,6 +61,11 @@ function svsc_catalog_product(string $productId, string $sku): array
 
 function svsc_product(string $productId, string $sku): array
 {
+    $catalog = svsc_catalog_product($productId, $sku);
+    if ($catalog !== []) {
+        return $catalog;
+    }
+
     $db = svp_db();
     if ($db instanceof mysqli) {
         $row = svp_lookup_product($db, $sku, $productId);
@@ -79,7 +75,7 @@ function svsc_product(string $productId, string $sku): array
         }
     }
 
-    return svsc_catalog_product($productId, $sku);
+    return [];
 }
 
 function svsc_item_product(array $item): array

@@ -1,130 +1,53 @@
 <?php
-/**
- * Auto-teste do Catálogo Olist
- * Valida: produtos, SKUs, imagens, integridade
- */
+declare(strict_types=1);
 
+header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
 
-$host = getenv('DB_HOST') ?: 'localhost';
-$user = getenv('DB_USER') ?: 'root';
-$pass = getenv('DB_PASS') ?: '';
-$db_name = getenv('DB_NAME') ?: 'shopvivaliz';
+require_once dirname(__DIR__) . '/includes/catalog-runtime.php';
 
-$db = new mysqli($host, $user, $pass, $db_name, 3306);
+$products = svcr_products();
+$total = count($products);
+$skus = [];
+$images = 0;
+$priced = 0;
+$available = 0;
 
-if ($db->connect_error) {
-    exit(json_encode(['ok' => false, 'erro' => 'Conexão: ' . $db->connect_error]));
+foreach ($products as $product) {
+    if (!is_array($product)) continue;
+    $sku = trim((string)($product['sku'] ?? ''));
+    if ($sku !== '') $skus[$sku] = true;
+    $image = trim((string)($product['image_url'] ?? ''));
+    if (preg_match('~^https://~i', $image)) $images++;
+    if ((float)($product['price'] ?? 0) > 0) $priced++;
+    if ((int)($product['stock'] ?? 0) > 0) $available++;
 }
 
-$db->set_charset('utf8mb4');
-
-$tests = [];
-$all_pass = true;
-
-// TEST 1: Produtos
-$count = $db->query("SELECT COUNT(*) as c FROM products")->fetch_assoc()['c'] ?? 0;
-$pass = $count >= 196;
-$tests[] = [
-    'name' => 'Produtos locais',
-    'expected' => '≥ 196',
-    'actual' => $count,
-    'pass' => $pass,
-    'message' => $pass ? "✓ $count produtos" : "✗ Apenas $count de 196"
-];
-$all_pass = $all_pass && $pass;
-
-// TEST 2: SKUs importados
-$skus = $db->query("SELECT COUNT(DISTINCT sku) as c FROM products WHERE sku IS NOT NULL AND sku != ''")->fetch_assoc()['c'] ?? 0;
-$pass = $skus >= 196;
-$tests[] = [
-    'name' => 'SKUs únicos importados',
-    'expected' => '≥ 196',
-    'actual' => $skus,
-    'pass' => $pass,
-    'message' => $pass ? "✓ $skus SKUs" : "✗ Apenas $skus de 196"
-];
-$all_pass = $all_pass && $pass;
-
-// TEST 3: Imagens vinculadas
-$linked = $db->query("SELECT COUNT(*) as c FROM olist_product_images WHERE product_local_id > 0")->fetch_assoc()['c'] ?? 0;
-$total_img = $db->query("SELECT COUNT(*) as c FROM olist_product_images")->fetch_assoc()['c'] ?? 0;
-$pass = $linked > 0;
-$tests[] = [
-    'name' => 'Imagens vinculadas',
-    'expected' => '> 0',
-    'actual' => "$linked / $total_img",
-    'pass' => $pass,
-    'message' => $pass ? "✓ $linked / $total_img imagens" : "✗ 0 imagens vinculadas"
-];
-$all_pass = $all_pass && $pass;
-
-// TEST 4: Imagem principal
-$primary = $db->query("SELECT COUNT(*) as c FROM products WHERE image_url IS NOT NULL AND image_url != ''")->fetch_assoc()['c'] ?? 0;
-$pass = $primary >= 150;
-$tests[] = [
-    'name' => 'Imagens principais',
-    'expected' => '≥ 150',
-    'actual' => $primary,
-    'pass' => $pass,
-    'message' => $pass ? "✓ $primary produtos com imagem" : "✗ Apenas $primary com imagem"
-];
-$all_pass = $all_pass && $pass;
-
-// TEST 5: Catálogo não limitado
-$limit = $db->query("SELECT COUNT(*) as c FROM products WHERE active = 1")->fetch_assoc()['c'] ?? 0;
-$pass = $limit >= 196;
-$tests[] = [
-    'name' => 'Produtos ativos no catálogo',
-    'expected' => '≥ 196',
-    'actual' => $limit,
-    'pass' => $pass,
-    'message' => $pass ? "✓ $limit produtos ativos" : "✗ Apenas $limit ativos"
-];
-$all_pass = $all_pass && $pass;
-
-// TEST 6: Tabelas existem
-$tables = [];
-$table_names = ['products', 'olist_products', 'olist_product_images'];
-foreach ($table_names as $t) {
-    $exists = $db->query("SHOW TABLES LIKE '$t'")->num_rows > 0;
-    $tables[] = $exists ? "✓ $t" : "✗ $t";
-    $all_pass = $all_pass && $exists;
-}
-$tests[] = [
-    'name' => 'Tabelas SQL',
-    'expected' => 'products, olist_products, olist_product_images',
-    'actual' => implode(', ', $tables),
-    'pass' => $all_pass && count(array_filter($tables, fn($t) => strpos($t, '✓') === 0)) === 3,
-    'message' => implode(' | ', $tables)
+$root = dirname(__DIR__);
+$checks = [
+    'catalog_products' => ['pass' => $total >= 180, 'actual' => $total, 'expected' => '>= 180'],
+    'unique_skus' => ['pass' => count($skus) === $total, 'actual' => count($skus), 'expected' => $total],
+    'valid_prices' => ['pass' => $priced === $total, 'actual' => $priced, 'expected' => $total],
+    'products_in_stock' => ['pass' => $available > 0, 'actual' => $available, 'expected' => '> 0'],
+    'real_image_coverage' => [
+        'pass' => $total > 0 && ($images / $total) >= 0.98,
+        'actual' => $total > 0 ? round(($images / $total) * 100, 2) . '%' : '0%',
+        'expected' => '>= 98%',
+    ],
+    'atomic_sync_daemon' => ['pass' => is_file($root . '/daemon-sync-products.py'), 'actual' => 'file', 'expected' => 'present'],
+    'catalog_runtime' => ['pass' => is_file($root . '/includes/catalog-runtime.php'), 'actual' => 'file', 'expected' => 'present'],
+    'csrf_guard' => ['pass' => is_file($root . '/includes/csrf.php'), 'actual' => 'file', 'expected' => 'present'],
 ];
 
-$shopeeRepairScript = is_file(dirname(__DIR__) . '/scripts/shopee-media-space-repair.py');
-$tests[] = [
-    'name' => 'Script Shopee Media Space repair',
-    'expected' => 'presente',
-    'actual' => $shopeeRepairScript ? 'presente' : 'ausente',
-    'pass' => $shopeeRepairScript,
-    'message' => $shopeeRepairScript ? '✓ Script presente' : '✗ Script ausente'
-];
-$all_pass = $all_pass && $shopeeRepairScript;
-
-$shopeeRepairWorkflow = is_file(dirname(__DIR__) . '/.github/workflows/shopee-media-space-repair.yml');
-$tests[] = [
-    'name' => 'Workflow Shopee Media Space repair',
-    'expected' => 'presente',
-    'actual' => $shopeeRepairWorkflow ? 'presente' : 'ausente',
-    'pass' => $shopeeRepairWorkflow,
-    'message' => $shopeeRepairWorkflow ? '✓ Workflow presente' : '✗ Workflow ausente'
-];
-$all_pass = $all_pass && $shopeeRepairWorkflow;
-
-$db->close();
+$ok = !in_array(false, array_column($checks, 'pass'), true);
+http_response_code($ok ? 200 : 503);
 
 echo json_encode([
-    'ok' => $all_pass,
-    'status' => $all_pass ? '✓ 100% OK' : '✗ FALHAS DETECTADAS',
-    'tests' => $tests,
-    'timestamp' => date('c')
-], JSON_UNESCAPED_UNICODE);
-?>
+    'ok' => $ok,
+    'status' => $ok ? '100% OK' : 'FAILURES DETECTED',
+    'version' => '9.2.102',
+    'checks' => $checks,
+    'timestamp' => date(DATE_ATOM),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

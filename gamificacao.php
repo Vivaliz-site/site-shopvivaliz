@@ -253,14 +253,20 @@ $heroImage = gam_first_hero_image();
       }
     }
 
+    function escHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = String(str || '');
+      return div.innerHTML;
+    }
+
     function badgeHtml(badge) {
       const state = badge.earned ? 'Conquistado' : `${Math.max(0, Math.min(100, badge.progress || 0))}%`;
       return `
         <div class="badge">
           <div class="badge-head">
             <div>
-              <div class="badge-title">${badge.title}</div>
-              <div class="badge-desc">${badge.description || ''}</div>
+              <div class="badge-title">${escHtml(badge.title)}</div>
+              <div class="badge-desc">${escHtml(badge.description || '')}</div>
             </div>
             <span class="pill ${badge.earned ? '' : 'dim'}">${state}</span>
           </div>
@@ -274,7 +280,7 @@ $heroImage = gam_first_hero_image();
         <div class="badge">
           <div class="leader-row">
             <div>
-              <div class="name">#${index + 1} ${item.display_name || 'Cliente'}</div>
+              <div class="name">#${index + 1} ${escHtml(item.display_name || 'Cliente')}</div>
               <div class="meta">${item.orders_count || 0} pedidos no mes</div>
             </div>
             <span class="pill dim">${fmtMoney(item.total_spent || 0)}</span>

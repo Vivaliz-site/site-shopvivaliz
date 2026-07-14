@@ -10,6 +10,7 @@
   function subtotal(){return cart().reduce(function(sum,item){return sum+(Number(item.price)||0)*(Number(item.quantity)||1);},0);}
   function save(quote){localStorage.setItem('shopvivaliz_shipping_quote',JSON.stringify(quote));}
   function makeQuote(option,cep){return{cep:cep,total:Number(option.price)||0,option:option,label:(option.company?option.company+' - ':'')+(option.name||'Frete'),quote_id:option.quote_id||'',expires_at:Number(option.expires_at)||0,provider:'melhorenvio'};}
+  function escHtml(str){var d=document.createElement('div');d.textContent=String(str||'');return d.innerHTML;}
   function renderOptions(options,cep){
     if(!status)return;
     status.innerHTML='';
@@ -18,8 +19,23 @@
     options.forEach(function(option,index){
       var label=document.createElement('label');
       label.className='sv-shipping-option';
-      label.innerHTML='<input type="radio" name="sv_shipping_option" '+(index===0?'checked':'')+'><span><strong>'+String(option.name||option.company||'Frete')+'</strong><small>'+(option.delivery_time?('Entrega em até '+option.delivery_time+' dias úteis'):'Prazo informado no checkout')+'</small></span><b>'+money(option.price)+'</b>';
-      label.querySelector('input').addEventListener('change',function(){
+      var input=document.createElement('input');
+      input.type='radio';
+      input.name='sv_shipping_option';
+      if(index===0)input.checked=true;
+      var span=document.createElement('span');
+      var strong=document.createElement('strong');
+      strong.textContent=option.name||option.company||'Frete';
+      span.appendChild(strong);
+      var small=document.createElement('small');
+      small.textContent=option.delivery_time?('Entrega em até '+option.delivery_time+' dias úteis'):'Prazo informado no checkout';
+      span.appendChild(small);
+      var priceB=document.createElement('b');
+      priceB.textContent=money(option.price);
+      label.appendChild(input);
+      label.appendChild(span);
+      label.appendChild(priceB);
+      input.addEventListener('change',function(){
         var quote=makeQuote(option,cep);
         save(quote);
         if(frete)frete.textContent=money(quote.total);
@@ -28,7 +44,10 @@
       wrap.appendChild(label);
     });
     status.appendChild(wrap);
-    status.insertAdjacentHTML('beforeend','<div class="sv-shipping-validity">Cotação válida por 30 minutos para o CEP '+cep.replace(/(\d{5})(\d{3})/,'$1-$2')+'.</div>');
+    var validity=document.createElement('div');
+    validity.className='sv-shipping-validity';
+    validity.textContent='Cotação válida por 30 minutos para o CEP '+cep.replace(/(\d{5})(\d{3})/,'$1-$2')+'.';
+    status.appendChild(validity);
   }
   button.addEventListener('click',function(event){
     event.preventDefault();event.stopImmediatePropagation();

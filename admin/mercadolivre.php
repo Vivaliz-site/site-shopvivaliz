@@ -409,7 +409,7 @@ async function runOptimizer() {
             }),
         });
         const data = await res.json();
-        if (!data.ok) { result.innerHTML = `<div class="result-box" style="color:#991b1b">Erro: ${data.error}</div>`; return; }
+        if (!data.ok) { result.innerHTML = `<div class="result-box" style="color:#991b1b">Erro: ${escHtml(data.error)}</div>`; return; }
 
         const q = data.quality;
         const kw = data.keywords;
