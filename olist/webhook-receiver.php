@@ -45,11 +45,14 @@ if (!$data) {
 
 $event_type = $data['event'] ?? $data['tipo'] ?? $data['type'] ?? null;
 $product_id = $data['produto_id'] ?? $data['product_id'] ?? $data['id'] ?? null;
+if (!$product_id && isset($data['dados']['idProduto'])) {
+    $product_id = $data['dados']['idProduto'];
+}
 
-// Eventos que interessam
-$sync_events = ['produto.criado', 'produto.atualizado', 'produto.alterado', 'preco.alterado', 'estoque.alterado'];
+// Eventos que interessam (Olist envia "tipo" em vez de "event")
+$sync_events = ['produto.criado', 'produto.atualizado', 'produto.alterado', 'preco.alterado', 'estoque.alterado', 'estoque', 'preco', 'produto'];
 
-if (in_array($event_type, $sync_events) || strpos($event_type, 'produto') !== false) {
+if (in_array($event_type, $sync_events) || strpos($event_type, 'produto') !== false || strpos($event_type, 'estoque') !== false || strpos($event_type, 'preco') !== false) {
     // Disparar sincronização
     exec('php ' . dirname(__DIR__) . '/olist/sync-on-webhook.php > /dev/null 2>&1 &');
 
