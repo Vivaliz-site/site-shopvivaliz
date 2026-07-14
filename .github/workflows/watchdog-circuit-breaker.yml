@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 10
 
@@ -82,8 +82,9 @@ jobs:
         with:
           status: 'failure'
           text: '🚨 Watchdog detectou problema. Auto-rollback acionado.'
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
           fields: repo,message,commit
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
         continue-on-error: true
 
       - name: ✅ Report Success

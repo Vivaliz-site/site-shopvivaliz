@@ -22,12 +22,15 @@ ini_set('display_errors', '0');
 require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/social-auth.php';
+require_once __DIR__ . '/../includes/csrf.php';
 
 $error = '';
 $email = '';
 
 // Processar login
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-login', $_POST['csrf_token'] ?? null)) {
+    $error = 'Sua sessão expirou. Recarregue a página e tente novamente.';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
 
@@ -253,6 +256,7 @@ $google_auth_url = sv_social_google_auth_url('login', $redirectTo);
         <?php endif; ?>
 
         <form method="POST">
+            <?= sv_csrf_input('auth-login') ?>
             <input type="hidden" name="redirect" value="<?= htmlspecialchars($redirectTo, ENT_QUOTES, 'UTF-8') ?>">
             <div class="form-group">
                 <label for="email">Email</label>

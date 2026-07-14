@@ -32,20 +32,40 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, mbstring, curl
 
       - name: Install dependencies
         run: |
           npm install --no-save @playwright/test
           npx playwright install --with-deps chromium
 
+      - name: Start application under test
+        run: |
+          nohup php -S 127.0.0.1:8080 scripts/dev-router.php > /tmp/shopvivaliz-php.log 2>&1 &
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:8080/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/shopvivaliz-php.log
+          exit 1
+
       - name: Rodar suite E2E completa
         id: run_tests
+        env:
+          E2E_BASE_URL: http://127.0.0.1:8080
         run: timeout --signal=TERM --kill-after=30s 12m npx playwright test --reporter=list,html
         continue-on-error: true
 

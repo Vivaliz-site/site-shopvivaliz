@@ -60,6 +60,64 @@ STOP_STATUSES = {
     "blocked_no_safe_change",
 }
 
+ROO_HELPERS = [
+    {
+        "id": "qa-self-test",
+        "name": "Roo Auxiliar — QA / Self-test",
+        "description": "Validar logs, health checks e fluxos críticos sem alterar o ecommerce.",
+        "keywords": ["qa", "self-test", "test", "validar", "log", "health", "checkout"],
+        "next_steps": ["Validar endpoints críticos.", "Registrar evidências.", "Priorizar estabilidade antes do deploy."],
+    },
+    {
+        "id": "olist-tiny",
+        "name": "Roo Auxiliar — Olist / Tiny",
+        "description": "Acompanhar estoque, imagens e catálogo sem alterar preços.",
+        "keywords": ["olist", "tiny", "estoque", "imagem", "catalog", "sku", "produto", "sincroniz"],
+        "next_steps": ["Conferir a sincronização local.", "Revisar logs sem tocar em preços.", "Encaminhar discrepâncias para revisão."],
+    },
+    {
+        "id": "frete-checkout",
+        "name": "Roo Auxiliar — Frete / Checkout",
+        "description": "Auditar frete, CEP, carrinho e checkout com segurança.",
+        "keywords": ["frete", "shipping", "cep", "carrinho", "entrega"],
+        "next_steps": ["Validar cálculo de frete.", "Comparar dados e logs.", "Evitar alterações financeiras."],
+    },
+]
+
+
+def classify_ai_result(returncode: int, output: str) -> tuple[str, str]:
+    if returncode in {2, 3}:
+        return "blocked_external_access_required", output or "Cliente de IA ou dependência externa indisponível."
+    if returncode != 0:
+        return "failed", output or "Falha inesperada no fluxo de IA."
+    return "ok", output or "Fluxo de IA executado sem incidências."
+
+
+def select_roo_helper(task: dict[str, Any]) -> dict[str, Any]:
+    text = f"{task.get('title', '')} {task.get('description', '')}".lower()
+    for helper in ROO_HELPERS:
+        if any(keyword in text for keyword in helper["keywords"]):
+            return helper
+    return {
+        "id": "roo-general",
+        "name": "Roo Auxiliar — Geral",
+        "description": "Manter continuidade segura e auditável.",
+        "keywords": [],
+        "next_steps": ["Registrar o estado atual.", "Evitar ações financeiras.", "Encaminhar riscos para revisão."],
+    }
+
+
+def render_roo_fallback_report(task: dict[str, Any], helper: dict[str, Any]) -> str:
+    steps = "\n".join(f"- {step}" for step in helper.get("next_steps", []))
+    return (
+        "# Roo Auxiliar — Fallback seguro\n\n"
+        f"## Tarefa: {task.get('title') or task.get('id') or 'sem título'}\n\n"
+        f"**Descrição:** {task.get('description') or 'Sem descrição'}\n\n"
+        f"**Roo selecionado:** {helper['name']}\n\n"
+        "## Próximos passos seguros\n"
+        f"{steps}\n"
+    )
+
 
 def ensure_dirs() -> None:
     AUTONOMOUS_DIR.mkdir(parents=True, exist_ok=True)

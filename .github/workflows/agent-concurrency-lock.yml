@@ -19,7 +19,7 @@ jobs:
       lock_acquired: ${{ steps.acquire.outputs.success }}
     steps:
       - name: 📥 Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 🔒 Adquirir Lock Exclusivo
         id: acquire

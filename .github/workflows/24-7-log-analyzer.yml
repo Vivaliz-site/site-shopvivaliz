@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -83,6 +83,7 @@ jobs:
         with:
           status: 'success'
           text: '✅ LLM Analyzer concluído. Patches aplicados automaticamente.'
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
           fields: repo,message
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
         continue-on-error: true

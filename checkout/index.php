@@ -12,6 +12,11 @@ if (session_status() === PHP_SESSION_NONE) {
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
+require_once dirname(__DIR__) . '/includes/csrf.php';
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && !sv_csrf_valid('checkout', $_POST['csrf_token'] ?? null)) {
+    $_SERVER['REQUEST_METHOD'] = 'CSRF_REJECTED';
+    http_response_code(419);
+}
 
 header('Content-Type: text/html; charset=UTF-8');
 
@@ -448,6 +453,7 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
 
             <div id="checkout-content" class="checkout-layout">
                 <form method="POST" class="form-panel" id="checkout-form">
+                    <?= sv_csrf_input('checkout') ?>
                     <input type="hidden" name="acao" value="finalizar_pedido">
                     <input type="hidden" name="cart_payload" id="cart-payload" value="[]">
 

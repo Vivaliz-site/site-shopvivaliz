@@ -8,7 +8,7 @@ test.describe('Catálogo - Preços', () => {
 
   test('deve exibir preços nos produtos da homepage', async ({ page }) => {
     // Esperar produtos carregarem
-    await page.waitForSelector('[class*="produto"]', { timeout: 5000 }).catch(() => {});
+    await page.waitForSelector('#product-grid .product-card', { timeout: 5000 });
 
     // Procurar por "Preço sob consulta" - NÃO deve existir
     const priceLabels = await page.$$('text=Preço sob consulta');

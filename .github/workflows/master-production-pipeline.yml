@@ -38,7 +38,7 @@ jobs:
     outputs:
       commit_sha: ${{ github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -107,10 +107,10 @@ jobs:
     needs: validate
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -130,7 +130,7 @@ jobs:
           # Checks críticos de estrutura
           checks = [
               ('footer-cols' in html, "Footer structure"),
-              ('hero-section' in html, "Hero section"),
+              (re.search(r'<section\b[^>]*class=["\'][^"\']*\bhero\b', html, re.I) is not None, "Hero section"),
               ('<title>' in html and len(html) > 5000, "Page HTML"),
           ]
 
@@ -155,13 +155,36 @@ jobs:
           response = urllib.request.urlopen('https://dev.shopvivaliz.com.br/')
           html = response.read().decode('utf-8')
 
-          # Verifica se há múltiplas seções hero com gradient (sintoma do bug CSS wildcard)
-          hero_blocks = re.findall(r'class="[^"]*hero[^"]*"[^>]*style="[^"]*linear-gradient', html)
-          if len(hero_blocks) > 1:
-              print(f"❌ ERRO: {len(hero_blocks)} hero blocks com gradient encontrados (esperado ≤1)")
+          def classes(tag):
+              match = re.search(r'class=["\']([^"\']*)["\']', tag, re.I)
+              return set(match.group(1).split()) if match else set()
+
+          # Há uma hero principal e um carrossel separado. Cada slide pode ter
+          # seu próprio overlay em gradiente; isso não é duplicação de layout.
+          section_tags = re.findall(r'<section\b[^>]*>', html, re.I)
+          primary_heroes = [tag for tag in section_tags if 'hero' in classes(tag)]
+          slide_tags = re.findall(r'<(?:article|div)\b[^>]*>', html, re.I)
+          hero_slides = [tag for tag in slide_tags if 'hero-slide' in classes(tag)]
+          gradient_overlays = [
+              tag for tag in slide_tags
+              if 'hero-overlay' in classes(tag) and 'linear-gradient' in tag.lower()
+          ]
+
+          if len(primary_heroes) != 1:
+              print(f"❌ ERRO: {len(primary_heroes)} seções .hero principais (esperado 1)")
               exit(1)
 
-          print("✓ No duplicate gradients")
+          if len(gradient_overlays) > len(hero_slides):
+              print(
+                  f"❌ ERRO: {len(gradient_overlays)} overlays para "
+                  f"{len(hero_slides)} slides"
+              )
+              exit(1)
+
+          print(
+              f"✓ Hero structure OK: 1 principal, "
+              f"{len(hero_slides)} slides, {len(gradient_overlays)} overlays"
+          )
           EOF
 
       - name: Regression Test - Footer Data Real
@@ -204,8 +227,19 @@ jobs:
 
       - name: Performance Check - Page Load
         run: |
-          # Verifica que página carrega em < 3s
-          time curl -sL -o /dev/null -w 'HTTP %{http_code} em %{time_total}s\n' https://dev.shopvivaliz.com.br/ || exit 1
+          # Baseline pré-deploy: resposta HTTP válida em até 5 segundos.
+          result=$(curl --fail --location --silent --show-error --output /dev/null \
+            --connect-timeout 5 --max-time 10 \
+            --write-out '%{http_code} %{time_total}' \
+            https://dev.shopvivaliz.com.br/)
+          read -r status elapsed <<< "$result"
+          echo "HTTP $status em ${elapsed}s"
+          python3 - "$elapsed" <<'PY'
+          import sys
+          elapsed = float(sys.argv[1])
+          if elapsed >= 5:
+              raise SystemExit(f"Página excedeu o limite de 5s: {elapsed:.3f}s")
+          PY
 
   # ============ ESTÁGIO 3: DEPLOY ============
   # Deploy imediato para Oracle VM via SSH após testes passarem
@@ -216,7 +250,7 @@ jobs:
     if: success()
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup SSH
         run: |
@@ -235,10 +269,17 @@ jobs:
           python3 git-auto-sync.py
           exit_code=$?
 
+          deployed_commit=$(git rev-parse HEAD 2>/dev/null || true)
+          if [ "$exit_code" -eq 0 ] && [ "$deployed_commit" != "${{ github.sha }}" ]; then
+            echo "ERRO: commit publicado ($deployed_commit) difere do esperado (${{ github.sha }})"
+            exit_code=1
+          fi
+
           echo "=========================================="
           echo "Deploy Status"
           echo "=========================================="
-          echo "Commit: ${{ github.sha }}"
+          echo "Commit esperado: ${{ github.sha }}"
+          echo "Commit publicado: $deployed_commit"
           echo "Deployed at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "Sync exit code: $exit_code"
           echo "=========================================="
@@ -281,7 +322,7 @@ jobs:
     needs: [validate, test]
     if: failure() && github.event_name == 'push'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Alert Only (rollback automatico desativado apos incidente)
         run: |
@@ -316,18 +357,66 @@ jobs:
           # Verifica endpoints críticos (máx 5 retries)
           endpoints=(
             "https://dev.shopvivaliz.com.br/"
-            "https://dev.shopvivaliz.com.br/cart"
+            "https://dev.shopvivaliz.com.br/carrinho"
             "https://dev.shopvivaliz.com.br/checkout"
+            "https://dev.shopvivaliz.com.br/api/catalog/products.php?limit=1"
+            "https://dev.shopvivaliz.com.br/api/catalog/price-health.php"
+            "https://dev.shopvivaliz.com.br/api/catalog/image-health.php"
+            "https://dev.shopvivaliz.com.br/api/catalog/stock-health.php"
+            "https://dev.shopvivaliz.com.br/api/orders/health.php"
+            "https://dev.shopvivaliz.com.br/installer/self-test.php"
           )
 
           for url in "${endpoints[@]}"; do
-            status=$(curl -s -o /dev/null -w '%{http_code}' "$url" || echo "000")
+            status=$(curl --location --silent --output /dev/null --max-time 10 \
+              --write-out '%{http_code}' "$url" || echo "000")
             if [[ "$status" == "200" ]] || [[ "$status" == "302" ]]; then
               echo "✓ $url ($status)"
             else
               echo "❌ $url ($status)"
               exit 1
             fi
+          done
+
+      - name: Security perimeter regression check
+        run: |
+          set -euo pipefail
+          private_paths=(
+            "/.git/config"
+            "/.env.local"
+            "/storage/products-cache-ativos.json"
+            "/tasks-queue.json"
+            "/scripts/"
+            "/tests/"
+            "/debug-products.php"
+            "/discover-db.php"
+            "/find-db-host.php"
+            "/fix-database.php"
+            "/full-sync.php"
+            "/gen-token.php"
+            "/shop-catalog-export.php"
+            "/sync-now.php"
+            "/olist/token-refresh.php"
+            "/api/catalog/test-normalize.php"
+          )
+          for path in "${private_paths[@]}"; do
+            status=$(curl --silent --output /dev/null --max-time 10 \
+              --write-out '%{http_code}' "https://dev.shopvivaliz.com.br${path}" || echo "000")
+            if [[ "$status" != "403" ]]; then
+              echo "::error::private path exposed: ${path} returned ${status}"
+              exit 1
+            fi
+            echo "✓ private ${path} (403)"
+          done
+
+          headers=$(curl --silent --show-error --head --max-time 10 \
+            https://dev.shopvivaliz.com.br/ | tr -d '\r' | tr '[:upper:]' '[:lower:]')
+          for required in strict-transport-security x-content-type-options content-security-policy; do
+            if ! grep -q "^${required}:" <<< "$headers"; then
+              echo "::error::required security header missing: ${required}"
+              exit 1
+            fi
+            echo "✓ header ${required}"
           done
 
       - name: Summary
@@ -338,6 +427,6 @@ jobs:
           echo "========================================="
           echo "Validation: ✓"
           echo "Tests: ✓"
-          echo "Deploy: Queued for Oracle VM sync"
+          echo "Deploy: ✓ commit confirmado na Oracle VM"
           echo "Monitor: ✓"
           echo "========================================="

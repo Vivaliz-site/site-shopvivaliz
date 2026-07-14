@@ -4,6 +4,7 @@ declare(strict_types=1);
 header('Content-Type: text/html; charset=UTF-8');
 
 require_once __DIR__ . '/includes/product-price-enrich.php';
+require_once __DIR__ . '/includes/catalog-runtime.php';
 
 function sv_catalog_root(): string
 {
@@ -20,10 +21,7 @@ function sv_catalog_load(): array
 {
     static $data = null;
     if ($data !== null) return $data;
-    $jsonPath = sv_catalog_root() . '/api/catalog/fallback-products.json';
-    if (!is_file($jsonPath) || !is_readable($jsonPath)) return $data = [];
-    $decoded = json_decode((string)file_get_contents($jsonPath), true);
-    return $data = is_array($decoded) ? $decoded : [];
+    return $data = svcr_products();
 }
 
 function sv_catalog_products(int $limit, string $query, string $category = ''): array

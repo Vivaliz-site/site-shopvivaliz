@@ -4,6 +4,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: public, max-age=300');
 header('X-Content-Type-Options: nosniff');
+require_once dirname(__DIR__, 2) . '/includes/catalog-runtime.php';
 
 function svvip_valid_image(string $image): bool {
     $image = trim($image);
@@ -13,8 +14,7 @@ function svvip_valid_image(string $image): bool {
     return str_starts_with($image, '/') || str_starts_with($image, 'https://') || str_starts_with($image, 'http://');
 }
 
-$path = __DIR__ . '/fallback-products.json';
-$rows = is_file($path) ? json_decode((string)file_get_contents($path), true) : [];
+$rows = svcr_products();
 $products = [];
 
 foreach (is_array($rows) ? $rows : [] as $row) {

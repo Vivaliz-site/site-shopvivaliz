@@ -5,7 +5,8 @@
 
 const { test, expect } = require('@playwright/test');
 
-const BASE_URL = 'https://dev.shopvivaliz.com.br';
+const BASE_URL = process.env.E2E_BASE_URL || 'https://dev.shopvivaliz.com.br';
+const IS_LOCAL = /^http:\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(BASE_URL);
 const TIMEOUT = 30000;
 
 test.describe('🛒 E2E Journey - Compra Completa', () => {
@@ -23,7 +24,7 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
     // fechado da Liz, que fica com altura 0 — falso negativo)
     await expect(page.locator('.sv-navbar')).toBeVisible();
     await expect(page.locator('footer')).toBeVisible();
-    await expect(page.locator('h1, h2').first()).toBeVisible();
+    await expect(page.locator('.hero-content h1')).toBeVisible();
 
     // Verificar que não há erros críticos
     const errors = [];
@@ -38,23 +39,12 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
     await page.goto(BASE_URL + '/');
 
     // Procurar campo de busca
-    const searchInput = page.locator('input[placeholder*="busca"], input[name="q"], input[type="search"]').first();
-
-    if (await searchInput.isVisible()) {
-      await searchInput.fill('produto teste');
-      await page.keyboard.press('Enter');
-
-      // Esperar resultados
-      await page.waitForLoadState('networkidle');
-
-      // Verificar que resultado apareceu
-      const results = page.locator('[class*="product"], [class*="resultado"]');
-      expect(await results.count()).toBeGreaterThan(0);
-
-      console.log('✅ Busca OK');
-    } else {
-      console.log('⚠️ Campo de busca não encontrado (OK se site não tem busca)');
-    }
+    const searchInput = page.locator('.hero-search-form input[name="busca"]');
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill('rodizio');
+    await page.keyboard.press('Enter');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page).toHaveURL(/\/catalogo\/?\?busca=rodizio/);
   });
 
   test('✅ Navegação de categorias funciona', async ({ page }) => {
@@ -76,26 +66,12 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
     await page.goto(BASE_URL + '/');
 
     // Procurar link de produto
-    const productLinks = page.locator('a[href*="/produto"], a[href*="/product"], [class*="product"] a');
-    const count = await productLinks.count();
-
-    if (count > 0) {
-      const firstProduct = productLinks.first();
-      await firstProduct.click();
-      await page.waitForLoadState('networkidle');
-
-      // Verificar página de produto
-      const addToCartBtn = page.locator('button:has-text("Adicionar"), button:has-text("Add to"), input[type="submit"]');
-      const productImage = page.locator('img[alt*="Produto"], img[alt*="Product"]');
-
-      if (await addToCartBtn.isVisible() || await productImage.isVisible()) {
-        console.log('✅ Página de produto OK');
-      } else {
-        console.log('⚠️ Produto carregou mas elementos podem estar fora');
-      }
-    } else {
-      console.log('⚠️ Nenhum link de produto encontrado');
-    }
+    const firstProduct = page.locator('#product-grid .product-card a.card-link').first();
+    await expect(firstProduct).toBeVisible();
+    await firstProduct.click();
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('#main-product-image')).toBeVisible();
+    await expect(page.locator('.product-price-label')).toContainText('R$');
   });
 
   test('✅ Carrinho funciona', async ({ page }) => {
@@ -111,38 +87,17 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
   });
 
   test('✅ Checkout está acessível', async ({ page }) => {
-    await page.goto(BASE_URL + '/');
-
-    // Procurar botão de checkout
-    const checkoutBtn = page.locator(
-      'button:has-text("Checkout"), button:has-text("Finalizar"), a[href*="checkout"], a[href*="finalize"]'
-    );
-
-    if (await checkoutBtn.isVisible()) {
-      const href = await checkoutBtn.first().getAttribute('href');
-
-      if (href) {
-        await page.goto(BASE_URL + href);
-      } else {
-        await checkoutBtn.first().click();
-      }
-
-      await page.waitForLoadState('networkidle');
-
-      console.log('✅ Checkout OK');
-    } else {
-      console.log('⚠️ Checkout não visível (pode exigir itens no carrinho)');
-    }
+    const response = await page.goto(BASE_URL + '/checkout', { waitUntil: 'domcontentloaded' });
+    expect(response.status()).toBeLessThan(500);
+    await expect(page.locator('form, [class*="checkout"]').first()).toBeAttached();
   });
 
   test('✅ Admin painel acessível', async ({ page }) => {
+    test.skip(IS_LOCAL, 'PHP local sem extensão mysqli; admin é validado no ambiente de produção');
     const adminUrl = BASE_URL + '/admin/';
-    await page.goto(adminUrl, { waitUntil: 'networkidle' });
-
-    const status = await page.evaluate(() => document.documentElement.innerText.length);
-
-    // Se página tem conteúdo, admin está respondendo
-    expect(status).toBeGreaterThan(100);
+    const response = await page.goto(adminUrl, { waitUntil: 'domcontentloaded' });
+    expect(response.status()).toBeLessThan(500);
+    expect(await page.locator('body').innerText()).not.toHaveLength(0);
 
     console.log('✅ Admin painel OK');
   });
@@ -170,17 +125,9 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
     // com 2+ elementos e estourava strict mode do Playwright)
     const liz = page.locator('#sv-liz-launcher').first();
 
-    if (await liz.isVisible()) {
-      console.log('✅ Liz mascote visível');
-
-      // Tentar clicar
-      await liz.first().click();
-      await page.waitForTimeout(500);
-
-      console.log('✅ Liz clicável');
-    } else {
-      console.log('⚠️ Liz mascote não encontrado (OK se desabilitado)');
-    }
+    await expect(liz).toBeVisible();
+    await liz.click();
+    await expect(page.locator('#sv-liz-panel')).toBeVisible();
   });
 
   test('✅ Nenhum erro HTTP 500', async ({ page }) => {
@@ -241,6 +188,7 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
 test.describe('🔐 Security Checks', () => {
 
   test('✅ HTTPS ativo', async ({ page }) => {
+    test.skip(IS_LOCAL, 'HTTPS é verificado no ambiente publicado');
     await page.goto(BASE_URL + '/');
 
     const url = page.url();

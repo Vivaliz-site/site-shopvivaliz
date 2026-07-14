@@ -273,6 +273,8 @@ def watch_mode(poll_interval: int = 30):
 # ============================================================================
 
 def main():
+    global ENVIRONMENT
+
     parser = argparse.ArgumentParser(
         description="Leitor de Requisições de Agentes - GitHub Issues Listener"
     )
@@ -295,7 +297,6 @@ def main():
 
     args = parser.parse_args()
 
-    global ENVIRONMENT
     ENVIRONMENT = args.env or ENVIRONMENT
 
     log(f"🤖 AGENTES LEITOR - ShopVivaliz")

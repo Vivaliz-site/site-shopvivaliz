@@ -9,6 +9,30 @@ class SecurityScanner {
     private $vulnerabilityDb = 'https://api.github.com/graphql'; // GitHub Advisory DB
     private $criticalThreshold = 7.0; // CVSS score
 
+    private function rootPath(string $path = ''): string {
+        $root = dirname(__DIR__);
+        return $path === '' ? $root : $root . DIRECTORY_SEPARATOR . ltrim($path, '/\\');
+    }
+
+    private function projectFiles(array $extensions): array {
+        $files = [];
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveCallbackFilterIterator(
+                new RecursiveDirectoryIterator($this->rootPath(), FilesystemIterator::SKIP_DOTS),
+                static function (SplFileInfo $file): bool {
+                    if (!$file->isDir()) return true;
+                    return !in_array($file->getFilename(), ['.git', 'node_modules', 'vendor', 'logs', 'test-results', 'playwright-report'], true);
+                }
+            )
+        );
+        foreach ($iterator as $file) {
+            if ($file->isFile() && in_array(strtolower($file->getExtension()), $extensions, true)) {
+                $files[] = $file->getPathname();
+            }
+        }
+        return $files;
+    }
+
     public function run() {
         echo "🔐 Iniciando Security Scan...\n";
 
@@ -91,13 +115,13 @@ class SecurityScanner {
         echo "  Checking SQL Injection...\n";
 
         $vulns = [];
-        $files = glob('/home/ubuntu/site-shopvivaliz/**/*.php', GLOB_RECURSIVE);
+        $files = $this->projectFiles(['php']);
 
         foreach ($files as $file) {
             $content = file_get_contents($file);
 
             // Procurar patterns perigosos
-            if (preg_match('/\$_(GET|POST|REQUEST)\s*\[\s*[\'"]?\w+[\'"]?\s*\].*mysqli|PDO|query/i', $content)) {
+            if (preg_match('/\$_(GET|POST|REQUEST)\s*\[\s*[\'"]?\w+[\'"]?\s*\].*?(?:mysqli|PDO|->query)/i', $content)) {
                 if (!preg_match('/mysqli_real_escape_string|prepared.*statement|parameterized|bind/i', $content)) {
                     $vulns[] = $file;
                 }
@@ -111,7 +135,7 @@ class SecurityScanner {
         echo "  Checking XSS vulnerabilities...\n";
 
         $vulns = [];
-        $files = glob('/home/ubuntu/site-shopvivaliz/**/*.php', GLOB_RECURSIVE);
+        $files = $this->projectFiles(['php']);
 
         foreach ($files as $file) {
             $content = file_get_contents($file);
@@ -131,7 +155,7 @@ class SecurityScanner {
         echo "  Checking CSRF protection...\n";
 
         $vulns = [];
-        $files = glob('/home/ubuntu/site-shopvivaliz/**/*.php', GLOB_RECURSIVE);
+        $files = $this->projectFiles(['php']);
 
         foreach ($files as $file) {
             $content = file_get_contents($file);
@@ -151,7 +175,7 @@ class SecurityScanner {
         echo "  Checking insecure deserialization...\n";
 
         $vulns = [];
-        $files = glob('/home/ubuntu/site-shopvivaliz/**/*.php', GLOB_RECURSIVE);
+        $files = $this->projectFiles(['php']);
 
         foreach ($files as $file) {
             $content = file_get_contents($file);
@@ -171,12 +195,12 @@ class SecurityScanner {
         $vulns = [];
 
         // Verificar se admin panel tem proteção
-        if (!file_exists('/home/ubuntu/site-shopvivaliz/includes/admin-guard.php')) {
+        if (!file_exists($this->rootPath('includes/admin-guard.php'))) {
             $vulns[] = 'Admin panel sem proteção de autenticação';
         }
 
         // Verificar se senhas são hasheadas
-        $configFiles = glob('/home/ubuntu/site-shopvivaliz/config/*.php');
+        $configFiles = glob($this->rootPath('config/*.php')) ?: [];
         foreach ($configFiles as $file) {
             $content = file_get_contents($file);
             if (preg_match('/password\s*=\s*[\'"](?!^\$2|\$argon|\$pbkdf)/i', $content)) {
@@ -199,8 +223,7 @@ class SecurityScanner {
             'AUTH_TOKEN' => '/auth[_-]?token\s*[:=]\s*[\'"]([a-zA-Z0-9\-_]{20,})[\'"]/',
         ];
 
-        $files = glob('/home/ubuntu/site-shopvivaliz/**/*.php', GLOB_RECURSIVE);
-        $files = array_merge($files, glob('/home/ubuntu/site-shopvivaliz/**/*.json', GLOB_RECURSIVE));
+        $files = $this->projectFiles(['php', 'json']);
 
         foreach ($files as $file) {
             if (strpos($file, '.git') !== false || strpos($file, 'node_modules') !== false) {
@@ -231,13 +254,13 @@ class SecurityScanner {
         $vulns = [];
 
         // Check composer.lock
-        if (file_exists('/home/ubuntu/site-shopvivaliz/composer.lock')) {
+        if (file_exists($this->rootPath('composer.lock'))) {
             echo "  Checking PHP dependencies...\n";
             $vulns = array_merge($vulns, $this->checkComposerVulns());
         }
 
         // Check package-lock.json
-        if (file_exists('/home/ubuntu/site-shopvivaliz/package-lock.json')) {
+        if (file_exists($this->rootPath('package-lock.json'))) {
             echo "  Checking npm dependencies...\n";
             $vulns = array_merge($vulns, $this->checkNpmVulns());
         }
@@ -249,7 +272,7 @@ class SecurityScanner {
 
     private function checkComposerVulns() {
         // Simular resultado de composer audit
-        $result = shell_exec('cd /home/ubuntu/site-shopvivaliz && composer audit --json 2>&1');
+        $result = shell_exec('cd ' . escapeshellarg($this->rootPath()) . ' && composer audit --json 2>&1');
 
         if ($result) {
             $data = json_decode($result, true);
@@ -261,7 +284,7 @@ class SecurityScanner {
 
     private function checkNpmVulns() {
         // Simular resultado de npm audit
-        $result = shell_exec('cd /home/ubuntu/site-shopvivaliz && npm audit --json 2>&1');
+        $result = shell_exec('cd ' . escapeshellarg($this->rootPath()) . ' && npm audit --json 2>&1');
 
         if ($result) {
             $data = json_decode($result, true);
@@ -289,8 +312,8 @@ class SecurityScanner {
         echo "🔍 Scanning Docker image...\n";
 
         // Procurar Dockerfile vulneráveis
-        if (file_exists('/home/ubuntu/site-shopvivaliz/Dockerfile')) {
-            $content = file_get_contents('/home/ubuntu/site-shopvivaliz/Dockerfile');
+        if (file_exists($this->rootPath('Dockerfile'))) {
+            $content = file_get_contents($this->rootPath('Dockerfile'));
 
             $issues = [];
 

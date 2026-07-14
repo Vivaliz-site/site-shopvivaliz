@@ -2,12 +2,10 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/product-price-enrich.php';
+require_once __DIR__ . '/catalog-runtime.php';
 
 function svoa_catalog_map(): array {
-    $path = dirname(__DIR__) . '/api/catalog/fallback-products.json';
-    $rows = is_file($path) ? json_decode((string)file_get_contents($path), true) : [];
-    $products = [];
-    foreach (is_array($rows) ? $rows : [] as $row) if (is_array($row)) $products[] = $row;
+    $products = svcr_products();
     $products = svp_enrich_products($products);
     $map = [];
     foreach ($products as $row) {

@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
 
-$catalog = __DIR__ . '/../../api/catalog/fallback-products.json';
-$rows = is_file($catalog) ? json_decode((string)file_get_contents($catalog), true) : [];
+require_once __DIR__ . '/../../includes/catalog-runtime.php';
+$rows = svcr_products();
 $valid = 0;
 $invalid = 0;
 foreach (is_array($rows) ? $rows : [] as $row) {

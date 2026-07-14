@@ -3,6 +3,7 @@ import { test, expect } from './fixtures';
 test.describe('Webhook de Status e Notificações', () => {
   const baseUrl = process.env.E2E_BASE_URL || 'https://dev.shopvivaliz.com.br';
   const webhookUrl = `${baseUrl}/api/webhooks/order-status-update.php`;
+  const webhookToken = process.env.E2E_WEBHOOK_TOKEN;
 
   test('webhook sem token deve retornar 401', async ({ request }) => {
     const response = await request.post(webhookUrl, {
@@ -16,7 +17,7 @@ test.describe('Webhook de Status e Notificações', () => {
     console.log(`[INFO] Webhook sem token retornou ${response.status()}`);
   });
 
-  test('webhook com token inválido deve retornar 403', async ({ request }) => {
+  test('webhook com token inválido deve negar acesso', async ({ request }) => {
     const response = await request.post(webhookUrl, {
       headers: {
         'Authorization': 'Bearer invalid-token',
@@ -34,11 +35,11 @@ test.describe('Webhook de Status e Notificações', () => {
   });
 
   test('webhook com dados inválidos deve retornar 400', async ({ request }) => {
-    const webhookToken = process.env.OLIST_WEBHOOK_TOKEN || 'test-token';
+    test.skip(!webhookToken, 'E2E_WEBHOOK_TOKEN não configurado para teste autenticado');
 
     const response = await request.post(webhookUrl, {
       headers: {
-        'Authorization': `Bearer ${webhookToken}`,
+        'Authorization': `Bearer ${webhookToken!}`,
         'Content-Type': 'application/json',
       },
       data: {
@@ -47,12 +48,12 @@ test.describe('Webhook de Status e Notificações', () => {
       },
     });
 
-    expect([400, 401, 403]).toContain(response.status());
+    expect(response.status()).toBe(400);
     console.log(`[INFO] Webhook com dados inválidos retornou ${response.status()}`);
   });
 
   test('webhook deve aceitar payload válido do Olist', async ({ request }) => {
-    const webhookToken = process.env.OLIST_WEBHOOK_TOKEN || 'test-token';
+    test.skip(!webhookToken, 'E2E_WEBHOOK_TOKEN não configurado para teste autenticado');
 
     const payload = {
       order_id: 'olist-test-' + Date.now(),
@@ -63,24 +64,18 @@ test.describe('Webhook de Status e Notificações', () => {
 
     const response = await request.post(webhookUrl, {
       headers: {
-        'Authorization': `Bearer ${webhookToken}`,
+        'Authorization': `Bearer ${webhookToken!}`,
         'Content-Type': 'application/json',
       },
       data: payload,
     });
 
-    // Pode retornar 200 (sucesso), 404 (pedido não encontrado), ou 500 (erro)
     console.log(`[INFO] Webhook com dados válidos retornou ${response.status()}`);
-    console.log(`[INFO] Resposta: ${await response.text()}`);
-
-    // Se temos o webhook token correto e a tabela existe, deve funcionar
-    if (webhookToken !== 'test-token') {
-      expect(response.status()).toBeLessThan(500);
-    }
+    expect([200, 404]).toContain(response.status());
   });
 
   test('webhook deve mapear status do Olist corretamente', async ({ request }) => {
-    const webhookToken = process.env.OLIST_WEBHOOK_TOKEN || 'test-token';
+    test.skip(!webhookToken, 'E2E_WEBHOOK_TOKEN não configurado para teste autenticado');
 
     const statusMap = [
       { input: 'waiting_payment', expected: 'aguardando_pagamento' },
@@ -99,7 +94,7 @@ test.describe('Webhook de Status e Notificações', () => {
 
       const response = await request.post(webhookUrl, {
         headers: {
-          'Authorization': `Bearer ${webhookToken}`,
+          'Authorization': `Bearer ${webhookToken!}`,
         },
         data: payload,
       });
@@ -107,6 +102,7 @@ test.describe('Webhook de Status e Notificações', () => {
       console.log(
         `[INFO] Status '${mapping.input}' → '${mapping.expected}': ${response.status()}`
       );
+      expect([200, 404]).toContain(response.status());
     }
   });
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +13,7 @@ LEGACY_QUEUE_FILE = Path("logs/tasks-queue.json")
 
 DEFAULT_QUEUE = {
     "version": "1.1",
-    "created_at": datetime.utcnow().isoformat() + "Z",
+    "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "queue": [],
 }
 
@@ -21,7 +21,7 @@ PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
 def utc_now() -> str:
-    return datetime.utcnow().isoformat() + "Z"
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _task_from_external(item: dict[str, Any], index: int) -> dict[str, Any]:

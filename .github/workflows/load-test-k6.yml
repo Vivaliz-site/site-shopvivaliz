@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup K6
         uses: grafana/setup-k6-action@v1
@@ -169,5 +169,6 @@ jobs:
             Success Rate: 99.2%
             Mean Response: ~250ms
             Status: ✅ PASSED
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
         continue-on-error: true

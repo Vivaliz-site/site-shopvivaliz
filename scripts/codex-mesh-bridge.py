@@ -19,7 +19,7 @@ def repo_root() -> Path:
 
 
 ROOT = repo_root()
-DATA_DIR = ROOT / "storage" / "codex-bridge"
+DATA_DIR = Path(os.environ.get("CODEX_BRIDGE_DATA_DIR") or ROOT / "storage" / "codex-bridge")
 MESSAGES_FILE = DATA_DIR / "messages.jsonl"
 STATE_FILE = DATA_DIR / "state.json"
 
@@ -282,6 +282,11 @@ def handle_request(payload: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def main() -> int:
+    # MCP stdio is always UTF-8. On Windows, Python otherwise inherits the
+    # legacy cp1252 code page; accented tool descriptions then produce invalid
+    # UTF-8 and Codex waits for tools/list until startup times out.
+    sys.stdin.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")
     ensure_storage()
     state_update(last_start=now_iso())
 

@@ -1,0 +1,16 @@
+{
+  "version": "9.2.102",
+  "date": "2026-07-14",
+  "codename": "production-catalog-hardening",
+  "type": "cumulative",
+  "migrations": [],
+  "migration_note": "No database schema changes; the release is file- and cache-compatible and idempotent.",
+  "highlights": [
+    "Restores the production catalog from detailed Olist product data with atomic, rate-limit-aware synchronization.",
+    "Uses one authoritative catalog source across storefront, cart, checkout, shipping, health APIs, sitemap and merchant feed.",
+    "Adds CSRF protection and removes deterministic quote-signature fallbacks.",
+    "Makes security, quality, Python and Playwright tests deterministic and resistant to false-positive passes."
+  ],
+  "self_test": "installer/self-test.php",
+  "rollback": "Revert version 9.2.102 files; no database rollback is required."
+}

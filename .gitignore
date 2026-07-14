@@ -42,3 +42,4 @@ config/runtime-secrets*.php
 # Playwright runtime artifacts belong in CI artifacts, never in source control.
 test-results/
 playwright-report/
+storage/order-rate-limit/

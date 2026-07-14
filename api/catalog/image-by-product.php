@@ -4,6 +4,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: public, max-age=300');
 header('X-Content-Type-Options: nosniff');
+require_once dirname(__DIR__, 2) . '/includes/catalog-runtime.php';
 
 $sku = trim((string)($_GET['sku'] ?? ''));
 $id = trim((string)($_GET['id'] ?? $_GET['olist_product_id'] ?? ''));
@@ -13,8 +14,7 @@ if ($sku === '' && $id === '') {
     exit;
 }
 
-$path = __DIR__ . '/fallback-products.json';
-$rows = is_file($path) ? json_decode((string)file_get_contents($path), true) : [];
+$rows = svcr_products();
 foreach (is_array($rows) ? $rows : [] as $row) {
     if (!is_array($row)) continue;
     $rowSku = trim((string)($row['sku'] ?? ''));

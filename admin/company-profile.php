@@ -7,6 +7,8 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/config/bootstrap-env.php';
+require_once dirname(__DIR__) . '/includes/admin-guard.php';
+require_once dirname(__DIR__) . '/includes/csrf.php';
 
 // Carregar dados da empresa
 $company = require dirname(__DIR__) . '/config/company-profile.php';
@@ -15,7 +17,9 @@ $company = require dirname(__DIR__) . '/config/company-profile.php';
 $syncMessage = null;
 $syncError = null;
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('admin-company', $_POST['csrf_token'] ?? null)) {
+    $syncError = 'Sessão expirada. Recarregue a página.';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'sync_olist') {
         // Chamar Olist API para buscar dados atualizados
         $olistToken = getenv('OLIST_SELLER_ID');
@@ -279,6 +283,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         <!-- Contatos (Editável) -->
         <form method="POST">
+            <?= sv_csrf_input('admin-company') ?>
             <div class="section">
                 <h2>Contatos (Editável)</h2>
                 <div class="grid">
@@ -312,6 +317,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <h2>Sincronização com Olist</h2>
             <p>Clique abaixo para sincronizar os dados mais recentes da sua conta Olist.</p>
             <form method="POST">
+                <?= sv_csrf_input('admin-company') ?>
                 <div class="buttons">
                     <button type="submit" name="action" value="sync_olist" class="btn-secondary">🔄 Sincronizar com Olist</button>
                 </div>
