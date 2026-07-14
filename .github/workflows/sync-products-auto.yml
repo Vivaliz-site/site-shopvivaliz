@@ -1,0 +1,35 @@
+name: Sincronizar Produtos ERP (a cada 2h)
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Carregar credenciais
+        run: |
+          echo "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Sincronizar produtos
+        run: |
+          python sync-products-to-json.py
+
+      - name: Commit & Push
+        run: |
+          git config user.email "auto@shopvivaliz.com"
+          git config user.name "Auto Sync"
+          git add storage/products-cache.json
+          git commit -m "auto: sincronizar produtos do ERP" || true
+          git push origin main || true
