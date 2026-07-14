@@ -114,6 +114,10 @@ function svp_bulk_price_stock(?mysqli $db, array $skus): array
  * Aplica precos reais do banco por cima da lista de produtos (indexados por sku).
  * Retorna a mesma lista, so sobrescrevendo price/stock quando o banco tiver
  * um valor maior que zero.
+ *
+ * IMPORTANTE: 2026-07-13 - Desabilitar enriquecimento de PRECOS porque o banco
+ * tem precos multiplicados por 10 (bug do Tiny sync). Usar APENAS fallback.json.
+ * Manter apenas enriquecimento de ESTOQUE que esta correto.
  */
 function svp_enrich_products(array $products): array
 {
@@ -139,9 +143,10 @@ function svp_enrich_products(array $products): array
         if ($sku === '' || !isset($bySku[$sku])) {
             continue;
         }
-        if ($bySku[$sku]['price'] > 0) {
-            $products[$index]['price'] = $bySku[$sku]['price'];
-        }
+        // DESABILITAR: Nao sobrescrever PRECOS do banco (estao errados - multiplicados por 10)
+        // if ($bySku[$sku]['price'] > 0) {
+        //     $products[$index]['price'] = $bySku[$sku]['price'];
+        // }
         // So sobrescreve estoque quando o banco tiver valor maior que zero --
         // a tabela products local pode estar desatualizada/nunca sincronizada
         // (stock=0 default) enquanto o catalogo (fallback-products.json) ja
