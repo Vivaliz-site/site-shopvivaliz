@@ -46,6 +46,28 @@ $codename = (string)($version['codename'] ?? '');
         </section>
 
         <section class="container admin-overview" style="margin-top: 2rem;">
+            <!-- Menu Principal -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                <a href="/admin/pedidos.php" style="background: #007bff; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    📋 Pedidos
+                </a>
+                <a href="/admin/produtos.php" style="background: #28a745; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    📦 Produtos
+                </a>
+                <a href="/admin/clientes.php" style="background: #17a2b8; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    👥 Clientes
+                </a>
+                <a href="/admin/menu-completo.php" style="background: #6c757d; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    🎯 Menu Completo
+                </a>
+                <a href="/admin/monitor/" style="background: #ffc107; color: black; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    📊 Monitor
+                </a>
+                <a href="/admin/integrations.php" style="background: #e83e8c; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    ⚙️ Integrações
+                </a>
+            </div>
+
             <article class="admin-card admin-card-wide">
                 <div class="admin-card-head">
                     <div>
