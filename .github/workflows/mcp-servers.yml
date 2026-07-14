@@ -7,8 +7,8 @@ on:
       - "mcp-servers.json"
       - ".github/workflows/mcp-servers.yml"
   schedule:
-    # Health check a cada 15 minutos
-    - cron: "*/15 * * * *"
+    # Validação diária; endpoints locais não são acessíveis pelo runner hospedado.
+    - cron: "17 7 * * *"
   workflow_dispatch:
 
 permissions:
@@ -31,60 +31,43 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install pytest requests
 
-      - name: Health check de servidores
-        id: health
+      - name: Validate MCP configuration
         run: |
-          python scripts/mcp-client.py --list-servers
-        continue-on-error: true
+          python scripts/mcp-client.py --validate-config
+
+      - name: Verify VS Code/Codex stdio bridge protocol
+        run: |
+          python -m pytest tests/test_codex_mesh_bridge.py -q
 
       - name: Log health status
         run: |
-          echo "✅ MCP Health check concluído"
-          echo "📍 Servidores: windows-local, ubuntu-vm, fred-win"
-          echo "⏱️ Próximo check: em 15 minutos"
+          echo "✅ Configuração MCP e bridge stdio validados"
+          echo "ℹ️ Endpoints privados não são sondados pelo runner do GitHub"
 
   mcp-documentation:
     runs-on: ubuntu-latest
-    name: "📚 MCP Documentation"
+    name: "📚 MCP Configuration"
     if: github.event_name == 'push'
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Atualizar MCP documentation
-        run: |
-          echo "# MCP Servers - ShopVivaliz" > MCP-SERVERS.md
-          echo "" >> MCP-SERVERS.md
-          echo "**Atualizado:** $(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> MCP-SERVERS.md
-          echo "" >> MCP-SERVERS.md
-          echo "## Servidores Disponíveis" >> MCP-SERVERS.md
-          echo "" >> MCP-SERVERS.md
-          python3 -c "
-          import json
-          with open('mcp-servers.json') as f:
-              config = json.load(f)
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
 
-          for name, server in config['servers'].items():
-              enabled = '✅' if server.get('enabled') else '❌'
-              print(f'### {enabled} {name}')
-              print(f\"- URL: \`{server['url']}\`)
-              print(f\"- Env: \`{server['environment']}\`)
-              print(f\"- Location: {server['location']}\`)
-              print(f\"- Status: {'Enabled' if server.get('enabled') else 'Disabled'}\`)
-              print()
-          " >> MCP-SERVERS.md
-
-      - name: Commit documentation
+      - name: Install dependencies
         run: |
-          git config user.name "MCP Manager"
-          git config user.email "mcp@shopvivaliz.local"
-          git add MCP-SERVERS.md
-          git commit -m "docs: atualizar MCP servers documentation" || true
-          git push origin main || true
-        continue-on-error: true
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Validate committed configuration
+        run: |
+          python scripts/mcp-client.py --validate-config
 
   mcp-startup-guide:
     runs-on: ubuntu-latest
@@ -101,24 +84,11 @@ jobs:
           echo ""
           echo "## Windows Local"
           echo "\`\`\`powershell"
-          echo "python scripts/mcp-server.py --port 5555 --env windows-local"
+          echo "python scripts/codex-mesh-bridge.py"
           echo "\`\`\`"
           echo ""
-          echo "## Ubuntu VM (137.131.156.17)"
+          echo "## Validar configuração e protocolo"
           echo "\`\`\`bash"
-          echo "ssh ubuntu@137.131.156.17"
-          echo "cd /home/ubuntu/site-shopvivaliz"
-          echo "python3 scripts/mcp-server.py --port 5556 --env ubuntu-vm"
-          echo "\`\`\`"
-          echo ""
-          echo "## Fred-Win (Outra máquina)"
-          echo "\`\`\`powershell"
-          echo "python scripts/mcp-server.py --port 5557 --env fred-win"
-          echo "\`\`\`"
-          echo ""
-          echo "## Testar Cliente"
-          echo "\`\`\`bash"
-          echo "python scripts/mcp-client.py --health"
-          echo "python scripts/mcp-client.py --list-resources"
-          echo "python scripts/mcp-client.py --list-tools"
+          echo "python scripts/mcp-client.py --validate-config"
+          echo "python -m pytest tests/test_codex_mesh_bridge.py -q"
           echo "\`\`\`"
