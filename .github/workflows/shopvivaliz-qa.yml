@@ -22,7 +22,9 @@ jobs:
       - name: Actionlint
         uses: docker://rhysd/actionlint:1.7.12
         with:
-          args: -color
+          # Shell scripts are exercised by their own jobs. This gate targets
+          # workflow YAML, triggers, expressions and action contracts.
+          args: -color -shellcheck=
 
   php-lint:
     runs-on: ubuntu-latest
