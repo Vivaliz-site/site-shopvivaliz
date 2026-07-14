@@ -530,6 +530,13 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                         <h2>Endereco de entrega</h2>
                         <div class="form-grid full">
                             <div class="field">
+                                <label for="cep">CEP</label>
+                                <input type="text" id="cep" name="cep" placeholder="12345-678" required>
+                                <small id="cep-status"></small>
+                            </div>
+                        </div>
+                        <div class="form-grid full">
+                            <div class="field">
                                 <label for="endereco">Rua ou avenida</label>
                                 <input type="text" id="endereco" name="endereco" required>
                             </div>
@@ -544,15 +551,10 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                                 <input type="text" id="complemento" name="complemento">
                             </div>
                         </div>
-                        <div class="form-grid">
+                        <div class="form-grid full">
                             <div class="field">
                                 <label for="cidade">Cidade</label>
                                 <input type="text" id="cidade" name="cidade" required>
-                            </div>
-                            <div class="field">
-                                <label for="cep">CEP</label>
-                                <input type="text" id="cep" name="cep" placeholder="12345-678" required>
-                                <small id="cep-status"></small>
                             </div>
                         </div>
                     </section>
