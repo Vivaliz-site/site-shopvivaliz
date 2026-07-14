@@ -45,3 +45,16 @@ def test_generated_cache_is_allowed_but_canonical_copy_wins() -> None:
 
     assert sync.unsafe_dirty_paths([cache]) == []
     assert not sync.is_preserved_path(cache)
+
+
+def test_production_services_follow_main_and_run_detail_sync() -> None:
+    root = MODULE_PATH.parent
+    git_sync = (root / "deploy/systemd/shopvivaliz-sync.service").read_text(encoding="utf-8")
+    product_sync = (root / "deploy/systemd/shopvivaliz-sync-products.service").read_text(
+        encoding="utf-8"
+    )
+
+    assert "SHOPVIVALIZ_SYNC_BRANCH=main" in git_sync
+    assert "daemon-sync-products.py --interval 300 --workers 4" in product_sync
+    assert "User=ubuntu" in product_sync
+    assert "Group=www-data" in product_sync
