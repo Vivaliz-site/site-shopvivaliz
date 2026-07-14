@@ -20,6 +20,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && !sv_csrf_valid('checkout', 
 
 header('Content-Type: text/html; charset=UTF-8');
 
+require_once dirname(__DIR__) . '/config/constants.php';
+require_once dirname(__DIR__) . '/config/database.php';
+
 $runtimeSecretsFile = dirname(__DIR__) . '/config/runtime-secrets.php';
 if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
     $runtimeSecrets = require $runtimeSecretsFile;
@@ -101,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
             'timestamp' => date('c'),
             'cliente' => $cliente,
             'items' => $items,
-            'payment_method' => trim((string)($_POST['payment_method'] ?? 'pix')),
+            'payment_method' => trim((string)($_POST['payment_method'] ?? 'mercado_pago')),
             'status' => 'pendente_atendimento',
             'source' => 'checkout_site',
         ];
@@ -116,6 +119,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
             json_encode($registro, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
             FILE_APPEND | LOCK_EX
         );
+
+        // Salvar no banco de dados
+        try {
+            $db = Database::getInstance();
+            $total = array_reduce($items, function ($s, $it) {
+                return $s + (float)($it['price'] ?? 0) * (int)($it['quantity'] ?? 1);
+            }, 0.0);
+
+            $stmt = $db->prepare('INSERT INTO orders (id, customer_name, customer_email, customer_phone, customer_address, customer_city, customer_zip, total, payment_method, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())');
+            $stmt->bind_param('sssssssds', $pedidoId, $cliente['nome'], $cliente['email'], $cliente['telefone'], $cliente['endereco'], $cliente['cidade'], $cliente['cep'], $total, $registro['payment_method']);
+            $stmt->execute();
+
+            // Salvar itens do pedido
+            foreach ($items as $item) {
+                $stmt = $db->prepare('INSERT INTO order_items (order_id, product_id, quantity, price, created_at) VALUES (?, ?, ?, ?, NOW())');
+                $qty = (int)($item['quantity'] ?? 1);
+                $price = (float)($item['price'] ?? 0);
+                $stmt->bind_param('sidi', $pedidoId, $item['id'], $qty, $price);
+                $stmt->execute();
+            }
+        } catch (Exception $e) {
+            error_log('Erro ao salvar pedido no BD: ' . $e->getMessage());
+        }
 
         // Email de notificacao para o lojista
         $adminEmail = defined('LOJA_EMAIL_ADMIN') ? LOJA_EMAIL_ADMIN : 'fredmourao@gmail.com';
@@ -160,21 +186,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
 ";
         $body .= "Acesse os pedidos em: https://dev.shopvivaliz.com.br/admin/
 ";
-        @mail($adminEmail, $subject, $body, "From: pedidos@dev.shopvivaliz.com.br
+        @mail($adminEmail, $subject, $body, "From: pedidos@dev.shopvivaliz.com.br\r\nContent-Type: text/plain; charset=UTF-8");
 
-Content-Type: text/plain; charset=UTF-8");
+        // Email de confirmacao para o cliente
+        $clienteSubject = "Pedido confirmado - {$pedidoId} - Vivaliz";
+        $clienteBody = "Olá {$cliente['nome']},
+
+Seu pedido foi recebido com sucesso!
+
+ID DO PEDIDO: {$pedidoId}
+Data: " . date('d/m/Y H:i') . "
+
+ITENS COMPRADOS
+{$itemLines}
+
+TOTAL: R$ {$totalFmt}
+Forma de pagamento: " . ucfirst(str_replace('_', ' ', $registro['payment_method'])) . "
+
+ENDEREÇO DE ENTREGA
+{$cliente['endereco']}, {$cliente['numero']} {$cliente['complemento']}
+{$cliente['cidade']} - {$cliente['cep']}
+
+Você pode acompanhar seu pedido aqui: https://dev.shopvivaliz.com.br/
+
+Se tiver dúvidas, entre em contato conosco pelo WhatsApp: https://wa.me/{$whatsapp}
+
+Obrigado pela compra!
+Vivaliz";
+
+        @mail($cliente['email'], $clienteSubject, $clienteBody, "From: pedidos@dev.shopvivaliz.com.br\r\nContent-Type: text/plain; charset=UTF-8");
 
         $pedidoCriado = true;
     }
 }
 
 $paymentOptions = [
-    'pix' => ['title' => 'PIX', 'desc' => 'Aprovacao imediata'],
-    'mercado_pago' => ['title' => 'Mercado Pago', 'desc' => 'Cartao, boleto, PIX'],
-    'pagarme' => ['title' => 'Pagar.me', 'desc' => 'Cartao de credito'],
-    'boleto' => ['title' => 'Boleto', 'desc' => 'Emissao apos confirmacao do frete'],
-    'whatsapp' => ['title' => 'WhatsApp', 'desc' => 'Atendimento assistido'],
-    'transferencia' => ['title' => 'Transferencia', 'desc' => 'TED / DOC'],
+    'mercado_pago' => ['title' => 'Mercado Pago', 'desc' => 'Cartão, PIX, Boleto'],
 ];
 ?>
 <!DOCTYPE html>
@@ -504,30 +551,30 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                             </div>
                             <div class="field">
                                 <label for="cep">CEP</label>
-                                <input type="text" id="cep" name="cep" required>
+                                <input type="text" id="cep" name="cep" placeholder="12345-678" required>
+                                <small id="cep-status"></small>
                             </div>
                         </div>
                     </section>
 
+                    <!-- Hidden payment method field -->
+                    <input type="hidden" name="payment_method" value="mercado_pago">
+
+                    <!-- Mercado Pago Payment Section -->
                     <section class="form-section">
                         <h2>Forma de pagamento</h2>
-                        <div class="payment-options">
-                            <?php foreach ($paymentOptions as $value => $option): ?>
-                                <label class="payment-option">
-                                    <input type="radio" name="payment_method" value="<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $value === 'pix' ? 'checked' : ''; ?>>
-                                    <span class="payment-option-box">
-                                        <strong><?php echo htmlspecialchars($option['title'], ENT_QUOTES, 'UTF-8'); ?></strong>
-                                        <small><?php echo htmlspecialchars($option['desc'], ENT_QUOTES, 'UTF-8'); ?></small>
-                                    </span>
-                                </label>
-                            <?php endforeach; ?>
-                        </div>
-                        <div class="payment-help">
-                            PIX mostra a chave imediatamente. Boleto e transferencia seguem para confirmacao manual de frete e emissao pela equipe.
+                        <div style="text-align: center; padding: 2rem 0;">
+                            <img src="https://http2.mlstatic.com/frontend-assets/ui-navigation/5.17.1/mercadopago/60.png" alt="Mercado Pago" style="height: 60px; margin-bottom: 1rem;">
+                            <p style="color: #666; margin-bottom: 1.5rem;">
+                                Pagamento seguro via Mercado Pago
+                                <br>
+                                <small>Aceita: Cartão de Crédito, PIX, Boleto e mais</small>
+                            </p>
+                            <button type="button" id="checkout-mp-btn" class="primary-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); font-size: 1rem; font-weight: 600; cursor: pointer;">
+                                💳 Continuar com Mercado Pago
+                            </button>
                         </div>
                     </section>
-
-                    <button class="primary-btn" type="submit" id="checkout-submit">Confirmar pedido</button>
                     <div class="status-message" id="checkout-status" aria-live="polite"></div>
                 </form>
 
@@ -730,6 +777,154 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 submitNode.textContent = 'Confirmar pedido';
                 setStatus('Erro de conexao. Tente novamente.', 'err');
             });
+        });
+    })();
+
+    // ============================================
+    // CEP LOOKUP & FRETE RECALCULATION
+    // ============================================
+    (function () {
+        const cepInput = document.getElementById('cep');
+        const cepStatus = document.getElementById('cep-status');
+        const addressInput = document.getElementById('endereco');
+        const cityInput = document.getElementById('cidade');
+
+        if (!cepInput) return;
+
+        cepInput.addEventListener('blur', function () {
+            const cep = this.value.replace(/\D/g, '');
+            if (cep.length !== 8) {
+                cepStatus.textContent = '';
+                return;
+            }
+
+            cepStatus.textContent = 'Buscando endereço...';
+
+            // Fetch CEP data from ViaCEP
+            fetch('https://viacep.com.br/ws/' + cep + '/json/')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.erro) {
+                        cepStatus.textContent = '❌ CEP não encontrado';
+                        return;
+                    }
+                    // Preencher campos
+                    addressInput.value = (data.logradouro || '') + (data.complemento ? ' ' + data.complemento : '');
+                    cityInput.value = data.localidade || '';
+                    cepStatus.textContent = '✅ Endereço encontrado';
+
+                    // Recalcular frete
+                    recalculateShipping(cep);
+                })
+                .catch(err => {
+                    cepStatus.textContent = '❌ Erro ao buscar CEP';
+                    console.error(err);
+                });
+        });
+
+        function recalculateShipping(cep) {
+            const items = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
+            if (!Array.isArray(items) || items.length === 0) return;
+
+            cepStatus.textContent = 'Calculando frete...';
+
+            fetch('/api/melhorenvio/shipping-check-v2.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cep: cep, items: items })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok && Array.isArray(data.shipping_options)) {
+                    // Mostrar opções de transportadora
+                    showShippingOptions(data.shipping_options);
+                    cepStatus.textContent = '✅ Transportadoras disponíveis';
+                } else {
+                    cepStatus.textContent = '❌ Sem opções de frete';
+                }
+            })
+            .catch(err => {
+                cepStatus.textContent = '❌ Erro ao calcular frete';
+                console.error('Erro:', err);
+            });
+        }
+
+        function showShippingOptions(options) {
+            let optionsHTML = '<div style="margin-top: 1rem; padding: 1rem; background: #f9f9f9; border-radius: 8px;">';
+            optionsHTML += '<p style="margin-top: 0; font-weight: 600; color: #333;">Escolha a transportadora:</p>';
+
+            options.forEach((opt, idx) => {
+                const price = parseFloat(opt.price || 0).toFixed(2);
+                const days = opt.delivery_time || '?';
+                const selected = idx === 0 ? 'checked' : '';
+                const labelId = 'shipping-' + idx;
+
+                optionsHTML += `
+                    <label style="display: block; margin: 0.75rem 0; padding: 0.75rem; background: white; border: 2px solid #e0e0e0; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+                        <input type="radio" name="shipping_option" value="${idx}" ${selected} onchange="selectShipping(${idx}, ${price}, '${opt.name}', '${opt.quote_id}')">
+                        <strong>${opt.company || opt.name}</strong>
+                        <span style="float: right; color: #667eea; font-weight: 600;">R$ ${price.replace('.', ',')}</span>
+                        <div style="font-size: 0.9rem; color: #666; margin-top: 0.25rem;">Entrega em ${days} dias</div>
+                    </label>
+                `;
+            });
+
+            optionsHTML += '</div>';
+
+            const shippingContainer = document.getElementById('shipping-options-container') || createShippingContainer();
+            shippingContainer.innerHTML = optionsHTML;
+
+            // Selecionar primeira opção automaticamente
+            if (options.length > 0) {
+                selectShipping(0, options[0].price, options[0].name, options[0].quote_id);
+            }
+        }
+
+        function createShippingContainer() {
+            const container = document.createElement('div');
+            container.id = 'shipping-options-container';
+            const form = document.querySelector('form');
+            const section = form.querySelector('.form-section');
+            if (section) {
+                section.parentNode.insertBefore(container, section.nextSibling);
+            }
+            return container;
+        }
+
+        window.selectShipping = function(idx, price, name, quoteId) {
+            localStorage.setItem('shopvivaliz_shipping_total', price.toString());
+            localStorage.setItem('shopvivaliz_shipping_label', name);
+            localStorage.setItem('shopvivaliz_quote_id', quoteId);
+            updateCheckoutSummary();
+        }
+    })();
+
+    // ============================================
+    // MERCADO PAGO BUTTON
+    // ============================================
+    (function () {
+        const mpBtn = document.getElementById('checkout-mp-btn');
+        if (!mpBtn) return;
+
+        mpBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+
+            // Validar formulário
+            const form = document.querySelector('form');
+            if (!form) return;
+
+            const nome = document.getElementById('nome').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const cep = document.getElementById('cep').value.trim();
+            const endereco = document.getElementById('endereco').value.trim();
+
+            if (!nome || !email || !cep || !endereco) {
+                alert('Preencha todos os dados de entrega antes de continuar');
+                return;
+            }
+
+            // Submeter formulário normalmente
+            form.submit();
         });
     })();
 </script>
