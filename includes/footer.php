@@ -11,6 +11,8 @@ $neighborhood = $company['neighborhood'] ?? 'SAO JOSE';
 $city = $company['city'] ?? 'Divinopolis';
 $state = $company['state'] ?? 'MG';
 $zipcode = $company['zipcode'] ?? '35501-236';
+$socialMedia = is_array($company['social_media'] ?? null) ? $company['social_media'] : [];
+$whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
 ?>
 <footer>
     <div class="container">
@@ -18,11 +20,11 @@ $zipcode = $company['zipcode'] ?? '35501-236';
             <div>
                 <strong>Vivaliz</strong>
                 <p>Qualidade e entrega rapida para todo o Brasil.</p>
-                <div style="margin-top: 15px; display: flex; gap: 15px;">
-                    <a href="https://instagram.com/shopvivaliz" target="_blank" rel="noopener" title="Instagram" style="color: #e4405f; text-decoration: none; font-size: 20px;">IG</a>
-                    <a href="https://facebook.com/shopvivaliz" target="_blank" rel="noopener" title="Facebook" style="color: #1877f2; text-decoration: none; font-size: 20px;">FB</a>
-                    <a href="https://tiktok.com/@shop_vivaliz" target="_blank" rel="noopener" title="TikTok" style="color: #111; text-decoration: none; font-size: 20px;">TT</a>
-                </div>
+                <?php if ($whatsapp !== ''): ?>
+                    <div style="margin-top: 15px; display: flex; gap: 15px;">
+                        <a href="https://wa.me/<?= htmlspecialchars($whatsapp, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" title="WhatsApp" style="color: #157347; text-decoration: none; font-weight: 700;">WhatsApp</a>
+                    </div>
+                <?php endif; ?>
             </div>
 
             <div>
