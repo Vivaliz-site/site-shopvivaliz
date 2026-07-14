@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 REPO_DIR = Path(__file__).resolve().parent
-DEFAULT_BRANCH = os.getenv("SHOPVIVALIZ_SYNC_BRANCH", "feat/dazzle-visual-v1")
+DEFAULT_BRANCH = os.getenv("SHOPVIVALIZ_SYNC_BRANCH", "main")
 STATUS_FILE = REPO_DIR / "logs" / "tri-environment-sync.json"
 PRESERVE_PATHS = {
     ".env.local",
