@@ -300,13 +300,32 @@ function aij_ab_list(mysqli $db): never
     $min_impressions = (int)($_GET['min_impressions'] ?? 0);
     $limit           = min((int)($_GET['limit'] ?? 100), 500);
 
-    $conds = [];
-    if ($status !== '')          $conds[] = "status = '" . $db->real_escape_string($status) . "'";
-    if ($min_impressions > 0)    $conds[] = "impressions >= $min_impressions";
-    $where = $conds ? 'WHERE ' . implode(' AND ', $conds) : '';
+    $sql = "SELECT * FROM ab_test_sessions WHERE 1=1";
+    $params = [];
+    $types = '';
+
+    if ($status !== '') {
+        $sql .= " AND status = ?";
+        $params[] = $status;
+        $types .= 's';
+    }
+    if ($min_impressions > 0) {
+        $sql .= " AND impressions >= ?";
+        $params[] = $min_impressions;
+        $types .= 'i';
+    }
+    $sql .= " ORDER BY created_at DESC LIMIT $limit";
 
     $rows = [];
-    $result = $db->query("SELECT * FROM ab_test_sessions $where ORDER BY created_at DESC LIMIT $limit");
+    if ($params) {
+        $stmt = $db->prepare($sql);
+        $stmt->bind_param($types, ...$params);
+        $stmt->execute();
+        $result = $stmt->get_result();
+    } else {
+        $result = $db->query($sql);
+    }
+
     while ($row = $result->fetch_assoc()) $rows[] = $row;
     aij_json(200, ['ok' => true, 'total' => count($rows), 'sessions' => $rows]);
 }
