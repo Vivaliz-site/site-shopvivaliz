@@ -8,7 +8,9 @@ $patterns = [
     'OpenAI project key' => '/sk-' . 'proj-[A-Za-z0-9_-]{20,}/',
     'Google API key' => '/AIza' . 'Sy[A-Za-z0-9_-]{25,}/',
     'GitHub token' => '/ghp' . '_[A-Za-z0-9]{30,}/',
-    'private key' => '/-----BEGIN ' . 'PRIVATE KEY-----[\s\S]+-----END PRIVATE KEY-----/',
+    // A real PEM has one or more base64 body lines. Documentation that merely
+    // names the BEGIN/END markers must not fail the build.
+    'private key' => '/-----BEGIN ' . '(?:RSA |EC |OPENSSH )?PRIVATE KEY-----\R(?:[A-Za-z0-9+\/=]{40,}\R)+-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/',
 ];
 $documentedExamples = [
     './CONFIGURAR_GITHUB_SECRETS.md', // onboarding example; never loaded at runtime

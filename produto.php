@@ -1,5 +1,6 @@
 <?php
 header('Content-Type: text/html; charset=UTF-8');
+require_once __DIR__ . '/includes/catalog-runtime.php';
 
 /* ── helpers ── */
 function sv_product_default_image(): string
@@ -211,10 +212,7 @@ function sv_product_catalog(): array
 {
     static $data = null;
     if ($data !== null) return $data;
-    $path = __DIR__ . '/api/catalog/fallback-products.json';
-    if (!is_file($path)) return $data = [];
-    $d = json_decode((string)file_get_contents($path), true);
-    return $data = is_array($d) ? $d : [];
+    return $data = svcr_products();
 }
 
 function sv_product_related(string $sku, string $category, int $limit = 4): array

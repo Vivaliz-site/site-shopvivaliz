@@ -104,7 +104,7 @@ define('API_TIMEOUT', 10);
 define('EXECUTION_TIMEOUT', 300);
 
 // Versão
-define('APP_VERSION', '9.2.101');
+define('APP_VERSION', '9.2.102');
 define('DB_VERSION', '1.0');
 
 // Agentes

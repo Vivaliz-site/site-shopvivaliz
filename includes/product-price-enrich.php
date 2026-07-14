@@ -111,51 +111,13 @@ function svp_bulk_price_stock(?mysqli $db, array $skus): array
 }
 
 /**
- * Aplica precos reais do banco por cima da lista de produtos (indexados por sku).
- * Retorna a mesma lista, so sobrescrevendo price/stock quando o banco tiver
- * um valor maior que zero.
- *
- * IMPORTANTE: 2026-07-13 - Desabilitar enriquecimento de PRECOS porque o banco
- * tem precos multiplicados por 10 (bug do Tiny sync). Usar APENAS fallback.json.
- * Manter apenas enriquecimento de ESTOQUE que esta correto.
+ * The detailed Olist cache is the canonical price and stock source. The local
+ * products table is intentionally not layered over it: the table may lag the
+ * ERP and historically contained multiplied prices. Keep this compatibility
+ * function as a no-op for older callers.
  */
 function svp_enrich_products(array $products): array
 {
-    if ($products === []) {
-        return $products;
-    }
-
-    $db = svp_db();
-    if (!$db instanceof mysqli) {
-        return $products;
-    }
-
-    $skus = array_map(static fn($p) => (string)($p['sku'] ?? ''), $products);
-    $bySku = svp_bulk_price_stock($db, $skus);
-    $db->close();
-
-    if ($bySku === []) {
-        return $products;
-    }
-
-    foreach ($products as $index => $product) {
-        $sku = trim((string)($product['sku'] ?? ''));
-        if ($sku === '' || !isset($bySku[$sku])) {
-            continue;
-        }
-        // DESABILITAR: Nao sobrescrever PRECOS do banco (estao errados - multiplicados por 10)
-        // if ($bySku[$sku]['price'] > 0) {
-        //     $products[$index]['price'] = $bySku[$sku]['price'];
-        // }
-        // So sobrescreve estoque quando o banco tiver valor maior que zero --
-        // a tabela products local pode estar desatualizada/nunca sincronizada
-        // (stock=0 default) enquanto o catalogo (fallback-products.json) ja
-        // tem o valor real vindo direto da Tiny.
-        if ($bySku[$sku]['stock'] > 0) {
-            $products[$index]['stock'] = $bySku[$sku]['stock'];
-        }
-    }
-
     return $products;
 }
 

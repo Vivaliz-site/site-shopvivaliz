@@ -14,13 +14,16 @@ ini_set('display_errors', '0');
 require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/social-auth.php';
+require_once __DIR__ . '/../includes/csrf.php';
 
 $error = '';
 $success = '';
 $name = '';
 $email = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_POST['csrf_token'] ?? null)) {
+    $error = 'Sua sessão expirou. Recarregue a página e tente novamente.';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['name'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
@@ -268,6 +271,7 @@ $apple_auth_url = sv_social_apple_auth_url('register', '/');
         <?php endif; ?>
 
         <form method="POST">
+            <?= sv_csrf_input('auth-register') ?>
             <div class="form-group">
                 <label for="name">Nome Completo</label>
                 <input type="text" id="name" name="name" required

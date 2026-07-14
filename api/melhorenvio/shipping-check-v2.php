@@ -8,11 +8,12 @@ header('Cache-Control: no-store, max-age=0');
 
 require_once dirname(__DIR__, 2) . '/includes/product-price-enrich.php';
 require_once dirname(__DIR__, 2) . '/includes/melhorenvio-oauth.php';
+require_once dirname(__DIR__, 2) . '/includes/catalog-runtime.php';
 
 function svsh_json(int $status, array $payload): never { http_response_code($status); echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); exit; }
 function svsh_env(string ...$keys): string { svp_env_load(); foreach ($keys as $key) { $value = getenv($key); if (is_string($value) && trim($value) !== '') return trim($value); if (isset($_ENV[$key]) && is_string($_ENV[$key]) && trim($_ENV[$key]) !== '') return trim($_ENV[$key]); } return ''; }
-function svsh_secret(): string { return svsh_env('APP_KEY','SHOPVIVALIZ_APP_KEY','QUOTE_SIGNING_KEY') ?: hash('sha256', dirname(__DIR__, 2) . '|shopvivaliz-shipping-v2'); }
-function svsh_catalog(): array { static $rows = null; if ($rows !== null) return $rows; $path = dirname(__DIR__, 2) . '/api/catalog/fallback-products.json'; $decoded = is_file($path) ? json_decode((string)file_get_contents($path), true) : []; return $rows = is_array($decoded) ? $decoded : []; }
+function svsh_secret(): string { $secret=svsh_env('QUOTE_SIGNING_KEY','APP_KEY','SHOPVIVALIZ_APP_KEY','SHOPVIVALIZ_AGENT_KEY'); if($secret==='')svsh_json(503,['ok'=>false,'error'=>'quote_signing_key_missing','message'=>'Assinatura segura de frete não configurada.']); return $secret; }
+function svsh_catalog(): array { static $rows = null; if ($rows !== null) return $rows; return $rows = svcr_products(); }
 function svsh_product(string $sku, string $id): array { foreach (svsh_catalog() as $row) { if (!is_array($row)) continue; $rowSku = trim((string)($row['sku'] ?? '')); $rowId = trim((string)($row['id'] ?? $row['olist_product_id'] ?? '')); if (($sku !== '' && strcasecmp($rowSku, $sku) === 0) || ($id !== '' && $rowId === $id)) return $row; } return []; }
 function svsh_number(array $row, array $keys, float $fallback): float { foreach ($keys as $key) { $value = (float)($row[$key] ?? 0); if ($value > 0) return $value; } return $fallback; }
 function svsh_post(string $url, array $payload, string $token): array { if (!function_exists('curl_init')) return ['ok'=>false,'status'=>0,'body'=>[]]; $ch = curl_init($url); curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),CURLOPT_CONNECTTIMEOUT=>8,CURLOPT_TIMEOUT=>25,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_HTTPHEADER=>['Accept: application/json','Content-Type: application/json','Authorization: Bearer '.$token,'User-Agent: ShopVivaliz/Shipping-v2']]); $raw=curl_exec($ch); $status=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE); curl_close($ch); $body=is_string($raw)?json_decode($raw,true):[]; return ['ok'=>$status>=200&&$status<300,'status'=>$status,'body'=>is_array($body)?$body:[]]; }

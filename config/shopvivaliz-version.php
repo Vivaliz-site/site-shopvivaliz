@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 return array(
-    'version' => '9.2.101',
-    'version_code' => 902101,
+    'version' => '9.2.102',
+    'version_code' => 902102,
     'channel' => 'dev',
-    'codename' => 'shopee-media-space-repair',
+    'codename' => 'production-catalog-hardening',
     'release_type' => 'cumulative',
-    'generated_at' => '2026-07-02T00:30:00-03:00',
+    'generated_at' => '2026-07-14T03:08:24-03:00',
     'requires_update_php_sync' => true,
     'notes' => array(
         'Centraliza numero da versao para deploy, endpoints e testes pos-deploy.',
@@ -25,5 +25,10 @@ return array(
         'Prepara o deploy para injetar secrets de Melhor Envio e Pagar.me no .env temporario do servidor e aceita aliases de nome para o token de frete.',
         'Adiciona reparo dedicado para Shopee Media Space lendo planilha de resultado, mapeando imagem local e atualizando a capa via Open API.',
         'Prepara workflow manual com secrets do GitHub para executar uploads de arquivo local em lote sem depender de CDN externo.',
+        'Restaura o catalogo de producao a partir do cache detalhado Olist, incluindo estoque, imagens, dimensoes e categorias.',
+        'Torna a sincronizacao de produtos atomica, paginada, tolerante a rate limit e preserva detalhes em falhas parciais.',
+        'Centraliza a fonte autoritativa do catalogo para vitrine, carrinho, checkout, frete, feeds e endpoints de saude.',
+        'Adiciona protecao CSRF aos formularios sensiveis e remove fallbacks deterministas de assinatura de cotacao.',
+        'Endurece lint, scanner, testes Python e Playwright para impedir falsos positivos e chamadas externas na coleta.',
     ),
 );

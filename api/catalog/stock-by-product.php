@@ -10,6 +10,7 @@ header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
 require_once dirname(__DIR__, 2) . '/includes/product-price-enrich.php';
+require_once dirname(__DIR__, 2) . '/includes/catalog-runtime.php';
 
 $sku = trim((string)($_GET['sku'] ?? ''));
 $id = trim((string)($_GET['id'] ?? $_GET['olist_product_id'] ?? ''));
@@ -20,30 +21,25 @@ if ($sku === '' && $id === '') {
     exit;
 }
 
-$db = svp_db();
-$row = svp_lookup_product($db, $sku, $id);
-
-if ($db instanceof mysqli) {
-    $db->close();
-}
-
-if ($row === []) {
-    $path = __DIR__ . '/fallback-products.json';
-    $rows = is_file($path) ? json_decode((string)file_get_contents($path), true) : [];
-
-    foreach (is_array($rows) ? $rows : [] as $candidate) {
-        if (!is_array($candidate)) {
-            continue;
-        }
-
-        $rowSku = trim((string)($candidate['sku'] ?? ''));
-        $rowId = trim((string)($candidate['olist_product_id'] ?? $candidate['id'] ?? ''));
-
-        if (($sku !== '' && strcasecmp($rowSku, $sku) === 0) || ($id !== '' && $rowId === $id)) {
-            $row = $candidate;
-            break;
-        }
+$row = [];
+$rows = svcr_products();
+foreach ($rows as $candidate) {
+    if (!is_array($candidate)) {
+        continue;
     }
+
+    $rowSku = trim((string)($candidate['sku'] ?? ''));
+    $rowId = trim((string)($candidate['olist_product_id'] ?? $candidate['id'] ?? ''));
+
+    if (($sku !== '' && strcasecmp($rowSku, $sku) === 0) || ($id !== '' && $rowId === $id)) {
+        $row = $candidate;
+        break;
+    }
+}
+if ($row === []) {
+    $db = svp_db();
+    $row = svp_lookup_product($db, $sku, $id);
+    if ($db instanceof mysqli) $db->close();
 }
 
 if ($row === []) {

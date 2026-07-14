@@ -4,6 +4,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: public, max-age=300');
 header('X-Content-Type-Options: nosniff');
+require_once dirname(__DIR__, 2) . '/includes/catalog-runtime.php';
 
 function svci_normalize(string $value): string {
     return trim(function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value));
@@ -17,8 +18,7 @@ function svci_valid_image(string $value): bool {
     return str_starts_with($value, '/') || str_starts_with($value, 'http://') || str_starts_with($value, 'https://');
 }
 
-$path = __DIR__ . '/fallback-products.json';
-$decoded = is_file($path) ? json_decode((string)file_get_contents($path), true) : [];
+$decoded = svcr_products();
 $categories = [];
 
 $generic_images = [

@@ -5,8 +5,8 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
-$path = __DIR__ . '/fallback-products.json';
-$products = is_file($path) ? json_decode((string)file_get_contents($path), true) : [];
+require_once dirname(__DIR__, 2) . '/includes/catalog-runtime.php';
+$products = svcr_products();
 $summary = [
     'products_total' => 0,
     'products_with_real_image' => 0,
