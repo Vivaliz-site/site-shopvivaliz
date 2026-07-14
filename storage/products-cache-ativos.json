@@ -1,0 +1,3954 @@
+{
+  "total": 188,
+  "timestamp": "2026-07-13T23:09:39.674191",
+  "itens": [
+    {
+      "id": 341440872,
+      "sku": "KIT4R-SOPRÃO",
+      "descricao": "KIT4R-SOPRÃO",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-03 10:31:10",
+      "dataAlteracao": "2026-06-22 07:13:37",
+      "unidade": "UN",
+      "gtin": "7904013466354",
+      "precos": {
+        "preco": 45,
+        "precoPromocional": 0,
+        "precoCusto": 16.02,
+        "precoCustoMedio": 16.02
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341440887,
+      "sku": "PRODUTO_341440887",
+      "descricao": "PRODUTO_341440887",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-03 10:31:53",
+      "dataAlteracao": "2026-06-22 02:22:47",
+      "unidade": "UN",
+      "gtin": "",
+      "precos": {
+        "preco": 119,
+        "precoPromocional": 0,
+        "precoCusto": 36.12,
+        "precoCustoMedio": 43.2
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341440908,
+      "sku": "PRODUTO_341440908",
+      "descricao": "PRODUTO_341440908",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-03 10:32:23",
+      "dataAlteracao": "2026-06-22 02:22:47",
+      "unidade": "UN",
+      "gtin": "",
+      "precos": {
+        "preco": 45,
+        "precoPromocional": 0,
+        "precoCusto": 12.04,
+        "precoCustoMedio": 14.4
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341441027,
+      "sku": "RODIZIO-75MM",
+      "descricao": "4x Rodízio Gel 75mm Freio 220kg Total",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-03 10:33:20",
+      "dataAlteracao": "2026-06-13 10:34:10",
+      "unidade": "UN",
+      "gtin": "7896004822563",
+      "precos": {
+        "preco": 76,
+        "precoPromocional": 0,
+        "precoCusto": 40,
+        "precoCustoMedio": 40
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341441223,
+      "sku": "KITROD12",
+      "descricao": "Kit 12 Rodízios Gel 50mm Freio Soprano",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-03 10:34:08",
+      "dataAlteracao": "2026-06-20 11:41:51",
+      "unidade": "UN",
+      "gtin": "",
+      "precos": {
+        "preco": 129,
+        "precoPromocional": 0,
+        "precoCusto": 44.82,
+        "precoCustoMedio": 46.2
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341443735,
+      "sku": "FLOREIRA-FLAT77",
+      "descricao": "Floreira Flat 77cm Parede Cimento Queimado",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-03 10:58:44",
+      "dataAlteracao": "2026-06-19 14:17:33",
+      "unidade": "UN",
+      "gtin": "7895741956487",
+      "precos": {
+        "preco": 798.91,
+        "precoPromocional": 0,
+        "precoCusto": 320,
+        "precoCustoMedio": 320
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341456124,
+      "sku": "JVCDPA34",
+      "descricao": "Vaso Cilíndrico Decore 34 28L Preto Ardósia Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-03 11:46:20",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023150797",
+      "precos": {
+        "preco": 459,
+        "precoPromocional": 0,
+        "precoCusto": 175,
+        "precoCustoMedio": 175
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341481165,
+      "sku": "6323",
+      "descricao": "Gancho Armador Rede Embutir Colonial 6323 Aliança",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-03 17:40:58",
+      "dataAlteracao": "2026-06-13 10:35:09",
+      "unidade": "UN",
+      "gtin": "7891249011642",
+      "precos": {
+        "preco": 118.87,
+        "precoPromocional": 0,
+        "precoCusto": 51,
+        "precoCustoMedio": 51
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341484398,
+      "sku": "TAJ/AS*BR1-NOVO",
+      "descricao": "Assento Sanitário Almofadado Slim Branco Astra",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-03 18:44:19",
+      "dataAlteracao": "2026-06-17 19:56:25",
+      "unidade": "UN",
+      "gtin": "7891222222652",
+      "precos": {
+        "preco": 78.99,
+        "precoPromocional": 0,
+        "precoCusto": 45.04,
+        "precoCustoMedio": 45.04
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341486833,
+      "sku": "KIT-CADEADO-PAPAIZ-50MM-5UN",
+      "descricao": "Kit 5 Cadeados 50mm Papaiz Latão Segredos Diferentes",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-03 19:07:07",
+      "dataAlteracao": "2026-06-13 09:34:19",
+      "unidade": "UN",
+      "gtin": "7891194054206",
+      "precos": {
+        "preco": 339.15,
+        "precoPromocional": 0,
+        "precoCusto": 180,
+        "precoCustoMedio": 180
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341533994,
+      "sku": "JVAQMA55",
+      "descricao": "Vaso Antique 55 75L Macchiato Japi Brown",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-04 12:38:03",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023148732",
+      "precos": {
+        "preco": 573.27,
+        "precoPromocional": 0,
+        "precoCusto": 191.09,
+        "precoCustoMedio": 191.09
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341533998,
+      "sku": "JVAQCQ44",
+      "descricao": "Vaso Antique 44 70L Cimento Queimado Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-04 12:38:03",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023148695",
+      "precos": {
+        "preco": 574.9,
+        "precoPromocional": 0,
+        "precoCusto": 185.45,
+        "precoCustoMedio": 185.45
+      },
+      "estoque": {
+        "localizacao": "A1-01"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341534002,
+      "sku": "JVAQMA56",
+      "descricao": "Vaso Decorativo Plantas Antique 56 (46l) Macchiato Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-04 12:38:04",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023148749",
+      "precos": {
+        "preco": 471.19,
+        "precoPromocional": 0,
+        "precoCusto": 138.18,
+        "precoCustoMedio": 138.18
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341679379,
+      "sku": "N09R",
+      "descricao": "Caixa Ferramentas Sanfonada 7 Gavetas Refor 50x20x25cm 09R Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-05 19:56:54",
+      "dataAlteracao": "2026-06-19 15:23:17",
+      "unidade": "UN",
+      "gtin": "7894162001493",
+      "precos": {
+        "preco": 329,
+        "precoPromocional": 0,
+        "precoCusto": 133.25,
+        "precoCustoMedio": 133.25
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341679483,
+      "sku": "13",
+      "descricao": "Caixa Ferramentas Bau Reto N13 50x25x22 C/ Bandeja Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-05 19:58:12",
+      "dataAlteracao": "2026-07-03 18:55:05",
+      "unidade": "UN",
+      "gtin": "7894162000922",
+      "precos": {
+        "preco": 198.31,
+        "precoPromocional": 0,
+        "precoCusto": 95.34,
+        "precoCustoMedio": 95.46
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341679995,
+      "sku": "16",
+      "descricao": "Caixa Ferramentas Bau Reto N16 80x34x45cm C/ Bandeja Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-05 20:09:12",
+      "dataAlteracao": "2026-07-03 18:55:05",
+      "unidade": "UN",
+      "gtin": "7894162000274",
+      "precos": {
+        "preco": 709.85,
+        "precoPromocional": 0,
+        "precoCusto": 308.63,
+        "precoCustoMedio": 310.26
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341681699,
+      "sku": "03S",
+      "descricao": "Caixa Ferramentas Sanfonada 3 Gavetas 20x30x17cm N03S Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-05 20:34:11",
+      "dataAlteracao": "2026-06-13 10:34:11",
+      "unidade": "UN",
+      "gtin": "7894162001127",
+      "precos": {
+        "preco": 119,
+        "precoPromocional": 0,
+        "precoCusto": 57.17,
+        "precoCustoMedio": 56.38
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341682112,
+      "sku": "6",
+      "descricao": "Caixa Ferramentas Sanfonada 5 Gavetas 40x20x21 Cm N06 Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-05 20:40:36",
+      "dataAlteracao": "2026-06-19 06:06:52",
+      "unidade": "UN",
+      "gtin": "7894162000168",
+      "precos": {
+        "preco": 245,
+        "precoPromocional": 0,
+        "precoCusto": 83,
+        "precoCustoMedio": 83
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341682319,
+      "sku": "14",
+      "descricao": "Caixa Ferramentas Bau Reto N14 60x30x25cm C/ Bandeja Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-05 20:44:26",
+      "dataAlteracao": "2026-07-10 11:40:18",
+      "unidade": "UN",
+      "gtin": "7894162000298",
+      "precos": {
+        "preco": 327.37,
+        "precoPromocional": 0,
+        "precoCusto": 141.72,
+        "precoCustoMedio": 141.69
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341682899,
+      "sku": "CS-11",
+      "descricao": "Caixa Ferramentas Sanfonada 7 Gavetas Roda 50x20x25cm CS-11 Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-05 20:51:56",
+      "dataAlteracao": "2026-06-13 10:35:09",
+      "unidade": "UN",
+      "gtin": "7894162000984",
+      "precos": {
+        "preco": 299.25,
+        "precoPromocional": 0,
+        "precoCusto": 150,
+        "precoCustoMedio": 150
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341683965,
+      "sku": "00",
+      "descricao": "Caixa Ferramentas Bau Reto N00 30x13x10 C/ Bandeja Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-05 21:13:11",
+      "dataAlteracao": "2026-06-19 14:17:55",
+      "unidade": "UN",
+      "gtin": "7894162000106",
+      "precos": {
+        "preco": 75,
+        "precoPromocional": 0,
+        "precoCusto": 30.22,
+        "precoCustoMedio": 29.55
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341689566,
+      "sku": "CD02",
+      "descricao": "Carrinho Ferramentas CD02 1 Gaveta Azul Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-05 21:24:30",
+      "dataAlteracao": "2026-06-13 10:34:11",
+      "unidade": "UN",
+      "gtin": "7894162003756",
+      "precos": {
+        "preco": 721.05,
+        "precoPromocional": 0,
+        "precoCusto": 385,
+        "precoCustoMedio": 385
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341718082,
+      "sku": "ESTOPAPOLIMENTO1KG",
+      "descricao": "Estopa Polimento Automotivo Algodão 1kg Aquatools Branco",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-05 21:45:59",
+      "dataAlteracao": "2026-06-13 09:34:13",
+      "unidade": "UN",
+      "gtin": "7899887510664",
+      "precos": {
+        "preco": 42.75,
+        "precoPromocional": 0,
+        "precoCusto": 12,
+        "precoCustoMedio": 12
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341723607,
+      "sku": "23050",
+      "descricao": "Jogo Cinta Catraca Amarração 25mm X 4,6m 800kg Aquatools",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-05 21:49:18",
+      "dataAlteracao": "2026-06-13 10:34:19",
+      "unidade": "UN",
+      "gtin": "7899887513887",
+      "precos": {
+        "preco": 46.55,
+        "precoPromocional": 0,
+        "precoCusto": 17,
+        "precoCustoMedio": 17
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341725351,
+      "sku": "22959",
+      "descricao": "Jogo Cinta Catraca Amarração 28mm X 4,6m 1500kg Aquatools",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-05 21:50:00",
+      "dataAlteracao": "2026-06-13 09:34:15",
+      "unidade": "UN",
+      "gtin": "7899887513726",
+      "precos": {
+        "preco": 51.3,
+        "precoPromocional": 0,
+        "precoCusto": 23,
+        "precoCustoMedio": 23
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341728727,
+      "sku": "JOGOALICATES3PECAS",
+      "descricao": "Jogo de Alicates com 3 Peças - Aquatools",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-05 21:51:28",
+      "dataAlteracao": "2026-06-13 10:34:19",
+      "unidade": "UN",
+      "gtin": "7899887505486",
+      "precos": {
+        "preco": 130.64,
+        "precoPromocional": 0,
+        "precoCusto": 45,
+        "precoCustoMedio": 45
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341844041,
+      "sku": "VASOPLANTASJAPI",
+      "descricao": "Vaso Plantas Decorativo Japi Unique 16 14x16cm Preto",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-06 00:02:22",
+      "dataAlteracao": "2026-06-21 11:02:22",
+      "unidade": "UN",
+      "gtin": "7894023139075",
+      "precos": {
+        "preco": 20.8,
+        "precoPromocional": 0,
+        "precoCusto": 7,
+        "precoCustoMedio": 7
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 341844061,
+      "sku": "7323",
+      "descricao": "Gancho/armador Rede de Embutir Inox Cromado 7323 Aliança",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-06 00:03:38",
+      "dataAlteracao": "2026-06-13 10:34:20",
+      "unidade": "UN",
+      "gtin": "7891249011673",
+      "precos": {
+        "preco": 78.41,
+        "precoPromocional": 0,
+        "precoCusto": 40.94,
+        "precoCustoMedio": 41.97
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342355202,
+      "sku": "TE-C08",
+      "descricao": "Tesoura Costura Profissional Aço Inox 8 Polegadas Aquatools",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-07 08:05:50",
+      "dataAlteracao": "2026-06-13 10:34:04",
+      "unidade": "UN",
+      "gtin": "7899887506261",
+      "precos": {
+        "preco": 99.99,
+        "precoPromocional": 0,
+        "precoCusto": 14.5,
+        "precoCustoMedio": 14.5
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342356475,
+      "sku": "KIT-6-CADEADO-PAPAIZ-50MM",
+      "descricao": "Kit 6 Cadeado Papaiz 50mm Armário Portão",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-07 08:06:48",
+      "dataAlteracao": "2026-06-13 10:35:09",
+      "unidade": "UN",
+      "gtin": "7891194000371",
+      "precos": {
+        "preco": 390.15,
+        "precoPromocional": 0,
+        "precoCusto": 216,
+        "precoCustoMedio": 216
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342364207,
+      "sku": "21049",
+      "descricao": "Resistencia 3 Temperaturas 127v 5400w Enerducha Plus Up Pratimix",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-07 08:11:56",
+      "dataAlteracao": "2026-06-13 14:45:05",
+      "unidade": "UN",
+      "gtin": "7898945401005",
+      "precos": {
+        "preco": 33.24,
+        "precoPromocional": 0,
+        "precoCusto": 16,
+        "precoCustoMedio": 16
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342364870,
+      "sku": "RESISTENCIAENERDUCHA",
+      "descricao": "Resistencia 3 Temperaturas 220v 5400w Enerducha Plus Pratimix",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-07 08:12:19",
+      "dataAlteracao": "2026-06-19 14:17:25",
+      "unidade": "UN",
+      "gtin": "7898945401395",
+      "precos": {
+        "preco": 36.67,
+        "precoPromocional": 0,
+        "precoCusto": 16,
+        "precoCustoMedio": 16
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342371996,
+      "sku": "KIT10RODOVEDADOR90CM",
+      "descricao": "Kit 10 Rodo Vedante Borracha Friso Porta Aluminio 90 Cm",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-07 08:16:24",
+      "dataAlteracao": "2026-06-20 11:41:48",
+      "unidade": "UN",
+      "gtin": "",
+      "precos": {
+        "preco": 45,
+        "precoPromocional": 0,
+        "precoCusto": 75.7,
+        "precoCustoMedio": 91.2
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342374752,
+      "sku": "ASTRAPET-CASINHA-CACHORRO-AZUL",
+      "descricao": "Casinha Cachorro 52x41x40 Astra Pet Azul",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-07 08:18:05",
+      "dataAlteracao": "2026-06-19 14:17:40",
+      "unidade": "UN",
+      "gtin": "7891222355695",
+      "precos": {
+        "preco": 215.1,
+        "precoPromocional": 0,
+        "precoCusto": 70,
+        "precoCustoMedio": 70
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342377420,
+      "sku": "PL8PRATEADO",
+      "descricao": "Ducha em Alumínio 8 Polegadas - Pro Lazer Prateado",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-07 08:20:02",
+      "dataAlteracao": "2026-06-20 00:45:06",
+      "unidade": "UN",
+      "gtin": "7898129830027",
+      "precos": {
+        "preco": 140.04,
+        "precoPromocional": 0,
+        "precoCusto": 72,
+        "precoCustoMedio": 72
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342710723,
+      "sku": "15",
+      "descricao": "Caixa Ferramentas Bau Reto N15 37x70x28cm Bandeja Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-07 13:48:20",
+      "dataAlteracao": "2026-06-13 09:34:02",
+      "unidade": "UN",
+      "gtin": "7894162000304",
+      "precos": {
+        "preco": 436.03,
+        "precoPromocional": 0,
+        "precoCusto": 189.58,
+        "precoCustoMedio": 185.92
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342715215,
+      "sku": "ARM-08",
+      "descricao": "Armário Ferramentas Duas Portas ARM-08 Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-07 14:01:00",
+      "dataAlteracao": "2026-06-13 09:33:53",
+      "unidade": "UN",
+      "gtin": "7894162000861",
+      "precos": {
+        "preco": 584.29,
+        "precoPromocional": 0,
+        "precoCusto": 261.04,
+        "precoCustoMedio": 263.11
+      },
+      "estoque": {
+        "localizacao": "Depósito Principal"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342716133,
+      "sku": "CHB-40025",
+      "descricao": "Cabo para Chupeta Bateria 2,5 Metros 400a Enxerto Carro Aquatools",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-07 14:03:12",
+      "dataAlteracao": "2026-06-19 15:23:02",
+      "unidade": "UN",
+      "gtin": "7899887503062",
+      "precos": {
+        "preco": 78.31,
+        "precoPromocional": 0,
+        "precoCusto": 44,
+        "precoCustoMedio": 44
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342716910,
+      "sku": "TPJ/AS*BR1",
+      "descricao": "Assento Sanitário Oval Universal Soft Branco Astra",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-07 14:04:17",
+      "dataAlteracao": "2026-06-21 14:41:50",
+      "unidade": "UN",
+      "gtin": "7891222045879",
+      "precos": {
+        "preco": 44.1,
+        "precoPromocional": 0,
+        "precoCusto": 20,
+        "precoCustoMedio": 20
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342849443,
+      "sku": "A21",
+      "descricao": "Armário Banheiro A21 28.4x40.8x9.5cm Branco Porta Correr Astra",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-07 23:03:00",
+      "dataAlteracao": "2026-06-17 19:56:25",
+      "unidade": "UN",
+      "gtin": "7891222105122",
+      "precos": {
+        "preco": 78.99,
+        "precoPromocional": 0,
+        "precoCusto": 47.68,
+        "precoCustoMedio": 47.18
+      },
+      "estoque": {
+        "localizacao": "Depósito Principal"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342849584,
+      "sku": "A41*BR",
+      "descricao": "Armário Banheiro Versátil Branco com Espelho A41 Astra",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-07 23:03:26",
+      "dataAlteracao": "2026-06-13 10:34:20",
+      "unidade": "UN",
+      "gtin": "7891222124574",
+      "precos": {
+        "preco": 129,
+        "precoPromocional": 0,
+        "precoCusto": 56.29,
+        "precoCustoMedio": 56.29
+      },
+      "estoque": {
+        "localizacao": "Depósito Principal"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342849898,
+      "sku": "RGCT50-6",
+      "descricao": "Rodizio em Gel C/Trava Cristal 50mm 6 UN Soprano",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-07 23:05:36",
+      "dataAlteracao": "2026-06-13 09:34:24",
+      "unidade": "UN",
+      "gtin": "7791799605028",
+      "precos": {
+        "preco": 54.5,
+        "precoPromocional": 0,
+        "precoCusto": 24.18,
+        "precoCustoMedio": 24.78
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342850165,
+      "sku": "RG50-4",
+      "descricao": "Kit 4 rodízios 50mm em gel 2 com trava e 2 sem trava",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-07 23:09:47",
+      "dataAlteracao": "2026-06-20 11:41:51",
+      "unidade": "UN",
+      "gtin": "",
+      "precos": {
+        "preco": 45,
+        "precoPromocional": 0,
+        "precoCusto": 14.94,
+        "precoCustoMedio": 15.4
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342902474,
+      "sku": "SKU-342902474",
+      "descricao": "Soprano, Kit 4 Rodízios Móveis Gel, 2 Freio e 2 sem  75mm",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:14:48",
+      "dataAlteracao": "2026-06-20 11:42:09",
+      "unidade": "UN",
+      "gtin": "",
+      "precos": {
+        "preco": 78,
+        "precoPromocional": 0,
+        "precoCusto": 40,
+        "precoCustoMedio": 40
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342902497,
+      "sku": "1C7Q-LKVS-MQQN",
+      "descricao": "Rodizio de Gel Giratório Sem Freio 75mm Rolamento Soprano",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:15:29",
+      "dataAlteracao": "2026-06-13 09:34:24",
+      "unidade": "UN",
+      "gtin": "7892327895598",
+      "precos": {
+        "preco": 34.9,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342902508,
+      "sku": "1C7Q-LKVS-MDOC",
+      "descricao": "Rodizio de Gel Giratório com Freio 75mm Rolamento Soprano",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:15:40",
+      "dataAlteracao": "2026-06-13 09:34:24",
+      "unidade": "UN",
+      "gtin": "7892327895611",
+      "precos": {
+        "preco": 38.9,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342902653,
+      "sku": "1C7Q-LKUU-0BA3",
+      "descricao": "Rodízio Transparente 035mm Freio Chapa Giratória Soprano",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:17:57",
+      "dataAlteracao": "2026-06-21 09:34:00",
+      "unidade": "UN",
+      "gtin": "7892327013428",
+      "precos": {
+        "preco": 19.9,
+        "precoPromocional": 0,
+        "precoCusto": 3.01,
+        "precoCustoMedio": 3.6
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342902688,
+      "sku": "1C7Q-LKUT-YLKI",
+      "descricao": "Rodízio Transparente 035mm Sem Freio Chapa Giratória Soprano",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:18:09",
+      "dataAlteracao": "2026-06-21 09:33:41",
+      "unidade": "UN",
+      "gtin": "7892327013466",
+      "precos": {
+        "preco": 19.9,
+        "precoPromocional": 0,
+        "precoCusto": 5,
+        "precoCustoMedio": 5
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342902707,
+      "sku": "1C7Q-LKV1-WBFF",
+      "descricao": "Kit com 5 Rodizios Gel 35mm Giratoria Silicone trava Soprano",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:18:25",
+      "dataAlteracao": "2026-06-20 11:41:54",
+      "unidade": "UN",
+      "gtin": "",
+      "precos": {
+        "preco": 42.98,
+        "precoPromocional": 0,
+        "precoCusto": 15.05,
+        "precoCustoMedio": 18
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342902731,
+      "sku": "CONJ-10-RODIZIOS-35MM-GEL",
+      "descricao": "10x Rodízio 35mm Giratório com Freio Gel Anti-Risco Soprano",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:18:37",
+      "dataAlteracao": "2026-06-14 12:31:14",
+      "unidade": "UN",
+      "gtin": "",
+      "precos": {
+        "preco": 77.98,
+        "precoPromocional": 0,
+        "precoCusto": 30.1,
+        "precoCustoMedio": 36
+      },
+      "estoque": {
+        "localizacao": "A1-01"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342904162,
+      "sku": "1C7Q-LKVY-UH7N",
+      "descricao": "Chave Soquete Tipo T 10mm Hexagonal 25cm Aquatools",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:29:57",
+      "dataAlteracao": "2026-06-13 09:34:08",
+      "unidade": "UN",
+      "gtin": "7899887505042",
+      "precos": {
+        "preco": 37.7,
+        "precoPromocional": 0,
+        "precoCusto": 9.45,
+        "precoCustoMedio": 11.3
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342904166,
+      "sku": "1C7Q-LKVY-TGBG",
+      "descricao": "Chave Soquete Tipo T 13mm Aquatools",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:29:58",
+      "dataAlteracao": "2026-06-13 10:34:29",
+      "unidade": "UN",
+      "gtin": "7899887505073",
+      "precos": {
+        "preco": 35,
+        "precoPromocional": 0,
+        "precoCusto": 9.46,
+        "precoCustoMedio": 9.46
+      },
+      "estoque": {
+        "localizacao": "Depósito Principal"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342906294,
+      "sku": "Sulfatoonsite",
+      "descricao": "Sulfato de Alumínio Ultraclor 2kg",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:34:41",
+      "dataAlteracao": "2026-06-13 09:34:28",
+      "unidade": "UN",
+      "gtin": "7898724670059",
+      "precos": {
+        "preco": 24.9,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342906351,
+      "sku": "PAPELEIRA-ADESIVA-ASTRA-BRANCA",
+      "descricao": "Papeleira com Adesivo Branca Astra",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:35:38",
+      "dataAlteracao": "2026-06-25 02:40:23",
+      "unidade": "UN",
+      "gtin": "7891222411933",
+      "precos": {
+        "preco": 55,
+        "precoPromocional": 0,
+        "precoCusto": 23,
+        "precoCustoMedio": 23
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342906622,
+      "sku": "C17S",
+      "descricao": "Caixa Descarga Branca Elevada Regulável 9L Astra",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:36:46",
+      "dataAlteracao": "2026-06-17 19:56:25",
+      "unidade": "UN",
+      "gtin": "7891222100028",
+      "precos": {
+        "preco": 69,
+        "precoPromocional": 0,
+        "precoCusto": 39.73,
+        "precoCustoMedio": 39.73
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342906794,
+      "sku": "07VM",
+      "descricao": "Caixa Ferramentas Sanfonada 5 Gavetas Vermelha 50x20x21cm N07 Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:38:07",
+      "dataAlteracao": "2026-06-13 09:34:04",
+      "unidade": "UN",
+      "gtin": "7894162001363",
+      "precos": {
+        "preco": 329,
+        "precoPromocional": 0,
+        "precoCusto": 115,
+        "precoCustoMedio": 115
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342907554,
+      "sku": "1C7Q-LKVM-XFLJ",
+      "descricao": "Trena Profissional Emborrachada 7,5mx25mm Team-75 Aquatools",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:41:57",
+      "dataAlteracao": "2026-06-13 09:34:28",
+      "unidade": "UN",
+      "gtin": "7899887501723",
+      "precos": {
+        "preco": 34.9,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342908280,
+      "sku": "KIT-4-RODIZIOS-GEL-35MM-SOPRANO",
+      "descricao": "Kit 4 Rodízios Gel Giratório Sem Freio 1,3/8 35 mm Soprano",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:43:36",
+      "dataAlteracao": "2026-06-20 11:41:51",
+      "unidade": "UN",
+      "gtin": "",
+      "precos": {
+        "preco": 49,
+        "precoPromocional": 0,
+        "precoCusto": 20,
+        "precoCustoMedio": 20
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342909579,
+      "sku": "08R",
+      "descricao": "Caixa Ferramentas Sanfonada 5 Gavetas Reforç 50x20x21cm 08R Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:48:48",
+      "dataAlteracao": "2026-06-13 09:34:04",
+      "unidade": "UN",
+      "gtin": "7894162000328",
+      "precos": {
+        "preco": 269.79,
+        "precoPromocional": 0,
+        "precoCusto": 120,
+        "precoCustoMedio": 120
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342910138,
+      "sku": "CS-10",
+      "descricao": "Caixa Ferramentas Sanfonada 5 Gavetas Roda 50x20x21cm CS-10 Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:50:23",
+      "dataAlteracao": "2026-06-13 09:34:04",
+      "unidade": "UN",
+      "gtin": "7894162000960",
+      "precos": {
+        "preco": 349,
+        "precoPromocional": 0,
+        "precoCusto": 125,
+        "precoCustoMedio": 125
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 342910745,
+      "sku": "1C7Q-LKVM-XZ7J",
+      "descricao": "Enerbras Resistência Enerducha UP 5500W 127V",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 08:53:18",
+      "dataAlteracao": "2026-06-20 00:47:05",
+      "unidade": "UN",
+      "gtin": "7898192564751",
+      "precos": {
+        "preco": 35.9,
+        "precoPromocional": 0,
+        "precoCusto": 20,
+        "precoCustoMedio": 20
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 343571944,
+      "sku": "1C7Q-LKWA-VQGQ",
+      "descricao": "VASO Unique Chumbo N12 Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 22:04:42",
+      "dataAlteracao": "2026-06-21 11:03:43",
+      "unidade": "UN",
+      "gtin": "7894023139112",
+      "precos": {
+        "preco": 19.11,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 343571949,
+      "sku": "1C7Q-LKW4-FI2Y",
+      "descricao": "VASO Unique ROSA N16 Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 22:04:42",
+      "dataAlteracao": "2026-06-21 11:04:41",
+      "unidade": "UN",
+      "gtin": "7894023139044",
+      "precos": {
+        "preco": 21.49,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 343571954,
+      "sku": "1C7Q-LKW4-FC3O",
+      "descricao": "VASO Unique AZUL N12 Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 22:04:43",
+      "dataAlteracao": "2026-06-21 11:03:18",
+      "unidade": "UN",
+      "gtin": "7894023139006",
+      "precos": {
+        "preco": 19.4,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 343571958,
+      "sku": "1C7Q-LKW4-F5R7",
+      "descricao": "VASO Unique ROSA N12 Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 22:04:43",
+      "dataAlteracao": "2026-06-21 11:04:17",
+      "unidade": "UN",
+      "gtin": "7894023139068",
+      "precos": {
+        "preco": 20.41,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 343577587,
+      "sku": "KIT-RODIZIOS-SOPRANO-50MM-FREIO",
+      "descricao": "Soprano, Kit 4 Rodízios Móveis Freio Rodas de Silicone 50mm",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-04-08 23:44:30",
+      "dataAlteracao": "2026-06-20 11:42:09",
+      "unidade": "UN",
+      "gtin": "",
+      "precos": {
+        "preco": 66.9,
+        "precoPromocional": 0,
+        "precoCusto": 14.94,
+        "precoCustoMedio": 15.4
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 344670767,
+      "sku": "03080.3050.10",
+      "descricao": "Rodizio Transparente 50MM SEM Freio Chapa Giratorio Niquel Soprano",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-10 15:42:09",
+      "dataAlteracao": "2026-06-13 09:34:25",
+      "unidade": "UN",
+      "gtin": "7892327903439",
+      "precos": {
+        "preco": 15.45,
+        "precoPromocional": 0,
+        "precoCusto": 3.44,
+        "precoCustoMedio": 3.57
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 344671209,
+      "sku": "03080.2050.10",
+      "descricao": "Rodizio Transparente 50MM COM Freio Chapa Giratorio Niquel Soprano",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-10 15:43:44",
+      "dataAlteracao": "2026-06-13 09:34:25",
+      "unidade": "UN",
+      "gtin": "7892327903392",
+      "precos": {
+        "preco": 18,
+        "precoPromocional": 0,
+        "precoCusto": 4.03,
+        "precoCustoMedio": 4.13
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 347410379,
+      "sku": "JFFLE77",
+      "descricao": "Cachepot Floreira Flat Vaso Atenas 77(32L) Chumbo Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-15 07:21:55",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023169911",
+      "precos": {
+        "preco": 319,
+        "precoPromocional": 0,
+        "precoCusto": 160,
+        "precoCustoMedio": 160
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 348942357,
+      "sku": "348942357",
+      "descricao": "Machadinha Profissional Cabo Fibra 600g Aquatools",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-17 21:29:10",
+      "dataAlteracao": "2026-06-13 10:34:38",
+      "unidade": "UN",
+      "gtin": "7899887503000",
+      "precos": {
+        "preco": 118.14,
+        "precoPromocional": 0,
+        "precoCusto": 55,
+        "precoCustoMedio": 55
+      },
+      "estoque": {
+        "localizacao": "Depósito Principal"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 350509721,
+      "sku": "JVCDAC34",
+      "descricao": "Vaso Decor Plantas Cilin Decore 34 (28l) Aço Corten Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-23 20:31:14",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023150827",
+      "precos": {
+        "preco": 459,
+        "precoPromocional": 0,
+        "precoCusto": 175,
+        "precoCustoMedio": 175
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 350554366,
+      "sku": "9040101",
+      "descricao": "Ultra Decantador Liquido Finalizador Piscinas 1l Ultraclor",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-24 05:53:03",
+      "dataAlteracao": "2026-06-13 14:47:05",
+      "unidade": "UN",
+      "gtin": "7898724670004",
+      "precos": {
+        "preco": 37.04,
+        "precoPromocional": 0,
+        "precoCusto": 11,
+        "precoCustoMedio": 11
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 350563587,
+      "sku": "JVCDE33",
+      "descricao": "Vaso Decor Plantas Cilin Decore 33 (16l) Chumbo Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-24 08:27:51",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023137941",
+      "precos": {
+        "preco": 429,
+        "precoPromocional": 0,
+        "precoCusto": 153,
+        "precoCustoMedio": 153
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 350621042,
+      "sku": "VCRAC2",
+      "descricao": "Vaso Concept Redondo N2 Aço Corten Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-04-24 12:24:47",
+      "dataAlteracao": "2026-06-25 03:09:29",
+      "unidade": "UN",
+      "gtin": "7894023147940",
+      "precos": {
+        "preco": 93.94,
+        "precoPromocional": 0,
+        "precoCusto": 33.23,
+        "precoCustoMedio": 33.23
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 351041822,
+      "sku": "Parafuso5x16",
+      "descricao": "Parafuso 5x16",
+      "tipo": "M",
+      "situacao": "A",
+      "dataCriacao": "2026-04-26 19:39:27",
+      "dataAlteracao": "2026-06-19 07:56:11",
+      "unidade": "UN",
+      "gtin": "",
+      "precos": {
+        "preco": 0.01,
+        "precoPromocional": 0,
+        "precoCusto": 0.1,
+        "precoCustoMedio": 0.1
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 352292111,
+      "sku": "JVCDCQ34",
+      "descricao": "Vaso Decor Plantas Cilin Decore 34 (28l) Cimento Queim Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-03 11:10:03",
+      "dataAlteracao": "2026-06-19 14:17:02",
+      "unidade": "UN",
+      "gtin": "7894023150353",
+      "precos": {
+        "preco": 459,
+        "precoPromocional": 0,
+        "precoCusto": 175,
+        "precoCustoMedio": 175
+      },
+      "estoque": {
+        "localizacao": "Depósito Principal"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 352312277,
+      "sku": "JVCDPA33",
+      "descricao": "Vaso Decor Planta Cilin Decore 33 (16l) Preto Ardósia Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-03 15:30:39",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023150803",
+      "precos": {
+        "preco": 429,
+        "precoPromocional": 0,
+        "precoCusto": 155,
+        "precoCustoMedio": 155
+      },
+      "estoque": {
+        "localizacao": "Depósito Principal"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 352312377,
+      "sku": "JVCDB33",
+      "descricao": "Vaso Decor Plantas Cilin Decore 33 (16l) Off White Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-03 15:32:06",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023137934",
+      "precos": {
+        "preco": 399,
+        "precoPromocional": 0,
+        "precoCusto": 155,
+        "precoCustoMedio": 155
+      },
+      "estoque": {
+        "localizacao": "Depósito Principal"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 352312491,
+      "sku": "JVCDAC33",
+      "descricao": "Vaso Decorativo Planta Cilin Decore 33 (16l) Aco Corten Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-03 15:33:18",
+      "dataAlteracao": "2026-06-21 10:43:59",
+      "unidade": "UN",
+      "gtin": "7894023150834",
+      "precos": {
+        "preco": 429,
+        "precoPromocional": 0,
+        "precoCusto": 155,
+        "precoCustoMedio": 155
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 352312595,
+      "sku": "JVCDCQ33",
+      "descricao": "Vaso Decor Plantas Cilin Decore 33 (16l) Cimento Queim Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-03 15:34:24",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023150247",
+      "precos": {
+        "preco": 429,
+        "precoPromocional": 0,
+        "precoCusto": 155,
+        "precoCustoMedio": 155
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 352312700,
+      "sku": "JVCDE34",
+      "descricao": "Vaso Decor Plantas Cilin Decore 34 (28l) Chumbo Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-03 15:35:35",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023137965",
+      "precos": {
+        "preco": 459,
+        "precoPromocional": 0,
+        "precoCusto": 173.8,
+        "precoCustoMedio": 174.73
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 352326295,
+      "sku": "JVAQAC55",
+      "descricao": "Vaso Decorativo Plantas Antique 55 (75l) Aço Corten Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-03 17:45:26",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023153019",
+      "precos": {
+        "preco": 572.28,
+        "precoPromocional": 0,
+        "precoCusto": 191.09,
+        "precoCustoMedio": 191.09
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 352330640,
+      "sku": "JVNTI55",
+      "descricao": "Vaso Decorativo Plantas Nativa 55 (75l) Iron JVNTI55 Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-03 17:50:49",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023170740",
+      "precos": {
+        "preco": 640.3,
+        "precoPromocional": 0,
+        "precoCusto": 257,
+        "precoCustoMedio": 257
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 352335653,
+      "sku": "4",
+      "descricao": "Caixa Ferramentas Sanfonada 3 Gavetas 40x20x17 Cm N04 Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-03 17:52:37",
+      "dataAlteracao": "2026-06-20 00:05:11",
+      "unidade": "UN",
+      "gtin": "7894162000144",
+      "precos": {
+        "preco": 149,
+        "precoPromocional": 0,
+        "precoCusto": 66,
+        "precoCustoMedio": 66
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 352336104,
+      "sku": "JFUBCQ10",
+      "descricao": "Cachepot Floreira Flat Vaso Urbe 100 (119L) Cimento Queimado Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-03 17:53:26",
+      "dataAlteracao": "2026-06-30 10:25:40",
+      "unidade": "UN",
+      "gtin": "7894023170337",
+      "precos": {
+        "preco": 749.48,
+        "precoPromocional": 0,
+        "precoCusto": 299.79,
+        "precoCustoMedio": 299.79
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353469544,
+      "sku": "T12-AGL",
+      "descricao": "Fechadura Digital T12 Bluetooth Chave Senha Preto Agl",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 08:13:55",
+      "dataAlteracao": "2026-06-13 09:34:13",
+      "unidade": "UN",
+      "gtin": "7899884526170",
+      "precos": {
+        "preco": 1599,
+        "precoPromocional": 0,
+        "precoCusto": 550,
+        "precoCustoMedio": 550
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353676753,
+      "sku": "JVCDB34",
+      "descricao": "Vaso Decor Plantas Cilin Decore 34 (28l) Off White Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 17:52:45",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023137958",
+      "precos": {
+        "preco": 473.7,
+        "precoPromocional": 0,
+        "precoCusto": 179.73,
+        "precoCustoMedio": 178.83
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353681080,
+      "sku": "75x25",
+      "descricao": "Trena profissional emborrachada Aquatools - 7,5 metrosx25mm",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 18:24:28",
+      "dataAlteracao": "2026-06-13 09:34:28",
+      "unidade": "UN",
+      "gtin": "7899887501723",
+      "precos": {
+        "preco": 29.9,
+        "precoPromocional": 0,
+        "precoCusto": 5,
+        "precoCustoMedio": 5
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353681086,
+      "sku": "3x19",
+      "descricao": "Trena Profissional Emborrachada Aquatools - 3 Metros X 16mm",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 18:24:29",
+      "dataAlteracao": "2026-06-13 09:34:28",
+      "unidade": "UN",
+      "gtin": "7899887501709",
+      "precos": {
+        "preco": 19.9,
+        "precoPromocional": 0,
+        "precoCusto": 5,
+        "precoCustoMedio": 5
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353691872,
+      "sku": "CAD-3050-FBACD",
+      "descricao": "Cadeado Haste Longa Latão- Papaiz 30/50",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 20:28:46",
+      "dataAlteracao": "2026-06-20 23:32:39",
+      "unidade": "UN",
+      "gtin": "7891194000401",
+      "precos": {
+        "preco": 59,
+        "precoPromocional": 0,
+        "precoCusto": 18.95,
+        "precoCustoMedio": 18.97
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353692194,
+      "sku": "7",
+      "descricao": "Caixa Ferramentas Fercar 07 Metal 20x50x21cm Azul Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 20:32:25",
+      "dataAlteracao": "2026-06-21 09:38:57",
+      "unidade": "UN",
+      "gtin": "7894162000175",
+      "precos": {
+        "preco": 169,
+        "precoPromocional": 0,
+        "precoCusto": 99,
+        "precoCustoMedio": 99
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353692294,
+      "sku": "9",
+      "descricao": "Caixa Ferramentas Sanfonada 7 Gavetas 50x20x25 Cm N09 Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 20:34:08",
+      "dataAlteracao": "2026-06-13 09:34:04",
+      "unidade": "UN",
+      "gtin": "7894162000366",
+      "precos": {
+        "preco": 303,
+        "precoPromocional": 0,
+        "precoCusto": 127,
+        "precoCustoMedio": 127
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353692377,
+      "sku": "5",
+      "descricao": "Caixa Ferramentas Sanfonada 3 Gavetas 50x20x17 Cm N05 Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 20:35:20",
+      "dataAlteracao": "2026-06-20 00:05:23",
+      "unidade": "UN",
+      "gtin": "7894162000151",
+      "precos": {
+        "preco": 179,
+        "precoPromocional": 0,
+        "precoCusto": 74,
+        "precoCustoMedio": 74
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353692529,
+      "sku": "N05",
+      "descricao": "Caixa Ferramentas Sanfonada 3 Gavetas Vermelha 50x20x17cm N05 Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 20:36:49",
+      "dataAlteracao": "2026-06-20 00:05:34",
+      "unidade": "UN",
+      "gtin": "7894162004258",
+      "precos": {
+        "preco": 149,
+        "precoPromocional": 0,
+        "precoCusto": 74,
+        "precoCustoMedio": 74
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353692684,
+      "sku": "C06AZ",
+      "descricao": "Carrinho Fechado Ferramentas C06 3 Gavetas Azul Cinza Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 20:39:46",
+      "dataAlteracao": "2026-07-03 18:56:29",
+      "unidade": "UN",
+      "gtin": "7894162000465",
+      "precos": {
+        "preco": 1409.76,
+        "precoPromocional": 0,
+        "precoCusto": 704.88,
+        "precoCustoMedio": 704.95
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353692956,
+      "sku": "C06PT",
+      "descricao": "Carrinho Fechado Ferramentas C06 3 Gavetas Preto Cinza Fercar ",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 20:44:38",
+      "dataAlteracao": "2026-06-21 09:53:08",
+      "unidade": "UN",
+      "gtin": "7894162002407",
+      "precos": {
+        "preco": 1399,
+        "precoPromocional": 0,
+        "precoCusto": 700,
+        "precoCustoMedio": 700
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353693038,
+      "sku": "C06TPT",
+      "descricao": "Carrinho Fechado Ferramentas C06 3 Gavetas Todo Preto Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 20:45:43",
+      "dataAlteracao": "2026-07-10 11:40:18",
+      "unidade": "UN",
+      "gtin": "7894162004685",
+      "precos": {
+        "preco": 1414.52,
+        "precoPromocional": 0,
+        "precoCusto": 707.26,
+        "precoCustoMedio": 707.26
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353693135,
+      "sku": "C06TVM",
+      "descricao": "Carrinho Fechado Ferramentas C06 3 Gavetas Td Vermelho Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 20:46:37",
+      "dataAlteracao": "2026-06-20 00:09:36",
+      "unidade": "UN",
+      "gtin": "7894162004845",
+      "precos": {
+        "preco": 1399,
+        "precoPromocional": 0,
+        "precoCusto": 700,
+        "precoCustoMedio": 700
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353693202,
+      "sku": "C06VM",
+      "descricao": "Carrinho Fechado Ferramentas C06 3 Gavetas Vermelh Cza Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 20:47:28",
+      "dataAlteracao": "2026-06-23 08:37:37",
+      "unidade": "UN",
+      "gtin": "7894162002063",
+      "precos": {
+        "preco": 1391.6,
+        "precoPromocional": 0,
+        "precoCusto": 713.64,
+        "precoCustoMedio": 702.73
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353694002,
+      "sku": "C08CZ",
+      "descricao": "Carrinho Fechado Ferramenta C08 6 Gavetas Cinza Fercar Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 21:01:59",
+      "dataAlteracao": "2026-06-13 09:34:04",
+      "unidade": "UN",
+      "gtin": "7894162004418",
+      "precos": {
+        "preco": 1499,
+        "precoPromocional": 0,
+        "precoCusto": 900,
+        "precoCustoMedio": 900
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353696687,
+      "sku": "CSD830FBA",
+      "descricao": "Chave Liga/desliga/liga Margirius Csd-830 30a por Alavanca",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 21:41:07",
+      "dataAlteracao": "2026-06-21 09:09:32",
+      "unidade": "UN",
+      "gtin": "7890428162595",
+      "precos": {
+        "preco": 129,
+        "precoPromocional": 0,
+        "precoCusto": 80,
+        "precoCustoMedio": 80
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353696981,
+      "sku": "COM4",
+      "descricao": "Comedouro Aves Pássaros com Fruteira COM4 Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 21:45:48",
+      "dataAlteracao": "2026-06-13 10:05:17",
+      "unidade": "UN",
+      "gtin": "7894162000502",
+      "precos": {
+        "preco": 103.09,
+        "precoPromocional": 0,
+        "precoCusto": 44.82,
+        "precoCustoMedio": 40.11
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353697603,
+      "sku": "KIT-RODIZIOS-50MM-GEL",
+      "descricao": "Kit 4 rodízios parafusos 50mm gel 2 trava e 2 trava Soprano",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 21:53:58",
+      "dataAlteracao": "2026-06-13 09:34:17",
+      "unidade": "UN",
+      "gtin": "7897447900467",
+      "precos": {
+        "preco": 49,
+        "precoPromocional": 0,
+        "precoCusto": 33.08,
+        "precoCustoMedio": 34
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353697660,
+      "sku": "Castanhodba",
+      "descricao": "Massa F12 para Calafetar Madeira 400g Castanho Viapol",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 21:55:05",
+      "dataAlteracao": "2026-06-21 10:17:42",
+      "unidade": "UN",
+      "gtin": "7898055525646",
+      "precos": {
+        "preco": 22.44,
+        "precoPromocional": 0,
+        "precoCusto": 11.22,
+        "precoCustoMedio": 10.37
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353697737,
+      "sku": "Jatobadba",
+      "descricao": "Massa F12 para Calafetar Madeira 400g Jatoba Viapol",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 21:55:48",
+      "dataAlteracao": "2026-06-21 09:30:18",
+      "unidade": "UN",
+      "gtin": "7898055524878",
+      "precos": {
+        "preco": 24.9,
+        "precoPromocional": 0,
+        "precoCusto": 10.51,
+        "precoCustoMedio": 10.51
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353697814,
+      "sku": "Marfimdba",
+      "descricao": "Massa F12 para Calafetar Madeira 400g Marfim Viapol",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 21:56:22",
+      "dataAlteracao": "2026-06-21 10:19:13",
+      "unidade": "UN",
+      "gtin": "7898055524823",
+      "precos": {
+        "preco": 23.43,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353697897,
+      "sku": "V0210691",
+      "descricao": "Massa F12 para Calafetar Madeira 400g Mogno Viapol",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 21:57:04",
+      "dataAlteracao": "2026-06-21 10:21:49",
+      "unidade": "UN",
+      "gtin": "7898055524830",
+      "precos": {
+        "preco": 22.44,
+        "precoPromocional": 0,
+        "precoCusto": 11.22,
+        "precoCustoMedio": 11.22
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353698023,
+      "sku": "V0217760",
+      "descricao": "Massa Paramadeira F-12 400G/0,225L Angelim - Viapol",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 21:57:48",
+      "dataAlteracao": "2026-06-21 10:21:21",
+      "unidade": "UN",
+      "gtin": "7899519910633",
+      "precos": {
+        "preco": 24.9,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353698103,
+      "sku": "V0210680",
+      "descricao": "Massa Paramadeira F-12 400G/0,225L Sucupira - Viapol",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 21:58:27",
+      "dataAlteracao": "2026-06-21 09:29:55",
+      "unidade": "UN",
+      "gtin": "7898055525660",
+      "precos": {
+        "preco": 31.12,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353698195,
+      "sku": "V0210685",
+      "descricao": "Massa para Calafetar Madeira F12 Ipe 400g Viapol",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 21:59:04",
+      "dataAlteracao": "2026-06-23 20:17:54",
+      "unidade": "UN",
+      "gtin": "7898055524861",
+      "precos": {
+        "preco": 24.9,
+        "precoPromocional": 0,
+        "precoCusto": 10.51,
+        "precoCustoMedio": 10.26
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353698283,
+      "sku": "V0210681",
+      "descricao": "Massa para Madeira F12 400g Branca Viapol",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 21:59:47",
+      "dataAlteracao": "2026-06-21 09:29:15",
+      "unidade": "UN",
+      "gtin": "7898055524847",
+      "precos": {
+        "preco": 31.12,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353698363,
+      "sku": "V0210643",
+      "descricao": "Massa para Madeira F12 400g Cumaru Viapol",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 22:00:32",
+      "dataAlteracao": "2026-06-25 02:37:46",
+      "unidade": "UN",
+      "gtin": "7898055525981",
+      "precos": {
+        "preco": 31.12,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353698435,
+      "sku": "V0210675",
+      "descricao": "Massa F12 para Calafetar Madeira 400g Cerejeira Viapol",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 22:01:17",
+      "dataAlteracao": "2026-06-21 09:28:50",
+      "unidade": "UN",
+      "gtin": "7898055524922",
+      "precos": {
+        "preco": 24.9,
+        "precoPromocional": 0,
+        "precoCusto": 10.51,
+        "precoCustoMedio": 10.51
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353698620,
+      "sku": "JFQFAC77",
+      "descricao": "Cachepot Floreira Flat Vaso 77(32l) 29x77cm Aco Corten Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 22:05:09",
+      "dataAlteracao": "2026-06-20 00:00:53",
+      "unidade": "UN",
+      "gtin": "7894023127867",
+      "precos": {
+        "preco": 398.88,
+        "precoPromocional": 0,
+        "precoCusto": 160,
+        "precoCustoMedio": 160
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353698710,
+      "sku": "JFQFCQ77",
+      "descricao": "Cachepot Floreira Flat Vaso 77(32l) 29x77cm Cimento Queimado Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 22:06:05",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023127317",
+      "precos": {
+        "preco": 411.81,
+        "precoPromocional": 0,
+        "precoCusto": 160,
+        "precoCustoMedio": 160
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353698781,
+      "sku": "JFQFE77",
+      "descricao": "Cachepot Floreira Flat Vaso 77(32l) 29x77cm Chumbo Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 22:06:44",
+      "dataAlteracao": "2026-06-30 10:25:40",
+      "unidade": "UN",
+      "gtin": "7899887502157",
+      "precos": {
+        "preco": 357.6,
+        "precoPromocional": 0,
+        "precoCusto": 155.48,
+        "precoCustoMedio": 155.48
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353698890,
+      "sku": "JFQFPA77",
+      "descricao": "Cachepot Floreira Flat Vaso 77(32l) 29x77cm Preto Ardósia Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 22:07:31",
+      "dataAlteracao": "2026-06-20 00:01:19",
+      "unidade": "UN",
+      "gtin": "7894023127287",
+      "precos": {
+        "preco": 399,
+        "precoPromocional": 0,
+        "precoCusto": 160,
+        "precoCustoMedio": 160
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353701556,
+      "sku": "JFQFAC57",
+      "descricao": "Cachepot Floreira Flat Vaso 57(6l) 15x57cm Aço Corten Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 23:04:25",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023116168",
+      "precos": {
+        "preco": 159.89,
+        "precoPromocional": 0,
+        "precoCusto": 63.81,
+        "precoCustoMedio": 64.06
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353701726,
+      "sku": "JFQFE57",
+      "descricao": "Cachepot Floreira Flat Vaso 57(6l) 15x57cm Chumbo Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 23:05:30",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023158328",
+      "precos": {
+        "preco": 159.89,
+        "precoPromocional": 0,
+        "precoCusto": 65,
+        "precoCustoMedio": 65
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353701891,
+      "sku": "JFQFCQ57",
+      "descricao": "Cachepot Floreira Flat Vaso 57 (6l)15x57cm Cimento Quei Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 23:07:08",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023113822",
+      "precos": {
+        "preco": 174.51,
+        "precoPromocional": 0,
+        "precoCusto": 63.8,
+        "precoCustoMedio": 63.8
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353702017,
+      "sku": "JFQFPA57",
+      "descricao": "Cachepot Floreira Flat Vaso 57(6l) 15x57cm Preto Ardosi Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 23:07:56",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023127300",
+      "precos": {
+        "preco": 159.89,
+        "precoPromocional": 0,
+        "precoCusto": 63.81,
+        "precoCustoMedio": 63.81
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353702856,
+      "sku": "JVTBPA32",
+      "descricao": "Vaso Decorativo Planta Tribo Japi 43x32cm 32 Preto Ardósia",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 23:18:42",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023139136",
+      "precos": {
+        "preco": 219,
+        "precoPromocional": 0,
+        "precoCusto": 75,
+        "precoCustoMedio": 75
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353703884,
+      "sku": "KIT2RODOALUMINIOBORRACHA",
+      "descricao": "Kit 2 Rodo Vedante Borracha Friso Porta Aluminio  80cm",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 23:47:04",
+      "dataAlteracao": "2026-06-13 09:34:17",
+      "unidade": "UN",
+      "gtin": "7898912189097",
+      "precos": {
+        "preco": 45,
+        "precoPromocional": 0,
+        "precoCusto": 20,
+        "precoCustoMedio": 20
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353704049,
+      "sku": "KIT2RODOVEDADORALUMINIO",
+      "descricao": "Kit 2 Rodo Vedante Borracha Friso Porta Aluminio  100cm",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 23:50:01",
+      "dataAlteracao": "2026-06-13 09:34:17",
+      "unidade": "UN",
+      "gtin": "7898465460148",
+      "precos": {
+        "preco": 45,
+        "precoPromocional": 0,
+        "precoCusto": 20,
+        "precoCustoMedio": 20
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353704246,
+      "sku": "KIT2VEDANTEPORTA90CM",
+      "descricao": "Kit 2 Rodo Vedante Borracha Friso Porta Aluminio 90 Cm",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-05-08 23:55:37",
+      "dataAlteracao": "2026-06-20 01:16:06",
+      "unidade": "UN",
+      "gtin": "7898465460094",
+      "precos": {
+        "preco": 50.99,
+        "precoPromocional": 0,
+        "precoCusto": 20,
+        "precoCustoMedio": 20
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353704474,
+      "sku": "kit-70",
+      "descricao": "Kit 2 Rodo Vedante Borracha Friso Porta Aluminio 70cm",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 00:02:06",
+      "dataAlteracao": "2026-06-20 11:41:51",
+      "unidade": "UN",
+      "gtin": "",
+      "precos": {
+        "preco": 45,
+        "precoPromocional": 0,
+        "precoCusto": 20,
+        "precoCustoMedio": 20
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353711354,
+      "sku": "JFQFCQ67",
+      "descricao": "Cachepot Floreira Flat Vaso 67(17l) 22x67cm Cimento Queimado Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 07:18:06",
+      "dataAlteracao": "2026-06-20 00:00:35",
+      "unidade": "UN",
+      "gtin": "7894023113815",
+      "precos": {
+        "preco": 309.12,
+        "precoPromocional": 0,
+        "precoCusto": 113.42,
+        "precoCustoMedio": 114.44
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353711479,
+      "sku": "V0210636",
+      "descricao": "Massa F12 para Calafetar Madeira 400g Imbuia Viapol",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 07:20:14",
+      "dataAlteracao": "2026-06-21 09:28:13",
+      "unidade": "UN",
+      "gtin": "7898055524854",
+      "precos": {
+        "preco": 31.12,
+        "precoPromocional": 0,
+        "precoCusto": 10.51,
+        "precoCustoMedio": 10.14
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353711631,
+      "sku": "COR5",
+      "descricao": "Caixa Correio Vertical Trava para Grade/embutir COR5 Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 07:24:40",
+      "dataAlteracao": "2026-06-13 09:34:00",
+      "unidade": "UN",
+      "gtin": "7894162001783",
+      "precos": {
+        "preco": 78.9,
+        "precoPromocional": 0,
+        "precoCusto": 37.53,
+        "precoCustoMedio": 35.89
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353727541,
+      "sku": "VUNA16",
+      "descricao": "Vaso Plantas Unique 16 Azul - Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 09:50:30",
+      "dataAlteracao": "2026-06-21 11:02:49",
+      "unidade": "UN",
+      "gtin": "7894023138986",
+      "precos": {
+        "preco": 24.9,
+        "precoPromocional": 0,
+        "precoCusto": 7,
+        "precoCustoMedio": 7
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353727693,
+      "sku": "TH-05",
+      "descricao": "Trena 5mx19mm Halten Th-05",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 09:50:59",
+      "dataAlteracao": "2026-06-21 09:27:16",
+      "unidade": "UN",
+      "gtin": "7899887504823",
+      "precos": {
+        "preco": 25,
+        "precoPromocional": 0,
+        "precoCusto": 5,
+        "precoCustoMedio": 5
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353727985,
+      "sku": "PET/ORBM*SORT",
+      "descricao": "Ossinho Rex Tamanho M Astra",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 09:52:31",
+      "dataAlteracao": "2026-07-10 09:27:44",
+      "unidade": "UN",
+      "gtin": "7891222355947",
+      "precos": {
+        "preco": 35,
+        "precoPromocional": 0,
+        "precoCusto": 5,
+        "precoCustoMedio": 5
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353728012,
+      "sku": "PET/CMGF*RSP",
+      "descricao": "Comedouro para Gatos 200ml Astra Rosa Pet",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 09:53:01",
+      "dataAlteracao": "2026-07-10 09:27:45",
+      "unidade": "UN",
+      "gtin": "7891222355480",
+      "precos": {
+        "preco": 35,
+        "precoPromocional": 0,
+        "precoCusto": 5,
+        "precoCustoMedio": 5
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353731662,
+      "sku": "VED90UN",
+      "descricao": "Rodo Vedante Borracha Friso Porta Aluminio 90 Cm Vivaliz",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:14:19",
+      "dataAlteracao": "2026-06-25 02:45:50",
+      "unidade": "UN",
+      "gtin": "7894682000037",
+      "precos": {
+        "preco": 29,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353731878,
+      "sku": "ved-80-nh",
+      "descricao": "Rodo Vedante Borracha Friso Porta Aluminio 80cm Vivaliz",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:15:28",
+      "dataAlteracao": "2026-06-13 09:34:26",
+      "unidade": "UN",
+      "gtin": "7898618121032",
+      "precos": {
+        "preco": 29,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353732039,
+      "sku": "RODOVED100",
+      "descricao": "Rodo Vedante Borracha Friso Porta Aluminio 100cm Vivaliz",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:16:30",
+      "dataAlteracao": "2026-06-25 02:43:12",
+      "unidade": "UN",
+      "gtin": "17896417223879",
+      "precos": {
+        "preco": 29.9,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353732318,
+      "sku": "ved-70",
+      "descricao": "Rodo Vedante Borracha Friso Porta Aluminio 70cm Vivaliz",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:17:33",
+      "dataAlteracao": "2026-06-13 09:34:26",
+      "unidade": "UN",
+      "gtin": "7898465422498",
+      "precos": {
+        "preco": 29,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353732774,
+      "sku": "178970678530",
+      "descricao": "Cofrinho Infantil Segredo Senha Moedas Cédulas Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:20:09",
+      "dataAlteracao": "2026-07-03 18:56:29",
+      "unidade": "UN",
+      "gtin": "7894162000083",
+      "precos": {
+        "preco": 24.21,
+        "precoPromocional": 0,
+        "precoCusto": 8.29,
+        "precoCustoMedio": 9.96
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353733531,
+      "sku": "Sabatini",
+      "descricao": "Assento Sanitário Almofadado Sabatini Astra",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:23:13",
+      "dataAlteracao": "2026-06-17 19:56:25",
+      "unidade": "UN",
+      "gtin": "7891222044445",
+      "precos": {
+        "preco": 189,
+        "precoPromocional": 0,
+        "precoCusto": 99.99,
+        "precoCustoMedio": 93.82
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353733822,
+      "sku": "COM1",
+      "descricao": "Comedouro Automatico Regulavel Caes Gatos 2,5 Kg Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:24:24",
+      "dataAlteracao": "2026-07-10 11:40:18",
+      "unidade": "UN",
+      "gtin": "7894162000182",
+      "precos": {
+        "preco": 94.44,
+        "precoPromocional": 0,
+        "precoCusto": 41.06,
+        "precoCustoMedio": 41.14
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353733903,
+      "sku": "COM2",
+      "descricao": "Comedouro Automatico Regulavel Caes Gatosv5 Kg Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:25:06",
+      "dataAlteracao": "2026-07-10 11:40:18",
+      "unidade": "UN",
+      "gtin": "7894162000199",
+      "precos": {
+        "preco": 141.13,
+        "precoPromocional": 0,
+        "precoCusto": 61.36,
+        "precoCustoMedio": 61.94
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353733990,
+      "sku": "COM3",
+      "descricao": "Comedouro Automatico Regulavel Caes Gatos 10 Kg Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:25:49",
+      "dataAlteracao": "2026-06-13 10:05:17",
+      "unidade": "UN",
+      "gtin": "7894162000205",
+      "precos": {
+        "preco": 218,
+        "precoPromocional": 0,
+        "precoCusto": 81.04,
+        "precoCustoMedio": 81.8
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353734276,
+      "sku": "JFQFPA67",
+      "descricao": "Cachepot Floreira Flat Vaso 67(17l) 22x67cm Preto Ardósia Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:27:43",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023127294",
+      "precos": {
+        "preco": 329,
+        "precoPromocional": 0,
+        "precoCusto": 115,
+        "precoCustoMedio": 115
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353734363,
+      "sku": "JFQFAC67",
+      "descricao": "Cachepot Floreira Flat Vaso 67(17l) 22x67cm Aco Corten Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:28:27",
+      "dataAlteracao": "2026-06-20 00:00:15",
+      "unidade": "UN",
+      "gtin": "7894023116151",
+      "precos": {
+        "preco": 249.11,
+        "precoPromocional": 0,
+        "precoCusto": 113.42,
+        "precoCustoMedio": 113.42
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353734704,
+      "sku": "JFQFE67",
+      "descricao": "Cachepot Floreira Flat Vaso 67(17l) 22x67cm Chumbo Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:29:21",
+      "dataAlteracao": "2026-06-19 13:07:56",
+      "unidade": "UN",
+      "gtin": "7894023158335",
+      "precos": {
+        "preco": 260.43,
+        "precoPromocional": 0,
+        "precoCusto": 115,
+        "precoCustoMedio": 115
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353735022,
+      "sku": "C08TVM",
+      "descricao": "Carrinho Fechado Ferramentas C08 6 Gavetas Td Vermelho Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:30:28",
+      "dataAlteracao": "2026-06-13 09:34:06",
+      "unidade": "UN",
+      "gtin": "7894162004784",
+      "precos": {
+        "preco": 1575.47,
+        "precoPromocional": 0,
+        "precoCusto": 880.15,
+        "precoCustoMedio": 890.08
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353735611,
+      "sku": "C08AZ",
+      "descricao": "Carrinho Fechado Ferramentas C08 6 Gavetas Azul Cinza Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:31:25",
+      "dataAlteracao": "2026-06-13 09:34:06",
+      "unidade": "UN",
+      "gtin": "7894162000878",
+      "precos": {
+        "preco": 1599,
+        "precoPromocional": 0,
+        "precoCusto": 900,
+        "precoCustoMedio": 900
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353735815,
+      "sku": "C08BR",
+      "descricao": "Carrinho Fechado Ferramentas C08 6 Gavetas Branco Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:32:13",
+      "dataAlteracao": "2026-06-13 09:34:06",
+      "unidade": "UN",
+      "gtin": "7894162001882",
+      "precos": {
+        "preco": 1599,
+        "precoPromocional": 0,
+        "precoCusto": 885.37,
+        "precoCustoMedio": 895.12
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353736231,
+      "sku": "C08TPT",
+      "descricao": "Carrinho Fechado Ferramentas C08 6 Gavetas Todo Preto Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:33:47",
+      "dataAlteracao": "2026-07-03 18:56:29",
+      "unidade": "UN",
+      "gtin": "7894162004692",
+      "precos": {
+        "preco": 1591.88,
+        "precoPromocional": 0,
+        "precoCusto": 879.49,
+        "precoCustoMedio": 882.42
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353736291,
+      "sku": "C08VM",
+      "descricao": "Carrinho Fechado Ferramentas C08 6 Gavetas Vermelh Cza Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:34:33",
+      "dataAlteracao": "2026-07-03 18:56:30",
+      "unidade": "UN",
+      "gtin": "7894162002322",
+      "precos": {
+        "preco": 1688.62,
+        "precoPromocional": 0,
+        "precoCusto": 882.97,
+        "precoCustoMedio": 895.13
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 353736360,
+      "sku": "C08PT",
+      "descricao": "Carrinho Fechado Ferramentas C08 6 Gavetas Preto Cinza Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-09 10:35:04",
+      "dataAlteracao": "2026-07-03 18:55:05",
+      "unidade": "UN",
+      "gtin": "7894162002544",
+      "precos": {
+        "preco": 1699,
+        "precoPromocional": 0,
+        "precoCusto": 882.97,
+        "precoCustoMedio": 891.99
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 354887824,
+      "sku": "PCT-250",
+      "descricao": "Marmita Descartável 250ml Totalplast Freezer Microonda 24un",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-14 20:30:21",
+      "dataAlteracao": "2026-06-13 10:35:09",
+      "unidade": "UN",
+      "gtin": "7898505142270",
+      "precos": {
+        "preco": 28.4,
+        "precoPromocional": 0,
+        "precoCusto": 9.5,
+        "precoCustoMedio": 9.5
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 354887867,
+      "sku": "PCT-500",
+      "descricao": "Pote Plástico 500ml Totalplast 24 Unidade Microondas Freezer",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-05-14 20:31:01",
+      "dataAlteracao": "2026-06-13 10:35:09",
+      "unidade": "UN",
+      "gtin": "7898505142287",
+      "precos": {
+        "preco": 33.15,
+        "precoPromocional": 0,
+        "precoCusto": 13.4,
+        "precoCustoMedio": 13.4
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 359360602,
+      "sku": "AH-2UC1-6SIO",
+      "descricao": "Sifão Multissifão Tubo Extensível - Krona",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-04 11:28:28",
+      "dataAlteracao": "2026-06-13 09:34:26",
+      "unidade": "UN",
+      "gtin": "7897801301596",
+      "precos": {
+        "preco": 23.9,
+        "precoPromocional": 0,
+        "precoCusto": 6,
+        "precoCustoMedio": 6
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 359360637,
+      "sku": "16-52ZG-AKB9",
+      "descricao": "Disjuntor Bipolar 100A Ul Soprano",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-04 11:28:34",
+      "dataAlteracao": "2026-06-13 09:34:13",
+      "unidade": "UN",
+      "gtin": "7892327509440",
+      "precos": {
+        "preco": 153.9,
+        "precoPromocional": 0,
+        "precoCusto": 65,
+        "precoCustoMedio": 65
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360421105,
+      "sku": "9C-M51D-ITZ7",
+      "descricao": "Maçarico portátil  culinário a gás MELFI",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 10:10:37",
+      "dataAlteracao": "2026-07-03 18:57:54",
+      "unidade": "UN",
+      "gtin": "7898642791416",
+      "precos": {
+        "preco": 49,
+        "precoPromocional": 0,
+        "precoCusto": 17,
+        "precoCustoMedio": 17
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360490802,
+      "sku": "PET/CMF3*RSP",
+      "descricao": "Comedouro Antiformiga 550ml Rosa Astra",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:44:50",
+      "dataAlteracao": "2026-07-10 09:27:44",
+      "unidade": "UN",
+      "gtin": "7891222355763",
+      "precos": {
+        "preco": 34,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360490989,
+      "sku": "Pote500",
+      "descricao": "Pote Marmita Fit Retangular Com Tampa 500ml 144un Totalplast",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:45:28",
+      "dataAlteracao": "2026-06-13 14:48:48",
+      "unidade": "UN",
+      "gtin": "17898505142284",
+      "precos": {
+        "preco": 149,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360491230,
+      "sku": "Potr250",
+      "descricao": "Pote Marmita Fit Retangular C Tampa 250ml Cx144un Totalplast",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:45:57",
+      "dataAlteracao": "2026-06-25 01:48:45",
+      "unidade": "UN",
+      "gtin": "17898505142277",
+      "precos": {
+        "preco": 132.05,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360491374,
+      "sku": "SKU-343577002",
+      "descricao": "Chave Teste 140MM 100/500V",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:46:31",
+      "dataAlteracao": "2026-06-20 00:23:51",
+      "unidade": "UN",
+      "gtin": "7899612795090",
+      "precos": {
+        "preco": 8.9,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360491489,
+      "sku": "JVAQMA44",
+      "descricao": "Vaso Decorativo Plantas Antique 44 (70l) Macchiato Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:47:03",
+      "dataAlteracao": "2026-06-30 10:25:40",
+      "unidade": "UN",
+      "gtin": "7894023148725",
+      "precos": {
+        "preco": 574.24,
+        "precoPromocional": 0,
+        "precoCusto": 185.24,
+        "precoCustoMedio": 185.24
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360491615,
+      "sku": "JVAQAC44",
+      "descricao": "Vaso Decorativo Plantas Antique 44 (70l) Aco Corten Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:47:28",
+      "dataAlteracao": "2026-06-30 10:25:40",
+      "unidade": "UN",
+      "gtin": "7894023152999",
+      "precos": {
+        "preco": 574.24,
+        "precoPromocional": 0,
+        "precoCusto": 185.24,
+        "precoCustoMedio": 185.24
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360491751,
+      "sku": "JVAQCQ56",
+      "descricao": "Vaso Decorativo Plantas Antique 56 (46l) Cimento Queim Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:48:01",
+      "dataAlteracao": "2026-06-21 10:33:47",
+      "unidade": "UN",
+      "gtin": "7894023148718",
+      "precos": {
+        "preco": 471.23,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360491873,
+      "sku": "JVAQAC56",
+      "descricao": "Vaso Decorativo Plantas Antique 56 (46l) Aco Corten Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:48:30",
+      "dataAlteracao": "2026-06-21 10:34:44",
+      "unidade": "UN",
+      "gtin": "7894023153057",
+      "precos": {
+        "preco": 459,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360491974,
+      "sku": "JCMCCQ35",
+      "descricao": "Vaso Match 35 16L Prato Cimento Queimado Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:48:59",
+      "dataAlteracao": "2026-06-21 11:01:13",
+      "unidade": "UN",
+      "gtin": "7894023127379",
+      "precos": {
+        "preco": 349,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360492094,
+      "sku": "JVAQCQ55",
+      "descricao": "Vaso Decorativo Plantas Antique 55 (75l) Cimento Queim Japi",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:49:32",
+      "dataAlteracao": "2026-06-21 10:35:43",
+      "unidade": "UN",
+      "gtin": "7894023148701",
+      "precos": {
+        "preco": 573.27,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360492243,
+      "sku": "PET/CMF3*AZP",
+      "descricao": "Comedouro N 2 Antiformiga 600ml Astra Azul Pet",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:50:10",
+      "dataAlteracao": "2026-07-10 09:27:45",
+      "unidade": "UN",
+      "gtin": "7891222355756",
+      "precos": {
+        "preco": 34,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360492424,
+      "sku": "KIT-DISCO",
+      "descricao": "Kit 10 Disco Corte Inox Esmerilhadeira 4.1/2 1.0mm Aquatools",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:50:44",
+      "dataAlteracao": "2026-06-20 01:05:05",
+      "unidade": "UN",
+      "gtin": "7899887501891",
+      "precos": {
+        "preco": 59,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360493000,
+      "sku": "13705E",
+      "descricao": "Irrigador Giratório Jardim 1/2 6 Jatos com Suporte Garden",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:52:02",
+      "dataAlteracao": "2026-06-20 00:58:05",
+      "unidade": "UN",
+      "gtin": "7893308004992",
+      "precos": {
+        "preco": 45,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360493393,
+      "sku": "341481451",
+      "descricao": "Alicate Universal 8\" Gedore Robust Profissional",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:53:50",
+      "dataAlteracao": "2026-07-08 22:07:49",
+      "unidade": "UN",
+      "gtin": "",
+      "precos": {
+        "preco": 39,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": "Depósito Principal"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360493566,
+      "sku": "JV-8HKB-IBHR",
+      "descricao": "Aquatools Torneira Esfera Zincada, 1/2 X 3/4, Uso Geral",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:54:20",
+      "dataAlteracao": "2026-06-21 13:36:59",
+      "unidade": "UN",
+      "gtin": "7899887506315",
+      "precos": {
+        "preco": 49,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360493754,
+      "sku": "PET/CMGF*VMP",
+      "descricao": "Comedouro para Gatos 200ml Astra Vermelho Pet",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-09 14:55:24",
+      "dataAlteracao": "2026-07-10 09:27:44",
+      "unidade": "UN",
+      "gtin": "7891222355497",
+      "precos": {
+        "preco": 35,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 360774093,
+      "sku": "TTH-K*BCO-01",
+      "descricao": "Assento Sanitário Almofadado Thema/Hawaii/Arezzon/Valentina Branco Astra",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-10 11:56:38",
+      "dataAlteracao": "2026-06-17 19:56:25",
+      "unidade": "UN",
+      "gtin": "7891222044483",
+      "precos": {
+        "preco": 199,
+        "precoPromocional": 0,
+        "precoCusto": 99.99,
+        "precoCustoMedio": 99.99
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 361408120,
+      "sku": "TVT/K-NOVO-02",
+      "descricao": "Assento Sanitário Almofadado Avant/Fit/Versato/Angra Branco Astra",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-13 13:50:48",
+      "dataAlteracao": "2026-06-22 14:59:12",
+      "unidade": "UN",
+      "gtin": "7891222044445",
+      "precos": {
+        "preco": 189,
+        "precoPromocional": 0,
+        "precoCusto": 10,
+        "precoCustoMedio": 10
+      },
+      "estoque": {
+        "localizacao": "Depósito Principal"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 361408226,
+      "sku": "ADGANBR",
+      "descricao": "Gancho Adesivo Multiuso Banheiro Cozinha Astra",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-13 13:51:44",
+      "dataAlteracao": "2026-06-20 00:51:49",
+      "unidade": "UN",
+      "gtin": "7891222411650",
+      "precos": {
+        "preco": 29.22,
+        "precoPromocional": 0,
+        "precoCusto": 8.62,
+        "precoCustoMedio": 8.62
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 361408689,
+      "sku": "ADSABBR",
+      "descricao": "Saboneteira Comadesivo Astra Branco Fixação Rapida - Branco",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-13 13:54:33",
+      "dataAlteracao": "2026-06-20 00:51:25",
+      "unidade": "UN",
+      "gtin": "7891222411636",
+      "precos": {
+        "preco": 49,
+        "precoPromocional": 0,
+        "precoCusto": 15.62,
+        "precoCustoMedio": 15.62
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 361408826,
+      "sku": "ADPS*BR",
+      "descricao": "Prateleira Shampoo Adesivo Banheiro Astra Branco",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-13 13:55:30",
+      "dataAlteracao": "2026-06-20 00:50:13",
+      "unidade": "UN",
+      "gtin": "7891222411803",
+      "precos": {
+        "preco": 74,
+        "precoPromocional": 0,
+        "precoCusto": 28,
+        "precoCustoMedio": 28
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 361409256,
+      "sku": "PETCM2AZP",
+      "descricao": "Comedouro Vasilha Ração Agua Pet Cachorro Gato Astra Azul",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-13 13:58:48",
+      "dataAlteracao": "2026-07-10 09:28:03",
+      "unidade": "UN",
+      "gtin": "7891222355534",
+      "precos": {
+        "preco": 19.01,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 362724709,
+      "sku": "REGUA5TOMADA",
+      "descricao": "Tomada Barra Multipla Régua extensão 20A Quintupla CINZA",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-20 11:24:01",
+      "dataAlteracao": "2026-06-20 11:25:12",
+      "unidade": "UN",
+      "gtin": "7890428177759",
+      "precos": {
+        "preco": 58.5,
+        "precoPromocional": 55.58,
+        "precoCusto": 20,
+        "precoCustoMedio": 20
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 362838488,
+      "sku": "C06CZ",
+      "descricao": "Carrinho Fechado Ferramentas C06 3 Gavetas Cinza Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-21 12:33:39",
+      "dataAlteracao": "2026-07-04 14:18:40",
+      "unidade": "UN",
+      "gtin": "7894162004401",
+      "precos": {
+        "preco": 2364.31,
+        "precoPromocional": 1891.45,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 362838492,
+      "sku": "C06BR",
+      "descricao": "Carrinho Fechado Ferramentas C06 3 Gavetas Branco Fercar",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-21 12:33:39",
+      "dataAlteracao": "2026-07-04 14:18:40",
+      "unidade": "UN",
+      "gtin": "7894162001875",
+      "precos": {
+        "preco": 2364.31,
+        "precoPromocional": 1891.45,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 362838496,
+      "sku": "350x8c",
+      "descricao": "Camara  ar 3,5 X 8 Colson",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-21 12:33:39",
+      "dataAlteracao": "2026-07-04 14:18:40",
+      "unidade": "UN",
+      "gtin": "7898505234104",
+      "precos": {
+        "preco": 65.91,
+        "precoPromocional": 52.73,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 362847505,
+      "sku": "FITAPERFAFBA",
+      "descricao": "Abraçadeira Fita Perfurada 19mm x 10 Metros Aço Galvanizado",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-21 14:30:15",
+      "dataAlteracao": "2026-06-21 14:30:15",
+      "unidade": "UN",
+      "gtin": "7898964344048",
+      "precos": {
+        "preco": 39,
+        "precoPromocional": 0,
+        "precoCusto": 25,
+        "precoCustoMedio": 25
+      },
+      "estoque": {
+        "localizacao": "A1"
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 364827946,
+      "sku": "",
+      "descricao": "FLOREIRA ANTIQUE 55 MACCHIATO",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-30 10:24:29",
+      "dataAlteracao": "2026-07-04 14:18:40",
+      "unidade": "UN",
+      "gtin": "7894023160000",
+      "precos": {
+        "preco": 450.18,
+        "precoPromocional": 0,
+        "precoCusto": 195.73,
+        "precoCustoMedio": 195.73
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 364827975,
+      "sku": "",
+      "descricao": "FLOREIRA ANTIQUE 55 ACO CORTEN",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-30 10:24:35",
+      "dataAlteracao": "2026-07-04 14:18:40",
+      "unidade": "UN",
+      "gtin": "7894023159950",
+      "precos": {
+        "preco": 450.18,
+        "precoPromocional": 0,
+        "precoCusto": 195.73,
+        "precoCustoMedio": 195.73
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 364828022,
+      "sku": "",
+      "descricao": "FLOREIRA ANTIQUE 55 CIMENTO QUEIMADO",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-06-30 10:24:42",
+      "dataAlteracao": "2026-07-04 14:18:40",
+      "unidade": "UN",
+      "gtin": "7894023159981",
+      "precos": {
+        "preco": 450.16,
+        "precoPromocional": 0,
+        "precoCusto": 195.72,
+        "precoCustoMedio": 195.72
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 365911533,
+      "sku": "kit4rod35freio",
+      "descricao": "Kit 4 Rodízio Giratório Gel Silicone Rodinha 35mm Com Trava",
+      "tipo": "K",
+      "situacao": "A",
+      "dataCriacao": "2026-07-03 19:13:59",
+      "dataAlteracao": "2026-07-12 12:10:36",
+      "unidade": "UN",
+      "gtin": "",
+      "precos": {
+        "preco": 37.2,
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    },
+    {
+      "id": 367969820,
+      "sku": "TVT-K-NOVO-2",
+      "descricao": "Assento Almofadado Branco Astra para Sanitários Avant/fit/versato/angra Astra",
+      "tipo": "S",
+      "situacao": "A",
+      "dataCriacao": "2026-07-12 15:56:35",
+      "dataAlteracao": "2026-07-12 15:56:35",
+      "unidade": "UN",
+      "gtin": "7891222044445",
+      "precos": {
+        "preco": 249.59,
+        "precoPromocional": 199.67,
+        "precoCusto": 0,
+        "precoCustoMedio": 0
+      },
+      "estoque": {
+        "localizacao": ""
+      },
+      "tipoVariacao": "N"
+    }
+  ]
+}
