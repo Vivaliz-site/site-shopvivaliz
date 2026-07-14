@@ -546,4 +546,9 @@ svcat_json(200, [
     'count'      => count($products),
     'products'   => $products,
     'categories' => $categories,
+    'debug'      => [
+        'cache_exists' => $cache_exists ?? false,
+        'cache_fresh' => $cache_fresh ?? false,
+        'cache_used' => $cache_used ?? false,
+    ]
 ]);
