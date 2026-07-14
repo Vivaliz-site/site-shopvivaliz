@@ -27,6 +27,7 @@ End-to-end catalog, storefront, checkout, security, deployment and developer-too
 - Removed internal cache flags and per-request debug logging from the public catalog response.
 - Replaced two syntactically invalid scheduled workflows. The production E2E workflow is now explicitly non-financial; the VM configuration workflow sends only whitelisted static values over stdin and updates `.env` atomically without overwriting rotating OAuth tokens.
 - Replaced an obsolete Olist web-scraping image job (login endpoint returned 404) with a canonical API coverage audit, and replaced a Shopee job that called nonexistent/simulated upload files with a non-mutating prerequisite preflight.
+- Updated all workflow checkout/setup actions to their current Node 24-compatible major releases after GitHub began warning that Node 20 actions were being force-upgraded at runtime.
 
 ## Local verification
 

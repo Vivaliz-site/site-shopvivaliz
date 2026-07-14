@@ -18,7 +18,7 @@ jobs:
     name: GitHub Actions syntax
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v7
       - name: Actionlint
         uses: docker://rhysd/actionlint:1.7.12
         with:
@@ -29,7 +29,7 @@ jobs:
   php-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v7
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:

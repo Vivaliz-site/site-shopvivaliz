@@ -38,7 +38,7 @@ jobs:
     outputs:
       commit_sha: ${{ github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -107,10 +107,10 @@ jobs:
     needs: validate
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -250,7 +250,7 @@ jobs:
     if: success()
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup SSH
         run: |
@@ -322,7 +322,7 @@ jobs:
     needs: [validate, test]
     if: failure() && github.event_name == 'push'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Alert Only (rollback automatico desativado apos incidente)
         run: |
