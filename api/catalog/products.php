@@ -79,6 +79,9 @@ function normalize_product(array $item): array
     $preco_obj = $item['precos'] ?? [];
     $preco = (float)($preco_obj['preco'] ?? $preco_obj['preco_venda'] ?? $item['preco'] ?? 0);
 
+    // Estoque: lê do cache (estoque_disponivel) ou da API (estoque.quantidade)
+    $stock = (int)($item['estoque_disponivel'] ?? ($item['estoque']['quantidade'] ?? 0));
+
     return [
         'id' => (string)($item['id'] ?? ''),
         'sku' => trim((string)($item['sku'] ?? $item['codigo'] ?? '')),
@@ -86,7 +89,7 @@ function normalize_product(array $item): array
         'name' => trim((string)($item['descricao'] ?? $item['nome'] ?? 'Produto')),
         'description' => trim((string)($item['descricao_complementar'] ?? $item['descricao'] ?? '')),
         'price' => $preco,
-        'stock' => (int)($item['estoque'] ?? 0),
+        'stock' => $stock,
         'image_url' => trim((string)($item['imagem_principal_url'] ?? '')),
         'images_count' => (int)($item['imagens_count'] ?? 1),
         'status' => 'active',
