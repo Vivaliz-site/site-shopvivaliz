@@ -171,6 +171,7 @@ Content-Type: text/plain; charset=UTF-8");
 $paymentOptions = [
     'pix' => ['title' => 'PIX', 'desc' => 'Aprovacao imediata'],
     'mercado_pago' => ['title' => 'Mercado Pago', 'desc' => 'Cartao, boleto, PIX'],
+    'pagarme' => ['title' => 'Pagar.me', 'desc' => 'Cartao de credito'],
     'boleto' => ['title' => 'Boleto', 'desc' => 'Emissao apos confirmacao do frete'],
     'whatsapp' => ['title' => 'WhatsApp', 'desc' => 'Atendimento assistido'],
     'transferencia' => ['title' => 'Transferencia', 'desc' => 'TED / DOC'],
