@@ -1,10 +1,85 @@
 <?php
+/**
+ * ALTERADO 2026-07-13: Busca DIRETO do ERP OLIST (Tiny)
+ * FONTE DE VERDADE: ERP OLIST apenas
+ * E-commerce local desativado
+ */
+
 declare(strict_types=1);
 
 header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
+
+function get_erp_token(): ?string
+{
+    $root = dirname(__DIR__, 2);
+
+    // Token file
+    $token_file = $root . '/storage/private/tokens.json';
+    if (is_file($token_file) && is_readable($token_file)) {
+        $tokens = json_decode(file_get_contents($token_file), true);
+        if (is_array($tokens)) {
+            return $tokens['OLIST_ACCESS_TOKEN'] ?? $tokens['TINY_ACCESS_TOKEN'] ?? null;
+        }
+    }
+
+    // .env
+    $env_file = $root . '/.env';
+    if (is_file($env_file)) {
+        foreach (file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+            if (str_starts_with($line, 'OLIST_ACCESS_TOKEN=') || str_starts_with($line, 'TINY_ACCESS_TOKEN=')) {
+                $parts = explode('=', $line, 2);
+                return trim(trim($parts[1] ?? ''), "\"'");
+            }
+        }
+    }
+
+    return null;
+}
+
+function fetch_erp_products(int $page = 1, int $limit = 100): array
+{
+    $token = get_erp_token();
+    if (!$token) {
+        return [];
+    }
+
+    $url = "https://api.tiny.com.br/api/v2/produtos?pagina={$page}&limite={$limit}";
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'header' => "Authorization: Bearer {$token}\r\nAccept: application/json\r\n",
+            'timeout' => 15,
+        ]
+    ]);
+
+    $response = @file_get_contents($url, false, $context);
+    if (!$response) {
+        return [];
+    }
+
+    $data = json_decode($response, true);
+    return is_array($data) ? $data : [];
+}
+
+function normalize_product(array $item): array
+{
+    return [
+        'id' => (string)($item['id'] ?? ''),
+        'sku' => trim((string)($item['codigo'] ?? '')),
+        'olist_product_id' => (string)($item['id'] ?? ''),
+        'name' => trim((string)($item['nome'] ?? 'Produto')),
+        'description' => trim((string)($item['descricao_complementar'] ?? '')),
+        'price' => (float)($item['preco'] ?? 0),
+        'stock' => (int)($item['estoque'] ?? 0),
+        'image_url' => trim((string)($item['imagem_principal_url'] ?? '')),
+        'images_count' => (int)($item['imagens_count'] ?? 1),
+        'status' => 'active',
+    ];
+}
 
 function svcat_root(): string
 {
