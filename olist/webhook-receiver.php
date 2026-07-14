@@ -30,6 +30,67 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// ============================================================
+// HMAC-SHA256 SIGNATURE VERIFICATION
+// ============================================================
+function verify_webhook_signature(string $request_body, string $signature): bool
+{
+    // Get webhook secret from environment or config
+    $root = dirname(__DIR__);
+    $secret = '';
+
+    // Try to get from environment
+    if (function_exists('getenv')) {
+        $secret = getenv('OLIST_WEBHOOK_SECRET') ?: '';
+    }
+
+    // Try to get from .env file
+    if (!$secret) {
+        $env_file = $root . '/.env';
+        if (is_file($env_file)) {
+            foreach (file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+                if (str_starts_with($line, 'OLIST_WEBHOOK_SECRET=')) {
+                    $parts = explode('=', $line, 2);
+                    $secret = trim(trim($parts[1] ?? ''), "\"'");
+                    break;
+                }
+            }
+        }
+    }
+
+    // If no secret configured, log warning but continue (graceful degradation)
+    if (!$secret) {
+        error_log("[WEBHOOK] WARNING: OLIST_WEBHOOK_SECRET not configured. Signature verification skipped.");
+        return true; // Allow unsigned webhooks until secret is configured
+    }
+
+    // Compute expected signature: HMAC-SHA256(body, secret)
+    $expected_signature = hash_hmac('sha256', $request_body, $secret, false);
+
+    // Compare signatures (constant-time comparison to prevent timing attacks)
+    $result = hash_equals($expected_signature, $signature);
+
+    if (!$result) {
+        error_log("[WEBHOOK] FAILED: Signature mismatch. Expected: " . substr($expected_signature, 0, 16) . "... Got: " . substr($signature, 0, 16) . "...");
+    }
+
+    return $result;
+}
+
+// Verify HMAC signature if header present
+$signature = $_SERVER['HTTP_X_OLIST_SIGNATURE'] ?? $_SERVER['HTTP_X_SIGNATURE'] ?? '';
+if ($signature) {
+    if (!verify_webhook_signature($request_body, $signature)) {
+        error_log("[WEBHOOK] REJECTED: Invalid signature from " . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        http_response_code(403);
+        echo json_encode(['erro' => 'Assinatura inválida']);
+        exit;
+    }
+    error_log("[WEBHOOK] VERIFIED: Signature valid");
+} else {
+    error_log("[WEBHOOK] WARNING: No signature header found. Accepting unsigned webhook.");
+}
+
 // Parse JSON
 $data = json_decode($request_body, true);
 
