@@ -99,8 +99,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
 
     if ($cliente['nome'] !== '' && $cliente['email'] !== '' && $cliente['telefone'] !== '' && $cliente['endereco'] !== '' && $cliente['numero'] !== '' && $cliente['cidade'] !== '' && $cliente['cep'] !== '' && $items) {
         $pedidoId = 'PED-' . date('YmdHis');
+
+        // Criar Order no Mercado Pago conforme API oficial
+        $mpOrderId = null;
+        $total = array_reduce($items, function ($s, $it) {
+            return $s + (float)($it['price'] ?? 0) * (int)($it['quantity'] ?? 1);
+        }, 0.0);
+
+        $mpOrderPayload = [
+            'external_reference' => $pedidoId,
+            'total_amount' => (float)$total,
+            'items' => array_map(function ($item) {
+                return [
+                    'sku_number' => $item['sku'] ?? $item['id'] ?? '',
+                    'category' => $item['category'] ?? 'Produto',
+                    'title' => $item['name'] ?? 'Item',
+                    'description' => $item['name'] ?? 'Item do pedido',
+                    'unit_price' => (float)($item['price'] ?? 0),
+                    'quantity' => (int)($item['quantity'] ?? 1)
+                ];
+            }, $items),
+            'payer' => [
+                'email' => $cliente['email'],
+                'first_name' => explode(' ', $cliente['nome'])[0] ?? '',
+                'last_name' => implode(' ', array_slice(explode(' ', $cliente['nome']), 1)) ?? '',
+                'phone' => $cliente['telefone'] ?? ''
+            ]
+        ];
+
+        // Chamar Orders API do Mercado Pago
+        try {
+            $ch = curl_init('https://api.mercadopago.com/v1/orders');
+
+            $env = [];
+            $envFile = __DIR__ . '/../.env';
+            if (file_exists($envFile)) {
+                foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+                    if (str_starts_with(trim($line), '#') || !str_contains($line, '=')) continue;
+                    [$key, $value] = explode('=', $line, 2);
+                    $env[trim($key)] = trim(trim($value), "\"'");
+                }
+            }
+
+            $mpToken = $env['MERCADOPAGO_ACCESS_TOKEN'] ?? '';
+
+            if ($mpToken) {
+                curl_setopt_array($ch, [
+                    CURLOPT_HTTPHEADER => [
+                        'Content-Type: application/json',
+                        'Authorization: Bearer ' . $mpToken,
+                    ],
+                    CURLOPT_POST => true,
+                    CURLOPT_POSTFIELDS => json_encode($mpOrderPayload),
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_TIMEOUT => 10,
+                ]);
+
+                $mpResponse = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                if ($httpCode === 201) {
+                    $mpData = json_decode($mpResponse, true);
+                    if (isset($mpData['id'])) {
+                        $mpOrderId = $mpData['id'];
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            error_log('Erro ao criar Order no Mercado Pago: ' . $e->getMessage());
+        }
+
         $registro = [
             'id' => $pedidoId,
+            'mercadopago_order_id' => $mpOrderId,
             'timestamp' => date('c'),
             'cliente' => $cliente,
             'items' => $items,
