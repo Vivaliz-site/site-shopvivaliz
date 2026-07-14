@@ -1,1 +1,16 @@
-add full time agent version compiler
+docs: guia de resolução de erros no deploy
+
+Adicionado guia com:
+- Checklist de secrets
+- Valores corretos para HostGator
+- Passo a passo de diagnóstico
+- Soluções para erros comuns
+  • Connection refused
+  • Authentication failed
+  • Permission denied
+  • server-dir should be a folder
+
+Próximos passos:
+1. Verifique GitHub Secrets
+2. Confirme valores FTP
+3. Retry o deploy

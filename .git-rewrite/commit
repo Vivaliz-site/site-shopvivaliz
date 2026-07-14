@@ -1,6 +1,21 @@
-tree 72308dbfd7827e74864eda4de6826d88c647a4bd
-parent d4263369e33ef1b15aa7f25474efb6acd587686f
-author fredmourao-ai <fredmourao@gmail.com> 1782437426 -0300
-committer fredmourao-ai <fredmourao@gmail.com> 1782437426 -0300
+tree acbc281e58b0b85fad30f19786ae9de2d51d044a
+parent b8c031eb98a6abed2f82b4eefde041cf1b2b7665
+author fredmourao-ai <fredmourao@gmail.com> 1782585435 -0300
+committer fredmourao-ai <fredmourao@gmail.com> 1782585435 -0300
 
-add full time agent version compiler
+docs: guia de resolução de erros no deploy
+
+Adicionado guia com:
+- Checklist de secrets
+- Valores corretos para HostGator
+- Passo a passo de diagnóstico
+- Soluções para erros comuns
+  • Connection refused
+  • Authentication failed
+  • Permission denied
+  • server-dir should be a folder
+
+Próximos passos:
+1. Verifique GitHub Secrets
+2. Confirme valores FTP
+3. Retry o deploy
