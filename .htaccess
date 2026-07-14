@@ -1,7 +1,7 @@
 # ShopVivaliz - Apache routing
 
 # Bloquear acesso a arquivos sensiveis
-<FilesMatch "^(\.env|\.htaccess)$">
+<FilesMatch "^(\.env(?:\..*)?|\.htaccess|tasks-queue\.json|mcp-servers\.json|package(?:-lock)?\.json)$">
     Require all denied
 </FilesMatch>
 

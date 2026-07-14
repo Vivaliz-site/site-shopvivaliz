@@ -58,3 +58,7 @@ def test_production_services_follow_main_and_run_detail_sync() -> None:
     assert "daemon-sync-products.py --interval 300 --workers 4" in product_sync
     assert "User=ubuntu" in product_sync
     assert "Group=www-data" in product_sync
+    token_sync = (root / "deploy/systemd/shopvivaliz-token-renewer.service").read_text(
+        encoding="utf-8"
+    )
+    assert "daemon-token-renewer.py --interval 7200 --retry-interval 900" in token_sync
