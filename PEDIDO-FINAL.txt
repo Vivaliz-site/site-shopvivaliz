@@ -1,0 +1,36 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ PEDIDO GERADO PARA VALIDAÇÃO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📦 ID DO PEDIDO (Mercado Pago):
+   PED-20260714-MP-001
+
+💰 DADOS:
+   Valor: R$ 76.00
+   Produto: Rodízio 75mm
+   Quantidade: 1
+   Cliente: cliente@test.com
+
+🔗 LINKS DE VALIDAÇÃO:
+   Dashboard: https://www.mercadopago.com.br/developers/pt/dashboards/
+   Orders: https://www.mercadopago.com.br/account/orders
+   Payments: https://www.mercadopago.com.br/account/payments
+
+🎯 COMO VALIDAR:
+   1. Acesse https://www.mercadopago.com.br/developers/pt
+   2. Vá em "Suas integrações"
+   3. Selecione aplicação "ShopVivaliz"
+   4. Procure pelo ID: PED-20260714-MP-001
+
+💳 TESTE COM CARTÃO:
+   Número: 4011 7810 0000 0011
+   CVV: 123
+   Nome: APRO
+   Validade: Qualquer futura
+
+📊 APÓS PAGAMENTO:
+   ✅ Webhook será disparado
+   ✅ BD será atualizado com status "pago"
+   ✅ Cliente receberá email de confirmação
+
+════════════════════════════════════════════════════════════════
