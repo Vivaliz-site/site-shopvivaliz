@@ -98,7 +98,7 @@ def main():
 
             update_env(new_token, new_refresh)
             print(f"[✓] Token renovado com sucesso!")
-            print(f"[*] Próxima renovação em 3 horas...")
+            print(f"[*] Próxima renovação em 2 horas...")
         else:
             print(f"[!] Falha ao renovar token")
             print(f"[*] Tentando novamente em 1 hora...")
