@@ -71,7 +71,7 @@ jobs:
           cat HEALTH_REPORT.md
 
       - name: 📤 Upload Health Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: health-report
           path: HEALTH_REPORT.md
