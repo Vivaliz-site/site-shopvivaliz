@@ -357,7 +357,7 @@ jobs:
           # Verifica endpoints críticos (máx 5 retries)
           endpoints=(
             "https://dev.shopvivaliz.com.br/"
-            "https://dev.shopvivaliz.com.br/cart"
+            "https://dev.shopvivaliz.com.br/carrinho"
             "https://dev.shopvivaliz.com.br/checkout"
             "https://dev.shopvivaliz.com.br/api/catalog/products.php?limit=1"
             "https://dev.shopvivaliz.com.br/api/catalog/price-health.php"
