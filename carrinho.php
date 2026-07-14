@@ -126,16 +126,10 @@ header('Content-Type: text/html; charset=UTF-8');
 </footer>
 
 <script>
+// Legacy shipping handler removed - now using cart-shipping-v7.js
 (function () {
     function getCart() {
         try { return JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'); } catch(e) { return []; }
-    }
-    function saveCart(items) { localStorage.setItem('shopvivaliz_cart', JSON.stringify(items)); }
-    function saveShippingQuote(quote) {
-        localStorage.setItem('shopvivaliz_shipping_quote', JSON.stringify(quote || null));
-    }
-    function clearShippingQuote() {
-        localStorage.removeItem('shopvivaliz_shipping_quote');
     }
     function fmtMoney(v) {
         if (!v || isNaN(v)) return 'Consulte o valor';
