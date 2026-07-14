@@ -16,14 +16,16 @@ $codename = (string)($version['codename'] ?? '');
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="container nav-inner">
-            <a class="brand-link" href="/">ShopVivaliz Admin</a>
-            <div class="navbar-menu">
-                <a href="/">Loja</a>
-                <a href="/catalogo.php">Catálogo</a>
-                <a href="/checkout">Checkout</a>
-                <a href="/admin/monitor/">Monitor</a>
+    <nav class="navbar" style="background: #1a1a2e; padding: 1rem 0;">
+        <div class="container nav-inner" style="display: flex; justify-content: space-between; align-items: center;">
+            <a class="brand-link" href="/admin/" style="color: white; font-weight: bold; font-size: 1.2rem;">🛍️ ShopVivaliz Admin</a>
+            <div class="navbar-menu" style="display: flex; gap: 0.5rem; flex-wrap: wrap; font-size: 0.9rem;">
+                <a href="/admin/menu-completo.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px; font-weight: bold; background: rgba(255,255,255,0.2);">📋 Menu Completo</a>
+                <a href="/admin/produtos.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📦 Produtos</a>
+                <a href="/admin/pedidos.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📋 Pedidos</a>
+                <a href="/admin/clientes.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">👥 Clientes</a>
+                <a href="/admin/monitor/" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📊 Monitor</a>
+                <a href="/auth/logout.php" style="color: #ff6b6b; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🚪 Sair</a>
             </div>
         </div>
     </nav>
@@ -43,7 +45,7 @@ $codename = (string)($version['codename'] ?? '');
             </div>
         </section>
 
-        <section class="container admin-overview">
+        <section class="container admin-overview" style="margin-top: 2rem;">
             <article class="admin-card admin-card-wide">
                 <div class="admin-card-head">
                     <div>
