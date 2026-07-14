@@ -478,8 +478,8 @@ $q = trim((string)($_GET['q'] ?? ''));
 $products = [];
 $all_erp = [];
 
-// Tentar ler do cache JSON primeiro (mais rápido)
-$cache_file = svcat_root() . '/storage/products-cache.json';
+// Tentar ler do cache JSON primeiro (APENAS ATIVOS - status A)
+$cache_file = svcat_root() . '/storage/products-cache-ativos.json';
 $cache_exists = is_file($cache_file);
 $cache_fresh = $cache_exists && (time() - filemtime($cache_file)) < 86400; // 24 horas
 $cache_used = false;
