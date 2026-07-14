@@ -6,11 +6,16 @@
 
 declare(strict_types=1);
 
-$root = dirname(__DIR__);
+$root = dirname(__FILE__);  // Diretório atual (site-shopvivaliz/)
 
 // Ler token de integrador (V2 - FIXO)
 $token = '';
-foreach (file($root . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+$env_file = $root . '/../.env';  // Sobe um nível se estiver em subdir, ou procura localmente
+if (!is_file($env_file)) {
+    $env_file = getcwd() . '/.env';
+}
+
+foreach (file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
     if (str_starts_with($line, 'OLIST_INTEGRADOR_TOKEN=')) {
         $token = trim(explode('=', $line, 2)[1] ?? '');
         break;
