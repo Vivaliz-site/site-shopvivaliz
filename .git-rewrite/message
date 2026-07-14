@@ -1,0 +1,12 @@
+fix: remover emojis de todos os workflows YAML
+
+Emojis causavam erros de sintaxe YAML nos seguintes workflows:
+- ai-autonomous-executor.yml
+- auto-task-generator.yml
+- continuous-trio-executor.yml
+- executor-watchdog.yml
+- deploy-squad-chat.yml
+- deploy.yml
+- parallel-trio-executor.yml
+
+Todos os workflows agora têm sintaxe YAML válida e podem executar sem erros.
