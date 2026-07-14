@@ -52,6 +52,8 @@ def test_root_htaccess_blocks_legacy_web_diagnostics() -> None:
         "olist",
     ):
         assert token in rules
+    assert "(?:[-_.][^/]*)?" in rules
+    assert "(?:debug|test|teste|check|gen-token)[^/]*" not in rules
 
 
 def test_catalog_response_does_not_publish_runtime_debug_state() -> None:
