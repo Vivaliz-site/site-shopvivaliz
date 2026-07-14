@@ -12,6 +12,8 @@ import logging
 import os
 import subprocess
 import sys
+import shutil
+import tempfile
 from pathlib import Path
 
 REPO_DIR = Path(__file__).resolve().parent
@@ -25,6 +27,13 @@ PRESERVE_PATHS = {
     "reports/hourly",
     "tasks-queue.json",
     "config/__pycache__",
+    "api/catalog/fallback-products.json",
+    "storage/products-cache-ativos.json",
+    "storage/order-idempotency",
+    "storage/order-rate-limit",
+    "storage/orders",
+    ".claude/scheduled_tasks.lock",
+    ".claude/settings.local.json",
 }
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
@@ -75,6 +84,42 @@ def unsafe_dirty_paths(paths: list[str]) -> list[str]:
             continue
         unsafe.append(normalized)
     return unsafe
+
+
+def is_preserved_path(path: str) -> bool:
+    normalized = path.replace("\\", "/").rstrip("/")
+    return any(normalized == keep or normalized.startswith(keep + "/") for keep in PRESERVE_PATHS)
+
+
+def snapshot_preserved_paths(paths: list[str], backup_root: Path) -> list[str]:
+    """Copy dirty runtime paths outside the checkout before Git updates it."""
+    copied: list[str] = []
+    for path in sorted(set(paths)):
+        normalized = path.replace("\\", "/").rstrip("/")
+        if not normalized or not is_preserved_path(normalized):
+            continue
+        source = REPO_DIR / normalized
+        if not source.exists():
+            continue
+        destination = backup_root / normalized
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if source.is_dir():
+            shutil.copytree(source, destination, dirs_exist_ok=True)
+        else:
+            shutil.copy2(source, destination)
+        copied.append(normalized)
+    return copied
+
+
+def restore_preserved_paths(paths: list[str], backup_root: Path) -> None:
+    for normalized in paths:
+        source = backup_root / normalized
+        destination = REPO_DIR / normalized
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if source.is_dir():
+            shutil.copytree(source, destination, dirs_exist_ok=True)
+        else:
+            shutil.copy2(source, destination)
 
 
 def write_status(payload: dict[str, object]) -> None:
@@ -128,9 +173,14 @@ def main() -> int:
             log.info(payload["message"])
             return 0
 
-        run(["git", "reset", "--hard", f"origin/{branch}"], check=True)
+        with tempfile.TemporaryDirectory(prefix="shopvivaliz-sync-") as temp_dir:
+            backup_root = Path(temp_dir)
+            preserved = snapshot_preserved_paths(dirty, backup_root)
+            run(["git", "reset", "--hard", f"origin/{branch}"], check=True)
+            restore_preserved_paths(preserved, backup_root)
         payload["action"] = "hard-reset-to-canonical"
         payload["local_sha_after"] = git_output(["rev-parse", "HEAD"])
+        payload["preserved_paths"] = preserved
         payload["message"] = "checkout alinhado via hard reset para a branch canonica"
         write_status(payload)
         log.info(payload["message"])
