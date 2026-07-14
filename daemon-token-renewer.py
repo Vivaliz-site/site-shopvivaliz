@@ -105,8 +105,8 @@ def main():
             time.sleep(3600)  # Tentar novamente em 1 hora
             continue
 
-        # Aguardar 3 horas (10800 segundos)
-        time.sleep(10800)
+        # Aguardar 2 horas (7200 segundos)
+        time.sleep(7200)
 
 if __name__ == "__main__":
     try:
