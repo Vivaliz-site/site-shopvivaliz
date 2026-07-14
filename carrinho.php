@@ -332,5 +332,6 @@ header('Content-Type: text/html; charset=UTF-8');
 })();
 </script>
 <script src="/js/cro-interactions.js"></script>
+<script src="/js/cart-shipping-v7.js"></script>
 </body>
 </html>
