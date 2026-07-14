@@ -791,8 +791,8 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
 
         if (!cepInput) return;
 
-        cepInput.addEventListener('blur', function () {
-            const cep = this.value.replace(/\D/g, '');
+        function fetchCepData(cepValue) {
+            const cep = cepValue.replace(/\D/g, '');
             if (cep.length !== 8) {
                 cepStatus.textContent = '';
                 return;
@@ -820,6 +820,19 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                     cepStatus.textContent = '❌ Erro ao buscar CEP';
                     console.error(err);
                 });
+        }
+
+        // Buscar ao sair do campo
+        cepInput.addEventListener('blur', function () {
+            fetchCepData(this.value);
+        });
+
+        // Também buscar automaticamente após digitar 8 dígitos
+        cepInput.addEventListener('input', function () {
+            const cep = this.value.replace(/\D/g, '');
+            if (cep.length === 8) {
+                fetchCepData(this.value);
+            }
         });
 
         function recalculateShipping(cep) {
