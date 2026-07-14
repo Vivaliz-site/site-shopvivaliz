@@ -20,7 +20,7 @@
       var title=card.querySelector('strong');
       var wrapper=card.querySelector('.category-slide-image-wrapper');
       var row=title?byCategory[normalize(title.textContent)]:null;
-      if(!title||!wrapper||!row||!row.image_url){card.remove();return;}
+      if(!title||!wrapper||!row||!row.image_url){return;}
       var image=document.createElement('img');
       image.className='category-slide-real-image';
       image.src=row.image_url;
@@ -30,7 +30,7 @@
       image.width=320;
       image.height=220;
       image.addEventListener('load',function(){card.classList.add('has-real-image');});
-      image.addEventListener('error',function(){card.remove();});
+      image.addEventListener('error',function(){});
       wrapper.replaceChildren(image);
       card.dataset.categoryImageSku=String(row.sku||'');
       card.dataset.categoryImageProduct=String(row.product_name||'');
@@ -41,5 +41,5 @@
   fetch('/api/catalog/category-images.php',{credentials:'same-origin',cache:'no-store'})
     .then(function(response){if(!response.ok)throw new Error('category_images_unavailable');return response.json();})
     .then(function(payload){render(Array.isArray(payload.categories)?payload.categories:[]);})
-    .catch(function(){cards.forEach(function(card){card.remove();});});
+    .catch(function(){});
 })();
