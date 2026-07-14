@@ -800,8 +800,8 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
 
             cepStatus.textContent = 'Buscando endereço...';
 
-            // Fetch CEP data from ViaCEP
-            fetch('https://viacep.com.br/ws/' + cep + '/json/')
+            // Fetch CEP data from ViaCEP proxy (evita CORS blocker)
+            fetch('/api/viacep-proxy.php?cep=' + cep)
                 .then(r => r.json())
                 .then(data => {
                     if (data.erro) {
