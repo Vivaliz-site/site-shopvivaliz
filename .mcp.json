@@ -2,7 +2,7 @@
   "mcpServers": {
     "codex-mesh-bridge": {
       "command": "python",
-      "args": ["scripts/codex-mesh-bridge.py"]
+      "args": ["C:\\site-shopvivaliz\\scripts\\codex-mesh-bridge.py"]
     }
   }
 }
