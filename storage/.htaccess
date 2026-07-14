@@ -1,3 +1,6 @@
-<FilesMatch "\.json$">
+Options +FollowSymLinks
+RewriteEngine On
+
+<Files "*.json">
     Allow from all
-</FilesMatch>
+</Files>
