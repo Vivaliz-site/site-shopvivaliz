@@ -44,7 +44,7 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
     await searchInput.fill('rodizio');
     await page.keyboard.press('Enter');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page).toHaveURL(/\/catalogo\?busca=rodizio/);
+    await expect(page).toHaveURL(/\/catalogo\/?\?busca=rodizio/);
   });
 
   test('✅ Navegação de categorias funciona', async ({ page }) => {
