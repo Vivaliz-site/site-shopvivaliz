@@ -1,0 +1,3 @@
+<FilesMatch "\.json$">
+    Allow from all
+</FilesMatch>
