@@ -43,6 +43,10 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
+    # Cart API endpoints
+    RewriteRule ^api/cart/validate/?$ api/cart/validate.php [L,QSA]
+    RewriteRule ^api/cart/sync/?$ api/cart/sync.php [L,QSA]
+
     # Mercado Livre OAuth
     RewriteRule ^api/ml/login/?$ api/ml/login.php [L]
     RewriteRule ^api/ml/callback/?$ api/ml/callback.php [L,QSA]
