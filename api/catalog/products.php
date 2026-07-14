@@ -481,11 +481,7 @@ $all_erp = [];
 $page = 1;
 $max_pages = 50;
 while ($page <= $max_pages) {
-    $response = fetch_erp_products($page, 100);
-    if (isset($response['error'])) {
-        break;
-    }
-    $items = $response['data']['itens'] ?? [];
+    $items = fetch_erp_products($page, 100);
     if (!is_array($items) || empty($items)) {
         break;
     }
