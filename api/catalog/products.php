@@ -75,13 +75,17 @@ function fetch_erp_products(int $page = 1, int $limit = 100): array
 
 function normalize_product(array $item): array
 {
+    // V3 API retorna em 'itens' com estrutura diferente
+    $preco_obj = $item['precos'] ?? [];
+    $preco = (float)($preco_obj['preco'] ?? $preco_obj['preco_venda'] ?? $item['preco'] ?? 0);
+
     return [
         'id' => (string)($item['id'] ?? ''),
-        'sku' => trim((string)($item['codigo'] ?? '')),
+        'sku' => trim((string)($item['sku'] ?? $item['codigo'] ?? '')),
         'olist_product_id' => (string)($item['id'] ?? ''),
-        'name' => trim((string)($item['nome'] ?? 'Produto')),
-        'description' => trim((string)($item['descricao_complementar'] ?? '')),
-        'price' => (float)($item['preco'] ?? 0),
+        'name' => trim((string)($item['descricao'] ?? $item['nome'] ?? 'Produto')),
+        'description' => trim((string)($item['descricao_complementar'] ?? $item['descricao'] ?? '')),
+        'price' => $preco,
         'stock' => (int)($item['estoque'] ?? 0),
         'image_url' => trim((string)($item['imagem_principal_url'] ?? '')),
         'images_count' => (int)($item['imagens_count'] ?? 1),
