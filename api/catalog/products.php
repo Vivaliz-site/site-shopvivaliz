@@ -457,44 +457,46 @@ function svcat_fallback_products(int $limit, string $q, string $category = ''): 
     }, array_values($bySku));
 }
 
+// ALTERADO 2026-07-13: Busca DIRETO do ERP, nao mais ecommerce Olist
+// Ecommerce desativado - usar apenas Tiny/ERP
+
 $limit = min(200, max(1, (int)($_GET['limit'] ?? 48)));
 $q = trim((string)($_GET['q'] ?? ''));
-$category = trim((string)($_GET['category'] ?? ''));
-$source = 'fallback_report';
+
 $products = [];
-try {
-    $db = svcat_db();
-    if ($db instanceof mysqli) {
-        $products = svcat_db_products($db, $limit, $q);
-        if ($products) {
-            $source = 'database';
-        }
+$all_erp = [];
+
+$page = 1;
+$max_pages = 50;
+while ($page <= $max_pages) {
+    $response = fetch_erp_products($page, 100);
+    if (isset($response['error'])) {
+        break;
     }
-} catch (Throwable $e) {
-    $products = [];
-    $source = 'fallback_report';
-}
-if (!$products) {
-    $products = svcat_fallback_products($limit, $q, $category);
-    $source = 'fallback_report';
+    $items = $response['data']['itens'] ?? [];
+    if (!is_array($items) || empty($items)) {
+        break;
+    }
+    foreach ($items as $item) {
+        $all_erp[] = normalize_product($item);
+    }
+    if (count($items) < 100) {
+        break;
+    }
+    $page++;
+    usleep(500000);
 }
 
-// Enrich products with prices from Tiny API (cached 6h on HostGator)
-if ($products) {
-    $priceMap = svcat_tiny_price_map();
-    if ($priceMap) {
-        foreach ($products as &$p) {
-            if (($p['price'] ?? 0) > 0) continue;
-            $pid = (string)($p['olist_product_id'] ?? $p['id'] ?? '');
-            $sku = (string)($p['sku'] ?? '');
-            $price = $priceMap[$pid] ?? $priceMap['sku:' . $sku] ?? 0.0;
-            if ($price > 0) $p['price'] = $price;
-        }
-        unset($p);
-    }
+if ($q !== '') {
+    $all_erp = array_filter($all_erp, function($p) use ($q) {
+        $searchText = strtoupper($p['sku'] . ' ' . $p['name']);
+        return strpos($searchText, strtoupper($q)) !== false;
+    });
 }
 
-// Monta lista de categorias disponíveis a partir do JSON completo
+$products = array_slice(array_values($all_erp), 0, $limit);
+
+// Categorias do fallback.json (apenas leitura)
 $categories = [];
 $jsonPath = svcat_root() . '/api/catalog/fallback-products.json';
 if (is_file($jsonPath)) {
@@ -510,7 +512,7 @@ if (is_file($jsonPath)) {
 
 svcat_json(200, [
     'ok'         => true,
-    'source'     => $products && $source === 'database' ? 'database' : 'fallback_report',
+    'source'     => 'erp_olist',
     'count'      => count($products),
     'products'   => $products,
     'categories' => $categories,
