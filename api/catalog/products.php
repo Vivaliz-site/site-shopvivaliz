@@ -507,7 +507,7 @@ if ($cache_exists && $cache_fresh) {
 }
 
 if (!$cache_used) {
-    // Fallback: buscar da API
+    // Fallback: buscar da API e filtrar APENAS ATIVOS (situacao === 'A')
     $page = 1;
     $max_pages = 50;
     while ($page <= $max_pages) {
@@ -516,7 +516,10 @@ if (!$cache_used) {
             break;
         }
         foreach ($items as $item) {
-            $all_erp[] = normalize_product($item);
+            // FILTRO CRÍTICO: apenas produtos status A (ativos)
+            if (isset($item['situacao']) && $item['situacao'] === 'A') {
+                $all_erp[] = normalize_product($item);
+            }
         }
         if (count($items) < 100) {
             break;
