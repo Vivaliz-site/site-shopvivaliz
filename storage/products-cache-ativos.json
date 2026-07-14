@@ -1,6 +1,6 @@
 {
   "total": 188,
-  "timestamp": "2026-07-13T23:47:06.145652",
+  "timestamp": "2026-07-14T00:06:08.954335",
   "itens": [
     {
       "id": 341440872,
@@ -21,8 +21,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341440887,
@@ -43,8 +42,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341440908,
@@ -65,8 +63,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341441027,
@@ -87,8 +84,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341441223,
@@ -109,8 +105,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341443735,
@@ -131,8 +126,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341456124,
@@ -153,8 +147,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341481165,
@@ -175,8 +168,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341484398,
@@ -197,8 +189,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341486833,
@@ -219,8 +210,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341533994,
@@ -241,8 +231,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341533998,
@@ -263,8 +252,7 @@
       "estoque": {
         "localizacao": "A1-01"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341534002,
@@ -285,8 +273,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341679379,
@@ -307,8 +294,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341679483,
@@ -329,8 +315,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341679995,
@@ -351,8 +336,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341681699,
@@ -373,8 +357,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341682112,
@@ -395,8 +378,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341682319,
@@ -417,8 +399,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341682899,
@@ -439,8 +420,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341683965,
@@ -461,8 +441,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341689566,
@@ -483,8 +462,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341718082,
@@ -505,8 +483,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341723607,
@@ -527,8 +504,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341725351,
@@ -549,8 +525,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341728727,
@@ -571,8 +546,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341844041,
@@ -593,8 +567,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 341844061,
@@ -615,8 +588,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342355202,
@@ -637,8 +609,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342356475,
@@ -659,8 +630,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342364207,
@@ -681,8 +651,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342364870,
@@ -703,8 +672,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342371996,
@@ -725,8 +693,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342374752,
@@ -747,8 +714,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342377420,
@@ -769,8 +735,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342710723,
@@ -791,8 +756,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342715215,
@@ -813,8 +777,7 @@
       "estoque": {
         "localizacao": "Depósito Principal"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342716133,
@@ -835,8 +798,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342716910,
@@ -857,8 +819,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342849443,
@@ -879,8 +840,7 @@
       "estoque": {
         "localizacao": "Depósito Principal"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342849584,
@@ -901,8 +861,7 @@
       "estoque": {
         "localizacao": "Depósito Principal"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342849898,
@@ -923,8 +882,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342850165,
@@ -945,8 +903,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342902474,
@@ -967,8 +924,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342902497,
@@ -989,8 +945,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342902508,
@@ -1011,8 +966,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342902653,
@@ -1033,8 +987,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342902688,
@@ -1055,8 +1008,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342902707,
@@ -1077,8 +1029,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342902731,
@@ -1099,8 +1050,7 @@
       "estoque": {
         "localizacao": "A1-01"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342904162,
@@ -1121,8 +1071,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342904166,
@@ -1143,8 +1092,7 @@
       "estoque": {
         "localizacao": "Depósito Principal"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342906294,
@@ -1165,8 +1113,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342906351,
@@ -1187,8 +1134,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342906622,
@@ -1209,8 +1155,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342906794,
@@ -1231,8 +1176,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342907554,
@@ -1253,8 +1197,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342908280,
@@ -1275,8 +1218,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342909579,
@@ -1297,8 +1239,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342910138,
@@ -1319,8 +1260,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 342910745,
@@ -1341,8 +1281,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 343571944,
@@ -1363,8 +1302,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 343571949,
@@ -1385,8 +1323,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 343571954,
@@ -1407,8 +1344,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 343571958,
@@ -1429,8 +1365,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 343577587,
@@ -1451,8 +1386,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 344670767,
@@ -1473,8 +1407,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 344671209,
@@ -1495,8 +1428,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 347410379,
@@ -1517,8 +1449,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 348942357,
@@ -1539,8 +1470,7 @@
       "estoque": {
         "localizacao": "Depósito Principal"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 350509721,
@@ -1561,8 +1491,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 350554366,
@@ -1583,8 +1512,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 350563587,
@@ -1605,8 +1533,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 350621042,
@@ -1627,8 +1554,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 351041822,
@@ -1649,8 +1575,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 352292111,
@@ -1671,8 +1596,7 @@
       "estoque": {
         "localizacao": "Depósito Principal"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 352312277,
@@ -1693,8 +1617,7 @@
       "estoque": {
         "localizacao": "Depósito Principal"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 352312377,
@@ -1715,8 +1638,7 @@
       "estoque": {
         "localizacao": "Depósito Principal"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 352312491,
@@ -1737,8 +1659,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 352312595,
@@ -1759,8 +1680,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 352312700,
@@ -1781,8 +1701,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 352326295,
@@ -1803,8 +1722,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 352330640,
@@ -1825,8 +1743,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 352335653,
@@ -1847,8 +1764,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 352336104,
@@ -1869,8 +1785,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353469544,
@@ -1891,8 +1806,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353676753,
@@ -1913,8 +1827,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353681080,
@@ -1935,8 +1848,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353681086,
@@ -1957,8 +1869,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353691872,
@@ -1979,8 +1890,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353692194,
@@ -2001,8 +1911,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353692294,
@@ -2023,8 +1932,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353692377,
@@ -2045,8 +1953,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353692529,
@@ -2067,8 +1974,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353692684,
@@ -2089,8 +1995,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353692956,
@@ -2111,8 +2016,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353693038,
@@ -2133,8 +2037,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353693135,
@@ -2155,8 +2058,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353693202,
@@ -2177,8 +2079,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353694002,
@@ -2199,8 +2100,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353696687,
@@ -2221,8 +2121,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353696981,
@@ -2243,8 +2142,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353697603,
@@ -2265,8 +2163,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353697660,
@@ -2287,8 +2184,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353697737,
@@ -2309,8 +2205,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353697814,
@@ -2331,8 +2226,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353697897,
@@ -2353,8 +2247,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353698023,
@@ -2375,8 +2268,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353698103,
@@ -2397,8 +2289,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353698195,
@@ -2419,8 +2310,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353698283,
@@ -2441,8 +2331,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353698363,
@@ -2463,8 +2352,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353698435,
@@ -2485,8 +2373,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353698620,
@@ -2507,8 +2394,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353698710,
@@ -2529,8 +2415,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353698781,
@@ -2551,8 +2436,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353698890,
@@ -2573,8 +2457,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353701556,
@@ -2595,8 +2478,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353701726,
@@ -2617,8 +2499,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353701891,
@@ -2639,8 +2520,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353702017,
@@ -2661,8 +2541,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353702856,
@@ -2683,8 +2562,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353703884,
@@ -2705,8 +2583,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353704049,
@@ -2727,8 +2604,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353704246,
@@ -2749,8 +2625,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353704474,
@@ -2771,8 +2646,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353711354,
@@ -2793,8 +2667,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353711479,
@@ -2815,8 +2688,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353711631,
@@ -2837,8 +2709,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353727541,
@@ -2859,8 +2730,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353727693,
@@ -2881,8 +2751,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353727985,
@@ -2903,8 +2772,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353728012,
@@ -2925,8 +2793,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353731662,
@@ -2947,8 +2814,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353731878,
@@ -2969,8 +2835,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353732039,
@@ -2991,8 +2856,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353732318,
@@ -3013,8 +2877,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353732774,
@@ -3035,8 +2898,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353733531,
@@ -3057,8 +2919,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353733822,
@@ -3079,8 +2940,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353733903,
@@ -3101,8 +2961,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353733990,
@@ -3123,8 +2982,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353734276,
@@ -3145,8 +3003,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353734363,
@@ -3167,8 +3024,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353734704,
@@ -3189,8 +3045,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353735022,
@@ -3211,8 +3066,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353735611,
@@ -3233,8 +3087,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353735815,
@@ -3255,8 +3108,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353736231,
@@ -3277,8 +3129,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353736291,
@@ -3299,8 +3150,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 353736360,
@@ -3321,8 +3171,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 354887824,
@@ -3343,8 +3192,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 354887867,
@@ -3365,8 +3213,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 359360602,
@@ -3387,8 +3234,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 359360637,
@@ -3409,8 +3255,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360421105,
@@ -3431,8 +3276,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360490802,
@@ -3453,8 +3297,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360490989,
@@ -3475,8 +3318,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360491230,
@@ -3497,8 +3339,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360491374,
@@ -3519,8 +3360,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360491489,
@@ -3541,8 +3381,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360491615,
@@ -3563,8 +3402,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360491751,
@@ -3585,8 +3423,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360491873,
@@ -3607,8 +3444,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360491974,
@@ -3629,8 +3465,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360492094,
@@ -3651,8 +3486,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360492243,
@@ -3673,8 +3507,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360492424,
@@ -3695,8 +3528,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360493000,
@@ -3717,8 +3549,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360493393,
@@ -3739,8 +3570,7 @@
       "estoque": {
         "localizacao": "Depósito Principal"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360493566,
@@ -3761,8 +3591,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360493754,
@@ -3783,8 +3612,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 360774093,
@@ -3805,8 +3633,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 361408120,
@@ -3827,8 +3654,7 @@
       "estoque": {
         "localizacao": "Depósito Principal"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 361408226,
@@ -3849,8 +3675,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 361408689,
@@ -3871,8 +3696,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 361408826,
@@ -3893,8 +3717,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 361409256,
@@ -3915,8 +3738,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 362724709,
@@ -3937,8 +3759,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 362838488,
@@ -3959,8 +3780,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 362838492,
@@ -3981,8 +3801,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 362838496,
@@ -4003,8 +3822,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 362847505,
@@ -4025,8 +3843,7 @@
       "estoque": {
         "localizacao": "A1"
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 364827946,
@@ -4047,8 +3864,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 364827975,
@@ -4069,8 +3885,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 364828022,
@@ -4091,8 +3906,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 365911533,
@@ -4113,8 +3927,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     },
     {
       "id": 367969820,
@@ -4135,8 +3948,7 @@
       "estoque": {
         "localizacao": ""
       },
-      "tipoVariacao": "N",
-      "estoque_disponivel": 0
+      "tipoVariacao": "N"
     }
   ]
 }
