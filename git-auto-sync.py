@@ -27,13 +27,17 @@ PRESERVE_PATHS = {
     "reports/hourly",
     "tasks-queue.json",
     "config/__pycache__",
-    "api/catalog/fallback-products.json",
-    "storage/products-cache-ativos.json",
     "storage/order-idempotency",
     "storage/order-rate-limit",
     "storage/orders",
     ".claude/scheduled_tasks.lock",
     ".claude/settings.local.json",
+}
+ALLOWED_DIRTY_PATHS = PRESERVE_PATHS | {
+    # Rebuilt caches may be dirty, but the canonical branch copy should win on
+    # deploy so a stale or empty runtime cache cannot overwrite a newer seed.
+    "api/catalog/fallback-products.json",
+    "storage/products-cache-ativos.json",
 }
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
@@ -78,9 +82,9 @@ def unsafe_dirty_paths(paths: list[str]) -> list[str]:
     unsafe: list[str] = []
     for path in paths:
         normalized = path.replace("\\", "/")
-        if normalized in PRESERVE_PATHS:
+        if normalized in ALLOWED_DIRTY_PATHS:
             continue
-        if any(normalized == keep or normalized.startswith(keep + "/") for keep in PRESERVE_PATHS):
+        if any(normalized == keep or normalized.startswith(keep + "/") for keep in ALLOWED_DIRTY_PATHS):
             continue
         unsafe.append(normalized)
     return unsafe
