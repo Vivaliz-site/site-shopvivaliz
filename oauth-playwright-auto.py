@@ -195,11 +195,11 @@ async def main():
 
     # Pedir credenciais ao usuário
     print(f"\n🔑 Credenciais Olist/Tiny:")
-    email = input("📧 Email/Usuário: ").strip()
+    email = input("📧 Email/Usuário [atendimento@shopvivaliz.com.br]: ").strip() or "atendimento@shopvivaliz.com.br"
     password = input("🔐 Senha: ").strip()
 
-    if not email or not password:
-        print("❌ Email/Senha vazios")
+    if not password:
+        print("❌ Senha vazia")
         return
 
     # Fazer login OAuth
