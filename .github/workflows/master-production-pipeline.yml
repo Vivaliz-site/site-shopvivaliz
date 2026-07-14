@@ -110,7 +110,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -376,6 +376,42 @@ jobs:
               echo "❌ $url ($status)"
               exit 1
             fi
+          done
+
+      - name: Security perimeter regression check
+        run: |
+          set -euo pipefail
+          private_paths=(
+            "/.git/config"
+            "/.env.local"
+            "/storage/products-cache-ativos.json"
+            "/tasks-queue.json"
+            "/scripts/"
+            "/tests/"
+            "/debug-products.php"
+            "/gen-token.php"
+            "/sync-now.php"
+            "/olist/token-refresh.php"
+            "/api/catalog/test-normalize.php"
+          )
+          for path in "${private_paths[@]}"; do
+            status=$(curl --silent --output /dev/null --max-time 10 \
+              --write-out '%{http_code}' "https://dev.shopvivaliz.com.br${path}" || echo "000")
+            if [[ "$status" != "403" ]]; then
+              echo "::error::private path exposed: ${path} returned ${status}"
+              exit 1
+            fi
+            echo "✓ private ${path} (403)"
+          done
+
+          headers=$(curl --silent --show-error --head --max-time 10 \
+            https://dev.shopvivaliz.com.br/ | tr -d '\r' | tr '[:upper:]' '[:lower:]')
+          for required in strict-transport-security x-content-type-options content-security-policy; do
+            if ! grep -q "^${required}:" <<< "$headers"; then
+              echo "::error::required security header missing: ${required}"
+              exit 1
+            fi
+            echo "✓ header ${required}"
           done
 
       - name: Summary

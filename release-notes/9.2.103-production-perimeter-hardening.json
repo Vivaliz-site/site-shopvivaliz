@@ -1,0 +1,17 @@
+{
+  "version": "9.2.103",
+  "date": "2026-07-14",
+  "codename": "production-perimeter-hardening",
+  "type": "cumulative",
+  "migrations": [],
+  "migration_note": "No database schema changes; all web-server, service and workflow changes are idempotent.",
+  "highlights": [
+    "Denies public access to repository internals, runtime data, legacy diagnostics, token utilities and unauthenticated maintenance endpoints.",
+    "Disables directory indexes, adds a non-breaking defensive CSP and removes catalog debug state and request-by-request debug logging.",
+    "Runs Olist OAuth renewal and detailed catalog synchronization as hardened resident services with atomic environment/cache updates.",
+    "Replaces invalid legacy workflows with a non-financial production journey and an atomic static-environment synchronizer.",
+    "Keeps the MCP bridge UTF-8 clean on Windows so Codex tools initialize in VS Code."
+  ],
+  "self_test": "installer/self-test.php",
+  "rollback": "Revert version 9.2.103 files and reinstall the previous Apache/systemd definitions; no database rollback is required."
+}
