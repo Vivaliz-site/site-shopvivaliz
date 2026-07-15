@@ -56,6 +56,16 @@ def test_root_htaccess_blocks_legacy_web_diagnostics() -> None:
     assert "(?:debug|test|teste|check|gen-token)[^/]*" not in rules
 
 
+def test_pretty_checkout_routes_do_not_redirect_after_internal_rewrite() -> None:
+    lines = (ROOT / ".htaccess").read_text(encoding="utf-8").splitlines()
+    for route in ("carrinho", "checkout"):
+        rule = f"    RewriteRule ^{route}\\.php$ /{route} [R=301,L]"
+        rule_index = lines.index(rule)
+        condition = lines[rule_index - 1]
+        assert condition.startswith("    RewriteCond %{THE_REQUEST} ")
+        assert f"{route}\\.php" in condition
+
+
 def test_catalog_response_does_not_publish_runtime_debug_state() -> None:
     endpoint = (ROOT / "api" / "catalog" / "products.php").read_text(encoding="utf-8")
     assert "'debug'" not in endpoint
