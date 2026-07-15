@@ -453,3 +453,41 @@ mesmo com catálogo disponível a IA não chega a rodar; e (4), estrutural — a
 para este agente (CTR, conversão, teste de preço) não é implementável com a integração atual,
 que é limitada a título/descrição via IA sobre dados do Tiny, sem qualquer fonte real de
 métricas de performance do Shopee.
+
+### 9.8 Atualização — ciclo de 2026-07-15 (~13h UTC), 11º ciclo
+
+**Achado estrutural (seção 9.7) confirmado, sem mudança:** nenhum secret ou workflow novo de
+performance/analytics do Shopee (`SHOPEE_PARTNER_ID`, `SHOPEE_PARTNER_KEY`, `SHOPEE_SHOP_ID`,
+`SHOPEE_ACCESS_TOKEN`) foi adicionado desde o ciclo 10. As instruções desta rotina (CTR real,
+teste A/B de preço, reordenar imagens por engagement, comparar concorrentes) continuam
+tecnicamente inexequíveis — não há de onde ler esses dados. Nenhuma otimização foi aplicada e
+nenhum dado de CTR/conversão/venda foi inventado neste ciclo, conforme a regra de segurança
+da seção 6.
+
+**Regressão no bloqueador de autenticação Tiny (o que existe do pipeline, título/descrição via
+catálogo, também parou de funcionar):** analisando `listings/optimization-report-*.json` e
+`listings/shopee-listings-*.json` entre 2026-07-10 e hoje:
+
+- 2026-07-10 a 2026-07-13: erro voltou a ser `Falha OAuth2 refresh: Token is not active` — o
+  fix da seção 9.7 (priorizar `TINY_REFRESH_TOKEN`) funcionou uma vez em 2026-07-09 mas o
+  refresh token expirou/foi invalidado de novo em menos de 24h e não se renovou sozinho nos
+  ciclos seguintes.
+- 2026-07-14 e 2026-07-15 (`optimization-report-20260714-093004.json`,
+  `optimization-report-20260715-101720.json`, `shopee-listings-20260714-164350.json`): o erro
+  mudou para `Falha OAuth2 refresh: Invalid client or Invalid client credentials` — isto é
+  diferente de token expirado. Sugere que `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET` (não apenas o
+  refresh token) estão incorretos ou o app Tiny foi revogado/reconfigurado do lado do Tiny.
+  `git log` não mostra nenhum commit alterando esses secrets entre 07-09 e agora — a mudança
+  de sintoma veio do lado do provedor (Tiny), não de uma alteração no repo.
+
+Resultado prático: **0 produtos extraídos e 0 otimizações aplicadas em todos os 6 ciclos desde
+07-09** (`total_products: 0` em todos os relatórios do período). O catálogo mais recente
+disponível continua sendo o de 2026-07-09 (1058 produtos).
+
+**Notificação push enviada neste ciclo:** o bloqueador de credencial Tiny piorou de "token
+expirado" (recuperável por refresh automático) para "client credentials inválidas" (exige
+reconfiguração manual do app no painel Tiny + atualização de `TINY_CLIENT_ID`/
+`TINY_CLIENT_SECRET` nos GitHub Secrets) — sem essa correção manual, nenhum ciclo futuro deste
+pipeline vai funcionar, mesmo os que não exigem dado de performance do Shopee. Reforçada
+também a conclusão estrutural: a rotina de CTR/conversão/preço não é implementável sem
+integração real com a API de analytics do Shopee Open Platform.
