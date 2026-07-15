@@ -56,6 +56,19 @@ function mp_fixture_order(string $method = 'boleto'): array
     ];
 }
 
+mp_test('bootstrap permite fallback quando fonte anterior esta vazia', function (): void {
+    $key = 'SHOPVIVALIZ_TEST_EMPTY_SECRET';
+    putenv($key . '=');
+    $_ENV[$key] = '';
+    $_SERVER[$key] = '';
+
+    sv_bootstrap_env_assign($key, 'fallback-seguro');
+    mp_assert(getenv($key) === 'fallback-seguro', 'valor vazio bloqueou o fallback não vazio');
+
+    putenv($key);
+    unset($_ENV[$key], $_SERVER[$key]);
+});
+
 mp_test('valida CPF correto e rejeita repeticoes', function (): void {
     mp_assert(svmp_validate_cpf('529.982.247-25'), 'CPF de teste válido foi rejeitado');
     mp_assert(!svmp_validate_cpf('111.111.111-11'), 'CPF repetido foi aceito');
