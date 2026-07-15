@@ -34,3 +34,25 @@ def test_merge_env_is_atomic_and_preserves_unmanaged_tokens(tmp_path: Path) -> N
 def test_merge_env_rejects_unmanaged_keys(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="unsupported"):
         merge_env(tmp_path / ".env", {"OLIST_REFRESH_TOKEN": "must-not-overwrite"})
+
+
+def test_merge_env_accepts_mercadopago_runtime_keys(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    changed = merge_env(
+        env_file,
+        {
+            "MERCADOPAGO_ACCESS_TOKEN": "access-token",
+            "MERCADOPAGO_PUBLIC_KEY": "public-key",
+            "MERCADOPAGO_WEBHOOK_SECRET": "webhook-secret",
+        },
+    )
+
+    assert changed == [
+        "MERCADOPAGO_ACCESS_TOKEN",
+        "MERCADOPAGO_PUBLIC_KEY",
+        "MERCADOPAGO_WEBHOOK_SECRET",
+    ]
+    content = env_file.read_text(encoding="utf-8")
+    assert "MERCADOPAGO_ACCESS_TOKEN=access-token" in content
+    assert "MERCADOPAGO_PUBLIC_KEY=public-key" in content
+    assert "MERCADOPAGO_WEBHOOK_SECRET=webhook-secret" in content
