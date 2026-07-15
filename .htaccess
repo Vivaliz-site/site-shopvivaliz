@@ -56,8 +56,10 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^claude/?$ claude/index.php [L]
     RewriteRule ^claude/(.*)$ claude/$1 [L]
 
-    # Normaliza URLs legadas para as rotas canonicas
+    # Normaliza URLs legadas para as rotas canonicas (apenas se solicitado diretamente)
+    RewriteCond %{THE_REQUEST} \s/carrinho\.php[\s?]
     RewriteRule ^carrinho\.php$ /carrinho [R=301,L]
+    RewriteCond %{THE_REQUEST} \s/checkout\.php[\s?]
     RewriteRule ^checkout\.php$ /checkout [R=301,L]
 
     # Nao reescrever arquivos e diretorios reais
