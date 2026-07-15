@@ -42,9 +42,9 @@
 178406789799013684
 ```
 
-✅ **Formato:** 20 dígitos (padrão Mercado Pago)  
-✅ **Validade:** Funcional por 7 dias a partir da criação  
-✅ **Tipo:** Payment ID único, sequencial  
+✅ **Formato:** 20 dígitos (padrão Mercado Pago)
+✅ **Validade:** Funcional por 7 dias a partir da criação
+✅ **Tipo:** Payment ID único, sequencial
 
 ---
 
@@ -87,14 +87,14 @@ Seu `.env` contém:
 
 ```bash
 # Production Credentials
-MERCADOPAGO_ACCESS_TOKEN=APP_USR-4763908325265919-...
+MERCADOPAGO_ACCESS_TOKEN=APP_USR-REDACTED-ROTATE...
 MERCADOPAGO_PUBLIC_KEY=APP_USR-c2a29ee1-...
 MERCADOPAGO_WEBHOOK_SECRET=
 ```
 
-✅ Access Token: Autenticação servidor  
-✅ Public Key: Inicialização cliente  
-✅ Webhook Secret: Será gerado após validação  
+✅ Access Token: Autenticação servidor
+✅ Public Key: Inicialização cliente
+✅ Webhook Secret: Será gerado após validação
 
 ---
 
@@ -273,6 +273,6 @@ Seu e-commerce ShopVivaliz está **100% integrado com Mercado Pago** e pronto pa
 
 ---
 
-**Data de Conclusão:** 2026-07-14 22:35:00  
-**Responsável:** Claude Code Autonomous Agent  
+**Data de Conclusão:** 2026-07-14 22:35:00
+**Responsável:** Claude Code Autonomous Agent
 **Status:** ✅ PRONTO PARA PRODUÇÃO

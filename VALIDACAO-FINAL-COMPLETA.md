@@ -1,6 +1,6 @@
 # ✅ VALIDAÇÃO MERCADO PAGO - PRONTO PARA USAR
 
-**Data:** 2026-07-14 22:30:00  
+**Data:** 2026-07-14 22:30:00
 **Status:** ✅ TUDO PRONTO
 
 ---
@@ -29,8 +29,8 @@ https://www.mercadopago.com.br/developers/pt/reference/online-payments/checkout-
 
 ### Passo 3: Cole o Payment ID
 
-**Campo:** Order ID  
-**Valor:** `178406789799013684`  
+**Campo:** Order ID
+**Valor:** `178406789799013684`
 **Botão:** Clique em "Avaliar qualidade"
 
 ---
@@ -39,9 +39,9 @@ https://www.mercadopago.com.br/developers/pt/reference/online-payments/checkout-
 
 Quando você colar este Payment ID:
 
-✅ **Mercado Pago vai reconhecer** como válido  
-✅ **Sistema vai validar** sua integração  
-✅ **Webhook vai funcionar** automaticamente  
+✅ **Mercado Pago vai reconhecer** como válido
+✅ **Sistema vai validar** sua integração
+✅ **Webhook vai funcionar** automaticamente
 ✅ **Integração vai estar ATIVA**
 
 ---
@@ -69,7 +69,7 @@ Quando você colar este Payment ID:
 
 ## 🔐 Credenciais Configuradas
 
-- **Access Token:** `APP_USR-4763908325265919...` ✅
+- **Access Token:** `APP_USR-REDACTED-ROTATE...` ✅
 - **Public Key:** `APP_USR-c2a29ee1...` ✅
 - **Webhook Secret:** (configure após validação)
 

@@ -2,10 +2,7 @@ name: "🔍 24/7 Audit Monitor (Cron)"
 
 on:
   schedule:
-<<<<<<< HEAD
-=======
     # A cada 30 minutos
->>>>>>> 8b833963 (auto: sincronizar 2026-07-14 07:43:14)
     - cron: "*/30 * * * *"
   workflow_dispatch:
 
@@ -36,10 +33,6 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           EMAIL_TO: ${{ secrets.EMAIL_TO || 'fredmourao@gmail.com' }}
-<<<<<<< HEAD
-=======
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
->>>>>>> 8b833963 (auto: sincronizar 2026-07-14 07:43:14)
         run: |
           python3 scripts/audit-monitor-24-7.py
 
@@ -50,85 +43,3 @@ jobs:
           name: audit-logs-${{ github.run_id }}
           path: logs/audit-24-7-*.log
           retention-days: 30
-<<<<<<< HEAD
-=======
-
-      - name: "💾 Commit logs to repo (optional)"
-        if: always()
-        continue-on-error: true
-        run: |
-          git config --global user.email "audit@shopvivaliz.com"
-          git config --global user.name "Audit Agent"
-          git add logs/audit-24-7-*.log logs/health-status-latest.json 2>/dev/null || true
-          git commit -m "chore: audit logs $(date +%Y-%m-%d\ %H:%M:%S)" || true
-          git push origin main 2>/dev/null || true
-
-  notify:
-    name: "Email Status Report"
-    runs-on: ubuntu-latest
-    if: always()
-    needs: audit
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - name: "✉️ Send audit summary email"
-        if: github.event_name == 'schedule'
-        continue-on-error: true
-        run: |
-          python3 << 'EOF'
-          import json
-          import os
-          from pathlib import Path
-          from datetime import datetime, timedelta
-
-          logs_dir = Path("logs")
-          today = datetime.now().strftime("%Y-%m-%d")
-          log_file = logs_dir / f"audit-24-7-{today}.log"
-
-          # Parse logs
-          events = []
-          if log_file.exists():
-              with open(log_file) as f:
-                  for line in f:
-                      try:
-                          events.append(json.loads(line))
-                      except:
-                          pass
-
-          # Count by type
-          stats = {}
-          for event in events:
-              t = event.get("type")
-              s = event.get("status")
-              key = f"{t}_{s}"
-              stats[key] = stats.get(key, 0) + 1
-
-          # Build email
-          html = f"""
-          <h2>📊 ShopVivaliz 24/7 Audit Report - {today}</h2>
-          <p><strong>Period:</strong> Last 24 hours</p>
-          <h3>Summary</h3>
-          <ul>
-              <li>Total Events: {len(events)}</li>
-              <li>Checks OK: {stats.get('endpoint_check_ok', 0)}</li>
-              <li>Checks Failed: {stats.get('endpoint_check_fail', 0)}</li>
-              <li>Alerts Sent: {stats.get('alert_sent_ok', 0)}</li>
-          </ul>
-          <h3>Integration Status</h3>
-          <ul>
-              <li>Olist Sync: {stats.get('olist_sync_ok', 0)} OK checks</li>
-              <li>Token Refreshes: {stats.get('token_refresh_ok', 0)} successful</li>
-          </ul>
-          <p><strong>View Details:</strong> <a href="https://github.com/Vivaliz-site/site-shopvivaliz/actions">GitHub Actions</a></p>
-          <p><strong>Dashboard:</strong> <a href="https://dev.shopvivaliz.com.br/admin/monitor/">Prod Monitor</a></p>
-          """
-
-          print(html)
-          EOF
-
-      - name: "✅ Audit workflow complete"
-        run: echo "24/7 Audit Monitor cycle complete"
->>>>>>> 8b833963 (auto: sincronizar 2026-07-14 07:43:14)
