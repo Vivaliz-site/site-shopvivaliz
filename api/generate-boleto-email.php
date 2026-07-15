@@ -59,18 +59,18 @@ $preference = [
     'auto_return' => 'approved',
 ];
 
-$ch = curl_init('https://api.mercadopago.com/checkout/preferences');
-curl_setopt_array($ch, [
-    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $accessToken, 'Content-Type: application/json'],
-    CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => json_encode($preference),
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_TIMEOUT => 10,
+$context = stream_context_create([
+    'http' => [
+        'method' => 'POST',
+        'header' => "Authorization: Bearer $accessToken\r\nContent-Type: application/json\r\n",
+        'content' => json_encode($preference),
+        'timeout' => 10,
+    ],
+    'ssl' => ['verify_peer' => false],
 ]);
 
-$response = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
+$response = @file_get_contents('https://api.mercadopago.com/checkout/preferences', false, $context);
+$httpCode = isset($http_response_header) ? (int)substr($http_response_header[0], 9, 3) : 0;
 
 if ($httpCode !== 201) {
     http_response_code(400);
