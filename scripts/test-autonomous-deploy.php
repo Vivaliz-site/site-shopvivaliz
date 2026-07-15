@@ -4,7 +4,7 @@ declare(strict_types=1);
 echo "🔍 VERIFICAÇÃO DE DEPLOY AUTÔNOMO\n";
 echo "==================================\n\n";
 
-$baseDir = __DIR__ . '/api/autonomous';
+$baseDir = dirname(__DIR__) . '/api/autonomous';
 $files = [
     'send-email.php',
     'task-validator.php',
