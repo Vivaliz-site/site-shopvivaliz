@@ -369,13 +369,6 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
                 if (d.erro) return;
                 var addr = document.getElementById('address-input');
                 if (addr) {
-<<<<<<< HEAD
-                    var addressStr = [d.logradouro, d.bairro, d.localidade + '/' + d.uf].filter(Boolean).join(', ');
-                    if (addressStr) {
-                        addr.value = addressStr;
-                        addr.focus();
-                    }
-=======
                     if (d.logradouro) addr.value = d.logradouro;
                     var neighborhood = document.getElementById('neighborhood-input');
                     var city = document.getElementById('city-input');
@@ -385,7 +378,6 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
                     if (state && d.uf) state.value = d.uf;
                     var number = document.getElementById('street-number-input');
                     if (number) number.focus();
->>>>>>> 723f6fce431c55c0eb63407b35bda0d4fe1d9caa
                 }
             }).catch(function(){});
     }
