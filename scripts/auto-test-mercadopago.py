@@ -28,19 +28,40 @@ async def complete_checkout():
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
 
-        print("\n[TEST] Acessando checkout...")
-        await page.goto("https://dev.shopvivaliz.com.br/checkout/", wait_until="networkidle")
+        print("\n[TEST] Acessando carrinho para preparar itens...")
+        await page.goto("https://dev.shopvivaliz.com.br/carrinho", wait_until="networkidle")
+
+        # Injetar produto real no carrinho
+        await page.evaluate("""() => {
+            localStorage.setItem('shopvivaliz_cart', JSON.stringify([{
+                sku: 'RODIZIO-75MM',
+                name: '4x Rodízio Gel 75mm Freio 220kg Total',
+                price: 76.00,
+                quantity: 1,
+                image_url: '/public/assets/category-images/cat-rodizios.jpg',
+                id: '123'
+            }]));
+        }""")
+        await page.reload(wait_until="networkidle")
+
+        # Inserir CEP e calcular frete
+        print("[TEST] Calculando frete...")
+        await page.fill('#frete-cep', '35500-006')
+        await page.click('#btn-frete')
+        await page.wait_for_timeout(4000) # Aguarda cálculo do Melhor Envio
+
+        # Acessar checkout
+        print("[TEST] Acessando checkout...")
+        await page.goto("https://dev.shopvivaliz.com.br/checkout", wait_until="networkidle")
 
         # Preencher dados
         print("[TEST] Preenchendo formulário...")
 
         fields = {
-            'input[name="nome"]': "Teste Mercado Pago Auto",
-            'input[name="email"]': "teste@shopvivaliz.com.br",
-            'input[name="telefone"]': "11988776655",
-            'input[name="endereco"]': "Rua Automática",
-            'input[name="numero"]': "999",
-            'input[name="cidade"]': "Belo Horizonte",
+            'input[name="customer_name"]': "Teste Mercado Pago Auto",
+            'input[name="customer_email"]': "teste@shopvivaliz.com.br",
+            'input[name="customer_phone"]': "11988776655",
+            'input[name="address"]': "Rua Automática, 999",
             'input[name="cep"]': "35500-006"
         }
 

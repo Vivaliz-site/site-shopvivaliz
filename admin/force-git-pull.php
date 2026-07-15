@@ -30,7 +30,12 @@ if (!$repo_root || !is_dir("$repo_root/.git")) {
     exit;
 }
 
-// 2. Execute git pull
+// 2. Fix git permissions (dubious ownership error)
+$fix_cmd = "git config --global --add safe.directory '$repo_root' 2>&1";
+exec($fix_cmd, $fix_output, $fix_code);
+file_put_contents($log_file, "[$timestamp] Git config fix: " . implode("\n", $fix_output) . "\n", FILE_APPEND);
+
+// 3. Execute git pull
 $cmd = "cd '$repo_root' && git fetch origin main 2>&1 && git reset --hard origin/main 2>&1";
 exec($cmd, $output, $return_code);
 
