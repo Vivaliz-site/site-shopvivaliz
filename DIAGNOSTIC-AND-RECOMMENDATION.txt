@@ -1,0 +1,229 @@
+DIAGNOSTIC AND RECOMMENDATION
+Date: 2026-07-15 00:50 UTC
+Status: PHASE 1 DIAGNOSTIC COMPLETE
+
+================================================================================
+CRITICAL FINDING
+================================================================================
+
+An EXISTING COMPLETE ORCHESTRATOR has been running in production:
+- File: scripts/autonomous-executor.py (697 lines)
+- Status: ACTIVE and RUNNING
+- Capabilities: Task queue, agent routing, learning history, intervention handling
+
+This orchestrator was NOT created by Claude Code.
+It implements most of the required functionality already.
+
+================================================================================
+WHAT THE EXISTING SYSTEM DOES
+================================================================================
+
+The autonomous-executor.py implements:
+
+1. QUEUE MANAGEMENT
+   - Canonical queue (tasks-queue.json)
+   - Status tracking: pending -> assigned -> running -> in_progress -> completed
+   - Load/save operations
+
+2. AGENT ROUTING
+   - Picks next task from queue
+   - Routes to: Claude (implementation), Gemini (architecture), GPT (validation)
+   - Assigns based on task keywords
+
+3. LEARNING SYSTEM
+   - Appends lessons to learning-history.jsonl
+   - Retrieves recent learning
+   - Prevents task duplication via recent_task_titles()
+
+4. STEP TRACKING
+   - Emits steps to agent-steps.jsonl
+   - Records action, status, task_id, timestamp
+
+5. SIGNAL DETECTION
+   - site_signals(): Check home, robots.txt, sitemap, pages
+   - token_signals(): Monitor Olist/Tiny token health
+   - email_signals(): Check SMTP configuration
+
+6. AUTO-GENERATION
+   - Generates tasks when queue drops below watermark
+   - Respects MAX_GENERATED_TASKS per cycle
+   - Avoids duplicate task titles
+
+7. INTERVENTION HANDLING
+   - Reads from storage/private/agent-interventions.jsonl
+   - Supports human-driven directives
+
+8. FALLBACK SYSTEM
+   - "Roo Auxiliars" - safe fallback helpers
+   - QA/Self-test, Olist/Tiny, Frete/Checkout, General
+   - Used when task execution isn't immediately safe
+
+9. REPORT GENERATION
+   - Cycle reports to autonomous-cycle-report.json
+   - Event stream to autonomous-cycle-events.jsonl
+   - Email health tracking
+
+================================================================================
+WHAT THE EXISTING SYSTEM DOES NOT DO (Requirements Gap)
+================================================================================
+
+The existing system is missing from the 91 requirements:
+
+ANTI-LOOP DETECTION (Req 13)
+- Not implemented: detecting same task executed repeatedly
+- Not implemented: same test command without code change
+- Not implemented: detecting heartbeat updates without new evidence
+- Not implemented: detecting empty reports
+
+EXECUTION BUDGET (Req 14)
+- Not implemented: time limit per cycle
+- Not implemented: max attempts per task
+- Not implemented: max files altered limit
+- Not implemented: CPU/memory quotas
+
+TASK QUALITY VALIDATION (Req 15)
+- Not implemented: specific vs vague task detection
+- Not implemented: automatic rejection of "melhorar o sistema"
+- Not implemented: objective acceptance criteria enforcement
+
+IMPACT PRIORITIZATION (Req 16)
+- Not implemented: priority_score calculation
+- Not implemented: business impact weighting
+
+ENVIRONMENT SEPARATION (Req 17)
+- Not implemented: branch-per-task requirement
+- Not implemented: approval workflow for sensitive changes
+
+BASELINE & REGRESSION (Req 18)
+- Not implemented: baseline test recording
+- Not implemented: regression detection
+
+INCIDENT MANAGEMENT (Req 19)
+- Not implemented: SEV1/2/3/4 classification
+- Not implemented: root cause capture
+
+SENSITIVE CHANGE APPROVAL (Req 20)
+- Not implemented: database changes require approval
+- Not implemented: credentials changes blocked
+- Not implemented: payment gateway changes blocked
+
+REAL TESTING (Req 21)
+- Not implemented: differentiation between test types
+- Not implemented: external validation requirement
+- Not implemented: sandbox payment validation
+
+INDEPENDENT REVIEW (Req 22)
+- Not implemented: GPT independent verification
+- Not implemented: architecture review before implementation
+
+CONFIDENCE SCORING (Req 24)
+- Not implemented: confidence_score on conclusions
+- Not implemented: limitations disclosure
+
+PRODUCTIVITY REPORTING (Req 25)
+- Not implemented: useful executive summary
+- Not implemented: structured hourly report format
+
+AGENT HEALTH CHECK (Req 26)
+- Not implemented: health status states
+- Not implemented: CPU/memory monitoring
+- Not implemented: idleness classification
+
+And many more...
+
+================================================================================
+DECISION POINT: FOLLOW REQUIREMENT 90
+================================================================================
+
+Requirement 90 states:
+"Priorizar correções incrementais.
+Antes de criar um novo... verificar se já existe uma implementação utilizável."
+
+The existing autonomous-executor.py IS USABLE.
+
+OPTION 1 (Recommended):
+- Keep the existing Python orchestrator
+- Extend it with missing requirements (anti-loop, budgets, approvals, etc)
+- Add PHP-based utilities for specific missing pieces
+- Estimated work: 40 hours (extensions to existing system)
+- Risk: LOW (builds on proven foundation)
+- Timeline: Weeks
+
+OPTION 2 (Not Recommended):
+- Replace with our PHP system from scratch
+- Delete autonomous-executor.py
+- Use only our orchestrator-loop.sh + PHP classes
+- Estimated work: 80+ hours (rewrite all functionality)
+- Risk: HIGH (unproven new system)
+- Timeline: Months
+- Violates Requirement 90
+
+================================================================================
+RECOMMENDATION
+================================================================================
+
+Proceed with OPTION 1:
+
+1. PHASE 2A: Audit existing system (2-4 hours)
+   - Map all functions in autonomous-executor.py
+   - Identify which 91 requirements ARE implemented
+   - Identify which ARE NOT
+   - Create integration plan
+
+2. PHASE 2B: Extend existing system (10-20 hours)
+   - Add anti-loop detection to autonomous-executor.py
+   - Add execution budgets
+   - Add quality validation for auto-generated tasks
+   - Add priority scoring
+   - Add sensitive change approval workflow
+   - Add incident classification
+   - Add confidence scoring
+
+3. PHASE 2C: Add PHP utilities (5-10 hours)
+   - productivity-reporter.php (format the existing metrics)
+   - blocker-detector.php (detect stuck tasks)
+   - health-monitor.php (Req 26 agent health check)
+   - approval-queue-manager.php (Req 33 human approval)
+   - cost-tracker.php (Req 31 model usage tracking)
+
+4. PHASE 2D: Integration testing (5-10 hours)
+   - Run existing system for 24 hours
+   - Validate all extensions work
+   - Create dashboard
+
+5. PHASE 2E: Documentation
+   - Update CLAUDE.md with all 91 requirements status
+   - Create operations manual
+   - Define SLA/SLO
+
+================================================================================
+RISKS OF NOT FOLLOWING RECOMMENDATION
+================================================================================
+
+If we replace the existing system:
+- We lose 697 lines of production-tested code
+- We lose learning history and intervention mechanism
+- We lose Roo Auxiliar fallback system
+- We lose 2+ weeks of uptime
+- We violate Requirement 90
+- We create technical debt
+- We introduce new bugs
+
+================================================================================
+NEXT STEP
+================================================================================
+
+Awaiting user decision:
+
+1. Proceed with OPTION 1 (extend existing system)?
+2. Proceed with OPTION 2 (replace everything)?
+3. Other approach?
+
+If OPTION 1 is approved, we begin PHASE 2A immediately:
+- Full audit of autonomous-executor.py
+- Requirement-by-requirement mapping
+- Extension plan
+
+The existing system is GOOD ENOUGH to build upon.
+Do not rewrite working code.
+

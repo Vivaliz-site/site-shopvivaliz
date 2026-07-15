@@ -89,24 +89,19 @@ async def complete_checkout():
         }""")
         print(f"[DEBUG] DOM check: {dom_check}")
 
-        mp_selectors = [
-            'input[value="mercado_pago"]',
-            'input[name="payment_method"][value="mercado_pago"]'
-        ]
+        found_mp = await page.evaluate("""() => {
+            const el = document.querySelector('input[value="mercado_pago"]');
+            if (el) {
+                el.checked = true;
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+            }
+            return false;
+        }""")
 
-        found_mp = False
-        for selector in mp_selectors:
-            try:
-                locator = page.locator(selector)
-                if await locator.count() > 0:
-                    await locator.first.check(force=True)
-                    found_mp = True
-                    print("[OK] Mercado Pago selecionado via check(force=True)")
-                    break
-            except Exception as ex:
-                print(f"[WARN] Erro ao marcar selector {selector}: {ex}")
-
-        if not found_mp:
+        if found_mp:
+            print("[OK] Mercado Pago selecionado programaticamente via JS")
+        else:
             print("[ERR] Mercado Pago NÃO encontrado no checkout!")
             await page.screenshot(path="logs/mercadopago-not-found.png")
             await browser.close()
