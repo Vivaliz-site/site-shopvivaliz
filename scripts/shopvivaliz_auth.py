@@ -8,12 +8,23 @@ Protege API com tokens JWT.
 import os
 import jwt
 import uuid
+import secrets
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import Dict, Any, Optional
 from flask import request, jsonify
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "shopvivaliz-secret-key-change-in-production")
+# JWT_SECRET_KEY MUST be configured via environment variable
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY:
+    # Generate random key if not configured (development only)
+    # In production, JWT_SECRET_KEY MUST be set explicitly
+    if os.getenv("ENVIRONMENT") == "production":
+        raise ValueError("CRITICAL: JWT_SECRET_KEY must be set in production environment")
+    # Development: generate random key (changes on each run - acceptable for dev)
+    JWT_SECRET_KEY = secrets.token_urlsafe(32)
+    print("[WARNING] JWT_SECRET_KEY not set. Generated random key for development.")
+
 ALGORITHM = "HS256"
 TOKEN_EXPIRY_HOURS = 24
 
@@ -30,13 +41,13 @@ class AuthManager:
             "exp": datetime.utcnow() + timedelta(hours=TOKEN_EXPIRY_HOURS),
             "jti": str(uuid.uuid4()),
         }
-        return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+        return jwt.encode(payload, JWT_SECRET_KEY, algorithm=ALGORITHM)
 
     @staticmethod
     def verify_token(token: str) -> Optional[Dict[str, Any]]:
         """Verificar e decodificar token JWT."""
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
             return payload
         except jwt.ExpiredSignatureError:
             return None
@@ -58,14 +69,8 @@ class AuthManager:
                 except IndexError:
                     return jsonify({"error": "Invalid token format"}), 401
 
-            elif "token" in request.args:
-                token = request.args.get("token")
-
-            elif request.is_json and "token" in request.json:
-                token = request.json.get("token")
-
             if not token:
-                return jsonify({"error": "Token required"}), 401
+                return jsonify({"error": "Missing authentication token"}), 401
 
             payload = AuthManager.verify_token(token)
             if not payload:
@@ -73,31 +78,26 @@ class AuthManager:
 
             # Adicionar payload ao request context
             request.auth = payload
-
             return f(*args, **kwargs)
 
         return decorated_function
 
     @staticmethod
-    def get_current_agent() -> Optional[str]:
-        """Obter ID do agente autenticado."""
+    def get_agent_id() -> Optional[str]:
+        """Obter agent_id do token autenticado."""
         if hasattr(request, "auth"):
             return request.auth.get("agent_id")
         return None
 
 
-# CLI para gerar tokens
 if __name__ == "__main__":
     import sys
-
-    if len(sys.argv) > 1:
-        agent_id = sys.argv[1]
-        agent_type = sys.argv[2] if len(sys.argv) > 2 else "custom"
-
-        token = AuthManager.generate_token(agent_id, agent_type)
-        print(f"Token gerado para {agent_id}:")
-        print(f"  {token}")
-        print(f"\nUse em request:")
-        print(f"  curl -H 'Authorization: Bearer {token}' http://localhost:5000/agents")
-    else:
+    if len(sys.argv) < 2:
         print("Uso: python shopvivaliz_auth.py <agent_id> [agent_type]")
+        sys.exit(1)
+
+    agent_id = sys.argv[1]
+    agent_type = sys.argv[2] if len(sys.argv) > 2 else "worker"
+
+    token = AuthManager.generate_token(agent_id, agent_type)
+    print(f"Token gerado para {agent_id} ({agent_type}): {token}")
