@@ -25,10 +25,11 @@ function initialize_security(): void
     set_security_headers();
 
     // Enforce HTTPS in production
-    $environment = getenv('APP_ENV') ?: 'development';
-    if ($environment === 'production') {
-        enforce_https();
-    }
+    // TEMPORARIAMENTE DESABILITADO: causava loop de redirect (2026-07-14)
+    // $environment = getenv('APP_ENV') ?: 'development';
+    // if ($environment === 'production') {
+    //     enforce_https();
+    // }
 
     // Session configuration
     configure_session();
