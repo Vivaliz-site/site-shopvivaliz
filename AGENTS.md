@@ -1,12 +1,14 @@
 # 🤖 GUIA OBRIGATÓRIO PARA AGENTES IA
 
 **Efetivo:** 2026-07-15  
-**Responsável:** Todos os agentes (Claude Code, Gemini, GPT)  
-**Segurança:** CRÍTICA
+**Responsável:** Todos os agentes (Claude, Codex, Gemini, GPT, etc.)  
+**Escopo:** Qualquer tarefa automatizada (deploy, testes, integrações, ERP, pagamentos, e-mails)  
+
+> ⚠️ **CRÍTICO:** Ler primeiro [`VALIDATION-POLICY.md`](VALIDATION-POLICY.md) para política completa. Se houver conflito, `VALIDATION-POLICY.md` prevalece.
 
 ---
 
-## ⛔ REGRAS OBRIGATÓRIAS
+## ⛔ REGRAS OBRIGATÓRIAS (Resumo Executivo)
 
 ### 1. NUNCA Use `git reset --hard` em Produção
 
