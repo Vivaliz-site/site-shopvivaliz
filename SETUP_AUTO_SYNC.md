@@ -1,203 +1,77 @@
-# 🔄 Setup de Sincronização Automática
+# Setup de Sincronizacao Automatica
 
-## ⚡ Quick Start (2 Passos)
-
-### Passo 1: Abrir PowerShell como Administrador
+## Uso rapido
 
 ```powershell
-# Abrir: Start Menu → Digite "PowerShell"
-# Clique com botão direito → "Executar como Administrador"
-```
-
-### Passo 2: Executar Setup
-
-```powershell
-cd c:\site-shopvivaliz
+cd C:\site-shopvivaliz
 .\scripts\setup_auto_sync.ps1
 ```
 
-**Saída esperada:**
-```
-✅ Executando como Administrador
-🚀 ShopVivaliz - Setup de Auto Sync
-📝 Criando tarefa de sincronização...
-✅ Tarefa criada com sucesso!
-🧪 Executando teste...
-✅ Sincronização concluída com sucesso!
-```
+Isso registra a tarefa `ShopVivaliz Auto Sync` no Task Scheduler para executar
+`scripts/local-auto-sync.ps1` a cada 30 minutos.
 
----
+## O que o script faz hoje
 
-## 🎯 O Que Acontece
+- faz `git fetch origin main`;
+- exige que o checkout atual esteja na branch `main`;
+- bloqueia execucao se houver arquivos locais modificados;
+- bloqueia historico divergente em vez de tentar mergear sozinho;
+- faz apenas `pull --ff-only` ou `push` de commits ja existentes;
+- grava logs em `logs/local-sync-AAAA-MM-DD.log`.
 
-Após o setup, a sincronização automática:
+O script nao cria commits automaticos, nao usa `--no-verify` e nao esconde erro
+de Git.
 
-1. **A cada 5 minutos** (configurável):
-   - ✅ Faz `git pull` (atualiza com mudanças remotas)
-   - ✅ Faz `git add && git commit` (se houver mudanças locais)
-   - ✅ Faz `git push` (envia mudanças para GitHub)
-   - ✅ Valida secrets
-   - ✅ Registra tudo em `logs/auto-sync-*.log`
-
-2. **Roda em background** (sem interrupções)
-
-3. **Recupera de erros** (tenta novamente no próximo intervalo)
-
----
-
-## 🛠️ Comandos Úteis
-
-### Ver Status
+## Comandos uteis
 
 ```powershell
 .\scripts\setup_auto_sync.ps1 -Status
-```
-
-### Alterar Intervalo (ex: 15 minutos)
-
-```powershell
 .\scripts\setup_auto_sync.ps1 -Interval 15
-```
-
-### Ver Logs
-
-```powershell
-# Último log (hoje)
-Get-Content logs/auto-sync-$(Get-Date -Format 'yyyy-MM-dd').log -Tail 50
-
-# Monitorar em tempo real
-Get-Content -Path logs/auto-sync-*.log -Wait -Tail 20
-```
-
-### Desabilitar Sincronização
-
-```powershell
 .\scripts\setup_auto_sync.ps1 -Remove
+Get-Content logs\local-sync-$(Get-Date -Format 'yyyy-MM-dd').log -Tail 50
 ```
 
----
+## Leitura dos codigos de saida
 
-## 📋 Comparação: Antes vs Depois
+- `0`: sincronizado ou ja em dia.
+- `1`: falha inesperada.
+- `2`: branch atual nao e `main`.
+- `3`: working tree local nao esta limpa.
+- `4`: historico local e remoto divergiu.
+- `5`: outro agente esta segurando o lock do repositorio.
 
-| Aspecto | Antes | Depois |
-|---------|-------|--------|
-| **Manual** | Push/Pull manual | Automático a cada N min |
-| **Conflitos** | Não detecta | Detecta e tenta resolver |
-| **Validação** | Manual | Automática |
-| **Logs** | Nenhum | Completos em `logs/` |
-| **Esforço** | Alto | Zero |
+## Troubleshooting
 
----
+### A tarefa executa mas nao sincroniza
 
-## 🔧 Troubleshooting
-
-### Problema: "Acesso Negado"
-
-```
-❌ Este script requer permissões de Administrador!
-```
-
-**Solução:**
-1. Abrir PowerShell como Administrador
-2. Rodar comando novamente
-
-### Problema: "Script não encontrado"
-
-```
-❌ Script não encontrado: C:\path\auto_sync_git.ps1
-```
-
-**Solução:**
-1. Verificar que está no diretório correto
-2. Verificar que `scripts/auto_sync_git.ps1` existe
-
-### Problema: Tarefa não executa
-
-**Solução:**
-1. Ver status: `.\scripts\setup_auto_sync.ps1 -Status`
-2. Verificar logs: `Get-Content logs/auto-sync-*.log -Tail 50`
-3. Remover e recriar: `.\scripts\setup_auto_sync.ps1 -Remove` + novamente
-
-### Problema: Conflitos Git
-
-Se houver conflitos, o script:
-1. Tenta fazer pull
-2. Se falhar, registra em logs
-3. Tenta novamente no próximo intervalo
-
-**Solução manual:**
-```bash
-cd c:\site-shopvivaliz
-git status  # Ver o que está acontecendo
-git pull    # Tentar resolver
-```
-
----
-
-## 📊 Monitoramento
-
-### Ver últimas sincronizações
+Veja o resultado mais recente:
 
 ```powershell
-$LogFile = "logs/auto-sync-$(Get-Date -Format 'yyyy-MM-dd').log"
-Get-Content $LogFile | Select-String "✅|❌" | Select-Object -Last 20
+Get-ScheduledTaskInfo -TaskName "ShopVivaliz Auto Sync"
+Get-Content logs\local-sync-$(Get-Date -Format 'yyyy-MM-dd').log -Tail 100
 ```
 
-### Gráfico de atividade (PowerShell)
+### Branch errada
+
+Se o log mostrar codigo `2`, o checkout esta em branch de trabalho. O auto-sync
+local so deve rodar em `main`.
+
+### Alteracoes locais
+
+Se o log mostrar codigo `3`, revise:
 
 ```powershell
-$LogFile = "logs/auto-sync-$(Get-Date -Format 'yyyy-MM-dd').log"
-(Get-Content $LogFile | Measure-Object -Line).Lines
+git status --short
 ```
 
-### Verificar Git status
+### Divergencia Git
 
-```powershell
-git status
-git log --oneline | head -10
-```
+Se o log mostrar codigo `4`, resolva a integracao manualmente antes de religar o
+fluxo automatico.
 
----
+## Arquivos principais
 
-## 🔐 Segurança
-
-### O Script NÃO
-
-- ❌ Faz força push (--force)
-- ❌ Deleta branches
-- ❌ Reseta hard commits
-- ❌ Modifica arquivos diretamente
-
-### O Script SIM
-
-- ✅ Faz pull seguro
-- ✅ Faz commit apenas se tiver mudanças
-- ✅ Faz push normal (não force)
-- ✅ Registra tudo em logs
-- ✅ Para em erros (não sobreescreve)
-
----
-
-## 🎯 Próximas Ações
-
-Após ativar auto-sync:
-
-1. ✅ Monitorar logs por 10 minutos
-2. ✅ Fazer uma mudança local e ver se sincroniza
-3. ✅ Fazer uma mudança no GitHub e ver se puxa
-4. ✅ Deixar rodando indefinidamente
-
----
-
-## 📚 Arquivos Relacionados
-
-- `scripts/auto_sync_git.ps1` - Script principal
-- `scripts/setup_auto_sync.ps1` - Configurador
-- `logs/auto-sync-*.log` - Logs de execução
-- `CLAUDE.md` - Documentação do sistema
-
----
-
-**Status: ✅ Pronto para Sincronização Automática**
-
-Tempo de setup: 2 minutos ⚡
+- `scripts/local-auto-sync.ps1`
+- `scripts/auto_sync_git.ps1`
+- `scripts/setup_auto_sync.ps1`
+- `ATIVAR-AUTO-SYNC.bat`

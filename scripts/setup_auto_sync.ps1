@@ -1,27 +1,25 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-Configurar sincronização automática no Windows Task Scheduler
+Configurar sincronizacao automatica no Windows Task Scheduler
 
 .DESCRIPTION
-Cria uma tarefa no Task Scheduler que executa auto_sync_git.ps1 periodicamente
+Cria uma tarefa no Task Scheduler que executa local-auto-sync.ps1 de forma segura
 
 .PARAMETER Interval
-Intervalo em minutos (padrão: 30)
+Intervalo em minutos (padrao: 30)
 
 .PARAMETER TaskName
-Nome da tarefa no Task Scheduler (padrão: "ShopVivaliz Auto Sync")
+Nome da tarefa no Task Scheduler (padrao: "ShopVivaliz Auto Sync")
 
 .EXAMPLE
-# Setup com intervalo de 30 minutos
 .\setup_auto_sync.ps1
 
-# Setup com intervalo de 15 minutos
+.EXAMPLE
 .\setup_auto_sync.ps1 -Interval 15
 
-# Remover tarefa
+.EXAMPLE
 .\setup_auto_sync.ps1 -Remove
-
 #>
 
 param(
@@ -33,39 +31,29 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# ============================================================================
-# VERIFICAR NIVEL DE EXECUCAO
-# ============================================================================
+$isAdministrator = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+    [Security.Principal.WindowsBuiltInRole] "Administrator"
+)
+$runLevel = if ($isAdministrator) { "Highest" } else { "Limited" }
 
-$IsAdministrator = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
-$RunLevel = if ($IsAdministrator) { "Highest" } else { "Limited" }
-Write-Host "Nivel da tarefa: $RunLevel" -ForegroundColor Gray
+$repositoryPath = (Get-Item -Path $PSScriptRoot).Parent.FullName
+$scriptPath = Join-Path (Join-Path $repositoryPath "scripts") "local-auto-sync.ps1"
 
-# ============================================================================
-# CONFIGURAÇÃO
-# ============================================================================
-
-$RepositoryPath = (Get-Item -Path $PSScriptRoot).Parent.FullName
-$ScriptPath = Join-Path $RepositoryPath "scripts" "local-auto-sync.ps1"
-$TaskFolderName = "ShopVivaliz"
-
+Write-Host "Nivel da tarefa: $runLevel" -ForegroundColor Gray
 Write-Host ""
-Write-Host "🚀 ShopVivaliz - Setup de Auto Sync" -ForegroundColor Cyan
+Write-Host "ShopVivaliz - Setup de Auto Sync" -ForegroundColor Cyan
 Write-Host ("=" * 60)
-Write-Host "Repositório: $RepositoryPath" -ForegroundColor Gray
-Write-Host "Script: $ScriptPath" -ForegroundColor Gray
+Write-Host "Repositorio: $repositoryPath" -ForegroundColor Gray
+Write-Host "Script: $scriptPath" -ForegroundColor Gray
 Write-Host "Tarefa: $TaskName" -ForegroundColor Gray
 Write-Host "Intervalo: $Interval minuto(s)" -ForegroundColor Gray
 Write-Host ""
 
-# ============================================================================
-# FUNÇÕES
-# ============================================================================
-
 function Test-TaskExists {
-    param([string]$TaskName)
+    param([string]$Name)
+
     try {
-        $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+        $task = Get-ScheduledTask -TaskName $Name -ErrorAction SilentlyContinue
         return $null -ne $task
     } catch {
         return $false
@@ -73,126 +61,123 @@ function Test-TaskExists {
 }
 
 function Remove-AutoSyncTask {
-    Write-Host "🗑️  Removendo tarefa: $TaskName..." -ForegroundColor Yellow
+    param([string]$Name)
 
-    if (Test-TaskExists -TaskName $TaskName) {
-        try {
-            Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
-            Write-Host "✅ Tarefa removida com sucesso!" -ForegroundColor Green
-            return $true
-        } catch {
-            Write-Host "❌ Erro ao remover tarefa: $_" -ForegroundColor Red
-            return $false
-        }
-    } else {
-        Write-Host "ℹ️  Tarefa não existe (nada a remover)" -ForegroundColor Gray
+    Write-Host "Removendo tarefa: $Name..." -ForegroundColor Yellow
+
+    if (-not (Test-TaskExists -Name $Name)) {
+        Write-Host "Tarefa nao existe (nada a remover)." -ForegroundColor Gray
         return $true
+    }
+
+    try {
+        Unregister-ScheduledTask -TaskName $Name -Confirm:$false
+        Write-Host "Tarefa removida com sucesso." -ForegroundColor Green
+        return $true
+    } catch {
+        Write-Host "Erro ao remover tarefa: $($_.Exception.Message)" -ForegroundColor Red
+        return $false
     }
 }
 
 function Get-TaskStatus {
     Write-Host ""
-    Write-Host "📋 Status das Tarefas ShopVivaliz:" -ForegroundColor Cyan
+    Write-Host "Status das tarefas ShopVivaliz:" -ForegroundColor Cyan
     Write-Host ("=" * 60)
 
     try {
-        $tasks = Get-ScheduledTask | Where-Object { $_.TaskName -like "*ShopVivaliz*" -or $_.TaskName -like "*Auto Sync*" }
+        $tasks = Get-ScheduledTask | Where-Object {
+            $_.TaskName -like "*ShopVivaliz*" -or $_.TaskName -like "*Auto Sync*"
+        }
 
-        if ($tasks.Count -eq 0) {
-            Write-Host "⭕ Nenhuma tarefa encontrada" -ForegroundColor Gray
-        } else {
-            foreach ($task in $tasks) {
-                $taskInfo = Get-ScheduledTaskInfo -TaskName $task.TaskName
-                $lastRun = $taskInfo.LastRunTime
-                $lastResult = $taskInfo.LastTaskResult
-                $enabled = $task.State -ne "Disabled"
+        if (-not $tasks) {
+            Write-Host "Nenhuma tarefa encontrada." -ForegroundColor Gray
+            return
+        }
 
-                Write-Host ""
-                Write-Host "📌 $($task.TaskName)" -ForegroundColor Cyan
-                Write-Host "   Habilitada: $(if ($enabled) { '✅ Sim' } else { '❌ Não' })" -ForegroundColor Gray
-                Write-Host "   Última execução: $(if ($lastRun) { $lastRun } else { 'Nunca executada' })" -ForegroundColor Gray
-                Write-Host "   Resultado: $lastResult" -ForegroundColor Gray
-            }
+        foreach ($task in $tasks) {
+            $taskInfo = Get-ScheduledTaskInfo -TaskName $task.TaskName
+            $enabled = $task.State -ne "Disabled"
+
+            Write-Host ""
+            Write-Host $task.TaskName -ForegroundColor Cyan
+            Write-Host "  Habilitada: $(if ($enabled) { 'Sim' } else { 'Nao' })" -ForegroundColor Gray
+            Write-Host "  Ultima execucao: $($taskInfo.LastRunTime)" -ForegroundColor Gray
+            Write-Host "  Proxima execucao: $($taskInfo.NextRunTime)" -ForegroundColor Gray
+            Write-Host "  Resultado: $($taskInfo.LastTaskResult)" -ForegroundColor Gray
         }
     } catch {
-        Write-Host "❌ Erro ao obter status: $_" -ForegroundColor Red
+        Write-Host "Erro ao obter status: $($_.Exception.Message)" -ForegroundColor Red
     }
 
     Write-Host ""
 }
 
 function Create-AutoSyncTask {
-    Write-Host "📝 Criando tarefa de sincronização..." -ForegroundColor Yellow
+    param(
+        [string]$Name,
+        [int]$Minutes
+    )
+
+    Write-Host "Criando tarefa de sincronizacao..." -ForegroundColor Yellow
     Write-Host ""
 
-    # Verificar se script existe
-    if (-not (Test-Path $ScriptPath)) {
-        Write-Host "❌ Script não encontrado: $ScriptPath" -ForegroundColor Red
+    if (-not (Test-Path -LiteralPath $scriptPath)) {
+        Write-Host "Script nao encontrado: $scriptPath" -ForegroundColor Red
         return $false
     }
 
-    # Se tarefa existe, remover primeiro
-    if (Test-TaskExists -TaskName $TaskName) {
-        Write-Host "⚠️  Tarefa já existe, removendo..." -ForegroundColor Yellow
-        Remove-AutoSyncTask
+    if (Test-TaskExists -Name $Name) {
+        if (-not (Remove-AutoSyncTask -Name $Name)) {
+            return $false
+        }
     }
 
     try {
-        # Criar ação de tarefa
-        $Action = New-ScheduledTaskAction `
+        $action = New-ScheduledTaskAction `
             -Execute "powershell.exe" `
-            -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`" -IntervalMinutes $Interval -OneTime"
+            -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -IntervalMinutes $Minutes -OneTime"
 
-        # Criar trigger (a cada N minutos, indefinidamente)
-        $Trigger = New-ScheduledTaskTrigger `
+        $trigger = New-ScheduledTaskTrigger `
             -Once `
             -At (Get-Date).AddMinutes(1) `
-            -RepetitionInterval (New-TimeSpan -Minutes $Interval) `
+            -RepetitionInterval (New-TimeSpan -Minutes $Minutes) `
             -RepetitionDuration (New-TimeSpan -Days 3650)
 
-        # Criar configuração de tarefa
-        $Settings = New-ScheduledTaskSettingsSet `
+        $settings = New-ScheduledTaskSettingsSet `
             -AllowStartIfOnBatteries `
             -DontStopIfGoingOnBatteries `
             -Compatibility Win8 `
             -MultipleInstances IgnoreNew `
             -RunOnlyIfNetworkAvailable
 
-        # Registrar tarefa
         Register-ScheduledTask `
-            -TaskName $TaskName `
-            -Action $Action `
-            -Trigger $Trigger `
-            -Settings $Settings `
-            -RunLevel $RunLevel `
+            -TaskName $Name `
+            -Action $action `
+            -Trigger $trigger `
+            -Settings $settings `
+            -RunLevel $runLevel `
             -Force | Out-Null
 
-        Write-Host "✅ Tarefa criada com sucesso!" -ForegroundColor Green
+        Write-Host "Tarefa criada com sucesso." -ForegroundColor Green
         Write-Host ""
-        Write-Host "📋 Detalhes:" -ForegroundColor Cyan
-        Write-Host "   Nome: $TaskName" -ForegroundColor Gray
-        Write-Host "   Script: $ScriptPath" -ForegroundColor Gray
-        Write-Host "   Intervalo: $Interval minuto(s)" -ForegroundColor Gray
-        Write-Host "   Nível: $RunLevel" -ForegroundColor Gray
-        Write-Host "   Status: Ativa" -ForegroundColor Green
-
+        Write-Host "Detalhes:" -ForegroundColor Cyan
+        Write-Host "  Nome: $Name" -ForegroundColor Gray
+        Write-Host "  Script: $scriptPath" -ForegroundColor Gray
+        Write-Host "  Intervalo: $Minutes minuto(s)" -ForegroundColor Gray
+        Write-Host "  Nivel: $runLevel" -ForegroundColor Gray
         return $true
-
     } catch {
-        Write-Host "❌ Erro ao criar tarefa: $_" -ForegroundColor Red
+        Write-Host "Erro ao criar tarefa: $($_.Exception.Message)" -ForegroundColor Red
         return $false
     }
 }
 
-# ============================================================================
-# MAIN
-# ============================================================================
-
 if ($Remove) {
     Write-Host ""
-    $success = Remove-AutoSyncTask
+    $success = Remove-AutoSyncTask -Name $TaskName
     Write-Host ""
-    exit (if ($success) { 0 } else { 1 })
+    if ($success) { exit 0 } else { exit 1 }
 }
 
 if ($Status) {
@@ -200,22 +185,21 @@ if ($Status) {
     exit 0
 }
 
-# Setup normal
-$success = Create-AutoSyncTask
+$success = Create-AutoSyncTask -Name $TaskName -Minutes $Interval
 
 if ($success) {
     Write-Host ""
-    Write-Host "🎉 Setup completo!" -ForegroundColor Green
+    Write-Host "Setup completo." -ForegroundColor Green
     Write-Host ""
-    Write-Host "Próximos passos:" -ForegroundColor Cyan
+    Write-Host "Proximos passos:" -ForegroundColor Cyan
     Write-Host "  1. Verificar logs em: logs/local-sync-*.log" -ForegroundColor Gray
     Write-Host "  2. Ver status: .\scripts\setup_auto_sync.ps1 -Status" -ForegroundColor Gray
     Write-Host "  3. Parar: .\scripts\setup_auto_sync.ps1 -Remove" -ForegroundColor Gray
     Write-Host ""
-
-    Write-Host "A tarefa executara o primeiro teste em ate um minuto." -ForegroundColor Gray
-} else {
-    Write-Host ""
-    Write-Host "❌ Setup falhou!" -ForegroundColor Red
-    exit 1
+    Write-Host "A tarefa executara o primeiro ciclo em ate um minuto." -ForegroundColor Gray
+    exit 0
 }
+
+Write-Host ""
+Write-Host "Setup falhou." -ForegroundColor Red
+exit 1

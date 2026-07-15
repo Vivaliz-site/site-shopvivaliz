@@ -6,6 +6,10 @@ O auto-sync local foi alterado para sincronizar apenas historico Git seguro. O
 script nao cria mais commits automaticos, nao usa `--no-verify`, nao faz merge
 implicito e nao informa sucesso quando um comando Git falha.
 
+Uma segunda rodada no mesmo dia alinhou os atalhos e a documentacao operacional
+ao comportamento seguro atual e corrigiu a compatibilidade do configurador com
+`powershell.exe` classico do Windows.
+
 ## Arquivos alterados
 
 - `.gitignore`: ignora estado e mensagens de runtime do bridge MCP.
@@ -15,6 +19,10 @@ implicito e nao informa sucesso quando um comando Git falha.
 - `scripts/local-auto-sync-loop.ps1`: executa um ciclo por intervalo.
 - `scripts/setup_auto_sync.ps1`: agenda execucao unica a cada 30 minutos e
   funciona sem exigir elevacao administrativa.
+- `ATIVAR-AUTO-SYNC.bat`: passou a chamar o configurador canonico em vez de
+  recriar uma tarefa inconsistente por `schtasks`.
+- `SETUP_AUTO_SYNC.md`: reescrito para descrever o fluxo real, os codigos de
+  saida e os logs corretos.
 - `tests/test_local_auto_sync.py`: testes isolados de fast-forward, working tree
   suja e historico divergente.
 - `storage/codex-bridge/messages.jsonl` e `state.json`: removidos apenas do
@@ -23,6 +31,7 @@ implicito e nao informa sucesso quando um comando Git falha.
 ## Testes executados
 
 - Parser PowerShell em `local-auto-sync.ps1` e `setup_auto_sync.ps1`.
+- `powershell -File scripts/setup_auto_sync.ps1 -Status`.
 - `python -m unittest tests.test_local_auto_sync -v`.
 - Resultado: 3 testes aprovados.
 - Tarefa `ShopVivaliz Auto Sync` registrada como `Ready`, sem elevacao, com
@@ -37,6 +46,9 @@ implicito e nao informa sucesso quando um comando Git falha.
   a auditoria. Elas nao foram descartadas nem incluidas nesta correcao.
 - Tarefas agendadas antigas estavam desativadas e apontavam para caminhos
   anteriores a migracao.
+- A tentativa de remover tres tarefas antigas do Windows Task Scheduler falhou
+  com `Access denied` no contexto atual sem elevacao. Elas continuam
+  desativadas, mas ainda precisam de limpeza manual administrativa.
 
 ## Proxima tarefa recomendada
 
