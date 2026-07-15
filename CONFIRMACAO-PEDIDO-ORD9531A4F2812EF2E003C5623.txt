@@ -1,0 +1,53 @@
+═══════════════════════════════════════════════════════════════
+
+Pedido Confirmado - ShopVivaliz #ORD9531A4F2812EF2E003C5623
+
+═══════════════════════════════════════════════════════════════
+
+Olá Cliente,
+
+Seu pedido foi registrado com sucesso em nossa loja!
+
+DADOS DO PEDIDO
+═══════════════════════════════════════════════════════════════
+
+Número do Pedido: ORD9531A4F2812EF2E003C5623
+Data: 15/07/2026 12:32:24
+Status: AGUARDANDO PAGAMENTO
+
+VALOR DO PEDIDO: R$ 99,90
+
+═══════════════════════════════════════════════════════════════
+
+PRÓXIMOS PASSOS
+
+1. ✅ Você receberá um link de pagamento via Mercado Pago
+2. ✅ Escolha sua forma de pagamento (Cartão, Boleto, PIX, etc)
+3. ✅ Nossa equipe confirmará seu pedido após o pagamento
+4. ✅ Você receberá atualizações sobre frete e entrega
+
+═══════════════════════════════════════════════════════════════
+
+LINK DE PAGAMENTO
+
+https://dev.shopvivaliz.com.br/checkout?order=ORD9531A4F2812EF2E003C5623
+
+═══════════════════════════════════════════════════════════════
+
+DÚVIDAS?
+
+📞 WhatsApp: 11 4041-5850
+📧 Email: contato@shopvivaliz.com.br
+🌐 Site: https://dev.shopvivaliz.com.br
+
+═══════════════════════════════════════════════════════════════
+
+Obrigado por comprar na ShopVivaliz!
+
+Atenciosamente,
+Equipe ShopVivaliz
+
+© 2026 ShopVivaliz - Todos os direitos reservados
+Este é um email automático - Por favor, não responda
+
+═══════════════════════════════════════════════════════════════
