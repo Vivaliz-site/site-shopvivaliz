@@ -1,111 +1,110 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Auto-sync local repository a cada 30 minutos (igual VM Oracle)
-.DESCRIPTION
-    - Pull automático cada 30min
-    - Push automático se houver commits locais
-    - Log em C:\site-shopvivaliz\logs\local-sync-*.log
-    - Roda continuamente em background
+Sincroniza commits da branch main com origin/main sem criar commits ou esconder conflitos.
 #>
-
 param(
     [int]$IntervalMinutes = 30,
     [switch]$OneTime,
-    [switch]$Verbose
+    [string]$RepositoryPath = ""
 )
 
-$ErrorActionPreference = "Continue"
-
+$ErrorActionPreference = "Stop"
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-try {
-    $repo = (git rev-parse --show-toplevel 2>$null).Trim()
-} catch {
-    $repo = $scriptRoot
-}
-if ([string]::IsNullOrWhiteSpace($repo)) {
-    $repo = $scriptRoot
-}
-$logsDir = "$repo\logs"
+if ([string]::IsNullOrWhiteSpace($RepositoryPath)) { $RepositoryPath = Split-Path -Parent $scriptRoot }
+$repo = (Resolve-Path -LiteralPath $RepositoryPath).Path
+$logsDir = Join-Path $repo "logs"
+New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
+$logFile = Join-Path $logsDir "local-sync-$(Get-Date -Format 'yyyy-MM-dd').log"
 
-if (-not (Test-Path $logsDir)) {
-    New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
-}
-
-$logFile = "$logsDir\local-sync-$(Get-Date -Format 'yyyy-MM-dd').log"
-
-function Log($Message) {
-    $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $msg = "[$ts] $Message"
-    Write-Host $msg
-    Add-Content -Path $logFile -Value $msg -Encoding UTF8
+function Write-SyncLog {
+    param([string]$Message, [string]$Level = "INFO")
+    $line = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [$Level] $Message"
+    Write-Host $line
+    Add-Content -LiteralPath $logFile -Value $line -Encoding UTF8
 }
 
-function SyncOnce {
-    Set-Location $repo
+function Invoke-Git {
+    param([string[]]$Arguments)
+    $output = @(& git -C $repo @Arguments 2>&1)
+    $exitCode = $LASTEXITCODE
+    foreach ($line in $output) { Write-SyncLog "git: $line" }
+    [pscustomobject]@{ ExitCode = $exitCode; Output = $output }
+}
 
-    Log "=========================================================================="
-    Log ">> SYNC INICIADO"
+function Git-Text {
+    param([string[]]$Arguments)
+    $result = Invoke-Git -Arguments $Arguments
+    if ($result.ExitCode -ne 0) { throw "git $($Arguments -join ' ') falhou com codigo $($result.ExitCode)" }
+    (($result.Output -join "`n").Trim())
+}
 
+function Invoke-SyncOnce {
+    $lockStream = $null
     try {
-        # Pull com rebase e autostash
-        Log "[1] Executando git fetch..."
-        git fetch --prune origin 2>&1 | ForEach-Object { Log "    $_" }
+        $gitDir = Git-Text -Arguments @("rev-parse", "--git-dir")
+        if (-not [IO.Path]::IsPathRooted($gitDir)) { $gitDir = Join-Path $repo $gitDir }
+        $lockPath = Join-Path $gitDir "shopvivaliz-agent-edit.lock"
+        $lockStream = [IO.File]::Open($lockPath, "OpenOrCreate", "ReadWrite", "ReadWrite")
+        try { $lockStream.Lock(0, 1) } catch {
+            Write-SyncLog "Sincronizacao adiada: outro agente esta editando o repositorio." "WARN"
+            return 5
+        }
 
-        $behind = (git rev-list --count "HEAD..origin/main" 2>$null)
-        $ahead = (git rev-list --count "origin/main..HEAD" 2>$null)
+        $branch = Git-Text -Arguments @("branch", "--show-current")
+        if ($branch -ne "main") {
+            Write-SyncLog "Bloqueado: branch atual '$branch'; esperado 'main'." "ERROR"
+            return 2
+        }
 
-        Log "    Status: ahead=$ahead behind=$behind"
+        $fetch = Invoke-Git -Arguments @("fetch", "--prune", "origin", "main")
+        if ($fetch.ExitCode -ne 0) { throw "git fetch falhou" }
 
+        $status = Git-Text -Arguments @(
+            "status", "--porcelain", "--untracked-files=normal", "--", ".", ":(exclude)logs/**"
+        )
+        if ($status) {
+            Write-SyncLog "Bloqueado: existem alteracoes locais; nenhum arquivo foi commitado automaticamente." "ERROR"
+            foreach ($line in ($status -split "`n")) { Write-SyncLog $line "ERROR" }
+            return 3
+        }
+
+        $counts = Git-Text -Arguments @("rev-list", "--left-right", "--count", "HEAD...origin/main")
+        $parts = $counts -split "\s+"
+        $ahead = [int]$parts[0]
+        $behind = [int]$parts[1]
+        Write-SyncLog "Estado Git: ahead=$ahead behind=$behind"
+
+        if ($ahead -gt 0 -and $behind -gt 0) {
+            Write-SyncLog "Bloqueado: historico divergiu; exige revisao/rebase manual." "ERROR"
+            return 4
+        }
         if ($behind -gt 0) {
-            Log "[2] Puxando atualizacoes..."
-            git pull --rebase --autostash 2>&1 | ForEach-Object { Log "    $_" }
-            Log "    >> Pull concluido"
+            $pull = Invoke-Git -Arguments @("pull", "--ff-only", "origin", "main")
+            if ($pull.ExitCode -ne 0) { throw "git pull --ff-only falhou" }
+            Write-SyncLog "Fast-forward concluido com sucesso." "SUCCESS"
+        } elseif ($ahead -gt 0) {
+            $push = Invoke-Git -Arguments @("push", "origin", "main")
+            if ($push.ExitCode -ne 0) { throw "git push falhou" }
+            Write-SyncLog "Push concluido com sucesso." "SUCCESS"
         } else {
-            Log "    >> Ja atualizado"
+            Write-SyncLog "Repositorio ja sincronizado." "SUCCESS"
         }
-
-        if ($ahead -gt 0) {
-            Log "[3] Push de $ahead commit(s)..."
-            git push origin main --no-verify 2>&1 | ForEach-Object { Log "    $_" }
-            Log "    >> Push concluido"
-        } else {
-            Log "    >> Nada para fazer push"
-        }
-
-        Log "OK - SYNC CONCLUIDO"
-        return $true
-
+        return 0
     } catch {
-        Log "ERRO: $_"
-        return $false
+        Write-SyncLog "Falha: $($_.Exception.Message)" "ERROR"
+        return 1
+    } finally {
+        if ($null -ne $lockStream) {
+            try { $lockStream.Unlock(0, 1) } catch {}
+            $lockStream.Dispose()
+        }
     }
 }
 
-Log "🚀 LOCAL AUTO-SYNC INICIADO"
-Log "   Repositorio: $repo"
-Log "   Intervalo: ${IntervalMinutes}min"
-Log "   Log: $logFile"
-
-if ($OneTime) {
-    Log "   Modo: Uma unica execucao"
-    $result = SyncOnce
-    if ($result) { exit 0 } else { exit 1 }
-} else {
-    Log "   Modo: Continuo (infinito)"
-    Log "   Para parar: Ctrl+C"
-
-    $iteration = 0
-    while ($true) {
-        $iteration++
-        Log ""
-        Log "════ CICLO $iteration ════"
-
-        SyncOnce | Out-Null
-
-        Log "Proximo ciclo em ${IntervalMinutes} minutos... (proxima: $(([DateTime]::Now).AddMinutes($IntervalMinutes).ToString('yyyy-MM-dd HH:mm:ss')))"
-        Log ""
-
-        Start-Sleep -Seconds ($IntervalMinutes * 60)
-    }
-}
+do {
+    $code = Invoke-SyncOnce
+    if ($OneTime) { exit $code }
+    Write-SyncLog "Proximo ciclo em $IntervalMinutes minuto(s)."
+    Start-Sleep -Seconds ([Math]::Max(1, $IntervalMinutes * 60))
+} while ($true)

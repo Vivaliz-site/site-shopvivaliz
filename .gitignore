@@ -43,3 +43,8 @@ config/runtime-secrets*.php
 test-results/
 playwright-report/
 storage/order-rate-limit/
+
+# Runtime do bridge MCP: muda a cada inicializacao/mensagem e nunca deve
+# provocar auto-commits ou bloquear a sincronizacao do codigo.
+storage/codex-bridge/messages.jsonl
+storage/codex-bridge/state.json

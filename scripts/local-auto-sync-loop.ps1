@@ -8,6 +8,6 @@ if (-not (Test-Path $syncScript)) {
 }
 
 while ($true) {
-    & $syncScript
+    & $syncScript -OneTime
     Start-Sleep -Seconds 1800
 }
