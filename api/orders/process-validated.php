@@ -298,8 +298,9 @@ $city = trim((string)($body['city'] ?? ''));
 $state = strtoupper(trim((string)($body['state'] ?? '')));
 $notes = trim((string)($body['notes'] ?? ''));
 $paymentMethod = svop_payment_method((string)($body['payment_method'] ?? 'pix'));
+$deviceId = trim((string)($body['device_id'] ?? ''));
 
-if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($streetNumber) > 30 || strlen($neighborhood) > 120 || strlen($city) > 120 || strlen($state) > 2 || strlen($notes) > 1000) {
+if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($streetNumber) > 30 || strlen($neighborhood) > 120 || strlen($city) > 120 || strlen($state) > 2 || strlen($notes) > 1000 || strlen($deviceId) > 255) {
     svoi_release($idempotencyKey);
     svop_json(422, ['ok' => false, 'error' => 'field_too_long']);
 }
@@ -338,6 +339,7 @@ $paymentSessionToken = in_array($paymentMethod, ['boleto', 'mercado_pago'], true
     : '';
 $record = [
     'order_number' => $orderNumber,
+    'device_id' => $deviceId,
     'status' => 'pending_confirmation',
     'customer' => [
         'name' => $name,

@@ -397,6 +397,10 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
         var payload = { items: items };
         fd.forEach(function(v,k){ payload[k] = v; });
         try {
+            var deviceInput = document.querySelector('input[name="deviceId"]');
+            payload.device_id = deviceInput ? deviceInput.value : (window.deviceId || '');
+        } catch (e) {}
+        try {
             var q = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
             if (q) {
                 payload.shipping_total = Number(q.total) || 0;
