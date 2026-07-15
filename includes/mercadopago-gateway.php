@@ -166,8 +166,8 @@ function svmp_boleto_payload(array $order): array
     ];
 }
 
-/** @return array<string,mixed> */
-function svmp_preference_payload(array $order): array
+/** @return array */
+function svmp_build_items(array $order): array
 {
     $items = [];
     foreach ((array)($order['items'] ?? []) as $item) {
@@ -185,6 +185,8 @@ function svmp_preference_payload(array $order): array
             'quantity' => $quantity,
             'currency_id' => 'BRL',
             'unit_price' => $unitPrice,
+            'category_id' => 'others',
+            'external_code' => svmp_truncate((string)($item['sku'] ?? ''), 50),
         ];
     }
     $shipping = round((float)($order['shipping_total'] ?? 0), 2);
@@ -195,8 +197,65 @@ function svmp_preference_payload(array $order): array
             'quantity' => 1,
             'currency_id' => 'BRL',
             'unit_price' => $shipping,
+            'category_id' => 'others',
+            'external_code' => 'shipping_fee',
         ];
     }
+    return $items;
+}
+
+/** @return array<string,mixed> */
+function svmp_boleto_payload(array $order): array
+{
+    $customer = is_array($order['customer'] ?? null) ? $order['customer'] : [];
+    [$firstName, $lastName] = svmp_split_name((string)($customer['name'] ?? ''));
+    $cpf = preg_replace('/\D+/', '', (string)($customer['cpf'] ?? '')) ?? '';
+    $total = round((float)($order['total'] ?? 0), 2);
+    if ($total <= 0 || !svmp_validate_cpf($cpf)) {
+        throw new InvalidArgumentException('invalid_boleto_order');
+    }
+
+    $required = ['email', 'cep', 'street_name', 'street_number', 'neighborhood', 'city', 'state'];
+    foreach ($required as $field) {
+        if (trim((string)($customer[$field] ?? '')) === '') {
+            throw new InvalidArgumentException('missing_boleto_payer_fields');
+        }
+    }
+
+    return [
+        'type' => 'online',
+        'external_reference' => (string)($order['order_number'] ?? ''),
+        'processing_mode' => 'automatic',
+        'total_amount' => svmp_money($total),
+        'description' => 'Pedido ShopVivaliz ' . (string)($order['order_number'] ?? ''),
+        'items' => svmp_build_items($order),
+        'payer' => [
+            'email' => (string)$customer['email'],
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'identification' => ['type' => 'CPF', 'number' => $cpf],
+            'address' => [
+                'street_name' => (string)$customer['street_name'],
+                'street_number' => (string)$customer['street_number'],
+                'zip_code' => preg_replace('/\D+/', '', (string)$customer['cep']),
+                'neighborhood' => (string)$customer['neighborhood'],
+                'state' => strtoupper((string)$customer['state']),
+                'city' => (string)$customer['city'],
+            ],
+        ],
+        'transactions' => [
+            'payments' => [[
+                'amount' => svmp_money($total),
+                'payment_method' => ['id' => 'boleto', 'type' => 'ticket'],
+            ]],
+        ],
+    ];
+}
+
+/** @return array<string,mixed> */
+function svmp_preference_payload(array $order): array
+{
+    $items = svmp_build_items($order);
     if ($items === []) {
         throw new InvalidArgumentException('invalid_preference_items');
     }
@@ -205,13 +264,27 @@ function svmp_preference_payload(array $order): array
     [$firstName, $lastName] = svmp_split_name((string)($customer['name'] ?? ''));
     $baseUrl = svmp_base_url();
     $orderNumber = (string)($order['order_number'] ?? '');
+    $cpf = preg_replace('/\D+/', '', (string)($customer['cpf'] ?? '')) ?? '';
 
-    return [
+    $payload = [
         'items' => $items,
         'payer' => [
             'name' => $firstName,
             'surname' => $lastName,
             'email' => (string)($customer['email'] ?? ''),
+            'phone' => [
+                'area_code' => strlen($customer['phone'] ?? '') >= 10 ? substr(preg_replace('/\D+/', '', $customer['phone']), 0, 2) : '37',
+                'number' => strlen($customer['phone'] ?? '') >= 10 ? substr(preg_replace('/\D+/', '', $customer['phone']), 2) : preg_replace('/\D+/', '', $customer['phone'] ?? ''),
+            ],
+            'identification' => $cpf !== '' ? ['type' => 'CPF', 'number' => $cpf] : null,
+            'address' => [
+                'street_name' => (string)($customer['street_name'] ?? $customer['address'] ?? ''),
+                'street_number' => (string)($customer['street_number'] ?? 'SN'),
+                'zip_code' => preg_replace('/\D+/', '', (string)($customer['cep'] ?? '')),
+                'neighborhood' => (string)($customer['neighborhood'] ?? ''),
+                'state' => strtoupper((string)($customer['state'] ?? '')),
+                'city' => (string)($customer['city'] ?? ''),
+            ],
         ],
         'external_reference' => $orderNumber,
         'statement_descriptor' => 'SHOPVIVALIZ',
@@ -223,11 +296,34 @@ function svmp_preference_payload(array $order): array
         'auto_return' => 'approved',
         'notification_url' => $baseUrl . '/api/webhook-mercadopago.php?source_news=webhooks',
         'metadata' => ['shopvivaliz_order' => $orderNumber],
+        'additional_info' => [
+            'payer' => [
+                'registration_date' => $order['created_at'] ?? date('c'),
+                'authentication_type' => 'email',
+                'is_first_purchase_online' => true,
+            ],
+            'shipments' => [
+                'express_shipments' => false,
+                'receivers_address' => [
+                    'zip_code' => preg_replace('/\D+/', '', (string)($customer['cep'] ?? '')),
+                    'state_name' => strtoupper((string)($customer['state'] ?? '')),
+                    'city_name' => (string)($customer['city'] ?? ''),
+                    'street_number' => (string)($customer['street_number'] ?? 'SN'),
+                    'street_name' => (string)($customer['street_name'] ?? $customer['address'] ?? ''),
+                ]
+            ]
+        ]
     ];
+
+    if ($payload['payer']['identification'] === null) {
+        unset($payload['payer']['identification']);
+    }
+
+    return $payload;
 }
 
 /** @return array<string,mixed> */
-function svmp_api_request(string $method, string $path, string $accessToken, ?array $payload = null, string $idempotencyKey = ''): array
+function svmp_api_request(string $method, string $path, string $accessToken, ?array $payload = null, string $idempotencyKey = '', string $deviceId = ''): array
 {
     if ($accessToken === '') {
         throw new SvMercadoPagoApiException(503, 'gateway_unavailable');
@@ -240,6 +336,9 @@ function svmp_api_request(string $method, string $path, string $accessToken, ?ar
     ];
     if ($idempotencyKey !== '') {
         $headers[] = 'X-Idempotency-Key: ' . $idempotencyKey;
+    }
+    if ($deviceId !== '') {
+        $headers[] = 'X-Melidata-Session: ' . $deviceId;
     }
 
     $encodedPayload = $payload !== null
@@ -302,7 +401,8 @@ function svmp_create_boleto(array $order, string $accessToken): array
     $payload = svmp_boleto_payload($order);
     $orderNumber = (string)($order['order_number'] ?? '');
     $idempotencyKey = hash_hmac('sha256', 'boleto|' . $orderNumber, $accessToken);
-    $response = svmp_api_request('POST', '/v1/orders', $accessToken, $payload, $idempotencyKey);
+    $deviceId = (string)($order['device_id'] ?? '');
+    $response = svmp_api_request('POST', '/v1/orders', $accessToken, $payload, $idempotencyKey, $deviceId);
     $payment = $response['transactions']['payments'][0] ?? [];
     $paymentMethod = is_array($payment) && is_array($payment['payment_method'] ?? null) ? $payment['payment_method'] : [];
     $ticketUrl = (string)($paymentMethod['ticket_url'] ?? '');
@@ -326,7 +426,8 @@ function svmp_create_preference(array $order, string $accessToken): array
     $payload = svmp_preference_payload($order);
     $orderNumber = (string)($order['order_number'] ?? '');
     $idempotencyKey = hash_hmac('sha256', 'preference|' . $orderNumber, $accessToken);
-    $response = svmp_api_request('POST', '/checkout/preferences', $accessToken, $payload, $idempotencyKey);
+    $deviceId = (string)($order['device_id'] ?? '');
+    $response = svmp_api_request('POST', '/checkout/preferences', $accessToken, $payload, $idempotencyKey, $deviceId);
     $checkoutUrl = (string)($response['init_point'] ?? '');
     if ((string)($response['id'] ?? '') === '' || !str_starts_with($checkoutUrl, 'https://')) {
         throw new SvMercadoPagoApiException(502, 'preference_missing_checkout_url');
