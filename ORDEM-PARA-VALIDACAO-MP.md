@@ -1,7 +1,7 @@
 # 📦 Ordem Gerada para Validação no Mercado Pago
 
-**Data:** 2026-07-14  
-**Status:** Pronto para validação  
+**Data:** 2026-07-14
+**Status:** Pronto para validação
 **Ambiente:** Sandbox (Teste)
 
 ---
@@ -35,18 +35,18 @@ PED-20260714-FINAL-VALIDATION
 ### No Painel Mercado Pago
 
 1. **Acesse:** https://www.mercadopago.com.br/developers/pt
-2. **Seção:** "Suas integrações" 
+2. **Seção:** "Suas integrações"
 3. **Aplicação:** ShopVivaliz
 4. **Credenciais Utilizadas:**
    - Public Key: `TEST-xxx...` (visível no checkout)
    - Access Token: `APP_USR-xxx...` (servidor apenas)
-   
+
 ### Validar Ordem
 
 ```bash
 # Via API REST (usando curl)
 curl -X GET https://api.mercadopago.com/v1/orders \
-  -H "Authorization: Bearer APP_USR-476390832526..."
+  -H "Authorization: Bearer APP_USR-REDACTED-ROTATE..."
 ```
 
 ---
