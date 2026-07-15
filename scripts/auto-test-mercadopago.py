@@ -75,6 +75,20 @@ async def complete_checkout():
         # Selecionar Mercado Pago
         print("[TEST] Selecionando Mercado Pago...")
 
+        dom_check = await page.evaluate("""() => {
+            const el = document.querySelector('input[value="mercado_pago"]');
+            if (!el) return 'NOT_FOUND';
+            return {
+                tagName: el.tagName,
+                type: el.type,
+                name: el.name,
+                value: el.value,
+                visible: el.offsetWidth > 0 && el.offsetHeight > 0,
+                parent: el.parentElement ? el.parentElement.outerHTML.substring(0, 200) : null
+            };
+        }""")
+        print(f"[DEBUG] DOM check: {dom_check}")
+
         mp_selectors = [
             'input[value="mercado_pago"]',
             'input[name="payment_method"][value="mercado_pago"]'
