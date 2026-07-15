@@ -45,7 +45,8 @@ async def complete_checkout():
         await page.reload(wait_until="networkidle")
 
         # Inserir CEP e calcular frete
-        print("[TEST] Calculando frete...")
+        print(f"[TEST] Calculando frete... URL atual: {page.url}, Título: {await page.title()}")
+        await page.wait_for_selector('#frete-cep', timeout=5000)
         await page.fill('#frete-cep', '35500-006')
         await page.click('#btn-frete')
         await page.wait_for_timeout(4000) # Aguarda cálculo do Melhor Envio
