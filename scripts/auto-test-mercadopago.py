@@ -114,7 +114,7 @@ async def complete_checkout():
         # Tentar enviar
         print("[TEST] Enviando pedido...")
 
-        submit_btn = page.locator('button[type="submit"], button:has-text("Confirmar")')
+        submit_btn = page.locator('#submit-btn')
         if await submit_btn.count() > 0:
             await submit_btn.first.click()
 
