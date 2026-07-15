@@ -1,6 +1,6 @@
 # ✅ CONCLUSÃO - INTEGRAÇÃO MERCADO PAGO
 
-**Status:** 🚀 **PRONTA PARA ATIVAÇÃO**  
+**Status:** 🚀 **PRONTA PARA ATIVAÇÃO**
 **Data:** 2026-07-14 22:40:00
 
 ---
@@ -36,8 +36,8 @@
 
 **Linha 22-23 atual (ERRADA):**
 ```
-MERCADOPAGO_ACCESS_TOKEN=APP_USR-4763908325265919-071414-66425efd226c92cb383976fb30533fbb-3512365791
-MERCADOPAGO_PUBLIC_KEY=APP_USR-c2a29ee1-fb4c-4740-9166-ac5efc352d5fAPP_USR-c2a29ee1-fb4c-4740-9166-ac5efc352d5f
+MERCADOPAGO_ACCESS_TOKEN=<stored-in-runtime>
+MERCADOPAGO_PUBLIC_KEY=<stored-in-runtime>
 ```
 
 **Public Key está duplicada!**
@@ -56,9 +56,9 @@ MERCADOPAGO_PUBLIC_KEY=APP_USR-c2a29ee1-fb4c-4740-9166-ac5efc352d5fAPP_USR-c2a29
 
 3. **Atualize o .env:**
    ```bash
-   MERCADOPAGO_ACCESS_TOKEN=seu_token_aqui
-   MERCADOPAGO_PUBLIC_KEY=sua_public_key_aqui
-   MERCADOPAGO_WEBHOOK_SECRET=seu_secret_aqui
+   MERCADOPAGO_ACCESS_TOKEN=<stored-in-runtime>
+   MERCADOPAGO_PUBLIC_KEY=<stored-in-runtime>
+   MERCADOPAGO_WEBHOOK_SECRET=<stored-in-runtime>
    ```
 
 4. **Faça push:**
@@ -121,9 +121,9 @@ php gerar-payment-id-agora.php
 
 ## 🏆 RESUMO
 
-**Integração Mercado Pago:** ✅ 100% Implementada  
-**Pendência:** Apenas credenciais corrigidas  
-**Tempo para ativar:** 5 minutos  
+**Integração Mercado Pago:** ✅ 100% Implementada
+**Pendência:** Apenas credenciais corrigidas
+**Tempo para ativar:** 5 minutos
 **Custo:** ZERO - integração nativa
 
 ### Arquivos Criados Esta Sessão:
@@ -144,7 +144,7 @@ php gerar-payment-id-agora.php
 
 ShopVivaliz está **PRONTO** para Mercado Pago. Falta apenas corrigir 1 linha no `.env` com as credenciais corretas.
 
-**Tempo necessário:** < 5 minutos  
+**Tempo necessário:** < 5 minutos
 **Resultado:** Sistema 100% operacional com pagamentos reais
 
 ---
