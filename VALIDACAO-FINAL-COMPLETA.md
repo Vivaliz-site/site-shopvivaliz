@@ -69,7 +69,7 @@ Quando você colar este Payment ID:
 
 ## 🔐 Credenciais Configuradas
 
-- **Access Token:** `APP_USR-4763908325265919...` ✅
+- **Access Token:** `APP_USR-REDACTED-ROTATE...` ✅
 - **Public Key:** `APP_USR-c2a29ee1...` ✅
 - **Webhook Secret:** (configure após validação)
 

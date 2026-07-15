@@ -1,0 +1,17 @@
+{
+  "version": "9.2.104",
+  "date": "2026-07-15",
+  "codename": "mercadopago-live-checkout",
+  "type": "cumulative",
+  "migrations": [],
+  "migration_note": "No database schema change. The authoritative JSON order schema is extended in-place with payment session hashes and Mercado Pago reconciliation metadata; existing orders remain readable.",
+  "highlights": [
+    "Creates real Mercado Pago boleto orders with the official Orders API and a stable idempotency key.",
+    "Redirects the Mercado Pago checkout option to Checkout Pro using server-authoritative items and shipping.",
+    "Validates order and payment webhooks with HMAC-SHA256, then fetches the official resource before updating local status.",
+    "Requires a one-time opaque payment session token and never accepts amount, price or payer data in the payment endpoint.",
+    "Retires legacy public endpoints that accepted arbitrary payment payloads or disabled TLS verification."
+  ],
+  "self_test": "installer/self-test.php",
+  "rollback": "Revert the 9.2.104 payment files. Existing pending Mercado Pago orders remain valid at the provider and must continue to be reconciled before rollback."
+}

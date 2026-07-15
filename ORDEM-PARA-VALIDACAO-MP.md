@@ -46,7 +46,7 @@ PED-20260714-FINAL-VALIDATION
 ```bash
 # Via API REST (usando curl)
 curl -X GET https://api.mercadopago.com/v1/orders \
-  -H "Authorization: Bearer APP_USR-476390832526..."
+  -H "Authorization: Bearer APP_USR-REDACTED-ROTATE..."
 ```
 
 ---

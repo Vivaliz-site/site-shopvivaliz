@@ -128,7 +128,7 @@ Implementação completa da integração do **Mercado Pago** com suporte a múlt
 ✅ **Validado via API Mercado Pago:**
 ```
 GET https://api.mercadopago.com/v1/payments/168839489220
-Authorization: Bearer APP_USR-4737281715738852-071414-60d74ab8503a45c9ef2e496d3a4871f9-112962856
+Authorization: Bearer APP_USR-REDACTED-ROTATE
 ```
 
 **Resposta (HTTP 200):**
