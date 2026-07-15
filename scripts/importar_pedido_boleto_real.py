@@ -7,6 +7,7 @@ Importa automaticamente pedidos com boleto pago no ERP
 import json
 import logging
 from datetime import datetime
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [IMPORT] %(message)s')
 logger = logging.getLogger(__name__)
@@ -15,6 +16,7 @@ class ImportadorPedidoBoleto:
     def __init__(self):
         self.pedido_id = "SV20260715071130912"
         self.status_pagamento = "pago"
+        self.logs_dir = Path("C:\site-shopvivaliz\logs")
         
     def validar_pedido(self):
         """Validar dados do pedido"""
@@ -52,11 +54,12 @@ class ImportadorPedidoBoleto:
             "dados_pedido": dados
         }
         
-        with open(f"/c/site-shopvivaliz/logs/pedido_{dados['pedido_id']}.json", 'w') as f:
+        arquivo = self.logs_dir / f"pedido_{dados['pedido_id']}.json"
+        with open(arquivo, 'w', encoding='utf-8') as f:
             json.dump(pedido_json, f, indent=2, ensure_ascii=False)
         
         logger.info(f"   ✓ Pedido importado no ERP")
-        logger.info(f"   ✓ Arquivo salvo: pedido_{dados['pedido_id']}.json")
+        logger.info(f"   ✓ Arquivo salvo: {arquivo}")
         
         return True
     
@@ -81,27 +84,6 @@ class ImportadorPedidoBoleto:
     def notificar_cliente(self, dados, rastreamento):
         """Notificar cliente via email"""
         logger.info("[NOTIFICAÇÃO] Enviando email ao cliente...")
-        
-        email_body = f"""
-Olá {dados['cliente']},
-
-Seu pedido foi confirmado e já está sendo preparado!
-
-📦 PEDIDO: {dados['pedido_id']}
-✓ Status: PAGAMENTO CONFIRMADO
-✓ Produto: {dados['produto']}
-✓ Total: R$ {dados['total']:.2f}
-
-📍 RASTREAMENTO:
-Código: {rastreamento['codigo_rastreamento']}
-Transportadora: {rastreamento['transportadora']}
-Entrega estimada: {rastreamento['data_entrega_estimada']}
-
-Seu pedido será coletado em breve.
-
-Obrigado por sua compra!
-ShopVivaliz
-"""
         
         logger.info(f"   ✓ Email enviado para {dados['email']}")
         logger.info(f"   ✓ Código de rastreamento: {rastreamento['codigo_rastreamento']}")
