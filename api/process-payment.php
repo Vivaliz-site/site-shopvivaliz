@@ -1,4 +1,5 @@
 <?php
+<<<<<<< HEAD
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
@@ -179,3 +180,17 @@ try {
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'payment_api_error']);
 }
+=======
+
+declare(strict_types=1);
+
+header_remove('X-Powered-By');
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
+http_response_code(410);
+echo json_encode([
+    'ok' => false,
+    'error' => 'legacy_endpoint_retired',
+    'message' => 'Use the order-bound Mercado Pago boleto or Checkout Pro endpoints.',
+]);
+>>>>>>> 723f6fce431c55c0eb63407b35bda0d4fe1d9caa
