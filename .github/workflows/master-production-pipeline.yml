@@ -266,6 +266,21 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_rsa ubuntu@137.131.156.17 << 'SSH_EOF'
           cd /home/ubuntu/site-shopvivaliz
+
+          dirty_before="$(git status --porcelain)"
+          if [ -n "$dirty_before" ]; then
+            backup_name="predeploy-$(date -u +%Y%m%d-%H%M%S)-${{ github.sha }}"
+            echo "Alteracoes remotas detectadas; criando backup reversivel: $backup_name"
+            git stash push --include-untracked --message "$backup_name"
+            stash_sha="$(git rev-parse stash@{0} 2>/dev/null || true)"
+            if [ -z "$stash_sha" ]; then
+              echo "ERRO: nao foi possivel confirmar o stash de backup"
+              exit 4
+            fi
+            git branch "server-backup/$backup_name" "$stash_sha"
+            echo "Backup preservado em server-backup/$backup_name ($stash_sha)"
+          fi
+
           python3 git-auto-sync.py
           exit_code=$?
 
