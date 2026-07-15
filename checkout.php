@@ -241,6 +241,16 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
 
 <script>
 (function () {
+    // MercadoPago.js V2 initialization with Public Key
+    var PUBLIC_KEY = <?= json_encode(svmp_env('MERCADOPAGO_PUBLIC_KEY')) ?>;
+    if (PUBLIC_KEY && window.MercadoPago) {
+        window.MercadoPago.configure({
+            publicKey: PUBLIC_KEY
+        });
+        // Initialize Device ID for fraud detection
+        window.MercadoPago.deviceId();
+    }
+
     var PIX_KEY = <?= json_encode($pixKey) ?>;
     var WPP_NUM = <?= json_encode($whatsapp) ?>;
 
