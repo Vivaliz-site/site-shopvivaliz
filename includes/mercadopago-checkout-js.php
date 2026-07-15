@@ -1,261 +1,213 @@
 <?php
-/**
- * Integração MP.js v2 Client-side
- * Documentação: https://www.mercadopago.com.br/developers/pt/docs/sdks-library/client-side/mp-js-v2
- */
+declare(strict_types=1);
 
-// Load .env para public key
-$env = [];
-$envFile = __DIR__ . '/../.env';
-if (file_exists($envFile)) {
-    foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-        if (str_starts_with(trim($line), '#') || !str_contains($line, '=')) continue;
-        [$key, $value] = explode('=', $line, 2);
-        $env[trim($key)] = trim(trim($value), "\"'");
-    }
+// Carregar secrets de forma segura
+$runtimeSecretsFile = dirname(__DIR__) . '/config/runtime-secrets.php';
+$secrets = (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile))
+    ? (array)require $runtimeSecretsFile
+    : [];
+
+function mp_get_secret(string $key, array $secrets): string {
+    $value = getenv($key);
+    if (is_string($value) && $value !== '') return $value;
+    if (isset($secrets[$key])) return (string)$secrets[$key];
+    if (isset($_ENV[$key])) return (string)$_ENV[$key];
+    return '';
 }
 
-$publicKey = $env['MERCADOPAGO_PUBLIC_KEY'] ?? '';
+$publicKey = mp_get_secret('MERCADOPAGO_PUBLIC_KEY', $secrets);
+if (!$publicKey) {
+    echo '<!-- Mercado Pago não configurado -->';
+    exit;
+}
 ?>
 
-<!-- Mercado Pago SDK v2 - Client-side -->
 <script src="https://sdk.mercadopago.com/js/v2"></script>
-
 <script>
-// Inicializar Mercado Pago
-const mp = new MercadoPago('<?php echo htmlspecialchars($publicKey, ENT_QUOTES, 'UTF-8'); ?>', {
-    locale: 'pt-BR'
-});
+    // Inicializar MercadoPago com chave pública
+    const mp = new MercadoPago('<?php echo htmlspecialchars($publicKey, ENT_QUOTES, 'UTF-8'); ?>');
 
-// Variáveis globais
-let createdOrderId = null;
+    // Estado global
+    let currentPaymentBrick = null;
 
-/**
- * Criar Order no servidor e obter Order ID
- */
-async function createOrderOnServer(orderData) {
-    try {
-        console.log('📡 Criando order no servidor...');
+    /**
+     * Criar Order no servidor e retornar Order ID válido
+     */
+    async function createOrderOnServer(cartItems, customerData) {
+        try {
+            const response = await fetch('/api/orders/create-validated.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: cartItems,
+                    customer: customerData,
+                    external_reference: 'order-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9)
+                })
+            });
 
-        const response = await fetch('/api/mercadopago-orders-sdk.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(orderData)
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            if (!data.ok) throw new Error(data.error || 'Order creation failed');
+            return data.order_id;
+        } catch (error) {
+            console.error('Order creation error:', error);
+            throw error;
         }
-
-        const data = await response.json();
-
-        if (data.success && data.order_id) {
-            console.log('✅ Order criada:', data.order_id);
-            createdOrderId = data.order_id;
-            return data;
-        } else {
-            throw new Error(data.error || 'Falha ao criar order');
-        }
-    } catch (error) {
-        console.error('❌ Erro ao criar order:', error);
-        throw error;
     }
-}
 
-/**
- * Renderizar formulário de pagamento com Payment Brick
- */
-async function renderPaymentBrick() {
-    try {
-        console.log('🎨 Renderizando Payment Brick...');
+    /**
+     * Renderizar Payment Brick
+     */
+    async function renderPaymentBrick(orderId, totalAmount) {
+        const brickContainer = document.getElementById('payment-brick-container');
+        if (!brickContainer) {
+            console.error('Payment brick container not found');
+            return;
+        }
 
-        const brickBuilder = mp.bricks();
-
-        const settings = {
-            initialization: {
-                amount: parseFloat(document.getElementById('order-total').value || 0)
-            },
-            customization: {
-                paymentMethods: {
-                    wallet: 'all',
-                    credit_card: 'all',
-                    debit_card: 'all',
-                    ticket: 'all',
-                    atm: 'all',
-                    maxInstallments: 6
+        try {
+            const settings = {
+                initialization: {
+                    amount: totalAmount,
+                    payer: {
+                        email: document.getElementById('email')?.value || ''
+                    }
                 },
-                visual: {
-                    hideFormTitle: false,
-                    hideAmountSummary: false
+                customization: {
+                    visual: {
+                        style: 'default'
+                    },
+                    paymentMethods: {
+                        visa: 'all',
+                        mastercard: 'all',
+                        amex: 'all',
+                        pix: 'all',
+                        boleto: 'all'
+                    }
+                },
+                callbacks: {
+                    onReady: () => console.log('Payment Brick ready'),
+                    onError: (error) => console.error('Payment Brick error:', error),
+                    onSubmit: async (formData) => {
+                        await processPayment(orderId, formData);
+                    }
                 }
-            },
-            callbacks: {
-                onReady: () => {
-                    console.log('✅ Payment Brick pronto');
-                },
-                onSubmit: async (cardFormData) => {
-                    console.log('📤 Processando pagamento...');
-                    return await processPayment(cardFormData);
-                },
-                onFetching: (resource) => {
-                    console.log('⏳ Buscando:', resource);
-                },
-                onError: (error) => {
-                    console.error('❌ Erro no Payment Brick:', error);
-                    showError('Erro ao processar pagamento: ' + error.message);
-                }
+            };
+
+            if (currentPaymentBrick) {
+                currentPaymentBrick.unmount();
             }
-        };
 
-        const brickController = await brickBuilder.create('payment', 'paymentBrick_container', settings);
-        return brickController;
-    } catch (error) {
-        console.error('❌ Erro ao renderizar Payment Brick:', error);
-        showError('Erro ao carregar formulário de pagamento');
-        throw error;
-    }
-}
-
-/**
- * Processar pagamento
- */
-async function processPayment(paymentData) {
-    try {
-        console.log('💳 Iniciando pagamento...');
-        console.log('Order ID:', createdOrderId);
-
-        // Adicionar order ID aos dados de pagamento
-        paymentData.order_id = createdOrderId;
-
-        // Aqui você envia os dados para seu servidor
-        // que processará o pagamento via API do Mercado Pago
-        const response = await fetch('/api/process-payment.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(paymentData)
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            console.log('✅ Pagamento processado:', result.payment_id);
-            showSuccess('Pagamento processado com sucesso!');
-            return {
-                success: true,
-                payment_id: result.payment_id
-            };
-        } else {
-            console.error('❌ Erro no pagamento:', result.error);
-            showError('Erro ao processar pagamento: ' + result.error);
-            return {
-                success: false,
-                error: result.error
-            };
+            currentPaymentBrick = await mp.bricks.create('payment', 'payment-brick-container', settings);
+        } catch (error) {
+            console.error('Payment brick render error:', error);
+            alert('Erro ao carregar formulário de pagamento');
         }
-    } catch (error) {
-        console.error('❌ Erro ao processar pagamento:', error);
-        showError('Erro: ' + error.message);
+    }
+
+    /**
+     * Processar pagamento (enviar token para servidor)
+     */
+    async function processPayment(orderId, formData) {
+        try {
+            const response = await fetch('/api/process-payment.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    order_id: orderId,
+                    external_reference: formData.external_reference || orderId,
+                    payment_token: formData.token,
+                    installments: formData.installments || 1
+                })
+            });
+
+            const data = await response.json();
+
+            if (!data.ok) {
+                alert('Erro ao processar pagamento: ' + (data.error || 'Tente novamente'));
+                return;
+            }
+
+            // Redirecionar para confirmação
+            window.location.href = '/checkout/success?payment_id=' + encodeURIComponent(data.payment_id) + '&order_id=' + encodeURIComponent(orderId);
+        } catch (error) {
+            console.error('Payment processing error:', error);
+            alert('Erro ao processar pagamento');
+        }
+    }
+
+    /**
+     * Iniciar fluxo de checkout
+     */
+    async function startCheckout() {
+        const cartItems = collectCartItems();
+        if (!cartItems || cartItems.length === 0) {
+            alert('Carrinho vazio');
+            return;
+        }
+
+        const customerData = collectCustomerData();
+        if (!customerData) {
+            alert('Preencha todos os dados do cliente');
+            return;
+        }
+
+        const totalAmount = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+        try {
+            // Criar order no servidor
+            const orderId = await createOrderOnServer(cartItems, customerData);
+            console.log('Order created:', orderId);
+
+            // Renderizar Payment Brick
+            await renderPaymentBrick(orderId, totalAmount);
+
+            // Mostrar container
+            const container = document.getElementById('payment-brick-container');
+            if (container) {
+                container.style.display = 'block';
+                container.scrollIntoView({ behavior: 'smooth' });
+            }
+        } catch (error) {
+            console.error('Checkout error:', error);
+            alert('Erro ao iniciar checkout: ' + error.message);
+        }
+    }
+
+    /**
+     * Coletar dados do cliente
+     */
+    function collectCustomerData() {
+        const nome = document.getElementById('nome')?.value?.trim();
+        const email = document.getElementById('email')?.value?.trim();
+        const telefone = document.getElementById('telefone')?.value?.trim();
+        const endereco = document.getElementById('endereco')?.value?.trim();
+        const numero = document.getElementById('numero')?.value?.trim();
+        const cidade = document.getElementById('cidade')?.value?.trim();
+        const cep = document.getElementById('cep')?.value?.trim();
+
+        if (!nome || !email || !telefone || !endereco || !numero || !cidade || !cep) {
+            return null;
+        }
+
         return {
-            success: false,
-            error: error.message
+            nome, email, telefone, endereco, numero, cidade, cep
         };
     }
-}
 
-/**
- * Inicializar formulário ao submeter checkout
- */
-async function initializePaymentFlow() {
-    try {
-        console.log('🚀 Iniciando fluxo de pagamento...');
-
-        // 1. Coletar dados do formulário
-        const orderData = collectCheckoutData();
-        console.log('📋 Dados coletados:', orderData);
-
-        // 2. Criar order no servidor
-        const orderResult = await createOrderOnServer(orderData);
-        console.log('🆔 Order ID recebido:', orderResult.order_id);
-
-        // 3. Renderizar Payment Brick
-        await renderPaymentBrick();
-
-        // 4. Mostrar container de pagamento
-        document.getElementById('paymentBrick_container').style.display = 'block';
-        document.getElementById('checkout-form').style.display = 'none';
-
-        return true;
-    } catch (error) {
-        console.error('❌ Erro no fluxo de pagamento:', error);
-        showError('Erro ao iniciar pagamento');
-        return false;
+    /**
+     * Coletar itens do carrinho
+     */
+    function collectCartItems() {
+        // Implementar conforme estrutura do seu carrinho
+        // Exemplo: const items = JSON.parse(document.getElementById('cart-payload')?.value || '[]');
+        return [];
     }
-}
 
-/**
- * Coletar dados do checkout
- */
-function collectCheckoutData() {
-    return {
-        external_reference: document.getElementById('pedido-id').value,
-        total_amount: parseFloat(document.getElementById('order-total').value),
-        items: JSON.parse(document.getElementById('cart-items').value || '[]'),
-        payer: {
-            email: document.getElementById('email').value,
-            first_name: document.getElementById('nome').value.split(' ')[0],
-            last_name: document.getElementById('nome').value.split(' ').slice(1).join(' '),
-            phone: document.getElementById('telefone').value
-        }
+    // Exportar funções globais
+    window.mpCheckout = {
+        startCheckout,
+        renderPaymentBrick,
+        processPayment,
+        createOrderOnServer
     };
-}
-
-/**
- * Mostrar mensagens ao usuário
- */
-function showError(message) {
-    const alert = document.createElement('div');
-    alert.className = 'alert alert-danger';
-    alert.textContent = message;
-    document.getElementById('payment-messages').appendChild(alert);
-}
-
-function showSuccess(message) {
-    const alert = document.createElement('div');
-    alert.className = 'alert alert-success';
-    alert.textContent = message;
-    document.getElementById('payment-messages').appendChild(alert);
-}
-
-// Exportar função global
-window.initializePaymentFlow = initializePaymentFlow;
 </script>
-
-<style>
-#paymentBrick_container {
-    display: none;
-    margin-top: 20px;
-}
-
-.alert {
-    padding: 15px;
-    margin-bottom: 15px;
-    border: 1px solid transparent;
-    border-radius: 4px;
-}
-
-.alert-danger {
-    color: #721c24;
-    background-color: #f8d7da;
-    border-color: #f5c6cb;
-}
-
-.alert-success {
-    color: #155724;
-    background-color: #d4edda;
-    border-color: #c3e6cb;
-}
-</style>
