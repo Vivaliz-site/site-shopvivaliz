@@ -17,32 +17,7 @@ if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
     }
 }
 
-/* PIX key e WhatsApp vindos de .env ou config */
-function sv_co_env(string ...$keys): string {
-    static $loaded = false;
-    if (!$loaded) {
-        $loaded = true;
-        $f = __DIR__ . '/.env';
-        if (is_file($f)) {
-            foreach (file($f, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-                $line = trim($line);
-                if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
-                [$k, $v] = explode('=', $line, 2);
-                $k = trim($k); $v = trim(trim($v), '"\'');
-                if ($k !== '' && getenv($k) === false) { putenv("$k=$v"); $_ENV[$k] = $v; }
-            }
-        }
-    }
-    foreach ($keys as $k) {
-        $v = getenv($k); if (is_string($v) && $v !== '') return $v;
-        if (isset($_ENV[$k]) && $_ENV[$k] !== '') return $_ENV[$k];
-    }
-    return '';
-}
-
-$pixKey      = sv_co_env('LOJA_PIX_KEY')     ?: 'contato@vivaliz.com.br';
-$pixName     = sv_co_env('LOJA_PIX_NAME')    ?: 'Vivaliz Store';
-$whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
+require_once __DIR__ . '/includes/mercadopago-gateway.php';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
