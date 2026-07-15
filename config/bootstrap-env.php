@@ -4,11 +4,15 @@ declare(strict_types=1);
 if (!function_exists('sv_bootstrap_env_assign')) {
     function sv_bootstrap_env_assign(string $key, mixed $value): void
     {
-        if ($key === '' || getenv($key) !== false) {
+        if ($key === '') {
             return;
         }
 
         $stringValue = is_scalar($value) ? (string)$value : '';
+        $currentValue = getenv($key);
+        if (trim($stringValue) === '' || (is_string($currentValue) && trim($currentValue) !== '')) {
+            return;
+        }
         putenv($key . '=' . $stringValue);
         $_ENV[$key] = $stringValue;
         $_SERVER[$key] = $stringValue;
