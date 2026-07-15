@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
 """
-Git Auto-Sync Daemon
-Executado via cron a cada 30 minutos na VM Oracle
-Sincroniza repositório com main branch
+Git Auto-Sync Daemon (SEGURO)
+Executado via cron a cada 2 minutos na VM Oracle.
+
+CRÍTICO: Este daemon NÃO usa git reset --hard (perigoso em produção).
+Usa git fetch + git merge --ff-only que é seguro.
+
+Regras obrigatórias:
+1. Valida working tree antes de qualquer operação git
+2. Rejeita merge se não é Fast-Forward
+3. Registra SHA completo para auditoria
+4. Falha rápido com mensagens claras
+5. Protege dados operacionais em .gitignore
 """
 
 import os
@@ -19,6 +28,15 @@ BRANCH = "main"
 LOG_DIR = "/var/log/shopvivaliz"
 LOG_FILE = f"{LOG_DIR}/git-auto-sync-{datetime.now().strftime('%Y%m%d')}.log"
 LOCK_FILE = f"{REPO_DIR}/.git-sync.lock"
+
+# Arquivos que NÃO devem ser commitados (proteção de dados)
+PROTECTED_FILES = [
+    ".git-sync.lock",
+    ".agent-heartbeats/",
+    "storage/orders/",
+    "storage/codex-bridge/state.json",
+    "storage/orchestrator/queue.json",
+]
 
 def log_message(level: str, msg: str):
     """Log com timestamp"""
