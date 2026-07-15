@@ -99,12 +99,12 @@ async def complete_checkout():
             try:
                 locator = page.locator(selector)
                 if await locator.count() > 0:
-                    await locator.first.click()
+                    await locator.first.check(force=True)
                     found_mp = True
-                    print("[OK] Mercado Pago selecionado")
+                    print("[OK] Mercado Pago selecionado via check(force=True)")
                     break
-            except:
-                pass
+            except Exception as ex:
+                print(f"[WARN] Erro ao marcar selector {selector}: {ex}")
 
         if not found_mp:
             print("[ERR] Mercado Pago NÃO encontrado no checkout!")
