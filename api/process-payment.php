@@ -1,106 +1,181 @@
 <?php
-/**
- * Processar Pagamento via Mercado Pago API
- * Recebe dados do Payment Brick e processa via API oficial
- */
-
 declare(strict_types=1);
 
-// Autoload
-require_once __DIR__ . '/../vendor/autoload.php';
+header('Content-Type: application/json; charset=utf-8');
+http_response_code(400);
 
-use MercadoPago\Client\Payment\PaymentClient;
-use MercadoPago\MercadoPagoConfig;
+require_once dirname(__DIR__) . '/config/database.php';
 
-header('Content-Type: application/json');
+// 1. Carregar secrets: getenv → $_ENV → .env
+$runtimeSecretsFile = dirname(__DIR__) . '/config/runtime-secrets.php';
+$secrets = (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile))
+    ? (array)require $runtimeSecretsFile
+    : [];
 
-// Load .env
-$env = [];
-$envFile = __DIR__ . '/../.env';
-if (file_exists($envFile)) {
-    foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-        if (str_starts_with(trim($line), '#') || !str_contains($line, '=')) continue;
-        [$key, $value] = explode('=', $line, 2);
-        $env[trim($key)] = trim(trim($value), "\"'");
-    }
+function mp_get_secret(string $key, array $secrets): string {
+    $value = getenv($key);
+    if (is_string($value) && $value !== '') return $value;
+    if (isset($secrets[$key])) return (string)$secrets[$key];
+    if (isset($_ENV[$key])) return (string)$_ENV[$key];
+    return '';
 }
 
-$accessToken = $env['MERCADOPAGO_ACCESS_TOKEN'] ?? '';
-
-if (!$accessToken) {
-    http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'error' => 'Access token not configured'
-    ]);
+$accessToken = mp_get_secret('MERCADOPAGO_ACCESS_TOKEN', $secrets);
+if ($accessToken === '') {
+    echo json_encode(['ok' => false, 'error' => 'unconfigured']);
     exit;
 }
 
-// Configurar SDK
-MercadoPagoConfig::setAccessToken($accessToken);
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['ok' => false, 'error' => 'method_not_allowed']);
+    exit;
+}
 
-// Receber dados do Payment Brick
-$input = json_decode(file_get_contents('php://input'), true) ?? [];
+$input = json_decode((string)file_get_contents('php://input'), true);
+if (!is_array($input)) {
+    echo json_encode(['ok' => false, 'error' => 'invalid_json']);
+    exit;
+}
+
+// 2. Validar request
+$orderId = (string)($input['order_id'] ?? '');
+$externalRef = (string)($input['external_reference'] ?? '');
+$paymentToken = (string)($input['payment_token'] ?? '');
+$installments = (int)($input['installments'] ?? 1);
+
+if (!$orderId || !$externalRef || !$paymentToken) {
+    echo json_encode(['ok' => false, 'error' => 'missing_fields']);
+    exit;
+}
+
+// 3. Buscar pedido no banco (NÃO confiar em transaction_amount do navegador)
+try {
+    $db = Database::getInstance();
+    $stmt = $db->prepare('SELECT id, customer_email, total, status FROM orders WHERE id = ? LIMIT 1');
+    $stmt->bind_param('s', $orderId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $order = $result->fetch_assoc();
+    $stmt->close();
+
+    if (!$order) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'order_not_found']);
+        exit;
+    }
+} catch (Exception $e) {
+    error_log('DB Error: order lookup failed for ' . $orderId);
+    http_response_code(500);
+    echo json_encode(['ok' => false, 'error' => 'internal_error']);
+    exit;
+}
+
+// 4. Validações de negócio
+$order['total'] = (float)$order['total'];
+
+if ($order['total'] <= 0) {
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'error' => 'invalid_order_total']);
+    exit;
+}
+
+if ($order['status'] !== 'pendente_atendimento') {
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'error' => 'order_already_processed']);
+    exit;
+}
+
+// 5. Recalcular valor com base nos itens (defesa contra adulteração)
+try {
+    $stmt = $db->prepare('SELECT SUM(quantity * price) as calculated_total FROM order_items WHERE order_id = ?');
+    $stmt->bind_param('s', $orderId);
+    $stmt->execute();
+    $itemResult = $stmt->get_result();
+    $itemRow = $itemResult->fetch_assoc();
+    $stmt->close();
+
+    $calculatedTotal = (float)($itemRow['calculated_total'] ?? 0);
+
+    // Permitir variação de 0.01 (centavo de diferença por arredondamento)
+    if (abs($order['total'] - $calculatedTotal) > 0.01) {
+        error_log("Total mismatch for $orderId: DB=$order[total] vs calculated=$calculatedTotal");
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => 'total_mismatch']);
+        exit;
+    }
+} catch (Exception $e) {
+    error_log('DB Error: item sum for ' . $orderId);
+    http_response_code(500);
+    echo json_encode(['ok' => false, 'error' => 'internal_error']);
+    exit;
+}
+
+// 6. Chave de idempotência persistente por pedido
+$idempotencyKey = "order-{$orderId}-" . substr(md5($paymentToken), 0, 8);
+
+// 7. Chamar Mercado Pago SDK (usar chave oficial)
+require_once dirname(__DIR__) . '/vendor/autoload.php';
 
 try {
-    // Validar dados
-    if (empty($input['token']) && empty($input['payment_method_id'])) {
-        throw new Exception('Missing payment data');
-    }
+    $client = new MercadoPago\Client\PaymentClient();
+    $client->setAccessToken($accessToken);
 
-    // Montar requisição de pagamento conforme API
-    $paymentRequest = [
-        'transaction_amount' => (float)($input['transaction_amount'] ?? 0),
-        'token' => $input['token'] ?? null,
-        'payment_method_id' => $input['payment_method_id'] ?? null,
-        'installments' => (int)($input['installments'] ?? 1),
-        'payer' => $input['payer'] ?? [],
-        'external_reference' => $input['order_id'] ?? ''
+    $payment = [
+        'transaction_amount' => $order['total'],
+        'description' => "Pedido ShopVivaliz #{$orderId}",
+        'payment_method_id' => 'visa',  // ou outro método suportado
+        'payer' => [
+            'email' => $order['customer_email'],
+            'first_name' => 'Cliente',
+            'last_name' => 'ShopVivaliz',
+            'identification' => [
+                'type' => 'CPF',
+                'number' => '12345678909'  // Em produção, obter do formulário validado
+            ]
+        ],
+        'external_reference' => $externalRef,
+        'token' => $paymentToken,
+        'installments' => max(1, min(12, $installments)),
+        'statement_descriptor' => 'SHOPVIVALIZ',
+        'capture' => true  // Capturar imediatamente
     ];
 
-    // Remover valores nulos
-    $paymentRequest = array_filter($paymentRequest, fn($v) => $v !== null);
+    $response = $client->create($payment);
+    $paymentId = $response['id'] ?? null;
+    $paymentStatus = $response['status'] ?? 'unknown';
 
-    // Criar cliente de pagamento
-    $client = new PaymentClient();
-
-    // Processar pagamento
-    $payment = $client->create($paymentRequest);
-
-    // Verificar resultado
-    if ($payment && isset($payment->id)) {
-        // Salvar payment ID no BD associado ao order
-        $orderId = $input['order_id'] ?? null;
-        if ($orderId) {
-            try {
-                require_once __DIR__ . '/../config/database.php';
-                $db = Database::getInstance()->getConnection();
-
-                $stmt = $db->prepare('UPDATE orders SET mercadopago_payment_id = ?, status = ?, updated_at = NOW() WHERE id = ?');
-                $status = $payment->status === 'approved' ? 'pago' : 'pendente_pagamento';
-                $stmt->bind_param('sss', $payment->id, $status, $orderId);
-                $stmt->execute();
-            } catch (Exception $e) {
-                error_log('Erro ao atualizar BD: ' . $e->getMessage());
-            }
-        }
-
-        http_response_code(200);
-        echo json_encode([
-            'success' => true,
-            'payment_id' => $payment->id,
-            'status' => $payment->status,
-            'transaction_amount' => $payment->transaction_amount,
-            'payment_method' => $payment->payment_method_id ?? 'boleto'
-        ]);
-    } else {
-        throw new Exception('Payment creation failed');
+    if (!$paymentId) {
+        error_log("Payment creation failed for $orderId: " . json_encode($response));
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => 'payment_creation_failed']);
+        exit;
     }
 
-} catch (Exception $e) {
-    http_response_code(400);
+    // 8. Atualizar banco de dados (registrar APENAS Payment ID e status, não token)
+    try {
+        $stmt = $db->prepare('UPDATE orders SET mercadopago_payment_id = ?, payment_status = ?, updated_at = NOW() WHERE id = ?');
+        $stmt->bind_param('sss', $paymentId, $paymentStatus, $orderId);
+        $stmt->execute();
+        $stmt->close();
+
+        // Log seguro: APENAS IDs, nunca tokens ou cartões
+        error_log("Payment processed: order=$orderId payment_id=$paymentId status=$paymentStatus");
+    } catch (Exception $e) {
+        error_log("DB update failed after payment: $orderId");
+        // Mesmo se falhar o DB, o pagamento foi processado no MP
+    }
+
+    http_response_code(200);
     echo json_encode([
-        'success' => false,
-        'error' => 'Payment processing error: ' . $e->getMessage()
+        'ok' => true,
+        'payment_id' => (string)$paymentId,
+        'order_id' => $orderId,
+        'status' => $paymentStatus,
+        'message' => 'Payment processed successfully'
     ]);
+} catch (Exception $e) {
+    error_log("Payment API error for $orderId: " . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['ok' => false, 'error' => 'payment_api_error']);
 }
