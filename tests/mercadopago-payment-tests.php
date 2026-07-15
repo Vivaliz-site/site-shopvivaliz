@@ -1,261 +1,156 @@
 <?php
+
 declare(strict_types=1);
 
-/**
- * Testes Automatizados da Integração Mercado Pago
- *
- * Execução: php tests/mercadopago-payment-tests.php
- * Ambiente: TESTE APENAS (não usa credenciais de produção)
- */
-
-echo "🧪 TESTES INTEGRAÇÃO MERCADO PAGO\n";
-echo str_repeat("═", 70) . "\n\n";
+require_once dirname(__DIR__) . '/includes/mercadopago-gateway.php';
 
 $passed = 0;
 $failed = 0;
 
-function test(string $name, callable $fn): void {
+function mp_test(string $name, callable $test): void
+{
     global $passed, $failed;
     try {
-        $fn();
-        echo "✅ $name\n";
+        $test();
+        echo "PASS $name\n";
         $passed++;
-    } catch (Exception $e) {
-        echo "❌ $name: " . $e->getMessage() . "\n";
+    } catch (Throwable $e) {
+        echo "FAIL $name: {$e->getMessage()}\n";
         $failed++;
     }
 }
 
-// ============================================================
-// 1. TESTES DE CONFIGURAÇÃO
-// ============================================================
-
-test('Arquivo runtime-secrets.php existe', function () {
-    $file = __DIR__ . '/../config/runtime-secrets.php';
-    if (!is_file($file)) throw new Exception('Arquivo não encontrado');
-});
-
-test('SDK Mercado Pago está instalado', function () {
-    $file = __DIR__ . '/../vendor/autoload.php';
-    if (!is_file($file)) throw new Exception('vendor/autoload.php não encontrado');
-    require $file;
-    if (!class_exists('MercadoPago\Client\PaymentClient')) {
-        throw new Exception('MercadoPago SDK não carregou corretamente');
+function mp_assert(bool $condition, string $message): void
+{
+    if (!$condition) {
+        throw new RuntimeException($message);
     }
-});
-
-test('Arquivo process-payment.php existe', function () {
-    $file = __DIR__ . '/../api/process-payment.php';
-    if (!is_file($file)) throw new Exception('process-payment.php não encontrado');
-});
-
-test('Arquivo webhook-mercadopago.php existe', function () {
-    $file = __DIR__ . '/../api/webhook-mercadopago.php';
-    if (!is_file($file)) throw new Exception('webhook-mercadopago.php não encontrado');
-});
-
-// ============================================================
-// 2. TESTES DE CARREGAMENTO DE SECRETS
-// ============================================================
-
-test('Carregar secrets com getenv', function () {
-    // Simular environment
-    putenv('MERCADOPAGO_ACCESS_TOKEN=test-token-123');
-    $token = getenv('MERCADOPAGO_ACCESS_TOKEN');
-    if ($token !== 'test-token-123') throw new Exception('getenv não funcionou');
-});
-
-test('Secrets carregados em $_ENV', function () {
-    $_ENV['MERCADOPAGO_PUBLIC_KEY'] = 'test-public-key';
-    if ($_ENV['MERCADOPAGO_PUBLIC_KEY'] !== 'test-public-key') {
-        throw new Exception('$_ENV não funcionou');
-    }
-});
-
-test('Fallback para .env', function () {
-    $envFile = __DIR__ . '/../.env';
-    if (!is_file($envFile)) throw new Exception('.env não encontrado');
-});
-
-// ============================================================
-// 3. TESTES DE VALIDAÇÃO (process-payment.php)
-// ============================================================
-
-test('Rejeitar POST sem order_id', function () {
-    $input = ['external_reference' => 'ref-123', 'payment_token' => 'token-123'];
-    if (isset($input['order_id'])) throw new Exception('order_id não deveria estar presente');
-});
-
-test('Rejeitar POST sem external_reference', function () {
-    $input = ['order_id' => 'PED-123', 'payment_token' => 'token-123'];
-    if (isset($input['external_reference'])) throw new Exception('external_reference não deveria estar presente');
-});
-
-test('Rejeitar POST sem payment_token', function () {
-    $input = ['order_id' => 'PED-123', 'external_reference' => 'ref-123'];
-    if (isset($input['payment_token'])) throw new Exception('payment_token não deveria estar presente');
-});
-
-test('Rejeitar valor adulterado (amount mismatch)', function () {
-    // Simular cenário: DB tem R$100, navegador envia R$50
-    $dbTotal = 100.00;
-    $browserAmount = 50.00;
-    if (abs($dbTotal - $browserAmount) <= 0.01) {
-        throw new Exception('Deveria rejeitar valores diferentes');
-    }
-});
-
-test('Aceitar pequenas variações (até 1 centavo)', function () {
-    $dbTotal = 100.00;
-    $calculatedAmount = 100.005; // Pequeno arredondamento
-    if (abs($dbTotal - $calculatedAmount) > 0.01) {
-        throw new Exception('Deveria aceitar pequenas variações');
-    }
-});
-
-test('Rejeitar pedido já pago', function () {
-    $orderStatus = 'pagamento_confirmado';
-    $allowedStatuses = ['pendente_atendimento', 'pagamento_pendente'];
-    if (in_array($orderStatus, $allowedStatuses, true)) {
-        throw new Exception('Deveria rejeitar pedido já pago');
-    }
-});
-
-test('Rejeitar valor zero', function () {
-    $total = 0.00;
-    if ($total > 0) {
-        throw new Exception('Deveria rejeitar valor zero');
-    }
-});
-
-// ============================================================
-// 4. TESTES DE WEBHOOK
-// ============================================================
-
-test('Webhook rejeita assinatura inválida', function () {
-    $validSignature = 'abc123def456';
-    $receivedSignature = 'invalid-signature';
-    if ($validSignature === $receivedSignature) {
-        throw new Exception('Deveria rejeitar assinatura inválida');
-    }
-});
-
-test('Webhook rejeita sem HTTP_X_SIGNATURE', function () {
-    $headers = []; // Sem X-Signature
-    if (isset($headers['HTTP_X_SIGNATURE'])) {
-        throw new Exception('Deveria rejeitar sem X-Signature');
-    }
-});
-
-test('Webhook rejeita sem HTTP_X_REQUEST_ID', function () {
-    $headers = ['HTTP_X_SIGNATURE' => 'sig123']; // Sem X-Request-ID
-    if (isset($headers['HTTP_X_REQUEST_ID'])) {
-        throw new Exception('Deveria rejeitar sem X-Request-ID');
-    }
-});
-
-test('Webhook rejeita sem data.id', function () {
-    $query = []; // Sem data.id
-    if (isset($query['data.id']) || isset($query['data_id'])) {
-        throw new Exception('Deveria rejeitar sem data.id');
-    }
-});
-
-test('Webhook é idempotente (não reprocessa mesmo pedido)', function () {
-    $orderId = 'PED-20260714-001';
-    $currentStatus = 'pagamento_confirmado';
-    $allowedUpdate = ['pendente_atendimento', 'pagamento_pendente'];
-
-    // Só atualiza se o status PERMITIR (já processado = não atualiza)
-    if (in_array($currentStatus, $allowedUpdate, true)) {
-        throw new Exception('Deveria ser idempotente');
-    }
-});
-
-// ============================================================
-// 5. TESTES DE MAPEAMENTO DE STATUS
-// ============================================================
-
-test('Mapear status MP "approved" → "pagamento_confirmado"', function () {
-    $mpStatus = 'approved';
-    $localStatus = match ($mpStatus) {
-        'approved' => 'pagamento_confirmado',
-        default => 'unknown'
-    };
-    if ($localStatus !== 'pagamento_confirmado') throw new Exception('Mapeamento incorreto');
-});
-
-test('Mapear status MP "pending" → "pagamento_pendente"', function () {
-    $mpStatus = 'pending';
-    $localStatus = match ($mpStatus) {
-        'pending' => 'pagamento_pendente',
-        default => 'unknown'
-    };
-    if ($localStatus !== 'pagamento_pendente') throw new Exception('Mapeamento incorreto');
-});
-
-test('Mapear status MP "rejected" → "pagamento_recusado"', function () {
-    $mpStatus = 'rejected';
-    $localStatus = match ($mpStatus) {
-        'rejected' => 'pagamento_recusado',
-        default => 'unknown'
-    };
-    if ($localStatus !== 'pagamento_recusado') throw new Exception('Mapeamento incorreto');
-});
-
-test('Mapear status MP "charged_back" → "chargeback"', function () {
-    $mpStatus = 'charged_back';
-    $localStatus = match ($mpStatus) {
-        'charged_back' => 'chargeback',
-        default => 'unknown'
-    };
-    if ($localStatus !== 'chargeback') throw new Exception('Mapeamento incorreto');
-});
-
-// ============================================================
-// 6. TESTES DE SEGURANÇA (LOG)
-// ============================================================
-
-test('Logs não expõem tokens de cartão', function () {
-    $logEntry = "Pagamento processado: order=PED-123 payment_id=999 status=approved";
-    // Verificar que não contém padrões típicos de cartão
-    if (preg_match('/\d{4}\s\d{4}\s\d{4}\s\d{4}/', $logEntry) || strpos($logEntry, 'CVV') !== false) {
-        throw new Exception('Log não deve conter dados de cartão');
-    }
-});
-
-test('Logs não expõem access tokens', function () {
-    $accessTokenPattern = 'APP_USR-[a-z0-9]{32}-[a-z0-9]{8}';
-    $logEntry = "Pagamento processado: order=PED-123";
-    if (preg_match('/APP_USR-/', $logEntry)) {
-        throw new Exception('Log não deve conter access token');
-    }
-});
-
-test('Logs registram apenas IDs e códigos', function () {
-    $logEntry = "Webhook processed: order=PED-123 payment_id=456 status=approved";
-    $hasOrderId = strpos($logEntry, 'PED-123') !== false;
-    $hasPaymentId = strpos($logEntry, '456') !== false;
-    $hasStatus = strpos($logEntry, 'approved') !== false;
-
-    if (!$hasOrderId || !$hasPaymentId || !$hasStatus) {
-        throw new Exception('Log deveria conter IDs e status');
-    }
-});
-
-// ============================================================
-// RESUMO
-// ============================================================
-
-echo "\n" . str_repeat("═", 70) . "\n";
-echo "📊 RESUMO DOS TESTES\n";
-echo "✅ Passaram: $passed\n";
-echo "❌ Falharam: $failed\n";
-echo str_repeat("═", 70) . "\n";
-
-if ($failed > 0) {
-    exit(1);
-} else {
-    echo "\n🎉 TODOS OS TESTES PASSARAM!\n\n";
-    exit(0);
 }
+
+function mp_fixture_order(string $method = 'boleto'): array
+{
+    return [
+        'order_number' => 'SV20260715123456789',
+        'payment_method' => $method,
+        'total' => 112.34,
+        'shipping_total' => 12.34,
+        'shipping_label' => 'Entrega padrão',
+        'customer' => [
+            'name' => 'Cliente de Teste',
+            'email' => 'cliente@example.com',
+            'phone' => '11999999999',
+            'cpf' => '52998224725',
+            'cep' => '01310100',
+            'street_name' => 'Avenida de Teste',
+            'street_number' => '100',
+            'neighborhood' => 'Centro',
+            'city' => 'São Paulo',
+            'state' => 'SP',
+        ],
+        'items' => [[
+            'sku' => 'SKU-TESTE',
+            'name' => 'Produto de teste',
+            'quantity' => 2,
+            'price' => 50.00,
+        ]],
+    ];
+}
+
+mp_test('bootstrap permite fallback quando fonte anterior esta vazia', function (): void {
+    $key = 'SHOPVIVALIZ_TEST_EMPTY_SECRET';
+    putenv($key . '=');
+    $_ENV[$key] = '';
+    $_SERVER[$key] = '';
+
+    sv_bootstrap_env_assign($key, 'fallback-seguro');
+    mp_assert(getenv($key) === 'fallback-seguro', 'valor vazio bloqueou o fallback não vazio');
+
+    putenv($key);
+    unset($_ENV[$key], $_SERVER[$key]);
+});
+
+mp_test('valida CPF correto e rejeita repeticoes', function (): void {
+    mp_assert(svmp_validate_cpf('529.982.247-25'), 'CPF de teste válido foi rejeitado');
+    mp_assert(!svmp_validate_cpf('111.111.111-11'), 'CPF repetido foi aceito');
+    mp_assert(!svmp_validate_cpf('52998224724'), 'dígito verificador inválido foi aceito');
+});
+
+mp_test('payload do boleto usa total autoritativo e Orders API', function (): void {
+    $payload = svmp_boleto_payload(mp_fixture_order());
+    mp_assert($payload['total_amount'] === '112.34', 'total incorreto');
+    mp_assert($payload['transactions']['payments'][0]['amount'] === '112.34', 'valor da transação incorreto');
+    mp_assert($payload['transactions']['payments'][0]['payment_method']['id'] === 'boleto', 'método incorreto');
+    mp_assert($payload['transactions']['payments'][0]['payment_method']['type'] === 'ticket', 'tipo incorreto');
+    mp_assert($payload['external_reference'] === 'SV20260715123456789', 'referência externa incorreta');
+});
+
+mp_test('payload do boleto exige endereco estruturado', function (): void {
+    $order = mp_fixture_order();
+    unset($order['customer']['street_number']);
+    try {
+        svmp_boleto_payload($order);
+    } catch (InvalidArgumentException) {
+        return;
+    }
+    throw new RuntimeException('endereço incompleto foi aceito');
+});
+
+mp_test('preferencia soma produtos e frete sem confiar no navegador', function (): void {
+    $payload = svmp_preference_payload(mp_fixture_order('mercado_pago'));
+    $total = 0.0;
+    foreach ($payload['items'] as $item) {
+        $total += (float)$item['unit_price'] * (int)$item['quantity'];
+    }
+    mp_assert(abs($total - 112.34) < 0.001, 'itens da preferência não fecham o total');
+    mp_assert($payload['external_reference'] === 'SV20260715123456789', 'pedido não vinculado');
+    mp_assert(str_starts_with($payload['notification_url'], 'https://'), 'webhook não usa HTTPS');
+});
+
+mp_test('sessao de pagamento aceita somente o token original', function (): void {
+    $token = bin2hex(random_bytes(32));
+    $order = ['payment_session_hash' => hash('sha256', $token)];
+    mp_assert(svmp_session_matches($order, $token), 'token original rejeitado');
+    mp_assert(!svmp_session_matches($order, $token . 'x'), 'token adulterado aceito');
+});
+
+mp_test('assinatura webhook HMAC e validada em tempo constante', function (): void {
+    $secret = implode('-', ['webhook', 'secret', 'for', 'tests']);
+    $requestId = 'request-123';
+    $dataId = 'ORD01JTESTABC';
+    $ts = '1784123456';
+    $manifest = 'id:' . strtolower($dataId) . ';request-id:' . $requestId . ';ts:' . $ts . ';';
+    $signature = 'ts=' . $ts . ',v1=' . hash_hmac('sha256', $manifest, $secret);
+    mp_assert(svmp_validate_webhook_signature($signature, $requestId, $dataId, $secret), 'assinatura correta rejeitada');
+    mp_assert(!svmp_validate_webhook_signature($signature, $requestId, $dataId . 'x', $secret), 'assinatura adulterada aceita');
+});
+
+mp_test('status do provedor nao aprova boleto pendente', function (): void {
+    mp_assert(svmp_local_status('action_required') === 'payment_pending', 'action_required deveria permanecer pendente');
+    mp_assert(svmp_local_status('approved') === 'payment_approved', 'approved deveria confirmar');
+    mp_assert(svmp_local_status('charged_back') === 'payment_chargeback', 'chargeback deveria ser terminal');
+});
+
+mp_test('checkout chama endpoints vinculados ao pedido', function (): void {
+    $checkout = (string)file_get_contents(dirname(__DIR__) . '/checkout.php');
+    mp_assert(str_contains($checkout, '/api/mercadopago/create-boleto.php'), 'emissão de boleto não ligada ao checkout');
+    mp_assert(str_contains($checkout, '/api/mercadopago/create-preference.php'), 'Checkout Pro não ligado ao checkout');
+    mp_assert(str_contains($checkout, 'payment_session_token'), 'sessão segura ausente');
+});
+
+mp_test('endpoints legados nao criam pagamentos arbitrarios', function (): void {
+    foreach (['api/process-payment.php', 'api/mercadopago-orders.php', 'api/mercadopago-orders-sdk.php'] as $file) {
+        $source = (string)file_get_contents(dirname(__DIR__) . '/' . $file);
+        mp_assert(str_contains($source, 'legacy_endpoint_retired'), "$file ainda está ativo");
+        mp_assert(!str_contains($source, 'CURLOPT_SSL_VERIFYPEER'), "$file altera validação TLS");
+    }
+});
+
+mp_test('webhook consulta recurso antes de atualizar pedido', function (): void {
+    $source = (string)file_get_contents(dirname(__DIR__) . '/api/webhook-mercadopago.php');
+    mp_assert(str_contains($source, "'/v1/orders/'"), 'consulta de order ausente');
+    mp_assert(str_contains($source, "'/v1/payments/'"), 'consulta de payment ausente');
+    mp_assert(str_contains($source, 'svmp_validate_webhook_signature'), 'validação de assinatura ausente');
+});
+
+echo "RESULT passed=$passed failed=$failed\n";
+exit($failed === 0 ? 0 : 1);

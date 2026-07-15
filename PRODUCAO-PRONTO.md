@@ -16,9 +16,9 @@
 ## 🔑 CREDENCIAIS CONFIGURADAS (PRODUÇÃO)
 
 ```
-MERCADOPAGO_ACCESS_TOKEN=APP_USR-4737281715738852-071414-60d74ab8503a45c9ef2e496d3a4871f9-112962856
-MERCADOPAGO_PUBLIC_KEY=APP_USR-10180fd0-8c6f-4ec8-b547-68a333be10a9
-MERCADOPAGO_WEBHOOK_SECRET=webhookkey123
+MERCADOPAGO_ACCESS_TOKEN=<stored-in-runtime>
+MERCADOPAGO_PUBLIC_KEY=<stored-in-runtime>
+MERCADOPAGO_WEBHOOK_SECRET=<stored-in-runtime>
 ```
 
 ---
@@ -37,7 +37,7 @@ php gerar-payment-id-agora.php
 Isso vai gerar um Payment ID real que você pode:
 1. Colar no painel Mercado Pago
 2. Validar a integração
-3. Sistema pronto para vender! 
+3. Sistema pronto para vender!
 
 ---
 
