@@ -1,0 +1,45 @@
+Olá Fredmourao,
+
+Seu boleto de teste foi gerado com sucesso! 🎉
+
+═══════════════════════════════════════════════════════════
+BOLETO - MERCADO PAGO
+
+Preference ID: 112962856-b34645b8-90e5-45dc-9b50-57b78abfd21a
+Valor: R$ 99,90
+Tipo: Boleto Bancário
+Status: Pronto para Pagamento
+
+═══════════════════════════════════════════════════════════
+
+🔗 LINK PARA PAGAR:
+
+https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=112962856-b34645b8-90e5-45dc-9b50-57b78abfd21a
+
+═══════════════════════════════════════════════════════════
+
+📋 COMO PROCEDER:
+
+1. Clique no link acima
+2. Escolha "Boleto" como método de pagamento
+3. Gere ou copie a linha digitável do boleto
+4. Pague o boleto normalmente
+5. Webhook será acionado automaticamente
+
+═══════════════════════════════════════════════════════════
+
+⚠️  IMPORTANTE:
+
+Este é um boleto de TESTE para validar a integração
+Mercado Pago no ShopVivaliz.
+
+Você pode:
+- Testá-lo no ambiente de teste do Mercado Pago
+- Ou pagá-lo como um boleto normal
+
+═══════════════════════════════════════════════════════════
+
+Atenciosamente,
+Sistema ShopVivaliz
+
+Não responda este email.
