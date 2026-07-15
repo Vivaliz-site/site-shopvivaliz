@@ -46,7 +46,13 @@ class ReviewEnforcer
         $review['checks'][] = self::validateSecurity($task);
 
         // Overall decision
-        $allPassed = array_all($review['checks'], fn($c) => $c['passed']);
+        $allPassed = true;
+        foreach ($review['checks'] as $check) {
+            if (!($check['passed'] ?? false)) {
+                $allPassed = false;
+                break;
+            }
+        }
         $review['approved'] = $allPassed;
         $review['confidence_score'] = self::calculateConfidence($review['checks']);
 
