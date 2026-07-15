@@ -107,9 +107,30 @@ def run_command(cmd: str, cwd: str = None) -> tuple[int, str, str]:
     except Exception as e:
         return 1, "", str(e)
 
+def check_working_tree():
+    """Validar working tree antes de operações git"""
+    code, out, err = run_command("git status --porcelain")
+    if code != 0:
+        log_message("ERROR", f"Não conseguiu verificar status: {err}")
+        return False, "git status falhou"
+
+    # Se há saída, há mudanças não commitadas
+    if out.strip():
+        log_message("WARNING", f"Working tree sujo, rejeitando merge:\n{out}")
+        return False, "working tree sujo"
+
+    return True, "OK"
+
+def get_current_sha():
+    """Obter SHA completo do HEAD"""
+    code, sha, err = run_command("git rev-parse HEAD")
+    if code == 0:
+        return sha.strip()
+    return None
+
 def sync():
-    """Executar sincronização"""
-    log_message("INFO", "Iniciando sincronização")
+    """Executar sincronização (SEGURA - SEM git reset --hard)"""
+    log_message("INFO", "========== Git Auto-Sync (SEGURO) ==========")
 
     # Verificar lock
     if is_locked():
@@ -120,7 +141,7 @@ def sync():
     create_lock()
 
     try:
-        # 1. Verificar se repositório existe
+        # 1. Verificar repositório
         if not os.path.isdir(REPO_DIR):
             log_message("ERROR", f"Repositório não encontrado: {REPO_DIR}")
             return False
@@ -129,26 +150,50 @@ def sync():
             log_message("ERROR", f"Não é um repositório git: {REPO_DIR}")
             return False
 
-        # 2. Fetch
-        log_message("INFO", "Executando git fetch")
+        # 2. Registrar estado ANTES
+        sha_before = get_current_sha()
+        log_message("INFO", f"SHA antes: {sha_before}")
+
+        # 3. Validar working tree
+        is_clean, status = check_working_tree()
+        if not is_clean:
+            log_message("ERROR", f"Working tree inválida: {status}")
+            return False
+
+        # 4. Fetch (seguro - só puxar)
+        log_message("INFO", "Executando git fetch origin")
         code, out, err = run_command("git fetch origin")
         if code != 0:
             log_message("ERROR", f"git fetch falhou: {err}")
             return False
         log_message("INFO", "git fetch OK")
 
-        # 3. Reset --hard
-        log_message("INFO", f"Executando git reset --hard origin/{BRANCH}")
-        code, out, err = run_command(f"git reset --hard origin/{BRANCH}")
-        if code != 0:
-            log_message("ERROR", f"git reset falhou: {err}")
-            return False
-        log_message("INFO", "git reset OK")
+        # 5. Merge --ff-only (seguro - rejeita se não é Fast-Forward)
+        log_message("INFO", f"Executando git merge --ff-only origin/{BRANCH}")
+        code, out, err = run_command(f"git merge --ff-only origin/{BRANCH}")
 
-        # 4. Verificar HEAD
-        code, commit, _ = run_command("git rev-parse HEAD")
-        if code == 0:
-            log_message("INFO", f"Sincronizado para commit: {commit.strip()[:10]}")
+        if code != 0:
+            if "is not an ancestor of HEAD" in err or "merge conflict" in err.lower():
+                log_message("ERROR", f"Branch divergiu ou há conflito: {err}")
+                return False
+            elif "Already up to date" in out or "Already up to date" in err:
+                log_message("INFO", "Já está sincronizado com origin")
+                return True
+            else:
+                log_message("ERROR", f"git merge falhou: {err}")
+                return False
+
+        log_message("INFO", "git merge OK")
+
+        # 6. Registrar estado DEPOIS
+        sha_after = get_current_sha()
+        log_message("INFO", f"SHA depois: {sha_after}")
+
+        # 7. Verificar se mudou
+        if sha_before != sha_after:
+            log_message("INFO", f"Sincronizado de {sha_before[:10]} para {sha_after[:10]}")
+        else:
+            log_message("INFO", "Sem novas mudanças")
 
         log_message("INFO", "Sincronização concluída com sucesso")
         return True
