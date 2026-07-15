@@ -15,7 +15,7 @@ import sys
 def check_server_ready():
     """Verifica se servidor tem Mercado Pago sincronizado"""
     try:
-        req = urllib.request.Request("https://dev.shopvivaliz.com.br/checkout/")
+        req = urllib.request.Request("https://dev.shopvivaliz.com.br/checkout")
         with urllib.request.urlopen(req, timeout=5) as response:
             content = response.read().decode('utf-8')
             return "mercado_pago" in content
