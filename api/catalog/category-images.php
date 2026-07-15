@@ -22,16 +22,16 @@ $decoded = svcr_products();
 $categories = [];
 
 $generic_images = [
-    'armários e organização' => 'https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=320&q=80',
+    'armários e organização' => '/public/assets/category-images/cat-organizacao.jpg',
     'banheiro' => 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=320&q=80',
     'cadeados e segurança' => 'https://images.unsplash.com/photo-1558025137-0b407a944810?w=320&q=80',
     'caixas de ferramentas' => 'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?w=320&q=80',
     'elétrico e automotivo' => 'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=320&q=80',
-    'ferramentas' => 'https://images.unsplash.com/photo-1581166397057-235af2b3c6dd?w=320&q=80',
-    'fixação e ferragem' => 'https://images.unsplash.com/photo-1586864387967-d02ef85d93e8?w=320&q=80',
-    'floreiras e jardim' => 'https://images.unsplash.com/photo-1416879598556-33b63b27b87c?w=320&q=80',
+    'ferramentas' => '/public/assets/category-images/cat-ferramentas.jpg',
+    'fixação e ferragem' => '/public/assets/category-images/cat-ferragens.jpg',
+    'floreiras e jardim' => '/public/assets/category-images/cat-jardim.jpg',
     'pet' => 'https://images.unsplash.com/photo-1450778869180-41d0601e046e?w=320&q=80',
-    'rodízios' => 'https://images.unsplash.com/photo-1601597111158-2fceff292cdc?w=320&q=80',
+    'rodízios' => '/public/assets/category-images/cat-rodizios.jpg',
     'utilidades' => 'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?w=320&q=80',
 ];
 
