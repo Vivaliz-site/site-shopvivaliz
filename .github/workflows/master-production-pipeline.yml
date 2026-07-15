@@ -262,7 +262,7 @@ jobs:
           echo "StrictHostKeyChecking no" >> ~/.ssh/config
           echo "UserKnownHostsFile=/dev/null" >> ~/.ssh/config
 
-      - name: Sync Oracle VM (git-auto-sync.py)
+      - name: Sync Oracle VM (backup + canonical reset)
         run: |
           ssh -i ~/.ssh/id_rsa ubuntu@137.131.156.17 << 'SSH_EOF'
           cd /home/ubuntu/site-shopvivaliz
@@ -281,8 +281,18 @@ jobs:
             echo "Backup preservado em server-backup/$backup_name ($stash_sha)"
           fi
 
-          python3 git-auto-sync.py
+          # O backup acima torna seguro substituir somente os arquivos rastreados.
+          # Arquivos ignorados de runtime (uploads, sessoes e configuracoes locais)
+          # permanecem intactos; o commit publicado fica identico ao aprovado.
+          git fetch --no-tags origin main
+          git cat-file -e "${{ github.sha }}^{commit}"
+          git reset --hard "${{ github.sha }}"
           exit_code=$?
+
+          if [ "$exit_code" -eq 0 ] && ! git diff --quiet --ignore-submodules --; then
+            echo "ERRO: arquivos rastreados foram alterados durante a sincronizacao"
+            exit_code=1
+          fi
 
           deployed_commit=$(git rev-parse HEAD 2>/dev/null || true)
           if [ "$exit_code" -eq 0 ] && [ "$deployed_commit" != "${{ github.sha }}" ]; then
