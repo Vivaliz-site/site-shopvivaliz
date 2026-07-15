@@ -206,13 +206,11 @@ def sync():
 
 def main():
     """Main"""
-    log_message("INFO", "========== Git Auto-Sync ==========")
-
     success = sync()
-
     log_message("INFO", "========== Fim ==========")
     log_message("INFO", "")
 
+    # Retornar código apropriado
     sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
