@@ -15,13 +15,17 @@ declare(strict_types=1);
  * https://tiny.com.br/api-docs/api2-webhooks-atualizacao-estoque
  */
 
+header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
 
 function svtw_log(string $message): void
 {
     $logFile = dirname(__DIR__, 2) . '/logs/tiny-stock-webhook.log';
-    @mkdir(dirname($logFile), 0755, true);
-    @file_put_contents($logFile, '[' . date('c') . '] ' . $message . "\n", FILE_APPEND);
+    if (!is_dir(dirname($logFile))) {
+        @mkdir(dirname($logFile), 0755, true);
+    }
+    @file_put_contents($logFile, '[' . date('c') . '] ' . $message . "\n", FILE_APPEND | LOCK_EX);
 }
 
 function svtw_json(int $status, array $payload): never
@@ -48,6 +52,11 @@ if ($sku === '' || $saldo === null) {
     svtw_json(200, ['ok' => true, 'ignored' => true, 'reason' => 'missing_sku_or_saldo']);
 }
 
+if (!is_numeric((string)$saldo)) {
+    svtw_log('Payload com saldo invalido: ' . substr($raw, 0, 300));
+    svtw_json(200, ['ok' => true, 'ignored' => true, 'reason' => 'invalid_saldo']);
+}
+
 $stock = (int)round((float)$saldo);
 $catalogPath = dirname(__DIR__, 2) . '/api/catalog/fallback-products.json';
 
@@ -57,33 +66,51 @@ if (!$fp) {
     svtw_json(500, ['ok' => false, 'error' => 'catalog_unavailable']);
 }
 
-flock($fp, LOCK_EX);
-$content = stream_get_contents($fp);
-$catalog = json_decode($content !== false ? $content : '[]', true);
-if (!is_array($catalog)) {
-    $catalog = [];
-}
-
-$updated = false;
-foreach ($catalog as &$product) {
-    if (!is_array($product)) {
-        continue;
+try {
+    if (!flock($fp, LOCK_EX)) {
+        svtw_log("Falha ao bloquear {$catalogPath}");
+        svtw_json(500, ['ok' => false, 'error' => 'catalog_lock_failed']);
     }
-    if (strcasecmp((string)($product['sku'] ?? ''), $sku) === 0) {
-        $product['stock'] = $stock;
-        $updated = true;
-        break;
-    }
-}
-unset($product);
 
-if ($updated) {
-    ftruncate($fp, 0);
     rewind($fp);
-    fwrite($fp, json_encode($catalog, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    $content = stream_get_contents($fp);
+    $catalog = json_decode($content !== false ? $content : '[]', true);
+    if (!is_array($catalog)) {
+        svtw_log("Catalogo invalido em {$catalogPath}");
+        svtw_json(500, ['ok' => false, 'error' => 'catalog_invalid']);
+    }
+
+    $updated = false;
+    foreach ($catalog as &$product) {
+        if (!is_array($product)) {
+            continue;
+        }
+        if (strcasecmp((string)($product['sku'] ?? ''), $sku) === 0) {
+            $product['stock'] = $stock;
+            $updated = true;
+            break;
+        }
+    }
+    unset($product);
+
+    if ($updated) {
+        $payload = json_encode($catalog, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        if ($payload === false) {
+            svtw_log("Falha ao serializar catalogo para sku={$sku}");
+            svtw_json(500, ['ok' => false, 'error' => 'catalog_encode_failed']);
+        }
+        ftruncate($fp, 0);
+        rewind($fp);
+        if (fwrite($fp, $payload . PHP_EOL) === false) {
+            svtw_log("Falha ao gravar catalogo para sku={$sku}");
+            svtw_json(500, ['ok' => false, 'error' => 'catalog_write_failed']);
+        }
+        fflush($fp);
+    }
+} finally {
+    flock($fp, LOCK_UN);
+    fclose($fp);
 }
-flock($fp, LOCK_UN);
-fclose($fp);
 
 svtw_log(($updated ? 'Atualizado' : 'SKU nao encontrado no catalogo') . ": sku={$sku} stock={$stock}");
 

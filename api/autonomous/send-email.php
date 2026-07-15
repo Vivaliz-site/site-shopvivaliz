@@ -11,6 +11,20 @@ class EmailSender
     private const SMTP_HOST = 'smtp.gmail.com';
     private const SMTP_PORT = 587;
 
+    private static function appendLog(array $payload): bool
+    {
+        $logDir = dirname(__DIR__, 2) . '/logs/autonomous';
+        if (!is_dir($logDir) || !is_writable($logDir)) {
+            return false;
+        }
+
+        return file_put_contents(
+            "$logDir/email-log.jsonl",
+            json_encode($payload) . "\n",
+            FILE_APPEND
+        ) !== false;
+    }
+
     /**
      * Send email with SMTP authentication
      */
@@ -259,11 +273,8 @@ HTML;
     /**
      * Log email delivery
      */
-    private static function logSuccess(string $to, string $subject, string $method): void
+    private static function logSuccess(string $to, string $subject, string $method): bool
     {
-        $logDir = dirname(__DIR__, 2) . '/logs/autonomous';
-        @mkdir($logDir, 0755, true);
-
         $maskedTo = substr($to, 0, 3) . '***' . substr($to, -7);
         $log = [
             'timestamp' => date('c'),
@@ -274,31 +285,20 @@ HTML;
             'message_id' => uniqid('shopvivaliz-', true)
         ];
 
-        file_put_contents(
-            "$logDir/email-log.jsonl",
-            json_encode($log) . "\n",
-            FILE_APPEND
-        );
+        return self::appendLog($log);
     }
 
     /**
      * Log email errors
      */
-    private static function logError(string $error): void
+    private static function logError(string $error): bool
     {
-        $logDir = dirname(__DIR__, 2) . '/logs/autonomous';
-        @mkdir($logDir, 0755, true);
-
         $log = [
             'timestamp' => date('c'),
             'status' => 'error',
             'error' => $error
         ];
 
-        file_put_contents(
-            "$logDir/email-log.jsonl",
-            json_encode($log) . "\n",
-            FILE_APPEND
-        );
+        return self::appendLog($log);
     }
 }

@@ -1,0 +1,28 @@
+# Module Sweep 2026-07-15 Round 3
+
+- Task:
+  - continuar melhorias sem repetir os modulos ja tratados nas rodadas anteriores
+- Modules touched:
+  - `api/tiny`
+  - `api/covers`
+  - `tests`
+- Files changed:
+  - `api/tiny/stock-webhook.php`
+  - `api/covers/status.php`
+  - `tests/test_production_hardening.py`
+- Tests executed:
+  - `php -l api/tiny/stock-webhook.php`
+  - `php -l api/covers/status.php`
+  - `pytest tests/test_production_hardening.py -q`
+- Results:
+  - stock webhook agora valida `saldo` numerico, adiciona headers de hardening, usa log com `LOCK_EX` e libera lock/fd com `finally`
+  - webhook tambem retorna erros estruturados para falhas de lock, JSON invalido e escrita do catalogo
+  - covers status deixou de expor caminho absoluto interno quando o catalogo falha
+  - testes de hardening cobrem os contratos novos desses endpoints
+- Risks identified:
+  - runtime local de PHP continua com aviso de extensao `curl` ausente nos lints
+  - `api/graphql.php` ainda cria diretorio de rate limit sob demanda durante requests e pode merecer uma abordagem mais previsivel
+- Next recommended module:
+  - `api/graphql.php`
+- Reason:
+  - mistura leitura publica com escrita incidental de rate limiting em request path e e um bom alvo de previsibilidade operacional

@@ -52,3 +52,67 @@ def test_stdio_protocol_is_utf8_and_lists_tools(tmp_path: Path) -> None:
 
     assert {tool["name"] for tool in tools} == {"post_message", "read_messages", "bridge_status"}
     assert any("Lê mensagens" in tool["description"] for tool in tools)
+
+
+def test_tools_list_requires_initialize(tmp_path: Path) -> None:
+    request = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+    env = os.environ.copy()
+    env["CODEX_BRIDGE_DATA_DIR"] = str(tmp_path / "bridge-data")
+
+    completed = subprocess.run(
+        [sys.executable, str(BRIDGE)],
+        input=(json.dumps(request) + "\n").encode("utf-8"),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        cwd=ROOT,
+        timeout=10,
+        check=True,
+    )
+
+    response = json.loads(completed.stdout.decode("utf-8").strip())
+    assert response["error"]["code"] == -32002
+
+
+def test_post_message_validation_errors_are_tool_results(tmp_path: Path) -> None:
+    requests = [
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-11-25",
+                "capabilities": {},
+                "clientInfo": {"name": "pytest", "version": "1"},
+            },
+        },
+        {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+            "params": {},
+        },
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "post_message", "arguments": {}},
+        },
+    ]
+    env = os.environ.copy()
+    env["CODEX_BRIDGE_DATA_DIR"] = str(tmp_path / "bridge-data")
+
+    completed = subprocess.run(
+        [sys.executable, str(BRIDGE)],
+        input="".join(json.dumps(item) + "\n" for item in requests).encode("utf-8"),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        cwd=ROOT,
+        timeout=10,
+        check=True,
+    )
+
+    responses = [json.loads(line) for line in completed.stdout.decode("utf-8").splitlines()]
+    response = next(item for item in responses if item.get("id") == 2)
+    assert response["result"]["isError"] is True
+    assert response["result"]["structuredContent"]["message"] == "body is required"

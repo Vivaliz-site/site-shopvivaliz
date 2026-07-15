@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -16,6 +17,10 @@ HTACCESS_PATH = ROOT / ".htaccess"
 PRODUCT_PAGE_PATH = ROOT / "produto.php"
 REPORT_JSON = ROOT / "logs" / "product-page-indexability-audit.json"
 REPORT_MD = ROOT / "logs" / "product-page-indexability-audit.md"
+
+
+def report_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
 
 
 def main() -> int:
@@ -59,8 +64,11 @@ def main() -> int:
         "status": "ok" if site_ready else "warning",
     }
 
-    REPORT_JSON.parent.mkdir(parents=True, exist_ok=True)
+    if not report_dir_ready(REPORT_JSON):
+        raise FileNotFoundError(f"Diretório de relatório indisponível: {REPORT_JSON.parent}")
     REPORT_JSON.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    if not report_dir_ready(REPORT_MD):
+        raise FileNotFoundError(f"Diretório de relatório indisponível: {REPORT_MD.parent}")
     REPORT_MD.write_text(
         "\n".join(
             [

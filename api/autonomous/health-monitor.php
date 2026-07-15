@@ -176,13 +176,15 @@ class HealthMonitor
     /**
      * Log SLA status
      */
-    private static function logSLAStatus(string $agent, array $violations): void
+    private static function logSLAStatus(string $agent, array $violations): bool
     {
         $dir = dirname(self::SLA_FILE);
-        @mkdir($dir, 0755, true);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            return false;
+        }
 
         if (count($violations) > 0) {
-            file_put_contents(
+            return file_put_contents(
                 self::SLA_FILE,
                 json_encode([
                     'timestamp' => date('c'),
@@ -190,8 +192,10 @@ class HealthMonitor
                     'violations' => $violations
                 ]) . "\n",
                 FILE_APPEND
-            );
+            ) !== false;
         }
+
+        return true;
     }
 
     /**

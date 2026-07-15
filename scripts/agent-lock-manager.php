@@ -13,15 +13,20 @@ class AgentLockManager {
 
     public function __construct(string $agentId = 'unknown') {
         $this->agentId = $agentId;
-        if (!is_dir($this->lockDir)) {
-            mkdir($this->lockDir, 0755, true);
-        }
+    }
+
+    private function lockDirReady(): bool {
+        return is_dir($this->lockDir) && is_writable($this->lockDir);
     }
 
     /**
      * Adquirir lock exclusivo para um arquivo
      */
     public function acquireLock(string $filePath): bool {
+        if (!$this->lockDirReady()) {
+            return false;
+        }
+
         $lockFile = $this->getLockPath($filePath);
         
         // Verificar se lock já existe
@@ -46,8 +51,7 @@ class AgentLockManager {
             'pid' => getmypid()
         ];
 
-        file_put_contents($lockFile, json_encode($lockData));
-        return true;
+        return file_put_contents($lockFile, json_encode($lockData), LOCK_EX) !== false;
     }
 
     /**

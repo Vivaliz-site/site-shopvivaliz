@@ -10,6 +10,10 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+
+def report_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
 def print_header(title):
     print("\n" + "=" * 80)
     print(f"  {title}")
@@ -107,7 +111,8 @@ def deploy_production():
 
     # Save report
     report_file = Path('logs/production_deployment_report.json')
-    report_file.parent.mkdir(exist_ok=True)
+    if not report_dir_ready(report_file):
+        raise FileNotFoundError(f"Diretório de relatório indisponível: {report_file.parent}")
 
     with open(report_file, 'w') as f:
         json.dump(report, f, indent=2)

@@ -16,13 +16,19 @@ class BackupManager
      */
     public static function createFullBackup(): array
     {
-        @mkdir(self::BACKUP_DIR, 0755, true);
-
         $backupId = date('Y-m-d-H-i-s');
         $backupPath = self::BACKUP_DIR . '/' . $backupId;
-        @mkdir($backupPath, 0755, true);
+        if (!self::ensureDirectory($backupPath)) {
+            return [
+                'success' => false,
+                'reason' => 'backup_target_unavailable',
+                'backup_id' => $backupId,
+                'items' => []
+            ];
+        }
 
         $backup = [
+            'success' => true,
             'backup_id' => $backupId,
             'timestamp' => date('c'),
             'items' => []
@@ -31,28 +37,31 @@ class BackupManager
         // Backup queue
         $queueFile = __DIR__ . '/../../tasks-queue.json';
         if (file_exists($queueFile)) {
-            copy($queueFile, "$backupPath/tasks-queue.json");
-            $backup['items'][] = 'tasks-queue';
+            if (copy($queueFile, "$backupPath/tasks-queue.json")) {
+                $backup['items'][] = 'tasks-queue';
+            }
         }
 
         // Backup memories
         $logsDir = __DIR__ . '/../../logs/autonomous';
         foreach (glob("$logsDir/*.jsonl") as $file) {
             $name = basename($file);
-            copy($file, "$backupPath/$name");
-            $backup['items'][] = $name;
+            if (copy($file, "$backupPath/$name")) {
+                $backup['items'][] = $name;
+            }
         }
 
         // Backup metrics
         $agentsDir = __DIR__ . '/../../logs/agents';
         foreach (glob("$agentsDir/*.json") as $file) {
             $name = basename($file);
-            copy($file, "$backupPath/$name");
-            $backup['items'][] = $name;
+            if (copy($file, "$backupPath/$name")) {
+                $backup['items'][] = $name;
+            }
         }
 
         // Save manifest
-        self::appendManifest($backup);
+        $backup['manifest_updated'] = self::appendManifest($backup);
 
         return $backup;
     }
@@ -72,24 +81,26 @@ class BackupManager
         // Restore queue
         $queueBackup = "$backupPath/tasks-queue.json";
         if (file_exists($queueBackup)) {
-            copy($queueBackup, __DIR__ . '/../../tasks-queue.json');
-            $restored['items'][] = 'tasks-queue';
+            $queueTarget = __DIR__ . '/../../tasks-queue.json';
+            if (self::isWritableParent($queueTarget) && copy($queueBackup, $queueTarget)) {
+                $restored['items'][] = 'tasks-queue';
+            }
         }
 
         // Restore memories
+        $destDir = __DIR__ . '/../../logs/autonomous';
         foreach (glob("$backupPath/*.jsonl") as $file) {
-            $destDir = __DIR__ . '/../../logs/autonomous';
-            @mkdir($destDir, 0755, true);
-            copy($file, "$destDir/" . basename($file));
-            $restored['items'][] = basename($file);
+            if (self::ensureDirectory($destDir) && copy($file, "$destDir/" . basename($file))) {
+                $restored['items'][] = basename($file);
+            }
         }
 
         // Restore metrics
+        $metricsDir = __DIR__ . '/../../logs/agents';
         foreach (glob("$backupPath/*-productivity.json") as $file) {
-            $destDir = __DIR__ . '/../../logs/agents';
-            @mkdir($destDir, 0755, true);
-            copy($file, "$destDir/" . basename($file));
-            $restored['items'][] = basename($file);
+            if (self::ensureDirectory($metricsDir) && copy($file, "$metricsDir/" . basename($file))) {
+                $restored['items'][] = basename($file);
+            }
         }
 
         $restored['success'] = true;
@@ -148,8 +159,12 @@ class BackupManager
     /**
      * Append to manifest
      */
-    private static function appendManifest(array $backup): void
+    private static function appendManifest(array $backup): bool
     {
+        if (!self::ensureDirectory(self::BACKUP_DIR) || !is_writable(self::BACKUP_DIR)) {
+            return false;
+        }
+
         $manifest = [];
         if (file_exists(self::BACKUP_MANIFEST)) {
             $manifest = json_decode(file_get_contents(self::BACKUP_MANIFEST), true) ?? [];
@@ -158,10 +173,10 @@ class BackupManager
         $manifest['backups'][] = $backup;
         $manifest['last_backup'] = $backup['timestamp'];
 
-        file_put_contents(
+        return file_put_contents(
             self::BACKUP_MANIFEST,
             json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
-        );
+        ) !== false;
     }
 
     /**
@@ -211,5 +226,29 @@ class BackupManager
             }
         }
         rmdir($dir);
+    }
+
+    private static function ensureDirectory(string $dir): bool
+    {
+        if (is_dir($dir)) {
+            return is_writable($dir);
+        }
+
+        $parent = dirname($dir);
+        if ($parent === $dir) {
+            return false;
+        }
+
+        if (!self::ensureDirectory($parent)) {
+            return false;
+        }
+
+        return mkdir($dir, 0755, true) || is_dir($dir);
+    }
+
+    private static function isWritableParent(string $path): bool
+    {
+        $parent = dirname($path);
+        return is_dir($parent) && is_writable($parent);
     }
 }

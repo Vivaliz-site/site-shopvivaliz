@@ -33,11 +33,16 @@ OLIST_EMAIL = os.getenv('OLIST_EMAIL') or os.getenv('OLIST_USER') or os.getenv('
 OLIST_PASSWORD = os.getenv('OLIST_PASSWORD') or os.getenv('EMAIL_PASSWORD') or ''
 REDIRECT_URI = 'https://dev.shopvivaliz.com.br/olist/handle-callback.php'
 
+
+def log_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
 def log_msg(msg):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     line = f"[{timestamp}] {msg}"
     print(line)
-    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not log_dir_ready(LOG_FILE):
+        raise FileNotFoundError(f"Diretório de log indisponível: {LOG_FILE.parent}")
     with open(LOG_FILE, 'a', encoding='utf-8') as f:
         f.write(line + '\n')
 
@@ -115,6 +120,8 @@ def login_headless():
         if driver:
             try:
                 screenshot = LOG_FILE.parent / 'login-error.png'
+                if not log_dir_ready(screenshot):
+                    raise FileNotFoundError(f"Diretório de log indisponível: {screenshot.parent}")
                 driver.save_screenshot(str(screenshot))
                 log_msg(f"Screenshot salvo: {screenshot}")
             except:

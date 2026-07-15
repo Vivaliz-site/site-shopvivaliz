@@ -1,0 +1,25 @@
+# Module Sweep 2026-07-15 Round 11
+
+- Task:
+  - continuar endurecendo uma nova superficie de monitoramento sem repetir modulo
+- Modules touched:
+  - `api/monitor`
+  - `tests`
+- Files changed:
+  - `api/monitor/api.php`
+  - `tests/test_production_hardening.py`
+- Tests executed:
+  - `php -l api/monitor/api.php`
+  - `pytest tests/test_production_hardening.py -q`
+- Results:
+  - `monitor/api.php` agora remove `X-Powered-By`
+  - append JSONL deixou de criar diretorio automaticamente e passou a retornar sucesso/erro
+  - envio de comando operacional retorna erro estruturado quando `storage/private` nao estiver disponivel
+  - suite de hardening cobre ausencia de `mkdir` e a mensagem de indisponibilidade da fila privada
+- Risks identified:
+  - runtime local de PHP continua com aviso da extensao `curl` ausente durante lint
+  - `api/autonomous/testing-framework.php` ainda cria diretorio automaticamente em caminho operacional
+- Next recommended module:
+  - `api/autonomous/testing-framework.php`
+- Reason:
+  - abre uma nova familia de modulo e ainda tem criacao implicita de diretorio em fluxo de teste/automacao

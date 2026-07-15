@@ -114,7 +114,8 @@ def load_queue() -> dict[str, Any]:
 def save_queue(data: dict[str, Any]) -> None:
     normalized = _normalize(data)
     for path in (ROOT_QUEUE_FILE, LEGACY_QUEUE_FILE):
-        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.parent.is_dir() or not path.parent.exists():
+            raise FileNotFoundError(f"Diretorio da fila indisponivel: {path.parent}")
         path.write_text(
             json.dumps(normalized, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",

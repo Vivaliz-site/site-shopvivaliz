@@ -28,11 +28,13 @@ declare(strict_types=1);
 
 function cd_env(string $key): string { return (string)(getenv($key) ?: ''); }
 
-function cd_log(string $task, string $msg): void {
+function cd_log(string $task, string $msg): bool {
     $dir = dirname(__DIR__, 2) . '/logs';
-    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return false;
+    }
     $line = '[' . date('c') . '] [' . $task . '] ' . $msg . "\n";
-    file_put_contents($dir . '/cron-dispatcher.log', $line, FILE_APPEND | LOCK_EX);
+    return file_put_contents($dir . '/cron-dispatcher.log', $line, FILE_APPEND | LOCK_EX) !== false;
 }
 
 function cd_http_get(string $url): array {

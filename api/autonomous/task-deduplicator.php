@@ -11,6 +11,20 @@ class TaskDeduplicator
 {
     private const DEDUP_LOG = __DIR__ . '/../../logs/autonomous/deduplication.jsonl';
 
+    public static function appendJsonl(string $path, array $payload): bool
+    {
+        $dir = dirname($path);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            return false;
+        }
+
+        return file_put_contents(
+            $path,
+            json_encode($payload) . "\n",
+            FILE_APPEND
+        ) !== false;
+    }
+
     /**
      * Check for duplicates before queuing
      */
@@ -105,21 +119,14 @@ class TaskDeduplicator
     /**
      * Log deduplication action
      */
-    public static function logDuplicate(array $newTask, string $duplicateOf): void
+    public static function logDuplicate(array $newTask, string $duplicateOf): bool
     {
-        $dir = dirname(self::DEDUP_LOG);
-        @mkdir($dir, 0755, true);
-
-        file_put_contents(
-            self::DEDUP_LOG,
-            json_encode([
-                'timestamp' => date('c'),
-                'new_task_id' => $newTask['id'] ?? 'unknown',
-                'duplicate_of' => $duplicateOf,
-                'action' => 'rejected_as_duplicate'
-            ]) . "\n",
-            FILE_APPEND
-        );
+        return self::appendJsonl(self::DEDUP_LOG, [
+            'timestamp' => date('c'),
+            'new_task_id' => $newTask['id'] ?? 'unknown',
+            'duplicate_of' => $duplicateOf,
+            'action' => 'rejected_as_duplicate'
+        ]);
     }
 }
 
@@ -266,15 +273,11 @@ class OrphanTaskDetector
     /**
      * Log orphan task
      */
-    private static function logOrphan(array $orphan): void
+    private static function logOrphan(array $orphan): bool
     {
-        $dir = dirname(self::ORPHAN_LOG);
-        @mkdir($dir, 0755, true);
-
-        file_put_contents(
+        return TaskDeduplicator::appendJsonl(
             self::ORPHAN_LOG,
-            json_encode(array_merge(['timestamp' => date('c')], $orphan)) . "\n",
-            FILE_APPEND
+            array_merge(['timestamp' => date('c')], $orphan)
         );
     }
 }

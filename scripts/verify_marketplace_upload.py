@@ -26,6 +26,10 @@ UPLOAD_MAPPING_FILE = Path('storage/uploaded_urls.csv')
 VERIFICATION_REPORT = Path('logs/marketplace_verification_report.json')
 
 
+def report_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
+
 class MarketplaceVerifier:
     """Verifica uploads nos marketplaces"""
 
@@ -261,7 +265,8 @@ class MarketplaceVerifier:
 
         # Salvar relatório JSON
         self.report['optimization'] = optimization
-        VERIFICATION_REPORT.parent.mkdir(parents=True, exist_ok=True)
+        if not report_dir_ready(VERIFICATION_REPORT):
+            raise FileNotFoundError(f"Diretório de relatório indisponível: {VERIFICATION_REPORT.parent}")
         with VERIFICATION_REPORT.open('w', encoding='utf-8') as f:
             json.dump(self.report, f, indent=2, ensure_ascii=False)
 

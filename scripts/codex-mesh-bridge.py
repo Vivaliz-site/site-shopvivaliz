@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -22,6 +23,22 @@ ROOT = repo_root()
 DATA_DIR = Path(os.environ.get("CODEX_BRIDGE_DATA_DIR") or ROOT / "storage" / "codex-bridge")
 MESSAGES_FILE = DATA_DIR / "messages.jsonl"
 STATE_FILE = DATA_DIR / "state.json"
+MAX_MESSAGE_TITLE = 200
+MAX_MESSAGE_BODY = 8_000
+MAX_READ_LIMIT = 100
+
+
+def lock_file(handle) -> None:
+    if os.name == "nt":
+        import msvcrt
+
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        return
+
+    import fcntl
+
+    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
 
 
 def ensure_storage() -> None:
@@ -40,7 +57,11 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     rows: list[dict[str, Any]] = []
-    for raw in path.read_text(encoding="utf-8").splitlines():
+    with path.open("a+", encoding="utf-8", newline="\n") as handle:
+        lock_file(handle)
+        handle.seek(0)
+        content = handle.read()
+    for raw in content.splitlines():
         raw = raw.strip()
         if not raw:
             continue
@@ -55,22 +76,48 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 def append_jsonl(path: Path, row: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as handle:
+    with path.open("a+", encoding="utf-8", newline="\n") as handle:
+        lock_file(handle)
+        handle.seek(0, os.SEEK_END)
         handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+        handle.flush()
 
 
 def state_update(**updates: Any) -> None:
     ensure_storage()
-    state: dict[str, Any] = {}
-    if STATE_FILE.exists():
-        try:
-            loaded = json.loads(STATE_FILE.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict):
-                state = loaded
-        except json.JSONDecodeError:
-            state = {}
-    state.update(updates)
-    STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    with STATE_FILE.open("a+", encoding="utf-8", newline="\n") as handle:
+        lock_file(handle)
+        handle.seek(0)
+        state: dict[str, Any] = {}
+        raw = handle.read().strip()
+        if raw:
+            try:
+                loaded = json.loads(raw)
+                if isinstance(loaded, dict):
+                    state = loaded
+            except json.JSONDecodeError:
+                state = {}
+        state.update(updates)
+        handle.seek(0)
+        handle.truncate()
+        handle.write(json.dumps(state, ensure_ascii=False, indent=2) + "\n")
+        handle.flush()
+
+
+def state_read() -> dict[str, Any]:
+    if not STATE_FILE.exists():
+        return {}
+    with STATE_FILE.open("a+", encoding="utf-8", newline="\n") as handle:
+        lock_file(handle)
+        handle.seek(0)
+        raw = handle.read().strip()
+    if not raw:
+        return {}
+    try:
+        loaded = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
 
 
 def tool_post_message(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -82,6 +129,12 @@ def tool_post_message(arguments: dict[str, Any]) -> dict[str, Any]:
     thread = str(arguments.get("thread") or arguments.get("thread_id") or uuid.uuid4()).strip()
     if not body:
         raise ValueError("body is required")
+    if len(title) > MAX_MESSAGE_TITLE:
+        raise ValueError(f"title exceeds {MAX_MESSAGE_TITLE} characters")
+    if len(body) > MAX_MESSAGE_BODY:
+        raise ValueError(f"body exceeds {MAX_MESSAGE_BODY} characters")
+    if len(sender) > 120 or len(recipient) > 120 or len(thread) > 120:
+        raise ValueError("from, to, and thread must be 120 characters or fewer")
 
     row = {
         "id": str(uuid.uuid4()),
@@ -96,7 +149,8 @@ def tool_post_message(arguments: dict[str, Any]) -> dict[str, Any]:
         "read": False,
     }
     append_jsonl(MESSAGES_FILE, row)
-    state_update(last_start=state_get("last_start"), last_message_id=row["id"])
+    state = state_read()
+    state_update(last_start=state.get("last_start"), last_message_id=row["id"])
     return {
         "resultType": "complete",
         "message_id": row["id"],
@@ -106,15 +160,7 @@ def tool_post_message(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def state_get(key: str, default: Any = None) -> Any:
-    if not STATE_FILE.exists():
-        return default
-    try:
-        loaded = json.loads(STATE_FILE.read_text(encoding="utf-8"))
-        if isinstance(loaded, dict):
-            return loaded.get(key, default)
-    except json.JSONDecodeError:
-        pass
-    return default
+    return state_read().get(key, default)
 
 
 def tool_read_messages(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -122,6 +168,7 @@ def tool_read_messages(arguments: dict[str, Any]) -> dict[str, Any]:
     recipient = str(arguments.get("recipient") or "*").strip() or "*"
     thread = str(arguments.get("thread") or "").strip()
     limit = int(arguments.get("limit") or 20)
+    limit = max(1, min(limit, MAX_READ_LIMIT))
     since_id = str(arguments.get("since_id") or "").strip()
 
     rows = read_jsonl(MESSAGES_FILE)
@@ -156,8 +203,20 @@ def tool_read_messages(arguments: dict[str, Any]) -> dict[str, Any]:
 def tool_status(arguments: dict[str, Any]) -> dict[str, Any]:
     ensure_storage()
     try:
-        branch = os.popen("git branch --show-current").read().strip()
-        head = os.popen("git rev-parse HEAD").read().strip()
+        branch = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.strip()
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.strip()
     except Exception:
         branch = ""
         head = ""
@@ -221,17 +280,32 @@ def jsonrpc_error(request_id: Any, code: int, message: str, data: Any = None) ->
     return payload
 
 
-def handle_request(payload: dict[str, Any]) -> dict[str, Any] | None:
+def tool_error_result(request_id: Any, message: str) -> dict[str, Any]:
+    result = {
+        "content": [{"type": "text", "text": message}],
+        "structuredContent": {"resultType": "error", "message": message},
+        "isError": True,
+    }
+    return jsonrpc_result(request_id, result)
+
+
+def handle_request(payload: dict[str, Any], session: dict[str, Any]) -> dict[str, Any] | None:
+    if payload.get("jsonrpc") != "2.0":
+        return jsonrpc_error(payload.get("id"), -32600, "jsonrpc must be '2.0'")
+
     method = payload.get("method")
     request_id = payload.get("id")
     params = payload.get("params") or {}
+    if params and not isinstance(params, dict):
+        return jsonrpc_error(request_id, -32602, "params must be an object")
 
     if method == "initialize":
+        session["initialized"] = True
         return jsonrpc_result(request_id, {
             "protocolVersion": "2025-11-25",
             "serverInfo": {
                 "name": "shopvivaliz-codex-mesh-bridge",
-                "version": "1.0.0",
+                "version": "1.1.0",
             },
             "capabilities": {
                 "tools": {},
@@ -245,6 +319,9 @@ def handle_request(payload: dict[str, Any]) -> dict[str, Any] | None:
     if method == "notifications/initialized":
         return None
 
+    if not session.get("initialized"):
+        return jsonrpc_error(request_id, -32002, "Server not initialized")
+
     if method == "tools/list":
         return jsonrpc_result(request_id, {"tools": TOOLS})
 
@@ -252,7 +329,7 @@ def handle_request(payload: dict[str, Any]) -> dict[str, Any] | None:
         name = str(params.get("name") or "").strip()
         arguments = params.get("arguments") or params.get("input") or {}
         if not isinstance(arguments, dict):
-            arguments = {}
+            return jsonrpc_error(request_id, -32602, "tool arguments must be an object")
         try:
             if name == "post_message":
                 result = tool_post_message(arguments)
@@ -261,9 +338,11 @@ def handle_request(payload: dict[str, Any]) -> dict[str, Any] | None:
             elif name == "bridge_status":
                 result = tool_status(arguments)
             else:
-                return jsonrpc_error(request_id, -32601, f"Unknown tool: {name}")
+                return jsonrpc_error(request_id, -32602, f"Unknown tool: {name}")
+        except ValueError as exc:
+            return tool_error_result(request_id, str(exc))
         except Exception as exc:
-            return jsonrpc_error(request_id, -32000, str(exc))
+            return tool_error_result(request_id, f"tool execution failed: {exc}")
 
         return jsonrpc_result(request_id, {
             "content": [
@@ -289,6 +368,7 @@ def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     ensure_storage()
     state_update(last_start=now_iso())
+    session = {"initialized": False}
 
     for raw in sys.stdin:
         raw = raw.strip()
@@ -302,7 +382,7 @@ def main() -> int:
         if not isinstance(payload, dict):
             continue
 
-        response = handle_request(payload)
+        response = handle_request(payload, session)
         if response is not None and payload.get("id") is not None:
             print(json.dumps(response, ensure_ascii=False), flush=True)
 

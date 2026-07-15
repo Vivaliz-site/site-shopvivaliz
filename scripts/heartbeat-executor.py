@@ -5,12 +5,16 @@ Deve rodar periodicamente (via cron na máquina local ou CI)
 """
 import subprocess
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
+
+def log_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
 def trigger_executor():
     """Aciona o executor via GitHub API"""
-    import os
 
     token = os.getenv('GITHUB_TOKEN')
     if not token:
@@ -32,7 +36,8 @@ def trigger_executor():
 
             # Log do heartbeat
             logfile = Path(__file__).parent.parent / "logs" / "executor-heartbeat.log"
-            logfile.parent.mkdir(parents=True, exist_ok=True)
+            if not log_dir_ready(logfile):
+                raise FileNotFoundError(f"Diretório de log indisponível: {logfile.parent}")
 
             logfile.write_text(
                 f"{datetime.now().isoformat()} - Executor acionado com sucesso\n",

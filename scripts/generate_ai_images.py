@@ -21,6 +21,14 @@ RAW_ROOT = Path('storage/raw')
 PROCESSED_ROOT = Path('storage/processed')
 VARIANT_COUNT = 4
 
+
+def dir_ready(path: Path) -> bool:
+    return path.is_dir() and os.access(path, os.W_OK)
+
+
+def parent_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
 PROMPTS = {
     1: 'a clean white-background hero shot of the exact product in the image, preserving its shape, color, and proportions, with no new product features added',
     2: 'a lifestyle scene showing the product in realistic use, preserving its shape, color, and proportions, with no new product features added',
@@ -62,7 +70,8 @@ def get_variant_prompt(variant: int) -> str:
 
 def safe_copy_source(source_path: Path, destination_path: Path) -> bool:
     try:
-        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        if not parent_dir_ready(destination_path):
+            raise FileNotFoundError(f'Diretório de destino indisponível: {destination_path.parent}')
         shutil.copy2(source_path, destination_path)
         logger.info(f'Copied original image to fallback path: {destination_path}')
         return True
@@ -73,7 +82,8 @@ def safe_copy_source(source_path: Path, destination_path: Path) -> bool:
 
 def save_image_bytes(image_bytes: bytes, output_path: Path) -> bool:
     try:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if not parent_dir_ready(output_path):
+            raise FileNotFoundError(f'Diretório de saída indisponível: {output_path.parent}')
         with Image.open(io.BytesIO(image_bytes)) as image:
             image = image.convert('RGB')
             image.save(output_path, format='JPEG', quality=92, optimize=True)
@@ -87,7 +97,8 @@ def download_image_url(image_url: str, output_path: Path) -> bool:
     try:
         response = requests.get(image_url, timeout=60)
         response.raise_for_status()
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if not parent_dir_ready(output_path):
+            raise FileNotFoundError(f'Diretório de download indisponível: {output_path.parent}')
         with open(output_path, 'wb') as image_file:
             image_file.write(response.content)
         return True
@@ -146,7 +157,8 @@ def render_ai_variant(source_path: Path, destination_path: Path, variant: int, p
     try:
         logger.info(f'  Generating variant {variant}: {prompt}')
         image_bytes = openai_image_edit(source_path, prompt, api_key)
-        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        if not parent_dir_ready(destination_path):
+            raise FileNotFoundError(f'Diretório de variante indisponível: {destination_path.parent}')
         with open(destination_path, 'wb') as f:
             f.write(image_bytes)
         logger.info(f'    Saved AI variant {variant} at {destination_path}')
@@ -180,7 +192,8 @@ def main(argv=None) -> int:
 
         total_skus += 1
         output_dir = PROCESSED_ROOT / sku_dir.name
-        output_dir.mkdir(parents=True, exist_ok=True)
+        if not dir_ready(output_dir):
+            raise FileNotFoundError(f'Diretório processado indisponível: {output_dir}')
         logger.info(f'Processing SKU {sku_dir.name}')
 
         for variant in range(1, VARIANT_COUNT + 1):

@@ -36,10 +36,15 @@ $coversDir   = covers_root() . '/storage/covers';
 // ── Carrega catálogo ──────────────────────────────────────────────────────────
 
 if (!is_file($catalogFile)) {
-    covers_json(500, ['error' => 'Catálogo não encontrado', 'path' => $catalogFile]);
+    covers_json(500, ['error' => 'Catálogo não encontrado']);
 }
 
-$products = json_decode(file_get_contents($catalogFile), true);
+$rawCatalog = file_get_contents($catalogFile);
+if ($rawCatalog === false) {
+    covers_json(500, ['error' => 'Falha ao ler catálogo']);
+}
+
+$products = json_decode($rawCatalog, true);
 if (!is_array($products)) {
     covers_json(500, ['error' => 'JSON inválido no catálogo']);
 }

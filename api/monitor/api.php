@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
 
+header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
@@ -54,15 +55,18 @@ function monitor_read_jsonl(string $relPath, int $limit = 200): array
     return $items;
 }
 
-function monitor_write_jsonl(string $relPath, array $payload): void
+function monitor_write_jsonl(string $relPath, array $payload): bool
 {
     $path = monitor_root() . '/' . ltrim($relPath, '/');
-    @mkdir(dirname($path), 0755, true);
-    file_put_contents(
+    $dir = dirname($path);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return false;
+    }
+    return file_put_contents(
         $path,
         json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
         FILE_APPEND | LOCK_EX
-    );
+    ) !== false;
 }
 
 function monitor_queue_candidates(): array
@@ -308,7 +312,10 @@ function monitor_send_operational_command(array $payload): array
         'status' => 'queued',
         'kind' => 'human-intervention',
     ];
-    monitor_write_jsonl('storage/private/agent-interventions.jsonl', $command);
+    if (!monitor_write_jsonl('storage/private/agent-interventions.jsonl', $command)) {
+        http_response_code(500);
+        return ['status' => 'error', 'message' => 'Fila privada indisponivel para gravacao.'];
+    }
 
     return [
         'status' => 'ok',

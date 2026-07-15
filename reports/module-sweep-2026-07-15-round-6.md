@@ -1,0 +1,25 @@
+# Module Sweep 2026-07-15 Round 6
+
+- Task:
+  - continuar o endurecimento em superficies externas sem repetir os modulos anteriores
+- Modules touched:
+  - `api/ml`
+  - `tests`
+- Files changed:
+  - `api/ml/webhook.php`
+  - `tests/test_production_hardening.py`
+- Tests executed:
+  - `php -l api/ml/webhook.php`
+  - `pytest tests/test_production_hardening.py -q`
+- Results:
+  - webhook do Mercado Livre agora envia `Cache-Control: no-store`
+  - endpoint deixou de criar diretorios automaticamente no caminho da requisicao
+  - logs e persistencia de pedidos passaram a usar helpers dedicados, com tolerancia quando o diretorio de logs nao existe e erro explicito quando `storage/orders` nao estiver disponivel
+  - suite de hardening cobre a ausencia de `mkdir` e a presenca dos helpers de escrita segura
+- Risks identified:
+  - runtime local de PHP segue com aviso da extensao `curl` ausente durante lint
+  - `api/ml/products.php` ainda cria diretorios e grava arquivos diretamente em multiplos pontos
+- Next recommended module:
+  - `api/ml/products.php`
+- Reason:
+  - continua dentro de uma superficie externa com escrita em disco e tem padrao semelhante ao webhook endurecido nesta rodada

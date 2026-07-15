@@ -1,0 +1,25 @@
+# Module Sweep 2026-07-15 Round 17
+
+- Task:
+  - continuar o ciclo prolongado endurecendo mais um modulo operacional sem repetir o modulo anterior
+- Modules touched:
+  - `api/autonomous`
+  - `tests`
+- Files changed:
+  - `api/autonomous/send-email.php`
+  - `tests/test_production_hardening.py`
+- Tests executed:
+  - `php -l api/autonomous/send-email.php`
+  - `pytest tests/test_production_hardening.py -q`
+- Results:
+  - `EmailSender` agora usa helper interno `appendLog`
+  - logs de sucesso e erro nao criam mais `logs/autonomous` automaticamente
+  - os dois pontos de log agora retornam booleano e falham de forma previsivel quando o diretorio nao estiver disponivel
+  - suite de hardening cobre ausencia de `mkdir` e novas assinaturas dos helpers de log
+- Risks identified:
+  - runtime local de PHP continua com aviso da extensao `curl` ausente durante lint
+  - `api/autonomous/operational-controls.php` ainda cria diretorio automaticamente para log de auditoria
+- Next recommended module:
+  - `api/autonomous/operational-controls.php`
+- Reason:
+  - continua em uma nova superficie operacional com persistencia implicita que pode ser alinhada ao mesmo padrao

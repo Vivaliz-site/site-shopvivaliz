@@ -1,0 +1,24 @@
+# MCP Hardening Report
+
+- Task: `Harden the active MCP bridge and remove unsafe legacy wiring`
+- Files changed:
+  - `.codex/config.toml`
+  - `docker-compose.yml`
+  - `docs/codex-mesh-bridge.md`
+  - `scripts/codex-mesh-bridge.py`
+  - `scripts/mcp-local-autostart.py`
+  - `setup-shopvivaliz-mcp.ps1`
+  - `tests/test_codex_mesh_bridge.py`
+- Tests planned:
+  - `pytest tests/test_codex_mesh_bridge.py --basetemp .pytest-tmp/codex-mcp-fix`
+  - `python scripts/mcp-local-autostart.py`
+- Expected result:
+  - keep only the stdio MCP path active
+  - require MCP initialization before tool access
+  - reduce race conditions in repo-backed mailbox storage
+  - stop helper scripts from reinstalling or exposing the legacy HTTP server
+- Remaining risks:
+  - `storage/codex-bridge/*.json*` is still tracked in git history and should be untracked in a follow-up
+  - `scripts/mcp-server.py` still exists in the repository and should be retired or isolated in a separate follow-up
+- Recommended next task:
+  - remove tracked bridge mailbox state from version control and migrate storage to an untracked path

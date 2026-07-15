@@ -18,6 +18,10 @@ TOKENS_DIR = PROJECT_ROOT / '.tokens'
 CONFIG_FILE = TOKENS_DIR / 'olist-config.json'
 LOG_FILE = PROJECT_ROOT / 'logs' / 'auto-complete-olist.log'
 
+
+def dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
 # Credenciais
 CLIENT_ID = os.getenv('OLIST_CLIENT_ID', 'SEU_OLIST_CLIENT_ID_AQUI')
 CLIENT_SECRET = os.getenv('OLIST_CLIENT_SECRET', 'SEU_OLIST_CLIENT_SECRET_AQUI')
@@ -30,7 +34,8 @@ def log_msg(msg):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     line = f"[{timestamp}] {msg}"
     print(line)
-    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not dir_ready(LOG_FILE):
+        raise FileNotFoundError(f"Diretório de log indisponível: {LOG_FILE.parent}")
     with open(LOG_FILE, 'a', encoding='utf-8') as f:
         f.write(line + '\n')
 
@@ -118,7 +123,8 @@ def save_token(token_data):
         'created_at': datetime.now().isoformat()
     }
 
-    TOKENS_DIR.mkdir(parents=True, exist_ok=True)
+    if not dir_ready(CONFIG_FILE):
+        raise FileNotFoundError(f"Diretório de tokens indisponível: {CONFIG_FILE.parent}")
     with open(CONFIG_FILE, 'w') as f:
         json.dump(config, f, indent=2)
 

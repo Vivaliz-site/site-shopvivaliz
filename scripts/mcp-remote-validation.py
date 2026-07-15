@@ -24,7 +24,8 @@ REPORTS_DIR = REPO_ROOT / "reports"
 
 
 def write_report(report: Dict[str, Any]) -> Path:
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    if not REPORTS_DIR.is_dir() or not REPORTS_DIR.exists():
+        raise FileNotFoundError(f"Report directory unavailable: {REPORTS_DIR}")
     stamp = datetime.now().strftime("%Y-%m-%d")
     path = REPORTS_DIR / f"mcp-remote-validation-{stamp}.md"
     lines = [

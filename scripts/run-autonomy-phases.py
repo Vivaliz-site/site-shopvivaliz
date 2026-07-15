@@ -56,6 +56,10 @@ AUTONOMOUS_SOURCES = {
 }
 
 
+def report_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
+
 def current_branch() -> str:
     result = subprocess.run(
         ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -198,10 +202,11 @@ def build_report() -> dict:
 
 def write_reports(report: dict) -> tuple[Path, Path]:
     logs_dir = Path("logs")
-    logs_dir.mkdir(parents=True, exist_ok=True)
-
     json_path = logs_dir / "autonomy-phase-report.json"
     md_path = logs_dir / "autonomy-phase-report.md"
+
+    if not report_dir_ready(json_path):
+        raise FileNotFoundError(f"Diretório de relatório indisponível: {json_path.parent}")
 
     json_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
@@ -234,6 +239,8 @@ def write_reports(report: dict) -> tuple[Path, Path]:
             lines.append(line)
         lines.append("")
 
+    if not report_dir_ready(md_path):
+        raise FileNotFoundError(f"Diretório de relatório indisponível: {md_path.parent}")
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return json_path, md_path
 

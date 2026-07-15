@@ -8,15 +8,18 @@ set_time_limit(30);
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
-function log_event($action, $data = []) {
+function log_event($action, $data = []): bool {
     $log = __DIR__ . '/../../logs/olist-webhook-processor.log';
-    @mkdir(dirname($log), 0755, true);
+    $dir = dirname($log);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return false;
+    }
     $line = json_encode([
         'timestamp' => date('c'),
         'action' => $action,
         'data' => $data,
     ], JSON_UNESCAPED_UNICODE) . "\n";
-    @file_put_contents($log, $line, FILE_APPEND);
+    return file_put_contents($log, $line, FILE_APPEND | LOCK_EX) !== false;
 }
 
 // Carregar env

@@ -22,6 +22,10 @@ OUTPUT_PROCESSED_ROOT = Path('storage/processed')
 TARGET_SIZE = (1000, 1000)
 
 
+def output_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
+
 def process_image(source_path: Path, target_path: Path) -> bool:
     try:
         with Image.open(source_path) as image:
@@ -29,7 +33,8 @@ def process_image(source_path: Path, target_path: Path) -> bool:
             image = ImageOps.fit(image, TARGET_SIZE, Image.LANCZOS)
             image = ImageEnhance.Sharpness(image).enhance(1.2)
             image = ImageEnhance.Contrast(image).enhance(1.1)
-            target_path.parent.mkdir(parents=True, exist_ok=True)
+            if not output_dir_ready(target_path):
+                raise FileNotFoundError(f'Diretório processado indisponível: {target_path.parent}')
             image.save(target_path, format='JPEG', quality=92, optimize=True)
         return True
     except Exception as exc:

@@ -13,12 +13,21 @@ $remote_ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 
 // Log file
 $log_file = __DIR__ . '/../logs/admin-force-pull.log';
-@mkdir(dirname($log_file), 0755, true);
 
 $timestamp = date('Y-m-d H:i:s');
 
+function force_pull_log(string $path, string $line): bool
+{
+    $dir = dirname($path);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return false;
+    }
+
+    return file_put_contents($path, $line, FILE_APPEND | LOCK_EX) !== false;
+}
+
 // Log the request
-file_put_contents($log_file, "[$timestamp] Access from: $remote_ip\n", FILE_APPEND);
+force_pull_log($log_file, "[$timestamp] Access from: $remote_ip\n");
 
 // 1. Check if root directory is accessible
 $repo_root = realpath(__DIR__ . '/..');
@@ -26,14 +35,14 @@ if (!$repo_root || !is_dir("$repo_root/.git")) {
     http_response_code(400);
     header('Content-Type: application/json');
     echo json_encode(['error' => 'Git repository not found'], JSON_PRETTY_PRINT);
-    file_put_contents($log_file, "[$timestamp] ERROR: Git repo not found at $repo_root\n", FILE_APPEND);
+    force_pull_log($log_file, "[$timestamp] ERROR: Git repo not found at $repo_root\n");
     exit;
 }
 
 // 2. Fix git permissions (dubious ownership error) - try shell_exec for shell context
 $shell_wrapper = "bash -c 'git config --global --add safe.directory \"$repo_root\" 2>&1 || true'";
 @shell_exec($shell_wrapper);
-file_put_contents($log_file, "[$timestamp] Git config attempted via shell_exec\n", FILE_APPEND);
+force_pull_log($log_file, "[$timestamp] Git config attempted via shell_exec\n");
 
 // 2b. Also try local git config
 $local_fix = "cd '$repo_root' && git config --local user.email 'ci@shopvivaliz.com.br' 2>&1";
@@ -57,7 +66,7 @@ if (file_exists($checkout_file)) {
 // 4. Clear OPcache if available
 if (function_exists('opcache_reset')) {
     opcache_reset();
-    file_put_contents($log_file, "[$timestamp] OPcache cleared\n", FILE_APPEND);
+    force_pull_log($log_file, "[$timestamp] OPcache cleared\n");
 }
 
 // 5. Prepare response
@@ -77,7 +86,7 @@ $response = [
 ];
 
 // Log result
-file_put_contents($log_file, "[$timestamp] Result: " . json_encode($response) . "\n", FILE_APPEND);
+force_pull_log($log_file, "[$timestamp] Result: " . json_encode($response) . "\n");
 
 // Return response
 http_response_code($success ? 200 : 206);

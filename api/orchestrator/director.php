@@ -33,9 +33,16 @@ header('Cache-Control: no-store');
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function odir_env(string $key): string { return (string)(getenv($key) ?: ''); }
 
-function odir_log(string $msg): void {
+function odir_log_dir(): ?string {
     $dir = dirname(__DIR__, 2) . '/logs';
-    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    return (is_dir($dir) && is_writable($dir)) ? $dir : null;
+}
+
+function odir_log(string $msg): void {
+    $dir = odir_log_dir();
+    if ($dir === null) {
+        return;
+    }
     $line = '[' . date('c') . '] [director] ' . $msg . "\n";
     file_put_contents($dir . '/orchestrator.log', $line, FILE_APPEND | LOCK_EX);
 }

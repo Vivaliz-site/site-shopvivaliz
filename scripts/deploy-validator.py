@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -24,6 +25,10 @@ def fetch(url: str, timeout: int) -> tuple[int, str]:
     with urllib.request.urlopen(request, timeout=timeout) as response:
         body = response.read().decode("utf-8", errors="replace")
         return response.getcode(), body
+
+
+def report_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
 
 
 def main() -> int:
@@ -85,7 +90,8 @@ def main() -> int:
     report["ok"] = len(report["errors"]) == 0
 
     report_path = Path(args.report)
-    report_path.parent.mkdir(parents=True, exist_ok=True)
+    if not report_dir_ready(report_path):
+        raise FileNotFoundError(f"Diretório de relatório indisponível: {report_path.parent}")
     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     print(json.dumps(report, indent=2, ensure_ascii=False))

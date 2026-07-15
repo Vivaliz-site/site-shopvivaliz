@@ -314,10 +314,19 @@ Accept: application/json
         usleep(300000);
     }
     if ($map) {
-        @mkdir(svcat_root() . '/storage', 0755, true);
-        @file_put_contents($cache, json_encode($map, JSON_UNESCAPED_UNICODE));
+        svcat_write_price_cache($cache, $map);
     }
     return $map;
+}
+
+function svcat_write_price_cache(string $path, array $map): bool
+{
+    $dir = dirname($path);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return false;
+    }
+
+    return file_put_contents($path, json_encode($map, JSON_UNESCAPED_UNICODE), LOCK_EX) !== false;
 }
 
 function svcat_db_products(mysqli $db, int $limit, string $q): array

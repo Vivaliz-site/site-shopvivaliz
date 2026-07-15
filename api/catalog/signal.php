@@ -12,6 +12,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+function svsig_write(string $path, array $signals): bool
+{
+    $dir = dirname($path);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return false;
+    }
+
+    return file_put_contents($path, json_encode($signals, JSON_UNESCAPED_UNICODE), LOCK_EX) !== false;
+}
+
 /**
  * V16 Commerce Brain — signal tracker
  * POST /api/catalog/signal.php
@@ -37,7 +47,6 @@ if ($key === '' || !in_array($event, ['view', 'cart_add', 'checkout_start'], tru
 }
 
 $storageDir = dirname(__DIR__, 2) . '/storage';
-if (!is_dir($storageDir)) @mkdir($storageDir, 0755, true);
 $signalPath = $storageDir . '/commerce_signals.json';
 
 $signals = [];
@@ -49,7 +58,11 @@ $map = ['view' => 'views', 'cart_add' => 'cart', 'checkout_start' => 'checkout']
 $bucket = $map[$event];
 $signals[$bucket][$key] = (int)($signals[$bucket][$key] ?? 0) + 1;
 
-@file_put_contents($signalPath, json_encode($signals, JSON_UNESCAPED_UNICODE), LOCK_EX);
+if (!svsig_write($signalPath, $signals)) {
+    http_response_code(503);
+    echo json_encode(['ok' => false, 'error' => 'signal_storage_unavailable']);
+    exit;
+}
 
 http_response_code(200);
 echo json_encode(['ok' => true, 'event' => $event, 'key' => $key]);

@@ -21,12 +21,12 @@ function svsa_root(): string
 function svsa_data_dir(): string
 {
     $preferred = svsa_root() . '/storage/stock-alerts';
-    if ((is_dir($preferred) || @mkdir($preferred, 0755, true)) && is_writable($preferred)) {
+    if (is_dir($preferred) && is_writable($preferred)) {
         return $preferred;
     }
 
     $fallback = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'shopvivaliz-stock-alerts';
-    if ((is_dir($fallback) || @mkdir($fallback, 0755, true)) && is_writable($fallback)) {
+    if (is_dir($fallback) && is_writable($fallback)) {
         return $fallback;
     }
 

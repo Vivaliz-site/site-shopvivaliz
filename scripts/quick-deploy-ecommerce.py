@@ -5,8 +5,13 @@ Cria: Catálogo + Produto + Carrinho + Checkout
 """
 
 import json
+import os
 from pathlib import Path
 from datetime import datetime
+
+
+def output_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
 
 def create_catalogo():
     """Página de catálogo com produtos"""
@@ -622,7 +627,8 @@ def main():
 
     for caminho, conteudo in pages.items():
         arquivo = base / caminho
-        arquivo.parent.mkdir(parents=True, exist_ok=True)
+        if not output_dir_ready(arquivo):
+            raise FileNotFoundError(f"Diretório de página indisponível: {arquivo.parent}")
         arquivo.write_text(conteudo, encoding='utf-8')
         print(f"[OK] {caminho}")
 

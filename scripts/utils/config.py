@@ -15,9 +15,17 @@ IA_IMAGES_DIR = STORAGE_DIR / 'ia_images'
 LOGS_DIR = PROJECT_ROOT / 'logs'
 PLANILHAS_DIR = PROJECT_ROOT / 'planilhas'
 
-# Criar diretórios se não existirem
-for dir_path in [STORAGE_DIR, IA_IMAGES_DIR, LOGS_DIR, PLANILHAS_DIR]:
-    dir_path.mkdir(exist_ok=True)
+
+def dir_ready(dir_path: Path) -> bool:
+    return dir_path.is_dir() and os.access(dir_path, os.W_OK)
+
+
+PATHS_READY = {
+    'storage': dir_ready(STORAGE_DIR),
+    'ia_images': dir_ready(IA_IMAGES_DIR),
+    'logs': dir_ready(LOGS_DIR),
+    'planilhas': dir_ready(PLANILHAS_DIR),
+}
 
 # APIs
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')

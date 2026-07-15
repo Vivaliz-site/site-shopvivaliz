@@ -17,14 +17,19 @@ class DisasterRecovery {
         $this->s3Bucket = getenv('AWS_S3_BACKUP_BUCKET') ?: 'shopvivaliz-backups';
         $this->dbUser = getenv('DB_USER') ?: 'root';
         $this->dbPass = getenv('DB_PASS') ?: '';
+    }
 
-        if (!is_dir($this->backupDir)) {
-            mkdir($this->backupDir, 0700, true);
-        }
+    private function backupDirReady() {
+        return is_dir($this->backupDir) && is_writable($this->backupDir);
     }
 
     public function run() {
         echo "🔐 Disaster Recovery - Iniciando backup...\n";
+
+        if (!$this->backupDirReady()) {
+            echo "⚠️ Diretório de backup indisponível para escrita: {$this->backupDir}\n";
+            return false;
+        }
 
         $results = [
             'database' => $this->backupDatabase(),

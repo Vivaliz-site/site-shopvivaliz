@@ -1,0 +1,27 @@
+## Round 81 - scripts/sync-olist-images.py
+
+- Módulo tratado: `scripts/sync-olist-images.py`
+- Escopo da rodada: hardening focado na trilha de relatórios/artefatos (`CSV`, `SQL`, `JSON`) e nas validações iniciais de diretórios.
+- Ajuste aplicado:
+  - removida a criação automática de diretórios para:
+    - `olist_produtos_entrada.csv`
+    - `olist_imagens_baixadas.csv`
+    - `olist_imagens_site_mapeamento.csv`
+    - `olist_imagens_site_mapeamento.sql`
+    - `olist_imagens_site_mapeamento.json`
+  - removida a criação automática inicial de `args.reports_dir` e `args.storage_images`.
+- Hardening aplicado:
+  - adicionados `dir_ready(path: Path) -> bool` e `parent_dir_ready(path: Path) -> bool`;
+  - `main()` agora exige `reports_dir` e `storage_images` previamente provisionados e graváveis;
+  - os writers de CSV/JSON e o writer de SQL agora falham com `FileNotFoundError` quando o diretório necessário estiver indisponível.
+- Teste adicionado: `test_sync_olist_images_hardens_report_dirs_without_mkdir_for_reports`
+- Validações executadas:
+  - `python -m py_compile scripts/sync-olist-images.py`
+  - `pytest tests/test_production_hardening.py -q`
+- Resultado:
+  - `88 passed`
+- Riscos identificados:
+  - o fluxo operacional de download ainda contém outros pontos de criação de subdiretórios por SKU, não cobertos nesta rodada;
+  - esta passada endureceu primeiro a trilha de relatórios, que era o recorte mais seguro do módulo.
+- Próximo módulo seguro recomendado:
+  - `scripts/repair-olist-images.py` ou voltar em uma rodada futura específica para os subdiretórios operacionais de `sync-olist-images.py`, se você quiser aprofundar esse módulo depois.

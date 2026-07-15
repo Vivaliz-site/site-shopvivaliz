@@ -62,11 +62,11 @@ function svop_payment_instructions(string $method): string
     };
 }
 
-function svop_append_log(array $order): void
+function svop_append_log(array $order): bool
 {
     $dir = svop_root() . '/logs';
-    if (!is_dir($dir)) {
-        @mkdir($dir, 0755, true);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return false;
     }
 
     $entry = [
@@ -90,11 +90,11 @@ function svop_append_log(array $order): void
         'total' => round((float)($order['total'] ?? 0), 2),
     ];
 
-    @file_put_contents(
+    return file_put_contents(
         $dir . '/pedidos.jsonl',
         json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
         FILE_APPEND | LOCK_EX
-    );
+    ) !== false;
 }
 
 function svop_load_runtime_secrets(): void

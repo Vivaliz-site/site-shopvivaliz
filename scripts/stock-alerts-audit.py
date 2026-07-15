@@ -11,6 +11,7 @@ Escopo seguro:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,6 +28,10 @@ SUBSCRIBE_ENDPOINT = ROOT / "api" / "stock-alerts" / "subscribe.php"
 PROCESSOR = ROOT / "api" / "stock-alerts" / "process.php"
 REPORT_JSON = ROOT / "logs" / "stock-alerts-audit.json"
 REPORT_MD = ROOT / "logs" / "stock-alerts-audit.md"
+
+
+def report_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
 
 
 def read_text(path: Path) -> str:
@@ -152,8 +157,11 @@ def main() -> int:
         "errors": errors,
     }
 
-    REPORT_JSON.parent.mkdir(parents=True, exist_ok=True)
+    if not report_dir_ready(REPORT_JSON):
+        raise FileNotFoundError(f"Diretório de relatório indisponível: {REPORT_JSON.parent}")
     REPORT_JSON.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    if not report_dir_ready(REPORT_MD):
+        raise FileNotFoundError(f"Diretório de relatório indisponível: {REPORT_MD.parent}")
     REPORT_MD.write_text(markdown_report(report), encoding="utf-8")
 
     print(json.dumps(report, ensure_ascii=False))

@@ -1,0 +1,25 @@
+# Module Sweep 2026-07-15 Round 14
+
+- Task:
+  - continuar o ciclo prolongado endurecendo mais um modulo da familia autonoma sem repetir o modulo anterior
+- Modules touched:
+  - `api/autonomous`
+  - `tests`
+- Files changed:
+  - `api/autonomous/task-deduplicator.php`
+  - `tests/test_production_hardening.py`
+- Tests executed:
+  - `php -l api/autonomous/task-deduplicator.php`
+  - `pytest tests/test_production_hardening.py -q`
+- Results:
+  - deduplicador passou a usar helper compartilhado `appendJsonl`
+  - logs de duplicidade e orfaos nao criam mais `logs/autonomous` automaticamente
+  - os dois pontos de persistencia agora falham de forma previsivel quando o diretorio nao estiver disponivel
+  - suite de hardening cobre ausencia de `mkdir` e novas assinaturas/uso do helper
+- Risks identified:
+  - runtime local de PHP continua com aviso da extensao `curl` ausente durante lint
+  - `api/autonomous/review-enforcer.php` ainda cria diretorio automaticamente para log de revisoes
+- Next recommended module:
+  - `api/autonomous/review-enforcer.php`
+- Reason:
+  - segue uma nova superficie operacional da mesma familia com persistencia implicita que pode ser alinhada ao padrao

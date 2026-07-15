@@ -20,6 +20,10 @@ CLIENT_SECRET = os.getenv("OLIST_CLIENT_SECRET") or os.getenv("TINY_CLIENT_SECRE
 EMAIL = os.getenv("OLIST_EMAIL") or os.getenv("OLIST_USER") or os.getenv("EMAIL_USER") or ""
 SENHA = os.getenv("OLIST_PASSWORD") or os.getenv("EMAIL_PASSWORD") or ""
 
+
+def result_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
 print("\n" + "="*70)
 print("OLIST LOGIN - OBTER AUTHORIZATION CODE E SINCRONIZAR")
 print("="*70)
@@ -157,7 +161,8 @@ try:
 
                 # Salvar resultado
                 result_file = Path("logs/olist-oauth-resultado.json")
-                result_file.parent.mkdir(exist_ok=True)
+                if not result_dir_ready(result_file):
+                    raise FileNotFoundError(f"Diretório de resultado indisponível: {result_file.parent}")
 
                 result = {
                     'timestamp': datetime.now().isoformat(),

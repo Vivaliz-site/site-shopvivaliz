@@ -1,0 +1,25 @@
+# Module Sweep 2026-07-15 Round 8
+
+- Task:
+  - continuar correcoes e melhorias em uma nova superficie operacional sem repetir modulo
+- Modules touched:
+  - `api/orchestrator`
+  - `tests`
+- Files changed:
+  - `api/orchestrator/queue.php`
+  - `tests/test_production_hardening.py`
+- Tests executed:
+  - `php -l api/orchestrator/queue.php`
+  - `pytest tests/test_production_hardening.py -q`
+- Results:
+  - fila do orchestrator nao cria mais `storage/orchestrator` automaticamente
+  - escrita da fila agora falha de forma previsivel se o diretorio nao existir ou nao for gravavel
+  - endpoint HTTP passou a responder com `Cache-Control: no-store` e nao expoe caminho absoluto real da fila
+  - suite de hardening cobre a ausencia de `mkdir`, o check de writability e o caminho relativo exposto
+- Risks identified:
+  - runtime local de PHP continua com aviso da extensao `curl` ausente durante lint
+  - `api/orchestrator/director.php` ainda cria diretorio e grava log diretamente
+- Next recommended module:
+  - `api/orchestrator/director.php`
+- Reason:
+  - permanece numa area operacional relacionada, mas distinta da fila, e ainda tem escrita incidental em log que pode ser alinhada

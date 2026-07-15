@@ -28,9 +28,6 @@ $roadmapPath = sv_monitor_first_existing([
     $root . '/autodev/roadmap.json',
 ]);
 $logsDir = $root . '/logs';
-if (!is_dir($logsDir)) {
-    @mkdir($logsDir, 0755, true);
-}
 
 $checks = [
     'Painel admin presente' => is_file($root . '/admin/index.php'),

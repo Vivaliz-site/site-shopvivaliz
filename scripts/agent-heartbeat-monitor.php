@@ -12,15 +12,20 @@ class AgentHeartbeatMonitor {
     private $heartbeatTTL = 600; // 10 minutos
 
     public function __construct() {
-        if (!is_dir($this->heartbeatDir)) {
-            mkdir($this->heartbeatDir, 0755, true);
-        }
+    }
+
+    private function heartbeatDirReady(): bool {
+        return is_dir($this->heartbeatDir) && is_writable($this->heartbeatDir);
     }
 
     /**
      * Registrar heartbeat de um agente
      */
-    public function recordHeartbeat(string $agentId): void {
+    public function recordHeartbeat(string $agentId): bool {
+        if (!$this->heartbeatDirReady()) {
+            return false;
+        }
+
         $file = $this->getHeartbeatFile($agentId);
         $data = [
             'agent_id' => $agentId,
@@ -30,7 +35,7 @@ class AgentHeartbeatMonitor {
             'tasks_processed' => $this->getTasksCount($agentId)
         ];
         
-        file_put_contents($file, json_encode($data));
+        return file_put_contents($file, json_encode($data), LOCK_EX) !== false;
     }
 
     /**

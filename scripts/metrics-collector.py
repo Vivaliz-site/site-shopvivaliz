@@ -10,10 +10,15 @@ from datetime import datetime
 class MetricsCollector:
     def __init__(self):
         self.metrics_file = Path("logs/metrics.jsonl")
-        self.metrics_file.parent.mkdir(parents=True, exist_ok=True)
+
+    def metrics_dir_ready(self) -> bool:
+        return self.metrics_file.parent.is_dir() and os.access(self.metrics_file.parent, os.W_OK)
 
     def log_task_completion(self, agent_name, task_id, elapsed_time, success=True, cost=0.0):
         """Registrar conclusão de tarefa"""
+        if not self.metrics_dir_ready():
+            return False
+
         metric = {
             'timestamp': datetime.now().isoformat(),
             'agent': agent_name,
@@ -26,6 +31,7 @@ class MetricsCollector:
 
         with open(self.metrics_file, 'a') as f:
             f.write(json.dumps(metric, ensure_ascii=False) + "\n")
+        return True
 
     def get_agent_stats(self):
         """Retornar estatísticas por agente"""

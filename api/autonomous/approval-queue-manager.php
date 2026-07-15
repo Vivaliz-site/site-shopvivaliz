@@ -245,15 +245,17 @@ class ApprovalQueueManager
     /**
      * Save entire queue
      */
-    private static function saveQueue(array $queue): void
+    private static function saveQueue(array $queue): bool
     {
         $dir = dirname(self::APPROVAL_QUEUE_FILE);
-        @mkdir($dir, 0755, true);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            return false;
+        }
 
-        file_put_contents(
+        return file_put_contents(
             self::APPROVAL_QUEUE_FILE,
             json_encode($queue, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
-        );
+        ) !== false;
     }
 
     /**

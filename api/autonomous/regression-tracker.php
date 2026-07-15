@@ -112,32 +112,36 @@ class RegressionTracker
     /**
      * Save baseline data
      */
-    private static function saveBaseline(array $baseline): void
+    private static function saveBaseline(array $baseline): bool
     {
         $dir = dirname(self::BASELINE_FILE);
-        @mkdir($dir, 0755, true);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            return false;
+        }
 
-        file_put_contents(
+        return file_put_contents(
             self::BASELINE_FILE,
             json_encode($baseline, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
-        );
+        ) !== false;
     }
 
     /**
      * Log regression for analysis
      */
-    private static function logRegression(array $result): void
+    private static function logRegression(array $result): bool
     {
         $dir = dirname(self::RESULTS_FILE);
-        @mkdir($dir, 0755, true);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            return false;
+        }
 
-        file_put_contents(
+        return file_put_contents(
             self::RESULTS_FILE,
             json_encode([
                 'timestamp' => date('c'),
                 'regression' => $result
             ]) . "\n",
             FILE_APPEND
-        );
+        ) !== false;
     }
 }

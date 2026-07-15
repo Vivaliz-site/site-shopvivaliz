@@ -8,12 +8,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 LOG_DIR = Path(__file__).parents[2] / "storage" / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "pipeline.csv"
 
 _FIELDS = ["timestamp", "level", "stage", "product_id", "message"]
 
+def _log_dir_ready() -> bool:
+    return LOG_DIR.is_dir() and os.access(LOG_DIR, os.W_OK)
+
+
 def _ensure_header():
+    if not _log_dir_ready():
+        return
     if not LOG_FILE.exists() or LOG_FILE.stat().st_size == 0:
         with open(LOG_FILE, "w", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(_FIELDS)
@@ -24,8 +29,9 @@ _ensure_header()
 def _write(level: str, stage: str, message: str, product_id: str = ""):
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     row = [ts, level, stage, product_id, message]
-    with open(LOG_FILE, "a", newline="", encoding="utf-8") as f:
-        csv.writer(f).writerow(row)
+    if _log_dir_ready():
+        with open(LOG_FILE, "a", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow(row)
     color = {"INFO": "\033[0m", "OK": "\033[32m", "WARN": "\033[33m", "ERROR": "\033[31m"}.get(level, "\033[0m")
     pid = f"[{product_id}] " if product_id else ""
     print(f"{color}[{ts}] {level:5s} {stage:20s} {pid}{message}\033[0m", flush=True)

@@ -10,6 +10,10 @@ import os
 from pathlib import Path
 from datetime import datetime
 
+
+def parent_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
 print("="*70)
 print("REPARO DE IMAGENS OLIST - 147 PRODUTOS")
 print("="*70)
@@ -90,6 +94,8 @@ print(f"\n[3] Gerando script SQL de atualização...")
 
 # Salvar script SQL
 sql_file = Path('logs/repair-images.sql')
+if not parent_dir_ready(sql_file):
+    raise FileNotFoundError(f"Diretório SQL indisponível: {sql_file.parent}")
 with open(sql_file, 'w', encoding='utf-8') as f:
     f.write("-- Script de Reparo de Imagens Olist\n")
     f.write(f"-- Gerado: {datetime.now().isoformat()}\n")
@@ -119,6 +125,8 @@ data['produtos'] = updated_products
 data['last_repair_at'] = datetime.now().isoformat()
 data['repair_status'] = f"Reparadas {repaired} imagens (amostra de {len(sem_imagem)})"
 
+if not parent_dir_ready(cache_file):
+    raise FileNotFoundError(f"Diretório de cache indisponível: {cache_file.parent}")
 with open(cache_file, 'w', encoding='utf-8') as f:
     json.dump(data, f, ensure_ascii=False, indent=2)
 

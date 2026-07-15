@@ -34,7 +34,14 @@ except ImportError:
 
 REPO_ROOT = Path(__file__).parent.parent
 LOGS_DIR = REPO_ROOT / "logs"
-LOGS_DIR.mkdir(exist_ok=True)
+
+
+def logs_dir_ready() -> bool:
+    return LOGS_DIR.is_dir() and os.access(LOGS_DIR, os.W_OK)
+
+
+def parent_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
 
 ENVIRONMENT = os.getenv("AGENT_ENVIRONMENT", "unknown")
 MCP_PORT = int(os.getenv("MCP_PORT", "5555"))
@@ -43,13 +50,14 @@ MCP_HOST = os.getenv("MCP_HOST", "0.0.0.0")
 LOG_FILE = LOGS_DIR / f"mcp-server-{ENVIRONMENT}.log"
 
 # Configurar logging
+logging_handlers = [logging.StreamHandler()]
+if logs_dir_ready():
+    logging_handlers.insert(0, logging.FileHandler(LOG_FILE))
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_FILE),
-        logging.StreamHandler(),
-    ],
+    handlers=logging_handlers,
 )
 logger = logging.getLogger(__name__)
 
@@ -363,7 +371,8 @@ class MCPTools:
         file_path = REPO_ROOT / path
 
         try:
-            file_path.parent.mkdir(parents=True, exist_ok=True)
+            if not parent_dir_ready(file_path):
+                return {"error": f"Diretorio indisponivel para escrita: {file_path.parent}"}
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(content)
             return {"success": True, "message": f"Arquivo escrito: {path}"}

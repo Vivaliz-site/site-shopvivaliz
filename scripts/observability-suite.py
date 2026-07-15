@@ -14,7 +14,9 @@ from pathlib import Path
 class ObservabilitySuite:
     def __init__(self):
         self.logs_dir = Path("logs/observability")
-        self.logs_dir.mkdir(parents=True, exist_ok=True)
+
+    def logs_dir_ready(self) -> bool:
+        return self.logs_dir.is_dir() and self.logs_dir.exists()
 
     # 11. Real-time Log Streaming
     def stream_logs_websocket(self):
@@ -55,6 +57,8 @@ class ObservabilitySuite:
         print("=" * 60)
         print(" OBSERVABILITY SUITE (11-15)")
         print("=" * 60 + "\n")
+        if not self.logs_dir_ready():
+            print(f"⚠️ Logs dir indisponível: {self.logs_dir}\n")
         self.stream_logs_websocket()
         self.track_errors()
         self.apm_monitoring()

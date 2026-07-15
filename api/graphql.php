@@ -65,6 +65,22 @@ function gql_client_ip(): string
     return 'unknown';
 }
 
+function gql_rate_limit_dir(): ?string
+{
+    $candidates = [
+        gql_root() . '/storage/rate-limits',
+        sys_get_temp_dir() . '/shopvivaliz-rate-limits',
+    ];
+
+    foreach ($candidates as $dir) {
+        if (is_dir($dir) && is_writable($dir)) {
+            return $dir;
+        }
+    }
+
+    return null;
+}
+
 function gql_rate_limit(): void
 {
     $limit = (int)(getenv('GRAPHQL_RATE_LIMIT_PER_MINUTE') ?: 60);
@@ -74,41 +90,74 @@ function gql_rate_limit(): void
 
     $window = 60;
     $ip = gql_client_ip();
-    $dir = gql_root() . '/storage/rate-limits';
-    if (!is_dir($dir)) {
-        @mkdir($dir, 0755, true);
+    $dir = gql_rate_limit_dir();
+    if ($dir === null) {
+        header('X-RateLimit-Limit: ' . $limit);
+        header('X-RateLimit-Policy: unavailable');
+        return;
     }
 
     $file = $dir . '/graphql-' . md5($ip) . '.json';
     $now = time();
-    $state = ['window_start' => $now, 'count' => 0];
-    if (is_file($file)) {
-        $decoded = json_decode((string)file_get_contents($file), true);
-        if (is_array($decoded)) {
-            $state = array_merge($state, $decoded);
+    $defaultState = ['window_start' => $now, 'count' => 0];
+    $fp = fopen($file, 'c+');
+    if (!$fp) {
+        header('X-RateLimit-Limit: ' . $limit);
+        header('X-RateLimit-Policy: unavailable');
+        return;
+    }
+
+    try {
+        if (!flock($fp, LOCK_EX)) {
+            header('X-RateLimit-Limit: ' . $limit);
+            header('X-RateLimit-Policy: unavailable');
+            return;
         }
-    }
 
-    if (($now - (int)$state['window_start']) >= $window) {
-        $state = ['window_start' => $now, 'count' => 0];
-    }
+        rewind($fp);
+        $rawState = stream_get_contents($fp);
+        $state = $defaultState;
+        if (is_string($rawState) && trim($rawState) !== '') {
+            $decoded = json_decode($rawState, true);
+            if (is_array($decoded)) {
+                $state = array_merge($state, $decoded);
+            }
+        }
 
-    $state['count'] = (int)$state['count'] + 1;
-    file_put_contents($file, json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
+        if (($now - (int)$state['window_start']) >= $window) {
+            $state = $defaultState;
+        }
 
-    if ($state['count'] > $limit) {
-        $retryAfter = max(1, $window - ($now - (int)$state['window_start']));
-        header('Retry-After: ' . $retryAfter);
-        gql_json(429, [
-            'ok' => false,
-            'errors' => [[
-                'message' => 'Rate limit excedido para GraphQL.',
-                'extensions' => [
-                    'code' => 'RATE_LIMITED',
-                    'retry_after' => $retryAfter,
-                ],
-            ]],
-        ]);
+        $state['count'] = (int)$state['count'] + 1;
+        $remaining = max(0, $limit - (int)$state['count']);
+        header('X-RateLimit-Limit: ' . $limit);
+        header('X-RateLimit-Remaining: ' . $remaining);
+
+        $payload = json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($payload !== false) {
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, $payload);
+            fflush($fp);
+        }
+
+        if ($state['count'] > $limit) {
+            $retryAfter = max(1, $window - ($now - (int)$state['window_start']));
+            header('Retry-After: ' . $retryAfter);
+            gql_json(429, [
+                'ok' => false,
+                'errors' => [[
+                    'message' => 'Rate limit excedido para GraphQL.',
+                    'extensions' => [
+                        'code' => 'RATE_LIMITED',
+                        'retry_after' => $retryAfter,
+                    ],
+                ]],
+            ]);
+        }
+    } finally {
+        flock($fp, LOCK_UN);
+        fclose($fp);
     }
 }
 

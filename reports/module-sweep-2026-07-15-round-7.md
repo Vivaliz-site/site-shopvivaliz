@@ -1,0 +1,25 @@
+# Module Sweep 2026-07-15 Round 7
+
+- Task:
+  - continuar o ciclo prolongado sem repetir modulo, endurecendo uma nova superficie de agente
+- Modules touched:
+  - `api/agent`
+  - `tests`
+- Files changed:
+  - `api/agent/squad-chat.php`
+  - `tests/test_production_hardening.py`
+- Tests executed:
+  - `php -l api/agent/squad-chat.php`
+  - `pytest tests/test_production_hardening.py -q`
+- Results:
+  - `squad-chat` nao cria mais diretorios automaticamente para fila de intervencao nem para a base de aprendizado
+  - escrita JSONL/JSON passou a exigir diretorio existente e gravavel
+  - falha de persistencia da fila operacional agora retorna erro estruturado, em vez de assumir sucesso silenciosamente
+  - suite de hardening cobre a ausencia de `mkdir`, o helper `squad_write_json` e a validacao de writability
+- Risks identified:
+  - runtime local de PHP continua com aviso da extensao `curl` ausente durante os lints
+  - `api/agent/cron-dispatcher.php` ainda escreve log criando diretorio automaticamente
+- Next recommended module:
+  - `api/agent/cron-dispatcher.php`
+- Reason:
+  - e outro endpoint/facilitador da mesma familia de automacao operacional com escrita em disco no caminho quente e pode ser alinhado ao padrao aplicado no Squad Chat

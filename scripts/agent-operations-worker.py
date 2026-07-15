@@ -49,10 +49,15 @@ def local_time_label() -> str:
     return datetime.now().astimezone().strftime("%H:%M:%S")
 
 
+def dir_ready(path: Path) -> bool:
+    return path.is_dir() and path.exists()
+
+
 def ensure_dirs() -> None:
-    HEARTBEAT_DIR.mkdir(parents=True, exist_ok=True)
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    required_dirs = (HEARTBEAT_DIR, LOGS_DIR, STORAGE_DIR)
+    missing = [str(path) for path in required_dirs if not dir_ready(path)]
+    if missing:
+        raise FileNotFoundError(f"Diretórios operacionais indisponíveis: {', '.join(missing)}")
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -66,6 +71,8 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
+    if not dir_ready(path.parent):
+        raise FileNotFoundError(f"Diretório indisponível para escrita: {path.parent}")
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -86,6 +93,8 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def append_jsonl(path: Path, row: dict[str, Any]) -> None:
+    if not dir_ready(path.parent):
+        raise FileNotFoundError(f"Diretório indisponível para escrita: {path.parent}")
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(row, ensure_ascii=False) + "\n")
 
@@ -228,6 +237,8 @@ def record_agent_activity(queue: dict[str, Any], runtime_state: dict[str, Any]) 
 
 
 def write_heartbeats(queue: dict[str, Any], runtime_state: dict[str, Any]) -> None:
+    if not dir_ready(HEARTBEAT_DIR):
+        raise FileNotFoundError(f"Diretório de heartbeat indisponível: {HEARTBEAT_DIR}")
     for agent_id, meta in AGENTS.items():
         tasks = tasks_for_agent(queue, agent_id)
         current_focus = tasks[0].get("title") if tasks else "Aguardando tarefa"

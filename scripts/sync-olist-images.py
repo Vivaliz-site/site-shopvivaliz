@@ -94,6 +94,14 @@ class SafeError(RuntimeError):
     """An operational error that is safe to show to the user."""
 
 
+def dir_ready(path: Path) -> bool:
+    return path.is_dir() and os.access(path, os.W_OK)
+
+
+def parent_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
+
 def log(message: str) -> None:
     print(message, flush=True)
 
@@ -332,7 +340,8 @@ def read_input_products(path: Path) -> List[ProductInput]:
 
 
 def write_input_csv(products: Sequence[ProductInput], path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    if not parent_dir_ready(path):
+        raise FileNotFoundError(f"Diretório de entrada convertida indisponível: {path.parent}")
     with path.open("w", newline="", encoding="utf-8-sig") as fh:
         writer = csv.DictWriter(fh, fieldnames=["sku", "olist_product_id", "nome_produto"])
         writer.writeheader()
@@ -1047,7 +1056,8 @@ def lookup_product_local_ids(rows: Sequence[FinalImageRow]) -> Dict[str, str]:
 
 
 def write_download_csv(images: Sequence[DownloadedImage], path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    if not parent_dir_ready(path):
+        raise FileNotFoundError(f"Diretório de downloads indisponível: {path.parent}")
     fieldnames = [
         "sku",
         "olist_product_id",
@@ -1069,7 +1079,8 @@ def write_download_csv(images: Sequence[DownloadedImage], path: Path) -> None:
 
 
 def write_final_csv(rows: Sequence[FinalImageRow], path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    if not parent_dir_ready(path):
+        raise FileNotFoundError(f"Diretório final indisponível: {path.parent}")
     fieldnames = [
         "sku",
         "olist_product_id",
@@ -1227,7 +1238,8 @@ def summarize(products: Sequence[ProductInput], images: Sequence[DownloadedImage
 
 
 def write_json_report(path: Path, data: Dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    if not parent_dir_ready(path):
+        raise FileNotFoundError(f"Diretório de relatório JSON indisponível: {path.parent}")
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
@@ -1265,8 +1277,10 @@ def main(argv: Sequence[str]) -> int:
     if not input_path.is_file():
         raise SafeError(f"Planilha/CSV de entrada nao encontrado: {input_path}")
 
-    args.reports_dir.mkdir(parents=True, exist_ok=True)
-    args.storage_images.mkdir(parents=True, exist_ok=True)
+    if not dir_ready(args.reports_dir):
+        raise FileNotFoundError(f"Diretório de relatórios indisponível: {args.reports_dir}")
+    if not dir_ready(args.storage_images):
+        raise FileNotFoundError(f"Diretório de imagens indisponível: {args.storage_images}")
 
     products = read_input_products(input_path)
     if args.limit > 0:
@@ -1290,6 +1304,8 @@ def main(argv: Sequence[str]) -> int:
     final_rows = build_final_rows(args, images)
     sql_text = generate_sql(final_rows)
     if args.db_mode != "none":
+        if not parent_dir_ready(sql_path):
+            raise FileNotFoundError(f"Diretório SQL indisponível: {sql_path.parent}")
         sql_path.write_text(sql_text, encoding="utf-8")
         log(f"SQL de vinculo gerado: {sql_path}")
 

@@ -107,16 +107,18 @@ class WeeklyAudit
     private static function countStuckTasks(): int { return rand(0, 1); }
     private static function getLogSize(): int { return rand(100, 500); }
 
-    private static function logAudit(array $findings): void
+    private static function logAudit(array $findings): bool
     {
         $dir = dirname(self::AUDIT_LOG);
-        @mkdir($dir, 0755, true);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            return false;
+        }
 
-        file_put_contents(
+        return file_put_contents(
             self::AUDIT_LOG,
             json_encode(['timestamp' => date('c'), 'findings' => $findings]) . "\n",
             FILE_APPEND
-        );
+        ) !== false;
     }
 }
 

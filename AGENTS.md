@@ -2,6 +2,15 @@
 
 Este repositorio usa agentes especializados para acelerar lancamento, QA, automacoes Olist/Tiny, seguranca e releases cumulativos.
 
+## Pasta correta do projeto (obrigatorio)
+
+- No computador local do projeto, o checkout principal e canonico do ShopVivaliz e `C:\site-shopvivaliz`.
+- A pasta `C:\Users\FRED\site-shopvivaliz` nao e o projeto correto e nao deve ser usada para leitura, edicao, testes, commits ou execucao de agentes.
+- Antes de iniciar qualquer tarefa local, todo agente deve executar `git rev-parse --show-toplevel` e confirmar que o resultado e `C:/site-shopvivaliz` (comparacao sem diferenciar maiusculas e minusculas).
+- Se o diretorio for diferente, o agente deve interromper a tarefa sem alterar arquivos e mudar para `C:\site-shopvivaliz`.
+- A unica excecao sao worktrees Git criadas explicitamente a partir do repositorio canonico para isolamento de branches. Uma copia independente, pasta de mesmo nome ou repositorio diferente nao e uma worktree valida.
+- Tarefas e automacoes do Codex devem ser criadas no projeto cadastrado com o caminho `C:\site-shopvivaliz`; nao reutilizar tarefas vinculadas ao caminho antigo.
+
 ## Diretriz global de operacao autonoma
 
 ### Exclusao mutua obrigatoria entre agentes

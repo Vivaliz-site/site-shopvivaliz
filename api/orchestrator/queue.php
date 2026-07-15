@@ -28,26 +28,29 @@ define('OQ_PRIORITIES',   ['high', 'normal', 'low']);
 
 function oq_root(): string { return dirname(__DIR__, 2); }
 
-function oq_storage_dir(): string {
+function oq_storage_dir(): ?string {
     $dir = oq_root() . '/storage/orchestrator';
-    if (!is_dir($dir)) @mkdir($dir, 0755, true);
-    return $dir;
+    return (is_dir($dir) && is_writable($dir)) ? $dir : null;
 }
 
 function oq_queue_file(): string {
-    return oq_storage_dir() . '/queue.json';
+    $dir = oq_storage_dir();
+    return $dir !== null ? $dir . '/queue.json' : '';
 }
 
 // ── Leitura / Escrita da fila ─────────────────────────────────────────────────
 function oq_read(): array {
     $file = oq_queue_file();
-    if (!is_file($file)) return [];
+    if ($file === '' || !is_file($file)) return [];
     $data = json_decode((string)file_get_contents($file), true);
     return is_array($data) ? $data : [];
 }
 
 function oq_write(array $tasks): bool {
     $file = oq_queue_file();
+    if ($file === '') {
+        return false;
+    }
     return file_put_contents($file, json_encode($tasks, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX) !== false;
 }
 
@@ -193,7 +196,7 @@ function queue_status(): array {
         'total'   => count($tasks),
         'counts'  => $counts,
         'by_type' => $byType,
-        'queue_file' => oq_queue_file(),
+        'queue_file' => 'storage/orchestrator/queue.json',
     ];
 }
 
@@ -207,7 +210,9 @@ if (PHP_SAPI !== 'cli' && basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basena
         exit;
     }
 
+    header_remove('X-Powered-By');
     header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
     $action = $_GET['action'] ?? 'status';
 
     $out = match ($action) {

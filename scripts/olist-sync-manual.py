@@ -6,6 +6,7 @@ import webbrowser
 import time
 import requests
 import json
+import os
 from pathlib import Path
 from datetime import datetime
 
@@ -13,6 +14,10 @@ from datetime import datetime
 SITE_BASE = "https://dev.shopvivaliz.com.br"
 CONNECT_URL = f"{SITE_BASE}/olist/connect.php"
 SYNC_URL = f"{SITE_BASE}/olist/sync-products.php"
+
+
+def result_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
 
 print("\n" + "="*70)
 print("SINCRONIZAR 198 PRODUTOS OLIST - MODO MANUAL")
@@ -78,7 +83,8 @@ try:
 
             # Salvar resultado
             result_file = Path("logs/olist-sync-resultado.json")
-            result_file.parent.mkdir(exist_ok=True)
+            if not result_dir_ready(result_file):
+                raise FileNotFoundError(f"Diretório de resultado indisponível: {result_file.parent}")
 
             with open(result_file, 'w', encoding='utf-8') as f:
                 json.dump({

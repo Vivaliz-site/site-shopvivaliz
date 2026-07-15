@@ -26,6 +26,10 @@ MAX_PAGES = int(os.getenv("OLIST_MAX_PAGES", "20"))
 SLEEP_SECONDS = float(os.getenv("OLIST_SLEEP_SECONDS", "1.0"))
 
 
+def output_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
+
 def fail(message: str, code: int = 1) -> None:
     print(f"ERRO: {message}", file=sys.stderr)
     sys.exit(code)
@@ -297,8 +301,10 @@ def build_rows(products: list) -> list:
 
 
 def write_outputs(products: list, rows: list) -> None:
-    OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
-    OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
+    if not output_dir_ready(OUT_CSV):
+        raise FileNotFoundError(f"Diretório CSV indisponível: {OUT_CSV.parent}")
+    if not output_dir_ready(OUT_JSON):
+        raise FileNotFoundError(f"Diretório JSON indisponível: {OUT_JSON.parent}")
     fieldnames = [
         "exported_at",
         "olist_id",

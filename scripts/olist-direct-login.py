@@ -21,13 +21,18 @@ OLIST_PASSWORD = os.getenv('OLIST_PASSWORD') or os.getenv('EMAIL_PASSWORD') or '
 CLIENT_ID = os.getenv('OLIST_CLIENT_ID', 'SEU_OLIST_CLIENT_ID_AQUI')
 CLIENT_SECRET = os.getenv('OLIST_CLIENT_SECRET', 'SEU_OLIST_CLIENT_SECRET_AQUI')
 
+
+def dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
 def log_msg(msg):
     """Log com timestamp"""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     line = f"[{timestamp}] {msg}"
     print(line)
 
-    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not dir_ready(LOG_FILE):
+        raise FileNotFoundError(f"Diretório de log indisponível: {LOG_FILE.parent}")
     with open(LOG_FILE, 'a', encoding='utf-8') as f:
         f.write(line + '\n')
 
@@ -70,7 +75,8 @@ def login_direct():
                 'created_at': datetime.now().isoformat()
             }
 
-            TOKENS_DIR.mkdir(parents=True, exist_ok=True)
+            if not dir_ready(CONFIG_FILE):
+                raise FileNotFoundError(f"Diretório de tokens indisponível: {CONFIG_FILE.parent}")
             with open(CONFIG_FILE, 'w') as f:
                 json.dump(config, f, indent=2)
 
@@ -105,7 +111,8 @@ def login_direct():
                     'method': 'client_credentials'
                 }
 
-                TOKENS_DIR.mkdir(parents=True, exist_ok=True)
+                if not dir_ready(CONFIG_FILE):
+                    raise FileNotFoundError(f"Diretório de tokens indisponível: {CONFIG_FILE.parent}")
                 with open(CONFIG_FILE, 'w') as f:
                     json.dump(config, f, indent=2)
 

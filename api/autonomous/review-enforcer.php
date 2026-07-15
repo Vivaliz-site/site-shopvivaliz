@@ -235,16 +235,18 @@ class ReviewEnforcer
     /**
      * Log review
      */
-    private static function logReview(array $review): void
+    private static function logReview(array $review): bool
     {
         $dir = dirname(self::REVIEW_LOG);
-        @mkdir($dir, 0755, true);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            return false;
+        }
 
-        file_put_contents(
+        return file_put_contents(
             self::REVIEW_LOG,
             json_encode($review) . "\n",
             FILE_APPEND
-        );
+        ) !== false;
     }
 
     /**

@@ -47,15 +47,17 @@ function roi_write_json(string $rel, array $payload): string
 {
     $path = roi_path($rel);
     $dir = dirname($path);
-    if (!is_dir($dir)) {
-        @mkdir($dir, 0755, true);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return '';
     }
 
-    file_put_contents(
+    if (file_put_contents(
         $path,
         json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n",
         LOCK_EX
-    );
+    ) === false) {
+        return '';
+    }
 
     return $path;
 }

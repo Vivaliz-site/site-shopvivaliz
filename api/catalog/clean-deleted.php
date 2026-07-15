@@ -3,6 +3,7 @@
  * Remove produtos que foram deletados da Olist
  * Sincroniza apenas com produtos que existem na Olist/Tiny
  */
+declare(strict_types=1);
 
 set_time_limit(300);
 error_reporting(E_ALL);
@@ -10,13 +11,43 @@ ini_set('display_errors', 0);
 
 $catalogPath = __DIR__ . '/fallback-products.json';
 
-// Ler catálogo atual
-if (!is_file($catalogPath)) {
-    die("Catalog not found");
+function catalog_fail(string $message, int $status = 1): void
+{
+    fwrite(STDERR, $message . PHP_EOL);
+    exit($status);
 }
 
-$catalog = json_decode(file_get_contents($catalogPath), true) ?: [];
-if (!is_array($catalog)) die("Invalid catalog");
+function write_catalog_atomic(string $path, array $payload): void
+{
+    $tempPath = $path . '.tmp';
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    if ($json === false) {
+        catalog_fail('Failed to encode catalog JSON');
+    }
+    if (file_put_contents($tempPath, $json . PHP_EOL, LOCK_EX) === false) {
+        @unlink($tempPath);
+        catalog_fail('Failed to write temporary catalog file');
+    }
+    if (!rename($tempPath, $path)) {
+        @unlink($tempPath);
+        catalog_fail('Failed to replace catalog file');
+    }
+}
+
+// Ler catálogo atual
+if (!is_file($catalogPath)) {
+    catalog_fail('Catalog not found');
+}
+
+$rawCatalog = file_get_contents($catalogPath);
+if ($rawCatalog === false) {
+    catalog_fail('Failed to read catalog');
+}
+
+$catalog = json_decode($rawCatalog, true);
+if (!is_array($catalog)) {
+    catalog_fail('Invalid catalog');
+}
 
 echo "Catalog: " . count($catalog) . " products\n";
 
@@ -54,6 +85,6 @@ echo "Removed: " . $deleted_count . " products\n";
 $cleaned = array_values($cleaned);
 
 // Salvar
-file_put_contents($catalogPath, json_encode($cleaned, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+write_catalog_atomic($catalogPath, $cleaned);
 echo "✓ Cleaned catalog saved\n";
 ?>

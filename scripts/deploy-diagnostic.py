@@ -13,6 +13,10 @@ class DeployDiagnostic:
         self.issues = []
         self.warnings = []
 
+    @staticmethod
+    def report_dir_ready(path: Path) -> bool:
+        return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
     def check_ftp_credentials(self):
         """Verificar credenciais FTP"""
         print(" Verificando credenciais FTP...")
@@ -163,8 +167,10 @@ class DeployDiagnostic:
 
         print("=" * 60)
 
-        Path("logs").mkdir(exist_ok=True)
-        Path("logs/deploy-diagnostic.json").write_text(
+        report_path = Path("logs/deploy-diagnostic.json")
+        if not self.report_dir_ready(report_path):
+            raise FileNotFoundError(f"Diretório de relatório indisponível: {report_path.parent}")
+        report_path.write_text(
             json.dumps({
                 "ok": len(self.issues) == 0,
                 "issues": self.issues,

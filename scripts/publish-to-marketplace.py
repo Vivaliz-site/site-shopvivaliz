@@ -40,6 +40,10 @@ MARKETPLACE_PRIMARY: Dict[str, str] = {
 }
 
 
+def output_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
+
 # ---------------------------------------------------------------------------
 # HTTP helpers
 # ---------------------------------------------------------------------------
@@ -372,7 +376,8 @@ def main(argv: List[str]) -> int:
     }
 
     out_path = Path(args.out)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if not output_dir_ready(out_path):
+        raise FileNotFoundError(f"Diretório de relatório indisponível: {out_path.parent}")
     out_path.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
 
     log(f"\n=== CONCLUÍDO ===")

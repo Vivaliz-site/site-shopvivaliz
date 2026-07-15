@@ -51,14 +51,30 @@ function squad_read_jsonl(string $path, int $limit = 100): array
     return $items;
 }
 
-function squad_append_jsonl(string $path, array $payload): void
+function squad_append_jsonl(string $path, array $payload): bool
 {
-    @mkdir(dirname($path), 0755, true);
-    file_put_contents(
+    $dir = dirname($path);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return false;
+    }
+    return file_put_contents(
         $path,
         json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
         FILE_APPEND | LOCK_EX
-    );
+    ) !== false;
+}
+
+function squad_write_json(string $path, array $payload): bool
+{
+    $dir = dirname($path);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return false;
+    }
+    $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    if ($json === false) {
+        return false;
+    }
+    return file_put_contents($path, $json, LOCK_EX) !== false;
 }
 
 function squad_operations_mode(array $payload): bool
@@ -88,7 +104,10 @@ function squad_send_intervention(array $payload): array
         'kind' => 'human-intervention',
     ];
 
-    squad_append_jsonl(squad_root() . '/storage/private/agent-interventions.jsonl', $entry);
+    if (!squad_append_jsonl(squad_root() . '/storage/private/agent-interventions.jsonl', $entry)) {
+        http_response_code(500);
+        return ['status' => 'error', 'message' => 'Fila de intervencao indisponivel.'];
+    }
 
     return [
         'status' => 'ok',
@@ -163,8 +182,6 @@ function processLizChat(string $message, string $context): string
     $learningData = ['learned_facts' => [], 'history' => []];
     if (is_file($learningFile)) {
         $learningData = json_decode((string) file_get_contents($learningFile), true) ?: $learningData;
-    } else {
-        @mkdir(dirname($learningFile), 0777, true);
     }
 
     $catalogFile = dirname(__DIR__, 2) . '/api/catalog/fallback-products.json';
@@ -228,7 +245,7 @@ function processLizChat(string $message, string $context): string
     $learningData['history'][] = ['role' => 'user', 'content' => $message];
     $learningData['history'][] = ['role' => 'bot', 'content' => $answer];
     $learningData['history'] = array_slice($learningData['history'], -30);
-    file_put_contents($learningFile, json_encode($learningData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    squad_write_json($learningFile, $learningData);
 
     return $answer;
 }

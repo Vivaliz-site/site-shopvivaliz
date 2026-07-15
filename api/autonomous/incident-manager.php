@@ -196,53 +196,66 @@ class IncidentManager
     /**
      * Preserve incident evidence (file backups, logs, state)
      */
-    private static function preserveEvidence(string $incidentId, array $context): void
+    private static function preserveEvidence(string $incidentId, array $context): bool
     {
-        $evidenceDir = dirname(self::INCIDENT_LOG) . '/incident-' . $incidentId;
-        @mkdir($evidenceDir, 0755, true);
+        $evidenceDir = dirname(self::INCIDENT_LOG);
+        if (!is_dir($evidenceDir) || !is_writable($evidenceDir)) {
+            return false;
+        }
 
         // Save context
-        file_put_contents(
-            "$evidenceDir/context.json",
+        if (file_put_contents(
+            $evidenceDir . '/incident-' . $incidentId . '-context.json',
             json_encode($context, JSON_PRETTY_PRINT)
-        );
+        ) === false) {
+            return false;
+        }
 
         // Save logs if available
         if (isset($context['log_file'])) {
             if (file_exists($context['log_file'])) {
-                copy($context['log_file'], "$evidenceDir/error-log.txt");
+                copy($context['log_file'], $evidenceDir . '/incident-' . $incidentId . '-error-log.txt');
             }
         }
 
         // Save system state
-        exec('ps aux > ' . escapeshellarg("$evidenceDir/processes.txt") . ' 2>&1');
-        exec('free -h > ' . escapeshellarg("$evidenceDir/memory.txt") . ' 2>&1');
-        exec('df -h > ' . escapeshellarg("$evidenceDir/disk.txt") . ' 2>&1');
+        exec('ps aux > ' . escapeshellarg($evidenceDir . '/incident-' . $incidentId . '-processes.txt') . ' 2>&1');
+        exec('free -h > ' . escapeshellarg($evidenceDir . '/incident-' . $incidentId . '-memory.txt') . ' 2>&1');
+        exec('df -h > ' . escapeshellarg($evidenceDir . '/incident-' . $incidentId . '-disk.txt') . ' 2>&1');
+
+        return true;
     }
 
     /**
      * Halt non-critical work (pause agendas)
      */
-    private static function haltNonCriticalWork(string $incidentId): void
+    private static function haltNonCriticalWork(string $incidentId): bool
     {
         // Create pause file
         $pauseFile = dirname(self::INCIDENT_LOG) . '/../.agents-readonly';
-        file_put_contents($pauseFile, $incidentId);
+        $dir = dirname($pauseFile);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            return false;
+        }
+
+        return file_put_contents($pauseFile, $incidentId) !== false;
     }
 
     /**
      * Log incident
      */
-    private static function log(array $incident): void
+    private static function log(array $incident): bool
     {
         $dir = dirname(self::INCIDENT_LOG);
-        @mkdir($dir, 0755, true);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            return false;
+        }
 
-        file_put_contents(
+        return file_put_contents(
             self::INCIDENT_LOG,
             json_encode($incident) . "\n",
             FILE_APPEND
-        );
+        ) !== false;
     }
 
     /**

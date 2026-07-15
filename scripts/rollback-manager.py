@@ -6,12 +6,15 @@ import subprocess
 import json
 from pathlib import Path
 from datetime import datetime
+import os
 
 class RollbackManager:
     def __init__(self):
         self.max_retries = 3
         self.rollback_log = Path("logs/rollbacks.jsonl")
-        self.rollback_log.parent.mkdir(parents=True, exist_ok=True)
+
+    def log_dir_ready(self):
+        return self.rollback_log.parent.is_dir() and os.access(self.rollback_log.parent, os.W_OK)
 
     def check_task_success(self, task_id):
         """Verificar se tarefa completou com sucesso"""
@@ -61,6 +64,9 @@ class RollbackManager:
 
     def _log_rollback(self, task_id, commit_hash, status):
         """Registrar rollback"""
+        if not self.log_dir_ready():
+            return False
+
         log_entry = {
             'timestamp': datetime.now().isoformat(),
             'task_id': task_id,
@@ -70,6 +76,7 @@ class RollbackManager:
 
         with open(self.rollback_log, 'a') as f:
             f.write(json.dumps(log_entry) + "\n")
+        return True
 
     def retry_task(self, task_id, agents, attempt=1):
         """Tentar tarefa com agente diferente"""

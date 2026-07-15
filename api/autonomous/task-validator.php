@@ -208,10 +208,12 @@ class TaskValidator
     /**
      * Reject task and record why
      */
-    public static function reject(array $task, array $validation): void
+    public static function reject(array $task, array $validation): bool
     {
         $logDir = dirname(__DIR__, 2) . '/logs/autonomous';
-        @mkdir($logDir, 0755, true);
+        if (!is_dir($logDir) || !is_writable($logDir)) {
+            return false;
+        }
 
         $rejection = [
             'timestamp' => date('c'),
@@ -224,10 +226,10 @@ class TaskValidator
             'task_data' => $task
         ];
 
-        file_put_contents(
+        return file_put_contents(
             "$logDir/rejected-tasks.jsonl",
             json_encode($rejection) . "\n",
             FILE_APPEND
-        );
+        ) !== false;
     }
 }

@@ -102,11 +102,11 @@ function svo_order_dir(): string
     return '';
 }
 
-function svo_append_legacy_order_log(array $order): void
+function svo_append_legacy_order_log(array $order): bool
 {
     $logDir = svo_root() . '/logs';
-    if (!is_dir($logDir)) {
-        @mkdir($logDir, 0755, true);
+    if (!is_dir($logDir) || !is_writable($logDir)) {
+        return false;
     }
 
     $entry = [
@@ -133,11 +133,11 @@ function svo_append_legacy_order_log(array $order): void
         'total' => round((float)($order['total'] ?? 0), 2),
     ];
 
-    @file_put_contents(
+    return file_put_contents(
         $logDir . '/pedidos.jsonl',
         json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
         FILE_APPEND | LOCK_EX
-    );
+    ) !== false;
 }
 
 function svo_payment_method(string $value): string

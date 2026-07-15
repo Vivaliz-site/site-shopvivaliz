@@ -6,6 +6,7 @@ Abre Chrome, faz login, captura código, sincroniza 198 produtos
 import sys
 import time
 import json
+import os
 from pathlib import Path
 from datetime import datetime
 
@@ -50,6 +51,10 @@ SYNC_URL = f"{BASE_URL}/olist/sync-products.php"
 
 EMAIL = os.getenv("OLIST_EMAIL") or os.getenv("OLIST_USER") or os.getenv("EMAIL_USER") or ""
 SENHA = os.getenv("OLIST_PASSWORD") or os.getenv("EMAIL_PASSWORD") or ""
+
+
+def result_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
 
 print("\n" + "="*70)
 print("SINCRONIZAR 198 PRODUTOS - CHROME AUTOMATION")
@@ -250,7 +255,8 @@ try:
 
                         # Salvar resultado
                         result_file = Path("logs/olist-sync-resultado.json")
-                        result_file.parent.mkdir(exist_ok=True)
+                        if not result_dir_ready(result_file):
+                            raise FileNotFoundError(f"Diretório de resultado indisponível: {result_file.parent}")
 
                         with open(result_file, 'w', encoding='utf-8') as f:
                             json.dump({

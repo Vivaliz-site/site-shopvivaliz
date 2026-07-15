@@ -1,0 +1,25 @@
+# Module Sweep 2026-07-15 Round 4
+
+- Task:
+  - continuar melhorias em modulos distintos e manter o ciclo auditavel
+- Modules touched:
+  - `api/graphql`
+  - `tests`
+- Files changed:
+  - `api/graphql.php`
+  - `tests/test_production_hardening.py`
+- Tests executed:
+  - `php -l api/graphql.php`
+  - `pytest tests/test_production_hardening.py -q`
+- Results:
+  - GraphQL rate limit agora evita `mkdir` no caminho quente da requisicao
+  - contador por IP passou a usar `fopen` + `flock` + regravacao no mesmo handle
+  - quando nao existe diretorio de rate-limit disponivel, o endpoint falha de forma previsivel no controle e sinaliza isso via header, sem mutar o filesystem
+  - testes de hardening cobrem a ausencia de `mkdir`, o uso de locking e o fallback `X-RateLimit-Policy: unavailable`
+- Risks identified:
+  - runtime local de PHP ainda mostra aviso de extensao `curl` ausente nos lints
+  - `api/monitor/dev-status.php` ainda cria diretorio de logs durante a leitura do status
+- Next recommended module:
+  - `api/monitor/dev-status.php`
+- Reason:
+  - e outro endpoint de observabilidade que pode ser tornado somente leitura, alinhando o comportamento com o endurecimento ja aplicado em `api/health.php`

@@ -1,0 +1,25 @@
+# Module Sweep 2026-07-15 Round 16
+
+- Task:
+  - continuar o ciclo prolongado endurecendo uma nova superficie da familia autonoma sem repetir o modulo anterior
+- Modules touched:
+  - `api/autonomous`
+  - `tests`
+- Files changed:
+  - `api/autonomous/regression-tracker.php`
+  - `tests/test_production_hardening.py`
+- Tests executed:
+  - `php -l api/autonomous/regression-tracker.php`
+  - `pytest tests/test_production_hardening.py -q`
+- Results:
+  - `saveBaseline` nao cria mais `logs/autonomous` automaticamente
+  - `logRegression` tambem nao cria mais diretorio automaticamente
+  - baseline e resultado agora retornam `false` quando o diretorio nao estiver disponivel ou gravavel
+  - suite de hardening cobre ausencia de `mkdir` e as duas assinaturas booleanas
+- Risks identified:
+  - runtime local de PHP continua com aviso da extensao `curl` ausente durante lint
+  - `api/autonomous/send-email.php` ainda cria diretorio automaticamente em dois pontos de log
+- Next recommended module:
+  - `api/autonomous/send-email.php`
+- Reason:
+  - abre outro ponto de persistencia operacional com dois caminhos de log que podem ser alinhados ao mesmo padrao

@@ -45,6 +45,10 @@ TOKENS_DIR = PROJECT_ROOT / '.tokens'
 CONFIG_FILE = TOKENS_DIR / 'olist-config.json'
 LOG_FILE = PROJECT_ROOT / 'logs' / 'auto-oauth-login.log'
 
+
+def dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
 def log_msg(msg):
     """Log com timestamp"""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -53,7 +57,8 @@ def log_msg(msg):
     line_safe = line.encode('ascii', 'replace').decode('ascii')
     print(line_safe)
 
-    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not dir_ready(LOG_FILE):
+        raise FileNotFoundError(f"Diretório de log indisponível: {LOG_FILE.parent}")
     with open(LOG_FILE, 'a', encoding='utf-8') as f:
         f.write(line + '\n')
 
@@ -107,7 +112,10 @@ def login_and_get_token():
 
         if not email_input:
             log_msg("ERRO: Campo de email nao encontrado. Salvando screenshot...")
-            driver.save_screenshot(str(LOG_FILE.parent / 'login_page.png'))
+            screenshot_path = LOG_FILE.parent / 'login_page.png'
+            if not dir_ready(screenshot_path):
+                raise FileNotFoundError(f"Diretório de log indisponível: {screenshot_path.parent}")
+            driver.save_screenshot(str(screenshot_path))
             log_msg(f"Screenshot salvo em {LOG_FILE.parent / 'login_page.png'}")
             raise Exception("Campo de email nao encontrado")
 
@@ -220,7 +228,8 @@ def main():
     log_msg("=== AUTO OAUTH LOGIN INICIADO ===")
 
     # Criar diretório de tokens
-    TOKENS_DIR.mkdir(parents=True, exist_ok=True)
+    if not dir_ready(CONFIG_FILE):
+        raise FileNotFoundError(f"Diretório de tokens indisponível: {CONFIG_FILE.parent}")
 
     # Fazer login
     if login_and_get_token():

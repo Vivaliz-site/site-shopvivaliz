@@ -99,12 +99,14 @@ class DatabaseSafety
     /**
      * Log database operation
      */
-    public static function logOperation(string $operation, array $result): void
+    public static function logOperation(string $operation, array $result): bool
     {
         $dir = dirname(self::DB_LOG);
-        @mkdir($dir, 0755, true);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            return false;
+        }
 
-        file_put_contents(
+        return file_put_contents(
             self::DB_LOG,
             json_encode([
                 'timestamp' => date('c'),
@@ -112,7 +114,7 @@ class DatabaseSafety
                 'result' => $result
             ]) . "\n",
             FILE_APPEND
-        );
+        ) !== false;
     }
 }
 

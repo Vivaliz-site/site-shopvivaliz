@@ -25,6 +25,10 @@ REQUIRED_ENV = [
 ]
 
 
+def report_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
+
 def load_env_file(path: Path) -> None:
     if not path.is_file():
         return
@@ -100,7 +104,8 @@ def main() -> int:
 
     if args.output:
         output_path = Path(args.output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if not report_dir_ready(output_path):
+            raise FileNotFoundError(f"Diretório de relatório indisponível: {output_path.parent}")
         output_path.write_text(text + "\n", encoding="utf-8")
 
     if args.json:

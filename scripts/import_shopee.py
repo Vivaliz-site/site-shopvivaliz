@@ -44,6 +44,14 @@ WINDOWS_RESERVED_NAMES = {
 }
 
 
+def dir_ready(path: Path) -> bool:
+    return path.is_dir() and os.access(path, os.W_OK)
+
+
+def parent_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
+
 def sanitize_folder_name(value: str) -> str:
     safe_value = re.sub(r'[\\/*:?"<>|]', '_', value or '')
     safe_value = re.sub(r'\s+', '_', safe_value)
@@ -246,7 +254,8 @@ def download_image(url: str, sku: str, folder_name: str) -> Optional[Path]:
             return None
 
         sku_folder = OUTPUT_RAW_ROOT / folder_name
-        sku_folder.mkdir(parents=True, exist_ok=True)
+        if not dir_ready(sku_folder):
+            raise FileNotFoundError(f'Diretório SKU indisponível: {sku_folder}')
         image_path = sku_folder / '1.jpg'
 
         with open(image_path, 'wb') as image_file:
@@ -278,7 +287,8 @@ def download_image_with_retries(url: str, sku: str, folder_name: str) -> Optiona
 
 
 def save_sku_mapping(mapping: Dict[str, str]) -> None:
-    SKU_MAPPING_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not parent_dir_ready(SKU_MAPPING_FILE):
+        raise FileNotFoundError(f'Diretório de mapeamento indisponível: {SKU_MAPPING_FILE.parent}')
     with SKU_MAPPING_FILE.open('w', encoding='utf-8', newline='') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=['sanitized_folder', 'sku'])
         writer.writeheader()
@@ -289,7 +299,8 @@ def save_sku_mapping(mapping: Dict[str, str]) -> None:
 def save_skus_excel(skus: List[str], output_path: Path) -> None:
     if not OPENPYXL_AVAILABLE:
         raise RuntimeError('openpyxl is required to write the output Excel file. Install it with: pip install openpyxl')
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if not parent_dir_ready(output_path):
+        raise FileNotFoundError(f'Diretório do Excel indisponível: {output_path.parent}')
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = 'produtos'

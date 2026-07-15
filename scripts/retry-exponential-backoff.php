@@ -3,6 +3,7 @@
  * 🔄 Retry with Exponential Backoff - Resilência contra falhas transitórias
  * Trata: Timeouts, rate limits, temporary failures
  */
+declare(strict_types=1);
 
 class RetryExponentialBackoff {
     private $maxRetries = 5;
@@ -92,14 +93,19 @@ class RetryExponentialBackoff {
             'primary_failed' => true,
             'primary_attempts' => $result['attempts'],
             'fallback_attempts' => $fallbackResult['attempts'],
-            'error' => $result['error'],
+            'error' => $fallbackResult['error'] ?? $result['error'],
         ];
     }
 
     public function moveToDeadLetterQueue($task, $error) {
         echo "☠️ Movendo task para Dead Letter Queue: {$task['task_id']}\n";
 
-        $dlq = json_decode(file_get_contents('.dead-letter-queue.json') ?: '[]', true);
+        $dlqPath = __DIR__ . '/.dead-letter-queue.json';
+        $rawDlq = is_file($dlqPath) ? file_get_contents($dlqPath) : '[]';
+        $dlq = json_decode($rawDlq ?: '[]', true);
+        if (!is_array($dlq)) {
+            $dlq = [];
+        }
 
         $dlq[] = [
             'task_id' => $task['task_id'],
@@ -109,18 +115,20 @@ class RetryExponentialBackoff {
             'requires_investigation' => true,
         ];
 
-        file_put_contents('.dead-letter-queue.json', json_encode($dlq, JSON_PRETTY_PRINT));
+        file_put_contents($dlqPath, json_encode($dlq, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . PHP_EOL, LOCK_EX);
 
         // Notificar admin
-        mail(
-            'fredmourao@gmail.com',
-            "[SHOPVIVALIZ DLQ] Task {$task['task_id']} falhou permanentemente",
-            "Task: {$task['task_id']}\n" .
-            "Ação: {$task['action']}\n" .
-            "Erro: $error\n\n" .
-            "Requer investigação manual.",
-            'From: retry@shopvivaliz.com.br'
-        );
+        if (function_exists('mail')) {
+            @mail(
+                'fredmourao@gmail.com',
+                "[SHOPVIVALIZ DLQ] Task {$task['task_id']} falhou permanentemente",
+                "Task: {$task['task_id']}\n" .
+                "Ação: {$task['action']}\n" .
+                "Erro: $error\n\n" .
+                "Requer investigação manual.",
+                'From: retry@shopvivaliz.com.br'
+            );
+        }
     }
 }
 

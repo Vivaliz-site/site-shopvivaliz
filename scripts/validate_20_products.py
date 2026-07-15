@@ -13,6 +13,10 @@ from pathlib import Path
 if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8')
 
+
+def report_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
 def get_all_products():
     """Obtém lista de todos os produtos processados"""
     processed = Path('storage/processed')
@@ -184,7 +188,8 @@ CONCLUSÃO:
 
     # Salvar relatório detalhado
     report_file = Path('logs/validation_20_products.json')
-    report_file.parent.mkdir(parents=True, exist_ok=True)
+    if not report_dir_ready(report_file):
+        raise FileNotFoundError(f"Diretório de relatório indisponível: {report_file.parent}")
 
     with report_file.open('w', encoding='utf-8') as f:
         json.dump({

@@ -1,0 +1,25 @@
+## Round 84 - scripts/generate_ai_images.py
+
+- Módulo tratado: `scripts/generate_ai_images.py`
+- Escopo da rodada: hardening focado nos diretórios de saída/processamento das variantes geradas.
+- Ajuste aplicado:
+  - removida a criação automática de diretórios para:
+    - cópia fallback da imagem original;
+    - escrita do arquivo convertido via PIL;
+    - download temporário por URL;
+    - gravação da variante final gerada;
+    - diretório processado por SKU em `storage/processed`.
+- Hardening aplicado:
+  - adicionados `dir_ready(path: Path) -> bool` e `parent_dir_ready(path: Path) -> bool`;
+  - o módulo agora exige diretórios previamente provisionados e graváveis antes de qualquer escrita local;
+  - falha explícita com `FileNotFoundError` quando diretórios de destino, saída, download, variante ou processamento estiverem indisponíveis.
+- Teste adicionado: `test_generate_ai_images_hardens_output_dirs`
+- Validações executadas:
+  - `python -m py_compile scripts/generate_ai_images.py`
+  - `pytest tests/test_production_hardening.py -q`
+- Resultado:
+  - `91 passed`
+- Riscos identificados:
+  - o fluxo continua dependendo de provisionamento prévio de `storage/processed`, consistente com o padrão endurecido deste ciclo.
+- Próximo módulo seguro recomendado:
+  - `scripts/upload_images.py`

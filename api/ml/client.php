@@ -56,11 +56,19 @@ function ml_create_pkce(): array {
 
 function ml_token_path(): string {
     $dir = ml_root() . '/storage/private';
-    if (!is_dir($dir)) @mkdir($dir, 0750, true);
     return $dir . '/ml-tokens.json';
 }
 
+function ml_tokens_writable(): bool {
+    $dir = dirname(ml_token_path());
+    return is_dir($dir) && is_writable($dir);
+}
+
 function ml_save_tokens(array $data): array {
+    if (!ml_tokens_writable()) {
+        throw new RuntimeException('Diretorio de tokens ML indisponivel para gravacao.');
+    }
+
     $existing = ml_read_tokens(false) ?? [];
     $expires_at_ms = isset($data['expires_in'])
         ? (int)(microtime(true) * 1000) + ((int)$data['expires_in'] * 1000)

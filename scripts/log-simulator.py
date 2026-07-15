@@ -4,6 +4,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import random
 
+
+def dir_ready(path: Path) -> bool:
+    return path.is_dir() and os.access(path, os.W_OK)
+
 def generate_log_entry(level, message, context=None):
     timestamp = datetime.now().isoformat()
     entry = {
@@ -16,10 +20,14 @@ def generate_log_entry(level, message, context=None):
 
 def simulate_logs(num_entries=5):
     log_dir = Path("logs")
-    log_dir.mkdir(parents=True, exist_ok=True)
+    if not dir_ready(log_dir):
+        print(f"Diretório de logs indisponível: {log_dir}")
+        return False
 
     execution_dir = log_dir / "execution"
-    execution_dir.mkdir(parents=True, exist_ok=True)
+    if not dir_ready(execution_dir):
+        print(f"Diretório de execução indisponível: {execution_dir}")
+        return False
     execution_log_path = execution_dir / "app.log"
     monitor_messages_log_path = log_dir / "monitor-messages.log"
     monitor_responses_jsonl_path = log_dir / "monitor-responses.jsonl"
@@ -71,6 +79,8 @@ def simulate_logs(num_entries=5):
     print(f"- {execution_dir}/app.log (diretório e arquivo)")
     print(f"- {monitor_messages_log_path}")
     print(f"- {monitor_responses_jsonl_path}")
+
+    return True
 
 if __name__ == "__main__":
     simulate_logs()

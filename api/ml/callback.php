@@ -3,10 +3,13 @@ declare(strict_types=1);
 require_once __DIR__ . '/client.php';
 
 header('Content-Type: text/html; charset=UTF-8');
+header('Cache-Control: no-store');
 
 $code  = trim($_GET['code']  ?? '');
 $state = trim($_GET['state'] ?? '');
 $error = trim($_GET['error'] ?? '');
+$redirectUri = ml_env('ML_REDIRECT_URI');
+$secure = str_starts_with($redirectUri, 'https://');
 
 if ($error !== '') {
     http_response_code(400);
@@ -42,7 +45,13 @@ try {
     $tokens = ml_save_tokens($data);
 
     foreach (['ml_pkce_verifier', 'ml_oauth_state'] as $name) {
-        setcookie($name, '', ['expires' => 1, 'path' => '/', 'httponly' => true]);
+        setcookie($name, '', [
+            'expires' => 1,
+            'path' => '/',
+            'httponly' => true,
+            'secure' => $secure,
+            'samesite' => 'Lax',
+        ]);
     }
 
     $userId = htmlspecialchars((string)($tokens['user_id'] ?? 'não informado'));
@@ -60,5 +69,14 @@ try {
 
 } catch (Throwable $e) {
     http_response_code(500);
-    echo '<pre>Erro: ' . htmlspecialchars($e->getMessage()) . '</pre>';
+    foreach (['ml_pkce_verifier', 'ml_oauth_state'] as $name) {
+        setcookie($name, '', [
+            'expires' => 1,
+            'path' => '/',
+            'httponly' => true,
+            'secure' => $secure,
+            'samesite' => 'Lax',
+        ]);
+    }
+    echo '<pre>Erro ao concluir autenticação do Mercado Livre: ' . htmlspecialchars($e->getMessage()) . '</pre>';
 }

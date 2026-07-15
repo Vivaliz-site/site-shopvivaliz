@@ -90,6 +90,20 @@ function gms_current_month(string $createdAt): bool
     return $createdAt !== '' && str_starts_with($createdAt, date('Y-m'));
 }
 
+function gms_write_summary(array $payload): bool
+{
+    $dir = gms_root() . '/storage/gamification';
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return false;
+    }
+
+    return file_put_contents(
+        $dir . '/latest-summary.json',
+        json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        LOCK_EX
+    ) !== false;
+}
+
 $orders = gms_orders();
 $feedback = gms_feedback();
 
@@ -188,10 +202,6 @@ $payload = [
     ],
 ];
 
-$dir = gms_root() . '/storage/gamification';
-if (!is_dir($dir)) {
-    @mkdir($dir, 0755, true);
-}
-@file_put_contents($dir . '/latest-summary.json', json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
+gms_write_summary($payload);
 
 gms_json(200, $payload);

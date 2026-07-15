@@ -14,7 +14,6 @@ class TriaNotifier {
         $this->emailTo = getenv('EMAIL_TO') ?: getenv('NOTIFY_EMAIL_TO') ?: '';
         $this->emailFrom = getenv('EMAIL_FROM') ?: getenv('SMTP_USER') ?: getenv('EMAIL_USER') ?: getenv('MAIL_USER') ?: 'trio-ia@shopvivaliz.com.br';
         $this->logFile = __DIR__ . '/../logs/notifications.log';
-        @mkdir(dirname($this->logFile), 0755, true);
     }
 
     /**
@@ -271,6 +270,11 @@ HTML;
      * Log
      */
     private function log($type, $title, $message) {
+        $dir = dirname($this->logFile);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            return false;
+        }
+
         $entry = json_encode([
             'timestamp' => date('c'),
             'type' => $type,
@@ -278,7 +282,7 @@ HTML;
             'message' => $message
         ]) . "\n";
 
-        file_put_contents($this->logFile, $entry, FILE_APPEND);
+        return file_put_contents($this->logFile, $entry, FILE_APPEND | LOCK_EX) !== false;
     }
 }
 

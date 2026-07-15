@@ -4,6 +4,7 @@ require_once __DIR__ . '/client.php';
 
 header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
 
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 
@@ -24,10 +25,7 @@ $entry = [
     'body'           => $body,
 ];
 
-$logDir = ml_root() . '/logs';
-if (!is_dir($logDir)) @mkdir($logDir, 0755, true);
-$line = json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
-file_put_contents($logDir . '/ml-webhooks.log', $line, FILE_APPEND | LOCK_EX);
+ml_append_log('ml-webhooks.log', $entry);
 
 // Reage a notificacoes de pedido, gravando no mesmo formato usado pelo
 // checkout do site (storage/orders/*.json), sem derrubar o webhook em
@@ -37,19 +35,38 @@ if ($entry['topic'] === 'orders_v2' && $entry['resource'] !== '') {
     try {
         ml_sync_order_from_webhook($entry['resource']);
     } catch (Throwable $e) {
-        file_put_contents(
-            $logDir . '/ml-webhook-errors.log',
-            json_encode(['at' => gmdate('c'), 'resource' => $entry['resource'], 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE) . "\n",
-            FILE_APPEND | LOCK_EX
-        );
+        ml_append_log('ml-webhook-errors.log', [
+            'at' => gmdate('c'),
+            'resource' => $entry['resource'],
+            'error' => $e->getMessage(),
+        ]);
     }
 }
 
 echo json_encode(['ok' => true]);
 
+function ml_log_dir(): ?string {
+    $dir = ml_root() . '/logs';
+    return (is_dir($dir) && is_writable($dir)) ? $dir : null;
+}
+
+function ml_append_log(string $filename, array $payload): void {
+    $dir = ml_log_dir();
+    if ($dir === null) {
+        return;
+    }
+    $line = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+    if ($line === false) {
+        return;
+    }
+    @file_put_contents($dir . '/' . $filename, $line . PHP_EOL, FILE_APPEND | LOCK_EX);
+}
+
 function ml_order_dir(): string {
     $dir = ml_root() . '/storage/orders';
-    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        throw new RuntimeException('ML order storage unavailable');
+    }
     return $dir;
 }
 
@@ -90,7 +107,7 @@ function ml_sync_order_from_webhook(string $resource): void {
         $existing = json_decode((string)file_get_contents($path), true) ?: [];
         $existing['status'] = ml_map_status((string)($order['status'] ?? ''));
         $existing['ml_status'] = (string)($order['status'] ?? '');
-        file_put_contents($path, json_encode($existing, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+        ml_write_json_file($path, $existing);
         return;
     }
 
@@ -114,5 +131,15 @@ function ml_sync_order_from_webhook(string $resource): void {
         'source' => 'mercado_livre',
     ];
 
-    file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+    ml_write_json_file($path, $record);
+}
+
+function ml_write_json_file(string $path, array $payload): void {
+    $encoded = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    if ($encoded === false) {
+        throw new RuntimeException('ML webhook JSON encode failed');
+    }
+    if (file_put_contents($path, $encoded, LOCK_EX) === false) {
+        throw new RuntimeException('ML webhook write failed');
+    }
 }

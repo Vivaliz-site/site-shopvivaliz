@@ -147,12 +147,12 @@ function svas_self_healing_state(?string $incidentKey = null): array
     ];
 }
 
-function svas_append_self_healing_attempt(array $record): void
+function svas_append_self_healing_attempt(array $record): bool
 {
     $path = svas_self_healing_log_path();
     $dir = dirname($path);
-    if (!is_dir($dir)) {
-        @mkdir($dir, 0755, true);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return false;
     }
-    file_put_contents($path, json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n", FILE_APPEND | LOCK_EX);
+    return file_put_contents($path, json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n", FILE_APPEND | LOCK_EX) !== false;
 }

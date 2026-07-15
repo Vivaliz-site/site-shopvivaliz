@@ -11,6 +11,7 @@ Escopo seguro:
 from __future__ import annotations
 
 import json
+import os
 import statistics
 import sys
 from datetime import UTC, datetime
@@ -28,6 +29,10 @@ CATALOG_PATH = ROOT / "api" / "catalog" / "fallback-products.json"
 REPORT_JSON = ROOT / "logs" / "seo-automation-audit.json"
 REPORT_MD = ROOT / "logs" / "seo-automation-audit.md"
 BASE_URL = "https://dev.shopvivaliz.com.br"
+
+
+def report_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
 
 COLOR_HINTS = {
     "preto", "preta", "branco", "branca", "azul", "vermelho", "vermelha", "verde",
@@ -243,8 +248,11 @@ def main() -> int:
         "marketplace": marketplace_entries,
     }
 
-    REPORT_JSON.parent.mkdir(parents=True, exist_ok=True)
+    if not report_dir_ready(REPORT_JSON):
+        raise FileNotFoundError(f"Diretório de relatório indisponível: {REPORT_JSON.parent}")
     REPORT_JSON.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+    if not report_dir_ready(REPORT_MD):
+        raise FileNotFoundError(f"Diretório de relatório indisponível: {REPORT_MD.parent}")
     REPORT_MD.write_text(markdown_report(report), encoding="utf-8")
 
     print("SEO automation audit")

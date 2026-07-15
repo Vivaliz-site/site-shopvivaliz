@@ -1,0 +1,30 @@
+# Module Sweep 2026-07-15 Round 5
+
+- Task:
+  - continuar endurecimento em modulos distintos com validacao objetiva
+- Modules touched:
+  - `api/monitor`
+  - `api/stock-alerts`
+  - `tests`
+- Files changed:
+  - `api/monitor/dev-status.php`
+  - `api/stock-alerts/subscribe.php`
+  - `api/stock-alerts/process.php`
+  - `tests/test_production_hardening.py`
+- Tests executed:
+  - `php -l api/monitor/dev-status.php`
+  - `php -l api/stock-alerts/subscribe.php`
+  - `php -l api/stock-alerts/process.php`
+  - `pytest tests/test_production_hardening.py -q`
+- Results:
+  - `dev-status` deixou de criar o diretorio de logs no endpoint de observabilidade
+  - `stock-alerts` nao cria mais diretorios automaticamente no caminho da requisicao
+  - `stock-alerts/process` deixou de expor caminho absoluto do outbox na resposta
+  - suite de hardening passou a cobrir esses contratos
+- Risks identified:
+  - runtime local de PHP continua com aviso da extensao `curl` ausente nos lints
+  - `api/ml/webhook.php` ainda escreve logs e arquivos com pouca normalizacao de caminhos/nomes e merece endurecimento semelhante
+- Next recommended module:
+  - `api/ml/webhook.php`
+- Reason:
+  - e um endpoint externo com escrita em disco, bom candidato para o mesmo padrao de previsibilidade e hardening

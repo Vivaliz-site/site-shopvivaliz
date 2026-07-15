@@ -34,9 +34,16 @@ require_once __DIR__ . '/queue.php';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function osch_env(string $key): string { return (string)(getenv($key) ?: ''); }
 
-function osch_log(string $msg): void {
+function osch_log_dir(): ?string {
     $dir = dirname(__DIR__, 2) . '/logs';
-    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    return (is_dir($dir) && is_writable($dir)) ? $dir : null;
+}
+
+function osch_log(string $msg): void {
+    $dir = osch_log_dir();
+    if ($dir === null) {
+        return;
+    }
     $line = '[' . date('c') . '] [scheduler] ' . $msg . "\n";
     file_put_contents($dir . '/orchestrator.log', $line, FILE_APPEND | LOCK_EX);
 }

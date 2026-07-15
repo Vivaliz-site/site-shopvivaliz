@@ -1,0 +1,28 @@
+# Module Sweep 2026-07-15 Round 2
+
+- Task:
+  - continuar correcoes e melhorias em modulos distintos sem repetir a rodada anterior
+- Modules touched:
+  - `api/sync-cache-endpoint`
+  - `api/health`
+  - `tests`
+- Files changed:
+  - `api/sync-cache-endpoint.php`
+  - `api/health.php`
+  - `tests/test_production_hardening.py`
+- Tests executed:
+  - `php -l api/sync-cache-endpoint.php`
+  - `php -l api/health.php`
+  - `pytest tests/test_production_hardening.py -q`
+- Results:
+  - sync-cache endpoint agora busca token por runtime-secrets, `.env`, `storage/private/tokens.json` e ambiente
+  - escrita do cache passou a ser atomica e a resposta nao expõe caminho absoluto
+  - endpoint de health deixou de criar diretorios automaticamente, ficando apenas leitura
+  - testes de hardening agora cobrem o contrato novo do sync-cache e a natureza read-only do health endpoint
+- Risks identified:
+  - runtime local de PHP continua com aviso de extensao `curl` ausente durante `php -l`
+  - `api/tiny/stock-webhook.php` ainda grava o catalogo diretamente dentro do lock, sem helper reutilizavel de escrita segura
+- Next recommended module:
+  - `api/tiny/stock-webhook.php`
+- Reason:
+  - e outro ponto de escrita de catalogo em fluxo automatizado e merece o mesmo nivel de robustez aplicado ao sync-cache

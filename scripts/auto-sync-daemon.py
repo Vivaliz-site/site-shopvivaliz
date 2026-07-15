@@ -24,6 +24,10 @@ REPO_DIR = Path(__file__).parent.parent
 SYNC_INTERVAL = 30  # segundos em dev, 1800 em prod (30 min)
 LOG_FILE = REPO_DIR / "logs" / "auto-sync-daemon.log"
 
+
+def log_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
 def log(msg: str):
     """Log com timestamp."""
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -32,7 +36,8 @@ def log(msg: str):
         print(log_msg)
     except UnicodeEncodeError:
         print(log_msg.encode('utf-8', 'ignore').decode('utf-8'))
-    LOG_FILE.parent.mkdir(exist_ok=True)
+    if not log_dir_ready(LOG_FILE):
+        raise FileNotFoundError(f"Diretório de log indisponível: {LOG_FILE.parent}")
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(log_msg + "\n")
 

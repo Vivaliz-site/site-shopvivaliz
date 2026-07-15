@@ -1,0 +1,24 @@
+# Module Sweep 2026-07-15 Round 10
+
+- Task:
+  - continuar o ciclo prolongado endurecendo uma nova superficie operacional sem repetir modulo
+- Modules touched:
+  - `api/orchestrator`
+  - `tests`
+- Files changed:
+  - `api/orchestrator/scheduler.php`
+  - `tests/test_production_hardening.py`
+- Tests executed:
+  - `php -l api/orchestrator/scheduler.php`
+  - `pytest tests/test_production_hardening.py -q`
+- Results:
+  - `scheduler` nao cria mais diretorio de logs automaticamente
+  - logging agora depende de diretorio existente e gravavel, alinhando com `director`
+  - suite de hardening cobre a ausencia de `mkdir` e o helper `osch_log_dir`
+- Risks identified:
+  - runtime local de PHP continua com aviso da extensao `curl` ausente durante lint
+  - `api/monitor/api.php` ainda cria diretorios automaticamente para append de logs/estado
+- Next recommended module:
+  - `api/monitor/api.php`
+- Reason:
+  - e uma nova superficie de monitoramento com escrita em disco no caminho quente e pode receber o mesmo padrao de previsibilidade

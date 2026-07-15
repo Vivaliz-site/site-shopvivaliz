@@ -29,12 +29,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def dir_ready(path: Path) -> bool:
+    return path.is_dir() and os.access(path, os.W_OK)
+
+
+def parent_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
 class OlistImageDownloader:
     def __init__(self, email, password, output_dir="downloads_olist_imagens"):
         self.email = email
         self.password = password
         self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(exist_ok=True)
+        if not dir_ready(self.output_dir):
+            raise FileNotFoundError(f"Diretório de saída indisponível: {self.output_dir}")
 
         self.session = requests.Session()
         self.session.headers.update({
@@ -118,7 +127,8 @@ class OlistImageDownloader:
             url = urljoin(self.erp_base, url)
 
         folder = self.output_dir / f"{sku}_{product_id}"
-        folder.mkdir(exist_ok=True)
+        if not dir_ready(folder):
+            raise FileNotFoundError(f"Diretório do produto indisponível: {folder}")
 
         try:
             resp = self.session.get(url, timeout=30, stream=True)
@@ -303,6 +313,8 @@ class OlistImageDownloader:
             'raw_image_json'
         ]
 
+        if not parent_dir_ready(filepath):
+            raise FileNotFoundError(f"Diretório de auditoria indisponível: {filepath.parent}")
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
@@ -320,6 +332,8 @@ class OlistImageDownloader:
             'site_public_url', 'file_hash', 'upload_status', 'catalog_link_status'
         ]
 
+        if not parent_dir_ready(filepath):
+            raise FileNotFoundError(f"Diretório de mapeamento indisponível: {filepath.parent}")
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()

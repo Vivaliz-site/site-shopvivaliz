@@ -9,13 +9,18 @@ class PerformanceOptimizer {
     private $cacheDir = '/home/ubuntu/site-shopvivaliz/.cache';
 
     public function __construct() {
-        if (!is_dir($this->cacheDir)) {
-            mkdir($this->cacheDir, 0755, true);
-        }
+    }
+
+    private function cacheDirReady() {
+        return is_dir($this->cacheDir) && is_writable($this->cacheDir);
     }
 
     public function optimizeAll() {
         echo "🚀 Performance Optimization iniciado...\n";
+
+        if (!$this->cacheDirReady()) {
+            echo "⚠️ Cache dir indisponível para escrita: {$this->cacheDir}\n";
+        }
 
         $results = [
             'css_minified' => $this->minifyCSS(),

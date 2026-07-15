@@ -20,6 +20,10 @@ REMOTE_BASE_DIR = '/public_html/dev/uploads/olist'
 WEB_BASE_URL = 'https://dev.shopvivaliz.com.br/uploads/olist'
 
 
+def output_dir_ready(path: Path) -> bool:
+    return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
+
 def get_env_variable(name: str, alt_names: Optional[list[str]] = None) -> str:
     value = os.environ.get(name)
     found_name = name
@@ -140,8 +144,8 @@ def main(argv=None) -> int:
 
     ftp.quit()
 
-    if OUTPUT_MAPPING_FILE.parent:
-        OUTPUT_MAPPING_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not output_dir_ready(OUTPUT_MAPPING_FILE):
+        raise FileNotFoundError(f'Diretório de mapeamento indisponível: {OUTPUT_MAPPING_FILE.parent}')
     with OUTPUT_MAPPING_FILE.open('w', newline='', encoding='utf-8') as csvfile:
         fieldnames = ['sku', 'image_url_1', 'image_url_2', 'image_url_3', 'image_url_4']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)

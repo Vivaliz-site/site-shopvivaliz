@@ -1,0 +1,31 @@
+# Module Sweep 2026-07-15 Round 1
+
+- Task:
+  - buscar correcoes e melhorias em modulos distintos sem repetir area nesta rodada
+- Modules touched:
+  - `api/catalog`
+  - `api/ml`
+  - `scripts`
+  - `admin`
+- Files changed:
+  - `api/catalog/clean-deleted.php`
+  - `api/ml/callback.php`
+  - `scripts/retry-exponential-backoff.php`
+  - `admin/teste-banco.php`
+- Tests executed:
+  - `php -l api/catalog/clean-deleted.php`
+  - `php -l api/ml/callback.php`
+  - `php -l scripts/retry-exponential-backoff.php`
+  - `php -l admin/teste-banco.php`
+- Results:
+  - catalog cleanup now fails loudly on invalid JSON and writes atomically
+  - Mercado Livre callback now clears cookies with the same security attributes and disables caching
+  - retry helper now handles invalid DLQ JSON and fallback errors more safely
+  - admin DB test no longer exposes host/user in the success payload and handles query failure explicitly
+- Risks identified:
+  - local PHP runtime still warns about missing `curl` extension during lint runs
+  - `api/sync-cache-endpoint.php` still reads `.env` directly and writes cache without atomic replace
+- Next recommended module:
+  - `api/sync-cache-endpoint.php`
+- Reason:
+  - it is a separate API surface with direct secret handling and filesystem writes, so it offers a good next hardening step without overlapping the modules above

@@ -191,11 +191,13 @@ function ml_publish_one(array $product, array $catMap): array {
     }
 }
 
-function ml_publish_log(array $entry): void {
+function ml_publish_log(array $entry): bool {
     $dir = dirname(__DIR__, 2) . '/logs';
-    if (!is_dir($dir)) @mkdir($dir, 0750, true);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return false;
+    }
     $entry['at'] = date('c');
-    file_put_contents($dir . '/ml-publish.log', json_encode($entry, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
+    return file_put_contents($dir . '/ml-publish.log', json_encode($entry, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX) !== false;
 }
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';

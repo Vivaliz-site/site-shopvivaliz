@@ -25,9 +25,6 @@ function sv_health_bytes(string $value): int
 
 function sv_health_is_writable_dir(string $path): bool
 {
-    if (!is_dir($path)) {
-        @mkdir($path, 0755, true);
-    }
     return is_dir($path) && is_writable($path);
 }
 

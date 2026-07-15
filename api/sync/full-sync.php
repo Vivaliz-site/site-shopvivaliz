@@ -25,6 +25,20 @@ function full_sync_price(float|int|string|null $value): float
     return round((float)$normalized, 2);
 }
 
+function full_sync_append_log(array $payload): bool
+{
+    $logDir = dirname(__DIR__, 2) . '/logs';
+    if (!is_dir($logDir) || !is_writable($logDir)) {
+        return false;
+    }
+
+    return file_put_contents(
+        $logDir . '/full-sync-prices.log',
+        json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
+        FILE_APPEND | LOCK_EX
+    ) !== false;
+}
+
 try {
     $db = Database::getInstance()->getConnection();
 
@@ -112,18 +126,10 @@ try {
 
     $after = (int)($db->query("SELECT COUNT(*) AS total FROM products")->fetch_assoc()['total'] ?? 0);
 
-    $logDir = dirname(__DIR__, 2) . '/logs';
-    if (!is_dir($logDir)) {
-        @mkdir($logDir, 0755, true);
-    }
-    @file_put_contents(
-        $logDir . '/full-sync-prices.log',
-        json_encode([
-            'timestamp' => date('c'),
-            'updated_prices' => $priceLogs,
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
-        FILE_APPEND
-    );
+    full_sync_append_log([
+        'timestamp' => date('c'),
+        'updated_prices' => $priceLogs,
+    ]);
 
     full_sync_json(200, [
         'ok' => true,

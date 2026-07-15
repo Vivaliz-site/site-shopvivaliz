@@ -1,6 +1,11 @@
 import os
 from pathlib import Path
 from datetime import datetime, timedelta
+import json
+
+
+def dir_ready(path: Path) -> bool:
+    return path.is_dir() and os.access(path, os.W_OK)
 
 def check_log_status():
     log_files = {
@@ -86,7 +91,8 @@ def check_log_status():
 
     # Salvar relatório (opcional, pode ser integrado ao system-health-check.py)
     report_dir = Path("logs")
-    report_dir.mkdir(parents=True, exist_ok=True)
+    if not dir_ready(report_dir):
+        raise FileNotFoundError(f"Diretório de logs indisponível para relatório: {report_dir}")
     with open(report_dir / "log-health-check-report.json", "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
     
@@ -95,5 +101,4 @@ def check_log_status():
     return report
 
 if __name__ == "__main__":
-    import json
     check_log_status()

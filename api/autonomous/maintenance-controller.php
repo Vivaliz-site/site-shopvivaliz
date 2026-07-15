@@ -17,14 +17,13 @@ class MaintenanceController
     /**
      * Enable global pause (all agents stop)
      */
-    public static function pauseAll(string $reason = ''): void
+    public static function pauseAll(string $reason = ''): bool
     {
-        @mkdir(self::CONTROL_DIR, 0755, true);
-        file_put_contents(self::GLOBAL_PAUSE, json_encode([
+        return self::writeControlFile(self::GLOBAL_PAUSE, [
             'timestamp' => date('c'),
             'reason' => $reason,
             'paused_by' => getenv('USER') ?? 'system'
-        ]));
+        ]);
     }
 
     /**
@@ -38,14 +37,13 @@ class MaintenanceController
     /**
      * Pause specific agent
      */
-    public static function pauseAgent(string $agent, string $reason = ''): void
+    public static function pauseAgent(string $agent, string $reason = ''): bool
     {
-        @mkdir(self::CONTROL_DIR, 0755, true);
-        file_put_contents(self::CONTROL_DIR . '/.pause-' . $agent, json_encode([
+        return self::writeControlFile(self::CONTROL_DIR . '/.pause-' . $agent, [
             'timestamp' => date('c'),
             'agent' => $agent,
             'reason' => $reason
-        ]));
+        ]);
     }
 
     /**
@@ -59,14 +57,13 @@ class MaintenanceController
     /**
      * Enable readonly mode (audit only, no changes)
      */
-    public static function enableReadonly(string $reason = ''): void
+    public static function enableReadonly(string $reason = ''): bool
     {
-        @mkdir(self::CONTROL_DIR, 0755, true);
-        file_put_contents(self::READONLY_MODE, json_encode([
+        return self::writeControlFile(self::READONLY_MODE, [
             'timestamp' => date('c'),
             'reason' => $reason,
             'enabled_by' => getenv('USER') ?? 'system'
-        ]));
+        ]);
     }
 
     /**
@@ -80,13 +77,12 @@ class MaintenanceController
     /**
      * Emergency stop (immediate halt)
      */
-    public static function emergencyStop(): void
+    public static function emergencyStop(): bool
     {
-        @mkdir(self::CONTROL_DIR, 0755, true);
-        file_put_contents(self::EMERGENCY_STOP, json_encode([
+        return self::writeControlFile(self::EMERGENCY_STOP, [
             'timestamp' => date('c'),
             'triggered_by' => getenv('USER') ?? 'system'
-        ]));
+        ]);
     }
 
     /**
@@ -123,7 +119,7 @@ class MaintenanceController
     /**
      * Define change window
      */
-    public static function defineChangeWindow(string $dayOfWeek, string $startTime, string $endTime): void
+    public static function defineChangeWindow(string $dayOfWeek, string $startTime, string $endTime): bool
     {
         $window = [
             'day' => $dayOfWeek,
@@ -131,11 +127,7 @@ class MaintenanceController
             'end' => $endTime
         ];
 
-        @mkdir(self::CONTROL_DIR, 0755, true);
-        file_put_contents(
-            self::CONTROL_DIR . '/change-window.json',
-            json_encode($window, JSON_PRETTY_PRINT)
-        );
+        return self::writeControlFile(self::CONTROL_DIR . '/change-window.json', $window);
     }
 
     /**
@@ -172,5 +164,17 @@ class MaintenanceController
         }
 
         return false;
+    }
+
+    private static function writeControlFile(string $path, array $payload): bool
+    {
+        if (!is_dir(self::CONTROL_DIR) || !is_writable(self::CONTROL_DIR)) {
+            return false;
+        }
+
+        return file_put_contents(
+            $path,
+            json_encode($payload, JSON_PRETTY_PRINT)
+        ) !== false;
     }
 }

@@ -18,6 +18,10 @@ class SystemHealthCheck:
             'warnings': []
         }
 
+    @staticmethod
+    def report_dir_ready(path: Path) -> bool:
+        return path.parent.is_dir() and os.access(path.parent, os.W_OK)
+
     def check_files_exist(self):
         """Verificar se arquivos críticos existem"""
         print("\n1. VERIFICANDO ARQUIVOS CRÍTICOS...")
@@ -285,7 +289,8 @@ class SystemHealthCheck:
     def save_report(self):
         """Salvar relatório de saúde"""
         report_file = Path('logs/system-health-check.json')
-        report_file.parent.mkdir(parents=True, exist_ok=True)
+        if not self.report_dir_ready(report_file):
+            raise FileNotFoundError(f"Diretório de relatório indisponível: {report_file.parent}")
 
         with open(report_file, 'w') as f:
             json.dump(self.report, f, indent=2)
