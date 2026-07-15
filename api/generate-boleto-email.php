@@ -2,13 +2,16 @@
 declare(strict_types=1);
 header('Content-Type: application/json; charset=UTF-8');
 
-// Load runtime secrets
-$runtimeSecretsFile = __DIR__ . '/../config/runtime-secrets.php';
-if (is_file($runtimeSecretsFile)) {
-    $secrets = require $runtimeSecretsFile;
-    if (is_array($secrets)) {
-        foreach ($secrets as $k => $v) {
-            if (!getenv($k)) putenv($k . '=' . (string)$v);
+// Load .env file
+$envFile = __DIR__ . '/../.env';
+if (is_file($envFile)) {
+    $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos($line, '=') !== false && !str_starts_with($line, '#')) {
+            [$key, $value] = explode('=', $line, 2);
+            if (!getenv(trim($key))) {
+                putenv(trim($key) . '=' . trim($value));
+            }
         }
     }
 }
