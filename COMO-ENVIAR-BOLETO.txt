@@ -1,0 +1,97 @@
+╔════════════════════════════════════════════════════════════╗
+║         COMO ENVIAR O BOLETO POR EMAIL                    ║
+╚════════════════════════════════════════════════════════════╝
+
+OPÇÃO 1: USAR GMAIL
+═════════════════════════════════════════════════════════════
+
+1. Abra Gmail: https://gmail.com
+2. Clique em "Redigir" (Compose)
+3. Copie o texto abaixo no corpo do email:
+4. Envie para: fredmourao@gmail.com
+
+TEXTO DO EMAIL:
+═════════════════════════════════════════════════════════════
+
+Olá Fredmourao,
+
+Seu boleto de teste foi gerado com sucesso! 🎉
+
+═══════════════════════════════════════════════════════════
+BOLETO - MERCADO PAGO
+
+Preference ID: 112962856-b34645b8-90e5-45dc-9b50-57b78abfd21a
+Valor: R$ 99,90
+Tipo: Boleto Bancário
+Status: Pronto para Pagamento
+
+═══════════════════════════════════════════════════════════
+
+🔗 LINK PARA PAGAR:
+
+https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=112962856-b34645b8-90e5-45dc-9b50-57b78abfd21a
+
+═══════════════════════════════════════════════════════════
+
+📋 PRÓXIMOS PASSOS:
+
+1. Clique no link acima
+2. Escolha "Boleto" como método de pagamento
+3. Gere ou copie a linha digitável
+4. Pague o boleto
+5. Webhook será acionado automaticamente
+
+═══════════════════════════════════════════════════════════
+
+Atenciosamente,
+Sistema ShopVivaliz
+
+═════════════════════════════════════════════════════════════
+
+
+OPÇÃO 2: USAR POWERPOINT (Windows)
+═════════════════════════════════════════════════════════════
+
+Cole este comando no PowerShell (substitua a senha):
+
+$SecurePassword = ConvertTo-SecureString -String "SUA_SENHA_AQUI" -AsPlainText -Force
+$Credential = New-Object System.Management.Automation.PSCredential("fredmourao@gmail.com", $SecurePassword)
+Send-MailMessage -From "noreply@shopvivaliz.com.br" -To "fredmourao@gmail.com" -Subject "🎫 Boleto de Teste - ShopVivaliz (R$ 99,90)" -Body "Olá Fredmourao,
+
+Seu boleto de teste foi gerado com sucesso! 🎉
+
+═══════════════════════════════════════════════════════════
+BOLETO - MERCADO PAGO
+
+Preference ID: 112962856-b34645b8-90e5-45dc-9b50-57b78abfd21a
+Valor: R$ 99,90
+Tipo: Boleto Bancário
+Status: Pronto para Pagamento
+
+═══════════════════════════════════════════════════════════
+
+🔗 LINK PARA PAGAR:
+
+https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=112962856-b34645b8-90e5-45dc-9b50-57b78abfd21a
+
+═══════════════════════════════════════════════════════════
+
+📋 PRÓXIMOS PASSOS:
+
+1. Clique no link acima
+2. Escolha "Boleto" como método de pagamento
+3. Gere ou copie a linha digitável
+4. Pague o boleto
+5. Webhook será acionado automaticamente
+
+═══════════════════════════════════════════════════════════
+
+Atenciosamente,
+Sistema ShopVivaliz" -SmtpServer "smtp.gmail.com" -Port 587 -UseSsl -Credential $Credential
+
+
+LINK DIRETO DO BOLETO:
+═════════════════════════════════════════════════════════════
+
+https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=112962856-b34645b8-90e5-45dc-9b50-57b78abfd21a
+
