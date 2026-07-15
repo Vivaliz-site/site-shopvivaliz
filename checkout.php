@@ -18,6 +18,8 @@ if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
 }
 
 require_once __DIR__ . '/includes/mercadopago-gateway.php';
+
+$whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
