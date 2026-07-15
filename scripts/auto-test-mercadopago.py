@@ -29,7 +29,7 @@ async def complete_checkout():
         page = await browser.new_page()
 
         print("\n[TEST] Acessando carrinho para preparar itens...")
-        await page.goto("https://dev.shopvivaliz.com.br/carrinho", wait_until="networkidle")
+        await page.goto("https://dev.shopvivaliz.com.br/carrinho?nocache=1", wait_until="networkidle")
 
         # Injetar produto real no carrinho
         await page.evaluate("""() => {
@@ -53,7 +53,7 @@ async def complete_checkout():
 
         # Acessar checkout
         print("[TEST] Acessando checkout...")
-        await page.goto("https://dev.shopvivaliz.com.br/checkout", wait_until="networkidle")
+        await page.goto("https://dev.shopvivaliz.com.br/checkout?nocache=1", wait_until="networkidle")
 
         # Preencher dados
         print("[TEST] Preenchendo formulário...")
