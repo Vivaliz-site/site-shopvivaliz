@@ -17,32 +17,9 @@ if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
     }
 }
 
-/* PIX key e WhatsApp vindos de .env ou config */
-function sv_co_env(string ...$keys): string {
-    static $loaded = false;
-    if (!$loaded) {
-        $loaded = true;
-        $f = __DIR__ . '/.env';
-        if (is_file($f)) {
-            foreach (file($f, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-                $line = trim($line);
-                if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
-                [$k, $v] = explode('=', $line, 2);
-                $k = trim($k); $v = trim(trim($v), '"\'');
-                if ($k !== '' && getenv($k) === false) { putenv("$k=$v"); $_ENV[$k] = $v; }
-            }
-        }
-    }
-    foreach ($keys as $k) {
-        $v = getenv($k); if (is_string($v) && $v !== '') return $v;
-        if (isset($_ENV[$k]) && $_ENV[$k] !== '') return $_ENV[$k];
-    }
-    return '';
-}
+require_once __DIR__ . '/includes/mercadopago-gateway.php';
 
-$pixKey      = sv_co_env('LOJA_PIX_KEY')     ?: 'contato@vivaliz.com.br';
-$pixName     = sv_co_env('LOJA_PIX_NAME')    ?: 'Vivaliz Store';
-$whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
+$whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -147,51 +124,11 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
             <div class="payment-select-title">Forma de pagamento *</div>
             <div class="payment-options">
                 <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="pix" checked>
+                    <input type="radio" name="payment_method" value="mercado_pago" checked required>
                     <span class="payment-opt-box">
-                        <span class="pay-icon">⚡</span>
-                        <strong>PIX</strong>
-                        <small>Aprovação imediata</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="mercado_pago">
-                    <span class="payment-opt-box">
-                        <span class="pay-icon">💳</span>
-                        <strong>Mercado Pago</strong>
-                        <small>Cartão, PIX ou saldo no ambiente seguro</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="pagarme">
-                    <span class="payment-opt-box">
-                        <span class="pay-icon">🔒</span>
-                        <strong>Pagar.me</strong>
-                        <small>Cartão de crédito</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="boleto">
-                    <span class="payment-opt-box">
-                        <span class="pay-icon">🧾</span>
-                        <strong>Boleto</strong>
-                        <small>Emitido agora pelo Mercado Pago</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="whatsapp">
-                    <span class="payment-opt-box">
-                        <span class="pay-icon">💬</span>
-                        <strong>WhatsApp</strong>
-                        <small>Fale com a gente</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="transferencia">
-                    <span class="payment-opt-box">
-                        <span class="pay-icon">🏦</span>
-                        <strong>Transferência</strong>
-                        <small>TED / DOC</small>
+                        <img src="/assets/payments/mercado-pago-official.svg" alt="Mercado Pago" style="max-height:48px; margin-bottom:8px">
+                        <strong>Pagar com segurança</strong>
+                        <small>Cartão, PIX, Boleto ou saldo em conta</small>
                     </span>
                 </label>
             </div>
