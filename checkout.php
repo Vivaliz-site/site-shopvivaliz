@@ -147,51 +147,11 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
             <div class="payment-select-title">Forma de pagamento *</div>
             <div class="payment-options">
                 <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="pix" checked>
+                    <input type="radio" name="payment_method" value="mercado_pago" checked required>
                     <span class="payment-opt-box">
-                        <span class="pay-icon">⚡</span>
-                        <strong>PIX</strong>
-                        <small>Aprovação imediata</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="mercado_pago">
-                    <span class="payment-opt-box">
-                        <span class="pay-icon">💳</span>
-                        <strong>Mercado Pago</strong>
-                        <small>Cartão, PIX ou saldo no ambiente seguro</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="pagarme">
-                    <span class="payment-opt-box">
-                        <span class="pay-icon">🔒</span>
-                        <strong>Pagar.me</strong>
-                        <small>Cartão de crédito</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="boleto">
-                    <span class="payment-opt-box">
-                        <span class="pay-icon">🧾</span>
-                        <strong>Boleto</strong>
-                        <small>Emitido agora pelo Mercado Pago</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="whatsapp">
-                    <span class="payment-opt-box">
-                        <span class="pay-icon">💬</span>
-                        <strong>WhatsApp</strong>
-                        <small>Fale com a gente</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="transferencia">
-                    <span class="payment-opt-box">
-                        <span class="pay-icon">🏦</span>
-                        <strong>Transferência</strong>
-                        <small>TED / DOC</small>
+                        <img src="/assets/payments/mercado-pago-official.svg" alt="Mercado Pago" style="max-height:48px; margin-bottom:8px">
+                        <strong>Pagar com segurança</strong>
+                        <small>Cartão, PIX, Boleto ou saldo em conta</small>
                     </span>
                 </label>
             </div>
