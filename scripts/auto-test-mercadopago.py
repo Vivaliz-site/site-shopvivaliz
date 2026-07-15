@@ -41,6 +41,8 @@ async def complete_checkout():
                 image_url: '/public/assets/category-images/cat-rodizios.jpg',
                 id: '123'
             }]));
+            localStorage.setItem('shopvivaliz_cart_updated_at', String(Date.now()));
+            localStorage.setItem('shopvivaliz_cart_validated_at', String(Date.now()));
         }""")
         await page.reload(wait_until="networkidle")
 
