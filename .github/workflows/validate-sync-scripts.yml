@@ -1,0 +1,67 @@
+name: Validate Sync Scripts
+
+on:
+  push:
+    paths:
+      - 'scripts/git-auto-sync.py'
+      - 'scripts/install-git-sync-cron.sh'
+      - '.github/workflows/validate-sync-scripts.yml'
+  pull_request:
+    paths:
+      - 'scripts/git-auto-sync.py'
+      - 'scripts/install-git-sync-cron.sh'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    name: Validate Sync Daemon Scripts
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Python syntax
+        run: |
+          python3 -m py_compile scripts/git-auto-sync.py
+          echo "✅ Python syntax OK"
+
+      - name: Validate Bash syntax
+        run: |
+          bash -n scripts/install-git-sync-cron.sh
+          echo "✅ Bash syntax OK"
+
+      - name: Check for git reset --hard (FORBIDDEN)
+        run: |
+          if grep -r "git reset --hard" scripts/; then
+            echo "❌ ERRO: Encontrado 'git reset --hard' - PROIBIDO em produção!"
+            exit 1
+          fi
+          echo "✅ Sem git reset --hard"
+
+      - name: Check for set -e in bash scripts
+        run: |
+          if ! grep -q "set -Eeuo pipefail" scripts/install-git-sync-cron.sh; then
+            echo "⚠️  WARNING: install-git-sync-cron.sh deveria ter 'set -Eeuo pipefail'"
+            # Não falha, apenas aviso
+          fi
+          echo "✅ Bash safety check OK"
+
+      - name: Verify .gitignore protections
+        run: |
+          PROTECTED=("storage/orders/" "storage/codex-bridge/state.json" ".git-sync.lock")
+          for file in "${PROTECTED[@]}"; do
+            if ! grep -q "$file" .gitignore; then
+              echo "❌ ERRO: $file NÃO está protegido em .gitignore!"
+              exit 1
+            fi
+          done
+          echo "✅ Dados operacionais protegidos em .gitignore"
+
+      - name: Summary
+        run: |
+          echo "✅ Todos os testes passaram!"
+          echo ""
+          echo "Script validado:"
+          echo "  - Sintaxe Python: OK"
+          echo "  - Sintaxe Bash: OK"
+          echo "  - Sem git reset --hard: OK"
+          echo "  - Proteções .gitignore: OK"
