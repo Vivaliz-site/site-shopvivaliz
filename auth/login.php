@@ -19,10 +19,14 @@ if (!empty($_SESSION['user_id'])) {
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
-require_once __DIR__ . '/../config/constants.php';
-require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../includes/social-auth.php';
-require_once __DIR__ . '/../includes/csrf.php';
+try {
+    require_once __DIR__ . '/../config/constants.php';
+    require_once __DIR__ . '/../config/database.php';
+    require_once __DIR__ . '/../includes/social-auth.php';
+    require_once __DIR__ . '/../includes/csrf.php';
+} catch (Exception $e) {
+    error_log('[auth/login] Erro ao carregar dependências: ' . $e->getMessage());
+}
 
 $error = '';
 $email = '';
