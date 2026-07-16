@@ -43,3 +43,11 @@ config/runtime-secrets*.php
 test-results/
 playwright-report/
 storage/order-rate-limit/
+
+# ⚠️ CRÍTICO: Dados operacionais - NUNCA versionados (risco de perda em git reset)
+storage/orders/
+storage/codex-bridge/state.json
+storage/orchestrator/queue.json
+.agent-heartbeats/
+.git-sync.lock
+.git-auto-sync.log

@@ -1,150 +1,194 @@
-# ShopVivaliz - Agentes do Projeto
+# 🤖 GUIA OBRIGATÓRIO PARA AGENTES IA
 
-Este repositorio usa agentes especializados para acelerar lancamento, QA, automacoes Olist/Tiny, seguranca e releases cumulativos.
+**Efetivo:** 2026-07-15  
+**Responsável:** Todos os agentes (Claude, Codex, Gemini, GPT, etc.)  
+**Escopo:** Qualquer tarefa automatizada (deploy, testes, integrações, ERP, pagamentos, e-mails)  
 
-## Diretriz global de operacao autonoma
+> ⚠️ **CRÍTICO:** Ler primeiro [`VALIDATION-POLICY.md`](VALIDATION-POLICY.md) para política completa. Se houver conflito, `VALIDATION-POLICY.md` prevalece.
 
-### Exclusao mutua obrigatoria entre agentes
+---
 
-- Todo agente que editar o repositorio deve executar seu processo atraves de `python scripts/agent-exclusive-run.py --owner <agente-id> -- <comando>`.
-- O lock deve permanecer adquirido durante toda a leitura, edicao e validacao da mudanca; nao apenas durante o commit.
-- Se outro agente estiver editando, aguardar o lock. Nunca contornar, apagar ou sobrescrever `.git/shopvivaliz-agent-edit.lock`.
-- Agentes em GitHub Actions devem compartilhar o grupo de concorrencia `shopvivaliz-autonomous-code-edit` e usar o mesmo wrapper dentro do runner.
-- Cada agente trabalha em branch isolada. Integracao ocorre somente por PR com checks verdes; nunca por dois processos escrevendo na mesma `main`.
+## ⛔ REGRAS OBRIGATÓRIAS (Resumo Executivo)
 
-Esta diretriz deve ser considerada obrigatoria para ChatGPT, Roo, Gemini, Claude e demais agentes ativos no projeto ShopVivaliz.
+### 1. NUNCA Use `git reset --hard` em Produção
 
-Todos os agentes passam a operar como uma unica equipe coordenada pelo Diretor de IA, compartilhando a mesma arquitetura, regras de governanca e prioridades.
+**Proibido SEMPRE:**
+```bash
+git reset --hard origin/main          # ❌ NUNCA
+git reset --hard origin/[branch]      # ❌ NUNCA
+git reset --hard HEAD~1               # ❌ NUNCA
+```
 
-### Regras de continuidade
+**Por quê:**
+- Descarta arquivos não versionados
+- Mata dados de runtime (pedidos, caches, logs)
+- Não recuperável sem backup
+- Viola integridade de dados operacionais
 
-- Nenhum agente deve aguardar nova instrucao ao concluir uma tarefa segura.
-- Ao finalizar uma tarefa, o agente deve consultar o backlog, roadmap e prioridades do Diretor.
-- O agente deve escolher automaticamente a proxima tarefa segura de maior prioridade.
-- O ciclo deve continuar enquanto existir tarefa segura, auditavel e sem dependencia de aprovacao humana.
-- Todo ciclo deve deixar rastro em log ou relatorio.
+**Alternativas seguras:**
+```bash
+git fetch origin                       # ✅ SEGURO
+git merge --ff-only origin/main       # ✅ SEGURO (falha se não-FF)
+git pull --ff-only origin main        # ✅ SEGURO (rejeita merges)
+```
 
-### Fluxo obrigatorio ao concluir tarefa
+---
 
-1. Atualizar documentacao quando necessario.
-2. Executar autoauditoria.
-3. Registrar em log ou relatorio:
-   - tarefa concluida;
-   - arquivos criados ou alterados;
-   - testes executados;
-   - resultado;
-   - riscos identificados;
-   - proxima tarefa escolhida ou recomendada;
-   - motivo da escolha.
-4. Consultar o Diretor antes de iniciar nova execucao.
-5. Executar automaticamente a proxima tarefa segura aprovada ou priorizada pelo Diretor.
+### 2. Validar Working Tree Antes de Git Pull
 
-### Governanca obrigatoria
+**Obrigatório fazer ANTES de git pull/merge/fetch:**
 
-- Nunca alterar precos automaticamente.
-- Nunca criar, publicar ou ativar campanhas sem aprovacao humana.
-- Nunca aumentar orcamento automaticamente.
-- Nunca executar acao financeira sem aprovacao.
-- Nunca fazer deploy sem autorizacao explicita.
-- Nunca remover funcionalidades existentes sem validacao.
-- Nunca commitar credenciais, tokens, cookies ou dados sensiveis.
-- Nunca operar sem log.
-- Nunca repetir a mesma tarefa sem avanco real.
+```bash
+set -Eeuo pipefail  # Falhar imediatamente em erros
 
-### Condicoes que exigem parada e intervencao humana
+# 1. Verificar status
+git status --porcelain
 
-O agente deve parar e solicitar intervencao humana apenas quando houver:
+# 2. Se há alterações NÃO commitadas:
+if [[ -n "$(git status --porcelain)" ]]; then
+    echo "❌ Working tree sujo. Abortar."
+    exit 1
+fi
 
-- campanha pendente de aprovacao;
-- alteracao de preco;
-- aumento de orcamento;
-- necessidade de deploy;
-- risco de perda de dados;
-- risco de indisponibilidade;
-- conflito tecnico sem solucao segura;
-- ausencia de proxima tarefa segura;
-- erro critico.
+# 3. DEPOIS fazer pull seguro
+git fetch origin
+git merge --ff-only origin/main  # Falha se não é Fast-Forward
+```
 
-Fora dessas excecoes, a operacao deve permanecer continua, autonoma, auditavel e orientada a estabilidade, qualidade, desempenho, conversao e crescimento do projeto ShopVivaliz.
+---
 
-## Regras gerais
+### 3. Todo Script Shell DEVE Usar `set -Eeuo pipefail`
 
-- Sempre gerar atualizacoes cumulativas.
-- Nunca commitar credenciais reais, tokens, dumps de producao ou arquivos de `storage/private`.
-- Nunca commitar `login_config.json`, cookies, perfis Chrome, HARs com cookies, relatorios contendo dados sensiveis ou dumps de sessoes autenticadas.
-- Toda alteracao deve considerar PHP 8.3, MySQL 5.7, atualizador web e ambiente dev em `https://dev.shopvivaliz.com.br`.
-- SQLs, migrations e reparos de vinculo devem rodar no atualizador sem links manuais.
-- Todo release deve atualizar `SV_VERSION`, migrations, self-test e relatorio.
-- Para automacoes Olist/Tiny, sempre executar validacoes locais antes de gerar ZIP ou publicar alteracoes.
-- Para integracao Olist/Tiny ERP API v3, consultar `docs/olist-tiny-erp-api-knowledge-v2.md` como base principal e `docs/olist-tiny-erp-api-knowledge.md` como historico V1.
-- Nunca expor secrets, tokens, cookies ou sessoes. Usar API publica primeiro; endpoints internos somente em ambiente autorizado.
+**Obrigatório na primeira linha:**
 
-## Agentes principais
+```bash
+#!/bin/bash
+set -Eeuo pipefail  # ← OBRIGATÓRIO
 
-### Release Manager
-Gera ZIP cumulativo, controla versao, release notes, migrations e validacoes finais.
+# Qualquer erro agora para a execução
+somecommand | grep pattern  # Se grep falhar, script falha
+```
 
-### QA / Self-test
-Executa lint, integridade ZIP, endpoints, webhooks, botao Comprar, CEP, checkout, frete e versao aplicada. Também utiliza [`scripts/log-health-checker.py`](scripts/log-health-checker.py) para auditoria de saúde dos logs, e [`scripts/log-simulator.py`](scripts/log-simulator.py) para gerar dados de log para testes. Além disso, a auditoria verifica a presença de workflows críticos como `.github/workflows/24-7-continuous-agent.yml` e `.github/workflows/parallel-trio-executor.yml`, e seus placeholders caso estejam ausentes, para indicar a necessidade de restauração dos workflows reais. Também verifica a presença do placeholder [`api/monitor/api.php`](api/monitor/api.php) e a necessidade de restaurar a funcionalidade real do monitoramento.
+---
 
-### Olist / Tiny
-Cuida de OAuth, refresh token, paginacao, produtos, imagens, estoque, peso e dimensoes.
+### 4. Validar Código de Saída de Todo Comando
 
-### Frete / Checkout
-Cuida de Melhor Envio, campo CEP, carrinho, checkout, origem, destino e calculo de frete.
+**Padrão correto:**
 
-### Imagens / Produtos
-Cuida de importacao de imagens, capa, galerias, AI image templates e SEO visual.
+```bash
+# ✅ CORRETO
+if ! command arg; then
+    echo "❌ Comando falhou"
+    exit 1
+fi
 
-### Seguranca / Segredos
-Valida ausencia de credenciais em Git, permissoes, arquivos privados e exposicao publica.
+# ❌ ERRADO
+command arg
+echo "✅ Sucesso"  # Roda mesmo se command falhou
+```
 
-### Pagar.me
-Cuida de chaves, webhook, checkout, PIX, boleto, cartao e conciliacao de eventos.
+---
 
-### Installer / Updater
-Cuida do atualizador web, BAT 1 clique, pos-update automatico, logs e rollback seguro.
+### 5. Registre Estado ANTES e DEPOIS
 
-### CRO / Simulador de Cliente
-Revisa funil, layout mobile, produto, checkout, copy, confianca e conversao.
+**Obrigatório para testes:**
 
-## Agentes de automacao Olist
+```bash
+echo "=== ANTES ===" 
+git log --oneline -1
+git status --porcelain
+date -u
 
-### Login Olist
-Valida arquivos locais de login antes da execucao. Aceita modelos seguros como `login_config.example.json` e `login_config.txt`, mas nunca deve versionar credenciais reais. Quando o usuario solicitar teste ou execucao, deve verificar se o arquivo local existe, se o JSON/TXT e valido e se `enabled=true`, sem imprimir senha em logs.
+echo "=== TESTANDO ==="
+# ... seu teste ...
 
-### Olist UI Regression
-Valida seletores e fluxo visual do ERP Olist antes de executar em massa. Deve testar pesquisa por SKU, abertura do cadastro, aba Dados Complementares, botao Gerenciar imagens, input `Filedata`, botoes de remover e botao Salvar imagens.
+echo "=== DEPOIS ===" 
+git log --oneline -1
+```
 
-### Selenium Test Runner
-Executa testes automatizados da automacao Olist em modo teste. Deve priorizar `self_test.py`, `data_check.py` e uma amostra pequena antes de liberar processamento completo. Em caso de falha, deve salvar screenshot e log.
+---
 
-### Config Validator
-Confere caminhos obrigatorios, extensoes, mapeamentos, planilhas, imagens geradas e dependencias Python. Deve falhar cedo se faltar `mapeamento_olist_ambientadas.xlsx`, pasta `imagens_ambientadas`, Chrome/Selenium ou arquivos de configuracao local.
-**Nota:** Foi identificado que o arquivo `mapeamento_olist_ambientadas.xlsx` e a pasta `imagens_ambientadas` estao ausentes, sendo criticos para a automacao Olist/Tiny completa.
+### 6. NUNCA Declare "Sucesso" Sem Evidência
 
-### Artifact Builder
-Gera ZIPs cumulativos da automacao, README, changelog, `.gitignore`, BATs de execucao e relatorios de validacao. Inclui um script local [`scripts/local-artifact-builder.py`](scripts/local-artifact-builder.py) para geracao manual de ZIPs. Nunca inclui credenciais, caches, screenshots sensiveis, perfis Chrome, cookies ou arquivos de sessao.
+**Proibido:**
 
-### Recovery Manager
-Valida retomada apos interrupcao. Deve conferir relatorios, status por SKU, arquivos ja processados e permitir continuar sem repetir itens OK, mantendo log de erros e pendencias.
+| ❌ NÃO FAÇA | ✅ FAÇA |
+|-----------|--------|
+| "100% operacional" | "COMPROVADO: SHA bate" |
+| "funcionando" | "FALHOU: erro no log" |
+| "daemon rodando" | "INCONCLUSIVO: sem evidência" |
 
-### Olist Image Position Auditor
-Audita a regra de imagens no ERP: manter imagens 1 a 5, inserir Hero Shot na posicao correta, limitar resultado final a ate 6 imagens quando houver 5 ou mais imagens, e remover imagens excedentes das posicoes 7, 8, 9 em diante.
+---
 
+### 7. Testes Reais, Nunca Simulação
 
-### Criação de Testes
-São fornecidos exemplos de testes unitários em [`tests/`](tests/) para PHP (usando PHPUnit) e Python (usando `unittest`), para serem utilizados como base para novas funcionalidades.
+- Se você executa `git pull/reset/fetch` DEPOIS do push, invalidou o teste
+- Teste real = push + aguardar daemon + SEM intervir
 
-## Agentes reais v9.2.84 no repositorio
+---
 
-A pasta `agents/v9.2.84` materializa os agentes antes apenas conceituais:
+### 8. Separar Claramente: Preparação, Disparo, Espera, Observação
 
-- `SafeMigrationRepairAgent`: cria tabelas/indices de controle e tolera execucoes repetidas.
-- `OlistImageRepairAgent`: repara imagem primaria, contagem de imagens e status Olist.
-- `AutonomousReportAgent`: gera relatorio JSON para acompanhamento pelo ChatGPT.
-- `SelfTestAgent`: valida runtime basico.
-- `LoopStarterAgent`: registra pedido de ciclo autonomo.
-- `AutonomousWatchdogAgent`: orquestra todos os agentes.
+```bash
+# FASE 1: PREPARAÇÃO
+echo "=== PREPARAÇÃO ===" 
+git checkout main
+git log --oneline -1
 
-Endpoints apos deploy:
+# FASE 2: DISPARO
+echo "=== DISPARO ===" 
+git commit --allow-empty -m "test: sync"
+EXPECTED_SHA=$(git rev-parse HEAD)
+git push origin main
+
+# FASE 3: ESPERA (SEM INTERVIR!)
+echo "Aguardando 4 minutos..."
+sleep 240
+
+# FASE 4: OBSERVAÇÃO
+echo "=== OBSERVAÇÃO ===" 
+ACTUAL_SHA=$(ssh ubuntu@vm "git -C /home/ubuntu/site-shopvivaliz rev-parse HEAD")
+[[ "$ACTUAL_SHA" == "$EXPECTED_SHA" ]] && echo "✅ OK" || echo "❌ FALHOU"
+```
+
+---
+
+### 9. Proteja Dados Operacionais
+
+**NUNCA comitte:**
+
+```
+storage/orders/
+storage/codex-bridge/state.json
+storage/orchestrator/queue.json
+.agent-heartbeats/
+.git-sync.lock
+```
+
+---
+
+### 10. Em Caso de Erro: PARAR Imediatamente
+
+```bash
+set -Eeuo pipefail  # Faz script falhar automaticamente em erros
+git fetch origin    # Se isso falha, próximas linhas NÃO rodam
+git merge --ff-only origin/main
+```
+
+---
+
+## 📋 CHECKLIST
+
+- [ ] `set -Eeuo pipefail` em scripts
+- [ ] Validei código de saída
+- [ ] Registrei ANTES e DEPOIS
+- [ ] Teste é REAL
+- [ ] NÃO usei `git reset --hard`
+- [ ] Nenhuma falsa afirmação
+- [ ] Status é COMPROVADO/FALHOU/INCONCLUSIVO
+
+---
+
+**Versão:** 1.0  
+**Data:** 2026-07-15  
+**Efetivo para:** Todos os agentes IA

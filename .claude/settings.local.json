@@ -13,5 +13,9 @@
       "mcp__claude-in-chrome__read_console_messages",
       "mcp__claude-in-chrome__form_input"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "codex-mesh-bridge"
+  ],
+  "enableAllProjectMcpServers": true
 }
