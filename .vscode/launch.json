@@ -1,0 +1,52 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Listen for XDebug",
+      "type": "php",
+      "port": 9003,
+      "pathMapping": {
+        "/": "${workspaceRoot}/",
+        "/public_html": "${workspaceRoot}/public/"
+      }
+    },
+    {
+      "name": "Launch PHP Server",
+      "type": "php",
+      "runtimeArgs": [
+        "-S",
+        "127.0.0.1:8000"
+      ],
+      "program": "${workspaceRoot}/public/index.php",
+      "cwd": "${workspaceRoot}",
+      "port": 9003,
+      "pathMapping": {
+        "/": "${workspaceRoot}/"
+      }
+    },
+    {
+      "name": "Python: Current File",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Python: Module",
+      "type": "python",
+      "request": "launch",
+      "module": "enter-your-module-name",
+      "console": "integratedTerminal"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack (PHP + Python)",
+      "configurations": [
+        "Listen for XDebug",
+        "Python: Current File"
+      ]
+    }
+  ]
+}
