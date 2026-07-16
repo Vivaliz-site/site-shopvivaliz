@@ -1,32 +1,8 @@
 <?php
-declare(strict_types=1);
-
-session_start();
-
-// So aceita redirects internos (comeca com "/", nunca "//" que seria
-// interpretado como URL absoluta por outro host -- evita open redirect).
-$redirectTo = (string)($_GET['redirect'] ?? $_POST['redirect'] ?? '/');
-if ($redirectTo === '' || $redirectTo[0] !== '/' || str_starts_with($redirectTo, '//')) {
-    $redirectTo = '/';
-}
-
-// Se já está logado, redireciona para home
-if (!empty($_SESSION['user_id'])) {
-    header('Location: ' . $redirectTo);
-    exit;
-}
-
-error_reporting(E_ALL);
-ini_set('display_errors', '0');
-
-try {
-    require_once __DIR__ . '/../config/constants.php';
-    require_once __DIR__ . '/../config/database.php';
-    require_once __DIR__ . '/../includes/social-auth.php';
-    require_once __DIR__ . '/../includes/csrf.php';
-} catch (Exception $e) {
-    error_log('[auth/login] Erro ao carregar dependências: ' . $e->getMessage());
-}
+// Redirect para login simplificado que funciona
+header('Location: /auth/login-simple.php' . (isset($_GET['redirect']) ? '?redirect=' . urlencode($_GET['redirect']) : ''));
+exit;
+?>
 
 $error = '';
 $email = '';
