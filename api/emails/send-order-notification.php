@@ -61,13 +61,18 @@ function svem_send_order_email(array $order, string $event = 'order_created'): b
 
 function svem_build_email_content(array $order, string $event, string $customerName): array
 {
-    $orderNumber = $order['order_number'] ?? 'N/A';
-    $orderDate = date('d/m/Y H:i', strtotime($order['created_at'] ?? 'now'));
-    $total = number_format($order['total'] ?? 0, 2, ',', '.');
-    $phone = $order['customer']['phone'] ?? '';
+    $orderNumber = isset($order['order_number']) ? $order['order_number'] : 'N/A';
+    $orderDate = date('d/m/Y H:i', strtotime(isset($order['created_at']) ? $order['created_at'] : 'now'));
+    $total = number_format(isset($order['total']) ? $order['total'] : 0, 2, ',', '.');
+    $phone = isset($order['customer']['phone']) ? $order['customer']['phone'] : '';
     $whatsapp = getenv('LOJA_WHATSAPP') ?: '551140415850';
     $whatsappLink = "https://wa.me/" . preg_replace('/\D/', '', $whatsapp);
-    $trackingCode = $order['tracking_code'] ?? 'Será enviado em breve';
+    $trackingCode = isset($order['tracking_code']) ? $order['tracking_code'] : 'Será enviado em breve';
+    $address = isset($order['customer']['address']) ? $order['customer']['address'] : '';
+    $neighborhood = isset($order['customer']['neighborhood']) ? $order['customer']['neighborhood'] : '';
+    $city = isset($order['customer']['city']) ? $order['customer']['city'] : '';
+    $state = isset($order['customer']['state']) ? $order['customer']['state'] : '';
+    $cep = isset($order['customer']['cep']) ? $order['customer']['cep'] : '';
 
     $itemsHtml = '';
     foreach ($order['items'] ?? [] as $item) {
