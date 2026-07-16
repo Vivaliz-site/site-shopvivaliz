@@ -342,6 +342,7 @@ function svmp_api_request(string $method, string $path, string $accessToken, ?ar
         throw new SvMercadoPagoApiException(502, 'gateway_invalid_response');
     }
     if ($status < 200 || $status >= 300) {
+        error_log('[MercadoPago] API Error: status=' . $status . ' body=' . json_encode($data));
         $candidate = (string)($data['code'] ?? $data['error'] ?? 'gateway_rejected_request');
         $publicCode = preg_match('/^[a-zA-Z0-9_.-]{1,80}$/', $candidate) === 1 ? strtolower($candidate) : 'gateway_rejected_request';
         throw new SvMercadoPagoApiException($status >= 400 && $status < 500 ? 422 : 502, $publicCode);
