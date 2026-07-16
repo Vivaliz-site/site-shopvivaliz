@@ -8,6 +8,7 @@ header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
 require_once dirname(__DIR__) . '/includes/mercadopago-gateway.php';
+require_once dirname(__DIR__) . '/includes/tiny-order-push.php';
 
 function svmp_webhook_response(int $status, string $result): never
 {
