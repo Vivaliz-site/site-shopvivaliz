@@ -118,7 +118,7 @@ function svem_build_email_content(array $order, string $event, string $customerN
             <p>Seu pedido foi enviado! 📦</p>
             <p>Número do pedido: <strong>$orderNumber</strong><br>
             Status: <strong>EM TRÂNSITO</strong></p>
-            <p>Código de rastreamento: <strong>{$order['tracking_code'] ?? 'Será enviado em breve'}</strong></p>
+            <p>Código de rastreamento: <strong>$trackingCode</strong></p>
             <p>Acompanhe a entrega através do código acima no site dos Correios ou Melhor Envio.</p>
         ",
         'boleto_generated' => "
