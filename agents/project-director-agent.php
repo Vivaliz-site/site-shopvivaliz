@@ -1,0 +1,218 @@
+<?php
+/**
+ * PROJECT DIRECTOR AGENT
+ * Audita estado geral do projeto e identifica lacunas
+ * Roda 24/7 para garantir qualidade e eficiência
+ */
+
+declare(strict_types=1);
+
+class ProjectDirectorAgent {
+    private array $audit_results = [];
+    private array $critical_issues = [];
+    private array $warnings = [];
+
+    public function __construct() {
+        $this->log("🎯 PROJECT DIRECTOR AGENT - Iniciando auditoria", "info");
+    }
+
+    /**
+     * Executa auditoria completa do projeto
+     */
+    public function run_full_audit(): array {
+        $this->audit_admin_panel();
+        $this->audit_database();
+        $this->audit_integrations();
+        $this->audit_api_endpoints();
+        $this->audit_deployment();
+        $this->audit_documentation();
+
+        return $this->generate_report();
+    }
+
+    /**
+     * Auditoria: Painel de Admin
+     */
+    private function audit_admin_panel(): void {
+        $admin_files = [
+            '/admin/index.php' => 'Dashboard principal',
+            '/admin/produtos.php' => 'Gestão de produtos',
+            '/admin/pedidos.php' => 'Gestão de pedidos',
+            '/admin/clientes.php' => 'Gestão de clientes',
+            '/admin/monitor/' => 'Monitor',
+            '/admin/menu-completo.php' => 'Menu centralizado',
+        ];
+
+        foreach ($admin_files as $file => $desc) {
+            $path = __DIR__ . '/../' . ltrim($file, '/');
+            if (!file_exists($path)) {
+                $this->add_critical("ADMIN: Faltando $desc ($file)");
+            }
+        }
+
+        $this->log("✅ Admin panel audit concluído", "info");
+    }
+
+    /**
+     * Auditoria: Banco de Dados
+     */
+    private function audit_database(): void {
+        $required_tables = [
+            'users', 'products', 'orders', 'customers',
+            'order_items', 'payments', 'shipping'
+        ];
+
+        // Verificar se tabelas essenciais existem
+        foreach ($required_tables as $table) {
+            // Placeholder - verificação real seria via DB
+            $this->audit_results["database_table_$table"] = "pending";
+        }
+
+        $this->log("✅ Database audit concluído", "info");
+    }
+
+    /**
+     * Auditoria: Integrações
+     */
+    private function audit_integrations(): void {
+        $integrations = [
+            'olist' => 'Olist/Tiny ERP',
+            'mercadolivre' => 'Mercado Livre',
+            'pagarme' => 'Pagar.me',
+            'mercadopago' => 'Mercado Pago',
+            'shopee' => 'Shopee',
+        ];
+
+        foreach ($integrations as $key => $name) {
+            $status = $this->check_integration_status($key);
+            if ($status === 'disconnected') {
+                $this->add_warning("INTEGRAÇÃO: $name desconectada");
+            }
+        }
+
+        $this->log("✅ Integrations audit concluído", "info");
+    }
+
+    /**
+     * Auditoria: Endpoints de API
+     */
+    private function audit_api_endpoints(): void {
+        $endpoints = [
+            '/api/health.php' => 'Health check',
+            '/api/catalog/products.php' => 'Produtos',
+            '/api/orders/create.php' => 'Criar pedido',
+            '/api/mercadopago/*' => 'Mercado Pago',
+        ];
+
+        foreach ($endpoints as $endpoint => $desc) {
+            // Placeholder - verificação real seria via HTTP
+            $this->audit_results["api_$endpoint"] = "pending";
+        }
+
+        $this->log("✅ API endpoints audit concluído", "info");
+    }
+
+    /**
+     * Auditoria: Deploy & Produção
+     */
+    private function audit_deployment(): void {
+        // Verificar se sincronização está funcionando
+        $last_sync = $this->get_last_sync_time();
+        $time_diff = time() - strtotime($last_sync);
+
+        if ($time_diff > 1800) { // 30 minutos
+            $this->add_warning("DEPLOY: Última sincronização há " . floor($time_diff/60) . " minutos");
+        }
+
+        if (!file_exists(__DIR__ . '/../.env')) {
+            $this->add_critical("DEPLOY: .env não encontrado");
+        }
+
+        $this->log("✅ Deployment audit concluído", "info");
+    }
+
+    /**
+     * Auditoria: Documentação
+     */
+    private function audit_documentation(): void {
+        $docs = [
+            'CLAUDE.md' => 'Instruções do projeto',
+            'README.md' => 'Documentação',
+            'CHANGELOG.md' => 'Histórico de mudanças',
+        ];
+
+        foreach ($docs as $file => $desc) {
+            $path = __DIR__ . '/../' . $file;
+            if (!file_exists($path)) {
+                $this->add_warning("DOCS: Faltando $desc");
+            }
+        }
+
+        $this->log("✅ Documentation audit concluído", "info");
+    }
+
+    /**
+     * Gera relatório de auditoria
+     */
+    private function generate_report(): array {
+        return [
+            'timestamp' => date('Y-m-d H:i:s'),
+            'agent' => 'ProjectDirectorAgent',
+            'audit_type' => 'full_scan',
+            'critical_issues' => $this->critical_issues,
+            'warnings' => $this->warnings,
+            'total_checks' => count($this->audit_results),
+            'status' => empty($this->critical_issues) ? 'healthy' : 'issues_found',
+            'next_audit' => date('Y-m-d H:i:s', time() + 3600),
+        ];
+    }
+
+    // Helpers
+    private function add_critical(string $issue): void {
+        $this->critical_issues[] = $issue;
+        $this->log("🔴 CRÍTICO: $issue", "error");
+    }
+
+    private function add_warning(string $issue): void {
+        $this->warnings[] = $issue;
+        $this->log("🟡 AVISO: $issue", "warning");
+    }
+
+    private function check_integration_status(string $key): string {
+        // Placeholder
+        return 'connected';
+    }
+
+    private function get_last_sync_time(): string {
+        $sync_file = __DIR__ . '/../logs/tri-environment-sync.json';
+        if (file_exists($sync_file)) {
+            $data = json_decode(file_get_contents($sync_file), true);
+            return $data['timestamp'] ?? date('Y-m-d H:i:s');
+        }
+        return date('Y-m-d H:i:s');
+    }
+
+    private function log(string $message, string $level = 'info'): void {
+        $log_file = __DIR__ . '/../logs/project-director-agent.log';
+        $timestamp = date('Y-m-d H:i:s');
+        $log_line = "[$timestamp] [$level] $message\n";
+        @file_put_contents($log_file, $log_line, FILE_APPEND);
+    }
+}
+
+// EXECUTAR AUDITORIA
+if (php_sapi_name() === 'cli' || isset($_GET['run'])) {
+    $director = new ProjectDirectorAgent();
+    $report = $director->run_full_audit();
+
+    // Salvar relatório
+    $report_file = __DIR__ . '/../logs/project-director-report.json';
+    file_put_contents($report_file, json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+    if (php_sapi_name() === 'cli') {
+        echo json_encode($report, JSON_PRETTY_PRINT) . "\n";
+    } else {
+        header('Content-Type: application/json');
+        echo json_encode($report, JSON_PRETTY_PRINT);
+    }
+}

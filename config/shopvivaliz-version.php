@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 return array(
-    'version' => '9.2.103',
-    'version_code' => 902103,
+    'version' => '9.2.104',
+    'version_code' => 902104,
     'channel' => 'dev',
-    'codename' => 'production-perimeter-hardening',
+    'codename' => 'mercadopago-live-checkout',
     'release_type' => 'cumulative',
-    'generated_at' => '2026-07-14T04:18:00-03:00',
+    'generated_at' => '2026-07-15T12:00:00-03:00',
     'requires_update_php_sync' => true,
     'notes' => array(
         'Centraliza numero da versao para deploy, endpoints e testes pos-deploy.',
@@ -34,5 +34,8 @@ return array(
         'Desativa listagem de diretorios, adiciona CSP defensiva e remove estado de debug da API publica de catalogo.',
         'Corrige workflows E2E e de configuracao da VM com jornada sem cobranca e atualizacao atomica de secrets estaticos.',
         'Instala renovacao OAuth Olist residente, atomica e sem registrar tokens.',
+        'Ativa Checkout Pro e boleto bancario real do Mercado Pago vinculados ao pedido autoritativo.',
+        'Valida webhook Mercado Pago por HMAC e consulta o recurso oficial antes de atualizar o pedido.',
+        'Desativa endpoints legados que aceitavam valores arbitrarios ou configuracao TLS insegura.',
     ),
 );

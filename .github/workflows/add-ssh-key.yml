@@ -1,0 +1,50 @@
+name: 🔑 Add SSH Key to Remote Machine
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/add-ssh-key.yml'
+
+jobs:
+  add-key:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ORACLE_VM_SSH_KEY }}" > ~/.ssh/oracle_vm_key
+          chmod 600 ~/.ssh/oracle_vm_key
+          ssh-keyscan -H ${{ secrets.ORACLE_VM_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Add Claude Code SSH key to authorized_keys
+        run: |
+          SSH_KEY="${{ secrets.CLAUDE_SSH_PUBLIC_KEY }}"
+          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=no \
+            ${{ secrets.ORACLE_VM_USER }}@${{ secrets.ORACLE_VM_HOST }} \
+            "sudo bash -c 'echo \"$SSH_KEY\" >> /home/shopvivaliz/.ssh/authorized_keys && chmod 600 /home/shopvivaliz/.ssh/authorized_keys && chown shopvivaliz:shopvivaliz /home/shopvivaliz/.ssh/authorized_keys'"
+          echo "✅ SSH key added to authorized_keys"
+
+      - name: Verify SSH key was added
+        run: |
+          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=no \
+            ${{ secrets.ORACLE_VM_USER }}@${{ secrets.ORACLE_VM_HOST }} \
+            "echo 'Keys in authorized_keys:' && wc -l /home/shopvivaliz/.ssh/authorized_keys"
+
+      - name: Create summary
+        run: |
+          echo "# ✅ SSH Key Added Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Host:** ${{ secrets.ORACLE_VM_HOST }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **User:** shopvivaliz" >> $GITHUB_STEP_SUMMARY
+          echo "- **Port:** 22" >> $GITHUB_STEP_SUMMARY
+          echo "- **Auth:** SSH Key Authentication" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Claude Code: Configure SSH access to shopvivaliz@${{ secrets.ORACLE_VM_HOST }}" >> $GITHUB_STEP_SUMMARY
+          echo "2. Claude Chat: Configure MCP at http://${{ secrets.ORACLE_VM_HOST }}:5556" >> $GITHUB_STEP_SUMMARY
+          echo "3. Test: \`ssh shopvivaliz@${{ secrets.ORACLE_VM_HOST }}\`" >> $GITHUB_STEP_SUMMARY

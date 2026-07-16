@@ -40,6 +40,7 @@ AddCharset UTF-8 .html .txt .php .json
     # Nunca expor arquivos internos de configuracao e operacao
     RewriteRule ^config/ - [F,L]
     RewriteRule ^storage/ - [F,L]
+    RewriteRule ^(?:criar-pagamento-teste-real|criar-pagamento-producao|gerar-payment-id-agora|fazer-pagamento-real-agora|simular-pagamento-real)\.php$ - [F,L,NC]
     RewriteRule ^logs/ - [F,L]
     RewriteRule ^(?:\.git|\.env(?:\.|$)|\.claude|\.codex|\.github|\.githooks|\.vscode|\.tmp_shopvivaliz|__pycache__|scripts|tests|test-results|deploy|docs|reports|scratch|olist|automation|automations|autodev|core|dashboards|imports|kong|listings|medusa|migrations|planilhas|public_html|release-notes|tools|utils|CheckoutPageOptimizer)(?:/|$) - [F,L,NC]
     RewriteRule ^(?:debug|test|teste|check|gen-token)(?:[-_.][^/]*)?$ - [F,L,NC]
@@ -56,8 +57,10 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^claude/?$ claude/index.php [L]
     RewriteRule ^claude/(.*)$ claude/$1 [L]
 
-    # Normaliza URLs legadas para as rotas canonicas
+    # Normaliza URLs legadas para as rotas canonicas (apenas se solicitado diretamente)
+    RewriteCond %{THE_REQUEST} \s/carrinho\.php[\s?]
     RewriteRule ^carrinho\.php$ /carrinho [R=301,L]
+    RewriteCond %{THE_REQUEST} \s/checkout\.php[\s?]
     RewriteRule ^checkout\.php$ /checkout [R=301,L]
 
     # Nao reescrever arquivos e diretorios reais
@@ -88,6 +91,7 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^catalogo/?$ catalogo.php [L]
     RewriteRule ^carrinho/?$ carrinho.php [L]
     RewriteRule ^checkout/?$ checkout.php [L]
+    RewriteRule ^checkout/retorno/?$ checkout-return.php [L,QSA]
     RewriteRule ^sobre/?$ sobre/index.php [L]
     RewriteRule ^contato/?$ contato/index.php [L]
     RewriteRule ^faq/?$ faq/index.php [L]

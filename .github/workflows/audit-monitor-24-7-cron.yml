@@ -2,6 +2,7 @@ name: "🔍 24/7 Audit Monitor (Cron)"
 
 on:
   schedule:
+    # A cada 30 minutos
     - cron: "*/30 * * * *"
   workflow_dispatch:
 

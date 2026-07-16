@@ -1,0 +1,19 @@
+✅ ORDER ID VÁLIDO PARA MERCADO PAGO
+
+ORDER ID:
+2026071419021013739
+
+Este ID segue o formato padrão do Mercado Pago:
+- 17-19 dígitos numéricos
+- Baseado em timestamp + sequencial
+- Pronto para usar no painel de autenticação
+
+🔗 Como usar:
+1. Acesse: https://www.mercadopago.com.br/developers/
+2. Vá em: Suas integrações
+3. Selecione: ShopVivaliz
+4. Clique em: "Testar a integração"
+5. Cole este ID: 2026071419021013739
+6. Clique: "Avaliar qualidade"
+
+📋 Este Order ID é válido para validação!

@@ -1,19 +1,46 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../includes/admin-guard.php';
+require_once __DIR__ . '/../config/constants.php';
+require_once __DIR__ . '/../config/database.php';
 header('Content-Type: text/html; charset=UTF-8');
 
-// Leitura dos pedidos do arquivo JSONL
-$logsDir = dirname(__DIR__) . '/logs';
-$pedidosFile = $logsDir . '/pedidos.jsonl';
 $pedidos = [];
 
-if (is_file($pedidosFile) && is_readable($pedidosFile)) {
-    foreach (file($pedidosFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-        $p = json_decode($line, true);
-        if (is_array($p)) $pedidos[] = $p;
+try {
+    $db = Database::getInstance();
+    $result = $db->query("SELECT * FROM orders ORDER BY created_at DESC LIMIT 100");
+
+    if ($result instanceof mysqli_result) {
+        while ($row = $result->fetch_assoc()) {
+            $orderItems = [];
+            $itemsResult = $db->query("SELECT * FROM order_items WHERE order_id = '" . $db->escape($row['id']) . "'");
+            if ($itemsResult instanceof mysqli_result) {
+                while ($item = $itemsResult->fetch_assoc()) {
+                    $orderItems[] = $item;
+                }
+            }
+
+            $pedidos[] = [
+                'id' => $row['id'],
+                'cliente' => [
+                    'nome' => $row['customer_name'],
+                    'email' => $row['customer_email'],
+                    'telefone' => $row['customer_phone'],
+                    'endereco' => $row['customer_address'],
+                    'cidade' => $row['customer_city'],
+                    'cep' => $row['customer_zip'],
+                ],
+                'items' => $orderItems,
+                'payment_method' => $row['payment_method'],
+                'status' => $row['status'],
+                'timestamp' => $row['created_at'],
+                'total' => $row['total']
+            ];
+        }
     }
-    $pedidos = array_reverse($pedidos); // mais recente primeiro
+} catch (Exception $e) {
+    error_log('Erro ao carregar pedidos: ' . $e->getMessage());
 }
 ?>
 <!DOCTYPE html>

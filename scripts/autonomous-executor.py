@@ -612,6 +612,28 @@ def write_cycle_report(report: dict[str, Any]) -> None:
     append_jsonl(REPORT_EVENTS_FILE, {"timestamp": utc_now(), "kind": "cycle-report", "report": report})
 
 
+def detect_unproductive_loop(task: dict[str, Any], recent_cycles: list[dict[str, Any]]) -> tuple[bool, str]:
+    """Req 13: Detect unproductive loops and theater."""
+    task_id = task.get("id")
+
+    same_task_cycles = [c for c in recent_cycles[-10:] if c.get("task", {}).get("id") == task_id]
+    if len(same_task_cycles) >= 3:
+        statuses = [c.get("task", {}).get("status") for c in same_task_cycles]
+        if len(set(statuses)) == 1:
+            return True, f"Same task {task_id} executed 3+ times without status change"
+
+    test_commands = [c.get("last_command") for c in recent_cycles[-5:] if "test" in str(c.get("last_command", ""))]
+    if len(test_commands) > 0 and len(set(test_commands)) == 1:
+        if recent_cycles[-1].get("last_result", {}).get("diff_size", 0) == 0:
+            return True, "Same test command without code change detected"
+
+    recent_results = [c.get("last_result", {}) for c in recent_cycles[-5:]]
+    if all(r.get("evidence_hash") == recent_results[-1].get("evidence_hash") for r in recent_results[-3:]):
+        return True, "Identical evidence in 3+ consecutive cycles (heartbeat without new work)"
+
+    return False, ""
+
+
 def execute_cycle(queue: dict[str, Any]) -> dict[str, Any]:
     lessons = recent_learning()
     generated_tasks = maybe_generate_tasks(queue, lessons)
@@ -625,6 +647,21 @@ def execute_cycle(queue: dict[str, Any]) -> dict[str, Any]:
         "email_health": email_signals(),
         "learning_tail": [row.get("summary") for row in lessons[-5:]],
     }
+
+    if task and task.get("status") == "in_progress":
+        recent_cycles = read_jsonl(REPORT_EVENTS_FILE)[-10:] if REPORT_EVENTS_FILE.exists() else []
+        is_loop, loop_reason = detect_unproductive_loop(task, recent_cycles)
+        if is_loop:
+            log_learning("core-agent", task, "unproductive_loop", loop_reason)
+            agent_id = task.get("assigned_to", ["gpt"])[0]
+            emit_step(agent_id, f"PAUSED: {loop_reason}", status="paused")
+            task["status"] = "blocked_loop"
+            task["loop_reason"] = loop_reason
+            save_queue(queue)
+            append_jsonl(REPORT_EVENTS_FILE, {"timestamp": utc_now(), "kind": "loop-detected", "task_id": task.get("id"), "reason": loop_reason})
+            cycle["result"] = {"status": "loop_detected", "summary": loop_reason}
+            write_cycle_report(cycle)
+            return cycle
 
     if task is None:
         emit_step("core-agent", "Fila vazia apos auto-geracao; aguardando proximo ciclo", status="waiting_feedback")

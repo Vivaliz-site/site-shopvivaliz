@@ -137,17 +137,34 @@ function create_tables() {
 
         // Pedidos
         'CREATE TABLE IF NOT EXISTS orders (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            order_number VARCHAR(50) UNIQUE NOT NULL,
+            id VARCHAR(50) PRIMARY KEY,
+            user_id INT,
+            customer_name VARCHAR(255) NOT NULL,
+            customer_email VARCHAR(255) NOT NULL,
+            customer_phone VARCHAR(20),
+            customer_address VARCHAR(500),
+            customer_city VARCHAR(100),
+            customer_zip VARCHAR(20),
             total DECIMAL(10, 2) NOT NULL,
-            status VARCHAR(50) DEFAULT "pending",
+            status VARCHAR(50) DEFAULT "pendente_atendimento",
             payment_method VARCHAR(50),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id),
-            INDEX idx_user_id (user_id),
-            INDEX idx_status (status)
+            INDEX idx_customer_email (customer_email),
+            INDEX idx_status (status),
+            INDEX idx_created_at (created_at)
+        )',
+
+        // Itens do pedido
+        'CREATE TABLE IF NOT EXISTS order_items (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            order_id VARCHAR(50) NOT NULL,
+            product_id INT,
+            quantity INT DEFAULT 1,
+            price DECIMAL(10, 2) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+            INDEX idx_order_id (order_id)
         )',
 
         // Imagens Olist
