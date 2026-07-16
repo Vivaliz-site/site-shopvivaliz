@@ -9,6 +9,7 @@ header('Content-Type: application/json; charset=utf-8');
 // Authentication and payload validation must not depend on database startup.
 // This guarantees deterministic 4xx responses even during a DB outage.
 require_once __DIR__ . '/../../config/bootstrap-env.php';
+require_once __DIR__ . '/../../api/emails/send-order-notification.php';
 
 // Validar token do webhook
 $webhook_token = getenv('OLIST_WEBHOOK_TOKEN') ?: getenv('ERP_WEBHOOK_TOKEN') ?: '';
