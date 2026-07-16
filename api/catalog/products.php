@@ -493,7 +493,7 @@ $all_erp = [];
 // Tentar ler do cache JSON primeiro (APENAS ATIVOS - status A)
 $cache_file = svcat_root() . '/storage/products-cache-ativos.json';
 $cache_exists = is_file($cache_file);
-$cache_fresh = $cache_exists && (time() - filemtime($cache_file)) < 86400; // 24 horas
+$cache_fresh = $cache_exists; // Use cache if exists, avoiding 24h expiration lockouts
 $cache_used = false;
 
 if ($cache_exists && $cache_fresh) {
@@ -558,10 +558,21 @@ if (is_file($jsonPath)) {
     $categories = $catCount;
 }
 
+if (empty($categories)) {
+    $catCount = [];
+    foreach ($all_erp as $row) {
+        $cat = (string)($row['category'] ?? '');
+        if ($cat !== '') $catCount[$cat] = ($catCount[$cat] ?? 0) + 1;
+    }
+    arsort($catCount);
+    $categories = $catCount;
+}
+
 svcat_json(200, [
     'ok'         => true,
     'source'     => 'erp_olist',
-    'count'      => count($products),
+    'count'         => count($products),
     'products'   => $products,
     'categories' => $categories,
 ]);
+
