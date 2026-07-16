@@ -355,7 +355,7 @@ $svNavCurrent = '';
         <div class="container">
             <div class="hero-content">
                 <div class="hero-free-shipping-badge">
-                    🚚 Frete Grátis acima de R$ 150 para Sul e Sudeste
+                    🚚 Frete Grátis acima de R$ 299 para Sul e Sudeste
                 </div>
                 <p class="eyebrow hero-kicker">
                     🛍️ Loja oficial Vivaliz
