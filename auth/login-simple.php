@@ -41,7 +41,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$google_auth_url = '/auth/google-mock-login.php?redirect=' . urlencode($redirectTo);
+if (sv_social_google_is_configured()) {
+    $google_auth_url = sv_social_google_auth_url('login', $redirectTo);
+    $google_button_label = 'Continuar com Google';
+} else {
+    // Sem credenciais OAuth configuradas: usa mock apenas fora de produção.
+    $appEnv = strtolower((string)(getenv('APP_ENV') ?: ($_ENV['APP_ENV'] ?? 'production')));
+    if ($appEnv === 'production') {
+        $google_auth_url = '';
+        $google_button_label = '';
+    } else {
+        $google_auth_url = '/auth/google-mock-login.php?redirect=' . urlencode($redirectTo);
+        $google_button_label = 'Continuar com Google (TESTE)';
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
