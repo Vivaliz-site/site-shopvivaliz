@@ -314,6 +314,37 @@ $record['tiny_push'] = $tinyPushStatus;
 file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
 svo_append_legacy_order_log($record);
 
+// Espelha o pedido na tabela MySQL `orders` (fonte usada por meus-pedidos.php
+// e pelo webhook do ERP) -- antes disso a tabela nunca era populada aqui.
+try {
+    require_once dirname(__DIR__, 2) . '/includes/pdo-database.php';
+    require_once dirname(__DIR__, 2) . '/includes/account-schema.php';
+    sv_account_ensure_schema();
+
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+    $sessionUserId = isset($_SESSION['user_id']) && is_numeric($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null;
+
+    $pdo = sv_pdo();
+    $stmt = $pdo->prepare(
+        'INSERT INTO orders (user_id, order_number, olist_order_id, email, order_total, order_status, payment_method, items_json, created_at)
+         VALUES (:user_id, :order_number, :olist_order_id, :email, :total, :status, :payment_method, :items_json, NOW())'
+    );
+    $stmt->execute([
+        ':user_id' => $sessionUserId,
+        ':order_number' => $orderNumber,
+        ':olist_order_id' => $tinyOrderId,
+        ':email' => $email,
+        ':total' => round($grandTotal, 2),
+        ':status' => 'aguardando_pagamento',
+        ':payment_method' => $paymentMethod,
+        ':items_json' => json_encode($cleanItems, JSON_UNESCAPED_UNICODE),
+    ]);
+} catch (Throwable $e) {
+    error_log('[OrderCreate] MySQL orders mirror failed: ' . $e->getMessage());
+}
+
 svo_json(200, [
     'ok' => true,
     'order_number' => $orderNumber,
