@@ -16,14 +16,16 @@ $codename = (string)($version['codename'] ?? '');
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="container nav-inner">
-            <a class="brand-link" href="/">ShopVivaliz Admin</a>
-            <div class="navbar-menu">
-                <a href="/">Loja</a>
-                <a href="/catalogo.php">Catálogo</a>
-                <a href="/checkout">Checkout</a>
-                <a href="/admin/monitor/">Monitor</a>
+    <nav class="navbar" style="background: #1a1a2e; padding: 1rem 0;">
+        <div class="container nav-inner" style="display: flex; justify-content: space-between; align-items: center;">
+            <a class="brand-link" href="/admin/" style="color: white; font-weight: bold; font-size: 1.2rem;">🛍️ ShopVivaliz Admin</a>
+            <div class="navbar-menu" style="display: flex; gap: 0.5rem; flex-wrap: wrap; font-size: 0.9rem;">
+                <a href="/admin/menu-completo.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px; font-weight: bold; background: rgba(255,255,255,0.2);">📋 Menu Completo</a>
+                <a href="/admin/produtos.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📦 Produtos</a>
+                <a href="/admin/pedidos.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📋 Pedidos</a>
+                <a href="/admin/clientes.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">👥 Clientes</a>
+                <a href="/admin/monitor/" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📊 Monitor</a>
+                <a href="/auth/logout.php" style="color: #ff6b6b; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🚪 Sair</a>
             </div>
         </div>
     </nav>
@@ -43,7 +45,29 @@ $codename = (string)($version['codename'] ?? '');
             </div>
         </section>
 
-        <section class="container admin-overview">
+        <section class="container admin-overview" style="margin-top: 2rem;">
+            <!-- Menu Principal -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                <a href="/admin/pedidos.php" style="background: #007bff; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    📋 Pedidos
+                </a>
+                <a href="/admin/produtos.php" style="background: #28a745; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    📦 Produtos
+                </a>
+                <a href="/admin/clientes.php" style="background: #17a2b8; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    👥 Clientes
+                </a>
+                <a href="/admin/menu-completo.php" style="background: #6c757d; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    🎯 Menu Completo
+                </a>
+                <a href="/admin/monitor/" style="background: #ffc107; color: black; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    📊 Monitor
+                </a>
+                <a href="/admin/integrations.php" style="background: #e83e8c; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    ⚙️ Integrações
+                </a>
+            </div>
+
             <article class="admin-card admin-card-wide">
                 <div class="admin-card-head">
                     <div>

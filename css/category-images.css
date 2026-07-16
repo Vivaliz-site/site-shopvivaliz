@@ -1,24 +1,68 @@
-/* Artes editoriais geradas para as categorias da home. Nenhuma imagem usa foto de produto. */
-.category-slide-image-wrapper{width:100%;height:140px;border-radius:12px 12px 0 0;overflow:hidden;background:#f4f7fa;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
-.category-slide-icon{width:100%;height:100%;background-size:cover;background-position:center;background-repeat:no-repeat;transition:filter .25s ease,transform .25s ease}
-.category-slide{transition:transform .3s cubic-bezier(.4,0,.2,1),box-shadow .3s ease;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)}
-.category-slide:hover{transform:translateY(-4px);box-shadow:0 8px 16px rgba(0,0,0,.15)}
-.category-slide:hover .category-slide-icon{filter:brightness(1.04) saturate(1.08);transform:scale(1.02)}
+/* Categorias ativas da home: imagens reais e enquadramento uniforme. */
+.category-slide{min-height:220px;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(15,23,42,.10);transition:transform .25s ease,box-shadow .25s ease}
+.category-slide:hover{transform:translateY(-4px);box-shadow:0 10px 24px rgba(15,23,42,.16)}
+.category-slide-image-wrapper{width:100%;height:140px;aspect-ratio:4/3;margin-bottom:12px;overflow:hidden;border-radius:12px 12px 0 0;background:linear-gradient(145deg,#f8fafc,#eef2f7);display:flex;align-items:center;justify-content:center}
+.category-slide-img,.category-slide-real-image{display:block;width:100%;height:100%;object-fit:cover;object-position:center;transform:scale(1.01);transition:transform .3s ease,filter .3s ease}
+.category-slide:hover .category-slide-img,.category-slide:hover .category-slide-real-image{transform:scale(1.05);filter:brightness(1.03) saturate(1.04)}
 
-.category-tools{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23ead4ad'/%3E%3Cg stroke='%23333' stroke-width='10' stroke-linecap='round' fill='none'%3E%3Cpath d='M45 50l80 80M100 35l-65 65M250 30l-70 160M300 55l55 120M155 45l95 0'/%3E%3C/g%3E%3Cg fill='%23f4b400'%3E%3Crect x='20' y='145' width='110' height='24' rx='8'/%3E%3Crect x='245' y='158' width='120' height='24' rx='8'/%3E%3C/g%3E%3Ccircle cx='198' cy='166' r='26' fill='%23d94f3d'/%3E%3C/svg%3E")}
-.category-wheels{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23e9edf1'/%3E%3Cg fill='%234f5963' stroke='%232a3036' stroke-width='7'%3E%3Ccircle cx='90' cy='155' r='46'/%3E%3Ccircle cx='205' cy='140' r='38'/%3E%3Ccircle cx='315' cy='160' r='50'/%3E%3C/g%3E%3Cg fill='%23cfd5db'%3E%3Ccircle cx='90' cy='155' r='18'/%3E%3Ccircle cx='205' cy='140' r='15'/%3E%3Ccircle cx='315' cy='160' r='20'/%3E%3C/g%3E%3Cg fill='%237a8793'%3E%3Crect x='65' y='40' width='50' height='70' rx='8'/%3E%3Crect x='182' y='45' width='46' height='55' rx='8'/%3E%3Crect x='286' y='35' width='58' height='72' rx='8'/%3E%3C/g%3E%3C/svg%3E")}
-.category-garden,.category-plants{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23dff0d8'/%3E%3Cg fill='%233f8f4d'%3E%3Cellipse cx='80' cy='80' rx='28' ry='55' transform='rotate(-25 80 80)'/%3E%3Cellipse cx='145' cy='65' rx='25' ry='48' transform='rotate(30 145 65)'/%3E%3Cellipse cx='260' cy='70' rx='30' ry='58' transform='rotate(-20 260 70)'/%3E%3Cellipse cx='330' cy='90' rx='25' ry='48' transform='rotate(28 330 90)'/%3E%3C/g%3E%3Cg fill='%23b97845'%3E%3Cpath d='M35 135h125l-18 70H53z'/%3E%3Cpath d='M225 130h140l-20 75H245z'/%3E%3C/g%3E%3C/svg%3E")}
-.category-bathroom{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23dceef7'/%3E%3Cg fill='%23fff' stroke='%235b839b' stroke-width='7'%3E%3Cpath d='M30 150h145v35H30z'/%3E%3Cellipse cx='102' cy='145' rx='62' ry='22'/%3E%3Cpath d='M230 65h120v120H230z'/%3E%3C/g%3E%3Cg stroke='%235b839b' stroke-width='8' fill='none' stroke-linecap='round'%3E%3Cpath d='M75 60h55v45M280 30v35M255 55h50'/%3E%3C/g%3E%3Ccircle cx='300' cy='125' r='18' fill='%238bc7e8'/%3E%3C/svg%3E")}
-.category-kitchen{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23f6e7cf'/%3E%3Cg fill='%23c84f3c'%3E%3Cpath d='M30 95h125v90H30z'/%3E%3Ccircle cx='92' cy='95' r='62'/%3E%3C/g%3E%3Cg stroke='%23444' stroke-width='9' fill='none' stroke-linecap='round'%3E%3Cpath d='M215 35v155M255 35v155M320 40l-55 150'/%3E%3C/g%3E%3Cg fill='%23f4b942'%3E%3Cellipse cx='215' cy='40' rx='18' ry='28'/%3E%3Cellipse cx='255' cy='40' rx='18' ry='28'/%3E%3Ccircle cx='320' cy='40' r='22'/%3E%3C/g%3E%3C/svg%3E")}
-.category-auto{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23e7e9ec'/%3E%3Cpath d='M40 145l35-65h210l55 65v35H40z' fill='%232c6b9c'/%3E%3Cpath d='M110 80l30-45h95l40 45z' fill='%238fc5e8'/%3E%3Cg fill='%23282d33'%3E%3Ccircle cx='110' cy='180' r='34'/%3E%3Ccircle cx='290' cy='180' r='34'/%3E%3C/g%3E%3Cg fill='%23cfd5da'%3E%3Ccircle cx='110' cy='180' r='14'/%3E%3Ccircle cx='290' cy='180' r='14'/%3E%3C/g%3E%3C/svg%3E")}
-.category-electric{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23fff3bd'/%3E%3Cg stroke='%233e4a59' stroke-width='12' fill='none'%3E%3Cpath d='M35 180C90 70 145 70 200 180S310 290 365 60'/%3E%3C/g%3E%3Cg fill='%23f0a800'%3E%3Cpath d='M135 25l-40 90h45l-25 90 95-120h-50l35-60z'/%3E%3C/g%3E%3Ccircle cx='55' cy='180' r='18' fill='%233e4a59'/%3E%3Ccircle cx='350' cy='65' r='18' fill='%233e4a59'/%3E%3C/svg%3E")}
-.category-locks,.category-security{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23dcebdd'/%3E%3Cg stroke='%234d6650' stroke-width='12' fill='none'%3E%3Cpath d='M55 120V80a55 55 0 01110 0v40M235 115V75a45 45 0 0190 0v40'/%3E%3C/g%3E%3Cg fill='%236aa36f'%3E%3Crect x='35' y='110' width='150' height='95' rx='18'/%3E%3Crect x='215' y='105' width='130' height='100' rx='18'/%3E%3C/g%3E%3Cg fill='%23fff'%3E%3Ccircle cx='110' cy='155' r='12'/%3E%3Ccircle cx='280' cy='150' r='12'/%3E%3C/g%3E%3C/svg%3E")}
-.category-storage{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23eee2d5'/%3E%3Cg fill='%23a66f45' stroke='%23744d31' stroke-width='6'%3E%3Crect x='25' y='40' width='110' height='165'/%3E%3Crect x='150' y='65' width='100' height='140'/%3E%3Crect x='265' y='30' width='110' height='175'/%3E%3C/g%3E%3Cg fill='%23dbc3a9'%3E%3Crect x='42' y='60' width='76' height='35'/%3E%3Crect x='42' y='112' width='76' height='35'/%3E%3Crect x='282' y='52' width='76' height='48'/%3E%3C/g%3E%3C/svg%3E")}
-.category-hardware{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23e5e7e9'/%3E%3Cg fill='%23777' stroke='%23444' stroke-width='5'%3E%3Ccircle cx='80' cy='75' r='30'/%3E%3Ccircle cx='200' cy='145' r='38'/%3E%3Ccircle cx='320' cy='80' r='28'/%3E%3C/g%3E%3Cg fill='%23e5e7e9'%3E%3Ccircle cx='80' cy='75' r='10'/%3E%3Ccircle cx='200' cy='145' r='12'/%3E%3Ccircle cx='320' cy='80' r='9'/%3E%3C/g%3E%3Cg stroke='%23888' stroke-width='14'%3E%3Cpath d='M35 190l100-100M260 190l85-95'/%3E%3C/g%3E%3C/svg%3E")}
-.category-boxes{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23f3e4d0'/%3E%3Cg stroke='%23865b32' stroke-width='6'%3E%3Cpath d='M25 85l80-45 80 45-80 45z' fill='%23d8a465'/%3E%3Cpath d='M25 85v90l80 45v-90z' fill='%23bd8247'/%3E%3Cpath d='M105 130v90l80-45V85z' fill='%23ca9357'/%3E%3Cpath d='M215 75l65-35 75 40-70 42z' fill='%23e0b171'/%3E%3Cpath d='M215 75v95l70 38v-86z' fill='%23c78d4e'/%3E%3Cpath d='M285 122v86l70-42V80z' fill='%23d49f60'/%3E%3C/g%3E%3C/svg%3E")}
-.category-cleaning{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23e4f2ef'/%3E%3Cg fill='%2354a6a2'%3E%3Cpath d='M35 60h75l-10 145H45z'/%3E%3Crect x='210' y='80' width='70' height='125' rx='12'/%3E%3C/g%3E%3Cg fill='%23f3c05b'%3E%3Cpath d='M150 35h18l30 170h-50z'/%3E%3Cpath d='M295 145h75l-12 60h-50z'/%3E%3C/g%3E%3Cg fill='%23fff'%3E%3Ccircle cx='75' cy='90' r='12'/%3E%3Ccircle cx='245' cy='120' r='10'/%3E%3C/g%3E%3C/svg%3E")}
-.category-utilities{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23e6e8f5'/%3E%3Cg fill='%235d68a8'%3E%3Crect x='25' y='45' width='110' height='150' rx='18'/%3E%3Ccircle cx='205' cy='105' r='65'/%3E%3Cpath d='M290 45h75v150h-75z'/%3E%3C/g%3E%3Cg fill='%23fff'%3E%3Ccircle cx='80' cy='95' r='12'/%3E%3Ccircle cx='205' cy='105' r='28'/%3E%3Crect x='307' y='75' width='40' height='16' rx='8'/%3E%3Crect x='307' y='115' width='40' height='16' rx='8'/%3E%3C/g%3E%3C/svg%3E")}
-.category-paint{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23f8ead8'/%3E%3Cg fill='%23e56d3e'%3E%3Cpath d='M25 105h135v95H25z'/%3E%3Cpath d='M45 65h95v45H45z'/%3E%3C/g%3E%3Cg fill='%23f2bd3d'%3E%3Ccircle cx='230' cy='95' r='55'/%3E%3Cpath d='M290 35h75v35h-75z'/%3E%3C/g%3E%3Cpath d='M325 65v120' stroke='%236b4f3d' stroke-width='16'/%3E%3Cpath d='M200 150c30-20 60-15 90 5' stroke='%2370a9d8' stroke-width='25' fill='none'/%3E%3C/svg%3E")}
-.category-construction{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23eee5db'/%3E%3Cg fill='%23c95e39'%3E%3Crect x='25' y='100' width='110' height='50'/%3E%3Crect x='140' y='100' width='110' height='50'/%3E%3Crect x='82' y='45' width='110' height='50'/%3E%3Crect x='255' y='100' width='110' height='50'/%3E%3C/g%3E%3Cg fill='%23f0b94d'%3E%3Cpath d='M45 190l45-65 45 65z'/%3E%3Cpath d='M265 190l45-65 45 65z'/%3E%3C/g%3E%3Cpath d='M200 30v175' stroke='%236c747c' stroke-width='14'/%3E%3C/svg%3E")}
-.category-pets{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23f4e4df'/%3E%3Cg fill='%23c56a58'%3E%3Cellipse cx='105' cy='145' rx='65' ry='52'/%3E%3Cellipse cx='290' cy='145' rx='60' ry='48'/%3E%3Ccircle cx='105' cy='75' r='42'/%3E%3Ccircle cx='290' cy='78' r='40'/%3E%3C/g%3E%3Cg fill='%238c4a3c'%3E%3Cpath d='M70 45l-28-30 8 58z'/%3E%3Cpath d='M140 45l28-30-8 58z'/%3E%3Cpath d='M260 47l-18-38 44 28z'/%3E%3Cpath d='M320 47l18-38-44 28z'/%3E%3C/g%3E%3Cg fill='%232f2f2f'%3E%3Ccircle cx='92' cy='72' r='6'/%3E%3Ccircle cx='118' cy='72' r='6'/%3E%3Ccircle cx='278' cy='76' r='6'/%3E%3Ccircle cx='302' cy='76' r='6'/%3E%3C/g%3E%3Cg fill='%23f0b52f'%3E%3Ccircle cx='195' cy='175' r='18'/%3E%3Crect x='175' y='168' width='40' height='14' rx='7'/%3E%3C/g%3E%3C/svg%3E")}
-.category-default{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Crect width='400' height='240' fill='%23e9edf1'/%3E%3Cg fill='%23788795'%3E%3Ccircle cx='80' cy='80' r='35'/%3E%3Crect x='145' y='45' width='90' height='70' rx='14'/%3E%3Cpath d='M285 45l60 45-60 45-60-45z'/%3E%3Crect x='50' y='150' width='300' height='35' rx='17'/%3E%3C/g%3E%3C/svg%3E")}
+/* Ferramentas, chaves, soquetes, medição, pintura e construção. */
+.category-slide-img[alt*="Ferrament" i],
+.category-slide-img[alt*="Chaves" i],
+.category-slide-img[alt*="Soquete" i],
+.category-slide-img[alt*="Medição" i],
+.category-slide-img[alt*="Medicao" i],
+.category-slide-img[alt*="Pintura" i],
+.category-slide-img[alt*="Construção" i],
+.category-slide-img[alt*="Construcao" i]{content:url('/storage/original/341481451.jpg')}
+
+/* Vasos, cachepots, floreiras e jardim. */
+.category-slide-img[alt*="Vaso" i],
+.category-slide-img[alt*="Cachepot" i],
+.category-slide-img[alt*="Floreira" i],
+.category-slide-img[alt*="Jardim" i]{content:url('/storage/original/1C7Q-LKW4-FI2Y.jpg')}
+
+/* Rodízios. */
+.category-slide-img[alt*="Rodízio" i],
+.category-slide-img[alt*="Rodizio" i]{content:url('/uploads/olist/CONJ-10-RODIZIOS-35MM-GEL/002-9434fc7a841b.jpg')}
+
+/* Fercar, carrinhos, armários e organização metálica. */
+.category-slide-img[alt*="Fercar" i],
+.category-slide-img[alt*="Carrinho" i],
+.category-slide-img[alt*="Armário" i],
+.category-slide-img[alt*="Armario" i]{content:url('/uploads/olist/ARM-08/004-09c708d77d14.jpg')}
+
+/* Banheiro e assentos. */
+.category-slide-img[alt*="Banheiro" i],
+.category-slide-img[alt*="Assento" i]{content:url('/uploads/olist/A21/003-55e4d9f70c8a.jpg')}
+
+/* Ferragens, fixação, cadeados e segurança. */
+.category-slide-img[alt*="Ferragem" i],
+.category-slide-img[alt*="Fixação" i],
+.category-slide-img[alt*="Fixacao" i],
+.category-slide-img[alt*="Cadeado" i],
+.category-slide-img[alt*="Segurança" i],
+.category-slide-img[alt*="Seguranca" i]{content:url('/uploads/olist/FITAPERFAFBA/004-926848c209da.jpg')}
+
+/* Caixas de ferramentas e armazenamento. */
+.category-slide-img[alt*="Caixa" i],
+.category-slide-img[alt*="Armazenamento" i]{content:url('/storage/original/13.jpg')}
+
+/* Elétrico e automotivo. */
+.category-slide-img[alt*="Elétrico" i],
+.category-slide-img[alt*="Eletrico" i],
+.category-slide-img[alt*="Automotivo" i]{content:url('/storage/original/CHB-40025.jpg')}
+
+/* Pet e comedouros. */
+.category-slide-img[alt*="Pet" i],
+.category-slide-img[alt*="Comedouro" i]{content:url('/storage/original/CPAZ.jpg')}
+
+/* Utilidades, organização, domésticos, cozinha e limpeza. */
+.category-slide-img[alt*="Utilidade" i],
+.category-slide-img[alt*="Organização" i],
+.category-slide-img[alt*="Organizacao" i],
+.category-slide-img[alt*="Doméstica" i],
+.category-slide-img[alt*="Domestica" i],
+.category-slide-img[alt*="Cozinha" i],
+.category-slide-img[alt*="Limpeza" i]{content:url('/storage/original/13.jpg')}
+
+@media(max-width:640px){.category-slide-image-wrapper{height:128px}}

@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "shopvivaliz-php",
+      "name": "ShopVivaliz PHP",
       "runtimeExecutable": "php",
-      "runtimeArgs": ["-S", "127.0.0.1:8890", "-t", "."],
-      "port": 8890
+      "runtimeArgs": ["-S", "localhost:8000"],
+      "port": 8000
     }
   ]
 }

@@ -1,0 +1,12 @@
+✅ PAYMENT ID REAL GERADO
+
+PAYMENT ID:
+1784067263388237241
+
+Status: pending
+Valor: R$ 76.00
+Produto: Rodízio 75mm
+Cliente: teste@shopvivaliz.com.br
+Criado em: 2026-07-14 22:14:23
+
+Use este ID para validar sua integração Mercado Pago!

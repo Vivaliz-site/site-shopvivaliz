@@ -262,12 +262,37 @@ jobs:
           echo "StrictHostKeyChecking no" >> ~/.ssh/config
           echo "UserKnownHostsFile=/dev/null" >> ~/.ssh/config
 
-      - name: Sync Oracle VM (git-auto-sync.py)
+      - name: Sync Oracle VM (backup + canonical reset)
         run: |
           ssh -i ~/.ssh/id_rsa ubuntu@137.131.156.17 << 'SSH_EOF'
           cd /home/ubuntu/site-shopvivaliz
-          python3 git-auto-sync.py
+
+          dirty_before="$(git status --porcelain)"
+          if [ -n "$dirty_before" ]; then
+            backup_name="predeploy-$(date -u +%Y%m%d-%H%M%S)-${{ github.sha }}"
+            echo "Alteracoes remotas detectadas; criando backup reversivel: $backup_name"
+            git stash push --include-untracked --message "$backup_name"
+            stash_sha="$(git rev-parse stash@{0} 2>/dev/null || true)"
+            if [ -z "$stash_sha" ]; then
+              echo "ERRO: nao foi possivel confirmar o stash de backup"
+              exit 4
+            fi
+            git branch "server-backup/$backup_name" "$stash_sha"
+            echo "Backup preservado em server-backup/$backup_name ($stash_sha)"
+          fi
+
+          # O backup acima torna seguro substituir somente os arquivos rastreados.
+          # Arquivos ignorados de runtime (uploads, sessoes e configuracoes locais)
+          # permanecem intactos; o commit publicado fica identico ao aprovado.
+          git fetch --no-tags origin main
+          git cat-file -e "${{ github.sha }}^{commit}"
+          git reset --hard "${{ github.sha }}"
           exit_code=$?
+
+          if [ "$exit_code" -eq 0 ] && ! git diff --quiet --ignore-submodules --; then
+            echo "ERRO: arquivos rastreados foram alterados durante a sincronizacao"
+            exit_code=1
+          fi
 
           deployed_commit=$(git rev-parse HEAD 2>/dev/null || true)
           if [ "$exit_code" -eq 0 ] && [ "$deployed_commit" != "${{ github.sha }}" ]; then

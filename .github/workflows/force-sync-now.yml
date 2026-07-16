@@ -1,0 +1,65 @@
+name: Force Sync Now
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Motivo da sincronização forçada"
+        required: false
+
+jobs:
+  force-sync:
+    runs-on: ubuntu-latest
+    name: Force git reset to origin/main
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Force sync (hard reset)
+        run: |
+          echo "=== FORCE SYNC NOW ==="
+          echo "Reason: ${{ github.event.inputs.reason }}"
+          echo ""
+
+          # Fetch
+          git fetch origin main
+
+          # Check status
+          echo "Before sync:"
+          git status --short | head -10 || echo "(clean)"
+
+          # Force reset
+          git reset --hard origin/main
+
+          # Verify
+          echo ""
+          echo "After sync:"
+          git log -1 --oneline
+
+          # Check critical files
+          echo ""
+          echo "File check:"
+          if grep -q "pagarme" checkout/index.php; then
+            echo "[OK] checkout/index.php has pagarme"
+          else
+            echo "[ERR] checkout/index.php missing pagarme"
+            exit 1
+          fi
+
+          if grep -q "mercado_pago" checkout/index.php; then
+            echo "[OK] checkout/index.php has mercado_pago"
+          else
+            echo "[ERR] checkout/index.php missing mercado_pago"
+            exit 1
+          fi
+
+      - name: Status
+        if: success()
+        run: |
+          echo "✓ Force sync completed successfully"
+          echo "✓ Both payment gateways present"
+          echo "✓ Ready for deployment to Oracle VM"
