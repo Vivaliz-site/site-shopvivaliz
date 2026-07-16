@@ -536,9 +536,10 @@ if (!$cache_used) {
 }
 
 if ($q !== '') {
-    $all_erp = array_filter($all_erp, function($p) use ($q) {
-        $searchText = strtoupper($p['sku'] . ' ' . $p['name']);
-        return strpos($searchText, strtoupper($q)) !== false;
+    $qNormalized = svcat_search_normalize($q);
+    $all_erp = array_filter($all_erp, function($p) use ($qNormalized) {
+        $searchText = svcat_search_normalize($p['sku'] . ' ' . $p['name']);
+        return strpos($searchText, $qNormalized) !== false;
     });
 }
 
