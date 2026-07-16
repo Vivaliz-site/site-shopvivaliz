@@ -6,6 +6,8 @@
 
 session_start();
 
+require_once __DIR__ . '/../includes/social-auth.php';
+
 $redirectTo = (string)($_GET['redirect'] ?? $_POST['redirect'] ?? '/');
 if ($redirectTo === '' || $redirectTo[0] !== '/' || str_starts_with($redirectTo, '//')) {
     $redirectTo = '/';
