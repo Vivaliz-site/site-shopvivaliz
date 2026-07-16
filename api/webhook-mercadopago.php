@@ -93,6 +93,27 @@ try {
         $order['mercadopago']['last_webhook_at'] = date(DATE_ATOM);
         $order['mercadopago']['last_webhook_topic'] = $isOrder ? 'order' : 'payment';
 
+        // Pedidos pagos via Mercado Pago nao eram enviados ao Tiny ERP (apenas o
+        // fluxo manual/offline em api/orders/create-v2.php fazia esse push).
+        if ($localStatus === 'payment_approved' && empty($order['tiny_order_id'])) {
+            if (svtop_tiny_credentials_configured()) {
+                try {
+                    $tinyOrderId = svtop_push_order_tiny($order);
+                    if ($tinyOrderId) {
+                        $order['tiny_order_id'] = $tinyOrderId;
+                        $order['tiny_push'] = 'ok';
+                    } else {
+                        $order['tiny_push'] = 'token_unavailable';
+                    }
+                } catch (Throwable $e) {
+                    $order['tiny_push'] = $e->getMessage();
+                    error_log('[MercadoPago] Tiny push error: order=' . $externalReference . ' ' . $e->getMessage());
+                }
+            } else {
+                $order['tiny_push'] = 'missing_credentials';
+            }
+        }
+
         $encoded = json_encode($order, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         rewind($handle);
         ftruncate($handle, 0);
