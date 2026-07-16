@@ -235,9 +235,8 @@ if (sv_social_google_is_configured()) {
             <button type="submit" class="btn-primary">Entrar</button>
         </form>
 
-        <div class="divider">OU</div>
-
         <?php if ($google_auth_url !== ''): ?>
+        <div class="divider">OU</div>
         <div class="social-buttons">
             <a href="<?php echo htmlspecialchars($google_auth_url); ?>" class="btn-social" style="grid-column: 1 / -1;">
                 <svg viewBox="0 0 24 24" fill="currentColor">
