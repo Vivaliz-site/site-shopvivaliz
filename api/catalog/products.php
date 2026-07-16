@@ -73,6 +73,13 @@ function fetch_erp_products(int $page = 1, int $limit = 100): array
     return is_array($data) ? $data : [];
 }
 
+function svcat_search_normalize(string $value): string
+{
+    $value = mb_strtoupper(trim($value), 'UTF-8');
+    $transliterated = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
+    return $transliterated !== false ? $transliterated : $value;
+}
+
 function normalize_product(array $item): array
 {
     // V3 API retorna em 'itens' com estrutura diferente
