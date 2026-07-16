@@ -50,7 +50,7 @@ try {
     if (!is_array($order) || !svmp_session_matches($order, $sessionToken)) {
         svmp_boleto_response(403, ['ok' => false, 'error' => 'invalid_payment_session']);
     }
-    if (($order['payment_method'] ?? '') !== 'boleto') {
+    if (($order['payment_method'] ?? '') !== 'boleto' && ($order['payment_method'] ?? '') !== 'mercado_pago') {
         svmp_boleto_response(409, ['ok' => false, 'error' => 'payment_method_mismatch']);
     }
 

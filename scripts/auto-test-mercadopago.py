@@ -29,6 +29,18 @@ async def complete_checkout():
         page = await browser.new_page()
         page.on("console", lambda msg: print(f"[CONSOLE] {msg.text}"))
 
+        order_data = {}
+        async def handle_response(response):
+            if "create.php" in response.url or "create-validated.php" in response.url:
+                try:
+                    data = await response.json()
+                    if data.get("ok"):
+                        order_data["order_number"] = data.get("order_number")
+                        order_data["payment_session_token"] = data.get("payment_session_token")
+                except Exception as e:
+                    pass
+        page.on("response", handle_response)
+
         print("\n[TEST] Acessando carrinho para preparar itens...")
         await page.goto("https://dev.shopvivaliz.com.br/carrinho", wait_until="networkidle")
 
@@ -63,14 +75,15 @@ async def complete_checkout():
 
         fields = {
             'input[name="customer_name"]': "Teste Mercado Pago Auto",
-            'input[name="customer_email"]': "teste@shopvivaliz.com.br",
+            'input[name="customer_email"]': "shopvivaliz@gmail.com",
             'input[name="customer_phone"]': "11988776655",
             'input[name="cep"]': "35500-006",
             'input[name="address"]': "Rua Automática",
             'input[name="street_number"]': "999",
             'input[name="neighborhood"]': "Centro",
             'input[name="city"]': "Divinópolis",
-            'input[name="state"]': "MG"
+            'input[name="state"]': "MG",
+            'input[name="cpf"]': "01366995619"
         }
 
         for selector, value in fields.items():
@@ -111,13 +124,35 @@ async def complete_checkout():
         if await submit_btn.count() > 0:
             await submit_btn.first.click()
 
-            # Aguardar resposta
-            await page.wait_for_timeout(3000)
+            # Aguardar resposta do endpoint e processamento
+            await page.wait_for_timeout(4000)
 
-        # Extrair Order ID da página
-        print("[TEST] Extraindo Order ID...")
-
+        # Chamar endpoint create-boleto.php para obter Payment ID de homologação
         order_id = None
+        if order_data.get("order_number") and order_data.get("payment_session_token"):
+            print(f"[TEST] Chamando API de boleto para o pedido {order_data['order_number']}...")
+            try:
+                req_ctx = page.request
+                resp = await req_ctx.post(
+                    "https://dev.shopvivaliz.com.br/api/mercadopago/create-boleto.php",
+                    headers={"Content-Type": "application/json"},
+                    data=json.dumps({
+                        "order_number": order_data["order_number"],
+                        "payment_session_token": order_data["payment_session_token"]
+                    })
+                )
+                res_data = await resp.json()
+                if res_data.get("ok"):
+                    print(f"[OK] Boleto Mercado Pago gerado via API de homologação!")
+                    order_id = res_data.get("payment_id")
+                    print(f"[PAYMENT_ID] {order_id}")
+                else:
+                    print(f"[ERR] Falha ao criar boleto: {res_data}")
+            except Exception as e:
+                print(f"[ERR] Erro na requisição do boleto: {e}")
+
+        # Extrair Order ID da página (caso não tenha sido obtido pela chamada direta)
+        print("[TEST] Extraindo Order ID de fallback...")
 
         # Procurar padrões de Order ID
         page_content = await page.content()
