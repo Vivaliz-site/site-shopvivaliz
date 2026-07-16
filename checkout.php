@@ -31,7 +31,7 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/checkout.css">
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
-    <!-- Mercado Pago SDK & Device ID -->
+    <!-- Mercado Pago SDK V2 + Device ID para fraude -->
     <script src="https://sdk.mercadopago.com/js/v2"></script>
     <script src="https://www.mercadopago.com/v2/security.js" output="deviceId"></script>
 </head>
