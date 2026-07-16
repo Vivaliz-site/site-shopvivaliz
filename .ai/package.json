@@ -1,35 +1,26 @@
 {
   "name": "shopvivaliz-hybrid-ai",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Hybrid AI system combining local Ollama models with GPT, Claude, and Gemini",
   "main": "main.js",
-  "type": "module",
   "scripts": {
     "start": "node main.js",
-    "test": "node main.js",
-    "dev": "node --watch main.js",
-    "lint": "eslint .",
-    "format": "prettier --write ."
+    "validate": "node validate.js",
+    "server": "node server.js",
+    "test": "node validate.js",
+    "dev": "node --watch main.js"
   },
   "keywords": [
     "ai",
     "ollama",
     "gpt",
     "claude",
-    "gemini",
-    "orchestrator",
-    "llm",
-    "hybrid"
+    "gemini"
   ],
   "author": "Claude Code Autonomous",
   "license": "MIT",
   "dependencies": {
-    "uuid": "^9.0.0",
-    "node-fetch": "^2.6.11"
-  },
-  "devDependencies": {
-    "eslint": "^8.50.0",
-    "prettier": "^3.0.3"
+    "uuid": "^9.0.1"
   },
   "engines": {
     "node": ">=18.0.0"

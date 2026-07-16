@@ -1,3 +1,5 @@
+// Node 18+ has native fetch
+
 /**
  * 🌐 LLM Provider - Abstração Unificada para APIs Pagas
  *
@@ -6,15 +8,11 @@
  *
  * Arquivo: .ai/llm-provider.js
  */
-
-const fetch = require('node-fetch');
-
 class OpenAIProvider {
   constructor(api_key) {
     this.api_key = api_key;
     this.base_url = 'https://api.openai.com/v1';
   }
-
   async chat(messages, options = {}) {
     const payload = {
       model: options.model || 'gpt-4-turbo',
@@ -23,7 +21,6 @@ class OpenAIProvider {
       max_tokens: options.max_tokens || 2000,
       top_p: options.top_p || 0.95
     };
-
     const response = await fetch(`${this.base_url}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -32,11 +29,9 @@ class OpenAIProvider {
       },
       body: JSON.stringify(payload)
     });
-
     if (!response.ok) {
       throw new Error(`OpenAI error: ${response.statusText}`);
     }
-
     const data = await response.json();
     return {
       content: data.choices[0].message.content,
@@ -48,7 +43,6 @@ class OpenAIProvider {
       model: data.model
     };
   }
-
   calculateCost(usage) {
     const rates = {
       'gpt-4-turbo': { input: 0.00003, output: 0.0006 }
@@ -57,33 +51,27 @@ class OpenAIProvider {
     return (usage.input_tokens * rate.input + usage.output_tokens * rate.output).toFixed(6);
   }
 }
-
 class AnthropicProvider {
   constructor(api_key) {
     this.api_key = api_key;
     this.base_url = 'https://api.anthropic.com/v1';
   }
-
   async chat(messages, options = {}) {
     // Converter formato de OpenAI para Anthropic
     const system_message = messages
       .filter(m => m.role === 'system')
       .map(m => m.content)
       .join('\n');
-
     const user_messages = messages.filter(m => m.role !== 'system');
-
     const payload = {
       model: options.model || 'claude-opus-4',
       max_tokens: options.max_tokens || 2000,
       messages: user_messages,
       temperature: options.temperature || 0.7
     };
-
     if (system_message) {
       payload.system = system_message;
     }
-
     const response = await fetch(`${this.base_url}/messages`, {
       method: 'POST',
       headers: {
@@ -93,11 +81,9 @@ class AnthropicProvider {
       },
       body: JSON.stringify(payload)
     });
-
     if (!response.ok) {
       throw new Error(`Anthropic error: ${response.statusText}`);
     }
-
     const data = await response.json();
     return {
       content: data.content[0].text,
@@ -109,7 +95,6 @@ class AnthropicProvider {
       model: data.model
     };
   }
-
   calculateCost(usage, model) {
     const rates = {
       'claude-opus-4': { input: 0.000075, output: 0.00024 },
@@ -119,19 +104,16 @@ class AnthropicProvider {
     return (usage.input_tokens * rate.input + usage.output_tokens * rate.output).toFixed(6);
   }
 }
-
 class GoogleProvider {
   constructor(api_key) {
     this.api_key = api_key;
     this.base_url = 'https://generativelanguage.googleapis.com/v1beta';
   }
-
   async chat(messages, options = {}) {
     const contents = messages.map(m => ({
       role: m.role === 'user' ? 'user' : 'model',
       parts: [{ text: m.content }]
     }));
-
     const payload = {
       contents,
       generationConfig: {
@@ -140,10 +122,8 @@ class GoogleProvider {
         topP: options.top_p || 0.95
       }
     };
-
     const model = options.model || 'gemini-pro';
     const url = `${this.base_url}/models/${model}:generateContent?key=${this.api_key}`;
-
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -151,14 +131,11 @@ class GoogleProvider {
       },
       body: JSON.stringify(payload)
     });
-
     if (!response.ok) {
       throw new Error(`Google error: ${response.statusText}`);
     }
-
     const data = await response.json();
     const content = data.candidates[0].content.parts[0].text;
-
     return {
       content,
       usage: {
@@ -169,7 +146,6 @@ class GoogleProvider {
       model
     };
   }
-
   calculateCost(usage, model) {
     const rates = {
       'gemini-pro': { input: 0.00001, output: 0.00002 },
@@ -179,18 +155,14 @@ class GoogleProvider {
     return (usage.input_tokens * rate.input + usage.output_tokens * rate.output).toFixed(6);
   }
 }
-
 class OllamaProvider {
   constructor(base_url = 'http://localhost:11434') {
     this.base_url = base_url;
   }
-
   async chat(messages, options = {}) {
     const model = options.model || 'qwen2.5-coder:1.5b-q2_K';
-
     // Converter array de messages para string
     const context = messages.map(m => `${m.role}: ${m.content}`).join('\n');
-
     const payload = {
       model,
       messages: messages.map(m => ({
@@ -204,7 +176,6 @@ class OllamaProvider {
         top_p: options.top_p || 0.95
       }
     };
-
     const response = await fetch(`${this.base_url}/api/chat`, {
       method: 'POST',
       headers: {
@@ -212,11 +183,9 @@ class OllamaProvider {
       },
       body: JSON.stringify(payload)
     });
-
     if (!response.ok) {
       throw new Error(`Ollama error: ${response.statusText}`);
     }
-
     const data = await response.json();
     return {
       content: data.message.content,
@@ -229,12 +198,10 @@ class OllamaProvider {
       duration_ms: Math.round(data.total_duration / 1000000) // nanoseconds to ms
     };
   }
-
   calculateCost() {
     return '0.00'; // Ollama é grátis
   }
 }
-
 class LLMProviderFactory {
   static create(provider, config) {
     switch (provider.toLowerCase()) {
@@ -251,7 +218,6 @@ class LLMProviderFactory {
     }
   }
 }
-
 /**
  * Classe unificada para chamar qualquer modelo
  */
@@ -259,20 +225,16 @@ class UnifiedLLM {
   constructor() {
     this.providers = new Map();
   }
-
   /**
    * Chamar qualquer modelo
    */
   async call(model_id, messages, options = {}) {
     const [provider, model] = model_id.split(':');
-
     if (!this.providers.has(provider)) {
       this.providers.set(provider, LLMProviderFactory.create(provider, {}));
     }
-
     const llm_provider = this.providers.get(provider);
     const result = await llm_provider.chat(messages, { model, ...options });
-
     return {
       ...result,
       provider,
@@ -280,7 +242,6 @@ class UnifiedLLM {
     };
   }
 }
-
 module.exports = {
   OpenAIProvider,
   AnthropicProvider,
