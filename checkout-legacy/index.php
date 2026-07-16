@@ -20,9 +20,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && !sv_csrf_valid('checkout', 
 
 header('Content-Type: text/html; charset=UTF-8');
 
-require_once dirname(__DIR__) . '/config/constants.php';
-require_once dirname(__DIR__) . '/config/database.php';
-
 $runtimeSecretsFile = dirname(__DIR__) . '/config/runtime-secrets.php';
 if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
     $runtimeSecrets = require $runtimeSecretsFile;
@@ -89,7 +86,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
         'endereco' => trim((string)($_POST['endereco'] ?? '')),
         'numero' => trim((string)($_POST['numero'] ?? '')),
         'complemento' => trim((string)($_POST['complemento'] ?? '')),
+        'bairro' => trim((string)($_POST['bairro'] ?? '')),
         'cidade' => trim((string)($_POST['cidade'] ?? '')),
+        'uf' => trim((string)($_POST['uf'] ?? '')),
         'cep' => trim((string)($_POST['cep'] ?? '')),
     ];
     $itemsPayload = json_decode((string)($_POST['cart_payload'] ?? '[]'), true);
@@ -99,85 +98,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
 
     if ($cliente['nome'] !== '' && $cliente['email'] !== '' && $cliente['telefone'] !== '' && $cliente['endereco'] !== '' && $cliente['numero'] !== '' && $cliente['cidade'] !== '' && $cliente['cep'] !== '' && $items) {
         $pedidoId = 'PED-' . date('YmdHis');
-
-        // Criar Order no Mercado Pago conforme API oficial
-        $mpOrderId = null;
-        $total = array_reduce($items, function ($s, $it) {
-            return $s + (float)($it['price'] ?? 0) * (int)($it['quantity'] ?? 1);
-        }, 0.0);
-
-        $mpOrderPayload = [
-            'external_reference' => $pedidoId,
-            'total_amount' => (float)$total,
-            'items' => array_map(function ($item) {
-                return [
-                    'sku_number' => $item['sku'] ?? $item['id'] ?? '',
-                    'category' => $item['category'] ?? 'Produto',
-                    'title' => $item['name'] ?? 'Item',
-                    'description' => $item['name'] ?? 'Item do pedido',
-                    'unit_price' => (float)($item['price'] ?? 0),
-                    'quantity' => (int)($item['quantity'] ?? 1)
-                ];
-            }, $items),
-            'payer' => [
-                'email' => $cliente['email'],
-                'first_name' => explode(' ', $cliente['nome'])[0] ?? '',
-                'last_name' => implode(' ', array_slice(explode(' ', $cliente['nome']), 1)) ?? '',
-                'phone' => $cliente['telefone'] ?? ''
-            ]
-        ];
-
-        // Chamar Orders API do Mercado Pago
-        try {
-            $ch = curl_init('https://api.mercadopago.com/v1/orders');
-
-            $env = [];
-            $envFile = __DIR__ . '/../.env';
-            if (file_exists($envFile)) {
-                foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-                    if (str_starts_with(trim($line), '#') || !str_contains($line, '=')) continue;
-                    [$key, $value] = explode('=', $line, 2);
-                    $env[trim($key)] = trim(trim($value), "\"'");
-                }
-            }
-
-            $mpToken = $env['MERCADOPAGO_ACCESS_TOKEN'] ?? '';
-
-            if ($mpToken) {
-                curl_setopt_array($ch, [
-                    CURLOPT_HTTPHEADER => [
-                        'Content-Type: application/json',
-                        'Authorization: Bearer ' . $mpToken,
-                    ],
-                    CURLOPT_POST => true,
-                    CURLOPT_POSTFIELDS => json_encode($mpOrderPayload),
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_SSL_VERIFYPEER => false,
-                    CURLOPT_TIMEOUT => 10,
-                ]);
-
-                $mpResponse = curl_exec($ch);
-                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                curl_close($ch);
-
-                if ($httpCode === 201) {
-                    $mpData = json_decode($mpResponse, true);
-                    if (isset($mpData['id'])) {
-                        $mpOrderId = $mpData['id'];
-                    }
-                }
-            }
-        } catch (Exception $e) {
-            error_log('Erro ao criar Order no Mercado Pago: ' . $e->getMessage());
-        }
-
         $registro = [
             'id' => $pedidoId,
-            'mercadopago_order_id' => $mpOrderId,
             'timestamp' => date('c'),
             'cliente' => $cliente,
             'items' => $items,
-            'payment_method' => trim((string)($_POST['payment_method'] ?? 'mercado_pago')),
+            'payment_method' => trim((string)($_POST['payment_method'] ?? 'pix')),
             'status' => 'pendente_atendimento',
             'source' => 'checkout_site',
         ];
@@ -192,29 +118,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
             json_encode($registro, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
             FILE_APPEND | LOCK_EX
         );
-
-        // Salvar no banco de dados
-        try {
-            $db = Database::getInstance();
-            $total = array_reduce($items, function ($s, $it) {
-                return $s + (float)($it['price'] ?? 0) * (int)($it['quantity'] ?? 1);
-            }, 0.0);
-
-            $stmt = $db->prepare('INSERT INTO orders (id, customer_name, customer_email, customer_phone, customer_address, customer_city, customer_zip, total, payment_method, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())');
-            $stmt->bind_param('sssssssds', $pedidoId, $cliente['nome'], $cliente['email'], $cliente['telefone'], $cliente['endereco'], $cliente['cidade'], $cliente['cep'], $total, $registro['payment_method']);
-            $stmt->execute();
-
-            // Salvar itens do pedido
-            foreach ($items as $item) {
-                $stmt = $db->prepare('INSERT INTO order_items (order_id, product_id, quantity, price, created_at) VALUES (?, ?, ?, ?, NOW())');
-                $qty = (int)($item['quantity'] ?? 1);
-                $price = (float)($item['price'] ?? 0);
-                $stmt->bind_param('sidi', $pedidoId, $item['id'], $qty, $price);
-                $stmt->execute();
-            }
-        } catch (Exception $e) {
-            error_log('Erro ao salvar pedido no BD: ' . $e->getMessage());
-        }
 
         // Email de notificacao para o lojista
         $adminEmail = defined('LOJA_EMAIL_ADMIN') ? LOJA_EMAIL_ADMIN : 'fredmourao@gmail.com';
@@ -245,9 +148,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
 ";
         $body .= "Telefone: {$cliente['telefone']}
 ";
-        $body .= "Endereco: {$cliente['endereco']}, {$cliente['numero']} {$cliente['complemento']}
+        $body .= "Endereco: {$cliente['endereco']}, {$cliente['numero']} {$cliente['complemento']} - {$cliente['bairro']}
 ";
-        $body .= "Cidade/CEP: {$cliente['cidade']} - {$cliente['cep']}
+        $body .= "Cidade/UF/CEP: {$cliente['cidade']}/{$cliente['uf']} - {$cliente['cep']}
 
 ";
         $body .= "ITENS
@@ -259,42 +162,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
 ";
         $body .= "Acesse os pedidos em: https://dev.shopvivaliz.com.br/admin/
 ";
-        @mail($adminEmail, $subject, $body, "From: pedidos@dev.shopvivaliz.com.br\r\nContent-Type: text/plain; charset=UTF-8");
+        @mail($adminEmail, $subject, $body, "From: pedidos@dev.shopvivaliz.com.br
 
-        // Email de confirmacao para o cliente
-        $clienteSubject = "Pedido confirmado - {$pedidoId} - Vivaliz";
-        $clienteBody = "Olá {$cliente['nome']},
-
-Seu pedido foi recebido com sucesso!
-
-ID DO PEDIDO: {$pedidoId}
-Data: " . date('d/m/Y H:i') . "
-
-ITENS COMPRADOS
-{$itemLines}
-
-TOTAL: R$ {$totalFmt}
-Forma de pagamento: " . ucfirst(str_replace('_', ' ', $registro['payment_method'])) . "
-
-ENDEREÇO DE ENTREGA
-{$cliente['endereco']}, {$cliente['numero']} {$cliente['complemento']}
-{$cliente['cidade']} - {$cliente['cep']}
-
-Você pode acompanhar seu pedido aqui: https://dev.shopvivaliz.com.br/
-
-Se tiver dúvidas, entre em contato conosco pelo WhatsApp: https://wa.me/{$whatsapp}
-
-Obrigado pela compra!
-Vivaliz";
-
-        @mail($cliente['email'], $clienteSubject, $clienteBody, "From: pedidos@dev.shopvivaliz.com.br\r\nContent-Type: text/plain; charset=UTF-8");
+Content-Type: text/plain; charset=UTF-8");
 
         $pedidoCriado = true;
     }
 }
 
 $paymentOptions = [
-    'mercado_pago' => ['title' => 'Mercado Pago', 'desc' => 'Cartão, PIX, Boleto'],
+    'pix' => ['title' => 'PIX', 'desc' => 'Aprovacao imediata'],
+    'boleto' => ['title' => 'Boleto', 'desc' => 'Emissao apos confirmacao do frete'],
+    'whatsapp' => ['title' => 'WhatsApp', 'desc' => 'Atendimento assistido'],
+    'transferencia' => ['title' => 'Transferencia', 'desc' => 'TED / DOC'],
 ];
 ?>
 <!DOCTYPE html>
@@ -603,13 +483,6 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                         <h2>Endereco de entrega</h2>
                         <div class="form-grid full">
                             <div class="field">
-                                <label for="cep">CEP</label>
-                                <input type="text" id="cep" name="cep" placeholder="12345-678" required>
-                                <small id="cep-status"></small>
-                            </div>
-                        </div>
-                        <div class="form-grid full">
-                            <div class="field">
                                 <label for="endereco">Rua ou avenida</label>
                                 <input type="text" id="endereco" name="endereco" required>
                             </div>
@@ -624,32 +497,47 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                                 <input type="text" id="complemento" name="complemento">
                             </div>
                         </div>
-                        <div class="form-grid full">
+                        <div class="form-grid">
+                            <div class="field">
+                                <label for="bairro">Bairro</label>
+                                <input type="text" id="bairro" name="bairro">
+                            </div>
+                            <div class="field">
+                                <label for="uf">Estado (UF)</label>
+                                <input type="text" id="uf" name="uf" maxlength="2">
+                            </div>
+                        </div>
+                        <div class="form-grid">
                             <div class="field">
                                 <label for="cidade">Cidade</label>
                                 <input type="text" id="cidade" name="cidade" required>
                             </div>
+                            <div class="field">
+                                <label for="cep">CEP</label>
+                                <input type="text" id="cep" name="cep" inputmode="numeric" maxlength="9" required>
+                            </div>
                         </div>
                     </section>
 
-                    <!-- Hidden payment method field -->
-                    <input type="hidden" name="payment_method" value="mercado_pago">
-
-                    <!-- Mercado Pago Payment Section -->
                     <section class="form-section">
                         <h2>Forma de pagamento</h2>
-                        <div style="text-align: center; padding: 2rem 0;">
-                            <img src="https://http2.mlstatic.com/frontend-assets/ui-navigation/5.17.1/mercadopago/60.png" alt="Mercado Pago" style="height: 60px; margin-bottom: 1rem;">
-                            <p style="color: #666; margin-bottom: 1.5rem;">
-                                Pagamento seguro via Mercado Pago
-                                <br>
-                                <small>Aceita: Cartão de Crédito, PIX, Boleto e mais</small>
-                            </p>
-                            <button type="button" id="checkout-mp-btn" class="primary-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); font-size: 1rem; font-weight: 600; cursor: pointer;">
-                                💳 Continuar com Mercado Pago
-                            </button>
+                        <div class="payment-options">
+                            <?php foreach ($paymentOptions as $value => $option): ?>
+                                <label class="payment-option">
+                                    <input type="radio" name="payment_method" value="<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $value === 'pix' ? 'checked' : ''; ?>>
+                                    <span class="payment-option-box">
+                                        <strong><?php echo htmlspecialchars($option['title'], ENT_QUOTES, 'UTF-8'); ?></strong>
+                                        <small><?php echo htmlspecialchars($option['desc'], ENT_QUOTES, 'UTF-8'); ?></small>
+                                    </span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                        <div class="payment-help">
+                            PIX mostra a chave imediatamente. Boleto e transferencia seguem para confirmacao manual de frete e emissao pela equipe.
                         </div>
                     </section>
+
+                    <button class="primary-btn" type="submit" id="checkout-submit">Confirmar pedido</button>
                     <div class="status-message" id="checkout-status" aria-live="polite"></div>
                 </form>
 
@@ -785,6 +673,28 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 + '</section>';
         }
 
+        const cepInput = document.getElementById('cep');
+        if (cepInput) {
+            cepInput.addEventListener('blur', function () {
+                const cep = this.value.replace(/\D/g, '');
+                if (cep.length !== 8) return;
+                fetch('https://viacep.com.br/ws/' + cep + '/json/')
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d.erro) return;
+                        const enderecoField = document.getElementById('endereco');
+                        const bairroField = document.getElementById('bairro');
+                        const cidadeField = document.getElementById('cidade');
+                        const ufField = document.getElementById('uf');
+                        if (enderecoField && !enderecoField.value) enderecoField.value = d.logradouro || '';
+                        if (bairroField && !bairroField.value) bairroField.value = d.bairro || '';
+                        if (cidadeField && !cidadeField.value) cidadeField.value = d.localidade || '';
+                        if (ufField && !ufField.value) ufField.value = d.uf || '';
+                    })
+                    .catch(function () {});
+            });
+        }
+
         form.addEventListener('submit', function (event) {
             event.preventDefault();
 
@@ -807,7 +717,9 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                     formData.get('endereco') || '',
                     formData.get('numero') || '',
                     formData.get('complemento') || '',
-                    formData.get('cidade') || ''
+                    formData.get('bairro') || '',
+                    formData.get('cidade') || '',
+                    formData.get('uf') || ''
                 ].filter(Boolean).join(', '),
                 notes: '',
                 payment_method: formData.get('payment_method') || 'pix',
@@ -852,167 +764,6 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 submitNode.textContent = 'Confirmar pedido';
                 setStatus('Erro de conexao. Tente novamente.', 'err');
             });
-        });
-    })();
-
-    // ============================================
-    // CEP LOOKUP & FRETE RECALCULATION
-    // ============================================
-    (function () {
-        const cepInput = document.getElementById('cep');
-        const cepStatus = document.getElementById('cep-status');
-        const addressInput = document.getElementById('endereco');
-        const cityInput = document.getElementById('cidade');
-
-        if (!cepInput) return;
-
-        function fetchCepData(cepValue) {
-            const cep = cepValue.replace(/\D/g, '');
-            if (cep.length !== 8) {
-                cepStatus.textContent = '';
-                return;
-            }
-
-            cepStatus.textContent = 'Buscando endereço...';
-
-            // Fetch CEP data from ViaCEP proxy (evita CORS blocker)
-            fetch('/api/viacep-proxy.php?cep=' + cep)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.erro) {
-                        cepStatus.textContent = '❌ CEP não encontrado';
-                        return;
-                    }
-                    // Preencher campos
-                    addressInput.value = (data.logradouro || '') + (data.complemento ? ' ' + data.complemento : '');
-                    cityInput.value = data.localidade || '';
-                    cepStatus.textContent = '✅ Endereço encontrado';
-
-                    // Recalcular frete
-                    recalculateShipping(cep);
-                })
-                .catch(err => {
-                    cepStatus.textContent = '❌ Erro ao buscar CEP';
-                    console.error(err);
-                });
-        }
-
-        // Buscar ao sair do campo
-        cepInput.addEventListener('blur', function () {
-            fetchCepData(this.value);
-        });
-
-        // Também buscar automaticamente após digitar 8 dígitos
-        cepInput.addEventListener('input', function () {
-            const cep = this.value.replace(/\D/g, '');
-            if (cep.length === 8) {
-                fetchCepData(this.value);
-            }
-        });
-
-        function recalculateShipping(cep) {
-            const items = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
-            if (!Array.isArray(items) || items.length === 0) return;
-
-            cepStatus.textContent = 'Calculando frete...';
-
-            fetch('/api/melhorenvio/shipping-check-v2.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cep: cep, items: items })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.ok && Array.isArray(data.shipping_options)) {
-                    // Mostrar opções de transportadora
-                    showShippingOptions(data.shipping_options);
-                    cepStatus.textContent = '✅ Transportadoras disponíveis';
-                } else {
-                    cepStatus.textContent = '❌ Sem opções de frete';
-                }
-            })
-            .catch(err => {
-                cepStatus.textContent = '❌ Erro ao calcular frete';
-                console.error('Erro:', err);
-            });
-        }
-
-        function showShippingOptions(options) {
-            let optionsHTML = '<div style="margin-top: 1rem; padding: 1rem; background: #f9f9f9; border-radius: 8px;">';
-            optionsHTML += '<p style="margin-top: 0; font-weight: 600; color: #333;">Escolha a transportadora:</p>';
-
-            options.forEach((opt, idx) => {
-                const price = parseFloat(opt.price || 0).toFixed(2);
-                const days = opt.delivery_time || '?';
-                const selected = idx === 0 ? 'checked' : '';
-                const labelId = 'shipping-' + idx;
-
-                optionsHTML += `
-                    <label style="display: block; margin: 0.75rem 0; padding: 0.75rem; background: white; border: 2px solid #e0e0e0; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
-                        <input type="radio" name="shipping_option" value="${idx}" ${selected} onchange="selectShipping(${idx}, ${price}, '${opt.name}', '${opt.quote_id}')">
-                        <strong>${opt.company || opt.name}</strong>
-                        <span style="float: right; color: #667eea; font-weight: 600;">R$ ${price.replace('.', ',')}</span>
-                        <div style="font-size: 0.9rem; color: #666; margin-top: 0.25rem;">Entrega em ${days} dias</div>
-                    </label>
-                `;
-            });
-
-            optionsHTML += '</div>';
-
-            const shippingContainer = document.getElementById('shipping-options-container') || createShippingContainer();
-            shippingContainer.innerHTML = optionsHTML;
-
-            // Selecionar primeira opção automaticamente
-            if (options.length > 0) {
-                selectShipping(0, options[0].price, options[0].name, options[0].quote_id);
-            }
-        }
-
-        function createShippingContainer() {
-            const container = document.createElement('div');
-            container.id = 'shipping-options-container';
-            const form = document.querySelector('form');
-            const section = form.querySelector('.form-section');
-            if (section) {
-                section.parentNode.insertBefore(container, section.nextSibling);
-            }
-            return container;
-        }
-
-        window.selectShipping = function(idx, price, name, quoteId) {
-            localStorage.setItem('shopvivaliz_shipping_total', price.toString());
-            localStorage.setItem('shopvivaliz_shipping_label', name);
-            localStorage.setItem('shopvivaliz_quote_id', quoteId);
-            updateCheckoutSummary();
-        }
-    })();
-
-    // ============================================
-    // MERCADO PAGO BUTTON
-    // ============================================
-    (function () {
-        const mpBtn = document.getElementById('checkout-mp-btn');
-        if (!mpBtn) return;
-
-        mpBtn.addEventListener('click', function (e) {
-            e.preventDefault();
-
-            // Validar formulário
-            const form = document.querySelector('form');
-            if (!form) return;
-
-            const nome = document.getElementById('nome').value.trim();
-            const email = document.getElementById('email').value.trim();
-            const cep = document.getElementById('cep').value.trim();
-            const endereco = document.getElementById('endereco').value.trim();
-
-            if (!nome || !email || !cep || !endereco) {
-                alert('Preencha todos os dados de entrega antes de continuar');
-                return;
-            }
-
-            // Submeter formulário normalmente
-            form.submit();
         });
     })();
 </script>
