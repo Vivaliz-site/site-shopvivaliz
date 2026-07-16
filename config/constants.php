@@ -147,7 +147,7 @@ define('FTP_PORT', getenv('FTP_PORT') ?: 21);
 define('FTP_DIR', getenv('FTP_REMOTE_DIR') ?: '/');
 
 // Frete
-define('FREE_SHIPPING_THRESHOLD', (float)(getenv('FREE_SHIPPING_THRESHOLD') ?: 150));
+define('FREE_SHIPPING_THRESHOLD', (float)(getenv('FREE_SHIPPING_THRESHOLD') ?: 299));
 
 // Features flags
 define('FEATURE_CART_PERSISTENCE', true);
