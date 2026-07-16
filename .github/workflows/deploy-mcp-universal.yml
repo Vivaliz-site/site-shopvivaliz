@@ -1,0 +1,120 @@
+name: 🚀 Deploy Universal MCP Server
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'mcp-server-universal.py'
+      - '.github/workflows/deploy-mcp-universal.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ORACLE_VM_SSH_KEY }}" > ~/.ssh/oracle_vm_key
+          chmod 600 ~/.ssh/oracle_vm_key
+          ssh-keyscan -H ${{ secrets.ORACLE_VM_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy MCP Server
+        run: |
+          # Copy server to remote
+          scp -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=no \
+            mcp-server-universal.py \
+            ${{ secrets.ORACLE_VM_USER }}@${{ secrets.ORACLE_VM_HOST }}:/tmp/mcp-server-universal.py
+
+          # Install and start service
+          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=no \
+            ${{ secrets.ORACLE_VM_USER }}@${{ secrets.ORACLE_VM_HOST }} << 'EOF'
+
+          # Copy to home directory
+          sudo cp /tmp/mcp-server-universal.py /home/shopvivaliz/mcp-server-universal.py
+          sudo chmod +x /home/shopvivaliz/mcp-server-universal.py
+          sudo chown shopvivaliz:shopvivaliz /home/shopvivaliz/mcp-server-universal.py
+
+          # Create systemd service
+          sudo tee /etc/systemd/system/mcp-universal.service > /dev/null << 'SERVICE'
+          [Unit]
+          Description=Universal MCP Server for AI Providers
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=shopvivaliz
+          WorkingDirectory=/home/shopvivaliz
+          Environment="MCP_CLAUDE_KEY=sk-claude-default-key"
+          Environment="MCP_OPENAI_KEY=sk-openai-default-key"
+          Environment="MCP_GEMINI_KEY=sk-gemini-default-key"
+          Environment="MCP_DEFAULT_KEY=sk-default-universal-key"
+          ExecStart=/usr/bin/python3 /home/shopvivaliz/mcp-server-universal.py
+          Restart=always
+          RestartSec=10
+          StandardOutput=journal
+          StandardError=journal
+
+          [Install]
+          WantedBy=multi-user.target
+          SERVICE
+
+          # Enable and start service
+          sudo systemctl daemon-reload
+          sudo systemctl enable mcp-universal
+          sudo systemctl restart mcp-universal
+
+          # Verify
+          sleep 2
+          sudo systemctl status mcp-universal --no-pager
+
+          # Test endpoint
+          curl -s http://localhost:5556/status | head -20
+
+          EOF
+
+      - name: Verify Deployment
+        run: |
+          sleep 3
+
+          # Test status endpoint
+          echo "Testing /status endpoint..."
+          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=no \
+            ${{ secrets.ORACLE_VM_USER }}@${{ secrets.ORACLE_VM_HOST }} \
+            "curl -s http://localhost:5556/status | python3 -m json.tool | head -20"
+
+          echo ""
+          echo "Testing /health endpoint..."
+          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=no \
+            ${{ secrets.ORACLE_VM_USER }}@${{ secrets.ORACLE_VM_HOST }} \
+            "curl -s http://localhost:5556/health | python3 -m json.tool"
+
+          echo ""
+          echo "Checking service status..."
+          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=no \
+            ${{ secrets.ORACLE_VM_USER }}@${{ secrets.ORACLE_VM_HOST }} \
+            "systemctl status mcp-universal --no-pager | head -10"
+
+      - name: Create Summary
+        run: |
+          echo "# ✅ MCP Universal Server Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Endpoints" >> $GITHUB_STEP_SUMMARY
+          echo "- **Base URL:** http://137.131.156.17:5556" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** http://137.131.156.17:5556/status" >> $GITHUB_STEP_SUMMARY
+          echo "- **Health:** http://137.131.156.17:5556/health" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tools:** http://137.131.156.17:5556/tools" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## API Keys" >> $GITHUB_STEP_SUMMARY
+          echo "- **OpenAI:** sk-openai-default-key" >> $GITHUB_STEP_SUMMARY
+          echo "- **Claude:** sk-claude-default-key" >> $GITHUB_STEP_SUMMARY
+          echo "- **Gemini:** sk-gemini-default-key" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Test" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "curl http://137.131.156.17:5556/status" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Service running and ready for AI agents!" >> $GITHUB_STEP_SUMMARY
