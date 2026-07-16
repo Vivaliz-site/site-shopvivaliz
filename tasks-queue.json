@@ -100,25 +100,3 @@
     }
   ]
 }
-,
-    {
-      "task_id": "PROJECT-AUDIT-001",
-      "type": "audit",
-      "action": "project_director_audit",
-      "title": "Auditoria Contínua de Projeto",
-      "description": "Executa auditoria 24/7 para identificar lacunas, problemas e oportunidades de melhoria",
-      "priority": "critical",
-      "status": "active",
-      "assigned_to": ["project-director-agent"],
-      "schedule": "*/30 * * * *",
-      "checks": [
-        "admin_panel_completeness",
-        "database_integrity",
-        "api_endpoints_health",
-        "integration_status",
-        "deployment_sync_health",
-        "documentation_completeness"
-      ],
-      "expected_hours": 0.5,
-      "created_at": "2026-07-14T19:00:00Z"
-    }

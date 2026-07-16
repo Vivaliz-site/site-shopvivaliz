@@ -1,0 +1,53 @@
+name: MCP VM Diagnostic (read-only)
+
+# Diagnóstico manual e somente-leitura do estado do scripts/mcp-server.py na
+# VM Oracle. Não inicia, para ou modifica nada — só reporta o que já está
+# rodando, para decidir com segurança os próximos passos da task MCP.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Check MCP server state on Oracle VM
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.ORACLE_VM_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "StrictHostKeyChecking no" >> ~/.ssh/config
+          echo "UserKnownHostsFile=/dev/null" >> ~/.ssh/config
+
+      - name: Inspect MCP server process/port on the VM (localhost)
+        run: |
+          ssh -i ~/.ssh/id_rsa ubuntu@137.131.156.17 << 'SSH_EOF'
+          echo "=== listening sockets on 5556 ==="
+          (ss -lntp 2>/dev/null | grep 5556) || (sudo -n ss -lntp 2>/dev/null | grep 5556) || echo "(nada escutando em 5556, ou sem permissao pra ver o processo)"
+
+          echo ""
+          echo "=== mcp-server.py process ==="
+          (ps aux | grep '[m]cp-server.py') || echo "(mcp-server.py nao esta rodando)"
+
+          echo ""
+          echo "=== local health check (127.0.0.1:5556) ==="
+          curl -m 5 -i http://127.0.0.1:5556/health 2>&1 || echo "(sem resposta local em 5556)"
+
+          echo ""
+          echo "=== ufw status ==="
+          (sudo -n ufw status 2>/dev/null) || echo "(sem permissao sudo non-interactive pra checar ufw)"
+
+          echo ""
+          echo "=== outros processos python3 relevantes (agentes/automacoes) ==="
+          (ps aux | grep -E '[p]ython3.*(mcp|agent)') || echo "(nenhum)"
+          SSH_EOF
+
+      - name: External reachability check (from GitHub-hosted runner, public internet)
+        run: |
+          echo "=== curl externo para http://137.131.156.17:5556/health ==="
+          curl -m 8 -i http://137.131.156.17:5556/health 2>&1 || echo "(sem resposta externa na porta 5556 -- pode ser firewall, ou servidor parado)"

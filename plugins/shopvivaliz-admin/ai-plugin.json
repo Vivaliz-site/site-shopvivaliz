@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "ShopVivaliz Admin",
+  "name_for_model": "shopvivaliz_admin",
+  "description_for_human": "Monitor e gerencie o repositório ShopVivaliz em tempo real. Acesse status do repositório, saúde do servidor, workflows do GitHub e diagnósticos de erro.",
+  "description_for_model": "Tool para monitorar ShopVivaliz: repositório Git, servidor VM, workflows GitHub, diagnosticar erros HTTP.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "mcp",
+    "url": "https://saturday-jimmy-flash-protection.trycloudflare.com/mcp"
+  },
+  "logo_url": "https://dev.shopvivaliz.com.br/favicon.ico",
+  "contact_email": "fredmourao@gmail.com",
+  "legal_info_url": "https://github.com/Vivaliz-site/site-shopvivaliz"
+}

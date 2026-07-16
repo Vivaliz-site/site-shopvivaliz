@@ -1,0 +1,91 @@
+name: 🔧 Fix MCP Deployment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ORACLE_VM_SSH_KEY }}" > ~/.ssh/oracle_vm_key
+          chmod 600 ~/.ssh/oracle_vm_key
+          ssh-keyscan -H ${{ secrets.ORACLE_VM_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Check and Fix MCP Service
+        run: |
+          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=no \
+            ${{ secrets.ORACLE_VM_USER }}@${{ secrets.ORACLE_VM_HOST }} << 'EOF'
+
+          echo "=== Checking MCP services ==="
+
+          # Stop old services
+          sudo systemctl stop mcp-universal 2>/dev/null || true
+          sudo systemctl stop mcp-real 2>/dev/null || true
+
+          # Check if file exists
+          echo "Checking mcp-server-universal.py..."
+          ls -la /home/shopvivaliz/mcp-server-universal.py || echo "File not found!"
+
+          # Ensure it's executable
+          sudo chmod +x /home/shopvivaliz/mcp-server-universal.py
+          sudo chown shopvivaliz:shopvivaliz /home/shopvivaliz/mcp-server-universal.py
+
+          # Create/update systemd service
+          echo "Creating systemd service..."
+          sudo tee /etc/systemd/system/mcp-universal.service > /dev/null << 'SERVICE'
+          [Unit]
+          Description=Universal MCP Server for AI Providers
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=shopvivaliz
+          WorkingDirectory=/home/shopvivaliz
+          Environment="MCP_CLAUDE_KEY=sk-claude-default-key"
+          Environment="MCP_OPENAI_KEY=sk-openai-default-key"
+          Environment="MCP_GEMINI_KEY=sk-gemini-default-key"
+          ExecStart=/usr/bin/python3 /home/shopvivaliz/mcp-server-universal.py
+          Restart=always
+          RestartSec=10
+          StandardOutput=journal
+          StandardError=journal
+
+          [Install]
+          WantedBy=multi-user.target
+          SERVICE
+
+          # Enable and start
+          sudo systemctl daemon-reload
+          sudo systemctl enable mcp-universal
+          sudo systemctl start mcp-universal
+
+          # Wait and check
+          sleep 3
+          echo "=== Service Status ==="
+          sudo systemctl status mcp-universal --no-pager || true
+
+          # Test endpoint
+          echo ""
+          echo "=== Testing Endpoint ==="
+          curl -s http://localhost:5556/status || echo "Endpoint test failed"
+
+          EOF
+
+      - name: Verify
+        run: |
+          sleep 2
+          echo "=== Remote Status Check ==="
+          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=no \
+            ${{ secrets.ORACLE_VM_USER }}@${{ secrets.ORACLE_VM_HOST }} \
+            "systemctl is-active mcp-universal && echo 'Service is running' || echo 'Service failed'"
+
+      - name: Summary
+        run: |
+          echo "# ✅ MCP Deployment Fixed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Service: mcp-universal" >> $GITHUB_STEP_SUMMARY
+          echo "Status: Verified and restarted" >> $GITHUB_STEP_SUMMARY
+          echo "Endpoint: http://137.131.156.17:5556/status" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,80 @@
+name: 🚀 Setup Claude Remote Access (Automatic)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/setup-claude-remote-access.yml'
+      - 'bootstrap-claude-access.sh'
+
+jobs:
+  setup-remote-access:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ORACLE_VM_SSH_KEY }}" > ~/.ssh/oracle_vm_key
+          chmod 600 ~/.ssh/oracle_vm_key
+          ssh-keyscan -H ${{ secrets.ORACLE_VM_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Transfer bootstrap script
+        run: |
+          scp -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=no \
+            bootstrap-claude-access.sh \
+            ${{ secrets.ORACLE_VM_USER }}@${{ secrets.ORACLE_VM_HOST }}:/tmp/bootstrap-claude-access.sh
+
+      - name: Execute bootstrap script
+        run: |
+          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=no \
+            ${{ secrets.ORACLE_VM_USER }}@${{ secrets.ORACLE_VM_HOST }} \
+            "sudo bash /tmp/bootstrap-claude-access.sh"
+
+      - name: Retrieve SSH public key
+        id: get_pubkey
+        run: |
+          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=no \
+            ${{ secrets.ORACLE_VM_USER }}@${{ secrets.ORACLE_VM_HOST }} \
+            "cat /home/shopvivaliz/.ssh/claude_code_rsa.pub" > /tmp/claude_pubkey.txt
+          cat /tmp/claude_pubkey.txt
+
+      - name: Verify MCP Server
+        run: |
+          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=no \
+            ${{ secrets.ORACLE_VM_USER }}@${{ secrets.ORACLE_VM_HOST }} \
+            "curl -s http://localhost:5556/status | jq ."
+
+      - name: Test SSH access
+        run: |
+          ssh -i ~/.ssh/oracle_vm_key -o StrictHostKeyChecking=no \
+            ${{ secrets.ORACLE_VM_USER }}@${{ secrets.ORACLE_VM_HOST }} \
+            "ssh -o StrictHostKeyChecking=no shopvivaliz@localhost whoami"
+
+      - name: Upload credentials to artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-remote-credentials
+          path: /tmp/claude_pubkey.txt
+          retention-days: 7
+
+      - name: Create summary
+        if: success()
+        run: |
+          echo "# ✅ Claude Remote Access Setup Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Configuration Details" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Host:** ${{ secrets.ORACLE_VM_HOST }}" >> $GITHUB_STEP_SUMMARY
+          echo "**SSH User:** shopvivaliz" >> $GITHUB_STEP_SUMMARY
+          echo "**SSH Port:** 22" >> $GITHUB_STEP_SUMMARY
+          echo "**MCP Port:** 5556" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. Configure Claude Code with SSH access" >> $GITHUB_STEP_SUMMARY
+          echo "2. Configure Claude Chat with MCP at http://${{ secrets.ORACLE_VM_HOST }}:5556" >> $GITHUB_STEP_SUMMARY
+          echo "3. Both should now have full access!" >> $GITHUB_STEP_SUMMARY

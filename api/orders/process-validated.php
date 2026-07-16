@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/includes/order-request-context.php';
 require_once dirname(__DIR__, 2) . '/includes/order-idempotency.php';
+require_once dirname(__DIR__, 2) . '/includes/mercadopago-gateway.php';
+require_once dirname(__DIR__, 2) . '/api/emails/send-order-notification.php';
 
 function svop_json(int $status, array $payload): never
 {
@@ -53,10 +55,10 @@ function svop_payment_label(string $method): string
 function svop_payment_instructions(string $method): string
 {
     return match ($method) {
-        'boleto' => 'Boleto sujeito a emissao manual apos confirmacao do frete.',
+        'boleto' => 'Boleto emitido pelo Mercado Pago com linha digitavel e link seguro.',
         'whatsapp' => 'Pagamento e frete serao alinhados pelo atendimento no WhatsApp.',
         'transferencia' => 'Dados bancarios serao enviados pela equipe apos confirmacao do frete.',
-        'mercado_pago' => 'Link de pagamento do Mercado Pago sera enviado apos confirmacao do frete.',
+        'mercado_pago' => 'Pagamento processado no ambiente seguro do Mercado Pago.',
         'pagarme' => 'Link de pagamento do Pagar.me sera enviado apos confirmacao do frete.',
         default => 'Pagamento via PIX com confirmacao apos validacao do pedido.',
     };
@@ -289,9 +291,17 @@ $email = trim((string)($body['customer_email'] ?? ''));
 $phone = trim((string)($body['customer_phone'] ?? ''));
 $cep = preg_replace('/\D+/', '', (string)($body['cep'] ?? ''));
 $address = trim((string)($body['address'] ?? ''));
+$cpf = preg_replace('/\D+/', '', (string)($body['cpf'] ?? ''));
+$streetName = trim((string)($body['street_name'] ?? $address));
+$streetNumber = trim((string)($body['street_number'] ?? ''));
+$neighborhood = trim((string)($body['neighborhood'] ?? ''));
+$city = trim((string)($body['city'] ?? ''));
+$state = strtoupper(trim((string)($body['state'] ?? '')));
 $notes = trim((string)($body['notes'] ?? ''));
+$paymentMethod = svop_payment_method((string)($body['payment_method'] ?? 'pix'));
+$deviceId = trim((string)($body['device_id'] ?? ''));
 
-if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($notes) > 1000) {
+if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($streetNumber) > 30 || strlen($neighborhood) > 120 || strlen($city) > 120 || strlen($state) > 2 || strlen($notes) > 1000 || strlen($deviceId) > 255) {
     svoi_release($idempotencyKey);
     svop_json(422, ['ok' => false, 'error' => 'field_too_long']);
 }
@@ -299,12 +309,15 @@ if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || $phone === '' 
     svoi_release($idempotencyKey);
     svop_json(422, ['ok' => false, 'error' => 'missing_required_fields']);
 }
+if ($paymentMethod === 'boleto' && (!svmp_validate_cpf($cpf) || $streetName === '' || $streetNumber === '' || $neighborhood === '' || $city === '' || strlen($state) !== 2)) {
+    svoi_release($idempotencyKey);
+    svop_json(422, ['ok' => false, 'error' => 'boleto_payer_fields_invalid', 'message' => 'Preencha CPF e endereco completo para emitir o boleto.']);
+}
 
 $shippingTotal = round(max(0.0, (float)($body['shipping_total'] ?? 0)), 2);
 $shippingLabel = trim((string)($body['shipping_label'] ?? ''));
 $shippingService = trim((string)($body['shipping_service'] ?? ''));
 $shippingCep = preg_replace('/\D+/', '', (string)($body['shipping_cep'] ?? $cep));
-$paymentMethod = svop_payment_method((string)($body['payment_method'] ?? 'pix'));
 
 $itemsTotal = 0.0;
 $cleanItems = [];
@@ -322,8 +335,12 @@ foreach ($items as $item) {
 }
 
 $orderNumber = 'SV' . date('YmdHis') . random_int(100, 999);
+$paymentSessionToken = in_array($paymentMethod, ['boleto', 'mercado_pago'], true)
+    ? bin2hex(random_bytes(32))
+    : '';
 $record = [
     'order_number' => $orderNumber,
+    'device_id' => $deviceId,
     'status' => 'pending_confirmation',
     'customer' => [
         'name' => $name,
@@ -331,6 +348,12 @@ $record = [
         'phone' => $phone,
         'cep' => $cep,
         'address' => $address,
+        'cpf' => $cpf,
+        'street_name' => $streetName,
+        'street_number' => $streetNumber,
+        'neighborhood' => $neighborhood,
+        'city' => $city,
+        'state' => $state,
     ],
     'items' => $cleanItems,
     'items_total' => round($itemsTotal, 2),
@@ -345,6 +368,7 @@ $record = [
     'created_at' => date('c'),
     'source' => 'site_checkout_validated',
     'idempotency_key_hash' => hash('sha256', $idempotencyKey),
+    'payment_session_hash' => $paymentSessionToken !== '' ? hash('sha256', $paymentSessionToken) : '',
 ];
 
 $dir = svop_order_dir();
@@ -379,7 +403,16 @@ $record['tiny_push'] = $tinyPushStatus;
 file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
 svop_append_log($record);
 
-svop_json(200, [
+// Disparar email de confirmação do pedido
+try {
+    $emailSent = svem_send_order_email($record, 'order_created');
+    $record['confirmation_email_sent'] = $emailSent;
+} catch (Throwable $e) {
+    error_log('[OrderValidated] Email send error: ' . $e->getMessage());
+    $record['confirmation_email_sent'] = false;
+}
+
+$response = [
     'ok' => true,
     'order_number' => $orderNumber,
     'status' => 'pending_confirmation',
@@ -394,4 +427,8 @@ svop_json(200, [
     'shipping_total' => $shippingTotal,
     'shipping_label' => $shippingLabel,
     'total' => $record['total'],
-]);
+];
+if ($paymentSessionToken !== '') {
+    $response['payment_session_token'] = $paymentSessionToken;
+}
+svop_json(200, $response);

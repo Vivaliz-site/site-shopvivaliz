@@ -17,32 +17,9 @@ if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
     }
 }
 
-/* PIX key e WhatsApp vindos de .env ou config */
-function sv_co_env(string ...$keys): string {
-    static $loaded = false;
-    if (!$loaded) {
-        $loaded = true;
-        $f = __DIR__ . '/.env';
-        if (is_file($f)) {
-            foreach (file($f, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-                $line = trim($line);
-                if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
-                [$k, $v] = explode('=', $line, 2);
-                $k = trim($k); $v = trim(trim($v), '"\'');
-                if ($k !== '' && getenv($k) === false) { putenv("$k=$v"); $_ENV[$k] = $v; }
-            }
-        }
-    }
-    foreach ($keys as $k) {
-        $v = getenv($k); if (is_string($v) && $v !== '') return $v;
-        if (isset($_ENV[$k]) && $_ENV[$k] !== '') return $_ENV[$k];
-    }
-    return '';
-}
+require_once __DIR__ . '/includes/mercadopago-gateway.php';
 
-$pixKey      = sv_co_env('LOJA_PIX_KEY')     ?: 'contato@vivaliz.com.br';
-$pixName     = sv_co_env('LOJA_PIX_NAME')    ?: 'Vivaliz Store';
-$whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
+$whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -54,6 +31,9 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/checkout.css">
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
+    <!-- Mercado Pago SDK V2 + Device ID para fraude -->
+    <script src="https://sdk.mercadopago.com/js/v2"></script>
+    <script src="https://www.mercadopago.com/v2/security.js" output="deviceId"></script>
 </head>
 <body>
 <?php $svNavCurrent = 'checkout'; include __DIR__ . '/includes/navbar.php'; ?>
@@ -113,59 +93,45 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
                     <input name="cep" id="cep-input" inputmode="numeric" maxlength="9" required autocomplete="postal-code" aria-label="CEP">
                 </label>
             </div>
-            <label class="form-group">
-                <span>Endereço completo *</span>
-                <input name="address" id="address-input" maxlength="300" required autocomplete="street-address" aria-label="Endereço completo">
-            </label>
+            <div class="form-row-2">
+                <label class="form-group">
+                    <span>Rua / avenida *</span>
+                    <input name="address" id="address-input" maxlength="300" required autocomplete="address-line1" aria-label="Rua ou avenida">
+                </label>
+                <label class="form-group">
+                    <span>Número *</span>
+                    <input name="street_number" id="street-number-input" maxlength="30" required autocomplete="address-line2" aria-label="Número do endereço">
+                </label>
+            </div>
+            <div class="form-row-2">
+                <label class="form-group">
+                    <span>Bairro *</span>
+                    <input name="neighborhood" id="neighborhood-input" maxlength="120" required aria-label="Bairro">
+                </label>
+                <label class="form-group">
+                    <span>Cidade *</span>
+                    <input name="city" id="city-input" maxlength="120" required autocomplete="address-level2" aria-label="Cidade">
+                </label>
+            </div>
+            <div class="form-row-2">
+                <label class="form-group">
+                    <span>Estado (UF) *</span>
+                    <input name="state" id="state-input" maxlength="2" minlength="2" required autocomplete="address-level1" aria-label="Estado" style="text-transform:uppercase">
+                </label>
+                <label class="form-group" id="boleto-cpf-field" hidden>
+                    <span>CPF do pagador *</span>
+                    <input name="cpf" id="cpf-input" inputmode="numeric" maxlength="14" autocomplete="off" aria-label="CPF do pagador">
+                </label>
+            </div>
 
             <div class="payment-select-title">Forma de pagamento *</div>
             <div class="payment-options">
                 <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="pix" checked>
+                    <input type="radio" name="payment_method" value="mercado_pago" checked required>
                     <span class="payment-opt-box">
-                        <span class="pay-icon">⚡</span>
-                        <strong>PIX</strong>
-                        <small>Aprovação imediata</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="mercado_pago">
-                    <span class="payment-opt-box">
-                        <span class="pay-icon">💳</span>
-                        <strong>Mercado Pago</strong>
-                        <small>Cartão, Boleto, PIX</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="pagarme">
-                    <span class="payment-opt-box">
-                        <span class="pay-icon">🔒</span>
-                        <strong>Pagar.me</strong>
-                        <small>Cartão de crédito</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="boleto">
-                    <span class="payment-opt-box">
-                        <span class="pay-icon">🧾</span>
-                        <strong>Boleto</strong>
-                        <small>Emissão após confirmação</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="whatsapp">
-                    <span class="payment-opt-box">
-                        <span class="pay-icon">💬</span>
-                        <strong>WhatsApp</strong>
-                        <small>Fale com a gente</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="transferencia">
-                    <span class="payment-opt-box">
-                        <span class="pay-icon">🏦</span>
-                        <strong>Transferência</strong>
-                        <small>TED / DOC</small>
+                        <img src="/assets/payments/mercado-pago-official.svg" alt="Mercado Pago" style="max-height:48px; margin-bottom:8px">
+                        <strong>Pagar com segurança</strong>
+                        <small>Cartão, PIX, Boleto ou saldo em conta</small>
                     </span>
                 </label>
             </div>
@@ -240,6 +206,24 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
     </div>
 </div>
 
+<!-- MODAL BOLETO MERCADO PAGO -->
+<div id="boleto-modal" class="modal-overlay" hidden>
+    <div class="modal-box">
+        <div class="modal-icon">🧾</div>
+        <h2>Boleto Mercado Pago emitido</h2>
+        <p id="boleto-order-msg" style="font-weight:700;color:#0f8f62;font-size:18px"></p>
+        <label class="form-group" id="boleto-line-group">
+            <span>Linha digitável</span>
+            <textarea id="boleto-digitable-line" rows="3" readonly aria-label="Linha digitável do boleto"></textarea>
+        </label>
+        <div class="modal-actions">
+            <button type="button" onclick="svCopyBoletoLine()" class="btn btn-secondary">Copiar linha</button>
+            <a id="boleto-open-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Abrir boleto</a>
+        </div>
+        <p class="muted" style="font-size:13px">O pedido será confirmado somente após a compensação informada pelo Mercado Pago.</p>
+    </div>
+</div>
+
 <!-- MODAL SUCESSO -->
 <div id="success-modal" class="modal-overlay" hidden>
     <div class="modal-box">
@@ -258,6 +242,16 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
 
 <script>
 (function () {
+    // MercadoPago.js V2 initialization with Public Key
+    var PUBLIC_KEY = <?= json_encode(svmp_env('MERCADOPAGO_PUBLIC_KEY')) ?>;
+    if (PUBLIC_KEY && window.MercadoPago) {
+        window.MercadoPago.configure({
+            publicKey: PUBLIC_KEY
+        });
+        // Initialize Device ID for fraud detection
+        window.MercadoPago.deviceId();
+    }
+
     var PIX_KEY = <?= json_encode($pixKey) ?>;
     var WPP_NUM = <?= json_encode($whatsapp) ?>;
 
@@ -318,25 +312,185 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
 
     /* CEP auto-fill via ViaCEP */
     var cepInput = document.getElementById('cep-input');
+    function fetchAddress(cep) {
+        fetch('https://viacep.com.br/ws/' + cep + '/json/')
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (d.erro) return;
+                var addr = document.getElementById('address-input');
+                if (addr) {
+                    if (d.logradouro) addr.value = d.logradouro;
+                    var neighborhood = document.getElementById('neighborhood-input');
+                    var city = document.getElementById('city-input');
+                    var state = document.getElementById('state-input');
+                    if (neighborhood && d.bairro) neighborhood.value = d.bairro;
+                    if (city && d.localidade) city.value = d.localidade;
+                    if (state && d.uf) state.value = d.uf;
+                    var number = document.getElementById('street-number-input');
+                    if (number) number.focus();
+                }
+            }).catch(function(){});
+    }
     if (cepInput) {
+        cepInput.addEventListener('input', function () {
+            var val = this.value.replace(/\D/g, '');
+            if (val.length > 5) {
+                this.value = val.substring(0, 5) + '-' + val.substring(5, 8);
+            } else {
+                this.value = val;
+            }
+            if (val.length === 8) {
+                fetchAddress(val);
+            }
+        });
         cepInput.addEventListener('blur', function () {
-            var cep = this.value.replace(/\D/g,'');
-            if (cep.length !== 8) return;
-            fetch('https://viacep.com.br/ws/' + cep + '/json/')
-                .then(function(r){ return r.json(); })
-                .then(function(d){
-                    if (d.erro) return;
-                    var addr = document.getElementById('address-input');
-                    if (addr && !addr.value) {
-                        addr.value = d.logradouro + ', ' + d.bairro + ', ' + d.localidade + '/' + d.uf;
-                    }
-                }).catch(function(){});
+            var val = this.value.replace(/\D/g, '');
+            if (val.length === 8) {
+                fetchAddress(val);
+            }
         });
     }
 
-    /* Submit */
+    function selectedPaymentMethod() {
+        var selected = document.querySelector('input[name="payment_method"]:checked');
+        return selected ? selected.value : 'pix';
+    }
+
+    function updatePaymentFields() {
+        var boleto = selectedPaymentMethod() === 'boleto';
+        var group = document.getElementById('boleto-cpf-field');
+        var input = document.getElementById('cpf-input');
+        if (group) group.hidden = !boleto;
+        if (input) input.required = boleto;
+    }
+    document.querySelectorAll('input[name="payment_method"]').forEach(function(input) {
+        input.addEventListener('change', updatePaymentFields);
+    });
+    updatePaymentFields();
+
+    function pendingKey(items, method) {
+        return JSON.stringify({method: method, items: items.map(function(item) {
+            return [String(item.sku || ''), Number(item.quantity || 1)];
+        })});
+    }
+    function readPendingPayment() {
+        try { return JSON.parse(localStorage.getItem('shopvivaliz_pending_payment') || 'null'); } catch (e) { return null; }
+    }
+    function writePendingPayment(value) { localStorage.setItem('shopvivaliz_pending_payment', JSON.stringify(value)); }
+    function clearPendingPayment() { localStorage.removeItem('shopvivaliz_pending_payment'); }
+
+    async function postJson(url, payload) {
+        var response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        var data = await response.json().catch(function() { return {}; });
+        if (!response.ok || !data.ok) throw new Error(data.message || data.error || 'Falha ao processar pagamento.');
+        return data;
+    }
+
+    window.svNewCheckoutSubmit = true;
+    document.getElementById('checkout-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var btn = document.getElementById('submit-btn');
+        var status = document.getElementById('checkout-status');
+        var items = getCart();
+        if (!items.length) { status.textContent = 'Carrinho vazio.'; status.className='checkout-status-msg err'; return; }
+        if (!this.checkValidity()) { this.reportValidity(); return; }
+
+        btn.disabled = true;
+        btn.textContent = 'Registrando pedido…';
+        status.textContent = '';
+        status.className = 'checkout-status-msg';
+        var fd = new FormData(this);
+        var payload = { items: items };
+        fd.forEach(function(v,k){ payload[k] = v; });
+        try {
+            var deviceInput = document.querySelector('input[name="deviceId"]');
+            payload.device_id = deviceInput ? deviceInput.value : (window.deviceId || '');
+        } catch (e) {}
+        try {
+            var q = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
+            if (q) {
+                payload.shipping_total = Number(q.total) || 0;
+                payload.shipping_label = q.label || '';
+                payload.shipping_service = q.option && q.option.id ? q.option.id : '';
+                payload.shipping_cep = q.cep || payload.cep || '';
+                payload.shipping_quote_id = q.quote_id || '';
+                payload.shipping_expires_at = Number(q.expires_at) || 0;
+            }
+        } catch (ignore) {}
+
+        var method = fd.get('payment_method') || 'pix';
+        var key = pendingKey(items, method);
+        try {
+            var pending = readPendingPayment();
+            var order = pending && pending.key === key && pending.order_number && pending.payment_session_token
+                ? pending
+                : await postJson('/api/orders/create.php', payload);
+            if ((method === 'boleto' || method === 'mercado_pago') && !order.payment_session_token) {
+                throw new Error('Sessão segura de pagamento não foi criada.');
+            }
+            if (order.payment_session_token) {
+                writePendingPayment({key: key, method: method, order_number: order.order_number, payment_session_token: order.payment_session_token});
+            }
+
+            var shippingQuote = getShippingQuote();
+            var shippingTotal = shippingQuote && Number(shippingQuote.total || 0) > 0 ? Number(shippingQuote.total || 0) : 0;
+            var total = items.reduce(function(a,i){ return a+(parseFloat(i.price)||0)*(i.quantity||1); }, 0) + shippingTotal;
+            var totalFmt = fmtMoney(total);
+            var name = fd.get('customer_name') || '';
+            var wppMsg = encodeURIComponent('Olá! Acabei de fazer um pedido na Vivaliz.\nNº: ' + order.order_number + '\nNome: ' + name + '\nTotal: ' + (total > 0 ? totalFmt : 'Consultar') + '\nFavor confirmar frete e pagamento.');
+            var wppNumber = String(WPP_NUM || '').replace(/\D/g, '');
+            var wppLink = wppNumber ? ('https://wa.me/' + wppNumber + '?text=' + wppMsg) : '/contato';
+
+            if (method === 'boleto') {
+                btn.textContent = 'Emitindo boleto…';
+                var boleto = await postJson('/api/mercadopago/create-boleto.php', {
+                    order_number: order.order_number,
+                    payment_session_token: order.payment_session_token
+                });
+                clearPendingPayment(); clearCart(); clearShippingQuote(); renderCart();
+                document.getElementById('boleto-order-msg').textContent = 'Pedido ' + order.order_number;
+                document.getElementById('boleto-digitable-line').value = boleto.digitable_line || '';
+                document.getElementById('boleto-line-group').hidden = !boleto.digitable_line;
+                document.getElementById('boleto-open-link').href = boleto.ticket_url;
+                document.getElementById('boleto-modal').hidden = false;
+            } else if (method === 'mercado_pago') {
+                btn.textContent = 'Abrindo Mercado Pago…';
+                var preference = await postJson('/api/mercadopago/create-preference.php', {
+                    order_number: order.order_number,
+                    payment_session_token: order.payment_session_token
+                });
+                clearPendingPayment(); clearCart(); clearShippingQuote();
+                window.location.assign(preference.checkout_url);
+                return;
+            } else {
+                clearPendingPayment(); clearCart(); clearShippingQuote(); renderCart();
+                if (method === 'pix') {
+                    document.getElementById('pix-amount-display').textContent = total > 0 ? totalFmt : 'Confirmar com a loja';
+                    document.getElementById('wpp-confirm-link').href = wppLink;
+                    document.getElementById('pix-modal').hidden = false;
+                } else {
+                    document.getElementById('order-number-msg').textContent = 'Pedido ' + order.order_number;
+                    document.getElementById('success-wpp-link').href = wppLink;
+                    document.getElementById('success-modal').hidden = false;
+                }
+            }
+        } catch (err) {
+            status.textContent = err && err.message ? err.message : 'Erro de conexão. Tente novamente.';
+            status.className='checkout-status-msg err';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Confirmar pedido';
+        }
+    });
+
+    /* Submit legado: mantido sem execução durante a transição */
     document.getElementById('checkout-form').addEventListener('submit', function (e) {
         e.preventDefault();
+        if (window.svNewCheckoutSubmit) return;
         var btn = document.getElementById('submit-btn');
         var status = document.getElementById('checkout-status');
         var items = getCart();
@@ -351,6 +505,19 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
         var payload = { items: items };
         fd.forEach(function(v,k){ payload[k] = v; });
 
+        // Add shipping quote details
+        try {
+            var q = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
+            if (q) {
+                payload['shipping_total'] = Number(q.total) || 0;
+                payload['shipping_label'] = q.label || '';
+                payload['shipping_service'] = q.option && q.option.id ? q.option.id : '';
+                payload['shipping_cep'] = q.cep || payload['cep'] || '';
+                payload['shipping_quote_id'] = q.quote_id || '';
+                payload['shipping_expires_at'] = Number(q.expires_at) || 0;
+            }
+        } catch (err) {}
+
         fetch('/api/orders/create.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -360,7 +527,7 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
         .then(function(d) {
             btn.disabled = false;
             btn.textContent = 'Confirmar pedido';
-            if (!d.ok) { status.textContent = d.error || 'Erro ao registrar pedido.'; status.className='checkout-status-msg err'; return; }
+            if (!d.ok) { status.textContent = d.message || d.error || 'Erro ao registrar pedido.'; status.className='checkout-status-msg err'; return; }
 
             var method = fd.get('payment_method') || 'pix';
             var shippingQuote = getShippingQuote();
@@ -407,6 +574,11 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
         });
     };
 
+    window.svCopyBoletoLine = function() {
+        var line = document.getElementById('boleto-digitable-line');
+        if (line && line.value) navigator.clipboard.writeText(line.value);
+    };
+
     renderCart();
 
     /* Timer regressivo de reserva */
@@ -414,7 +586,7 @@ $whatsapp    = sv_co_env('LOJA_WHATSAPP')    ?: '';
         var duration = 15 * 60; // 15 minutos em segundos
         var display = document.getElementById('checkout-timer-display');
         if (!display) return;
-        
+
         var timer = duration, minutes, seconds;
         var interval = setInterval(function () {
             minutes = parseInt(String(timer / 60), 10);

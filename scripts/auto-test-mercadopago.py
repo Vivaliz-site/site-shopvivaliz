@@ -15,7 +15,7 @@ import sys
 def check_server_ready():
     """Verifica se servidor tem Mercado Pago sincronizado"""
     try:
-        req = urllib.request.Request("https://dev.shopvivaliz.com.br/checkout/")
+        req = urllib.request.Request("https://dev.shopvivaliz.com.br/checkout")
         with urllib.request.urlopen(req, timeout=5) as response:
             content = response.read().decode('utf-8')
             return "mercado_pago" in content
@@ -27,21 +27,50 @@ async def complete_checkout():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
+        page.on("console", lambda msg: print(f"[CONSOLE] {msg.text}"))
 
-        print("\n[TEST] Acessando checkout...")
-        await page.goto("https://dev.shopvivaliz.com.br/checkout/", wait_until="networkidle")
+        print("\n[TEST] Acessando carrinho para preparar itens...")
+        await page.goto("https://dev.shopvivaliz.com.br/carrinho", wait_until="networkidle")
+
+        # Injetar produto real no carrinho
+        await page.evaluate("""() => {
+            localStorage.setItem('shopvivaliz_cart', JSON.stringify([{
+                sku: 'RODIZIO-75MM',
+                name: '4x Rodízio Gel 75mm Freio 220kg Total',
+                price: 76.00,
+                quantity: 1,
+                image_url: '/public/assets/category-images/cat-rodizios.jpg',
+                id: '123'
+            }]));
+            localStorage.setItem('shopvivaliz_cart_updated_at', String(Date.now()));
+            localStorage.setItem('shopvivaliz_cart_validated_at', String(Date.now()));
+        }""")
+        await page.reload(wait_until="networkidle")
+
+        # Inserir CEP e calcular frete
+        print(f"[TEST] Calculando frete... URL atual: {page.url}, Título: {await page.title()}")
+        await page.wait_for_selector('#frete-cep', timeout=5000)
+        await page.fill('#frete-cep', '35500-006')
+        await page.click('#btn-frete')
+        await page.wait_for_timeout(4000) # Aguarda cálculo do Melhor Envio
+
+        # Acessar checkout
+        print("[TEST] Acessando checkout...")
+        await page.goto("https://dev.shopvivaliz.com.br/checkout", wait_until="networkidle")
 
         # Preencher dados
         print("[TEST] Preenchendo formulário...")
 
         fields = {
-            'input[name="nome"]': "Teste Mercado Pago Auto",
-            'input[name="email"]': "teste@shopvivaliz.com.br",
-            'input[name="telefone"]': "11988776655",
-            'input[name="endereco"]': "Rua Automática",
-            'input[name="numero"]': "999",
-            'input[name="cidade"]': "Belo Horizonte",
-            'input[name="cep"]': "35500-006"
+            'input[name="customer_name"]': "Teste Mercado Pago Auto",
+            'input[name="customer_email"]': "teste@shopvivaliz.com.br",
+            'input[name="customer_phone"]': "11988776655",
+            'input[name="cep"]': "35500-006",
+            'input[name="address"]': "Rua Automática",
+            'input[name="street_number"]': "999",
+            'input[name="neighborhood"]': "Centro",
+            'input[name="city"]': "Divinópolis",
+            'input[name="state"]': "MG"
         }
 
         for selector, value in fields.items():
@@ -53,24 +82,19 @@ async def complete_checkout():
         # Selecionar Mercado Pago
         print("[TEST] Selecionando Mercado Pago...")
 
-        mp_selectors = [
-            'input[value="mercado_pago"]',
-            'input[name="payment_method"][value="mercado_pago"]'
-        ]
+        found_mp = await page.evaluate("""() => {
+            const el = document.querySelector('input[value="mercado_pago"]');
+            if (el) {
+                el.checked = true;
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+            }
+            return false;
+        }""")
 
-        found_mp = False
-        for selector in mp_selectors:
-            try:
-                locator = page.locator(selector)
-                if await locator.count() > 0:
-                    await locator.first.click()
-                    found_mp = True
-                    print("[OK] Mercado Pago selecionado")
-                    break
-            except:
-                pass
-
-        if not found_mp:
+        if found_mp:
+            print("[OK] Mercado Pago selecionado programaticamente via JS")
+        else:
             print("[ERR] Mercado Pago NÃO encontrado no checkout!")
             await page.screenshot(path="logs/mercadopago-not-found.png")
             await browser.close()
@@ -83,7 +107,7 @@ async def complete_checkout():
         # Tentar enviar
         print("[TEST] Enviando pedido...")
 
-        submit_btn = page.locator('button[type="submit"], button:has-text("Confirmar")')
+        submit_btn = page.locator('#submit-btn')
         if await submit_btn.count() > 0:
             await submit_btn.first.click()
 
