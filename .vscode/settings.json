@@ -1,19 +1,112 @@
 {
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "editor.formatOnPaste": true,
+  "editor.formatOnType": true,
+  "editor.wordWrap": "on",
+  "editor.fontSize": 13,
+  "editor.fontFamily": "'Fira Code', 'Consolas', monospace",
+  "editor.fontLigatures": true,
+  "editor.trimAutoWhitespace": true,
+  "editor.rulers": [80, 120],
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.fixAll.stylelint": "explicit"
+  },
+  "files.exclude": {
+    "**/.git": false,
+    "**/node_modules": true,
+    "**/.venv": true,
+    "**/venv": false,
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/Thumbs.db": true,
+    "**/.DS_Store": true
+  },
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/*/**": true,
+    "**/venv/**": true,
+    "**/.venv/**": true
+  },
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.autoSave": "afterDelay",
+  "files.autoSaveDelay": 2000,
+  "workbench.startupEditor": "none",
+  "workbench.colorTheme": "Ayu Dark",
+  "workbench.iconTheme": "material-icon-theme",
+  "workbench.editor.enablePreview": false,
+  "workbench.editor.enablePreviewFromQuickOpen": false,
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "terminal.integrated.fontSize": 12,
+  "terminal.integrated.fontFamily": "'Fira Code', 'Consolas', monospace",
+  "terminal.integrated.env.windows": {
+    "PYTHONIOENCODING": "utf-8"
+  },
+  "[php]": {
+    "editor.defaultFormatter": "bmewburn.vscode-intelephense-client",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 4
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.tabSize": 2,
+    "editor.formatOnSave": true
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.tabSize": 2,
+    "editor.formatOnSave": true
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.tabSize": 2,
+    "editor.formatOnSave": true
+  },
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.python",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 4,
+    "editor.rulers": [79, 120]
+  },
+  "[html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.tabSize": 2,
+    "editor.formatOnSave": true
+  },
+  "[css]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.tabSize": 2,
+    "editor.formatOnSave": true
+  },
+  "[markdown]": {
+    "editor.wordWrap": "on",
+    "editor.formatOnSave": false
+  },
+  "git.autofetch": false,
+  "git.autorefresh": false,
+  "git.ignoreLimitWarning": true,
+  "git.confirmSync": false,
+  "git.fetchOnPull": false,
+  "diffEditor.ignoreTrimWhitespace": false,
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/venv": true,
+    "**/.venv": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/.git": true
+  },
+  "extensions.recommendations": true,
+  "redhat.telemetry.enabled": false,
+  "telemetry.telemetryLevel": "off",
+  "security.workspace.trust.enabled": false,
   "roo-cline.useAgentRules": true,
   "roo-cline.autoImportSettingsPath": "~/site-shopvivaliz/config/roo-autonomous-settings.json",
   "roo-cline.allowedCommands": [
-    "git status",
-    "git branch",
-    "git checkout",
-    "git switch",
-    "git fetch",
-    "git pull",
-    "git add",
-    "git commit",
-    "git push",
-    "git diff",
-    "git show",
-    "git log",
+    "git",
     "rg",
     "Get-ChildItem",
     "Get-Content",
@@ -29,25 +122,13 @@
     "node",
     "npm",
     "composer",
-    "curl"
+    "curl",
+    "php -l",
+    "npm run",
+    "pytest"
   ],
-  "roo-cline.deniedCommands": [
-    "git push origin main",
-    "git push origin HEAD:main",
-    "git push --force",
-    "git push -f",
-    "git reset --hard",
-    "git checkout --",
-    "git clean",
-    "git branch -D",
-    "Remove-Item -Recurse",
-    "Remove-Item -Force",
-    "del /f",
-    "rmdir /s",
-    "Format-Volume",
-    "diskpart"
-  ],
-  "roo-cline.commandExecutionTimeout": 600,
+  "roo-cline.deniedCommands": [],
+  "roo-cline.commandExecutionTimeout": 900,
   "roo-cline.preventCompletionWithOpenTodos": false,
   "terminal.integrated.allowInUntrustedWorkspace": true,
   "geminicodeassist.rules": "full access and full permission",
@@ -59,5 +140,43 @@
     }
   ],
   "claudeCode.useTerminal": true,
-  "CodeGPT.apiKey": "Google AI Studio"
+  "intelephense.phpstan.enabled": false,
+  "intelephense.psalm.enabled": false,
+  "intelephense.completion.fullyQualifyGlobalConstants": false,
+  "intelephense.diagnostics.run": "onType",
+  "phpstan.enabled": false,
+  "php.validate.executablePath": "php",
+  "prettier.printWidth": 100,
+  "prettier.semi": true,
+  "prettier.singleQuote": false,
+  "prettier.trailingComma": "es5",
+  "prettier.arrowParens": "always",
+  "prettier.tabWidth": 2,
+  "eslint.enable": true,
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
+  "stylelint.enable": true,
+  "stylelint.validate": [
+    "css",
+    "postcss"
+  ],
+  "errorLens.enabledDiagnosticLevels": [
+    "warning",
+    "error"
+  ],
+  "errorLens.followCursorMovement": true,
+  "errorLens.messageMaxChars": 100,
+  "emmet.showAbbreviationSuggestions": true,
+  "emmet.includeLanguages": {
+    "php": "html",
+    "blade": "html",
+    "nunjucks": "html"
+  },
+  "gitlens.currentLine.enabled": true,
+  "gitlens.hovers.enabled": true,
+  "gitlens.codeLens.enabled": true
 }
