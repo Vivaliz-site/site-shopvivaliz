@@ -189,9 +189,9 @@ function svem_build_email_content(array $order, string $event, string $customerN
 
             <div style='background: #f0f0f0; padding: 15px; border-radius: 5px; margin: 20px 0;'>
                 <strong>Informações de Entrega:</strong><br>
-                {$order['customer']['address'] ?? ''}<br>
-                {$order['customer']['neighborhood'] ?? ''} - {$order['customer']['city'] ?? ''}/{$order['customer']['state'] ?? ''}<br>
-                CEP: {$order['customer']['cep'] ?? ''}
+                $address<br>
+                $neighborhood - $city/$state<br>
+                CEP: $cep
             </div>
 
             <hr style='border: none; border-top: 1px solid #eee; margin: 30px 0;'>
