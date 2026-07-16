@@ -104,6 +104,23 @@ try {
     }
 
     error_log('[MercadoPago] webhook processed: order=' . $externalReference . ' resource=' . $dataId . ' status=' . $providerStatus);
+
+    // Enviar email de confirmação em background (se pagamento foi aprovado)
+    if ($localStatus === 'payment_approved') {
+        $postProcCmd = 'php ' . escapeshellarg(__DIR__ . '/webhook-post-processor.php') . ' ' .
+                       escapeshellarg($externalReference) . ' ' .
+                       escapeshellarg($path);
+
+        // Executar em background (non-blocking)
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            pclose(popen('start /B ' . $postProcCmd, 'r'));
+        } else {
+            exec($postProcCmd . ' > /dev/null 2>&1 &');
+        }
+
+        error_log('[MercadoPago] email processor queued: order=' . $externalReference);
+    }
+
     svmp_webhook_response(200, 'processed');
 } catch (SvMercadoPagoApiException $e) {
     error_log('[MercadoPago] webhook API failure: resource=' . substr($dataId, 0, 80) . ' code=' . $e->publicCode);
