@@ -1,0 +1,44 @@
+name: MCP VM - Stop Insecure Server
+
+# Para o processo scripts/mcp-server.py na VM Oracle (sem autenticacao,
+# execute_command de shell arbitrario, read/write com path traversal --
+# ver achados de seguranca discutidos na task MCP). So mata o processo,
+# nao mexe em firewall/Apache/deploy do site.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stop:
+    name: pkill mcp-server.py on Oracle VM
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.ORACLE_VM_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "StrictHostKeyChecking no" >> ~/.ssh/config
+          echo "UserKnownHostsFile=/dev/null" >> ~/.ssh/config
+
+      - name: Stop mcp-server.py and verify
+        run: |
+          ssh -i ~/.ssh/id_rsa ubuntu@137.131.156.17 << 'SSH_EOF'
+          echo "=== before ==="
+          (ps aux | grep '[m]cp-server.py') || echo "(ja nao estava rodando)"
+
+          pkill -f 'scripts/mcp-server.py' && echo "pkill enviado" || echo "pkill nao encontrou processo"
+          sleep 2
+
+          echo ""
+          echo "=== after ==="
+          (ps aux | grep '[m]cp-server.py') && echo "AINDA RODANDO -- pkill falhou" || echo "confirmado: parado"
+
+          echo ""
+          echo "=== porta 5556 apos stop ==="
+          (ss -lntp 2>/dev/null | grep 5556) || echo "porta 5556 livre"
+          SSH_EOF
