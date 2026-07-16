@@ -6,6 +6,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 require_once dirname(__DIR__, 2) . '/includes/catalog-runtime.php';
+require_once dirname(__DIR__, 2) . '/includes/tiny-order-push.php';
 
 function svo_json(int $status, array $payload): never
 {
