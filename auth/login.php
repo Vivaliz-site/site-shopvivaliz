@@ -1,8 +1,19 @@
 <?php
-// Redirect para login simplificado que funciona
-header('Location: /auth/login-simple.php' . (isset($_GET['redirect']) ? '?redirect=' . urlencode($_GET['redirect']) : ''));
-exit;
-?>
+declare(strict_types=1);
+
+session_start();
+
+require_once __DIR__ . '/../config/constants.php';
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/csrf.php';
+require_once __DIR__ . '/../includes/social-auth.php';
+
+$redirectTo = sv_social_sanitize_redirect((string)($_GET['redirect'] ?? $_POST['redirect'] ?? '/'));
+
+if (!empty($_SESSION['user_id'])) {
+    header('Location: ' . $redirectTo);
+    exit;
+}
 
 $error = '';
 $email = '';
