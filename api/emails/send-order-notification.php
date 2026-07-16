@@ -67,6 +67,7 @@ function svem_build_email_content(array $order, string $event, string $customerN
     $phone = $order['customer']['phone'] ?? '';
     $whatsapp = getenv('LOJA_WHATSAPP') ?: '551140415850';
     $whatsappLink = "https://wa.me/" . preg_replace('/\D/', '', $whatsapp);
+    $trackingCode = $order['tracking_code'] ?? 'Será enviado em breve';
 
     $itemsHtml = '';
     foreach ($order['items'] ?? [] as $item) {
