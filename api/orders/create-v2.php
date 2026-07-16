@@ -296,10 +296,10 @@ if (svo_autodev_available()) {
 // Enviar pedido ao Tiny ERP via API v3
 $tinyOrderId  = null;
 $tinyPushStatus = 'missing_credentials';
-if (svo_tiny_credentials_configured()) {
+if (svtop_tiny_credentials_configured()) {
     $tinyPushStatus = 'token_unavailable';
     try {
-        $tinyOrderId = svo_push_order_tiny($record);
+        $tinyOrderId = svtop_push_order_tiny($record);
         if ($tinyOrderId) {
             $tinyPushStatus = 'ok';
             $record['tiny_order_id'] = $tinyOrderId;
