@@ -1,0 +1,27 @@
+{
+  "type": "mcp",
+  "version": "1.0.0",
+  "tools": [
+    {
+      "name": "shopvivaliz_github_list_runs",
+      "description": "List recent GitHub Actions workflow runs for ShopVivaliz repository",
+      "category": "read-only"
+    },
+    {
+      "name": "shopvivaliz_vm_git_status",
+      "description": "Check current repository status on ShopVivaliz VM",
+      "category": "read-only"
+    },
+    {
+      "name": "shopvivaliz_vm_system_health",
+      "description": "Check ShopVivaliz server health: Apache status, disk space, memory usage",
+      "category": "read-only"
+    },
+    {
+      "name": "shopvivaliz_diagnose_http500",
+      "description": "Diagnose HTTP 500 errors on ShopVivaliz site",
+      "category": "read-only"
+    }
+  ],
+  "mcp_url": "https://saturday-jimmy-flash-protection.trycloudflare.com/mcp"
+}
