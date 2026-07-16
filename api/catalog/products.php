@@ -75,7 +75,8 @@ function fetch_erp_products(int $page = 1, int $limit = 100): array
 
 function svcat_search_normalize(string $value): string
 {
-    $value = mb_strtoupper(trim($value), 'UTF-8');
+    $value = trim($value);
+    $value = function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
     $transliterated = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
     return $transliterated !== false ? $transliterated : $value;
 }
