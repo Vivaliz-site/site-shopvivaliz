@@ -58,5 +58,6 @@
       "packageManager": "ms-python.python:pip"
     }
   ],
-  "claudeCode.useTerminal": true
+  "claudeCode.useTerminal": true,
+  "CodeGPT.apiKey": "Gemini CLI"
 }
