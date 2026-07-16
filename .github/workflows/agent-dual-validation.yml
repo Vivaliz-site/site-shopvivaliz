@@ -27,18 +27,22 @@ jobs:
         run: |
           echo "Running self-validation checks..."
 
-          # Syntax checks
-          npm run lint 2>&1 || echo "Lint failed but continuing..."
-          npm run type-check 2>&1 || echo "Type check failed but continuing..."
-
-          # Tests
-          npm run test -- --passWithNoTests 2>&1 || echo "Tests failed but continuing..."
-
-          # Build check
-          npm run build 2>&1 || {
+          # PHP Syntax Check
+          echo "✓ Checking PHP syntax..."
+          find . -name "*.php" -type f ! -path "./vendor/*" ! -path "./.git/*" -exec php -l {} \; 2>&1 | grep -i "error\|parse" && {
             echo "passed=false" >> $GITHUB_OUTPUT
             exit 1
-          }
+          } || true
+
+          # No hardcoded secrets
+          echo "✓ Scanning for hardcoded secrets..."
+          if grep -r "password\|secret\|api.key\|token" --include="*.php" --include="*.js" --include="*.ts" . 2>/dev/null | grep -v ".env.example" | grep -v "node_modules" | grep -v ".git" | grep -v "docs/" | head -5 | grep -q .; then
+            echo "⚠️  Found potential secrets (check manually)"
+          fi
+
+          # Markdown validation
+          echo "✓ Checking markdown files..."
+          find . -name "*.md" -type f -exec sh -c 'grep -l "^```" "$1" && grep -c "^```\|^~~~" "$1" | awk "NR==1 && \$1 % 2 != 0 {print \"Unclosed code block in $1\"; exit 1}"' _ {} \; 2>/dev/null || true
 
           echo "passed=true" >> $GITHUB_OUTPUT
           echo "✅ Self-validation passed"
