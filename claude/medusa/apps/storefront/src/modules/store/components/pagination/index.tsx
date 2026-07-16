@@ -3,13 +3,17 @@
 import { clx } from "@modules/common/components/ui"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 
+const ITEMS_PER_PAGE_OPTIONS = [6, 12, 24, 48]
+
 export function Pagination({
   page,
   totalPages,
+  limit = 12,
   'data-testid': dataTestid
 }: {
   page: number
   totalPages: number
+  limit?: number
   'data-testid'?: string
 }) {
   const router = useRouter()
@@ -24,6 +28,14 @@ export function Pagination({
   const handlePageChange = (newPage: number) => {
     const params = new URLSearchParams(searchParams)
     params.set("page", newPage.toString())
+    router.push(`${pathname}?${params.toString()}`)
+  }
+
+  // Function to handle limit changes
+  const handleLimitChange = (newLimit: number) => {
+    const params = new URLSearchParams(searchParams)
+    params.set("limit", newLimit.toString())
+    params.set("page", "1") // Reset to first page when changing limit
     router.push(`${pathname}?${params.toString()}`)
   }
 
@@ -107,8 +119,26 @@ export function Pagination({
 
   // Render the component
   return (
-    <div className="flex justify-center w-full mt-12">
-      <div className="flex gap-3 items-end" data-testid={dataTestid}>{renderPageButtons()}</div>
+    <div className="flex flex-col gap-6 w-full mt-12">
+      <div className="flex justify-center">
+        <div className="flex gap-3 items-end" data-testid={dataTestid}>{renderPageButtons()}</div>
+      </div>
+      <div className="flex justify-center">
+        <div className="flex items-center gap-3">
+          <label className="txt-base text-ui-fg-muted">Itens por página:</label>
+          <select
+            value={limit}
+            onChange={(e) => handleLimitChange(parseInt(e.target.value))}
+            className="px-3 py-2 border border-ui-border-base rounded text-ui-fg-base"
+          >
+            {ITEMS_PER_PAGE_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
     </div>
   )
 }

@@ -13,15 +13,18 @@ export default function CollectionTemplate({
   page,
   countryCode,
   optionValueIds,
+  limit,
 }: {
   sortBy?: SortOptions
   collection: HttpTypes.StoreCollection
   page?: string
   countryCode: string
   optionValueIds?: OptionValueIds
+  limit?: string
 }) {
   const pageNumber = page ? parseInt(page) : 1
   const sort = sortBy || "created_at"
+  const itemsPerPage = limit ? parseInt(limit) : 12
 
   return (
     <div className="flex flex-col small:flex-row small:items-start py-6 content-container">
@@ -43,6 +46,7 @@ export default function CollectionTemplate({
             collectionId={collection.id}
             countryCode={countryCode}
             optionValueIds={optionValueIds}
+            limit={itemsPerPage}
           />
         </Suspense>
       </div>

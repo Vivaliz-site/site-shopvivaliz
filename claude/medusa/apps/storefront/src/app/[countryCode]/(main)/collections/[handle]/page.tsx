@@ -15,6 +15,7 @@ type Props = {
       page?: string
       sortBy?: SortOptions
       optionValueIds?: string | string[]
+      limit?: string
     }
   >
 }
@@ -73,7 +74,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 export default async function CollectionPage(props: Props) {
   const searchParams = await props.searchParams
   const params = await props.params
-  const { sortBy, page } = searchParams
+  const { sortBy, page, limit } = searchParams
   const optionValueIds = parseOptionValueIds(searchParams)
 
   const collection = await getCollectionByHandle(params.handle).then(
@@ -91,6 +92,7 @@ export default async function CollectionPage(props: Props) {
       sortBy={sortBy}
       countryCode={params.countryCode}
       optionValueIds={optionValueIds}
+      limit={limit}
     />
   )
 }

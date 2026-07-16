@@ -1,21 +1,10 @@
 {
   "permissions": {
+    "additionalDirectories": [
+      "C:\\Users\\FRED\\site-shopvivaliz\\.vscode"
+    ],
     "allow": [
-      "Bash(rm -f .git/index.lock)",
-      "Bash(git commit -m 'feat: implement Caminho C - Dashboard Admin \\(A/B Testing + Performance\\) *)",
-      "Bash(claude mcp *)",
-      "Bash(rm -rf ~/.claude/.mcp-cache)",
-      "mcp__claude-in-chrome__tabs_context_mcp",
-      "mcp__claude-in-chrome__navigate",
-      "mcp__claude-in-chrome__computer",
-      "mcp__claude-in-chrome__find",
-      "mcp__claude-in-chrome__read_page",
-      "mcp__claude-in-chrome__read_console_messages",
-      "mcp__claude-in-chrome__form_input"
+      "Bash(gh run *)"
     ]
-  },
-  "enabledMcpjsonServers": [
-    "codex-mesh-bridge"
-  ],
-  "enableAllProjectMcpServers": true
+  }
 }
