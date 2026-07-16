@@ -43,35 +43,6 @@ function svo_stock_map(): array
     return $map;
 }
 
-function svo_load_runtime_secrets(): void
-{
-    static $loaded = false;
-    if ($loaded) {
-        return;
-    }
-    $loaded = true;
-
-    $path = svo_root() . '/config/runtime-secrets.php';
-    if (!is_file($path) || !is_readable($path)) {
-        return;
-    }
-
-    $secrets = require $path;
-    if (!is_array($secrets)) {
-        return;
-    }
-
-    foreach ($secrets as $key => $value) {
-        if (!is_string($key) || $key === '' || getenv($key) !== false) {
-            continue;
-        }
-        $stringValue = is_scalar($value) ? (string)$value : '';
-        putenv($key . '=' . $stringValue);
-        $_ENV[$key] = $stringValue;
-        $_SERVER[$key] = $stringValue;
-    }
-}
-
 function svo_autodev_available(): bool
 {
     static $loaded = null;
