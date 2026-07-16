@@ -119,52 +119,6 @@ function svmp_truncate(string $value, int $length): string
     return function_exists('mb_substr') ? mb_substr($value, 0, $length, 'UTF-8') : substr($value, 0, $length);
 }
 
-/** @return array<string,mixed> */
-function svmp_boleto_payload(array $order): array
-{
-    $customer = is_array($order['customer'] ?? null) ? $order['customer'] : [];
-    [$firstName, $lastName] = svmp_split_name((string)($customer['name'] ?? ''));
-    $cpf = preg_replace('/\D+/', '', (string)($customer['cpf'] ?? '')) ?? '';
-    $total = round((float)($order['total'] ?? 0), 2);
-    if ($total <= 0 || !svmp_validate_cpf($cpf)) {
-        throw new InvalidArgumentException('invalid_boleto_order');
-    }
-
-    $required = ['email', 'cep', 'street_name', 'street_number', 'neighborhood', 'city', 'state'];
-    foreach ($required as $field) {
-        if (trim((string)($customer[$field] ?? '')) === '') {
-            throw new InvalidArgumentException('missing_boleto_payer_fields');
-        }
-    }
-
-    return [
-        'type' => 'online',
-        'external_reference' => (string)($order['order_number'] ?? ''),
-        'processing_mode' => 'automatic',
-        'total_amount' => svmp_money($total),
-        'description' => 'Pedido ShopVivaliz ' . (string)($order['order_number'] ?? ''),
-        'payer' => [
-            'email' => (string)$customer['email'],
-            'first_name' => $firstName,
-            'last_name' => $lastName,
-            'identification' => ['type' => 'CPF', 'number' => $cpf],
-            'address' => [
-                'street_name' => (string)$customer['street_name'],
-                'street_number' => (string)$customer['street_number'],
-                'zip_code' => preg_replace('/\D+/', '', (string)$customer['cep']),
-                'neighborhood' => (string)$customer['neighborhood'],
-                'state' => strtoupper((string)$customer['state']),
-                'city' => (string)$customer['city'],
-            ],
-        ],
-        'transactions' => [
-            'payments' => [[
-                'amount' => svmp_money($total),
-                'payment_method' => ['id' => 'boleto', 'type' => 'ticket'],
-            ]],
-        ],
-    ];
-}
 
 /** @return array */
 function svmp_build_items(array $order): array
