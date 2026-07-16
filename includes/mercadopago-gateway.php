@@ -158,6 +158,40 @@ function svmp_build_items(array $order): array
     return $items;
 }
 
+/** @return array */
+function svmp_build_boleto_items(array $order): array
+{
+    $items = [];
+    foreach ((array)($order['items'] ?? []) as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $quantity = max(1, (int)($item['quantity'] ?? 1));
+        $unitPrice = round((float)($item['price'] ?? 0), 2);
+        if ($unitPrice <= 0) {
+            continue;
+        }
+        $items[] = [
+            'title' => svmp_truncate((string)($item['name'] ?? $item['sku'] ?? 'Produto ShopVivaliz'), 120),
+            'quantity' => $quantity,
+            'unit_price' => number_format($unitPrice, 2, '.', ''),
+            'category_id' => 'others',
+            'external_code' => svmp_truncate((string)($item['sku'] ?? ''), 50),
+        ];
+    }
+    $shipping = round((float)($order['shipping_total'] ?? 0), 2);
+    if ($shipping > 0) {
+        $items[] = [
+            'title' => svmp_truncate((string)($order['shipping_label'] ?? 'Frete'), 120),
+            'quantity' => 1,
+            'unit_price' => number_format($shipping, 2, '.', ''),
+            'category_id' => 'others',
+            'external_code' => 'shipping_fee',
+        ];
+    }
+    return $items;
+}
+
 /** @return array<string,mixed> */
 function svmp_boleto_payload(array $order): array
 {
@@ -182,7 +216,7 @@ function svmp_boleto_payload(array $order): array
         'processing_mode' => 'automatic',
         'total_amount' => svmp_money($total),
         'description' => 'Pedido ShopVivaliz ' . (string)($order['order_number'] ?? ''),
-        'items' => svmp_build_items($order),
+        'items' => svmp_build_boleto_items($order),
         'payer' => [
             'email' => (string)$customer['email'],
             'first_name' => $firstName,
