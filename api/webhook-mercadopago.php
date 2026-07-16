@@ -127,6 +127,36 @@ try {
 
     error_log('[MercadoPago] webhook processed: order=' . $externalReference . ' resource=' . $dataId . ' status=' . $providerStatus);
 
+    // Espelha o status na tabela MySQL `orders` (fonte usada por meus-pedidos.php).
+    try {
+        require_once dirname(__DIR__) . '/includes/pdo-database.php';
+        require_once dirname(__DIR__) . '/includes/account-schema.php';
+        sv_account_ensure_schema();
+
+        $orderStatusMap = [
+            'payment_approved' => 'pagamento_aprovado',
+            'payment_pending' => 'aguardando_pagamento',
+            'payment_refunded' => 'devolvido',
+            'payment_chargeback' => 'devolvido',
+            'payment_cancelled' => 'cancelado',
+            'payment_failed' => 'cancelado',
+        ];
+        $mappedStatus = $orderStatusMap[$localStatus] ?? 'aguardando_pagamento';
+
+        $pdo = sv_pdo();
+        $stmt = $pdo->prepare(
+            'UPDATE orders SET order_status = :status, olist_order_id = COALESCE(:olist_order_id, olist_order_id), updated_at = NOW()
+             WHERE order_number = :order_number'
+        );
+        $stmt->execute([
+            ':status' => $mappedStatus,
+            ':olist_order_id' => $order['tiny_order_id'] ?? null,
+            ':order_number' => $externalReference,
+        ]);
+    } catch (Throwable $e) {
+        error_log('[MercadoPago] MySQL orders mirror failed: order=' . $externalReference . ' ' . $e->getMessage());
+    }
+
     // Enviar email de confirmação em background (se pagamento foi aprovado)
     if ($localStatus === 'payment_approved') {
         $postProcCmd = 'php ' . escapeshellarg(__DIR__ . '/webhook-post-processor.php') . ' ' .
