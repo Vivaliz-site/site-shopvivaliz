@@ -403,6 +403,15 @@ $record['tiny_push'] = $tinyPushStatus;
 file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
 svop_append_log($record);
 
+// Disparar email de confirmação do pedido
+try {
+    $emailSent = svem_send_order_email($record, 'order_created');
+    $record['confirmation_email_sent'] = $emailSent;
+} catch (Throwable $e) {
+    error_log('[OrderValidated] Email send error: ' . $e->getMessage());
+    $record['confirmation_email_sent'] = false;
+}
+
 $response = [
     'ok' => true,
     'order_number' => $orderNumber,
