@@ -73,6 +73,28 @@ function fetch_erp_products(int $page = 1, int $limit = 100): array
     return is_array($data) ? $data : [];
 }
 
+function svcat_search_normalize(string $value): string
+{
+    static $accents = [
+        'á' => 'a', 'à' => 'a', 'ã' => 'a', 'â' => 'a', 'ä' => 'a',
+        'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
+        'í' => 'i', 'ì' => 'i', 'î' => 'i', 'ï' => 'i',
+        'ó' => 'o', 'ò' => 'o', 'õ' => 'o', 'ô' => 'o', 'ö' => 'o',
+        'ú' => 'u', 'ù' => 'u', 'û' => 'u', 'ü' => 'u',
+        'ç' => 'c', 'ñ' => 'n', 'ý' => 'y',
+        'Á' => 'A', 'À' => 'A', 'Ã' => 'A', 'Â' => 'A', 'Ä' => 'A',
+        'É' => 'E', 'È' => 'E', 'Ê' => 'E', 'Ë' => 'E',
+        'Í' => 'I', 'Ì' => 'I', 'Î' => 'I', 'Ï' => 'I',
+        'Ó' => 'O', 'Ò' => 'O', 'Õ' => 'O', 'Ô' => 'O', 'Ö' => 'O',
+        'Ú' => 'U', 'Ù' => 'U', 'Û' => 'U', 'Ü' => 'U',
+        'Ç' => 'C', 'Ñ' => 'N', 'Ý' => 'Y',
+    ];
+
+    $value = trim($value);
+    $value = strtr($value, $accents);
+    return function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
+}
+
 function normalize_product(array $item): array
 {
     // V3 API retorna em 'itens' com estrutura diferente
@@ -536,9 +558,10 @@ if (!$cache_used) {
 }
 
 if ($q !== '') {
-    $all_erp = array_filter($all_erp, function($p) use ($q) {
-        $searchText = strtoupper($p['sku'] . ' ' . $p['name']);
-        return strpos($searchText, strtoupper($q)) !== false;
+    $qNormalized = svcat_search_normalize($q);
+    $all_erp = array_filter($all_erp, function($p) use ($qNormalized) {
+        $searchText = svcat_search_normalize($p['sku'] . ' ' . $p['name']);
+        return strpos($searchText, $qNormalized) !== false;
     });
 }
 

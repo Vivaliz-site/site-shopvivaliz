@@ -8,6 +8,7 @@ header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
 require_once dirname(__DIR__) . '/includes/mercadopago-gateway.php';
+require_once dirname(__DIR__) . '/includes/tiny-order-push.php';
 
 function svmp_webhook_response(int $status, string $result): never
 {
@@ -92,6 +93,27 @@ try {
         $order['mercadopago']['last_webhook_at'] = date(DATE_ATOM);
         $order['mercadopago']['last_webhook_topic'] = $isOrder ? 'order' : 'payment';
 
+        // Pedidos pagos via Mercado Pago nao eram enviados ao Tiny ERP (apenas o
+        // fluxo manual/offline em api/orders/create-v2.php fazia esse push).
+        if ($localStatus === 'payment_approved' && empty($order['tiny_order_id'])) {
+            if (svtop_tiny_credentials_configured()) {
+                try {
+                    $tinyOrderId = svtop_push_order_tiny($order);
+                    if ($tinyOrderId) {
+                        $order['tiny_order_id'] = $tinyOrderId;
+                        $order['tiny_push'] = 'ok';
+                    } else {
+                        $order['tiny_push'] = 'token_unavailable';
+                    }
+                } catch (Throwable $e) {
+                    $order['tiny_push'] = $e->getMessage();
+                    error_log('[MercadoPago] Tiny push error: order=' . $externalReference . ' ' . $e->getMessage());
+                }
+            } else {
+                $order['tiny_push'] = 'missing_credentials';
+            }
+        }
+
         $encoded = json_encode($order, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         rewind($handle);
         ftruncate($handle, 0);
@@ -104,6 +126,36 @@ try {
     }
 
     error_log('[MercadoPago] webhook processed: order=' . $externalReference . ' resource=' . $dataId . ' status=' . $providerStatus);
+
+    // Espelha o status na tabela MySQL `orders` (fonte usada por meus-pedidos.php).
+    try {
+        require_once dirname(__DIR__) . '/includes/pdo-database.php';
+        require_once dirname(__DIR__) . '/includes/account-schema.php';
+        sv_account_ensure_schema();
+
+        $orderStatusMap = [
+            'payment_approved' => 'pagamento_aprovado',
+            'payment_pending' => 'aguardando_pagamento',
+            'payment_refunded' => 'devolvido',
+            'payment_chargeback' => 'devolvido',
+            'payment_cancelled' => 'cancelado',
+            'payment_failed' => 'cancelado',
+        ];
+        $mappedStatus = $orderStatusMap[$localStatus] ?? 'aguardando_pagamento';
+
+        $pdo = sv_pdo();
+        $stmt = $pdo->prepare(
+            'UPDATE orders SET order_status = :status, olist_order_id = COALESCE(:olist_order_id, olist_order_id), updated_at = NOW()
+             WHERE order_number = :order_number'
+        );
+        $stmt->execute([
+            ':status' => $mappedStatus,
+            ':olist_order_id' => $order['tiny_order_id'] ?? null,
+            ':order_number' => $externalReference,
+        ]);
+    } catch (Throwable $e) {
+        error_log('[MercadoPago] MySQL orders mirror failed: order=' . $externalReference . ' ' . $e->getMessage());
+    }
 
     // Enviar email de confirmação em background (se pagamento foi aprovado)
     if ($localStatus === 'payment_approved') {
