@@ -1,0 +1,401 @@
+{
+  "system": {
+    "name": "ShopVivaliz Hybrid AI Platform",
+    "version": "1.0.0",
+    "phase": "Phase 1 Complete - Ready for Phase 2",
+    "environment": "development",
+    "timezone": "America/Sao_Paulo",
+    "description": "24/7 autonomous development with 70% free local processing, 30% smart API usage"
+  },
+
+  "orchestrator": {
+    "host": "127.0.0.1",
+    "port": 8080,
+    "api_prefix": "/api/v1",
+    "log_level": "INFO",
+    "max_concurrent_agents": 10,
+    "task_timeout_seconds": 3600,
+    "memory_gb": 16,
+    "enable_health_check": true,
+    "health_check_interval_seconds": 30
+  },
+
+  "hardware": {
+    "detected": {
+      "cpu": "Multi-core processor",
+      "ram_gb": 32,
+      "ram_free_gb": 16,
+      "disk_free_gb": 78,
+      "gpu_primary": "NVIDIA GeForce MX110",
+      "gpu_vram_gb": 2,
+      "gpu_driver": "457.49",
+      "cuda_available": true,
+      "notes": "GPU bottleneck: 2GB VRAM limits local model size"
+    },
+    "constraints": {
+      "max_local_model_params_b": 3,
+      "max_local_model_vram_gb": 2,
+      "recommended_quantization": "Q2_K",
+      "fallback_to_cpu": true
+    }
+  },
+
+  "models": {
+    "strategy": "hybrid-intelligent-routing",
+    "preferred_provider": "ollama-local",
+    "fallback_provider": "claude-api",
+    "decision_matrix": {
+      "trivial": {"model": "qwen2.5-coder:1.5b", "provider": "local", "latency_ms": 50},
+      "simple": {"model": "qwen2.5-coder:1.5b", "provider": "local", "latency_ms": 75},
+      "medium": {"model": "claude-haiku", "provider": "anthropic", "latency_ms": 200},
+      "complex": {"model": "claude-opus", "provider": "anthropic", "latency_ms": 500},
+      "reasoning": {"model": "gpt-4o", "provider": "openai", "latency_ms": 800}
+    },
+
+    "local": {
+      "provider": "ollama",
+      "base_url": "http://127.0.0.1:11434",
+      "timeout_seconds": 300,
+      "models": [
+        {
+          "name": "qwen2.5-coder:1.5b-q2_K",
+          "role": "primary-coding",
+          "download_size_mb": 520,
+          "vram_gb": 0.6,
+          "ram_gb": 0.8,
+          "latency_ms": 50,
+          "max_tokens": 2048,
+          "context_window": 32768,
+          "strengths": ["PHP", "JavaScript", "TypeScript", "SQL", "Code generation"],
+          "status": "not-yet-downloaded"
+        },
+        {
+          "name": "llama2:3b-q4",
+          "role": "fallback-reasoning",
+          "download_size_mb": 2500,
+          "vram_gb": 1.2,
+          "ram_gb": 1.5,
+          "latency_ms": 100,
+          "max_tokens": 4096,
+          "context_window": 4096,
+          "strengths": ["Logic", "Math", "Reasoning"],
+          "status": "not-yet-downloaded"
+        }
+      ],
+      "ollama_installation": {
+        "platform": "windows",
+        "download_url": "https://ollama.ai/download/windows",
+        "estimated_install_time_minutes": 5,
+        "setup_command": "ollama serve"
+      }
+    },
+
+    "paid": {
+      "anthropic": {
+        "api_key_env": "ANTHROPIC_API_KEY",
+        "base_url": "https://api.anthropic.com",
+        "models": {
+          "haiku": {
+            "model_id": "claude-3-5-haiku-20241022",
+            "cost_per_million_input_tokens": 800,
+            "cost_per_million_output_tokens": 4000,
+            "use_for": "fast-code-review, documentation",
+            "latency_ms": 200,
+            "max_context_tokens": 200000
+          },
+          "opus": {
+            "model_id": "claude-3-opus-20250122",
+            "cost_per_million_input_tokens": 3000,
+            "cost_per_million_output_tokens": 15000,
+            "use_for": "architecture, complex-reasoning",
+            "latency_ms": 500,
+            "max_context_tokens": 200000
+          },
+          "sonnet": {
+            "model_id": "claude-3-5-sonnet-20241022",
+            "cost_per_million_input_tokens": 1500,
+            "cost_per_million_output_tokens": 7500,
+            "use_for": "vision, screenshot-analysis",
+            "latency_ms": 400,
+            "max_context_tokens": 200000
+          }
+        }
+      },
+      "openai": {
+        "api_key_env": "OPENAI_API_KEY",
+        "base_url": "https://api.openai.com/v1",
+        "models": {
+          "gpt-4o": {
+            "model_id": "gpt-4o",
+            "cost_per_million_input_tokens": 2500,
+            "cost_per_million_output_tokens": 10000,
+            "use_for": "reasoning-hard, optimization",
+            "latency_ms": 800,
+            "max_context_tokens": 128000
+          }
+        }
+      },
+      "google": {
+        "api_key_env": "GEMINI_API_KEY",
+        "base_url": "https://generativelanguage.googleapis.com",
+        "models": {
+          "gemini-pro": {
+            "model_id": "gemini-1.5-pro",
+            "cost_per_million_input_tokens": 500,
+            "cost_per_million_output_tokens": 1500,
+            "use_for": "research, long-context",
+            "latency_ms": 600,
+            "max_context_tokens": 1000000
+          }
+        }
+      }
+    }
+  },
+
+  "memory": {
+    "provider": "qdrant",
+    "base_url": "http://127.0.0.1:6333",
+    "timeout_seconds": 10,
+    "embedding_model": "all-minilm-l6-v2",
+    "embedding_dimension": 384,
+    "default_collection": "shopvivaliz",
+    "collections": [
+      {
+        "name": "code",
+        "description": "PHP, JavaScript, SQL code snippets and functions",
+        "vector_size": 384
+      },
+      {
+        "name": "incidents",
+        "description": "Bugs, errors, and fixes (from CHANGELOG)",
+        "vector_size": 384
+      },
+      {
+        "name": "decisions",
+        "description": "Architecture decisions and trade-offs",
+        "vector_size": 384
+      },
+      {
+        "name": "tests",
+        "description": "Test cases and expected behaviors",
+        "vector_size": 384
+      }
+    ],
+    "postgres": {
+      "host": "localhost",
+      "port": 5432,
+      "database": "shopvivaliz_memory",
+      "user_env": "PG_USER",
+      "password_env": "PG_PASSWORD",
+      "sslmode": "disable"
+    }
+  },
+
+  "agents": {
+    "total_agents": 13,
+    "configuration_dir": ".ai/agents",
+    "list": [
+      "orchestrator",
+      "backend-php",
+      "frontend-js-ts",
+      "database",
+      "devops",
+      "security",
+      "testing",
+      "playwright",
+      "observability",
+      "erp-olist-tiny",
+      "commerce-payments",
+      "auditor",
+      "code-reviewer"
+    ]
+  },
+
+  "sandbox": {
+    "type": "git-worktree",
+    "isolation_level": "high",
+    "cleanup_on_success": true,
+    "cleanup_on_failure": false,
+    "allowed_paths": [
+      "C:\\Users\\*\\site-shopvivaliz",
+      "C:\\Users\\*\\AppData\\Local\\Temp"
+    ],
+    "forbidden_commands": [
+      "rm -rf /",
+      "git reset --hard",
+      "git push --force",
+      "systemctl",
+      "sudo",
+      "powershell -Command \"Remove-Item -Recurse -Force\"",
+      "del /s /q",
+      "format",
+      "cipher /w"
+    ],
+    "allowed_git_commands": [
+      "git add",
+      "git commit",
+      "git push origin HEAD",
+      "git fetch",
+      "git pull origin main",
+      "git branch",
+      "git checkout"
+    ]
+  },
+
+  "cost_control": {
+    "enabled": true,
+    "enforcement": "hard_stop_at_limit",
+    "budget": {
+      "daily_limit_usd": 10.00,
+      "weekly_limit_usd": 50.00,
+      "monthly_limit_usd": 200.00,
+      "per_task_limit_usd": 1.00
+    },
+    "alerts": {
+      "at_50_percent": true,
+      "at_80_percent": true,
+      "at_100_percent": true,
+      "escalation_email": "fredmourao@gmail.com"
+    },
+    "require_approval_above_usd": 1.00,
+    "tracking_database": "shopvivaliz_memory",
+    "cost_history_retention_days": 90
+  },
+
+  "security": {
+    "enable_audit_logging": true,
+    "audit_log_database": "shopvivaliz_memory",
+    "audit_log_retention_days": 365,
+    "require_human_approval_for": [
+      "git-push-to-main",
+      "production-deployment",
+      "secret-rotation",
+      "price-changes-in-database",
+      "customer-data-exports",
+      "database-schema-drop",
+      "api-key-generation"
+    ],
+    "rate_limits": {
+      "per_agent_per_minute": 10,
+      "per_agent_per_hour": 100,
+      "global_per_minute": 50
+    },
+    "secret_management": {
+      "provider": "environment",
+      "allowed_env_vars": [
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "GEMINI_API_KEY",
+        "GITHUB_TOKEN",
+        "PG_USER",
+        "PG_PASSWORD"
+      ],
+      "never_log": [
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "GEMINI_API_KEY",
+        "GITHUB_TOKEN",
+        "PG_PASSWORD"
+      ]
+    },
+    "ip_whitelist": ["127.0.0.1", "localhost"],
+    "require_https_for_apis": false,
+    "enable_request_signing": true
+  },
+
+  "monitoring": {
+    "dashboard": {
+      "port": 3000,
+      "path": "http://127.0.0.1:3000",
+      "update_interval_ms": 1000
+    },
+    "metrics": {
+      "provider": "prometheus",
+      "port": 9090,
+      "scrape_interval_seconds": 15,
+      "retention_days": 30
+    },
+    "logging": {
+      "level": "INFO",
+      "format": "json",
+      "output": "stdout+file",
+      "log_dir": "./logs",
+      "max_file_size_mb": 100,
+      "retention_days": 30
+    }
+  },
+
+  "github": {
+    "api_key_env": "GITHUB_TOKEN",
+    "repository": "Vivaliz-site/site-shopvivaliz",
+    "base_branch": "main",
+    "enable_webhooks": true,
+    "webhook_events": ["push", "pull_request", "workflow_run"],
+    "auto_approve_trusted_authors": [],
+    "require_approval_for_main_push": true,
+    "status_check_context": "ShopVivaliz Hybrid AI"
+  },
+
+  "integration": {
+    "olist": {
+      "enabled": true,
+      "api_url": "https://api.olist.com.br",
+      "api_key_env": "OLIST_API_KEY",
+      "sync_interval_minutes": 60,
+      "status": "waiting-manual-oauth-refresh"
+    },
+    "tiny": {
+      "enabled": true,
+      "api_url": "https://api.tiny.com.br",
+      "api_key_env": "TINY_API_KEY",
+      "sync_interval_minutes": 60,
+      "status": "configured"
+    },
+    "shopee": {
+      "enabled": true,
+      "api_url": "https://api.shopee.com.br",
+      "api_key_env": "SHOPEE_API_KEY",
+      "sync_interval_minutes": 120,
+      "status": "configured"
+    },
+    "mcp": {
+      "enabled": true,
+      "bridge_url": "http://127.0.0.1:8081",
+      "servers": [
+        {
+          "name": "shopvivaliz-admin",
+          "type": "http",
+          "url": "http://127.0.0.1:5000"
+        }
+      ]
+    }
+  },
+
+  "phases": {
+    "current": 1,
+    "completed": ["Phase 1: Hardware Diagnostics"],
+    "in_progress": [],
+    "roadmap": [
+      "Phase 2: Local LLM Setup (2h)",
+      "Phase 3: Memory System (4h)",
+      "Phase 4: Tools & Capabilities (6h)",
+      "Phase 5: API Integrations (4h)",
+      "Phase 6: Agents & Orchestration (8h)",
+      "Phase 7: Dashboard & Monitoring (6h)",
+      "Phase 8: Validation & Testing (4h)"
+    ]
+  },
+
+  "features": {
+    "local_execution": true,
+    "api_fallback": true,
+    "cost_tracking": true,
+    "audit_logging": true,
+    "sandbox_isolation": true,
+    "human_approval_workflow": true,
+    "automatic_rollback": true,
+    "memory_system": true,
+    "multi_agent_orchestration": true,
+    "continuous_deployment": true
+  }
+}
