@@ -4,6 +4,8 @@ declare(strict_types=1);
 header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
+set_time_limit(0);
+ignore_user_abort(true);
 
 /* ── helpers ── */
 function svs_root(): string { return dirname(__DIR__); }
