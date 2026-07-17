@@ -55,33 +55,10 @@ try {
     <div class="container">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
             <h1 class="page-title">Gestão de Produtos</h1>
-            <a href="#novo-produto" class="btn">➕ Novo Produto</a>
         </div>
 
-        <div id="novo-produto" style="background: white; padding: 2rem; border-radius: 8px; margin-bottom: 2rem; display: none;">
-            <h2>Novo Produto</h2>
-            <form style="display: grid; gap: 1rem;">
-                <div>
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Nome</label>
-                    <input type="text" placeholder="Nome do produto" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;">
-                </div>
-                <div>
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">SKU</label>
-                    <input type="text" placeholder="SKU" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;">
-                </div>
-                <div>
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Preço</label>
-                    <input type="number" step="0.01" placeholder="0.00" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;">
-                </div>
-                <div>
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Estoque</label>
-                    <input type="number" placeholder="0" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;">
-                </div>
-                <div style="display: flex; gap: 1rem;">
-                    <button type="submit" class="btn">Salvar Produto</button>
-                    <button type="button" class="btn" style="background: #6c757d;" onclick="document.getElementById('novo-produto').style.display='none'">Cancelar</button>
-                </div>
-            </form>
+        <div style="background: #fff8e6; border: 1px solid #f0d78c; padding: 1rem 1.5rem; border-radius: 8px; margin-bottom: 2rem; color: #5c4a09;">
+            ℹ️ O catálogo é sincronizado automaticamente do ERP (Tiny). Para cadastrar um produto novo, alterar preço/estoque na origem ou trocar categoria, faça isso diretamente no Tiny — o próximo sync (a cada ~10 min) replica para o site. Para ajustes pontuais no site (ex: ocultar da venda), use "Editar" abaixo.
         </div>
 
         <div style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
