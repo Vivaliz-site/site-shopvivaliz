@@ -149,7 +149,7 @@ if ($price > 0 && $price < 5) {
 // Regra 6: descrição presente
 if ($description === '') {
     $issues[] = 'Descrição ausente — anúncios com descrição convertem melhor.';
-} elseif (mb_strlen($description) < 100) {
+} elseif (svmlopt_len($description) < 100) {
     $issues[] = 'Descrição muito curta — recomendado mínimo 100 caracteres.';
 } else {
     $suggestions[] = 'Descrição presente com comprimento adequado.';
@@ -163,7 +163,7 @@ $optimizedTitle = $title;
 if (count($missingKws) > 0 && $titleLen < 55) {
     $toAdd = current($missingKws);
     $candidate = $optimizedTitle . ' ' . ucfirst($toAdd);
-    if (mb_strlen($candidate) <= 60) {
+    if (svmlopt_len($candidate) <= 60) {
         $optimizedTitle = $candidate;
     }
 }
