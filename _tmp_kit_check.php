@@ -1,4 +1,50 @@
 <?php
 require __DIR__ . '/config/bootstrap-env.php';
 sv_bootstrap_env();
-require __DIR__ . '/api/catalog/products.php'; // registers svcat_* helpers; harmless side output ignored via CLI
+
+function envv(string $k): string {
+    return (string)getenv($k);
+}
+
+$clientId = envv('OLIST_CLIENT_ID') ?: envv('TINY_CLIENT_ID');
+$clientSecret = envv('OLIST_CLIENT_SECRET') ?: envv('TINY_CLIENT_SECRET');
+$refreshToken = envv('OLIST_REFRESH_TOKEN') ?: envv('TINY_REFRESH_TOKEN');
+
+$token = '';
+if ($clientId && $clientSecret && $refreshToken) {
+    $payload = http_build_query([
+        'grant_type' => 'refresh_token',
+        'client_id' => $clientId,
+        'client_secret' => $clientSecret,
+        'refresh_token' => $refreshToken,
+    ]);
+    $ctx = stream_context_create(['http' => [
+        'method' => 'POST',
+        'header' => "Content-Type: application/x-www-form-urlencoded\r\nUser-Agent: ShopVivaliz/1.0\r\n",
+        'content' => $payload,
+        'timeout' => 15,
+    ]]);
+    $raw = @file_get_contents('https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token', false, $ctx);
+    if ($raw) {
+        $data = json_decode($raw, true);
+        $token = (string)($data['access_token'] ?? '');
+    }
+}
+if ($token === '') {
+    $token = envv('OLIST_ACCESS_TOKEN') ?: envv('TINY_ACCESS_TOKEN');
+}
+if ($token === '') {
+    echo "NO TOKEN\n";
+    exit(1);
+}
+
+$ctx = stream_context_create(['http' => [
+    'header' => "Authorization: Bearer $token\r\nAccept: application/json\r\n",
+    'timeout' => 20,
+]]);
+$raw = @file_get_contents('https://api.tiny.com.br/public-api/v3/produtos/342902474', false, $ctx);
+if ($raw === false) {
+    echo "REQUEST FAILED\n";
+    exit(1);
+}
+echo $raw . "\n";
