@@ -111,49 +111,11 @@ function svtop_tiny_get_token(): string
     return is_array($json) ? (string)($json['access_token'] ?? '') : '';
 }
 
-/**
- * @param array $order Precisa de: order_number, customer{name,email,phone,cep,address},
- *                      items[{sku,name,quantity,price}], payment_method, notes
- */
-function svtop_push_order_tiny(array $order): ?string
+function svtop_tiny_request(string $method, string $path, string $token, ?array $payload = null): array
 {
-    $token = svtop_tiny_get_token();
-    if ($token === '') return null;
-
-    $c = $order['customer'] ?? [];
-    $cep = preg_replace('/\D/', '', (string)($c['cep'] ?? ''));
-    $paymentMethod = (string)($order['payment_label'] ?? $order['payment_method'] ?? 'PIX');
-    $notes = trim((string)($order['notes'] ?? ''));
-    $obs = trim("Forma de pagamento: {$paymentMethod}\n" . $notes);
-
-    $payload = [
-        'numeroPedido' => $order['order_number'],
-        'situacao'     => ['id' => 1], // Aberto
-        'cliente'      => [
-            'nome'  => $c['name']  ?? '',
-            'email' => $c['email'] ?? '',
-            'fone'  => $c['phone'] ?? '',
-            'enderecos' => [[
-                'tipo'     => 'E',
-                'cep'      => $cep,
-                'endereco' => $c['address'] ?? '',
-                'cidade'   => '',
-                'uf'       => '',
-            ]],
-        ],
-        'itens' => array_map(static fn(array $i) => [
-            'codigo'      => $i['sku'],
-            'descricao'   => $i['name'],
-            'quantidade'  => $i['quantity'],
-            'valor'       => $i['price'],
-        ], $order['items'] ?? []),
-        'obs' => $obs,
-    ];
-
-    $ch = curl_init('https://api.tiny.com.br/public-api/v3/pedidos');
-    curl_setopt_array($ch, [
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => json_encode($payload, JSON_UNESCAPED_UNICODE),
+    $ch = curl_init('https://api.tiny.com.br/public-api/v3' . $path);
+    $opts = [
+        CURLOPT_CUSTOMREQUEST  => $method,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 30,
         CURLOPT_HTTPHEADER     => [
@@ -162,14 +124,131 @@ function svtop_push_order_tiny(array $order): ?string
             'Accept: application/json',
             'User-Agent: ShopVivaliz/3.0',
         ],
-    ]);
+    ];
+    if ($payload !== null) {
+        $opts[CURLOPT_POSTFIELDS] = json_encode($payload, JSON_UNESCAPED_UNICODE);
+    }
+    curl_setopt_array($ch, $opts);
     $body   = curl_exec($ch);
     $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     curl_close($ch);
-
-    if ($status !== 200 && $status !== 201) {
-        throw new RuntimeException("Tiny POST /pedidos HTTP $status: " . substr(is_string($body) ? $body : '', 0, 200));
-    }
     $json = json_decode(is_string($body) ? $body : '', true);
-    return (string)($json['id'] ?? $json['idPedido'] ?? '');
+    return ['status' => $status, 'body' => is_string($body) ? $body : '', 'json' => is_array($json) ? $json : []];
+}
+
+function svtop_format_cpf(string $digits): string
+{
+    $digits = preg_replace('/\D/', '', $digits);
+    if (strlen($digits) !== 11) return $digits;
+    return substr($digits, 0, 3) . '.' . substr($digits, 3, 3) . '.' . substr($digits, 6, 3) . '-' . substr($digits, 9, 2);
+}
+
+function svtop_format_cnpj(string $digits): string
+{
+    $digits = preg_replace('/\D/', '', $digits);
+    if (strlen($digits) !== 14) return $digits;
+    return substr($digits, 0, 2) . '.' . substr($digits, 2, 3) . '.' . substr($digits, 5, 3) . '/' . substr($digits, 8, 4) . '-' . substr($digits, 12, 2);
+}
+
+/**
+ * Busca o contato no Tiny pelo CPF/CNPJ. A API v3 exige o filtro cpfCnpj FORMATADO
+ * (com pontuacao/traco) -- passar so os digitos retorna lista vazia mesmo quando o
+ * contato existe (confirmado empiricamente contra a API real).
+ */
+function svtop_find_contact_id(string $token, string $cpfCnpj, string $name): ?int
+{
+    $digits = preg_replace('/\D/', '', $cpfCnpj);
+    if ($digits === '') return null;
+    $formatted = strlen($digits) === 14 ? svtop_format_cnpj($digits) : svtop_format_cpf($digits);
+
+    $res = svtop_tiny_request('GET', '/contatos?' . http_build_query(['cpfCnpj' => $formatted]), $token);
+    if ($res['status'] !== 200) return null;
+
+    foreach ($res['json']['itens'] ?? [] as $item) {
+        $itemCpf = preg_replace('/\D/', '', (string)($item['cpfCnpj'] ?? ''));
+        if ($itemCpf !== '' && $itemCpf === $digits) {
+            return (int)($item['id'] ?? 0) ?: null;
+        }
+    }
+    return null;
+}
+
+function svtop_create_contact(string $token, array $customer): ?int
+{
+    $cep = preg_replace('/\D/', '', (string)($customer['cep'] ?? ''));
+    $payload = [
+        'nome'       => $customer['name'] ?? '',
+        'tipoPessoa' => 'F',
+        'cpfCnpj'    => preg_replace('/\D/', '', (string)($customer['cpf'] ?? '')),
+        'email'      => $customer['email'] ?? '',
+        'fone'       => $customer['phone'] ?? '',
+        'endereco'   => [
+            'endereco'  => $customer['street_name'] ?? $customer['address'] ?? '',
+            'numero'    => $customer['street_number'] ?? '',
+            'bairro'    => $customer['neighborhood'] ?? '',
+            'cep'       => $cep,
+            'municipio' => $customer['city'] ?? '',
+            'uf'        => $customer['state'] ?? '',
+        ],
+    ];
+    $res = svtop_tiny_request('POST', '/contatos', $token, $payload);
+    if ($res['status'] === 200 || $res['status'] === 201) {
+        return (int)($res['json']['id'] ?? 0) ?: null;
+    }
+    // Se ja existe (corrida entre pedidos concorrentes), busca de novo em vez de falhar.
+    if ($res['status'] === 400 && str_contains($res['body'], 'já existe')) {
+        return svtop_find_contact_id($token, (string)($customer['cpf'] ?? ''), (string)($customer['name'] ?? ''));
+    }
+    return null;
+}
+
+/**
+ * @param array $order Precisa de: order_number, customer{name,email,phone,cep,cpf,street_name,
+ *                      street_number,neighborhood,city,state}, items[{sku,name,quantity,price,
+ *                      olist_product_id}], payment_method, notes
+ */
+function svtop_push_order_tiny(array $order): ?string
+{
+    $token = svtop_tiny_get_token();
+    if ($token === '') {
+        throw new RuntimeException('Tiny: nao foi possivel obter access_token (refresh_token ausente ou invalido)');
+    }
+
+    $c = $order['customer'] ?? [];
+    $paymentMethod = (string)($order['payment_label'] ?? $order['payment_method'] ?? 'PIX');
+    $notes = trim((string)($order['notes'] ?? ''));
+    $obs = trim("Forma de pagamento: {$paymentMethod}\n" . $notes);
+
+    $contactId = svtop_find_contact_id($token, (string)($c['cpf'] ?? ''), (string)($c['name'] ?? ''));
+    if ($contactId === null) {
+        $contactId = svtop_create_contact($token, $c);
+    }
+    if ($contactId === null) {
+        throw new RuntimeException('Tiny: nao foi possivel localizar nem criar o contato do cliente no ERP');
+    }
+
+    $items = array_values(array_filter($order['items'] ?? [], static fn(array $i) => (int)($i['olist_product_id'] ?? 0) > 0));
+    if (count($items) === 0) {
+        throw new RuntimeException('Tiny: nenhum item do pedido tem olist_product_id valido para vincular ao produto no ERP');
+    }
+
+    $payload = [
+        'numeroPedido' => $order['order_number'],
+        'situacao'     => 1, // Aberto -- a API v3 exige inteiro, nao objeto
+        'idContato'    => $contactId,
+        'itens' => array_map(static fn(array $i) => [
+            'produto'       => ['id' => (int)$i['olist_product_id']],
+            'quantidade'    => $i['quantity'],
+            'valorUnitario' => $i['price'],
+        ], $items),
+        'valorFrete' => (float)($order['shipping_total'] ?? 0),
+        'obs' => $obs,
+    ];
+
+    $res = svtop_tiny_request('POST', '/pedidos', $token, $payload);
+
+    if ($res['status'] !== 200 && $res['status'] !== 201) {
+        throw new RuntimeException("Tiny POST /pedidos HTTP {$res['status']}: " . substr($res['body'], 0, 400));
+    }
+    return (string)($res['json']['id'] ?? $res['json']['idPedido'] ?? '');
 }
