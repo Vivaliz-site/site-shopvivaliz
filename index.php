@@ -224,27 +224,20 @@ function sv_home_top_categories(int $limit = 8): array
 
     arsort($counts);
 
-    // Respeita ordem/visibilidade definidas no editor visual (config/layout-config.json)
-    // quando a categoria do editor casa (case-insensitive) com uma categoria real do catálogo.
+    // Respeita a ordem definida no editor visual (config/layout-config.json) quando a
+    // categoria do editor casa (case-insensitive) com uma categoria real do catálogo.
     $layoutLoader = __DIR__ . '/includes/layout-loader.php';
     $orderedNames = [];
-    $hiddenKeys = [];
     if (is_file($layoutLoader)) {
         require_once $layoutLoader;
         $catalogByKey = [];
         foreach (array_keys($counts) as $name) {
             $catalogByKey[mb_strtolower($name, 'UTF-8')] = $name;
         }
-        $visibleKeys = array_map(fn($v) => mb_strtolower(trim((string)$v), 'UTF-8'), sv_get_visible_categories());
         foreach (sv_get_categories_order() as $key) {
             $key = mb_strtolower(trim((string)$key), 'UTF-8');
             if (isset($catalogByKey[$key])) {
                 $orderedNames[] = $catalogByKey[$key];
-            }
-        }
-        foreach ($catalogByKey as $key => $name) {
-            if (!in_array($key, $visibleKeys, true) && in_array($key, array_map('mb_strtolower', array_keys($catalogByKey)), true) && $visibleKeys !== []) {
-                // só oculta se a categoria estiver explicitamente listada no editor como controlada
             }
         }
     }
