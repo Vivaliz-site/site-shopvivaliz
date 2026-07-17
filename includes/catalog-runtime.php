@@ -54,17 +54,19 @@ function svcr_products(): array
             ? $item['anexos']
             : (is_array($item['attachments'] ?? null) ? $item['attachments'] : []);
 
+        $imagesList = [];
+        foreach ($attachments as $attachment) {
+            $candidate = is_array($attachment)
+                ? trim((string)($attachment['url'] ?? $attachment['link'] ?? ''))
+                : '';
+            if (preg_match('~^https?://~i', $candidate) && !in_array($candidate, $imagesList, true)) {
+                $imagesList[] = $candidate;
+            }
+        }
+
         $image = trim((string)($item['imagem_principal_url'] ?? $item['image_url'] ?? $item['imagem'] ?? ''));
         if ($image === '') {
-            foreach ($attachments as $attachment) {
-                $candidate = is_array($attachment)
-                    ? trim((string)($attachment['url'] ?? $attachment['link'] ?? ''))
-                    : '';
-                if (preg_match('~^https?://~i', $candidate)) {
-                    $image = $candidate;
-                    break;
-                }
-            }
+            $image = $imagesList[0] ?? '';
         }
 
         $prices = is_array($item['precos'] ?? null) ? $item['precos'] : [];
