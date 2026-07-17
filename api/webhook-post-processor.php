@@ -26,6 +26,7 @@ if (is_file($envFile)) {
 }
 
 require_once __DIR__ . '/../includes/mercadopago-gateway.php';
+require_once __DIR__ . '/../includes/OrderNotificationService.class.php';
 
 // Argumentos
 $orderNumber = $argv[1] ?? '';
@@ -45,8 +46,9 @@ if (!is_array($orderData)) {
 
 // Extrair dados
 $orderNumber = (string)($orderData['order_number'] ?? $orderNumber);
-$customerEmail = (string)($orderData['customer_email'] ?? '');
-$customerName = (string)($orderData['customer_name'] ?? 'Cliente');
+$customer = is_array($orderData['customer'] ?? null) ? $orderData['customer'] : [];
+$customerEmail = (string)($customer['email'] ?? $orderData['customer_email'] ?? '');
+$customerName = (string)($customer['name'] ?? $orderData['customer_name'] ?? 'Cliente');
 $total = (float)($orderData['total'] ?? 0);
 $status = (string)($orderData['status'] ?? 'pending');
 
@@ -84,77 +86,22 @@ if (empty($customerEmail) || !filter_var($customerEmail, FILTER_VALIDATE_EMAIL))
     exit(1);
 }
 
-// Dados para o email
-$emailSubject = "Pedido Confirmado - ShopVivaliz #$orderNumber";
-$emailBody = <<<BODY
-Olá $customerName,
+echo "📧 Enviando email de confirmação via OrderNotificationService (SMTP real)...\n";
 
-Seu pedido foi CONFIRMADO! 🎉
+$service = OrderNotificationService::getInstance();
+$sent = $service->notifyOrderEvent(
+    $orderNumber,
+    'pagamento_aprovado',
+    $orderData,
+    $mpPaymentId !== '' ? $mpPaymentId : null
+);
 
-╔════════════════════════════════════════════════════════════╗
-║                  DADOS DO PEDIDO                           ║
-╚════════════════════════════════════════════════════════════╝
-
-Número do Pedido (Local): $orderNumber
-Número do Pedido (Mercado Pago): $mpOrderId
-ID do Pagamento: $mpPaymentId
-Data: " . date('d/m/Y H:i:s') . "
-Status: ✅ PAGAMENTO APROVADO
-
-╔════════════════════════════════════════════════════════════╗
-║                  VALOR DO PEDIDO                           ║
-╚════════════════════════════════════════════════════════════╝
-
-Total: R$ " . number_format($total, 2, ',', '.') . "
-
-╔════════════════════════════════════════════════════════════╗
-║              PRÓXIMOS PASSOS                               ║
-╚════════════════════════════════════════════════════════════╝
-
-1. ✅ Seu pagamento foi aprovado no Mercado Pago
-2. ⏳ Nossa equipe comercial vai confirmar o frete
-3. ⏳ Você receberá o rastreamento da sua entrega
-4. ⏳ Acompanhe seu pedido na plataforma
-
-LINK DE ACOMPANHAMENTO:
-https://dev.shopvivaliz.com.br/meu-pedido?order=$orderNumber
-
-═════════════════════════════════════════════════════════════
-
-DÚVIDAS?
-
-📞 WhatsApp: 11 4041-5850
-📧 Email: contato@shopvivaliz.com.br
-🌐 Site: https://dev.shopvivaliz.com.br
-
-═════════════════════════════════════════════════════════════
-
-Obrigado por comprar na ShopVivaliz!
-
-Atenciosamente,
-Equipe ShopVivaliz
-
-© 2026 ShopVivaliz
-Este é um email automático - Por favor, não responda
-BODY;
-
-// Tentar enviar email
-echo "📧 Enviando email de confirmação...\n";
-
-// Método 1: mail() PHP
-$emailFrom = getenv('EMAIL_FROM') ?: 'noreply@shopvivaliz.com.br';
-$headers = "MIME-Version: 1.0\r\n";
-$headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
-$headers .= "From: $emailFrom\r\n";
-
-if (mail($customerEmail, $emailSubject, $emailBody, $headers)) {
+if ($sent) {
     echo "✅ EMAIL ENVIADO COM SUCESSO!\n\n";
     echo "   Para: $customerEmail\n";
-    echo "   Assunto: $emailSubject\n";
-    echo "   Método: PHP mail()\n";
-    exit(0);
-} else {
-    echo "⚠️  mail() não funcionou localmente\n";
-    echo "   (Funcionará em produção com SMTP configurado)\n\n";
+    echo "   Evento: pagamento_aprovado\n";
     exit(0);
 }
+
+echo "❌ Falha ao enviar email (ver logs do OrderNotificationService para detalhes)\n";
+exit(1);
