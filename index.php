@@ -10,6 +10,8 @@ define('BASE_URL', $scheme . '://' . $host);
 define('APP_NAME', 'ShopVivaliz');
 require_once __DIR__ . '/includes/product-price-enrich.php';
 require_once __DIR__ . '/includes/catalog-runtime.php';
+require_once __DIR__ . '/includes/site-settings.php';
+$svFreeShipping = sv_free_shipping_config();
 
 function sv_home_esc(string $value): string
 {
