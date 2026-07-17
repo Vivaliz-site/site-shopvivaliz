@@ -360,6 +360,18 @@ $contactUrl = sv_product_contact_url($sku, $name);
 $baseUrl = sv_official_base_url();
 $canonicalUrl = $baseUrl . ($rawSlug !== '' ? '/produto/' . $rawSlug : '/produto?sku=' . rawurlencode($sku));
 
+$galleryImages = [];
+foreach (is_array($resolved['images'] ?? null) ? $resolved['images'] : [] as $galleryUrl) {
+    $galleryUrl = trim((string)$galleryUrl);
+    if ($galleryUrl !== '' && !in_array($galleryUrl, $galleryImages, true)) {
+        $galleryImages[] = $galleryUrl;
+    }
+}
+if ($galleryImages === [] && $image !== '') {
+    $galleryImages[] = $image;
+}
+$galleryImages = array_slice($galleryImages, 0, 12);
+
 $related = $notFound ? [] : sv_product_enrich_many(sv_product_related($sku, $category));
 $svNavCurrent = 'produto';
 
