@@ -126,7 +126,7 @@ if ($title === svmlopt_upper($title)) {
 $foundKws = [];
 $missingKws = [];
 foreach (array_slice($keywords, 0, 6) as $kw) {
-    if (str_contains($titleWords, mb_strtolower($kw))) {
+    if (str_contains($titleWords, svmlopt_lower($kw))) {
         $foundKws[] = $kw;
     } else {
         $missingKws[] = $kw;
