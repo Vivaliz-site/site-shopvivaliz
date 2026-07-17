@@ -96,11 +96,22 @@
     });
   }
 
+  function slugify(name, sku) {
+    const base = String(name || '')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60);
+    const skuPart = String(sku || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    return (base + '-' + skuPart).replace(/^-+|-+$/g, '') || skuPart;
+  }
+
   function card(product) {
     const image = product.image_url || '/images/logo-vivaliz-square.png';
     const sku = product.sku || product.olist_product_id || 'sem-sku';
     const category = String(product.category || '').trim();
-    const slug = String(product.slug || '').trim();
+    const slug = String(product.slug || '').trim() || (product.name && sku ? slugify(product.name, sku) : '');
     const payload = {
       sku: sku,
       name: product.name || sku,
