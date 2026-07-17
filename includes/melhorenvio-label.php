@@ -58,21 +58,35 @@ function svml_ensure_columns(): void
     }
 }
 
-/** Endereço de origem (remetente) -- dados da loja, configurados uma vez via .env. */
+/**
+ * Endereço de origem (remetente) -- usa os dados reais da empresa já
+ * cadastrados em config/company-profile.php (mesmo arquivo usado pelo painel
+ * admin/company-profile.php), com variáveis MELHORENVIO_FROM_* no .env como
+ * override opcional caso precise divergir do endereço fiscal.
+ */
 function svml_from_address(): array
 {
+    static $company = null;
+    if ($company === null) {
+        $path = dirname(__DIR__) . '/config/company-profile.php';
+        $company = is_file($path) ? (require $path) : [];
+        if (!is_array($company)) {
+            $company = [];
+        }
+    }
+
     return [
-        'name' => svml_env('MELHORENVIO_FROM_NAME') ?: 'ShopVivaliz',
-        'document' => preg_replace('/\D+/', '', svml_env('MELHORENVIO_FROM_DOCUMENT', 'MELHORENVIO_FROM_CNPJ')),
-        'email' => svml_env('MELHORENVIO_FROM_EMAIL') ?: 'contato@shopvivaliz.com.br',
-        'phone' => preg_replace('/\D+/', '', svml_env('MELHORENVIO_FROM_PHONE')),
-        'address' => svml_env('MELHORENVIO_FROM_ADDRESS'),
-        'complement' => svml_env('MELHORENVIO_FROM_COMPLEMENT'),
-        'number' => svml_env('MELHORENVIO_FROM_NUMBER'),
-        'district' => svml_env('MELHORENVIO_FROM_DISTRICT'),
-        'city' => svml_env('MELHORENVIO_FROM_CITY'),
-        'state_abbr' => strtoupper(svml_env('MELHORENVIO_FROM_STATE')),
-        'postal_code' => preg_replace('/\D+/', '', svml_env('MELHORENVIO_FROM_POSTAL_CODE', 'SHOPVIVALIZ_FROM_POSTAL_CODE')) ?: '35501236',
+        'name' => svml_env('MELHORENVIO_FROM_NAME') ?: (string)($company['fantasy_name'] ?? 'ShopVivaliz'),
+        'document' => preg_replace('/\D+/', '', svml_env('MELHORENVIO_FROM_DOCUMENT', 'MELHORENVIO_FROM_CNPJ') ?: (string)($company['cnpj'] ?? '')),
+        'email' => svml_env('MELHORENVIO_FROM_EMAIL') ?: (string)($company['email'] ?? 'atendimento@shopvivaliz.com.br'),
+        'phone' => preg_replace('/\D+/', '', svml_env('MELHORENVIO_FROM_PHONE') ?: (string)($company['phone'] ?? '')),
+        'address' => svml_env('MELHORENVIO_FROM_ADDRESS') ?: (string)($company['address'] ?? ''),
+        'complement' => svml_env('MELHORENVIO_FROM_COMPLEMENT') ?: (string)($company['complement'] ?? ''),
+        'number' => svml_env('MELHORENVIO_FROM_NUMBER') ?: (string)($company['number'] ?? ''),
+        'district' => svml_env('MELHORENVIO_FROM_DISTRICT') ?: (string)($company['neighborhood'] ?? ''),
+        'city' => svml_env('MELHORENVIO_FROM_CITY') ?: (string)($company['city'] ?? ''),
+        'state_abbr' => strtoupper(svml_env('MELHORENVIO_FROM_STATE') ?: (string)($company['state'] ?? '')),
+        'postal_code' => preg_replace('/\D+/', '', svml_env('MELHORENVIO_FROM_POSTAL_CODE', 'SHOPVIVALIZ_FROM_POSTAL_CODE') ?: (string)($company['zipcode'] ?? '')) ?: '35501236',
     ];
 }
 
@@ -186,7 +200,7 @@ function svml_purchase_and_generate_label(array $order): array
         return ['ok' => false, 'error' => 'sender_address_not_configured', 'message' => 'Configure MELHORENVIO_FROM_* no .env (nome, documento, endereço completo) para permitir a compra automática da etiqueta.'];
     }
 
-    $token = me_current_access_token();
+    $token = me_current_access_token() ?: svml_env('MELHORENVIO_ACCESS_TOKEN', 'SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN', 'MELHORENVIO_API_KEY');
     if ($token === null || $token === '') {
         return ['ok' => false, 'error' => 'missing_access_token'];
     }
