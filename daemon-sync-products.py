@@ -167,7 +167,23 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
         merged = dict(summary)
         merged.update(detail)
         stock = merged.get("estoque") if isinstance(merged.get("estoque"), dict) else {}
-        merged["estoque_disponivel"] = max(0, int(stock.get("quantidade") or 0))
+        quantity = max(0, int(stock.get("quantidade") or 0))
+
+        # O endpoint /estoque/{id} calcula "disponivel" no lado da Tiny
+        # (saldo - reservado, considerando composicao de kits automaticamente
+        # e depositos que devem ser desconsiderados) -- mais confiavel que
+        # estoque.quantidade do /produtos/{id}, que para kits fica sempre 0
+        # ou desatualizado. Usa disponivel quando o endpoint responde; cai
+        # para estoque.quantidade se a chamada falhar (produto raramente
+        # controla estoque, ou instabilidade pontual da API).
+        try:
+            stock_detail = api_get(f"estoque/{product_id}", token, attempts=2)
+            if "disponivel" in stock_detail:
+                quantity = max(0, int(stock_detail.get("disponivel") or 0))
+        except RuntimeError:
+            pass
+
+        merged["estoque_disponivel"] = quantity
         merged["_detail_synced_at"] = datetime.now(timezone.utc).isoformat()
         return product_id, public_product(merged)
 
