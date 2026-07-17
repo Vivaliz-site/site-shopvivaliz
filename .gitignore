@@ -51,3 +51,4 @@ storage/orchestrator/queue.json
 .agent-heartbeats/
 .git-sync.lock
 .git-auto-sync.log
+ai-system/config/orchestrator.json

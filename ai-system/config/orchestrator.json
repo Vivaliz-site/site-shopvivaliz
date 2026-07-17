@@ -1,0 +1,7 @@
+{
+  "local_model": "mistral:7b-instruct-q4_K_M",
+  "ollama_endpoint": "http://localhost:11434",
+  "openai_key": null,
+  "anthropic_key": null,
+  "google_key": null
+}
