@@ -26,6 +26,7 @@ if (is_file($envFile)) {
 }
 
 require_once __DIR__ . '/../includes/mercadopago-gateway.php';
+require_once __DIR__ . '/../includes/OrderNotificationService.class.php';
 
 // Argumentos
 $orderNumber = $argv[1] ?? '';
