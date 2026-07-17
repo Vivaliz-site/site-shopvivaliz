@@ -91,8 +91,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_P
         $error = 'Nome deve ter pelo menos 3 caracteres';
     } elseif (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Email inválido';
-    } elseif ($cpfDigits !== '' && !sv_register_valid_cpf($cpfDigits)) {
-        $error = 'CPF inválido';
+    } elseif ($cpfDigits !== '' && !sv_register_valid_document($cpfDigits)) {
+        $error = 'CPF/CNPJ inválido';
     } elseif (empty($password)) {
         $error = 'Senha é obrigatória';
     } elseif (strlen($password) < 8) {
