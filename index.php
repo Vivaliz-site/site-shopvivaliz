@@ -216,6 +216,7 @@ function sv_home_category_icon(string $category): string
 function sv_home_top_categories(int $limit = 8): array
 {
     $counts = [];
+    $categoryImages = [];
     foreach (sv_home_catalog_source_rows() as $row) {
         if (!is_array($row)) {
             continue;
@@ -225,6 +226,12 @@ function sv_home_top_categories(int $limit = 8): array
             continue;
         }
         $counts[$category] = ($counts[$category] ?? 0) + 1;
+        if (!isset($categoryImages[$category])) {
+            $image = trim((string)($row['image_url'] ?? ''));
+            if ($image !== '') {
+                $categoryImages[$category] = $image;
+            }
+        }
     }
 
     arsort($counts);
