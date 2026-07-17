@@ -100,6 +100,7 @@ header('Content-Type: text/html; charset=UTF-8');
                 Seu carrinho é salvo localmente para que você possa continuar a compra quando voltar.
             </div>
             <a href="/checkout" class="btn btn-primary btn-checkout" id="btn-checkout">Finalizar pedido</a>
+            <div id="checkout-validate-status" style="font-size:13px;color:#b00020;margin-top:8px;line-height:1.5"></div>
             <a href="/catalogo" class="btn-continue">Continuar comprando</a>
             <div class="sv-trust-badge">
                 <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
