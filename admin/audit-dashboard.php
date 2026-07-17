@@ -6,6 +6,7 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__) . '/includes/admin-guard.php';
 require_once dirname(__DIR__) . '/config/bootstrap-env.php';
 
 // Simular dados de auditoria (em produção, veria do BD)
