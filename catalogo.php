@@ -217,14 +217,29 @@ function sv_catalog_structured_data(array $products, string $canonicalUrl, strin
     ];
 }
 
-$query      = sv_catalog_query();
-$category   = trim((string)($_GET['categoria'] ?? ''));
-$products   = svp_enrich_products(sv_catalog_products(200, $query, $category));
-$categories = sv_catalog_categories();
-$totalStr   = count($products) . ' produto' . (count($products) === 1 ? '' : 's');
+$query        = sv_catalog_query();
+$category     = trim((string)($_GET['categoria'] ?? ''));
+$perPage      = 20;
+$totalCount   = sv_catalog_count_matching($query, $category);
+$totalPages   = max(1, (int)ceil($totalCount / $perPage));
+$currentPage  = max(1, min($totalPages, (int)($_GET['pagina'] ?? 1)));
+$offset       = ($currentPage - 1) * $perPage;
+$products     = svp_enrich_products(sv_catalog_products($perPage, $query, $category, $offset));
+$categories   = sv_catalog_categories();
+$totalStr     = $totalCount . ' produto' . ($totalCount === 1 ? '' : 's');
 $statusText = $products
     ? $totalStr . ($category !== '' ? " em \"{$category}\"" : '') . '.'
     : ($query !== '' ? 'Nenhum produto encontrado para essa busca.' : 'Explore nossas categorias ou fale com a equipe para localizar o item ideal.');
+
+function sv_catalog_page_url(int $page, string $query, string $category): string
+{
+    $params = [];
+    if ($query !== '') $params['q'] = $query;
+    if ($category !== '') $params['categoria'] = $category;
+    if ($page > 1) $params['pagina'] = $page;
+    $qs = http_build_query($params);
+    return '/catalogo' . ($qs !== '' ? '?' . $qs : '');
+}
 $pageTitle = sv_catalog_page_title($category, $query);
 $metaDescription = sv_catalog_meta_description($category, $query, count($products));
 $canonicalUrl = sv_catalog_canonical_url($category);
@@ -347,6 +362,18 @@ $svNavCurrent = 'catalogo';
                 </article>
             <?php endforeach; ?>
         </section>
+
+        <?php if ($totalPages > 1): ?>
+        <nav class="container catalog-pagination" aria-label="Paginação do catálogo" style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:30px 0;">
+            <?php if ($currentPage > 1): ?>
+                <a class="btn btn-secondary" href="<?= sv_catalog_esc(sv_catalog_page_url($currentPage - 1, $query, $category)) ?>">&laquo; Anterior</a>
+            <?php endif; ?>
+            <span class="muted">Página <?= $currentPage ?> de <?= $totalPages ?></span>
+            <?php if ($currentPage < $totalPages): ?>
+                <a class="btn btn-secondary" href="<?= sv_catalog_esc(sv_catalog_page_url($currentPage + 1, $query, $category)) ?>">Próxima &raquo;</a>
+            <?php endif; ?>
+        </nav>
+        <?php endif; ?>
     </main>
 
     <?php include __DIR__ . '/includes/footer.php'; ?>
