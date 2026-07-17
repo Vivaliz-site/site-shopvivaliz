@@ -137,31 +137,49 @@ function initFreeShippingProgress() {
     const bar = document.querySelector('.free-shipping-progress-bar');
     const text = document.querySelector('.free-shipping-text');
     const cartTotalEl = document.querySelector('.cart-subtotal-value');
-    
+    const wrapper = bar ? bar.closest('.free-shipping-progress-wrapper, .free-shipping-rewards, .gamification-rewards-container') : null;
+
     if (!bar || !cartTotalEl) return;
 
-    const FREE_SHIPPING_LIMIT = 299.00;
-    
-    window.updateFreeShippingVisual = function() {
-        let totalStr = cartTotalEl.innerText.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
-        let currentTotal = parseFloat(totalStr) || 0;
-        
-        let percentage = (currentTotal / FREE_SHIPPING_LIMIT) * 100;
-        if (percentage > 100) percentage = 100;
-        
-        bar.style.width = `${percentage}%`;
-        
-        if (currentTotal >= FREE_SHIPPING_LIMIT) {
-            bar.classList.add('bg-success');
-            if (text) text.innerHTML = '🎉 Parabéns! Você ganhou <strong>Frete Grátis</strong>!';
-        } else {
-            bar.classList.remove('bg-success');
-            const remaining = (FREE_SHIPPING_LIMIT - currentTotal).toFixed(2).replace('.', ',');
-            if (text) text.innerHTML = `Faltam apenas <strong>R$ ${remaining}</strong> para você ganhar <strong>Frete Grátis!</strong>`;
-        }
-    };
+    // Escondido por padrao ate confirmarmos que frete gratis esta habilitado
+    // no admin -- evita mostrar "Calculando frete gratis..." indefinidamente
+    // quando a loja nunca configurou um valor.
+    if (text) text.textContent = '';
+    if (wrapper) wrapper.style.display = 'none';
+    else bar.style.display = 'none';
 
-    window.updateFreeShippingVisual();
+    fetch('/api/settings/free-shipping.php')
+        .then(function (r) { return r.json(); })
+        .then(function (cfg) {
+            if (!cfg || !cfg.enabled || !(cfg.threshold > 0)) {
+                return;
+            }
+            const FREE_SHIPPING_LIMIT = cfg.threshold;
+            if (wrapper) wrapper.style.display = '';
+            else bar.style.display = '';
+
+            window.updateFreeShippingVisual = function() {
+                let totalStr = cartTotalEl.innerText.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
+                let currentTotal = parseFloat(totalStr) || 0;
+
+                let percentage = (currentTotal / FREE_SHIPPING_LIMIT) * 100;
+                if (percentage > 100) percentage = 100;
+
+                bar.style.width = `${percentage}%`;
+
+                if (currentTotal >= FREE_SHIPPING_LIMIT) {
+                    bar.classList.add('bg-success');
+                    if (text) text.innerHTML = '🎉 Parabéns! Você ganhou <strong>Frete Grátis</strong>!';
+                } else {
+                    bar.classList.remove('bg-success');
+                    const remaining = (FREE_SHIPPING_LIMIT - currentTotal).toFixed(2).replace('.', ',');
+                    if (text) text.innerHTML = `Faltam apenas <strong>R$ ${remaining}</strong> para você ganhar <strong>Frete Grátis!</strong>`;
+                }
+            };
+
+            window.updateFreeShippingVisual();
+        })
+        .catch(function () {});
 }
 
 /**
