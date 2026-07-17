@@ -94,11 +94,29 @@ function sv_home_money(float $value): string
     return $value > 0 ? 'R$ ' . number_format($value, 2, ',', '.') : 'Consulte o valor';
 }
 
+function sv_home_slugify(string $name, string $sku): string
+{
+    $accents = ['á'=>'a','à'=>'a','ã'=>'a','â'=>'a','ä'=>'a','é'=>'e','è'=>'e','ê'=>'e','ë'=>'e','í'=>'i','ì'=>'i','î'=>'i','ï'=>'i','ó'=>'o','ò'=>'o','õ'=>'o','ô'=>'o','ö'=>'o','ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ç'=>'c','ñ'=>'n'];
+    $base = strtr(sv_home_lower($name), $accents);
+    $base = preg_replace('/[^a-z0-9]+/', '-', $base);
+    $base = trim((string)$base, '-');
+    $base = function_exists('mb_substr') ? mb_substr($base, 0, 60) : substr($base, 0, 60);
+    $skuPart = strtolower((string)preg_replace('/[^a-zA-Z0-9]+/', '', $sku));
+    return trim($base . '-' . $skuPart, '-') ?: $skuPart;
+}
+
 function sv_home_product_url(array $product): string
 {
+    $sku = trim((string)($product['sku'] ?? ''));
+    $name = trim((string)($product['name'] ?? ''));
+    $slug = trim((string)($product['slug'] ?? '')) ?: ($sku !== '' && $name !== '' ? sv_home_slugify($name, $sku) : '');
+    if ($slug !== '') {
+        return '/produto/' . $slug;
+    }
+
     return '/produto?' . http_build_query([
-        'sku' => (string)($product['sku'] ?? ''),
-        'name' => (string)($product['name'] ?? ''),
+        'sku' => $sku,
+        'name' => $name,
         'image' => (string)($product['image_url'] ?? ''),
         'price' => (string)($product['price'] ?? 0),
         'olist_product_id' => (string)($product['olist_product_id'] ?? ''),
