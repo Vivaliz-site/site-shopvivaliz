@@ -244,10 +244,17 @@ function svs_normalize(array $p, string $source): array {
         $p['preco_venda']   ??  // v2
         0
     );
+    // Os campos reais retornados pela API Tiny v3 sao estoque.quantidade e
+    // estoque_disponivel (confirmado na resposta real de storage/products-cache-ativos.json).
+    // saldoFisicoTotal/saldoEstoque nao existem nessa API -- por isso o campo
+    // sempre caia no default 0 e zerava o estoque de TODOS os produtos no
+    // catalogo espelhado, bloqueando toda venda no checkout.
     $stock = (int)(
-        $p['estoque']['saldoFisicoTotal'] ??  // v3
+        $p['estoque_disponivel']          ??
+        $p['estoque']['quantidade']       ??
+        $p['estoque']['saldoFisicoTotal'] ??  // v3 (nome alternativo, mantido por seguranca)
         $p['saldoEstoque']                ??  // v2
-        $p['estoque']                     ??
+        (is_scalar($p['estoque'] ?? null) ? $p['estoque'] : null) ??
         0
     );
 
