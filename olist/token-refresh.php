@@ -10,8 +10,16 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
 $envFile = dirname(__DIR__) . '/.env';
+$logFile = dirname(__DIR__) . '/logs/olist-token-refresh.log';
+
+function svtr_log(string $msg): void
+{
+    global $logFile;
+    @file_put_contents($logFile, '[' . date('Y-m-d H:i:s') . '] ' . $msg . "\n", FILE_APPEND);
+}
 
 if (!is_file($envFile)) {
+    svtr_log('ERRO: .env não encontrado');
     http_response_code(500);
     echo json_encode(['erro' => '.env não encontrado']);
     exit;
