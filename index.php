@@ -264,7 +264,7 @@ function sv_home_top_categories(int $limit = 8): array
         $result[] = [
             'name' => $category,
             'count' => $counts[$category],
-            'icon' => sv_home_category_icon($category),
+            'icon' => $categoryImages[$category] ?? sv_home_category_icon($category),
             'href' => '/catalogo?categoria=' . rawurlencode($category),
         ];
         if (count($result) >= $limit) {
