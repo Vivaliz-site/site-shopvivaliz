@@ -253,7 +253,7 @@ function sv_slugify(string $name, string $sku): string
     $base = strtr(sv_lower($name), $accents);
     $base = preg_replace('/[^a-z0-9]+/', '-', $base);
     $base = trim((string)$base, '-');
-    $base = mb_substr($base, 0, 60);
+    $base = function_exists('mb_substr') ? mb_substr($base, 0, 60) : substr($base, 0, 60);
 
     $skuPart = strtolower((string)preg_replace('/[^a-zA-Z0-9]+/', '', $sku));
 
