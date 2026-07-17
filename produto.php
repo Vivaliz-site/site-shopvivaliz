@@ -521,15 +521,13 @@ if ($notFound) {
                     <img id="main-product-image" src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" onerror="this.src='<?= sv_product_default_image() ?>'" loading="eager">
                 </div>
                 <!-- Interactive Product Gallery Thumbnails -->
-                <div class="product-gallery-thumbnails" style="display:flex; gap:10px; justify-content:center; margin-bottom:12px;">
-                    <button type="button" class="thumb-btn active" data-src="<?= sv_esc($image) ?>" aria-label="Ver imagem principal"
-                            style="width:54px; height:54px; border:2px solid #0b4f88; border-radius:8px; overflow:hidden; cursor:pointer; padding:0; background:#fff; transition: border-color 0.2s;">
-                        <img src="<?= sv_esc($image) ?>" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='<?= sv_product_default_image() ?>'">
+                <div class="product-gallery-thumbnails" style="display:flex; gap:10px; justify-content:center; margin-bottom:12px; flex-wrap:wrap;">
+                    <?php foreach ($galleryImages as $galleryIndex => $galleryUrl): ?>
+                    <button type="button" class="thumb-btn<?= $galleryIndex === 0 ? ' active' : '' ?>" data-src="<?= sv_esc($galleryUrl) ?>" aria-label="Ver imagem <?= $galleryIndex + 1 ?>"
+                            style="width:54px; height:54px; border:<?= $galleryIndex === 0 ? '2px solid #0b4f88' : '1px solid #e2e8f0' ?>; border-radius:8px; overflow:hidden; cursor:pointer; padding:0; background:#fff; transition: border-color 0.2s;">
+                        <img src="<?= sv_esc($galleryUrl) ?>" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='<?= sv_product_default_image() ?>'">
                     </button>
-                    <button type="button" class="thumb-btn" data-src="/images/logo-vivaliz-square.png" aria-label="Ver selo Vivaliz"
-                            style="width:54px; height:54px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; cursor:pointer; padding:0; background:#fff; transition: border-color 0.2s;">
-                        <img src="/images/logo-vivaliz-square.png" style="width:100%; height:100%; object-fit:cover; opacity: 0.85;">
-                    </button>
+                    <?php endforeach; ?>
                 </div>
             </div>
             <div class="product-detail-copy">
