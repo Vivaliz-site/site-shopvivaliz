@@ -42,6 +42,7 @@ $clientSecret = trim($env['OLIST_CLIENT_SECRET'] ?? '');
 $refreshToken = trim($env['OLIST_REFRESH_TOKEN'] ?? '');
 
 if (!$refreshToken) {
+    svtr_log('ERRO: refresh_token não configurado');
     http_response_code(400);
     echo json_encode(['erro' => 'refresh_token não configurado']);
     exit;
