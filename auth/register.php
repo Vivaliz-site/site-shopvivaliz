@@ -117,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_P
                     $cpfCheck->execute();
                     return $cpfCheck->get_result()->num_rows > 0;
                 })()) {
-                    $error = 'Este CPF já está cadastrado em outra conta. Se o cadastro é seu, faça login ou use "Esqueci minha senha".';
+                    $error = 'Este CPF/CNPJ já está cadastrado em outra conta. Se o cadastro é seu, faça login ou use "Esqueci minha senha".';
                 } else {
                     // Criar novo usuário
                     $password_hash = password_hash($password, PASSWORD_BCRYPT);
@@ -141,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_P
                             $email = '';
                             $cpfInput = '';
                         } elseif ($db->errno === 1062) {
-                            $error = 'Este CPF já está cadastrado em outra conta. Se o cadastro é seu, faça login ou use "Esqueci minha senha".';
+                            $error = 'Este CPF/CNPJ já está cadastrado em outra conta. Se o cadastro é seu, faça login ou use "Esqueci minha senha".';
                         } else {
                             $error = 'Erro ao criar a conta. Tente novamente.';
                         }
