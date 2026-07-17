@@ -115,7 +115,12 @@ function svo_append_legacy_order_log(array $order): void
 function svo_payment_method(string $value): string
 {
     $normalized = strtolower(trim($value));
-    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia'];
+    // 'mercado_pago' e o unico metodo oferecido no formulario real do checkout
+    // (api/checkout, ver checkout.php) -- estava faltando aqui, entao todo
+    // pedido pago via Mercado Pago era silenciosamente rebaixado para 'pix'
+    // no backend, quebrando o fluxo real de pagamento (create-preference.php
+    // nunca era chamado corretamente).
+    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia', 'mercado_pago'];
     return in_array($normalized, $allowed, true) ? $normalized : 'pix';
 }
 
@@ -125,6 +130,7 @@ function svo_payment_label(string $method): string
         'boleto' => 'Boleto bancario',
         'whatsapp' => 'WhatsApp',
         'transferencia' => 'Transferencia bancaria',
+        'mercado_pago' => 'Mercado Pago',
         default => 'PIX',
     };
 }
@@ -135,6 +141,7 @@ function svo_payment_instructions(string $method): string
         'boleto' => 'Boleto sujeito a emissao manual apos confirmacao do frete.',
         'whatsapp' => 'Pagamento e frete serao alinhados pelo atendimento no WhatsApp.',
         'transferencia' => 'Dados bancarios serao enviados pela equipe apos confirmacao do frete.',
+        'mercado_pago' => 'Voce sera redirecionado para o checkout seguro do Mercado Pago.',
         default => 'Pagamento via PIX com confirmacao apos validacao do pedido.',
     };
 }
@@ -244,9 +251,15 @@ if ($shippingLabel !== '' || $shippingTotal > 0) {
 $grandTotal = $itemsTotal + $shippingTotal;
 
 $orderNumber = 'SV' . date('YmdHis') . random_int(100, 999);
+// Token de sessao de pagamento: o frontend (checkout.php) espera receber isso
+// na resposta para poder chamar create-preference.php/create-boleto.php
+// depois. Sem isso, svmp_session_matches() sempre rejeitava com
+// invalid_payment_session e o fluxo Mercado Pago nunca completava.
+$paymentSessionToken = bin2hex(random_bytes(32));
 $record = [
     'order_number' => $orderNumber,
     'status' => 'pending_confirmation',
+    'payment_session_hash' => hash('sha256', $paymentSessionToken),
     'customer' => [
         'name' => $name,
         'email' => $email,
@@ -348,6 +361,7 @@ try {
 svo_json(200, [
     'ok' => true,
     'order_number' => $orderNumber,
+    'payment_session_token' => $paymentSessionToken,
     'status' => 'pending_confirmation',
     'payment_method' => $paymentMethod,
     'payment_label' => $record['payment_label'],
