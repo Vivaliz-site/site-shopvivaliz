@@ -89,13 +89,30 @@ $whatsappLink = $whatsapp !== '' ? "https://wa.me/{$whatsapp}?text={$whatsappMsg
                             </a>
                         </div>
                     <?php endif; ?>
-                    <p>E-mail: <a href="mailto:agentes@shopvivaliz.com.br">agentes@shopvivaliz.com.br</a></p>
+                    <p>E-mail: <a href="mailto:atendimento@shopvivaliz.com.br">atendimento@shopvivaliz.com.br</a></p>
+                    <p>Telefone/WhatsApp: <a href="tel:+553799374112">+55 (37) 99937-4112</a></p>
                     <p>Use este canal para apoio em pedidos, dúvidas de catálogo e acompanhamento comercial.</p>
                 </article>
                 <article class="brand-card">
                     <h2>Horário de operação</h2>
-                    <p>Atendimento comercial em dias úteis, com priorização para cotações, suporte de compra e retorno operacional.</p>
+                    <p>Segunda a Sexta: 8h às 17h</p>
+                    <p>Sábado: 8h às 17h</p>
                     <p>Mensagens fora do horário entram na fila e são respondidas no próximo ciclo útil.</p>
+                </article>
+            </div>
+            <div class="brand-grid brand-grid-2" style="margin-top:24px;">
+                <article class="brand-card">
+                    <h2>Endereço</h2>
+                    <p>Rua Campina Verde, 841 - Vivaliz<br>Divinópolis - MG</p>
+                </article>
+                <article class="brand-card">
+                    <h2>Como chegar</h2>
+                    <a href="https://maps.app.goo.gl/pziyvVNHGD2i7KQS6" target="_blank" rel="noopener" style="display:block;text-decoration:none;">
+                        <iframe
+                            src="https://www.google.com/maps?q=Rua+Campina+Verde,+841,+Divin%C3%B3polis,+MG&output=embed"
+                            width="100%" height="220" style="border:0;border-radius:12px;" loading="lazy"
+                            referrerpolicy="no-referrer-when-downgrade" title="Mapa Vivaliz"></iframe>
+                    </a>
                 </article>
             </div>
         </section>
