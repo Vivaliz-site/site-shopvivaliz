@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-Write-Host "🧪 INICIANDO SUITE DE TESTE DE IA LOCAL" -ForegroundColor Cyan
+Write-Host "--- INICIANDO SUITE DE TESTE DE IA LOCAL ---" -ForegroundColor Cyan
 
 # 1. Submeter tarefa
 $TaskPayload = @{
@@ -19,7 +19,7 @@ if (-not $TaskId) {
     exit 1
 }
 
-Write-Host "✅ Tarefa submetida com sucesso! ID: $TaskId" -ForegroundColor Green
+Write-Host "Task submetida com sucesso! ID: $TaskId" -ForegroundColor Green
 
 # 2. Aguardar processamento
 $Timeout = 60
@@ -84,16 +84,16 @@ if ($PassOllama -and $PassModel -and $PassCost -and $PassSimulated) {
     $ReportLines += "- **Custo Zero:** PASS"
     $ReportLines += "- **Sem Simulacao:** PASS"
     $ReportLines += ""
-    $ReportLines += "### ✅ TESTES CONCLUIDOS COM SUCESSO!"
-    Write-Host "✅ TESTE COMPLETO E APROVADO!" -ForegroundColor Green
+    $ReportLines += "### TESTES CONCLUIDOS COM SUCESSO!"
+    Write-Host "TESTE COMPLETO E APROVADO!" -ForegroundColor Green
 } else {
     $ReportLines += "- **Inferencia Local Real:** FAIL"
     $ReportLines += "- **Detalhes:** Provedor: $($ResultLog.provider), Modelo: $($ResultLog.model), Custo: $($ResultLog.actual_cost), Simulado: $($ResultLog.simulated)"
     $ReportLines += ""
-    $ReportLines += "### ❌ TESTES COM FALHA!"
-    Write-Host "❌ TESTE FALHOU!" -ForegroundColor Red
+    $ReportLines += "### TESTES COM FALHA!"
+    Write-Host "TESTE FALHOU!" -ForegroundColor Red
 }
 
 New-Item -ItemType Directory -Force -Path "C:\site-shopvivaliz\reports" | Out-Null
 $ReportLines | Out-File $ReportFile -Encoding utf8
-Write-Host "📝 Relatorio salvo em: $ReportFile" -ForegroundColor Gray
+Write-Host "Relatorio salvo em: $ReportFile" -ForegroundColor Gray
