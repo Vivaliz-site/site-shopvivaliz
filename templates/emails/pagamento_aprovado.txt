@@ -1,0 +1,8 @@
+Olá {{customer_name}},
+
+Confirmamos o pagamento do seu pedido #{{order_id}}.
+O valor total de R$ {{total}} foi recebido com sucesso.
+
+Seu pedido foi encaminhado para a preparação.
+
+Acompanhe no link: https://dev.shopvivaliz.com.br/meus-pedidos

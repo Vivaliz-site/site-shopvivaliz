@@ -1,0 +1,4 @@
+Olá {{customer_name}},
+
+Recebemos a solicitação de reembolso de R$ {{refund_amount}} do pedido #{{order_id}}.
+A análise será feita em até 3 dias úteis. Enviaremos nova atualização assim que concluído.

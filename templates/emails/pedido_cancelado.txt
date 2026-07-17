@@ -1,0 +1,7 @@
+Olá {{customer_name}},
+
+O pedido #{{order_id}} foi cancelado.
+Detalhes financeiros:
+{{cancel_reason_instructions}}
+
+Dúvidas? Entre em contato com nosso suporte.

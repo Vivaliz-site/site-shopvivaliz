@@ -1,0 +1,4 @@
+Olá {{customer_name}},
+
+O prazo para realizar o pagamento do pedido #{{order_id}} expirou e ele foi cancelado automaticamente.
+Se ainda quiser os produtos, faça uma nova compra em: https://dev.shopvivaliz.com.br
