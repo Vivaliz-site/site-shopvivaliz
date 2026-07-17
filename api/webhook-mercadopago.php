@@ -93,6 +93,43 @@ try {
         $order['mercadopago']['last_webhook_at'] = date(DATE_ATOM);
         $order['mercadopago']['last_webhook_topic'] = $isOrder ? 'order' : 'payment';
 
+        // O cliente nunca recebia o QR/codigo Pix por email -- so existia
+        // envio apos pagamento aprovado. O Pix e criado inteiramente na
+        // pagina hospedada do Checkout Pro (fora do nosso backend), entao o
+        // unico jeito de capturar o QR e aqui no primeiro webhook em status
+        // "pending" com point_of_interaction (metodo pix). Envia uma unica
+        // vez por pedido.
+        if ($localStatus !== 'payment_approved' && empty($order['pix_qr_email_sent'])) {
+            try {
+                $pixData = is_array($payment['point_of_interaction']['transaction_data'] ?? null)
+                    ? $payment['point_of_interaction']['transaction_data']
+                    : null;
+                if ($pixData === null && $isOrder && !empty($payment['id'])) {
+                    $paymentDetail = svmp_api_request('GET', '/v1/payments/' . rawurlencode((string)$payment['id']), $accessToken);
+                    $pixData = is_array($paymentDetail['point_of_interaction']['transaction_data'] ?? null)
+                        ? $paymentDetail['point_of_interaction']['transaction_data']
+                        : null;
+                }
+                $qrCode = trim((string)($pixData['qr_code'] ?? ''));
+                $qrCodeBase64 = trim((string)($pixData['qr_code_base64'] ?? ''));
+                $customerEmailPix = (string)($order['customer']['email'] ?? '');
+                if (($qrCode !== '' || $qrCodeBase64 !== '') && $customerEmailPix !== '') {
+                    require_once dirname(__DIR__) . '/scripts/mailer.php';
+                    $sent = svmp_send_pix_qr_email(
+                        $customerEmailPix,
+                        (string)($order['customer']['name'] ?? 'Cliente'),
+                        $externalReference,
+                        round((float)($order['total'] ?? 0), 2),
+                        $qrCode,
+                        $qrCodeBase64
+                    );
+                    $order['pix_qr_email_sent'] = $sent;
+                }
+            } catch (Throwable $e) {
+                error_log('[MercadoPago] Pix QR email error: order=' . $externalReference . ' ' . $e->getMessage());
+            }
+        }
+
         // Pedidos pagos via Mercado Pago nao eram enviados ao Tiny ERP (apenas o
         // fluxo manual/offline em api/orders/create-v2.php fazia esse push).
         if ($localStatus === 'payment_approved' && empty($order['tiny_order_id'])) {
