@@ -1,0 +1,4 @@
+Olá {{customer_name}},
+
+Não foi possível aprovar o pagamento do seu pedido #{{order_id}}.
+Seu pedido ainda está reservado e você pode tentar realizar o pagamento com outro cartão ou forma de pagamento no link: https://dev.shopvivaliz.com.br/carrinho
