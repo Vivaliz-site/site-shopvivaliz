@@ -246,12 +246,16 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
 (function () {
     // MercadoPago.js V2 initialization with Public Key
     var PUBLIC_KEY = <?= json_encode(svmp_env('MERCADOPAGO_PUBLIC_KEY')) ?>;
-    if (PUBLIC_KEY && window.MercadoPago) {
-        window.MercadoPago.configure({
-            publicKey: PUBLIC_KEY
-        });
-        // Initialize Device ID for fraud detection
-        window.MercadoPago.deviceId();
+    try {
+        if (PUBLIC_KEY && window.MercadoPago) {
+            // SDK V2 usa o construtor `new MercadoPago(...)`, nao o metodo
+            // estatico `.configure()` da API antiga (V1). O Device ID de
+            // fraude ja e coletado automaticamente pelo v2/security.js
+            // carregado no <head>, nao precisa de chamada manual.
+            new MercadoPago(PUBLIC_KEY, { locale: 'pt-BR' });
+        }
+    } catch (mpInitError) {
+        console.error('MercadoPago SDK init failed', mpInitError);
     }
 
     var PIX_KEY = <?= json_encode($pixKey) ?>;
