@@ -356,9 +356,11 @@ $svNavCurrent = '';
     <section class="hero">
         <div class="container">
             <div class="hero-content">
+                <?php if ($svFreeShipping['enabled'] && $svFreeShipping['threshold'] > 0): ?>
                 <div class="hero-free-shipping-badge">
-                    🚚 Frete Grátis acima de R$ 299 para Sul e Sudeste
+                    🚚 Frete Grátis acima de R$ <?= number_format($svFreeShipping['threshold'], 0, ',', '.') ?>
                 </div>
+                <?php endif; ?>
                 <p class="eyebrow hero-kicker">
                     🛍️ Loja oficial Vivaliz
                 </p>
