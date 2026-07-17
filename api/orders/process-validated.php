@@ -241,10 +241,10 @@ if (file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESC
 
 $tinyOrderId = null;
 $tinyPushStatus = 'missing_credentials';
-if (svop_tiny_credentials_configured()) {
+if (svtop_tiny_credentials_configured()) {
     $tinyPushStatus = 'token_unavailable';
     try {
-        $tinyOrderId = svop_push_order_tiny($record);
+        $tinyOrderId = svtop_push_order_tiny($record);
         if ($tinyOrderId) {
             $tinyPushStatus = 'ok';
             $record['tiny_order_id'] = $tinyOrderId;
