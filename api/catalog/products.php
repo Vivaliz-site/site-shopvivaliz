@@ -565,7 +565,7 @@ if ($q !== '') {
     });
 }
 
-$categoria = trim((string)($_GET['categoria'] ?? ''));
+$categoria = trim((string)($_GET['categoria'] ?? $_GET['category'] ?? ''));
 if ($categoria !== '') {
     $all_erp = array_filter($all_erp, function ($p) use ($categoria) {
         return strcasecmp((string)($p['category'] ?? ''), $categoria) === 0;
