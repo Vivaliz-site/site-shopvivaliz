@@ -17,7 +17,7 @@ try {
     $pdo = sv_pdo();
     $stmt = $pdo->prepare(
         'SELECT id, order_number, olist_order_id, order_total, order_status, payment_method,
-                tracking_number, estimated_delivery, items_json, nf_pdf_url, nf_xml_url, created_at
+                tracking_number, estimated_delivery, items_json, nf_pdf_url, nf_xml_url, label_url, created_at
          FROM orders WHERE user_id = :uid ORDER BY created_at DESC LIMIT 50'
     );
     $stmt->execute([':uid' => $svAccountUser['id']]);
