@@ -54,17 +54,19 @@ function svcr_products(): array
             ? $item['anexos']
             : (is_array($item['attachments'] ?? null) ? $item['attachments'] : []);
 
+        $imagesList = [];
+        foreach ($attachments as $attachment) {
+            $candidate = is_array($attachment)
+                ? trim((string)($attachment['url'] ?? $attachment['link'] ?? ''))
+                : '';
+            if (preg_match('~^https?://~i', $candidate) && !in_array($candidate, $imagesList, true)) {
+                $imagesList[] = $candidate;
+            }
+        }
+
         $image = trim((string)($item['imagem_principal_url'] ?? $item['image_url'] ?? $item['imagem'] ?? ''));
         if ($image === '') {
-            foreach ($attachments as $attachment) {
-                $candidate = is_array($attachment)
-                    ? trim((string)($attachment['url'] ?? $attachment['link'] ?? ''))
-                    : '';
-                if (preg_match('~^https?://~i', $candidate)) {
-                    $image = $candidate;
-                    break;
-                }
-            }
+            $image = $imagesList[0] ?? '';
         }
 
         $prices = is_array($item['precos'] ?? null) ? $item['precos'] : [];
@@ -85,7 +87,8 @@ function svcr_products(): array
             'price' => (float)($prices['preco'] ?? $prices['preco_venda'] ?? $item['preco'] ?? $item['price'] ?? 0),
             'stock' => max(0, (int)($item['estoque_disponivel'] ?? $stockInfo['quantidade'] ?? $item['stock'] ?? 0)),
             'image_url' => $image,
-            'images_count' => count($attachments),
+            'images' => $imagesList,
+            'images_count' => count($imagesList),
             'category' => trim((string)($category['nome'] ?? $category['caminhoCompleto'] ?? $item['category'] ?? '')),
             'weight' => (float)($dimensions['pesoLiquido'] ?? $dimensions['peso_liquido'] ?? $item['peso'] ?? $item['weight'] ?? 0),
             'width' => (float)($dimensions['largura'] ?? $item['width'] ?? 0),
