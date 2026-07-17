@@ -1,5 +1,5 @@
 <?php
-function sv_home_lower($s){ return mb_strtolower($s,'UTF-8'); }
+function sv_home_lower($s){ return function_exists('mb_strtolower') ? mb_strtolower($s,'UTF-8') : strtolower($s); }
 function sv_home_category_icon($c){ return '/x.jpg'; }
 function sv_home_catalog_source_rows(){
   $d = json_decode(file_get_contents(__DIR__.'/api/catalog/fallback-products.json'), true);
