@@ -141,6 +141,7 @@ function svo_payment_instructions(string $method): string
         'boleto' => 'Boleto sujeito a emissao manual apos confirmacao do frete.',
         'whatsapp' => 'Pagamento e frete serao alinhados pelo atendimento no WhatsApp.',
         'transferencia' => 'Dados bancarios serao enviados pela equipe apos confirmacao do frete.',
+        'mercado_pago' => 'Voce sera redirecionado para o checkout seguro do Mercado Pago.',
         default => 'Pagamento via PIX com confirmacao apos validacao do pedido.',
     };
 }
