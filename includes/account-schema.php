@@ -89,6 +89,19 @@ function sv_account_ensure_schema(): void
         }
     }
 
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS password_resets (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            token_hash CHAR(64) NOT NULL,
+            expires_at TIMESTAMP NOT NULL,
+            used_at TIMESTAMP NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_password_resets_user (user_id),
+            UNIQUE INDEX idx_password_resets_token (token_hash)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+
     $existingIndexes = [];
     $idxStmt = $pdo->query('SHOW INDEX FROM orders');
     foreach ($idxStmt->fetchAll() as $row) {
