@@ -11,7 +11,7 @@ class TaskQueue {
     this.dataDir = path.join(__dirname, 'data');
     this.tasksFile = path.join(this.dataDir, 'tasks.jsonl');
     this.ensureStorage();
-    this.loadFromDisk();
+    this.loadFromDisk(true);
   }
 
   ensureStorage() {
@@ -20,7 +20,7 @@ class TaskQueue {
     }
   }
 
-  loadFromDisk() {
+  loadFromDisk(isStartup = false) {
     if (!fs.existsSync(this.tasksFile)) {
       return;
     }
@@ -28,21 +28,21 @@ class TaskQueue {
     try {
       const content = fs.readFileSync(this.tasksFile, 'utf8');
       const lines = content.split(/\r?\n/);
+      const newTasks = new Map();
       for (const line of lines) {
         if (!line.trim()) continue;
         try {
           const task = JSON.parse(line);
           if (task && task.id) {
-            if (task.status === 'executing' || task.status === 'running') {
+            if (isStartup && (task.status === 'executing' || task.status === 'running')) {
               task.status = 'pending';
               task.interrupted = true;
             }
-            this.tasks.set(task.id, task);
+            newTasks.set(task.id, task);
           }
-        } catch (e) {
-          console.error(`[TaskQueue] Error parsing line: ${line}`, e);
-        }
+        } catch (e) {}
       }
+      this.tasks = newTasks;
 
       const sortedTasks = Array.from(this.tasks.values())
         .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
@@ -53,7 +53,6 @@ class TaskQueue {
           this.queue.push(task.id);
         }
       }
-      console.log(`[TaskQueue] Loaded ${this.tasks.size} tasks from disk. ${this.queue.length} pending.`);
     } catch (err) {
       console.error('[TaskQueue] Error reading tasks file from disk:', err);
     }
