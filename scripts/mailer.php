@@ -4,6 +4,23 @@
  * Usa PHPMailer ou mail() nativo
  */
 
+// class_exists() abaixo so encontra o PHPMailer se algo mais no request ja
+// tiver carregado essas classes -- quando send_email() e chamado por um
+// fluxo que nao passa por isso antes (ex: auth/forgot-password.php), o
+// PHPMailer nunca e encontrado e cai no fallback mail() nativo, que falha
+// sempre porque o servidor nao tem /usr/sbin/sendmail instalado. Confirmado
+// ao vivo: send_email() retornava false sempre nesse cenario. Garantimos
+// aqui que o PHPMailer real esteja sempre disponivel, independente de quem
+// chamou este arquivo primeiro.
+if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
+    $phpMailerDir = dirname(__DIR__) . '/includes/PHPMailer';
+    if (is_file($phpMailerDir . '/Exception.php')) {
+        require_once $phpMailerDir . '/Exception.php';
+        require_once $phpMailerDir . '/PHPMailer.php';
+        require_once $phpMailerDir . '/SMTP.php';
+    }
+}
+
 function get_mailer_config(): array
 {
     return [
