@@ -306,24 +306,11 @@ if (svo_autodev_available()) {
     ]);
 }
 
-// Enviar pedido ao Tiny ERP via API v3
-$tinyOrderId  = null;
-$tinyPushStatus = 'missing_credentials';
-if (svtop_tiny_credentials_configured()) {
-    $tinyPushStatus = 'token_unavailable';
-    try {
-        $tinyOrderId = svtop_push_order_tiny($record);
-        if ($tinyOrderId) {
-            $tinyPushStatus = 'ok';
-            $record['tiny_order_id'] = $tinyOrderId;
-        }
-    } catch (Throwable $e) {
-        $tinyPushStatus = $e->getMessage();
-        error_log('[OrderCreate] Tiny push error: ' . $e->getMessage());
-    }
-}
-
-$record['tiny_push'] = $tinyPushStatus;
+// Pedido so vai para o Tiny ERP quando o pagamento e de fato aprovado --
+// isso acontece no webhook do Mercado Pago (api/webhook-mercadopago.php),
+// nunca aqui na criacao. Antes este endpoint empurrava TODO pedido criado
+// direto pro ERP, poluindo o Tiny com pedidos que o cliente nunca chegou
+// a pagar.
 file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
 svo_append_legacy_order_log($record);
 
