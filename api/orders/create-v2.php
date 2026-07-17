@@ -130,6 +130,7 @@ function svo_payment_label(string $method): string
         'boleto' => 'Boleto bancario',
         'whatsapp' => 'WhatsApp',
         'transferencia' => 'Transferencia bancaria',
+        'mercado_pago' => 'Mercado Pago',
         default => 'PIX',
     };
 }
