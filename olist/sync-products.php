@@ -202,7 +202,54 @@ function svs_fetch_v3(string $token): array {
         usleep(400000); // 400ms entre páginas
     }
 
+    // A listagem /produtos NÃO retorna estoque.quantidade nem anexos (imagens) --
+    // esses campos só existem na resposta do endpoint de detalhe /produtos/{id}.
+    // Sem isso o catálogo espelhado sempre caía com estoque=0 e sem imagem,
+    // derrubando o "Catálogo em destaque" e travando o checkout. Rate limit da
+    // Tiny é 60 req/min, por isso o espaçamento de ~1.1s entre chamadas.
+    foreach ($all as &$item) {
+        $id = $item['id'] ?? null;
+        if (!$id) continue;
+        $detail = svs_fetch_v3_detail((string)$id, $token);
+        if ($detail !== null) {
+            if (isset($detail['estoque']) && is_array($detail['estoque'])) {
+                $item['estoque'] = $detail['estoque'];
+            }
+            if (!empty($detail['anexos']) && is_array($detail['anexos'])) {
+                $item['imagens'] = $detail['anexos'];
+            }
+            if (!empty($detail['descricaoComplementar'])) {
+                $item['descricaoComplementar'] = $detail['descricaoComplementar'];
+            }
+            if (!empty($detail['categoria'])) {
+                $item['categoria'] = $detail['categoria'];
+            }
+        }
+        usleep(1100000); // ~1.1s entre chamadas (limite: 60 req/min)
+    }
+    unset($item);
+
     return $all;
+}
+
+function svs_fetch_v3_detail(string $id, string $token): ?array {
+    $BASE = 'https://api.tiny.com.br/public-api/v3';
+    $headers = [
+        "Authorization: Bearer $token",
+        'Accept: application/json',
+        'User-Agent: ShopVivaliz-OlistSync/3.0',
+    ];
+    $res = svs_http_get("$BASE/produtos/$id", $headers);
+    if ($res['status'] === 429) {
+        usleep(2000000);
+        $res = svs_http_get("$BASE/produtos/$id", $headers);
+    }
+    if ($res['status'] !== 200) {
+        svs_log("v3 /produtos/$id HTTP {$res['status']}");
+        return null;
+    }
+    $json = json_decode($res['body'], true);
+    return is_array($json) ? $json : null;
 }
 
 /* ── Tiny v2 fallback (token estático) ── */
