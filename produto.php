@@ -247,10 +247,26 @@ function sv_product_related(string $sku, string $category, int $limit = 4): arra
     return array_slice(array_merge($related, $fallback), 0, $limit);
 }
 
+function sv_slugify(string $name, string $sku): string
+{
+    $accents = ['á'=>'a','à'=>'a','ã'=>'a','â'=>'a','ä'=>'a','é'=>'e','è'=>'e','ê'=>'e','ë'=>'e','í'=>'i','ì'=>'i','î'=>'i','ï'=>'i','ó'=>'o','ò'=>'o','õ'=>'o','ô'=>'o','ö'=>'o','ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ç'=>'c','ñ'=>'n'];
+    $base = strtr(sv_lower($name), $accents);
+    $base = preg_replace('/[^a-z0-9]+/', '-', $base);
+    $base = trim((string)$base, '-');
+    $base = mb_substr($base, 0, 60);
+
+    $skuPart = strtolower((string)preg_replace('/[^a-zA-Z0-9]+/', '', $sku));
+
+    return trim($base . '-' . $skuPart, '-') ?: $skuPart;
+}
+
 function sv_product_find_slug(string $slug): array
 {
     foreach (sv_product_catalog() as $row) {
-        if (is_array($row) && trim((string)($row['slug'] ?? '')) === $slug) return $row;
+        if (!is_array($row)) continue;
+        $persistedSlug = trim((string)($row['slug'] ?? ''));
+        $computedSlug = sv_slugify((string)($row['name'] ?? ''), (string)($row['sku'] ?? ''));
+        if ($persistedSlug === $slug || $computedSlug === $slug) return $row;
     }
     return [];
 }
