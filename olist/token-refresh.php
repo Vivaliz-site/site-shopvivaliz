@@ -81,6 +81,7 @@ $context = stream_context_create([
 $response = @file_get_contents($tokenUrl, false, $context);
 
 if (!$response) {
+    svtr_log('ERRO: falha ao conectar com OAuth (sem resposta)');
     http_response_code(500);
     echo json_encode(['erro' => 'Falha ao conectar com OAuth']);
     exit;
@@ -89,6 +90,7 @@ if (!$response) {
 $tokenData = json_decode($response, true);
 
 if (!isset($tokenData['access_token'])) {
+    svtr_log('ERRO: refresh rejeitado pelo Tiny - ' . $response);
     http_response_code(401);
     echo json_encode(['erro' => 'Token não renovado', 'resposta' => $tokenData]);
     exit;
