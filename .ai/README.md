@@ -42,7 +42,7 @@ npm install
 
 **Puxar modelo recomendado:**
 ```bash
-ollama pull qwen2.5-coder:1.5b-q2_K
+ollama pull qwen2.5-coder:1.5b
 ollama serve
 ```
 
@@ -108,7 +108,7 @@ Cada execução retorna:
 {
   "task_id": "...",
   "status": "completed",
-  "model": "qwen2.5-coder:1.5b-q2_K",
+  "model": "qwen2.5-coder:1.5b",
   "provider": "ollama",
   "cost": 0.00,
   "execution_time_ms": 1234,
@@ -140,7 +140,7 @@ console.log(status.cost_report);
 
 | Modelo | Parâmetros | VRAM | CPU | Contexto | Especialização |
 |--------|-----------|------|-----|---------|-----------------|
-| **qwen2.5-coder** | 1.5B | 800MB | 2GB | 4K | Código (recomendado) |
+| **qwen2.5-coder** | 1.5B | 986MB | 2GB | 32K | Código (recomendado) |
 | deepseek-coder | 1.3B | 700MB | 1.8GB | 4K | Raciocínio em código |
 | phi | 2.7B | 1GB | 2.3GB | 2K | Chat leve |
 
@@ -265,6 +265,6 @@ MIT
 
 ---
 
-**Status:** ✅ Fase 1-5 Completo  
-**Próximos:** Fase 6-8 (Agentes, Interface, Validação)  
-**Último Update:** 2026-07-16
+**Status:** ✅ Fase 1-8 Completo  
+**Próximos:** Manutenção e Expansão de Features  
+**Último Update:** 2026-07-17
