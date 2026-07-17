@@ -175,11 +175,12 @@ function svtop_find_contact_id(string $token, string $cpfCnpj, string $name): ?i
 
 function svtop_create_contact(string $token, array $customer): ?int
 {
+    $docDigits = preg_replace('/\D/', '', (string)($customer['cpf'] ?? ''));
     $cep = preg_replace('/\D/', '', (string)($customer['cep'] ?? ''));
     $payload = [
         'nome'       => $customer['name'] ?? '',
-        'tipoPessoa' => 'F',
-        'cpfCnpj'    => preg_replace('/\D/', '', (string)($customer['cpf'] ?? '')),
+        'tipoPessoa' => strlen($docDigits) === 14 ? 'J' : 'F',
+        'cpfCnpj'    => $docDigits,
         'email'      => $customer['email'] ?? '',
         'fone'       => $customer['phone'] ?? '',
         'endereco'   => [
