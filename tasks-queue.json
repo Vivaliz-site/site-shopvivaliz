@@ -1,246 +1,102 @@
 {
-  "queue": [
-    {
-      "id": "SHOPEE-001",
-      "title": "Sincronizar Catálogo com Shopee",
-      "description": "Conectar produtos ao Shopee mantendo preços sincronizados",
-      "priority": "high",
-      "status": "completed",
-      "created_at": "2026-07-12T03:00:00Z",
-      "source": "external-task-format",
-      "tags": [],
-      "requires_env": [
-        "SHOPEE_PARTNER_ID",
-        "SHOPEE_PARTNER_KEY",
-        "SHOPEE_SHOP_ID",
-        "SHOPEE_REFRESH_TOKEN"
-      ],
-      "type": "integration",
-      "action": "sync_shopee_catalog",
-      "assigned_to": [
-        "claude"
-      ],
-      "estimated_hours": 3,
-      "started_at": "2026-07-17T01:57:14.696307Z",
-      "last_result": {
-        "status": "completed",
-        "summary": "Tarefa concluida sem incidentes.",
-        "tests": [
-          "python scripts/system-health-check.py"
-        ],
-        "exit_code": 0,
-        "stdout_tail": "0011.4 KB\n  [OK] logs/autonomous-cycle-report.json        - 2.3 KB\n  [OK] logs/autonomous-cycle-report.md          - 1.0 KB\n  [OK] logs/tri-environment-sync.json           - 0.5 KB\n\n4. VERIFICANDO APIs...\n  [OK] API Monitor existe\n  [OK] API Monitor schema atual reconhecido\n\n5. VERIFICANDO WORKFLOWS...\n  [OK] .github/workflows/24-7-continuous-agent.yml\n  [OK] .github/workflows/deploy.yml\n  [OK] .github/workflows/monitor-chat-responses.yml\n  [OK] .github/workflows/parallel-trio-executor.yml\n\n6. VERIFICANDO CONFIGURAÇÕES...\n  [OK] config/constants.php                     - Constantes\n  [OK] config/database.php                      - Banco de dados\n  [OK] .env.example                             - Template ENV\n  [OK] AUDITORIA-ESTRUTURA.md                   - Documentação auditoria\n  [OK] AGENTS-ACCESS-INDEX.md                   - Índice de agentes\n\n7. VERIFICANDO STATUS DOS AGENTES...\n  [OK] scripts/real-task-executor.py            - Executor real\n  [OK] scripts/chat-responder.py                - Responder chat\n  [OK] scripts/force-execution.py               - Força de execução\n  [OK] scripts/continuous-executor.py           - Executor contínuo\n  [OK] scripts/tri-environment-sync.js          - Sincronização triambiente JS\n\n8. VERIFICANDO DOCUMENTAÇÃO...\n  [OK] README.md                                - README\n  [OK] AGENTS-ACCESS-INDEX.md                   - Índice agentes\n  [OK] AUDITORIA-ESTRUTURA.md                   - Auditoria\n  [OK] AGENTS-STATUS-REPORT.md                  - Status agentes\n  [OK] OLIST-IMAGES-IMPORT-PLAN.md              - Plano Olist\n  [OK] DEPLOY-TROUBLESHOOTING.md                - Troubleshooting\n  [OK] docs/email-secrets-aliases.md            - Aliases email\n\n======================================================================\nRESUMO DE SAÚDE DO SISTEMA\n======================================================================\n\nStatus geral: 8/8 verificações OK\n\n[HEALTHY] STATUS FINAL: HEALTHY\n\nRelatório salvo em: logs/system-health-check.json\n",
-        "stderr_tail": ""
-      },
-      "finished_at": "2026-07-17T01:57:14.811534Z"
-    },
-    {
-      "id": "SHOPEE-002",
-      "title": "Sincronizar Pedidos do Shopee",
-      "description": "Importar pedidos do Shopee para o sistema",
-      "priority": "high",
-      "status": "completed",
-      "created_at": "2026-07-12T03:00:00Z",
-      "source": "external-task-format",
-      "tags": [],
-      "requires_env": [
-        "SHOPEE_SHOP_ID",
-        "SHOPEE_ACCESS_TOKEN"
-      ],
-      "type": "integration",
-      "action": "sync_shopee_orders",
-      "assigned_to": [
-        "claude"
-      ],
-      "estimated_hours": 2,
-      "started_at": "2026-07-17T01:58:17.885952Z",
-      "last_result": {
-        "status": "completed",
-        "summary": "Tarefa concluida sem incidentes.",
-        "tests": [
-          "python scripts/system-health-check.py"
-        ],
-        "exit_code": 0,
-        "stdout_tail": "0019.9 KB\n  [OK] logs/autonomous-cycle-report.json        - 4.5 KB\n  [OK] logs/autonomous-cycle-report.md          - 1.2 KB\n  [OK] logs/tri-environment-sync.json           - 0.5 KB\n\n4. VERIFICANDO APIs...\n  [OK] API Monitor existe\n  [OK] API Monitor schema atual reconhecido\n\n5. VERIFICANDO WORKFLOWS...\n  [OK] .github/workflows/24-7-continuous-agent.yml\n  [OK] .github/workflows/deploy.yml\n  [OK] .github/workflows/monitor-chat-responses.yml\n  [OK] .github/workflows/parallel-trio-executor.yml\n\n6. VERIFICANDO CONFIGURAÇÕES...\n  [OK] config/constants.php                     - Constantes\n  [OK] config/database.php                      - Banco de dados\n  [OK] .env.example                             - Template ENV\n  [OK] AUDITORIA-ESTRUTURA.md                   - Documentação auditoria\n  [OK] AGENTS-ACCESS-INDEX.md                   - Índice de agentes\n\n7. VERIFICANDO STATUS DOS AGENTES...\n  [OK] scripts/real-task-executor.py            - Executor real\n  [OK] scripts/chat-responder.py                - Responder chat\n  [OK] scripts/force-execution.py               - Força de execução\n  [OK] scripts/continuous-executor.py           - Executor contínuo\n  [OK] scripts/tri-environment-sync.js          - Sincronização triambiente JS\n\n8. VERIFICANDO DOCUMENTAÇÃO...\n  [OK] README.md                                - README\n  [OK] AGENTS-ACCESS-INDEX.md                   - Índice agentes\n  [OK] AUDITORIA-ESTRUTURA.md                   - Auditoria\n  [OK] AGENTS-STATUS-REPORT.md                  - Status agentes\n  [OK] OLIST-IMAGES-IMPORT-PLAN.md              - Plano Olist\n  [OK] DEPLOY-TROUBLESHOOTING.md                - Troubleshooting\n  [OK] docs/email-secrets-aliases.md            - Aliases email\n\n======================================================================\nRESUMO DE SAÚDE DO SISTEMA\n======================================================================\n\nStatus geral: 8/8 verificações OK\n\n[HEALTHY] STATUS FINAL: HEALTHY\n\nRelatório salvo em: logs/system-health-check.json\n",
-        "stderr_tail": ""
-      },
-      "finished_at": "2026-07-17T01:58:18.004042Z"
-    },
-    {
-      "id": "ML-001",
-      "title": "Sincronizar Catálogo com Mercado Livre",
-      "description": "Conectar produtos ao Mercado Livre com preços sincronizados",
-      "priority": "high",
-      "status": "completed",
-      "created_at": "2026-07-12T03:00:00Z",
-      "source": "external-task-format",
-      "tags": [],
-      "requires_env": [
-        "ML_CLIENT_ID",
-        "ML_CLIENT_SECRET",
-        "ML_REDIRECT_URI",
-        "ML_SELLER_ID"
-      ],
-      "type": "integration",
-      "action": "sync_mercadolivre_catalog",
-      "assigned_to": [
-        "claude"
-      ],
-      "estimated_hours": 3,
-      "started_at": "2026-07-17T01:55:08.701116Z",
-      "last_result": {
-        "status": "completed",
-        "summary": "Tarefa concluida sem incidentes.",
-        "tests": [
-          "python scripts/system-health-check.py"
-        ],
-        "exit_code": 0,
-        "stdout_tail": "9996.3 KB\n  [OK] logs/autonomous-cycle-report.json        - 2.3 KB\n  [OK] logs/autonomous-cycle-report.md          - 0.9 KB\n  [OK] logs/tri-environment-sync.json           - 0.8 KB\n\n4. VERIFICANDO APIs...\n  [OK] API Monitor existe\n  [OK] API Monitor schema atual reconhecido\n\n5. VERIFICANDO WORKFLOWS...\n  [OK] .github/workflows/24-7-continuous-agent.yml\n  [OK] .github/workflows/deploy.yml\n  [OK] .github/workflows/monitor-chat-responses.yml\n  [OK] .github/workflows/parallel-trio-executor.yml\n\n6. VERIFICANDO CONFIGURAÇÕES...\n  [OK] config/constants.php                     - Constantes\n  [OK] config/database.php                      - Banco de dados\n  [OK] .env.example                             - Template ENV\n  [OK] AUDITORIA-ESTRUTURA.md                   - Documentação auditoria\n  [OK] AGENTS-ACCESS-INDEX.md                   - Índice de agentes\n\n7. VERIFICANDO STATUS DOS AGENTES...\n  [OK] scripts/real-task-executor.py            - Executor real\n  [OK] scripts/chat-responder.py                - Responder chat\n  [OK] scripts/force-execution.py               - Força de execução\n  [OK] scripts/continuous-executor.py           - Executor contínuo\n  [OK] scripts/tri-environment-sync.js          - Sincronização triambiente JS\n\n8. VERIFICANDO DOCUMENTAÇÃO...\n  [OK] README.md                                - README\n  [OK] AGENTS-ACCESS-INDEX.md                   - Índice agentes\n  [OK] AUDITORIA-ESTRUTURA.md                   - Auditoria\n  [OK] AGENTS-STATUS-REPORT.md                  - Status agentes\n  [OK] OLIST-IMAGES-IMPORT-PLAN.md              - Plano Olist\n  [OK] DEPLOY-TROUBLESHOOTING.md                - Troubleshooting\n  [OK] docs/email-secrets-aliases.md            - Aliases email\n\n======================================================================\nRESUMO DE SAÚDE DO SISTEMA\n======================================================================\n\nStatus geral: 8/8 verificações OK\n\n[HEALTHY] STATUS FINAL: HEALTHY\n\nRelatório salvo em: logs/system-health-check.json\n",
-        "stderr_tail": ""
-      },
-      "finished_at": "2026-07-17T01:55:08.821684Z"
-    },
-    {
-      "id": "ML-002",
-      "title": "Sincronizar Pedidos do Mercado Livre",
-      "description": "Importar pedidos do Mercado Livre para o sistema",
-      "priority": "high",
-      "status": "completed",
-      "created_at": "2026-07-12T03:00:00Z",
-      "source": "external-task-format",
-      "tags": [],
-      "requires_env": [
-        "ML_SELLER_ID",
-        "ML_CLIENT_ID"
-      ],
-      "type": "integration",
-      "action": "sync_mercadolivre_orders",
-      "assigned_to": [
-        "claude"
-      ],
-      "estimated_hours": 2,
-      "started_at": "2026-07-17T01:56:11.611794Z",
-      "last_result": {
-        "status": "completed",
-        "summary": "Tarefa concluida sem incidentes.",
-        "tests": [
-          "python scripts/system-health-check.py"
-        ],
-        "exit_code": 0,
-        "stdout_tail": "0003.9 KB\n  [OK] logs/autonomous-cycle-report.json        - 2.3 KB\n  [OK] logs/autonomous-cycle-report.md          - 0.9 KB\n  [OK] logs/tri-environment-sync.json           - 0.8 KB\n\n4. VERIFICANDO APIs...\n  [OK] API Monitor existe\n  [OK] API Monitor schema atual reconhecido\n\n5. VERIFICANDO WORKFLOWS...\n  [OK] .github/workflows/24-7-continuous-agent.yml\n  [OK] .github/workflows/deploy.yml\n  [OK] .github/workflows/monitor-chat-responses.yml\n  [OK] .github/workflows/parallel-trio-executor.yml\n\n6. VERIFICANDO CONFIGURAÇÕES...\n  [OK] config/constants.php                     - Constantes\n  [OK] config/database.php                      - Banco de dados\n  [OK] .env.example                             - Template ENV\n  [OK] AUDITORIA-ESTRUTURA.md                   - Documentação auditoria\n  [OK] AGENTS-ACCESS-INDEX.md                   - Índice de agentes\n\n7. VERIFICANDO STATUS DOS AGENTES...\n  [OK] scripts/real-task-executor.py            - Executor real\n  [OK] scripts/chat-responder.py                - Responder chat\n  [OK] scripts/force-execution.py               - Força de execução\n  [OK] scripts/continuous-executor.py           - Executor contínuo\n  [OK] scripts/tri-environment-sync.js          - Sincronização triambiente JS\n\n8. VERIFICANDO DOCUMENTAÇÃO...\n  [OK] README.md                                - README\n  [OK] AGENTS-ACCESS-INDEX.md                   - Índice agentes\n  [OK] AUDITORIA-ESTRUTURA.md                   - Auditoria\n  [OK] AGENTS-STATUS-REPORT.md                  - Status agentes\n  [OK] OLIST-IMAGES-IMPORT-PLAN.md              - Plano Olist\n  [OK] DEPLOY-TROUBLESHOOTING.md                - Troubleshooting\n  [OK] docs/email-secrets-aliases.md            - Aliases email\n\n======================================================================\nRESUMO DE SAÚDE DO SISTEMA\n======================================================================\n\nStatus geral: 8/8 verificações OK\n\n[HEALTHY] STATUS FINAL: HEALTHY\n\nRelatório salvo em: logs/system-health-check.json\n",
-        "stderr_tail": ""
-      },
-      "finished_at": "2026-07-17T01:56:11.736440Z"
-    },
-    {
-      "id": "GADS-001",
-      "title": "Configurar Google Ads para Automação",
-      "description": "Preparar stack de Google Ads com rastreamento de conversões",
-      "priority": "medium",
-      "status": "pending",
-      "created_at": "2026-07-12T03:00:00Z",
-      "source": "external-task-format",
-      "tags": [],
-      "requires_env": [
-        "GOOGLE_ADS_CUSTOMER_ID",
-        "GOOGLE_ADS_DEVELOPER_TOKEN",
-        "GOOGLE_ADS_REFRESH_TOKEN"
-      ],
-      "requires_human_approval": false,
-      "type": "integration",
-      "action": "setup_google_ads",
-      "assigned_to": [
-        "claude"
-      ],
-      "estimated_hours": 4
-    },
-    {
-      "id": "AUDIT-001",
-      "title": "Auditoria Contínua de Integrações",
-      "description": "Monitorar sincronizações Shopee, ML, Google Ads 24/7",
-      "priority": "high",
-      "status": "completed",
-      "created_at": "2026-07-12T03:00:00Z",
-      "source": "external-task-format",
-      "tags": [],
-      "type": "monitoring",
-      "action": "audit_integrations_24_7",
-      "assigned_to": [
-        "claude"
-      ],
-      "estimated_hours": 0.5,
-      "started_at": "2026-07-17T01:54:06.005298Z",
-      "last_result": {
-        "status": "completed",
-        "summary": "Tarefa concluida sem incidentes.",
-        "tests": [
-          "python scripts/system-health-check.py"
-        ],
-        "exit_code": 0,
-        "stdout_tail": "9988.9 KB\n  [OK] logs/autonomous-cycle-report.json        - 2.2 KB\n  [OK] logs/autonomous-cycle-report.md          - 0.9 KB\n  [OK] logs/tri-environment-sync.json           - 0.8 KB\n\n4. VERIFICANDO APIs...\n  [OK] API Monitor existe\n  [OK] API Monitor schema atual reconhecido\n\n5. VERIFICANDO WORKFLOWS...\n  [OK] .github/workflows/24-7-continuous-agent.yml\n  [OK] .github/workflows/deploy.yml\n  [OK] .github/workflows/monitor-chat-responses.yml\n  [OK] .github/workflows/parallel-trio-executor.yml\n\n6. VERIFICANDO CONFIGURAÇÕES...\n  [OK] config/constants.php                     - Constantes\n  [OK] config/database.php                      - Banco de dados\n  [OK] .env.example                             - Template ENV\n  [OK] AUDITORIA-ESTRUTURA.md                   - Documentação auditoria\n  [OK] AGENTS-ACCESS-INDEX.md                   - Índice de agentes\n\n7. VERIFICANDO STATUS DOS AGENTES...\n  [OK] scripts/real-task-executor.py            - Executor real\n  [OK] scripts/chat-responder.py                - Responder chat\n  [OK] scripts/force-execution.py               - Força de execução\n  [OK] scripts/continuous-executor.py           - Executor contínuo\n  [OK] scripts/tri-environment-sync.js          - Sincronização triambiente JS\n\n8. VERIFICANDO DOCUMENTAÇÃO...\n  [OK] README.md                                - README\n  [OK] AGENTS-ACCESS-INDEX.md                   - Índice agentes\n  [OK] AUDITORIA-ESTRUTURA.md                   - Auditoria\n  [OK] AGENTS-STATUS-REPORT.md                  - Status agentes\n  [OK] OLIST-IMAGES-IMPORT-PLAN.md              - Plano Olist\n  [OK] DEPLOY-TROUBLESHOOTING.md                - Troubleshooting\n  [OK] docs/email-secrets-aliases.md            - Aliases email\n\n======================================================================\nRESUMO DE SAÚDE DO SISTEMA\n======================================================================\n\nStatus geral: 8/8 verificações OK\n\n[HEALTHY] STATUS FINAL: HEALTHY\n\nRelatório salvo em: logs/system-health-check.json\n",
-        "stderr_tail": ""
-      },
-      "finished_at": "2026-07-17T01:54:06.124072Z"
-    },
-    {
-      "title": "Restaurar telemetria triambiente no monitor operacional",
-      "description": "Corrigir ou repopular o status de sincronizacao entre local, GitHub e Ubuntu para devolver visibilidade real ao monitor.",
-      "priority": "high",
-      "status": "pending",
-      "auto_generated": true,
-      "source": "real-project-signals",
-      "id": "task-001",
-      "created_at": "2026-07-17T01:58:15.723653Z",
-      "selected_at": "2026-07-17T02:19:20.293676Z",
-      "selected_by": "autonomous-continuous-cycle",
-      "selection_reason": "phase=unphased; readiness=ready_local; queue_rank=na; director_rank=3"
-    },
-    {
-      "title": "Corrigir falhas concretas do validador de deploy",
-      "description": "Tratar os problemas apontados em logs/deploy-diagnostic.json para impedir deploy com erro silencioso.",
-      "priority": "high",
-      "status": "pending",
-      "auto_generated": true,
-      "source": "real-project-signals",
-      "id": "task-002",
-      "created_at": "2026-07-17T01:58:15.723684Z",
-      "assigned_to": [
-        "claude"
-      ],
-      "assignment_updated_at": "2026-07-17T01:58:18Z",
-      "started_at": "2026-07-17T02:19:20.596807Z",
-      "last_result": {
-        "status": "completed",
-        "summary": "Tarefa concluida sem incidentes.",
-        "tests": [
-          "python scripts/system-health-check.py"
-        ],
-        "exit_code": 0,
-        "stdout_tail": "0199.3 KB\n  [OK] logs/autonomous-cycle-report.json        - 4.6 KB\n  [OK] logs/autonomous-cycle-report.md          - 1.2 KB\n  [OK] logs/tri-environment-sync.json           - 0.8 KB\n\n4. VERIFICANDO APIs...\n  [OK] API Monitor existe\n  [OK] API Monitor schema atual reconhecido\n\n5. VERIFICANDO WORKFLOWS...\n  [OK] .github/workflows/24-7-continuous-agent.yml\n  [OK] .github/workflows/deploy.yml\n  [OK] .github/workflows/monitor-chat-responses.yml\n  [OK] .github/workflows/parallel-trio-executor.yml\n\n6. VERIFICANDO CONFIGURAÇÕES...\n  [OK] config/constants.php                     - Constantes\n  [OK] config/database.php                      - Banco de dados\n  [OK] .env.example                             - Template ENV\n  [OK] AUDITORIA-ESTRUTURA.md                   - Documentação auditoria\n  [OK] AGENTS-ACCESS-INDEX.md                   - Índice de agentes\n\n7. VERIFICANDO STATUS DOS AGENTES...\n  [OK] scripts/real-task-executor.py            - Executor real\n  [OK] scripts/chat-responder.py                - Responder chat\n  [OK] scripts/force-execution.py               - Força de execução\n  [OK] scripts/continuous-executor.py           - Executor contínuo\n  [OK] scripts/tri-environment-sync.js          - Sincronização triambiente JS\n\n8. VERIFICANDO DOCUMENTAÇÃO...\n  [OK] README.md                                - README\n  [OK] AGENTS-ACCESS-INDEX.md                   - Índice agentes\n  [OK] AUDITORIA-ESTRUTURA.md                   - Auditoria\n  [OK] AGENTS-STATUS-REPORT.md                  - Status agentes\n  [OK] OLIST-IMAGES-IMPORT-PLAN.md              - Plano Olist\n  [OK] DEPLOY-TROUBLESHOOTING.md                - Troubleshooting\n  [OK] docs/email-secrets-aliases.md            - Aliases email\n\n======================================================================\nRESUMO DE SAÚDE DO SISTEMA\n======================================================================\n\nStatus geral: 8/8 verificações OK\n\n[HEALTHY] STATUS FINAL: HEALTHY\n\nRelatório salvo em: logs/system-health-check.json\n",
-        "stderr_tail": ""
-      },
-      "finished_at": "2026-07-17T02:19:20.713504Z"
-    },
-    {
-      "title": "Reparar produtos reais do catalogo sem imagem valida",
-      "description": "Foram encontrados 203 produtos sem imagem valida no catalogo fallback; revisar cobertura visual desses SKUs.",
-      "priority": "high",
-      "status": "pending",
-      "auto_generated": true,
-      "source": "real-project-signals",
-      "id": "task-003",
-      "created_at": "2026-07-17T01:58:15.723711Z",
-      "assigned_to": [
-        "gemini"
-      ],
-      "assignment_updated_at": "2026-07-17T01:58:18Z"
-    }
-  ],
   "metadata": {
     "generated_at": "2026-07-12T03:00:00Z",
     "status": "active_integration_tasks",
     "description": "Ativar integrações Shopee, ML e Google Ads com credenciais do GitHub Secrets"
   },
-  "version": "1.1",
-  "created_at": "2026-07-17T01:54:05.933963Z"
+  "tasks": [
+    {
+      "task_id": "SHOPEE-001",
+      "type": "integration",
+      "action": "sync_shopee_catalog",
+      "title": "Sincronizar Catálogo com Shopee",
+      "description": "Conectar produtos ao Shopee mantendo preços sincronizados",
+      "priority": "high",
+      "status": "pending",
+      "assigned_to": ["claude", "gemini"],
+      "requires_secrets": [
+        "SHOPEE_PARTNER_ID",
+        "SHOPEE_PARTNER_KEY",
+        "SHOPEE_SHOP_ID",
+        "SHOPEE_REFRESH_TOKEN"
+      ],
+      "estimated_hours": 3,
+      "created_at": "2026-07-12T03:00:00Z"
+    },
+    {
+      "task_id": "SHOPEE-002",
+      "type": "integration",
+      "action": "sync_shopee_orders",
+      "title": "Sincronizar Pedidos do Shopee",
+      "description": "Importar pedidos do Shopee para o sistema",
+      "priority": "high",
+      "status": "pending",
+      "assigned_to": ["claude", "gemini"],
+      "requires_secrets": ["SHOPEE_SHOP_ID", "SHOPEE_ACCESS_TOKEN"],
+      "estimated_hours": 2,
+      "created_at": "2026-07-12T03:00:00Z"
+    },
+    {
+      "task_id": "ML-001",
+      "type": "integration",
+      "action": "sync_mercadolivre_catalog",
+      "title": "Sincronizar Catálogo com Mercado Livre",
+      "description": "Conectar produtos ao Mercado Livre com preços sincronizados",
+      "priority": "high",
+      "status": "pending",
+      "assigned_to": ["claude", "gemini"],
+      "requires_secrets": [
+        "ML_CLIENT_ID",
+        "ML_CLIENT_SECRET",
+        "ML_REDIRECT_URI",
+        "ML_SELLER_ID"
+      ],
+      "estimated_hours": 3,
+      "created_at": "2026-07-12T03:00:00Z"
+    },
+    {
+      "task_id": "ML-002",
+      "type": "integration",
+      "action": "sync_mercadolivre_orders",
+      "title": "Sincronizar Pedidos do Mercado Livre",
+      "description": "Importar pedidos do Mercado Livre para o sistema",
+      "priority": "high",
+      "status": "pending",
+      "assigned_to": ["claude", "gemini"],
+      "requires_secrets": ["ML_SELLER_ID", "ML_CLIENT_ID"],
+      "estimated_hours": 2,
+      "created_at": "2026-07-12T03:00:00Z"
+    },
+    {
+      "task_id": "GADS-001",
+      "type": "integration",
+      "action": "setup_google_ads",
+      "title": "Configurar Google Ads para Automação",
+      "description": "Preparar stack de Google Ads com rastreamento de conversões",
+      "priority": "medium",
+      "status": "pending",
+      "assigned_to": ["claude"],
+      "requires_secrets": [
+        "GOOGLE_ADS_CUSTOMER_ID",
+        "GOOGLE_ADS_DEVELOPER_TOKEN",
+        "GOOGLE_ADS_REFRESH_TOKEN"
+      ],
+      "requires_human_approval": false,
+      "estimated_hours": 4,
+      "created_at": "2026-07-12T03:00:00Z"
+    },
+    {
+      "task_id": "AUDIT-001",
+      "type": "monitoring",
+      "action": "audit_integrations_24_7",
+      "title": "Auditoria Contínua de Integrações",
+      "description": "Monitorar sincronizações Shopee, ML, Google Ads 24/7",
+      "priority": "high",
+      "status": "pending",
+      "assigned_to": ["claude", "gemini"],
+      "schedule": "*/30 * * * *",
+      "estimated_hours": 0.5,
+      "created_at": "2026-07-12T03:00:00Z"
+    }
+  ]
 }
