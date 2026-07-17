@@ -361,6 +361,7 @@ try {
 svo_json(200, [
     'ok' => true,
     'order_number' => $orderNumber,
+    'payment_session_token' => $paymentSessionToken,
     'status' => 'pending_confirmation',
     'payment_method' => $paymentMethod,
     'payment_label' => $record['payment_label'],
