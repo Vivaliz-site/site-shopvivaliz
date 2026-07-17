@@ -129,7 +129,7 @@ function svop_load_runtime_secrets(): void
     }
 }
 
-function svop_tiny_env_UNUSED_MARKER(string ...$keys): string
+function svop_tiny_env(string ...$keys): string
 {
     static $loaded = false;
     if (!$loaded) {
