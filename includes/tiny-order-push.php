@@ -175,11 +175,12 @@ function svtop_find_contact_id(string $token, string $cpfCnpj, string $name): ?i
 
 function svtop_create_contact(string $token, array $customer): ?int
 {
+    $docDigits = preg_replace('/\D/', '', (string)($customer['cpf'] ?? ''));
     $cep = preg_replace('/\D/', '', (string)($customer['cep'] ?? ''));
     $payload = [
         'nome'       => $customer['name'] ?? '',
-        'tipoPessoa' => 'F',
-        'cpfCnpj'    => preg_replace('/\D/', '', (string)($customer['cpf'] ?? '')),
+        'tipoPessoa' => strlen($docDigits) === 14 ? 'J' : 'F',
+        'cpfCnpj'    => $docDigits,
         'email'      => $customer['email'] ?? '',
         'fone'       => $customer['phone'] ?? '',
         'endereco'   => [
@@ -219,12 +220,22 @@ function svtop_push_order_tiny(array $order): ?string
     $notes = trim((string)($order['notes'] ?? ''));
     $obs = trim("Forma de pagamento: {$paymentMethod}\n" . $notes);
 
+    $docDigits = preg_replace('/\D/', '', (string)($c['cpf'] ?? ''));
+    if ($docDigits === '') {
+        throw new RuntimeException('Tiny: cliente sem CPF/CNPJ informado -- o ERP exige documento para criar/vincular o contato');
+    }
+
     $contactId = svtop_find_contact_id($token, (string)($c['cpf'] ?? ''), (string)($c['name'] ?? ''));
     if ($contactId === null) {
         $contactId = svtop_create_contact($token, $c);
     }
     if ($contactId === null) {
-        throw new RuntimeException('Tiny: nao foi possivel localizar nem criar o contato do cliente no ERP');
+        // Corrida entre pedidos concorrentes pode deixar o contato indexado com atraso no Tiny; tenta mais uma vez.
+        usleep(500000);
+        $contactId = svtop_find_contact_id($token, (string)($c['cpf'] ?? ''), (string)($c['name'] ?? ''));
+    }
+    if ($contactId === null) {
+        throw new RuntimeException('Tiny: nao foi possivel localizar nem criar o contato do cliente no ERP (documento: ' . $docDigits . ')');
     }
 
     $items = array_values(array_filter($order['items'] ?? [], static fn(array $i) => (int)($i['olist_product_id'] ?? 0) > 0));
