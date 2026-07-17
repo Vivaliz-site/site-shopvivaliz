@@ -10,8 +10,16 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
 $envFile = dirname(__DIR__) . '/.env';
+$logFile = dirname(__DIR__) . '/logs/olist-token-refresh.log';
+
+function svtr_log(string $msg): void
+{
+    global $logFile;
+    @file_put_contents($logFile, '[' . date('Y-m-d H:i:s') . '] ' . $msg . "\n", FILE_APPEND);
+}
 
 if (!is_file($envFile)) {
+    svtr_log('ERRO: .env não encontrado');
     http_response_code(500);
     echo json_encode(['erro' => '.env não encontrado']);
     exit;
@@ -34,6 +42,7 @@ $clientSecret = trim($env['OLIST_CLIENT_SECRET'] ?? '');
 $refreshToken = trim($env['OLIST_REFRESH_TOKEN'] ?? '');
 
 if (!$refreshToken) {
+    svtr_log('ERRO: refresh_token não configurado');
     http_response_code(400);
     echo json_encode(['erro' => 'refresh_token não configurado']);
     exit;
@@ -53,17 +62,26 @@ $postData = http_build_query([
 ]);
 
 $context = stream_context_create([
+    'http' => [
+        'method' => 'POST',
+        'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
+        'content' => $postData,
+        'timeout' => 30,
+        'ignore_errors' => true,
+    ],
     'https' => [
         'method' => 'POST',
         'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
         'content' => $postData,
         'timeout' => 30,
-    ]
+        'ignore_errors' => true,
+    ],
 ]);
 
 $response = @file_get_contents($tokenUrl, false, $context);
 
 if (!$response) {
+    svtr_log('ERRO: falha ao conectar com OAuth (sem resposta)');
     http_response_code(500);
     echo json_encode(['erro' => 'Falha ao conectar com OAuth']);
     exit;
@@ -72,6 +90,7 @@ if (!$response) {
 $tokenData = json_decode($response, true);
 
 if (!isset($tokenData['access_token'])) {
+    svtr_log('ERRO: refresh rejeitado pelo Tiny - ' . $response);
     http_response_code(401);
     echo json_encode(['erro' => 'Token não renovado', 'resposta' => $tokenData]);
     exit;
@@ -100,11 +119,20 @@ for ($i = 0; $i < count($keys); $i++) {
     }
 }
 
-file_put_contents($envFile, $envContent);
+$written = file_put_contents($envFile, $envContent);
+
+if ($written === false) {
+    svtr_log('ERRO CRITICO: refresh obtido do Tiny mas falha ao gravar em .env (permissao?)');
+    http_response_code(500);
+    echo json_encode(['erro' => 'Token obtido mas falha ao gravar em .env']);
+    exit;
+}
 
 // ============================================================
 // SUCESSO
 // ============================================================
+
+svtr_log('OK: token renovado, expires_in=' . ($tokenData['expires_in'] ?? 14400) . 's, bytes_gravados=' . $written);
 
 http_response_code(200);
 echo json_encode([
@@ -114,4 +142,3 @@ echo json_encode([
     'expires_in' => $tokenData['expires_in'] ?? 14400,
     'timestamp' => date('Y-m-d H:i:s'),
 ]);
-?>
