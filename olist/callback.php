@@ -126,7 +126,15 @@ foreach ($replacements as $key => $value) {
     }
 }
 
-file_put_contents($envFile, $envContent);
+$written = file_put_contents($envFile, $envContent);
+
+if ($written === false) {
+    http_response_code(500);
+    echo json_encode([
+        'erro' => 'Token obtido do Tiny mas falha ao gravar em .env (verifique permissao de escrita para o usuario do PHP)',
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    exit;
+}
 
 // ============================================================
 // SUCESSO!
