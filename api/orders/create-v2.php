@@ -334,7 +334,7 @@ try {
     $stmt->execute([
         ':user_id' => $sessionUserId,
         ':order_number' => $orderNumber,
-        ':olist_order_id' => $tinyOrderId,
+        ':olist_order_id' => null,
         ':email' => $email,
         ':total' => round($grandTotal, 2),
         ':status' => 'aguardando_pagamento',
