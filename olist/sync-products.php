@@ -419,6 +419,12 @@ function svs_mirror_catalog(array $fetched, string $catalogPath): array {
             $merged['price'] = $old['price'];
         }
 
+        // stock=null significa "fonte nao sabe" (fallback v2 sem dado real) --
+        // preserva o estoque anterior em vez de zerar o catalogo inteiro.
+        if (array_key_exists('stock', $new) && $new['stock'] === null) {
+            $merged['stock'] = (int)($old['stock'] ?? 0);
+        }
+
         if (!isset($seen[$key])) {
             $seen[$key] = true;
             $mirrored[] = $merged;
