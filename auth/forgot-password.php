@@ -25,11 +25,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-forgot-passwor
     $cpfDigits = preg_replace('/\D/', '', (string)($_POST['cpf'] ?? ''));
 
     if ($email === '' && $cpfDigits === '') {
-        $error = 'Informe seu email ou CPF cadastrado.';
+        $error = 'Informe seu email ou CPF/CNPJ cadastrado.';
     } elseif ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Informe um email válido.';
-    } elseif ($cpfDigits !== '' && strlen($cpfDigits) !== 11) {
-        $error = 'CPF inválido.';
+    } elseif ($cpfDigits !== '' && strlen($cpfDigits) !== 11 && strlen($cpfDigits) !== 14) {
+        $error = 'CPF/CNPJ inválido.';
     } else {
         try {
             $db = Database::getInstance()->getConnection();
