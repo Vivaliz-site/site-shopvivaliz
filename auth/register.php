@@ -319,6 +319,13 @@ $apple_auth_url = sv_social_apple_auth_url('register', '/');
             </div>
 
             <div class="form-group">
+                <label for="cpf">CPF (opcional)</label>
+                <input type="text" id="cpf" name="cpf" inputmode="numeric" maxlength="14"
+                    value="<?php echo htmlspecialchars($cpfInput); ?>"
+                    placeholder="000.000.000-00">
+            </div>
+
+            <div class="form-group">
                 <label for="password">Senha</label>
                 <input type="password" id="password" name="password" required
                     placeholder="••••••••">
