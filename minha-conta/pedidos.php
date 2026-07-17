@@ -105,6 +105,12 @@ require __DIR__ . '/../includes/account-chrome-top.php';
                         <button class="sv-btn secondary disabled" disabled title="Nota fiscal ainda não disponível para este pedido">NF-e (XML)</button>
                     <?php endif; ?>
 
+                    <?php if (!empty($order['label_url'])): ?>
+                        <a class="sv-btn secondary" href="<?php echo htmlspecialchars($order['label_url']); ?>" target="_blank" rel="noopener">Etiqueta de transporte</a>
+                    <?php else: ?>
+                        <button class="sv-btn secondary disabled" disabled title="Etiqueta ainda não gerada para este pedido">Etiqueta de transporte</button>
+                    <?php endif; ?>
+
                     <?php if ($hasItems): ?>
                         <button class="sv-btn sv-recompra-btn" data-order-id="<?php echo (int)$order['id']; ?>">🔁 Comprar novamente</button>
                     <?php else: ?>
