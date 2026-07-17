@@ -1,6 +1,45 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../includes/admin-guard.php';
+
+$ordersDir = dirname(__DIR__) . '/storage/orders';
+$files = is_dir($ordersDir) ? glob($ordersDir . '/*.json') : [];
+
+$clientes = [];
+foreach ($files as $file) {
+    $data = json_decode((string)@file_get_contents($file), true);
+    if (!is_array($data)) {
+        continue;
+    }
+    $customer = is_array($data['customer'] ?? null) ? $data['customer'] : [];
+    $email = trim((string)($customer['email'] ?? ''));
+    $key = $email !== '' ? strtolower($email) : trim((string)($customer['phone'] ?? ''));
+    if ($key === '') {
+        continue;
+    }
+
+    $items = is_array($data['items'] ?? null) ? $data['items'] : [];
+    $subtotal = array_reduce($items, fn($s, $i) => $s + (float)($i['price'] ?? 0) * (int)($i['quantity'] ?? 1), 0.0);
+    $total = $subtotal + (float)($data['shipping_total'] ?? 0);
+    $status = (string)($data['status'] ?? '');
+    $isPaid = in_array($status, ['payment_approved', 'pagamento_aprovado', 'nota_fiscal_enviada', 'pronto_para_enviar', 'enviado', 'entregue'], true);
+
+    if (!isset($clientes[$key])) {
+        $clientes[$key] = [
+            'nome' => $customer['name'] ?? '(sem nome)',
+            'email' => $email,
+            'telefone' => $customer['phone'] ?? '',
+            'pedidos' => 0,
+            'total_gasto' => 0.0,
+        ];
+    }
+    $clientes[$key]['pedidos']++;
+    if ($isPaid) {
+        $clientes[$key]['total_gasto'] += $total;
+    }
+}
+
+uasort($clientes, fn($a, $b) => $b['total_gasto'] <=> $a['total_gasto']);
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -14,15 +53,11 @@ require_once __DIR__ . '/../includes/admin-guard.php';
         .navbar { background: #1a1a2e; padding: 1rem; color: white; }
         .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
         .page-title { font-size: 2rem; margin-bottom: 2rem; color: #333; }
-        .btn { padding: 0.75rem 1.5rem; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; }
         .clients-table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         .clients-table th { background: #f8f9fa; padding: 1rem; text-align: left; font-weight: 600; border-bottom: 2px solid #dee2e6; }
         .clients-table td { padding: 1rem; border-bottom: 1px solid #dee2e6; }
         .clients-table tr:hover { background: #f8f9fa; }
         .empty-state { text-align: center; padding: 3rem; color: #666; }
-        .status { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.85rem; font-weight: 600; }
-        .status-active { background: #d4edda; color: #155724; }
-        .status-inactive { background: #f8d7da; color: #721c24; }
     </style>
 </head>
 <body>
@@ -36,7 +71,7 @@ require_once __DIR__ . '/../includes/admin-guard.php';
     </div>
 
     <div class="container">
-        <h1 class="page-title">Gestão de Clientes</h1>
+        <h1 class="page-title">Gestão de Clientes (<?= count($clientes) ?>)</h1>
 
         <div style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
             <table class="clients-table">
@@ -46,42 +81,26 @@ require_once __DIR__ . '/../includes/admin-guard.php';
                         <th>Email</th>
                         <th>Telefone</th>
                         <th>Pedidos</th>
-                        <th>Total Gasto</th>
-                        <th>Ações</th>
+                        <th>Total Pago</th>
                     </tr>
                 </thead>
-                <tbody id="clients-body">
-                    <tr><td colspan="6" class="empty-state">Carregando clientes... (dados vêm de pedidos realizados)</td></tr>
+                <tbody>
+                    <?php if (!$clientes): ?>
+                        <tr><td colspan="5" class="empty-state">Nenhum cliente ainda. Clientes aparecem aqui após o primeiro pedido no checkout.</td></tr>
+                    <?php else: ?>
+                        <?php foreach ($clientes as $c): ?>
+                        <tr>
+                            <td><?= htmlspecialchars($c['nome']) ?></td>
+                            <td><?= htmlspecialchars($c['email']) ?></td>
+                            <td><?= htmlspecialchars($c['telefone']) ?></td>
+                            <td><?= (int)$c['pedidos'] ?></td>
+                            <td>R$ <?= number_format($c['total_gasto'], 2, ',', '.') ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
-
-        <p style="margin-top: 2rem; color: #666; font-size: 0.9rem;">
-            <strong>ℹ️ Nota:</strong> Clientes são criados automaticamente quando fazem pedidos no checkout.
-            Integração com CRM/banco de dados em breve.
-        </p>
     </div>
-
-    <script>
-    // Placeholder - dados viriam do banco de dados
-    document.getElementById('clients-body').innerHTML = `
-        <tr>
-            <td>João Silva</td>
-            <td>joao@example.com</td>
-            <td>11987654321</td>
-            <td>3</td>
-            <td>R$ 450,00</td>
-            <td><button style="padding:0.5rem 1rem; background:#667eea; color:white; border:none; border-radius:4px; cursor:pointer;">Ver</button></td>
-        </tr>
-        <tr>
-            <td>Maria Santos</td>
-            <td>maria@example.com</td>
-            <td>11987654322</td>
-            <td>1</td>
-            <td>R$ 120,00</td>
-            <td><button style="padding:0.5rem 1rem; background:#667eea; color:white; border:none; border-radius:4px; cursor:pointer;">Ver</button></td>
-        </tr>
-    `;
-    </script>
 </body>
 </html>

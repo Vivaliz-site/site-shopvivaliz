@@ -188,7 +188,6 @@ $codename = (string)($version['codename'] ?? '');
             <div class="admin-link-list">
                 <a class="btn btn-secondary" href="/admin/monitor/" target="_blank" rel="noreferrer">Monitor</a>
                 <a class="btn btn-secondary" href="/admin/squad-chat.php" target="_blank" rel="noreferrer">Squad Chat</a>
-                <a class="btn btn-secondary" href="/admin/ai-pipeline.html" target="_blank" rel="noreferrer">AI Pipeline</a>
                 <a class="btn btn-secondary" href="/api/catalog/products.php?limit=200" target="_blank" rel="noreferrer">Ver JSON</a>
             </div>
         </section>
