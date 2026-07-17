@@ -22,23 +22,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-forgot-passwor
     $error = 'Sua sessão expirou. Recarregue a página e tente novamente.';
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim((string)($_POST['email'] ?? ''));
+    $cpfDigits = preg_replace('/\D/', '', (string)($_POST['cpf'] ?? ''));
 
-    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    if ($email === '' && $cpfDigits === '') {
+        $error = 'Informe seu email ou CPF cadastrado.';
+    } elseif ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Informe um email válido.';
+    } elseif ($cpfDigits !== '' && strlen($cpfDigits) !== 11) {
+        $error = 'CPF inválido.';
     } else {
         try {
             $db = Database::getInstance()->getConnection();
-            $stmt = $db->prepare('SELECT id, name FROM users WHERE email = ? LIMIT 1');
-            $stmt->bind_param('s', $email);
+            if ($email !== '') {
+                $stmt = $db->prepare('SELECT id, name, email FROM users WHERE email = ? LIMIT 1');
+                $stmt->bind_param('s', $email);
+            } else {
+                $stmt = $db->prepare('SELECT id, name, email FROM users WHERE cpf = ? LIMIT 1');
+                $stmt->bind_param('s', $cpfDigits);
+            }
             $stmt->execute();
             $user = $stmt->get_result()->fetch_assoc();
 
             // Sempre mostra a mesma mensagem de sucesso, exista ou nao a
-            // conta -- nao vazar pra quem esta tentando descobrir emails
-            // cadastrados se um email existe ou nao no sistema.
+            // conta -- nao vazar pra quem esta tentando descobrir
+            // emails/CPFs cadastrados se uma conta existe ou nao no sistema.
+            // As instrucoes sempre vao pro email JA cadastrado na conta,
+            // nunca exibido na tela -- assim quem "esqueceu o email" tambem
+            // recupera o acesso sem a gente vazar qual email esta associado
+            // aquele CPF pra quem esta perguntando.
             $sent = true;
 
             if ($user) {
+                $email = (string)$user['email'];
                 $token = bin2hex(random_bytes(32));
                 $tokenHash = hash('sha256', $token);
 
