@@ -115,7 +115,12 @@ function svo_append_legacy_order_log(array $order): void
 function svo_payment_method(string $value): string
 {
     $normalized = strtolower(trim($value));
-    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia'];
+    // 'mercado_pago' e o unico metodo oferecido no formulario real do checkout
+    // (api/checkout, ver checkout.php) -- estava faltando aqui, entao todo
+    // pedido pago via Mercado Pago era silenciosamente rebaixado para 'pix'
+    // no backend, quebrando o fluxo real de pagamento (create-preference.php
+    // nunca era chamado corretamente).
+    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia', 'mercado_pago'];
     return in_array($normalized, $allowed, true) ? $normalized : 'pix';
 }
 
