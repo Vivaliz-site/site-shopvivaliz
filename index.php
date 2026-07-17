@@ -18,6 +18,11 @@ function sv_home_esc(string $value): string
     return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 }
 
+function sv_home_lower(string $value): string
+{
+    return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+}
+
 function sv_home_default_image(): string
 {
     return '/images/logo-vivaliz-square.png';
@@ -223,11 +228,35 @@ function sv_home_top_categories(int $limit = 8): array
     }
 
     arsort($counts);
+
+    // Respeita a ordem definida no editor visual (config/layout-config.json) quando a
+    // categoria do editor casa (case-insensitive) com uma categoria real do catálogo.
+    $layoutLoader = __DIR__ . '/includes/layout-loader.php';
+    $orderedNames = [];
+    if (is_file($layoutLoader)) {
+        require_once $layoutLoader;
+        $catalogByKey = [];
+        foreach (array_keys($counts) as $name) {
+            $catalogByKey[sv_home_lower($name)] = $name;
+        }
+        foreach (sv_get_categories_order() as $key) {
+            $key = sv_home_lower(trim((string)$key));
+            if (isset($catalogByKey[$key])) {
+                $orderedNames[] = $catalogByKey[$key];
+            }
+        }
+    }
+
+    $orderedNames = array_values(array_unique(array_merge($orderedNames, array_keys($counts))));
+
     $result = [];
-    foreach ($counts as $category => $count) {
+    foreach ($orderedNames as $category) {
+        if (!isset($counts[$category])) {
+            continue;
+        }
         $result[] = [
             'name' => $category,
-            'count' => $count,
+            'count' => $counts[$category],
             'icon' => sv_home_category_icon($category),
             'href' => '/catalogo?categoria=' . rawurlencode($category),
         ];
@@ -239,7 +268,14 @@ function sv_home_top_categories(int $limit = 8): array
     return $result;
 }
 
-$featuredProducts = sv_home_featured_products(8);
+$layoutLoaderFile = __DIR__ . '/includes/layout-loader.php';
+if (is_file($layoutLoaderFile)) {
+    require_once $layoutLoaderFile;
+}
+$homeItemsPerPage = function_exists('sv_get_products_config')
+    ? (int)(sv_get_products_config()['itemsPerPage'] ?? 8)
+    : 8;
+$featuredProducts = sv_home_featured_products($homeItemsPerPage > 0 ? $homeItemsPerPage : 8);
 $featuredProductsCount = count($featuredProducts);
 $catalogCount = sv_home_catalog_count();
 $heroBanners = sv_home_banners();
