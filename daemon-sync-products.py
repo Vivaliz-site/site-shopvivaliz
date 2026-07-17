@@ -245,6 +245,9 @@ def sync_once(workers: int) -> bool:
     if not products:
         print("[!] Nenhum detalhe utilizável; cache existente preservado")
         return False
+    kits_updated = apply_kit_stock(products)
+    if kits_updated:
+        print(f"[+] Estoque recalculado pela composicao em {kits_updated} produtos tipo kit")
     output = save_products(products)
     with_stock = sum(1 for item in products if int(item.get("estoque_disponivel") or 0) > 0)
     with_images = sum(1 for item in products if isinstance(item.get("anexos"), list) and item["anexos"])
