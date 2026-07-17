@@ -115,10 +115,26 @@ class TaskAnalyzer {
 
 class ModelRouter {
   constructor(config = {}) {
+    // Load native env variables just in case
+    const envPath = path.join(__dirname, '../.env');
+    if (fs.existsSync(envPath)) {
+      const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+      for (const line of lines) {
+        const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+        if (match) {
+          const key = match[1];
+          let value = match[2] || '';
+          if (value.startsWith('"') && value.endsWith('"')) value = value.substring(1, value.length - 1);
+          else if (value.startsWith("'") && value.endsWith("'")) value = value.substring(1, value.length - 1);
+          if (!process.env[key]) process.env[key] = value;
+        }
+      }
+    }
+
     this.config = {
-      local_model: 'qwen2.5-coder:1.5b-q2_K',
-      local_fallback: 'deepseek-coder:1.3b-instruct-q2_K',
-      ollama_url: 'http://localhost:11434',
+      local_model: process.env.LOCAL_AI_MODEL || 'qwen2.5-coder:1.5b',
+      local_fallback: 'mistral:7b-instruct-q4_K_M',
+      ollama_url: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
       openai_api_key: process.env.OPENAI_API_KEY,
       anthropic_api_key: process.env.ANTHROPIC_API_KEY,
       google_api_key: process.env.GOOGLE_API_KEY,
@@ -143,6 +159,8 @@ class ModelRouter {
    */
   route(task) {
     const analysis = TaskAnalyzer.analyze(task);
+    const localMode = (process.env.LOCAL_AI_MODE === 'local-only');
+    const allowPaid = (process.env.ALLOW_PAID_PROVIDERS === 'true');
 
     // 1. Bloqueio por risco
     if (analysis.risk_level === 'critical') {
@@ -150,6 +168,17 @@ class ModelRouter {
         decision: 'REQUIRE_HUMAN_APPROVAL',
         reason: analysis.reason,
         model: null,
+        estimated_cost: 0
+      };
+    }
+
+    // Se estiver no modo estritamente local (local-only), forçamos o uso do modelo local
+    if (localMode || !allowPaid) {
+      return {
+        decision: 'USE_LOCAL',
+        reason: [...analysis.reason, 'Política local-only ativa: forçando execução local.'],
+        model: this.config.local_model,
+        provider: 'ollama',
         estimated_cost: 0
       };
     }
@@ -239,7 +268,7 @@ class ModelRouter {
       'gpt-4-turbo': { input: 0.00003, output: 0.0006 },
       'claude-opus-4': { input: 0.000075, output: 0.00024 },
       'gemini-pro': { input: 0.00001, output: 0.00002 },
-      'qwen2.5-coder:1.5b-q2_K': { input: 0, output: 0 }
+      'qwen2.5-coder:1.5b': { input: 0, output: 0 }
     };
 
     const rate = costs[model] || { input: 0, output: 0 };
