@@ -18,6 +18,26 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
+function svmlopt_lower(string $value): string
+{
+    return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+}
+
+function svmlopt_upper(string $value): string
+{
+    return function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
+}
+
+function svmlopt_len(string $value): int
+{
+    return function_exists('mb_strlen') ? mb_strlen($value, 'UTF-8') : strlen($value);
+}
+
+function svmlopt_substr(string $value, int $start, int $length): string
+{
+    return function_exists('mb_substr') ? mb_substr($value, $start, $length, 'UTF-8') : substr($value, $start, $length);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -55,7 +75,7 @@ $KEYWORDS_BY_CATEGORY = [
     'default'     => ['kit', 'conjunto', 'original', 'novo', 'qualidade', 'profissional'],
 ];
 
-$catLower = mb_strtolower($category);
+$catLower = svmlopt_lower($category);
 $keywords = $KEYWORDS_BY_CATEGORY['default'];
 foreach ($KEYWORDS_BY_CATEGORY as $key => $kws) {
     if ($key !== 'default' && str_contains($catLower, $key)) {
@@ -83,8 +103,8 @@ foreach ($ML_CATEGORIES as $key => $cat) {
 /* ------------------------------------------------------------------ *
  * Análise do título                                                    *
  * ------------------------------------------------------------------ */
-$titleWords = mb_strtolower($title);
-$titleLen   = mb_strlen($title);
+$titleWords = svmlopt_lower($title);
+$titleLen   = svmlopt_len($title);
 $issues     = [];
 $suggestions = [];
 
@@ -103,7 +123,7 @@ if (!preg_match('/\d/', $title)) {
 }
 
 // Regra 3: capitalização — ML prefere Título Case sem todas maiúsculas
-if ($title === mb_strtoupper($title)) {
+if ($title === svmlopt_upper($title)) {
     $issues[] = 'Evite CAPS LOCK completo — use Título Case para melhor CTR.';
 }
 
@@ -111,7 +131,7 @@ if ($title === mb_strtoupper($title)) {
 $foundKws = [];
 $missingKws = [];
 foreach (array_slice($keywords, 0, 6) as $kw) {
-    if (str_contains($titleWords, mb_strtolower($kw))) {
+    if (str_contains($titleWords, svmlopt_lower($kw))) {
         $foundKws[] = $kw;
     } else {
         $missingKws[] = $kw;
@@ -134,7 +154,7 @@ if ($price > 0 && $price < 5) {
 // Regra 6: descrição presente
 if ($description === '') {
     $issues[] = 'Descrição ausente — anúncios com descrição convertem melhor.';
-} elseif (mb_strlen($description) < 100) {
+} elseif (svmlopt_len($description) < 100) {
     $issues[] = 'Descrição muito curta — recomendado mínimo 100 caracteres.';
 } else {
     $suggestions[] = 'Descrição presente com comprimento adequado.';
@@ -148,12 +168,12 @@ $optimizedTitle = $title;
 if (count($missingKws) > 0 && $titleLen < 55) {
     $toAdd = current($missingKws);
     $candidate = $optimizedTitle . ' ' . ucfirst($toAdd);
-    if (mb_strlen($candidate) <= 60) {
+    if (svmlopt_len($candidate) <= 60) {
         $optimizedTitle = $candidate;
     }
 }
 // Trunca para segurança
-$optimizedTitle = mb_substr($optimizedTitle, 0, 60);
+$optimizedTitle = svmlopt_substr($optimizedTitle, 0, 60);
 
 /* ------------------------------------------------------------------ *
  * Score de qualidade do anúncio (0-100)                               *
