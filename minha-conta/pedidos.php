@@ -17,7 +17,7 @@ try {
     $pdo = sv_pdo();
     $stmt = $pdo->prepare(
         'SELECT id, order_number, olist_order_id, order_total, order_status, payment_method,
-                tracking_number, estimated_delivery, items_json, nf_pdf_url, nf_xml_url, created_at
+                tracking_number, estimated_delivery, items_json, nf_pdf_url, nf_xml_url, label_url, created_at
          FROM orders WHERE user_id = :uid ORDER BY created_at DESC LIMIT 50'
     );
     $stmt->execute([':uid' => $svAccountUser['id']]);
@@ -103,6 +103,12 @@ require __DIR__ . '/../includes/account-chrome-top.php';
                         <a class="sv-btn secondary" href="<?php echo htmlspecialchars($order['nf_xml_url']); ?>" target="_blank" rel="noopener">NF-e (XML)</a>
                     <?php else: ?>
                         <button class="sv-btn secondary disabled" disabled title="Nota fiscal ainda não disponível para este pedido">NF-e (XML)</button>
+                    <?php endif; ?>
+
+                    <?php if (!empty($order['label_url'])): ?>
+                        <a class="sv-btn secondary" href="<?php echo htmlspecialchars($order['label_url']); ?>" target="_blank" rel="noopener">Etiqueta de transporte</a>
+                    <?php else: ?>
+                        <button class="sv-btn secondary disabled" disabled title="Etiqueta ainda não gerada para este pedido">Etiqueta de transporte</button>
                     <?php endif; ?>
 
                     <?php if ($hasItems): ?>
