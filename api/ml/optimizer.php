@@ -70,7 +70,7 @@ $KEYWORDS_BY_CATEGORY = [
     'default'     => ['kit', 'conjunto', 'original', 'novo', 'qualidade', 'profissional'],
 ];
 
-$catLower = mb_strtolower($category);
+$catLower = svmlopt_lower($category);
 $keywords = $KEYWORDS_BY_CATEGORY['default'];
 foreach ($KEYWORDS_BY_CATEGORY as $key => $kws) {
     if ($key !== 'default' && str_contains($catLower, $key)) {
