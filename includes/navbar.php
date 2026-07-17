@@ -160,8 +160,8 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
                 <div class="gamification-goal-marker" id="goal-150-marker" title="Meta R$ 150: Cupom VIVALIZ5"
                      style="position:absolute; left:50%; top:-4px; width:16px; height:16px; border-radius:50%; background:#fff; border:2.5px solid #cbd5e1; transform:translateX(-50%); display:flex; align-items:center; justify-content:center; font-size:8px; z-index:2; transition:all 0.3s; cursor:pointer;">🎁</div>
                 <!-- Goal 2 Marker: Frete Gratis (visibilidade controlada via JS conforme configuracao no admin) -->
-                <div class="gamification-goal-marker" id="goal-299-marker" data-free-shipping-marker="1" title="Frete Grátis" hidden
-                     style="position:absolute; right:0; top:-4px; width:16px; height:16px; border-radius:50%; background:#fff; border:2.5px solid #cbd5e1; display:flex; align-items:center; justify-content:center; font-size:8px; z-index:2; transition:all 0.3s; cursor:pointer;">🚚</div>
+                <div class="gamification-goal-marker" id="goal-299-marker" data-free-shipping-marker="1" title="Frete Grátis"
+                     style="position:absolute; right:0; top:-4px; width:16px; height:16px; border-radius:50%; background:#fff; border:2.5px solid #cbd5e1; display:none; align-items:center; justify-content:center; font-size:8px; z-index:2; transition:all 0.3s; cursor:pointer;">🚚</div>
             </div>
         </div>
         <a href="/carrinho" class="btn btn-primary btn-large" style="width:100%; display:block; text-align:center;">Ir para o Checkout</a>
