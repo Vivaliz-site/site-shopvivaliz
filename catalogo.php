@@ -32,7 +32,7 @@ function sv_catalog_load(): array
     return $data = svcr_products();
 }
 
-function sv_catalog_products(int $limit, string $query, string $category = ''): array
+function sv_catalog_products(int $limit, string $query, string $category = '', int $offset = 0): array
 {
     $decoded = sv_catalog_load();
     if ($decoded === []) {
@@ -40,6 +40,7 @@ function sv_catalog_products(int $limit, string $query, string $category = ''): 
     }
 
     $products = [];
+    $skipped = 0;
     foreach ($decoded as $row) {
         if (!is_array($row)) continue;
         $sku  = trim((string)($row['sku'] ?? ''));
@@ -47,6 +48,10 @@ function sv_catalog_products(int $limit, string $query, string $category = ''): 
         $cat  = trim((string)($row['category'] ?? ''));
         if ($query !== '' && stripos($sku . ' ' . $name, $query) === false) continue;
         if ($category !== '' && $cat !== $category) continue;
+        if ($skipped < $offset) {
+            $skipped++;
+            continue;
+        }
         $products[] = [
             'sku'              => $sku !== '' ? $sku : (string)($row['id'] ?? 'sem-sku'),
             'name'             => $name !== '' ? $name : 'Produto Vivaliz',
@@ -63,6 +68,22 @@ function sv_catalog_products(int $limit, string $query, string $category = ''): 
     }
 
     return $products;
+}
+
+function sv_catalog_count_matching(string $query, string $category = ''): int
+{
+    $decoded = sv_catalog_load();
+    $count = 0;
+    foreach ($decoded as $row) {
+        if (!is_array($row)) continue;
+        $sku  = trim((string)($row['sku'] ?? ''));
+        $name = trim((string)($row['name'] ?? ''));
+        $cat  = trim((string)($row['category'] ?? ''));
+        if ($query !== '' && stripos($sku . ' ' . $name, $query) === false) continue;
+        if ($category !== '' && $cat !== $category) continue;
+        $count++;
+    }
+    return $count;
 }
 
 function sv_catalog_categories(): array
