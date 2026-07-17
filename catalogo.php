@@ -362,6 +362,18 @@ $svNavCurrent = 'catalogo';
                 </article>
             <?php endforeach; ?>
         </section>
+
+        <?php if ($totalPages > 1): ?>
+        <nav class="container catalog-pagination" aria-label="Paginação do catálogo" style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:30px 0;">
+            <?php if ($currentPage > 1): ?>
+                <a class="btn btn-secondary" href="<?= sv_catalog_esc(sv_catalog_page_url($currentPage - 1, $query, $category)) ?>">&laquo; Anterior</a>
+            <?php endif; ?>
+            <span class="muted">Página <?= $currentPage ?> de <?= $totalPages ?></span>
+            <?php if ($currentPage < $totalPages): ?>
+                <a class="btn btn-secondary" href="<?= sv_catalog_esc(sv_catalog_page_url($currentPage + 1, $query, $category)) ?>">Próxima &raquo;</a>
+            <?php endif; ?>
+        </nav>
+        <?php endif; ?>
     </main>
 
     <?php include __DIR__ . '/includes/footer.php'; ?>
