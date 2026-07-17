@@ -34,9 +34,20 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
         if isinstance(attachment, dict) and str(attachment.get("url", "")).startswith("https://"):
             attachments.append({"url": str(attachment["url"])})
     quantity = max(0, int(item.get("estoque_disponivel") or stock.get("quantidade") or 0))
+    kit_composition = []
+    for component in item.get("kit", []) if isinstance(item.get("kit"), list) else []:
+        if not isinstance(component, dict):
+            continue
+        produto = component.get("produto") if isinstance(component.get("produto"), dict) else {}
+        sku = str(produto.get("sku") or "").strip()
+        qty = int(component.get("quantidade") or 0)
+        if sku and qty > 0:
+            kit_composition.append({"sku": sku, "quantidade": qty})
     return {
         "id": item.get("id"),
         "sku": str(item.get("sku") or item.get("codigo") or "").strip(),
+        "tipo": str(item.get("tipo") or "P"),
+        "kit": kit_composition,
         "descricao": str(item.get("descricao") or item.get("nome") or "").strip(),
         "descricaoComplementar": str(item.get("descricaoComplementar") or item.get("descricao_complementar") or "").strip(),
         "situacao": str(item.get("situacao") or "A"),
