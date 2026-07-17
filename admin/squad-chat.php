@@ -5,6 +5,7 @@
  * Acesse /admin/squad-chat.php em vez de /admin/squad-chat.html.
  */
 declare(strict_types=1);
+require_once dirname(__DIR__) . '/includes/admin-guard.php';
 require_once dirname(__DIR__) . '/config/bootstrap-env.php';
 
 $serverToken = getenv('SQUAD_TOKEN') ?: '';
