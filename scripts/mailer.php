@@ -135,6 +135,67 @@ function send_password_reset_email(string $email, string $name, string $reset_to
     return send_email($email, $subject, $html);
 }
 
+function svmp_send_pix_qr_email(
+    string $email,
+    string $name,
+    string $orderNumber,
+    float $total,
+    string $qrCode,
+    string $qrCodeBase64
+): bool {
+    $config = get_mailer_config();
+    $totalFmt = number_format($total, 2, ',', '.');
+    $subject = "Pague com Pix - Pedido $orderNumber - ShopVivaliz";
+
+    $html = "<h2>Oi $name,</h2>";
+    $html .= "<p>Recebemos seu pedido <strong>#$orderNumber</strong>! Falta só o pagamento via Pix para confirmarmos.</p>";
+    $html .= "<p><strong>Valor:</strong> R$ $totalFmt</p>";
+    if ($qrCodeBase64 !== '') {
+        $html .= "<p>Escaneie o QR Code abaixo no app do seu banco:</p>";
+        $html .= "<p><img src=\"cid:pixqrcode\" alt=\"QR Code Pix\" style=\"max-width:260px;\"></p>";
+    }
+    if ($qrCode !== '') {
+        $html .= "<p>Ou copie e cole o código Pix:</p>";
+        $html .= "<p style=\"background:#f4f4f4;padding:12px;border-radius:6px;word-break:break-all;font-family:monospace;font-size:12px;\">" . htmlspecialchars($qrCode) . "</p>";
+    }
+    $html .= "<p>O Pix é aprovado na hora. Assim que identificarmos o pagamento, você recebe a confirmação por email.</p>";
+
+    if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
+        return false;
+    }
+
+    try {
+        $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+        $mail->isSMTP();
+        $mail->Host = $config['smtp_host'];
+        $mail->Port = $config['smtp_port'];
+        $mail->SMTPSecure = $config['smtp_secure'];
+        $mail->SMTPAuth = true;
+        $mail->Timeout = 30;
+        $mail->Username = $config['smtp_user'];
+        $mail->Password = $config['smtp_pass'];
+        $mail->setFrom($config['from_email'], $config['from_name']);
+        $mail->addAddress($email);
+        $mail->Subject = $subject;
+        $mail->isHTML(true);
+        $mail->Body = $html;
+        $mail->CharSet = 'UTF-8';
+        $mail->Encoding = '8bit';
+
+        if ($qrCodeBase64 !== '') {
+            $decoded = base64_decode($qrCodeBase64, true);
+            if ($decoded !== false) {
+                $mail->addStringEmbeddedImage($decoded, 'pixqrcode', 'pix-qrcode.png', 'base64', 'image/png');
+            }
+        }
+
+        return $mail->send();
+    } catch (Exception $e) {
+        error_log('PHPMailer error (pix qr): ' . $e->getMessage());
+        return false;
+    }
+}
+
 function send_order_confirmation_email(
     string $email,
     string $name,
