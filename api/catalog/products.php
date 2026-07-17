@@ -12,67 +12,6 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-function get_erp_token(): ?string
-{
-    $root = dirname(__DIR__, 2);
-
-    // Token file
-    $token_file = $root . '/storage/private/tokens.json';
-    if (is_file($token_file) && is_readable($token_file)) {
-        $tokens = json_decode(file_get_contents($token_file), true);
-        if (is_array($tokens)) {
-            return $tokens['OLIST_ACCESS_TOKEN'] ?? $tokens['TINY_ACCESS_TOKEN'] ?? null;
-        }
-    }
-
-    // .env
-    $env_file = $root . '/.env';
-    if (is_file($env_file)) {
-        foreach (file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-            if (str_starts_with($line, 'OLIST_ACCESS_TOKEN=') || str_starts_with($line, 'TINY_ACCESS_TOKEN=')) {
-                $parts = explode('=', $line, 2);
-                return trim(trim($parts[1] ?? ''), "\"'");
-            }
-        }
-    }
-
-    return null;
-}
-
-function fetch_erp_products(int $page = 1, int $limit = 100): array
-{
-    $token = get_erp_token();
-    if (!$token) {
-        return [];
-    }
-
-    // API V3 (Tiny Public API)
-    $offset = ($page - 1) * $limit;
-    $url = "https://api.tiny.com.br/public-api/v3/produtos?limit={$limit}&offset={$offset}";
-
-    $context = stream_context_create([
-        'https' => [
-            'method' => 'GET',
-            'header' => "Authorization: Bearer {$token}\r\nAccept: application/json\r\n",
-            'timeout' => 15,
-        ]
-    ]);
-
-    $response = @file_get_contents($url, false, $context);
-    if (!$response) {
-        return [];
-    }
-
-    $data = json_decode($response, true);
-
-    // V3 retorna em 'itens' dentro de resposta estruturada
-    if (isset($data['itens']) && is_array($data['itens'])) {
-        return $data['itens'];
-    }
-
-    return is_array($data) ? $data : [];
-}
-
 function svcat_search_normalize(string $value): string
 {
     static $accents = [
