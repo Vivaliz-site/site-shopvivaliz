@@ -159,7 +159,7 @@ function initFreeShippingProgress() {
             }
             const FREE_SHIPPING_LIMIT = cfg.threshold;
             wrappers.forEach(function (w) { w.style.display = ''; });
-            markers.forEach(function (m) { m.hidden = false; });
+            markers.forEach(function (m) { m.style.display = 'flex'; });
 
             window.updateFreeShippingVisual = function() {
                 let totalStr = cartTotalEl.innerText.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
