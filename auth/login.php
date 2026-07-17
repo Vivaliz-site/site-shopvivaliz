@@ -265,6 +265,10 @@ $google_auth_url = sv_social_google_auth_url('login', $redirectTo);
             <button type="submit" class="btn-primary">Entrar</button>
         </form>
 
+        <div class="footer-link" style="margin-top:12px;">
+            <a href="/auth/forgot-password.php">Esqueci minha senha</a>
+        </div>
+
         <div class="divider">OU</div>
 
         <div class="social-buttons">
