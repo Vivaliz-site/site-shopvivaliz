@@ -29,13 +29,23 @@ if ($auth_header === '' && function_exists('getallheaders')) {
     }
 }
 
-if (empty($webhook_token) || !str_starts_with($auth_header, 'Bearer ')) {
+// O painel de Webhooks da Tiny (Configuracoes > Webhooks) so aceita uma URL
+// por evento, sem campo de header customizado -- entao nao ha como a Tiny
+// mandar "Authorization: Bearer ...". Aceita o token tambem via query string
+// (?token=...) pra poder embutir na propria URL cadastrada no painel.
+$provided_token = '';
+if ($auth_header !== '' && str_starts_with($auth_header, 'Bearer ')) {
+    $provided_token = substr($auth_header, 7);
+} elseif (isset($_GET['token'])) {
+    $provided_token = (string)$_GET['token'];
+}
+
+if (empty($webhook_token) || $provided_token === '') {
     http_response_code(401);
     echo json_encode(['error' => 'Unauthorized']);
     exit;
 }
 
-$provided_token = substr($auth_header, 7);
 if (!hash_equals($webhook_token, $provided_token)) {
     http_response_code(403);
     echo json_encode(['error' => 'Forbidden']);
