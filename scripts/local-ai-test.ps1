@@ -55,17 +55,17 @@ $ReportLines = @(
     "# Relatorio de Teste de IA Local - ShopVivaliz",
     "",
     "- **Data/Hora:** $(Get-Date -Format g)",
-    "- **ID da Tarefa:** `$TaskId`",
-    "- **Status da Tarefa:** `$($TaskDetails.status)`",
-    "- **Provedor Utilizado:** `$($ResultLog.provider)`",
-    "- **Modelo Utilizado:** `$($ResultLog.model)`",
-    "- **Tempo de Execucao:** `$($ResultLog.execution_time_ms) ms`",
-    "- **Custo Financeiro:** `$($ResultLog.actual_cost) USD`",
-    "- **Execucao Simulada (Mock):** `$($ResultLog.simulated)`",
+    "- **ID da Tarefa:** $TaskId",
+    "- **Status da Tarefa:** $($TaskDetails.status)",
+    "- **Provedor Utilizado:** $($ResultLog.provider)",
+    "- **Modelo Utilizado:** $($ResultLog.model)",
+    "- **Tempo de Execucao:** $($ResultLog.execution_time_ms) ms",
+    "- **Custo Financeiro:** $($ResultLog.actual_cost) USD",
+    "- **Execucao Simulada (Mock):** $($ResultLog.simulated)",
     "",
     "## Output do Modelo",
     "```text",
-    $ResultLog.result,
+    "$($ResultLog.result)",
     "```",
     "",
     "## Criterios de Sucesso"
@@ -78,16 +78,16 @@ $PassCost = $ResultLog.actual_cost -eq 0
 $PassSimulated = $ResultLog.simulated -eq $false
 
 if ($PassOllama -and $PassModel -and $PassCost -and $PassSimulated) {
-    $ReportLines += "- **Inferencia Local Real:** `PASS`"
-    $ReportLines += "- **Provedor Ollama:** `PASS`"
-    $ReportLines += "- **Modelo Correto:** `PASS`"
-    $ReportLines += "- **Custo Zero:** `PASS`"
-    $ReportLines += "- **Sem Simulacao:** `PASS`"
+    $ReportLines += "- **Inferencia Local Real:** PASS"
+    $ReportLines += "- **Provedor Ollama:** PASS"
+    $ReportLines += "- **Modelo Correto:** PASS"
+    $ReportLines += "- **Custo Zero:** PASS"
+    $ReportLines += "- **Sem Simulacao:** PASS"
     $ReportLines += ""
     $ReportLines += "### ✅ TESTES CONCLUIDOS COM SUCESSO!"
     Write-Host "✅ TESTE COMPLETO E APROVADO!" -ForegroundColor Green
 } else {
-    $ReportLines += "- **Inferencia Local Real:** `FAIL`"
+    $ReportLines += "- **Inferencia Local Real:** FAIL"
     $ReportLines += "- **Detalhes:** Provedor: $($ResultLog.provider), Modelo: $($ResultLog.model), Custo: $($ResultLog.actual_cost), Simulado: $($ResultLog.simulated)"
     $ReportLines += ""
     $ReportLines += "### ❌ TESTES COM FALHA!"
