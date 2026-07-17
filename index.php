@@ -263,7 +263,14 @@ function sv_home_top_categories(int $limit = 8): array
     return $result;
 }
 
-$featuredProducts = sv_home_featured_products(8);
+$layoutLoaderFile = __DIR__ . '/includes/layout-loader.php';
+if (is_file($layoutLoaderFile)) {
+    require_once $layoutLoaderFile;
+}
+$homeItemsPerPage = function_exists('sv_get_products_config')
+    ? (int)(sv_get_products_config()['itemsPerPage'] ?? 8)
+    : 8;
+$featuredProducts = sv_home_featured_products($homeItemsPerPage > 0 ? $homeItemsPerPage : 8);
 $featuredProductsCount = count($featuredProducts);
 $catalogCount = sv_home_catalog_count();
 $heroBanners = sv_home_banners();
