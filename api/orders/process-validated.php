@@ -5,6 +5,7 @@ require_once dirname(__DIR__, 2) . '/includes/order-request-context.php';
 require_once dirname(__DIR__, 2) . '/includes/order-idempotency.php';
 require_once dirname(__DIR__, 2) . '/includes/mercadopago-gateway.php';
 require_once dirname(__DIR__, 2) . '/api/emails/send-order-notification.php';
+require_once dirname(__DIR__, 2) . '/includes/tiny-order-push.php';
 
 function svop_json(int $status, array $payload): never
 {
