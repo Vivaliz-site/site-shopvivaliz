@@ -355,8 +355,6 @@ svo_json(200, [
     'message' => 'Pedido registrado para confirmacao manual de frete e pagamento.',
     'payment_instructions' => svo_payment_instructions($paymentMethod),
     'storage' => str_contains($dir, 'shopvivaliz-orders') ? 'fallback_temp' : 'storage_orders',
-    'tiny_order_id' => $tinyOrderId,
-    'tiny_push' => $tinyPushStatus,
     'subtotal' => round($itemsTotal, 2),
     'shipping_total' => round($shippingTotal, 2),
     'shipping_label' => $shippingLabel,
