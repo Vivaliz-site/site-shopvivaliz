@@ -6,9 +6,9 @@ $WorkerPidFile = Join-Path $LogDir "local-ai-service.pid"
 $ServerPidFile = Join-Path $LogDir "local-ai-server.pid"
 $HeartbeatFile = Join-Path $LogDir "local-ai-heartbeat.json"
 
-Write-Host "════════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host "📊 STATUS DO SISTEMA DE IA LOCAL - SHOPVIVALIZ" -ForegroundColor Cyan
-Write-Host "════════════════════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "--------------------------------------------------------" -ForegroundColor Cyan
+Write-Host "STATUS DO SISTEMA DE IA LOCAL - SHOPVIVALIZ" -ForegroundColor Cyan
+Write-Host "--------------------------------------------------------" -ForegroundColor Cyan
 
 # 1. Windows Scheduled Task
 $Task = Get-ScheduledTask -TaskName "ShopVivaliz Local AI"
@@ -93,4 +93,4 @@ if (Test-Path $HeartbeatFile) {
     Write-Host "• Heartbeat File: NAO LOCALIZADO" -ForegroundColor Red
 }
 
-Write-Host "════════════════════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "--------------------------------------------------------" -ForegroundColor Cyan
