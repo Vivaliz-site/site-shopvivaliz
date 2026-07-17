@@ -99,6 +99,7 @@ try {
                     <tr><td colspan="5" class="empty-state">Carregando produtos...</td></tr>
                 </tbody>
             </table>
+            <div id="products-pager" style="padding: 1rem; text-align: center; border-top: 1px solid #dee2e6;"></div>
         </div>
     </div>
 
@@ -114,20 +115,42 @@ try {
                 return;
             }
 
-            tbody.innerHTML = data.products.slice(0, 50).map(p => `
-                <tr>
-                    <td><strong>${p.sku}</strong></td>
-                    <td>${p.name}</td>
-                    <td>R$ ${parseFloat(p.price).toFixed(2)}</td>
-                    <td>${p.stock}</td>
-                    <td>
-                        <div class="actions">
-                            <a href="/admin/editar-produto.php?id=${p.id}" class="btn btn-small btn-edit">✏️ Editar</a>
-                            <button class="btn btn-small btn-delete" onclick="if(confirm('Deletar?')) alert('Deletar: ${p.id}')">🗑️ Deletar</button>
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
+            const PAGE_SIZE = 20;
+            let currentPage = 1;
+            const allProducts = data.products;
+
+            function renderPage(page) {
+                const start = (page - 1) * PAGE_SIZE;
+                const pageItems = allProducts.slice(start, start + PAGE_SIZE);
+                const totalPages = Math.max(1, Math.ceil(allProducts.length / PAGE_SIZE));
+
+                tbody.innerHTML = pageItems.map(p => `
+                    <tr>
+                        <td><strong>${p.sku}</strong></td>
+                        <td>${p.name}</td>
+                        <td>R$ ${parseFloat(p.price).toFixed(2)}</td>
+                        <td>${p.stock}</td>
+                        <td>
+                            <div class="actions">
+                                <a href="/admin/editar-produto.php?id=${p.olist_product_id || p.id}" class="btn btn-small btn-edit">✏️ Editar</a>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+
+                const pager = document.getElementById('products-pager');
+                if (pager) {
+                    pager.innerHTML = `
+                        <button class="btn btn-small" ${page <= 1 ? 'disabled' : ''} id="pager-prev">← Anterior</button>
+                        <span style="margin: 0 1rem;">Página ${page} de ${totalPages} (${allProducts.length} produtos)</span>
+                        <button class="btn btn-small" ${page >= totalPages ? 'disabled' : ''} id="pager-next">Próxima →</button>
+                    `;
+                    document.getElementById('pager-prev')?.addEventListener('click', () => { currentPage--; renderPage(currentPage); });
+                    document.getElementById('pager-next')?.addEventListener('click', () => { currentPage++; renderPage(currentPage); });
+                }
+            }
+
+            renderPage(currentPage);
         } catch(e) {
             document.getElementById('products-body').innerHTML = '<tr><td colspan="5" class="empty-state">Erro ao carregar produtos</td></tr>';
         }
