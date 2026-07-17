@@ -13,7 +13,21 @@ require_once __DIR__ . '/../../api/emails/send-order-notification.php';
 
 // Validar token do webhook
 $webhook_token = getenv('OLIST_WEBHOOK_TOKEN') ?: getenv('ERP_WEBHOOK_TOKEN') ?: '';
+
+// O servidor nao repassa Authorization para $_SERVER['HTTP_AUTHORIZATION']
+// (comportamento comum de Apache/PHP-FPM sem CGIPassAuth) -- confirmado ao
+// vivo que o header chega via getallheaders() mas nao via $_SERVER, o que
+// fazia esse endpoint rejeitar TODA chamada real da Tiny com 401, mesmo com
+// o token correto configurado.
 $auth_header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+if ($auth_header === '' && function_exists('getallheaders')) {
+    foreach (getallheaders() as $headerName => $headerValue) {
+        if (strcasecmp($headerName, 'Authorization') === 0) {
+            $auth_header = $headerValue;
+            break;
+        }
+    }
+}
 
 if (empty($webhook_token) || !str_starts_with($auth_header, 'Bearer ')) {
     http_response_code(401);
