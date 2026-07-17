@@ -251,9 +251,15 @@ if ($shippingLabel !== '' || $shippingTotal > 0) {
 $grandTotal = $itemsTotal + $shippingTotal;
 
 $orderNumber = 'SV' . date('YmdHis') . random_int(100, 999);
+// Token de sessao de pagamento: o frontend (checkout.php) espera receber isso
+// na resposta para poder chamar create-preference.php/create-boleto.php
+// depois. Sem isso, svmp_session_matches() sempre rejeitava com
+// invalid_payment_session e o fluxo Mercado Pago nunca completava.
+$paymentSessionToken = bin2hex(random_bytes(32));
 $record = [
     'order_number' => $orderNumber,
     'status' => 'pending_confirmation',
+    'payment_session_hash' => hash('sha256', $paymentSessionToken),
     'customer' => [
         'name' => $name,
         'email' => $email,
