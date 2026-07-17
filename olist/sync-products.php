@@ -298,14 +298,22 @@ function svs_normalize(array $p, string $source): array {
     // saldoFisicoTotal/saldoEstoque nao existem nessa API -- por isso o campo
     // sempre caia no default 0 e zerava o estoque de TODOS os produtos no
     // catalogo espelhado, bloqueando toda venda no checkout.
-    $stock = (int)(
-        $p['estoque_disponivel']          ??
+    //
+    // O fallback v2 (usado quando o OAuth v3 falha) nao tem nenhum desses
+    // campos na listagem e nao faz fetch de detalhe por produto -- por isso
+    // NUNCA retorna estoque real. Se tratassemos "sem campo" como estoque=0
+    // aqui, toda vez que o OAuth v3 falhasse (o que ja aconteceu de forma
+    // recorrente por token expirado) o catalogo inteiro seria zerado e
+    // bloquearia checkout de TODOS os produtos, mesmo os com estoque real.
+    // Por isso o fallback v2 retorna null (estoque desconhecido) em vez de 0,
+    // e o merge em svs_mirror_catalog preserva o estoque anterior nesse caso.
+    $stockRaw = $p['estoque_disponivel']          ??
         $p['estoque']['quantidade']       ??
         $p['estoque']['saldoFisicoTotal'] ??  // v3 (nome alternativo, mantido por seguranca)
         $p['saldoEstoque']                ??  // v2
         (is_scalar($p['estoque'] ?? null) ? $p['estoque'] : null) ??
-        0
-    );
+        null;
+    $stock = $stockRaw !== null ? (int)$stockRaw : ($source === 'tiny_v2' ? null : 0);
 
     // imagens
     $images = [];
