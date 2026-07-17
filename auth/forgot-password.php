@@ -148,7 +148,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-forgot-passwor
             <?= sv_csrf_input('auth-forgot-password') ?>
             <div class="form-group">
                 <label for="email">Email</label>
-                <input type="email" id="email" name="email" required placeholder="seu@email.com">
+                <input type="email" id="email" name="email" placeholder="seu@email.com">
+            </div>
+            <div class="form-group">
+                <label for="cpf">Ou CPF/CNPJ cadastrado</label>
+                <input type="text" id="cpf" name="cpf" inputmode="numeric" maxlength="18" placeholder="Preencha se não lembra o email">
             </div>
             <button type="submit">Enviar link de redefinição</button>
         </form>
