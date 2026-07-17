@@ -273,35 +273,13 @@ try {
     error_log('[OrderValidated] MySQL orders mirror failed: ' . $e->getMessage());
 }
 
-$tinyOrderId = null;
-$tinyPushStatus = 'missing_credentials';
-if (svtop_tiny_credentials_configured()) {
-    $tinyPushStatus = 'token_unavailable';
-    try {
-        $tinyOrderId = svtop_push_order_tiny($record);
-        if ($tinyOrderId) {
-            $tinyPushStatus = 'ok';
-            $record['tiny_order_id'] = $tinyOrderId;
-        }
-    } catch (Throwable $e) {
-        $tinyPushStatus = $e->getMessage();
-        error_log('[OrderValidated] Tiny push error: ' . $e->getMessage());
-    }
-}
-
-$record['tiny_push'] = $tinyPushStatus;
+// Pedido so vai para o Tiny ERP quando o pagamento e de fato aprovado --
+// isso acontece no webhook do Mercado Pago (api/webhook-mercadopago.php),
+// nunca aqui na criacao. Antes este endpoint empurrava TODO pedido criado
+// (mesmo "aguardando_pagamento"/pix nao pago) direto pro ERP, poluindo o
+// Tiny com pedidos que o cliente nunca chegou a pagar.
 file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
 svop_append_log($record);
-
-if ($tinyOrderId) {
-    try {
-        $pdo = sv_pdo();
-        $stmt = $pdo->prepare('UPDATE orders SET olist_order_id = :olist_order_id WHERE order_number = :order_number');
-        $stmt->execute([':olist_order_id' => $tinyOrderId, ':order_number' => $orderNumber]);
-    } catch (Throwable $e) {
-        error_log('[OrderValidated] MySQL olist_order_id update failed: ' . $e->getMessage());
-    }
-}
 
 // Disparar email de confirmação do pedido
 try {
@@ -321,8 +299,6 @@ $response = [
     'message' => 'Pedido registrado para confirmacao manual de frete e pagamento.',
     'payment_instructions' => svop_payment_instructions($paymentMethod),
     'storage' => str_contains($dir, 'shopvivaliz-orders') ? 'fallback_temp' : 'storage_orders',
-    'tiny_order_id' => $tinyOrderId,
-    'tiny_push' => $tinyPushStatus,
     'subtotal' => round($itemsTotal, 2),
     'shipping_total' => $shippingTotal,
     'shipping_label' => $shippingLabel,
