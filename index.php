@@ -18,6 +18,11 @@ function sv_home_esc(string $value): string
     return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 }
 
+function sv_home_lower(string $value): string
+{
+    return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+}
+
 function sv_home_default_image(): string
 {
     return '/images/logo-vivaliz-square.png';
