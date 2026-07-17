@@ -366,7 +366,7 @@ $olistId  = trim((string)($resolved['olist_product_id']?? '')) ?: sv_qv('olist_p
 $category = trim((string)($resolved['category']        ?? ''));
 $tags     = is_array($resolved['tags'] ?? null) ? $resolved['tags'] : [];
 $qScore   = (int)($resolved['quality_score'] ?? 0);
-$rawSlug  = trim((string)($resolved['slug'] ?? ''));
+$rawSlug  = trim((string)($resolved['slug'] ?? '')) ?: ($sku !== '' && $name !== '' ? sv_slugify($name, $sku) : '');
 
 $priceRaw   = (float)($resolved['price'] ?? (float)sv_qv('price', '0'));
 $stockRaw   = (int)($resolved['stock'] ?? 0);
