@@ -200,7 +200,7 @@ function svml_purchase_and_generate_label(array $order): array
         return ['ok' => false, 'error' => 'sender_address_not_configured', 'message' => 'Configure MELHORENVIO_FROM_* no .env (nome, documento, endereço completo) para permitir a compra automática da etiqueta.'];
     }
 
-    $token = me_current_access_token();
+    $token = me_current_access_token() ?: svml_env('MELHORENVIO_ACCESS_TOKEN', 'SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN', 'MELHORENVIO_API_KEY');
     if ($token === null || $token === '') {
         return ['ok' => false, 'error' => 'missing_access_token'];
     }
