@@ -129,7 +129,7 @@ function sv_product_merge_db(array $product, array $dbRow): array
         return $product;
     }
 
-    foreach (['sku', 'name', 'description', 'olist_product_id'] as $field) {
+    foreach (['sku', 'name', 'olist_product_id'] as $field) {
         if (trim((string)($dbRow[$field] ?? '')) !== '') {
             $product[$field] = (string)$dbRow[$field];
         }
@@ -139,17 +139,16 @@ function sv_product_merge_db(array $product, array $dbRow): array
         $product['image_url'] = (string)$dbRow['image_url'];
     }
 
-    if ((float)($dbRow['price'] ?? 0) > 0) {
-        $product['price'] = (float)$dbRow['price'];
-    }
-
-    // Estoque nunca vem do banco local: a tabela `products` pode ficar
-    // desatualizada em qualquer direcao (zerada OU com valor antigo maior
-    // que o real). O catalogo sincronizado (svcr_products(), direto da
-    // Tiny) e a unica fonte confiavel de estoque -- sobrescrever com o
-    // banco ja mostrou "X unidades restantes" para produto com estoque
-    // real 0, deixando o cliente adicionar ao carrinho um item indisponivel
-    // que so falha (com mensagem confusa) na validacao do checkout.
+    // Preco, descricao e estoque nunca vem do banco local: a tabela
+    // `products` pode ficar desatualizada em qualquer direcao (preco 100x
+    // maior/menor, descricao antiga ou com texto de teste/agente, estoque
+    // zerado ou com valor antigo maior que o real). O catalogo sincronizado
+    // (svcr_products(), direto da Tiny) e a unica fonte confiavel para esses
+    // tres campos -- sobrescrever com o banco ja mostrou preco 100x errado
+    // (ex: R$ 7.798,00 em vez de R$ 77,98) e "X unidades restantes" para
+    // produto com estoque real 0, deixando o cliente adicionar ao carrinho
+    // um item indisponivel que so falha (com mensagem confusa) na
+    // validacao do checkout.
 
     return $product;
 }
