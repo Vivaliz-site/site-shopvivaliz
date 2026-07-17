@@ -191,6 +191,38 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
     return ordered, failures
 
 
+def apply_kit_stock(products: list[dict[str, Any]]) -> int:
+    """Produtos tipo kit (tipo == "K") nao tem estoque proprio confiavel na
+    Tiny -- o campo estoque_disponivel para eles costuma ficar zerado ou
+    desatualizado, porque a disponibilidade real depende da composicao
+    (quantidade de cada componente em estoque). Recalcula estoque_disponivel
+    dos kits como o minimo, entre os componentes, de estoque_do_componente
+    dividido pela quantidade exigida por kit.
+    """
+    stock_by_sku = {
+        str(item.get("sku") or ""): int(item.get("estoque_disponivel") or 0)
+        for item in products
+        if item.get("sku")
+    }
+    updated = 0
+    for item in products:
+        if item.get("tipo") != "K":
+            continue
+        composition = item.get("kit") or []
+        if not composition:
+            continue
+        possible = [
+            stock_by_sku.get(str(component.get("sku") or ""), 0) // max(1, int(component.get("quantidade") or 1))
+            for component in composition
+        ]
+        kit_stock = max(0, min(possible)) if possible else 0
+        if item.get("estoque_disponivel") != kit_stock:
+            item["estoque_disponivel"] = kit_stock
+            item["estoque"] = {"quantidade": kit_stock}
+            updated += 1
+    return updated
+
+
 def save_products(products: list[dict[str, Any]]) -> Path:
     payload = {"total": len(products), "timestamp": datetime.now(timezone.utc).isoformat(), "itens": products}
     CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
