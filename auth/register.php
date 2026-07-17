@@ -20,6 +20,25 @@ $error = '';
 $success = '';
 $name = '';
 $email = '';
+$cpfInput = '';
+
+function sv_register_valid_cpf(string $digits): bool
+{
+    if (strlen($digits) !== 11 || preg_match('/^(\d)\1{10}$/', $digits)) {
+        return false;
+    }
+    for ($t = 9; $t <= 10; $t++) {
+        $sum = 0;
+        for ($i = 0; $i < $t; $i++) {
+            $sum += (int)$digits[$i] * (($t + 1) - $i);
+        }
+        $digit = ((10 * $sum) % 11) % 10;
+        if ((int)$digits[$t] !== $digit) {
+            return false;
+        }
+    }
+    return true;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_POST['csrf_token'] ?? null)) {
     $error = 'Sua sessão expirou. Recarregue a página e tente novamente.';
@@ -28,6 +47,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_P
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     $password_confirm = $_POST['password_confirm'] ?? '';
+    $cpfInput = trim($_POST['cpf'] ?? '');
+    $cpfDigits = preg_replace('/\D/', '', $cpfInput);
 
     // Validações
     if (empty($name)) {
@@ -36,6 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_P
         $error = 'Nome deve ter pelo menos 3 caracteres';
     } elseif (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Email inválido';
+    } elseif ($cpfDigits !== '' && !sv_register_valid_cpf($cpfDigits)) {
+        $error = 'CPF inválido';
     } elseif (empty($password)) {
         $error = 'Senha é obrigatória';
     } elseif (strlen($password) < 8) {
@@ -55,13 +78,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_P
 
                 if ($result->num_rows > 0) {
                     $error = 'Este email já está cadastrado';
+                } elseif ($cpfDigits !== '' && ($cpfCheck = $db->prepare('SELECT id FROM users WHERE cpf = ? LIMIT 1')) && (function () use ($cpfCheck, $cpfDigits) {
+                    $cpfCheck->bind_param('s', $cpfDigits);
+                    $cpfCheck->execute();
+                    return $cpfCheck->get_result()->num_rows > 0;
+                })()) {
+                    $error = 'Este CPF já está cadastrado em outra conta. Se o cadastro é seu, faça login ou use "Esqueci minha senha".';
                 } else {
                     // Criar novo usuário
                     $password_hash = password_hash($password, PASSWORD_BCRYPT);
                     // NULL, nao string vazia: cpf tem UNIQUE KEY no schema,
                     // e '' colide para todo cadastro sem CPF (preenchido
                     // depois no checkout). NULL nao conflita com NULL.
-                    $cpf = null;
+                    $cpf = $cpfDigits !== '' ? $cpfDigits : null;
                     $phone = '';
 
                     $insert = $db->prepare(
@@ -76,6 +105,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_P
                             $success = 'Cadastro realizado com sucesso! Você pode fazer login agora.';
                             $name = '';
                             $email = '';
+                            $cpfInput = '';
+                        } elseif ($db->errno === 1062) {
+                            $error = 'Este CPF já está cadastrado em outra conta. Se o cadastro é seu, faça login ou use "Esqueci minha senha".';
                         } else {
                             $error = 'Erro ao criar a conta. Tente novamente.';
                         }
