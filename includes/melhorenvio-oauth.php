@@ -63,8 +63,11 @@ function me_read_tokens(): ?array {
 
 /** Troca o "code" recebido no callback OAuth por access_token/refresh_token. */
 function me_exchange_code(string $code): array {
-    $clientId = me_oauth_env('MELHORENVIO_CLIENT_ID');
-    $clientSecret = me_oauth_env('MELHORENVIO_CLIENT_SECRET');
+    // O .env de producao tem a variavel gravada como MELHORENVIO_CLIENTE_ID
+    // (em portugues), nao MELHORENVIO_CLIENT_ID -- sem esse alias o OAuth
+    // nunca completava a troca de code por token (client_id sempre vazio).
+    $clientId = me_oauth_env('MELHORENVIO_CLIENT_ID', 'MELHORENVIO_CLIENTE_ID');
+    $clientSecret = me_oauth_env('MELHORENVIO_CLIENT_SECRET', 'MELHORENVIO_CLIENTE_SECRET');
     $redirectUri = me_oauth_env('MELHORENVIO_REDIRECT_URI') ?: 'https://dev.shopvivaliz.com.br/api/melhorenvio/webhook.php';
 
     $fields = [
@@ -108,8 +111,8 @@ function me_refresh_if_needed(): ?array {
 
     $refreshFields = [
         'grant_type' => 'refresh_token',
-        'client_id' => me_oauth_env('MELHORENVIO_CLIENT_ID'),
-        'client_secret' => me_oauth_env('MELHORENVIO_CLIENT_SECRET'),
+        'client_id' => me_oauth_env('MELHORENVIO_CLIENT_ID', 'MELHORENVIO_CLIENTE_ID'),
+        'client_secret' => me_oauth_env('MELHORENVIO_CLIENT_SECRET', 'MELHORENVIO_CLIENTE_SECRET'),
         'refresh_token' => $refresh,
     ];
     $tokenHost = str_contains((string)($tokens['_token_host'] ?? ''), 'sandbox')
