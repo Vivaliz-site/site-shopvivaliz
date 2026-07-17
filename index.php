@@ -232,10 +232,10 @@ function sv_home_top_categories(int $limit = 8): array
         require_once $layoutLoader;
         $catalogByKey = [];
         foreach (array_keys($counts) as $name) {
-            $catalogByKey[mb_strtolower($name, 'UTF-8')] = $name;
+            $catalogByKey[sv_home_lower($name)] = $name;
         }
         foreach (sv_get_categories_order() as $key) {
-            $key = mb_strtolower(trim((string)$key), 'UTF-8');
+            $key = sv_home_lower(trim((string)$key));
             if (isset($catalogByKey[$key])) {
                 $orderedNames[] = $catalogByKey[$key];
             }
