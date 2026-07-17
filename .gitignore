@@ -43,6 +43,12 @@ config/runtime-secrets*.php
 test-results/
 playwright-report/
 storage/order-rate-limit/
+storage/order-idempotency/
+storage/private/
+
+# Backups pontuais deixados por agentes em produção -- nunca devem ser
+# versionados nem travar o auto-sync seguro da VM.
+*.backup-*
 
 # ⚠️ CRÍTICO: Dados operacionais - NUNCA versionados (risco de perda em git reset)
 storage/orders/
