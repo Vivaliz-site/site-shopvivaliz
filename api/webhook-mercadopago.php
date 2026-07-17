@@ -171,6 +171,20 @@ try {
         }
 
         error_log('[MercadoPago] email processor queued: order=' . $externalReference);
+
+        // Compra e gera a etiqueta de transporte automaticamente assim que o
+        // pagamento e aprovado -- tambem em background, pois a compra na
+        // Melhor Envio faz varias chamadas HTTP sequenciais (cart -> checkout
+        // -> generate -> print) e nao deve atrasar a resposta do webhook.
+        $labelCmd = 'php ' . escapeshellarg(dirname(__DIR__) . '/api/melhorenvio/generate-label-background.php') . ' ' .
+                    escapeshellarg($path);
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            pclose(popen('start /B ' . $labelCmd, 'r'));
+        } else {
+            exec($labelCmd . ' > /dev/null 2>&1 &');
+        }
+
+        error_log('[MercadoPago] label processor queued: order=' . $externalReference);
     }
 
     svmp_webhook_response(200, 'processed');
