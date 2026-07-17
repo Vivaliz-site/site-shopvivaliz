@@ -6,7 +6,7 @@ if (($_GET['token'] ?? '') !== '3Q3xqbQxTPZASaKvaFXrzhJMLq8Seseh') {
     exit('not found');
 }
 
-require dirname(__DIR__) . '/scripts/mailer.php';
+require __DIR__ . '/scripts/mailer.php';
 
 $fakeQrCode = '00020126580014BR.GOV.BCB.PIX0136teste-fake-nao-e-um-pix-real520400005303986540510.005802BR5913ShopVivaliz Teste6008Sao Paulo62070503***6304ABCD';
 $fakePngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
