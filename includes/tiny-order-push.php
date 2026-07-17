@@ -229,9 +229,15 @@ function svtop_push_order_tiny(array $order): ?string
     if ($contactId === null) {
         $contactId = svtop_create_contact($token, $c);
     }
-    if ($contactId === null) {
-        // Corrida entre pedidos concorrentes pode deixar o contato indexado com atraso no Tiny; tenta mais uma vez.
-        usleep(500000);
+    // A busca de contato na Tiny e inconsistente logo apos criacao (indexacao
+    // com atraso) -- confirmado ao vivo: chamadas a svtop_find_contact_id com
+    // o mesmo CPF, segundos apart, retornaram resultados diferentes (achou,
+    // depois nao achou). Um unico retry de 500ms nao era suficiente e deixava
+    // pedidos reais falharem por "contato nao encontrado" mesmo com o
+    // contato ja existindo no ERP. Tenta varias vezes com backoff crescente
+    // antes de desistir.
+    for ($attempt = 0; $contactId === null && $attempt < 4; $attempt++) {
+        usleep((int)(500000 * (2 ** $attempt))); // 0.5s, 1s, 2s, 4s
         $contactId = svtop_find_contact_id($token, (string)($c['cpf'] ?? ''), (string)($c['name'] ?? ''));
     }
     if ($contactId === null) {
