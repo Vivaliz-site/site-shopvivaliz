@@ -243,6 +243,36 @@ if (file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESC
     svop_json(500, ['ok' => false, 'error' => 'order_write_failed']);
 }
 
+// Espelha o pedido na tabela MySQL `orders` -- e o que "Minha Conta" /
+// meus-pedidos.php le (por user_id). Sem isso, todo cliente logado que
+// comprava pelo checkout nunca via o pedido na propria conta, mesmo com
+// o pedido salvo corretamente e enviado ao ERP.
+try {
+    require_once dirname(__DIR__, 2) . '/includes/pdo-database.php';
+    require_once dirname(__DIR__, 2) . '/includes/account-schema.php';
+    sv_account_ensure_schema();
+
+    $sessionUserId = isset($_SESSION['user_id']) && is_numeric($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null;
+
+    $pdo = sv_pdo();
+    $stmt = $pdo->prepare(
+        'INSERT INTO orders (user_id, order_number, olist_order_id, email, order_total, order_status, payment_method, items_json, created_at)
+         VALUES (:user_id, :order_number, :olist_order_id, :email, :total, :status, :payment_method, :items_json, NOW())'
+    );
+    $stmt->execute([
+        ':user_id' => $sessionUserId,
+        ':order_number' => $orderNumber,
+        ':olist_order_id' => null,
+        ':email' => $email,
+        ':total' => $record['total'],
+        ':status' => 'aguardando_pagamento',
+        ':payment_method' => $paymentMethod,
+        ':items_json' => json_encode($cleanItems, JSON_UNESCAPED_UNICODE),
+    ]);
+} catch (Throwable $e) {
+    error_log('[OrderValidated] MySQL orders mirror failed: ' . $e->getMessage());
+}
+
 $tinyOrderId = null;
 $tinyPushStatus = 'missing_credentials';
 if (svtop_tiny_credentials_configured()) {
