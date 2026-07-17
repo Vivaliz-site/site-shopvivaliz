@@ -528,7 +528,7 @@ if ($notFound) {
                 <div style="color: #fbbf24; font-size: 14px; margin-bottom: 10px;">
                     ★★★★★ <span style="color: #6b7280; font-size: 12px; margin-left: 5px;">(4.9/5 - Excelente)</span>
                 </div>
-                <p class="product-description"><?= sv_esc($description) ?></p>
+                <div class="product-description"><?= $description ?></div>
                 <div class="product-price-block">
                     <?php if ($stockRaw > 0 && $stockRaw <= 5): ?>
                         <div class="urgency-tag">
