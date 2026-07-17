@@ -241,6 +241,7 @@ function svtop_push_order_tiny(array $order): ?string
             'quantidade'    => $i['quantity'],
             'valorUnitario' => $i['price'],
         ], $items),
+        'valorFrete' => (float)($order['shipping_total'] ?? 0),
         'obs' => $obs,
     ];
 
