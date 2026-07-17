@@ -98,8 +98,8 @@ foreach ($ML_CATEGORIES as $key => $cat) {
 /* ------------------------------------------------------------------ *
  * Análise do título                                                    *
  * ------------------------------------------------------------------ */
-$titleWords = mb_strtolower($title);
-$titleLen   = mb_strlen($title);
+$titleWords = svmlopt_lower($title);
+$titleLen   = svmlopt_len($title);
 $issues     = [];
 $suggestions = [];
 
