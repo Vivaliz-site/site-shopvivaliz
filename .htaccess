@@ -42,7 +42,7 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^storage/ - [F,L]
     RewriteRule ^(?:criar-pagamento-teste-real|criar-pagamento-producao|gerar-payment-id-agora|fazer-pagamento-real-agora|simular-pagamento-real)\.php$ - [F,L,NC]
     RewriteRule ^logs/ - [F,L]
-    RewriteRule ^(?:\.git|\.env(?:\.|$)|\.claude|\.codex|\.github|\.githooks|\.vscode|\.tmp_shopvivaliz|__pycache__|scripts|tests|test-results|deploy|docs|reports|scratch|olist|automation|automations|autodev|core|dashboards|imports|kong|listings|medusa|migrations|planilhas|public_html|release-notes|tools|utils|CheckoutPageOptimizer)(?:/|$) - [F,L,NC]
+    RewriteRule ^(?:\.git|\.env(?:\.|$)|\.claude|\.codex|\.github|\.githooks|\.vscode|\.tmp_shopvivaliz|__pycache__|scripts|tests|test-results|deploy|docs|reports|scratch|automation|automations|autodev|core|dashboards|imports|kong|listings|medusa|migrations|planilhas|public_html|release-notes|tools|utils|CheckoutPageOptimizer)(?:/|$) - [F,L,NC]
     RewriteRule ^(?:debug|test|teste|check|gen-token)(?:[-_.][^/]*)?$ - [F,L,NC]
     RewriteRule ^(?:setup-webhooks|update-fallback-prices)\.php$ - [F,L,NC]
     RewriteRule ^sync(?:[-a-z0-9]*)?\.php$ - [F,L,NC]

@@ -1,13 +1,11 @@
 Options +FollowSymLinks
 RewriteEngine On
 
-# Permitir acesso a arquivos existentes
 <IfModule mod_rewrite.c>
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
 </IfModule>
 
-# Permitir todos os PHP files
 <FilesMatch "\.php$">
-    Allow from all
+    Require all granted
 </FilesMatch>
