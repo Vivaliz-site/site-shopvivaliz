@@ -45,8 +45,9 @@ if (!is_array($orderData)) {
 
 // Extrair dados
 $orderNumber = (string)($orderData['order_number'] ?? $orderNumber);
-$customerEmail = (string)($orderData['customer_email'] ?? '');
-$customerName = (string)($orderData['customer_name'] ?? 'Cliente');
+$customer = is_array($orderData['customer'] ?? null) ? $orderData['customer'] : [];
+$customerEmail = (string)($customer['email'] ?? $orderData['customer_email'] ?? '');
+$customerName = (string)($customer['name'] ?? $orderData['customer_name'] ?? 'Cliente');
 $total = (float)($orderData['total'] ?? 0);
 $status = (string)($orderData['status'] ?? 'pending');
 
