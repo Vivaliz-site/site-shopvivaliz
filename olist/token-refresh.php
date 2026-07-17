@@ -119,11 +119,20 @@ for ($i = 0; $i < count($keys); $i++) {
     }
 }
 
-file_put_contents($envFile, $envContent);
+$written = file_put_contents($envFile, $envContent);
+
+if ($written === false) {
+    svtr_log('ERRO CRITICO: refresh obtido do Tiny mas falha ao gravar em .env (permissao?)');
+    http_response_code(500);
+    echo json_encode(['erro' => 'Token obtido mas falha ao gravar em .env']);
+    exit;
+}
 
 // ============================================================
 // SUCESSO
 // ============================================================
+
+svtr_log('OK: token renovado, expires_in=' . ($tokenData['expires_in'] ?? 14400) . 's, bytes_gravados=' . $written);
 
 http_response_code(200);
 echo json_encode([
