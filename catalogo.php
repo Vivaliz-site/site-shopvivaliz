@@ -1,6 +1,14 @@
 <?php
 declare(strict_types=1);
 
+// Precisa iniciar a sessao antes de qualquer output: esta pagina tem HTML
+// suficiente antes do include do navbar (JSON-LD, meta tags) para estourar o
+// buffer de saida do PHP, o que envia os headers cedo e faz o session_start()
+// tardio do navbar.php falhar silenciosamente (usuario aparece deslogado).
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 header('Content-Type: text/html; charset=UTF-8');
 
 require_once __DIR__ . '/includes/product-price-enrich.php';
