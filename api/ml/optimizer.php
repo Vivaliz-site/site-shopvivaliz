@@ -118,7 +118,7 @@ if (!preg_match('/\d/', $title)) {
 }
 
 // Regra 3: capitalização — ML prefere Título Case sem todas maiúsculas
-if ($title === mb_strtoupper($title)) {
+if ($title === svmlopt_upper($title)) {
     $issues[] = 'Evite CAPS LOCK completo — use Título Case para melhor CTR.';
 }
 
