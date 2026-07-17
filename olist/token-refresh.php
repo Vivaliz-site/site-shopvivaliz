@@ -53,12 +53,20 @@ $postData = http_build_query([
 ]);
 
 $context = stream_context_create([
+    'http' => [
+        'method' => 'POST',
+        'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
+        'content' => $postData,
+        'timeout' => 30,
+        'ignore_errors' => true,
+    ],
     'https' => [
         'method' => 'POST',
         'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
         'content' => $postData,
         'timeout' => 30,
-    ]
+        'ignore_errors' => true,
+    ],
 ]);
 
 $response = @file_get_contents($tokenUrl, false, $context);
