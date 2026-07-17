@@ -99,6 +99,7 @@ try {
                     <tr><td colspan="5" class="empty-state">Carregando produtos...</td></tr>
                 </tbody>
             </table>
+            <div id="products-pager" style="padding: 1rem; text-align: center; border-top: 1px solid #dee2e6;"></div>
         </div>
     </div>
 
