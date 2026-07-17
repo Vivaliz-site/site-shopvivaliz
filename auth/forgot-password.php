@@ -135,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-forgot-passwor
     <div class="container">
         <div class="logo">ShopVivaliz</div>
         <h1>Esqueci minha senha</h1>
-        <p class="subtitle">Informe seu email e enviaremos um link para redefinir a senha.</p>
+        <p class="subtitle">Informe seu email <strong>ou</strong> CPF/CNPJ cadastrado. Enviaremos um link de redefinição para o email da sua conta.</p>
 
         <?php if ($error): ?>
         <div class="error"><?php echo htmlspecialchars($error); ?></div>
