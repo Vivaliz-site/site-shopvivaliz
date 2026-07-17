@@ -111,8 +111,8 @@ function me_refresh_if_needed(): ?array {
 
     $refreshFields = [
         'grant_type' => 'refresh_token',
-        'client_id' => me_oauth_env('MELHORENVIO_CLIENT_ID'),
-        'client_secret' => me_oauth_env('MELHORENVIO_CLIENT_SECRET'),
+        'client_id' => me_oauth_env('MELHORENVIO_CLIENT_ID', 'MELHORENVIO_CLIENTE_ID'),
+        'client_secret' => me_oauth_env('MELHORENVIO_CLIENT_SECRET', 'MELHORENVIO_CLIENTE_SECRET'),
         'refresh_token' => $refresh,
     ];
     $tokenHost = str_contains((string)($tokens['_token_host'] ?? ''), 'sandbox')
