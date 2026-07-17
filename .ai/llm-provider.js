@@ -1,4 +1,29 @@
 // Node 18+ has native fetch
+const fs = require('fs');
+const path = require('path');
+
+function loadEnv() {
+  const envPath = path.join(__dirname, '../.env');
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+      if (match) {
+        const key = match[1];
+        let value = match[2] || '';
+        if (value.startsWith('"') && value.endsWith('"')) {
+          value = value.substring(1, value.length - 1);
+        } else if (value.startsWith("'") && value.endsWith("'")) {
+          value = value.substring(1, value.length - 1);
+        }
+        if (!process.env[key]) {
+          process.env[key] = value;
+        }
+      }
+    }
+  }
+}
+loadEnv();
 
 /**
  * 🌐 LLM Provider - Abstração Unificada para APIs Pagas
@@ -156,13 +181,11 @@ class GoogleProvider {
   }
 }
 class OllamaProvider {
-  constructor(base_url = 'http://localhost:11434') {
-    this.base_url = base_url;
+  constructor(base_url) {
+    this.base_url = base_url || process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
   }
   async chat(messages, options = {}) {
-    const model = options.model || 'qwen2.5-coder:1.5b-q2_K';
-    // Converter array de messages para string
-    const context = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+    const model = options.model || process.env.LOCAL_AI_MODEL || 'qwen2.5-coder:1.5b';
     const payload = {
       model,
       messages: messages.map(m => ({
@@ -176,34 +199,80 @@ class OllamaProvider {
         top_p: options.top_p || 0.95
       }
     };
-    const response = await fetch(`${this.base_url}/api/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-    if (!response.ok) {
-      throw new Error(`Ollama error: ${response.statusText}`);
+
+    const controller = new AbortController();
+    const timeoutMs = options.timeout_ms || 90000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(`${this.base_url}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        let errBody = '';
+        try {
+          errBody = await response.text();
+        } catch (_) {}
+        throw new Error(`Ollama API error (${response.status} ${response.statusText}): ${errBody}`);
+      }
+
+      const data = await response.json();
+      if (!data.message || !data.message.content) {
+        throw new Error('Ollama returned an empty response or invalid schema.');
+      }
+
+      return {
+        content: data.message.content,
+        usage: {
+          input_tokens: data.prompt_eval_count || 0,
+          output_tokens: data.eval_count || 0,
+          total_tokens: (data.prompt_eval_count || 0) + (data.eval_count || 0)
+        },
+        model,
+        duration_ms: Math.round(data.total_duration / 1000000) || 0
+      };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error(`Ollama request timed out after ${timeoutMs}ms`);
+      }
+      if (error.code === 'ECONNREFUSED' || error.message.includes('fetch failed')) {
+        throw new Error(`Ollama connection refused at ${this.base_url}. Is Ollama running?`);
+      }
+      throw error;
     }
-    const data = await response.json();
-    return {
-      content: data.message.content,
-      usage: {
-        input_tokens: data.prompt_eval_count || 0,
-        output_tokens: data.eval_count || 0,
-        total_tokens: (data.prompt_eval_count || 0) + (data.eval_count || 0)
-      },
-      model,
-      duration_ms: Math.round(data.total_duration / 1000000) // nanoseconds to ms
-    };
   }
   calculateCost() {
-    return '0.00'; // Ollama é grátis
+    return '0.00';
   }
 }
 class LLMProviderFactory {
-  static create(provider, config) {
+  static create(provider, config = {}) {
+    const allowPaid = (process.env.ALLOW_PAID_PROVIDERS === 'true');
+    const localMode = (process.env.LOCAL_AI_MODE === 'local-only');
+
+    if (provider.toLowerCase() !== 'ollama') {
+      if (!allowPaid || localMode) {
+        throw new Error(`paid_provider_not_configured: Paid provider '${provider}' is disabled by policy (LOCAL_AI_MODE=local-only).`);
+      }
+      let key = null;
+      if (provider.toLowerCase() === 'openai') key = config.api_key || process.env.OPENAI_API_KEY;
+      if (provider.toLowerCase() === 'anthropic') key = config.api_key || process.env.ANTHROPIC_API_KEY;
+      if (provider.toLowerCase() === 'google') key = config.api_key || process.env.GOOGLE_API_KEY;
+
+      if (!key || key.startsWith('sk-YOUR') || key.startsWith('YOUR')) {
+        throw new Error(`paid_provider_not_configured: API key for '${provider}' is not configured.`);
+      }
+    }
+
     switch (provider.toLowerCase()) {
       case 'openai':
         return new OpenAIProvider(config.api_key || process.env.OPENAI_API_KEY);
@@ -229,7 +298,13 @@ class UnifiedLLM {
    * Chamar qualquer modelo
    */
   async call(model_id, messages, options = {}) {
-    const [provider, model] = model_id.split(':');
+    const firstColon = model_id.indexOf(':');
+    if (firstColon === -1) {
+      throw new Error(`Invalid model_id: ${model_id}`);
+    }
+    const provider = model_id.substring(0, firstColon);
+    const model = model_id.substring(firstColon + 1);
+
     if (!this.providers.has(provider)) {
       this.providers.set(provider, LLMProviderFactory.create(provider, {}));
     }

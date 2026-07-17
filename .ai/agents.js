@@ -19,7 +19,7 @@ class Agent {
     this.objective = config.objective;
     this.allowed_tools = config.allowed_tools || [];
     this.forbidden_tools = config.forbidden_tools || [];
-    this.preferred_model = config.preferred_model || 'ollama:qwen2.5-coder:1.5b-q2_K';
+    this.preferred_model = config.preferred_model || 'ollama:qwen2.5-coder:1.5b';
     this.fallback_model = config.fallback_model || 'openai:gpt-4-turbo';
     this.cost_limit = config.cost_limit || 0.50;
     this.max_retries = config.max_retries || 2;
@@ -114,7 +114,7 @@ const AGENTS = {
     objective: 'Editar, debugar, refatorar código PHP',
     allowed_tools: ['git', 'file_read', 'file_write', 'test'],
     forbidden_tools: ['deploy', 'delete_production'],
-    preferred_model: 'ollama:qwen2.5-coder:1.5b-q2_K',
+    preferred_model: 'ollama:qwen2.5-coder:1.5b',
     fallback_model: 'anthropic:claude-opus-4',
     cost_limit: 0.5
   }),
@@ -125,7 +125,7 @@ const AGENTS = {
     objective: 'Editar componentes frontend',
     allowed_tools: ['git', 'file_read', 'file_write', 'test', 'playwright'],
     forbidden_tools: ['deploy', 'delete_production'],
-    preferred_model: 'ollama:qwen2.5-coder:1.5b-q2_K',
+    preferred_model: 'ollama:qwen2.5-coder:1.5b',
     fallback_model: 'openai:gpt-4-turbo',
     cost_limit: 0.4
   }),
@@ -136,7 +136,7 @@ const AGENTS = {
     objective: 'Análise e design de banco de dados',
     allowed_tools: ['git', 'file_read', 'logs'],
     forbidden_tools: ['file_write', 'execute_sql', 'delete_data'],
-    preferred_model: 'ollama:qwen2.5-coder:1.5b-q2_K',
+    preferred_model: 'ollama:qwen2.5-coder:1.5b',
     fallback_model: 'anthropic:claude-opus-4',
     cost_limit: 0.5
   }),
@@ -148,7 +148,7 @@ const AGENTS = {
     objective: 'Criar e executar testes',
     allowed_tools: ['git', 'file_read', 'file_write', 'playwright', 'terminal'],
     forbidden_tools: ['deploy', 'delete_files'],
-    preferred_model: 'ollama:qwen2.5-coder:1.5b-q2_K',
+    preferred_model: 'ollama:qwen2.5-coder:1.5b',
     cost_limit: 0.3
   }),
 
@@ -181,7 +181,7 @@ const AGENTS = {
     objective: 'Integrar com Olist e Tiny ERP',
     allowed_tools: ['git', 'file_read', 'api_call', 'logs'],
     forbidden_tools: ['file_write', 'delete_data', 'modify_orders'],
-    preferred_model: 'ollama:qwen2.5-coder:1.5b-q2_K',
+    preferred_model: 'ollama:qwen2.5-coder:1.5b',
     cost_limit: 0.4
   }),
 
@@ -202,7 +202,7 @@ const AGENTS = {
     objective: 'Monitorar logs e gerar relatórios',
     allowed_tools: ['logs', 'memory', 'file_read'],
     forbidden_tools: ['file_write', 'delete_logs', 'modify_data'],
-    preferred_model: 'ollama:qwen2.5-coder:1.5b-q2_K',
+    preferred_model: 'ollama:qwen2.5-coder:1.5b',
     cost_limit: 0.2
   }),
 
@@ -212,7 +212,7 @@ const AGENTS = {
     objective: 'Garantir que custos estejam dentro do limite',
     allowed_tools: ['memory', 'logs'],
     forbidden_tools: ['file_write', 'execute', 'delete_data'],
-    preferred_model: 'ollama:qwen2.5-coder:1.5b-q2_K',
+    preferred_model: 'ollama:qwen2.5-coder:1.5b',
     cost_limit: 0.1
   }),
 

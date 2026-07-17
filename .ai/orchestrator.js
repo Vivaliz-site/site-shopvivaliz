@@ -1,18 +1,70 @@
-/**
- * 🎭 Orchestrator - Núcleo de Execução de Tarefas
- *
- * Gerencia: fila, roteamento, execução, aprovações, logs
- *
- * Arquivo: .ai/orchestrator.js
- */
-
+const fs = require('fs');
+const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const { ModelRouter, TaskAnalyzer } = require('./model-router');
+const { UnifiedLLM } = require('./llm-provider');
 
 class TaskQueue {
   constructor() {
     this.tasks = new Map();
     this.queue = [];
+    this.dataDir = path.join(__dirname, 'data');
+    this.tasksFile = path.join(this.dataDir, 'tasks.jsonl');
+    this.ensureStorage();
+    this.loadFromDisk(true);
+  }
+
+  ensureStorage() {
+    if (!fs.existsSync(this.dataDir)) {
+      fs.mkdirSync(this.dataDir, { recursive: true });
+    }
+  }
+
+  loadFromDisk(isStartup = false) {
+    if (!fs.existsSync(this.tasksFile)) {
+      return;
+    }
+
+    try {
+      const content = fs.readFileSync(this.tasksFile, 'utf8');
+      const lines = content.split(/\r?\n/);
+      const newTasks = new Map();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const task = JSON.parse(line);
+          if (task && task.id) {
+            if (isStartup && (task.status === 'executing' || task.status === 'running')) {
+              task.status = 'pending';
+              task.interrupted = true;
+            }
+            newTasks.set(task.id, task);
+          }
+        } catch (e) {}
+      }
+      this.tasks = newTasks;
+
+      const sortedTasks = Array.from(this.tasks.values())
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+      this.queue = [];
+      for (const task of sortedTasks) {
+        if (task.status === 'pending') {
+          this.queue.push(task.id);
+        }
+      }
+    } catch (err) {
+      console.error('[TaskQueue] Error reading tasks file from disk:', err);
+    }
+  }
+
+  persistTask(task) {
+    try {
+      const line = JSON.stringify(task) + '\n';
+      fs.appendFileSync(this.tasksFile, line, 'utf8');
+    } catch (err) {
+      console.error('[TaskQueue] Error appending task to disk:', err);
+    }
   }
 
   add(task) {
@@ -25,6 +77,7 @@ class TaskQueue {
     };
     this.tasks.set(id, fullTask);
     this.queue.push(id);
+    this.persistTask(fullTask);
     return id;
   }
 
@@ -37,6 +90,7 @@ class TaskQueue {
     if (task) {
       Object.assign(task, updates);
       task.updated_at = new Date().toISOString();
+      this.persistTask(task);
     }
     return task;
   }
@@ -54,7 +108,7 @@ class TaskQueue {
   }
 
   size() {
-    return this.queue.length;
+    return Array.from(this.tasks.values()).filter(t => t.status === 'pending').length;
   }
 }
 
@@ -63,7 +117,7 @@ class Orchestrator {
     this.config = {
       max_concurrent_tasks: 2,
       approval_required_for_cost_above: 0.50,
-      approval_timeout_ms: 3600000, // 1 hora
+      approval_timeout_ms: 3600000,
       ...config
     };
 
@@ -73,6 +127,8 @@ class Orchestrator {
     this.approvals_pending = new Map();
     this.execution_log = [];
     this.error_log = [];
+    this.resultsFile = path.join(__dirname, 'data', 'results.jsonl');
+    this.stateFile = path.join(__dirname, 'data', 'state.json');
   }
 
   /**
@@ -232,21 +288,76 @@ class Orchestrator {
   /**
    * Executar uma tarefa
    */
+  /**
+   * Persistir resultado no disco e atualizar state.json
+   */
+  _persistResult(logEntry) {
+    try {
+      fs.appendFileSync(this.resultsFile, JSON.stringify(logEntry) + '\n', 'utf8');
+      const statusSummary = this.getStatus();
+      fs.writeFileSync(this.stateFile, JSON.stringify({
+        last_updated: new Date().toISOString(),
+        summary: statusSummary
+      }, null, 2), 'utf8');
+    } catch (err) {
+      console.error('[Orchestrator] Error persisting result to disk:', err);
+    }
+  }
+
+  /**
+   * Executar uma tarefa
+   */
   async _execute(task, route) {
     this.executing_tasks.set(task.id, {
-      started_at: new Date(),
+      started_at: new Date().toISOString(),
       route,
       status: 'executing'
     });
 
-    this.queue.update(task.id, { status: 'executing' });
+    this.queue.update(task.id, { 
+      status: 'executing',
+      started_at: new Date().toISOString()
+    });
 
     console.log(`[ORCHESTRATOR] Executing task ${task.id} with ${route.model}`);
 
-    // Simular execução (será substituído por chamada real)
-    const result = await this._simulateExecution(task, route);
+    const start = Date.now();
+    let result;
+    try {
+      const llm = new UnifiedLLM();
+      const modelId = `${route.provider}:${route.model}`;
+      const messages = [
+        { role: 'system', content: 'Você é um assistente de IA focado no desenvolvimento do Shop Vivaliz.' },
+        { role: 'user', content: `Tarefa: ${task.description}\nContexto: ${task.context || ''}` }
+      ];
 
-    // Registrar resultado
+      const llmResult = await llm.call(modelId, messages);
+      const execution_time_ms = Date.now() - start;
+
+      result = {
+        success: true,
+        output: llmResult.content,
+        actual_cost: parseFloat(llmResult.cost || 0),
+        execution_time_ms,
+        provider: llmResult.provider,
+        model: llmResult.model,
+        simulated: false
+      };
+    } catch (error) {
+      const execution_time_ms = Date.now() - start;
+      const isPaidConfigError = error.message.includes('paid_provider_not_configured');
+
+      result = {
+        success: false,
+        error: error.message,
+        actual_cost: 0,
+        execution_time_ms,
+        simulated: false,
+        blocked: isPaidConfigError,
+        reason: isPaidConfigError ? 'paid_provider_not_configured' : 'execution_failed'
+      };
+    }
+
     const log_entry = {
       task_id: task.id,
       executed_at: new Date().toISOString(),
@@ -255,14 +366,15 @@ class Orchestrator {
       estimated_cost: route.estimated_cost,
       actual_cost: result.actual_cost,
       success: result.success,
-      result: result.success ? result.output : result.error,
-      execution_time_ms: result.execution_time_ms
+      result: result.success ? result.output : (result.error || result.reason),
+      execution_time_ms: result.execution_time_ms,
+      simulated: false
     };
 
     this.execution_log.push(log_entry);
+    this._persistResult(log_entry);
 
-    // Atualizar custo
-    if (route.provider && route.provider !== 'ollama') {
+    if (route.provider && route.provider !== 'ollama' && !result.blocked) {
       this.router.logCostUsage(
         task.id,
         route.provider,
@@ -273,42 +385,28 @@ class Orchestrator {
       );
     }
 
-    // Atualizar status
+    const finalStatus = result.success ? 'completed' : (result.blocked ? 'blocked' : 'failed');
     this.queue.update(task.id, {
-      status: result.success ? 'completed' : 'failed',
-      result: log_entry
+      status: finalStatus,
+      result: log_entry,
+      finished_at: new Date().toISOString(),
+      provider: route.provider,
+      model: route.model,
+      cost: result.actual_cost,
+      simulated: false,
+      error: result.success ? null : result.error
     });
 
     this.executing_tasks.delete(task.id);
 
-    console.log(`[ORCHESTRATOR] Task ${task.id} ${result.success ? 'completed' : 'failed'}`);
+    console.log(`[ORCHESTRATOR] Task ${task.id} ${finalStatus}`);
 
     return {
       type: 'EXECUTION_COMPLETE',
       task_id: task.id,
       success: result.success,
+      status: finalStatus,
       ...log_entry
-    };
-  }
-
-  /**
-   * Simular execução (placeholder)
-   */
-  async _simulateExecution(task, route) {
-    const start = Date.now();
-
-    // Simular delay
-    const delay = route.provider === 'ollama' ? 1000 : 3000;
-    await new Promise(r => setTimeout(r, delay));
-
-    const execution_time_ms = Date.now() - start;
-
-    // Simular resultado (sempre sucesso por agora)
-    return {
-      success: true,
-      output: `Result for task ${task.id}`,
-      actual_cost: route.estimated_cost || 0,
-      execution_time_ms
     };
   }
 
