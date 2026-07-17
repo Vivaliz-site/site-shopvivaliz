@@ -151,7 +151,7 @@ async function main() {
   console.log('✅ Teste Completo!\n');
   console.log('📌 Próximos Passos:');
   console.log('   1. Instalar Ollama (https://ollama.ai/download)');
-  console.log('   2. ollama pull qwen2.5-coder:1.5b-q2_K');
+  console.log('   2. ollama pull qwen2.5-coder:1.5b');
   console.log('   3. Configurar OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY');
   console.log('   4. Rodar: node .ai/main.js\n');
 }
