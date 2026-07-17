@@ -42,14 +42,17 @@ foreach (is_array($decoded) ? $decoded : [] as $row) {
 
     $key = svci_normalize($category);
     $generic_image = $generic_images[$key] ?? 'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?w=320&q=80';
+    $realImage = trim((string)($row['image_url'] ?? ''));
+    $image = svci_valid_image($realImage) ? $realImage : $generic_image;
     $score = ((int)($row['stock'] ?? 0) > 0 ? 4 : 0)
         + ((float)($row['price'] ?? 0) > 0 ? 2 : 0)
+        + (svci_valid_image($realImage) ? 3 : 0)
         + (trim((string)($row['slug'] ?? '')) !== '' ? 1 : 0);
 
     if (!isset($categories[$key]) || $score > $categories[$key]['score']) {
         $categories[$key] = [
             'category' => $category,
-            'image_url' => $generic_image,
+            'image_url' => $image,
             'sku' => (string)($row['sku'] ?? $row['id'] ?? ''),
             'product_name' => (string)($row['name'] ?? ''),
             'score' => $score,
