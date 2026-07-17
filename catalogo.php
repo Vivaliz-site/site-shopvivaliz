@@ -134,10 +134,11 @@ function sv_catalog_product_url(array $product): string
 function sv_catalog_slugify(string $name, string $sku): string
 {
     $accents = ['á'=>'a','à'=>'a','ã'=>'a','â'=>'a','ä'=>'a','é'=>'e','è'=>'e','ê'=>'e','ë'=>'e','í'=>'i','ì'=>'i','î'=>'i','ï'=>'i','ó'=>'o','ò'=>'o','õ'=>'o','ô'=>'o','ö'=>'o','ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ç'=>'c','ñ'=>'n'];
-    $base = strtr(mb_strtolower($name, 'UTF-8'), $accents);
+    $lower = function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
+    $base = strtr($lower, $accents);
     $base = preg_replace('/[^a-z0-9]+/', '-', $base);
     $base = trim((string)$base, '-');
-    $base = mb_substr($base, 0, 60);
+    $base = function_exists('mb_substr') ? mb_substr($base, 0, 60) : substr($base, 0, 60);
     $skuPart = strtolower((string)preg_replace('/[^a-zA-Z0-9]+/', '', $sku));
     return trim($base . '-' . $skuPart, '-') ?: $skuPart;
 }
