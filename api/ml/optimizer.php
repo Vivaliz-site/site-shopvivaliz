@@ -173,7 +173,7 @@ if (count($missingKws) > 0 && $titleLen < 55) {
     }
 }
 // Trunca para segurança
-$optimizedTitle = mb_substr($optimizedTitle, 0, 60);
+$optimizedTitle = svmlopt_substr($optimizedTitle, 0, 60);
 
 /* ------------------------------------------------------------------ *
  * Score de qualidade do anúncio (0-100)                               *
