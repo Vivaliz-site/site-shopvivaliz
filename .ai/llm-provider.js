@@ -298,7 +298,13 @@ class UnifiedLLM {
    * Chamar qualquer modelo
    */
   async call(model_id, messages, options = {}) {
-    const [provider, model] = model_id.split(':');
+    const firstColon = model_id.indexOf(':');
+    if (firstColon === -1) {
+      throw new Error(`Invalid model_id: ${model_id}`);
+    }
+    const provider = model_id.substring(0, firstColon);
+    const model = model_id.substring(firstColon + 1);
+
     if (!this.providers.has(provider)) {
       this.providers.set(provider, LLMProviderFactory.create(provider, {}));
     }

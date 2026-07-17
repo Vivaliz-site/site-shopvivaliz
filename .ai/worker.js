@@ -158,6 +158,7 @@ async function start() {
 
     while (!shutdownRequested) {
       try {
+        orchestrator.queue.loadFromDisk(false);
         const status = orchestrator.getStatus();
         const pendingCount = status.queue_size;
         const runningCount = status.executing;

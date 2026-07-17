@@ -109,6 +109,7 @@ const server = http.createServer((req, res) => {
 
   // GET /api/status
   if (pathname === '/api/status' && req.method === 'GET') {
+    orchestrator.queue.loadFromDisk(false);
     const status = orchestrator.getStatus();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(status, null, 2));
@@ -117,6 +118,7 @@ const server = http.createServer((req, res) => {
 
   // GET /api/tasks
   if (pathname === '/api/tasks' && req.method === 'GET') {
+    orchestrator.queue.loadFromDisk(false);
     const tasks = Array.from(orchestrator.queue.tasks.values());
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(tasks, null, 2));
@@ -132,6 +134,7 @@ const server = http.createServer((req, res) => {
 
     req.on('end', () => {
       try {
+        orchestrator.queue.loadFromDisk(false);
         const task = JSON.parse(body);
         const task_id = orchestrator.submit(task);
 
@@ -149,6 +152,7 @@ const server = http.createServer((req, res) => {
   const taskMatch = pathname.match(/^\/api\/tasks\/([a-f0-9-]+)$/);
   if (taskMatch && req.method === 'GET') {
     const taskId = taskMatch[1];
+    orchestrator.queue.loadFromDisk(false);
     const task = orchestrator.queue.get(taskId);
     if (!task) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -164,6 +168,7 @@ const server = http.createServer((req, res) => {
   const cancelMatch = pathname.match(/^\/api\/tasks\/([a-f0-9-]+)\/cancel$/);
   if (cancelMatch && req.method === 'POST') {
     const taskId = cancelMatch[1];
+    orchestrator.queue.loadFromDisk(false);
     const task = orchestrator.queue.get(taskId);
     if (!task) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
