@@ -34,38 +34,6 @@ function svcat_search_normalize(string $value): string
     return function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
 }
 
-function normalize_product(array $item): array
-{
-    // V3 API retorna em 'itens' com estrutura diferente
-    $preco_obj = $item['precos'] ?? [];
-    $preco = (float)($preco_obj['preco'] ?? $preco_obj['preco_venda'] ?? $item['preco'] ?? 0);
-
-    // Estoque: lê do cache (estoque_disponivel) ou da API (estoque.quantidade)
-    $stock = (int)($item['estoque_disponivel'] ?? ($item['estoque']['quantidade'] ?? 0));
-    $attachments = is_array($item['anexos'] ?? null) ? $item['anexos'] : [];
-    $imageUrl = trim((string)($item['imagem_principal_url'] ?? ''));
-    if ($imageUrl === '') {
-        foreach ($attachments as $attachment) {
-            $candidate = is_array($attachment) ? trim((string)($attachment['url'] ?? '')) : '';
-            if (preg_match('~^https://~i', $candidate)) { $imageUrl = $candidate; break; }
-        }
-    }
-
-    return [
-        'id' => (string)($item['id'] ?? ''),
-        'sku' => trim((string)($item['sku'] ?? $item['codigo'] ?? '')),
-        'olist_product_id' => (string)($item['id'] ?? ''),
-        'name' => trim((string)($item['descricao'] ?? $item['nome'] ?? 'Produto')),
-        'description' => trim((string)($item['descricaoComplementar'] ?? $item['descricao_complementar'] ?? $item['descricao'] ?? '')),
-        'price' => $preco,
-        'stock' => $stock,
-        'image_url' => $imageUrl,
-        'images_count' => count($attachments) ?: (int)($item['imagens_count'] ?? 0),
-        'category' => trim((string)($item['categoria']['nome'] ?? $item['categoria']['caminhoCompleto'] ?? '')),
-        'status' => 'active',
-    ];
-}
-
 function svcat_root(): string
 {
     return dirname(__DIR__, 2);
