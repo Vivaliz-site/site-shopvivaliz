@@ -393,7 +393,7 @@ $svNavCurrent = 'catalogo';
     <?php include __DIR__ . '/includes/footer.php'; ?>
 
     <script src="/autodev/client.js"></script>
-    <script src="/js/catalog.js"></script>
+    <script src="/js/catalog.js?v=<?= filemtime(__DIR__ . '/js/catalog.js') ?: '1' ?>"></script>
     <script>
     (function(){
         try {
