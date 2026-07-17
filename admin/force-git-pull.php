@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * ADMIN ENDPOINT - Force git pull on server
  * Access: https://dev.shopvivaliz.com.br/admin/force-git-pull.php
@@ -7,8 +8,8 @@
  * Use when automatic cron sync fails or is delayed
  */
 
-// Security: Allow only from localhost or specific IPs
-$allowed_ips = ['127.0.0.1', 'localhost', '::1'];
+require_once __DIR__ . '/../includes/admin-guard.php';
+
 $remote_ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 
 // Log file
