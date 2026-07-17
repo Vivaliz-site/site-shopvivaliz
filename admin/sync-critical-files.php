@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * ENDPOINT DE SINCRONIZAÇÃO DE ARQUIVOS CRÍTICOS
  * Bypass git when "dubious ownership" error occurs
@@ -6,6 +7,8 @@
  *
  * Access: https://dev.shopvivaliz.com.br/admin/sync-critical-files.php
  */
+
+require_once __DIR__ . '/../includes/admin-guard.php';
 
 header('Content-Type: application/json');
 
