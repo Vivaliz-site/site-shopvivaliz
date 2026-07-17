@@ -10,6 +10,8 @@ define('BASE_URL', $scheme . '://' . $host);
 define('APP_NAME', 'ShopVivaliz');
 require_once __DIR__ . '/includes/product-price-enrich.php';
 require_once __DIR__ . '/includes/catalog-runtime.php';
+require_once __DIR__ . '/includes/site-settings.php';
+$svFreeShipping = sv_free_shipping_config();
 
 function sv_home_esc(string $value): string
 {
@@ -354,9 +356,11 @@ $svNavCurrent = '';
     <section class="hero">
         <div class="container">
             <div class="hero-content">
+                <?php if ($svFreeShipping['enabled'] && $svFreeShipping['threshold'] > 0): ?>
                 <div class="hero-free-shipping-badge">
-                    🚚 Frete Grátis acima de R$ 299 para Sul e Sudeste
+                    🚚 Frete Grátis acima de R$ <?= number_format($svFreeShipping['threshold'], 0, ',', '.') ?>
                 </div>
+                <?php endif; ?>
                 <p class="eyebrow hero-kicker">
                     🛍️ Loja oficial Vivaliz
                 </p>
