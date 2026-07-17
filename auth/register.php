@@ -40,6 +40,40 @@ function sv_register_valid_cpf(string $digits): bool
     return true;
 }
 
+function sv_register_valid_cnpj(string $digits): bool
+{
+    if (strlen($digits) !== 14 || preg_match('/^(\d)\1{13}$/', $digits)) {
+        return false;
+    }
+    $calc = static function (string $digits, int $length) {
+        $weights = $length === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+        $sum = 0;
+        for ($i = 0; $i < $length; $i++) {
+            $sum += (int)$digits[$i] * $weights[$i];
+        }
+        $rest = $sum % 11;
+        return $rest < 2 ? 0 : 11 - $rest;
+    };
+    if ((int)$digits[12] !== $calc($digits, 12)) {
+        return false;
+    }
+    if ((int)$digits[13] !== $calc($digits, 13)) {
+        return false;
+    }
+    return true;
+}
+
+function sv_register_valid_document(string $digits): bool
+{
+    if (strlen($digits) === 11) {
+        return sv_register_valid_cpf($digits);
+    }
+    if (strlen($digits) === 14) {
+        return sv_register_valid_cnpj($digits);
+    }
+    return false;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_POST['csrf_token'] ?? null)) {
     $error = 'Sua sessão expirou. Recarregue a página e tente novamente.';
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
