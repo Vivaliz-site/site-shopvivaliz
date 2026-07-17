@@ -136,22 +136,37 @@ function svtop_tiny_request(string $method, string $path, string $token, ?array 
     return ['status' => $status, 'body' => is_string($body) ? $body : '', 'json' => is_array($json) ? $json : []];
 }
 
+function svtop_format_cpf(string $digits): string
+{
+    $digits = preg_replace('/\D/', '', $digits);
+    if (strlen($digits) !== 11) return $digits;
+    return substr($digits, 0, 3) . '.' . substr($digits, 3, 3) . '.' . substr($digits, 6, 3) . '-' . substr($digits, 9, 2);
+}
+
+function svtop_format_cnpj(string $digits): string
+{
+    $digits = preg_replace('/\D/', '', $digits);
+    if (strlen($digits) !== 14) return $digits;
+    return substr($digits, 0, 2) . '.' . substr($digits, 2, 3) . '.' . substr($digits, 5, 3) . '/' . substr($digits, 8, 4) . '-' . substr($digits, 12, 2);
+}
+
 /**
- * Busca o contato no Tiny pelo CPF/CNPJ. A API v3 filtra por nome de forma confiavel,
- * mas o filtro direto por cpfCnpj nao retorna resultado mesmo quando o contato existe
- * (confirmado empiricamente) -- por isso buscamos por nome e filtramos o CPF no PHP.
+ * Busca o contato no Tiny pelo CPF/CNPJ. A API v3 exige o filtro cpfCnpj FORMATADO
+ * (com pontuacao/traco) -- passar so os digitos retorna lista vazia mesmo quando o
+ * contato existe (confirmado empiricamente contra a API real).
  */
 function svtop_find_contact_id(string $token, string $cpfCnpj, string $name): ?int
 {
-    $cpfCnpj = preg_replace('/\D/', '', $cpfCnpj);
-    if ($cpfCnpj === '' || $name === '') return null;
+    $digits = preg_replace('/\D/', '', $cpfCnpj);
+    if ($digits === '') return null;
+    $formatted = strlen($digits) === 14 ? svtop_format_cnpj($digits) : svtop_format_cpf($digits);
 
-    $res = svtop_tiny_request('GET', '/contatos?' . http_build_query(['nome' => $name]), $token);
+    $res = svtop_tiny_request('GET', '/contatos?' . http_build_query(['cpfCnpj' => $formatted]), $token);
     if ($res['status'] !== 200) return null;
 
     foreach ($res['json']['itens'] ?? [] as $item) {
         $itemCpf = preg_replace('/\D/', '', (string)($item['cpfCnpj'] ?? ''));
-        if ($itemCpf !== '' && $itemCpf === $cpfCnpj) {
+        if ($itemCpf !== '' && $itemCpf === $digits) {
             return (int)($item['id'] ?? 0) ?: null;
         }
     }
