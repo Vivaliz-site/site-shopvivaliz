@@ -565,6 +565,13 @@ if ($q !== '') {
     });
 }
 
+$categoria = trim((string)($_GET['categoria'] ?? ''));
+if ($categoria !== '') {
+    $all_erp = array_filter($all_erp, function ($p) use ($categoria) {
+        return strcasecmp((string)($p['category'] ?? ''), $categoria) === 0;
+    });
+}
+
 $products = array_slice(array_values($all_erp), 0, $limit);
 
 // Categorias do fallback.json (apenas leitura)
