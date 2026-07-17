@@ -143,12 +143,13 @@ function sv_product_merge_db(array $product, array $dbRow): array
         $product['price'] = (float)$dbRow['price'];
     }
 
-    // So sobrescreve quando o banco tiver estoque > 0 -- a tabela local
-    // pode estar desatualizada (0 default) enquanto o catalogo estatico
-    // ja tem o valor real sincronizado direto da Tiny.
-    if ((int)($dbRow['stock'] ?? 0) > 0) {
-        $product['stock'] = (int)$dbRow['stock'];
-    }
+    // Estoque nunca vem do banco local: a tabela `products` pode ficar
+    // desatualizada em qualquer direcao (zerada OU com valor antigo maior
+    // que o real). O catalogo sincronizado (svcr_products(), direto da
+    // Tiny) e a unica fonte confiavel de estoque -- sobrescrever com o
+    // banco ja mostrou "X unidades restantes" para produto com estoque
+    // real 0, deixando o cliente adicionar ao carrinho um item indisponivel
+    // que so falha (com mensagem confusa) na validacao do checkout.
 
     return $product;
 }
