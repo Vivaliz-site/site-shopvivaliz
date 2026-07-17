@@ -181,9 +181,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('admin-integrations'
             <?php foreach ($integrations as $key => $integration): ?>
                 <div class="card">
                     <div class="card-title"><?= htmlspecialchars($integration['name']) ?></div>
-                    <form method="POST">
-                        <?= sv_csrf_input('admin-integrations') ?>
-                        <?php foreach ($integration['fields'] as $fieldKey => $field): ?>
+                    <?php foreach ($integration['fields'] as $fieldKey => $field): ?>
+                        <form method="POST">
+                            <?= sv_csrf_input('admin-integrations') ?>
                             <div class="form-group">
                                 <label><?= htmlspecialchars($field['label']) ?></label>
                                 <input
@@ -197,12 +197,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('admin-integrations'
                                     <?= (!empty($field['value']) && $field['value'] !== '***REDACTED***') ? '✅ Configurado' : '⚠️ Vazio' ?>
                                 </div>
                             </div>
-                        <?php endforeach; ?>
-                        <input type="hidden" name="integration" value="<?= htmlspecialchars($key) ?>">
-                        <input type="hidden" name="field" value="<?= array_key_first($integration['fields']) ?>">
-                        <input type="hidden" name="save_integration" value="1">
-                        <button type="submit">💾 Salvar</button>
-                    </form>
+                            <input type="hidden" name="integration" value="<?= htmlspecialchars($key) ?>">
+                            <input type="hidden" name="field" value="<?= htmlspecialchars($fieldKey) ?>">
+                            <input type="hidden" name="save_integration" value="1">
+                            <button type="submit">💾 Salvar <?= htmlspecialchars($field['label']) ?></button>
+                        </form>
+                    <?php endforeach; ?>
                 </div>
             <?php endforeach; ?>
         </div>
