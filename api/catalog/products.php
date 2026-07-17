@@ -503,59 +503,33 @@ function svcat_fallback_products(int $limit, string $q, string $category = ''): 
     }, array_values($bySku));
 }
 
-// ALTERADO 2026-07-13: Busca DIRETO do ERP, nao mais ecommerce Olist
-// Ecommerce desativado - usar apenas Tiny/ERP
+// ALTERADO 2026-07-17: usa svcr_products() -- a mesma fonte de dados do
+// checkout (/api/cart/validate.php) e da pagina de produto (produto.php).
+// Antes este endpoint lia o cache/API do ERP direto, uma fonte separada do
+// arquivo curado (api/catalog/fallback-products.json) usado no resto do
+// site. As duas fontes ficavam dessincronizadas: produtos apareciam
+// "disponivel" no catalogo mas "esgotado" na pagina do produto (ou o
+// carrinho recusava um item que o catalogo mostrava como comprável).
+require_once dirname(__DIR__, 2) . '/includes/catalog-runtime.php';
 
 $limit = min(200, max(1, (int)($_GET['limit'] ?? 48)));
 $q = trim((string)($_GET['q'] ?? ''));
 
-$products = [];
-$all_erp = [];
-
-// Tentar ler do cache JSON primeiro (APENAS ATIVOS - status A)
-$cache_file = svcat_root() . '/storage/products-cache-ativos.json';
-$cache_exists = is_file($cache_file);
-$cache_fresh = $cache_exists; // Use cache if exists, avoiding 24h expiration lockouts
-$cache_used = false;
-
-if ($cache_exists && $cache_fresh) {
-    $cache_content = @file_get_contents($cache_file);
-    if ($cache_content) {
-        $cache_data = json_decode($cache_content, true);
-        if (isset($cache_data['itens']) && is_array($cache_data['itens'])) {
-            foreach ($cache_data['itens'] as $item) {
-                // FILTER: Only include active products (situacao === 'A')
-                if (isset($item['situacao']) && $item['situacao'] === 'A') {
-                    $all_erp[] = normalize_product($item);
-                }
-            }
-            $cache_used = true;
-        }
-    }
-}
-
-if (!$cache_used) {
-    // Fallback: buscar da API e filtrar APENAS ATIVOS (situacao === 'A')
-    $page = 1;
-    $max_pages = 50;
-    while ($page <= $max_pages) {
-        $items = fetch_erp_products($page, 100);
-        if (!is_array($items) || empty($items)) {
-            break;
-        }
-        foreach ($items as $item) {
-            // FILTRO CRÍTICO: apenas produtos status A (ativos)
-            if (isset($item['situacao']) && $item['situacao'] === 'A') {
-                $all_erp[] = normalize_product($item);
-            }
-        }
-        if (count($items) < 100) {
-            break;
-        }
-        $page++;
-        usleep(500000);
-    }
-}
+$all_erp = array_map(static function (array $row): array {
+    return [
+        'id' => (string)($row['id'] ?? $row['sku'] ?? ''),
+        'sku' => trim((string)($row['sku'] ?? '')),
+        'olist_product_id' => (string)($row['olist_product_id'] ?? ''),
+        'name' => trim((string)($row['name'] ?? 'Produto')),
+        'description' => trim((string)($row['description'] ?? '')),
+        'price' => (float)($row['price'] ?? 0),
+        'stock' => (int)($row['stock'] ?? 0),
+        'image_url' => trim((string)($row['image_url'] ?? '')),
+        'images_count' => (int)($row['images_count'] ?? 0),
+        'category' => trim((string)($row['category'] ?? '')),
+        'status' => 'active',
+    ];
+}, array_values(array_filter(svcr_products(), 'is_array')));
 
 if ($q !== '') {
     $qNormalized = svcat_search_normalize($q);
