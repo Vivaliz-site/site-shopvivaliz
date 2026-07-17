@@ -293,6 +293,16 @@ $record['tiny_push'] = $tinyPushStatus;
 file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
 svop_append_log($record);
 
+if ($tinyOrderId) {
+    try {
+        $pdo = sv_pdo();
+        $stmt = $pdo->prepare('UPDATE orders SET olist_order_id = :olist_order_id WHERE order_number = :order_number');
+        $stmt->execute([':olist_order_id' => $tinyOrderId, ':order_number' => $orderNumber]);
+    } catch (Throwable $e) {
+        error_log('[OrderValidated] MySQL olist_order_id update failed: ' . $e->getMessage());
+    }
+}
+
 // Disparar email de confirmação do pedido
 try {
     $emailSent = svem_send_order_email($record, 'order_created');
