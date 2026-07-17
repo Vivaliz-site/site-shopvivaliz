@@ -1,5 +1,11 @@
 <?php
 declare(strict_types=1);
+// Precisa iniciar cedo: pagina tem HTML suficiente antes do include do navbar
+// para estourar o buffer de saida do PHP e o session_start() tardio do
+// navbar.php falha silenciosamente (usuario aparece deslogado).
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 header('Content-Type: text/html; charset=UTF-8');
 
 $runtimeSecretsFile = __DIR__ . '/config/runtime-secrets.php';
