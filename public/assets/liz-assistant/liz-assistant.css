@@ -110,6 +110,15 @@
   position: relative;
 }
 
+/* Logo no cabecalho: SVG sem tamanho definido (400x400) estava sem limite
+   de altura, forcando o .sv-head a esticar bem alem do min-height de 80px
+   para caber a imagem inteira -- faixa desproporcionalmente grossa. */
+.sv-head > img {
+  height: 34px;
+  width: auto;
+  flex-shrink: 0;
+}
+
 /* Glowing Indicator */
 .sv-head-avatar-wrapper {
   position: relative;
