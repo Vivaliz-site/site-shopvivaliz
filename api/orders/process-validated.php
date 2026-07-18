@@ -194,6 +194,13 @@ foreach ($items as $item) {
     ];
 }
 
+// Cupom ja revalidado com preco de servidor em create-validated.php --
+// aqui so aplica o desconto calculado la (nunca confia em valor vindo do
+// cliente). Ver includes/coupons.php.
+$coupon = is_array($body['coupon'] ?? null) ? $body['coupon'] : null;
+$couponCode = $coupon !== null ? (string)($coupon['code'] ?? '') : '';
+$couponDiscount = $coupon !== null ? round(min((float)($coupon['amount'] ?? 0), $itemsTotal), 2) : 0.0;
+
 $orderNumber = 'SV' . date('YmdHis') . random_int(100, 999);
 $paymentSessionToken = in_array($paymentMethod, ['boleto', 'mercado_pago'], true)
     ? bin2hex(random_bytes(32))
@@ -217,11 +224,13 @@ $record = [
     ],
     'items' => $cleanItems,
     'items_total' => round($itemsTotal, 2),
+    'coupon_code' => $couponCode,
+    'coupon_discount' => $couponDiscount,
     'shipping_total' => $shippingTotal,
     'shipping_label' => $shippingLabel,
     'shipping_service' => $shippingService,
     'shipping_cep' => $shippingCep,
-    'total' => round($itemsTotal + $shippingTotal, 2),
+    'total' => round($itemsTotal - $couponDiscount + $shippingTotal, 2),
     'payment_method' => $paymentMethod,
     'payment_label' => svop_payment_label($paymentMethod),
     'notes' => $notes,
@@ -300,6 +309,8 @@ $response = [
     'payment_instructions' => svop_payment_instructions($paymentMethod),
     'storage' => str_contains($dir, 'shopvivaliz-orders') ? 'fallback_temp' : 'storage_orders',
     'subtotal' => round($itemsTotal, 2),
+    'coupon_code' => $couponCode,
+    'coupon_discount' => $couponDiscount,
     'shipping_total' => $shippingTotal,
     'shipping_label' => $shippingLabel,
     'total' => $record['total'],

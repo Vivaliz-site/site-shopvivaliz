@@ -11,6 +11,7 @@ require_once dirname(__DIR__, 2) . '/includes/order-authoritative.php';
 require_once dirname(__DIR__, 2) . '/includes/order-request-context.php';
 require_once dirname(__DIR__, 2) . '/includes/order-idempotency.php';
 require_once dirname(__DIR__, 2) . '/includes/order-rate-limit.php';
+require_once dirname(__DIR__, 2) . '/includes/coupons.php';
 
 function svq_fail(int $status, string $error, string $message, array $extra = []): never {
     http_response_code($status);
@@ -73,6 +74,14 @@ $fingerprintItems = array_map(static fn(array $item): array => [
 $fingerprint = ['cep'=>$shippingCep,'items'=>$fingerprintItems,'service_id'=>$serviceId,'price'=>$shippingTotal,'expires_at'=>$expiresAt];
 $expected = hash_hmac('sha256', json_encode($fingerprint, JSON_UNESCAPED_SLASHES), svq_secret());
 if (!hash_equals($expected, $quoteId)) svq_fail(409,'shipping_quote_invalid','O valor do frete foi alterado ou não corresponde à cotação. Calcule novamente.');
+
+$couponCode = trim((string)($body['coupon_code'] ?? ''));
+if ($couponCode !== '') {
+    $itemsSubtotal = array_reduce($resolved['items'], static fn(float $sum, array $item): float => $sum + $item['price'] * $item['quantity'], 0.0);
+    $coupon = svcp_validate($couponCode, $itemsSubtotal);
+    if (!$coupon['ok']) svq_fail(422,'coupon_invalid','Cupom inválido ou não aplicável a este carrinho.');
+    $body['coupon'] = $coupon;
+}
 
 $idempotencyKey = svoi_key($body, $resolved['items']);
 if (!svoi_claim($idempotencyKey)) svq_fail(409,'duplicate_order_request','Este pedido já está sendo processado ou foi enviado recentemente.');

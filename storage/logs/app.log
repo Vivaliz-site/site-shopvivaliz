@@ -477,3 +477,7 @@
 {"timestamp":"2026-07-12T07:01:49+00:00","message":"Database connection failed","context":{"error":"Access denied for user 'shopvivaliz'@'localhost' (using password: YES)"}}
 {"timestamp":"2026-07-12T07:01:50+00:00","message":"Database connection failed","context":{"error":"Access denied for user 'shopvivaliz'@'localhost' (using password: YES)"}}
 {"timestamp":"2026-07-12T07:01:51+00:00","message":"Database connection failed","context":{"error":"Access denied for user 'shopvivaliz'@'localhost' (using password: YES)"}}
+{"timestamp":"2026-07-18T12:35:33+00:00","message":"Database connection failed","context":{"error":"Nenhuma conex\u00e3o p\u00f4de ser feita porque a m\u00e1quina de destino as recusou ativamente"}}
+{"timestamp":"2026-07-18T12:35:37+00:00","message":"Database connection failed","context":{"error":"Nenhuma conex\u00e3o p\u00f4de ser feita porque a m\u00e1quina de destino as recusou ativamente"}}
+{"timestamp":"2026-07-18T12:36:47+00:00","message":"Database connection failed","context":{"error":"Nenhuma conex\u00e3o p\u00f4de ser feita porque a m\u00e1quina de destino as recusou ativamente"}}
+{"timestamp":"2026-07-18T12:36:51+00:00","message":"Database connection failed","context":{"error":"Nenhuma conex\u00e3o p\u00f4de ser feita porque a m\u00e1quina de destino as recusou ativamente"}}

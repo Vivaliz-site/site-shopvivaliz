@@ -12,10 +12,10 @@ $coupons = [];
 try {
     $pdo = sv_pdo();
     $stmt = $pdo->query(
-        "SELECT code, discount_type, discount_value, min_order_value, expires_at
+        "SELECT code, description, discount_type, discount_value, ends_at
          FROM coupons
-         WHERE is_active = 1 AND (expires_at IS NULL OR expires_at >= NOW())
-         ORDER BY expires_at IS NULL, expires_at ASC
+         WHERE is_active = 1 AND (ends_at IS NULL OR ends_at >= NOW())
+         ORDER BY ends_at IS NULL, ends_at ASC
          LIMIT 50"
     );
     $coupons = $stmt->fetchAll();
@@ -24,10 +24,13 @@ try {
 }
 
 $labelFor = static function (array $c): string {
+    if (trim((string)($c['description'] ?? '')) !== '') {
+        return (string)$c['description'];
+    }
     return match ($c['discount_type']) {
-        'pct' => 'Desconto ' . (int)$c['discount_value'] . '%',
+        'percent' => 'Desconto ' . rtrim(rtrim(number_format((float)$c['discount_value'], 2, ',', '.'), '0'), ',') . '%',
         'fixed' => 'Desconto R$ ' . number_format((float)$c['discount_value'], 2, ',', '.'),
-        'frete' => 'Frete Grátis',
+        'shipping' => 'Frete Grátis',
         default => 'Desconto aplicado',
     };
 };
@@ -45,11 +48,8 @@ require __DIR__ . '/../includes/account-chrome-top.php';
             <div style="border:1px dashed #173b63; border-radius:8px; padding:16px; background:#f7f9fc;">
                 <div style="font-size:18px; font-weight:700; letter-spacing:1px; color:#173b63;"><?php echo htmlspecialchars($c['code']); ?></div>
                 <div style="font-size:14px; margin-top:4px;"><?php echo htmlspecialchars($labelFor($c)); ?></div>
-                <?php if ((float)($c['min_order_value'] ?? 0) > 0): ?>
-                    <div style="font-size:12px; color:#666; margin-top:4px;">Pedido mínimo: R$ <?php echo number_format((float)$c['min_order_value'], 2, ',', '.'); ?></div>
-                <?php endif; ?>
-                <?php if (!empty($c['expires_at'])): ?>
-                    <div style="font-size:12px; color:#666;">Válido até <?php echo date('d/m/Y', strtotime($c['expires_at'])); ?></div>
+                <?php if (!empty($c['ends_at'])): ?>
+                    <div style="font-size:12px; color:#666;">Válido até <?php echo date('d/m/Y', strtotime($c['ends_at'])); ?></div>
                 <?php endif; ?>
             </div>
         <?php endforeach; ?>

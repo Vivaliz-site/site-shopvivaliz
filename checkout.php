@@ -189,10 +189,20 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         <h2 class="checkout-title">Resumo</h2>
         <div id="cart-items" class="summary-items"></div>
 
+        <div class="sv-coupon-box" style="display:flex; gap:8px; margin:14px 0;">
+            <input type="text" id="coupon-input" placeholder="Cupom de desconto" maxlength="30" style="flex:1; text-transform:uppercase;" aria-label="Código do cupom de desconto">
+            <button type="button" id="coupon-apply-btn" class="btn btn-secondary">Aplicar</button>
+        </div>
+        <div id="coupon-status" class="sv-checkout-note" hidden></div>
+
         <div class="summary-totals">
             <div class="summary-row">
                 <span>Subtotal</span>
                 <strong id="cart-subtotal">—</strong>
+            </div>
+            <div class="summary-row" id="coupon-discount-row" hidden>
+                <span id="coupon-discount-label">Desconto</span>
+                <strong id="cart-discount">— R$ 0,00</strong>
             </div>
             <div class="summary-row">
                 <span>Frete</span>
@@ -297,6 +307,11 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     function getShippingQuote() {
         try { return JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null'); } catch(e) { return null; }
     }
+    function getCoupon() {
+        try { return JSON.parse(localStorage.getItem('shopvivaliz_coupon') || 'null'); } catch(e) { return null; }
+    }
+    function saveCoupon(coupon) { localStorage.setItem('shopvivaliz_coupon', JSON.stringify(coupon)); }
+    function clearCoupon() { localStorage.removeItem('shopvivaliz_coupon'); }
 
     /* Persistencia dos dados do formulario: sem isso, sair da tela (ex: pra
        revisar o carrinho) e voltar limpava nome/email/endereco e o usuario
@@ -349,6 +364,9 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         var totEl = document.getElementById('cart-total');
         var shippingEl = document.getElementById('cart-shipping');
         var badge = document.getElementById('nav-cart-count');
+        var discountRow = document.getElementById('coupon-discount-row');
+        var discountLabel = document.getElementById('coupon-discount-label');
+        var discountEl = document.getElementById('cart-discount');
         if (!el) return;
 
         var total = 0;
@@ -356,6 +374,8 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         var html = '';
         var quote = getShippingQuote();
         var shippingTotal = quote && Number(quote.total || 0) > 0 ? Number(quote.total || 0) : 0;
+        var coupon = getCoupon();
+        var discountTotal = coupon && Number(coupon.amount || 0) > 0 ? Number(coupon.amount || 0) : 0;
 
         if (!items.length) {
             html = '<p class="empty-cart">Carrinho vazio. <a href="/catalogo">Ver produtos</a></p>';
@@ -373,12 +393,18 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                     + '</div></div>';
             });
         }
+        discountTotal = Math.min(discountTotal, total);
 
         el.innerHTML = html;
         var fmt = hasPrice ? fmtMoney(total) : 'Consultar';
         if (subEl) subEl.textContent = fmt;
         if (shippingEl) shippingEl.textContent = shippingTotal > 0 ? fmtMoney(shippingTotal) : 'A calcular';
-        if (totEl) totEl.textContent = hasPrice ? fmtMoney(total + shippingTotal) : 'Consultar';
+        if (discountRow) discountRow.hidden = discountTotal <= 0;
+        if (discountTotal > 0) {
+            if (discountLabel) discountLabel.textContent = 'Desconto' + (coupon && coupon.code ? ' (' + coupon.code + ')' : '');
+            if (discountEl) discountEl.textContent = '- ' + fmtMoney(discountTotal);
+        }
+        if (totEl) totEl.textContent = hasPrice ? fmtMoney(total - discountTotal + shippingTotal) : 'Consultar';
         if (badge) badge.textContent = items.reduce(function(a,i){ return a+(i.quantity||1); }, 0);
     }
 
@@ -460,6 +486,46 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Falha de conexão ao calcular o frete. Tente novamente.'; }
             });
     }
+    var couponApplyBtn = document.getElementById('coupon-apply-btn');
+    var couponInput = document.getElementById('coupon-input');
+    (function initCoupon() {
+        var existing = getCoupon();
+        if (existing && couponInput) couponInput.value = existing.code || '';
+        if (couponApplyBtn) {
+            couponApplyBtn.addEventListener('click', function () {
+                var statusEl = document.getElementById('coupon-status');
+                var code = (couponInput.value || '').trim().toUpperCase();
+                if (!code) { clearCoupon(); renderCart(); if (statusEl) { statusEl.hidden = true; } return; }
+                couponApplyBtn.disabled = true;
+                couponApplyBtn.textContent = 'Aplicando…';
+                if (statusEl) { statusEl.hidden = true; }
+                fetch('/api/orders/validate-coupon.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ coupon_code: code, items: getCart() })
+                })
+                    .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+                    .then(function (result) {
+                        couponApplyBtn.disabled = false;
+                        couponApplyBtn.textContent = 'Aplicar';
+                        if (!result.ok || !result.data.ok) {
+                            clearCoupon();
+                            renderCart();
+                            if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Cupom inválido ou não aplicável a este carrinho.'; }
+                            return;
+                        }
+                        saveCoupon({ code: result.data.code, amount: result.data.amount, percent: result.data.percent, label: result.data.label });
+                        renderCart();
+                        if (statusEl) { statusEl.hidden = false; statusEl.className = 'sv-checkout-note'; statusEl.textContent = result.data.label + ' aplicado!'; }
+                    })
+                    .catch(function () {
+                        couponApplyBtn.disabled = false;
+                        couponApplyBtn.textContent = 'Aplicar';
+                        if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Falha de conexão ao validar o cupom.'; }
+                    });
+            });
+        }
+    })();
     if (cepInput) {
         cepInput.addEventListener('input', function () {
             var val = this.value.replace(/\D/g, '');
@@ -553,6 +619,10 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 payload.shipping_expires_at = Number(q.expires_at) || 0;
             }
         } catch (ignore) {}
+        try {
+            var appliedCoupon = getCoupon();
+            if (appliedCoupon && appliedCoupon.code) payload.coupon_code = appliedCoupon.code;
+        } catch (ignore) {}
 
         var method = fd.get('payment_method') || 'pix';
         var key = pendingKey(items, method);
@@ -583,7 +653,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                     order_number: order.order_number,
                     payment_session_token: order.payment_session_token
                 });
-                clearPendingPayment(); clearCart(); clearShippingQuote(); renderCart();
+                clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon(); renderCart();
                 document.getElementById('boleto-order-msg').textContent = 'Pedido ' + order.order_number;
                 document.getElementById('boleto-digitable-line').value = boleto.digitable_line || '';
                 document.getElementById('boleto-line-group').hidden = !boleto.digitable_line;
@@ -595,11 +665,11 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                     order_number: order.order_number,
                     payment_session_token: order.payment_session_token
                 });
-                clearPendingPayment(); clearCart(); clearShippingQuote();
+                clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon();
                 window.location.assign(preference.checkout_url);
                 return;
             } else {
-                clearPendingPayment(); clearCart(); clearShippingQuote(); renderCart();
+                clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon(); renderCart();
                 if (method === 'pix') {
                     document.getElementById('pix-amount-display').textContent = total > 0 ? totalFmt : 'Confirmar com a loja';
                     document.getElementById('wpp-confirm-link').href = wppLink;
