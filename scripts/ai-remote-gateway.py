@@ -541,7 +541,11 @@ async def handle_tools(request: web.Request) -> web.Response:
 
 async def handle_exec(request: web.Request) -> web.Response:
     data = await request.json()
-    result = await run_command(str(data.get("cmd") or ""), int(data.get("timeout") or 30))
+    result = await run_command(
+        str(data.get("cmd") or ""),
+        int(data.get("timeout") or 30),
+        remote=request.remote,
+    )
     return _json_response(result)
 
 
