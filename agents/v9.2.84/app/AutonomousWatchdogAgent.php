@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../../includes/pdo-database.php';
 require_once __DIR__ . '/SafeMigrationRepairAgent.php';
 require_once __DIR__ . '/OlistImageRepairAgent.php';
 require_once __DIR__ . '/SelfTestAgent.php';

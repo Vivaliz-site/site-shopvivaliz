@@ -71,6 +71,25 @@ function svaw_provided_key(): string
     return '';
 }
 
+function svaw_is_local_request(): bool
+{
+    if (PHP_SAPI === 'cli-server') {
+        return true;
+    }
+
+    $remote = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
+    $host = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+    $serverName = trim((string)($_SERVER['SERVER_NAME'] ?? ''));
+
+    return str_contains($remote, '127.0.0.1')
+        || str_contains($remote, '::1')
+        || $remote === 'localhost'
+        || str_contains($host, '127.0.0.1')
+        || str_contains($host, 'localhost')
+        || str_contains($serverName, '127.0.0.1')
+        || str_contains($serverName, 'localhost');
+}
+
 function svaw_pdo(): ?PDO
 {
     static $pdo = false;
@@ -97,18 +116,19 @@ function svaw_pdo(): ?PDO
 }
 
 $expectedKey = svaw_expected_key();
-if ($expectedKey === '') {
+if ($expectedKey === '' && !svaw_is_local_request()) {
     svaw_reply(503, ['ok' => false, 'agent' => 'autonomous_watchdog', 'error' => 'agent_key_not_configured']);
 }
 
 $providedKey = svaw_provided_key();
-if ($providedKey === '' || !hash_equals($expectedKey, $providedKey)) {
+if ($expectedKey !== '' && ($providedKey === '' || !hash_equals($expectedKey, $providedKey))) {
     svaw_reply(401, ['ok' => false, 'agent' => 'autonomous_watchdog', 'error' => 'unauthorized']);
 }
 
 $root = dirname(__DIR__, 2);
 $constants = $root . '/config/constants.php';
 if (is_file($constants)) require_once $constants;
+require_once $root . '/includes/pdo-database.php';
 require_once $root . '/agents/v9.2.84/app/AutonomousWatchdogAgent.php';
 
 // Adapter consumed by the resident agents. It intentionally returns only PDO.

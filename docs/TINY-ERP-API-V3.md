@@ -30,6 +30,10 @@ leia o bloco `cURL` de exemplo pra confirmar o path exato antes de codificar —
 | Naturezas de operação — listar | **não existe** (`/naturezas-operacao` = 404) | — |
 | Listas de preço — listar | não confirmado (`/lista-de-precos`/`/listas-precos` = 404, path real não achado ainda) | — |
 | Estoque | `GET /estoque/{id}` | — (só esse tem `disponivel` correto pra kits) |
+| Pedidos — atualizar despacho/rastreio | `PUT /pedidos/{idPedido}/despacho` | [atualizar-informações-de-rastreamento-do-pedido](https://api-docs.erp.olist.com/api-reference/pedidos/atualizar-informa%C3%A7%C3%B5es-de-rastreamento-do-pedido) |
+| Notas fiscais — obter | `GET /notas/{idNota}` | [obter-nota-fiscal](https://api-docs.erp.olist.com/api-reference/notas/obter-nota-fiscal) |
+| Notas fiscais — obter XML | `GET /notas/{idNota}/xml` | [obter-xml-da-nota-fiscal](https://api-docs.erp.olist.com/api-reference/notas/obter-xml-da-nota-fiscal) |
+| Categorias — árvore completa | `GET /categorias/todas` | [listar-árvore-de-categorias](https://api-docs.erp.olist.com/api-reference/categorias/listar-%C3%A1rvore-de-categorias) |
 
 ## Limites de requisição
 
@@ -295,6 +299,72 @@ cadastradas, e a UI de "adicionar integração" / app "Webhooks" (que a doc anti
 mencionava) não é o caminho certo pra esses 6 eventos nativos de e-commerce
 (produto/estoque/preço/situação-pedido/rastreio/nota-fiscal) — esses vivem dentro da
 integração "API do ERP" já instalada, aba Notificações.
+
+## PUT /pedidos/{idPedido}/despacho — vincular transportador/rastreio real (não implementado ainda)
+
+Este é o endpoint que fecha a lacuna documentada acima em "vendedor agora É preenchido":
+depois da etiqueta comprada via Melhor Envio, dá pra fazer PUT no pedido já criado no Tiny
+com os dados reais de transporte — sem precisar saber isso no momento do push inicial.
+
+Schema confirmado (todos os campos opcionais, `idPedido` no path):
+
+```json
+PUT /pedidos/{idPedido}/despacho
+{
+  "codigoRastreamento": "string",
+  "urlRastreamento": "string",
+  "formaEnvio": { "id": 123 },
+  "formaFrete": { "id": 123 },
+  "fretePagoEmpresa": 0.0,
+  "dataPrevista": "2024-01-01",
+  "idContatoTransportadora": 123,
+  "volumes": 1,
+  "pesoBruto": 0.0,
+  "pesoLiquido": 0.0,
+  "observacoes": "string"
+}
+```
+
+Resposta: `204 No Content` em sucesso. Ponto de integração natural: dentro de
+`api/melhorenvio/generate-label-background.php`, depois que a etiqueta é gerada e temos
+`shipping_service`/`tracking_code`/peso/volumes reais — falta mapear `formaEnvio.id` (ver
+tabela "GET /formas-envio" acima) e `formaFrete.id` (sub-serviço, ex. PAC/SEDEX dentro de
+"Correios via Melhor envio") a partir do serviço escolhido no Melhor Envio. Ainda não
+implementado — próximo passo natural depois de montar essa tabela de mapeamento.
+
+## GET /notas/{idNota} e GET /notas/{idNota}/xml — consultar NF emitida (não implementado ainda)
+
+`GET /notas/{idNota}` retorna o modelo completo da nota fiscal: `situacao` (enum 1-10),
+`tipo` (E/S), `numero`, `serie`, `chaveAcesso`, `dataEmissao`, valores (`valor`,
+`valorProdutos`, `valorFrete`, `baseIcms`, `valorIcms`, `valorIpi`, etc.), `cliente`,
+`enderecoEntrega`, `vendedor`, `transportador`, `itens[]`, `parcelas[]`.
+
+`GET /notas/{idNota}/xml` retorna `{ "xmlNfe": "string", "xmlCancelamento": "string" }` —
+o XML assinado da NF-e (e o de cancelamento, se houver).
+
+**Não temos o `idNota` armazenado localmente ainda** — só recebemos o evento de webhook
+"nota fiscal" (`api/webhooks/order-status-update.php?type=invoice`, ver seção acima), que
+precisa ser inspecionado ao vivo (próximo pedido real com NF emitida) pra confirmar se o
+body traz `idNota`/`numero`/`chaveAcesso` direto ou só o novo `situacao`. Uso pretendido:
+disponibilizar o XML/dados da NF pro cliente no site (hoje não existe essa tela).
+
+## GET /categorias/todas — árvore de categorias (não implementado ainda)
+
+```json
+GET /categorias/todas
+[
+  { "id": 123456789, "descricao": "Camisetas", "filhas": [
+    { "id": 987654321, "descricao": "Camisetas Masculinas", "filhas": [] },
+    { "id": 876543219, "descricao": "Camisetas Femininas", "filhas": [] }
+  ]}
+]
+```
+
+Estrutura recursiva ilimitada. `olist/sync-products.php` já traz `categoria{id,nome,
+caminhoCompleto}` por produto (schema de `GET /produtos/{id}`), mas não usa esta árvore —
+seria a fonte pra popular filtro/navegação de categorias reais do catálogo em vez do que
+está hardcoded hoje. Não avaliado ainda se compensa (sem paginação visível na doc — pode
+ser resposta grande numa conta com muitas categorias).
 
 ## Como redescobrir estes dados se algo mudar
 
