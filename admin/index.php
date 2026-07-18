@@ -6,6 +6,37 @@ header('Content-Type: text/html; charset=UTF-8');
 $version = is_file(__DIR__ . '/../config/shopvivaliz-version.php') ? require __DIR__ . '/../config/shopvivaliz-version.php' : [];
 $appVersion = (string)($version['version'] ?? '0.0.0');
 $codename = (string)($version['codename'] ?? '');
+
+$remoteServersFile = __DIR__ . '/../mcp-servers.json';
+$remoteServers = [];
+if (is_file($remoteServersFile)) {
+    $decodedServers = json_decode((string)file_get_contents($remoteServersFile), true);
+    if (is_array($decodedServers)) {
+        $remoteServers = $decodedServers;
+    }
+}
+
+$remoteAiGateway = is_array($remoteServers['servers']['remote-ai-gateway'] ?? null) ? $remoteServers['servers']['remote-ai-gateway'] : [];
+$remoteGatewayUrl = (string)($remoteAiGateway['url'] ?? 'http://127.0.0.1:5560');
+$remoteGatewayStatusUrl = rtrim($remoteGatewayUrl, '/') . '/status';
+$remoteGatewayHealthUrl = rtrim($remoteGatewayUrl, '/') . '/health';
+$remoteGatewayIp = (string)($remoteAiGateway['ip'] ?? '127.0.0.1');
+$remoteGatewayEnabled = (bool)($remoteAiGateway['enabled'] ?? false);
+
+$remoteApiKeyFile = __DIR__ . '/../storage/remote-access/api-key.txt';
+$remoteApiKey = is_file($remoteApiKeyFile) ? trim((string)file_get_contents($remoteApiKeyFile)) : '';
+$remoteApiKeyMasked = $remoteApiKey !== '' ? substr($remoteApiKey, 0, 6) . '…' . substr($remoteApiKey, -4) : 'não configurada';
+$remoteAccessState = $remoteApiKey !== '' && $remoteGatewayEnabled ? 'Pronto' : 'Pendente';
+
+$publicTunnelFile = __DIR__ . '/../storage/remote-access/public-tunnel.json';
+$publicTunnel = [];
+if (is_file($publicTunnelFile)) {
+    $decodedPublicTunnel = json_decode((string)file_get_contents($publicTunnelFile), true);
+    if (is_array($decodedPublicTunnel)) {
+        $publicTunnel = $decodedPublicTunnel;
+    }
+}
+$publicTunnelUrl = (string)($publicTunnel['public_url'] ?? '');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -141,6 +172,34 @@ $codename = (string)($version['codename'] ?? '');
                 </div>
             </article>
 
+            <article class="admin-card">
+                <div class="admin-card-head">
+                    <div>
+                        <p class="eyebrow">Acesso remoto</p>
+                        <h2>Remote AI Gateway</h2>
+                    </div>
+                    <span class="admin-pill" id="remote-ai-status-pill"><?= htmlspecialchars($remoteAccessState, ENT_QUOTES, 'UTF-8') ?></span>
+                </div>
+                <ul class="admin-checklist">
+                    <li>Gateway: <strong><?= htmlspecialchars($remoteGatewayUrl, ENT_QUOTES, 'UTF-8') ?></strong></li>
+                    <li>Host/IP: <strong><?= htmlspecialchars($remoteGatewayIp, ENT_QUOTES, 'UTF-8') ?></strong></li>
+                    <?php if ($publicTunnelUrl !== ''): ?>
+                    <li>URL pública: <strong><?= htmlspecialchars($publicTunnelUrl, ENT_QUOTES, 'UTF-8') ?></strong></li>
+                    <?php endif; ?>
+                    <li>API key: <code id="remote-ai-key"><?= htmlspecialchars($remoteApiKeyMasked, ENT_QUOTES, 'UTF-8') ?></code></li>
+                </ul>
+                <div class="admin-link-list">
+                    <button class="btn btn-primary" type="button" data-copy="<?= htmlspecialchars($remoteGatewayUrl, ENT_QUOTES, 'UTF-8') ?>">Copiar URL</button>
+                    <?php if ($publicTunnelUrl !== ''): ?>
+                    <button class="btn btn-secondary" type="button" data-copy="<?= htmlspecialchars($publicTunnelUrl, ENT_QUOTES, 'UTF-8') ?>" data-copy-label="URL pública copiada">Copiar URL pública</button>
+                    <?php endif; ?>
+                    <button class="btn btn-secondary" type="button" data-copy="<?= htmlspecialchars($remoteApiKey, ENT_QUOTES, 'UTF-8') ?>" data-copy-label="Chave copiada">Copiar chave</button>
+                    <a class="btn btn-secondary" href="<?= htmlspecialchars($remoteGatewayStatusUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noreferrer">Abrir status</a>
+                    <a class="btn btn-secondary" href="<?= htmlspecialchars($remoteGatewayHealthUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noreferrer">Abrir health</a>
+                </div>
+                <p class="muted">Use este gateway para que o chat no celular envie comandos ao PC via MCP e browser controlado.</p>
+            </article>
+
             <article class="admin-card admin-card-wide">
                 <div class="admin-card-head">
                     <div>
@@ -202,6 +261,46 @@ $codename = (string)($version['codename'] ?? '');
     </main>
 
     <script>
+    document.addEventListener('click', async (event) => {
+        const button = event.target.closest('[data-copy]');
+        if (!button) {
+            return;
+        }
+
+        const value = button.getAttribute('data-copy') || '';
+        if (!value) {
+            return;
+        }
+
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(value);
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = value;
+                textarea.setAttribute('readonly', 'true');
+                textarea.style.position = 'fixed';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+                const copied = document.execCommand('copy');
+                document.body.removeChild(textarea);
+                if (!copied) {
+                    throw new Error('copy fallback failed');
+                }
+            }
+            const label = button.getAttribute('data-copy-label') || 'Copiado';
+            const original = button.textContent;
+            button.textContent = label;
+            window.setTimeout(() => {
+                button.textContent = original;
+            }, 1200);
+        } catch (error) {
+            console.error('Falha ao copiar', error);
+            alert('Não foi possível copiar automaticamente.');
+        }
+    });
+
     // ML status check
     (async () => {
         const pill = document.getElementById('ml-status-pill');

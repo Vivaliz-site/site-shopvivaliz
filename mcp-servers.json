@@ -1,52 +1,63 @@
-{
-  "description": "Configuração de MCP Servers - Múltiplas Estações",
-  "version": "1.0.0",
-  "updated": "2026-07-13T20:00:00Z",
-  "servers": {
-    "windows-local": {
-      "url": "http://localhost:5555",
-      "environment": "windows-local",
-      "location": "Local Development",
-      "hostname": "FRED-PC",
-      "ip": "127.0.0.1",
-      "enabled": true,
-      "auto_start": true
-    },
-    "fred-win": {
-      "url": "http://192.168.1.100:5557",
-      "environment": "fred-win",
-      "location": "Remote Windows (Fred)",
-      "hostname": "FRED-WIN",
-      "ip": "192.168.1.100",
-      "enabled": false,
-      "auto_start": false,
-      "note": "Configurar quando Fred-Win estiver pronto"
-    },
-    "ubuntu-vm": {
-      "url": "http://137.131.156.17:5556",
-      "environment": "ubuntu-vm",
-      "location": "Oracle Cloud VM",
-      "hostname": "ubuntu-vm",
-      "ip": "137.131.156.17",
-      "enabled": false,
-      "auto_start": false,
-      "note": "Configurar quando Ubuntu VM estiver pronto"
-    },
-    "github-actions": {
-      "url": "http://github-actions-runner:5558",
-      "environment": "github-actions",
-      "location": "GitHub Actions CI/CD",
-      "hostname": "github-runner",
-      "ip": "internal",
-      "enabled": false,
-      "auto_start": false,
-      "note": "Opcional - para workflows do GitHub"
-    }
-  },
-  "settings": {
-    "default_timeout": 30,
-    "retry_attempts": 3,
-    "health_check_interval": 60,
-    "log_level": "INFO"
-  }
+﻿{
+    "description":  "ConfiguraÃ§Ã£o de MCP Servers - MÃºltiplas EstaÃ§Ãµes",
+    "version":  "1.0.0",
+    "updated":  "2026-07-18T02:31:51.2639027Z",
+    "servers":  {
+                    "windows-local":  {
+                                          "url":  "http://localhost:5555",
+                                          "environment":  "windows-local",
+                                          "location":  "Local Development",
+                                          "hostname":  "FRED-PC",
+                                          "ip":  "127.0.0.1",
+                                          "enabled":  true,
+                                          "auto_start":  true
+                                      },
+                    "fred-win":  {
+                                     "url":  "http://192.168.1.100:5557",
+                                     "environment":  "fred-win",
+                                     "location":  "Remote Windows (Fred)",
+                                     "hostname":  "FRED-WIN",
+                                     "ip":  "192.168.1.100",
+                                     "enabled":  false,
+                                     "auto_start":  false,
+                                     "note":  "Configurar quando Fred-Win estiver pronto"
+                                 },
+                    "ubuntu-vm":  {
+                                      "url":  "http://137.131.156.17:5556",
+                                      "environment":  "ubuntu-vm",
+                                      "location":  "Oracle Cloud VM",
+                                      "hostname":  "ubuntu-vm",
+                                      "ip":  "137.131.156.17",
+                                      "enabled":  false,
+                                      "auto_start":  false,
+                                      "note":  "Configurar quando Ubuntu VM estiver pronto"
+                                  },
+                    "github-actions":  {
+                                           "url":  "http://github-actions-runner:5558",
+                                           "environment":  "github-actions",
+                                           "location":  "GitHub Actions CI/CD",
+                                           "hostname":  "github-runner",
+                                           "ip":  "internal",
+                                           "enabled":  false,
+                                           "auto_start":  false,
+                                           "note":  "Opcional - para workflows do GitHub"
+                                       },
+                    "remote-ai-gateway":  {
+                                              "url":  "http://100.71.51.106:5560",
+                                              "environment":  "remote-ai-gateway",
+                                              "location":  "Local PC via Tailscale/LAN",
+                                              "hostname":  "LAPTOP-NIG4IFUU",
+                                              "ip":  "100.71.51.106",
+                                              "magicdns":  "laptop-nig4ifuu.tail2c4322.ts.net",
+                                              "enabled":  true,
+                                              "auto_start":  true,
+                                              "auth":  "X-API-Key"
+                                          }
+                },
+    "settings":  {
+                     "default_timeout":  30,
+                     "retry_attempts":  3,
+                     "health_check_interval":  60,
+                     "log_level":  "INFO"
+                 }
 }

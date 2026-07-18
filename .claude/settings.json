@@ -11,7 +11,10 @@
       "Glob",
       "Grep",
       "Agent",
-      "Skill"
+      "Skill",
+      "mcp__codex-mesh-bridge__bridge_status",
+      "mcp__codex-mesh-bridge__read_messages",
+      "mcp__codex-mesh-bridge__post_message"
     ],
     "deny": [],
     "defaultMode": "bypassPermissions"

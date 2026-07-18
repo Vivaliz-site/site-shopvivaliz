@@ -58,3 +58,7 @@ storage/orchestrator/queue.json
 .git-sync.lock
 .git-auto-sync.log
 ai-system/config/orchestrator.json
+
+# Gateway de acesso remoto para agentes IA (ChatGPT/Gemini/etc) -- a chave de
+# API em texto puro nunca pode vazar pro GitHub.
+storage/remote-access/
