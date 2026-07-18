@@ -245,8 +245,26 @@ class ProjectDirectorAgent {
     }
 
     private function check_integration_status(string $key): string {
-        // Placeholder
-        return 'connected';
+        // Verifica presenca real de credenciais configuradas (.env/tokens.json)
+        // em vez de simular "connected" sempre. Nao faz chamada de API ao
+        // vivo pra cada provedor (custaria rate limit a cada ciclo de 1min
+        // do orquestrador) -- presenca de credencial e um proxy real e
+        // barato de "integracao configurada".
+        $envKeys = match ($key) {
+            'olist' => ['OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN', 'OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN'],
+            'mercadolivre' => ['ML_CLIENT_ID', 'ML_CLIENT_SECRET'],
+            'pagarme' => ['PAGARME_API_KEY', 'PAGARME_SECRET_KEY'],
+            'mercadopago' => ['MERCADOPAGO_ACCESS_TOKEN'],
+            'shopee' => ['SHOPEE_PARTNER_ID', 'SHOPEE_PARTNER_KEY'],
+            default => [],
+        };
+        foreach ($envKeys as $envKey) {
+            $value = getenv($envKey);
+            if (is_string($value) && trim($value) !== '') {
+                return 'connected';
+            }
+        }
+        return 'disconnected';
     }
 
     private function get_last_sync_time(): string {
