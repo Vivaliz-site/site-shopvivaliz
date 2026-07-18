@@ -273,6 +273,26 @@ EOF
 
 ---
 
+## 🧠 Memória compartilhada entre agentes — `docs/MEMORIA-AGENTES.md`
+
+Múltiplos agentes diferentes (Claude, GPT, Gemini) trabalham autonomamente neste repo,
+cada um em sessões isoladas sem memória compartilhada entre si. Isso já causou o mesmo
+bug de integração (ex: enum `situacao` do Tiny invertido) ser "descoberto" e corrigido
+mais de uma vez, em sessões diferentes, sem que a segunda soubesse que a primeira já
+tinha mapeado o problema.
+
+**`docs/MEMORIA-AGENTES.md` é o único lugar combinado pra isso — leia antes de investigar
+um bug que parece familiar ou integrar com um sistema externo (Tiny/Olist, Mercado Pago,
+Melhor Envio, Mercado Livre).** Se você descobrir algo não-óbvio (campo de API com nome
+diferente do esperado, enum contra-intuitivo, limite de taxa, comportamento assíncrono),
+adicione uma entrada lá seguindo o formato descrito no topo do arquivo. Documentação
+extensa (schema completo de uma API, por exemplo) vai num arquivo dedicado em `docs/`
+(ex: `docs/TINY-ERP-API-V3.md`), com só um resumo e link em `MEMORIA-AGENTES.md`. O
+objetivo é que cada agente que passar por aqui saia mais capaz que o anterior — não que
+cada um recomece do zero.
+
+---
+
 ## 🧠 Conhecimento acumulado (`docs/*.md`) — leia antes de reinventar
 
 Múltiplos agentes diferentes (Claude, GPT, Gemini) trabalham autonomamente neste repo,
