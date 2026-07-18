@@ -333,6 +333,29 @@ function svtop_push_order_tiny(array $order): ?string
             'tipoPessoa'       => strlen($docDigits) === 14 ? 'J' : 'F',
         ],
     ];
+
+    // Forma de envio real, escolhida pelo cliente no checkout via Melhor
+    // Envio (salva em shipping_label no formato "<Transportadora> - <Servico>",
+    // ex: "Jadlog - .Package") -- confirmado via GET /formas-envio que a
+    // conta ja tem cadastro pra cada transportadora "via Melhor envio"
+    // vinculado ao gatewayLogistico "Melhor envio" (id 337724739). So o
+    // ID da forma de envio (nao um id de "transportador" separado -- a doc
+    // aceita transportador.id como null) e suficiente pra Tiny saber qual
+    // transportadora sera usada.
+    $shippingLabel = strtolower((string)($order['shipping_label'] ?? ''));
+    $formaEnvioIds = [
+        'correios'      => 357119973,
+        'jadlog'        => 357119976,
+        'jet'           => 357119979,
+        'loggi'         => 357119982,
+        'total express' => 357119984,
+    ];
+    foreach ($formaEnvioIds as $needle => $formaEnvioId) {
+        if (str_contains($shippingLabel, $needle)) {
+            $payload['transportador'] = ['formaEnvio' => ['id' => $formaEnvioId]];
+            break;
+        }
+    }
     if ($paymentFormId !== null) {
         // transportador: a transportadora real so e decidida depois deste
         // push, quando a etiqueta e comprada na Melhor Envio de forma
