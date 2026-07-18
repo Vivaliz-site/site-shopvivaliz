@@ -5,6 +5,12 @@
 > Status: ✅ Produção - deploy real via VM Oracle (não FTP, ver abaixo)  
 > Repositório real: **https://github.com/Vivaliz-site/site-shopvivaliz** (não `fredmourao-ai/site-shopvivaliz`)
 
+> ⚠️ **LEIA `docs/MEMORIA-AGENTES.md` ANTES DE COMEÇAR.** Múltiplos agentes autônomos
+> diferentes (Claude, GPT, Gemini) trabalham neste repo em sessões isoladas sem memória
+> compartilhada — esse arquivo é o único lugar combinado onde erros e descobertas não
+> óbvias já feitas ficam registrados, pra ninguém redescobrir o mesmo bug do zero. Ao
+> final da sua sessão, se você aprendeu algo não-óbvio, adicione uma entrada lá.
+
 ---
 
 ## 📊 Visão Geral do Sistema
@@ -264,6 +270,26 @@ EOF
 | Resolver conflito merge | `scripts/resolve_git_agent_conflict.ps1` | Executar |
 | Sincronizar ambientes | `git fetch && git pull origin main` | Bash/PowerShell |
 | Integrar com Tiny/Olist ERP | `docs/TINY-ERP-API-V3.md` | Ler ANTES de mexer em `includes/tiny-order-push.php`, `daemon-sync-products.py`, `api/olist/*` |
+
+---
+
+## 🧠 Memória compartilhada entre agentes — `docs/MEMORIA-AGENTES.md`
+
+Múltiplos agentes diferentes (Claude, GPT, Gemini) trabalham autonomamente neste repo,
+cada um em sessões isoladas sem memória compartilhada entre si. Isso já causou o mesmo
+bug de integração (ex: enum `situacao` do Tiny invertido) ser "descoberto" e corrigido
+mais de uma vez, em sessões diferentes, sem que a segunda soubesse que a primeira já
+tinha mapeado o problema.
+
+**`docs/MEMORIA-AGENTES.md` é o único lugar combinado pra isso — leia antes de investigar
+um bug que parece familiar ou integrar com um sistema externo (Tiny/Olist, Mercado Pago,
+Melhor Envio, Mercado Livre).** Se você descobrir algo não-óbvio (campo de API com nome
+diferente do esperado, enum contra-intuitivo, limite de taxa, comportamento assíncrono),
+adicione uma entrada lá seguindo o formato descrito no topo do arquivo. Documentação
+extensa (schema completo de uma API, por exemplo) vai num arquivo dedicado em `docs/`
+(ex: `docs/TINY-ERP-API-V3.md`), com só um resumo e link em `MEMORIA-AGENTES.md`. O
+objetivo é que cada agente que passar por aqui saia mais capaz que o anterior — não que
+cada um recomece do zero.
 
 ---
 
