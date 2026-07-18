@@ -25,7 +25,7 @@ header('Content-Type: text/html; charset=UTF-8');
                     <a class="brand-btn-secondary" href="/contato">Falar com a equipe</a>
                 </div>
                 <div class="brand-kpis">
-                    <div class="brand-kpi"><strong>Catálogo organizado</strong><span>Produtos com fotos reais e descrições claras</span></div>
+                    <div class="brand-kpi"><strong>Produtos organizados</strong><span>Produtos com fotos reais e descrições claras</span></div>
                     <div class="brand-kpi"><strong>Atendimento rápido</strong><span>Time pronto para tirar dúvidas antes e depois da compra</span></div>
                     <div class="brand-kpi"><strong>Entrega para todo o Brasil</strong><span>Frete calculado no carrinho, com prazo e valor exibidos antes de fechar o pedido</span></div>
                 </div>
@@ -42,7 +42,7 @@ header('Content-Type: text/html; charset=UTF-8');
         <article class="brand-card">
             <h2>Como trabalhamos</h2>
             <ul class="brand-list">
-                <li>Catálogo com fotos e informações atualizadas dos produtos.</li>
+                <li>Produtos com fotos e informações atualizadas.</li>
                 <li>Atendimento pelo WhatsApp e e-mail, antes e depois da compra.</li>
                 <li>Pagamento seguro via Pix, boleto ou cartão, com envio para todo o país.</li>
             </ul>

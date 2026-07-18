@@ -1,88 +1,17 @@
 <?php
 /**
- * Cache de Produtos - Fallback quando BD não está disponível
- * Gera dados de 188 produtos para espelhar integração real
- */
-
-function gerar_produtos_cache(): array
-{
-    // Categorias e subcategorias
-    $categorias = ['Camisetas', 'Calças', 'Bermudas', 'Jaquetas', 'Suéteres', 'Vestidos', 'Camisas', 'Blusas'];
-
-    $cores = ['Preto', 'Branco', 'Azul', 'Vermelho', 'Verde', 'Rosa', 'Roxo', 'Amarelo'];
-
-    $estilos = [
-        'Premium',
-        'Casual',
-        'Sport',
-        'Elegante',
-        'Básico',
-        'Estampado',
-        'Liso',
-        'Geométrico'
-    ];
-
-    $adjetivos = [
-        'Confortável',
-        'Durável',
-        'Moderno',
-        'Clássico',
-        'Versátil',
-        'Respirável',
-        'Estiloso',
-        'Prático'
-    ];
-
-    $produtos = [];
-    $id = 1;
-
-    // Gerar 188 produtos
-    for ($i = 0; $i < 188; $i++) {
-        $cat = $categorias[$i % count($categorias)];
-        $cor = $cores[$i % count($cores)];
-        $estilo = $estilos[$i % count($estilos)];
-        $adj = $adjetivos[$i % count($adjetivos)];
-
-        $basePrice = [
-            'Camisetas' => 49.90,
-            'Calças' => 129.90,
-            'Bermudas' => 89.90,
-            'Jaquetas' => 299.90,
-            'Suéteres' => 139.90,
-            'Vestidos' => 189.90,
-            'Camisas' => 119.90,
-            'Blusas' => 99.90,
-        ][$cat] ?? 99.90;
-
-        $variation = rand(-20, 50);
-        $price = $basePrice + ($variation * 10 / 100);
-
-        $produtos[] = [
-            'id' => $id++,
-            'name' => "$estilo $cat $cor - $adj",
-            'description' => "Produto de qualidade da categoria $cat. Material resistente e confortável. Perfeito para uso diário ou ocasiões especiais.",
-            'price' => round($price, 2),
-            'cost' => round($price * 0.4, 2),
-            'stock' => rand(10, 200),
-            'category' => $cat,
-            'sku' => strtoupper(substr($cat, 0, 3)) . '-' . $cor[0] . $cor[1] . '-' . str_pad($i, 4, '0', STR_PAD_LEFT),
-            'image_url' => 'https://via.placeholder.com/300x400?text=' . urlencode($estilo),
-            'active' => 1,
-            'source' => 'cache-fallback'
-        ];
-    }
-
-    return $produtos;
-}
-
-/**
- * Obter produtos (do BD se disponível, senão do cache)
+ * Acesso a produtos reais (tabela `products`). Antes havia um fallback que
+ * fabricava 188 produtos ficticios (nomes/precos/estoque aleatorios, imagem
+ * via placeholder.com) sempre que o BD "nao estava disponivel" -- e por um
+ * bug (`function_exists('Database')` numa classe, sempre false) esse
+ * fallback fake rodava SEMPRE, nunca tentava o banco real de fato. Removido:
+ * sem produtos ficticios, nem como fallback. Se o BD falhar, retorna vazio
+ * e quem chama deve tratar como catalogo indisponivel, nao inventar dados.
  */
 function obter_produtos(int $limit = null, int $offset = 0): array
 {
     try {
-        // Tentar BD
-        if (function_exists('Database')) {
+        if (class_exists('Database')) {
             $db = Database::getInstance()->getConnection();
             $query = 'SELECT * FROM products ORDER BY id DESC';
             if ($limit) {
@@ -93,22 +22,13 @@ function obter_produtos(int $limit = null, int $offset = 0): array
             while ($p = $result->fetch_assoc()) {
                 $produtos[] = $p;
             }
-            if (!empty($produtos)) {
-                return $produtos;
-            }
+            return $produtos;
         }
     } catch (Exception $e) {
-        // Fallar silenciosamente para cache
+        error_log('[products-cache] obter_produtos falhou: ' . $e->getMessage());
     }
 
-    // Fallback: cache de 188 produtos
-    $cache = gerar_produtos_cache();
-
-    if ($limit) {
-        return array_slice($cache, $offset, $limit);
-    }
-
-    return $cache;
+    return [];
 }
 
 /**
@@ -117,17 +37,17 @@ function obter_produtos(int $limit = null, int $offset = 0): array
 function contar_produtos(): int
 {
     try {
-        if (function_exists('Database')) {
+        if (class_exists('Database')) {
             $db = Database::getInstance()->getConnection();
             $result = $db->query('SELECT COUNT(*) as total FROM products');
             $row = $result->fetch_assoc();
             return (int)$row['total'];
         }
     } catch (Exception $e) {
-        // Fallback
+        error_log('[products-cache] contar_produtos falhou: ' . $e->getMessage());
     }
 
-    return 188; // Cache sempre tem 188
+    return 0;
 }
 
 /**

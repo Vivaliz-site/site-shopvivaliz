@@ -73,6 +73,7 @@ if (empty($olist_order_id) || empty($status)) {
 require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../scripts/mailer.php';
+require_once __DIR__ . '/../../includes/mercadopago-gateway.php';
 
 try {
     $db = Database::getInstance()->getConnection();
@@ -99,7 +100,7 @@ try {
 
     // Buscar pedido
     $stmt = $db->prepare(
-        'SELECT p.id, p.user_id, p.email, p.order_status, u.email as user_email, u.name
+        'SELECT p.id, p.user_id, p.email, p.order_status, p.order_number, u.email as user_email, u.name
          FROM orders p
          LEFT JOIN users u ON u.id = p.user_id
          WHERE p.olist_order_id = ? LIMIT 1'
@@ -144,6 +145,29 @@ try {
                     tracking: $tracking,
                     estimated_delivery: $estimated_delivery
                 );
+            }
+
+            // Gatilho real da etiqueta Melhor Envio: NAO mais na aprovacao do
+            // pagamento (api/webhook-mercadopago.php nao dispara mais isso),
+            // e sim aqui, quando a Tiny confirma que a NF do pedido foi de
+            // fato emitida -- essa URL (?type=invoice) ja esta cadastrada no
+            // painel Tiny (Configuracoes > API do ERP > Notificacoes > URL
+            // para envio da nota fiscal), so faltava agir sobre o evento.
+            if ($normalized_status === 'nota_fiscal_enviada') {
+                $orderNumber = trim((string)($order['order_number'] ?? ''));
+                $orderPath = $orderNumber !== '' ? svmp_find_order_path($orderNumber) : '';
+                if ($orderPath !== '') {
+                    $labelCmd = 'php ' . escapeshellarg(dirname(__DIR__) . '/melhorenvio/generate-label-background.php') . ' ' .
+                                escapeshellarg($orderPath);
+                    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                        pclose(popen('start /B ' . $labelCmd, 'r'));
+                    } else {
+                        exec($labelCmd . ' > /dev/null 2>&1 &');
+                    }
+                    error_log('[TinyWebhook] NF emitida, etiqueta disparada: order=' . $orderNumber . ' olist_order_id=' . $olist_order_id);
+                } else {
+                    error_log('[TinyWebhook] NF emitida mas pedido local nao encontrado: olist_order_id=' . $olist_order_id . ' order_number=' . $orderNumber);
+                }
             }
         }
     }

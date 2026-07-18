@@ -203,7 +203,11 @@ Não confiar em `estoque.quantidade` do próprio kit — usar `GET /estoque/{id}
 `disponivel`, já calculado corretamente pela Tiny) em vez de recalcular manualmente pela
 composição.
 
-## Webhooks (app "Webhooks" precisa estar instalado na conta)
+## Webhooks — app genérico "Webhooks" (NÃO é o caminho usado neste projeto)
+
+⚠️ Isto documenta o app avulso "Webhooks" da Tiny por completude, mas **não é como
+este projeto recebe eventos da Tiny** — ver seção seguinte ("Notificações da
+integração API do ERP") pro caminho realmente em uso.
 
 Configuração: `Menu → Configurações → Aba Geral → Outras configurações → Webhooks`.
 Confirmação exige HTTP 200 na URL configurada; sem isso a Tiny reenvia até 10x com
@@ -217,26 +221,42 @@ Eventos disponíveis:
 
 Não é possível criar webhooks específicos por aplicativo (é por conta).
 
-✅ **Implementado em 2026-07-18**: `api/webhooks/tiny-nota-fiscal.php` recebe o evento
-"notas fiscais autorizadas" e dispara `api/melhorenvio/generate-label-background.php`
-pro pedido correspondente (localizado por `tiny_order_id` em `storage/orders/*.json`).
-`api/webhook-mercadopago.php` não gera mais a etiqueta na aprovação do pagamento —
-só faz o push do pedido pro Tiny; a etiqueta agora só é comprada depois que a NF é
-emitida de fato no ERP.
+## Notificações da integração "API do ERP" (caminho realmente usado neste projeto)
 
-⚠️ **Ainda pendente (ação manual do usuário, não automatizável por API)**:
-1. Configurar `TINY_WEBHOOK_SECRET` no `.env` (local e produção) — um token
-   aleatório qualquer, usado só pra autenticar a URL do webhook.
-2. No painel Tiny: `Menu → Configurações → Aba Geral → Outras configurações →
-   Webhooks` → app "Webhooks" instalado → ativar **"Notificações de notas
-   fiscais autorizadas"** com URL
-   `https://dev.shopvivaliz.com.br/api/webhooks/tiny-nota-fiscal.php?token=<TINY_WEBHOOK_SECRET>`.
-3. O formato exato do payload desse evento específico da Tiny não foi observado
-   ao vivo ainda (só é possível depois do passo 2). O parsing em
-   `tiny-nota-fiscal.php` tenta os campos mais prováveis (`dados.idPedido`,
-   `dados.pedido.id`, `dados.id`, `id`, `idPedido`) e loga o payload cru em
-   `error_log` sempre que não reconhece o pedido — ajustar o parsing com um
-   exemplo real assim que o primeiro webhook chegar.
+Painel Tiny → `Integrações → API do ERP → gerenciar → aba Notificações → URLs de
+notificações`. Tem 6 campos de URL, um por evento — cada um já vem preenchido
+apontando pra um endpoint deste repo:
+- Envio de produtos / estoque / preços → `olist/webhook-receiver.php?event=product|stock|price`
+- Alteração na situação de pedidos / rastreio / **nota fiscal** →
+  `api/webhooks/order-status-update.php?token=<OLIST_WEBHOOK_TOKEN>&type=order_status|tracking|invoice`
+
+✅ **Implementado em 2026-07-18**: descoberto ao vivo (painel Tiny → Integrações →
+API do ERP → aba Notificações → URLs de notificações) que **já existia** um endpoint
+cadastrado pra isso desde antes — `api/webhooks/order-status-update.php`, recebendo
+os 3 eventos "alteração na situação de pedidos", "rastreio" e **"nota fiscal"** (cada
+um com sua própria URL, todas `.../order-status-update.php?token=...&type=<evento>`).
+O endpoint já existia e já autenticava via `?token=` (comparado contra
+`OLIST_WEBHOOK_TOKEN`/`ERP_WEBHOOK_TOKEN`), já mapeava `status: invoiced/invoice_sent`
+→ `nota_fiscal_enviada` — só faltava agir sobre esse evento. Adicionado: quando o
+status normalizado vira `nota_fiscal_enviada`, localiza o pedido local por
+`order_number` (`svmp_find_order_path()`) e dispara
+`api/melhorenvio/generate-label-background.php` em background, mesmo padrão já usado
+em `api/webhook-mercadopago.php` (que **não gera mais a etiqueta na aprovação do
+pagamento** — só faz o push do pedido pro Tiny).
+
+⚠️ Nenhuma ação manual pendente — a URL já estava cadastrada no painel Tiny e
+`OLIST_WEBHOOK_TOKEN` já está configurado em produção. Só falta validar com um pedido
+real (a lógica assume que o `status` recebido no body é `invoiced`/`invoice_sent`;
+se a Tiny mandar outro valor pro evento `type=invoice`, ajustar `$status_map` em
+`api/webhooks/order-status-update.php`).
+
+**Lição pra quem for mexer em webhooks aqui de novo**: antes de criar um endpoint
+novo, sempre conferir `Integrações → API do ERP → Notificações → URLs de
+notificações` no painel — só existe UM lugar pra ver quais URLs já estão realmente
+cadastradas, e a UI de "adicionar integração" / app "Webhooks" (que a doc antiga
+mencionava) não é o caminho certo pra esses 6 eventos nativos de e-commerce
+(produto/estoque/preço/situação-pedido/rastreio/nota-fiscal) — esses vivem dentro da
+integração "API do ERP" já instalada, aba Notificações.
 
 ## Como redescobrir estes dados se algo mudar
 

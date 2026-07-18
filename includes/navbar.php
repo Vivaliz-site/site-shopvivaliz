@@ -10,7 +10,7 @@ $svNavCurrent = preg_replace('#^index\.php$#', '', $svNavCurrent);
 
 $svNavLinks = [
     ['href' => '/', 'label' => 'Home', 'match' => ['']],
-    ['href' => '/catalogo', 'label' => 'Catálogo', 'match' => ['catalogo', 'produtos', 'produto']],
+    ['href' => '/catalogo', 'label' => 'Produtos', 'match' => ['catalogo', 'produtos', 'produto']],
     ['href' => '/sobre', 'label' => 'Sobre', 'match' => ['sobre']],
     ['href' => '/contato', 'label' => 'Contato', 'match' => ['contato']],
     ['href' => '/carrinho', 'label' => 'Carrinho', 'match' => ['carrinho', 'checkout']],
