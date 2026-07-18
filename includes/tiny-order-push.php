@@ -279,7 +279,19 @@ function svtop_push_order_tiny(array $order): ?string
         // ter sido de fato. Corrigido para 0 (Aberta): o pedido so deve
         // virar Faturada quando a NF for realmente emitida no ERP.
         'situacao'     => 0,
+        // Sem 'data' o pedido nasce sem data de venda -- a busca da UI da
+        // Tiny filtra por essa data (nao pela data de cadastro), entao
+        // pedidos sem ela ficam invisiveis na busca mesmo existindo de
+        // verdade (confirmado ao vivo: GET /pedidos/{id} retornava 200 mas
+        // a busca "nao retornou resultados"). Usa a data de criacao local
+        // do pedido, ou a data atual se ausente.
+        'data'         => date('Y-m-d', strtotime((string)($order['created_at'] ?? 'now')) ?: time()),
         'idContato'    => $contactId,
+        // "Loja Online" -- vendedor generico cadastrado especificamente pra
+        // isso (a conta nao tinha nenhum vendedor antes, GET /vendedores
+        // retornava vazio, e pedidos sem vendedor tambem pareciam sumir da
+        // busca da UI). Ver docs/TINY-ERP-API-V3.md.
+        'vendedor'     => ['id' => 369463749],
         'deposito'     => ['id' => 337683271], // "Geral" -- unico deposito proprio (nao-marketplace) cadastrado
         'itens' => array_map(static fn(array $i) => [
             'produto'       => ['id' => (int)$i['olist_product_id']],
@@ -287,18 +299,64 @@ function svtop_push_order_tiny(array $order): ?string
             'valorUnitario' => $i['price'],
         ], $items),
         'valorFrete' => (float)($order['shipping_total'] ?? 0),
-        'obs' => $obs,
+        // O campo se chama 'observacoes' na API v3 -- 'obs' nao existe no
+        // schema oficial (api-docs.erp.olist.com/api-reference/pedidos/criar-pedido)
+        // e era ignorado silenciosamente pela Tiny, entao o pedido no ERP
+        // nunca tinha nenhuma observacao visivel apesar do codigo "enviar" isso.
+        'observacoes' => $obs,
+        // Marca a venda como pra consumidor final (nao revenda) -- afeta o
+        // calculo de tributacao da nota fiscal. A Tiny troca o nome exibido
+        // na coluna "Cliente" da listagem por "Consumidor Final" quando essa
+        // flag esta ativa (comportamento normal da UI pra esse tipo de
+        // venda, nao um bug -- o nome real do cliente continua no cadastro
+        // do contato, so a exibicao na lista muda).
+        'consumidorFinal' => [
+            'cpfCnpj'                => $docDigits,
+            'clienteConsumidorFinal' => true,
+        ],
+        // Endereco de entrega do cliente -- antes nao era enviado, entao o
+        // pedido no ERP ficava sem endereco de entrega definido (so o do
+        // contato cadastrado, se houver).
+        'enderecoEntrega' => [
+            'endereco'         => (string)($c['street_name'] ?? $c['address'] ?? ''),
+            'enderecoNro'      => (string)($c['street_number'] ?? ''),
+            'complemento'      => (string)($c['complement'] ?? ''),
+            'bairro'           => (string)($c['neighborhood'] ?? ''),
+            'municipio'        => (string)($c['city'] ?? ''),
+            'cep'              => preg_replace('/\D/', '', (string)($c['cep'] ?? '')),
+            'uf'               => (string)($c['state'] ?? ''),
+            'fone'             => (string)($c['phone'] ?? ''),
+            'nomeDestinatario' => (string)($c['name'] ?? ''),
+            'cpfCnpj'          => $docDigits,
+            // enum J/F/E/X (doc oficial) -- todo checkout do site e pessoa
+            // fisica (CPF de 11 digitos), nunca CNPJ.
+            'tipoPessoa'       => strlen($docDigits) === 14 ? 'J' : 'F',
+        ],
     ];
+
+    // Forma de envio real, escolhida pelo cliente no checkout via Melhor
+    // Envio (salva em shipping_label no formato "<Transportadora> - <Servico>",
+    // ex: "Jadlog - .Package") -- confirmado via GET /formas-envio que a
+    // conta ja tem cadastro pra cada transportadora "via Melhor envio"
+    // vinculado ao gatewayLogistico "Melhor envio" (id 337724739). So o
+    // ID da forma de envio (nao um id de "transportador" separado -- a doc
+    // aceita transportador.id como null) e suficiente pra Tiny saber qual
+    // transportadora sera usada.
+    $shippingLabel = strtolower((string)($order['shipping_label'] ?? ''));
+    $formaEnvioIds = [
+        'correios'      => 357119973,
+        'jadlog'        => 357119976,
+        'jet'           => 357119979,
+        'loggi'         => 357119982,
+        'total express' => 357119984,
+    ];
+    foreach ($formaEnvioIds as $needle => $formaEnvioId) {
+        if (str_contains($shippingLabel, $needle)) {
+            $payload['transportador'] = ['formaEnvio' => ['id' => $formaEnvioId]];
+            break;
+        }
+    }
     if ($paymentFormId !== null) {
-        // vendedor: nao ha nenhum vendedor cadastrado na conta (GET
-        // /vendedores retorna vazio), entao nao ha id valido pra mandar.
-        // transportador: a transportadora real so e decidida depois deste
-        // push, quando a etiqueta e comprada na Melhor Envio de forma
-        // assincrona (ver api/melhorenvio/generate-label-background.php) --
-        // nao da pra saber qual serviço/transportadora sera usado ainda
-        // neste momento. O schema oficial (transportador.id/formaEnvio/
-        // formaFrete) so aceita referencias a cadastros existentes, entao
-        // fica de fora ate ter uma transportadora real pra referenciar.
         $payload['pagamento'] = [
             'formaRecebimento' => ['id' => $paymentFormId],
         ];
