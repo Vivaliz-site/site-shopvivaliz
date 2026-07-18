@@ -40,6 +40,12 @@
 
 ## Entradas
 
+### 2026-07-18 — Pedidos sem Vendedor vinculado não aparecem na busca do Tiny (mas existem via API)
+**Sistema/arquivo:** `includes/tiny-order-push.php`, busca de pedidos na UI do Tiny (`erp.tiny.com.br/vendas#list`)
+**O que descobri:** confirmado de novo (mesmo sintoma já visto em sessão anterior com outro pedido) que um pedido pushado pelo site (id 369458858, número 3022, cliente MARINA FALEIRO) existe de fato -- `GET /pedidos/369458858` retorna HTTP 200 com dados completos, e o link direto `erp.tiny.com.br/vendas#edit/369458858` abre normal -- mas a busca por nome/CPF do cliente na tela "Pedidos de venda" retorna "Sua pesquisa não retornou resultados". Abrindo o pedido, o campo **Vendedor está vazio**. A conta não tem nenhum vendedor cadastrado (`GET /vendedores` retorna lista vazia, confirmado em sessão anterior), então nosso push nunca consegue preencher esse campo.
+**Por quê importa:** parece fortemente correlacionado -- pedidos sem vendedor vinculado ficam fora do índice de busca full-text da Tiny, mesmo existindo e sendo editáveis via link direto. Isso é uma limitação/comportamento da própria Tiny (não um bug no nosso código) -- não há workaround do nosso lado sem cadastrar um vendedor genérico na conta (decisão de negócio, não técnica). Se for investigar de novo: não perder tempo comparando payload de push, o pedido já está correto; o gargalo é a ausência de vendedor.
+**Ver também:** —
+
 ### 2026-07-18 — MERCADOPAGO_WEBHOOK_SECRET REGREDIU pro placeholder antigo (2a vez!)
 **Sistema/arquivo:** `.env` do servidor (VM Oracle), `api/webhook-mercadopago.php`
 **O que descobri:** o mesmo bug já documentado como "corrigido" em 2026-07-17 (`MERCADOPAGO_WEBHOOK_SECRET=webhookkey123`, placeholder nunca trocado) **voltou a acontecer** em 2026-07-18. Confirmado nos logs reais (`sudo tail /var/log/apache2/shopvivaliz_error.log`) que 8+ tentativas reais do Mercado Pago (`referer: mercadopago.com.ar`) foram rejeitadas com `invalid_signature` antes da correção. O usuário confirmou que o valor no painel MP é o MESMO de antes (`d8f63591fc4fd85348baa468c613df6442bdb524e7e8e0db61f564fbbc018e39`) -- ou seja, **não foi rotação no painel**, foi o `.env` do servidor sendo revertido/sobrescrito por algum processo (auto-sync, restore, outro agente).
