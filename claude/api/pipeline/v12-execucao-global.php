@@ -93,6 +93,7 @@ try {
             'preco' => round($preco, 2),
             'imagem' => $imagem,
             'categoria' => $cat,
+            'margem_aplicada' => $margem,
             'status' => 'otimizado'
         ];
 
