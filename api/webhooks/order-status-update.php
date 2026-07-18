@@ -100,7 +100,7 @@ try {
 
     // Buscar pedido
     $stmt = $db->prepare(
-        'SELECT p.id, p.user_id, p.email, p.order_status, u.email as user_email, u.name
+        'SELECT p.id, p.user_id, p.email, p.order_status, p.order_number, u.email as user_email, u.name
          FROM orders p
          LEFT JOIN users u ON u.id = p.user_id
          WHERE p.olist_order_id = ? LIMIT 1'
