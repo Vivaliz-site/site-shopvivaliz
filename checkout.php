@@ -650,7 +650,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                     order_number: order.order_number,
                     payment_session_token: order.payment_session_token
                 });
-                clearPendingPayment(); clearCart(); clearShippingQuote(); renderCart();
+                clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon(); renderCart();
                 document.getElementById('boleto-order-msg').textContent = 'Pedido ' + order.order_number;
                 document.getElementById('boleto-digitable-line').value = boleto.digitable_line || '';
                 document.getElementById('boleto-line-group').hidden = !boleto.digitable_line;
@@ -662,11 +662,11 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                     order_number: order.order_number,
                     payment_session_token: order.payment_session_token
                 });
-                clearPendingPayment(); clearCart(); clearShippingQuote();
+                clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon();
                 window.location.assign(preference.checkout_url);
                 return;
             } else {
-                clearPendingPayment(); clearCart(); clearShippingQuote(); renderCart();
+                clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon(); renderCart();
                 if (method === 'pix') {
                     document.getElementById('pix-amount-display').textContent = total > 0 ? totalFmt : 'Confirmar com a loja';
                     document.getElementById('wpp-confirm-link').href = wppLink;
