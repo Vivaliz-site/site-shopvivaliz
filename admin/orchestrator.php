@@ -91,21 +91,13 @@ $log_cron  = orch_tail_log($root . '/logs/cron-dispatcher.log', 20);
 
 // Watchdog — tenta via HTTP para refletir estado real do servidor
 $base_url   = rtrim(orch_env('SITE_URL') ?: 'https://dev.shopvivaliz.com.br', '/');
-$watchdog   = null;
-$report_api = null;
-{
-    $ctx = stream_context_create(['http' => ['method' => 'GET', 'timeout' => 6, 'ignore_errors' => true]]);
-    $wb = @file_get_contents($base_url . '/api/agent/autonomous-watchdog.php', false, $ctx);
-    if ($wb !== false) $watchdog = json_decode($wb, true);
-
-    $rb = @file_get_contents($base_url . '/api/agent/autonomous-report.php', false, $ctx);
-    if ($rb !== false) $report_api = json_decode($rb, true);
-}
+$watchdog   = orch_read_json($root . '/logs/autonomous-hourly-guardian.json', []);
+$report_api = orch_read_json($root . '/logs/autonomous-cycle-report.json', []);
 
 // Status watchdog
-$wd_status = is_array($watchdog) ? ($watchdog['status'] ?? 'unknown') : 'unreachable';
-$wd_alerts = is_array($watchdog) ? ($watchdog['alerts'] ?? []) : [];
-$wd_ok     = $wd_status === 'all_ok' || $wd_status === 'ok';
+$wd_status = is_array($watchdog) ? (string)($watchdog['decision']['reason'] ?? $watchdog['status'] ?? 'unknown') : 'unreachable';
+$wd_alerts = is_array($watchdog) ? ($watchdog['alerts'] ?? ($watchdog['actions'] ?? [])) : [];
+$wd_ok     = is_array($watchdog) ? !((bool)($watchdog['decision']['stale'] ?? false)) : false;
 
 // Catálogo do relatório
 $cat    = is_array($report_api) ? ($report_api['catalog'] ?? []) : [];
