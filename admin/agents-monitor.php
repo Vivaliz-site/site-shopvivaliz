@@ -4,16 +4,21 @@ require_once __DIR__ . '/../includes/admin-guard.php';
 
 // Simple read-only monitoring panel for ShopVivaliz agents
 
-$base = 'https://dev.shopvivaliz.com.br';
-
-function fetch_json($url) {
-    $data = @file_get_contents($url);
-    if (!$data) return null;
-    return json_decode($data, true);
+function am_json_file(string $relativePath): array {
+    $path = dirname(__DIR__) . '/' . ltrim($relativePath, '/');
+    if (!is_file($path)) {
+        return [];
+    }
+    $raw = (string)@file_get_contents($path);
+    if (trim($raw) === '') {
+        return [];
+    }
+    $data = json_decode($raw, true);
+    return is_array($data) ? $data : [];
 }
 
-$report = fetch_json($base . '/api/agent/autonomous-report.php');
-$watchdog = fetch_json($base . '/api/agent/autonomous-watchdog.php');
+$report = am_json_file('/logs/autonomous-cycle-report.json');
+$watchdog = am_json_file('/logs/autonomous-hourly-guardian.json');
 
 ?><!DOCTYPE html>
 <html>
@@ -35,10 +40,10 @@ $watchdog = fetch_json($base . '/api/agent/autonomous-watchdog.php');
 <div class="card">
 <h2>Watchdog Status</h2>
 <?php if ($watchdog): ?>
-    <p>Status: <strong class="<?= $watchdog['all_ok'] ? 'ok' : 'fail' ?>">
-        <?= $watchdog['all_ok'] ? 'OK' : 'ALERT' ?>
+    <p>Status: <strong class="<?= !empty($watchdog['decision']['idle']) || !empty($watchdog['decision']['no_pending']) ? 'ok' : 'fail' ?>">
+        <?= !empty($watchdog['decision']['idle']) || !empty($watchdog['decision']['no_pending']) ? 'OK' : 'ALERT' ?>
     </strong></p>
-    <p>Última execução: <?= $watchdog['generated_at'] ?? '-' ?></p>
+    <p>Última execução: <?= $watchdog['generated_at'] ?? ($watchdog['report_generated_at'] ?? '-') ?></p>
 <?php else: ?>
     <p class="fail">Falha ao obter watchdog</p>
 <?php endif; ?>
@@ -47,7 +52,7 @@ $watchdog = fetch_json($base . '/api/agent/autonomous-watchdog.php');
 <div class="card">
 <h2>Relatório Autônomo</h2>
 <?php if ($report): ?>
-    <p>Total produtos: <?= $report['catalog']['total'] ?? 0 ?></p>
+    <p>Total produtos: <?= $report['catalog']['total'] ?? ($report['backlog_snapshot']['pending'] ?? 0) ?></p>
     <p>Sem imagem: <?= $report['catalog']['no_image'] ?? 0 ?></p>
     <p>Preço zero: <?= $report['catalog']['zero_price'] ?? 0 ?></p>
     <p>ML conectado: <?= !empty($report['integrations']['ml_oauth_connected']) ? 'Sim' : 'Não' ?></p>
