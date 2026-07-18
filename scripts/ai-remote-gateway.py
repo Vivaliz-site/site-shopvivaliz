@@ -89,6 +89,14 @@ def _write_connection_card(host: str, port: int) -> None:
     CONNECTION_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+WRITE_PROTECTED_PREFIXES = (
+    ".git",
+    ".github/workflows",
+    ".claude/settings.json",
+    "storage/remote-access",
+)
+
+
 def _safe_repo_path(path: str) -> Path:
     candidate = (REPO_ROOT / path).resolve()
     try:
@@ -96,6 +104,14 @@ def _safe_repo_path(path: str) -> Path:
     except ValueError as exc:
         raise ValueError("path outside repository root") from exc
     return candidate
+
+
+def _is_write_protected(path: str) -> bool:
+    normalized = path.strip().replace("\\", "/").lstrip("/")
+    return any(
+        normalized == prefix or normalized.startswith(prefix + "/")
+        for prefix in WRITE_PROTECTED_PREFIXES
+    )
 
 
 def _is_private_or_loopback(remote: str | None) -> bool:
