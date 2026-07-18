@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', function() {
     initStickyAddToCart();
     initSkeletonLoaders();
     initImageHoverZoom();
-    initSocialProofPopup();
     initFreeShippingProgress();
 });
 
@@ -86,48 +85,6 @@ function initImageHoverZoom() {
             img.style.transformOrigin = 'center center';
         });
     });
-}
-
-/**
- * Social Proof Popup
- */
-function initSocialProofPopup() {
-    const popup = document.getElementById('social-proof-popup');
-    if (!popup) return;
-
-    const names = ['Maria', 'João', 'Ana', 'Carlos', 'Juliana', 'Rafael', 'Amanda', 'Pedro', 'Lucas', 'Fernanda'];
-    const cities = ['São Paulo', 'Rio de Janeiro', 'Belo Horizonte', 'Curitiba', 'Salvador', 'Fortaleza', 'Brasília', 'Porto Alegre'];
-    
-    function showRandomPopup() {
-        const name = names[Math.floor(Math.random() * names.length)];
-        const city = cities[Math.floor(Math.random() * cities.length)];
-        
-        const textElement = popup.querySelector('.proof-text');
-        const timeElement = popup.querySelector('.proof-time');
-        
-        if (textElement) {
-            textElement.innerHTML = `<strong>${name}</strong> de ${city} acabou de comprar este produto!`;
-        }
-        if (timeElement) {
-            const minutes = Math.floor(Math.random() * 59) + 1;
-            timeElement.innerText = `Há ${minutes} minuto${minutes > 1 ? 's' : ''}`;
-        }
-
-        popup.classList.add('show');
-        
-        setTimeout(() => {
-            popup.classList.remove('show');
-            const nextDelay = (Math.floor(Math.random() * 30) + 15) * 1000;
-            setTimeout(showRandomPopup, nextDelay);
-        }, 5000);
-    }
-
-    setTimeout(showRandomPopup, 8000);
-
-    const closeBtn = popup.querySelector('.proof-close');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', () => popup.classList.remove('show'));
-    }
 }
 
 /**
