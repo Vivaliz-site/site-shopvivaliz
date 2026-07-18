@@ -2,6 +2,9 @@
 
 Options -Indexes
 
+# Error Pages
+ErrorDocument 404 /404.php
+
 # Bloquear acesso a arquivos sensiveis
 <FilesMatch "^(\.env(?:\..*)?|\.htaccess|tasks-queue\.json|mcp-servers\.json|package(?:-lock)?\.json)$">
     Require all denied
