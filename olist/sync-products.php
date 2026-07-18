@@ -219,17 +219,23 @@ function svs_fetch_v3(string $token): array {
         if (!$id) continue;
         $detail = svs_fetch_v3_detail((string)$id, $token);
         if ($detail !== null) {
-            if (isset($detail['estoque']) && is_array($detail['estoque'])) {
-                $item['estoque'] = $detail['estoque'];
-            }
             if (!empty($detail['anexos']) && is_array($detail['anexos'])) {
                 $item['imagens'] = $detail['anexos'];
             }
-            if (!empty($detail['descricaoComplementar'])) {
-                $item['descricaoComplementar'] = $detail['descricaoComplementar'];
-            }
-            if (!empty($detail['categoria'])) {
-                $item['categoria'] = $detail['categoria'];
+            // Mescla o objeto de detalhe INTEIRO (schema completo confirmado em
+            // api-docs.erp.olist.com/api-reference/produtos/obter-produto) por
+            // cima do item da listagem -- a listagem /produtos so tem um
+            // subconjunto raso dos campos; o detalhe tem tudo: situacao,
+            // produtoPai, unidade, unidadePorCaixa, ncm, gtin, origem, garantia,
+            // observacoes, categoria, marca, dimensoes, precos, estoque,
+            // fornecedores, seo (titulo/descricao/keywords/slug/linkVideo),
+            // tributacao, variacoes (com grade = atributos reais), kit,
+            // tipoVariacao, tipo. So exclui 'anexos' (ja tratado acima como
+            // 'imagens') e 'id'/'sku' (a listagem ja tem, nao precisa sobrescrever).
+            foreach ($detail as $field => $value) {
+                if (in_array($field, ['anexos', 'id', 'sku'], true)) continue;
+                if ($value === null || $value === '' || $value === []) continue;
+                $item[$field] = $value;
             }
         }
         usleep(1100000); // ~1.1s entre chamadas (limite: 60 req/min)
@@ -346,6 +352,94 @@ function svs_normalize(array $p, string $source): array {
         ''
     ));
 
+    // SEO: usa o slug/titulo/descricao/keywords ja cadastrados na Tiny
+    // (bloco 'seo' do detalhe do produto) quando existirem. Sem slug real
+    // cadastrado, gera um a partir do nome+sku (mesmo algoritmo usado como
+    // fallback em tempo real por catalogo.php/produto.php/index.php) --
+    // mas agora persistido, entao a URL do produto fica estavel mesmo se
+    // esse algoritmo mudar no futuro.
+    $seo = is_array($p['seo'] ?? null) ? $p['seo'] : [];
+    $slug = trim((string)($seo['slug'] ?? ''));
+    if ($slug === '' && $name !== '') {
+        $slug = svs_slugify($name, $sku);
+    }
+    $seoTitle = trim((string)($seo['titulo'] ?? ''));
+    $seoDescription = trim((string)($seo['descricao'] ?? ''));
+    $keywords = is_array($seo['keywords'] ?? null) ? array_values(array_filter(array_map('strval', $seo['keywords']))) : [];
+
+    $marca = trim((string)($p['marca']['nome'] ?? ''));
+    $gtin = trim((string)($p['gtin'] ?? ''));
+    $ncm = trim((string)($p['ncm'] ?? ''));
+    $unidade = trim((string)($p['unidade'] ?? ''));
+
+    // Restante do schema oficial de "Obter produto" que ainda nao tinha
+    // campo dedicado no catalogo espelhado -- ver comentario no loop de
+    // fetch de detalhe pra lista completa da doc.
+    $situacao = trim((string)($p['situacao'] ?? ''));
+    $tipo = trim((string)($p['tipo'] ?? ''));
+    $tipoVariacao = trim((string)($p['tipoVariacao'] ?? ''));
+    $unidadePorCaixa = trim((string)($p['unidadePorCaixa'] ?? ''));
+    $origem = trim((string)($p['origem'] ?? ''));
+    $garantia = trim((string)($p['garantia'] ?? ''));
+    $notes = trim((string)($p['observacoes'] ?? ''));
+    $parentProduct = is_array($p['produtoPai'] ?? null) ? [
+        'id' => (string)($p['produtoPai']['id'] ?? ''),
+        'sku' => (string)($p['produtoPai']['sku'] ?? ''),
+        'name' => (string)($p['produtoPai']['descricao'] ?? ''),
+    ] : null;
+    $prices = is_array($p['precos'] ?? null) ? [
+        'price' => (float)($p['precos']['preco'] ?? $price),
+        'promotional_price' => (float)($p['precos']['precoPromocional'] ?? 0),
+        'cost_price' => (float)($p['precos']['precoCusto'] ?? 0),
+        'avg_cost_price' => (float)($p['precos']['precoCustoMedio'] ?? 0),
+    ] : null;
+    $stockDetail = is_array($p['estoque'] ?? null) ? [
+        'controlled' => (bool)($p['estoque']['controlar'] ?? true),
+        'made_to_order' => (bool)($p['estoque']['sobEncomenda'] ?? false),
+        'prep_days' => (int)($p['estoque']['diasPreparacao'] ?? 0),
+        'location' => (string)($p['estoque']['localizacao'] ?? ''),
+        'min' => (float)($p['estoque']['minimo'] ?? 0),
+        'max' => (float)($p['estoque']['maximo'] ?? 0),
+    ] : null;
+    $dimensions = is_array($p['dimensoes'] ?? null) ? [
+        'width' => (float)($p['dimensoes']['largura'] ?? 0),
+        'height' => (float)($p['dimensoes']['altura'] ?? 0),
+        'length' => (float)($p['dimensoes']['comprimento'] ?? 0),
+        'diameter' => (float)($p['dimensoes']['diametro'] ?? 0),
+        'net_weight' => (float)($p['dimensoes']['pesoLiquido'] ?? 0),
+        'gross_weight' => (float)($p['dimensoes']['pesoBruto'] ?? 0),
+        'volumes' => (int)($p['dimensoes']['quantidadeVolumes'] ?? 1),
+    ] : null;
+    $suppliers = [];
+    foreach ((is_array($p['fornecedores'] ?? null) ? $p['fornecedores'] : []) as $supplier) {
+        $supplierName = trim((string)($supplier['nome'] ?? ''));
+        if ($supplierName !== '') $suppliers[] = $supplierName;
+    }
+    $taxation = is_array($p['tributacao'] ?? null) ? [
+        'gtin_packaging' => (string)($p['tributacao']['gtinEmbalagem'] ?? ''),
+        'ipi_fixed_value' => (float)($p['tributacao']['valorIPIFixo'] ?? 0),
+        'ipi_class' => (string)($p['tributacao']['classeIPI'] ?? ''),
+    ] : null;
+    $kitItems = [];
+    foreach ((is_array($p['kit'] ?? null) ? $p['kit'] : []) as $kitItem) {
+        $kitSku = trim((string)($kitItem['produto']['sku'] ?? ''));
+        $kitQty = (float)($kitItem['quantidade'] ?? 0);
+        if ($kitSku !== '') $kitItems[] = ['sku' => $kitSku, 'quantity' => $kitQty];
+    }
+
+    // 'grade' das variacoes = atributos reais do produto (ex: cor=Azul,
+    // tamanho=M) -- so existe quando o produto tem variacoes cadastradas.
+    $attributes = [];
+    foreach ((is_array($p['variacoes'] ?? null) ? $p['variacoes'] : []) as $variation) {
+        foreach ((is_array($variation['grade'] ?? null) ? $variation['grade'] : []) as $pair) {
+            $key = trim((string)($pair['chave'] ?? ''));
+            $value = trim((string)($pair['valor'] ?? ''));
+            if ($key !== '' && $value !== '' && !in_array("$key: $value", $attributes, true)) {
+                $attributes[] = "$key: $value";
+            }
+        }
+    }
+
     return [
         'olist_product_id' => $id,
         'sku'              => $sku,
@@ -356,9 +450,43 @@ function svs_normalize(array $p, string $source): array {
         'images'           => $images,
         'description'      => $description,
         'category'         => $category,
+        'slug'             => $slug,
+        'seo_title'        => $seoTitle,
+        'seo_description'  => $seoDescription,
+        'keywords'         => $keywords,
+        'brand'            => $marca,
+        'gtin'             => $gtin,
+        'ncm'              => $ncm,
+        'unit'             => $unidade,
+        'attributes'       => $attributes,
+        'status'           => $situacao,
+        'type'             => $tipo,
+        'variation_type'   => $tipoVariacao,
+        'unit_per_box'     => $unidadePorCaixa,
+        'origin'           => $origem,
+        'warranty'         => $garantia,
+        'notes'            => $notes,
+        'parent_product'   => $parentProduct,
+        'prices'           => $prices,
+        'stock_detail'     => $stockDetail,
+        'dimensions'       => $dimensions,
+        'suppliers'        => $suppliers,
+        'taxation'         => $taxation,
+        'kit_items'        => $kitItems,
         'sync_source'      => $source,
         'synced_at'        => date('c'),
     ];
+}
+
+function svs_slugify(string $name, string $sku): string {
+    $accents = ['á'=>'a','à'=>'a','ã'=>'a','â'=>'a','ä'=>'a','é'=>'e','è'=>'e','ê'=>'e','ë'=>'e','í'=>'i','ì'=>'i','î'=>'i','ï'=>'i','ó'=>'o','ò'=>'o','õ'=>'o','ô'=>'o','ö'=>'o','ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ç'=>'c','ñ'=>'n'];
+    $lower = function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
+    $base = strtr($lower, $accents);
+    $base = preg_replace('/[^a-z0-9]+/', '-', $base);
+    $base = trim((string)$base, '-');
+    $base = function_exists('mb_substr') ? mb_substr($base, 0, 60) : substr($base, 0, 60);
+    $skuPart = strtolower((string)preg_replace('/[^a-zA-Z0-9]+/', '', $sku));
+    return trim($base . '-' . $skuPart, '-') ?: $skuPart;
 }
 
 /* ── Espelho: a lista final deve ser a lista ativa retornada pela Tiny/Olist ── */
