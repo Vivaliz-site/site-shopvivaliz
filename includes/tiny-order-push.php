@@ -299,7 +299,32 @@ function svtop_push_order_tiny(array $order): ?string
             'valorUnitario' => $i['price'],
         ], $items),
         'valorFrete' => (float)($order['shipping_total'] ?? 0),
-        'obs' => $obs,
+        // O campo se chama 'observacoes' na API v3 -- 'obs' nao existe no
+        // schema oficial (api-docs.erp.olist.com/api-reference/pedidos/criar-pedido)
+        // e era ignorado silenciosamente pela Tiny, entao o pedido no ERP
+        // nunca tinha nenhuma observacao visivel apesar do codigo "enviar" isso.
+        'observacoes' => $obs,
+        // Endereco de entrega do cliente -- antes nao era enviado, entao o
+        // pedido no ERP ficava sem endereco de entrega definido (so o do
+        // contato cadastrado, se houver).
+        'enderecoEntrega' => [
+            'endereco'         => (string)($c['street_name'] ?? $c['address'] ?? ''),
+            'enderecoNro'      => (string)($c['street_number'] ?? ''),
+            'complemento'      => (string)($c['complement'] ?? ''),
+            'bairro'           => (string)($c['neighborhood'] ?? ''),
+            'municipio'        => (string)($c['city'] ?? ''),
+            'cep'              => preg_replace('/\D/', '', (string)($c['cep'] ?? '')),
+            'uf'               => (string)($c['state'] ?? ''),
+            'fone'             => (string)($c['phone'] ?? ''),
+            'nomeDestinatario' => (string)($c['name'] ?? ''),
+            'cpfCnpj'          => $docDigits,
+        ],
+        // Toda venda do checkout do site e pra pessoa fisica final, nunca
+        // revenda -- marca explicitamente em vez de deixar a Tiny inferir.
+        'consumidorFinal' => [
+            'cpfCnpj'                => $docDigits,
+            'clienteConsumidorFinal' => true,
+        ],
     ];
     if ($paymentFormId !== null) {
         // transportador: a transportadora real so e decidida depois deste
