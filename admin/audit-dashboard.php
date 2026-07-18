@@ -11,7 +11,7 @@ require_once dirname(__DIR__) . '/config/bootstrap-env.php';
 
 $baseDir = dirname(__DIR__);
 
-$readJson = static function (string $relativePath): array use ($baseDir): array {
+$readJson = static function (string $relativePath) use ($baseDir): array {
     $path = $baseDir . '/' . ltrim($relativePath, '/');
     if (!is_file($path)) {
         return [];
