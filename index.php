@@ -563,7 +563,7 @@ $svNavCurrent = '';
         <div class="container">
             <div class="section-heading">
                 <div>
-                    <h2>Catálogo em destaque</h2>
+                    <h2>Produtos em destaque</h2>
                     <p class="muted">Seleção com imagens reais e acesso rápido às linhas mais procuradas.</p>
                 </div>
                 <a href="/catalogo" class="btn btn-secondary">Ver todos</a>
