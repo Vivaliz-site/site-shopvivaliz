@@ -7,6 +7,8 @@ declare(strict_types=1);
  * pagos via Mercado Pago nunca eram enviados ao ERP (apenas os do fluxo manual/offline).
  */
 
+require_once __DIR__ . '/catalog-runtime.php';
+
 function svtop_root(): string
 {
     return dirname(__DIR__);
@@ -75,16 +77,180 @@ function svtop_env(string ...$keys): string
     return '';
 }
 
+/**
+ * @return array{status:int, raw:string, transport_error:bool}
+ */
+function svtop_python_request(string $method, string $url, array $headers, string $payload): array
+{
+    $python = svtop_env('PYTHON_BINARY');
+    if ($python === '') {
+        $python = 'python';
+    }
+
+    $script = <<<'PY'
+import json
+import sys
+
+import requests
+
+method = sys.argv[1]
+url = sys.argv[2]
+headers_path = sys.argv[3]
+body_path = sys.argv[4] if len(sys.argv) > 4 else ""
+
+with open(headers_path, "r", encoding="utf-8") as fh:
+    headers = json.load(fh)
+
+body = ""
+if body_path:
+    with open(body_path, "r", encoding="utf-8") as fh:
+        body = fh.read()
+
+kwargs = {"headers": headers, "timeout": 20}
+if body:
+    kwargs["data"] = body.encode("utf-8")
+
+try:
+    response = requests.request(method, url, **kwargs)
+    print(json.dumps({
+        "status": response.status_code,
+        "raw": response.text,
+    }, ensure_ascii=False))
+except Exception as exc:
+    print(json.dumps({
+        "error": str(exc),
+    }, ensure_ascii=False))
+PY;
+
+    $tempDir = sys_get_temp_dir();
+    $scriptFile = tempnam($tempDir, 'svtop_py_');
+    if ($scriptFile === false) {
+        return ['status' => 0, 'raw' => '', 'transport_error' => true];
+    }
+    $scriptPath = $scriptFile . '.py';
+    @rename($scriptFile, $scriptPath);
+    if (@file_put_contents($scriptPath, $script) === false) {
+        @unlink($scriptPath);
+        return ['status' => 0, 'raw' => '', 'transport_error' => true];
+    }
+
+    $headersFile = tempnam($tempDir, 'svtop_hdr_');
+    $bodyFile = tempnam($tempDir, 'svtop_bdy_');
+    if ($headersFile === false || $bodyFile === false) {
+        @unlink($scriptPath);
+        if (is_string($headersFile)) {
+            @unlink($headersFile);
+        }
+        if (is_string($bodyFile)) {
+            @unlink($bodyFile);
+        }
+        return ['status' => 0, 'raw' => '', 'transport_error' => true];
+    }
+    if (@file_put_contents($headersFile, json_encode($headers, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) === false) {
+        @unlink($scriptPath);
+        @unlink($headersFile);
+        @unlink($bodyFile);
+        return ['status' => 0, 'raw' => '', 'transport_error' => true];
+    }
+    if (@file_put_contents($bodyFile, $payload) === false) {
+        @unlink($scriptPath);
+        @unlink($headersFile);
+        @unlink($bodyFile);
+        return ['status' => 0, 'raw' => '', 'transport_error' => true];
+    }
+
+    $command = escapeshellarg($python)
+        . ' ' . escapeshellarg($scriptPath)
+        . ' ' . escapeshellarg(strtoupper($method))
+        . ' ' . escapeshellarg($url)
+        . ' ' . escapeshellarg($headersFile)
+        . ' ' . escapeshellarg($bodyFile);
+
+    $descriptorSpec = [
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ];
+
+    $process = @proc_open($command, $descriptorSpec, $pipes);
+    if (!is_resource($process)) {
+        @unlink($scriptPath);
+        return ['status' => 0, 'raw' => '', 'transport_error' => true];
+    }
+
+    fclose($pipes[0]);
+    $stdout = stream_get_contents($pipes[1]);
+    $stderr = stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    $exitCode = proc_close($process);
+    @unlink($scriptPath);
+    @unlink($headersFile);
+    @unlink($bodyFile);
+
+    $json = json_decode(trim((string)$stdout), true);
+    if (is_array($json) && isset($json['status'], $json['raw'])) {
+        return [
+            'status' => (int)$json['status'],
+            'raw' => (string)$json['raw'],
+            'transport_error' => false,
+        ];
+    }
+
+    return [
+        'status' => 0,
+        'raw' => trim((string)$stderr) !== '' ? trim((string)$stderr) : trim((string)$stdout),
+        'transport_error' => $exitCode !== 0,
+    ];
+}
+
 function svtop_tiny_credentials_configured(): bool
 {
-    return svtop_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN') !== ''
+    return svtop_tiny_v2_token() !== ''
+        || svtop_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN') !== ''
         && svtop_env('OLIST_CLIENT_ID', 'TINY_CLIENT_ID') !== ''
         && svtop_env('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET') !== '';
+}
+
+function svtop_tiny_v2_token(): string
+{
+    return svtop_env('OLIST_INTEGRADOR_TOKEN', 'TINY_API_TOKEN', 'OLIST_API_TOKEN');
+}
+
+/**
+ * @return array{status:int, body:string, json:array<string,mixed>}
+ */
+function svtop_tiny_v2_post(string $path, array $fields): array
+{
+    $token = svtop_tiny_v2_token();
+    if ($token === '') {
+        return ['status' => 0, 'body' => '', 'json' => []];
+    }
+
+    $res = svtop_python_request('POST', 'https://api.tiny.com.br' . $path, [
+        'Content-Type' => 'application/x-www-form-urlencoded',
+        'Accept' => 'application/json',
+        'User-Agent' => 'ShopVivaliz/3.0',
+    ], http_build_query(array_merge([
+        'token' => $token,
+        'formato' => 'json',
+    ], $fields)));
+
+    $json = json_decode((string)$res['raw'], true);
+    return [
+        'status' => (int)$res['status'],
+        'body' => (string)$res['raw'],
+        'json' => is_array($json) ? $json : [],
+    ];
 }
 
 function svtop_tiny_get_token(): string
 {
     $TOKEN_URL    = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
+    $accessToken  = svtop_env('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN');
+    if ($accessToken !== '') {
+        return $accessToken;
+    }
     $refresh      = svtop_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN');
     $clientId     = svtop_env('OLIST_CLIENT_ID',     'TINY_CLIENT_ID');
     $clientSecret = svtop_env('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET');
@@ -106,14 +272,48 @@ function svtop_tiny_get_token(): string
     $body   = curl_exec($ch);
     $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     curl_close($ch);
-    if ($status !== 200) return '';
+    if ($status !== 200) {
+        $fallback = svtop_python_request('POST', $TOKEN_URL, [
+            'Content-Type' => 'application/x-www-form-urlencoded',
+            'Accept' => 'application/json',
+            'User-Agent' => 'ShopVivaliz/3.0',
+        ], http_build_query([
+            'grant_type'    => 'refresh_token',
+            'client_id'     => $clientId,
+            'client_secret' => $clientSecret,
+            'refresh_token' => $refresh,
+        ]));
+        if ($fallback['status'] !== 200) {
+            return '';
+        }
+        $json = json_decode((string)$fallback['raw'], true);
+        return is_array($json) ? (string)($json['access_token'] ?? '') : '';
+    }
     $json = json_decode(is_string($body) ? $body : '', true);
+    if (is_array($json)) {
+        return (string)($json['access_token'] ?? '');
+    }
+
+    $fallback = svtop_python_request('POST', $TOKEN_URL, [
+        'Content-Type' => 'application/x-www-form-urlencoded',
+        'Accept' => 'application/json',
+        'User-Agent' => 'ShopVivaliz/3.0',
+    ], http_build_query([
+        'grant_type'    => 'refresh_token',
+        'client_id'     => $clientId,
+        'client_secret' => $clientSecret,
+        'refresh_token' => $refresh,
+    ]));
+    if ($fallback['status'] !== 200) {
+        return '';
+    }
+    $json = json_decode((string)$fallback['raw'], true);
     return is_array($json) ? (string)($json['access_token'] ?? '') : '';
 }
 
 function svtop_tiny_request(string $method, string $path, string $token, ?array $payload = null): array
 {
-    $ch = curl_init('https://api.tiny.com.br/public-api/v3' . $path);
+    $url = 'https://api.tiny.com.br/public-api/v3' . $path;
     $opts = [
         CURLOPT_CUSTOMREQUEST  => $method,
         CURLOPT_RETURNTRANSFER => true,
@@ -128,11 +328,26 @@ function svtop_tiny_request(string $method, string $path, string $token, ?array 
     if ($payload !== null) {
         $opts[CURLOPT_POSTFIELDS] = json_encode($payload, JSON_UNESCAPED_UNICODE);
     }
+    $ch = curl_init($url);
     curl_setopt_array($ch, $opts);
     $body   = curl_exec($ch);
     $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     curl_close($ch);
     $json = json_decode(is_string($body) ? $body : '', true);
+    if (!is_array($json) || $status < 200 || $status >= 300) {
+        $fallback = svtop_python_request($method, $url, [
+            'Authorization' => 'Bearer ' . $token,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+            'User-Agent' => 'ShopVivaliz/3.0',
+        ], $payload !== null ? json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '');
+        $fallbackJson = json_decode((string)$fallback['raw'], true);
+        return [
+            'status' => (int)$fallback['status'],
+            'body' => (string)$fallback['raw'],
+            'json' => is_array($fallbackJson) ? $fallbackJson : [],
+        ];
+    }
     return ['status' => $status, 'body' => is_string($body) ? $body : '', 'json' => is_array($json) ? $json : []];
 }
 
@@ -196,6 +411,36 @@ function svtop_tiny_first_non_empty(array $values): string
             return $value;
         }
     }
+    return '';
+}
+
+function svtop_resolve_olist_product_id(array $item): string
+{
+    $existing = trim((string)($item['olist_product_id'] ?? $item['id'] ?? ''));
+    if ($existing !== '' && ctype_digit($existing) && (int)$existing > 0) {
+        return $existing;
+    }
+
+    $sku = trim((string)($item['sku'] ?? ''));
+    if ($sku === '') {
+        return '';
+    }
+
+    foreach (svcr_products() as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+
+        if (strcasecmp(trim((string)($row['sku'] ?? '')), $sku) !== 0) {
+            continue;
+        }
+
+        $resolved = trim((string)($row['olist_product_id'] ?? $row['id'] ?? ''));
+        if ($resolved !== '' && ctype_digit($resolved) && (int)$resolved > 0) {
+            return $resolved;
+        }
+    }
+
     return '';
 }
 
@@ -451,6 +696,69 @@ function svtop_create_contact(string $token, array $customer): ?int
  */
 function svtop_push_order_tiny(array $order): ?string
 {
+    $v2Token = svtop_tiny_v2_token();
+    if ($v2Token !== '') {
+        $customer = $order['customer'] ?? [];
+        $siteOrderNumber = (string)($order['order_number'] ?? '');
+        $docDigits = preg_replace('/\D/', '', (string)($customer['cpf'] ?? ''));
+        if ($siteOrderNumber !== '' && $docDigits !== '') {
+            $items = [];
+            foreach (($order['items'] ?? []) as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $items[] = [
+                    'item' => [
+                        'codigo' => (string)($item['sku'] ?? ''),
+                        'descricao' => (string)($item['name'] ?? ''),
+                        'unidade' => 'UN',
+                        'quantidade' => (string)max(1, (int)($item['quantity'] ?? 1)),
+                        'valor_unitario' => number_format(max(0.0, (float)($item['price'] ?? 0)), 2, '.', ''),
+                    ],
+                ];
+            }
+
+            if ($items !== []) {
+                $pedido = [
+                    'numero_pedido_ecommerce' => $siteOrderNumber,
+                    'numero_ordem_compra' => $siteOrderNumber,
+                    'data_pedido' => date('d/m/Y', strtotime((string)($order['created_at'] ?? 'now')) ?: time()),
+                    'data_prevista' => date('d/m/Y', strtotime('+7 days')),
+                    'situacao' => 'aprovado',
+                    'cliente' => [
+                        'nome' => (string)($customer['name'] ?? ''),
+                        'codigo' => $siteOrderNumber,
+                        'nome_fantasia' => (string)($customer['name'] ?? ''),
+                        'tipo_pessoa' => strlen($docDigits) === 14 ? 'J' : 'F',
+                        'cpf_cnpj' => $docDigits,
+                        'email' => (string)($customer['email'] ?? ''),
+                        'telefone' => (string)($customer['phone'] ?? ''),
+                        'endereco' => (string)($customer['street_name'] ?? $customer['address'] ?? ''),
+                        'numero' => (string)($customer['street_number'] ?? ''),
+                        'bairro' => (string)($customer['neighborhood'] ?? ''),
+                        'cidade' => (string)($customer['city'] ?? ''),
+                        'uf' => (string)($customer['state'] ?? ''),
+                        'cep' => (string)($customer['cep'] ?? ''),
+                        'atualizar_cliente' => 'S',
+                    ],
+                    'itens' => $items,
+                    'valor_frete' => number_format(max(0.0, (float)($order['shipping_total'] ?? 0)), 2, '.', ''),
+                    'valor_desconto' => '0.00',
+                ];
+
+                $res = svtop_tiny_v2_post('/api2/pedido.incluir.php', [
+                    'pedido' => json_encode(['pedido' => $pedido], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ]);
+                if ($res['status'] === 200) {
+                    $tinyId = (string)($res['json']['retorno']['registros']['registro']['id'] ?? '');
+                    if ($tinyId !== '') {
+                        return $tinyId;
+                    }
+                }
+            }
+        }
+    }
+
     $token = svtop_tiny_get_token();
     if ($token === '') {
         throw new RuntimeException('Tiny: nao foi possivel obter access_token (refresh_token ausente ou invalido)');
@@ -503,7 +811,21 @@ function svtop_push_order_tiny(array $order): ?string
         throw new RuntimeException('Tiny: nao foi possivel localizar nem criar o contato do cliente no ERP (documento: ' . $docDigits . ')');
     }
 
-    $items = array_values(array_filter($order['items'] ?? [], static fn(array $i) => (int)($i['olist_product_id'] ?? 0) > 0));
+    $items = [];
+    foreach (($order['items'] ?? []) as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $resolvedId = svtop_resolve_olist_product_id($item);
+        if ($resolvedId !== '') {
+            $item['olist_product_id'] = $resolvedId;
+        }
+
+        if ((int)($item['olist_product_id'] ?? 0) > 0) {
+            $items[] = $item;
+        }
+    }
     if (count($items) === 0) {
         throw new RuntimeException('Tiny: nenhum item do pedido tem olist_product_id valido para vincular ao produto no ERP');
     }

@@ -88,20 +88,33 @@ if (empty($customerEmail) || !filter_var($customerEmail, FILTER_VALIDATE_EMAIL))
 
 echo "📧 Enviando email de confirmação via OrderNotificationService (SMTP real)...\n";
 
-$service = OrderNotificationService::getInstance();
-$sent = $service->notifyOrderEvent(
-    $orderNumber,
-    'pagamento_aprovado',
-    $orderData,
-    $mpPaymentId !== '' ? $mpPaymentId : null
-);
+try {
+    $service = OrderNotificationService::getInstance();
+    $sent = $service->notifyOrderEvent(
+        $orderNumber,
+        'pagamento_aprovado',
+        $orderData,
+        $mpPaymentId !== '' ? $mpPaymentId : null
+    );
 
-if ($sent) {
-    echo "✅ EMAIL ENVIADO COM SUCESSO!\n\n";
+    if ($sent) {
+        echo "✅ EMAIL ENVIADO COM SUCESSO!\n\n";
+        echo "   Para: $customerEmail\n";
+        echo "   Evento: pagamento_aprovado\n";
+        exit(0);
+    }
+} catch (Throwable $e) {
+    error_log('[MercadoPago] OrderNotificationService unavailable, falling back to direct SMTP email: ' . $e->getMessage());
+}
+
+require_once __DIR__ . '/../api/emails/send-order-notification.php';
+$sentFallback = svem_send_order_email($orderData, 'payment_received');
+if ($sentFallback) {
+    echo "✅ EMAIL ENVIADO COM FALLBACK SMTP DIRETO!\n\n";
     echo "   Para: $customerEmail\n";
-    echo "   Evento: pagamento_aprovado\n";
+    echo "   Evento: payment_received\n";
     exit(0);
 }
 
-echo "❌ Falha ao enviar email (ver logs do OrderNotificationService para detalhes)\n";
+echo "❌ Falha ao enviar email (fallback SMTP também falhou)\n";
 exit(1);
