@@ -372,6 +372,61 @@ function svs_normalize(array $p, string $source): array {
     $ncm = trim((string)($p['ncm'] ?? ''));
     $unidade = trim((string)($p['unidade'] ?? ''));
 
+    // Restante do schema oficial de "Obter produto" que ainda nao tinha
+    // campo dedicado no catalogo espelhado -- ver comentario no loop de
+    // fetch de detalhe pra lista completa da doc.
+    $situacao = trim((string)($p['situacao'] ?? ''));
+    $tipo = trim((string)($p['tipo'] ?? ''));
+    $tipoVariacao = trim((string)($p['tipoVariacao'] ?? ''));
+    $unidadePorCaixa = trim((string)($p['unidadePorCaixa'] ?? ''));
+    $origem = trim((string)($p['origem'] ?? ''));
+    $garantia = trim((string)($p['garantia'] ?? ''));
+    $notes = trim((string)($p['observacoes'] ?? ''));
+    $parentProduct = is_array($p['produtoPai'] ?? null) ? [
+        'id' => (string)($p['produtoPai']['id'] ?? ''),
+        'sku' => (string)($p['produtoPai']['sku'] ?? ''),
+        'name' => (string)($p['produtoPai']['descricao'] ?? ''),
+    ] : null;
+    $prices = is_array($p['precos'] ?? null) ? [
+        'price' => (float)($p['precos']['preco'] ?? $price),
+        'promotional_price' => (float)($p['precos']['precoPromocional'] ?? 0),
+        'cost_price' => (float)($p['precos']['precoCusto'] ?? 0),
+        'avg_cost_price' => (float)($p['precos']['precoCustoMedio'] ?? 0),
+    ] : null;
+    $stockDetail = is_array($p['estoque'] ?? null) ? [
+        'controlled' => (bool)($p['estoque']['controlar'] ?? true),
+        'made_to_order' => (bool)($p['estoque']['sobEncomenda'] ?? false),
+        'prep_days' => (int)($p['estoque']['diasPreparacao'] ?? 0),
+        'location' => (string)($p['estoque']['localizacao'] ?? ''),
+        'min' => (float)($p['estoque']['minimo'] ?? 0),
+        'max' => (float)($p['estoque']['maximo'] ?? 0),
+    ] : null;
+    $dimensions = is_array($p['dimensoes'] ?? null) ? [
+        'width' => (float)($p['dimensoes']['largura'] ?? 0),
+        'height' => (float)($p['dimensoes']['altura'] ?? 0),
+        'length' => (float)($p['dimensoes']['comprimento'] ?? 0),
+        'diameter' => (float)($p['dimensoes']['diametro'] ?? 0),
+        'net_weight' => (float)($p['dimensoes']['pesoLiquido'] ?? 0),
+        'gross_weight' => (float)($p['dimensoes']['pesoBruto'] ?? 0),
+        'volumes' => (int)($p['dimensoes']['quantidadeVolumes'] ?? 1),
+    ] : null;
+    $suppliers = [];
+    foreach ((is_array($p['fornecedores'] ?? null) ? $p['fornecedores'] : []) as $supplier) {
+        $supplierName = trim((string)($supplier['nome'] ?? ''));
+        if ($supplierName !== '') $suppliers[] = $supplierName;
+    }
+    $taxation = is_array($p['tributacao'] ?? null) ? [
+        'gtin_packaging' => (string)($p['tributacao']['gtinEmbalagem'] ?? ''),
+        'ipi_fixed_value' => (float)($p['tributacao']['valorIPIFixo'] ?? 0),
+        'ipi_class' => (string)($p['tributacao']['classeIPI'] ?? ''),
+    ] : null;
+    $kitItems = [];
+    foreach ((is_array($p['kit'] ?? null) ? $p['kit'] : []) as $kitItem) {
+        $kitSku = trim((string)($kitItem['produto']['sku'] ?? ''));
+        $kitQty = (float)($kitItem['quantidade'] ?? 0);
+        if ($kitSku !== '') $kitItems[] = ['sku' => $kitSku, 'quantity' => $kitQty];
+    }
+
     // 'grade' das variacoes = atributos reais do produto (ex: cor=Azul,
     // tamanho=M) -- so existe quando o produto tem variacoes cadastradas.
     $attributes = [];
