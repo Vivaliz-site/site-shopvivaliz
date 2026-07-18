@@ -14,6 +14,50 @@ permissions:
   statuses: write
 
 jobs:
+  memory-nudge:
+    name: Lembrete de memoria compartilhada
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Verificar se arquivo de integracao de risco mudou sem atualizar docs/MEMORIA-AGENTES.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -e
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          CHANGED=$(git diff --name-only "$BASE" "$HEAD" || true)
+
+          # Arquivos onde bugs de integracao ja causaram retrabalho entre
+          # agentes (ver docs/MEMORIA-AGENTES.md). Nao e uma lista exaustiva,
+          # so os pontos de maior risco ja conhecidos.
+          RISK_PATTERN='includes/tiny-order-push.php|daemon-sync-products.py|api/olist/|api/webhook-mercadopago.php|api/melhorenvio/|includes/mercadopago-gateway.php'
+
+          if echo "$CHANGED" | grep -qE "$RISK_PATTERN"; then
+            if ! echo "$CHANGED" | grep -q "^docs/MEMORIA-AGENTES.md$"; then
+              MATCHED=$(echo "$CHANGED" | grep -E "$RISK_PATTERN" | sed 's/^/- `/;s/$/`/')
+              {
+                echo "🧠 **Lembrete de memória compartilhada**"
+                echo ""
+                echo "Este PR mexe em arquivo(s) de integração externa que já causaram retrabalho entre agentes antes:"
+                echo ""
+                echo "$MATCHED"
+                echo ""
+                echo "Se você descobriu algo não-óbvio sobre a API/comportamento externo (não só corrigiu um bug já mapeado), considere adicionar uma entrada em \`docs/MEMORIA-AGENTES.md\` — assim a próxima sessão (de qualquer agente) não precisa redescobrir do zero."
+                echo ""
+                echo "Isso é só um lembrete, não bloqueia o merge."
+              } > /tmp/memory-nudge-body.md
+              gh pr comment "$PR_NUMBER" --body-file /tmp/memory-nudge-body.md 2>/dev/null || echo "::notice::Nao foi possivel comentar no PR (permissao/contexto), seguindo sem bloquear."
+            fi
+          fi
+          exit 0
+
   workflow-lint:
     name: GitHub Actions syntax
     runs-on: ubuntu-latest
