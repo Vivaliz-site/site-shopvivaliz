@@ -217,13 +217,26 @@ Eventos disponíveis:
 
 Não é possível criar webhooks específicos por aplicativo (é por conta).
 
-⚠️ **Relevante para o fluxo pedido pelo usuário**: gerar a etiqueta de transporte
-(Melhor Envio) só depois da NF emitida, em vez de na aprovação do pagamento (estado
-atual, ver `api/webhook-mercadopago.php` → `api/melhorenvio/generate-label-background.php`).
-O webhook **"notas fiscais autorizadas"** é o gatilho certo pra isso — ainda não há
-endpoint no nosso lado pra receber esse evento (precisa ser criado, e o app
-"Webhooks" precisa estar instalado/configurado na conta Tiny). Levantamento feito,
-implementação pendente.
+✅ **Implementado em 2026-07-18**: `api/webhooks/tiny-nota-fiscal.php` recebe o evento
+"notas fiscais autorizadas" e dispara `api/melhorenvio/generate-label-background.php`
+pro pedido correspondente (localizado por `tiny_order_id` em `storage/orders/*.json`).
+`api/webhook-mercadopago.php` não gera mais a etiqueta na aprovação do pagamento —
+só faz o push do pedido pro Tiny; a etiqueta agora só é comprada depois que a NF é
+emitida de fato no ERP.
+
+⚠️ **Ainda pendente (ação manual do usuário, não automatizável por API)**:
+1. Configurar `TINY_WEBHOOK_SECRET` no `.env` (local e produção) — um token
+   aleatório qualquer, usado só pra autenticar a URL do webhook.
+2. No painel Tiny: `Menu → Configurações → Aba Geral → Outras configurações →
+   Webhooks` → app "Webhooks" instalado → ativar **"Notificações de notas
+   fiscais autorizadas"** com URL
+   `https://dev.shopvivaliz.com.br/api/webhooks/tiny-nota-fiscal.php?token=<TINY_WEBHOOK_SECRET>`.
+3. O formato exato do payload desse evento específico da Tiny não foi observado
+   ao vivo ainda (só é possível depois do passo 2). O parsing em
+   `tiny-nota-fiscal.php` tenta os campos mais prováveis (`dados.idPedido`,
+   `dados.pedido.id`, `dados.id`, `id`, `idPedido`) e loga o payload cru em
+   `error_log` sempre que não reconhece o pedido — ajustar o parsing com um
+   exemplo real assim que o primeiro webhook chegar.
 
 ## Como redescobrir estes dados se algo mudar
 
