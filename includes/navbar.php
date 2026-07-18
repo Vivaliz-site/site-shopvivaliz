@@ -35,14 +35,14 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 <link rel="preconnect" href="https://s3.amazonaws.com">
 <link rel="dns-prefetch" href="https://s3.amazonaws.com">
 <link rel="dns-prefetch" href="https://images.unsplash.com">
-<link rel="stylesheet" href="/css/shopvivaliz-visual-v3.css?v=3.0.8">
-<link rel="stylesheet" href="/css/accessibility-v11.css?v=11.0.0">
-<link rel="stylesheet" href="/css/loading-states-v21.css?v=21.0.0">
-<link rel="stylesheet" href="/css/network-status-v22.css?v=22.0.0">
+<link rel="stylesheet" href="/css/shopvivaliz-unified-theme.css?v=2026-07-18">
+<!-- accessibility-v11.css bundled -->
+<!-- loading-states-v21.css bundled -->
+<!-- network-status-v22.css bundled -->
 <link rel="stylesheet" href="/css/print-v27.css?v=27.0.0" media="print">
-<link rel="stylesheet" href="/css/premium-theme.css?v=2026-07-12">
-<link rel="stylesheet" href="/css/premium-visual-v2.css?v=2026-07-13-v4">
-<link rel="stylesheet" href="/css/dazzle-v1.css?v=1.2.0">
+<!-- premium-theme.css bundled -->
+<!-- premium-visual-v2.css bundled -->
+<!-- dazzle-v1.css bundled -->
 <?php if ($svIsHome): ?><link rel="stylesheet" href="/css/home-polish-v17.css?v=17.0.0"><link rel="stylesheet" href="/css/category-real-images-v52.css?v=52.0.0"><?php endif; ?>
 <?php if ($svIsCatalog): ?><link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=4.0.0"><link rel="stylesheet" href="/css/product-image-integrity-v63.css?v=63.0.0"><link rel="stylesheet" href="/css/price-integrity-v73.css?v=73.0.0"><link rel="stylesheet" href="/css/stock-integrity-v83.css?v=83.0.0"><?php endif; ?>
 <?php if ($svIsProduct): ?><link rel="stylesheet" href="/css/product-conversion-v5.css?v=5.0.0"><link rel="stylesheet" href="/css/product-image-integrity-v63.css?v=63.0.0"><link rel="stylesheet" href="/css/price-integrity-v73.css?v=73.0.0"><link rel="stylesheet" href="/css/stock-integrity-v83.css?v=83.0.0"><?php endif; ?>
