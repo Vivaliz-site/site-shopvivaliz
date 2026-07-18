@@ -47,6 +47,22 @@ function orch_tail_log(string $path, int $n = 20): array
     return is_array($lines) ? array_slice($lines, -$n) : [];
 }
 
+function orch_php_json(string $relativeScript): array
+{
+    $script = dirname(__DIR__) . '/' . ltrim($relativeScript, '/');
+    if (!is_file($script)) {
+        return ['ok' => false, 'error' => 'missing_script'];
+    }
+    $php = PHP_BINARY ?: 'php';
+    $cmd = escapeshellarg($php) . ' ' . escapeshellarg($script) . ' 2>&1';
+    $raw = @shell_exec($cmd);
+    if (!is_string($raw) || trim($raw) === '') {
+        return ['ok' => false, 'error' => 'empty_output'];
+    }
+    $data = json_decode($raw, true);
+    return is_array($data) ? $data : ['ok' => false, 'raw' => substr($raw, 0, 500)];
+}
+
 // ── Ação POST ─────────────────────────────────────────────────────────────────
 $action_result = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -91,22 +107,9 @@ $queue      = orch_read_json($queue_path, []);
 $log_orch  = orch_tail_log($root . '/logs/orchestrator.log', 20);
 $log_cron  = orch_tail_log($root . '/logs/cron-dispatcher.log', 20);
 
-// Watchdog — tenta via HTTP para refletir estado real do servidor
-// Preferir a URL local quando o painel estiver sendo aberto no ambiente de dev
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host   = (string)($_SERVER['HTTP_HOST'] ?? '');
-$fallbackBase = $host !== '' ? ($scheme . '://' . $host) : 'https://dev.shopvivaliz.com.br';
-$base_url   = rtrim(orch_env('SITE_URL') ?: $fallbackBase, '/');
-$watchdog   = null;
-$report_api = null;
-{
-    $ctx = stream_context_create(['http' => ['method' => 'GET', 'timeout' => 6, 'ignore_errors' => true]]);
-    $wb = @file_get_contents($base_url . '/api/agent/autonomous-watchdog.php', false, $ctx);
-    if ($wb !== false) $watchdog = json_decode($wb, true);
-
-    $rb = @file_get_contents($base_url . '/api/agent/autonomous-report.php', false, $ctx);
-    if ($rb !== false) $report_api = json_decode($rb, true);
-}
+// Ler os JSONs diretamente do PHP local evita autochamada HTTP no servidor embutido
+$watchdog   = orch_php_json('/api/agent/autonomous-watchdog.php');
+$report_api = orch_php_json('/api/agent/autonomous-report.php');
 
 // Status watchdog
 $wd_status = is_array($watchdog) ? ($watchdog['status'] ?? 'unknown') : 'unreachable';

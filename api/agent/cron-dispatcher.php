@@ -47,6 +47,21 @@ function cd_http_get(string $url): array {
     return is_array($data) ? $data : ['ok' => false, 'raw' => substr($body, 0, 200)];
 }
 
+function cd_php_json(string $relativeScript): array {
+    $script = dirname(__DIR__, 2) . '/' . ltrim($relativeScript, '/');
+    if (!is_file($script)) {
+        return ['ok' => false, 'error' => 'missing_script'];
+    }
+    $php = PHP_BINARY ?: 'php';
+    $cmd = escapeshellarg($php) . ' ' . escapeshellarg($script) . ' 2>&1';
+    $raw = @shell_exec($cmd);
+    if (!is_string($raw) || trim($raw) === '') {
+        return ['ok' => false, 'error' => 'empty_output'];
+    }
+    $data = json_decode($raw, true);
+    return is_array($data) ? $data : ['ok' => false, 'raw' => substr($raw, 0, 500)];
+}
+
 // ── Autenticação ──────────────────────────────────────────────────────────────
 $cronSecret = cd_env('CRON_SECRET');
 $isCli      = PHP_SAPI === 'cli';
@@ -70,7 +85,7 @@ $baseUrl = rtrim(cd_env('SITE_URL') ?: 'https://dev.shopvivaliz.com.br', '/');
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 
 function task_watchdog(string $baseUrl): array {
-    $result = cd_http_get($baseUrl . '/api/agent/autonomous-watchdog.php');
+    $result = cd_php_json('/api/agent/autonomous-watchdog.php');
     $status = $result['status'] ?? 'unknown';
     cd_log('watchdog', 'status=' . $status . ' alerts=' . count($result['alerts'] ?? []));
     if (!empty($result['alerts'])) {
@@ -82,7 +97,7 @@ function task_watchdog(string $baseUrl): array {
 }
 
 function task_report(string $baseUrl): array {
-    $result = cd_http_get($baseUrl . '/api/agent/autonomous-report.php');
+    $result = cd_php_json('/api/agent/autonomous-report.php');
     $catalog = $result['catalog'] ?? [];
     cd_log('report', sprintf(
         'total=%d zero_price=%d no_image=%d ml_connected=%s',
@@ -95,8 +110,8 @@ function task_report(string $baseUrl): array {
 }
 
 function task_status(string $baseUrl): array {
-    $report   = cd_http_get($baseUrl . '/api/agent/autonomous-report.php');
-    $watchdog = cd_http_get($baseUrl . '/api/agent/autonomous-watchdog.php');
+    $report   = cd_php_json('/api/agent/autonomous-report.php');
+    $watchdog = cd_php_json('/api/agent/autonomous-watchdog.php');
     return ['report' => $report, 'watchdog' => $watchdog];
 }
 

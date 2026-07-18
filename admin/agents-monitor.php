@@ -4,21 +4,23 @@ require_once __DIR__ . '/../includes/admin-guard.php';
 
 // Simple read-only monitoring panel for ShopVivaliz agents
 
-$base = 'https://dev.shopvivaliz.com.br';
-if (!empty($_SERVER['HTTP_HOST'])) {
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $base = $scheme . '://' . $_SERVER['HTTP_HOST'];
+function am_php_json(string $relativeScript): array {
+    $script = dirname(__DIR__) . '/' . ltrim($relativeScript, '/');
+    if (!is_file($script)) {
+        return [];
+    }
+    $php = PHP_BINARY ?: 'php';
+    $cmd = escapeshellarg($php) . ' ' . escapeshellarg($script) . ' 2>&1';
+    $raw = @shell_exec($cmd);
+    if (!is_string($raw) || trim($raw) === '') {
+        return [];
+    }
+    $data = json_decode($raw, true);
+    return is_array($data) ? $data : [];
 }
 
-function fetch_json($url) {
-    $context = stream_context_create(['http' => ['method' => 'GET', 'timeout' => 8, 'ignore_errors' => true]]);
-    $data = @file_get_contents($url, false, $context);
-    if (!$data) return null;
-    return json_decode($data, true);
-}
-
-$report = fetch_json($base . '/api/agent/autonomous-report.php');
-$watchdog = fetch_json($base . '/api/agent/autonomous-watchdog.php');
+$report = am_php_json('/api/agent/autonomous-report.php');
+$watchdog = am_php_json('/api/agent/autonomous-watchdog.php');
 
 ?><!DOCTYPE html>
 <html>
