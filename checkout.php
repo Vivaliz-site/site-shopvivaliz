@@ -364,6 +364,9 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         var totEl = document.getElementById('cart-total');
         var shippingEl = document.getElementById('cart-shipping');
         var badge = document.getElementById('nav-cart-count');
+        var discountRow = document.getElementById('coupon-discount-row');
+        var discountLabel = document.getElementById('coupon-discount-label');
+        var discountEl = document.getElementById('cart-discount');
         if (!el) return;
 
         var total = 0;
@@ -371,6 +374,8 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         var html = '';
         var quote = getShippingQuote();
         var shippingTotal = quote && Number(quote.total || 0) > 0 ? Number(quote.total || 0) : 0;
+        var coupon = getCoupon();
+        var discountTotal = coupon && Number(coupon.amount || 0) > 0 ? Number(coupon.amount || 0) : 0;
 
         if (!items.length) {
             html = '<p class="empty-cart">Carrinho vazio. <a href="/catalogo">Ver produtos</a></p>';
@@ -388,12 +393,18 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                     + '</div></div>';
             });
         }
+        discountTotal = Math.min(discountTotal, total);
 
         el.innerHTML = html;
         var fmt = hasPrice ? fmtMoney(total) : 'Consultar';
         if (subEl) subEl.textContent = fmt;
         if (shippingEl) shippingEl.textContent = shippingTotal > 0 ? fmtMoney(shippingTotal) : 'A calcular';
-        if (totEl) totEl.textContent = hasPrice ? fmtMoney(total + shippingTotal) : 'Consultar';
+        if (discountRow) discountRow.hidden = discountTotal <= 0;
+        if (discountTotal > 0) {
+            if (discountLabel) discountLabel.textContent = 'Desconto' + (coupon && coupon.code ? ' (' + coupon.code + ')' : '');
+            if (discountEl) discountEl.textContent = '- ' + fmtMoney(discountTotal);
+        }
+        if (totEl) totEl.textContent = hasPrice ? fmtMoney(total - discountTotal + shippingTotal) : 'Consultar';
         if (badge) badge.textContent = items.reduce(function(a,i){ return a+(i.quantity||1); }, 0);
     }
 
