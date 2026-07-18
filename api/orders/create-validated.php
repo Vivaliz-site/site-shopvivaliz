@@ -11,6 +11,7 @@ require_once dirname(__DIR__, 2) . '/includes/order-authoritative.php';
 require_once dirname(__DIR__, 2) . '/includes/order-request-context.php';
 require_once dirname(__DIR__, 2) . '/includes/order-idempotency.php';
 require_once dirname(__DIR__, 2) . '/includes/order-rate-limit.php';
+require_once dirname(__DIR__, 2) . '/includes/coupons.php';
 
 function svq_fail(int $status, string $error, string $message, array $extra = []): never {
     http_response_code($status);
