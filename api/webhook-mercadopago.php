@@ -39,17 +39,7 @@ if ($webhookSecret === '' || $accessToken === '') {
     svmp_webhook_response(503, 'gateway_unconfigured');
 }
 if (!svmp_validate_webhook_signature($signature, $requestId, $dataId, $webhookSecret)) {
-    // Diagnostico temporario (2026-07-18): assinatura calculada manualmente
-    // com o MERCADOPAGO_WEBHOOK_SECRET atual bate (testado via curl), mas
-    // TODAS as chamadas reais do MP vem falhando com invalid_signature --
-    // loga os componentes crus (sem o secret) pra descobrir a diferenca
-    // exata assim que o MP reenviar. Remover depois de diagnosticado.
-    error_log('[MercadoPago] webhook rejected: invalid signature request=' . substr($requestId, 0, 80)
-        . ' dataId=' . substr($dataId, 0, 40)
-        . ' topic=' . $topic
-        . ' rawSignatureHeader=' . substr($signature, 0, 200)
-        . ' secretLen=' . strlen($webhookSecret)
-        . ' secretPrefix=' . substr($webhookSecret, 0, 4));
+    error_log('[MercadoPago] webhook rejected: invalid signature request=' . substr($requestId, 0, 80));
     svmp_webhook_response(401, 'invalid_signature');
 }
 
