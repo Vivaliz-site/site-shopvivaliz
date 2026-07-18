@@ -593,36 +593,24 @@ function svs_removed_products(array $mirrored, string $catalogPath): array {
 
 /* ════════════════════════ MAIN ════════════════════════ */
 $dryRun  = isset($_GET['dry_run']) && $_GET['dry_run'] !== '0';
-$forceV2 = isset($_GET['v2'])      && $_GET['v2']      !== '0';
 $errors  = [];
 $fetched = [];
 $source  = 'none';
 
-// Tentar v3 OAuth
-if (!$forceV2) {
-    try {
-        $token   = svs_get_access_token();
-        $raw     = svs_fetch_v3($token);
-        $source  = 'tiny_v3';
-        foreach ($raw as $p) { $fetched[] = svs_normalize($p, $source); }
-        svs_log("v3 sync: " . count($fetched) . ' produtos');
-    } catch (Throwable $e) {
-        $errors[] = $e->getMessage();
-        svs_log('v3 error: ' . $e->getMessage());
-    }
-}
-
-// Fallback v2 token estático
-if (count($fetched) === 0) {
-    $apiToken = svs_env('TOKEN_API_OLIST', 'TINY_API_TOKEN', 'OLIST_API_TOKEN');
-    if ($apiToken !== '') {
-        $raw    = svs_fetch_v2($apiToken);
-        $source = 'tiny_v2';
-        foreach ($raw as $p) { $fetched[] = svs_normalize($p, $source); }
-        svs_log("v2 sync: " . count($fetched) . ' produtos');
-    } else {
-        $errors[] = 'no_api_credentials';
-    }
+// Tiny v3 OAuth -- unico caminho suportado. A API v2 legada (token estatico,
+// api2/produtos.pesquisa.php) foi removida em 2026-07-18: alem de obsoleta,
+// o schema dela usa terminologia de "pedido ecommerce" que nao corresponde
+// a como este projeto realmente integra com o Tiny (venda direta do site,
+// nao um canal de marketplace).
+try {
+    $token   = svs_get_access_token();
+    $raw     = svs_fetch_v3($token);
+    $source  = 'tiny_v3';
+    foreach ($raw as $p) { $fetched[] = svs_normalize($p, $source); }
+    svs_log("v3 sync: " . count($fetched) . ' produtos');
+} catch (Throwable $e) {
+    $errors[] = $e->getMessage();
+    svs_log('v3 error: ' . $e->getMessage());
 }
 
 $catalogPath = svs_root() . '/api/catalog/fallback-products.json';
