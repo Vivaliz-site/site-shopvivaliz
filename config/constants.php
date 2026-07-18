@@ -73,6 +73,8 @@ define('DB_USER', getenv('DB_USER') ?: (getenv('DB_USERNAME') ?: 'root'));
 define('DB_PASS', getenv('DB_PASS') ?: (getenv('DB_PASSWORD') ?: ''));
 define('DB_CHARSET', 'utf8mb4');
 
+require_once __DIR__ . '/../includes/mysqli-fallback.php';
+
 // APIs de IA
 define('GEMINI_API_KEY', getenv('GEMINI_API_KEY') ?: null);
 define('ANTHROPIC_API_KEY', getenv('ANTHROPIC_API_KEY') ?: null);

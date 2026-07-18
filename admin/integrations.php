@@ -182,15 +182,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('admin-integrations'
                 <div class="card">
                     <div class="card-title"><?= htmlspecialchars($integration['name']) ?></div>
                     <?php foreach ($integration['fields'] as $fieldKey => $field): ?>
+                        <?php $fieldType = (string)($field['type'] ?? 'text'); ?>
                         <form method="POST">
                             <?= sv_csrf_input('admin-integrations') ?>
                             <div class="form-group">
                                 <label><?= htmlspecialchars($field['label']) ?></label>
                                 <input
-                                    type="<?= $field['type'] ?? 'text' ?>"
+                                    type="<?= htmlspecialchars($fieldType, ENT_QUOTES, 'UTF-8') ?>"
                                     name="value"
                                     value="<?= htmlspecialchars($field['value']) ?>"
-                                    <?= ($field['type'] === 'password' && $field['value'] === '***REDACTED***') ? 'readonly' : '' ?>
+                                    <?= ($fieldType === 'password' && $field['value'] === '***REDACTED***') ? 'readonly' : '' ?>
                                     placeholder="<?= htmlspecialchars($field['label']) ?>"
                                 >
                                 <div class="status <?= (!empty($field['value']) && $field['value'] !== '***REDACTED***') ? 'active' : 'inactive' ?>">

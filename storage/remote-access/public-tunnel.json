@@ -1,0 +1,8 @@
+﻿{
+    "timestamp":  "2026-07-18T02:44:08.7283644Z",
+    "public_url":  "https://feels-continental-gilbert-drunk.trycloudflare.com",
+    "gateway_url":  "http://127.0.0.1:5560",
+    "process_id":  12372,
+    "stdout_log":  "C:\\site-shopvivaliz\\logs\\cloudflared-public-tunnel.out.log",
+    "stderr_log":  "C:\\site-shopvivaliz\\logs\\cloudflared-public-tunnel.err.log"
+}

@@ -38,7 +38,7 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
             <div>
                 <strong>Institucional</strong>
                 <a href="/sobre">Quem somos</a>
-                <a href="/catalogo">Catalogo</a>
+                <a href="/catalogo">Produtos</a>
                 <a href="/gamificacao.php">Gamificacao</a>
             </div>
 

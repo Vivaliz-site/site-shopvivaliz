@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-07-18T02:34:30.655205+00:00",
+  "host": "127.0.0.1",
+  "port": 5559,
+  "health_url": "http://127.0.0.1:5559/health",
+  "status_url": "http://127.0.0.1:5559/status",
+  "api_key_file": "C:\\site-shopvivaliz\\storage\\remote-access\\api-key.txt",
+  "browser_profile": "C:\\site-shopvivaliz\\storage\\remote-access\\browser-profile",
+  "auth_header": "X-API-Key"
+}

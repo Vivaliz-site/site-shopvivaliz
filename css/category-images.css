@@ -23,17 +23,17 @@
 
 /* Rodízios. */
 .category-slide-img[alt*="Rodízio" i],
-.category-slide-img[alt*="Rodizio" i]{content:url('/uploads/olist/CONJ-10-RODIZIOS-35MM-GEL/002-9434fc7a841b.jpg')}
+.category-slide-img[alt*="Rodizio" i]{content:url('/storage/original/CONJ-10-RODIZIOS-35MM-GEL.jpg')}
 
 /* Fercar, carrinhos, armários e organização metálica. */
 .category-slide-img[alt*="Fercar" i],
 .category-slide-img[alt*="Carrinho" i],
 .category-slide-img[alt*="Armário" i],
-.category-slide-img[alt*="Armario" i]{content:url('/uploads/olist/ARM-08/004-09c708d77d14.jpg')}
+.category-slide-img[alt*="Armario" i]{content:url('/storage/original/ARM-08.jpg')}
 
 /* Banheiro e assentos. */
 .category-slide-img[alt*="Banheiro" i],
-.category-slide-img[alt*="Assento" i]{content:url('/uploads/olist/A21/003-55e4d9f70c8a.jpg')}
+.category-slide-img[alt*="Assento" i]{content:url('/storage/original/A21.jpg')}
 
 /* Ferragens, fixação, cadeados e segurança. */
 .category-slide-img[alt*="Ferragem" i],

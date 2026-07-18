@@ -14,7 +14,7 @@
         <button class="sv-close" type="button" aria-label="Fechar assistente">×</button>
       </div>
       <div class="sv-hero">
-        <video autoplay muted loop playsinline src="/public/assets/liz-assistant/liz-acenando.webm"></video>
+        <img src="/public/assets/liz-assistant/liz-avatar.png" alt="Liz acenando">
       </div>
       <div class="sv-msgs">
         <div class="sv-msg sv-bot">Oi! Eu sou a Liz. Posso ajudar você a encontrar um produto, acompanhar uma compra ou tirar dúvidas.</div>
