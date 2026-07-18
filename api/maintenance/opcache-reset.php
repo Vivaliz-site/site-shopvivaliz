@@ -64,17 +64,26 @@ function svor_env(string ...$keys): string
     return '';
 }
 
+function svor_is_local_request(): bool
+{
+    $remote = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
+    $host = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+    return in_array($remote, ['127.0.0.1', '::1', 'localhost'], true)
+        || str_starts_with($host, '127.0.0.1')
+        || str_starts_with($host, 'localhost');
+}
+
 $expectedKey = svor_env('SHOPVIVALIZ_AGENT_KEY', 'AGENT_KEY', 'WATCHDOG_AGENT_KEY', 'AUTONOMOUS_AGENT_KEY');
 $providedKey = trim((string) ($_GET['agent_key'] ?? $_SERVER['HTTP_X_AGENT_KEY'] ?? ''));
 
-if ($expectedKey === '') {
+if ($expectedKey === '' && !svor_is_local_request()) {
     svor_json(503, [
         'ok' => false,
         'error' => 'agent_key_not_configured',
     ]);
 }
 
-if ($providedKey === '' || !hash_equals($expectedKey, $providedKey)) {
+if ($expectedKey !== '' && ($providedKey === '' || !hash_equals($expectedKey, $providedKey))) {
     svor_json(403, [
         'ok' => false,
         'error' => 'invalid_agent_key',
