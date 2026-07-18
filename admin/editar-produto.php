@@ -37,6 +37,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $catalog[$index]['category'] = trim((string)($_POST['category'] ?? $catalog[$index]['category'] ?? ''));
         $catalog[$index]['status'] = isset($_POST['exibir_para_venda']) ? 'active' : 'inactive';
 
+        $catalog[$index]['slug'] = trim((string)($_POST['slug'] ?? $catalog[$index]['slug'] ?? ''));
+        $catalog[$index]['gtin'] = trim((string)($_POST['gtin'] ?? $catalog[$index]['gtin'] ?? ''));
+        $catalog[$index]['ncm'] = trim((string)($_POST['ncm'] ?? $catalog[$index]['ncm'] ?? ''));
+        $catalog[$index]['brand'] = trim((string)($_POST['brand'] ?? $catalog[$index]['brand'] ?? ''));
+        $catalog[$index]['unit'] = trim((string)($_POST['unit'] ?? $catalog[$index]['unit'] ?? ''));
+        $catalog[$index]['notes'] = trim((string)($_POST['notes'] ?? $catalog[$index]['notes'] ?? ''));
+        $catalog[$index]['seo_title'] = trim((string)($_POST['seo_title'] ?? $catalog[$index]['seo_title'] ?? ''));
+        $catalog[$index]['seo_description'] = trim((string)($_POST['seo_description'] ?? $catalog[$index]['seo_description'] ?? ''));
+        $keywordsRaw = trim((string)($_POST['keywords'] ?? ''));
+        $catalog[$index]['keywords'] = $keywordsRaw !== ''
+            ? array_values(array_filter(array_map('trim', explode(',', $keywordsRaw))))
+            : ($catalog[$index]['keywords'] ?? []);
+
+        $dimensions = is_array($catalog[$index]['dimensions'] ?? null) ? $catalog[$index]['dimensions'] : [];
+        $dimensions['width'] = (float)($_POST['dim_width'] ?? $dimensions['width'] ?? 0);
+        $dimensions['height'] = (float)($_POST['dim_height'] ?? $dimensions['height'] ?? 0);
+        $dimensions['length'] = (float)($_POST['dim_length'] ?? $dimensions['length'] ?? 0);
+        $dimensions['net_weight'] = (float)($_POST['dim_net_weight'] ?? $dimensions['net_weight'] ?? 0);
+        $dimensions['gross_weight'] = (float)($_POST['dim_gross_weight'] ?? $dimensions['gross_weight'] ?? 0);
+        $catalog[$index]['dimensions'] = $dimensions;
+
+        $prices = is_array($catalog[$index]['prices'] ?? null) ? $catalog[$index]['prices'] : [];
+        $prices['cost_price'] = (float)($_POST['cost_price'] ?? $prices['cost_price'] ?? 0);
+        $prices['promotional_price'] = (float)($_POST['promotional_price'] ?? $prices['promotional_price'] ?? 0);
+        $catalog[$index]['prices'] = $prices;
+
         $written = file_put_contents($catalogPath, json_encode($catalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), LOCK_EX);
         if ($written === false) {
             $error = 'Falha ao salvar (permissão de escrita no catálogo).';
