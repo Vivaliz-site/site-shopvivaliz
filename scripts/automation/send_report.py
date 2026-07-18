@@ -6,6 +6,9 @@ Enviar relatório de automação por email
 import os
 import json
 import csv
+import smtplib
+import ssl
+from email.mime.text import MIMEText
 from datetime import datetime
 
 class ReportSender:
