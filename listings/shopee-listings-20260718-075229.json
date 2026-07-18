@@ -1,0 +1,5114 @@
+{
+    "agent": "shopee_listings_extractor",
+    "version": "9.2.85",
+    "generated_at": "2026-07-18T07:52:29+00:00",
+    "secrets_check": {
+        "token_source": "oauth2_refresh",
+        "token_refreshed": true
+    },
+    "status": "success",
+    "total_products": 300,
+    "products": [
+        {
+            "id": 337702887,
+            "sku": "9977-237",
+            "nome": "Caixa de Ferramentas 5 Gavetas Fercar 07 Metal Azul 20x50x21cm EDA",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000175",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337702901,
+            "sku": "9977-449",
+            "nome": "Chave Alavanca Interruptor Liga Desliga 30A Margirius Cinza para Motores",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7890428162656",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337702906,
+            "sku": "9977-456",
+            "nome": "Chave Interruptor Alavanca 15A Margirius CS-815 Aço para Motores Elétricos",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7890428162571",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337702914,
+            "sku": "9977-457",
+            "nome": "Chave Interruptor Alavanca 15A Margirius CS-815 Aço para Motores Elétricos",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7890428162571",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337702927,
+            "sku": "9976-268",
+            "nome": "Kit 5 Cadeados Papaiz CR50 Latão Maciço com 2 Chaves Amarelo",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891194054206",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337702931,
+            "sku": "9976-269",
+            "nome": "Kit 5 Cadeados Papaiz CR50 Latão Maciço com 2 Chaves Amarelo",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891194054206",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337702941,
+            "sku": "9976-248",
+            "nome": "Kit 2 Vedantes para Porta de Alumínio Rodo Borracha 90cm Preto Estelar Liso",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337702945,
+            "sku": "9976-249",
+            "nome": "Kit 2 Vedantes para Porta de Alumínio Rodo Borracha 90cm Preto Estelar Liso",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337702957,
+            "sku": "9976-75",
+            "nome": "Ducha de Alumínio 8 Polegadas Pro Lazer Cromado Prateado",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898129830027",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337702967,
+            "sku": "9976-271",
+            "nome": "Kit 6 Chaves de Fenda e Phillips Imantadas Aquatools Cromo-vanádio",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7899887506186",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703039,
+            "sku": "9977-450",
+            "nome": "Chave De Roda 27x33mm - Riosul Tools",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898142337060",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703058,
+            "sku": "9976-462",
+            "nome": "Trena Profissional Emborrachada",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7899887501716",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703074,
+            "sku": "9977-203",
+            "nome": "Caixa Bau Com Estojo 80 X 45 X 34 Fercar 16 Cor Azul",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000274",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703094,
+            "sku": "9976-30",
+            "nome": "Comedouro Para Pássaros Aço Pequenas Aves Pendurável Fercar Branco",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000502",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703133,
+            "sku": "9976-285",
+            "nome": "Maçaneta Para Fechadura Porta De Casa 86617 Cromada Aliança Cor Inox",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891249072353",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703165,
+            "sku": "9976-216",
+            "nome": "Kit 10 Rodo Vedador Vedante De Porta Em Alumínio C/ Borracha Prateado 90 Cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703186,
+            "sku": "9976-404",
+            "nome": "Rodo Vedador Vedante Borracha Porta Em Alumínio 100cm Prateado Clássico",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703216,
+            "sku": "9976-218",
+            "nome": "Kit 2 Rodo Vedador Porta De Aluminio Borracha 80/90/100cm Alumínio 100cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898465460148",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703230,
+            "sku": "9976-9",
+            "nome": "Comedouro Fercar Para Aves Silvestres Beija-flor Aço Branco 25x30cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000502",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703248,
+            "sku": "9977-63",
+            "nome": "Armário Ferramentas 1 Prateleiro E Duas Portas Arm08 Fercar Cor Azul",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000861",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703258,
+            "sku": "9977-424",
+            "nome": "Carrinho Mecânico Oficina 6 Gaveta Todo Vermelho C08 Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162004784",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703270,
+            "sku": "9976-41",
+            "nome": "Comedouro Regulável Para Animais 2,5 Kg Fercar Animais Pequeno Porte Branco",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000182",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703311,
+            "sku": "9977-494",
+            "nome": "Comedouro Antiformiga 350ml Pet/cmf2 Vermelho Astra",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222355800",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703319,
+            "sku": "9977-416",
+            "nome": "Carrinho Ferramentas Capacidade 120kg 1 Gaveta Cd02 Fercar Cor Azul",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162003756",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703347,
+            "sku": "9977-423",
+            "nome": "Carrinho Mecânico Oficina 6 Gaveta Cinza C08 Fercar Cinza",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162004418",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703360,
+            "sku": "JVCDB34",
+            "nome": "Vaso Decorativo Plantas Cilíndrico Decore 34 (28l) Japi - Off-White - Lisa",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894023137958",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703408,
+            "sku": "9977-287",
+            "nome": "Caixa Ferramentas Sanfonada Fercar 09 7 Gavetas 50cm Azul",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000366",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703412,
+            "sku": "9977-312",
+            "nome": "Caixa Sanfonada Fercar 7 Gavetas Com Rodas Metal Porta Cadeado Azul",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000984",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703422,
+            "sku": "9977-227",
+            "nome": "Caixa De Correio De Parede Fercar Cor-02 Aço Com Fechadura",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000229",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703446,
+            "sku": "9977-303",
+            "nome": "Caixa Sanfona 7 Gavetas Vermelho - Fercar-09-vm - Fercar Cor Vermelha",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162001370",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703450,
+            "sku": "9977-337",
+            "nome": "Carrinho De Ferramentas Fercar C-06 Com 3 Gavetas E Chave Cinza",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162004401",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703458,
+            "sku": "9977-345",
+            "nome": "Carrinho De Mecânico Oficina 6 Gavetas Com Chave C08 Fercar Cor Vermelho",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162002322",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703504,
+            "sku": "9976-99",
+            "nome": "Fercar C08 Carrinho De Mecânico Oficina 6 Gavetas Com Chave Cor Preto",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162002544",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703524,
+            "sku": "9977-275",
+            "nome": "Caixa Ferramentas Fercar Sanfonada 3 Gavetas 50cm 05 Azul",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000151",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703599,
+            "sku": "9977-429",
+            "nome": "Carrinho P/ Ferramentas 6gavetas Chaveado Preto Fercar C08pr",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162004692",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703603,
+            "sku": "9977-435",
+            "nome": "Carrinho Para Ferramentas Aberto Desmontável Mecânico",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162003749",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703647,
+            "sku": "9976-446",
+            "nome": "Suporte De Shampoo Prateleiras De Banheiro Sem Furo Astra Cor Branco",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222411803",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703659,
+            "sku": "9976-418",
+            "nome": "Saboneteira C/adesivo Astra Branco Fixação Rapida",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222411636",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703689,
+            "sku": "9977-420",
+            "nome": "Carrinho Ferramentas Chaveado 6 Gavetas C08 Fercar Branco",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162001882",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703697,
+            "sku": "9977-343",
+            "nome": "Carrinho De Mecânico Oficina 6 Gavetas Com Chave C08 Fercar Cor Azul",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000878",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703710,
+            "sku": "9977-96",
+            "nome": "Assento Sanitário Oval Universal Soft Astra Branco",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222045879",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703743,
+            "sku": "9976-152",
+            "nome": "Friso Veda Porta Rodo 70cm Borracha Alumínio Vedação Impermeável Liso",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898465422498",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703769,
+            "sku": "9976-144",
+            "nome": "Floreira Flat 77 (39l) Cor Preto Ardosia Japi",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894023127287",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703800,
+            "sku": "9977-478",
+            "nome": "Cofrinho Infantil Segredo Senha Cofre Metal Moedas Cédulas Lisa Variadas",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000083",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703912,
+            "sku": "9976-116",
+            "nome": "Fercar Comedouro Automático 10kg Branco 26x26cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000205",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703921,
+            "sku": "9977-484",
+            "nome": "Comedor Cães Gatos Automático Comedouro Alimentador Cor Cinza Claro 5kg",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000199",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337703929,
+            "sku": "9977-268",
+            "nome": "Caixa Ferramenta Baú 60 Cm N.14 - Fercar Azul",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000298",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337704082,
+            "sku": "9975-21",
+            "nome": "Vaso Decorativo Floreira Flat 77 (39) Chumbo Japi Chumbo Lisa",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "78947467",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337704498,
+            "sku": "9977-341",
+            "nome": "Carrinho De Ferramentas Fercar Com Fechadura 3 Gavetas Preto",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162002407",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337704514,
+            "sku": "9977-101",
+            "nome": "Assento Tampa Para Vaso Sanitário Almofada Convencional Oval Branco Astra Slim Taj/asbr1",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222222652",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337705051,
+            "sku": "9977-79",
+            "nome": "Assento Almofadado Thema Incepa/hawaii Branco Astra",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222044483",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337705059,
+            "sku": "9977-248",
+            "nome": "Caixa De Ferramentas Fercar 03s Metal 20cm X 30cm X 17cm Cor Azul",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162001127",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337705111,
+            "sku": "9976-97",
+            "nome": "Fercar 00 Caixa De Ferramentas Baú 30x13x10 Pequena Com Estojo Removível Cor Azul",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000106",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337705119,
+            "sku": "9977-241",
+            "nome": "Caixa De Ferramentas Baú 50 Cm Azul Fercar N° 13 13",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000922",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337705127,
+            "sku": "9977-328",
+            "nome": "Carrinho De Ferramentas 3 Gavetas C-06 Todo Preto - Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162004685",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337705217,
+            "sku": "9977-213",
+            "nome": "Caixa De Areia Resistente 46,5x36x11,7 Cm Pet Cães Gatos Rosa",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222355459",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337749462,
+            "sku": "9977-289",
+            "nome": "CAIXA MALETA PARA FERRAMENTAS SANFONADA COM 3 GAVETAS EM AÇO 30CM FERCAR",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "1236547898568",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337749466,
+            "sku": "9977-304",
+            "nome": "Caixa Sanfonada com 3 Gavetas para Ferramentas-FERCAR-03S",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162001127",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337749479,
+            "sku": "9977-107",
+            "nome": "Astra Assento Sanitário Almofadado Versato Branco 01",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337749484,
+            "sku": "9977-139",
+            "nome": "Baú Reforçado para Ferramentas Número 14-FERCAR-14",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000298",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337749488,
+            "sku": "9977-438",
+            "nome": "Carrinho para Ferramentas com 6 Gavetas Preto e Cinza C08 FERCAR",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162002544",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337749526,
+            "sku": "9976-313",
+            "nome": "Massa F12 para Calafetar Madeira 400g Mogno",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898055524830",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337749535,
+            "sku": "9977-317",
+            "nome": "Caixa Sanfonada Reforçada com 5 Gavetas 50cm CS-08R Ferramix",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000328",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337749552,
+            "sku": "9975-110",
+            "nome": "Vedante para Porta Rodo Vedador 70/80/90/100 cm Aluminio (70cm)",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764237,
+            "sku": "9977-58",
+            "nome": "Armario Banheiro Astra 28.4 x 40.8 x 9.5 Branco c/Porta de Correr A21",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222105122",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764241,
+            "sku": "9977-122",
+            "nome": "Astra Pet Comedouro N° 4 Tradicional 1900ml Rosa para Cães e Gatos",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222355633",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764253,
+            "sku": "9976-37",
+            "nome": "Comedouro para Pássaros com Fruteira COM-4 Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000502",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764258,
+            "sku": "9976-194",
+            "nome": "JAPI, Vaso Cilíndrico Decore 33 (16L) Cor Cimento Queimado JAPI",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894023150247",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764267,
+            "sku": "9976-254",
+            "nome": "KIT 4 PÇS SQ50 GEL HC4X42 2 C/TRAVA 2 S/TRAVA",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7897447900467",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764271,
+            "sku": "9976-307",
+            "nome": "Massa F12 para Calafetar Madeira 400g Imbuia",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898055524854",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764276,
+            "sku": "9976-29",
+            "nome": "Comedouro para Gatos 200ml Azul - Astra Pet",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222355473",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764284,
+            "sku": "9977-116",
+            "nome": "Astra Pet Caixa de Areia Higiênica para Gatos Essencial Rosa",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222355459",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764328,
+            "sku": "9977-308",
+            "nome": "Caixa Sanfonada com 5 Gavetas e Rodas 50cm CS-10 Ferramix",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000960",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764333,
+            "sku": "9976-494",
+            "nome": "VASO CILINDRICO DECORE 33 OFF-WHITE",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894023137934",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764341,
+            "sku": "9977-142",
+            "nome": "Baú Reforçado para Ferramentas Número 16-FERCAR-BAUN°16",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000274",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764363,
+            "sku": "9976-188",
+            "nome": "JAPI, Floreira Flat 77 (39L) Cor Aço Corten JAPI",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894023127867",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764380,
+            "sku": "9976-134",
+            "nome": "Floreira FLAT 57 Cimento Queimado",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894023113822",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764442,
+            "sku": "9977-265",
+            "nome": "Caixa de ferramentas tipo baú reto 30 cm, EDA, 4DY, Preto",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000106",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764456,
+            "sku": "9977-48",
+            "nome": "Aquatools, Vedante para Porta Rodo Vedador 70/80/90/100 cm Aluminio (100cm)",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764464,
+            "sku": "9976-345",
+            "nome": "Porta Protetor Alumínio Borracha 80 Cm - Solução Completa para Proteção Contra Chuvas e Pragas",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898618121032",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764468,
+            "sku": "9977-98",
+            "nome": "Assento Sanitário Soft Astra Branco TPJ/AS",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222045879",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764476,
+            "sku": "9976-242",
+            "nome": "Kit 2 Vedantes para Porta de Alumínio e Borracha Laminada 80/90/100 cm (90cm)",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898465460094",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764480,
+            "sku": "9977-483",
+            "nome": "COFRINHO MINI COFRE EM AÇO COM SEGREDO SENHA AJUSTAVEL PARA NOTAS E MOEDAS FERCAR",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898341262804",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764497,
+            "sku": "9976-274",
+            "nome": "Kit com 4 Rodizios Gel Rodinha 35mm Roda Giratoria Silicone com trava",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764503,
+            "sku": "9976-16",
+            "nome": "COMEDOURO PARA ANIMAIS CAES E GATOS AUTOMATICO ANTI FORMIGA COM CAPACIDADE DE 2,5 KG PARA PETS E CACHORROS FERCAR",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898341262828",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764511,
+            "sku": "9977-62",
+            "nome": "Armário em Aço com 1 Prateleira ARM-08 Ferramix",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000861",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764518,
+            "sku": "9977-92",
+            "nome": "Assento Sanitário Almofadado Slim Astra Branco para Louças Ovais e Deca",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222222652",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764527,
+            "sku": "9977-90",
+            "nome": "Assento Sanitário Almofadado Sabatini Icasa Branco",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222044445",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764531,
+            "sku": "9976-51",
+            "nome": "Conjunto 4x2 3 Tomadas Tripla 10a B3 Margirius Cor:Branca",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7890428194527",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764545,
+            "sku": "9976-257",
+            "nome": "Kit 4 Rodinhas Rodízio Gel Giratórias 50mm para Armários e Móveis Mdf Duas com Trava e Duas Sem",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7893086472853",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764557,
+            "sku": "9977-403",
+            "nome": "Carrinho Fechado Vermelho com 3 Gavetas e 2 Portas-FERCAR-C06-VM",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162002063",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764561,
+            "sku": "9976-103",
+            "nome": "Fercar Carrinho Fechado para Ferramentas com 03 Gavetas Cinza Modelo C-06",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162004401",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764566,
+            "sku": "9976-106",
+            "nome": "Fercar Carrinho para Ferramentas C08 Grande Cinza Organizador Porta Peças Fechado com 06 Gavetas Chaveado para Oficinas",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162004418",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764570,
+            "sku": "9976-110",
+            "nome": "Fercar Carrinho para Ferramentas C08 Grande Preto Organizador Porta Peças Fechado com 06 Gavetas Chaveado para Oficinas",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162004692",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764574,
+            "sku": "9976-108",
+            "nome": "Fercar Carrinho para Ferramentas C08 Grande Organizador Porta Peças Fechado com 06 Gavetas Chaveado para Oficinas Vermel",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162004784",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764628,
+            "sku": "9977-200",
+            "nome": "Cadeado Standard, Papaiz, CR50, Latão",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891194000074",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764648,
+            "sku": "9976-305",
+            "nome": "Massa F12 para Calafetar Madeira 400g Cerejeira",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898055524922",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764664,
+            "sku": "9976-118",
+            "nome": "FERCAR Mini Cofre com Segredo na Chapa Azul Aço Fecho por Combinação Mecânica",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764668,
+            "sku": "9977-480",
+            "nome": "Cofrinho Metal Pintado Fercar 10x8x12cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000083",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764673,
+            "sku": "9976-325",
+            "nome": "Mini Cofre Com Segredo Na Chapa",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764677,
+            "sku": "9977-118",
+            "nome": "Astra Pet Coleira de Nylon Cores Variadas",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222384916",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764682,
+            "sku": "9977-121",
+            "nome": "Astra Pet Comedouro Antiformiga N° 1 300ml Vermelho para Cães e Gatos",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222355800",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764711,
+            "sku": "9977-463",
+            "nome": "Chave Liga/Desliga Caixa Metalica Cs-830 7,5cv 30a Margirius",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7890428162595",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764719,
+            "sku": "9977-294",
+            "nome": "Caixa p/Ferramentas 5 Gavetas 50cm Reforçada Vermelha - FERCAR",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162001486",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764724,
+            "sku": "9977-233",
+            "nome": "Caixa de Descarga Elevada Branca com Volume Regulável de 6,8L a 9L Astra",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222100028",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764728,
+            "sku": "9976-26",
+            "nome": "Comedouro para Cães Gatos Automático 10Kg COM-3 Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000205",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764732,
+            "sku": "9976-137",
+            "nome": "Floreira FLAT 57 Preto Ardosia",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894023127300",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764747,
+            "sku": "9976-334",
+            "nome": "Novo Horizonte Rodo Vedador de Porta 90cm Moderno",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894682000037",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764755,
+            "sku": "9977-138",
+            "nome": "Baú para Ferramentas Numero 15-FERCAR-BAUN°15",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000304",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764761,
+            "sku": "9977-442",
+            "nome": "Carrinho para Ferramentas em Aço 3 Gavetas 2 Portas C-06 Ferramix",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000465",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764795,
+            "sku": "9977-226",
+            "nome": "Caixa de Correio Correspondência e Carta para Grade Fercar Nº 5 Cor-5",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162001783",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764808,
+            "sku": "9976-149",
+            "nome": "Floreira Flat 77 Preto Ardosia Jardim",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894023127287",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764825,
+            "sku": "9976-400",
+            "nome": "Rodo Veda Porta De Alumínio Vedante Borracha Vedação 80cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894682002017",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764915,
+            "sku": "9976-392",
+            "nome": "Rodizio Rodinhas para Moveis - Giratório 50 mm Gel 4 Un",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7791799544761",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764933,
+            "sku": "9977-434",
+            "nome": "Carrinho p/Ferramentas Fercar Desmontável c/ 1 Gaveta Azul - CD02E",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162003756",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764938,
+            "sku": "9976-309",
+            "nome": "Massa F12 para Calafetar Madeira 400g Jatoba",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898055524878",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764942,
+            "sku": "9976-336",
+            "nome": "Novo Horizonte Rodo Vedador De Porta Em Aluminio 80cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891470188403",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764958,
+            "sku": "9976-140",
+            "nome": "Floreira FLAT 67 Cimento Queimado",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894023113815",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764989,
+            "sku": "9977-136",
+            "nome": "Baú Caixa de Ferramentas Reforçada 50cm com Estojo Ref-13 Ferramix",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000922",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337764997,
+            "sku": "9977-453",
+            "nome": "Chave de Roda Extra Longa 27 x 33 mm-RIOSUL TOOLS-010181",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898142337060",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765006,
+            "sku": "9977-340",
+            "nome": "Carrinho de Ferramentas Fercar com 3 Gavetas Chaveado Preto - C-06",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162004685",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765016,
+            "sku": "9976-388",
+            "nome": "Rodizio para Moveis Roda Gel 50mm 2 Com Trava e 2 Sem Trava",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7791799535561",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765071,
+            "sku": "9976-389",
+            "nome": "Rodizio rodinha para moveis gel giratório 50mm - 4 unidades",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898037210720",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765087,
+            "sku": "9976-240",
+            "nome": "Kit 2 Vedantes Para Porta de Alumínio e Borracha Laminada 80/90/100 cm (80cm)",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898912189097",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765108,
+            "sku": "9977-440",
+            "nome": "Carrinho para Ferramentas com 6 Gavetas Vermelho e Cinza C08 FERCAR",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162002322",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765129,
+            "sku": "9976-34",
+            "nome": "COMEDOURO PARA PASSAROS AUTOMATICO ANTI FORMIGA COM FRUTEIRA PARA PASSARINHOS E AVES FERCAR",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898100805280",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765163,
+            "sku": "9977-123",
+            "nome": "Astra Pet Ossinho Rex Brinquedo Mordedor para Cães Filhotes e Pequeno Porte Cores Sortidas",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222355930",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765168,
+            "sku": "9977-52",
+            "nome": "Aquatools, Vedante para Porta Rodo Vedador 70/80/90/100 cm Aluminio (90cm)",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765172,
+            "sku": "9977-301",
+            "nome": "Caixa Para Ferramentas Sanfonada Com 7 Gavetas 50cm Com 2 Rodas e Cabo Dobravel - 511 - FERCAR",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000984",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765256,
+            "sku": "9975-126",
+            "nome": "Vedante Porta Rodo Vedador Alumínio 80cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898465460087",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765261,
+            "sku": "9977-352",
+            "nome": "Carrinho Fechado Branco com 3 Gavetas e Portas-FERCAR-C06BR",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162001875",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765275,
+            "sku": "9977-210",
+            "nome": "Caixa Correios Para Embutir No Muro 33x26x11cm COR2 Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000229",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765282,
+            "sku": "9977-60",
+            "nome": "Armário de Plástico Versatil Branco - A41*BR Armário de Plástico Versatil Branco - A41*BR1 - ASTRA",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222124574",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765287,
+            "sku": "9976-19",
+            "nome": "COMEDOURO PARA ANIMAIS CAES E GATOS AUTOMATICO ANTI FORMIGA COM CAPACIDADE DE 5 KG PARA PETS E CACHORROS FERCAR",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898341262767",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765294,
+            "sku": "9976-387",
+            "nome": "Rodízio Gel Trava Cristal 50mm Kit 6 Un",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7791799605028",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765300,
+            "sku": "9976-456",
+            "nome": "Tomada Barra Multipla Régua P/extensão 10A Quintupla CINZA",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7890428137890",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765311,
+            "sku": "9977-445",
+            "nome": "CARRINHO PARA FERRAMENTAS GRANDE ORGANIZADOR PORTA PECAS FECHADO COM 06 GAVETAS CHAVEADO PARA OFICINAS FERCAR",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7899527102167",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765328,
+            "sku": "9977-355",
+            "nome": "Carrinho Fechado com 6 gavetas chaveado n° 08-FERCAR-148",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000878",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765843,
+            "sku": "9977-134",
+            "nome": "Astra, Assento Sanitário Almofadado Thema Branco 01",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222044483",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765859,
+            "sku": "9976-323",
+            "nome": "Massa Para Madeira F12 400g Cumaru",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898055525981",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765876,
+            "sku": "9976-432",
+            "nome": "Soprano Kit 4 Rodízios para Móveis com Freio, Rodas de Silicone 50mm, Base Giratória 360 Graus",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765885,
+            "sku": "9976-450",
+            "nome": "Sv-Vedante Para Porta de Alumínio e Borracha Laminada 90cm - Novo Horizonte",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894682002024",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765897,
+            "sku": "9977-232",
+            "nome": "Caixa de Correios Cartas para Grade ou Embutir COR-03 Ferramix",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162000236",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765910,
+            "sku": "9975-5",
+            "nome": "VASO CILINDRICO DECORE 34 OFF-WHITE",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894023137958",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765936,
+            "sku": "9977-240",
+            "nome": "Caixa De Ferramentas 7 Gavetas Sanfonada 50X20X25",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162002179",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765940,
+            "sku": "9977-334",
+            "nome": "Carrinho De Ferramentas 3 Gavetas Fercar Preto Chaveado C06",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162002407",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337765945,
+            "sku": "9977-353",
+            "nome": "Carrinho Fechado Branco com 6 Gavetas-FERCAR-C08BR",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162001882",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 337766011,
+            "sku": "9977-311",
+            "nome": "Caixa Sanfonada com 7 Gavetas Reforçada 50cm CS-09R Ferramix",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894162001493",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341439491,
+            "sku": "9977-166",
+            "nome": "Cachepot Floreira Flat Vaso 67 (17l) 22x67cm Japi Cimento Queimado",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023113815",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341439628,
+            "sku": "9977-164",
+            "nome": "Cachepot Floreira Flat Para Plantas 67 Aço Corten - Japi Aço Corten Lisa Liso",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023116151",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341439803,
+            "sku": "9975-29",
+            "nome": "Vaso Decorativo Floreira Planta 67 (17l) 67x22 Preto Ardósia Japi",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023127294",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341440872,
+            "sku": "KIT4R-SOPRÃO",
+            "nome": "KIT4R-SOPRÃO",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7904013466354",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341440887,
+            "sku": "PRODUTO_341440887",
+            "nome": "PRODUTO_341440887",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341440908,
+            "sku": "PRODUTO_341440908",
+            "nome": "PRODUTO_341440908",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341441027,
+            "sku": "RODIZIO-75MM",
+            "nome": "4x Rodízio Gel 75mm Freio 220kg Total",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7896004822563",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341441223,
+            "sku": "KITROD12",
+            "nome": "Kit 12 Rodízios Gel 50mm Freio Soprano",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341441583,
+            "sku": "9975-38",
+            "nome": "Vaso Decorativo Jardineira Floreira 57cm Polietileno Japi Ci Cimento Queimado Lisa",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023113822",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341441804,
+            "sku": "9975-35",
+            "nome": "Vaso Decorativo Jardineira Floreira 57cm Polietileno Japi Aço Corten Lisa",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023116168",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341441961,
+            "sku": "9976-489",
+            "nome": "Vaso Cachepot Jardineira Floreira 57cm Japi Chumbo Chumbo Lisa",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023158328",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341442006,
+            "sku": "9976-131",
+            "nome": "Floreira Flat 57 (6l) Cor Preto Ardósia Japi",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023127300",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341443474,
+            "sku": "9976-478",
+            "nome": "Vaso Cachepô Japi Floreira Flat 77 (39l) Polietileno Cor Cimento Queimado",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023127317",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341443735,
+            "sku": "FLOREIRA-FLAT77",
+            "nome": "Floreira Flat 77cm Parede Cimento Queimado",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7895741956487",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341446916,
+            "sku": "9975-81",
+            "nome": "Vaso Floreira Jardineira Flat Polietileno 77x29x29cm Japi Chumbo Lisa",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7899887502157",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341451378,
+            "sku": "9975-80",
+            "nome": "Vaso Floreira Jardineira Flat Polietileno 77x29x29cm Japi Aço Corten Liso",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023127867",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341452301,
+            "sku": "9975-82",
+            "nome": "Vaso Floreira Jardineira Flat Polietileno 77x29x29cm Japi Preto ardósia",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023127287",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341455912,
+            "sku": "9977-170",
+            "nome": "Cachepot Floreira Planta Flat Vaso 67 (17l) 22x66cm Japi Chumbo Lisa",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023158335",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341456066,
+            "sku": "9975-4",
+            "nome": "Vaso Cilindrico Decore 34 Chumbo Japi Cor Plomo Prato Planta Redondo Europa 30 - 34cm X 4,5cm - Café - Japi",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023137965",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341456124,
+            "sku": "JVCDPA34",
+            "nome": "Vaso Cilíndrico Decore 34 28L Preto Ardósia Japi",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023150797",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341471585,
+            "sku": "9975-18",
+            "nome": "Vaso Decorativo Cilíndrico Flores Japi Decore 33 16l Off White",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894023137934",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341472418,
+            "sku": "9976-493",
+            "nome": "Vaso Cilindrico Decore 33 Chumbo - Japi",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894023137941",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341472644,
+            "sku": "9975-20",
+            "nome": "Vaso Decorativo Cilíndrico Flores Japi Decore 33 16l Preto/ardósia Lisa",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1,"
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341472704,
+            "sku": "9975-12",
+            "nome": "Vaso Decorativo Cilíndrico Flores Japi Decore 33 16l Aço Corten",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7894023150834",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341472942,
+            "sku": "9975-16",
+            "nome": "Vaso Decorativo Cilíndrico Flores Japi Decore 33 16l Cimento Queimado Liso",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341481165,
+            "sku": "6323",
+            "nome": "Gancho Armador Rede Embutir Colonial 6323 Aliança",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891249011642",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341481451,
+            "sku": "9977-20",
+            "nome": "Alicate Universal 8\" Gedore Robust Profissional",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "Depósito Principal"
+            },
+            "unidade": "UN",
+            "gtin": "4060833700559",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341481772,
+            "sku": "9977-70",
+            "nome": "Assento Almofadado Avant/Fit/Versato/Angra Branco Astra Branco",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341483019,
+            "sku": "9977-201",
+            "nome": "Caixa Areia Pet 46x36x12cm Resistente Vermelha Astra",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891222355466",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341483677,
+            "sku": "9977-82",
+            "nome": "Assento Almofadado Thema Incepa/hawaii Branco Astra",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891222044483",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341484398,
+            "sku": "TAJ/AS*BR1-NOVO",
+            "nome": "Assento Sanitário Almofadado Slim Branco Astra",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891222222652",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341484643,
+            "sku": "9976-154",
+            "nome": "Gancho Adesivo Multiuso Banheiro Cozinha Astra",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891222411650",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341484803,
+            "sku": "9976-360",
+            "nome": "Prateleira Shampoo Adesivo Banheiro Astra Branco",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891222411803",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341486833,
+            "sku": "KIT-CADEADO-PAPAIZ-50MM-5UN",
+            "nome": "Kit 5 Cadeados 50mm Papaiz Latão Segredos Diferentes",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891194054206",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341488041,
+            "sku": "cr50",
+            "nome": "Cadeado Papaiz 50mm Latão 2 Chaves Dourado",
+            "situacao": "I",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891194000371",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341533182,
+            "sku": "9975-87",
+            "nome": "Vaso Para Plantas Antique 55 Aço Corten- Japi",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341533506,
+            "sku": "9975-85",
+            "nome": "Vaso Match 35 16L Prato Cimento Queimado Japi",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023127379",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341533994,
+            "sku": "JVAQMA55",
+            "nome": "Vaso Antique 55 75L Macchiato Japi Brown",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023148732",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341533998,
+            "sku": "JVAQCQ44",
+            "nome": "Vaso Antique 44 70L Cimento Queimado Japi",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1-01"
+            },
+            "unidade": "UN",
+            "gtin": "7894023148695",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341534002,
+            "sku": "JVAQMA56",
+            "nome": "Vaso Decorativo Plantas Antique 56 (46l) Macchiato Japi",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023148749",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341596459,
+            "sku": "9975-45",
+            "nome": "Vaso Decorativo Planta Tribo Japi 43x32cm Jvtbma32 Preto Ardósia",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023139136",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341679379,
+            "sku": "N09R",
+            "nome": "Caixa Ferramentas Sanfonada 7 Gavetas Refor 50x20x25cm 09R Fercar",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162001493",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341679483,
+            "sku": "13",
+            "nome": "Caixa Ferramentas Bau Reto N13 50x25x22 C/ Bandeja Fercar",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000922",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341679675,
+            "sku": "9976-405",
+            "nome": "Rodo Vedante Borracha Friso Porta Aluminio  100cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341679995,
+            "sku": "16",
+            "nome": "Caixa Ferramentas Bau Reto N16 80x34x45cm C/ Bandeja Fercar",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000274",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341680190,
+            "sku": "9976-353",
+            "nome": "Porta Toalha 60cm Com Adesivo Astra Branco - Branco",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891222411827",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341680588,
+            "sku": "9977-371",
+            "nome": "Carrinho Fechado Ferramentas C06 3 Gavetas Branco Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162001875",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341680691,
+            "sku": "9976-428",
+            "nome": "Saboneteira Comadesivo Astra Branco Fixação Rapida - Branco",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891222411636",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341680921,
+            "sku": "9977-196",
+            "nome": "Cadeado Haste Longa Latão- Papaiz 35/50",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891194000425",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341681056,
+            "sku": "COR2",
+            "nome": "Caixa Correios Embutir 33x26x11 Cm COR2 Fercar",
+            "situacao": "I",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000229",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341681364,
+            "sku": "9977-126",
+            "nome": "Astra Pet, Caixa de Areia 46,5x36x11,7cm Pet Cães Gatos Rosa",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891222355459",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341681435,
+            "sku": "PET/CAT*RSP",
+            "nome": "Astra Pet, Caixa de Areia 40x26x8cm Rosa",
+            "situacao": "I",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1-01-01A"
+            },
+            "unidade": "UN",
+            "gtin": "7891222355428",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341681489,
+            "sku": "9977-124",
+            "nome": "Astra Pet, Caixa de Areia 40x26x8cm Vermelha",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891222355435",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341681699,
+            "sku": "03S",
+            "nome": "Caixa Ferramentas Sanfonada 3 Gavetas 20x30x17cm N03S Fercar",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162001127",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341681752,
+            "sku": "9977-285",
+            "nome": "Caixa Ferramentas Sanfonada 5 Gavetas 50x20x21 cm N07 Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000175",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341682112,
+            "sku": "6",
+            "nome": "Caixa Ferramentas Sanfonada 5 Gavetas 40x20x21 Cm N06 Fercar",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000168",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341682151,
+            "sku": "9977-286",
+            "nome": "Caixa Ferramentas Sanfonada 7 Gavetas 50x20x25 cm N09 Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000366",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341682260,
+            "sku": "9977-283",
+            "nome": "Caixa Ferramentas Sanfonada 3 Gavetas 50x20x17 cm N05 Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000151",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341682319,
+            "sku": "14",
+            "nome": "Caixa Ferramentas Bau Reto N14 60x30x25cm C/ Bandeja Fercar",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000298",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341682726,
+            "sku": "9977-284",
+            "nome": "Caixa Ferramentas Sanfonada 3 Gavetas Vermelha 50x20x17 cm N05 Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162004258",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341682808,
+            "sku": "9977-273",
+            "nome": "Caixa Ferramentas Bau Reto N03 50x16x15 C/ Bandeja Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000137",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341682899,
+            "sku": "CS-11",
+            "nome": "Caixa Ferramentas Sanfonada 7 Gavetas Roda 50x20x25cm CS-11 Fercar",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000984",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341682948,
+            "sku": "9977-280",
+            "nome": "Caixa Ferramentas Sanfo 7 Gaveta Verme 50x20x25cm 09 Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162001370",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341683863,
+            "sku": "350x8c",
+            "nome": "Caixa Ferramentas Sanfonada 8 Gavetas 35x20x30cm N08 Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898505234104",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341683965,
+            "sku": "00",
+            "nome": "Caixa Ferramentas Bau Reto N00 30x13x10 C/ Bandeja Fercar",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000106",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341684060,
+            "sku": "9977-322",
+            "nome": "Câmara Ar P/ Carrinho 3,25x8 Colson",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341684133,
+            "sku": "9977-375",
+            "nome": "Carrinho Fechado Ferramentas C06 3 Gavetas Todo Preto Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162004685",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341684312,
+            "sku": "9977-368",
+            "nome": "Carrinho Fechado Ferramentas C-08 6 Gavetas Vermelho c/ Cinza Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162002322",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341684449,
+            "sku": "9977-376",
+            "nome": "Carrinho Fechado Ferramentas C06 3 Gavetas Todo Vermelho Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162004845",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341684592,
+            "sku": "9977-366",
+            "nome": "Carrinho Fechado Ferramentas C-08 6 Gavetas Todo Vermelho Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162004784",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341684645,
+            "sku": "9977-357",
+            "nome": "Carrinho Fechado Ferramentas C-08 6 Gavetas Azul c/ Cinza Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000878",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341685957,
+            "sku": "9977-372",
+            "nome": "Carrinho Fechado Ferramentas C06 3 Gavetas Cinza Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162004401",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341687980,
+            "sku": "9977-374",
+            "nome": "Carrinho Fechado Ferramentas C06 3 Gavetas Preto c/ Cinza Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162002407",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341689566,
+            "sku": "CD02",
+            "nome": "Carrinho Ferramentas CD02 1 Gaveta Azul Fercar",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162003756",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341691407,
+            "sku": "9977-360",
+            "nome": "Carrinho Fechado Ferramentas C-08 6 Gavetas Cinza Fercar Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162004418",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341694950,
+            "sku": "9977-364",
+            "nome": "Carrinho Fechado Ferramentas C-08 6 Gavetas Todo Preto Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162004692",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341695924,
+            "sku": "9977-414",
+            "nome": "Carrinho Ferramentas Aberto CD01 Azul Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162003749",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341698438,
+            "sku": "9977-477",
+            "nome": "Cofrinho Infantil Segredo Senha Cofre Metal Moedas Cédulas Cores Variadas Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000083",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341701499,
+            "sku": "9976-6",
+            "nome": "Comedouro Automatico  Regulavel Caes Gatos5 Kg Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000199",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341707550,
+            "sku": "9976-8",
+            "nome": "Comedouro Aves Pássaros com Fruteira COM4 Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000502",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341708915,
+            "sku": "9977-120",
+            "nome": "Astra Pet Comedouro Antiformiga N° 1 300ml Vermelho para Cães e Gatos",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341712741,
+            "sku": "COM3",
+            "nome": "Comedouro Automatico  Regulavel Caes Gatos 10 Kg Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000205",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341717766,
+            "sku": "9976-4",
+            "nome": "Comedouro Automatico  Regulavel Caes Gatos 2,5 Kg Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000182",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341717874,
+            "sku": "9976-56",
+            "nome": "Cordão Prolongador Extensão Pp Plano 3x2,50x1,50m 127v/220v",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341718082,
+            "sku": "ESTOPAPOLIMENTO1KG",
+            "nome": "Estopa Polimento Automotivo Algodão 1kg Aquatools Branco",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7899887510664",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341719931,
+            "sku": "9977-362",
+            "nome": "Carrinho Fechado Ferramentas C-08 6 Gavetas Preto c/ Cinza Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162002544",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341723607,
+            "sku": "23050",
+            "nome": "Jogo Cinta Catraca Amarração 25mm X 4,6m 800kg Aquatools",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7899887513887",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341725351,
+            "sku": "22959",
+            "nome": "Jogo Cinta Catraca Amarração 28mm X 4,6m 1500kg Aquatools",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7899887513726",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341728727,
+            "sku": "JOGOALICATES3PECAS",
+            "nome": "Jogo de Alicates com 3 Peças - Aquatools",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7899887505486",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341730649,
+            "sku": "9976-213",
+            "nome": "Jogo de Chaves Fenda/phillips Imantada 6 Peças Aquatools",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7899887506186",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341844041,
+            "sku": "VASOPLANTASJAPI",
+            "nome": "Vaso Plantas Decorativo Japi Unique 16 14x16cm Preto",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894023139075",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341844061,
+            "sku": "7323",
+            "nome": "Gancho/armador Rede de Embutir Inox Cromado 7323 Aliança",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891249011673",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341844082,
+            "sku": "9976-409",
+            "nome": "Rodo Vedante Borracha Friso Porta Aluminio  70cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898465422498",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341859568,
+            "sku": "9976-65",
+            "nome": "Ducha Cascata 10 Polegadas Pro Lazer | Chuveirão Piscina Alumínio Durável",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898129830201",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 341859611,
+            "sku": "PAPAIZ-CADEADO-50MM-CX5",
+            "nome": "Cadeado 50mm Caixa 05 Un Segredo Diferente Papaiz",
+            "situacao": "I",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891194000371",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342274592,
+            "sku": "9976-223",
+            "nome": "Kit 2 Rodo Vedante Borracha Friso Porta Aluminio  100cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898465460148",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342275184,
+            "sku": "9976-227",
+            "nome": "Kit 2 Rodo Vedante Borracha Friso Porta Aluminio 70cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342277999,
+            "sku": "9976-344",
+            "nome": "Pneu Roda Carrinho Mão Não Fura 3,25x8 Force Branco",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898730312233",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342278354,
+            "sku": "9976-379",
+            "nome": "Roda Pneu Macico Não Fura Force Boracha Expandid 2.5x8 Preto",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898730312295",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342278999,
+            "sku": "9976-225",
+            "nome": "Kit 2 Rodo Vedante Borracha Friso Porta Aluminio  80cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898912189097",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342280094,
+            "sku": "9976-414",
+            "nome": "Rodo Vedante Borracha Friso Porta Aluminio 80cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898618121032",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342355202,
+            "sku": "TE-C08",
+            "nome": "Tesoura Costura Profissional Aço Inox 8 Polegadas Aquatools",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7899887506261",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342356475,
+            "sku": "KIT-6-CADEADO-PAPAIZ-50MM",
+            "nome": "Kit 6 Cadeado Papaiz 50mm Armário Portão",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891194000371",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342361119,
+            "sku": "9977-452",
+            "nome": "Chave De Roda 27x33mm - Riosul Tools",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7898142337060",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342362788,
+            "sku": "9977-461",
+            "nome": "Chave Liga / Desliga Caixa Metalica Cs-815 3cv 15a Margirius",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7890428162571",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342364207,
+            "sku": "21049",
+            "nome": "Resistencia 3 Temperaturas 127v 5400w Enerducha Plus Up Pratimix",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898945401005",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342364870,
+            "sku": "RESISTENCIAENERDUCHA",
+            "nome": "Resistencia 3 Temperaturas 220v 5400w Enerducha Plus Pratimix",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898945401395",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342367084,
+            "sku": "9976-359",
+            "nome": "Prateleira Porta Shampoo Com Adesivo Astra Preto",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891222417980",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342368037,
+            "sku": "9976-283",
+            "nome": "Maçaneta Alavanca para Porta Aliança Cromada. 86617 Cor Inox",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891249072353",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342371510,
+            "sku": "9976-228",
+            "nome": "Kit 2 Rodo Vedante Borracha Friso Porta Aluminio 90 Cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898465460094",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342371996,
+            "sku": "KIT10RODOVEDADOR90CM",
+            "nome": "Kit 10 Rodo Vedante Borracha Friso Porta Aluminio 90 Cm",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342374752,
+            "sku": "ASTRAPET-CASINHA-CACHORRO-AZUL",
+            "nome": "Casinha Cachorro 52x41x40 Astra Pet Azul",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7891222355695",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342375940,
+            "sku": "9976-349",
+            "nome": "Porta Sabonete Saboneteira Plastica Com Adesivo Ventosa Cor Preto",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891222418017",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342377420,
+            "sku": "PL8PRATEADO",
+            "nome": "Ducha em Alumínio 8 Polegadas - Pro Lazer Prateado",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898129830027",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342401885,
+            "sku": "9976-411",
+            "nome": "Rodo Vedante Borracha Friso Porta Aluminio  90 Cm",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894682000037",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342710723,
+            "sku": "15",
+            "nome": "Caixa Ferramentas Bau Reto N15 37x70x28cm Bandeja Fercar",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000304",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342715215,
+            "sku": "ARM-08",
+            "nome": "Armário Ferramentas Duas Portas ARM-08 Fercar",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "Depósito Principal"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000861",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342716133,
+            "sku": "CHB-40025",
+            "nome": "Cabo para Chupeta Bateria 2,5 Metros 400a Enxerto Carro Aquatools",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": ""
+            },
+            "unidade": "UN",
+            "gtin": "7899887503062",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342716910,
+            "sku": "TPJ/AS*BR1",
+            "nome": "Assento Sanitário Oval Universal Soft Branco Astra",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891222045879",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342718451,
+            "sku": "9977-208",
+            "nome": "Caixa Correio Vertical C/ Trava para Grade/Embutir COR5 Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162001783",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342800925,
+            "sku": "9977-377",
+            "nome": "Carrinho Fechado Ferramentas C06 3 Gavetas Vermelho c/ Cinza Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162002063",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342803034,
+            "sku": "9977-370",
+            "nome": "Carrinho Fechado Ferramentas C06 3 Gavetas Azul c/ Cinza Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162000465",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342849443,
+            "sku": "A21",
+            "nome": "Armário Banheiro A21 28.4x40.8x9.5cm Branco Porta Correr Astra",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "Depósito Principal"
+            },
+            "unidade": "UN",
+            "gtin": "7891222105122",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342849584,
+            "sku": "A41*BR",
+            "nome": "Armário Banheiro Versátil Branco com Espelho A41 Astra",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "Depósito Principal"
+            },
+            "unidade": "UN",
+            "gtin": "7891222124574",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342849898,
+            "sku": "RGCT50-6",
+            "nome": "Rodizio em Gel C/Trava Cristal 50mm 6 UN Soprano",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7791799605028",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342850165,
+            "sku": "RG50-4",
+            "nome": "Kit 4 rodízios 50mm em gel 2 com trava e 2 sem trava",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342901775,
+            "sku": "9976-267",
+            "nome": "Kit 4 rodízios parafusos 50mm em gel 2 com trava e 2 sem trava",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7897447900467",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902260,
+            "sku": "CPRA",
+            "nome": "Comedouro Astra Plástico Rosa-azul - Rosa",
+            "situacao": "I",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891222356005",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902343,
+            "sku": "CPAZ",
+            "nome": "Comedouro Astra Plástico Rosa-azul - Azul",
+            "situacao": "I",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7891222355992",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902474,
+            "sku": "SKU-342902474",
+            "nome": "Soprano, Kit 4 Rodízios Móveis Gel, 2 Freio e 2 sem  75mm",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902497,
+            "sku": "1C7Q-LKVS-MQQN",
+            "nome": "Rodizio de Gel Giratório Sem Freio 75mm Rolamento Soprano",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7892327895598",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902508,
+            "sku": "1C7Q-LKVS-MDOC",
+            "nome": "Rodizio de Gel Giratório com Freio 75mm Rolamento Soprano",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7892327895611",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902653,
+            "sku": "1C7Q-LKUU-0BA3",
+            "nome": "Rodízio Transparente 035mm Freio Chapa Giratória Soprano",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7892327013428",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902688,
+            "sku": "1C7Q-LKUT-YLKI",
+            "nome": "Rodízio Transparente 035mm Sem Freio Chapa Giratória Soprano",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7892327013466",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902707,
+            "sku": "1C7Q-LKV1-WBFF",
+            "nome": "Kit com 5 Rodizios Gel 35mm Giratoria Silicone trava Soprano",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902731,
+            "sku": "CONJ-10-RODIZIOS-35MM-GEL",
+            "nome": "10x Rodízio 35mm Giratório com Freio Gel Anti-Risco Soprano",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1-01"
+            },
+            "unidade": "UN",
+            "gtin": "",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902777,
+            "sku": "9976-304",
+            "nome": "Massa F12 para Calafetar Madeira 400g Castanho",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898055525646",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902833,
+            "sku": "9976-306",
+            "nome": "Massa F12 para Calafetar Madeira 400g Cerejeira",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898055524922",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902838,
+            "sku": "9976-308",
+            "nome": "Massa F12 para Calafetar Madeira 400g Imbuia",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898055524854",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902844,
+            "sku": "9976-310",
+            "nome": "Massa F12 para Calafetar Madeira 400g Jatoba",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898055524878",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902848,
+            "sku": "9976-312",
+            "nome": "Massa F12 para Calafetar Madeira 400g Marfim",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898055524823",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902852,
+            "sku": "9976-314",
+            "nome": "Massa F12 para Calafetar Madeira 400g Mogno",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898055524830",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902856,
+            "sku": "9976-316",
+            "nome": "Massa P/Madeira F-12 400G/0,225L Angelim - Viapol",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7899519910633",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902860,
+            "sku": "9976-318",
+            "nome": "Massa P/Madeira F-12 400G/0,225L Sucupira - Viapol",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898055525660",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902865,
+            "sku": "9976-320",
+            "nome": "Massa para Calafetar Madeira F12 Ipe 400g Viapol",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898055524861",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902869,
+            "sku": "9976-322",
+            "nome": "Massa Para Madeira F12 400g Branca",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898055524847",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342902873,
+            "sku": "9976-324",
+            "nome": "Massa Para Madeira F12 400g Cumaru",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7898055525981",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342903185,
+            "sku": "1C7Q-LKWA-VXHL",
+            "nome": "Abraçadeira Fita Perfurada 19mm x 10 Metros Aço Galvanizado",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "Depósito Principal"
+            },
+            "unidade": "UN",
+            "gtin": "7898964344048",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342903565,
+            "sku": "9977-15",
+            "nome": "AFIADOR E AMOLADOR DE FACAS COM VENTOSA PLASTICO ABS//MTX",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7899612732132",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342903966,
+            "sku": "9977-359",
+            "nome": "Carrinho Fechado Ferramentas C-08 6 Gavetas Branco Fercar",
+            "situacao": "E",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7894162001882",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342904162,
+            "sku": "1C7Q-LKVY-UH7N",
+            "nome": "Chave Soquete Tipo T 10mm Hexagonal 25cm Aquatools",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "A1"
+            },
+            "unidade": "UN",
+            "gtin": "7899887505042",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        },
+        {
+            "id": 342904166,
+            "sku": "1C7Q-LKVY-TGBG",
+            "nome": "Chave Soquete Tipo T 13mm Aquatools",
+            "situacao": "A",
+            "preco": null,
+            "preco_promocional": null,
+            "estoque": {
+                "localizacao": "Depósito Principal"
+            },
+            "unidade": "UN",
+            "gtin": "7899887505073",
+            "categoria": null,
+            "marca": null,
+            "imagens": [],
+            "qtd_variacoes": 0
+        }
+    ],
+    "errors": []
+}
