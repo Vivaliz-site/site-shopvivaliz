@@ -486,6 +486,47 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Falha de conexão ao calcular o frete. Tente novamente.'; }
             });
     }
+    var couponApplyBtn = document.getElementById('coupon-apply-btn');
+    var couponInput = document.getElementById('coupon-input');
+    (function initCoupon() {
+        var existing = getCoupon();
+        if (existing && couponInput) couponInput.value = existing.code || '';
+        if (couponApplyBtn) {
+            couponApplyBtn.addEventListener('click', function () {
+                var statusEl = document.getElementById('coupon-status');
+                var code = (couponInput.value || '').trim().toUpperCase();
+                if (!code) { clearCoupon(); renderCart(); if (statusEl) { statusEl.hidden = true; } return; }
+                couponApplyBtn.disabled = true;
+                couponApplyBtn.textContent = 'Aplicando…';
+                if (statusEl) { statusEl.hidden = true; }
+                fetch('/api/orders/validate-coupon.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ coupon_code: code, items: getCart() })
+                })
+                    .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+                    .then(function (result) {
+                        couponApplyBtn.disabled = false;
+                        couponApplyBtn.textContent = 'Aplicar';
+                        if (!result.ok || !result.data.ok) {
+                            clearCoupon();
+                            renderCart();
+                            if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Cupom inválido ou não aplicável a este carrinho.'; }
+                            return;
+                        }
+                        saveCoupon({ code: result.data.code, amount: result.data.amount, percent: result.data.percent, label: result.data.label });
+                        renderCart();
+                        if (statusEl) { statusEl.hidden = false; statusEl.className = 'sv-checkout-note'; statusEl.textContent = result.data.label + ' aplicado!'; }
+                    })
+                    .catch(function () {
+                        couponApplyBtn.disabled = false;
+                        couponApplyBtn.textContent = 'Aplicar';
+                        if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Falha de conexão ao validar o cupom.'; }
+                    });
+            });
+        }
+    })();
+
     if (cepInput) {
         cepInput.addEventListener('input', function () {
             var val = this.value.replace(/\D/g, '');
