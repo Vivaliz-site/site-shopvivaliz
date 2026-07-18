@@ -444,17 +444,17 @@ TOOLS = [
 ]
 
 
-async def execute_tool(tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
+async def execute_tool(tool_name: str, params: dict[str, Any], remote: str | None = None) -> dict[str, Any]:
     command = str(params.get("command") or "").strip()
     timeout = int(params.get("timeout") or 30)
     if tool_name == "execute_command":
         if not command:
             return {"ok": False, "error": "command is required"}
-        return await run_command(command, timeout)
+        return await run_command(command, timeout, remote=remote)
     if tool_name == "execute_git_command":
         if not command:
             return {"ok": False, "error": "command is required"}
-        return await run_command(f"git {command}", timeout)
+        return await run_command(f"git {command}", timeout, remote=remote)
     if tool_name == "read_file":
         return _read_file(str(params.get("path") or ""))
     if tool_name == "write_file":
