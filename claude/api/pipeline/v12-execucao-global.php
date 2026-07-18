@@ -68,7 +68,7 @@ try {
 
         // Gerar descrição
         $descricao = "Produto de alta qualidade categoria {$cat}. " .
-                    "Ideal para clientes que buscam {$this->getAtributo($cat)}. " .
+                    "Ideal para clientes que buscam " . getAtributo($cat) . ". " .
                     "Envio rápido e garantia de satisfação.";
 
         // Calcular preço
@@ -80,8 +80,10 @@ try {
         };
         $preco = $preco_base * $margem;
 
-        // Gerar imagem (simulado)
-        $imagem = $prod['imagem_url'] ?? "https://via.placeholder.com/400x400?text={$prod['id']}";
+        // Usa a imagem real do CSV importado; sem imagem real, deixa vazio
+        // em vez de apontar pra um placeholder externo (via.placeholder.com)
+        // que nunca corresponderia ao produto de verdade.
+        $imagem = $prod['imagem_url'] ?? '';
 
         $produtos_otimizados[] = [
             'id' => $prod['id'],
