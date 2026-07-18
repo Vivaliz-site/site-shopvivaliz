@@ -73,6 +73,7 @@ if (empty($olist_order_id) || empty($status)) {
 require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../scripts/mailer.php';
+require_once __DIR__ . '/../../includes/mercadopago-gateway.php';
 
 try {
     $db = Database::getInstance()->getConnection();
