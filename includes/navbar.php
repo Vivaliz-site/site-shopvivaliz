@@ -29,6 +29,7 @@ $svWhatsappRaw = is_array($svCompanyProfile) ? (string)($svCompanyProfile['socia
 $svWhatsappDigits = preg_replace('/\D+/', '', $svWhatsappRaw);
 $svWhatsappMessage = rawurlencode('Ola! Vim pelo site da ShopVivaliz e gostaria de falar com a equipe.');
 $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?text={$svWhatsappMessage}" : '/contato';
+?>
 <?php if ($svIsCheckout): ?><link rel="stylesheet" href="/css/checkout-conversion-v6.css?v=6.0.0"><?php endif; ?>
 <?php if ($svIsCart || $svIsCheckout): ?><link rel="stylesheet" href="/css/shipping-v7.css?v=7.0.0"><?php endif; ?>
 <a class="sv-skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
