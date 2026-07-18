@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../../includes/pdo-database.php';
+
 final class ShopvivalizAutonomousReportAgent
 {
     public const VERSION = '9.2.84-resident-autonomous-watchdog';

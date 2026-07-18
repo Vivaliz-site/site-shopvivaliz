@@ -109,6 +109,7 @@ if ($providedKey === '' || !hash_equals($expectedKey, $providedKey)) {
 $root = dirname(__DIR__, 2);
 $constants = $root . '/config/constants.php';
 if (is_file($constants)) require_once $constants;
+require_once $root . '/includes/pdo-database.php';
 require_once $root . '/agents/v9.2.84/app/AutonomousWatchdogAgent.php';
 
 // Adapter consumed by the resident agents. It intentionally returns only PDO.
