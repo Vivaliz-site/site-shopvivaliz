@@ -177,20 +177,37 @@ function svtop_create_contact(string $token, array $customer): ?int
 {
     $docDigits = preg_replace('/\D/', '', (string)($customer['cpf'] ?? ''));
     $cep = preg_replace('/\D/', '', (string)($customer['cep'] ?? ''));
+    $phone = (string)($customer['phone'] ?? '');
+    // Confirmado no schema oficial (api-docs.erp.olist.com/api-reference/contatos/criar-contato):
+    // o campo se chama 'telefone', nao 'fone' -- 'fone' nao existe e era
+    // ignorado silenciosamente pela Tiny, entao NENHUM contato criado pelo
+    // push do site tinha telefone salvo, apesar do codigo "enviar" isso.
+    // Tambem adiciona 'celular' (mesmo numero, o checkout do site so coleta
+    // um telefone/WhatsApp) e 'emailNfe' (usado pra envio da nota fiscal --
+    // sem isso a NF pode nao ser enviada por email ao cliente automaticamente).
+    $address = [
+        'endereco'  => $customer['street_name'] ?? $customer['address'] ?? '',
+        'numero'    => $customer['street_number'] ?? '',
+        'complemento' => $customer['complement'] ?? '',
+        'bairro'    => $customer['neighborhood'] ?? '',
+        'cep'       => $cep,
+        'municipio' => $customer['city'] ?? '',
+        'uf'        => $customer['state'] ?? '',
+        'pais'      => 'Brasil',
+    ];
     $payload = [
-        'nome'       => $customer['name'] ?? '',
-        'tipoPessoa' => strlen($docDigits) === 14 ? 'J' : 'F',
-        'cpfCnpj'    => $docDigits,
-        'email'      => $customer['email'] ?? '',
-        'fone'       => $customer['phone'] ?? '',
-        'endereco'   => [
-            'endereco'  => $customer['street_name'] ?? $customer['address'] ?? '',
-            'numero'    => $customer['street_number'] ?? '',
-            'bairro'    => $customer['neighborhood'] ?? '',
-            'cep'       => $cep,
-            'municipio' => $customer['city'] ?? '',
-            'uf'        => $customer['state'] ?? '',
-        ],
+        'nome'             => $customer['name'] ?? '',
+        'tipoPessoa'       => strlen($docDigits) === 14 ? 'J' : 'F',
+        'cpfCnpj'          => $docDigits,
+        'email'            => $customer['email'] ?? '',
+        'emailNfe'         => $customer['email'] ?? '',
+        'telefone'         => $phone,
+        'celular'          => $phone,
+        'endereco'         => $address,
+        // Sem endereco de cobranca proprio coletado no checkout -- usa o
+        // mesmo endereco de entrega (evita a Tiny cair num endereco de
+        // cobranca vazio/divergente na hora de faturar).
+        'enderecoCobranca' => $address,
     ];
     $res = svtop_tiny_request('POST', '/contatos', $token, $payload);
     if ($res['status'] === 200 || $res['status'] === 201) {
