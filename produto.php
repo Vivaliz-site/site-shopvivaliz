@@ -766,15 +766,6 @@ if ($notFound) {
         }
     })();
     </script>
-    <div id="social-proof-popup">
-        <div class="proof-icon">🛍️</div>
-        <div class="proof-content">
-            <p class="proof-text"></p>
-            <p class="proof-time"></p>
-        </div>
-        <button class="proof-close">&times;</button>
-    </div>
-
     <div class="sticky-buy-wrapper">
         <div class="sticky-buy-info">
             <span class="sticky-buy-title"><?= sv_esc($name) ?></span>
