@@ -9,6 +9,28 @@
 > qualquer código que integra com o Tiny (`includes/tiny-order-push.php`,
 > `daemon-sync-products.py`, `api/olist/*`), leia isto.**
 
+## Índice de endpoints reais confirmados (path exato ≠ slug da doc, sempre confirme)
+
+O `llms.txt` da doc (`api-docs.erp.olist.com/llms.txt`) tem um índice resumido, mas os
+**slugs de URL da doc não batem com o path HTTP real** em vários casos (ex: doc mostra
+`/formas-de-pagamento`, o path real é `/formas-pagamento`). Sempre abra a página da doc e
+leia o bloco `cURL` de exemplo pra confirmar o path exato antes de codificar — não adivinhe.
+
+| Recurso | Endpoint real (GET) | Doc |
+|---|---|---|
+| Pedidos — criar | `POST /pedidos` | [criar-pedido](https://api-docs.erp.olist.com/api-reference/pedidos/criar-pedido) |
+| Produtos — obter (schema completo) | `GET /produtos/{id}` | [obter-produto](https://api-docs.erp.olist.com/api-reference/produtos/obter-produto) |
+| Contatos — criar | `POST /contatos` | [criar-contato](https://api-docs.erp.olist.com/api-reference/contatos/criar-contato) |
+| Contatos — listar/buscar | `GET /contatos` | [listar-contatos](https://api-docs.erp.olist.com/api-reference/contatos/listar-contatos) |
+| Vendedores — listar | `GET /vendedores` | — |
+| Intermediadores — listar | `GET /intermediadores` | [listar-intermediadores](https://api-docs.erp.olist.com/api-reference/intermediadores/listar-intermediadores) |
+| Formas de pagamento — listar | `GET /formas-pagamento` | [listar-formas-de-pagamento](https://api-docs.erp.olist.com/api-reference/formas-de-pagamento/listar-formas-de-pagamento) |
+| Formas de envio — listar | `GET /formas-envio` | [listar-formas-de-envio](https://api-docs.erp.olist.com/api-reference/logistica/listar-formas-de-envio) |
+| Transportadores — listar | **não existe** (`/transportadores` = 404) | — |
+| Naturezas de operação — listar | **não existe** (`/naturezas-operacao` = 404) | — |
+| Listas de preço — listar | não confirmado (`/lista-de-precos`/`/listas-precos` = 404, path real não achado ainda) | — |
+| Estoque | `GET /estoque/{id}` | — (só esse tem `disponivel` correto pra kits) |
+
 ## Limites de requisição
 
 - Limite por minuto, diferenciado leitura (GET, mais folgado) vs escrita (POST/PUT/DELETE).
