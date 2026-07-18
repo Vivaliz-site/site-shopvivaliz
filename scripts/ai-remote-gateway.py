@@ -213,6 +213,8 @@ def _read_file(path: str) -> dict[str, Any]:
 
 
 def _write_file(path: str, content: str) -> dict[str, Any]:
+    if _is_write_protected(path):
+        return {"ok": False, "error": f"write blocked for protected path: {path}"}
     file_path = _safe_repo_path(path)
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(content, encoding="utf-8")
