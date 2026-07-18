@@ -141,6 +141,112 @@ $produto = $index !== null ? $catalog[$index] : null;
                         <label for="exibir_para_venda" style="margin: 0;">Exibir para venda</label>
                     </div>
 
+                    <fieldset>
+                        <legend>Identificação (Tiny)</legend>
+                        <div class="grid-3">
+                            <div>
+                                <label for="gtin">GTIN/EAN</label>
+                                <input type="text" id="gtin" name="gtin" value="<?= htmlspecialchars((string)($produto['gtin'] ?? '')) ?>">
+                            </div>
+                            <div>
+                                <label for="ncm">NCM</label>
+                                <input type="text" id="ncm" name="ncm" value="<?= htmlspecialchars((string)($produto['ncm'] ?? '')) ?>">
+                            </div>
+                            <div>
+                                <label for="brand">Marca</label>
+                                <input type="text" id="brand" name="brand" value="<?= htmlspecialchars((string)($produto['brand'] ?? '')) ?>">
+                            </div>
+                        </div>
+                        <div class="grid-2">
+                            <div>
+                                <label for="slug">Slug (URL)</label>
+                                <input type="text" id="slug" name="slug" value="<?= htmlspecialchars((string)($produto['slug'] ?? '')) ?>">
+                            </div>
+                            <div>
+                                <label for="unit">Unidade</label>
+                                <input type="text" id="unit" name="unit" value="<?= htmlspecialchars((string)($produto['unit'] ?? '')) ?>">
+                            </div>
+                        </div>
+                        <label for="notes">Observações</label>
+                        <textarea id="notes" name="notes" rows="2"><?= htmlspecialchars((string)($produto['notes'] ?? '')) ?></textarea>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>SEO</legend>
+                        <label for="seo_title">Título SEO</label>
+                        <input type="text" id="seo_title" name="seo_title" value="<?= htmlspecialchars((string)($produto['seo_title'] ?? '')) ?>">
+                        <label for="seo_description">Descrição SEO</label>
+                        <textarea id="seo_description" name="seo_description" rows="3"><?= htmlspecialchars((string)($produto['seo_description'] ?? '')) ?></textarea>
+                        <label for="keywords">Palavras-chave (separadas por vírgula)</label>
+                        <input type="text" id="keywords" name="keywords" value="<?= htmlspecialchars(implode(', ', (array)($produto['keywords'] ?? []))) ?>">
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Dimensões e peso</legend>
+                        <div class="grid-3">
+                            <div>
+                                <label for="dim_width">Largura (cm)</label>
+                                <input type="number" step="0.01" min="0" id="dim_width" name="dim_width" value="<?= htmlspecialchars((string)($produto['dimensions']['width'] ?? 0)) ?>">
+                            </div>
+                            <div>
+                                <label for="dim_height">Altura (cm)</label>
+                                <input type="number" step="0.01" min="0" id="dim_height" name="dim_height" value="<?= htmlspecialchars((string)($produto['dimensions']['height'] ?? 0)) ?>">
+                            </div>
+                            <div>
+                                <label for="dim_length">Comprimento (cm)</label>
+                                <input type="number" step="0.01" min="0" id="dim_length" name="dim_length" value="<?= htmlspecialchars((string)($produto['dimensions']['length'] ?? 0)) ?>">
+                            </div>
+                        </div>
+                        <div class="grid-2">
+                            <div>
+                                <label for="dim_net_weight">Peso líquido (kg)</label>
+                                <input type="number" step="0.001" min="0" id="dim_net_weight" name="dim_net_weight" value="<?= htmlspecialchars((string)($produto['dimensions']['net_weight'] ?? 0)) ?>">
+                            </div>
+                            <div>
+                                <label for="dim_gross_weight">Peso bruto (kg)</label>
+                                <input type="number" step="0.001" min="0" id="dim_gross_weight" name="dim_gross_weight" value="<?= htmlspecialchars((string)($produto['dimensions']['gross_weight'] ?? 0)) ?>">
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Preços (Tiny)</legend>
+                        <div class="grid-2">
+                            <div>
+                                <label for="cost_price">Preço de custo (R$)</label>
+                                <input type="number" step="0.01" min="0" id="cost_price" name="cost_price" value="<?= htmlspecialchars((string)($produto['prices']['cost_price'] ?? 0)) ?>">
+                            </div>
+                            <div>
+                                <label for="promotional_price">Preço promocional (R$)</label>
+                                <input type="number" step="0.01" min="0" id="promotional_price" name="promotional_price" value="<?= htmlspecialchars((string)($produto['prices']['promotional_price'] ?? 0)) ?>">
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <?php if (!empty($produto['suppliers']) || !empty($produto['kit_items']) || !empty($produto['attributes'])): ?>
+                        <fieldset>
+                            <legend>Somente leitura (vem do Tiny, editar lá)</legend>
+                            <?php if (!empty($produto['suppliers'])): ?>
+                                <div class="readonly-box">
+                                    <strong>Fornecedores:</strong>
+                                    <ul><?php foreach ((array)$produto['suppliers'] as $s): ?><li><?= htmlspecialchars(is_array($s) ? (string)($s['name'] ?? '') : (string)$s) ?></li><?php endforeach; ?></ul>
+                                </div>
+                            <?php endif; ?>
+                            <?php if (!empty($produto['kit_items'])): ?>
+                                <div class="readonly-box">
+                                    <strong>Itens do kit:</strong>
+                                    <ul><?php foreach ((array)$produto['kit_items'] as $k): ?><li><?= htmlspecialchars((string)($k['sku'] ?? '')) ?> × <?= htmlspecialchars((string)($k['quantity'] ?? '')) ?></li><?php endforeach; ?></ul>
+                                </div>
+                            <?php endif; ?>
+                            <?php if (!empty($produto['attributes'])): ?>
+                                <div class="readonly-box">
+                                    <strong>Atributos:</strong>
+                                    <ul><?php foreach ((array)$produto['attributes'] as $a): ?><li><?= htmlspecialchars((string)$a) ?></li><?php endforeach; ?></ul>
+                                </div>
+                            <?php endif; ?>
+                        </fieldset>
+                    <?php endif; ?>
+
                     <button type="submit" class="btn">Salvar alterações</button>
                 </form>
             <?php endif; ?>
