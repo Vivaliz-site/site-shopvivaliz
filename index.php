@@ -383,6 +383,11 @@ $svNavCurrent = '';
               foreach (array_slice($featuredProducts ?? [], 0, 10) as $p) {
                   $img = trim((string)($p['image_url'] ?? ''));
                   $url = 'https://shopvivaliz.com.br' . sv_home_product_url($p);
+                  $pSku = htmlspecialchars((string)($p['sku'] ?? 'sem-sku'), ENT_QUOTES);
+                  $pDesc = htmlspecialchars(preg_replace('/\s+/', ' ', trim(strip_tags((string)($p['description'] ?? '')))), ENT_QUOTES);
+                  if ($pDesc === '') {
+                      $pDesc = 'Produto de qualidade Vivaliz para todo o Brasil.';
+                  }
                   $seoItems[] = '{
                     "@type": "ListItem",
                     "position": ' . $position++ . ',
@@ -391,10 +396,19 @@ $svNavCurrent = '';
                       "name": "' . htmlspecialchars((string)$p['name'], ENT_QUOTES) . '",
                       "url": "' . $url . '",
                       "image": "' . $img . '",
+                      "sku": "' . $pSku . '",
+                      "mpn": "' . $pSku . '",
+                      "description": "' . $pDesc . '",
+                      "brand": {
+                        "@type": "Brand",
+                        "name": "Vivaliz"
+                      },
                       "offers": {
                         "@type": "Offer",
+                        "url": "' . $url . '",
                         "priceCurrency": "BRL",
                         "price": "' . (float)($p['price'] ?? 0) . '",
+                        "priceValidUntil": "' . date('Y-12-31') . '",
                         "availability": "https://schema.org/' . (($p['stock'] ?? 0) > 0 ? 'InStock' : 'OutOfStock') . '"
                       }
                     }

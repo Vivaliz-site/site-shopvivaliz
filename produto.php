@@ -475,6 +475,7 @@ if ($notFound) {
             'priceCurrency' => 'BRL',
             'price'         => $priceRaw > 0 ? number_format($priceRaw, 2, '.', '') : '0',
             'availability'  => $availability,
+            'priceValidUntil' => date('Y-12-31'),
             'itemCondition' => 'https://schema.org/NewCondition',
             'seller'        => ['@type' => 'Organization', 'name' => 'Shopvivaliz'],
         ],
