@@ -357,13 +357,6 @@ function svtop_push_order_tiny(array $order): ?string
         }
     }
     if ($paymentFormId !== null) {
-        // transportador: a transportadora real so e decidida depois deste
-        // push, quando a etiqueta e comprada na Melhor Envio de forma
-        // assincrona (ver api/melhorenvio/generate-label-background.php) --
-        // nao da pra saber qual serviço/transportadora sera usado ainda
-        // neste momento. O schema oficial (transportador.id/formaEnvio/
-        // formaFrete) so aceita referencias a cadastros existentes, entao
-        // fica de fora ate ter uma transportadora real pra referenciar.
         $payload['pagamento'] = [
             'formaRecebimento' => ['id' => $paymentFormId],
         ];
