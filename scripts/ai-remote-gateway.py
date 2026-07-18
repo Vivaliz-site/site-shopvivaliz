@@ -589,7 +589,7 @@ async def handle_mcp_tool(request: web.Request) -> web.Response:
     params = payload.get("params") or payload.get("input") or {}
     if not isinstance(params, dict):
         params = {}
-    result = await execute_tool(tool_name, params)
+    result = await execute_tool(tool_name, params, remote=request.remote)
     return _json_response({"tool": tool_name, "result": result})
 
 
