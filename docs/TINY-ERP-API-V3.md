@@ -104,7 +104,12 @@ Response 200/201: `{ "id": 123, "numeroPedido": "string" }`
   são todas "Gateway logístico" via Melhor Envio -- a transportadora real só é decidida na
   cotação, depois do push inicial (ver `api/melhorenvio/generate-label-background.php`).
   Melhoria futura possível: fazer um PUT no pedido depois da etiqueta comprada, vinculando
-  o `transportador.id` real baseado no serviço escolhido.
+  o `transportador.id` real baseado no serviço escolhido. Cada transportadora tem sub-servicos
+  em `formaFrete` (ex: dentro de "Correios via Melhor Envio" -> PAC=codigo 1, SEDEX=codigo 2) --
+  precisaria mapear nosso `shipping_service`/`shipping_label` (do lado Melhor Envio) pros IDs
+  de transportador+formaFrete correspondentes do lado Tiny. Não implementado ainda -- exigiria
+  primeiro listar as transportadoras via UI (API não expõe endpoint de listagem, `/transportadores`
+  retorna 404) pra montar essa tabela de mapeamento.
 - (histórico) **`vendedor`, `transportador`, `ecommerce`, `intermediador`** exigem IDs de cadastros
   já existentes na conta (não são strings livres). Ver seção "Cadastros da conta" abaixo
   para os IDs reais já levantados. Se a conta não tem nenhum registro do tipo (ex:
