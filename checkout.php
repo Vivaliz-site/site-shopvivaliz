@@ -141,10 +141,29 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                     <input type="radio" name="payment_method" value="mercado_pago" checked required>
                     <span class="payment-opt-box">
                         <img src="/assets/payments/mercado-pago-official.svg" alt="Mercado Pago" style="max-height:48px; margin-bottom:8px">
-                        <strong>Pagar com segurança</strong>
-                        <small>Cartão, PIX, Boleto ou saldo em conta</small>
+                        <strong>Mercado Pago</strong>
+                        <small>Cartão, PIX e boleto em checkout seguro</small>
                     </span>
                 </label>
+                <label class="payment-opt">
+                    <input type="radio" name="payment_method" value="pix">
+                    <span class="payment-opt-box">
+                        <div class="pay-icon" aria-hidden="true">⚡</div>
+                        <strong>PIX direto</strong>
+                        <small>Pagamento rápido com chave PIX</small>
+                    </span>
+                </label>
+                <label class="payment-opt">
+                    <input type="radio" name="payment_method" value="boleto">
+                    <span class="payment-opt-box">
+                        <div class="pay-icon" aria-hidden="true">🧾</div>
+                        <strong>Boleto</strong>
+                        <small>Emissão via Mercado Pago</small>
+                    </span>
+                </label>
+            </div>
+            <div class="payment-options-note">
+                Escolha o método que você já usa no dia a dia. O pedido segue com confirmação segura e sem cadastro extra.
             </div>
 
             <label class="form-group">
@@ -179,6 +198,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 <span>Frete</span>
                 <strong id="cart-shipping">A calcular</strong>
             </div>
+            <div id="checkout-shipping-status" class="sv-checkout-note" hidden></div>
             <div class="summary-row summary-total">
                 <span>Total estimado</span>
                 <strong id="cart-total">—</strong>
@@ -383,6 +403,63 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 }
             }).catch(function(){});
     }
+    /* Cotacao de frete automatica: antes, o checkout so lia a cotacao ja
+       salva em localStorage pelo carrinho -- se o cliente chegasse aqui
+       direto (ou mudasse o CEP nesta tela), o pedido travava com "Selecione
+       uma cotacao de frete valida" sem nenhuma forma visivel de resolver
+       sem voltar pro carrinho. Agora calcula direto ao preencher o CEP,
+       igual ao js/cart-shipping-v7.js do carrinho. */
+    function makeShippingQuote(option, cep) {
+        return {
+            cep: cep,
+            total: Number(option.price) || 0,
+            option: option,
+            label: (option.company ? option.company + ' - ' : '') + (option.name || 'Frete'),
+            quote_id: option.quote_id || '',
+            expires_at: Number(option.expires_at) || 0,
+            provider: 'melhorenvio'
+        };
+    }
+    function calculateShipping(cep) {
+        var statusEl = document.getElementById('checkout-shipping-status');
+        var items = getCart();
+        if (!items.length) return;
+        if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Calculando frete para ' + cep.substring(0,5) + '-' + cep.substring(5,8) + '…'; }
+        fetch('/api/melhorenvio/shipping-check-v2.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                cep: cep,
+                items: items.map(function (item) {
+                    return { sku: item.sku || '', product_id: item.id || '', olist_product_id: item.olist_product_id || '', quantity: item.quantity || 1 };
+                })
+            })
+        })
+            .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+            .then(function (result) {
+                if (!result.ok || !result.data.ok) {
+                    clearShippingQuote();
+                    renderCart();
+                    if (statusEl) { statusEl.hidden = false; statusEl.textContent = result.data.message || 'Não foi possível calcular o frete para este CEP. Volte ao carrinho e tente novamente.'; }
+                    return;
+                }
+                var options = result.data.shipping_options || [];
+                var selected = result.data.selected_option || options[0];
+                if (!selected) {
+                    clearShippingQuote();
+                    renderCart();
+                    if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Nenhuma opção de frete disponível para este CEP.'; }
+                    return;
+                }
+                var quote = makeShippingQuote(selected, cep);
+                localStorage.setItem('shopvivaliz_shipping_quote', JSON.stringify(quote));
+                renderCart();
+                if (statusEl) { statusEl.hidden = true; statusEl.textContent = ''; }
+            })
+            .catch(function () {
+                if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Falha de conexão ao calcular o frete. Tente novamente.'; }
+            });
+    }
     if (cepInput) {
         cepInput.addEventListener('input', function () {
             var val = this.value.replace(/\D/g, '');
@@ -393,12 +470,15 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             }
             if (val.length === 8) {
                 fetchAddress(val);
+                calculateShipping(val);
             }
         });
         cepInput.addEventListener('blur', function () {
             var val = this.value.replace(/\D/g, '');
             if (val.length === 8) {
                 fetchAddress(val);
+                var existing = getShippingQuote();
+                if (!existing || existing.cep !== val) calculateShipping(val);
             }
         });
     }
