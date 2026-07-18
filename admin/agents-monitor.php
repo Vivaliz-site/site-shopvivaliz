@@ -45,7 +45,7 @@ $watchdog = am_json_file('/logs/autonomous-hourly-guardian.json');
     </strong></p>
     <p>Última execução: <?= $watchdog['generated_at'] ?? ($watchdog['report_generated_at'] ?? '-') ?></p>
 <?php else: ?>
-    <p class="fail">Falha ao obter watchdog</p>
+    <p>Sem snapshot local do watchdog.</p>
 <?php endif; ?>
 </div>
 
@@ -57,7 +57,7 @@ $watchdog = am_json_file('/logs/autonomous-hourly-guardian.json');
     <p>Preço zero: <?= $report['catalog']['zero_price'] ?? 0 ?></p>
     <p>ML conectado: <?= !empty($report['integrations']['ml_oauth_connected']) ? 'Sim' : 'Não' ?></p>
 <?php else: ?>
-    <p class="fail">Falha ao obter relatório</p>
+    <p>Sem snapshot local do relatório.</p>
 <?php endif; ?>
 </div>
 
