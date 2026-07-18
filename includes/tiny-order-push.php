@@ -304,6 +304,16 @@ function svtop_push_order_tiny(array $order): ?string
         // e era ignorado silenciosamente pela Tiny, entao o pedido no ERP
         // nunca tinha nenhuma observacao visivel apesar do codigo "enviar" isso.
         'observacoes' => $obs,
+        // Marca a venda como pra consumidor final (nao revenda) -- afeta o
+        // calculo de tributacao da nota fiscal. A Tiny troca o nome exibido
+        // na coluna "Cliente" da listagem por "Consumidor Final" quando essa
+        // flag esta ativa (comportamento normal da UI pra esse tipo de
+        // venda, nao um bug -- o nome real do cliente continua no cadastro
+        // do contato, so a exibicao na lista muda).
+        'consumidorFinal' => [
+            'cpfCnpj'                => $docDigits,
+            'clienteConsumidorFinal' => true,
+        ],
         // Endereco de entrega do cliente -- antes nao era enviado, entao o
         // pedido no ERP ficava sem endereco de entrega definido (so o do
         // contato cadastrado, se houver).
