@@ -93,6 +93,13 @@ $produto = $index !== null ? $catalog[$index] : null;
         .alert { padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem; }
         .alert-error { background: #fdecea; color: #a33; }
         .alert-success { background: #e8f5ee; color: #157347; }
+        textarea { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 1rem; font-family: inherit; resize: vertical; }
+        fieldset { border: 1px solid #ddd; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+        legend { font-weight: 700; padding: 0 0.5rem; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1rem; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 1rem; }
+        .readonly-box { background: #f8f8fb; border-radius: 6px; padding: 0.75rem 1rem; font-size: 0.9rem; color: #555; margin-bottom: 1rem; }
+        .readonly-box ul { margin: 0.25rem 0 0 1.25rem; padding: 0; }
     </style>
 </head>
 <body>
