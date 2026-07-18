@@ -518,7 +518,7 @@ if ($notFound) {
 
     <main class="container produto-layout">
         <nav class="breadcrumb" aria-label="Navegação estrutural">
-            <a href="/">Início</a> › <a href="/catalogo">Catálogo</a>
+            <a href="/">Início</a> › <a href="/catalogo">Produtos</a>
             <?php if ($category !== ''): ?> › <a href="/catalogo?categoria=<?= rawurlencode($category) ?>"><?= sv_esc($category) ?></a><?php endif; ?>
             › <span><?= sv_esc(sv_product_trim($name, 40, '...')) ?></span>
         </nav>
