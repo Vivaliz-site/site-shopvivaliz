@@ -19,7 +19,7 @@ $layoutConfig = [
         [
             'id' => 'banner-2',
             'title' => 'Banner 2',
-            'image' => '/images/placeholder-banner-2.jpg',
+            'image' => '/public/assets/home-banners/banner-casa-estilo.jpg',
             'link' => '#',
             'active' => true,
         ],
