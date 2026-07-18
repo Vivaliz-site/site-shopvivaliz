@@ -15,40 +15,22 @@ function svem_send_order_email(array $order, string $event = 'order_created'): b
 {
     $email = $order['customer']['email'] ?? '';
     $name = $order['customer']['name'] ?? 'Cliente';
-    $phone = $order['customer']['phone'] ?? '';
 
     if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         error_log("[OrderEmail] Email inválido para pedido {$order['order_number']}: $email");
         return false;
     }
 
-    // Configurar SMTP
-    $smtpHost = getenv('SMTP_HOST') ?: 'smtp.gmail.com';
-    $smtpPort = (int)(getenv('SMTP_PORT') ?: '587');
-    $smtpUser = getenv('SMTP_USER') ?: '';
-    $smtpPass = getenv('SMTP_PASS') ?: '';
-    $fromEmail = getenv('SMTP_FROM') ?: 'noreply@shopvivaliz.com.br';
-    $fromName = getenv('SMTP_FROMNAME') ?: 'ShopVivaliz';
-
-    if (empty($smtpUser) || empty($smtpPass)) {
-        error_log("[OrderEmail] Credenciais SMTP não configuradas para pedido {$order['order_number']}");
-        return false;
-    }
-
     // Preparar conteúdo do email baseado no evento
     [$subject, $htmlBody] = svem_build_email_content($order, $event, $name);
 
-    // Headers
-    $headers = [
-        "From: {$fromName} <{$fromEmail}>",
-        "Reply-To: {$fromEmail}",
-        "MIME-Version: 1.0",
-        "Content-Type: text/html; charset=UTF-8",
-        "X-Mailer: ShopVivaliz/3.0",
-    ];
-
-    // Tentar enviar via SMTP nativo
-    $success = mail($email, $subject, $htmlBody, implode("\r\n", $headers));
+    // Usava mail() PHP nativo direto, que sempre falhava silenciosamente
+    // porque o servidor nao tem sendmail instalado ("sh: /usr/sbin/sendmail:
+    // not found") -- todo email de pedido (order_created em diante) nunca
+    // saia de fato. send_email() ja usa PHPMailer real via SMTP (mesmo
+    // caminho corrigido em scripts/mailer.php), so faltava esse arquivo usar.
+    require_once dirname(__DIR__, 2) . '/scripts/mailer.php';
+    $success = send_email($email, $subject, $htmlBody);
 
     if ($success) {
         error_log("[OrderEmail] ✅ Email enviado para $email (evento: $event, pedido: {$order['order_number']})");
