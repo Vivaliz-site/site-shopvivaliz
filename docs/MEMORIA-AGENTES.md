@@ -40,6 +40,24 @@
 
 ## Entradas
 
+### 2026-07-17 — Shopee/TikTok: scripts de upload fingiam sucesso sem chamar a API
+**Sistema/arquivo:** `scripts/execute_marketplace_upload.py`, `scripts/integrations/ftp_uploader.py`
+**O que descobri:** `upload_to_shopee()`/`upload_to_tiktok()` liam o CSV de imagens e imprimiam "Upload simulado com sucesso" mesmo com credenciais reais presentes -- nunca chamavam a API de verdade. Existem clientes reais e funcionais já no repo (`scripts/utils/shopee_client.py`, `scripts/utils/tiktok_client.py`) que ninguém tinha ligado a esses scripts. Reescrito pra usar os clientes reais: mapeia SKU → item_id/product_id na loja e sobe as imagens de fato.
+**Por quê importa:** o negócio podia achar que produtos estavam sendo atualizados nos marketplaces quando nada acontecia. Testado ao vivo com sucesso (Shopee) apos completar OAuth real. `[RESOLVIDO em 2026-07-17, PR #401]`
+**Ver também:** `docs/SHOPEE-OPEN-API-V2.md`
+
+### 2026-07-17 — Shopee OAuth: refresh_token muda a cada renovação, precisa persistir sempre
+**Sistema/arquivo:** qualquer integração com `partner.shopeemobile.com`
+**O que descobri:** ao chamar `RefreshAccessToken`, a Shopee retorna um `refresh_token` NOVO que substitui o antigo -- o antigo fica inutilizável. Diferente do padrão OAuth de alguns provedores onde o refresh_token e fixo. Access token válido só 4h, refresh token válido 30 dias. Criado `daemon-shopee-token-renewer.py` (roda a cada 3h, mesmo padrão do renovador do Tiny/Olist) pra nunca deixar expirar.
+**Por quê importa:** se você guardar só o access_token e reusar um refresh_token antigo, a próxima renovação falha silenciosamente e a integração para de funcionar em ~4h.
+**Ver também:** `docs/SHOPEE-OPEN-API-V2.md`
+
+### 2026-07-17 — Codigo/script fora do git some quando o processo reinicia
+**Sistema/arquivo:** `scripts/autonomous-orchestrator-loop.sh`, qualquer script chamado por systemd
+**O que descobri:** um script real rodando como `shopvivaliz-orchestrator.service` há 2+ dias nunca esteve versionado no git -- só existia no disco da VM, e já tinha sido deletado de lá (só sobrevivia porque o processo ainda tinha o arquivo aberto via file descriptor, recuperável via `/proc/<pid>/fd`). O loop chamava dois arquivos PHP que nunca existiram (`api/autonomous/project-director.php`, `productivity-tracker.php`), rodando havia dias sem fazer nenhum trabalho real (erro engolido por `|| true`).
+**Por quê importa:** scripts systemd na VM que não estão no repo são invisíveis pra qualquer auditoria baseada em código, e se perdem pra sempre se o processo reiniciar antes de alguém notar. Sempre conferir `systemctl cat <service>` e `git ls-files <script>` juntos ao investigar um serviço.
+**Ver também:** —
+
 ### 2026-07-17 — API do Tiny ERP: campos e enums que a maioria assume errado
 **Sistema/arquivo:** `includes/tiny-order-push.php`, `daemon-sync-products.py`, qualquer código que chama `api.tiny.com.br/public-api/v3`
 **O que descobri:** `situacao` no `POST /pedidos` é um enum inteiro onde `1` significa **"Faturada"** (nota fiscal já emitida), não "Aberta" como o código antigo assumia (comentário dizia `// Aberto`). Também: não existe `idDeposito` solto (é `deposito: {id}`), não existe `formaPagamento` dentro de `pagamento` (só `formaRecebimento`/`meioPagamento`), e `numeroPedido` não aceita string customizada (a Tiny ignora e atribui seu próprio sequencial — use `numeroOrdemCompra` pra referência externa).
