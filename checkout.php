@@ -189,10 +189,20 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         <h2 class="checkout-title">Resumo</h2>
         <div id="cart-items" class="summary-items"></div>
 
+        <div class="sv-coupon-box" style="display:flex; gap:8px; margin:14px 0;">
+            <input type="text" id="coupon-input" placeholder="Cupom de desconto" maxlength="30" style="flex:1; text-transform:uppercase;" aria-label="Código do cupom de desconto">
+            <button type="button" id="coupon-apply-btn" class="btn btn-secondary">Aplicar</button>
+        </div>
+        <div id="coupon-status" class="sv-checkout-note" hidden></div>
+
         <div class="summary-totals">
             <div class="summary-row">
                 <span>Subtotal</span>
                 <strong id="cart-subtotal">—</strong>
+            </div>
+            <div class="summary-row" id="coupon-discount-row" hidden>
+                <span id="coupon-discount-label">Desconto</span>
+                <strong id="cart-discount">— R$ 0,00</strong>
             </div>
             <div class="summary-row">
                 <span>Frete</span>
