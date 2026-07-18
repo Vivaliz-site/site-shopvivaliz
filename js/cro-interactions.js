@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', function() {
     initStickyAddToCart();
     initSkeletonLoaders();
     initImageHoverZoom();
-    initSocialProofPopup();
     initFreeShippingProgress();
 });
 
