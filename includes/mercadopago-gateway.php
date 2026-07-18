@@ -155,6 +155,19 @@ function svmp_build_items(array $order): array
             'external_code' => 'shipping_fee',
         ];
     }
+    $discount = round((float)($order['coupon_discount'] ?? 0), 2);
+    if ($discount > 0) {
+        $couponCode = (string)($order['coupon_code'] ?? '');
+        $items[] = [
+            'id' => 'desconto',
+            'title' => svmp_truncate('Desconto' . ($couponCode !== '' ? ' (' . $couponCode . ')' : ''), 120),
+            'quantity' => 1,
+            'currency_id' => 'BRL',
+            'unit_price' => -$discount,
+            'category_id' => 'others',
+            'external_code' => 'coupon_discount',
+        ];
+    }
     return $items;
 }
 
