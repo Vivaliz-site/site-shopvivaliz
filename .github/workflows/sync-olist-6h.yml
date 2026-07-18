@@ -1,8 +1,10 @@
-name: Sincronizar Olist/Tiny - Auto-Renew Token (2h)
+name: Sincronizar Olist/Tiny - Auto-Renew Token (10min)
+# 2026-07-18: nome/comentario antigos diziam "6h"/"2h"/"5min" mas o cron real
+# sempre foi */10 (10 em 10 minutos). Corrigido para bater com a realidade --
+# nao houve mudanca de comportamento, so de documentacao.
 
 on:
   schedule:
-    # ATIVO: A cada 5 MINUTOS para renovar token automaticamente
     - cron: '*/10 * * * *'
   workflow_dispatch:
 
