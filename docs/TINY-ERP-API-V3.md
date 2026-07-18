@@ -30,6 +30,10 @@ leia o bloco `cURL` de exemplo pra confirmar o path exato antes de codificar —
 | Naturezas de operação — listar | **não existe** (`/naturezas-operacao` = 404) | — |
 | Listas de preço — listar | não confirmado (`/lista-de-precos`/`/listas-precos` = 404, path real não achado ainda) | — |
 | Estoque | `GET /estoque/{id}` | — (só esse tem `disponivel` correto pra kits) |
+| Pedidos — atualizar despacho/rastreio | `PUT /pedidos/{idPedido}/despacho` | [atualizar-informações-de-rastreamento-do-pedido](https://api-docs.erp.olist.com/api-reference/pedidos/atualizar-informa%C3%A7%C3%B5es-de-rastreamento-do-pedido) |
+| Notas fiscais — obter | `GET /notas/{idNota}` | [obter-nota-fiscal](https://api-docs.erp.olist.com/api-reference/notas/obter-nota-fiscal) |
+| Notas fiscais — obter XML | `GET /notas/{idNota}/xml` | [obter-xml-da-nota-fiscal](https://api-docs.erp.olist.com/api-reference/notas/obter-xml-da-nota-fiscal) |
+| Categorias — árvore completa | `GET /categorias/todas` | [listar-árvore-de-categorias](https://api-docs.erp.olist.com/api-reference/categorias/listar-%C3%A1rvore-de-categorias) |
 
 ## Limites de requisição
 
