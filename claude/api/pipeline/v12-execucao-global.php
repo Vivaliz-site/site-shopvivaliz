@@ -142,9 +142,12 @@ try {
     // ========== ETAPA 5: RESUMO ==========
     $resultado['etapas']['resumo'] = 'gerando';
 
+    $margens = array_column($produtos_otimizados, 'margem_aplicada');
+    $margem_media_pct = $margens ? round((array_sum($margens) / count($margens) - 1) * 100, 1) : 0.0;
+
     $resultado['resumo'] = [
         'total_processado' => count($produtos_otimizados),
-        'margem_media' => 'Alta',
+        'margem_media_pct' => $margem_media_pct,
         'precos_ajustados' => count($produtos_otimizados),
         'imagens_geradas' => count($produtos_otimizados),
         'titulos_otimizados' => count($produtos_otimizados),
