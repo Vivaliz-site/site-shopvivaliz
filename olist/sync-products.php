@@ -358,6 +358,39 @@ function svs_normalize(array $p, string $source): array {
         ''
     ));
 
+    // SEO: usa o slug/titulo/descricao/keywords ja cadastrados na Tiny
+    // (bloco 'seo' do detalhe do produto) quando existirem. Sem slug real
+    // cadastrado, gera um a partir do nome+sku (mesmo algoritmo usado como
+    // fallback em tempo real por catalogo.php/produto.php/index.php) --
+    // mas agora persistido, entao a URL do produto fica estavel mesmo se
+    // esse algoritmo mudar no futuro.
+    $seo = is_array($p['seo'] ?? null) ? $p['seo'] : [];
+    $slug = trim((string)($seo['slug'] ?? ''));
+    if ($slug === '' && $name !== '') {
+        $slug = svs_slugify($name, $sku);
+    }
+    $seoTitle = trim((string)($seo['titulo'] ?? ''));
+    $seoDescription = trim((string)($seo['descricao'] ?? ''));
+    $keywords = is_array($seo['keywords'] ?? null) ? array_values(array_filter(array_map('strval', $seo['keywords']))) : [];
+
+    $marca = trim((string)($p['marca']['nome'] ?? ''));
+    $gtin = trim((string)($p['gtin'] ?? ''));
+    $ncm = trim((string)($p['ncm'] ?? ''));
+    $unidade = trim((string)($p['unidade'] ?? ''));
+
+    // 'grade' das variacoes = atributos reais do produto (ex: cor=Azul,
+    // tamanho=M) -- so existe quando o produto tem variacoes cadastradas.
+    $attributes = [];
+    foreach ((is_array($p['variacoes'] ?? null) ? $p['variacoes'] : []) as $variation) {
+        foreach ((is_array($variation['grade'] ?? null) ? $variation['grade'] : []) as $pair) {
+            $key = trim((string)($pair['chave'] ?? ''));
+            $value = trim((string)($pair['valor'] ?? ''));
+            if ($key !== '' && $value !== '' && !in_array("$key: $value", $attributes, true)) {
+                $attributes[] = "$key: $value";
+            }
+        }
+    }
+
     return [
         'olist_product_id' => $id,
         'sku'              => $sku,
@@ -368,9 +401,29 @@ function svs_normalize(array $p, string $source): array {
         'images'           => $images,
         'description'      => $description,
         'category'         => $category,
+        'slug'             => $slug,
+        'seo_title'        => $seoTitle,
+        'seo_description'  => $seoDescription,
+        'keywords'         => $keywords,
+        'brand'            => $marca,
+        'gtin'             => $gtin,
+        'ncm'              => $ncm,
+        'unit'             => $unidade,
+        'attributes'       => $attributes,
         'sync_source'      => $source,
         'synced_at'        => date('c'),
     ];
+}
+
+function svs_slugify(string $name, string $sku): string {
+    $accents = ['á'=>'a','à'=>'a','ã'=>'a','â'=>'a','ä'=>'a','é'=>'e','è'=>'e','ê'=>'e','ë'=>'e','í'=>'i','ì'=>'i','î'=>'i','ï'=>'i','ó'=>'o','ò'=>'o','õ'=>'o','ô'=>'o','ö'=>'o','ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ç'=>'c','ñ'=>'n'];
+    $lower = function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
+    $base = strtr($lower, $accents);
+    $base = preg_replace('/[^a-z0-9]+/', '-', $base);
+    $base = trim((string)$base, '-');
+    $base = function_exists('mb_substr') ? mb_substr($base, 0, 60) : substr($base, 0, 60);
+    $skuPart = strtolower((string)preg_replace('/[^a-zA-Z0-9]+/', '', $sku));
+    return trim($base . '-' . $skuPart, '-') ?: $skuPart;
 }
 
 /* ── Espelho: a lista final deve ser a lista ativa retornada pela Tiny/Olist ── */
