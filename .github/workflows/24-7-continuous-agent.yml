@@ -1,8 +1,10 @@
-name: 24-7 Continuous Agent
+name: PAUSADO - 24-7 Continuous Agent (substituido por autonomous-watchdog.yml)
+# 2026-07-18: autonomous-watchdog.yml ja documentava desde 2026-07-10 que este
+# workflow deveria estar pausado (chamava o mesmo endpoint api/agent/autonomous-watchdog.php
+# em paralelo, a cada 5min, duplicando o watchdog canonico). O comentario existia mas o
+# schedule nunca tinha sido removido de fato -- corrigido agora. Rodar apenas manualmente.
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'
   workflow_dispatch:
     inputs:
       cycles:
