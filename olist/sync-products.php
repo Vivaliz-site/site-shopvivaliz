@@ -219,29 +219,23 @@ function svs_fetch_v3(string $token): array {
         if (!$id) continue;
         $detail = svs_fetch_v3_detail((string)$id, $token);
         if ($detail !== null) {
-            if (isset($detail['estoque']) && is_array($detail['estoque'])) {
-                $item['estoque'] = $detail['estoque'];
-            }
             if (!empty($detail['anexos']) && is_array($detail['anexos'])) {
                 $item['imagens'] = $detail['anexos'];
             }
-            if (!empty($detail['descricaoComplementar'])) {
-                $item['descricaoComplementar'] = $detail['descricaoComplementar'];
-            }
-            if (!empty($detail['categoria'])) {
-                $item['categoria'] = $detail['categoria'];
-            }
-            // Campos so disponiveis no detalhe (nao vem na listagem /produtos),
-            // confirmados no schema oficial (api-docs.erp.olist.com/api-reference/produtos/obter-produto):
-            // gtin, marca, ncm, unidade, dimensoes, variacoes (grade = atributos
-            // reais tipo cor/tamanho), e o bloco 'seo' dedicado (titulo/descricao/
-            // keywords/slug) que a Tiny ja mantem por produto -- antes nada disso
-            // era extraido, o catalogo espelhado nunca tinha slug persistido nem
-            // metadados de SEO reais.
-            foreach (['gtin', 'ncm', 'unidade', 'marca', 'seo', 'dimensoes', 'variacoes', 'tipo'] as $field) {
-                if (isset($detail[$field]) && $detail[$field] !== null && $detail[$field] !== '') {
-                    $item[$field] = $detail[$field];
-                }
+            // Mescla o objeto de detalhe INTEIRO (schema completo confirmado em
+            // api-docs.erp.olist.com/api-reference/produtos/obter-produto) por
+            // cima do item da listagem -- a listagem /produtos so tem um
+            // subconjunto raso dos campos; o detalhe tem tudo: situacao,
+            // produtoPai, unidade, unidadePorCaixa, ncm, gtin, origem, garantia,
+            // observacoes, categoria, marca, dimensoes, precos, estoque,
+            // fornecedores, seo (titulo/descricao/keywords/slug/linkVideo),
+            // tributacao, variacoes (com grade = atributos reais), kit,
+            // tipoVariacao, tipo. So exclui 'anexos' (ja tratado acima como
+            // 'imagens') e 'id'/'sku' (a listagem ja tem, nao precisa sobrescrever).
+            foreach ($detail as $field => $value) {
+                if (in_array($field, ['anexos', 'id', 'sku'], true)) continue;
+                if ($value === null || $value === '' || $value === []) continue;
+                $item[$field] = $value;
             }
         }
         usleep(1100000); // ~1.1s entre chamadas (limite: 60 req/min)
