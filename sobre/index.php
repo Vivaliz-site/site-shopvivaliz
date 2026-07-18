@@ -42,7 +42,7 @@ header('Content-Type: text/html; charset=UTF-8');
         <article class="brand-card">
             <h2>Como trabalhamos</h2>
             <ul class="brand-list">
-                <li>Catálogo com fotos e informações atualizadas dos produtos.</li>
+                <li>Produtos com fotos e informações atualizadas.</li>
                 <li>Atendimento pelo WhatsApp e e-mail, antes e depois da compra.</li>
                 <li>Pagamento seguro via Pix, boleto ou cartão, com envio para todo o país.</li>
             </ul>
