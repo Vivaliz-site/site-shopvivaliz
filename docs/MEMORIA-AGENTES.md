@@ -40,6 +40,12 @@
 
 ## Entradas
 
+### 2026-07-18 — MERCADOPAGO_WEBHOOK_SECRET REGREDIU pro placeholder antigo (2a vez!)
+**Sistema/arquivo:** `.env` do servidor (VM Oracle), `api/webhook-mercadopago.php`
+**O que descobri:** o mesmo bug já documentado como "corrigido" em 2026-07-17 (`MERCADOPAGO_WEBHOOK_SECRET=webhookkey123`, placeholder nunca trocado) **voltou a acontecer** em 2026-07-18. Confirmado nos logs reais (`sudo tail /var/log/apache2/shopvivaliz_error.log`) que 8+ tentativas reais do Mercado Pago (`referer: mercadopago.com.ar`) foram rejeitadas com `invalid_signature` antes da correção. O usuário confirmou que o valor no painel MP é o MESMO de antes (`d8f63591fc4fd85348baa468c613df6442bdb524e7e8e0db61f564fbbc018e39`) -- ou seja, **não foi rotação no painel**, foi o `.env` do servidor sendo revertido/sobrescrito por algum processo (auto-sync, restore, outro agente).
+**Por quê importa:** enquanto esse secret está errado, TODO pagamento aprovado fica invisível (pedido nunca vira `payment_approved`, nunca vai pro Tiny, cliente nunca recebe email de confirmação) -- silenciosamente, sem erro visível pro usuário final. Antes de investigar "por que o pagamento não confirmou", sempre conferir primeiro se `MERCADOPAGO_WEBHOOK_SECRET` no `.env` do servidor bate com o painel (peça o valor atual ao usuário, não assuma que é rotação). Debug útil: reenviar um webhook real manualmente calculando a assinatura HMAC (`svmp_validate_webhook_signature()` em `includes/mercadopago-gateway.php`) com o secret do `.env` -- se bater e ainda assim os webhooks reais falharem, o secret do `.env` diverge do painel.
+**Ver também:** —
+
 ### 2026-07-18 — `includes/products-cache.php` fabricava 188 produtos ficticios quando o BD "falhava" (e o check nunca funcionava)
 **Sistema/arquivo:** `includes/products-cache.php`, `catalogo-v2.php` (unico caller, orfao -- nenhuma pagina linka pra ele)
 **O que descobri:** `obter_produtos()`/`contar_produtos()` tinham um fallback que gerava 188 produtos totalmente inventados (nomes tipo "Premium Camisetas Azul - Confortável", precos aleatorios, estoque `rand(10,200)`, imagem via `via.placeholder.com`) sempre que "o BD nao estava disponivel". Só que o check era `function_exists('Database')` -- `Database` é uma **classe**, não funcao, entao esse check é sempre `false` e o fallback fake **rodava sempre**, nunca tentava o banco real. Corrigido pra `class_exists('Database')` e removido o fallback fabricado por completo -- agora retorna array vazio se o BD falhar (a pagina já trata `empty($produtos)` corretamente).
