@@ -16,17 +16,26 @@ from utils.tiktok_client import TikTokClient  # noqa: E402
 
 class TikTokIntegration:
     def __init__(self):
+        # A implementacao anterior fingia sucesso ("[SIMULADO]") mesmo quando
+        # o cliente nao estava configurado, e nunca levantava excecao real em
+        # falha de chamada -- so imprimia "[ENVIADO]" incondicionalmente.
         self.products_api_url = os.getenv('SHOPVIVALIZ_PRODUCTS_API_URL', '')
+        self._client = None
+        self._client_error = None
         try:
             self._client = TikTokClient()
-        except KeyError as exc:
-            self._client = None
-            self._missing_env = str(exc).strip("'\"")
+        except Exception as exc:
+            self._client_error = str(exc)
 
     def update_all_products(self):
         """Atualiza todos os produtos automaticamente"""
         print("\n[TIKTOK] Iniciando atualizacao automatica")
         print("="*70)
+
+        if self._client is None:
+            print(f"[ERRO] Cliente TikTok nao inicializado: {self._client_error}")
+            print("[ERRO] Nenhuma atualizacao foi feita (sem simulacao de sucesso).")
+            return
 
         products_to_update = self._load_products_from_api()
         if not products_to_update:
