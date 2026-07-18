@@ -112,7 +112,22 @@ def upload_to_shopee(creds: dict) -> bool:
                     continue
 
                 try:
-                    image_ids = [client.upload_image_by_url(url) for url in image_urls]
+                    # upload_image_by_url() chama /media_space/upload_image_by_url,
+                    # endpoint que nao existe de fato na API v2 da Shopee (confirmado
+                    # 404 "error_not_found" em teste real) -- a API so aceita upload
+                    # de arquivo binario. Baixa a imagem e sobe pelo metodo real.
+                    image_ids = []
+                    for url in image_urls:
+                        resp = requests.get(url, timeout=30)
+                        resp.raise_for_status()
+                        suffix = Path(url).suffix or '.jpg'
+                        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                            tmp.write(resp.content)
+                            tmp_path = tmp.name
+                        try:
+                            image_ids.append(client.upload_image(tmp_path))
+                        finally:
+                            os.unlink(tmp_path)
                     client.update_product(int(item_id), image_ids=image_ids)
                     uploaded_products += 1
                     uploaded_images += len(image_ids)
