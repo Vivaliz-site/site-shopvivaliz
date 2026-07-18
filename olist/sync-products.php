@@ -231,6 +231,18 @@ function svs_fetch_v3(string $token): array {
             if (!empty($detail['categoria'])) {
                 $item['categoria'] = $detail['categoria'];
             }
+            // Campos so disponiveis no detalhe (nao vem na listagem /produtos),
+            // confirmados no schema oficial (api-docs.erp.olist.com/api-reference/produtos/obter-produto):
+            // gtin, marca, ncm, unidade, dimensoes, variacoes (grade = atributos
+            // reais tipo cor/tamanho), e o bloco 'seo' dedicado (titulo/descricao/
+            // keywords/slug) que a Tiny ja mantem por produto -- antes nada disso
+            // era extraido, o catalogo espelhado nunca tinha slug persistido nem
+            // metadados de SEO reais.
+            foreach (['gtin', 'ncm', 'unidade', 'marca', 'seo', 'dimensoes', 'variacoes', 'tipo'] as $field) {
+                if (isset($detail[$field]) && $detail[$field] !== null && $detail[$field] !== '') {
+                    $item[$field] = $detail[$field];
+                }
+            }
         }
         usleep(1100000); // ~1.1s entre chamadas (limite: 60 req/min)
     }
