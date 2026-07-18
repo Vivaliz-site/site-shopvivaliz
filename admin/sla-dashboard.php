@@ -7,7 +7,18 @@
 require_once __DIR__ . '/../includes/admin-guard.php';
 
 $period = $_GET['period'] ?? 'today'; // today, week, month
-$metricsFile = '.sla-metrics.json';
+$rootDir = dirname(__DIR__);
+$readJson = static function (string $path, array $default = []): array {
+    if (!is_file($path) || !is_readable($path)) {
+        return $default;
+    }
+    $raw = trim((string)@file_get_contents($path));
+    if ($raw === '') {
+        return $default;
+    }
+    $decoded = json_decode($raw, true);
+    return is_array($decoded) ? $decoded : $default;
+};
 
 // Calcular período
 $endDate = new DateTime();
@@ -25,7 +36,7 @@ switch ($period) {
 }
 
 // Carregar métricas
-$metrics = json_decode(file_get_contents($metricsFile) ?: '{}', true) ?: [];
+$metrics = $readJson($rootDir . '/.sla-metrics.json', []);
 
 // Calcular SLAs
 $uptime = $metrics['uptime'] ?? 99.8;
@@ -49,7 +60,7 @@ $status = [
 ];
 
 // Calcular MTTR (Mean Time To Recovery)
-$incidents = json_decode(file_get_contents('.incident-responses.json') ?: '[]', true) ?: [];
+$incidents = $readJson($rootDir . '/.incident-responses.json', []);
 $mttr = 0;
 if (!empty($incidents)) {
     $times = array_map(fn($i) => $i['resolution_time'] ?? 0, $incidents);
@@ -58,11 +69,11 @@ if (!empty($incidents)) {
 
 // Projeção de cumprimento de SLA
 $daysInMonth = 30;
-$currentDay = date('d');
+$currentDay = (int)date('j');
 $daysRemaining = $daysInMonth - $currentDay;
 
-// Se uptime cair para X, qual será o uptime final do mês?
-$projectedUptime = (($uptime / 100 * $currentDay) + ($uptime / 100 * $daysRemaining)) / $daysInMonth;
+// Sem série histórica local, a projeção segue o uptime atual.
+$projectedUptime = max(0, min(100, (float)$uptime));
 
 ?>
 <!DOCTYPE html>
