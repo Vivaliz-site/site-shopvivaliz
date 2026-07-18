@@ -422,7 +422,7 @@ $breadcrumbItems = [
     [
         '@type' => 'ListItem',
         'position' => 2,
-        'name' => 'Catálogo',
+        'name' => 'Produtos',
         'item' => $baseUrl . '/catalogo',
     ],
 ];
