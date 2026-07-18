@@ -1,9 +1,31 @@
-# Melhor Envio API — Webhooks
+# Melhor Envio API — Webhooks e regras gerais
 
-> Fonte oficial: https://docs.melhorenvio.com.br/docs/webhooks
-> Implementação neste repo: `api/melhorenvio/webhook.php`
+> Fontes oficiais: https://docs.melhorenvio.com.br/docs/webhooks e
+> https://docs.melhorenvio.com.br/reference/introducao-api-melhor-envio
+> Implementação neste repo: `api/melhorenvio/webhook.php`, `includes/melhorenvio-label.php`, `includes/melhorenvio-oauth.php`
 
-## Como funciona
+## Regras gerais da API (introdução)
+
+- **Base URL produção:** `https://melhorenvio.com.br` (a API roda em `/api/v2/...` sobre esse domínio —
+  ver `includes/melhorenvio-label.php::me_api_base()`, que já resolve produção vs sandbox).
+- **Base URL sandbox:** `https://sandbox.melhorenvio.com.br` — **ambiente isolado**, credenciais e conta
+  são diferentes das de produção, não dá pra usar as mesmas em ambos. Sandbox só tem Correios e Jadlog
+  disponíveis pra teste.
+- **Auth:** OAuth2. `access_token` expira em 30 dias, `refresh_token` em 45 dias — precisa renovar antes disso.
+- **Headers obrigatórios em toda requisição:** `Accept: application/json`, `Content-Type: application/json`,
+  e um `User-Agent` que identifique a aplicação **e um e-mail de contato** (ex: `"ShopVivaliz (contato@shopvivaliz.com.br)"`).
+  Rotas de OAuth2 (login/token) têm requisitos de header diferentes.
+- Todas as requisições devem ser HTTPS. Payloads (fora GET) vão sempre no corpo como JSON.
+- Integração é gratuita, sem taxas de uso da API em si (só o custo real do frete).
+
+⚠️ **Conformidade de `User-Agent` neste repo — parcial.** `includes/melhorenvio-label.php` já segue o
+formato exigido (`'User-Agent: ShopVivaliz (contato@shopvivaliz.com.br)'`), mas `api/melhorenvio/shipping-check.php`
+(`ShopVivaliz-ShippingCheck/1.0`) e `api/melhorenvio/shipping-check-v2.php` (`ShopVivaliz/Shipping-v2`) usam um
+formato sem e-mail de contato, fora do padrão pedido pela doc oficial. Não corrigido nesta doc — só registrado
+como achado, já que `shipping-check-v2.php` é o endpoint realmente ativo hoje (chamado por `js/cart-shipping-v7.js`
+e `checkout.php`).
+
+## Webhooks — como funciona
 
 Os webhooks notificam atualizações do ciclo de vida de uma etiqueta gerada pelo Melhor Envio. **Só chegam eventos de etiquetas geradas pelo mesmo aplicativo (client_id) onde o webhook foi cadastrado** — etiquetas criadas manualmente pelo site do Melhor Envio ou por outro app, mesmo na mesma conta, não disparam o webhook.
 
