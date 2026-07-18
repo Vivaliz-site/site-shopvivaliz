@@ -6,6 +6,9 @@ Enviar relatório de automação por email
 import os
 import json
 import csv
+import smtplib
+import ssl
+from email.mime.text import MIMEText
 from datetime import datetime
 
 class ReportSender:
@@ -23,17 +26,46 @@ class ReportSender:
         report = self._generate_report()
         email_body = self._format_email(report)
 
+        subject = f"Relatório Automação - {datetime.now().strftime('%Y-%m-%d')}"
         print(f"Destinatário: {self.email_to}")
-        print(f"Assunto: Relatório Automação - {datetime.now().strftime('%Y-%m-%d')}")
+        print(f"Assunto: {subject}")
         print("\nConteúdo do email:")
         print("-"*70)
         print(email_body)
         print("-"*70)
         self._persist_report(email_body)
 
-        # Simulado - em produção enviaria via SMTP
-        print("\n[OK] Email seria enviado com sucesso")
+        sent = self._send_smtp(subject, email_body)
+        if sent:
+            print("\n[OK] Email enviado com sucesso via SMTP")
+        else:
+            print("\n[ERRO] Email NAO foi enviado (ver mensagem de erro acima)")
         print("="*70)
+        return sent
+
+    def _send_smtp(self, subject: str, body: str) -> bool:
+        """Envia o relatorio por SMTP real. Retorna False honestamente (nao
+        finge sucesso) se faltar config ou a conexao falhar."""
+        if not (self.smtp_host and self.smtp_user and self.smtp_pass and self.email_to):
+            print("[ERRO] SMTP nao configurado (faltam SMTP_HOST/SMTP_USER/SMTP_PASS/EMAIL_TO)")
+            return False
+
+        smtp_port = int(os.getenv('SMTP_PORT') or os.getenv('MAIL_PORT') or 587)
+        msg = MIMEText(body, 'plain', 'utf-8')
+        msg['Subject'] = subject
+        msg['From'] = self.smtp_user
+        msg['To'] = self.email_to
+
+        try:
+            context = ssl.create_default_context()
+            with smtplib.SMTP(self.smtp_host, smtp_port, timeout=20) as server:
+                server.starttls(context=context)
+                server.login(self.smtp_user, self.smtp_pass)
+                server.sendmail(self.smtp_user, [self.email_to], msg.as_string())
+            return True
+        except Exception as e:
+            print(f"[ERRO] Falha ao enviar email via SMTP: {e}")
+            return False
 
     def _generate_report(self):
         """Gera dados do relatório"""

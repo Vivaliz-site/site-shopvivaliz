@@ -6,14 +6,17 @@ Atualizar dashboard ao vivo no domínio
 import os
 import json
 import csv
+import ftplib
 from datetime import datetime
 from pathlib import Path
 
 class DashboardUpdater:
     def __init__(self):
-        self.ftp_host = os.getenv('FTP_HOST', '')
-        self.ftp_user = os.getenv('FTP_USER', '')
-        self.ftp_pass = os.getenv('FTP_PASS', '')
+        self.ftp_host = os.getenv('FTP_HOST') or os.getenv('FTP_SERVER') or ''
+        self.ftp_user = os.getenv('FTP_USER') or os.getenv('FTP_USERNAME') or ''
+        self.ftp_pass = os.getenv('FTP_PASS') or os.getenv('FTP_PASSWORD') or ''
+        self.ftp_port = int(os.getenv('FTP_PORT') or 21)
+        self.ftp_remote_dir = os.getenv('FTP_REMOTE_DIR') or '/public_html'
 
     def update_live_dashboard(self):
         """Atualiza dashboard em tempo real"""
@@ -41,10 +44,40 @@ class DashboardUpdater:
 
         print("[OK] Dashboard HTML gerado")
 
-        # Upload FTP (simulado)
-        print("[FTP] Upload para /public_html/admin/")
-        print("[OK] Dashboard ao vivo atualizado!")
+        uploaded = self._upload_ftp()
+        if uploaded:
+            print(f"[OK] Dashboard ao vivo atualizado em {self.ftp_remote_dir}/admin/")
+        else:
+            print("[ERRO] Dashboard NAO foi enviado ao vivo (ver erro acima) -- ficou apenas local")
         print("="*70)
+        return uploaded
+
+    def _upload_ftp(self) -> bool:
+        """Envia os arquivos gerados via FTP real. Retorna False honestamente
+        se faltar credencial ou a conexao/upload falhar."""
+        if not (self.ftp_host and self.ftp_user and self.ftp_pass):
+            print("[ERRO] FTP nao configurado (faltam FTP_HOST/FTP_SERVER, FTP_USER/FTP_USERNAME, FTP_PASS/FTP_PASSWORD)")
+            return False
+
+        remote_dir = self.ftp_remote_dir.rstrip('/') + '/admin'
+        try:
+            with ftplib.FTP() as ftp:
+                ftp.connect(self.ftp_host, self.ftp_port, timeout=20)
+                ftp.login(self.ftp_user, self.ftp_pass)
+                for part in remote_dir.strip('/').split('/'):
+                    try:
+                        ftp.cwd(part)
+                    except ftplib.error_perm:
+                        ftp.mkd(part)
+                        ftp.cwd(part)
+                for local_file in ('admin/automation-dashboard.json', 'admin/automation-dashboard.html'):
+                    with open(local_file, 'rb') as f:
+                        ftp.storbinary(f'STOR {Path(local_file).name}', f)
+                    print(f"[FTP] Enviado: {local_file} -> {remote_dir}/{Path(local_file).name}")
+            return True
+        except Exception as e:
+            print(f"[ERRO] Falha no upload FTP: {e}")
+            return False
 
     def _gather_data(self):
         """Coleta todos os dados"""
