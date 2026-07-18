@@ -22,7 +22,9 @@ require_once __DIR__ . '/../includes/admin-guard.php';
 function orch_env(string $key): string { return (string)(getenv($key) ?: ''); }
 
 // ── CSRF simples (session token) ───────────────────────────────────────────────
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
 if (empty($_SESSION['orch_csrf'])) {
     $_SESSION['orch_csrf'] = bin2hex(random_bytes(16));
 }
@@ -56,19 +58,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (!in_array($task, ['watchdog', 'report', 'check_prices'], true)) {
         $action_result = ['ok' => false, 'error' => "Tarefa desconhecida: $task"];
     } else {
-        $secret  = orch_env('CRON_SECRET');
-        $baseUrl = rtrim(orch_env('SITE_URL') ?: 'https://dev.shopvivaliz.com.br', '/');
-        $url     = $baseUrl . '/api/agent/cron-dispatcher.php?task=' . urlencode($task)
-                   . ($secret !== '' ? '&secret=' . urlencode($secret) : '');
-
-        $ctx = stream_context_create(['http' => [
-            'method'  => 'GET',
-            'timeout' => 20,
-            'header'  => 'User-Agent: ShopVivaliz-Admin/1.0',
-            'ignore_errors' => true,
-        ]]);
-        $body = @file_get_contents($url, false, $ctx);
-        if ($body === false) {
+        $dispatcher = dirname(__DIR__) . '/api/agent/cron-dispatcher.php';
+        $php = PHP_BINARY ?: 'php';
+        $cmd = escapeshellarg($php) . ' ' . escapeshellarg($dispatcher) . ' ' . escapeshellarg($task) . ' 2>&1';
+        $body = @shell_exec($cmd);
+        if (!is_string($body) || trim($body) === '') {
             $action_result = ['ok' => false, 'error' => 'Falha ao chamar cron-dispatcher.'];
         } else {
             $decoded = json_decode($body, true);
