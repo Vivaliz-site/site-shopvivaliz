@@ -45,6 +45,7 @@ playwright-report/
 storage/order-rate-limit/
 storage/order-idempotency/
 storage/private/
+storage/tiny/
 
 # Backups pontuais deixados por agentes em produção -- nunca devem ser
 # versionados nem travar o auto-sync seguro da VM.
