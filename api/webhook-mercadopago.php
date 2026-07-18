@@ -209,19 +209,14 @@ try {
 
         error_log('[MercadoPago] email processor queued: order=' . $externalReference);
 
-        // Compra e gera a etiqueta de transporte automaticamente assim que o
-        // pagamento e aprovado -- tambem em background, pois a compra na
-        // Melhor Envio faz varias chamadas HTTP sequenciais (cart -> checkout
-        // -> generate -> print) e nao deve atrasar a resposta do webhook.
-        $labelCmd = 'php ' . escapeshellarg(dirname(__DIR__) . '/api/melhorenvio/generate-label-background.php') . ' ' .
-                    escapeshellarg($path);
-        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-            pclose(popen('start /B ' . $labelCmd, 'r'));
-        } else {
-            exec($labelCmd . ' > /dev/null 2>&1 &');
-        }
-
-        error_log('[MercadoPago] label processor queued: order=' . $externalReference);
+        // A etiqueta de transporte NAO e mais gerada aqui, na aprovacao do
+        // pagamento. Comprar a etiqueta antes de a nota fiscal ser emitida
+        // no ERP inverte a ordem real do processo fiscal/logistico -- o
+        // gatilho correto e o webhook "notas fiscais autorizadas" da Tiny,
+        // recebido em api/webhooks/tiny-nota-fiscal.php, que dispara o mesmo
+        // api/melhorenvio/generate-label-background.php assim que a NF do
+        // pedido e de fato emitida no ERP. Requer o app "Webhooks" configurado
+        // na conta Tiny (UI, nao ha API pra isso) -- ver docs/TINY-ERP-API-V3.md.
     }
 
     svmp_webhook_response(200, 'processed');

@@ -40,6 +40,12 @@
 
 ## Entradas
 
+### 2026-07-18 — Etiqueta Melhor Envio agora so e comprada depois da NF emitida (nao mais na aprovacao do pagamento)
+**Sistema/arquivo:** `api/webhook-mercadopago.php`, `api/webhooks/tiny-nota-fiscal.php` (novo), `api/melhorenvio/generate-label-background.php`
+**O que descobri:** o fluxo antigo comprava a etiqueta assim que o Mercado Pago aprovava o pagamento -- antes de qualquer NF existir no ERP, o que inverte a ordem real do processo (deveria ser: pago -> NF emitida -> etiqueta comprada). Criado `api/webhooks/tiny-nota-fiscal.php` pra receber o evento "notas fiscais autorizadas" da Tiny e so ai disparar a geracao de etiqueta (localiza o pedido local por `tiny_order_id` em `storage/orders/*.json`). O trigger antigo foi removido de `webhook-mercadopago.php`.
+**Por quê importa:** falta config manual no painel Tiny (o app "Webhooks" so pode ser ligado pela UI, sem endpoint de API) e falta `TINY_WEBHOOK_SECRET` no `.env` -- ate isso ser feito, NENHUMA etiqueta e gerada automaticamente (nem no evento antigo nem no novo). Nao reverter o trigger antigo sem configurar o novo webhook primeiro, ou etiquetas param de ser compradas. O payload exato do evento Tiny tambem nao foi confirmado ao vivo ainda -- se o parsing falhar, o `error_log` grava o payload cru pra ajuste.
+**Ver também:** `docs/TINY-ERP-API-V3.md`
+
 ### 2026-07-17 — Shopee/TikTok: scripts de upload fingiam sucesso sem chamar a API
 **Sistema/arquivo:** `scripts/execute_marketplace_upload.py`, `scripts/integrations/ftp_uploader.py`
 **O que descobri:** `upload_to_shopee()`/`upload_to_tiktok()` liam o CSV de imagens e imprimiam "Upload simulado com sucesso" mesmo com credenciais reais presentes -- nunca chamavam a API de verdade. Existem clientes reais e funcionais já no repo (`scripts/utils/shopee_client.py`, `scripts/utils/tiktok_client.py`) que ninguém tinha ligado a esses scripts. Reescrito pra usar os clientes reais: mapeia SKU → item_id/product_id na loja e sobe as imagens de fato.
