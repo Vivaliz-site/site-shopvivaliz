@@ -10,4 +10,8 @@ declare(strict_types=1);
  * (erro de "arquivo nao encontrado" engolido silenciosamente por `|| true`
  * no shell script).
  */
+require __DIR__ . '/../../config/bootstrap-env.php';
+if (function_exists('sv_bootstrap_env')) {
+    sv_bootstrap_env();
+}
 require __DIR__ . '/../../agents/project-director-agent.php';
