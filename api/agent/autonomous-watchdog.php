@@ -152,7 +152,7 @@ try {
     $executed = ($result['ok'] ?? false) === true
         && is_array($loop)
         && ($loop['ok'] ?? false) === true
-        && ($loop['status'] ?? '') === 'queued';
+        && in_array((string)($loop['status'] ?? ''), ['queued', 'degraded'], true);
     $result['execution_accepted'] = $executed;
     svaw_reply($executed ? 202 : 500, $result);
 } catch (Throwable $e) {

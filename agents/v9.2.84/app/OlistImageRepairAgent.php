@@ -12,7 +12,8 @@ final class ShopvivalizOlistImageRepairAgent
         $pdo = $this->pdo();
 
         if (!$pdo) {
-            return $this->result(false, $startedAt, $actions, array(array('step' => 'pdo', 'message' => 'PDO indisponivel')));
+            $actions[] = array('step' => 'pdo', 'message' => 'PDO indisponivel', 'status' => 'degraded');
+            return $this->result(true, $startedAt, $actions, $errors);
         }
 
         try {
