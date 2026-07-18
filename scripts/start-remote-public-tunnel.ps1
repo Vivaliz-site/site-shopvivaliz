@@ -67,6 +67,7 @@ $payload = [pscustomobject]@{
     timestamp = (Get-Date).ToUniversalTime().ToString('o')
     public_url = $publicUrl
     gateway_url = $GatewayUrl
+    local_url = $GatewayUrl
     process_id = $process.Id
     stdout_log = $StdOutLog
     stderr_log = $StdErrLog

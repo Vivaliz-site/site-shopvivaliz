@@ -37,6 +37,7 @@ if (is_file($publicTunnelFile)) {
     }
 }
 $publicTunnelUrl = (string)($publicTunnel['public_url'] ?? '');
+$publicTunnelLocalUrl = (string)($publicTunnel['local_url'] ?? $remoteGatewayUrl);
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -186,12 +187,18 @@ $publicTunnelUrl = (string)($publicTunnel['public_url'] ?? '');
                     <?php if ($publicTunnelUrl !== ''): ?>
                     <li>URL pública: <strong><?= htmlspecialchars($publicTunnelUrl, ENT_QUOTES, 'UTF-8') ?></strong></li>
                     <?php endif; ?>
+                    <?php if ($publicTunnelLocalUrl !== ''): ?>
+                    <li>Fallback local: <strong><?= htmlspecialchars($publicTunnelLocalUrl, ENT_QUOTES, 'UTF-8') ?></strong></li>
+                    <?php endif; ?>
                     <li>API key: <code id="remote-ai-key"><?= htmlspecialchars($remoteApiKeyMasked, ENT_QUOTES, 'UTF-8') ?></code></li>
                 </ul>
                 <div class="admin-link-list">
                     <button class="btn btn-primary" type="button" data-copy="<?= htmlspecialchars($remoteGatewayUrl, ENT_QUOTES, 'UTF-8') ?>">Copiar URL</button>
                     <?php if ($publicTunnelUrl !== ''): ?>
                     <button class="btn btn-secondary" type="button" data-copy="<?= htmlspecialchars($publicTunnelUrl, ENT_QUOTES, 'UTF-8') ?>" data-copy-label="URL pública copiada">Copiar URL pública</button>
+                    <?php endif; ?>
+                    <?php if ($publicTunnelLocalUrl !== ''): ?>
+                    <button class="btn btn-secondary" type="button" data-copy="<?= htmlspecialchars($publicTunnelLocalUrl, ENT_QUOTES, 'UTF-8') ?>" data-copy-label="URL local copiada">Copiar fallback local</button>
                     <?php endif; ?>
                     <button class="btn btn-secondary" type="button" data-copy="<?= htmlspecialchars($remoteApiKey, ENT_QUOTES, 'UTF-8') ?>" data-copy-label="Chave copiada">Copiar chave</button>
                     <a class="btn btn-secondary" href="<?= htmlspecialchars($remoteGatewayStatusUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noreferrer">Abrir status</a>
