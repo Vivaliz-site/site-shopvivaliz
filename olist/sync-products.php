@@ -265,37 +265,6 @@ function svs_fetch_v3_detail(string $id, string $token): ?array {
     return is_array($json) ? $json : null;
 }
 
-/* ── Tiny v2 fallback (token estático) ── */
-function svs_fetch_v2(string $apiToken): array {
-    $all  = [];
-    $seen = [];
-    for ($page = 1; $page <= 20; $page++) {
-        $url = 'https://api.tiny.com.br/api2/produtos.pesquisa.php?' . http_build_query([
-            'token'   => $apiToken,
-            'formato' => 'json',
-            'pagina'  => $page,
-            'limite'  => 100,
-        ]);
-        $res = svs_http_get($url, ['Accept: application/json', 'User-Agent: ShopVivaliz-OlistSync/3.0']);
-        if ($res['status'] !== 200) break;
-        $json  = json_decode($res['body'], true);
-        $items = $json['retorno']['produtos'] ?? [];
-        if (!is_array($items) || count($items) === 0) break;
-        $batch = 0;
-        foreach ($items as $item) {
-            $p  = is_array($item['produto'] ?? null) ? $item['produto'] : $item;
-            $id = (string)($p['id'] ?? $p['idProduto'] ?? md5(json_encode($p)));
-            if (isset($seen[$id])) continue;
-            $seen[$id] = true;
-            $all[] = $p;
-            $batch++;
-        }
-        if ($batch === 0) break;
-        usleep(300000);
-    }
-    return $all;
-}
-
 /* ── Normalizar produto bruto → formato Vivaliz ── */
 function svs_normalize(array $p, string $source): array {
     $id    = (string)($p['id']      ?? $p['idProduto'] ?? '');
