@@ -218,7 +218,22 @@ function svtop_push_order_tiny(array $order): ?string
     $c = $order['customer'] ?? [];
     $paymentMethod = (string)($order['payment_label'] ?? $order['payment_method'] ?? 'PIX');
     $notes = trim((string)($order['notes'] ?? ''));
-    $obs = trim("Forma de pagamento: {$paymentMethod}\n" . $notes);
+    $siteOrderNumber = (string)($order['order_number'] ?? '');
+    $obs = trim("Pedido no site: {$siteOrderNumber}\nForma de pagamento: {$paymentMethod}\n" . $notes);
+
+    // Mapa forma de pagamento do site -> id cadastrado na Tiny (GET
+    // /formas-pagamento). Cartao de credito/pix/boleto sao os unicos meios
+    // reais oferecidos no checkout (ver svop_payment_method/svo_payment_method).
+    $paymentFormIds = [
+        'pix' => 337683284,
+        'boleto' => 337683279,
+        'mercado_pago' => 337683277, // pago via Mercado Pago = cartao de credito na pratica
+        'pagarme' => 337683277,
+        'transferencia' => 337683281,
+        'whatsapp' => 337683282,
+    ];
+    $paymentMethodKey = strtolower(trim((string)($order['payment_method'] ?? 'pix')));
+    $paymentFormId = $paymentFormIds[$paymentMethodKey] ?? null;
 
     $docDigits = preg_replace('/\D/', '', (string)($c['cpf'] ?? ''));
     if ($docDigits === '') {
@@ -250,9 +265,22 @@ function svtop_push_order_tiny(array $order): ?string
     }
 
     $payload = [
-        'numeroPedido' => $order['order_number'],
-        'situacao'     => 1, // Aberto -- a API v3 exige inteiro, nao objeto
+        // 'numeroPedido' nao aceita string customizada (a Tiny ignora e
+        // atribui seu proprio numero sequencial interno) -- o numero do
+        // pedido do site vai em 'obs' e 'numeroOrdemCompra' (referencia
+        // externa) para ficar rastreavel dentro do ERP.
+        'numeroOrdemCompra' => $siteOrderNumber,
+        // Confirmado na documentacao oficial (api-docs.erp.olist.com/api-reference/pedidos/criar-pedido):
+        // 8=Dados Incompletos, 0=Aberta, 3=Aprovada, 4=Preparando Envio,
+        // 1=Faturada, 7=Pronto Envio, 5=Enviada, 6=Entregue, 2=Cancelada,
+        // 9=Nao Entregue. O codigo antigo mandava 1 achando que era "Aberto"
+        // -- na verdade e "Faturada", ou seja todo pedido criado por aqui
+        // nascia marcado como se ja tivesse nota fiscal emitida, sem nunca
+        // ter sido de fato. Corrigido para 0 (Aberta): o pedido so deve
+        // virar Faturada quando a NF for realmente emitida no ERP.
+        'situacao'     => 0,
         'idContato'    => $contactId,
+        'deposito'     => ['id' => 337683271], // "Geral" -- unico deposito proprio (nao-marketplace) cadastrado
         'itens' => array_map(static fn(array $i) => [
             'produto'       => ['id' => (int)$i['olist_product_id']],
             'quantidade'    => $i['quantity'],
@@ -261,6 +289,20 @@ function svtop_push_order_tiny(array $order): ?string
         'valorFrete' => (float)($order['shipping_total'] ?? 0),
         'obs' => $obs,
     ];
+    if ($paymentFormId !== null) {
+        // vendedor: nao ha nenhum vendedor cadastrado na conta (GET
+        // /vendedores retorna vazio), entao nao ha id valido pra mandar.
+        // transportador: a transportadora real so e decidida depois deste
+        // push, quando a etiqueta e comprada na Melhor Envio de forma
+        // assincrona (ver api/melhorenvio/generate-label-background.php) --
+        // nao da pra saber qual serviço/transportadora sera usado ainda
+        // neste momento. O schema oficial (transportador.id/formaEnvio/
+        // formaFrete) so aceita referencias a cadastros existentes, entao
+        // fica de fora ate ter uma transportadora real pra referenciar.
+        $payload['pagamento'] = [
+            'formaRecebimento' => ['id' => $paymentFormId],
+        ];
+    }
 
     $res = svtop_tiny_request('POST', '/pedidos', $token, $payload);
 
