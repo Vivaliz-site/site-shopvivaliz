@@ -203,7 +203,11 @@ Não confiar em `estoque.quantidade` do próprio kit — usar `GET /estoque/{id}
 `disponivel`, já calculado corretamente pela Tiny) em vez de recalcular manualmente pela
 composição.
 
-## Webhooks (app "Webhooks" precisa estar instalado na conta)
+## Webhooks — app genérico "Webhooks" (NÃO é o caminho usado neste projeto)
+
+⚠️ Isto documenta o app avulso "Webhooks" da Tiny por completude, mas **não é como
+este projeto recebe eventos da Tiny** — ver seção seguinte ("Notificações da
+integração API do ERP") pro caminho realmente em uso.
 
 Configuração: `Menu → Configurações → Aba Geral → Outras configurações → Webhooks`.
 Confirmação exige HTTP 200 na URL configurada; sem isso a Tiny reenvia até 10x com
@@ -216,6 +220,15 @@ Eventos disponíveis:
 - **Notificações de notas fiscais autorizadas** — Nota Fiscal é autorizada.
 
 Não é possível criar webhooks específicos por aplicativo (é por conta).
+
+## Notificações da integração "API do ERP" (caminho realmente usado neste projeto)
+
+Painel Tiny → `Integrações → API do ERP → gerenciar → aba Notificações → URLs de
+notificações`. Tem 6 campos de URL, um por evento — cada um já vem preenchido
+apontando pra um endpoint deste repo:
+- Envio de produtos / estoque / preços → `olist/webhook-receiver.php?event=product|stock|price`
+- Alteração na situação de pedidos / rastreio / **nota fiscal** →
+  `api/webhooks/order-status-update.php?token=<OLIST_WEBHOOK_TOKEN>&type=order_status|tracking|invoice`
 
 ✅ **Implementado em 2026-07-18**: descoberto ao vivo (painel Tiny → Integrações →
 API do ERP → aba Notificações → URLs de notificações) que **já existia** um endpoint
