@@ -27,10 +27,26 @@ if (strlen($raw) > 50000) {
 $body = json_decode($raw, true);
 $body = is_array($body) ? $body : [];
 
-$dataId = trim((string)($_GET['data.id'] ?? $_GET['data_id'] ?? $body['data']['id'] ?? ''));
-$topic = strtolower(trim((string)($_GET['type'] ?? $body['type'] ?? '')));
+$dataId = trim((string)($_GET['data.id'] ?? $_GET['data_id'] ?? $body['data']['id'] ?? $body['id'] ?? ''));
+$topic = strtolower(trim((string)($_GET['type'] ?? $_GET['topic'] ?? $body['type'] ?? $body['action'] ?? '')));
 $signature = trim((string)($_SERVER['HTTP_X_SIGNATURE'] ?? ''));
+if ($signature === '' && function_exists('getallheaders')) {
+    foreach (getallheaders() as $headerName => $headerValue) {
+        if (strcasecmp($headerName, 'X-Signature') === 0) {
+            $signature = trim((string)$headerValue);
+            break;
+        }
+    }
+}
 $requestId = trim((string)($_SERVER['HTTP_X_REQUEST_ID'] ?? ''));
+if ($requestId === '' && function_exists('getallheaders')) {
+    foreach (getallheaders() as $headerName => $headerValue) {
+        if (strcasecmp($headerName, 'X-Request-Id') === 0) {
+            $requestId = trim((string)$headerValue);
+            break;
+        }
+    }
+}
 $webhookSecret = svmp_env('MERCADOPAGO_WEBHOOK_SECRET');
 $accessToken = svmp_env('MERCADOPAGO_ACCESS_TOKEN');
 
@@ -39,7 +55,7 @@ if ($webhookSecret === '' || $accessToken === '') {
     svmp_webhook_response(503, 'gateway_unconfigured');
 }
 if (!svmp_validate_webhook_signature($signature, $requestId, $dataId, $webhookSecret)) {
-    error_log('[MercadoPago] webhook rejected: invalid signature request=' . substr($requestId, 0, 80));
+    error_log('[MercadoPago] webhook rejected: invalid signature request=' . substr($requestId, 0, 80) . ' sig_len=' . strlen($signature) . ' data_id=' . substr($dataId, 0, 80));
     svmp_webhook_response(401, 'invalid_signature');
 }
 

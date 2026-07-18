@@ -300,7 +300,7 @@ mencionava) não é o caminho certo pra esses 6 eventos nativos de e-commerce
 (produto/estoque/preço/situação-pedido/rastreio/nota-fiscal) — esses vivem dentro da
 integração "API do ERP" já instalada, aba Notificações.
 
-## PUT /pedidos/{idPedido}/despacho — vincular transportador/rastreio real (não implementado ainda)
+## PUT /pedidos/{idPedido}/despacho — vincular transportador/rastreio real
 
 Este é o endpoint que fecha a lacuna documentada acima em "vendedor agora É preenchido":
 depois da etiqueta comprada via Melhor Envio, dá pra fazer PUT no pedido já criado no Tiny
@@ -325,14 +325,23 @@ PUT /pedidos/{idPedido}/despacho
 }
 ```
 
-Resposta: `204 No Content` em sucesso. Ponto de integração natural: dentro de
-`api/melhorenvio/generate-label-background.php`, depois que a etiqueta é gerada e temos
-`shipping_service`/`tracking_code`/peso/volumes reais — falta mapear `formaEnvio.id` (ver
-tabela "GET /formas-envio" acima) e `formaFrete.id` (sub-serviço, ex. PAC/SEDEX dentro de
-"Correios via Melhor envio") a partir do serviço escolhido no Melhor Envio. Ainda não
-implementado — próximo passo natural depois de montar essa tabela de mapeamento.
+Resposta: `204 No Content` em sucesso.
 
-## GET /notas/{idNota} e GET /notas/{idNota}/xml — consultar NF emitida (não implementado ainda)
+✅ **Implementado em 2026-07-18**: o fluxo de etiqueta (`includes/melhorenvio-label.php`)
+agora chama este PUT depois da compra/geracao da etiqueta, usando os dados disponíveis no
+pedido local e no webhook de NF. O payload final aceita:
+
+- `codigoRastreamento` e `urlRastreamento` quando o pedido/integração já os tiver;
+- `formaEnvio.id` via `TINY_DESPACHO_FORMA_ENVIO_ID` (ou heuristica por nome do servico);
+- `formaFrete.id` via `TINY_DESPACHO_FORMA_FRETE_ID`;
+- `idContatoTransportadora` via `TINY_DESPACHO_ID_CONTATO_TRANSPORTADORA`;
+- `fretePagoEmpresa`, `dataPrevista`, `volumes`, `pesoBruto`, `pesoLiquido`, `observacoes`
+  quando presentes.
+
+Se faltar dado real para o despacho, a rotina registra `dispatch_payload_empty` em vez de
+inventar valores.
+
+## GET /notas/{idNota} e GET /notas/{idNota}/xml — consultar NF emitida
 
 `GET /notas/{idNota}` retorna o modelo completo da nota fiscal: `situacao` (enum 1-10),
 `tipo` (E/S), `numero`, `serie`, `chaveAcesso`, `dataEmissao`, valores (`valor`,
@@ -342,13 +351,14 @@ implementado — próximo passo natural depois de montar essa tabela de mapeamen
 `GET /notas/{idNota}/xml` retorna `{ "xmlNfe": "string", "xmlCancelamento": "string" }` —
 o XML assinado da NF-e (e o de cancelamento, se houver).
 
-**Não temos o `idNota` armazenado localmente ainda** — só recebemos o evento de webhook
-"nota fiscal" (`api/webhooks/order-status-update.php?type=invoice`, ver seção acima), que
-precisa ser inspecionado ao vivo (próximo pedido real com NF emitida) pra confirmar se o
-body traz `idNota`/`numero`/`chaveAcesso` direto ou só o novo `situacao`. Uso pretendido:
-disponibilizar o XML/dados da NF pro cliente no site (hoje não existe essa tela).
+✅ **Implementado em 2026-07-18**: o webhook `api/webhooks/order-status-update.php`
+agora extrai `idNota` quando a Tiny envia esse identificador, faz `GET /notas/{idNota}`
+e `GET /notas/{idNota}/xml`, grava `nf_id`, `nf_numero`, `nf_serie`,
+`nf_chave_acesso`, `nf_data_emissao` na tabela `orders` e espelha esses dados no JSON
+local do pedido. O CLI `scripts/fetch-tiny-invoice.php` também salva o snapshot da nota
+em `storage/tiny/notas/{idNota}.json` e o XML em `storage/tiny/notas/{idNota}.xml`.
 
-## GET /categorias/todas — árvore de categorias (não implementado ainda)
+## GET /categorias/todas — árvore de categorias
 
 ```json
 GET /categorias/todas
@@ -360,11 +370,13 @@ GET /categorias/todas
 ]
 ```
 
-Estrutura recursiva ilimitada. `olist/sync-products.php` já traz `categoria{id,nome,
-caminhoCompleto}` por produto (schema de `GET /produtos/{id}`), mas não usa esta árvore —
-seria a fonte pra popular filtro/navegação de categorias reais do catálogo em vez do que
-está hardcoded hoje. Não avaliado ainda se compensa (sem paginação visível na doc — pode
-ser resposta grande numa conta com muitas categorias).
+Estrutura recursiva ilimitada.
+
+✅ **Implementado em 2026-07-18**: o CLI `scripts/sync-tiny-categories.php` busca esta
+árvore e grava cache local em `storage/tiny/categories-tree.json` e
+`storage/tiny/categories-flat.json`. `includes/products-cache.php` passou a preferir esse
+cache para devolver categorias reais do Tiny quando ele existe, com fallback para as
+categorias locais dos produtos.
 
 ## Como redescobrir estes dados se algo mudar
 
