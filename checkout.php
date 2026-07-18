@@ -110,19 +110,25 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             </div>
             <div class="form-row-2">
                 <label class="form-group">
-                    <span>Bairro *</span>
-                    <input name="neighborhood" id="neighborhood-input" maxlength="120" required aria-label="Bairro">
+                    <span>Complemento</span>
+                    <input name="complement" id="complement-input" maxlength="120" autocomplete="address-line3" aria-label="Complemento (apto, bloco, referência)" placeholder="Apto, bloco, referência (opcional)">
                 </label>
                 <label class="form-group">
-                    <span>Cidade *</span>
-                    <input name="city" id="city-input" maxlength="120" required autocomplete="address-level2" aria-label="Cidade">
+                    <span>Bairro *</span>
+                    <input name="neighborhood" id="neighborhood-input" maxlength="120" required aria-label="Bairro">
                 </label>
             </div>
             <div class="form-row-2">
                 <label class="form-group">
+                    <span>Cidade *</span>
+                    <input name="city" id="city-input" maxlength="120" required autocomplete="address-level2" aria-label="Cidade">
+                </label>
+                <label class="form-group">
                     <span>Estado (UF) *</span>
                     <input name="state" id="state-input" maxlength="2" minlength="2" required autocomplete="address-level1" aria-label="Estado" style="text-transform:uppercase">
                 </label>
+            </div>
+            <div class="form-row-2">
                 <label class="form-group" id="boleto-cpf-field" hidden>
                     <span>CPF do pagador *</span>
                     <input name="cpf" id="cpf-input" inputmode="numeric" maxlength="14" autocomplete="off" aria-label="CPF do pagador">
@@ -271,6 +277,43 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     function getShippingQuote() {
         try { return JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null'); } catch(e) { return null; }
     }
+
+    /* Persistencia dos dados do formulario: sem isso, sair da tela (ex: pra
+       revisar o carrinho) e voltar limpava nome/email/endereco e o usuario
+       tinha que redigitar tudo. CPF fica de fora por ser dado sensivel --
+       nao vale a pena persistir em localStorage. */
+    (function persistCheckoutForm() {
+        var STORAGE_KEY = 'shopvivaliz_checkout_form';
+        var FIELDS = ['customer_name', 'customer_email', 'customer_phone', 'cep', 'address', 'street_number', 'complement', 'neighborhood', 'city', 'state'];
+        var form = document.getElementById('checkout-form');
+        if (!form) return;
+
+        function restore() {
+            var saved;
+            try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (e) { saved = null; }
+            if (!saved) return;
+            FIELDS.forEach(function (name) {
+                var el = form.querySelector('[name="' + name + '"]');
+                if (el && !el.value && saved[name]) el.value = saved[name];
+            });
+        }
+
+        function save() {
+            var data = {};
+            FIELDS.forEach(function (name) {
+                var el = form.querySelector('[name="' + name + '"]');
+                if (el) data[name] = el.value;
+            });
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+        }
+
+        restore();
+        form.addEventListener('input', save);
+        form.addEventListener('change', save);
+        form.addEventListener('submit', function () {
+            try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        });
+    })();
     function clearCart() { localStorage.removeItem('shopvivaliz_cart'); }
     function clearShippingQuote() { localStorage.removeItem('shopvivaliz_shipping_quote'); }
     function fmtMoney(v) {

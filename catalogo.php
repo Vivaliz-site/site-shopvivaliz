@@ -173,15 +173,15 @@ function sv_catalog_canonical_url(string $category): string
 function sv_catalog_page_title(string $category, string $query): string
 {
     if ($query !== '' && $category !== '') {
-        return $query . ' em ' . $category . ' | Catálogo Vivaliz';
+        return $query . ' em ' . $category . ' | Produtos Vivaliz';
     }
     if ($query !== '') {
-        return 'Busca por ' . $query . ' | Catálogo Vivaliz';
+        return 'Busca por ' . $query . ' | Produtos Vivaliz';
     }
     if ($category !== '') {
-        return $category . ' | Catálogo Vivaliz';
+        return $category . ' | Produtos Vivaliz';
     }
-    return 'Catálogo | Vivaliz';
+    return 'Produtos | Vivaliz';
 }
 
 function sv_catalog_meta_description(string $category, string $query, int $count): string
@@ -191,12 +191,12 @@ function sv_catalog_meta_description(string $category, string $query, int $count
         return 'Resultados para "' . $query . '" em ' . $category . ' na Vivaliz. ' . $countText . ' com compra segura, suporte comercial e entrega para todo o Brasil.';
     }
     if ($query !== '') {
-        return 'Resultados de busca por "' . $query . '" no catálogo Vivaliz. Explore produtos com compra segura, suporte comercial e entrega para todo o Brasil.';
+        return 'Resultados de busca por "' . $query . '" nos produtos Vivaliz. Explore produtos com compra segura, suporte comercial e entrega para todo o Brasil.';
     }
     if ($category !== '') {
         return 'Explore ' . $category . ' na Vivaliz. ' . $countText . ' com compra segura, atendimento comercial e entrega para todo o Brasil.';
     }
-    return 'Catálogo de produtos Vivaliz com compra segura, suporte comercial e entrega para todo o Brasil. Explore rodízios, ferragens, utilidades e muito mais.';
+    return 'Produtos Vivaliz com compra segura, suporte comercial e entrega para todo o Brasil. Explore rodízios, ferragens, utilidades e muito mais.';
 }
 
 function sv_catalog_structured_data(array $products, string $canonicalUrl, string $pageTitle, string $metaDescription): array
@@ -290,7 +290,7 @@ $svNavCurrent = 'catalogo';
             <div class="container catalog-header-inner">
                 <div>
                     <p class="eyebrow"><?= $category !== '' ? sv_catalog_esc($category) : 'Todos os produtos' ?></p>
-                    <h1>Catálogo Vivaliz</h1>
+                    <h1>Produtos Vivaliz</h1>
                     <p class="muted"><?= $statusText ?></p>
                 </div>
                 <form class="catalog-search" role="search" method="get" action="/catalogo">
