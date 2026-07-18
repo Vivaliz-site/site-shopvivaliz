@@ -69,6 +69,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Falha ao salvar (permissão de escrita no catálogo).';
         } else {
             $success = 'Produto atualizado com sucesso.';
+
+            $tinyId = (int)($catalog[$index]['olist_product_id'] ?? $catalog[$index]['id'] ?? 0);
+            if ($tinyId > 0) {
+                $push = svtpp_push_product_update($tinyId, $catalog[$index]);
+                $success .= $push['ok']
+                    ? ' Sincronizado com o Tiny ERP.'
+                    : ' ⚠️ Não foi possível sincronizar com o Tiny ERP (' . $push['error'] . ') — alteração salva só localmente por enquanto.';
+            }
         }
     }
 }
