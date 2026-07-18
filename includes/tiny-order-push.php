@@ -696,69 +696,12 @@ function svtop_create_contact(string $token, array $customer): ?int
  */
 function svtop_push_order_tiny(array $order): ?string
 {
-    $v2Token = svtop_tiny_v2_token();
-    if ($v2Token !== '') {
-        $customer = $order['customer'] ?? [];
-        $siteOrderNumber = (string)($order['order_number'] ?? '');
-        $docDigits = preg_replace('/\D/', '', (string)($customer['cpf'] ?? ''));
-        if ($siteOrderNumber !== '' && $docDigits !== '') {
-            $items = [];
-            foreach (($order['items'] ?? []) as $item) {
-                if (!is_array($item)) {
-                    continue;
-                }
-                $items[] = [
-                    'item' => [
-                        'codigo' => (string)($item['sku'] ?? ''),
-                        'descricao' => (string)($item['name'] ?? ''),
-                        'unidade' => 'UN',
-                        'quantidade' => (string)max(1, (int)($item['quantity'] ?? 1)),
-                        'valor_unitario' => number_format(max(0.0, (float)($item['price'] ?? 0)), 2, '.', ''),
-                    ],
-                ];
-            }
-
-            if ($items !== []) {
-                $pedido = [
-                    'numero_pedido_ecommerce' => $siteOrderNumber,
-                    'numero_ordem_compra' => $siteOrderNumber,
-                    'data_pedido' => date('d/m/Y', strtotime((string)($order['created_at'] ?? 'now')) ?: time()),
-                    'data_prevista' => date('d/m/Y', strtotime('+7 days')),
-                    'situacao' => 'aprovado',
-                    'cliente' => [
-                        'nome' => (string)($customer['name'] ?? ''),
-                        'codigo' => $siteOrderNumber,
-                        'nome_fantasia' => (string)($customer['name'] ?? ''),
-                        'tipo_pessoa' => strlen($docDigits) === 14 ? 'J' : 'F',
-                        'cpf_cnpj' => $docDigits,
-                        'email' => (string)($customer['email'] ?? ''),
-                        'telefone' => (string)($customer['phone'] ?? ''),
-                        'endereco' => (string)($customer['street_name'] ?? $customer['address'] ?? ''),
-                        'numero' => (string)($customer['street_number'] ?? ''),
-                        'bairro' => (string)($customer['neighborhood'] ?? ''),
-                        'cidade' => (string)($customer['city'] ?? ''),
-                        'uf' => (string)($customer['state'] ?? ''),
-                        'cep' => (string)($customer['cep'] ?? ''),
-                        'atualizar_cliente' => 'S',
-                    ],
-                    'itens' => $items,
-                    'valor_frete' => number_format(max(0.0, (float)($order['shipping_total'] ?? 0)), 2, '.', ''),
-                    'valor_desconto' => '0.00',
-                ];
-
-                $res = svtop_tiny_v2_post('/api2/pedido.incluir.php', [
-                    'pedido' => json_encode(['pedido' => $pedido], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                ]);
-                if ($res['status'] === 200) {
-                    $tinyId = (string)($res['json']['retorno']['registros']['registro']['id'] ?? '');
-                    if ($tinyId !== '') {
-                        return $tinyId;
-                    }
-                }
-            }
-        }
-    }
-
+    // Ate 2026-07-18 este ponto tentava primeiro a API v2 legada do Tiny
+    // (api2/pedido.incluir.php, token estatico, schema "numero_pedido_ecommerce")
+    // antes mesmo de tentar a v3 -- ou seja, pedidos reais vinham sendo
+    // criados por um caminho diferente do documentado em
+    // docs/TINY-ERP-API-V3.md. Removido: so a v3 (OAuth2, /pedidos) e usada
+    // agora, unico caminho documentado e testado nesta sessao.
     $token = svtop_tiny_get_token();
     if ($token === '') {
         throw new RuntimeException('Tiny: nao foi possivel obter access_token (refresh_token ausente ou invalido)');
