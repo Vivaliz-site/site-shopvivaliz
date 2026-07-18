@@ -206,42 +206,9 @@ PY;
 
 function svtop_tiny_credentials_configured(): bool
 {
-    return svtop_tiny_v2_token() !== ''
-        || svtop_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN') !== ''
+    return svtop_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN') !== ''
         && svtop_env('OLIST_CLIENT_ID', 'TINY_CLIENT_ID') !== ''
         && svtop_env('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET') !== '';
-}
-
-function svtop_tiny_v2_token(): string
-{
-    return svtop_env('OLIST_INTEGRADOR_TOKEN', 'TINY_API_TOKEN', 'OLIST_API_TOKEN');
-}
-
-/**
- * @return array{status:int, body:string, json:array<string,mixed>}
- */
-function svtop_tiny_v2_post(string $path, array $fields): array
-{
-    $token = svtop_tiny_v2_token();
-    if ($token === '') {
-        return ['status' => 0, 'body' => '', 'json' => []];
-    }
-
-    $res = svtop_python_request('POST', 'https://api.tiny.com.br' . $path, [
-        'Content-Type' => 'application/x-www-form-urlencoded',
-        'Accept' => 'application/json',
-        'User-Agent' => 'ShopVivaliz/3.0',
-    ], http_build_query(array_merge([
-        'token' => $token,
-        'formato' => 'json',
-    ], $fields)));
-
-    $json = json_decode((string)$res['raw'], true);
-    return [
-        'status' => (int)$res['status'],
-        'body' => (string)$res['raw'],
-        'json' => is_array($json) ? $json : [],
-    ];
 }
 
 function svtop_tiny_get_token(): string
