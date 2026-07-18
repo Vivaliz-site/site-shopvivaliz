@@ -273,7 +273,7 @@ EOF
 
 ---
 
-## 🧠 Conhecimento acumulado (`docs/*.md`) — leia antes de reinventar
+## 🧠 Memória compartilhada entre agentes — `docs/MEMORIA-AGENTES.md`
 
 Múltiplos agentes diferentes (Claude, GPT, Gemini) trabalham autonomamente neste repo,
 cada um em sessões isoladas sem memória compartilhada entre si. Isso já causou o mesmo
@@ -281,15 +281,15 @@ bug de integração (ex: enum `situacao` do Tiny invertido) ser "descoberto" e c
 mais de uma vez, em sessões diferentes, sem que a segunda soubesse que a primeira já
 tinha mapeado o problema.
 
-**Antes de integrar com um sistema externo (Tiny/Olist, Mercado Pago, Melhor Envio,
-Mercado Livre) ou investigar um bug que parece familiar, procure em `docs/*.md` por um
-arquivo já existente sobre aquele sistema.** Se você descobrir algo não-óbvio sobre uma
-API externa (um campo com nome diferente do esperado, um enum com significado
-contra-intuitivo, um limite de taxa, um comportamento assíncrono/eventual-consistency),
-**registre em `docs/<SISTEMA>.md`** (crie se não existir, seguindo o formato de
-`docs/TINY-ERP-API-V3.md`) em vez de deixar esse conhecimento morrer com a sessão atual.
-O objetivo é que cada agente que passar por aqui saia mais capaz que o anterior — não
-que cada um recomece do zero.
+**`docs/MEMORIA-AGENTES.md` é o único lugar combinado pra isso — leia antes de investigar
+um bug que parece familiar ou integrar com um sistema externo (Tiny/Olist, Mercado Pago,
+Melhor Envio, Mercado Livre).** Se você descobrir algo não-óbvio (campo de API com nome
+diferente do esperado, enum contra-intuitivo, limite de taxa, comportamento assíncrono),
+adicione uma entrada lá seguindo o formato descrito no topo do arquivo. Documentação
+extensa (schema completo de uma API, por exemplo) vai num arquivo dedicado em `docs/`
+(ex: `docs/TINY-ERP-API-V3.md`), com só um resumo e link em `MEMORIA-AGENTES.md`. O
+objetivo é que cada agente que passar por aqui saia mais capaz que o anterior — não que
+cada um recomece do zero.
 
 ---
 
