@@ -319,12 +319,6 @@ function svtop_push_order_tiny(array $order): ?string
             'nomeDestinatario' => (string)($c['name'] ?? ''),
             'cpfCnpj'          => $docDigits,
         ],
-        // Toda venda do checkout do site e pra pessoa fisica final, nunca
-        // revenda -- marca explicitamente em vez de deixar a Tiny inferir.
-        'consumidorFinal' => [
-            'cpfCnpj'                => $docDigits,
-            'clienteConsumidorFinal' => true,
-        ],
     ];
     if ($paymentFormId !== null) {
         // transportador: a transportadora real so e decidida depois deste
