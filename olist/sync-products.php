@@ -196,7 +196,14 @@ function svs_fetch_v3(string $token): array {
 
         foreach ($itens as $i) { $all[] = $i; }
 
-        $total = (int)($json['paginacao']['totalRegistros'] ?? $json['total'] ?? count($all));
+        // A API v3 real retorna 'paginacao.total', nao 'paginacao.totalRegistros'
+        // (confirmado ao vivo: {"paginacao":{"limit":100,"offset":0,"total":181}}).
+        // Com o nome errado, $total sempre caia no fallback count($all) -- que
+        // e igual ao proprio $itens buscado, entao count($all) >= $total ficava
+        // sempre verdadeiro e o sync parava sempre na 1a pagina (100 produtos),
+        // mesmo com mais paginas disponiveis (confirmado: 181 produtos reais,
+        // fallback-products.json ficava travado em 100 havia dias).
+        $total = (int)($json['paginacao']['total'] ?? $json['paginacao']['totalRegistros'] ?? count($all));
         if (count($all) >= $total || count($itens) < $pageSize) break;
         $page++;
         usleep(400000); // 400ms entre páginas
