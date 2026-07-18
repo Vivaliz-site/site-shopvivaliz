@@ -263,6 +263,27 @@ EOF
 | Modificar pipeline | `.github/workflows/*.yml` | Editar + push |
 | Resolver conflito merge | `scripts/resolve_git_agent_conflict.ps1` | Executar |
 | Sincronizar ambientes | `git fetch && git pull origin main` | Bash/PowerShell |
+| Integrar com Tiny/Olist ERP | `docs/TINY-ERP-API-V3.md` | Ler ANTES de mexer em `includes/tiny-order-push.php`, `daemon-sync-products.py`, `api/olist/*` |
+
+---
+
+## 🧠 Conhecimento acumulado (`docs/*.md`) — leia antes de reinventar
+
+Múltiplos agentes diferentes (Claude, GPT, Gemini) trabalham autonomamente neste repo,
+cada um em sessões isoladas sem memória compartilhada entre si. Isso já causou o mesmo
+bug de integração (ex: enum `situacao` do Tiny invertido) ser "descoberto" e corrigido
+mais de uma vez, em sessões diferentes, sem que a segunda soubesse que a primeira já
+tinha mapeado o problema.
+
+**Antes de integrar com um sistema externo (Tiny/Olist, Mercado Pago, Melhor Envio,
+Mercado Livre) ou investigar um bug que parece familiar, procure em `docs/*.md` por um
+arquivo já existente sobre aquele sistema.** Se você descobrir algo não-óbvio sobre uma
+API externa (um campo com nome diferente do esperado, um enum com significado
+contra-intuitivo, um limite de taxa, um comportamento assíncrono/eventual-consistency),
+**registre em `docs/<SISTEMA>.md`** (crie se não existir, seguindo o formato de
+`docs/TINY-ERP-API-V3.md`) em vez de deixar esse conhecimento morrer com a sessão atual.
+O objetivo é que cada agente que passar por aqui saia mais capaz que o anterior — não
+que cada um recomece do zero.
 
 ---
 
