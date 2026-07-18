@@ -279,7 +279,19 @@ function svtop_push_order_tiny(array $order): ?string
         // ter sido de fato. Corrigido para 0 (Aberta): o pedido so deve
         // virar Faturada quando a NF for realmente emitida no ERP.
         'situacao'     => 0,
+        // Sem 'data' o pedido nasce sem data de venda -- a busca da UI da
+        // Tiny filtra por essa data (nao pela data de cadastro), entao
+        // pedidos sem ela ficam invisiveis na busca mesmo existindo de
+        // verdade (confirmado ao vivo: GET /pedidos/{id} retornava 200 mas
+        // a busca "nao retornou resultados"). Usa a data de criacao local
+        // do pedido, ou a data atual se ausente.
+        'data'         => date('Y-m-d', strtotime((string)($order['created_at'] ?? 'now')) ?: time()),
         'idContato'    => $contactId,
+        // "Loja Online" -- vendedor generico cadastrado especificamente pra
+        // isso (a conta nao tinha nenhum vendedor antes, GET /vendedores
+        // retornava vazio, e pedidos sem vendedor tambem pareciam sumir da
+        // busca da UI). Ver docs/TINY-ERP-API-V3.md.
+        'vendedor'     => ['id' => 369463749],
         'deposito'     => ['id' => 337683271], // "Geral" -- unico deposito proprio (nao-marketplace) cadastrado
         'itens' => array_map(static fn(array $i) => [
             'produto'       => ['id' => (int)$i['olist_product_id']],
@@ -290,8 +302,6 @@ function svtop_push_order_tiny(array $order): ?string
         'obs' => $obs,
     ];
     if ($paymentFormId !== null) {
-        // vendedor: nao ha nenhum vendedor cadastrado na conta (GET
-        // /vendedores retorna vazio), entao nao ha id valido pra mandar.
         // transportador: a transportadora real so e decidida depois deste
         // push, quando a etiqueta e comprada na Melhor Envio de forma
         // assincrona (ver api/melhorenvio/generate-label-background.php) --
