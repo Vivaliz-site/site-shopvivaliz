@@ -570,6 +570,7 @@ async def handle_browser(request: web.Request) -> web.Response:
     result = await execute_tool(
         f"browser_{action}",
         data,
+        remote=request.remote,
     )
     return _json_response(result)
 
