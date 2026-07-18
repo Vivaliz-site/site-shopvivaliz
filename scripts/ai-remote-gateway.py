@@ -119,7 +119,7 @@ def _authorized(request: web.Request) -> bool:
     if auth_header.lower().startswith("bearer "):
         bearer = auth_header[7:].strip()
     token = header_key or bearer
-    return bool(token and token == API_KEY)
+    return bool(token and secrets.compare_digest(token, API_KEY))
 
 
 def _auth_error(message: str, status: int = 401) -> web.Response:
