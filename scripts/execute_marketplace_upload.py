@@ -129,7 +129,12 @@ def upload_to_shopee(creds: dict) -> bool:
 
 
 def upload_to_tiktok(creds: dict) -> bool:
-    """Faz upload para TikTok Shop"""
+    """Faz upload real para TikTok Shop: vincula as URLs de imagem (ja publicas em
+    dev.shopvivaliz.com.br) direto via update_product -- a API do TikTok Shop aceita
+    main_images por URL, sem precisar de um passo de upload separado. Usa
+    scripts/utils/tiktok_client.py. Antes esta funcao so lia o CSV e fingia sucesso
+    sem nunca chamar a API do TikTok.
+    """
     logger.info("\n" + "=" * 70)
     logger.info("🎵 UPLOAD TIKTOK SHOP")
     logger.info("=" * 70)
@@ -139,36 +144,72 @@ def upload_to_tiktok(creds: dict) -> bool:
         return False
 
     try:
-        client_id = creds['tiktok']['client_id']
-        client_secret = creds['tiktok']['client_secret'][:10] + "***"
+        sys.path.insert(0, str(Path(__file__).parent / 'utils'))
+        from tiktok_client import TikTokClient
 
+        client_id = creds['tiktok']['client_id']
         logger.info(f"✅ Credenciais encontradas:")
         logger.info(f"   • TIKTOK_CLIENT_ID: {client_id}")
-        logger.info(f"   • TIKTOK_CLIENT_SECRET: {client_secret}")
 
-        logger.info(f"\n📤 Conectando à API TikTok Shop...")
+        client = TikTokClient()
 
-        # Simular conexão
-        logger.info("✅ Autenticação bem-sucedida")
-        logger.info("📦 Lendo imagens de upload_mapping...")
+        logger.info("📦 Mapeando SKU -> product_id da loja...")
+        sku_to_product_id = {}
+        for product in client.iter_all_products():
+            product_id = product.get('id') or product.get('product_id')
+            if not product_id:
+                continue
+            skus = product.get('skus') or []
+            if not skus:
+                try:
+                    detail = client.get_product_detail(str(product_id))
+                    skus = detail.get('skus') or []
+                except Exception:
+                    skus = []
+            for sku_entry in skus:
+                seller_sku = str(sku_entry.get('seller_sku') or '').strip()
+                if seller_sku:
+                    sku_to_product_id[seller_sku] = product_id
+        logger.info(f"   {len(sku_to_product_id)} SKUs mapeados na loja TikTok")
 
         import csv
-        count = 0
+        uploaded_products = 0
+        uploaded_images = 0
+        skipped_no_match = 0
+        failed_products = []
+
         with UPLOAD_MAPPING_FILE.open('r', encoding='utf-8', newline='') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                count += 1
-                if count <= 5:
-                    logger.info(f"   ✅ {row.get('sku')}: 4 imagens prontas")
-                if count == 6:
-                    logger.info(f"   ... e {count - 5} produtos adicionais")
+                sku = str(row.get('sku') or '').strip()
+                product_id = sku_to_product_id.get(sku)
+                if not product_id:
+                    skipped_no_match += 1
+                    continue
+
+                image_urls = [row.get(f'image_url_{i}') for i in range(1, 5)]
+                image_urls = [u.strip() for u in image_urls if u and u.strip()]
+                if not image_urls:
+                    continue
+
+                try:
+                    client.update_product(str(product_id), image_urls=image_urls)
+                    uploaded_products += 1
+                    uploaded_images += len(image_urls)
+                    logger.info(f"   ✅ {sku} (product_id={product_id}): {len(image_urls)} imagens vinculadas")
+                except Exception as e:
+                    failed_products.append(sku)
+                    logger.warning(f"   ❌ {sku}: falhou -- {e}")
 
         logger.info(f"\n📊 RESULTADO TIKTOK SHOP")
-        logger.info(f"✅ {count} produtos preparados para upload")
-        logger.info(f"✅ {count * 4} imagens (4 por produto)")
-        logger.info(f"✅ Upload simulado com sucesso")
+        logger.info(f"✅ {uploaded_products} produtos atualizados com sucesso")
+        logger.info(f"✅ {uploaded_images} imagens vinculadas de verdade")
+        if skipped_no_match:
+            logger.info(f"⚠️  {skipped_no_match} SKUs do CSV nao encontrados na loja TikTok (pulados)")
+        if failed_products:
+            logger.warning(f"❌ {len(failed_products)} produtos falharam: {', '.join(failed_products[:10])}")
 
-        return True
+        return len(failed_products) == 0
 
     except Exception as e:
         logger.error(f"❌ Erro no upload TikTok: {e}")
