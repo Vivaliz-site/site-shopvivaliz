@@ -130,6 +130,21 @@ def _json_response(payload: dict[str, Any], status: int = 200) -> web.Response:
     return web.json_response(payload, status=status)
 
 
+COMMAND_AUDIT_LOG = LOGS_DIR / "ai-remote-gateway-commands.log"
+
+
+def _audit_log_command(command: str, remote: str | None, result: dict[str, Any]) -> None:
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "remote": remote,
+        "command": command,
+        "returncode": result.get("returncode"),
+        "ok": result.get("ok"),
+    }
+    with COMMAND_AUDIT_LOG.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
 def _run_command_sync(command: str, timeout: int) -> dict[str, Any]:
     result = subprocess.run(
         command,
@@ -147,8 +162,11 @@ def _run_command_sync(command: str, timeout: int) -> dict[str, Any]:
     }
 
 
-async def run_command(command: str, timeout: int = 30) -> dict[str, Any]:
-    return await asyncio.to_thread(_run_command_sync, command, timeout)
+async def run_command(command: str, timeout: int = 30, remote: str | None = None) -> dict[str, Any]:
+    result = await asyncio.to_thread(_run_command_sync, command, timeout)
+    logger.info("exec command=%r remote=%s returncode=%s", command, remote, result.get("returncode"))
+    _audit_log_command(command, remote, result)
+    return result
 
 
 def _read_log_tail(kind: str, lines: int) -> dict[str, Any]:
