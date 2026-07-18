@@ -24,8 +24,12 @@ switch ($period) {
         $startDate->modify('-1 day');
 }
 
-// Carregar métricas
-$metrics = json_decode(file_get_contents($metricsFile) ?: '{}', true) ?: [];
+// Carregar métricas sem gerar warning quando o arquivo não existir ainda
+$metrics = [];
+if (is_file($metricsFile)) {
+    $rawMetrics = @file_get_contents($metricsFile);
+    $metrics = json_decode($rawMetrics ?: '{}', true) ?: [];
+}
 
 // Calcular SLAs
 $uptime = $metrics['uptime'] ?? 99.8;
@@ -49,7 +53,12 @@ $status = [
 ];
 
 // Calcular MTTR (Mean Time To Recovery)
-$incidents = json_decode(file_get_contents('.incident-responses.json') ?: '[]', true) ?: [];
+$incidents = [];
+$incidentFile = '.incident-responses.json';
+if (is_file($incidentFile)) {
+    $rawIncidents = @file_get_contents($incidentFile);
+    $incidents = json_decode($rawIncidents ?: '[]', true) ?: [];
+}
 $mttr = 0;
 if (!empty($incidents)) {
     $times = array_map(fn($i) => $i['resolution_time'] ?? 0, $incidents);

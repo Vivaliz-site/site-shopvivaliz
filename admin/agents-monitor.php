@@ -5,9 +5,14 @@ require_once __DIR__ . '/../includes/admin-guard.php';
 // Simple read-only monitoring panel for ShopVivaliz agents
 
 $base = 'https://dev.shopvivaliz.com.br';
+if (!empty($_SERVER['HTTP_HOST'])) {
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $base = $scheme . '://' . $_SERVER['HTTP_HOST'];
+}
 
 function fetch_json($url) {
-    $data = @file_get_contents($url);
+    $context = stream_context_create(['http' => ['method' => 'GET', 'timeout' => 8, 'ignore_errors' => true]]);
+    $data = @file_get_contents($url, false, $context);
     if (!$data) return null;
     return json_decode($data, true);
 }
@@ -35,8 +40,8 @@ $watchdog = fetch_json($base . '/api/agent/autonomous-watchdog.php');
 <div class="card">
 <h2>Watchdog Status</h2>
 <?php if ($watchdog): ?>
-    <p>Status: <strong class="<?= $watchdog['all_ok'] ? 'ok' : 'fail' ?>">
-        <?= $watchdog['all_ok'] ? 'OK' : 'ALERT' ?>
+    <p>Status: <strong class="<?= !empty($watchdog['all_ok']) ? 'ok' : 'fail' ?>">
+        <?= !empty($watchdog['all_ok']) ? 'OK' : 'ALERT' ?>
     </strong></p>
     <p>Última execução: <?= $watchdog['generated_at'] ?? '-' ?></p>
 <?php else: ?>

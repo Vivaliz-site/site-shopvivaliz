@@ -22,7 +22,9 @@ require_once __DIR__ . '/../includes/admin-guard.php';
 function orch_env(string $key): string { return (string)(getenv($key) ?: ''); }
 
 // ── CSRF simples (session token) ───────────────────────────────────────────────
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
 if (empty($_SESSION['orch_csrf'])) {
     $_SESSION['orch_csrf'] = bin2hex(random_bytes(16));
 }
@@ -90,7 +92,11 @@ $log_orch  = orch_tail_log($root . '/logs/orchestrator.log', 20);
 $log_cron  = orch_tail_log($root . '/logs/cron-dispatcher.log', 20);
 
 // Watchdog — tenta via HTTP para refletir estado real do servidor
-$base_url   = rtrim(orch_env('SITE_URL') ?: 'https://dev.shopvivaliz.com.br', '/');
+// Preferir a URL local quando o painel estiver sendo aberto no ambiente de dev
+$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host   = (string)($_SERVER['HTTP_HOST'] ?? '');
+$fallbackBase = $host !== '' ? ($scheme . '://' . $host) : 'https://dev.shopvivaliz.com.br';
+$base_url   = rtrim(orch_env('SITE_URL') ?: $fallbackBase, '/');
 $watchdog   = null;
 $report_api = null;
 {
