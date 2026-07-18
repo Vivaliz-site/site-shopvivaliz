@@ -101,6 +101,7 @@ function sv_account_ensure_schema(): void
         'tiny_dispatch_status' => 'ALTER TABLE orders ADD COLUMN tiny_dispatch_status VARCHAR(50) NULL',
         'tiny_dispatch_error' => 'ALTER TABLE orders ADD COLUMN tiny_dispatch_error VARCHAR(500) NULL',
         'tiny_dispatch_updated_at' => 'ALTER TABLE orders ADD COLUMN tiny_dispatch_updated_at DATETIME NULL',
+        'tracking_url' => 'ALTER TABLE orders ADD COLUMN tracking_url VARCHAR(500) NULL',
     ];
     foreach ($alterations as $column => $sql) {
         if (!isset($existing[$column])) {
