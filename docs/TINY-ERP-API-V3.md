@@ -94,7 +94,18 @@ Response 200/201: `{ "id": 123, "numeroPedido": "string" }`
 - **Não existe campo `idDeposito` solto.** É `deposito: { "id": ... }`.
 - **Não existe campo `formaPagamento` dentro de `pagamento`.** Só existem
   `formaRecebimento` e `meioPagamento`, ambos objetos `{ "id": ... }`.
-- **`vendedor`, `transportador`, `ecommerce`, `intermediador`** exigem IDs de cadastros
+- **2026-07-18**: `vendedor` agora É preenchido (cadastrado vendedor genérico "Loja Online",
+  id `369463749` -- era isso, junto com o campo `data` ausente, que fazia pedidos pushados
+  pelo site sumirem da busca/listagem da UI do Tiny mesmo existindo via API). `transportador`
+  e `intermediador` continuam de fora conscientemente: `GET /intermediadores` retorna 51
+  cadastros, todos de marketplaces (Mercado Livre, Amazon, Shopee, TikTok Shop) -- nenhum
+  corresponde a "venda direta pelo site", preencher um deles seria dado fiscal incorreto.
+  As transportadoras cadastradas (`Correios/Jadlog/JeT/Loggi/Total Express via Melhor Envio`)
+  são todas "Gateway logístico" via Melhor Envio -- a transportadora real só é decidida na
+  cotação, depois do push inicial (ver `api/melhorenvio/generate-label-background.php`).
+  Melhoria futura possível: fazer um PUT no pedido depois da etiqueta comprada, vinculando
+  o `transportador.id` real baseado no serviço escolhido.
+- (histórico) **`vendedor`, `transportador`, `ecommerce`, `intermediador`** exigem IDs de cadastros
   já existentes na conta (não são strings livres). Ver seção "Cadastros da conta" abaixo
   para os IDs reais já levantados. Se a conta não tem nenhum registro do tipo (ex:
   `vendedor` — `GET /vendedores` retorna vazio nesta conta), não dá pra preencher, e
