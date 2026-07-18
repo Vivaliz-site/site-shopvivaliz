@@ -328,6 +328,9 @@ function svtop_push_order_tiny(array $order): ?string
             'fone'             => (string)($c['phone'] ?? ''),
             'nomeDestinatario' => (string)($c['name'] ?? ''),
             'cpfCnpj'          => $docDigits,
+            // enum J/F/E/X (doc oficial) -- todo checkout do site e pessoa
+            // fisica (CPF de 11 digitos), nunca CNPJ.
+            'tipoPessoa'       => strlen($docDigits) === 14 ? 'J' : 'F',
         ],
     ];
     if ($paymentFormId !== null) {
