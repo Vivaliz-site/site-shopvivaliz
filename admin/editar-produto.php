@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../includes/admin-guard.php';
 require_once __DIR__ . '/../includes/csrf.php';
+require_once __DIR__ . '/../includes/tiny-product-push.php';
 
 $catalogPath = dirname(__DIR__) . '/api/catalog/fallback-products.json';
 $id = trim((string)($_GET['id'] ?? $_POST['id'] ?? ''));
