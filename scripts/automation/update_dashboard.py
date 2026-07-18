@@ -6,6 +6,7 @@ Atualizar dashboard ao vivo no domínio
 import os
 import json
 import csv
+import ftplib
 from datetime import datetime
 from pathlib import Path
 
