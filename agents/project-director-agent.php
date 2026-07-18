@@ -62,13 +62,56 @@ class ProjectDirectorAgent {
             'order_items', 'payments', 'shipping'
         ];
 
-        // Verificar se tabelas essenciais existem
+        $pdo = $this->db();
+        if ($pdo === null) {
+            $this->add_warning('DATABASE: nao foi possivel conectar (credenciais ausentes ou banco fora do ar) -- checagem de tabelas pulada');
+            return;
+        }
+
         foreach ($required_tables as $table) {
-            // Placeholder - verificação real seria via DB
-            $this->audit_results["database_table_$table"] = "pending";
+            $stmt = $pdo->prepare('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1');
+            $stmt->execute([$table]);
+            $exists = (bool)$stmt->fetchColumn();
+            $this->audit_results["database_table_$table"] = $exists ? 'ok' : 'missing';
+            if (!$exists) {
+                $this->add_warning("DATABASE: tabela '$table' nao encontrada");
+            }
         }
 
         $this->log("✅ Database audit concluído", "info");
+    }
+
+    private function db(): ?PDO {
+        static $pdo = false;
+        if ($pdo instanceof PDO) return $pdo;
+        if ($pdo === null) return null;
+
+        $constants = __DIR__ . '/../config/constants.php';
+        if (is_file($constants)) require_once $constants;
+
+        $host = defined('DB_HOST') ? DB_HOST : (getenv('DB_HOST') ?: '');
+        $name = defined('DB_NAME') ? DB_NAME : (getenv('DB_NAME') ?: '');
+        $user = defined('DB_USER') ? DB_USER : (getenv('DB_USER') ?: '');
+        $pass = defined('DB_PASS') ? DB_PASS : (getenv('DB_PASS') ?: '');
+        $port = defined('DB_PORT') ? DB_PORT : (getenv('DB_PORT') ?: '3306');
+        if ($host === '' || $name === '' || $user === '') {
+            $pdo = null;
+            return null;
+        }
+
+        try {
+            $pdo = new PDO(
+                "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4",
+                $user,
+                $pass,
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5]
+            );
+            return $pdo;
+        } catch (Throwable $e) {
+            $this->log("DB connection failed: " . $e->getMessage(), 'error');
+            $pdo = null;
+            return null;
+        }
     }
 
     /**
