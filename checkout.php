@@ -620,6 +620,10 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 payload.shipping_expires_at = Number(q.expires_at) || 0;
             }
         } catch (ignore) {}
+        try {
+            var appliedCoupon = getCoupon();
+            if (appliedCoupon && appliedCoupon.code) payload.coupon_code = appliedCoupon.code;
+        } catch (ignore) {}
 
         var method = fd.get('payment_method') || 'pix';
         var key = pendingKey(items, method);
