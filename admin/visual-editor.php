@@ -12,7 +12,7 @@ $layoutConfig = [
         [
             'id' => 'banner-1',
             'title' => 'Banner 1',
-            'image' => '/images/placeholder-banner-1.jpg',
+            'image' => '/public/assets/home-banners/banner-primeira-compra.jpg',
             'link' => '#',
             'active' => true,
         ],
