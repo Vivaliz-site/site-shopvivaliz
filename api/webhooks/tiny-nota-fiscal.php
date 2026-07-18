@@ -52,28 +52,55 @@ if (strlen($raw) > 50000) {
 $body = json_decode($raw, true);
 $body = is_array($body) ? $body : [];
 
-// Formato exato do payload da Tiny pra este evento ainda nao foi observado
-// ao vivo (o app "Webhooks" precisa estar configurado na conta pra isso
-// acontecer) -- tenta os campos mais prováveis com base no padrao dos demais
-// eventos documentados pela Tiny (dados.id / dados.idPedido / id / idPedido).
-// Loga o payload cru sempre que o pedido nao for localizado, pra ajustar o
-// parsing com um exemplo real assim que o primeiro webhook chegar.
+function svtnf_me_first_non_empty_string(array $values): string
+{
+    foreach ($values as $value) {
+        $value = trim((string)$value);
+        if ($value !== '') {
+            return $value;
+        }
+    }
+    return '';
+}
+
+$tipo = strtolower(trim((string)($body['tipo'] ?? $body['event'] ?? $body['type'] ?? '')));
 $dados = is_array($body['dados'] ?? null) ? $body['dados'] : [];
-$tinyOrderId = trim((string)(
-    $dados['idPedido']
-    ?? $dados['pedido']['id']
-    ?? $dados['id']
-    ?? $body['idPedido']
-    ?? $body['id']
-    ?? ''
-));
+
+// Formato oficial Tiny 2.0:
+// - situacao_pedido -> dados.idPedidoEcommerce / dados.idVendaTiny
+// - nota_fiscal -> dados.idNotaFiscalTiny / dados.idPedidoEcommerce
+// - rastreio -> dados.codigoRastreio / dados.idPedidoEcommerce
+// Mantemos fallback legado porque algumas integrações ainda mandam campos
+// diferentes do contrato documentado.
+$tinyOrderId = svtnf_me_first_non_empty_string([
+    $dados['idPedidoEcommerce'] ?? '',
+    $dados['idVendaTiny'] ?? '',
+    $dados['pedido']['id'] ?? '',
+    $dados['idPedido'] ?? '',
+    $dados['id'] ?? '',
+    $body['idPedidoEcommerce'] ?? '',
+    $body['idVendaTiny'] ?? '',
+    $body['idPedido'] ?? '',
+    $body['id'] ?? '',
+]);
+$tinyInvoiceId = svtnf_me_first_non_empty_string([
+    $dados['idNotaFiscalTiny'] ?? '',
+    $dados['idNota'] ?? '',
+    $dados['notaFiscal']['id'] ?? '',
+    $body['idNotaFiscalTiny'] ?? '',
+    $body['idNota'] ?? '',
+]);
+
+if ($tipo !== '' && !in_array($tipo, ['nota_fiscal', 'rastreio', 'situacao_pedido'], true)) {
+    svtnf_response(200, 'ignored_event_type');
+}
 
 if ($tinyOrderId === '') {
     error_log('[TinyWebhook] payload sem id de pedido reconhecivel: ' . substr($raw, 0, 2000));
     svtnf_response(200, 'ignored_no_order_id');
 }
 
-$orderPath = svtnf_find_order_by_tiny_id($tinyOrderId);
+$orderPath = svtnf_find_order_by_reference($tinyOrderId);
 if ($orderPath === '') {
     error_log('[TinyWebhook] pedido Tiny id=' . $tinyOrderId . ' nao corresponde a nenhum pedido local (nao gerenciado pelo site ou etiqueta ja gerada)');
     svtnf_response(200, 'order_not_found_locally');
@@ -89,7 +116,7 @@ if (!is_array($order)) {
 // + label_url) -- ver includes/melhorenvio-label.php. Disparar de novo aqui
 // e seguro, so reexecuta o processo em background e ele mesmo detecta que
 // ja tem etiqueta e retorna cedo.
-error_log('[TinyWebhook] NF autorizada para pedido Tiny id=' . $tinyOrderId . ', disparando geracao de etiqueta: ' . $orderPath);
+error_log('[TinyWebhook] NF autorizada para pedido Tiny id=' . $tinyOrderId . ', nf=' . $tinyInvoiceId . ', disparando geracao de etiqueta: ' . $orderPath);
 
 $labelCmd = 'php ' . escapeshellarg(dirname(__DIR__) . '/melhorenvio/generate-label-background.php') . ' ' .
             escapeshellarg($orderPath);
@@ -105,8 +132,13 @@ svtnf_response(200, 'label_queued');
  * Varre storage/orders (e o diretorio temporario de fallback) procurando o
  * pedido local cujo tiny_order_id bate com o id recebido no webhook.
  */
-function svtnf_find_order_by_tiny_id(string $tinyOrderId): string
+function svtnf_find_order_by_reference(string $reference): string
 {
+    $orderPath = svmp_find_order_path($reference);
+    if ($orderPath !== '') {
+        return $orderPath;
+    }
+
     foreach (svmp_order_directories() as $directory) {
         if (!is_dir($directory)) {
             continue;
@@ -116,7 +148,7 @@ function svtnf_find_order_by_tiny_id(string $tinyOrderId): string
             if (!is_array($data)) {
                 continue;
             }
-            if ((string)($data['tiny_order_id'] ?? '') === $tinyOrderId) {
+            if ((string)($data['tiny_order_id'] ?? '') === $reference || (string)($data['order_number'] ?? '') === $reference) {
                 return $file;
             }
         }

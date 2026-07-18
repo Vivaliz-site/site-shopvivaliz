@@ -40,6 +40,24 @@
 
 ## Entradas
 
+### 2026-07-18 — Webhooks oficiais: Mercado Pago, Melhor Envio e Tiny nao usam o mesmo contrato
+**Sistema/arquivo:** `api/webhook-mercadopago.php`, `api/melhorenvio/webhook.php`, `api/webhooks/order-status-update.php`, `api/webhooks/tiny-nota-fiscal.php`
+**O que descobri:** Mercado Pago valida `X-Signature` + `X-Request-Id` sobre `data.id` e pode enviar `action`; Melhor Envio assina o corpo bruto com `X-ME-Signature` (HMAC-SHA256 em base64 com o secret do app) e envia eventos `order.*`; a Tiny 2.0 usa `tipo` + `dados.idPedidoEcommerce`/`dados.idVendaTiny`/`dados.idNotaFiscalTiny` e nao os campos legados mais antigos como fonte principal.
+**Por quê importa:** se outro agente assumir payload legado, a integracao autentica errado ou ignora o evento oficial, e o fluxo de pedido/frete/NF quebra sem aviso obvio.
+**Ver também:** `docs/TINY-ERP-API-V3.md`
+
+### 2026-07-18 — Tiny: despacho, nota fiscal e categorias agora tem consumo real no backend
+**Sistema/arquivo:** `includes/melhorenvio-label.php`, `api/webhooks/order-status-update.php`, `includes/tiny-order-push.php`, `scripts/fetch-tiny-invoice.php`, `scripts/sync-tiny-categories.php`
+**O que descobri:** o PUT `/pedidos/{idPedido}/despacho`, o GET `/notas/{idNota}` e o GET `/categorias/todas` já estavam documentados na Olist/Tiny, mas ainda nao eram consumidos de forma operacional. Corrigido: o fluxo de etiqueta agora tenta atualizar o despacho no Tiny depois da geracao da etiqueta; o webhook de status da NF agora extrai `idNota`, consulta a nota e persiste `nf_id/nf_numero/nf_serie/nf_chave_acesso/nf_data_emissao`; e as categorias podem ser sincronizadas para cache local e usadas pelo catalogo.
+**Por quê importa:** sem isso, o ERP continuava com o pedido "faturado" mas sem despacho real vinculado, a NF nao ficava persistida para reaproveitamento e o site nao tinha uma fonte real para categorias da Tiny.
+**Ver também:** `docs/TINY-ERP-API-V3.md`
+
+### 2026-07-18 — Tiny/Olist: contato precisa de `codigo`/`fantasia` e pedido precisa de referência de ecommerce para busca ficar completa
+**Sistema/arquivo:** `includes/tiny-order-push.php`
+**O que descobri:** além de `data` e `vendedor`, o cadastro do contato estava sendo criado sem `codigo` e `fantasia`, e o pedido do site não levava vínculo explícito de e-commerce. Para o fluxo atual do site, isso deixava pedidos recém-importados com dados menos indexáveis na busca do ERP. Corrigido: contato agora recebe `codigo` estável baseado no número do pedido e `fantasia` com o nome do cliente; pedido agora envia `ecommerce.id = 0` e `ecommerce.numeroPedidoEcommerce` com o número do pedido do site.
+**Por quê importa:** sem esses campos, o pedido pode entrar no ERP com visibilidade ruim na busca/listagem e parecer "incompleto" mesmo já tendo sido importado.
+**Ver também:** `docs/TINY-ERP-API-V3.md`
+
 ### 2026-07-18 — RESOLVIDO: pedidos sumindo da lista/busca do Tiny — faltavam `data` e `vendedor`
 **Sistema/arquivo:** `includes/tiny-order-push.php`
 **O que descobri:** confirmado (mesmo sintoma já visto antes) que pedidos pushados pelo site existiam via API (`GET /pedidos/{id}` retornava 200) mas sumiam da tela "Pedidos de venda" -- nem na busca por nome/CPF, nem na listagem geral "todos". Causa raiz identificada e corrigida: o payload de criação **não enviava o campo `data`** (data da venda -- a Tiny usa essa data pro filtro/ordenação padrão da lista, não a data de cadastro) **nem `vendedor`** (a conta não tinha nenhum vendedor cadastrado, `GET /vendedores` vazio). Corrigido: 1) cadastrado vendedor genérico "Loja Online" (id `369463749`) via UI (não existe endpoint de criação na API v3); 2) `tiny-order-push.php` agora envia `data` (data de criação do pedido local) e `vendedor: {id: 369463749}`. **Validado ao vivo**: pedido de teste criado com esses campos apareceu na listagem geral imediatamente, sem precisar nem buscar.

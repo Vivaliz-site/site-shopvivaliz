@@ -18,6 +18,7 @@ require_once __DIR__ . '/melhorenvio-oauth.php';
 require_once __DIR__ . '/catalog-runtime.php';
 require_once __DIR__ . '/pdo-database.php';
 require_once __DIR__ . '/account-schema.php';
+require_once __DIR__ . '/tiny-order-push.php';
 
 function svml_env(string ...$keys): string
 {
@@ -50,6 +51,9 @@ function svml_ensure_columns(): void
         'label_url' => 'ALTER TABLE orders ADD COLUMN label_url VARCHAR(500) NULL',
         'melhorenvio_shipment_id' => 'ALTER TABLE orders ADD COLUMN melhorenvio_shipment_id VARCHAR(64) NULL',
         'label_status' => 'ALTER TABLE orders ADD COLUMN label_status VARCHAR(30) NULL',
+        'tiny_dispatch_status' => 'ALTER TABLE orders ADD COLUMN tiny_dispatch_status VARCHAR(40) NULL',
+        'tiny_dispatch_error' => 'ALTER TABLE orders ADD COLUMN tiny_dispatch_error VARCHAR(500) NULL',
+        'tiny_dispatch_updated_at' => 'ALTER TABLE orders ADD COLUMN tiny_dispatch_updated_at DATETIME NULL',
     ];
     foreach ($alterations as $column => $sql) {
         if (!isset($existing[$column])) {
@@ -298,10 +302,71 @@ function svml_purchase_and_generate_label(array $order): array
         ':id' => $orderId,
     ]);
 
+    $dispatchResult = svml_sync_tiny_dispatch($order, [
+        'shipment_id' => $shipmentId,
+        'label_url' => $labelUrl,
+        'codigoRastreamento' => trim((string)($order['tracking_number'] ?? $order['tracking'] ?? '')),
+    ]);
+
+    if ($dispatchResult['ok'] ?? false) {
+        $dispatchUpdate = $pdo->prepare(
+            'UPDATE orders SET tiny_dispatch_status = :status, tiny_dispatch_error = NULL, tiny_dispatch_updated_at = NOW(), updated_at = NOW() WHERE id = :id'
+        );
+        $dispatchUpdate->execute([
+            ':status' => 'updated',
+            ':id' => $orderId,
+        ]);
+    } else {
+        $dispatchSummary = (string)($dispatchResult['error'] ?? 'skipped');
+        if (isset($dispatchResult['status'])) {
+            $dispatchSummary .= ' HTTP ' . (string)$dispatchResult['status'];
+        }
+        $dispatchUpdate = $pdo->prepare(
+            'UPDATE orders SET tiny_dispatch_status = :status, tiny_dispatch_error = :error, tiny_dispatch_updated_at = NOW(), updated_at = NOW() WHERE id = :id'
+        );
+        $dispatchUpdate->execute([
+            ':status' => (string)($dispatchResult['error'] ?? 'skipped'),
+            ':error' => substr($dispatchSummary, 0, 500),
+            ':id' => $orderId,
+        ]);
+    }
+
     return [
         'ok' => true,
         'shipment_id' => $shipmentId,
         'label_url' => $labelUrl,
+        'tiny_dispatch' => $dispatchResult,
+    ];
+}
+
+function svml_sync_tiny_dispatch(array $order, array $context = []): array
+{
+    $tinyOrderId = trim((string)($order['tiny_order_id'] ?? ''));
+    if ($tinyOrderId === '') {
+        return ['ok' => false, 'error' => 'missing_tiny_order_id'];
+    }
+
+    $payload = svtop_tiny_build_dispatch_payload($order, $context);
+    if ($payload === []) {
+        return ['ok' => false, 'error' => 'dispatch_payload_empty'];
+    }
+
+    $token = svtop_tiny_get_token();
+    if ($token === '') {
+        return ['ok' => false, 'error' => 'missing_tiny_token'];
+    }
+
+    $res = svtop_tiny_update_dispatch($tinyOrderId, $token, $payload);
+    if ($res['status'] === 200 || $res['status'] === 204) {
+        return ['ok' => true, 'status' => $res['status'], 'payload' => $payload, 'body' => $res['json']];
+    }
+
+    return [
+        'ok' => false,
+        'error' => 'dispatch_failed',
+        'status' => $res['status'],
+        'body' => $res['json'] ?: $res['body'],
+        'payload' => $payload,
     ];
 }
 

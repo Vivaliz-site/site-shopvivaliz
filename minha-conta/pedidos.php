@@ -17,7 +17,8 @@ try {
     $pdo = sv_pdo();
     $stmt = $pdo->prepare(
         'SELECT id, order_number, olist_order_id, order_total, order_status, payment_method,
-                tracking_number, estimated_delivery, items_json, nf_pdf_url, nf_xml_url, label_url, created_at
+                tracking_number, estimated_delivery, nf_id, nf_numero, nf_serie, nf_chave_acesso, nf_data_emissao,
+                items_json, nf_pdf_url, nf_xml_url, label_url, created_at
          FROM orders WHERE user_id = :uid ORDER BY created_at DESC LIMIT 50'
     );
     $stmt->execute([':uid' => $svAccountUser['id']]);
@@ -90,6 +91,26 @@ require __DIR__ . '/../includes/account-chrome-top.php';
                         📦 Rastreio: <code><?php echo htmlspecialchars($order['tracking_number']); ?></code>
                         <a href="https://rastreamento.correios.com.br/app/index.php?codigo=<?php echo urlencode($order['tracking_number']); ?>" target="_blank" rel="noopener" style="margin-left:8px; color:#173b63;">Rastrear entrega →</a>
                     </div>
+                <?php endif; ?>
+
+                <?php if (!empty($order['nf_numero']) || !empty($order['nf_chave_acesso'])): ?>
+                    <div style="font-size:13px; margin-bottom:8px; color:#444;">
+                        🧾 NF
+                        <?php if (!empty($order['nf_numero'])): ?>
+                            <span>#<?php echo htmlspecialchars($order['nf_numero']); ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($order['nf_serie'])): ?>
+                            <span>série <?php echo htmlspecialchars($order['nf_serie']); ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($order['nf_data_emissao'])): ?>
+                            <span>emitida em <?php echo htmlspecialchars(date('d/m/Y H:i', strtotime($order['nf_data_emissao']))); ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <?php if (!empty($order['nf_chave_acesso'])): ?>
+                        <div style="font-size:12px; margin-bottom:8px;">
+                            <code><?php echo htmlspecialchars($order['nf_chave_acesso']); ?></code>
+                        </div>
+                    <?php endif; ?>
                 <?php endif; ?>
 
                 <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">

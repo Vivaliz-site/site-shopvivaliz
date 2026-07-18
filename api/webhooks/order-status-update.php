@@ -10,6 +10,105 @@ header('Content-Type: application/json; charset=utf-8');
 // This guarantees deterministic 4xx responses even during a DB outage.
 require_once __DIR__ . '/../../config/bootstrap-env.php';
 require_once __DIR__ . '/../../api/emails/send-order-notification.php';
+require_once __DIR__ . '/../../includes/tiny-order-push.php';
+
+function svtnf_first_non_empty_string(array $values): string
+{
+    foreach ($values as $value) {
+        $value = trim((string)$value);
+        if ($value !== '') {
+            return $value;
+        }
+    }
+    return '';
+}
+
+function svtnf_extract_payload(array $data): array
+{
+    return is_array($data['dados'] ?? null) ? $data['dados'] : [];
+}
+
+function svtnf_extract_order_reference(array $data): string
+{
+    $dados = svtnf_extract_payload($data);
+    return svtnf_first_non_empty_string([
+        $dados['idPedidoEcommerce'] ?? '',
+        $dados['idVendaTiny'] ?? '',
+        $dados['pedido']['id'] ?? '',
+        $data['idPedidoEcommerce'] ?? '',
+        $data['idVendaTiny'] ?? '',
+        $data['idPedido'] ?? '',
+        $data['order_id'] ?? '',
+        $data['olist_id'] ?? '',
+        $data['id'] ?? '',
+    ]);
+}
+
+function svtnf_extract_status(array $data): string
+{
+    $dados = svtnf_extract_payload($data);
+    $raw = svtnf_first_non_empty_string([
+        $dados['situacao'] ?? '',
+        $dados['descricaoSituacao'] ?? '',
+        $data['status'] ?? '',
+        $data['order_status'] ?? '',
+    ]);
+
+    if ($raw === '') {
+        return '';
+    }
+
+    $map = [
+        '8' => 'dados_incompletos',
+        '0' => 'aguardando_pagamento',
+        '3' => 'pagamento_aprovado',
+        '4' => 'pronto_para_enviar',
+        '1' => 'nota_fiscal_enviada',
+        '7' => 'pronto_para_enviar',
+        '5' => 'enviado',
+        '6' => 'entregue',
+        '2' => 'cancelado',
+        '9' => 'nao_entregue',
+        'dados incompletos' => 'dados_incompletos',
+        'aberta' => 'aguardando_pagamento',
+        'aprovada' => 'pagamento_aprovado',
+        'preparando envio' => 'pronto_para_enviar',
+        'faturada' => 'nota_fiscal_enviada',
+        'pronto envio' => 'pronto_para_enviar',
+        'enviada' => 'enviado',
+        'entregue' => 'entregue',
+        'cancelada' => 'cancelado',
+        'nao entregue' => 'nao_entregue',
+        'não entregue' => 'nao_entregue',
+    ];
+
+    $normalized = strtolower(trim($raw));
+    return $map[$normalized] ?? $normalized;
+}
+
+function svtnf_extract_tracking(array $data): string
+{
+    $dados = svtnf_extract_payload($data);
+    return svtnf_first_non_empty_string([
+        $dados['codigoRastreio'] ?? '',
+        $dados['tracking'] ?? '',
+        $dados['urlRastreio'] ?? '',
+        $data['tracking_number'] ?? '',
+        $data['tracking'] ?? '',
+    ]);
+}
+
+function svtnf_extract_estimated_delivery(array $data): string
+{
+    $dados = svtnf_extract_payload($data);
+    return svtnf_first_non_empty_string([
+        $dados['dataPrevistaEntrega'] ?? '',
+        $dados['estimated_delivery'] ?? '',
+        $dados['estimated_delivery_date'] ?? '',
+        $data['estimated_delivery_date'] ?? '',
+        $data['prazoEntrega'] ?? '',
+    ]);
+}
 
 // Validar token do webhook
 $webhook_token = getenv('OLIST_WEBHOOK_TOKEN') ?: getenv('ERP_WEBHOOK_TOKEN') ?: '';
@@ -62,8 +161,22 @@ if (!is_array($data)) {
     exit;
 }
 
-$olist_order_id = $data['order_id'] ?? $data['olist_id'] ?? $data['id'] ?? '';
-$status = $data['status'] ?? $data['order_status'] ?? '';
+$tipo = strtolower(trim((string)($data['tipo'] ?? $data['event'] ?? $data['type'] ?? '')));
+$olist_order_id = svtnf_extract_order_reference($data);
+$status = svtnf_extract_status($data);
+$tracking = svtnf_extract_tracking($data);
+$estimated_delivery = svtnf_extract_estimated_delivery($data);
+$invoiceId = svtnf_extract_invoice_id($data);
+$invoiceDetails = [];
+$invoiceXml = [];
+
+if ($tipo === 'nota_fiscal' && $status === '') {
+    $status = 'nota_fiscal_enviada';
+}
+if ($tipo === 'rastreio' && $status === '') {
+    $status = 'enviado';
+}
+
 if (empty($olist_order_id) || empty($status)) {
     http_response_code(400);
     echo json_encode(['error' => 'Missing required fields']);
@@ -74,13 +187,11 @@ require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../scripts/mailer.php';
 require_once __DIR__ . '/../../includes/mercadopago-gateway.php';
+require_once __DIR__ . '/../../includes/account-schema.php';
 
 try {
     $db = Database::getInstance()->getConnection();
-
-    // Mapear IDs: olist_order_id -> pedido_id
-    $tracking = $data['tracking_number'] ?? $data['tracking'] ?? '';
-    $estimated_delivery = $data['estimated_delivery_date'] ?? '';
+    sv_account_ensure_schema();
 
     // Mapear status do Olist para nosso sistema
     $status_map = [
@@ -103,14 +214,14 @@ try {
         'SELECT p.id, p.user_id, p.email, p.order_status, p.order_number, u.email as user_email, u.name
          FROM orders p
          LEFT JOIN users u ON u.id = p.user_id
-         WHERE p.olist_order_id = ? LIMIT 1'
+         WHERE p.olist_order_id = ? OR p.order_number = ? LIMIT 1'
     );
 
     if (!$stmt) {
         throw new Exception('Prepare failed: ' . $db->error);
     }
 
-    $stmt->bind_param('s', $olist_order_id);
+    $stmt->bind_param('ss', $olist_order_id, $olist_order_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $order = $result->fetch_assoc();
@@ -121,21 +232,78 @@ try {
         exit;
     }
 
-    // Atualizar status se for diferente
-    if ($order['order_status'] !== $normalized_status) {
+    $orderNumber = trim((string)($order['order_number'] ?? ''));
+    $orderPath = $orderNumber !== '' ? svmp_find_order_path($orderNumber) : '';
+    $orderId = (int)$order['id'];
+    $statusChanged = $order['order_status'] !== $normalized_status;
+
+    $shouldPersist = $order['order_status'] !== $normalized_status
+        || $tracking !== ''
+        || $estimated_delivery !== ''
+        || $invoiceId !== '';
+
+    // Atualizar status/dados se houve mudanca ou se o webhook trouxe NF/rastreio novos.
+    if ($shouldPersist) {
         $update = $db->prepare(
-            'UPDATE orders SET order_status = ?, tracking_number = ?,
-             estimated_delivery = ?, updated_at = NOW()
+            'UPDATE orders SET order_status = ?,
+             tracking_number = COALESCE(NULLIF(?, ""), tracking_number),
+             estimated_delivery = COALESCE(NULLIF(?, ""), estimated_delivery),
+             nf_id = COALESCE(NULLIF(?, ""), nf_id),
+             nf_numero = COALESCE(NULLIF(?, ""), nf_numero),
+             nf_serie = COALESCE(NULLIF(?, ""), nf_serie),
+             nf_chave_acesso = COALESCE(NULLIF(?, ""), nf_chave_acesso),
+             nf_data_emissao = COALESCE(NULLIF(?, ""), nf_data_emissao),
+             updated_at = NOW()
              WHERE id = ?'
         );
 
         if ($update) {
-            $update->bind_param('sssi', $normalized_status, $tracking, $estimated_delivery, $order['id']);
+            $nfDataEmissao = '';
+            if ($invoiceId !== '' && svtop_tiny_credentials_configured()) {
+                try {
+                    $token = svtop_tiny_get_token();
+                    if ($token !== '') {
+                        $invoiceResp = svtop_tiny_get_invoice($invoiceId, $token);
+                        if (($invoiceResp['status'] ?? 0) === 200 && is_array($invoiceResp['json'] ?? null)) {
+                            $invoiceDetails = $invoiceResp['json'];
+                            $invoiceXmlResp = svtop_tiny_get_invoice_xml($invoiceId, $token);
+                            if (($invoiceXmlResp['status'] ?? 0) === 200 && is_array($invoiceXmlResp['json'] ?? null)) {
+                                $invoiceXml = $invoiceXmlResp['json'];
+                            }
+                        }
+                    }
+                } catch (Throwable $e) {
+                    error_log('[TinyWebhook] invoice fetch failed: ' . $e->getMessage());
+                }
+            }
+
+            $nfDataEmissao = (string)($invoiceDetails['dataEmissao'] ?? '');
+            $nfId = (string)($invoiceDetails['id'] ?? $invoiceId);
+            $nfNumero = (string)($invoiceDetails['numero'] ?? '');
+            $nfSerie = (string)($invoiceDetails['serie'] ?? '');
+            $nfChave = (string)($invoiceDetails['chaveAcesso'] ?? '');
+
+            $update->bind_param(
+                'ssssssssi',
+                $normalized_status,
+                $tracking,
+                $estimated_delivery,
+                $nfId,
+                $nfNumero,
+                $nfSerie,
+                $nfChave,
+                $nfDataEmissao,
+                $orderId
+            );
             $update->execute();
+
+            if ($orderPath !== '') {
+                svtnf_update_local_order_file($orderPath, $normalized_status, $tracking, $estimated_delivery, $invoiceDetails, $invoiceXml);
+            }
 
             // Enviar email para cliente
             $customer_email = $order['user_email'] ?? $order['email'];
-            if ($customer_email) {
+            if ($statusChanged && $customer_email) {
                 send_order_status_email(
                     email: $customer_email,
                     name: $order['name'] ?? 'Cliente',
@@ -154,8 +322,6 @@ try {
             // painel Tiny (Configuracoes > API do ERP > Notificacoes > URL
             // para envio da nota fiscal), so faltava agir sobre o evento.
             if ($normalized_status === 'nota_fiscal_enviada') {
-                $orderNumber = trim((string)($order['order_number'] ?? ''));
-                $orderPath = $orderNumber !== '' ? svmp_find_order_path($orderNumber) : '';
                 if ($orderPath !== '') {
                     $labelCmd = 'php ' . escapeshellarg(dirname(__DIR__) . '/melhorenvio/generate-label-background.php') . ' ' .
                                 escapeshellarg($orderPath);
@@ -175,9 +341,10 @@ try {
     http_response_code(200);
     echo json_encode([
         'success' => true,
-        'order_id' => $order['id'],
+        'order_id' => $orderId,
         'status' => $normalized_status,
         'tracking' => $tracking,
+        'invoice_id' => $invoiceId,
     ]);
 
 } catch (Exception $e) {
@@ -230,4 +397,90 @@ function send_order_status_email(
         subject: $subject,
         html: $html
     );
+}
+
+function svtnf_extract_invoice_id(array $data): string
+{
+    $candidates = [
+        $data['idNota'] ?? '',
+        $data['idNotaFiscalTiny'] ?? '',
+        $data['notaFiscal']['id'] ?? '',
+        $data['nota_fiscal']['id'] ?? '',
+        $data['invoice']['id'] ?? '',
+        $data['nf']['id'] ?? '',
+        $data['dados']['idNota'] ?? '',
+        $data['dados']['idNotaFiscalTiny'] ?? '',
+        $data['dados']['notaFiscal']['id'] ?? '',
+        $data['dados']['nota_fiscal']['id'] ?? '',
+    ];
+
+    foreach ($candidates as $candidate) {
+        $candidate = trim((string)$candidate);
+        if ($candidate !== '') {
+            return $candidate;
+        }
+    }
+
+    return '';
+}
+
+function svtnf_update_local_order_file(
+    string $path,
+    string $status,
+    string $tracking,
+    string $estimatedDelivery,
+    array $invoiceDetails,
+    array $invoiceXml
+): void {
+    $handle = fopen($path, 'c+');
+    if ($handle === false || !flock($handle, LOCK_EX)) {
+        if (is_resource($handle)) {
+            fclose($handle);
+        }
+        return;
+    }
+
+    try {
+        rewind($handle);
+        $order = json_decode((string)stream_get_contents($handle), true);
+        if (!is_array($order)) {
+            $order = [];
+        }
+
+        $order['status'] = $status;
+        $order['order_status'] = $status;
+        if ($tracking !== '') {
+            $order['tracking_number'] = $tracking;
+            $order['tracking'] = $tracking;
+        }
+        if ($estimatedDelivery !== '') {
+            $order['estimated_delivery'] = $estimatedDelivery;
+        }
+        if ($invoiceDetails !== []) {
+            $order['tiny_invoice'] = [
+                'id' => (string)($invoiceDetails['id'] ?? ''),
+                'numero' => (string)($invoiceDetails['numero'] ?? ''),
+                'serie' => (string)($invoiceDetails['serie'] ?? ''),
+                'chaveAcesso' => (string)($invoiceDetails['chaveAcesso'] ?? ''),
+                'dataEmissao' => (string)($invoiceDetails['dataEmissao'] ?? ''),
+            ];
+        }
+        if ($invoiceXml !== []) {
+            $order['tiny_invoice_xml'] = [
+                'hasXmlNfe' => array_key_exists('xmlNfe', $invoiceXml),
+                'hasXmlCancelamento' => array_key_exists('xmlCancelamento', $invoiceXml),
+            ];
+        }
+
+        $encoded = json_encode($order, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        rewind($handle);
+        ftruncate($handle, 0);
+        fwrite($handle, $encoded);
+        fflush($handle);
+    } catch (Throwable $e) {
+        error_log('[TinyWebhook] local order update failed: ' . $e->getMessage());
+    } finally {
+        flock($handle, LOCK_UN);
+        fclose($handle);
+    }
 }
