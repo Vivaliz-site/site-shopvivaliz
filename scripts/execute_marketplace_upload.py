@@ -8,6 +8,8 @@ import os
 import sys
 import json
 import logging
+import tempfile
+import requests
 from pathlib import Path
 from datetime import datetime
 
