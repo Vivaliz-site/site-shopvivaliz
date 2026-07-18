@@ -140,16 +140,39 @@ class ProjectDirectorAgent {
      * Auditoria: Endpoints de API
      */
     private function audit_api_endpoints(): void {
-        $endpoints = [
+        // GET puro (sem POST) so faz sentido pra endpoints de leitura --
+        // create.php e mercadopago/* exigem payload valido, entao so
+        // confirmamos que o arquivo existe no disco em vez de bater via
+        // HTTP com corpo vazio (o que so provaria erro 4xx esperado, nao
+        // informacao real sobre o endpoint estar funcionando).
+        $readEndpoints = [
             '/api/health.php' => 'Health check',
             '/api/catalog/products.php' => 'Produtos',
-            '/api/orders/create.php' => 'Criar pedido',
-            '/api/mercadopago/*' => 'Mercado Pago',
         ];
+        $baseUrl = 'https://dev.shopvivaliz.com.br';
 
-        foreach ($endpoints as $endpoint => $desc) {
-            // Placeholder - verificação real seria via HTTP
-            $this->audit_results["api_$endpoint"] = "pending";
+        foreach ($readEndpoints as $endpoint => $desc) {
+            $ctx = stream_context_create(['http' => ['method' => 'GET', 'timeout' => 10, 'ignore_errors' => true]]);
+            $result = @file_get_contents($baseUrl . $endpoint, false, $ctx);
+            $statusLine = $http_response_header[0] ?? '';
+            $ok = $result !== false && (bool)preg_match('~ (2\d\d) ~', $statusLine);
+            $this->audit_results["api_$endpoint"] = $ok ? 'ok' : 'failed';
+            if (!$ok) {
+                $this->add_critical("API: $desc ($endpoint) respondeu '$statusLine' ou falhou a conexao");
+            }
+        }
+
+        $fileOnlyEndpoints = [
+            '/api/orders/create.php' => 'Criar pedido',
+            '/api/mercadopago/create-preference.php' => 'Mercado Pago',
+        ];
+        foreach ($fileOnlyEndpoints as $endpoint => $desc) {
+            $path = __DIR__ . '/..' . $endpoint;
+            $exists = is_file($path);
+            $this->audit_results["api_$endpoint"] = $exists ? 'ok' : 'missing';
+            if (!$exists) {
+                $this->add_critical("API: $desc ($endpoint) nao existe no disco");
+            }
         }
 
         $this->log("✅ API endpoints audit concluído", "info");
