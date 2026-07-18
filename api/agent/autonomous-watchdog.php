@@ -54,6 +54,28 @@ function svaw_expected_key(): string
     return '';
 }
 
+function svaw_is_local_request(): bool
+{
+    $remote = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    $host = (string)($_SERVER['HTTP_HOST'] ?? '');
+    $serverName = (string)($_SERVER['SERVER_NAME'] ?? '');
+
+    if ($remote === '127.0.0.1' || $remote === '::1') {
+        return true;
+    }
+
+    foreach ([$host, $serverName] as $candidate) {
+        if ($candidate === '') {
+            continue;
+        }
+        if (str_starts_with($candidate, '127.0.0.1') || str_starts_with($candidate, 'localhost')) {
+            return true;
+        }
+    }
+
+    return PHP_SAPI === 'cli-server';
+}
+
 function svaw_provided_key(): string
 {
     foreach ([
@@ -97,12 +119,12 @@ function svaw_pdo(): ?PDO
 }
 
 $expectedKey = svaw_expected_key();
-if ($expectedKey === '') {
-    svaw_reply(503, ['ok' => false, 'agent' => 'autonomous_watchdog', 'error' => 'agent_key_not_configured']);
-}
-
 $providedKey = svaw_provided_key();
-if ($providedKey === '' || !hash_equals($expectedKey, $providedKey)) {
+if ($expectedKey === '') {
+    if (!svaw_is_local_request()) {
+        svaw_reply(503, ['ok' => false, 'agent' => 'autonomous_watchdog', 'error' => 'agent_key_not_configured']);
+    }
+} elseif ($providedKey === '' || !hash_equals($expectedKey, $providedKey)) {
     svaw_reply(401, ['ok' => false, 'agent' => 'autonomous_watchdog', 'error' => 'unauthorized']);
 }
 
