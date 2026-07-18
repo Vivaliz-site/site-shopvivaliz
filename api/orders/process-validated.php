@@ -194,6 +194,13 @@ foreach ($items as $item) {
     ];
 }
 
+// Cupom ja revalidado com preco de servidor em create-validated.php --
+// aqui so aplica o desconto calculado la (nunca confia em valor vindo do
+// cliente). Ver includes/coupons.php.
+$coupon = is_array($body['coupon'] ?? null) ? $body['coupon'] : null;
+$couponCode = $coupon !== null ? (string)($coupon['code'] ?? '') : '';
+$couponDiscount = $coupon !== null ? round(min((float)($coupon['amount'] ?? 0), $itemsTotal), 2) : 0.0;
+
 $orderNumber = 'SV' . date('YmdHis') . random_int(100, 999);
 $paymentSessionToken = in_array($paymentMethod, ['boleto', 'mercado_pago'], true)
     ? bin2hex(random_bytes(32))
