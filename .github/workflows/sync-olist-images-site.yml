@@ -94,21 +94,24 @@ jobs:
           ftp.quit()
           print("Endpoint publicado.")
 
-      - name: Buscar imagens na Tiny V2 ao vivo e subir por FTP
+      - name: Buscar imagens na Tiny V3 (OAuth) ao vivo e subir por FTP
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_PORT: ${{ secrets.FTP_PORT }}
           FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
-          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
+          OLIST_CLIENT_ID: ${{ secrets.OLIST_CLIENT_ID }}
+          OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
+          OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
+          OLIST_ACCESS_TOKEN: ${{ secrets.OLIST_ACCESS_TOKEN }}
           SITE_BASE_URL: https://dev.shopvivaliz.com.br
           OLIST_UPLOAD_MODE: ftp
           OLIST_DB_MODE: none
         run: |
           python3 scripts/sync-olist-images.py \
             --input storage/reports/olist_imagens_urls_min.csv \
-            --api-version v2 \
+            --api-version v3 \
             --quiet \
             --upload-mode ftp \
             --db-mode none

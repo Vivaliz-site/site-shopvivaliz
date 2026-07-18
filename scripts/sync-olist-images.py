@@ -34,7 +34,6 @@ import xml.etree.ElementTree as ET
 
 
 DEFAULT_API_BASE = "https://api.tiny.com.br/public-api/v3"
-DEFAULT_API_V2_BASE = "https://api.tiny.com.br/api2"
 DEFAULT_TOKEN_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
 DEFAULT_SITE_BASE_URL = "https://dev.shopvivaliz.com.br"
 DEFAULT_STORAGE_IMAGES = Path("storage/olist-images")
@@ -371,14 +370,6 @@ def http_post_form(url: str, data: Dict[str, str], timeout: int = 45) -> Dict[st
 
 
 def resolve_access_token(args: argparse.Namespace) -> Optional[str]:
-    if args.api_version == "v2":
-        for name in ("TINY_API_TOKEN", "TOKEN_API_OLIST", "OLIST_API_TOKEN"):
-            value = os.getenv(name)
-            if value:
-                log(f"Secret configurado: {name}")
-                return value
-        raise SafeError("Credenciais V2 ausentes: TINY_API_TOKEN, TOKEN_API_OLIST ou OLIST_API_TOKEN.")
-
     for name in (
         "OLIST_ACCESS_TOKEN",
         "TINY_ACCESS_TOKEN",
@@ -434,23 +425,6 @@ def api_get(args: argparse.Namespace, access_token: str, path: str, params: Opti
     return http_json(request, timeout=args.api_timeout)
 
 
-def api_get_v2(args: argparse.Namespace, token: str, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    merged = {"token": token, "formato": "json"}
-    if params:
-        merged.update(params)
-    query = urlencode(merged)
-    url = args.api_v2_base.rstrip("/") + "/" + endpoint.lstrip("/") + "?" + query
-    request = Request(
-        url,
-        headers={
-            "Accept": "application/json",
-            "User-Agent": USER_AGENT,
-        },
-        method="GET",
-    )
-    return http_json(request, timeout=args.api_timeout)
-
-
 def unwrap_product(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(payload, dict):
         return {}
@@ -461,15 +435,6 @@ def unwrap_product(payload: Dict[str, Any]) -> Dict[str, Any]:
     if "id" in payload or "sku" in payload or "nome" in payload:
         return payload
     return payload
-
-
-def unwrap_product_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
-    retorno = payload.get("retorno")
-    if isinstance(retorno, dict):
-        produto = retorno.get("produto")
-        if isinstance(produto, dict):
-            return produto
-    return {}
 
 
 def extract_items(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -502,19 +467,6 @@ def product_field(product: Dict[str, Any], *names: str) -> str:
 
 
 def fetch_product_by_id(args: argparse.Namespace, token: str, product_id: str) -> Tuple[Dict[str, Any], str]:
-    if args.api_version == "v2":
-        payload = api_get_v2(args, token, "produto.obter.php", {"id": product_id})
-        status = int(payload.get("_http_status") or 200)
-        if status >= 400 or status == 0:
-            return {}, f"API V2 produto.obter.php retornou HTTP {status}"
-        retorno = payload.get("retorno") if isinstance(payload, dict) else {}
-        if isinstance(retorno, dict) and str(retorno.get("status", "")).upper() == "ERRO":
-            return {}, f"API V2 produto.obter.php retornou erro para id {product_id}"
-        produto = unwrap_product_v2(payload)
-        if not produto:
-            return {}, f"API V2 sem produto para id {product_id}"
-        return produto, ""
-
     payload = api_get(args, token, f"/produtos/{quote(str(product_id), safe='')}")
     status = int(payload.get("_http_status") or 200)
     if status >= 400 or status == 0:
@@ -523,9 +475,6 @@ def fetch_product_by_id(args: argparse.Namespace, token: str, product_id: str) -
 
 
 def build_product_index(args: argparse.Namespace, token: str) -> Dict[str, Dict[str, Any]]:
-    if args.api_version == "v2":
-        raise SafeError("Indice por SKU nao suportado no modo V2 ao vivo sem ID do produto.")
-
     index: Dict[str, Dict[str, Any]] = {}
     seen_ids: set = set()
     offset = 0
@@ -1234,9 +1183,8 @@ def write_json_report(path: Path, data: Dict[str, Any]) -> None:
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fluxo completo de imagens Olist/Tiny para ShopVivaliz.")
     parser.add_argument("--input", required=True, help="Planilha real exportada da Olist/Tiny (.xlsx ou .csv).")
-    parser.add_argument("--api-version", choices=["v2", "v3"], default=os.getenv("OLIST_API_VERSION", "v3"))
+    parser.add_argument("--api-version", choices=["v3"], default=os.getenv("OLIST_API_VERSION", "v3"))
     parser.add_argument("--api-base", default=os.getenv("OLIST_API_BASE_URL") or os.getenv("TINY_API_BASE_URL") or DEFAULT_API_BASE)
-    parser.add_argument("--api-v2-base", default=os.getenv("TINY_API_V2_BASE_URL") or DEFAULT_API_V2_BASE)
     parser.add_argument("--token-url", default=os.getenv("OLIST_TOKEN_URL") or os.getenv("TINY_TOKEN_URL") or DEFAULT_TOKEN_URL)
     parser.add_argument("--site-base-url", default=os.getenv("SITE_BASE_URL") or os.getenv("BASE_URL") or DEFAULT_SITE_BASE_URL)
     parser.add_argument("--storage-images", type=Path, default=Path(os.getenv("OLIST_IMAGES_DIR", str(DEFAULT_STORAGE_IMAGES))))
