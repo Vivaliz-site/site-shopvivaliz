@@ -266,9 +266,14 @@ function svtop_push_order_tiny(array $order): ?string
     }
 
     $payload = [
-        'numeroPedido' => $order['order_number'],
+        // 'numeroPedido' nao aceita string customizada (a Tiny ignora e
+        // atribui seu proprio numero sequencial interno) -- o numero do
+        // pedido do site vai em 'obs' e 'numeroOrdemCompra' (referencia
+        // externa) para ficar rastreavel dentro do ERP.
+        'numeroOrdemCompra' => $siteOrderNumber,
         'situacao'     => 1, // Aberto -- a API v3 exige inteiro, nao objeto
         'idContato'    => $contactId,
+        'idDeposito'   => 337683271, // "Geral" -- unico deposito proprio (nao-marketplace) cadastrado
         'itens' => array_map(static fn(array $i) => [
             'produto'       => ['id' => (int)$i['olist_product_id']],
             'quantidade'    => $i['quantity'],
@@ -277,6 +282,19 @@ function svtop_push_order_tiny(array $order): ?string
         'valorFrete' => (float)($order['shipping_total'] ?? 0),
         'obs' => $obs,
     ];
+    if ($paymentFormId !== null) {
+        // vendedor: nao ha nenhum vendedor cadastrado na conta (GET
+        // /vendedores retorna vazio), entao nao ha id valido pra mandar.
+        // transportador: a transportadora real so e decidida depois deste
+        // push, quando a etiqueta e comprada na Melhor Envio de forma
+        // assincrona (ver api/melhorenvio/generate-label-background.php) --
+        // nao da pra saber qual serviço/transportadora sera usado ainda
+        // neste momento.
+        $payload['pagamento'] = [
+            'formaPagamento' => ['id' => $paymentFormId],
+            'formaRecebimento' => ['id' => $paymentFormId],
+        ];
+    }
 
     $res = svtop_tiny_request('POST', '/pedidos', $token, $payload);
 
