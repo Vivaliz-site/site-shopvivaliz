@@ -110,19 +110,25 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             </div>
             <div class="form-row-2">
                 <label class="form-group">
-                    <span>Bairro *</span>
-                    <input name="neighborhood" id="neighborhood-input" maxlength="120" required aria-label="Bairro">
+                    <span>Complemento</span>
+                    <input name="complement" id="complement-input" maxlength="120" autocomplete="address-line3" aria-label="Complemento (apto, bloco, referência)" placeholder="Apto, bloco, referência (opcional)">
                 </label>
                 <label class="form-group">
-                    <span>Cidade *</span>
-                    <input name="city" id="city-input" maxlength="120" required autocomplete="address-level2" aria-label="Cidade">
+                    <span>Bairro *</span>
+                    <input name="neighborhood" id="neighborhood-input" maxlength="120" required aria-label="Bairro">
                 </label>
             </div>
             <div class="form-row-2">
                 <label class="form-group">
+                    <span>Cidade *</span>
+                    <input name="city" id="city-input" maxlength="120" required autocomplete="address-level2" aria-label="Cidade">
+                </label>
+                <label class="form-group">
                     <span>Estado (UF) *</span>
                     <input name="state" id="state-input" maxlength="2" minlength="2" required autocomplete="address-level1" aria-label="Estado" style="text-transform:uppercase">
                 </label>
+            </div>
+            <div class="form-row-2">
                 <label class="form-group" id="boleto-cpf-field" hidden>
                     <span>CPF do pagador *</span>
                     <input name="cpf" id="cpf-input" inputmode="numeric" maxlength="14" autocomplete="off" aria-label="CPF do pagador">
