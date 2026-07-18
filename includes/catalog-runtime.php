@@ -12,7 +12,7 @@ function svcr_products(): array
     $fallback = $root . '/api/catalog/fallback-products.json';
     $rows = is_file($fallback) ? json_decode((string)file_get_contents($fallback), true) : [];
     if (is_array($rows) && $rows !== []) {
-        return array_values(array_filter($rows, 'is_array'));
+        return svcr_normalize_products(array_values(array_filter($rows, 'is_array')));
     }
 
     $cache = $root . '/storage/products-cache-ativos.json';
@@ -98,5 +98,18 @@ function svcr_products(): array
         ];
     }
 
-    return $products;
+    return svcr_normalize_products($products);
+}
+
+function svcr_normalize_products(array $products): array
+{
+    foreach ($products as &$product) {
+        if (!is_array($product)) {
+            continue;
+        }
+        $product['stock'] = max(0, (int)($product['stock'] ?? 0));
+    }
+    unset($product);
+
+    return array_values(array_filter($products, 'is_array'));
 }

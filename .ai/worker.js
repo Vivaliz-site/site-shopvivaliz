@@ -155,9 +155,23 @@ async function start() {
     // Loop contínuo
     let lastTaskId = null;
     let lastError = null;
+    let lastTinySyncTime = 0;
 
     while (!shutdownRequested) {
       try {
+        const now = Date.now();
+        if (now - lastTinySyncTime > 15 * 60 * 1000) {
+          lastTinySyncTime = now;
+          log('[WORKER] Executando fila de fallback para Tiny ERP...');
+          const childProcess = require('child_process');
+          childProcess.exec('php scripts/sync-failed-tiny-orders.php', (err, stdout, stderr) => {
+            if (err) {
+              logError('[WORKER] Erro ao rodar sync de fallback do Tiny:', err);
+            } else {
+              log(`[WORKER] Resposta do Tiny sync: ${stdout.trim()}`);
+            }
+          });
+        }
         orchestrator.queue.loadFromDisk(false);
         const status = orchestrator.getStatus();
         const pendingCount = status.queue_size;

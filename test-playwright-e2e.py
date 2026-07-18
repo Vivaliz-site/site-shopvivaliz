@@ -6,14 +6,19 @@ REGRA PRINCIPAL: SEMPRE CLICAR NOS BOTOES, NUNCA NAVEGAR DIRETO
 Testa checkout completo: CEP → Transportadora → Mercado Pago → BD → Admin
 
 Cada teste:
-✓ Preenche formulários
-✓ Clica em botões (não navega URL)
-✓ Valida resposta visual
-✓ Simula ação real de usuário
+[OK] Preenche formulários
+[OK] Clica em botões (não navega URL)
+[OK] Valida resposta visual
+[OK] Simula ação real de usuário
 """
 
 import asyncio
 import sys
+# Configurar encoding
+import sys
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 import os
 from datetime import datetime
 
@@ -56,20 +61,33 @@ async def test_checkout():
             # ========================================================
             print("[1] Checkout carrega?")
             try:
+                # Add product to cart first
+                print("[0] Adicionar produto ao carrinho na Home...")
+                try:
+                    await page.goto(BASE_URL, timeout=15000)
+                    await page.wait_for_selector(".buy-button", timeout=8000)
+                    await page.click(".buy-button")
+                    await page.wait_for_timeout(3000)
+                    print("[OK] Produto adicionado ao carrinho.\n")
+                except Exception as e:
+                    print(f"[FAIL] Erro ao adicionar ao carrinho: {e}\n")
+                    await browser.close()
+                    return results
+
                 await page.goto(f"{BASE_URL}/checkout/", timeout=15000)
-                await page.wait_for_selector("form", timeout=5000)
-                print("✅ PASSOU\n")
+                await page.wait_for_selector("#checkout-form", timeout=5000)
+                print("[OK] PASSOU\n")
                 results["passed"] += 1
                 results["tests"].append({
                     "name": "Checkout carrega",
-                    "status": "✅"
+                    "status": "[OK]"
                 })
             except Exception as e:
-                print(f"❌ FALHOU: {e}\n")
+                print(f"[FAIL] FALHOU: {e}\n")
                 results["failed"] += 1
                 results["tests"].append({
                     "name": "Checkout carrega",
-                    "status": "❌",
+                    "status": "[FAIL]",
                     "error": str(e)
                 })
                 await browser.close()
@@ -83,18 +101,18 @@ async def test_checkout():
                 await page.wait_for_selector("#nome", timeout=3000)
                 await page.wait_for_selector("#email", timeout=3000)
                 await page.wait_for_selector("#cep", timeout=3000)
-                print("✅ PASSOU\n")
+                print("[OK] PASSOU\n")
                 results["passed"] += 1
                 results["tests"].append({
                     "name": "Campos do formulário",
-                    "status": "✅"
+                    "status": "[OK]"
                 })
             except Exception as e:
-                print(f"❌ FALHOU: {e}\n")
+                print(f"[FAIL] FALHOU: {e}\n")
                 results["failed"] += 1
                 results["tests"].append({
                     "name": "Campos do formulário",
-                    "status": "❌",
+                    "status": "[FAIL]",
                     "error": str(e)
                 })
 
@@ -122,31 +140,31 @@ async def test_checkout():
                 cidade = await page.input_value("#cidade")
 
                 if endereco and cidade:
-                    print(f"✅ PASSOU (Endereço: {endereco}, {cidade})\n")
+                    print(f"[OK] PASSOU (Endereço: {endereco}, {cidade})\n")
                     results["passed"] += 1
                     results["tests"].append({
                         "name": "CEP preenche endereço",
-                        "status": "✅",
+                        "status": "[OK]",
                         "data": {
                             "endereco": endereco,
                             "cidade": cidade
                         }
                     })
                 else:
-                    print("❌ FALHOU: CEP não preencheu endereço\n")
+                    print("[FAIL] FALHOU: CEP não preencheu endereço\n")
                     results["failed"] += 1
                     results["tests"].append({
                         "name": "CEP preenche endereço",
-                        "status": "❌",
+                        "status": "[FAIL]",
                         "error": "Campos vazios"
                     })
 
             except Exception as e:
-                print(f"❌ FALHOU: {e}\n")
+                print(f"[FAIL] FALHOU: {e}\n")
                 results["failed"] += 1
                 results["tests"].append({
                     "name": "CEP preenche endereço",
-                    "status": "❌",
+                    "status": "[FAIL]",
                     "error": str(e)
                 })
 
@@ -167,30 +185,30 @@ async def test_checkout():
                 ).count()
 
                 if options > 0:
-                    print(f"✅ PASSOU ({options} opções)\n")
+                    print(f"[OK] PASSOU ({options} opções)\n")
                     results["passed"] += 1
                     results["tests"].append({
                         "name": "Seletor transportadora",
-                        "status": "✅",
+                        "status": "[OK]",
                         "data": {
                             "opcoes": options
                         }
                     })
                 else:
-                    print("❌ FALHOU: Nenhuma opção de frete\n")
+                    print("[FAIL] FALHOU: Nenhuma opção de frete\n")
                     results["failed"] += 1
                     results["tests"].append({
                         "name": "Seletor transportadora",
-                        "status": "❌",
+                        "status": "[FAIL]",
                         "error": "Sem opções"
                     })
 
             except Exception as e:
-                print(f"⚠️ TIMEOUT/FALHA: {e}\n")
+                print(f"[WARN] TIMEOUT/FALHA: {e}\n")
                 print("   (Pode ser erro de API do MelhorEnvio)\n")
                 results["tests"].append({
                     "name": "Seletor transportadora",
-                    "status": "⚠️",
+                    "status": "[WARN]",
                     "error": str(e)
                 })
 
@@ -203,18 +221,18 @@ async def test_checkout():
                     "#checkout-mp-btn, button:has-text('Mercado Pago')",
                     timeout=5000
                 )
-                print("✅ PASSOU\n")
+                print("[OK] PASSOU\n")
                 results["passed"] += 1
                 results["tests"].append({
                     "name": "Botão Mercado Pago",
-                    "status": "✅"
+                    "status": "[OK]"
                 })
             except Exception as e:
-                print(f"❌ FALHOU: {e}\n")
+                print(f"[FAIL] FALHOU: {e}\n")
                 results["failed"] += 1
                 results["tests"].append({
                     "name": "Botão Mercado Pago",
-                    "status": "❌",
+                    "status": "[FAIL]",
                     "error": str(e)
                 })
 
@@ -230,23 +248,23 @@ async def test_checkout():
                 has_pagarme = "value=\"pagarme\"" in page_content
 
                 if not has_pix and not has_boleto and not has_pagarme:
-                    print("✅ PASSOU\n")
+                    print("[OK] PASSOU\n")
                     results["passed"] += 1
                     results["tests"].append({
                         "name": "Apenas Mercado Pago",
-                        "status": "✅"
+                        "status": "[OK]"
                     })
                 else:
-                    print("❌ FALHOU: Encontrados outros gateways\n")
+                    print("[FAIL] FALHOU: Encontrados outros gateways\n")
                     results["failed"] += 1
                     results["tests"].append({
                         "name": "Apenas Mercado Pago",
-                        "status": "❌",
+                        "status": "[FAIL]",
                         "error": f"PIX: {has_pix}, Boleto: {has_boleto}, Pagar.me: {has_pagarme}"
                     })
 
             except Exception as e:
-                print(f"❌ FALHOU: {e}\n")
+                print(f"[FAIL] FALHOU: {e}\n")
                 results["failed"] += 1
 
             # ========================================================
@@ -255,6 +273,19 @@ async def test_checkout():
             print("[7] Clicar botao 'Continuar com Mercado Pago'?")
             try:
                 # Voltar para checkout para clicar no botao
+                # Add product to cart first
+                print("[0] Adicionar produto ao carrinho na Home...")
+                try:
+                    await page.goto(BASE_URL, timeout=15000)
+                    await page.wait_for_selector(".buy-button", timeout=8000)
+                    await page.click(".buy-button")
+                    await page.wait_for_timeout(3000)
+                    print("[OK] Produto adicionado ao carrinho.\n")
+                except Exception as e:
+                    print(f"[FAIL] Erro ao adicionar ao carrinho: {e}\n")
+                    await browser.close()
+                    return results
+
                 await page.goto(f"{BASE_URL}/checkout/", timeout=15000)
 
                 # Preencher dados se necessario
@@ -362,32 +393,32 @@ async def main():
     """Executar testes"""
     results = await test_checkout()
 
-    print("\n" + "═" * 60)
-    print("📊 RESUMO FINAL")
-    print("═" * 60)
+    print("\n" + "=" * 60)
+    print("[SUMMARY] RESUMO FINAL")
+    print("=" * 60)
     print()
-    print(f"✅ PASSOU: {results['passed']}")
-    print(f"❌ FALHOU: {results['failed']}")
-    print(f"⚠️  AVISOS: {len([t for t in results['tests'] if t.get('status') == '⚠️'])}")
+    print(f"[OK] PASSOU: {results['passed']}")
+    print(f"[FAIL] FALHOU: {results['failed']}")
+    print(f"[WARN]  AVISOS: {len([t for t in results['tests'] if t.get('status') == '[WARN]'])}")
     print()
 
     total = results['passed'] + results['failed']
     if total > 0:
         percentage = round((results['passed'] / total) * 100)
-        print(f"📈 Taxa de sucesso: {percentage}%")
+        print(f"[STATS] Taxa de sucesso: {percentage}%")
     print()
 
     if results['failed'] == 0:
-        print("🟢 TESTES PASSANDO!")
+        print("[PASSING] TESTES PASSANDO!")
         print("\nPróximos passos:")
         print("1. Fazer PR em GitHub")
         print("2. Merge para main")
         print("3. Esperar sincronização (30min)")
         print("4. Testar novamente")
     else:
-        print("🔴 TESTES FALHANDO - Verificar logs acima")
+        print("[FAILING] TESTES FALHANDO - Verificar logs acima")
 
-    print("\n" + "═" * 60)
+    print("\n" + "=" * 60)
     print()
 
 
@@ -395,5 +426,5 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n❌ Teste interrompido")
+        print("\n[FAIL] Teste interrompido")
         sys.exit(1)

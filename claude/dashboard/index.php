@@ -155,6 +155,35 @@ $ci_ts_unix  = $ci_ts_raw ? (int)strtotime($ci_ts_raw) : 0;
 $ci_mins_ago = $ci_ts_unix > 0 ? (int)round((time() - $ci_ts_unix) / 60) : -1;
 $ci_stale    = $ci_mins_ago < 0 || $ci_mins_ago > 25;
 
+// Local AI Status Check
+$local_ai_heartbeat_path = dirname(__DIR__, 2) . '/logs/local-ai-heartbeat.json';
+$local_ai_heartbeat = @json_decode(@file_get_contents($local_ai_heartbeat_path) ?: '{}', true) ?: [];
+$local_ai_worker_pid_path = dirname(__DIR__, 2) . '/logs/local-ai-service.pid';
+$local_ai_server_pid_path = dirname(__DIR__, 2) . '/logs/local-ai-server.pid';
+
+$local_ai_worker_pid = @trim((string)@file_get_contents($local_ai_worker_pid_path));
+$local_ai_server_pid = @trim((string)@file_get_contents($local_ai_server_pid_path));
+
+function local_ai_is_pid_active(string $pid): bool {
+    if ($pid === '') return false;
+    $output = [];
+    exec("tasklist /FI \"PID eq $pid\" /NH", $output);
+    foreach ($output as $line) {
+        if (str_contains($line, $pid)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+$local_ai_worker_active = local_ai_is_pid_active($local_ai_worker_pid);
+$local_ai_server_active = local_ai_is_pid_active($local_ai_server_pid);
+
+$local_ai_heartbeat_ts = $local_ai_heartbeat['timestamp'] ?? '';
+$local_ai_heartbeat_unix = $local_ai_heartbeat_ts ? (int)strtotime($local_ai_heartbeat_ts) : 0;
+$local_ai_heartbeat_sec_ago = $local_ai_heartbeat_unix > 0 ? (time() - $local_ai_heartbeat_unix) : -1;
+$local_ai_heartbeat_active = $local_ai_heartbeat_sec_ago >= 0 && $local_ai_heartbeat_sec_ago <= 120;
+
 $status_color = $all_ok ? '#22c55e' : '#ef4444';
 ?>
 <!DOCTYPE html>
@@ -338,6 +367,48 @@ $status_color = $all_ok ? '#22c55e' : '#ef4444';
     </div>
     <?php endif; ?>
     <?php endif; ?>
+
+    <!-- IA LOCAL E ORQUESTRADOR PERSISTENTE -->
+    <h2>IA Local & Orquestrador Persistente</h2>
+    <div class="grid-3" style="margin-bottom:1.5rem">
+        <!-- Status do Worker -->
+        <div class="provider-card <?= $local_ai_worker_active ? 'ok-provider' : 'fail-provider' ?>">
+            <div class="provider-name">⚙️ Worker Persistente</div>
+            <div class="provider-model">PID: <?= htmlspecialchars($local_ai_worker_pid ?: 'n/d') ?></div>
+            <div class="provider-status <?= $local_ai_worker_active ? 'ok' : 'fail' ?>">
+                <?= $local_ai_worker_active ? '✓ Executando' : '✗ Offline' ?>
+            </div>
+            <div style="font-size:.75rem;color:#94a3b8;margin-top:.2rem">
+                Fila: <?= (int)($local_ai_heartbeat['queue_pending'] ?? 0) ?> pendentes
+            </div>
+        </div>
+
+        <!-- Status do Server -->
+        <div class="provider-card <?= $local_ai_server_active ? 'ok-provider' : 'fail-provider' ?>">
+            <div class="provider-name">🖥️ Local AI API Server</div>
+            <div class="provider-model">PID: <?= htmlspecialchars($local_ai_server_pid ?: 'n/d') ?></div>
+            <div class="provider-status <?= $local_ai_server_active ? 'ok' : 'fail' ?>">
+                <?= $local_ai_server_active ? '✓ Online' : '✗ Offline' ?>
+            </div>
+            <div style="font-size:.75rem;color:#94a3b8;margin-top:.2rem">
+                Porta: 5555 (Restrito a Localhost)
+            </div>
+        </div>
+
+        <!-- Heartbeat e Modelo -->
+        <div class="provider-card <?= $local_ai_heartbeat_active ? 'ok-provider' : 'fail-provider' ?>">
+            <div class="provider-name">💓 Worker Heartbeat</div>
+            <div class="provider-model">Modelo: <?= htmlspecialchars($local_ai_heartbeat['model'] ?? 'qwen2.5-coder:1.5b') ?></div>
+            <div class="provider-status <?= $local_ai_heartbeat_active ? 'ok' : 'fail' ?>">
+                <?= $local_ai_heartbeat_active ? '✓ Ativo (Há ' . $local_ai_heartbeat_sec_ago . 's)' : '✗ Sem Sinal (Stale)' ?>
+            </div>
+            <?php if (!empty($local_ai_heartbeat['last_task_id'])): ?>
+                <div style="font-size:.75rem;color:#94a3b8;margin-top:.2rem;word-break:break-all;">
+                    Task: <?= htmlspecialchars($local_ai_heartbeat['last_task_id']) ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
 
     <!-- ÚLTIMO RUN EHA -->
     <?php if (!empty($last_run)): ?>

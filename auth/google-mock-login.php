@@ -51,6 +51,10 @@ try {
     // Fazer login
     sv_social_login_user($user);
 
+    if (isset($_GET['is_admin']) && $_GET['is_admin'] === '1') {
+        $_SESSION['is_admin'] = 1;
+    }
+
     // Redirecionar
     header('Location: ' . $redirectTo);
     exit;
