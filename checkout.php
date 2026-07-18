@@ -307,6 +307,11 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     function getShippingQuote() {
         try { return JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null'); } catch(e) { return null; }
     }
+    function getCoupon() {
+        try { return JSON.parse(localStorage.getItem('shopvivaliz_coupon') || 'null'); } catch(e) { return null; }
+    }
+    function saveCoupon(coupon) { localStorage.setItem('shopvivaliz_coupon', JSON.stringify(coupon)); }
+    function clearCoupon() { localStorage.removeItem('shopvivaliz_coupon'); }
 
     /* Persistencia dos dados do formulario: sem isso, sair da tela (ex: pra
        revisar o carrinho) e voltar limpava nome/email/endereco e o usuario
