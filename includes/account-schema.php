@@ -110,6 +110,31 @@ function sv_account_ensure_schema(): void
     }
 
     $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS coupons (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            code VARCHAR(60) NOT NULL,
+            description VARCHAR(255) NULL,
+            discount_type VARCHAR(20) NOT NULL DEFAULT "percent",
+            discount_value DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+            starts_at DATETIME NULL,
+            ends_at DATETIME NULL,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NULL,
+            UNIQUE KEY uniq_code (code),
+            KEY idx_active (is_active)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+    // Cupom referenciado no popup de carrinho abandonado (includes/navbar.php)
+    // e no assistente Liz -- antes disso nunca existia como registro real,
+    // entao o desconto prometido nunca era de fato aplicado.
+    $pdo->exec(
+        "INSERT INTO coupons (code, description, discount_type, discount_value, is_active)
+         VALUES ('VOLTEI5', 'Cupom carrinho abandonado (5%)', 'percent', 5.00, 1)
+         ON DUPLICATE KEY UPDATE code = code"
+    );
+
+    $pdo->exec(
         'CREATE TABLE IF NOT EXISTS password_resets (
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,
