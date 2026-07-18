@@ -40,6 +40,12 @@
 
 ## Entradas
 
+### 2026-07-18 — `includes/products-cache.php` fabricava 188 produtos ficticios quando o BD "falhava" (e o check nunca funcionava)
+**Sistema/arquivo:** `includes/products-cache.php`, `catalogo-v2.php` (unico caller, orfao -- nenhuma pagina linka pra ele)
+**O que descobri:** `obter_produtos()`/`contar_produtos()` tinham um fallback que gerava 188 produtos totalmente inventados (nomes tipo "Premium Camisetas Azul - Confortável", precos aleatorios, estoque `rand(10,200)`, imagem via `via.placeholder.com`) sempre que "o BD nao estava disponivel". Só que o check era `function_exists('Database')` -- `Database` é uma **classe**, não funcao, entao esse check é sempre `false` e o fallback fake **rodava sempre**, nunca tentava o banco real. Corrigido pra `class_exists('Database')` e removido o fallback fabricado por completo -- agora retorna array vazio se o BD falhar (a pagina já trata `empty($produtos)` corretamente).
+**Por quê importa:** apesar de `catalogo-v2.php` ser orfao (nenhuma pagina do site linka pra ele hoje), é acessivel por URL direta e mostraria produtos que nao existem de verdade, com precos inventados -- risco real se alguem cair nele. Alem disso o bug `function_exists` num nome de classe é um padrao fácil de repetir em outro lugar do codebase; vale grep por `function_exists\(['"]\w+['"]\)` perto de `new \w+\(\)` se for investigar algo parecido.
+**Ver também:** —
+
 ### 2026-07-18 — Etiqueta Melhor Envio agora so e comprada depois da NF emitida (nao mais na aprovacao do pagamento)
 **Sistema/arquivo:** `api/webhook-mercadopago.php`, `api/webhooks/order-status-update.php`, `api/melhorenvio/generate-label-background.php`
 **O que descobri:** o fluxo antigo comprava a etiqueta assim que o Mercado Pago aprovava o pagamento -- antes de qualquer NF existir no ERP, invertendo a ordem real do processo (deveria ser: pago -> NF emitida -> etiqueta comprada). Trigger removido de `webhook-mercadopago.php`. Ao investigar onde plugar o gatilho certo, descobri que **ja existia** um endpoint cadastrado no painel Tiny pra receber o evento de nota fiscal -- `api/webhooks/order-status-update.php` (ver painel: Integrações → API do ERP → gerenciar → aba Notificações → URLs de notificações → campo "URL para envio da nota fiscal"). So faltava agir sobre o evento: adicionado disparo de `generate-label-background.php` quando `$normalized_status === 'nota_fiscal_enviada'`.
