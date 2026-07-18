@@ -12,6 +12,10 @@ function sv_account_ensure_schema(): void
     $done = true;
 
     $pdo = sv_pdo();
+    if (!($pdo instanceof PDO)) {
+        error_log('[account-schema] sv_pdo indisponivel; schema nao aplicado');
+        return;
+    }
     $pdo->exec(
         'CREATE TABLE IF NOT EXISTS addresses (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -48,6 +52,11 @@ function sv_account_ensure_schema(): void
             payment_method VARCHAR(50) NULL,
             tracking_number VARCHAR(120) NULL,
             estimated_delivery DATE NULL,
+            nf_id VARCHAR(64) NULL,
+            nf_numero VARCHAR(30) NULL,
+            nf_serie VARCHAR(20) NULL,
+            nf_chave_acesso VARCHAR(80) NULL,
+            nf_data_emissao DATETIME NULL,
             items_json TEXT NULL,
             nf_pdf_url VARCHAR(500) NULL,
             nf_xml_url VARCHAR(500) NULL,
@@ -78,9 +87,20 @@ function sv_account_ensure_schema(): void
         'payment_method' => 'ALTER TABLE orders ADD COLUMN payment_method VARCHAR(50) NULL',
         'tracking_number' => 'ALTER TABLE orders ADD COLUMN tracking_number VARCHAR(120) NULL',
         'estimated_delivery' => 'ALTER TABLE orders ADD COLUMN estimated_delivery DATE NULL',
+        'nf_id' => 'ALTER TABLE orders ADD COLUMN nf_id VARCHAR(64) NULL',
+        'nf_numero' => 'ALTER TABLE orders ADD COLUMN nf_numero VARCHAR(30) NULL',
+        'nf_serie' => 'ALTER TABLE orders ADD COLUMN nf_serie VARCHAR(20) NULL',
+        'nf_chave_acesso' => 'ALTER TABLE orders ADD COLUMN nf_chave_acesso VARCHAR(80) NULL',
+        'nf_data_emissao' => 'ALTER TABLE orders ADD COLUMN nf_data_emissao DATETIME NULL',
         'items_json' => 'ALTER TABLE orders ADD COLUMN items_json TEXT NULL',
         'nf_pdf_url' => 'ALTER TABLE orders ADD COLUMN nf_pdf_url VARCHAR(500) NULL',
         'nf_xml_url' => 'ALTER TABLE orders ADD COLUMN nf_xml_url VARCHAR(500) NULL',
+        'melhorenvio_shipment_id' => 'ALTER TABLE orders ADD COLUMN melhorenvio_shipment_id VARCHAR(64) NULL',
+        'label_url' => 'ALTER TABLE orders ADD COLUMN label_url VARCHAR(500) NULL',
+        'label_status' => 'ALTER TABLE orders ADD COLUMN label_status VARCHAR(50) NULL',
+        'tiny_dispatch_status' => 'ALTER TABLE orders ADD COLUMN tiny_dispatch_status VARCHAR(50) NULL',
+        'tiny_dispatch_error' => 'ALTER TABLE orders ADD COLUMN tiny_dispatch_error VARCHAR(500) NULL',
+        'tiny_dispatch_updated_at' => 'ALTER TABLE orders ADD COLUMN tiny_dispatch_updated_at DATETIME NULL',
     ];
     foreach ($alterations as $column => $sql) {
         if (!isset($existing[$column])) {

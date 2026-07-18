@@ -136,6 +136,227 @@ function svtop_tiny_request(string $method, string $path, string $token, ?array 
     return ['status' => $status, 'body' => is_string($body) ? $body : '', 'json' => is_array($json) ? $json : []];
 }
 
+function svtop_tiny_get(string $path, string $token): array
+{
+    return svtop_tiny_request('GET', $path, $token);
+}
+
+function svtop_tiny_get_order(string $idPedido, string $token): array
+{
+    return svtop_tiny_get('/pedidos/' . rawurlencode($idPedido), $token);
+}
+
+function svtop_tiny_update_dispatch(string $idPedido, string $token, array $payload): array
+{
+    return svtop_tiny_request('PUT', '/pedidos/' . rawurlencode($idPedido) . '/despacho', $token, $payload);
+}
+
+function svtop_tiny_get_invoice(string $idNota, string $token): array
+{
+    return svtop_tiny_get('/notas/' . rawurlencode($idNota), $token);
+}
+
+function svtop_tiny_get_invoice_xml(string $idNota, string $token): array
+{
+    return svtop_tiny_get('/notas/' . rawurlencode($idNota) . '/xml', $token);
+}
+
+function svtop_tiny_list_categories(string $token): array
+{
+    return svtop_tiny_get('/categorias/todas', $token);
+}
+
+function svtop_tiny_int_env(string ...$keys): ?int
+{
+    foreach ($keys as $key) {
+        $value = trim((string)svtop_env($key));
+        if ($value !== '' && ctype_digit($value)) {
+            return (int)$value;
+        }
+    }
+    return null;
+}
+
+function svtop_tiny_float_env(string ...$keys): ?float
+{
+    foreach ($keys as $key) {
+        $value = trim((string)svtop_env($key));
+        if ($value !== '' && is_numeric($value)) {
+            return (float)$value;
+        }
+    }
+    return null;
+}
+
+function svtop_tiny_first_non_empty(array $values): string
+{
+    foreach ($values as $value) {
+        $value = trim((string)$value);
+        if ($value !== '') {
+            return $value;
+        }
+    }
+    return '';
+}
+
+function svtop_tiny_dispatch_forma_envio_id(array $order): ?int
+{
+    $explicit = svtop_tiny_int_env('TINY_DESPACHO_FORMA_ENVIO_ID', 'TINY_FORMA_ENVIO_ID');
+    if ($explicit !== null) {
+        return $explicit;
+    }
+
+    $label = strtolower(svtop_tiny_first_non_empty([
+        $order['shipping_label'] ?? '',
+        $order['shipping_service'] ?? '',
+        $order['shipping_method'] ?? '',
+    ]));
+
+    if (str_contains($label, 'correios')) {
+        return 337724753;
+    }
+    if (str_contains($label, 'jadlog')) {
+        return 337724757;
+    }
+
+    return null;
+}
+
+function svtop_tiny_dispatch_forma_frete_id(array $order): ?int
+{
+    $explicit = svtop_tiny_int_env('TINY_DESPACHO_FORMA_FRETE_ID', 'TINY_FORMA_FRETE_ID');
+    if ($explicit !== null) {
+        return $explicit;
+    }
+
+    $label = strtolower(svtop_tiny_first_non_empty([
+        $order['shipping_label'] ?? '',
+        $order['shipping_service'] ?? '',
+    ]));
+
+    if (str_contains($label, 'pac')) {
+        return svtop_tiny_int_env('TINY_DESPACHO_FORMA_FRETE_ID_PAC');
+    }
+    if (str_contains($label, 'sedex')) {
+        return svtop_tiny_int_env('TINY_DESPACHO_FORMA_FRETE_ID_SEDEX');
+    }
+
+    return null;
+}
+
+function svtop_tiny_build_dispatch_payload(array $order, array $context = []): array
+{
+    $payload = [];
+    $trackingCode = svtop_tiny_first_non_empty([
+        $context['codigoRastreamento'] ?? '',
+        $order['tracking_number'] ?? '',
+        $order['tracking'] ?? '',
+        $order['shipping_tracking_code'] ?? '',
+    ]);
+    $trackingUrl = svtop_tiny_first_non_empty([
+        $context['urlRastreamento'] ?? '',
+        $order['tracking_url'] ?? '',
+        $order['shipping_tracking_url'] ?? '',
+    ]);
+    $dispatchNote = svtop_tiny_first_non_empty([
+        $context['observacoes'] ?? '',
+        $order['notes'] ?? '',
+        $order['remarks'] ?? '',
+    ]);
+    $shippingTotal = svtop_tiny_float_env('TINY_DESPACHO_FRETE_PAGO_EMPRESA', 'TINY_DESPACHO_VALOR_FRETE');
+    if ($shippingTotal === null && isset($order['shipping_total']) && is_numeric($order['shipping_total'])) {
+        $shippingTotal = (float)$order['shipping_total'];
+    }
+
+    if ($trackingCode !== '') {
+        $payload['codigoRastreamento'] = $trackingCode;
+    }
+    if ($trackingUrl !== '') {
+        $payload['urlRastreamento'] = $trackingUrl;
+    }
+    $formaEnvioId = svtop_tiny_dispatch_forma_envio_id($order);
+    if ($formaEnvioId !== null) {
+        $payload['formaEnvio'] = ['id' => $formaEnvioId];
+    }
+    $formaFreteId = svtop_tiny_dispatch_forma_frete_id($order);
+    if ($formaFreteId !== null) {
+        $payload['formaFrete'] = ['id' => $formaFreteId];
+    }
+    if ($shippingTotal !== null) {
+        $payload['fretePagoEmpresa'] = $shippingTotal;
+    }
+
+    $datePrevista = svtop_tiny_first_non_empty([
+        $context['dataPrevista'] ?? '',
+        $order['estimated_delivery'] ?? '',
+        $order['shipping_estimated_delivery'] ?? '',
+    ]);
+    if ($datePrevista !== '') {
+        $payload['dataPrevista'] = substr($datePrevista, 0, 10);
+    }
+
+    $contactId = svtop_tiny_int_env('TINY_DESPACHO_ID_CONTATO_TRANSPORTADORA', 'TINY_ID_CONTATO_TRANSPORTADORA');
+    if ($contactId !== null) {
+        $payload['idContatoTransportadora'] = $contactId;
+    }
+
+    $volumes = $context['volumes'] ?? null;
+    if (is_int($volumes) || is_float($volumes)) {
+        $payload['volumes'] = max(1, (int)$volumes);
+    } elseif (is_array($volumes) && isset($volumes['count'])) {
+        $payload['volumes'] = max(1, (int)$volumes['count']);
+    } elseif (!empty($order['items']) && is_array($order['items'])) {
+        $payload['volumes'] = max(1, count($order['items']));
+    }
+
+    $pesoBruto = $context['pesoBruto'] ?? null;
+    if (is_numeric($pesoBruto)) {
+        $payload['pesoBruto'] = (float)$pesoBruto;
+    }
+
+    $pesoLiquido = $context['pesoLiquido'] ?? null;
+    if (is_numeric($pesoLiquido)) {
+        $payload['pesoLiquido'] = (float)$pesoLiquido;
+    }
+
+    if ($dispatchNote !== '') {
+        $payload['observacoes'] = $dispatchNote;
+    }
+
+    return $payload;
+}
+
+function svtop_tiny_dispatch_from_order(array $order, array $context = []): array
+{
+    $token = svtop_tiny_get_token();
+    if ($token === '') {
+        return ['ok' => false, 'error' => 'missing_tiny_token'];
+    }
+
+    $tinyOrderId = trim((string)($order['tiny_order_id'] ?? $order['olist_order_id'] ?? ''));
+    if ($tinyOrderId === '') {
+        return ['ok' => false, 'error' => 'missing_tiny_order_id'];
+    }
+
+    $payload = svtop_tiny_build_dispatch_payload($order, $context);
+    if ($payload === []) {
+        return ['ok' => false, 'error' => 'dispatch_payload_empty'];
+    }
+
+    $res = svtop_tiny_update_dispatch($tinyOrderId, $token, $payload);
+    if ($res['status'] === 200 || $res['status'] === 204) {
+        return ['ok' => true, 'status' => $res['status'], 'payload' => $payload, 'body' => $res['json']];
+    }
+
+    return [
+        'ok' => false,
+        'error' => 'dispatch_failed',
+        'status' => $res['status'],
+        'body' => $res['json'] ?: $res['body'],
+        'payload' => $payload,
+    ];
+}
+
 function svtop_format_cpf(string $digits): string
 {
     $digits = preg_replace('/\D/', '', $digits);
@@ -178,6 +399,7 @@ function svtop_create_contact(string $token, array $customer): ?int
     $docDigits = preg_replace('/\D/', '', (string)($customer['cpf'] ?? ''));
     $cep = preg_replace('/\D/', '', (string)($customer['cep'] ?? ''));
     $phone = (string)($customer['phone'] ?? '');
+    $contactCode = (string)($customer['contact_code'] ?? $customer['order_number'] ?? '');
     // Confirmado no schema oficial (api-docs.erp.olist.com/api-reference/contatos/criar-contato):
     // o campo se chama 'telefone', nao 'fone' -- 'fone' nao existe e era
     // ignorado silenciosamente pela Tiny, entao NENHUM contato criado pelo
@@ -197,6 +419,8 @@ function svtop_create_contact(string $token, array $customer): ?int
     ];
     $payload = [
         'nome'             => $customer['name'] ?? '',
+        'codigo'           => $contactCode !== '' ? $contactCode : ($customer['name'] ?? ''),
+        'fantasia'         => $customer['name'] ?? '',
         'tipoPessoa'       => strlen($docDigits) === 14 ? 'J' : 'F',
         'cpfCnpj'          => $docDigits,
         'email'            => $customer['email'] ?? '',
@@ -259,7 +483,10 @@ function svtop_push_order_tiny(array $order): ?string
 
     $contactId = svtop_find_contact_id($token, (string)($c['cpf'] ?? ''), (string)($c['name'] ?? ''));
     if ($contactId === null) {
-        $contactId = svtop_create_contact($token, $c);
+        $contactId = svtop_create_contact($token, array_merge($c, [
+            'contact_code' => $siteOrderNumber,
+            'order_number' => $siteOrderNumber,
+        ]));
     }
     // A busca de contato na Tiny e inconsistente logo apos criacao (indexacao
     // com atraso) -- confirmado ao vivo: chamadas a svtop_find_contact_id com
@@ -287,6 +514,13 @@ function svtop_push_order_tiny(array $order): ?string
         // pedido do site vai em 'obs' e 'numeroOrdemCompra' (referencia
         // externa) para ficar rastreavel dentro do ERP.
         'numeroOrdemCompra' => $siteOrderNumber,
+        // Vincula explicitamente o numero do checkout proprio ao canal de
+        // e-commerce. Na conta atual, pedidos do site usam ecommerce.id = 0
+        // e continuam pesquisaveis pelo numero do pedido externo.
+        'ecommerce' => [
+            'id' => 0,
+            'numeroPedidoEcommerce' => $siteOrderNumber,
+        ],
         // Confirmado na documentacao oficial (api-docs.erp.olist.com/api-reference/pedidos/criar-pedido):
         // 8=Dados Incompletos, 0=Aberta, 3=Aprovada, 4=Preparando Envio,
         // 1=Faturada, 7=Pronto Envio, 5=Enviada, 6=Entregue, 2=Cancelada,

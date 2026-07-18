@@ -12,6 +12,9 @@ function sv_settings_ensure_schema(): void
     $done = true;
 
     $pdo = sv_pdo();
+    if (!$pdo) {
+        return;
+    }
     $pdo->exec(
         'CREATE TABLE IF NOT EXISTS site_settings (
             setting_key VARCHAR(100) PRIMARY KEY,
@@ -26,6 +29,9 @@ function sv_setting_get(string $key, ?string $default = null): ?string
     sv_settings_ensure_schema();
     try {
         $pdo = sv_pdo();
+        if (!$pdo) {
+            return $default;
+        }
         $stmt = $pdo->prepare('SELECT setting_value FROM site_settings WHERE setting_key = :k LIMIT 1');
         $stmt->execute([':k' => $key]);
         $row = $stmt->fetch();
@@ -40,6 +46,9 @@ function sv_setting_set(string $key, string $value): void
 {
     sv_settings_ensure_schema();
     $pdo = sv_pdo();
+    if (!$pdo) {
+        return;
+    }
     $stmt = $pdo->prepare(
         'INSERT INTO site_settings (setting_key, setting_value) VALUES (:k, :v)
          ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)'

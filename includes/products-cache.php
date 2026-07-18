@@ -55,6 +55,27 @@ function contar_produtos(): int
  */
 function obter_categorias(): array
 {
+    $cachedPath = dirname(__DIR__) . '/storage/tiny/categories-flat.json';
+    if (is_file($cachedPath)) {
+        $decoded = json_decode((string)file_get_contents($cachedPath), true);
+        $items = is_array($decoded['items'] ?? null) ? $decoded['items'] : [];
+        $categorias = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $label = trim((string)($item['caminho'] ?? $item['descricao'] ?? ''));
+            if ($label !== '') {
+                $categorias[] = $label;
+            }
+        }
+        $categorias = array_values(array_unique($categorias));
+        sort($categorias);
+        if ($categorias !== []) {
+            return $categorias;
+        }
+    }
+
     $produtos = obter_produtos(999);
     $categorias = array_unique(array_column($produtos, 'category'));
     sort($categorias);
