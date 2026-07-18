@@ -228,12 +228,13 @@ final class ShopeeListingsOptimizationAgent
         }
 
         // Gera otimização (AI ou rule-based)
+        $aiError = null;
         $optimized = ($aiProvider !== 'rule_based' && $aiToken)
-            ? $this->optimizeWithAI($product, $aiProvider, $aiToken)
+            ? $this->optimizeWithAI($product, $aiProvider, $aiToken, $aiError)
             : $this->optimizeRuleBased($product);
 
         if (!$optimized) {
-            $entry['motivo'] = 'Otimização não gerou alterações';
+            $entry['motivo'] = $aiError ?? 'Otimização não gerou alterações (rule-based não achou melhoria)';
             return $entry;
         }
 
@@ -269,23 +270,27 @@ final class ShopeeListingsOptimizationAgent
     // AI optimization
     // ──────────────────────────────────────────────────────────────────────────
 
-    private function optimizeWithAI(array $product, string $provider, string $aiToken): ?array
+    private function optimizeWithAI(array $product, string $provider, string $aiToken, ?string &$error = null): ?array
     {
         $prompt = $this->buildOptimizationPrompt($product);
 
         $raw = match ($provider) {
-            'anthropic' => $this->callAnthropic($prompt, $aiToken),
-            'openai'    => $this->callOpenAI($prompt, $aiToken),
+            'anthropic' => $this->callAnthropic($prompt, $aiToken, $error),
+            'openai'    => $this->callOpenAI($prompt, $aiToken, $error),
             default     => null,
         };
 
-        if (!$raw) return null;
+        if (!$raw) return null; // $error já preenchido por callAnthropic()/callOpenAI()
 
         // Extrai JSON da resposta
         if (preg_match('/\{[\s\S]*\}/u', $raw, $m)) {
             $decoded = json_decode($m[0], true);
             if (is_array($decoded)) return $decoded;
+            $error = 'JSON inválido na resposta da IA (json_decode falhou): ' . substr($raw, 0, 300);
+            return null;
         }
+
+        $error = 'Resposta da IA não contém um JSON reconhecível: ' . substr($raw, 0, 300);
         return null;
     }
 
@@ -329,11 +334,11 @@ Retorne SOMENTE um JSON válido:
 PROMPT;
     }
 
-    private function callAnthropic(string $prompt, string $apiKey): ?string
+    private function callAnthropic(string $prompt, string $apiKey, ?string &$error = null): ?string
     {
         $body = json_encode([
             'model'      => self::ANTHROPIC_MODEL,
-            'max_tokens' => 1024,
+            'max_tokens' => 4096,
             'messages'   => [['role' => 'user', 'content' => $prompt]],
         ]);
 
@@ -350,14 +355,33 @@ PROMPT;
             CURLOPT_TIMEOUT        => 60,
             CURLOPT_SSL_VERIFYPEER => true,
         ]);
-        $resp = curl_exec($ch);
+        $resp     = curl_exec($ch);
+        $curlErrno = curl_errno($ch);
+        $curlErrmsg = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        $data = json_decode($resp ?: '', true);
-        return $data['content'][0]['text'] ?? null;
+        if ($resp === false || $curlErrno !== 0) {
+            $error = "Anthropic: curl error ($curlErrno): $curlErrmsg";
+            return null;
+        }
+
+        $data = json_decode($resp, true);
+
+        if ($httpCode !== 200 || !is_array($data)) {
+            $msg = $data['error']['message'] ?? substr($resp, 0, 300);
+            $error = "Anthropic: HTTP $httpCode: $msg";
+            return null;
+        }
+
+        $text = $data['content'][0]['text'] ?? null;
+        if ($text === null) {
+            $error = 'Anthropic: resposta 200 sem content[0].text: ' . substr($resp, 0, 300);
+        }
+        return $text;
     }
 
-    private function callOpenAI(string $prompt, string $apiKey): ?string
+    private function callOpenAI(string $prompt, string $apiKey, ?string &$error = null): ?string
     {
         $body = json_encode([
             'model'    => self::OPENAI_MODEL,
@@ -376,11 +400,30 @@ PROMPT;
             CURLOPT_TIMEOUT        => 60,
             CURLOPT_SSL_VERIFYPEER => true,
         ]);
-        $resp = curl_exec($ch);
+        $resp     = curl_exec($ch);
+        $curlErrno = curl_errno($ch);
+        $curlErrmsg = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        $data = json_decode($resp ?: '', true);
-        return $data['choices'][0]['message']['content'] ?? null;
+        if ($resp === false || $curlErrno !== 0) {
+            $error = "OpenAI: curl error ($curlErrno): $curlErrmsg";
+            return null;
+        }
+
+        $data = json_decode($resp, true);
+
+        if ($httpCode !== 200 || !is_array($data)) {
+            $msg = $data['error']['message'] ?? substr($resp, 0, 300);
+            $error = "OpenAI: HTTP $httpCode: $msg";
+            return null;
+        }
+
+        $text = $data['choices'][0]['message']['content'] ?? null;
+        if ($text === null) {
+            $error = 'OpenAI: resposta 200 sem choices[0].message.content: ' . substr($resp, 0, 300);
+        }
+        return $text;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
