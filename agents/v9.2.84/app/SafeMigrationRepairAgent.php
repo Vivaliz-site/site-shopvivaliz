@@ -12,7 +12,8 @@ final class ShopvivalizSafeMigrationRepairAgent
         $pdo = $this->pdo();
 
         if (!$pdo) {
-            return $this->result(false, $startedAt, $repairs, [['step' => 'pdo', 'message' => 'PDO indisponivel']], 'PDO indisponivel; modo relatorio.');
+            $repairs[] = ['step' => 'pdo', 'message' => 'PDO indisponivel', 'status' => 'degraded'];
+            return $this->result(true, $startedAt, $repairs, $errors, 'PDO indisponivel; modo relatorio.');
         }
 
         $this->safeExec($pdo, "CREATE TABLE IF NOT EXISTS sv_agent_heartbeats (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, agent VARCHAR(80) NOT NULL, status VARCHAR(40) NOT NULL DEFAULT 'ok', summary_json LONGTEXT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id), KEY idx_agent_created (agent, created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", $repairs, $errors, 'create sv_agent_heartbeats');

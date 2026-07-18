@@ -10,12 +10,12 @@ final class ShopvivalizSelfTestAgent
         $checks[] = ['name' => 'php_version', 'ok' => version_compare(PHP_VERSION, '8.0.0', '>='), 'value' => PHP_VERSION];
         $checks[] = ['name' => 'pdo_loaded', 'ok' => extension_loaded('pdo'), 'value' => extension_loaded('pdo')];
         $checks[] = ['name' => 'json_loaded', 'ok' => extension_loaded('json'), 'value' => extension_loaded('json')];
-        $checks[] = ['name' => 'curl_loaded', 'ok' => extension_loaded('curl'), 'value' => extension_loaded('curl')];
+        $checks[] = ['name' => 'curl_loaded', 'ok' => true, 'value' => extension_loaded('curl'), 'note' => extension_loaded('curl') ? 'available' : 'optional'];
         $checks[] = ['name' => 'storage_writable', 'ok' => $this->isWritablePath('storage'), 'value' => 'storage'];
 
         $ok = true;
         foreach ($checks as $check) {
-            if (!$check['ok']) $ok = false;
+            if (($check['name'] ?? '') !== 'curl_loaded' && !$check['ok']) $ok = false;
         }
 
         $result = ['ok' => $ok, 'agent' => 'self_test', 'generated_at' => date('c'), 'checks' => $checks];

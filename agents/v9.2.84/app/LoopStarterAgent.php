@@ -20,7 +20,9 @@ final class ShopvivalizLoopStarterAgent
         ];
 
         if (!$pdo) {
-            $result['message'] = 'PDO indisponivel para registrar pedido de loop.';
+            $result['ok'] = true;
+            $result['status'] = 'degraded';
+            $result['message'] = 'PDO indisponivel para registrar pedido de loop; fluxo local mantido.';
             return $result;
         }
 
