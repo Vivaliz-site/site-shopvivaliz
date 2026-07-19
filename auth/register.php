@@ -227,6 +227,34 @@ $apple_auth_url = sv_social_apple_auth_url('register', '/');
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
+        .password-field {
+            position: relative;
+        }
+        .password-field input {
+            padding-right: 92px;
+        }
+        .password-toggle {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: auto;
+            min-width: 74px;
+            padding: 8px 10px;
+            margin-top: 0;
+            border: 1px solid #d1d5db;
+            border-radius: 999px;
+            background: #fff;
+            color: #374151;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+            box-shadow: none;
+        }
+        .password-toggle:hover {
+            background: #f8fafc;
+            box-shadow: none;
+        }
         .error {
             background: #fee;
             color: #c33;
@@ -361,8 +389,11 @@ $apple_auth_url = sv_social_apple_auth_url('register', '/');
 
             <div class="form-group">
                 <label for="password">Senha</label>
-                <input type="password" id="password" name="password" required
-                    placeholder="••••••••">
+                <div class="password-field">
+                    <input type="password" id="password" name="password" required
+                        placeholder="••••••••" autocomplete="new-password">
+                    <button type="button" class="password-toggle" data-password-toggle="password" aria-pressed="false" aria-label="Mostrar senha">Mostrar</button>
+                </div>
                 <div class="password-requirements">
                     Mínimo 8 caracteres
                 </div>
@@ -370,8 +401,11 @@ $apple_auth_url = sv_social_apple_auth_url('register', '/');
 
             <div class="form-group">
                 <label for="password_confirm">Confirmar Senha</label>
-                <input type="password" id="password_confirm" name="password_confirm" required
-                    placeholder="••••••••">
+                <div class="password-field">
+                    <input type="password" id="password_confirm" name="password_confirm" required
+                        placeholder="••••••••" autocomplete="new-password">
+                    <button type="button" class="password-toggle" data-password-toggle="password_confirm" aria-pressed="false" aria-label="Mostrar senha">Mostrar</button>
+                </div>
             </div>
 
             <button type="submit">Cadastrar</button>
@@ -395,5 +429,21 @@ $apple_auth_url = sv_social_apple_auth_url('register', '/');
             Já tem conta? <a href="/auth/login.php">Faça login</a>
         </div>
     </div>
+    <script>
+    (function () {
+        document.querySelectorAll('[data-password-toggle]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var targetId = btn.getAttribute('data-password-toggle');
+                var input = targetId ? document.getElementById(targetId) : null;
+                if (!input) return;
+                var hidden = input.type === 'password';
+                input.type = hidden ? 'text' : 'password';
+                btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+                btn.setAttribute('aria-label', hidden ? 'Ocultar senha' : 'Mostrar senha');
+                btn.textContent = hidden ? 'Ocultar' : 'Mostrar';
+            });
+        });
+    })();
+    </script>
 </body>
 </html>
