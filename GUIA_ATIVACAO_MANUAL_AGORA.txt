@@ -1,0 +1,37 @@
+
+
+    CAMPANHA PRONTA PARA ATIVAR MANUALMENTE
+    =======================================
+
+    Se nao conseguir via API, ative manualmente:
+
+    1. Abra: https://ads.google.com/aw/campaigns/new?ocid=70511913
+    2. Preencha:
+       - Nome: Rodizios-Search-AGRESSIVO-10xROI-2026-07
+       - Website: https://shopvivaliz.com.br
+       - Budget Diario: R$ 15.00
+
+    3. Adicione 6 KEYWORDS (PHRASE match):
+    
+       - kit 12 rodizios soprano 35mm com freio (CPC max: R$ 3.50)
+       - 20 rodizios gel silicone 35mm com freio (CPC max: R$ 3.30)
+       - rodizios soprano 35mm comprar online (CPC max: R$ 2.80)
+       - kit rodizios gel 35mm com freio soprano (CPC max: R$ 2.90)
+       - comprar rodizios giratório gel 35mm (CPC max: R$ 2.50)
+       - rodizios de qualidade para móvel soprano (CPC max: R$ 2.40)
+
+    4. Adicione NEGATIVE keywords:
+
+       - rodizio barato
+       - rodizio gratis
+       - rodizio free download
+       - rodizio usado segunda mao
+       - rodizio emprego curso
+
+    5. Clique ATIVAR
+
+    Resultado esperado quando ATIVAR:
+    - Impressoes comecam 1-4 horas apos ativacao
+    - Cliques esperados em 2-8 horas
+    - Primeira venda esperada em 2-4 dias
+    - ROI esperado: 10x+ em 30 dias
