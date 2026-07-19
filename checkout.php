@@ -129,7 +129,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 </label>
             </div>
             <div class="form-row-2">
-                <label class="form-group" id="boleto-cpf-field" hidden>
+                <label class="form-group" id="boleto-cpf-field">
                     <span>CPF do pagador *</span>
                     <input name="cpf" id="cpf-input" inputmode="numeric" maxlength="14" autocomplete="off" aria-label="CPF do pagador">
                 </label>
@@ -558,11 +558,10 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     }
 
     function updatePaymentFields() {
-        var boleto = selectedPaymentMethod() === 'boleto';
         var group = document.getElementById('boleto-cpf-field');
         var input = document.getElementById('cpf-input');
-        if (group) group.hidden = !boleto;
-        if (input) input.required = boleto;
+        if (group) group.hidden = false;
+        if (input) input.required = true;
     }
     document.querySelectorAll('input[name="payment_method"]').forEach(function(input) {
         input.addEventListener('change', updatePaymentFields);

@@ -165,13 +165,25 @@ if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen
     svoi_release($idempotencyKey);
     svop_json(422, ['ok' => false, 'error' => 'field_too_long']);
 }
-if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || $phone === '' || strlen($cep) !== 8 || $address === '') {
+if (
+    $name === ''
+    || !filter_var($email, FILTER_VALIDATE_EMAIL)
+    || $phone === ''
+    || strlen($cep) !== 8
+    || $address === ''
+    || $streetName === ''
+    || $streetNumber === ''
+    || $neighborhood === ''
+    || $city === ''
+    || strlen($state) !== 2
+    || !svmp_validate_cpf($cpf)
+) {
     svoi_release($idempotencyKey);
-    svop_json(422, ['ok' => false, 'error' => 'missing_required_fields']);
-}
-if ($paymentMethod === 'boleto' && (!svmp_validate_cpf($cpf) || $streetName === '' || $streetNumber === '' || $neighborhood === '' || $city === '' || strlen($state) !== 2)) {
-    svoi_release($idempotencyKey);
-    svop_json(422, ['ok' => false, 'error' => 'boleto_payer_fields_invalid', 'message' => 'Preencha CPF e endereco completo para emitir o boleto.']);
+    svop_json(422, [
+        'ok' => false,
+        'error' => 'customer_fields_invalid',
+        'message' => 'Preencha CPF e endereco completo para finalizar o pedido.',
+    ]);
 }
 
 $shippingTotal = round(max(0.0, (float)($body['shipping_total'] ?? 0)), 2);
