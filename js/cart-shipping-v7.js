@@ -9,6 +9,7 @@
   function money(v){return 'R$ '+Number(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');}
   function subtotal(){return cart().reduce(function(sum,item){return sum+(Number(item.price)||0)*(Number(item.quantity)||1);},0);}
   function save(quote){localStorage.setItem('shopvivaliz_shipping_quote',JSON.stringify(quote));}
+  function loadQuote(){try{return JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote')||'null');}catch(e){return null;}}
   function makeQuote(option,cep){return{cep:cep,total:Number(option.price)||0,option:option,label:(option.company?option.company+' - ':'')+(option.name||'Frete'),quote_id:option.quote_id||'',expires_at:Number(option.expires_at)||0,provider:'melhorenvio'};}
   function escHtml(str){var d=document.createElement('div');d.textContent=String(str||'');return d.innerHTML;}
   function renderOptions(options,cep){
@@ -49,6 +50,20 @@
     validity.textContent='Cotação válida por 30 minutos para o CEP '+cep.replace(/(\d{5})(\d{3})/,'$1-$2')+'.';
     status.appendChild(validity);
   }
+  function refreshIfExpired(){
+    var quote=loadQuote();
+    var now=Math.floor(Date.now()/1000);
+    var cep=input.value.replace(/\D/g,'');
+    if(quote&&quote.expires_at&&quote.expires_at<now){
+      localStorage.removeItem('shopvivaliz_shipping_quote');
+      if(cep.length===8){button.click();return true;}
+      if(status)status.textContent='Sua cotação de frete expirou. Calcule novamente.';
+      if(frete)frete.textContent='A calcular';
+      return true;
+    }
+    return false;
+  }
+  refreshIfExpired();
   button.addEventListener('click',function(event){
     event.preventDefault();event.stopImmediatePropagation();
     var items=cart();

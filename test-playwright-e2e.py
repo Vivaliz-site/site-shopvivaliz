@@ -59,7 +59,7 @@ async def test_checkout():
                 # Passo 0: Autenticar sessao com Google Mock Login
                 try:
                     print("Autenticando sessao de teste...")
-                    await page.goto(f"{BASE_URL}/auth/google-mock-login.php?is_admin=1", timeout=15000)
+                    await page.goto(f"{BASE_URL}/auth/google-mock-login.php?email=atendimento@shopvivaliz.com.br", timeout=15000)
                     await asyncio.sleep(1)
                 except Exception as e:
                     print(f"Aviso: Nao foi possivel autenticar: {e}")
@@ -107,9 +107,9 @@ async def test_checkout():
             # ========================================================
             print("[2] Campos do formulario existem?")
             try:
-                await page.wait_for_selector("#nome", timeout=3000)
-                await page.wait_for_selector("#email", timeout=3000)
-                await page.wait_for_selector("#cep", timeout=3000)
+                await page.wait_for_selector("[name='customer_name']", timeout=3000)
+                await page.wait_for_selector("[name='customer_email']", timeout=3000)
+                await page.wait_for_selector("#cep-input", timeout=3000)
                 print("[OK] PASSOU\n")
                 results["passed"] += 1
                 results["tests"].append({
@@ -131,22 +131,22 @@ async def test_checkout():
             print("[3] CEP preenche endereco (ViaCEP)?")
             try:
                 # Preencher formulario
-                await page.fill("#nome", "Teste Cliente")
-                await page.fill("#email", "teste@example.com")
-                await page.fill("#telefone", "11987654321")
-                await page.fill("#endereco", "")  # Sera preenchido por ViaCEP
-                await page.fill("#numero", "123")
-                await page.fill("#cidade", "")  # Sera preenchido por ViaCEP
-                await page.fill("#cep", "01310100")
+                await page.fill("[name='customer_name']", "Teste Cliente")
+                await page.fill("[name='customer_email']", "teste@example.com")
+                await page.fill("[name='customer_phone']", "11987654321")
+                await page.fill("#address-input", "")  # Sera preenchido por ViaCEP
+                await page.fill("#street-number-input", "123")
+                await page.fill("#city-input", "")  # Sera preenchido por ViaCEP
+                await page.fill("#cep-input", "01310100")
 
                 # Esperar por ViaCEP preencher
                 await page.wait_for_function(
-                    "document.getElementById('endereco').value !== ''",
+                    "document.getElementById('address-input').value !== ''",
                     timeout=5000
                 )
 
-                endereco = await page.input_value("#endereco")
-                cidade = await page.input_value("#cidade")
+                endereco = await page.input_value("#address-input")
+                cidade = await page.input_value("#city-input")
 
                 if endereco and cidade:
                     print(f"[OK] PASSOU (Endereco: {endereco}, {cidade})\n")
@@ -285,11 +285,11 @@ async def test_checkout():
                 await page.goto(f"{BASE_URL}/checkout/", timeout=15000)
 
                 # Preencher dados se necessario
-                await page.fill("#nome", "Teste E2E")
-                await page.fill("#email", "teste-e2e@example.com")
-                await page.fill("#telefone", "11987654321")
-                await page.fill("#cep", "01310100")
-                await page.fill("#numero", "123")
+                await page.fill("[name='customer_name']", "Teste E2E")
+                await page.fill("[name='customer_email']", "teste-e2e@example.com")
+                await page.fill("[name='customer_phone']", "11987654321")
+                await page.fill("#cep-input", "01310100")
+                await page.fill("#street-number-input", "123")
 
                 # Aguardar formulario estar pronto
                 await page.wait_for_selector("#checkout-mp-btn", timeout=5000)
