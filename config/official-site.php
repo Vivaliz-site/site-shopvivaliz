@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 return [
-    'base_url' => 'https://shopvivaliz.com.br',
+    'base_url' => 'https://www.shopvivaliz.com.br',
     'verified_at' => '2026-07-11',
     'source' => 'official_storefront',
     'navigation' => [
