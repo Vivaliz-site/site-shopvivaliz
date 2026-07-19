@@ -34,7 +34,7 @@ $smtpPort = (int)(getenv('SMTP_PORT') ?: '587');
 $smtpUser = getenv('SMTP_USER') ?: 'fredmourao@gmail.com';
 $smtpPass = getenv('SMTP_PASS') ?: '';
 $emailFrom = getenv('EMAIL_FROM') ?: 'noreply@shopvivaliz.com.br';
-$siteBaseUrl = rtrim((string)(getenv('SHOPVIVALIZ_BASE_URL') ?: getenv('APP_URL') ?: getenv('SITE_URL') ?: 'https://www.shopvivaliz.com.br'), '/');
+$siteBaseUrl = rtrim((string)(getenv('SHOPVIVALIZ_BASE_URL') ?: getenv('APP_URL') ?: getenv('SITE_URL') ?: 'https://shopvivaliz.com.br'), '/');
 
 // Validação
 if (empty($customerEmail) || !filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {

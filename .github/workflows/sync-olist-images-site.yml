@@ -105,7 +105,7 @@ jobs:
           OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
           OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
           OLIST_ACCESS_TOKEN: ${{ secrets.OLIST_ACCESS_TOKEN }}
-          SITE_BASE_URL: https://dev.shopvivaliz.com.br
+          SITE_BASE_URL: https://shopvivaliz.com.br
           OLIST_UPLOAD_MODE: ftp
           OLIST_DB_MODE: none
         run: |
@@ -132,7 +132,7 @@ jobs:
           }
           body = json.dumps(payload).encode()
           req = urllib.request.Request(
-              "https://dev.shopvivaliz.com.br/api/agent/olist-image-linker.php",
+              "https://shopvivaliz.com.br/api/agent/olist-image-linker.php",
               data=body,
               headers={
                   "Content-Type": "application/json",

@@ -80,7 +80,7 @@ if (!$isCli) {
 }
 
 // ── Base URL ──────────────────────────────────────────────────────────────────
-$baseUrl = rtrim(cd_env('SITE_URL') ?: 'https://dev.shopvivaliz.com.br', '/');
+$baseUrl = rtrim(cd_env('SITE_URL') ?: 'https://shopvivaliz.com.br', '/');
 
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 

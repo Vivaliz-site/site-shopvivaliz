@@ -25,7 +25,7 @@ if ($error) {
         <h1>Erro no Login</h1>
         <div class="error"><?php echo htmlspecialchars($error); ?></div>
         <p><?php echo htmlspecialchars($_GET['error_description'] ?? ''); ?></p>
-        <a href="https://dev.shopvivaliz.com.br/olist/login-form.php">← Voltar</a>
+        <a href="https://shopvivaliz.com.br/olist/login-form.php">← Voltar</a>
     </body>
     </html>
     <?php
@@ -48,7 +48,7 @@ if (!$code) {
     <body>
         <h1>Erro</h1>
         <div class="error">Código de autorização não recebido</div>
-        <a href="https://dev.shopvivaliz.com.br/olist/login-form.php">← Voltar</a>
+        <a href="https://shopvivaliz.com.br/olist/login-form.php">← Voltar</a>
     </body>
     </html>
     <?php
@@ -64,6 +64,6 @@ file_put_contents($code_file, $code);
 error_log("[Handle Callback] Código salvo: " . substr($code, 0, 30) . "...");
 
 // Redirecionar para complete-oauth-flow.php
-header('Location: https://dev.shopvivaliz.com.br/olist/complete-oauth-flow.php');
+header('Location: https://shopvivaliz.com.br/olist/complete-oauth-flow.php');
 exit;
 ?>

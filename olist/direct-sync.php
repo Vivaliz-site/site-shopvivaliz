@@ -3,7 +3,7 @@
  * Sincronização Direta Olist - Sem precisar de OAuth manual
  * Usa client_id + client_secret para obter token automaticamente
  *
- * Acesso: https://dev.shopvivaliz.com.br/olist/direct-sync.php
+ * Acesso: https://shopvivaliz.com.br/olist/direct-sync.php
  */
 
 header('Content-Type: application/json; charset=utf-8');

@@ -177,7 +177,7 @@ function sv_catalog_base_url(): string
         return $base = rtrim($env, '/');
     }
 
-    return $base = 'https://www.shopvivaliz.com.br';
+    return $base = 'https://shopvivaliz.com.br';
 }
 
 function sv_catalog_product_url(array $product): string

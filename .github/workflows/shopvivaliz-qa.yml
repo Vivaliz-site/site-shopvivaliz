@@ -120,7 +120,7 @@ jobs:
     steps:
       - name: Verificar footer e ausencia de bug visual conhecido na home
         run: |
-          html=$(curl -sL https://dev.shopvivaliz.com.br/)
+          html=$(curl -sL https://shopvivaliz.com.br/)
           if ! echo "$html" | grep -q 'footer-cols'; then
             echo "ERRO: footer nao encontrado na home ao vivo."
             exit 1

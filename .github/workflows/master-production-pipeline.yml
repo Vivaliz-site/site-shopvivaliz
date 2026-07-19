@@ -121,7 +121,7 @@ jobs:
           import re
 
           try:
-              response = urllib.request.urlopen('https://dev.shopvivaliz.com.br/', timeout=10)
+              response = urllib.request.urlopen('https://shopvivaliz.com.br/', timeout=10)
               html = response.read().decode('utf-8')
           except Exception as e:
               print(f"❌ ERRO: não conseguiu acessar site: {e}")
@@ -152,7 +152,7 @@ jobs:
           import urllib.request
           import re
 
-          response = urllib.request.urlopen('https://dev.shopvivaliz.com.br/')
+          response = urllib.request.urlopen('https://shopvivaliz.com.br/')
           html = response.read().decode('utf-8')
 
           def classes(tag):
@@ -193,7 +193,7 @@ jobs:
           import urllib.request
           import re
 
-          response = urllib.request.urlopen('https://dev.shopvivaliz.com.br/')
+          response = urllib.request.urlopen('https://shopvivaliz.com.br/')
           html = response.read().decode('utf-8')
 
           # Verifica se footer tem dados reais (não números inventados)
@@ -231,7 +231,7 @@ jobs:
           result=$(curl --fail --location --silent --show-error --output /dev/null \
             --connect-timeout 5 --max-time 10 \
             --write-out '%{http_code} %{time_total}' \
-            https://dev.shopvivaliz.com.br/)
+            https://shopvivaliz.com.br/)
           read -r status elapsed <<< "$result"
           echo "HTTP $status em ${elapsed}s"
           python3 - "$elapsed" <<'PY'
@@ -327,7 +327,7 @@ jobs:
           Tests: ✅ PASSED
           Deploy: ✅ SYNCED TO ORACLE VM
 
-          Site is now live at: https://dev.shopvivaliz.com.br/
+          Site is now live at: https://shopvivaliz.com.br/
           ========================================
           EOF
           cat deployment-log-${{ github.sha }}.txt
@@ -381,15 +381,15 @@ jobs:
         run: |
           # Verifica endpoints críticos (máx 5 retries)
           endpoints=(
-            "https://dev.shopvivaliz.com.br/"
-            "https://dev.shopvivaliz.com.br/carrinho"
-            "https://dev.shopvivaliz.com.br/checkout"
-            "https://dev.shopvivaliz.com.br/api/catalog/products.php?limit=1"
-            "https://dev.shopvivaliz.com.br/api/catalog/price-health.php"
-            "https://dev.shopvivaliz.com.br/api/catalog/image-health.php"
-            "https://dev.shopvivaliz.com.br/api/catalog/stock-health.php"
-            "https://dev.shopvivaliz.com.br/api/orders/health.php"
-            "https://dev.shopvivaliz.com.br/installer/self-test.php"
+            "https://shopvivaliz.com.br/"
+            "https://shopvivaliz.com.br/carrinho"
+            "https://shopvivaliz.com.br/checkout"
+            "https://shopvivaliz.com.br/api/catalog/products.php?limit=1"
+            "https://shopvivaliz.com.br/api/catalog/price-health.php"
+            "https://shopvivaliz.com.br/api/catalog/image-health.php"
+            "https://shopvivaliz.com.br/api/catalog/stock-health.php"
+            "https://shopvivaliz.com.br/api/orders/health.php"
+            "https://shopvivaliz.com.br/installer/self-test.php"
           )
 
           for url in "${endpoints[@]}"; do
@@ -426,7 +426,7 @@ jobs:
           )
           for path in "${private_paths[@]}"; do
             status=$(curl --silent --output /dev/null --max-time 10 \
-              --write-out '%{http_code}' "https://dev.shopvivaliz.com.br${path}" || echo "000")
+              --write-out '%{http_code}' "https://shopvivaliz.com.br${path}" || echo "000")
             if [[ "$status" != "403" ]]; then
               echo "::error::private path exposed: ${path} returned ${status}"
               exit 1
@@ -435,7 +435,7 @@ jobs:
           done
 
           headers=$(curl --silent --show-error --head --max-time 10 \
-            https://dev.shopvivaliz.com.br/ | tr -d '\r' | tr '[:upper:]' '[:lower:]')
+            https://shopvivaliz.com.br/ | tr -d '\r' | tr '[:upper:]' '[:lower:]')
           for required in strict-transport-security x-content-type-options content-security-policy; do
             if ! grep -q "^${required}:" <<< "$headers"; then
               echo "::error::required security header missing: ${required}"

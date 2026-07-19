@@ -1,7 +1,7 @@
 <?php
 /**
  * Webhook Receiver - Olist envia notificações de mudanças
- * POST https://dev.shopvivaliz.com.br/olist/webhook-receiver.php
+ * POST https://shopvivaliz.com.br/olist/webhook-receiver.php
  *
  * Gatilhos:
  * - Produto criado

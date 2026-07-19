@@ -65,7 +65,7 @@ jobs:
       - name: Gerar e enviar relatorio pelo sender central
         env:
           REPORT_WINDOW_HOURS: "4"
-          REPORT_BASE_URL: "https://dev.shopvivaliz.com.br"
+          REPORT_BASE_URL: "https://shopvivaliz.com.br"
           REPORT_LOG_PATH: "logs/email-activity-report.txt"
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_TOKEN: ${{ github.token }}

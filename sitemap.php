@@ -7,7 +7,7 @@ $official = __DIR__ . '/config/official-site.php';
 $officialData = is_file($official) ? (@include $official) : [];
 $base = is_array($officialData) && trim((string)($officialData['base_url'] ?? '')) !== ''
     ? rtrim((string)$officialData['base_url'], '/')
-    : 'https://www.shopvivaliz.com.br';
+    : 'https://shopvivaliz.com.br';
 $catalog = __DIR__ . '/storage/products-cache-ativos.json';
 $catalogMTime = is_file($catalog) ? (int)@filemtime($catalog) : time();
 $today   = date('Y-m-d', $catalogMTime > 0 ? $catalogMTime : time());

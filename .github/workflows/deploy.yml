@@ -308,7 +308,7 @@ jobs:
           fi
 
           mkdir -p reports
-          RESET_URL="https://dev.shopvivaliz.com.br/api/maintenance/opcache-reset.php?agent_key=${RUNTIME_AGENT_KEY_VALUE}"
+          RESET_URL="https://shopvivaliz.com.br/api/maintenance/opcache-reset.php?agent_key=${RUNTIME_AGENT_KEY_VALUE}"
           HTTP_CODE=$(curl -sS -L \
             --max-time 20 \
             --retry 2 \
@@ -342,7 +342,7 @@ jobs:
               --max-time 10 \
               --retry 1 \
               --retry-delay 2 \
-              "https://dev.shopvivaliz.com.br/" > /dev/null; then
+              "https://shopvivaliz.com.br/" > /dev/null; then
               echo "✓ Site respondendo corretamente"
               exit 0
             fi
@@ -359,14 +359,14 @@ jobs:
           echo "  • Problema de conectividade"
           echo "  • Erro na aplicação"
           echo ""
-          echo "Verifique manualmente: https://dev.shopvivaliz.com.br/"
+          echo "Verifique manualmente: https://shopvivaliz.com.br/"
           exit 1
 
       - name: Validar Deploy Publicado
         shell: bash
         run: |
           python3 scripts/deploy-validator.py \
-            --url "https://dev.shopvivaliz.com.br/" \
+            --url "https://shopvivaliz.com.br/" \
             --report "reports/deploy-validation.json" \
             --expect "/public/assets/liz-assistant/liz-assistant.css" \
             --expect "/public/assets/liz-assistant/liz-assistant.js" \

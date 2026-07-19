@@ -2,7 +2,7 @@
 /**
  * OAuth Callback Simples
  * Apenas recebe código e salva em arquivo
- * URL: https://dev.shopvivaliz.com.br/olist/oauth-callback-simple.php
+ * URL: https://shopvivaliz.com.br/olist/oauth-callback-simple.php
  */
 
 header('Content-Type: application/json; charset=utf-8');

@@ -2,7 +2,7 @@
 declare(strict_types=1);
 /**
  * ADMIN ENDPOINT - Force git pull on server
- * Access: https://dev.shopvivaliz.com.br/admin/force-git-pull.php
+ * Access: https://shopvivaliz.com.br/admin/force-git-pull.php
  *
  * This endpoint forces a git pull from GitHub to update checkout to latest main branch
  * Use when automatic cron sync fails or is delayed

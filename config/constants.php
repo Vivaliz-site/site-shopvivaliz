@@ -56,7 +56,7 @@ define('UPLOADS_PATH', STORAGE_PATH . '/uploads');
 
 // URLs
 if (!defined('BASE_URL')) {
-    define('BASE_URL', getenv('BASE_URL') ?: 'https://dev.shopvivaliz.com.br');
+    define('BASE_URL', getenv('BASE_URL') ?: 'https://shopvivaliz.com.br');
 }
 if (!defined('API_URL')) {
     define('API_URL', BASE_URL . '/api');

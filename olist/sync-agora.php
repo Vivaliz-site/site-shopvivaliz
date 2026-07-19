@@ -1,7 +1,7 @@
 <?php
 /**
  * Sincronizar AGORA - Pode ser chamado via:
- * 1. URL direto: https://dev.shopvivaliz.com.br/olist/sync-agora.php
+ * 1. URL direto: https://shopvivaliz.com.br/olist/sync-agora.php
  * 2. Com parâmetros: ?refresh_token=TOKEN
  *
  * Tenta automaticamente encontrar ou renovar token

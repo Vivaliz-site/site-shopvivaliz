@@ -12,7 +12,7 @@ declare(strict_types=1);
  *
  * Configuracao no painel Tiny: Menu -> Configuracoes -> Aba Geral ->
  * Outras configuracoes -> Webhooks -> "Notificacoes de notas fiscais
- * autorizadas" -> URL: https://dev.shopvivaliz.com.br/api/webhooks/tiny-nota-fiscal.php?token=<TINY_WEBHOOK_SECRET>
+ * autorizadas" -> URL: https://shopvivaliz.com.br/api/webhooks/tiny-nota-fiscal.php?token=<TINY_WEBHOOK_SECRET>
  */
 
 header_remove('X-Powered-By');

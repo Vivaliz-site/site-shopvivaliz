@@ -122,7 +122,7 @@ function svtnf_site_base_url(): string
         return rtrim($configured, '/');
     }
 
-    return 'https://www.shopvivaliz.com.br';
+    return 'https://shopvivaliz.com.br';
 }
 
 // Validar token do webhook

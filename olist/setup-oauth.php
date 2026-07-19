@@ -3,14 +3,14 @@
  * Setup OAuth - Fazer login uma única vez para gerar refresh_token
  * Depois disso, sincronização automática funciona
  *
- * Acesso: https://dev.shopvivaliz.com.br/olist/setup-oauth.php
+ * Acesso: https://shopvivaliz.com.br/olist/setup-oauth.php
  */
 
 header('Content-Type: text/html; charset=utf-8');
 
 $client_id = getenv('OLIST_CLIENT_ID') ?: die('ERRO: OLIST_CLIENT_ID não configurado');
 $client_secret = getenv('OLIST_CLIENT_SECRET') ?: die('ERRO: OLIST_CLIENT_SECRET não configurado');
-$redirect_uri = 'https://dev.shopvivaliz.com.br/olist/setup-oauth.php';
+$redirect_uri = getenv('OLIST_SETUP_REDIRECT_URI') ?: 'https://shopvivaliz.com.br/olist/setup-oauth.php';
 
 // Se recebeu código de autorização
 if (isset($_GET['code'])) {
@@ -106,7 +106,7 @@ if (isset($_GET['code'])) {
 
         <p><strong>Próximos passos:</strong></p>
         <ol>
-            <li>Acesse: <code>https://dev.shopvivaliz.com.br/olist/direct-sync.php</code></li>
+            <li>Acesse: <code>https://shopvivaliz.com.br/olist/direct-sync.php</code></li>
             <li>Os 198 produtos da Olist serão sincronizados automaticamente</li>
             <li>Você poderá sincronizar novamente sempre que desejar (token válido por 1 dia)</li>
         </ol>
@@ -118,7 +118,7 @@ if (isset($_GET['code'])) {
             <li>✓ Próxima sincronização: Automática!</li>
         </ul>
 
-        <a href="https://dev.shopvivaliz.com.br/olist/direct-sync.php" class="button">Sincronizar Agora →</a>
+        <a href="https://shopvivaliz.com.br/olist/direct-sync.php" class="button">Sincronizar Agora →</a>
     </div>
 </body>
 </html>

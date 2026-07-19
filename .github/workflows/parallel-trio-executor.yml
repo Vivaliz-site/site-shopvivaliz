@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SHOPVIVALIZ_BASE_URL: https://dev.shopvivaliz.com.br
+  SHOPVIVALIZ_BASE_URL: https://shopvivaliz.com.br
 
 jobs:
   execute-trio:

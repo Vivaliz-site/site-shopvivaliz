@@ -63,7 +63,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-forgot-passwor
                 );
                 $insert->execute([':uid' => $user['id'], ':hash' => $tokenHash]);
 
-                $resetUrl = 'https://dev.shopvivaliz.com.br/auth/reset-password.php?token=' . urlencode($token);
+                $baseUrl = rtrim((string)(getenv('SHOPVIVALIZ_BASE_URL') ?: getenv('APP_URL') ?: getenv('SITE_URL') ?: BASE_URL), '/');
+                $resetUrl = $baseUrl . '/auth/reset-password.php?token=' . urlencode($token);
                 $name = htmlspecialchars((string)$user['name'], ENT_QUOTES, 'UTF-8');
                 $html = "<h2>Oi {$name},</h2>"
                     . "<p>Recebemos um pedido para redefinir a senha da sua conta ShopVivaliz.</p>"

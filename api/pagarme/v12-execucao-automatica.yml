@@ -52,4 +52,4 @@ jobs:
 
     - name: Execute V12 Global Pipeline
       # Este passo executa o endpoint principal do pipeline V12 conforme descrito no V12-STATUS-FINAL.txt.
-      run: curl https://dev.shopvivaliz.com.br/api/pipeline/v12-execucao-global.php
+      run: curl https://shopvivaliz.com.br/api/pipeline/v12-execucao-global.php

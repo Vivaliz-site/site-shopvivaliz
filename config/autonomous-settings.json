@@ -236,7 +236,7 @@
   },
   "monitoring": {
     "enabled": true,
-    "dashboard_url": "https://dev.shopvivaliz.com.br/admin/monitor/",
+    "dashboard_url": "https://shopvivaliz.com.br/admin/monitor/",
     "metrics_to_track": [
       "last_sync_time",
       "last_push_time",

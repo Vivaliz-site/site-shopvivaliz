@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SHOPVIVALIZ_BASE_URL: https://dev.shopvivaliz.com.br
+  SHOPVIVALIZ_BASE_URL: https://shopvivaliz.com.br
 
 jobs:
   validate-agent-key:
@@ -283,4 +283,4 @@ jobs:
           echo "  4. Verifique os logs do servidor (Apache/Nginx/PHP)"
           echo ""
           echo "Para debug local:"
-          echo "  curl -v https://dev.shopvivaliz.com.br/api/agent/autonomous-watchdog.php"
+          echo "  curl -v https://shopvivaliz.com.br/api/agent/autonomous-watchdog.php"
