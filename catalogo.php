@@ -94,10 +94,12 @@ function sv_catalog_products(int $limit, string $query, string $category = '', i
             $skipped++;
             continue;
         }
+        $images = is_array($row['images'] ?? null) ? $row['images'] : [];
         $products[] = [
             'sku'              => $sku !== '' ? $sku : (string)($row['id'] ?? 'sem-sku'),
             'name'             => $name !== '' ? $name : 'Produto Vivaliz',
             'image_url'        => trim((string)($row['image_url'] ?? sv_catalog_default_image())) ?: sv_catalog_default_image(),
+            'images'           => array_slice(array_filter($images), 0, 10),
             'price'            => (float)($row['price'] ?? 0),
             'stock'            => (int)($row['stock'] ?? 0),
             'images_count'     => (int)($row['images_count'] ?? 0),
