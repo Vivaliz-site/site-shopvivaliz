@@ -13,7 +13,7 @@ class AnalyticsTracking {
     private $events = [];
 
     public function __construct() {
-        $this->ga4_id = getenv('GA4_ID') ?: (getenv('GOOGLE_ANALYTICS') ?: (getenv('GOOGLE_ANALITYCS') ?: 'G-XXXXXXXXXX'));
+        $this->ga4_id = getenv('GA4_ID') ?: (getenv('GOOGLE_ANALYTICS_ID') ?: (getenv('GOOGLE_ANALYTICS') ?: (getenv('GOOGLE_ANALITYCS') ?: 'G-XXXXXXXXXX')));
         $this->facebook_pixel = getenv('FACEBOOK_PIXEL') ?: '';
         $this->tiktok_pixel = getenv('TIKTOK_PIXEL') ?: '';
         $id = getenv('GOOGLE_ADS_ID') ?: (getenv('GOOGLE_ADS_CONVERSION_ID') ?: '');
