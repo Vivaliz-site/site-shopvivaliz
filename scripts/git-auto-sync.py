@@ -3,7 +3,7 @@
 Git Auto-Sync Daemon (SEGURO)
 Executado via cron a cada 2 minutos na VM Oracle.
 
-CRÍTICO: Este daemon NÃO usa git reset --hard (perigoso em produção).
+CRÍTICO: Este daemon não usa reset destrutivo de Git em produção.
 Usa git fetch + git merge --ff-only que é seguro.
 
 Regras obrigatórias:
@@ -140,7 +140,7 @@ def get_current_sha():
     return None
 
 def sync():
-    """Executar sincronização (SEGURA - SEM git reset --hard)"""
+    """Executar sincronização segura sem reset destrutivo."""
     log_message("INFO", "========== Git Auto-Sync (SEGURO) ==========")
 
     # Verificar lock
