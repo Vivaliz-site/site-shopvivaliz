@@ -40,6 +40,12 @@
 
 ## Entradas
 
+### 2026-07-19 — Tiny/API v3: pedido pago deve nascer como `situacao=3` e com `pagamento.meioPagamento` junto de `formaRecebimento`
+**Sistema/arquivo:** `includes/tiny-order-push.php`, `api/webhook-mercadopago.php`
+**O que descobri:** o payload de criação do pedido na Tiny fica mais consistente para faturamento quando o pedido já entra como `situacao=3` (Aprovada) depois do pagamento aprovado, em vez de `0` (Aberta). A documentação oficial também expõe `pagamento.meioPagamento` no mesmo bloco de `formaRecebimento`; deixar só um deles reduz a fidelidade do registro. Além disso, `listaPreco`, `naturezaOperacao` e `intermediador` só devem ser enviados quando houver ID real configurado na conta.
+**Por quê importa:** pedidos pagos que nascem como “abertos” ou com pagamento incompleto podem continuar aparecendo como pendentes/incompletos no ERP, mesmo tendo sido importados. O contrário também é perigoso: inventar IDs de cadastro fiscal/logístico quebra o pedido ou polui o ERP com referência errada.
+**Ver também:** `docs/TINY-ERP-API-V3.md`, `docs/tiny-api-v3-reference.md`
+
 ### 2026-07-18 — Migração completa: todos os usos restantes de API v2 convertidos pra v3 ou removidos [RESOLVIDO, ver PR seguinte a #431]
 **Sistema/arquivo:** `olist/complete-oauth-flow.php`, `olist/direct-sync.php`, `olist/sync-agora.php`, `olist/fetch-estoque-v2.php` (renomeado `fetch-estoque-v3.php`), `olist/webhook-receiver.php`, `shop-catalog-export.php`, `scripts/sync-tiny-api.py` (removido), `scripts/export-olist-images-csv.py`
 **O que descobri/fiz:** depois da entrada anterior (remoção de `sync-direct-tiny.php`), o usuário pediu pra migrar TUDO que ainda usava v2. Ações:

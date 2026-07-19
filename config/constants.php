@@ -8,7 +8,7 @@ if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
     $runtimeSecrets = require $runtimeSecretsFile;
     if (is_array($runtimeSecrets)) {
         foreach ($runtimeSecrets as $key => $value) {
-            if (!is_string($key) || $key === '' || getenv($key) !== false) {
+            if (!is_string($key) || $key === '' || (getenv($key) !== false && trim((string)getenv($key)) !== '')) {
                 continue;
             }
             $stringValue = is_scalar($value) ? (string)$value : '';
@@ -32,7 +32,7 @@ if (is_file($envFile) && is_readable($envFile)) {
         [$key, $value] = explode('=', $line, 2);
         $key = trim($key);
         $value = trim(trim($value), "\"'");
-        if ($key === '' || getenv($key) !== false) {
+        if ($key === '' || (getenv($key) !== false && trim((string)getenv($key)) !== '')) {
             continue;
         }
         putenv($key . '=' . $value);

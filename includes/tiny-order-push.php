@@ -962,37 +962,18 @@ function svtop_push_order_tiny(array $order): ?string
     }
 
     $mp = is_array($order['mercadopago'] ?? null) ? $order['mercadopago'] : [];
-    if (($mp['payment_method_id'] ?? '') !== '' || ($mp['payment_type_id'] ?? '') !== '' || ($mp['authorization_code'] ?? '') !== '') {
-        $integratedPayment = [];
-        $integratedPayment['valor'] = round((float)($mp['transaction_amount'] ?? $order['total'] ?? 0), 2);
-
-        $paymentTypeMap = [
-            'pix' => 4,
-            'bank_transfer' => 4,
-            'credit_card' => 1,
-            'debit_card' => 2,
-            'ticket' => 3,
-            'prepaid_card' => 1,
-        ];
-        $paymentTypeKey = strtolower((string)($mp['payment_type_id'] ?? $mp['payment_method_id'] ?? ''));
-        if (isset($paymentTypeMap[$paymentTypeKey])) {
-            $integratedPayment['tipoPagamento'] = $paymentTypeMap[$paymentTypeKey];
-        }
-
-        $mpCnpj = preg_replace('/\D+/', '', (string)($mp['intermediator_cnpj'] ?? svtop_env('MERCADOPAGO_INTERMEDIADOR_CNPJ', 'MERCADOPAGO_CNPJ')));
-        if (strlen($mpCnpj) === 14) {
-            $integratedPayment['cnpjIntermediador'] = $mpCnpj;
-        }
+    $integratedPaymentTipo = svtop_tiny_int_env('TINY_PAGAMENTO_INTEGRADO_TIPO');
+    $integratedPaymentBandeira = svtop_tiny_int_env('TINY_PAGAMENTO_INTEGRADO_BANDEIRA');
+    $integratedPaymentCnpj = preg_replace('/\D+/', '', svtop_env('TINY_PAGAMENTO_INTEGRADO_CNPJ', 'MERCADOPAGO_INTERMEDIADOR_CNPJ', 'MERCADOPAGO_CNPJ'));
+    if ($integratedPaymentTipo !== null && $integratedPaymentBandeira !== null && strlen($integratedPaymentCnpj) === 14) {
+        $payload['pagamentosIntegrados'] = [[
+            'valor' => round((float)($mp['transaction_amount'] ?? $order['total'] ?? 0), 2),
+            'tipoPagamento' => $integratedPaymentTipo,
+            'cnpjIntermediador' => $integratedPaymentCnpj,
+            'codigoBandeira' => $integratedPaymentBandeira,
+        ]];
         if (($mp['authorization_code'] ?? '') !== '') {
-            $integratedPayment['codigoAutorizacao'] = (string)$mp['authorization_code'];
-        }
-        $cardBrand = trim((string)($mp['card_brand'] ?? ''));
-        if ($cardBrand !== '') {
-            $integratedPayment['codigoBandeira'] = $cardBrand;
-        }
-
-        if (count($integratedPayment) > 1) {
-            $payload['pagamentosIntegrados'] = [$integratedPayment];
+            $payload['pagamentosIntegrados'][0]['codigoAutorizacao'] = (string)$mp['authorization_code'];
         }
     }
 
