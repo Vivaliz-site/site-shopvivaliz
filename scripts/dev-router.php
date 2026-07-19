@@ -10,6 +10,12 @@ if (str_contains($relative, '..')) { http_response_code(400); exit('Bad request'
 $static = $root . ($path === '/' ? '/index.php' : '/' . $relative);
 if ($path !== '/' && is_file($static)) return false;
 
+if (preg_match('~^produto/([a-z0-9][a-z0-9\-]*)/?$~i', $relative, $matches)) {
+    $_GET['slug'] = $matches[1];
+    require $root . '/produto.php';
+    return true;
+}
+
 $candidates = $relative === ''
     ? [$root . '/index.php']
     : [$root . '/' . $relative . '.php', $root . '/' . $relative . '/index.php'];

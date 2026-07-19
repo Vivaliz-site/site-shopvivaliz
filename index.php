@@ -439,8 +439,8 @@ $svNavCurrent = '';
                 <p class="eyebrow hero-kicker">
                     🛍️ Loja oficial Vivaliz
                 </p>
-                <h1>Resolveu o problema, <span class="gradient-word">resolveu com a Vivaliz</span></h1>
-                <p>Rodízios, ferragens e utilidades domésticas que chegam rápido, em qualquer lugar do Brasil — catálogo organizado, atendimento rápido e navegação simples no celular.</p>
+                <h1>Rodízios, ferragens e utilidades <span class="gradient-word">para sua casa</span></h1>
+                <p>Catálogo organizado, entrega rápida pra todo o Brasil e atendimento de verdade antes e depois da compra.</p>
 
                 <!-- Premium E-Commerce Search Bar -->
                 <div class="hero-search-container">

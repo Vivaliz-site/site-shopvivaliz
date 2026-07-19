@@ -80,17 +80,67 @@ function svi_run_sync_cli(int $expected, int $limit): array
 {
     // /olist/* e bloqueado no perimetro de seguranca (deploy/apache/shopvivaliz-private-paths.conf),
     // entao chama-lo via HTTP (como os outros diagnosticos abaixo) sempre retorna 403 e
-    // olist_sync fica null -- ver docs/MEMORIA-AGENTES.md. Roda via CLI local, que nao
-    // passa pelo Apache/htaccess.
-    $script = escapeshellarg(dirname(__DIR__) . '/olist/sync-products.php');
-    $cmd = 'SVS_DRY_RUN=1 php ' . $script . ' 2>&1';
-    $output = shell_exec($cmd);
-    $json = is_string($output) ? json_decode($output, true) : null;
+    // olist_sync fica null -- ver docs/MEMORIA-AGENTES.md.
+    //
+    // Rodar sync-products.php de verdade aqui (mesmo em dry-run) ainda faz a
+    // busca completa e paginada na API v3 da Tiny -- pode levar minutos com
+    // rate limit (429) e travar essa checagem de status, que deveria ser
+    // rapida. Em vez disso, le o estado ja persistido: o catalogo espelhado
+    // (api/catalog/fallback-products.json, atualizado a cada ~10min por
+    // sync-olist-6h.yml/cron) e a ultima linha de logs/olist-sync.log.
+    $root = dirname(__DIR__);
+    $catalogFile = $root . '/api/catalog/fallback-products.json';
+    $logFile = $root . '/logs/olist-sync.log';
+
+    $afterCount = 0;
+    $syncSource = '';
+    if (is_file($catalogFile)) {
+        $data = json_decode((string)file_get_contents($catalogFile), true);
+        $items = is_array($data) ? ($data['products'] ?? $data) : [];
+        if (is_array($items)) {
+            $afterCount = count($items);
+            $syncSource = (string)($items[0]['sync_source'] ?? '');
+        }
+    }
+
+    $lastSyncLine = '';
+    $lastSyncAt = null;
+    if (is_file($logFile)) {
+        $lines = @file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+        for ($i = count($lines) - 1; $i >= 0; $i--) {
+            if (str_contains($lines[$i], 'Catálogo espelhado') || str_contains($lines[$i], 'v3 sync')) {
+                $lastSyncLine = $lines[$i];
+                if (preg_match('/^\[([\d\- :]+)\]/', $lines[$i], $m)) {
+                    $lastSyncAt = $m[1];
+                }
+                break;
+            }
+        }
+    }
+
+    // Considera operacional se ha um catalogo v3 nao-vazio e a ultima
+    // sincronizacao registrada em log foi ha menos de 30 minutos (o cron
+    // roda a cada ~10min; folga generosa pra nao marcar falso-negativo).
+    $recentEnough = $lastSyncAt !== null
+        && (time() - strtotime($lastSyncAt . ' UTC')) < 1800;
+    $operational = $afterCount > 0 && $syncSource === 'tiny_v3' && $recentEnough;
+
+    $json = [
+        'ok' => $operational,
+        'source' => $syncSource,
+        'after_count' => $afterCount,
+        'before_count' => $afterCount,
+        'operational' => $operational,
+        'last_sync_log' => $lastSyncLine,
+        'last_sync_at' => $lastSyncAt,
+        'oauth' => ['has_offline_access' => null, 'has_prompt_consent' => null],
+    ];
+
     return [
-        'status' => is_array($json) ? 200 : 0,
-        'error' => is_array($json) ? '' : 'cli_invocation_failed',
-        'json' => is_array($json) ? $json : null,
-        'raw' => is_string($output) ? $output : '',
+        'status' => 200,
+        'error' => '',
+        'json' => $json,
+        'raw' => json_encode($json),
     ];
 }
 
