@@ -62,3 +62,5 @@ tasks-queue.json
 .git-sync.lock
 .git-auto-sync.log
 ai-system/config/orchestrator.json
+ai-system/memory/*.db
+ai-system/memory/*_status.json
