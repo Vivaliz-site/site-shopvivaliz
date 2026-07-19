@@ -12,8 +12,6 @@ import logging
 import os
 import subprocess
 import sys
-import shutil
-import tempfile
 from pathlib import Path
 
 REPO_DIR = Path(__file__).resolve().parent
@@ -79,51 +77,12 @@ def tracked_dirty_paths() -> list[str]:
 
 
 def unsafe_dirty_paths(paths: list[str]) -> list[str]:
-    unsafe: list[str] = []
-    for path in paths:
-        normalized = path.replace("\\", "/")
-        if normalized in ALLOWED_DIRTY_PATHS:
-            continue
-        if any(normalized == keep or normalized.startswith(keep + "/") for keep in ALLOWED_DIRTY_PATHS):
-            continue
-        unsafe.append(normalized)
-    return unsafe
+    return [path.replace("\\", "/") for path in paths]
 
 
 def is_preserved_path(path: str) -> bool:
     normalized = path.replace("\\", "/").rstrip("/")
     return any(normalized == keep or normalized.startswith(keep + "/") for keep in PRESERVE_PATHS)
-
-
-def snapshot_preserved_paths(paths: list[str], backup_root: Path) -> list[str]:
-    """Copy dirty runtime paths outside the checkout before Git updates it."""
-    copied: list[str] = []
-    for path in sorted(set(paths)):
-        normalized = path.replace("\\", "/").rstrip("/")
-        if not normalized or not is_preserved_path(normalized):
-            continue
-        source = REPO_DIR / normalized
-        if not source.exists():
-            continue
-        destination = backup_root / normalized
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        if source.is_dir():
-            shutil.copytree(source, destination, dirs_exist_ok=True)
-        else:
-            shutil.copy2(source, destination)
-        copied.append(normalized)
-    return copied
-
-
-def restore_preserved_paths(paths: list[str], backup_root: Path) -> None:
-    for normalized in paths:
-        source = backup_root / normalized
-        destination = REPO_DIR / normalized
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        if source.is_dir():
-            shutil.copytree(source, destination, dirs_exist_ok=True)
-        else:
-            shutil.copy2(source, destination)
 
 
 def write_status(payload: dict[str, object]) -> None:
@@ -137,9 +96,7 @@ def main() -> int:
     log.info("Auto-sync iniciado para branch canonica %s", branch)
 
     try:
-        run(["git", "fetch", "origin", branch], check=True)
         local_sha = git_output(["rev-parse", "HEAD"])
-        remote_sha = git_output(["rev-parse", f"origin/{branch}"])
         current_branch = git_output(["branch", "--show-current"])
         dirty = tracked_dirty_paths()
         unsafe = unsafe_dirty_paths(dirty)
@@ -149,7 +106,7 @@ def main() -> int:
             "branch": current_branch,
             "canonical_branch": branch,
             "local_sha": local_sha,
-            "remote_sha": remote_sha,
+            "remote_sha": None,
             "dirty_paths": dirty,
             "unsafe_dirty_paths": unsafe,
             "action": "noop",
@@ -165,11 +122,15 @@ def main() -> int:
 
         if unsafe:
             payload["ok"] = False
-            payload["action"] = "blocked-unsafe-dirty-tree"
-            payload["message"] = "working tree contem alteracoes rastreadas fora das areas preservadas"
+            payload["action"] = "blocked-dirty-tree"
+            payload["message"] = "working tree contem alteracoes; sync seguro abortado antes do fetch"
             write_status(payload)
             log.error("%s: %s", payload["message"], ", ".join(unsafe))
             return 3
+
+        run(["git", "fetch", "origin", branch], check=True)
+        remote_sha = git_output(["rev-parse", f"origin/{branch}"])
+        payload["remote_sha"] = remote_sha
 
         if local_sha == remote_sha:
             payload["message"] = "checkout ja alinhado com a branch canonica"
@@ -177,15 +138,10 @@ def main() -> int:
             log.info(payload["message"])
             return 0
 
-        with tempfile.TemporaryDirectory(prefix="shopvivaliz-sync-") as temp_dir:
-            backup_root = Path(temp_dir)
-            preserved = snapshot_preserved_paths(dirty, backup_root)
-            run(["git", "reset", "--hard", f"origin/{branch}"], check=True)
-            restore_preserved_paths(preserved, backup_root)
-        payload["action"] = "hard-reset-to-canonical"
+        run(["git", "merge", "--ff-only", f"origin/{branch}"], check=True)
+        payload["action"] = "fast-forward-to-canonical"
         payload["local_sha_after"] = git_output(["rev-parse", "HEAD"])
-        payload["preserved_paths"] = preserved
-        payload["message"] = "checkout alinhado via hard reset para a branch canonica"
+        payload["message"] = "checkout alinhado via merge --ff-only para a branch canonica"
         write_status(payload)
         log.info(payload["message"])
         return 0
