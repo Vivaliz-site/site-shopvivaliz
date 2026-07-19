@@ -196,6 +196,11 @@
     const activeCategory = String(category || '').trim();
     status.textContent = 'Preparando as melhores opções para você...';
 
+    // A paginacao renderizada pelo PHP (ex: catalogo.php) fica redundante
+    // assim que este script assume o grid com paginacao propria.
+    var serverPagination = document.querySelector('.catalog-pagination');
+    if (serverPagination) serverPagination.hidden = true;
+
     grid.innerHTML = `
       <div class="product-card sv-skeleton-card" style="box-shadow:none; border:1px solid #e2e8f0; opacity:0.8;">
         <div class="sv-skeleton sv-skeleton-image" style="height: 180px; width: 100%; border-radius: 8px; margin-bottom: 12px;"></div>
