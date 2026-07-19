@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🚀 GOOGLE ADS 30-DAY ORCHESTRATOR
-Campanha ROI 10x Automática - ShopVivaliz
-Executa por 30 dias com otimizações automáticas
+ GOOGLE ADS 30-DAY ORCHESTRATOR
+Campanha ROI 10x Automtica - ShopVivaliz
+Executa por 30 dias com otimizaes automticas
 
 Fluxo:
 1. Criar campanha com 6 keywords agressivas
 2. Rodar por 30 dias
 3. Monitorar diariamente via GA4
 4. Otimizar: pausar ruins, escalar winners
-5. Gerar relatório final
+5. Gerar relatrio final
 """
 
 import json
@@ -39,34 +39,34 @@ CAMPAIGN_CONFIG = {
         {"text": "20 rodizios gel silicone 35mm com freio", "match": "PHRASE", "cpc": 3.30},
         {"text": "rodizios soprano 35mm comprar online", "match": "PHRASE", "cpc": 2.80},
         {"text": "kit rodizios gel 35mm com freio soprano", "match": "PHRASE", "cpc": 2.90},
-        {"text": "comprar rodizios giratório gel 35mm", "match": "PHRASE", "cpc": 2.50},
-        {"text": "rodizios de qualidade para móvel soprano", "match": "PHRASE", "cpc": 2.40},
+        {"text": "comprar rodizios giratrio gel 35mm", "match": "PHRASE", "cpc": 2.50},
+        {"text": "rodizios de qualidade para mvel soprano", "match": "PHRASE", "cpc": 2.40},
     ],
     "negatives": [
         "rodizio barato", "rodizio gratis", "rodizio free", "rodizio download",
-        "rodizio usado", "rodizio segunda mão", "rodizio emprego", "rodizio curso",
+        "rodizio usado", "rodizio segunda mo", "rodizio emprego", "rodizio curso",
         "rodizio caseiro", "rodizio tutorial", "como fazer rodizio",
-        "rodizio defeito", "rodizio problema", "rodizio reclamação", "rodizio preço"
+        "rodizio defeito", "rodizio problema", "rodizio reclamao", "rodizio preo"
     ],
     "headlines": [
-        "Kit 12 Rodízios Soprano - Frete Grátis Brasil",
-        "20 Rodízios Gel 35mm - Compra Protegida 100%",
-        "Kit Combo Rodízios - Economize Até 40%",
-        "12x Rodízios com Freio - Entrega 3 Dias",
-        "Rodízios Soprano Premium - Qualidade Soprano",
-        "Kit 20 Rodízios Giratórios - Oferta Limitada",
-        "Rodízios Gel Soprano - 7 Dias Troca Grátis",
-        "Kit Grande Rodízios - Melhor Preço Brasil",
-        "12 Rodízios Anti-Risco - Frete Incluído",
-        "Rodízios Soprano 35mm - Compra com Segurança",
+        "Kit 12 Rodzios Soprano - Frete Grtis Brasil",
+        "20 Rodzios Gel 35mm - Compra Protegida 100%",
+        "Kit Combo Rodzios - Economize At 40%",
+        "12x Rodzios com Freio - Entrega 3 Dias",
+        "Rodzios Soprano Premium - Qualidade Soprano",
+        "Kit 20 Rodzios Giratrios - Oferta Limitada",
+        "Rodzios Gel Soprano - 7 Dias Troca Grtis",
+        "Kit Grande Rodzios - Melhor Preo Brasil",
+        "12 Rodzios Anti-Risco - Frete Includo",
+        "Rodzios Soprano 35mm - Compra com Segurana",
     ],
     "descriptions": [
-        "Kit 12 rodízios em gel. Frete grátis. Economize comprando quantidade maior. Compra 100% segura.",
-        "20 rodízios soprano 35mm com freio. Entrega rápida Brasil. Melhor preço garantido! Confira!",
-        "Kits combo com até 40% desconto. Rodízios profissionais. 7 dias para troca sem burocracia.",
-        "Compre rodízios em quantidade e economize. Frete grátis acima de R$ 150. Parcelado até 6x.",
-        "Rodízios gel silicone anti-risco. Kits com desconto. Movimentação suave. Pronta entrega!",
-        "Kit grande rodízios soprano. Ambiente protegido. Pagamento seguro PIX/Cartão/Boleto. Compre!",
+        "Kit 12 rodzios em gel. Frete grtis. Economize comprando quantidade maior. Compra 100% segura.",
+        "20 rodzios soprano 35mm com freio. Entrega rpida Brasil. Melhor preo garantido! Confira!",
+        "Kits combo com at 40% desconto. Rodzios profissionais. 7 dias para troca sem burocracia.",
+        "Compre rodzios em quantidade e economize. Frete grtis acima de R$ 150. Parcelado at 6x.",
+        "Rodzios gel silicone anti-risco. Kits com desconto. Movimentao suave. Pronta entrega!",
+        "Kit grande rodzios soprano. Ambiente protegido. Pagamento seguro PIX/Carto/Boleto. Compre!",
     ]
 }
 
@@ -89,21 +89,21 @@ def create_campaign():
 
     log(f"Campanha: {CAMPAIGN_NAME}")
     log(f"Budget: R$ {BUDGET_DAILY:.2f}/dia")
-    log(f"Duration: {DAYS} dias ({START_DATE.date()} até {END_DATE.date()})")
+    log(f"Duration: {DAYS} dias ({START_DATE.date()} at {END_DATE.date()})")
     log(f"Keywords: 6 (PHRASE match, high-intent)")
     log(f"Negatives: 15")
     log(f"Headlines: 10")
     log(f"Descriptions: 6")
 
-    # Salvar config para criação manual/API
+    # Salvar config para criao manual/API
     config_file = Path("scripts/campaign_30day_config.json")
     with open(config_file, "w", encoding="utf-8") as f:
         json.dump(CAMPAIGN_CONFIG, f, ensure_ascii=False, indent=2)
 
-    log(f"✅ Configuração salva: {config_file}")
-    log("\n📋 PRÓXIMOS PASSOS PARA ATIVAR:")
+    log(f" Configurao salva: {config_file}")
+    log("\n PRXIMOS PASSOS PARA ATIVAR:")
     log("1. Abra: https://ads.google.com/aw/campaigns/new")
-    log("2. Vendas → Pesquisa")
+    log("2. Vendas  Pesquisa")
     log(f"3. Nome: {CAMPAIGN_NAME}")
     log(f"4. Budget: R$ {BUDGET_DAILY:.2f}")
     log("5. Copie keywords de 'scripts/campaign_30day_config.json'")
@@ -114,10 +114,10 @@ def create_campaign():
 def monitor_daily(day):
     """FASE 2: Monitorar diariamente"""
     log(f"\n{'='*70}")
-    log(f"DIA {day}/{DAYS} - MONITORAMENTO E OTIMIZAÇÃO")
+    log(f"DIA {day}/{DAYS} - MONITORAMENTO E OTIMIZAO")
     log(f"{'='*70}")
 
-    # Simulação de dados (em produção seria via GA4/Google Ads API)
+    # Simulao de dados (em produo seria via GA4/Google Ads API)
     daily_data = {
         "date": (START_DATE + timedelta(days=day-1)).isoformat(),
         "day": day,
@@ -125,10 +125,10 @@ def monitor_daily(day):
         "clicks": 8 + (day // 2),
         "conversions": max(0, day // 3),  # Primeira venda por volta do dia 3
         "spend": BUDGET_DAILY,
-        "revenue": 250 * max(0, day // 3),  # R$ 250/conversão
+        "revenue": 250 * max(0, day // 3),  # R$ 250/converso
     }
 
-    # Cálculos
+    # Clculos
     cpc = daily_data["spend"] / daily_data["clicks"] if daily_data["clicks"] > 0 else 0
     roas = daily_data["revenue"] / daily_data["spend"] if daily_data["spend"] > 0 else 0
     roi_multiple = roas  # Simplificado
@@ -140,22 +140,22 @@ def monitor_daily(day):
     })
 
     # Log
-    log(f"Impressões: {daily_data['impressions']}")
+    log(f"Impresses: {daily_data['impressions']}")
     log(f"Cliques: {daily_data['clicks']}")
-    log(f"Conversões: {daily_data['conversions']}")
+    log(f"Converses: {daily_data['conversions']}")
     log(f"CPC: R$ {daily_data['cpc']:.2f}")
     log(f"Revenue: R$ {daily_data['revenue']:.2f}")
     log(f"ROAS: {daily_data['roas']:.2f}x")
     log(f"ROI: {daily_data['roi_multiple']:.2f}x")
 
-    # Otimizações
+    # Otimizaes
     if day >= 3:
         if daily_data['roi_multiple'] >= 5:
-            log("✅ ROI >= 5x - AUMENTAR BUDGET +50% (próximo passo)")
+            log(" ROI >= 5x - AUMENTAR BUDGET +50% (prximo passo)")
         elif daily_data['roi_multiple'] >= 2:
-            log("✅ ROI >= 2x - MANTER E OTIMIZAR")
+            log(" ROI >= 2x - MANTER E OTIMIZAR")
         elif daily_data['roi_multiple'] < 1:
-            log("⚠️  ROI < 1x - REVISAR LANDING PAGE")
+            log("  ROI < 1x - REVISAR LANDING PAGE")
 
     # Salvar dados
     data_file = Path(f"logs/campaign_day{day:02d}.json")
@@ -168,22 +168,22 @@ def monitor_daily(day):
 def optimize_keywords(day, roi):
     """FASE 3: Otimizar keywords"""
     if day % 7 == 0:  # Weekly optimization
-        log(f"\n🔧 OTIMIZAÇÃO SEMANAL (Dia {day})")
+        log(f"\n OTIMIZAO SEMANAL (Dia {day})")
 
         if roi >= 5:
-            log("→ Aumentar CPC máximo em 20%")
-            log("→ Adicionar 2-3 keywords relacionadas")
+            log(" Aumentar CPC mximo em 20%")
+            log(" Adicionar 2-3 keywords relacionadas")
         elif roi >= 2:
-            log("→ Manter CPCs")
-            log("→ Testar novos headlines")
+            log(" Manter CPCs")
+            log(" Testar novos headlines")
         else:
-            log("→ Pausar keywords com CPA > R$ 100")
-            log("→ Revisar landing page (kits em destaque?)")
+            log(" Pausar keywords com CPA > R$ 100")
+            log(" Revisar landing page (kits em destaque?)")
 
 def generate_report(all_data):
-    """FASE 4: Gerar relatório final"""
+    """FASE 4: Gerar relatrio final"""
     log(f"\n{'='*70}")
-    log("RELATÓRIO FINAL - 30 DIAS")
+    log("RELATRIO FINAL - 30 DIAS")
     log(f"{'='*70}")
 
     total_impressions = sum(d.get("impressions", 0) for d in all_data)
@@ -197,31 +197,31 @@ def generate_report(all_data):
     roi_final = (total_revenue - total_spend) / total_spend if total_spend > 0 else 0
 
     log(f"\nTOTAL 30 DIAS:")
-    log(f"  Impressões: {total_impressions:,}")
+    log(f"  Impresses: {total_impressions:,}")
     log(f"  Cliques: {total_clicks:,}")
-    log(f"  Conversões: {total_conversions:,}")
+    log(f"  Converses: {total_conversions:,}")
     log(f"  Spend: R$ {total_spend:,.2f}")
     log(f"  Revenue: R$ {total_revenue:,.2f}")
     log(f"  Avg CPC: R$ {avg_cpc:.2f}")
     log(f"  ROAS: {roas_final:.2f}x")
     log(f"  ROI: {roi_final:.2f}x ({roi_final*100:.0f}%)")
 
-    # Análise
-    log(f"\n📊 ANÁLISE:")
+    # Anlise
+    log(f"\n ANLISE:")
     if roi_final >= 10:
-        log(f"🎉 EXCELENTE! ROI 10x+ atingido!")
-        log(f"   Próximo passo: Escalar +100% budget")
+        log(f" EXCELENTE! ROI 10x+ atingido!")
+        log(f"   Prximo passo: Escalar +100% budget")
     elif roi_final >= 5:
-        log(f"✅ BOM! ROI 5x+ atingido!")
-        log(f"   Próximo passo: Expandir para novo estado")
+        log(f" BOM! ROI 5x+ atingido!")
+        log(f"   Prximo passo: Expandir para novo estado")
     elif roi_final >= 2:
-        log(f"✓ ADEQUADO. ROI 2x+ atingido!")
-        log(f"   Próximo passo: Otimizar e escalar")
+        log(f" ADEQUADO. ROI 2x+ atingido!")
+        log(f"   Prximo passo: Otimizar e escalar")
     else:
-        log(f"⚠️  ABAIXO DO ESPERADO. ROI < 2x")
-        log(f"   Próximo passo: Revisar estratégia")
+        log(f"  ABAIXO DO ESPERADO. ROI < 2x")
+        log(f"   Prximo passo: Revisar estratgia")
 
-    # Salvar relatório
+    # Salvar relatrio
     report = {
         "period": f"{START_DATE.date()} a {END_DATE.date()}",
         "days": DAYS,
@@ -243,7 +243,7 @@ def generate_report(all_data):
     with open(report_file, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
 
-    log(f"\n✅ Relatório salvo: {report_file}")
+    log(f"\n Relatrio salvo: {report_file}")
     return report
 
 def main():
@@ -256,10 +256,10 @@ def main():
     # FASE 1: Criar
     create_campaign()
 
-    log("\n⏳ AGUARDANDO ATIVAÇÃO MANUAL...")
+    log("\n AGUARDANDO ATIVAO MANUAL...")
     log("Assim que ativar a campanha no Google Ads, este script")
-    log("começará a monitorar e otimizar automaticamente.")
-    log("\nPressione ENTER após ativar a campanha no Google Ads...")
+    log("comear a monitorar e otimizar automaticamente.")
+    log("\nPressione ENTER aps ativar a campanha no Google Ads...")
 
     # Para testes, assumir ativado
     input()
@@ -275,18 +275,18 @@ def main():
         # Para teste: comentado
         # time.sleep(86400)  # 24 horas
 
-    # FASE 4: Relatório final
+    # FASE 4: Relatrio final
     report = generate_report(all_daily_data)
 
     print(f"\n{'='*70}")
-    print("✅ CAMPANHA 30 DIAS CONCLUÍDA!")
+    print(" CAMPANHA 30 DIAS CONCLUDA!")
     print(f"{'='*70}")
-    print(f"\n📊 RESULTADO FINAL:")
+    print(f"\n RESULTADO FINAL:")
     print(f"   ROI: {report['summary']['roi']:.2f}x")
     print(f"   Revenue: R$ {report['summary']['revenue']:,.2f}")
-    print(f"   Conversões: {report['summary']['conversions']}")
-    print(f"\n📁 Relatório: logs/campaign_final_report_30days.json")
-    print(f"\n🎯 Próximo passo: Escalar ou expandir geográfico")
+    print(f"   Converses: {report['summary']['conversions']}")
+    print(f"\n Relatrio: logs/campaign_final_report_30days.json")
+    print(f"\n Prximo passo: Escalar ou expandir geogrfico")
     print()
 
 if __name__ == "__main__":
