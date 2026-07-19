@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-🚀 Google Ads Campaign Automation - ShopVivaliz
-Automação de criação de campanha de Pesquisa (Search)
-Produto Campeão: Rodízios 35mm Gel
-Orçamento: R$ 15.00/dia
+Google Ads Campaign Automation - ShopVivaliz
+Automacao de criacao de campanha de Pesquisa (Search)
+Produto Campeao: Rodizios 35mm Gel
+Orcamento: R$ 15.00/dia
 Data: 2026-07-19
 """
 
 import json
 import os
 import sys
+import io
 from datetime import datetime, timedelta
 
 # ============================================================================
