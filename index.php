@@ -515,18 +515,18 @@ $svNavCurrent = '';
                     <?php foreach ($heroBanners as $index => $banner): ?>
                         <article class="hero-slide hero-image-slide<?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>" style="position:relative;">
                             <img src="<?= sv_home_esc($banner['image']) ?>" alt="<?= sv_home_esc($banner['alt']) ?>" class="hero-banner-image" loading="<?= $index === 0 ? 'eager' : 'lazy' ?>" style="width:100%;height:100%;object-fit:cover;">
-                            <div class="hero-overlay" style="position:absolute; inset:0; background:linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0) 100%); display:flex; flex-direction:column; justify-content:center; padding:5%; color:#fff; text-align:left;">
+                            <div class="hero-overlay" class="banner-overlay">
                                 <?php if (!empty($banner['tag'])): ?>
-                                    <span style="font-size:12px; letter-spacing:2px; font-weight:700; text-transform:uppercase; color:#10b981; margin-bottom:12px;"><?= sv_home_esc($banner['tag']) ?></span>
+                                    <span class="banner-tag color-accent-green"><?= sv_home_esc($banner['tag']) ?></span>
                                 <?php endif; ?>
                                 <?php if (!empty($banner['title'])): ?>
-                                    <h2 style="font-size:clamp(32px, 5vw, 56px); font-weight:800; line-height:1.1; margin:0 0 16px; max-width:600px; text-shadow:0 4px 12px rgba(0,0,0,0.5);"><?= sv_home_esc($banner['title']) ?></h2>
+                                    <h2 class="banner-title"><?= sv_home_esc($banner['title']) ?></h2>
                                 <?php endif; ?>
                                 <?php if (!empty($banner['subtitle'])): ?>
-                                    <p style="font-size:clamp(16px, 2vw, 20px); font-weight:400; color:#cbd5e1; max-width:500px; margin:0 0 32px; line-height:1.5;"><?= sv_home_esc($banner['subtitle']) ?></p>
+                                    <p class="banner-subtitle color-text-muted"><?= sv_home_esc($banner['subtitle']) ?></p>
                                 <?php endif; ?>
-                                <div style="display:flex; gap:16px;">
-                                    <a href="<?= sv_home_esc($banner['primary']['href']) ?>" class="btn btn-primary" style="background:#10b981; border:none; padding:14px 28px !important; font-size:16px !important; border-radius:8px !important; color:#fff; text-decoration:none; font-weight:600; box-shadow:0 10px 25px rgba(16,185,129,0.4);"><?= sv_home_esc($banner['primary']['label']) ?></a>
+                                <div class="banner-cta-container">
+                                    <a href="<?= sv_home_esc($banner['primary']['href']) ?>" class="btn btn-primary" class="btn btn-primary btn-cta-green"><?= sv_home_esc($banner['primary']['label']) ?></a>
                                 </div>
                             </div>
                         </article>
@@ -725,10 +725,10 @@ $svNavCurrent = '';
                     <h2>Perguntas frequentes</h2>
                     <p class="muted">Tire suas dúvidas rápidas sobre envio, pagamentos e garantia.</p>
                     <!-- FAQ Search Bar -->
-                    <div style="max-width: 460px; margin: 16px auto 0; width: 100%;">
+                    <div class="newsletter-max-width">
                         <label for="faq-search-input" class="sr-only">Pesquisar perguntas frequentes</label>
                         <input type="text" id="faq-search-input" placeholder="Pesquisar dúvidas comuns..."
-                               style="width:100%; padding:12px 18px; border-radius:12px; border:1.5px solid #e2e8f0; font-size:14px; color:#1e293b; background:#f8fafc; transition: all 0.25s ease;"
+                               class="faq-search-input-custom input-custom"
                                aria-label="Pesquisar perguntas frequentes">
                     </div>
                 </div>
