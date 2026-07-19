@@ -165,6 +165,8 @@ Utilizada por agentes IA e desenvolvedores para diagnóstico e operação.
 
 Consulte primeiro [`docs/knowledge/README.md`](docs/knowledge/README.md) para acessar a visão geral, Squad Chat, troubleshooting, deploy, regras de agentes, atualizador cumulativo, integridade de dados e testes.
 
+O checklist de aquisição, SEO, performance, conversão, retenção e infraestrutura de dados está em [`docs/knowledge/traffic-visibility-checklist.md`](docs/knowledge/traffic-visibility-checklist.md).
+
 ---
 
 ## 📝 Notas
