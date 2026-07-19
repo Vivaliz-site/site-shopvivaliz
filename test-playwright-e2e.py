@@ -39,7 +39,7 @@ async def test_checkout():
         "tests": []
     }
 
-    BASE_URL = "https://dev.shopvivaliz.com.br"
+    BASE_URL = os.getenv("BASE_URL") or "http://127.0.0.1:8000"
 
     async with async_playwright() as p:
         print("[TESTE] E2E REAL COM PLAYWRIGHT - CLICANDO NOS BOTOES")
@@ -56,6 +56,16 @@ async def test_checkout():
             # ========================================================
             print("[1] Checkout carrega?")
             try:
+                # Pre-requisito: adicionar produto ao carrinho na Home
+                try:
+                    print("Adicionando produto ao carrinho na Home...")
+                    await page.goto(BASE_URL, timeout=15000)
+                    await page.wait_for_selector(".buy-button", timeout=5000)
+                    await page.click(".buy-button")
+                    await asyncio.sleep(1)
+                except Exception as e:
+                    print(f"Aviso: Nao foi possivel adicionar item: {e}")
+
                 await page.goto(f"{BASE_URL}/checkout/", timeout=15000)
                 await page.wait_for_selector("form", timeout=5000)
                 print("[OK] PASSOU\n")
