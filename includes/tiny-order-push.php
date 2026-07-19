@@ -945,10 +945,6 @@ function svtop_push_order_tiny(array $order): ?string
         'valorFrete' => (float)($order['shipping_total'] ?? 0),
         'observacoes' => $obs,
         'observacoesInternas' => svtop_tiny_build_observacoes_internas($order),
-        'consumidorFinal' => [
-            'cpfCnpj'                => $docDigits,
-            'clienteConsumidorFinal' => true,
-        ],
         'enderecoEntrega' => [
             'endereco'         => (string)($c['street_name'] ?? $c['address'] ?? ''),
             'enderecoNro'      => (string)($c['street_number'] ?? ''),
