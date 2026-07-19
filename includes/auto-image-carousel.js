@@ -64,7 +64,8 @@
       if (!imagesJson) return;
 
       try {
-        const images = JSON.parse(imagesJson);
+        const unescaped = imagesJson.replace(/&quot;/g, '"');
+        const images = JSON.parse(unescaped);
         if (!Array.isArray(images) || images.length < 2) return;
 
         let currentIndex = 0;
