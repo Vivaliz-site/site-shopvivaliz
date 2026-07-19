@@ -446,8 +446,9 @@ $svNavCurrent = '';
                 <!-- Premium E-Commerce Search Bar -->
                 <div class="hero-search-container">
                     <form action="/catalogo" method="GET" class="hero-search-form">
+                        <label for="hero-search-input" class="sr-only">Buscar produtos</label>
                         <span class="hero-search-icon">🔍</span>
-                        <input type="text" name="busca" placeholder="O que você está procurando hoje? Ex: rodízios, ferramentas..." required>
+                        <input id="hero-search-input" type="text" name="busca" placeholder="O que você está procurando hoje? Ex: rodízios, ferramentas..." required>
                         <button type="submit">Buscar</button>
                     </form>
                 </div>
