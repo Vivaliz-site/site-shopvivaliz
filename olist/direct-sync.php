@@ -107,129 +107,17 @@ try {
     log_msg("  Token obtido: " . substr($access_token, 0, 30) . "...");
 
     // ========================================================================
-    // PASSO 3: Buscar produtos com paginação
+    // PASSO 3: Sincronizar catalogo real via API v3 OAuth
     // ========================================================================
+    // A busca antiga (API v2 legada, paginada) so gravava em
+    // logs/olist-products-cache.json, um arquivo que o site nunca le -- ver
+    // docs/MEMORIA-AGENTES.md. O catalogo real e api/catalog/fallback-products.json,
+    // mantido por sync-products.php (v3 OAuth), que ja reaproveita o token salvo.
 
-    log_msg("\nPASSO 3: Buscando produtos...");
+    log_msg("\nPASSO 3: Sincronizando catalogo via olist/sync-products.php (API v3)...");
 
-    $todos_produtos = [];
-    $pagina = 1;
-    $limite = 50;
-    $total_recebido = 0;
-
-    while (true) {
-        $url = "https://api.tiny.com.br/api/v2/produtos.json?limite=$limite&pagina=$pagina&formato=json";
-
-        log_msg("  Pagina $pagina...", false);
-
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-                "Authorization: Bearer $access_token"
-            ]
-        ]);
-
-        $response = curl_exec($ch);
-        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($status != 200) {
-            if ($pagina == 1) {
-                log_msg(" ERRO $status");
-                log_msg("Resposta: " . substr($response, 0, 200));
-                exit_error("Falha ao buscar produtos. Status: $status");
-            } else {
-                log_msg(" (fim)");
-                break;
-            }
-        }
-
-        $data = json_decode($response, true);
-
-        if (!isset($data['produtos']) || !is_array($data['produtos'])) {
-            log_msg(" ERRO - JSON inválido");
-            break;
-        }
-
-        $count = count($data['produtos']);
-        log_msg(" $count produtos");
-
-        $todos_produtos = array_merge($todos_produtos, $data['produtos']);
-        $total_recebido += $count;
-
-        if ($count < $limite) {
-            log_msg("  Última página recebida");
-            break;
-        }
-
-        $pagina++;
-
-        if ($pagina > 20) {
-            log_msg("  Limite de 20 páginas atingido");
-            break;
-        }
-    }
-
-    log_msg("  Total recebido: " . count($todos_produtos) . " produtos");
-
-    if (count($todos_produtos) === 0) {
-        exit_error("Nenhum produto recebido da API");
-    }
-
-    // ========================================================================
-    // PASSO 4: Analisar imagens
-    // ========================================================================
-
-    log_msg("\nPASSO 4: Analisando imagens...");
-
-    $com_imagem = 0;
-    $sem_imagem = 0;
-
-    foreach ($todos_produtos as $p) {
-        $tem_imagem = false;
-
-        if (isset($p['imagem_produto']['url']) && $p['imagem_produto']['url']) {
-            $tem_imagem = true;
-        } elseif (isset($p['imagens']) && is_array($p['imagens']) && count($p['imagens']) > 0) {
-            $tem_imagem = true;
-        }
-
-        $tem_imagem ? $com_imagem++ : $sem_imagem++;
-    }
-
-    log_msg("  Com imagem: $com_imagem");
-    log_msg("  Sem imagem: $sem_imagem");
-
-    // ========================================================================
-    // PASSO 5: Salvar cache
-    // ========================================================================
-
-    log_msg("\nPASSO 5: Salvando cache...");
-
-    $cache_data = [
-        'timestamp' => date('c'),
-        'total' => count($todos_produtos),
-        'com_imagem' => $com_imagem,
-        'sem_imagem' => $sem_imagem,
-        'taxa_cobertura' => count($todos_produtos) > 0 ? round($com_imagem / count($todos_produtos) * 100, 1) : 0,
-        'source' => 'olist_direct_sync',
-        'produtos' => $todos_produtos
-    ];
-
-    $cache_file = __DIR__ . '/../logs/olist-products-cache.json';
-    @mkdir(dirname($cache_file), 0755, true);
-
-    file_put_contents(
-        $cache_file,
-        json_encode($cache_data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
-        LOCK_EX
-    );
-
-    log_msg("  Cache salvo!");
+    $sync_output = shell_exec('php ' . escapeshellarg(__DIR__ . '/sync-products.php') . ' 2>&1');
+    log_msg("  Saida do sync v3: " . trim((string)$sync_output));
 
     // ========================================================================
     // SUCESSO
@@ -240,12 +128,8 @@ try {
     http_response_code(200);
     echo json_encode([
         'sucesso' => true,
-        'total_produtos' => count($todos_produtos),
-        'com_imagem' => $com_imagem,
-        'sem_imagem' => $sem_imagem,
-        'taxa_cobertura' => $cache_data['taxa_cobertura'] . "%",
-        'cache_file' => $cache_file,
-        'mensagem' => "Sincronizado: " . count($todos_produtos) . " produtos, $com_imagem com imagem, $sem_imagem sem imagem",
+        'mensagem' => 'Catalogo sincronizado via API v3.',
+        'sync_output' => trim((string)$sync_output),
         'timestamp' => date('c')
     ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 

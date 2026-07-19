@@ -117,8 +117,8 @@ if (in_array($event_type, $sync_events) || strpos($event_type, 'produto') !== fa
     // Disparar sincronização
     exec('php ' . dirname(__DIR__) . '/olist/sync-on-webhook.php > /dev/null 2>&1 &');
 
-    // Enriquecer com estoque via API V2 (fallback)
-    exec('php ' . dirname(__DIR__) . '/olist/fetch-estoque-v2.php > /dev/null 2>&1 &');
+    // Enriquecer com estoque via API v3 OAuth (calculo correto, inclusive kits)
+    exec('php ' . dirname(__DIR__) . '/olist/fetch-estoque-v3.php > /dev/null 2>&1 &');
 
     http_response_code(200);
     echo json_encode([
@@ -126,7 +126,7 @@ if (in_array($event_type, $sync_events) || strpos($event_type, 'produto') !== fa
         'mensagem' => 'Webhook recebido e sincronização iniciada',
         'event' => $event_type,
         'product_id' => $product_id,
-        'steps' => ['sync-v3', 'enrich-v2']
+        'steps' => ['sync-v3', 'enrich-v3']
     ]);
 } else {
     http_response_code(200);

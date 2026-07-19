@@ -16,7 +16,6 @@ TOKEN_URL = os.getenv(
     "OLIST_TOKEN_URL",
     "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token",
 )
-PRODUCTS_API = os.getenv("OLIST_PRODUCTS_API", "https://api.tiny.com.br/api/v2/produtos.json")
 PRODUCTS_API_V3 = os.getenv("OLIST_PRODUCTS_API_V3", "https://api.tiny.com.br/public-api/v3/produtos")
 PROXY_URL    = os.getenv("OLIST_PROXY_URL", "")  # se definido, usa proxy PHP no servidor
 OUT_CSV = Path(os.getenv("OUT_CSV", "logs/olist-images-export.csv"))
@@ -117,11 +116,6 @@ def auth_context() -> dict:
         print("Usando access token Bearer direto do ambiente (API v3).")
         return {"type": "bearer_v3", "token": access_token}
 
-    api_token = os.getenv("OLIST_API_TOKEN") or os.getenv("TINY_API_TOKEN") or os.getenv("TOKEN_API_OLIST")
-    if api_token:
-        print("Usando token de API v2 por parametro seguro (legado, pode estar bloqueado).")
-        return {"type": "query_token", "token": api_token}
-
     if not client_id or not client_secret:
         fail("Configure OLIST_REFRESH_TOKEN/OLIST_ACCESS_TOKEN ou OLIST_CLIENT_ID e OLIST_CLIENT_SECRET.")
 
@@ -154,10 +148,7 @@ def http_get_json(url: str, auth: dict, params: dict, timeout: int = 45) -> dict
         request = Request(auth["proxy_url"], data=post_data, headers=req_headers, method="POST")
         return http_json(request, timeout=timeout)
 
-    if auth["type"] == "query_token":
-        query["token"] = auth["token"]
-    else:
-        headers["Authorization"] = f"Bearer {auth['token']}"
+    headers["Authorization"] = f"Bearer {auth['token']}"
     request = Request(f"{url}?{urlencode(query)}", headers=headers, method="GET")
     return http_json(request, timeout=timeout)
 
@@ -256,10 +247,12 @@ def fetch_all_products(auth: dict) -> list:
     if auth["type"] == "bearer_v3":
         return fetch_all_products_v3(auth)
 
+    # Modo proxy: shop-catalog-export.php ignora a URL passada a http_get_json
+    # e faz a chamada v3 do lado do servidor -- so os params (pagina/limite) importam.
     all_products = []
     for page in range(1, MAX_PAGES + 1):
-        print(f"Buscando pagina {page}...")
-        response = http_get_json(PRODUCTS_API, auth, {"limite": LIMIT, "pagina": page, "formato": "json"})
+        print(f"Buscando pagina {page} via proxy...")
+        response = http_get_json(PRODUCTS_API_V3, auth, {"limite": LIMIT, "pagina": page, "formato": "json"})
         products = extract_products(response)
         print(f"  Retornados: {len(products)}")
         if not products:
