@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 declare(strict_types=1);
 
 $baseUrl = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.com.br');
@@ -232,12 +232,12 @@ $currentPage = basename($_SERVER['PHP_SELF'] ?? '');
     <header>
         <div class="header-container">
             <a href="/" class="header-logo">
-                <span class="header-logo-icon">🏪</span>
+                <span class="header-logo-icon">ðŸª</span>
                 ShopVivaliz
             </a>
 
             <nav class="header-nav" id="headerNav">
-                <a href="/" <?php echo $currentPage === 'index.php' || $currentPage === '' ? 'class="active"' : ''; ?>>Início</a>
+                <a href="/" <?php echo $currentPage === 'index.php' || $currentPage === '' ? 'class="active"' : ''; ?>>InÃ­cio</a>
                 <a href="/?cat=ferramentas">Ferramentas</a>
                 <a href="/?cat=jardim">Jardim</a>
                 <a href="/?cat=cozinha">Cozinha</a>
@@ -246,13 +246,13 @@ $currentPage = basename($_SERVER['PHP_SELF'] ?? '');
             </nav>
 
             <div class="header-actions">
-                <input type="text" class="search-bar" placeholder="🔍 Buscar produtos..." id="searchBar">
+                <input type="text" class="search-bar" placeholder="ðŸ” Buscar produtos..." id="searchBar">
                 <a href="/carrinho.php" class="cart-icon" title="Carrinho">
-                    🛒
+                    ðŸ›’
                     <span class="cart-badge" id="cartBadge">0</span>
                 </a>
-                <a href="/login.php" class="user-icon" title="Minha Conta">👤</a>
-                <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Menu">☰</button>
+                <a href="/login.php" class="user-icon" title="Minha Conta">ðŸ‘¤</a>
+                <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Menu">â˜°</button>
             </div>
         </div>
     </header>
@@ -306,3 +306,4 @@ $currentPage = basename($_SERVER['PHP_SELF'] ?? '');
     </script>
 </body>
 </html>
+
