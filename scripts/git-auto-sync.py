@@ -29,13 +29,16 @@ LOG_DIR = "/var/log/shopvivaliz"
 LOG_FILE = f"{LOG_DIR}/git-auto-sync-{datetime.now().strftime('%Y%m%d')}.log"
 LOCK_FILE = f"{REPO_DIR}/.git-sync.lock"
 
-# Arquivos que NÃO devem ser commitados (proteção de dados)
+# Arquivos que NÃO devem ser commitados (proteção de dados) -- ver
+# check_working_tree(), que ignora mudanças nesses caminhos ao decidir se a
+# working tree esta "suja" o bastante pra bloquear o merge.
 PROTECTED_FILES = [
     ".git-sync.lock",
     ".agent-heartbeats/",
     "storage/orders/",
     "storage/codex-bridge/state.json",
     "storage/orchestrator/queue.json",
+    "tasks-queue.json",
 ]
 
 def log_message(level: str, msg: str):
@@ -107,18 +110,43 @@ def run_command(cmd: str, cwd: str = None) -> tuple[int, str, str]:
     except Exception as e:
         return 1, "", str(e)
 
+def _is_protected_path(path: str) -> bool:
+    """Verifica se um caminho de arquivo esta na lista PROTECTED_FILES
+    (prefixo de diretorio ou nome exato de arquivo)."""
+    return any(path == p or path.startswith(p) for p in PROTECTED_FILES)
+
 def check_working_tree():
-    """Validar working tree antes de operações git"""
+    """Validar working tree antes de operações git.
+
+    Mudancas em arquivos de PROTECTED_FILES (heartbeats de agentes,
+    tasks-queue.json, dados de pedidos etc.) sao esperadas e mudam o tempo
+    todo por design -- nao devem bloquear o merge automatico. So bloqueia se
+    houver mudanca em algum arquivo FORA dessa lista.
+    """
     code, out, err = run_command("git status --porcelain")
     if code != 0:
         log_message("ERROR", f"Não conseguiu verificar status: {err}")
         return False, "git status falhou"
 
-    # Se há saída, há mudanças não commitadas
-    if out.strip():
-        log_message("WARNING", f"Working tree sujo, rejeitando merge:\n{out}")
+    if not out.strip():
+        return True, "OK"
+
+    blocking_lines = []
+    for line in out.strip().splitlines():
+        # Formato "git status --porcelain": "XY caminho" (pode ter caminho
+        # entre aspas ou com "-> " pra rename); pega so o caminho.
+        path = line[3:].strip()
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1].strip()
+        path = path.strip('"')
+        if not _is_protected_path(path):
+            blocking_lines.append(line)
+
+    if blocking_lines:
+        log_message("WARNING", f"Working tree sujo, rejeitando merge:\n" + "\n".join(blocking_lines))
         return False, "working tree sujo"
 
+    log_message("INFO", f"Working tree tem so mudancas protegidas (ignoradas):\n{out.strip()}")
     return True, "OK"
 
 def get_current_sha():
@@ -154,11 +182,28 @@ def sync():
         sha_before = get_current_sha()
         log_message("INFO", f"SHA antes: {sha_before}")
 
-        # 3. Validar working tree
+        # 3. Validar working tree (ignora arquivos de PROTECTED_FILES)
         is_clean, status = check_working_tree()
         if not is_clean:
             log_message("ERROR", f"Working tree inválida: {status}")
             return False
+
+        # 3b. Descartar mudancas locais nos arquivos protegidos antes do
+        # merge -- sao dados efemeros/gerados em runtime (heartbeats,
+        # tasks-queue.json etc.), nao versionados de proposito. Sem isso, um
+        # "git merge --ff-only" pode falhar se o commit remoto tambem tocar
+        # nesses arquivos ("local changes would be overwritten by merge"),
+        # mesmo com o check acima passando.
+        code, out, err = run_command("git status --porcelain")
+        if out.strip():
+            protected_dirty = [
+                line[3:].strip().strip('"').split(" -> ", 1)[-1]
+                for line in out.strip().splitlines()
+                if _is_protected_path(line[3:].strip().strip('"').split(" -> ", 1)[-1])
+            ]
+            if protected_dirty:
+                run_command("git checkout -- " + " ".join(f'"{p}"' for p in protected_dirty))
+                log_message("INFO", f"Descartadas mudancas locais em arquivos protegidos: {protected_dirty}")
 
         # 4. Fetch (seguro - só puxar)
         log_message("INFO", "Executando git fetch origin")
