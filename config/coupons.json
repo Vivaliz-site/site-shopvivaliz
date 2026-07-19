@@ -1,0 +1,14 @@
+{
+  "PRIMEIRA10": {
+    "code": "PRIMEIRA10",
+    "type": "percent",
+    "value": 10,
+    "label": "Primeira compra: 10% de desconto"
+  },
+  "VIVALIZ10": {
+    "code": "VIVALIZ10",
+    "type": "percent",
+    "value": 10,
+    "label": "Primeira compra: 10% de desconto"
+  }
+}
