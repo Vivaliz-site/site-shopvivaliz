@@ -49,6 +49,26 @@ function me_validate_signature(string $rawBody, string $signature, string $secre
     return hash_equals($expected, $signature);
 }
 
+function me_is_registration_probe(array $body, string $event, array $data): bool
+{
+    $event = trim($event);
+    if (str_starts_with($event, 'order.')) {
+        return false;
+    }
+    if (me_first_non_empty_string([
+        $data['id'] ?? '',
+        $data['protocol'] ?? '',
+        $data['tracking'] ?? '',
+        $data['tracking_url'] ?? '',
+    ]) !== '') {
+        return false;
+    }
+    if ($event === '') {
+        return true;
+    }
+    return true;
+}
+
 // Callback OAuth: Melhor Envio redireciona para ca com ?code=... apos o
 // usuario autorizar o app. Troca o codigo por access_token/refresh_token
 // e salva em storage/private/melhorenvio-tokens.json (mesmo padrao usado
@@ -92,12 +112,24 @@ if (strlen($raw) > 100000) {
     ]);
 }
 
+if (trim($raw) === '') {
+    me_webhook_response(200, [
+        'ok' => true,
+        'provider' => 'melhorenvio',
+        'event_type' => 'registration_probe',
+        'received_at' => date('c'),
+        'message' => 'Webhook de teste recebido.',
+    ]);
+}
+
 $body = json_decode($raw, true);
 if (!is_array($body)) {
-    me_webhook_response(400, [
-        'ok' => false,
+    me_webhook_response(200, [
+        'ok' => true,
         'provider' => 'melhorenvio',
-        'error' => 'invalid_json',
+        'event_type' => 'registration_probe',
+        'received_at' => date('c'),
+        'message' => 'Webhook de teste recebido.',
     ]);
 }
 
@@ -121,7 +153,20 @@ if ($secret === '') {
     ]);
 }
 
+$event = trim((string)($body['event'] ?? ''));
+$data = is_array($body['data'] ?? null) ? $body['data'] : [];
+
 if (!me_validate_signature($raw, $signature, $secret)) {
+    if (me_is_registration_probe($body, $event, $data)) {
+        error_log('[MelhorEnvio] webhook registration probe accepted without valid signature event=' . substr($event, 0, 80));
+        me_webhook_response(200, [
+            'ok' => true,
+            'provider' => 'melhorenvio',
+            'event_type' => 'registration_probe',
+            'received_at' => date('c'),
+            'message' => 'Webhook de teste recebido.',
+        ]);
+    }
     error_log('[MelhorEnvio] invalid signature event=' . substr((string)($body['event'] ?? ''), 0, 80));
     me_webhook_response(401, [
         'ok' => false,
@@ -130,8 +175,6 @@ if (!me_validate_signature($raw, $signature, $secret)) {
     ]);
 }
 
-$event = trim((string)($body['event'] ?? ''));
-$data = is_array($body['data'] ?? null) ? $body['data'] : [];
 $eventId = me_first_non_empty_string([
     $data['id'] ?? '',
     $data['protocol'] ?? '',
@@ -247,4 +290,3 @@ me_webhook_response(200, [
     'order_updated' => $applied,
     'message' => 'Webhook recebido e autenticado.',
 ]);
-

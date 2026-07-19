@@ -21,7 +21,7 @@ async def test_mercado_pago_purchase():
         try:
             # 1. Acessar checkout
             print("[1] Acessando checkout...")
-            await page.goto("https://dev.shopvivaliz.com.br/checkout/",
+            await page.goto("https://shopvivaliz.com.br/checkout/",
                            wait_until="domcontentloaded")
             await page.wait_for_timeout(2000)
 

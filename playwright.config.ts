@@ -11,7 +11,7 @@ export default defineConfig({
     ['list'],
   ],
   use: {
-    baseURL: process.env.E2E_BASE_URL || 'https://dev.shopvivaliz.com.br',
+    baseURL: process.env.E2E_BASE_URL || 'https://shopvivaliz.com.br',
     actionTimeout: 10 * 1000,
     navigationTimeout: 25 * 1000,
     trace: 'on-first-retry',

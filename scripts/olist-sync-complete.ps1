@@ -33,11 +33,11 @@ Write-Status "========================================" "INFO"
 # ============================================================================
 
 $Config = @{
-    SiteBase = "https://dev.shopvivaliz.com.br"
-    ConnectUrl = "https://dev.shopvivaliz.com.br/olist/connect.php"
-    CallbackUrl = "https://dev.shopvivaliz.com.br/olist/callback.php"
-    SyncUrl = "https://dev.shopvivaliz.com.br/olist/sync-products.php"
-    DiagnosticUrl = "https://dev.shopvivaliz.com.br/api/olist/diagnostic.php"
+    SiteBase = "https://shopvivaliz.com.br"
+    ConnectUrl = "https://shopvivaliz.com.br/olist/connect.php"
+    CallbackUrl = "https://shopvivaliz.com.br/olist/callback.php"
+    SyncUrl = "https://shopvivaliz.com.br/olist/sync-products.php"
+    DiagnosticUrl = "https://shopvivaliz.com.br/api/olist/diagnostic.php"
     Email = $env:OLIST_EMAIL
     Senha = $env:OLIST_PASSWORD
     ClientId = $env:OLIST_CLIENT_ID
@@ -276,7 +276,7 @@ Write-Status "========================================" "INFO"
 
 if ($syncComplete) {
     Write-Status "Todos os 198 produtos foram sincronizados com sucesso!" "OK"
-    Write-Status "Verifique o catálogo em: https://dev.shopvivaliz.com.br/catalogo/" "INFO"
+    Write-Status "Verifique o catálogo em: https://shopvivaliz.com.br/catalogo/" "INFO"
 } else {
     Write-Status "A sincronização pode estar em andamento. Verifique manualmente em:" "WARN"
     Write-Status "$($Config.SyncUrl)" "INFO"

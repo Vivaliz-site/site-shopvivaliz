@@ -161,7 +161,7 @@ Valida as 14 verificações recomendadas:
 
 **Acesso:**
 ```
-GET https://dev.shopvivaliz.com.br/api/olist/diagnostic-full.php
+GET https://shopvivaliz.com.br/api/olist/diagnostic-full.php
 ```
 
 **Resposta:**
@@ -237,7 +237,7 @@ GET https://dev.shopvivaliz.com.br/api/olist/diagnostic-full.php
 
 ### Testar Diagnostic:
 ```bash
-curl https://dev.shopvivaliz.com.br/api/olist/diagnostic-full.php
+curl https://shopvivaliz.com.br/api/olist/diagnostic-full.php
 ```
 
 ### Testar Rate Limit Status:
@@ -249,7 +249,7 @@ echo json_encode($status);
 
 ### Sincronizar 198 ao Banco:
 ```bash
-curl https://dev.shopvivaliz.com.br/olist/sync-database-from-catalog.php
+curl https://shopvivaliz.com.br/olist/sync-database-from-catalog.php
 ```
 
 ---

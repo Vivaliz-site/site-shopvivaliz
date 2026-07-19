@@ -226,7 +226,7 @@ ls -la uploads/products/ | wc -l
 SELECT COUNT(*) FROM olist_product_images;
 
 # Ver catálogo atualizado
-curl https://dev.shopvivaliz.com.br/api/products
+curl https://shopvivaliz.com.br/api/products
 ```
 
 ---

@@ -13,7 +13,7 @@
 ```
 GET https://partner.tiktokshop.com/authorize?
   client_id=YOUR_APP_KEY&
-  redirect_uri=https://dev.shopvivaliz.com.br&
+  redirect_uri=https://shopvivaliz.com.br&
   response_type=code&
   scope=shop.basic,product.read,product.write
 ```
@@ -35,7 +35,7 @@ Content-Type: application/json
   "client_secret": "f0a2a1e58a7le4ca8b5f0f7fdfdb2o0ebee06c",
   "code": "authorization_code_from_step_1",
   "grant_type": "authorization_code",
-  "redirect_uri": "https://dev.shopvivaliz.com.br"
+  "redirect_uri": "https://shopvivaliz.com.br"
 }
 ```
 

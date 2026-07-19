@@ -23,7 +23,7 @@
 **Quando validar:**
 ```bash
 # Chamar API
-curl "https://dev.shopvivaliz.com.br/api/catalog/products.php?limit=1" | jq '.source'
+curl "https://shopvivaliz.com.br/api/catalog/products.php?limit=1" | jq '.source'
 # Deve retornar: "erp_olist"
 ```
 
@@ -99,7 +99,7 @@ tail -20 logs/olist-live-sync-response.json
 jq '.products | length' api/catalog/fallback-products.json
 
 # Testar API
-curl "https://dev.shopvivaliz.com.br/api/catalog/products.php?limit=1" \
+curl "https://shopvivaliz.com.br/api/catalog/products.php?limit=1" \
   | jq '{source: .source, count: .count}'
 
 # Ver histórico de workflows

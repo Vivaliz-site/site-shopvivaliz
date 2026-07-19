@@ -5,7 +5,7 @@
 
 const { test, expect } = require('@playwright/test');
 
-const BASE_URL = process.env.E2E_BASE_URL || 'https://dev.shopvivaliz.com.br';
+const BASE_URL = process.env.E2E_BASE_URL || 'https://shopvivaliz.com.br';
 const IS_LOCAL = /^http:\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(BASE_URL);
 const TIMEOUT = 30000;
 

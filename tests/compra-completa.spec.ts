@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 
 test.describe('Fluxo de Compra Completa', () => {
-  const baseUrl = process.env.E2E_BASE_URL || 'https://dev.shopvivaliz.com.br';
+  const baseUrl = process.env.E2E_BASE_URL || 'https://shopvivaliz.com.br';
   const testUser = {
     email: 'test@example.com',
     password: 'password123',

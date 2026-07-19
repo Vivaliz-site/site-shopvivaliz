@@ -148,11 +148,11 @@ DATABASE_URL=postgresql://medusa:sua_senha_segura@localhost:5432/shopvivaliz_med
 NODE_ENV=production
 
 # Backend
-MEDUSA_BACKEND_URL=https://dev.shopvivaliz.com.br/claude/medusa/backend
+MEDUSA_BACKEND_URL=https://shopvivaliz.com.br/claude/medusa/backend
 
 # Admin
-ADMIN_CORS=https://dev.shopvivaliz.com.br
-STORE_CORS=https://dev.shopvivaliz.com.br
+ADMIN_CORS=https://shopvivaliz.com.br
+STORE_CORS=https://shopvivaliz.com.br
 
 # Auth
 JWT_SECRET=gerar_com_openssl_rand_base64_32
@@ -168,7 +168,7 @@ OLIST_CLIENT_SECRET=
 
 # EHA Webhooks
 EHA_WEBHOOK_SECRET=gerar_com_openssl_rand_base64_32
-MEDUSA_WEBHOOK_URL=https://dev.shopvivaliz.com.br/claude/api/medusa-webhook.php
+MEDUSA_WEBHOOK_URL=https://shopvivaliz.com.br/claude/api/medusa-webhook.php
 
 # Logging
 LOG_LEVEL=info
@@ -188,8 +188,8 @@ openssl rand -base64 32
 cd ../storefront
 
 cat > .env.local << 'EOF'
-NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://dev.shopvivaliz.com.br/claude/medusa/backend
-NEXT_PUBLIC_STORE_URL=https://dev.shopvivaliz.com.br
+NEXT_PUBLIC_MEDUSA_BACKEND_URL=https://shopvivaliz.com.br/claude/medusa/backend
+NEXT_PUBLIC_STORE_URL=https://shopvivaliz.com.br
 EOF
 ```
 
@@ -302,13 +302,13 @@ cat > apps/storefront/.htaccess << 'EOF'
 
 ### Registrar webhooks (via admin):
 
-1. Acesso: https://dev.shopvivaliz.com.br/claude/medusa/backend/admin
+1. Acesso: https://shopvivaliz.com.br/claude/medusa/backend/admin
 2. Ir para Settings → Webhooks
 3. Criar novo webhook:
 
 ```
 Event: product.created
-URL: https://dev.shopvivaliz.com.br/claude/api/medusa-webhook.php
+URL: https://shopvivaliz.com.br/claude/api/medusa-webhook.php
 Secret: [mesma do EHA_WEBHOOK_SECRET no .env]
 ```
 
@@ -326,20 +326,20 @@ Secret: [mesma do EHA_WEBHOOK_SECRET no .env]
 ### Verificar backend:
 
 ```bash
-curl https://dev.shopvivaliz.com.br/claude/medusa/backend/health
+curl https://shopvivaliz.com.br/claude/medusa/backend/health
 # Resposta: {"status":"ok"}
 ```
 
 ### Verificar storefront:
 
 ```bash
-curl https://dev.shopvivaliz.com.br/claude/medusa/storefront
+curl https://shopvivaliz.com.br/claude/medusa/storefront
 ```
 
 ### Verificar webhook:
 
 ```bash
-curl -X POST https://dev.shopvivaliz.com.br/claude/api/medusa-webhook.php \
+curl -X POST https://shopvivaliz.com.br/claude/api/medusa-webhook.php \
   -H "X-Medusa-Signature: test" \
   -d '{}'
 # Deve retornar 401 (Unauthorized - expected)

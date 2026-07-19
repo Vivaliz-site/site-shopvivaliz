@@ -30,7 +30,7 @@ CLIENT_DATA = {
     "state": "MG",
 }
 
-SITE_URL = "https://dev.shopvivaliz.com.br/"
+SITE_URL = "https://shopvivaliz.com.br/"
 LOGS_DIR = Path("logs")
 SCREENSHOTS_DIR = Path("screenshots-purchase")
 

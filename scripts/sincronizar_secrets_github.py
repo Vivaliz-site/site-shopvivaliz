@@ -159,7 +159,7 @@ MELHORENVIO_ACCESS_TOKEN=
 # Ambiente
 APP_ENV=development
 APP_DEBUG=true
-APP_URL=https://dev.shopvivaliz.com.br
+APP_URL=https://shopvivaliz.com.br
 """
 
     env_file = Path(".env.local")

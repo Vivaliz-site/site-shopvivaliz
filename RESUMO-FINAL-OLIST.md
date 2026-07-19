@@ -48,25 +48,25 @@
 
 ### 1. **Testar Catálogo** (5 min)
 ```
-https://dev.shopvivaliz.com.br/catalogo/
+https://shopvivaliz.com.br/catalogo/
 # Devem aparecer 198 produtos com imagens
 ```
 
 ### 2. **Verificar API** (2 min)
 ```
-curl https://dev.shopvivaliz.com.br/api/produtos.php
+curl https://shopvivaliz.com.br/api/produtos.php
 # Retorna 198 produtos em JSON
 ```
 
 ### 3. **Sincronização de Imagens Locais** (opcional)
 ```
-https://dev.shopvivaliz.com.br/olist/download-images.php
+https://shopvivaliz.com.br/olist/download-images.php
 # Baixa as 198 imagens para /public/images/olist-produtos/
 ```
 
 ### 4. **Atualizar Banco de Dados** (opcional)
 ```
-https://dev.shopvivaliz.com.br/olist/sync-images-to-site.php
+https://shopvivaliz.com.br/olist/sync-images-to-site.php
 # Atualiza tabelas olist_products e olist_product_images
 ```
 

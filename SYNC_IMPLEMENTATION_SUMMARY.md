@@ -162,7 +162,7 @@ grep "product_updated" /logs/olist-webhook-processor.log
 ## 🔍 Troubleshooting
 
 ### Problema: Webhook não processa
-**Solução**: Verificar que Olist está enviando para `https://dev.shopvivaliz.com.br/api/olist/webhook.php`
+**Solução**: Verificar que Olist está enviando para `https://shopvivaliz.com.br/api/olist/webhook.php`
 
 ### Problema: Pedido não vai para Olist
 **Solução**: Verificar logs em `/logs/pedidos.jsonl` para campo `tiny_push`

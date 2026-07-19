@@ -188,13 +188,13 @@ RESULTADO FINAL          ✅ GO-LIVE   Claude + Fred
 
 ```bash
 # Preços corretos?
-curl https://dev.shopvivaliz.com.br/api/catalog/products.php | jq '.products[0]'
+curl https://shopvivaliz.com.br/api/catalog/products.php | jq '.products[0]'
 
 # Site online?
-curl -I https://dev.shopvivaliz.com.br/ | grep HTTP
+curl -I https://shopvivaliz.com.br/ | grep HTTP
 
 # Health check
-curl https://dev.shopvivaliz.com.br/admin/health-check.php
+curl https://shopvivaliz.com.br/admin/health-check.php
 ```
 
 ### Troubleshooting

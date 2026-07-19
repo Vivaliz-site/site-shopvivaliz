@@ -25,7 +25,7 @@ REALIDADE:
 
 ```csv
 sku,image_url_1,image_url_2,image_url_3,image_url_4
-JVAQAC44,https://dev.shopvivaliz.com.br/uploads/olist/JVAQAC44/1.jpg,,,
+JVAQAC44,https://shopvivaliz.com.br/uploads/olist/JVAQAC44/1.jpg,,,
 ```
 
 **Status:** ⚠️ Faltam 3 variantes!

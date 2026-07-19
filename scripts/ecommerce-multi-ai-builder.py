@@ -209,7 +209,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 define('APP_NAME', 'ShopVivaliz');
-define('BASE_URL', 'https://dev.shopvivaliz.com.br');
+define('BASE_URL', 'https://shopvivaliz.com.br');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">

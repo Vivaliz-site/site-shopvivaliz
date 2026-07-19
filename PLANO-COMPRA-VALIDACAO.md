@@ -9,7 +9,7 @@
 ### VOCÊ (Usuário):
 ```
 1. Abrir navegador
-2. Ir para: https://dev.shopvivaliz.com.br/
+2. Ir para: https://shopvivaliz.com.br/
 3. Fazer compra com seus dados (Frederico de Castro Mourao, CPF, email, etc)
 4. Gerar boleto
 5. Anotar número do pedido
@@ -108,7 +108,7 @@ Pedido não apareceu?
 - 📊 logs/email-*.log (monitorar email)
 - 📊 logs/olist-sync.log (monitorar ERP)
 - 📊 logs/orchestrator.log (monitorar geral)
-- 🔗 https://dev.shopvivaliz.com.br/ (testar site)
+- 🔗 https://shopvivaliz.com.br/ (testar site)
 
 ---
 
@@ -134,19 +134,19 @@ tail -20 logs/email-*.log
 tail -50 logs/olist-sync.log
 
 # Se site está com erro:
-curl -v https://dev.shopvivaliz.com.br/
+curl -v https://shopvivaliz.com.br/
 ```
 
 ### Método 3: Testes de API (Sob Demanda)
 ```bash
 # Testar email direto
-curl -X POST https://dev.shopvivaliz.com.br/api/mail/test.php
+curl -X POST https://shopvivaliz.com.br/api/mail/test.php
 
 # Testar Olist sync
-curl -X POST https://dev.shopvivaliz.com.br/api/olist/sync-catalog.php
+curl -X POST https://shopvivaliz.com.br/api/olist/sync-catalog.php
 
 # Health check
-curl https://dev.shopvivaliz.com.br/admin/health-check.php
+curl https://shopvivaliz.com.br/admin/health-check.php
 ```
 
 ---
@@ -189,7 +189,7 @@ Marque conforme progride:
 PREPARAÇÃO:
   [ ] Leu GUIA-COMPRA-TESTE-REAL.md
   [ ] Tem seus dados à mão (nome, CPF, email, etc)
-  [ ] Sabe acessar https://dev.shopvivaliz.com.br/
+  [ ] Sabe acessar https://shopvivaliz.com.br/
 
 EXECUÇÃO (Você):
   [ ] Abrir site
@@ -223,7 +223,7 @@ RESULTADO:
 5. Abra OUTRA aba/janela do navegador
 
 ### NA OUTRA ABA:
-1. Abra: https://dev.shopvivaliz.com.br/
+1. Abra: https://shopvivaliz.com.br/
 2. Siga GUIA-COMPRA-TESTE-REAL.md
 3. Faça a compra
 4. Relate o resultado
@@ -256,7 +256,7 @@ RESULTADO:
 
 **Site respondendo erro?**
 ```
-→ Verificar: curl -v https://dev.shopvivaliz.com.br/
+→ Verificar: curl -v https://shopvivaliz.com.br/
 → Logs Apache: /var/log/apache2/error.log (VM)
 → Reiniciar serviços se necessário
 ```

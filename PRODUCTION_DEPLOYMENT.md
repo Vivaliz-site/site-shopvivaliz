@@ -49,7 +49,7 @@ Endpoints: 4+ configurados
 ```
 App Key: 6kf502maarj2k
 App Secret: ✅ Configurado
-Redirect URL: https://dev.shopvivaliz.com.br
+Redirect URL: https://shopvivaliz.com.br
 Endpoints: 3+ configurados
 ```
 
@@ -148,8 +148,8 @@ Status: ✅ Automático
 ## 📱 ACESSO EM PRODUÇÃO
 
 ### URLs Live
-- **Site**: https://dev.shopvivaliz.com.br
-- **Admin Monitor**: https://dev.shopvivaliz.com.br/admin/monitor/
+- **Site**: https://shopvivaliz.com.br
+- **Admin Monitor**: https://shopvivaliz.com.br/admin/monitor/
 - **Shopee Dashboard**: https://partner.shopeemobile.com/
 - **TikTok Dashboard**: https://partner.tiktokshop.com/
 
@@ -268,4 +268,4 @@ Status: PRODUCTION READY
 
 Repositório: https://github.com/fredmourao-ai/site-shopvivaliz
 Commit: 3727af6
-Live URL: https://dev.shopvivaliz.com.br
+Live URL: https://shopvivaliz.com.br

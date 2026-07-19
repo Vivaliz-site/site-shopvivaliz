@@ -7,7 +7,7 @@ echo ""
 
 # 1. Testar conexão com servidor
 echo "1. TESTANDO CONEXAO COM SERVIDOR..."
-URL="https://dev.shopvivaliz.com.br"
+URL="https://shopvivaliz.com.br"
 
 echo "  Testando $URL..."
 status=$(curl -s -o /dev/null -w "%{http_code}" "$URL")

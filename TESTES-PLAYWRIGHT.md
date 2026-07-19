@@ -155,7 +155,7 @@ npx playwright show-report
   fullyParallel: false,
   reporter: ['html', 'list'],
   use: {
-    baseURL: 'https://dev.shopvivaliz.com.br',
+    baseURL: 'https://shopvivaliz.com.br',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

@@ -18,7 +18,7 @@ $diagnostics[] = [
 // 2. URL de callback configurada
 $diagnostics[] = [
     'check' => 'URL callback registrada',
-    'valor' => 'https://dev.shopvivaliz.com.br/olist/callback.php',
+    'valor' => 'https://shopvivaliz.com.br/olist/callback.php',
     'status' => 'ok'
 ];
 

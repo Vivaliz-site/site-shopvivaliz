@@ -150,7 +150,7 @@ tail -f logs/email-*.log
 ### Depois (Go-Live)
 - [ ] VM Oracle acessível via SSH ✓
 - [ ] Apache respondendo ✓
-- [ ] Site https://dev.shopvivaliz.com.br/ respondendo ✓
+- [ ] Site https://shopvivaliz.com.br/ respondendo ✓
 - [ ] Todos os testes passaram ✓
 - [ ] Deploy production readiness: YES ✓
 

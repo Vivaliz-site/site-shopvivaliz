@@ -74,7 +74,7 @@ OPÇÃO 1: Importar Manualmente na Shopee
 
 OPÇÃO 2: Executar via HTTP
 ──────────────────────────
-curl https://dev.shopvivaliz.com.br/api/pipeline/shopee-sync.php
+curl https://shopvivaliz.com.br/api/pipeline/shopee-sync.php
 
 Resposta JSON:
 {

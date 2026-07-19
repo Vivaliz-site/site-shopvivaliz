@@ -9,7 +9,7 @@ async def main():
         page = await browser.new_page()
 
         print("Acessando checkout...")
-        await page.goto("https://dev.shopvivaliz.com.br/checkout/")
+        await page.goto("https://shopvivaliz.com.br/checkout/")
         await page.wait_for_load_state("domcontentloaded")
         await page.wait_for_timeout(2000)
 

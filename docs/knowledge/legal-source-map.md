@@ -2,7 +2,7 @@
 
 ## Fonte pública principal
 
-Domínio oficial: `https://www.shopvivaliz.com.br`
+Domínio oficial: `https://shopvivaliz.com.br`
 
 ## Correspondência entre conteúdo e repositório
 

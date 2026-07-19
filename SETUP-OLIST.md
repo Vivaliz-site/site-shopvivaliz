@@ -35,7 +35,7 @@ TINY_ERP_API_KEY=sua_chave_tinyerp_aqui
 
 ## Testando
 Após configurar, acesse:
-- https://dev.shopvivaliz.com.br/catalogo/
+- https://shopvivaliz.com.br/catalogo/
 - Deverá carregar 198 produtos
 - Haverá filtros por categoria
 - Cache funcionará (1 hora)

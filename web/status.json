@@ -3,7 +3,7 @@
   "surface": "vercel-static-shell",
   "status": "ok",
   "runtime": "static",
-  "primary_app": "https://dev.shopvivaliz.com.br/",
+  "primary_app": "https://shopvivaliz.com.br/",
   "notes": [
     "Vercel serves the static web shell from /web.",
     "Core PHP application and autonomous agents remain outside Vercel runtime."

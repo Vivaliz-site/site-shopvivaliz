@@ -1,7 +1,7 @@
 <?php
 /**
  * Gerador de Token Tiny/Olist OAuth
- * Localização: https://dev.shopvivaliz.com.br/gen-token.php
+ * Localização: https://shopvivaliz.com.br/gen-token.php
  */
 
 declare(strict_types=1);

@@ -261,7 +261,7 @@ Get-ScheduledTask | Where-Object { $_.TaskName -like '*ShopVivaliz*' } | Get-Sch
 
 ### Dashboard (futuro)
 ```
-https://dev.shopvivaliz.com.br/admin/monitor/
+https://shopvivaliz.com.br/admin/monitor/
 ```
 
 ---

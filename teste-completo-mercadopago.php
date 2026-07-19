@@ -56,11 +56,11 @@ $preference = [
         ]
     ],
     'back_urls' => [
-        'success' => 'https://dev.shopvivaliz.com.br/checkout/success',
-        'pending' => 'https://dev.shopvivaliz.com.br/checkout/pending',
-        'failure' => 'https://dev.shopvivaliz.com.br/checkout/failure'
+        'success' => 'https://shopvivaliz.com.br/checkout/success',
+        'pending' => 'https://shopvivaliz.com.br/checkout/pending',
+        'failure' => 'https://shopvivaliz.com.br/checkout/failure'
     ],
-    'notification_url' => 'https://dev.shopvivaliz.com.br/api/webhook-mercadopago.php',
+    'notification_url' => 'https://shopvivaliz.com.br/api/webhook-mercadopago.php',
     'external_reference' => 'TESTE-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)),
     'auto_return' => 'approved'
 ];

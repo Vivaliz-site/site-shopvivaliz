@@ -19,7 +19,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # ============ CONFIGURAÇÃO ============
-BASE_URL = "https://dev.shopvivaliz.com.br"
+BASE_URL = "https://shopvivaliz.com.br"
 MONITOR_LOG = "/home/ubuntu/site-shopvivaliz/logs/auditoria-24-7.log"
 ALERTS_LOG = "/home/ubuntu/site-shopvivaliz/logs/alertas-24-7.log"
 REPORT_DIR = "/home/ubuntu/site-shopvivaliz/logs/reports"

@@ -11,30 +11,30 @@
 ### TESTE 1: Site Acessível + Carregamento Rápido
 ```bash
 # Teste 1.1: Site respondendo
-curl -s -I https://dev.shopvivaliz.com.br/ | grep "HTTP"
+curl -s -I https://shopvivaliz.com.br/ | grep "HTTP"
 # Esperado: HTTP/1.1 200 OK ✅
 
 # Teste 1.2: Página home carrega
-curl -s https://dev.shopvivaliz.com.br/ | grep -c "ShopVivaliz\|Loja\|Produtos" > 0
+curl -s https://shopvivaliz.com.br/ | grep -c "ShopVivaliz\|Loja\|Produtos" > 0
 # Esperado: conteúdo encontrado ✅
 
 # Teste 1.3: CSS + JS carregam
-curl -s -I https://dev.shopvivaliz.com.br/css/style.css | grep "200\|304"
+curl -s -I https://shopvivaliz.com.br/css/style.css | grep "200\|304"
 # Esperado: 200 ou 304 Not Modified ✅
 ```
 
 ### TESTE 2: Catálogo de Produtos (Sincronizado com Olist)
 ```bash
 # Teste 2.1: Produtos carregam
-curl -s https://dev.shopvivaliz.com.br/api/catalog/products.php | grep -c "id\|name\|price" > 0
+curl -s https://shopvivaliz.com.br/api/catalog/products.php | grep -c "id\|name\|price" > 0
 # Esperado: JSON com produtos ✅
 
 # Teste 2.2: Preços atualizados (do Olist)
-curl -s https://dev.shopvivaliz.com.br/api/catalog/products.php | grep "price" | head -1
+curl -s https://shopvivaliz.com.br/api/catalog/products.php | grep "price" | head -1
 # Esperado: preços numéricos ✅
 
 # Teste 2.3: Estoque sincronizado
-curl -s https://dev.shopvivaliz.com.br/api/catalog/products.php | grep "stock" | head -1
+curl -s https://shopvivaliz.com.br/api/catalog/products.php | grep "stock" | head -1
 # Esperado: quantidade de estoque ✅
 ```
 
@@ -42,20 +42,20 @@ curl -s https://dev.shopvivaliz.com.br/api/catalog/products.php | grep "stock" |
 ```bash
 # Teste 3.1: Adicionar ao carrinho
 # Simular POST /api/cart/add.php
-curl -X POST https://dev.shopvivaliz.com.br/api/cart/add.php \
+curl -X POST https://shopvivaliz.com.br/api/cart/add.php \
   -d '{"product_id":"123","quantity":1}' \
   -H "Content-Type: application/json"
 # Esperado: {"status":"ok","cart_id":"xxx"} ✅
 
 # Teste 3.2: Recuperar carrinho
-curl -s https://dev.shopvivaliz.com.br/api/cart/get.php?cart_id=xxx
+curl -s https://shopvivaliz.com.br/api/cart/get.php?cart_id=xxx
 # Esperado: items, totals, shipping ✅
 ```
 
 ### TESTE 4: Checkout e Geração de Boleto
 ```bash
 # Teste 4.1: Iniciar checkout
-curl -X POST https://dev.shopvivaliz.com.br/api/checkout/init.php \
+curl -X POST https://shopvivaliz.com.br/api/checkout/init.php \
   -d '{
     "customer":{"name":"Test","email":"test@gmail.com","phone":"11999999999"},
     "address":{"zip":"01234567"},
@@ -65,11 +65,11 @@ curl -X POST https://dev.shopvivaliz.com.br/api/checkout/init.php \
 # Esperado: order_id, payment_status, boleto_url ✅
 
 # Teste 4.2: Gerar boleto
-curl -s https://dev.shopvivaliz.com.br/api/payment/generate-boleto.php?order_id=xxx
+curl -s https://shopvivaliz.com.br/api/payment/generate-boleto.php?order_id=xxx
 # Esperado: boleto_number, due_date, barcode ✅
 
 # Teste 4.3: Verificar status pagamento
-curl -s https://dev.shopvivaliz.com.br/api/payment/status.php?order_id=xxx
+curl -s https://shopvivaliz.com.br/api/payment/status.php?order_id=xxx
 # Esperado: {"status":"pending","method":"boleto"} ✅
 ```
 
@@ -84,7 +84,7 @@ echo "HELO shopvivaliz.com.br" | nc -w 5 smtp.gmail.com 587
 # Esperado: 220 Conexão OK ✅
 
 # Teste 5.3: Testar envio de teste
-curl -X POST https://dev.shopvivaliz.com.br/api/mail/test.php \
+curl -X POST https://shopvivaliz.com.br/api/mail/test.php \
   -d "to=fredmourao@gmail.com&subject=Teste"
 # Verificar inbox após 30 segundos ✅
 ```
@@ -96,7 +96,7 @@ grep "OLIST_REFRESH_TOKEN" .env | cut -d= -f2 | head -c 20
 # Esperado: token começando com "eyJ..." (JWT válido) ✅
 
 # Teste 6.2: Sincronizar catálogo
-curl -X POST https://dev.shopvivaliz.com.br/api/olist/sync-catalog.php
+curl -X POST https://shopvivaliz.com.br/api/olist/sync-catalog.php
 # Esperado: {"status":"ok","synced":X,"errors":0} ✅
 
 # Teste 6.3: Verificar pedido no ERP
@@ -117,14 +117,14 @@ grep "SHOPEE_" .env | wc -l
 # Esperado: > 0 credenciais ✅
 
 # Teste 7.2: Sincronização Shopee
-curl -X POST https://dev.shopvivaliz.com.br/api/shopee/sync.php
+curl -X POST https://shopvivaliz.com.br/api/shopee/sync.php
 # Esperado: {"status":"ok","products_synced":X} ✅
 ```
 
 ### TESTE 8: Monitoramento e Alertas
 ```bash
 # Teste 8.1: Health check rodando
-curl -s https://dev.shopvivaliz.com.br/admin/health-check.php
+curl -s https://shopvivaliz.com.br/admin/health-check.php
 # Esperado: {"status":"healthy","uptime":X,"db":"connected"} ✅
 
 # Teste 8.2: Agent heartbeats atualizados
@@ -162,7 +162,7 @@ gh secret list 2>/dev/null | wc -l
 # Esperado: > 5 secrets ✅
 
 # Teste 10.3: HTTPS ativo
-curl -I https://dev.shopvivaliz.com.br/ | grep "Strict-Transport"
+curl -I https://shopvivaliz.com.br/ | grep "Strict-Transport"
 # Esperado: header presente ou conexão HTTPS ✅
 ```
 
@@ -175,7 +175,7 @@ curl -I https://dev.shopvivaliz.com.br/ | grep "Strict-Transport"
 # save as: test-e2e.sh
 # usage: bash test-e2e.sh
 
-SITE="https://dev.shopvivaliz.com.br"
+SITE="https://shopvivaliz.com.br"
 RESULTS=""
 PASS=0
 FAIL=0

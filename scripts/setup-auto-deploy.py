@@ -29,11 +29,11 @@ import getpass
 REPOS = [
     {
         "repo":       "fredmourao-ai/site-shopvivaliz",
-        "webhook_url": "https://dev.shopvivaliz.com.br/deploy-webhook.php",
+        "webhook_url": "https://shopvivaliz.com.br/deploy-webhook.php",
     },
     {
         "repo":       "fredmourao-ai/-shopvivaliz-pipeline",
-        "webhook_url": "https://dev.shopvivaliz.com.br/deploy-webhook.php",
+        "webhook_url": "https://shopvivaliz.com.br/deploy-webhook.php",
     },
 ]
 

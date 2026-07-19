@@ -253,7 +253,7 @@ class OlistImageDownloader:
                 # CSV Mapeamento
                 if local_path:
                     site_upload_path = f"/public_html/dev/uploads/olist/{sku}/{Path(local_path).name}"
-                    site_public_url = f"https://dev.shopvivaliz.com.br/uploads/olist/{sku}/{Path(local_path).name}"
+                    site_public_url = f"https://shopvivaliz.com.br/uploads/olist/{sku}/{Path(local_path).name}"
                     full_hash = self.calculate_file_hash(local_path)
 
                     self.mapping_rows.append({

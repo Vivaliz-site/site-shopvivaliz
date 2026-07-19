@@ -35,7 +35,7 @@ import xml.etree.ElementTree as ET
 
 DEFAULT_API_BASE = "https://api.tiny.com.br/public-api/v3"
 DEFAULT_TOKEN_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
-DEFAULT_SITE_BASE_URL = "https://dev.shopvivaliz.com.br"
+DEFAULT_SITE_BASE_URL = "https://shopvivaliz.com.br"
 DEFAULT_STORAGE_IMAGES = Path("storage/olist-images")
 DEFAULT_REPORTS_DIR = Path("storage/reports")
 DEFAULT_REMOTE_UPLOAD_ROOT = "uploads/olist"

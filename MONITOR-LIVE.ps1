@@ -18,7 +18,7 @@ while ($true) {
     # 1. Site Status
     Write-Host "1. SITE:" -ForegroundColor Yellow
     try {
-        $response = curl -s -I "https://dev.shopvivaliz.com.br/" | Select-Object -First 1
+        $response = curl -s -I "https://shopvivaliz.com.br/" | Select-Object -First 1
         if ($response -match "200") {
             Write-Host "   [OK] Online" -ForegroundColor Green
         } else {

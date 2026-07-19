@@ -37,7 +37,7 @@ EMAIL_TEMPLATE = """
     <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
       <strong style="font-size: 18px; color: #0b4f88;">{product_name}</strong><br>
       SKU: {sku}<br>
-      <a href="https://dev.shopvivaliz.com.br/produto?sku={sku}"
+      <a href="https://shopvivaliz.com.br/produto?sku={sku}"
          style="display: inline-block; margin-top: 10px; padding: 10px 20px; background: #0b4f88; color: white; text-decoration: none; border-radius: 5px;">
         Ver Produto
       </a>
@@ -48,7 +48,7 @@ EMAIL_TEMPLATE = """
     <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
     <p style="font-size: 12px; color: #999;">
       Para desincrever-se desta notificação,
-      <a href="https://dev.shopvivaliz.com.br/api/catalog/stock-alert.php?unsubscribe={unsubscribe_token}" style="color: #0b4f88;">clique aqui</a>.
+      <a href="https://shopvivaliz.com.br/api/catalog/stock-alert.php?unsubscribe={unsubscribe_token}" style="color: #0b4f88;">clique aqui</a>.
     </p>
   </div>
 </body>

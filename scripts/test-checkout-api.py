@@ -2,7 +2,7 @@ import requests
 import json
 import sys
 
-url = "https://dev.shopvivaliz.com.br/api/orders/create-v2.php"
+url = "https://shopvivaliz.com.br/api/orders/create-v2.php"
 
 payload = {
     "customer_name": "Test User",

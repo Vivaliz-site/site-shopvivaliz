@@ -21,7 +21,7 @@ Estado: MG
 ### PASSO 1: Abrir Site (1 MIN)
 ```
 1. Abrir navegador (Chrome/Firefox/Edge)
-2. Copiar e colar: https://dev.shopvivaliz.com.br/
+2. Copiar e colar: https://shopvivaliz.com.br/
 3. Pressionar ENTER
 4. Aguardar carregar
 5. ✅ Verificar: Logo ShopVivaliz aparece?
@@ -242,14 +242,14 @@ tail -50 logs/olist-sync.log
 tail -50 logs/orchestrator.log
 
 # Test email manual
-curl -X POST https://dev.shopvivaliz.com.br/api/mail/test.php \
+curl -X POST https://shopvivaliz.com.br/api/mail/test.php \
   -d "to=fredmourao@gmail.com&subject=TesteProdução"
 
 # Test Olist sync
-curl -X POST https://dev.shopvivaliz.com.br/api/olist/sync-catalog.php
+curl -X POST https://shopvivaliz.com.br/api/olist/sync-catalog.php
 
 # Health check site
-curl https://dev.shopvivaliz.com.br/admin/health-check.php
+curl https://shopvivaliz.com.br/admin/health-check.php
 ```
 
 ---

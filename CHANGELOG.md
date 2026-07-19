@@ -21,7 +21,7 @@
 ## 2026-07-12 — Suite Playwright E2E falhando (5 testes) e bloqueando promoção de código
 
 - **Sintoma:** job "Playwright E2E" falhando em todo PR com 5 testes quebrados; os testes rodam
-  contra a PRODUÇÃO (`https://dev.shopvivaliz.com.br`), não contra o código do PR.
+  contra a PRODUÇÃO (`https://shopvivaliz.com.br`), não contra o código do PR.
 - **Causas reais (uma por teste):**
   1. *Homepage*: `locator('header')` pegava o único `<header>` da página — o cabeçalho interno
      do painel FECHADO da Liz (altura 0 = "hidden"). A navbar real era `<nav>`, não `<header>`.

@@ -67,7 +67,7 @@ GITHUB (origin/main)
     ↓ (cron 30min)
 VM ORACLE (prod)
     ↓
-SITE LIVE (https://dev.shopvivaliz.com.br/)
+SITE LIVE (https://shopvivaliz.com.br/)
 ```
 
 **Tempo total:** Local → Produção = ~30 minutos máximo
@@ -153,7 +153,7 @@ tail -f logs/olist-sync.log
 tail -f logs/email-*.log
 
 # Testar site
-curl -I https://dev.shopvivaliz.com.br/
+curl -I https://shopvivaliz.com.br/
 ```
 
 ### Documentação
@@ -194,7 +194,7 @@ Sistema de sincronização automático entre estações está operacional. Email
 ### Timestamp Final
 - **Liberação:** 2026-07-13 23:28 UTC
 - **Commit:** b233141
-- **Site:** https://dev.shopvivaliz.com.br/ (✅ 200 OK)
+- **Site:** https://shopvivaliz.com.br/ (✅ 200 OK)
 - **Status:** 🚀 **GO LIVE**
 
 ---

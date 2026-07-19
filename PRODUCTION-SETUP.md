@@ -72,7 +72,7 @@ tail -f /home/ubuntu/site-shopvivaliz/logs/daemon-health.log
 
 ### 1. API Endpoint
 ```bash
-curl -s https://dev.shopvivaliz.com.br/api/catalog/products.php | jq '.count'
+curl -s https://shopvivaliz.com.br/api/catalog/products.php | jq '.count'
 # Esperado: 188
 ```
 
@@ -184,8 +184,8 @@ tail -f /home/ubuntu/site-shopvivaliz/logs/webhook.log
 
 **Repos:**
 - GitHub: https://github.com/Vivaliz-site/site-shopvivaliz
-- Site: https://dev.shopvivaliz.com.br/
-- Admin: https://dev.shopvivaliz.com.br/admin/monitor/
+- Site: https://shopvivaliz.com.br/
+- Admin: https://shopvivaliz.com.br/admin/monitor/
 
 **Docs:**
 - DOCS-API-OLIST.md - API reference

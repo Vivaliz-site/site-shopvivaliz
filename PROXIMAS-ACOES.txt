@@ -55,7 +55,7 @@ AÇÃO 5: Testar Tracking (10 min)
 ────────────────────────────────
 
 1. Instalar "Google Tag Assistant": https://tagassistant.google.com/
-2. Visitar: https://dev.shopvivaliz.com.br
+2. Visitar: https://shopvivaliz.com.br
 3. Procurar por "Google Analytics" na Tag Assistant
 4. Clicar em "Analytics" → Deve mostrar seu GA4_ID ✅
 

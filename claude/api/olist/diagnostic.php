@@ -3,7 +3,7 @@
  * Diagnostico Olist - Validar integracao completa
  * Testa todos os endpoints e status da sincronizacao
  *
- * Acesso: https://dev.shopvivaliz.com.brapi/olist/diagnostic.php
+ * Acesso: https://shopvivaliz.com.brapi/olist/diagnostic.php
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -138,7 +138,7 @@ if ($client_id && $client_secret) {
             'client_id' => $client_id,
             'client_secret' => $client_secret,
             'code' => 'TEST_CODE_INVALIDO',
-            'redirect_uri' => 'https://dev.shopvivaliz.com.br/olist/sync-products.php'
+            'redirect_uri' => 'https://shopvivaliz.com.br/olist/sync-products.php'
         ]),
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 10,
@@ -209,19 +209,19 @@ $resumo = [
 
 $proximos_passos = [
     'Passo 1: Autorizar Olist' => [
-        'url' => 'https://dev.shopvivaliz.com.br/olist/connect.php',
+        'url' => 'https://shopvivaliz.com.br/olist/connect.php',
         'descricao' => 'Clique para fazer login e autorizar ShopVivaliz a acessar seus produtos'
     ],
     'Passo 2: Callback' => [
-        'url' => 'https://dev.shopvivaliz.com.br/olist/callback.php',
+        'url' => 'https://shopvivaliz.com.br/olist/callback.php',
         'descricao' => 'Volta automaticamente aqui com o codigo de autorizacao'
     ],
     'Passo 3: Sincronizar' => [
-        'url' => 'https://dev.shopvivaliz.com.br/olist/sync-products.php',
+        'url' => 'https://shopvivaliz.com.br/olist/sync-products.php',
         'descricao' => 'Sincroniza todos os 198 produtos com imagens'
     ],
     'Passo 4: Renovar Token' => [
-        'url' => 'https://dev.shopvivaliz.com.brapi/olist/token-refresh.php',
+        'url' => 'https://shopvivaliz.com.brapi/olist/token-refresh.php',
         'descricao' => 'Se o token expirar, use isso para renovar (dura ~4 horas)'
     ]
 ];

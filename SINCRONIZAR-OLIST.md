@@ -10,7 +10,7 @@ As credenciais corretas foram configuradas nos Secrets do GitHub:
 ### Passo 1: Autorizar a Aplicação
 Abra no navegador:
 ```
-https://dev.shopvivaliz.com.br/olist/connect.php
+https://shopvivaliz.com.br/olist/connect.php
 ```
 
 **O que acontece:**
@@ -22,7 +22,7 @@ https://dev.shopvivaliz.com.br/olist/connect.php
 ### Passo 2: Autorização Recebida
 Você chegará em:
 ```
-https://dev.shopvivaliz.com.br/olist/callback.php
+https://shopvivaliz.com.br/olist/callback.php
 ```
 
 **O que ver:**
@@ -33,7 +33,7 @@ https://dev.shopvivaliz.com.br/olist/callback.php
 ### Passo 3: Sincronizar Produtos
 Após autorizar, acesse:
 ```
-https://dev.shopvivaliz.com.br/olist/sync-products.php
+https://shopvivaliz.com.br/olist/sync-products.php
 ```
 
 **O que acontece:**
@@ -79,7 +79,7 @@ https://dev.shopvivaliz.com.br/olist/sync-products.php
 ```
 GET https://id.olist.com/openid/authorize?
   client_id=OLIST_CLIENT_ID&
-  redirect_uri=https://dev.shopvivaliz.com.br/olist/callback.php&
+  redirect_uri=https://shopvivaliz.com.br/olist/callback.php&
   response_type=code&
   scope=products:read
 ```
@@ -91,7 +91,7 @@ POST https://id.olist.com/openid/token
   client_id=OLIST_CLIENT_ID
   client_secret=OLIST_CLIENT_SECRET
   code=CODIGO_RECEBIDO
-  redirect_uri=https://dev.shopvivaliz.com.br/olist/callback.php
+  redirect_uri=https://shopvivaliz.com.br/olist/callback.php
 ```
 
 **Resposta:**
@@ -152,10 +152,10 @@ Após sincronizar e salvar o cache, o catálogo pode:
 
 | Operação | URL |
 |----------|-----|
-| Conectar Olist | https://dev.shopvivaliz.com.br/olist/connect.php |
-| Callback Olist | https://dev.shopvivaliz.com.br/olist/callback.php |
-| Sincronizar | https://dev.shopvivaliz.com.br/olist/sync-products.php |
-| Cache | https://dev.shopvivaliz.com.br/logs/olist-products-cache.json |
+| Conectar Olist | https://shopvivaliz.com.br/olist/connect.php |
+| Callback Olist | https://shopvivaliz.com.br/olist/callback.php |
+| Sincronizar | https://shopvivaliz.com.br/olist/sync-products.php |
+| Cache | https://shopvivaliz.com.br/logs/olist-products-cache.json |
 
 ---
 

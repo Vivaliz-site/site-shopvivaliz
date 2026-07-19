@@ -184,7 +184,7 @@ Admin → /admin/pedidos.php
    - Title: "🚀 Production Ready - All Systems Green"
 3. Review e merge
 4. VM Oracle sincroniza em ~30 minutos
-5. Site está vivo em: https://dev.shopvivaliz.com.br/
+5. Site está vivo em: https://shopvivaliz.com.br/
 
 ---
 

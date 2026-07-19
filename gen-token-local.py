@@ -102,7 +102,7 @@ def gen_token():
     env_file.write_text(content)
 
     print(f"\n✅ PRONTO!")
-    print(f"   Teste: https://dev.shopvivaliz.com.br/olist/test-token-v3.php")
+    print(f"   Teste: https://shopvivaliz.com.br/olist/test-token-v3.php")
 
     return True
 

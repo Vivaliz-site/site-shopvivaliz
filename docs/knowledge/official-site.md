@@ -2,7 +2,7 @@
 
 ## Fonte
 
-O domínio oficial `https://www.shopvivaliz.com.br` é uma fonte válida para conteúdo institucional e comercial do ShopVivaliz.
+O domínio oficial `https://shopvivaliz.com.br` é uma fonte válida para conteúdo institucional e comercial do ShopVivaliz.
 
 Data de verificação desta referência: 11 de julho de 2026.
 

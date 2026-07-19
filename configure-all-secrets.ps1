@@ -172,6 +172,6 @@ Write-Host "   git push origin main" -ForegroundColor Yellow
 Write-Host "`n2. Monitorar execução:" -ForegroundColor White
 Write-Host "   https://github.com/fredmourao-ai/site-shopvivaliz/actions" -ForegroundColor Yellow
 Write-Host "`n3. Dashboard:" -ForegroundColor White
-Write-Host "   https://dev.shopvivaliz.com.br/admin/monitor/" -ForegroundColor Yellow
+Write-Host "   https://shopvivaliz.com.br/admin/monitor/" -ForegroundColor Yellow
 Write-Host "`n═══════════════════════════════════════════════════════════════" -ForegroundColor Green
 Write-Host "✨ Sistema começará a fazer upload automaticamente! 🚀" -ForegroundColor Green

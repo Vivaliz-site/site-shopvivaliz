@@ -289,7 +289,7 @@ git push origin main
 ```bash
 Verifique em GitHub Actions
 Logs em: logs/pipeline_execution_advanced.json
-Web em: https://dev.shopvivaliz.com.br/admin/monitor/
+Web em: https://shopvivaliz.com.br/admin/monitor/
 ```
 
 ### Passo 4: Analisar Resultados (Diário)

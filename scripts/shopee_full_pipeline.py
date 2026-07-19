@@ -14,7 +14,7 @@ PARTNER_KEY = "shpk574f454f6a756e534e7476726b67727a5242554c76736d4b56567769554d"
 BASE_URL = "https://partner.test-stable.shopeemobile.com"
 AUTH_BASE_URL = "https://openplatform.sandbox.test-stable.shopee.sg"
 
-REDIRECT = "https://dev.shopvivaliz.com.br"
+REDIRECT = "https://shopvivaliz.com.br"
 
 # =========================
 # SIGN

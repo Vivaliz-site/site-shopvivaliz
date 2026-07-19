@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Dados
-SITE = "https://dev.shopvivaliz.com.br"
+SITE = "https://shopvivaliz.com.br"
 LOGS_DIR = Path("logs")
 LOGS_DIR.mkdir(exist_ok=True)
 

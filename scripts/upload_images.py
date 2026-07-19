@@ -17,7 +17,7 @@ INPUT_PROCESSED_ROOT = Path('storage/processed')
 OUTPUT_MAPPING_FILE = Path('storage/uploaded_urls.csv')
 SKU_MAPPING_FILE = Path('storage/sku_mapping.csv')
 REMOTE_BASE_DIR = '/public_html/dev/uploads/olist'
-WEB_BASE_URL = 'https://dev.shopvivaliz.com.br/uploads/olist'
+WEB_BASE_URL = 'https://shopvivaliz.com.br/uploads/olist'
 
 
 def get_env_variable(name: str, alt_names: Optional[list[str]] = None) -> str:

@@ -5,7 +5,7 @@
 ```
 OLIST_CLIENT_ID = SEU_OLIST_CLIENT_ID_AQUI
 OLIST_CLIENT_SECRET = SEU_OLIST_CLIENT_SECRET_AQUI
-OLIST_REDIRECT_URI = https://dev.shopvivaliz.com.br/olist/callback.php
+OLIST_REDIRECT_URI = https://shopvivaliz.com.br/olist/callback.php
 ```
 
 ---
@@ -32,7 +32,7 @@ OLIST_REDIRECT_URI = https://dev.shopvivaliz.com.br/olist/callback.php
 
    **Secret 3:**
    - Name: `OLIST_REDIRECT_URI`
-   - Value: `https://dev.shopvivaliz.com.br/olist/callback.php`
+   - Value: `https://shopvivaliz.com.br/olist/callback.php`
    - Clique em **"Add secret"**
 
 4. ✅ Pronto! Os 3 secrets foram adicionados
@@ -46,7 +46,7 @@ gh secret set OLIST_CLIENT_ID --repo fredmourao-ai/site-shopvivaliz --body "SEU_
 
 gh secret set OLIST_CLIENT_SECRET --repo fredmourao-ai/site-shopvivaliz --body "SEU_OLIST_CLIENT_SECRET_AQUI"
 
-gh secret set OLIST_REDIRECT_URI --repo fredmourao-ai/site-shopvivaliz --body "https://dev.shopvivaliz.com.br/olist/callback.php"
+gh secret set OLIST_REDIRECT_URI --repo fredmourao-ai/site-shopvivaliz --body "https://shopvivaliz.com.br/olist/callback.php"
 ```
 
 ---
@@ -60,7 +60,7 @@ Se quer testar AGORA sem adicionar ao GitHub:
 cat > .env << EOF
 OLIST_CLIENT_ID=SEU_OLIST_CLIENT_ID_AQUI
 OLIST_CLIENT_SECRET=SEU_OLIST_CLIENT_SECRET_AQUI
-OLIST_REDIRECT_URI=https://dev.shopvivaliz.com.br/olist/callback.php
+OLIST_REDIRECT_URI=https://shopvivaliz.com.br/olist/callback.php
 EOF
 
 # Depois executar sincronização

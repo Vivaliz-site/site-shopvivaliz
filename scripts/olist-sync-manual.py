@@ -10,7 +10,7 @@ from pathlib import Path
 from datetime import datetime
 
 # Configuração
-SITE_BASE = "https://dev.shopvivaliz.com.br"
+SITE_BASE = "https://shopvivaliz.com.br"
 CONNECT_URL = f"{SITE_BASE}/olist/connect.php"
 SYNC_URL = f"{SITE_BASE}/olist/sync-products.php"
 

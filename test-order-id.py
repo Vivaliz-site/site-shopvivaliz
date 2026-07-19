@@ -17,7 +17,7 @@ async def main():
 
         # Acessar checkout
         print("[1] Acessando checkout...")
-        await page.goto("https://dev.shopvivaliz.com.br/checkout/",
+        await page.goto("https://shopvivaliz.com.br/checkout/",
                        wait_until="domcontentloaded")
         await page.wait_for_timeout(3000)
 

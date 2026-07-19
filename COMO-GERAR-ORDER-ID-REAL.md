@@ -10,7 +10,7 @@
 
 ### 1. Acesse o Site de Produção
 ```
-https://dev.shopvivaliz.com.br/checkout
+https://shopvivaliz.com.br/checkout
 ```
 
 ### 2. Preencha os Dados (Checkout)
@@ -62,7 +62,7 @@ CPF:       123.456.789-01
 
 Opção A - No site:
 ```
-1. Acesse: https://dev.shopvivaliz.com.br/admin/orders
+1. Acesse: https://shopvivaliz.com.br/admin/orders
 2. Procure pelo pedido mais recente
 3. O ID estará em: "Payment ID" ou "Mercado Pago ID"
 ```

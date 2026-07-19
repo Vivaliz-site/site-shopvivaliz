@@ -89,7 +89,7 @@ Ganho: +1 teste (de 21 para 22 = 81%)
 ### Passo 1: Testar API de Catálogo
 ```bash
 # Via terminal/PowerShell
-curl -s "https://dev.shopvivaliz.com.br/api/catalog/products.php?limit=4" | jq '.[0].price'
+curl -s "https://shopvivaliz.com.br/api/catalog/products.php?limit=4" | jq '.[0].price'
 
 # Resultado esperado: número > 0
 # Exemplo: 89.9

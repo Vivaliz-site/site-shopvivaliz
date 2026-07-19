@@ -44,7 +44,7 @@ import requests
 # CONFIGURAÇÃO
 # ============================================================================
 
-BASE_URL = "https://dev.shopvivaliz.com.br"
+BASE_URL = "https://shopvivaliz.com.br"
 CONNECT_URL = f"{BASE_URL}/olist/connect.php"
 SYNC_URL = f"{BASE_URL}/olist/sync-products.php"
 

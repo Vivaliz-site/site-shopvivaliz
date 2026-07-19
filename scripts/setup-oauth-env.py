@@ -147,7 +147,7 @@ def main():
 
         print("📋 Próximos passos:")
         print("  1. Restart do servidor (se necessário)")
-        print("  2. Teste em: https://dev.shopvivaliz.com.br/auth/login.php")
+        print("  2. Teste em: https://shopvivaliz.com.br/auth/login.php")
         print("  3. Clique em 'Google' ou 'Apple' para testar\n")
 
     except Exception as e:

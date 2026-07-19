@@ -52,9 +52,9 @@ CEP: 35501-236
 
 | Link | Descrição |
 |------|-----------|
-| `https://dev.shopvivaliz.com.br/pedido?id=PED-20260714211933` | Página do pedido |
-| `https://dev.shopvivaliz.com.br/admin/pedidos.php` | Admin - Todos os pedidos |
-| `https://dev.shopvivaliz.com.br/checkout` | Checkout para nova compra |
+| `https://shopvivaliz.com.br/pedido?id=PED-20260714211933` | Página do pedido |
+| `https://shopvivaliz.com.br/admin/pedidos.php` | Admin - Todos os pedidos |
+| `https://shopvivaliz.com.br/checkout` | Checkout para nova compra |
 
 ## ✅ Checklist de Testes
 

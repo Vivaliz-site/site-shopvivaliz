@@ -137,7 +137,7 @@
 ### 🟢 IMEDIATO (Hoje)
 1. **Encontrar produto sem preço:**
    ```bash
-   curl "https://dev.shopvivaliz.com.br/api/catalog/products.php?limit=999" \
+   curl "https://shopvivaliz.com.br/api/catalog/products.php?limit=999" \
      | jq '.products[] | select(.price==0)'
    ```
    - Corrigir preço no ERP
@@ -206,7 +206,7 @@
 
 1. **Sincronização ERP** (próxima 1-2 min)
    ```bash
-   curl "https://dev.shopvivaliz.com.br/api/catalog/products.php?limit=1" \
+   curl "https://shopvivaliz.com.br/api/catalog/products.php?limit=1" \
      | jq '.source'
    # Deve retornar: "erp_olist"
    ```

@@ -314,7 +314,7 @@ composer require mercadopago/sdk-php:^2.0
 ### 4. Webhook no Mercado Pago
 No painel do Mercado Pago, configurar:
 ```
-URL: https://dev.shopvivaliz.com.br/api/webhook-mercadopago.php
+URL: https://shopvivaliz.com.br/api/webhook-mercadopago.php
 Eventos: payment.created, payment.updated
 ```
 

@@ -80,7 +80,7 @@ Criados 5 documentos para orientar resolução:
 ### URGÊNCIA 1: Renovar Token Olist (HOJE - 30 min)
 ```
 Responsável: Admin ou Deploy Agent
-Ação: curl https://dev.shopvivaliz.com.br/api/olist/refresh-token.php
+Ação: curl https://shopvivaliz.com.br/api/olist/refresh-token.php
 Resultado esperado: ✅ Novo token salvo em .env
 Validação: Fazer pedido de teste → aparece no Olist
 ```
@@ -158,7 +158,7 @@ Validação: Fazer pedido de teste → aparece no Olist
 ### AGORA (< 30 min)
 ```
 Admin/Deploy: Renovar token Olist
-1. GET https://dev.shopvivaliz.com.br/api/olist/refresh-token.php
+1. GET https://shopvivaliz.com.br/api/olist/refresh-token.php
 2. Se sucesso: novo token salvo, testes podem continuar
 3. Se falha: re-autenticar via Olist OAuth
 ```

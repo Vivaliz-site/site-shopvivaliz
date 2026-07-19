@@ -135,11 +135,11 @@ curl -v ftp://seu_usuario:sua_senha@ftp.seuservidor.com:21/
 
 ```bash
 # Verifique se o endpoint existe:
-curl -v https://dev.shopvivaliz.com.br/api/agent/autonomous-watchdog.php
+curl -v https://shopvivaliz.com.br/api/agent/autonomous-watchdog.php
 
 # Teste com agent_key (se configurada):
 AGENT_KEY="seu_valor_secreto"
-curl -v "https://dev.shopvivaliz.com.br/api/agent/autonomous-watchdog.php?agent_key=$AGENT_KEY"
+curl -v "https://shopvivaliz.com.br/api/agent/autonomous-watchdog.php?agent_key=$AGENT_KEY"
 
 # Verifique erros HTTP específicos:
 # - 401/403: Chave inválida ou ausente
@@ -238,7 +238,7 @@ telnet ftp.seuservidor.com 21
 ls -la api/agent/autonomous-watchdog.php
 
 # Verifique no servidor:
-curl -I https://dev.shopvivaliz.com.br/api/agent/autonomous-watchdog.php
+curl -I https://shopvivaliz.com.br/api/agent/autonomous-watchdog.php
 
 # Se retornar 404, o deploy pode ter falhado:
 # 1. Verifique os logs do deploy.yml
@@ -262,7 +262,7 @@ curl -I https://dev.shopvivaliz.com.br/api/agent/autonomous-watchdog.php
 # - AUTONOMOUS_AGENT_KEY
 
 # Teste com curl:
-curl -v "https://dev.shopvivaliz.com.br/api/agent/autonomous-watchdog.php?agent_key=seu_valor"
+curl -v "https://shopvivaliz.com.br/api/agent/autonomous-watchdog.php?agent_key=seu_valor"
 ```
 
 ### CI falha por arquivos com sintaxe quebrada
@@ -379,8 +379,8 @@ Para debug detalhado:
 
 4. **Teste endpoints manualmente:**
    ```bash
-   curl -v https://dev.shopvivaliz.com.br/api/agent/autonomous-watchdog.php
-   curl -v https://dev.shopvivaliz.com.br/api/health.php
+   curl -v https://shopvivaliz.com.br/api/agent/autonomous-watchdog.php
+   curl -v https://shopvivaliz.com.br/api/health.php
    ```
 
 ---

@@ -14,7 +14,7 @@ PARTNER_ID = 1237032
 PARTNER_KEY = "shpk574f454f6a756e534e7476726b67727a5242554c76736d4b56567769554d"
 USER = "SANDBOX.b6fb03003426929be0c1"
 PASS = "56194122e737c5cd"
-REDIRECT = "https://dev.shopvivaliz.com.br"
+REDIRECT = "https://shopvivaliz.com.br"
 AUTH = "https://openplatform.sandbox.test-stable.shopee.sg/api/v2/shop/auth_partner"
 
 def sign(p, t):

@@ -148,7 +148,7 @@ assert_contains "${BASE_URL}/api/orders/security-health.php" '"endpoint":"orders
 assert_contains "${BASE_URL}/api/orders/idempotency-health.php" '"endpoint":"orders-idempotency"'
 assert_contains "${BASE_URL}/api/orders/context-health.php" '"endpoint":"orders-context"'
 assert_contains "${BASE_URL}/api/site/official-reference.php" '"endpoint":"official-site-reference"'
-assert_contains "${BASE_URL}/api/site/official-reference.php" 'https://www.shopvivaliz.com.br'
+assert_contains "${BASE_URL}/api/site/official-reference.php" 'https://shopvivaliz.com.br'
 
 assert_status 405 "${BASE_URL}/api/orders/create.php"
 assert_status 405 "${BASE_URL}/api/orders/create-validated.php"

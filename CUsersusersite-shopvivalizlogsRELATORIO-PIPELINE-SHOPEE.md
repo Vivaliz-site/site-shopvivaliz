@@ -75,7 +75,7 @@ TOTAL:        198 produtos
 
 ### Opção 2: Executar Pipeline via HTTP (Automático)
 ```bash
-curl https://dev.shopvivaliz.com.br/api/pipeline/shopee-sync.php
+curl https://shopvivaliz.com.br/api/pipeline/shopee-sync.php
 ```
 
 Resposta esperada:

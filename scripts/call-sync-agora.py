@@ -19,7 +19,7 @@ def log_msg(msg):
 
 log_msg("=== CHAMANDO SYNC AGORA ===")
 
-url = "https://dev.shopvivaliz.com.br/olist/sync-agora.php"
+url = "https://shopvivaliz.com.br/olist/sync-agora.php"
 
 req = urllib.request.Request(
     url,

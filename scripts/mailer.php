@@ -33,7 +33,7 @@ function sv_mailer_site_url(): string
         return rtrim($configured, '/');
     }
 
-    return 'https://www.shopvivaliz.com.br';
+    return 'https://shopvivaliz.com.br';
 }
 
 function get_mailer_config(): array

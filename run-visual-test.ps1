@@ -2,7 +2,7 @@
 # Execute em sua máquina para testar a página visualmente
 
 Write-Host "🧪 Iniciando Teste Visual com Playwright..." -ForegroundColor Cyan
-Write-Host "📍 Testando: https://dev.shopvivaliz.com.br/" -ForegroundColor Gray
+Write-Host "📍 Testando: https://shopvivaliz.com.br/" -ForegroundColor Gray
 
 # Verificar se Node.js está instalado
 $nodeCheck = node --version 2>$null
