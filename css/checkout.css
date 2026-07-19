@@ -87,7 +87,7 @@
 
 /* ── Payment Options ── */
 .payment-select-title { font-weight: 800; font-size: 14px; margin: 6px 0 10px; }
-.payment-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.payment-options { display: grid; grid-template-columns: minmax(0, 320px); gap: 10px; }
 .payment-opt { cursor: pointer; }
 .payment-opt input[type=radio] { display: none; }
 .payment-opt-box {

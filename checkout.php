@@ -145,25 +145,9 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                         <small>Cartão, PIX e boleto em checkout seguro</small>
                     </span>
                 </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="pix">
-                    <span class="payment-opt-box">
-                        <div class="pay-icon" aria-hidden="true">⚡</div>
-                        <strong>PIX direto</strong>
-                        <small>Pagamento rápido com chave PIX</small>
-                    </span>
-                </label>
-                <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="boleto">
-                    <span class="payment-opt-box">
-                        <div class="pay-icon" aria-hidden="true">🧾</div>
-                        <strong>Boleto</strong>
-                        <small>Emissão via Mercado Pago</small>
-                    </span>
-                </label>
             </div>
             <div class="payment-options-note">
-                Escolha o método que você já usa no dia a dia. O pedido segue com confirmação segura e sem cadastro extra.
+                Pagamento processado com segurança pelo Mercado Pago: cartão, PIX ou boleto, sem cadastro extra.
             </div>
 
             <label class="form-group">
@@ -192,6 +176,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         <div class="sv-coupon-box" style="display:flex; gap:8px; margin:14px 0;">
             <input type="text" id="coupon-input" placeholder="Cupom de desconto" maxlength="30" style="flex:1; text-transform:uppercase;" aria-label="Código do cupom de desconto">
             <button type="button" id="coupon-apply-btn" class="btn btn-secondary">Aplicar</button>
+            <button type="button" id="coupon-remove-btn" class="btn btn-secondary" hidden>Remover</button>
         </div>
         <div id="coupon-status" class="sv-checkout-note" hidden></div>
 
@@ -487,15 +472,20 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             });
     }
     var couponApplyBtn = document.getElementById('coupon-apply-btn');
+    var couponRemoveBtn = document.getElementById('coupon-remove-btn');
     var couponInput = document.getElementById('coupon-input');
+    function updateCouponRemoveVisibility() {
+        if (couponRemoveBtn) couponRemoveBtn.hidden = !getCoupon();
+    }
     (function initCoupon() {
         var existing = getCoupon();
         if (existing && couponInput) couponInput.value = existing.code || '';
+        updateCouponRemoveVisibility();
         if (couponApplyBtn) {
             couponApplyBtn.addEventListener('click', function () {
                 var statusEl = document.getElementById('coupon-status');
                 var code = (couponInput.value || '').trim().toUpperCase();
-                if (!code) { clearCoupon(); renderCart(); if (statusEl) { statusEl.hidden = true; } return; }
+                if (!code) { clearCoupon(); renderCart(); updateCouponRemoveVisibility(); if (statusEl) { statusEl.hidden = true; } return; }
                 couponApplyBtn.disabled = true;
                 couponApplyBtn.textContent = 'Aplicando…';
                 if (statusEl) { statusEl.hidden = true; }
@@ -511,11 +501,13 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                         if (!result.ok || !result.data.ok) {
                             clearCoupon();
                             renderCart();
+                            updateCouponRemoveVisibility();
                             if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Cupom inválido ou não aplicável a este carrinho.'; }
                             return;
                         }
                         saveCoupon({ code: result.data.code, amount: result.data.amount, percent: result.data.percent, label: result.data.label });
                         renderCart();
+                        updateCouponRemoveVisibility();
                         if (statusEl) { statusEl.hidden = false; statusEl.className = 'sv-checkout-note'; statusEl.textContent = result.data.label + ' aplicado!'; }
                     })
                     .catch(function () {
@@ -523,6 +515,16 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                         couponApplyBtn.textContent = 'Aplicar';
                         if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Falha de conexão ao validar o cupom.'; }
                     });
+            });
+        }
+        if (couponRemoveBtn) {
+            couponRemoveBtn.addEventListener('click', function () {
+                clearCoupon();
+                if (couponInput) couponInput.value = '';
+                renderCart();
+                updateCouponRemoveVisibility();
+                var statusEl = document.getElementById('coupon-status');
+                if (statusEl) { statusEl.hidden = false; statusEl.className = 'sv-checkout-note'; statusEl.textContent = 'Cupom removido.'; }
             });
         }
     })();
