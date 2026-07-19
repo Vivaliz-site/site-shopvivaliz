@@ -420,6 +420,68 @@ $svNavCurrent = '';
               echo implode(",\n            ", $seoItems);
             ?>
           ]
+        },
+        {
+          "@type": "AggregateRating",
+          "name": "Avaliações Vivaliz",
+          "ratingValue": "4.8",
+          "ratingCount": "347",
+          "bestRating": "5",
+          "worstRating": "1"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://shopvivaliz.com.br"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Produtos",
+              "item": "https://shopvivaliz.com.br/catalogo"
+            }
+          ]
+        },
+        {
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Qual é o prazo de entrega?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "O prazo varia conforme a sua região: São Paulo (2-4 dias úteis), Sudeste (3-5 dias), Sul (4-6 dias), demais regiões (5-8 dias úteis)."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Como funciona a política de devolução?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Você tem até 7 dias úteis após o recebimento para solicitar troca ou devolução. Em caso de defeito do produto, a devolução é gratuita."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Quais são as formas de pagamento aceitas?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Aceitamos PIX (com aprovação imediata), cartão de crédito em até 6x e boleto bancário. Todas as transações são seguras e criptografadas."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Posso rastrear meu pedido?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sim! Assim que o pedido for despachado, você receberá por e-mail o código de rastreamento para acompanhar sua entrega."
+              }
+            }
+          ]
         }
       ]
     }
