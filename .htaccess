@@ -51,7 +51,7 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^sync(?:[-a-z0-9]*)?\.php$ - [F,L,NC]
     RewriteRule ^(?:discover-db|do-sync-[a-z0-9-]+|find-db-host|fix-database|full-sync|get_ext_dir|get_php_info|shop-catalog-export)\.php$ - [F,L,NC]
     RewriteRule ^C.*shopee-sync\.php$ - [F,L,NC]
-    RewriteRule ^api/(?:debug-version\.php|catalog/test-normalize\.php|(?:pagarme|melhorenvio|olist)/diagnostic(?:-full)?\.php|sync-cache-endpoint\.php|sync/full-sync\.php)$ - [F,L,NC]
+    RewriteRule ^api/(?:catalog/test-normalize\.php|(?:pagarme|melhorenvio|olist)/diagnostic(?:-full)?\.php|sync-cache-endpoint\.php|sync/full-sync\.php)$ - [F,L,NC]
 
     # Valida frete no servidor antes de criar o pedido
     RewriteRule ^api/orders/create\.php$ api/orders/create-validated.php [L]
