@@ -226,7 +226,8 @@ def run_agent():
         return
 
     # Validacoes de seguranca
-    if any(file_path == b or file_path.startswith(b) for b in BLOCKED_PATHS):
+    norm_path = file_path.rstrip("/")
+    if any(norm_path == b.rstrip("/") or norm_path.startswith(b.rstrip("/") + "/") for b in BLOCKED_PATHS):
         print(f"BLOQUEADO por seguranca: {file_path}")
         return
 
