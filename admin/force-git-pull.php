@@ -10,7 +10,17 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/admin-guard.php';
 
+// Rate limiting: max 1 pull per 30 seconds
+$rate_limit_file = __DIR__ . '/../logs/.git-pull-cooldown';
+if (file_exists($rate_limit_file) && (time() - filemtime($rate_limit_file)) < 30) {
+    http_response_code(429);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Too many requests. Wait 30 seconds.'], JSON_PRETTY_PRINT);
+    exit;
+}
+
 $remote_ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+$remote_ip = preg_replace('/[^0-9a-f:.]/i', '', $remote_ip); // Sanitize
 
 // Log file
 $log_file = __DIR__ . '/../logs/admin-force-pull.log';
@@ -19,7 +29,8 @@ $log_file = __DIR__ . '/../logs/admin-force-pull.log';
 $timestamp = date('Y-m-d H:i:s');
 
 // Log the request
-file_put_contents($log_file, "[$timestamp] Access from: $remote_ip\n", FILE_APPEND);
+$log_entry = sprintf("[%s] Access from: %s\n", $timestamp, $remote_ip);
+file_put_contents($log_file, $log_entry, FILE_APPEND);
 
 // 1. Check if root directory is accessible
 $repo_root = realpath(__DIR__ . '/..');
