@@ -388,6 +388,9 @@ foreach (is_array($resolved['images'] ?? null) ? $resolved['images'] : [] as $ga
 if ($galleryImages === [] && $image !== '') {
     $galleryImages[] = $image;
 }
+$galleryImages = $image !== '' && !in_array($image, $galleryImages, true)
+    ? array_merge([$image], $galleryImages)
+    : $galleryImages;
 $galleryImages = array_slice($galleryImages, 0, 12);
 
 $related = $notFound ? [] : sv_product_enrich_many(sv_product_related($sku, $category));
