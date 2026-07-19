@@ -388,9 +388,40 @@ function svtop_tiny_optional_object_from_env(string $envKey): ?array
     return $id !== null ? ['id' => $id] : null;
 }
 
+function svtop_tiny_payment_method_key(array $order): string
+{
+    // $order['payment_method'] sozinho e sempre "mercado_pago" (generico --
+    // e o unico metodo oferecido no checkout, ver checkout.php). O
+    // sub-metodo real (pix/boleto/cartao) so aparece em
+    // mercadopago.payment_method_id/payment_type_id, setados pelo webhook
+    // apos o pagamento ser processado (api/webhook-mercadopago.php).
+    $paymentMethodKey = strtolower(trim((string)($order['payment_method'] ?? '')));
+    $mp = is_array($order['mercadopago'] ?? null) ? $order['mercadopago'] : [];
+    $mpMethod = strtolower(trim((string)($mp['payment_method_id'] ?? '')));
+    $mpType = strtolower(trim((string)($mp['payment_type_id'] ?? '')));
+
+    if ($mpMethod === 'pix' || ($mpType === 'bank_transfer' && str_contains($mpMethod, 'pix'))) {
+        return 'pix';
+    }
+    if (in_array($mpMethod, ['bolbradesco', 'pec'], true) || $mpType === 'ticket') {
+        return 'boleto';
+    }
+    if ($mpType === 'credit_card' || $mpType === 'debit_card') {
+        return 'mercado_pago';
+    }
+
+    return $paymentMethodKey !== '' ? $paymentMethodKey : 'pix';
+}
+
 function svtop_tiny_build_payment_block(array $order): array
 {
-    $paymentMethodKey = strtolower(trim((string)($order['payment_method'] ?? '')));
+    // Usa svtop_tiny_payment_method_key(), que detecta o sub-metodo real
+    // (pix/boleto/cartao) a partir de mercadopago.payment_method_id --
+    // $order['payment_method'] sozinho e sempre "mercado_pago" (generico),
+    // entao usa-lo direto aqui sempre resolvia pra "Cartao de credito"
+    // mesmo em pagamentos Pix (confirmado ao vivo: pedido 3055 recriado
+    // ainda saiu com formaRecebimento=Cartao de credito apesar do PIX).
+    $paymentMethodKey = svtop_tiny_payment_method_key($order);
     $paymentFormId = svtop_tiny_payment_form_id($paymentMethodKey);
     if ($paymentFormId === null) {
         return [];
@@ -399,9 +430,16 @@ function svtop_tiny_build_payment_block(array $order): array
     $total = round((float)($order['total'] ?? 0), 2);
     $createdAt = svtop_tiny_order_date((string)($order['created_at'] ?? ''));
 
+    // 'meioPagamento' removido: apesar de documentado como objeto {id} igual
+    // 'formaRecebimento', a Tiny rejeita o MESMO id de forma de pagamento
+    // valido (ex: 337683284 = Pix, confirmado existente via GET
+    // /formas-pagamento) quando enviado em 'meioPagamento', com erro
+    // "Meio de pagamento nao encontrado" -- bloqueava toda criacao de
+    // pedido novo. meioPagamento provavelmente exige um catalogo/enum
+    // diferente que nao foi identificado ainda; formaRecebimento sozinho e
+    // o que ja funcionava antes.
     $block = [
         'formaRecebimento' => ['id' => $paymentFormId],
-        'meioPagamento' => ['id' => $paymentFormId],
     ];
 
     if ($total > 0) {
@@ -410,7 +448,6 @@ function svtop_tiny_build_payment_block(array $order): array
             'data' => $createdAt,
             'valor' => $total,
             'formaRecebimento' => ['id' => $paymentFormId],
-            'meioPagamento' => ['id' => $paymentFormId],
         ]];
     }
 
@@ -856,24 +893,19 @@ function svtop_push_order_tiny(array $order): ?string
     }
 
     $c = $order['customer'] ?? [];
-    $paymentMethod = (string)($order['payment_label'] ?? $order['payment_method'] ?? 'PIX');
+    $paymentMethodLabels = [
+        'pix' => 'Pix',
+        'boleto' => 'Boleto',
+        'mercado_pago' => 'Cartão de crédito',
+        'pagarme' => 'Pagar.me',
+        'transferencia' => 'Transferência',
+        'whatsapp' => 'WhatsApp',
+    ];
+    $paymentMethod = $paymentMethodLabels[svtop_tiny_payment_method_key($order)]
+        ?? (string)($order['payment_label'] ?? $order['payment_method'] ?? 'PIX');
     $notes = trim((string)($order['notes'] ?? ''));
     $siteOrderNumber = (string)($order['order_number'] ?? '');
     $obs = trim("Pedido no site: {$siteOrderNumber}\nForma de pagamento: {$paymentMethod}\n" . $notes);
-
-    // Mapa forma de pagamento do site -> id cadastrado na Tiny (GET
-    // /formas-pagamento). Cartao de credito/pix/boleto sao os unicos meios
-    // reais oferecidos no checkout (ver svop_payment_method/svo_payment_method).
-    $paymentFormIds = [
-        'pix' => 337683284,
-        'boleto' => 337683279,
-        'mercado_pago' => 337683277, // pago via Mercado Pago = cartao de credito na pratica
-        'pagarme' => 337683277,
-        'transferencia' => 337683281,
-        'whatsapp' => 337683282,
-    ];
-    $paymentMethodKey = strtolower(trim((string)($order['payment_method'] ?? 'pix')));
-    $paymentFormId = $paymentFormIds[$paymentMethodKey] ?? null;
 
     $docDigits = preg_replace('/\D/', '', (string)($c['cpf'] ?? ''));
     if ($docDigits === '') {
