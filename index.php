@@ -725,7 +725,8 @@ $svNavCurrent = '';
                     <p class="muted">Tire suas dúvidas rápidas sobre envio, pagamentos e garantia.</p>
                     <!-- FAQ Search Bar -->
                     <div style="max-width: 460px; margin: 16px auto 0; width: 100%;">
-                        <input type="text" id="faq-search-input" placeholder="Pesquisar dúvidas comuns..." 
+                        <label for="faq-search-input" class="sr-only">Pesquisar perguntas frequentes</label>
+                        <input type="text" id="faq-search-input" placeholder="Pesquisar dúvidas comuns..."
                                style="width:100%; padding:12px 18px; border-radius:12px; border:1.5px solid #e2e8f0; font-size:14px; color:#1e293b; background:#f8fafc; transition: all 0.25s ease;"
                                aria-label="Pesquisar perguntas frequentes">
                     </div>
