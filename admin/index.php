@@ -24,6 +24,7 @@ $codename = (string)($version['codename'] ?? '');
                 <a href="/admin/produtos.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📦 Produtos</a>
                 <a href="/admin/pedidos.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📋 Pedidos</a>
                 <a href="/admin/clientes.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">👥 Clientes</a>
+                <a href="/admin/admin-back.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🗂️ Legado</a>
                 <a href="/admin/monitor/" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📊 Monitor</a>
                 <a href="/auth/logout.php" style="color: #ff6b6b; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🚪 Sair</a>
             </div>
@@ -56,6 +57,9 @@ $codename = (string)($version['codename'] ?? '');
                 </a>
                 <a href="/admin/clientes.php" style="background: #17a2b8; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
                     👥 Clientes
+                </a>
+                <a href="/admin/admin-back.php" style="background: #111827; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    🗂️ Legado
                 </a>
                 <a href="/admin/cupons.php" style="background: #10b981; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
                     🎟️ Cupons

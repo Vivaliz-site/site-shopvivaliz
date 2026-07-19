@@ -56,14 +56,14 @@ function svtop_env(string ...$keys): string
                 if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
                 [$k, $v] = explode('=', $line, 2);
                 $k = trim($k); $v = trim(trim($v), '"\'');
-                if ($k !== '' && getenv($k) === false) { putenv("$k=$v"); $_ENV[$k] = $v; }
+                if ($k !== '' && (getenv($k) === false || trim((string)getenv($k)) === '')) { putenv("$k=$v"); $_ENV[$k] = $v; }
             }
         }
         $tf = svtop_root() . '/storage/private/tokens.json';
         if (is_file($tf)) {
             $t = json_decode((string)file_get_contents($tf), true) ?: [];
             foreach ($t as $k => $v) {
-                if (is_string($k) && is_string($v) && getenv($k) === false) {
+                if (is_string($k) && is_string($v) && (getenv($k) === false || trim((string)getenv($k)) === '')) {
                     putenv("$k=$v"); $_ENV[$k] = $v;
                 }
             }
