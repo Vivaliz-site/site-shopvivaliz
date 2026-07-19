@@ -113,13 +113,17 @@
   }
 
   function initAll() {
+    console.log('[Carousel] Initializing...');
     initProductGallery();
     initProductCardCarousels();
+    console.log('[Carousel] Init complete');
   }
 
   if (document.readyState === 'loading') {
+    console.log('[Carousel] Waiting for DOMContentLoaded');
     document.addEventListener('DOMContentLoaded', initAll);
   } else {
+    console.log('[Carousel] DOM already loaded, initializing now');
     initAll();
   }
 
