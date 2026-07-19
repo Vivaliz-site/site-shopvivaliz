@@ -295,7 +295,11 @@ function svs_normalize(array $p, string $source): array {
         $p['saldoEstoque']                ??  // v2
         (is_scalar($p['estoque'] ?? null) ? $p['estoque'] : null) ??
         null;
-    $stock = $stockRaw !== null ? (int)$stockRaw : ($source === 'tiny_v2' ? null : 0);
+    // estoque.quantidade da Tiny e o saldo bruto e pode ficar negativo (venda alem
+    // do saldo/backorder) -- nunca faz sentido exibir estoque negativo pro cliente,
+    // entao zeramos aqui. O calculo "disponivel" correto (GET /estoque/{id}) e mais
+    // caro (1 chamada por produto) e fica pro enriquecimento sob demanda.
+    $stock = $stockRaw !== null ? max(0, (int)$stockRaw) : ($source === 'tiny_v2' ? null : 0);
 
     // imagens
     $images = [];
