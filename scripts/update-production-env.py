@@ -35,6 +35,7 @@ ALLOWED_KEYS = {
     "TINY_REDIRECT_URI",
     "SHOPEE_REDIRECT_URI",
     "TIKTOK_REDIRECT_URL",
+    "SHOPVIVALIZ_AGENT_KEY",
 }
 
 def normalize_value(key: str, value: object) -> str:
