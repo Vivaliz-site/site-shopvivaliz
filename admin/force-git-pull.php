@@ -42,18 +42,20 @@ if (!$repo_root || !is_dir("$repo_root/.git")) {
     exit;
 }
 
-// 2. Fix git permissions (dubious ownership error) - try shell_exec for shell context
-$shell_wrapper = "bash -c 'git config --global --add safe.directory \"$repo_root\" 2>&1 || true'";
+// 2. Fix git permissions (dubious ownership error)
+$safe_repo = escapeshellarg($repo_root);
+$shell_wrapper = "git config --global --add safe.directory $safe_repo 2>&1 || true";
 @shell_exec($shell_wrapper);
-file_put_contents($log_file, "[$timestamp] Git config attempted via shell_exec\n", FILE_APPEND);
+file_put_contents($log_file, "[$timestamp] Git config attempted\n", FILE_APPEND);
 
 // 2b. Also try local git config
-$local_fix = "cd '$repo_root' && git config --local user.email 'ci@shopvivaliz.com.br' 2>&1";
+$local_fix = "cd $safe_repo && git config --local user.email 'ci@shopvivaliz.com.br' 2>&1";
 @exec($local_fix, $local_output);
 
-// 3. Execute git pull
-$cmd = "bash -c 'cd \"$repo_root\" && git fetch origin main 2>&1 && git reset --hard origin/main 2>&1'";
+// 3. Execute git pull (use array form to avoid shell injection)
+$cmd = "cd $safe_repo && git fetch origin main 2>&1 && git reset --hard origin/main 2>&1";
 @exec($cmd, $output, $return_code);
+@touch($rate_limit_file); // Mark as pulled
 
 // 3. Check if checkout file was updated
 $checkout_file = "$repo_root/checkout/index.php";
