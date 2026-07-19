@@ -334,11 +334,9 @@ $svNavCurrent = '';
 
     <title>Vivaliz | Loja Online</title>
 
-    <link rel="stylesheet" href="/css/style.css?v=2026-07-13-v4">
-    <link rel="stylesheet" href="/css/category-images.css?v=2026-07-13-v4">
-    <link rel="stylesheet" href="/css/visual-enhancements.css?v=2026-07-13-v4">
-    <link rel="stylesheet" href="/css/visual-improvements-2026.css?v=2026-07-13-v4">
-    <link rel="stylesheet" href="/css/premium-visual-v2.css?v=2026-07-13-v4">
+    <!-- Consolidated stylesheets for better performance -->
+    <link rel="stylesheet" href="/css/shopvivaliz-core-consolidated.css?v=2026-07-19">
+    <link rel="stylesheet" href="/css/shopvivaliz-premium-consolidated.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
