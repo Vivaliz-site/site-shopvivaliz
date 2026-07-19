@@ -71,7 +71,10 @@
       }
 
       try {
-        const unescaped = imagesJson.replace(/&quot;/g, '"');
+        let unescaped = imagesJson.replace(/&quot;/g, '"');
+        try {
+          unescaped = decodeURIComponent(imagesJson);
+        } catch (e) {}
         const images = JSON.parse(unescaped);
         if (!Array.isArray(images) || images.length < 2) {
           console.log('[Carousel] Less than 2 images:', images.length);
