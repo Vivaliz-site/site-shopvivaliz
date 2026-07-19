@@ -139,6 +139,13 @@ $svRecoveryCouponLabel = is_array($svRecoveryCoupon) ? (string)($svRecoveryCoupo
 }
 </style>
 
+<?php if (getenv('TAG_MANAGER')): ?>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars(getenv('TAG_MANAGER')) ?>"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<?php endif; ?>
+
 <!-- Mini-Cart Side Drawer -->
 <div class="mini-cart-overlay" id="mini-cart-overlay"></div>
 <div class="mini-cart-drawer" id="mini-cart-drawer">

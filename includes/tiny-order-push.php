@@ -359,6 +359,160 @@ function svtop_tiny_int_env(string ...$keys): ?int
     return null;
 }
 
+function svtop_tiny_order_date(string $value): string
+{
+    $timestamp = strtotime(trim($value));
+    if ($timestamp === false || $timestamp <= 0) {
+        $timestamp = time();
+    }
+    return date('Y-m-d', $timestamp);
+}
+
+function svtop_tiny_payment_form_id(string $paymentMethodKey): ?int
+{
+    $paymentFormIds = [
+        'pix' => 337683284,
+        'boleto' => 337683279,
+        'mercado_pago' => 337683277,
+        'pagarme' => 337683277,
+        'transferencia' => 337683281,
+        'whatsapp' => 337683282,
+    ];
+
+    return $paymentFormIds[$paymentMethodKey] ?? null;
+}
+
+function svtop_tiny_optional_object_from_env(string $envKey): ?array
+{
+    $id = svtop_tiny_int_env($envKey);
+    return $id !== null ? ['id' => $id] : null;
+}
+
+function svtop_tiny_build_payment_block(array $order): array
+{
+    $paymentMethodKey = strtolower(trim((string)($order['payment_method'] ?? '')));
+    $paymentFormId = svtop_tiny_payment_form_id($paymentMethodKey);
+    if ($paymentFormId === null) {
+        return [];
+    }
+
+    $total = round((float)($order['total'] ?? 0), 2);
+    $createdAt = svtop_tiny_order_date((string)($order['created_at'] ?? ''));
+
+    $block = [
+        'formaRecebimento' => ['id' => $paymentFormId],
+        'meioPagamento' => ['id' => $paymentFormId],
+    ];
+
+    if ($total > 0) {
+        $block['parcelas'] = [[
+            'dias' => 0,
+            'data' => $createdAt,
+            'valor' => $total,
+            'formaRecebimento' => ['id' => $paymentFormId],
+            'meioPagamento' => ['id' => $paymentFormId],
+        ]];
+    }
+
+    return $block;
+}
+
+function svtop_tiny_build_transportador_block(array $order): array
+{
+    $block = [];
+    $transportadorId = svtop_tiny_int_env('TINY_TRANSPORTADOR_ID', 'TINY_MELHORENVIO_TRANSPORTADOR_ID');
+    if ($transportadorId !== null) {
+        $block['id'] = $transportadorId;
+    }
+
+    $shippingLabel = strtolower((string)($order['shipping_label'] ?? ''));
+    $formaEnvioIds = [
+        'correios'      => 337724753,
+        'jadlog'        => 337724757,
+        'jet'           => 357119979,
+        'loggi'         => 357119982,
+        'total express' => 357119984,
+    ];
+    foreach ($formaEnvioIds as $needle => $formaEnvioId) {
+        if (str_contains($shippingLabel, $needle)) {
+            $block['formaEnvio'] = ['id' => $formaEnvioId];
+            break;
+        }
+    }
+
+    $formaFreteId = svtop_tiny_int_env('TINY_DESPACHO_FORMA_FRETE_ID', 'TINY_FORMA_FRETE_ID');
+    if ($formaFreteId !== null) {
+        $block['formaFrete'] = ['id' => $formaFreteId];
+    } elseif (str_contains($shippingLabel, 'pac')) {
+        $pacId = svtop_tiny_int_env('TINY_DESPACHO_FORMA_FRETE_ID_PAC');
+        if ($pacId !== null) {
+            $block['formaFrete'] = ['id' => $pacId];
+        }
+    } elseif (str_contains($shippingLabel, 'sedex')) {
+        $sedexId = svtop_tiny_int_env('TINY_DESPACHO_FORMA_FRETE_ID_SEDEX');
+        if ($sedexId !== null) {
+            $block['formaFrete'] = ['id' => $sedexId];
+        }
+    }
+
+    return $block;
+}
+
+function svtop_tiny_build_business_block(array $order): array
+{
+    $block = [];
+
+    $listaPreco = svtop_tiny_optional_object_from_env('TINY_LISTA_PRECO_ID');
+    if ($listaPreco !== null) {
+        $block['listaPreco'] = $listaPreco;
+    }
+
+    $naturezaOperacao = svtop_tiny_optional_object_from_env('TINY_NATUREZA_OPERACAO_ID');
+    if ($naturezaOperacao !== null) {
+        $block['naturezaOperacao'] = $naturezaOperacao;
+    }
+
+    $intermediador = svtop_tiny_optional_object_from_env('TINY_INTERMEDIADOR_ID');
+    if ($intermediador !== null) {
+        $block['intermediador'] = $intermediador;
+    }
+
+    $depositoId = svtop_tiny_int_env('TINY_DEPOSITO_ID');
+    if ($depositoId === null || $depositoId <= 0) {
+        $depositoId = 337683271;
+    }
+    $block['deposito'] = ['id' => $depositoId];
+
+    return $block;
+}
+
+function svtop_tiny_build_observacoes_internas(array $order): string
+{
+    $parts = [
+        'Pedido do site',
+        'Pedido: ' . (string)($order['order_number'] ?? ''),
+    ];
+
+    $mp = is_array($order['mercadopago'] ?? null) ? $order['mercadopago'] : [];
+    if (($mp['payment_id'] ?? '') !== '') {
+        $parts[] = 'MP payment_id=' . (string)$mp['payment_id'];
+    }
+    if (($mp['order_id'] ?? '') !== '') {
+        $parts[] = 'MP order_id=' . (string)$mp['order_id'];
+    }
+    if (($mp['status'] ?? '') !== '') {
+        $parts[] = 'MP status=' . (string)$mp['status'];
+    }
+    if (($order['shipping_label'] ?? '') !== '') {
+        $parts[] = 'Frete=' . (string)$order['shipping_label'];
+    }
+    if (($order['shipping_service'] ?? '') !== '') {
+        $parts[] = 'Serviço=' . (string)$order['shipping_service'];
+    }
+
+    return implode(' | ', array_filter(array_map('trim', $parts)));
+}
+
 function svtop_tiny_float_env(string ...$keys): ?float
 {
     foreach ($keys as $key) {
@@ -741,65 +895,33 @@ function svtop_push_order_tiny(array $order): ?string
     }
 
     $payload = [
-        // 'numeroPedido' nao aceita string customizada (a Tiny ignora e
-        // atribui seu proprio numero sequencial interno) -- o numero do
-        // pedido do site vai em 'obs' e 'numeroOrdemCompra' (referencia
-        // externa) para ficar rastreavel dentro do ERP.
+        // O pedido entra na Tiny ja pago/aprovado, entao a situacao correta
+        // na criacao e "Aprovada" (3). "Faturada" e 1, e seria incorreto
+        // antes da NF existir de fato.
+        'situacao'     => 3,
+        // 'numeroPedido' nao aceita string customizada na pratica; usamos
+        // numeroOrdemCompra + observacoes para manter a referência rastreável.
         'numeroOrdemCompra' => $siteOrderNumber,
-        // Vincula explicitamente o numero do checkout proprio ao canal de
-        // e-commerce. Na conta atual, pedidos do site usam ecommerce.id = 0
-        // e continuam pesquisaveis pelo numero do pedido externo.
         'ecommerce' => [
             'id' => 0,
             'numeroPedidoEcommerce' => $siteOrderNumber,
         ],
-        // Confirmado na documentacao oficial (api-docs.erp.olist.com/api-reference/pedidos/criar-pedido):
-        // 8=Dados Incompletos, 0=Aberta, 3=Aprovada, 4=Preparando Envio,
-        // 1=Faturada, 7=Pronto Envio, 5=Enviada, 6=Entregue, 2=Cancelada,
-        // 9=Nao Entregue. O codigo antigo mandava 1 achando que era "Aberto"
-        // -- na verdade e "Faturada", ou seja todo pedido criado por aqui
-        // nascia marcado como se ja tivesse nota fiscal emitida, sem nunca
-        // ter sido de fato. Corrigido para 0 (Aberta): o pedido so deve
-        // virar Faturada quando a NF for realmente emitida no ERP.
-        'situacao'     => 0,
-        // Sem 'data' o pedido nasce sem data de venda -- a busca da UI da
-        // Tiny filtra por essa data (nao pela data de cadastro), entao
-        // pedidos sem ela ficam invisiveis na busca mesmo existindo de
-        // verdade (confirmado ao vivo: GET /pedidos/{id} retornava 200 mas
-        // a busca "nao retornou resultados"). Usa a data de criacao local
-        // do pedido, ou a data atual se ausente.
-        'data'         => date('Y-m-d', strtotime((string)($order['created_at'] ?? 'now')) ?: time()),
+        'data'         => svtop_tiny_order_date((string)($order['created_at'] ?? 'now')),
         'idContato'    => $contactId,
-        // "Loja Online" -- vendedor generico cadastrado especificamente pra
-        // isso (a conta nao tinha nenhum vendedor antes, GET /vendedores
-        // retornava vazio, e pedidos sem vendedor tambem pareciam sumir da
-        // busca da UI). Ver docs/TINY-ERP-API-V3.md.
         'vendedor'     => ['id' => 369463749],
-        'deposito'     => ['id' => 337683271], // "Geral" -- unico deposito proprio (nao-marketplace) cadastrado
+        'deposito'     => ['id' => 337683271],
         'itens' => array_map(static fn(array $i) => [
             'produto'       => ['id' => (int)$i['olist_product_id']],
             'quantidade'    => $i['quantity'],
             'valorUnitario' => $i['price'],
         ], $items),
         'valorFrete' => (float)($order['shipping_total'] ?? 0),
-        // O campo se chama 'observacoes' na API v3 -- 'obs' nao existe no
-        // schema oficial (api-docs.erp.olist.com/api-reference/pedidos/criar-pedido)
-        // e era ignorado silenciosamente pela Tiny, entao o pedido no ERP
-        // nunca tinha nenhuma observacao visivel apesar do codigo "enviar" isso.
         'observacoes' => $obs,
-        // Marca a venda como pra consumidor final (nao revenda) -- afeta o
-        // calculo de tributacao da nota fiscal. A Tiny troca o nome exibido
-        // na coluna "Cliente" da listagem por "Consumidor Final" quando essa
-        // flag esta ativa (comportamento normal da UI pra esse tipo de
-        // venda, nao um bug -- o nome real do cliente continua no cadastro
-        // do contato, so a exibicao na lista muda).
+        'observacoesInternas' => svtop_tiny_build_observacoes_internas($order),
         'consumidorFinal' => [
             'cpfCnpj'                => $docDigits,
             'clienteConsumidorFinal' => true,
         ],
-        // Endereco de entrega do cliente -- antes nao era enviado, entao o
-        // pedido no ERP ficava sem endereco de entrega definido (so o do
-        // contato cadastrado, se houver).
         'enderecoEntrega' => [
             'endereco'         => (string)($c['street_name'] ?? $c['address'] ?? ''),
             'enderecoNro'      => (string)($c['street_number'] ?? ''),
@@ -811,38 +933,67 @@ function svtop_push_order_tiny(array $order): ?string
             'fone'             => (string)($c['phone'] ?? ''),
             'nomeDestinatario' => (string)($c['name'] ?? ''),
             'cpfCnpj'          => $docDigits,
-            // enum J/F/E/X (doc oficial) -- todo checkout do site e pessoa
-            // fisica (CPF de 11 digitos), nunca CNPJ.
             'tipoPessoa'       => strlen($docDigits) === 14 ? 'J' : 'F',
         ],
     ];
 
-    // Forma de envio real, escolhida pelo cliente no checkout via Melhor
-    // Envio (salva em shipping_label no formato "<Transportadora> - <Servico>",
-    // ex: "Jadlog - .Package") -- confirmado via GET /formas-envio que a
-    // conta ja tem cadastro pra cada transportadora "via Melhor envio"
-    // vinculado ao gatewayLogistico "Melhor envio" (id 337724739). So o
-    // ID da forma de envio (nao um id de "transportador" separado -- a doc
-    // aceita transportador.id como null) e suficiente pra Tiny saber qual
-    // transportadora sera usada.
-    $shippingLabel = strtolower((string)($order['shipping_label'] ?? ''));
-    $formaEnvioIds = [
-        'correios'      => 357119973,
-        'jadlog'        => 357119976,
-        'jet'           => 357119979,
-        'loggi'         => 357119982,
-        'total express' => 357119984,
-    ];
-    foreach ($formaEnvioIds as $needle => $formaEnvioId) {
-        if (str_contains($shippingLabel, $needle)) {
-            $payload['transportador'] = ['formaEnvio' => ['id' => $formaEnvioId]];
-            break;
-        }
+    $businessBlock = svtop_tiny_build_business_block($order);
+    if ($businessBlock !== []) {
+        $payload = array_merge($payload, $businessBlock);
     }
-    if ($paymentFormId !== null) {
-        $payload['pagamento'] = [
-            'formaRecebimento' => ['id' => $paymentFormId],
+
+    $transportadorBlock = svtop_tiny_build_transportador_block($order);
+    if ($transportadorBlock !== []) {
+        $payload['transportador'] = $transportadorBlock;
+    }
+
+    $paymentBlock = svtop_tiny_build_payment_block($order);
+    if ($paymentBlock !== []) {
+        $payload['pagamento'] = $paymentBlock;
+    }
+
+    $estimatedDelivery = svtop_tiny_first_non_empty([
+        (string)($order['estimated_delivery'] ?? ''),
+        (string)($order['shipping_estimated_delivery'] ?? ''),
+    ]);
+    if ($estimatedDelivery !== '') {
+        $payload['dataPrevista'] = substr($estimatedDelivery, 0, 10);
+        $payload['dataEntrega'] = substr($estimatedDelivery, 0, 10);
+    }
+
+    $mp = is_array($order['mercadopago'] ?? null) ? $order['mercadopago'] : [];
+    if (($mp['payment_method_id'] ?? '') !== '' || ($mp['payment_type_id'] ?? '') !== '' || ($mp['authorization_code'] ?? '') !== '') {
+        $integratedPayment = [];
+        $integratedPayment['valor'] = round((float)($mp['transaction_amount'] ?? $order['total'] ?? 0), 2);
+
+        $paymentTypeMap = [
+            'pix' => 4,
+            'bank_transfer' => 4,
+            'credit_card' => 1,
+            'debit_card' => 2,
+            'ticket' => 3,
+            'prepaid_card' => 1,
         ];
+        $paymentTypeKey = strtolower((string)($mp['payment_type_id'] ?? $mp['payment_method_id'] ?? ''));
+        if (isset($paymentTypeMap[$paymentTypeKey])) {
+            $integratedPayment['tipoPagamento'] = $paymentTypeMap[$paymentTypeKey];
+        }
+
+        $mpCnpj = preg_replace('/\D+/', '', (string)($mp['intermediator_cnpj'] ?? svtop_env('MERCADOPAGO_INTERMEDIADOR_CNPJ', 'MERCADOPAGO_CNPJ')));
+        if (strlen($mpCnpj) === 14) {
+            $integratedPayment['cnpjIntermediador'] = $mpCnpj;
+        }
+        if (($mp['authorization_code'] ?? '') !== '') {
+            $integratedPayment['codigoAutorizacao'] = (string)$mp['authorization_code'];
+        }
+        $cardBrand = trim((string)($mp['card_brand'] ?? ''));
+        if ($cardBrand !== '') {
+            $integratedPayment['codigoBandeira'] = $cardBrand;
+        }
+
+        if (count($integratedPayment) > 1) {
+            $payload['pagamentosIntegrados'] = [$integratedPayment];
+        }
     }
 
     $res = svtop_tiny_request('POST', '/pedidos', $token, $payload);
