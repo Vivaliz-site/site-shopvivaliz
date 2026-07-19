@@ -4,10 +4,7 @@
 Write-Host "Configurando Claude Code + Codex com modo BARATO como default..." -ForegroundColor Green
 Write-Host ""
 
-# ╔═══════════════════════════════════════════════════════════════╗
-# ║ PARTE 1: CLAUDE CODE - HAIKU 4.5 COMO DEFAULT              ║
-# ╚═══════════════════════════════════════════════════════════════╝
-
+# PARTE 1: CLAUDE CODE - HAIKU 4.5 COMO DEFAULT
 Write-Host "[1/3] Claude Code - Haiku 4.5 (BARATO)" -ForegroundColor Cyan
 Write-Host "=======================================" -ForegroundColor Cyan
 
@@ -16,14 +13,10 @@ Write-Host "=======================================" -ForegroundColor Cyan
 Write-Host "      Variavel: CLAUDE_DEFAULT_MODEL = haiku-4-5-20251001" -ForegroundColor Green
 Write-Host ""
 
-# ╔═══════════════════════════════════════════════════════════════╗
-# ║ PARTE 2: CODEX (GPT) - MODO BARATO COMO DEFAULT             ║
-# ╚═══════════════════════════════════════════════════════════════╝
-
+# PARTE 2: CODEX (GPT) - MODO BARATO COMO DEFAULT
 Write-Host "[2/3] Codex (GPT) - Modo BARATO como default" -ForegroundColor Cyan
 Write-Host "=============================================" -ForegroundColor Cyan
 
-# Variaveis de ambiente para Codex/OpenAI
 [System.Environment]::SetEnvironmentVariable("CODEX_MODEL", "gpt-4o-mini", "User")
 [System.Environment]::SetEnvironmentVariable("OPENAI_DEFAULT_MODEL", "gpt-4o-mini", "User")
 [System.Environment]::SetEnvironmentVariable("GPT_CHEAP_MODE", "true", "User")
@@ -31,10 +24,7 @@ Write-Host "      Variavel: CODEX_MODEL = gpt-4o-mini (BARATO)" -ForegroundColor
 Write-Host "      Variavel: GPT_CHEAP_MODE = true" -ForegroundColor Green
 Write-Host ""
 
-# ╔═══════════════════════════════════════════════════════════════╗
-# ║ PARTE 3: ATUALIZAR POWERSHELL PROFILE                        ║
-# ╚═══════════════════════════════════════════════════════════════╝
-
+# PARTE 3: ATUALIZAR POWERSHELL PROFILE
 Write-Host "[3/3] Atualizando PowerShell Profile..." -ForegroundColor Cyan
 Write-Host "=======================================" -ForegroundColor Cyan
 
@@ -46,20 +36,15 @@ if (-not (Test-Path $profileDir)) {
 }
 
 $profileContent = @"
-# ╔════════════════════════════════════════════════════════════╗
-# ║  SHOPVIVALIZ - CLAUDE + CODEX MODO BARATO COMO DEFAULT    ║
-# ╚════════════════════════════════════════════════════════════╝
+# SHOPVIVALIZ - CLAUDE + CODEX MODO BARATO COMO DEFAULT
 
-# CLAUDE CODE - HAIKU 4.5 (BARATO)
 `$env:CLAUDE_DEFAULT_MODEL = "haiku-4-5-20251001"
 `$env:ANTHROPIC_DEFAULT_MODEL = "haiku-4-5-20251001"
 
-# CODEX (GPT) - GPT-4O-MINI (BARATO)
 `$env:CODEX_MODEL = "gpt-4o-mini"
 `$env:OPENAI_DEFAULT_MODEL = "gpt-4o-mini"
 `$env:GPT_CHEAP_MODE = "true"
 
-# ALIASES PARA RAPIDEZ
 function claude-cheap {
     `$env:CLAUDE_DEFAULT_MODEL = "haiku-4-5-20251001"
     claude @args
@@ -94,27 +79,15 @@ if ((Test-Path $profilePath) -and (Get-Content $profilePath | Select-String "CLA
 }
 
 Write-Host ""
-Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "║        CONFIGURACAO COMPLETA - MODO BARATO ATIVADO!        ║" -ForegroundColor Green
-Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
+Write-Host "CONFIGURACAO COMPLETA!" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "NOVOS COMANDOS DISPONIVEIS:" -ForegroundColor Cyan
+Write-Host "NOVOS COMANDOS:" -ForegroundColor Cyan
+Write-Host "  cc = Claude Haiku (BARATO - padrao)" -ForegroundColor White
+Write-Host "  cf = Claude Opus (rapido)" -ForegroundColor White
+Write-Host "  gx = Codex GPT-4o-mini (BARATO - padrao)" -ForegroundColor White
+Write-Host "  gf = Codex GPT-4-turbo (rapido)" -ForegroundColor White
 Write-Host ""
-Write-Host "  CLAUDE CODE:" -ForegroundColor Yellow
-Write-Host "    cc    - Claude Code com Haiku 4.5 (BARATO - padrao)" -ForegroundColor White
-Write-Host "    cf    - Claude Code com Opus 4.8 (rapido)" -ForegroundColor White
-Write-Host ""
-Write-Host "  CODEX (GPT):" -ForegroundColor Yellow
-Write-Host "    gx    - Codex com GPT-4o-mini (BARATO - padrao)" -ForegroundColor White
-Write-Host "    gf    - Codex com GPT-4-turbo (rapido)" -ForegroundColor White
-Write-Host ""
-Write-Host "CUSTO MENSAL ESPERADO:" -ForegroundColor Cyan
-Write-Host "  Claude Haiku:   ~$5/mes" -ForegroundColor Green
-Write-Host "  GPT-4o-mini:   ~$3/mes" -ForegroundColor Green
-Write-Host "  TOTAL:         ~$8/mes (modo BARATO)" -ForegroundColor Green
-Write-Host ""
-Write-Host "PROXIMO PASSO:" -ForegroundColor White
-Write-Host "  1. Fechar esta janela PowerShell" -ForegroundColor White
-Write-Host "  2. Abrir NOVA janela PowerShell" -ForegroundColor White
-Write-Host "  3. Testar: cc (para Claude) ou gx (para Codex)" -ForegroundColor White
+Write-Host "Custo: ~8/mes com modo BARATO" -ForegroundColor Green
 Write-Host ""
