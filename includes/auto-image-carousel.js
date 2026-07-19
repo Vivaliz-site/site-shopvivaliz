@@ -97,14 +97,14 @@
           startRotation();
         });
 
-        link.addEventListener('click', () => {
+        element.addEventListener('click', () => {
           isAutoPlay = false;
           if (timer) clearInterval(timer);
         });
 
         startRotation();
 
-        carousels.set(link, { timer, images });
+        carousels.set(element, { timer, images });
       } catch (e) {
         console.error('Erro ao parsear imagens do produto:', e);
       }
