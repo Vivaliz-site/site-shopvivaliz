@@ -640,5 +640,6 @@ svs_json($ok ? 200 : 207, [
     'dry_run'      => $dryRun,
     'saved'        => $saved,
     'errors'       => $errors,
+    'operational'  => $ok && count($errors) === 0,
     'synced_at'    => date('c'),
 ]);

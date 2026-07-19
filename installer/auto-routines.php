@@ -83,7 +83,7 @@ function svi_run_sync_cli(int $expected, int $limit): array
     // olist_sync fica null -- ver docs/MEMORIA-AGENTES.md. Roda via CLI local, que nao
     // passa pelo Apache/htaccess.
     $script = escapeshellarg(dirname(__DIR__) . '/olist/sync-products.php');
-    $cmd = 'php ' . $script . ' 2>&1';
+    $cmd = 'SVS_DRY_RUN=1 php ' . $script . ' 2>&1';
     $output = shell_exec($cmd);
     $json = is_string($output) ? json_decode($output, true) : null;
     return [
