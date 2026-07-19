@@ -993,5 +993,7 @@ $svNavCurrent = '';
     })();
     </script>
     <script src="/js/auto-image-carousel.js"></script>
+    <!-- A/B Testing Framework for CRO -->
+    <script src="/js/shopvivaliz-ab-testing.js?v=1.0.0"></script>
 </body>
 </html>
