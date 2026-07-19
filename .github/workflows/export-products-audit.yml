@@ -28,4 +28,4 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$SSH_PRIVATE_KEY"
-          mkdir -
+          mkdir -p
