@@ -470,7 +470,7 @@ $svNavCurrent = '';
     <div class="trust-bar" role="list" aria-label="Diferenciais da ShopVivaliz">
         <div class="trust-bar-inner">
             <div class="trust-bar-item" role="listitem">
-                <span class="trust-bar-icon" style="color: #10b981;">
+                <span class="trust-bar-icon color-accent-green">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                 </span>
                 <div class="trust-bar-text">
@@ -479,7 +479,7 @@ $svNavCurrent = '';
                 </div>
             </div>
             <div class="trust-bar-item" role="listitem">
-                <span class="trust-bar-icon" style="color: #10b981;">
+                <span class="trust-bar-icon color-accent-green">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
                 </span>
                 <div class="trust-bar-text">
@@ -488,7 +488,7 @@ $svNavCurrent = '';
                 </div>
             </div>
             <div class="trust-bar-item" role="listitem">
-                <span class="trust-bar-icon" style="color: #10b981;">
+                <span class="trust-bar-icon color-accent-green">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
                 </span>
                 <div class="trust-bar-text">
@@ -497,7 +497,7 @@ $svNavCurrent = '';
                 </div>
             </div>
             <div class="trust-bar-item" role="listitem">
-                <span class="trust-bar-icon" style="color: #10b981;">
+                <span class="trust-bar-icon color-accent-green">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
                 </span>
                 <div class="trust-bar-text">
