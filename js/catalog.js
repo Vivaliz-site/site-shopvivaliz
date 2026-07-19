@@ -130,9 +130,11 @@
         + '&olist_product_id=' + encodeURIComponent(payload.olist_product_id);
     const contactUrl = '/contato?sku=' + encodeURIComponent(payload.sku)
       + '&produto=' + encodeURIComponent(payload.name);
+    const images = Array.isArray(product.images) ? product.images.slice(0, 10).filter(Boolean) : [image];
+    const imagesJson = encodeURIComponent(JSON.stringify(images));
     return `
       <article class="product-card">
-        <a class="product-image" href="${esc(productUrl)}">
+        <a class="product-image" href="${esc(productUrl)}" data-images="${imagesJson}">
           <img src="${esc(image)}" alt="${esc(product.name)}" loading="lazy" onerror="this.src='/images/logo-vivaliz-square.png'">
         </a>
         <div class="product-info">
