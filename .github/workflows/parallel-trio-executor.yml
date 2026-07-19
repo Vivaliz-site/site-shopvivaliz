@@ -76,7 +76,15 @@ jobs:
           from pathlib import Path
 
           payload = json.loads(Path("reports/parallel-trio.json").read_text(encoding="utf-8"))
-          if "probes" not in payload:
-              raise SystemExit("Resposta do watchdog sem campo probes")
-          print("Parallel Trio OK:", payload.get("generated_at", "sem-data"))
+          if payload.get("ok") is not True:
+              raise SystemExit("Resposta do watchdog sem ok=true")
+          if payload.get("execution_accepted") is not True:
+              raise SystemExit("Resposta do watchdog sem execution_accepted=true")
+          errors = payload.get("errors") or []
+          if errors:
+              raise SystemExit(f"Resposta do watchdog contem errors: {errors}")
+          steps = payload.get("steps")
+          if not isinstance(steps, dict) or not steps:
+              raise SystemExit("Resposta do watchdog sem steps validos")
+          print("Parallel Trio OK:", payload.get("finished_at") or payload.get("generated_at", "sem-data"))
           PY
