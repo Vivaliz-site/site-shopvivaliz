@@ -1,0 +1,114 @@
+{
+  "campaign": {
+    "name": "Rodizios-Search-ShopVivaliz-2026-07",
+    "daily_budget": 15.0,
+    "budget_currency": "BRL",
+    "campaign_type": "SEARCH",
+    "status": "PAUSED",
+    "languages": [
+      "pt"
+    ],
+    "target_locations": [
+      "São Paulo",
+      "Minas Gerais",
+      "Paraná"
+    ],
+    "estimated_daily_reach": 450,
+    "estimated_monthly_budget": 450.0
+  },
+  "keywords": {
+    "high_value": [
+      {
+        "text": "rodizios gel soprano 35mm",
+        "bid": "R$ 2.50",
+        "match": "PHRASE"
+      },
+      {
+        "text": "rodizio giratório com freio",
+        "bid": "R$ 2.30",
+        "match": "PHRASE"
+      },
+      {
+        "text": "kit rodizios 35mm freio",
+        "bid": "R$ 2.40",
+        "match": "PHRASE"
+      }
+    ],
+    "medium_value": [
+      {
+        "text": "rodizios para móvel",
+        "bid": "R$ 1.80",
+        "match": "PHRASE"
+      },
+      {
+        "text": "rodizio gel silicone",
+        "bid": "R$ 1.90",
+        "match": "PHRASE"
+      },
+      {
+        "text": "rodizio giratório",
+        "bid": "R$ 1.70",
+        "match": "BROAD"
+      }
+    ],
+    "broad": [
+      {
+        "text": "rodizios",
+        "bid": "R$ 1.50",
+        "match": "BROAD"
+      },
+      {
+        "text": "ferragens para móvel",
+        "bid": "R$ 1.40",
+        "match": "BROAD"
+      }
+    ]
+  },
+  "negative_keywords": [
+    "rodizio barato",
+    "rodizio grátis",
+    "rodizio free",
+    "rodizio download",
+    "rodizio usado",
+    "rodizio segunda mão",
+    "rodizio emprego",
+    "rodizio curso"
+  ],
+  "ads": {
+    "headlines": [
+      "Rodízios Gel Soprano 35mm - Frete Gratis",
+      "Kit 4 Rodízios com Freio - Qualidade Premium",
+      "Rodízios Giratórios Anti-Risco - Entrega Rapida",
+      "Compre Rodízios Profissionais - 7 Dias de Troca",
+      "Rodízios em Gel - Movimentacao Suave",
+      "Kit Rodízios com Freio - Frete para Todo Brasil",
+      "Rodízios Soprano - Qualidade Vivaliza",
+      "Rodízios Giratórios - Melhor Preco",
+      "Rodízios para Móvel - Pronta Entrega",
+      "Rodízios Gel 35mm - Compra Segura",
+      "Rodízios Anti-Risco - Frete Gratis",
+      "Kit Rodízios com Freio - Entrega em 3 Dias"
+    ],
+    "descriptions": [
+      "Rodízios em gel de silicone alta qualidade. Frete gratis para Brasil. Compra 100% segura.",
+      "4 rodízios com freio anti-risco. Movimentacao suave para móveis e armários. Confira!",
+      "Rodízios giratórios profissionais. Resistem até 220kg. 7 dias para troca sem burocracia.",
+      "Compre rodízios soprano 35mm online. Entrega rápida em todo Brasil via transportadora.",
+      "Kit rodízios com freio para móvel. Silicone gel transparente. Pronta entrega!",
+      "Rodízios para armário e móvel. Rodagem suave. Frete gratis acima de R$ 150."
+    ]
+  },
+  "metadata": {
+    "created": "2026-07-19T08:44:52.255393",
+    "product_champion": "10x Rodízio 35mm Giratório com Freio Gel Anti-Risco Soprano",
+    "sku": "CONJ-10-RODIZIOS-35MM-GEL",
+    "avg_order_value": "R$ 171.60",
+    "conversion_states": [
+      "SP",
+      "MG",
+      "PR"
+    ],
+    "campaign_duration": "30 dias (teste inicial)",
+    "expected_roi": "3-5x"
+  }
+}
