@@ -408,7 +408,7 @@ $svNavCurrent = 'catalogo';
                 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
                 ?>
                 <article class="product-card<?= $stock <= 0 ? ' is-out-of-stock' : '' ?>">
-                    <a class="product-image" href="<?= sv_catalog_esc($productUrl) ?>">
+                    <a class="product-image" href="<?= sv_catalog_esc($productUrl) ?>" data-images="<?= sv_catalog_esc(json_encode(array_slice(array_filter($product['images'] ?? [$image]), 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
                         <img src="<?= sv_catalog_esc($image) ?>" alt="<?= sv_catalog_esc($product['name']) ?>" loading="lazy" onerror="this.src='<?= sv_catalog_default_image() ?>'">
                         <?php if ($stock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                     </a>
