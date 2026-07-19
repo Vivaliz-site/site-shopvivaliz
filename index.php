@@ -927,5 +927,6 @@ $svNavCurrent = '';
         });
     })();
     </script>
+    <script src="/includes/auto-image-carousel.js"></script>
 </body>
 </html>
