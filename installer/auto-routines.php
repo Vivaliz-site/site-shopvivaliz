@@ -13,7 +13,7 @@ function svi_base_url(): string
     }
     $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
     $scheme = $https ? 'https' : 'http';
-    $host = $_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.com.br';
+    $host = $_SERVER['HTTP_HOST'] ?? 'shopvivaliz.com.br';
     return $scheme . '://' . $host;
 }
 

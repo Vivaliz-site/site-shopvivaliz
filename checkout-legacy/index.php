@@ -162,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
 ";
         $body .= "Acesse os pedidos em: https://shopvivaliz.com.br/admin/
 ";
-        @mail($adminEmail, $subject, $body, "From: pedidos@dev.shopvivaliz.com.br
+        @mail($adminEmail, $subject, $body, "From: pedidos@shopvivaliz.com.br
 
 Content-Type: text/plain; charset=UTF-8");
 

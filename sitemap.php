@@ -52,7 +52,7 @@ ksort($categories);
 
 foreach (array_keys($categories) as $category) {
     echo "  <url>\n";
-    echo '    <loc>' . sx($base . '/catalogo?categoria=' . rawurlencode($category)) . "</loc>\n";
+    echo '    <loc>' . sx($base . '/catalogo/?categoria=' . rawurlencode($category)) . "</loc>\n";
     echo "    <lastmod>{$today}</lastmod>\n";
     echo "    <changefreq>weekly</changefreq>\n";
     echo "    <priority>0.7</priority>\n";
