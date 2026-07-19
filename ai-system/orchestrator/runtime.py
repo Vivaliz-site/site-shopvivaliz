@@ -14,6 +14,13 @@ from datetime import datetime
 from pathlib import Path
 import sys
 
+DEFAULT_REPO_PATH = Path(os.getenv("SHOPVIVALIZ_REPO_PATH") or Path(__file__).resolve().parents[2])
+LOG_DIR = DEFAULT_REPO_PATH / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+        stream.reconfigure(encoding="utf-8", errors="replace")
+
 # Add parent directory to path
 ai_system_path = str(Path(__file__).parent.parent)
 sys.path.insert(0, ai_system_path)
@@ -36,18 +43,18 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("C:/site-shopvivaliz/logs/ai-orchestrator.log"),
+        logging.FileHandler(LOG_DIR / "ai-orchestrator.log", encoding="utf-8"),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger("AIRuntime")
 
 class AIRuntime:
-    def __init__(self, repo_path: str = "C:/site-shopvivaliz"):
-        self.repo_path = repo_path
-        self.orchestrator = AIOrchestrator(repo_path)
-        self.memory = VectorMemory()
-        self.task_queue_path = f"{repo_path}/tasks-queue.json"
+    def __init__(self, repo_path: str | None = None):
+        self.repo_path = str(Path(repo_path) if repo_path else DEFAULT_REPO_PATH)
+        self.orchestrator = AIOrchestrator(self.repo_path)
+        self.memory = VectorMemory(str(Path(self.repo_path) / "ai-system" / "memory" / "vector.db"))
+        self.task_queue_path = str(Path(self.repo_path) / "tasks-queue.json")
 
         logger.info("✅ AI Runtime initialized")
 
