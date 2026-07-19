@@ -108,7 +108,10 @@ function filtrar_produtos(array $produtos, array $filtros = []): array
     if (isset($filtros['search']) && $filtros['search']) {
         $search = strtolower($filtros['search']);
         $produtos = array_filter($produtos, function($p) use ($search) {
-            return stripos($p['name'], $search) !== false || stripos($p['description'], $search) !== false;
+            return stripos($p['name'], $search) !== false
+                || stripos($p['description'], $search) !== false
+                || stripos($p['category'], $search) !== false
+                || stripos($p['sku'], $search) !== false;
         });
     }
 

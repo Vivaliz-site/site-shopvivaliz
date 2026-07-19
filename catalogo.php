@@ -25,6 +25,48 @@ function sv_catalog_query(): string
     return is_scalar($value) ? trim((string)$value) : '';
 }
 
+function sv_catalog_search_normalize(string $value): string
+{
+    static $accents = [
+        'á' => 'a', 'à' => 'a', 'ã' => 'a', 'â' => 'a', 'ä' => 'a',
+        'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
+        'í' => 'i', 'ì' => 'i', 'î' => 'i', 'ï' => 'i',
+        'ó' => 'o', 'ò' => 'o', 'õ' => 'o', 'ô' => 'o', 'ö' => 'o',
+        'ú' => 'u', 'ù' => 'u', 'û' => 'u', 'ü' => 'u',
+        'ç' => 'c', 'ñ' => 'n', 'ý' => 'y',
+        'Á' => 'A', 'À' => 'A', 'Ã' => 'A', 'Â' => 'A', 'Ä' => 'A',
+        'É' => 'E', 'È' => 'E', 'Ê' => 'E', 'Ë' => 'E',
+        'Í' => 'I', 'Ì' => 'I', 'Î' => 'I', 'Ï' => 'I',
+        'Ó' => 'O', 'Ò' => 'O', 'Õ' => 'O', 'Ô' => 'O', 'Ö' => 'O',
+        'Ú' => 'U', 'Ù' => 'U', 'Û' => 'U', 'Ü' => 'U',
+        'Ç' => 'C', 'Ñ' => 'N', 'Ý' => 'Y',
+    ];
+
+    $value = trim($value);
+    $value = strtr($value, $accents);
+    return function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
+}
+
+function sv_catalog_matches_query(array $row, string $query): bool
+{
+    if ($query === '') {
+        return true;
+    }
+
+    $haystack = implode(' ', array_filter([
+        (string)($row['sku'] ?? ''),
+        (string)($row['name'] ?? ''),
+        (string)($row['category'] ?? ''),
+        (string)($row['description'] ?? ''),
+        (string)($row['slug'] ?? ''),
+        (string)($row['olist_product_id'] ?? ''),
+        (string)($row['id'] ?? ''),
+        is_array($row['tags'] ?? null) ? implode(' ', array_map('strval', $row['tags'])) : '',
+    ]));
+
+    return strpos(sv_catalog_search_normalize($haystack), sv_catalog_search_normalize($query)) !== false;
+}
+
 function sv_catalog_load(): array
 {
     static $data = null;
@@ -46,7 +88,7 @@ function sv_catalog_products(int $limit, string $query, string $category = '', i
         $sku  = trim((string)($row['sku'] ?? ''));
         $name = trim((string)($row['name'] ?? 'Produto Vivaliz'));
         $cat  = trim((string)($row['category'] ?? ''));
-        if ($query !== '' && stripos($sku . ' ' . $name, $query) === false) continue;
+        if (!sv_catalog_matches_query($row, $query)) continue;
         if ($category !== '' && $cat !== $category) continue;
         if ($skipped < $offset) {
             $skipped++;
@@ -79,7 +121,7 @@ function sv_catalog_count_matching(string $query, string $category = ''): int
         $sku  = trim((string)($row['sku'] ?? ''));
         $name = trim((string)($row['name'] ?? ''));
         $cat  = trim((string)($row['category'] ?? ''));
-        if ($query !== '' && stripos($sku . ' ' . $name, $query) === false) continue;
+        if (!sv_catalog_matches_query($row, $query)) continue;
         if ($category !== '' && $cat !== $category) continue;
         $count++;
     }
@@ -116,7 +158,26 @@ function sv_catalog_money(float $value): string
 
 function sv_catalog_base_url(): string
 {
-    return 'https://dev.shopvivaliz.com.br';
+    static $base = null;
+    if ($base !== null) {
+        return $base;
+    }
+
+    $official = __DIR__ . '/config/official-site.php';
+    if (is_file($official)) {
+        $data = @include $official;
+        $candidate = is_array($data) ? trim((string)($data['base_url'] ?? '')) : '';
+        if ($candidate !== '') {
+            return $base = rtrim($candidate, '/');
+        }
+    }
+
+    $env = trim((string)(getenv('SHOPVIVALIZ_BASE_URL') ?: getenv('APP_URL') ?: getenv('SITE_URL') ?: ''));
+    if ($env !== '') {
+        return $base = rtrim($env, '/');
+    }
+
+    return $base = 'https://www.shopvivaliz.com.br';
 }
 
 function sv_catalog_product_url(array $product): string
