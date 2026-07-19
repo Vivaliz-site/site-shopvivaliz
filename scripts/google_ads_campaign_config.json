@@ -46,21 +46,21 @@
         "match": "PHRASE"
       },
       {
-        "text": "rodizio giratório",
+        "text": "rodizio giratório com freio",
         "bid": "R$ 1.70",
-        "match": "BROAD"
+        "match": "PHRASE"
       }
     ],
     "broad": [
       {
-        "text": "rodizios",
+        "text": "comprar rodizios gel",
         "bid": "R$ 1.50",
-        "match": "BROAD"
+        "match": "PHRASE"
       },
       {
-        "text": "ferragens para móvel",
+        "text": "rodizios para armario",
         "bid": "R$ 1.40",
-        "match": "BROAD"
+        "match": "PHRASE"
       }
     ]
   },
@@ -72,22 +72,32 @@
     "rodizio usado",
     "rodizio segunda mão",
     "rodizio emprego",
-    "rodizio curso"
+    "rodizio curso",
+    "rodizio de pizza",
+    "restaurante",
+    "escala de trabalho",
+    "sp trans",
+    "tutorial",
+    "como fazer",
+    "manual",
+    "pdf",
+    "olx",
+    "mercado livre usado"
   ],
   "ads": {
     "headlines": [
-      "Rodízios Gel Soprano 35mm - Frete Gratis",
-      "Kit 4 Rodízios com Freio - Qualidade Premium",
-      "Rodízios Giratórios Anti-Risco - Entrega Rapida",
-      "Compre Rodízios Profissionais - 7 Dias de Troca",
-      "Rodízios em Gel - Movimentacao Suave",
-      "Kit Rodízios com Freio - Frete para Todo Brasil",
-      "Rodízios Soprano - Qualidade Vivaliza",
-      "Rodízios Giratórios - Melhor Preco",
-      "Rodízios para Móvel - Pronta Entrega",
-      "Rodízios Gel 35mm - Compra Segura",
-      "Rodízios Anti-Risco - Frete Gratis",
-      "Kit Rodízios com Freio - Entrega em 3 Dias"
+      "Rodízios Gel Soprano",
+      "Kit Rodízios Com Freio",
+      "Rodízios Anti-Risco",
+      "Rodízios Para Móveis",
+      "Compra Segura Vivaliz",
+      "Envio Para Todo Brasil",
+      "Rodízios 35mm Gel",
+      "Rodízios Com Freio",
+      "Pronta Entrega",
+      "Pagamento Seguro",
+      "7 Dias Para Troca",
+      "Frete Acima De R$150"
     ],
     "descriptions": [
       "Rodízios em gel de silicone alta qualidade. Frete gratis para Brasil. Compra 100% segura.",

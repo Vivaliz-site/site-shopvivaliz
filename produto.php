@@ -517,6 +517,20 @@ if ($notFound) {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script type="application/ld+json"><?= json_encode($jsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
     <script type="application/ld+json"><?= json_encode($breadcrumbJsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
+    <?php if (!$notFound): ?>
+    <script>
+      window.ShopVivalizProductContext = <?= json_encode([
+          'sku' => $sku,
+          'name' => $name,
+          'brand' => $brandName,
+          'category' => $category,
+          'price' => $priceRaw,
+          'quantity' => 1,
+          'olist_product_id' => $olistId,
+      ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    </script>
+    <?php endif; ?>
+    <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
 </head>
 <body>
     <?php include __DIR__ . '/includes/navbar.php'; ?>

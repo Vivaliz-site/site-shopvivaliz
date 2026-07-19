@@ -487,8 +487,6 @@ $svNavCurrent = '';
     }
     </script>
 
-    <!-- Complete Integrations: GA4, GTM, Meta Pixel, Conversions -->
-    <?php require_once __DIR__ . '/includes/head-integrations-complete.php'; ?>
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
 </head>
 <body>

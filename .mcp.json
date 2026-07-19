@@ -3,6 +3,10 @@
     "codex-mesh-bridge": {
       "command": "python",
       "args": ["C:\\site-shopvivaliz\\scripts\\codex-mesh-bridge.py"]
+    },
+    "google-ads-readonly": {
+      "command": "python",
+      "args": ["C:\\site-shopvivaliz\\scripts\\mcp-google-ads-readonly.py"]
     }
   }
 }

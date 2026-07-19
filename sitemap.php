@@ -16,7 +16,7 @@ $products = svcr_products();
 function sx(string $s): string { return htmlspecialchars($s, ENT_XML1, 'UTF-8'); }
 
 echo '<?xml version="1.0" encoding="UTF-8"?>' . PHP_EOL;
-echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . PHP_EOL;
+echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">' . PHP_EOL;
 
 $pages = [
     ['loc' => '/',          'priority' => '1.0', 'freq' => 'daily'],
@@ -72,7 +72,7 @@ foreach ($products as $product) {
     echo "    <changefreq>weekly</changefreq>\n";
     echo "    <priority>0.8</priority>\n";
     if ($image !== '') {
-        echo "    <image:image xmlns:image=\"http://www.google.com/schemas/sitemap-image/1.1\">\n";
+        echo "    <image:image>\n";
         echo '      <image:loc>' . sx($image) . "</image:loc>\n";
         echo '      <image:title>' . sx(trim((string)($product['name'] ?? ''))) . "</image:title>\n";
         echo "    </image:image>\n";
