@@ -249,8 +249,8 @@ def generate_report(all_data):
 def main():
     """ORQUESTRADOR PRINCIPAL"""
     print("\n" + "="*70)
-    print("🚀 GOOGLE ADS 30-DAY ORCHESTRATOR")
-    print("   Campanha ROI 10x+ Automática")
+    print("[GOOGLE ADS 30-DAY ORCHESTRATOR]")
+    print("   Campaign ROI 10x+ Automatic")
     print("="*70 + "\n")
 
     # FASE 1: Criar
