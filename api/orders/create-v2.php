@@ -81,18 +81,22 @@ function svo_append_legacy_order_log(array $order): void
         @mkdir($logDir, 0755, true);
     }
 
+    $customer = is_array($order['customer'] ?? null) ? $order['customer'] : [];
     $entry = [
         'id' => $order['order_number'] ?? '',
         'timestamp' => $order['created_at'] ?? date('c'),
         'cliente' => [
-            'nome' => $order['customer']['name'] ?? '',
-            'email' => $order['customer']['email'] ?? '',
-            'telefone' => $order['customer']['phone'] ?? '',
-            'endereco' => $order['customer']['address'] ?? '',
-            'numero' => '',
-            'complemento' => '',
-            'cidade' => '',
-            'cep' => $order['customer']['cep'] ?? '',
+            'nome' => $customer['name'] ?? '',
+            'email' => $customer['email'] ?? '',
+            'telefone' => $customer['phone'] ?? '',
+            'endereco' => $customer['street_name'] ?? $customer['address'] ?? '',
+            'numero' => $customer['street_number'] ?? '',
+            'complemento' => $customer['complement'] ?? '',
+            'bairro' => $customer['neighborhood'] ?? '',
+            'cidade' => $customer['city'] ?? '',
+            'estado' => $customer['state'] ?? '',
+            'cpf' => $customer['cpf'] ?? '',
+            'cep' => $customer['cep'] ?? '',
         ],
         'items' => $order['items'] ?? [],
         'payment_method' => $order['payment_method'] ?? 'pix',
@@ -146,6 +150,28 @@ function svo_payment_instructions(string $method): string
     };
 }
 
+function svo_validate_cpf(string $cpf): bool
+{
+    $digits = preg_replace('/\D+/', '', $cpf) ?? '';
+    if (strlen($digits) !== 11 || preg_match('/^(\d)\1{10}$/', $digits) === 1) {
+        return false;
+    }
+    for ($position = 9; $position <= 10; $position++) {
+        $sum = 0;
+        for ($index = 0; $index < $position; $index++) {
+            $sum += ((int)$digits[$index]) * (($position + 1) - $index);
+        }
+        $digit = ($sum * 10) % 11;
+        if ($digit === 10) {
+            $digit = 0;
+        }
+        if ($digit !== (int)$digits[$position]) {
+            return false;
+        }
+    }
+    return true;
+}
+
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     svo_json(405, ['ok' => false, 'error' => 'method_not_allowed']);
 }
@@ -164,6 +190,13 @@ $email = trim((string)($body['customer_email'] ?? ''));
 $phone = trim((string)($body['customer_phone'] ?? ''));
 $cep = preg_replace('/\D+/', '', (string)($body['cep'] ?? ''));
 $address = trim((string)($body['address'] ?? ''));
+$streetName = trim((string)($body['street_name'] ?? $address));
+$streetNumber = trim((string)($body['street_number'] ?? $body['numero'] ?? ''));
+$complement = trim((string)($body['complement'] ?? $body['complemento'] ?? ''));
+$neighborhood = trim((string)($body['neighborhood'] ?? $body['bairro'] ?? ''));
+$city = trim((string)($body['city'] ?? ''));
+$state = strtoupper(trim((string)($body['state'] ?? $body['estado'] ?? '')));
+$cpf = preg_replace('/\D+/', '', (string)($body['cpf'] ?? ''));
 $notes = trim((string)($body['notes'] ?? ''));
 $paymentMethod = svo_payment_method((string)($body['payment_method'] ?? 'pix'));
 $shippingTotal = max(0.0, (float)($body['shipping_total'] ?? 0));
@@ -172,12 +205,28 @@ $shippingService = trim((string)($body['shipping_service'] ?? ''));
 $shippingCep = preg_replace('/\D+/', '', (string)($body['shipping_cep'] ?? $cep));
 $items = is_array($body['items'] ?? null) ? $body['items'] : [];
 
-if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($notes) > 1000) {
+if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($streetName) > 300 || strlen($streetNumber) > 30 || strlen($complement) > 120 || strlen($neighborhood) > 120 || strlen($city) > 120 || strlen($state) > 2 || strlen($notes) > 1000 || strlen($cpf) > 14) {
     svo_json(422, ['ok' => false, 'error' => 'field_too_long']);
 }
 
-if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || $phone === '' || strlen($cep) !== 8 || $address === '' || !$items) {
-    svo_json(422, ['ok' => false, 'error' => 'missing_required_fields']);
+if (
+    $name === ''
+    || !filter_var($email, FILTER_VALIDATE_EMAIL)
+    || $phone === ''
+    || strlen($cep) !== 8
+    || $streetName === ''
+    || $streetNumber === ''
+    || $neighborhood === ''
+    || $city === ''
+    || strlen($state) !== 2
+    || !svo_validate_cpf($cpf)
+    || !$items
+) {
+    svo_json(422, [
+        'ok' => false,
+        'error' => 'customer_fields_invalid',
+        'message' => 'Preencha CPF e endereco completo para faturamento.',
+    ]);
 }
 
 if (count($items) > 100) {
@@ -266,6 +315,13 @@ $record = [
         'phone' => $phone,
         'cep' => $cep,
         'address' => $address,
+        'cpf' => $cpf,
+        'street_name' => $streetName,
+        'street_number' => $streetNumber,
+        'complement' => $complement,
+        'neighborhood' => $neighborhood,
+        'city' => $city,
+        'state' => $state,
     ],
     'items' => $cleanItems,
     'items_total' => round($itemsTotal, 2),

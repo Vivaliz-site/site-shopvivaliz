@@ -503,6 +503,12 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                                 <input type="tel" id="telefone" name="telefone" required>
                             </div>
                         </div>
+                        <div class="form-grid">
+                            <div class="field">
+                                <label for="cpf">CPF</label>
+                                <input type="text" id="cpf" name="cpf" inputmode="numeric" maxlength="14" required>
+                            </div>
+                        </div>
                     </section>
 
                     <section class="form-section">
@@ -527,6 +533,16 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                             <div class="field">
                                 <label for="cidade">Cidade</label>
                                 <input type="text" id="cidade" name="cidade" required>
+                            </div>
+                            <div class="field">
+                                <label for="bairro">Bairro</label>
+                                <input type="text" id="bairro" name="bairro" required>
+                            </div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="field">
+                                <label for="estado">Estado (UF)</label>
+                                <input type="text" id="estado" name="estado" maxlength="2" minlength="2" style="text-transform:uppercase" required>
                             </div>
                             <div class="field">
                                 <label for="cep">CEP</label>
@@ -733,12 +749,14 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 customer_email: formData.get('email') || '',
                 customer_phone: formData.get('telefone') || '',
                 cep: formData.get('cep') || '',
-                address: [
-                    formData.get('endereco') || '',
-                    formData.get('numero') || '',
-                    formData.get('complemento') || '',
-                    formData.get('cidade') || ''
-                ].filter(Boolean).join(', '),
+                address: formData.get('endereco') || '',
+                street_name: formData.get('endereco') || '',
+                street_number: formData.get('numero') || '',
+                complement: formData.get('complemento') || '',
+                neighborhood: formData.get('bairro') || '',
+                city: formData.get('cidade') || '',
+                state: formData.get('estado') || '',
+                cpf: formData.get('cpf') || '',
                 notes: '',
                 payment_method: formData.get('payment_method') || 'pix',
                 items: items,
