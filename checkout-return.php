@@ -31,6 +31,7 @@ $message = $approved
     <title><?= htmlspecialchars($title) ?> | Vivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/checkout.css">
+    <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
 </head>
 <body>
 <?php $svNavCurrent = 'checkout'; include __DIR__ . '/includes/navbar.php'; ?>

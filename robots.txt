@@ -1,5 +1,7 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://www.shopvivaliz.com.br/sitemap.php
-# Merchant feed: https://www.shopvivaliz.com.br/google-merchant-feed.php
+Sitemap: https://dev.shopvivaliz.com.br/sitemap.php
+# Merchant feed: https://dev.shopvivaliz.com.br/google-merchant-feed.php
+# ATENCAO: atualizar para o dominio principal (shopvivaliz.com.br) no dia do
+# corte de DNS -- ver docs/MEMORIA-AGENTES.md.
