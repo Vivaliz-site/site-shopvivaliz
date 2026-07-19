@@ -53,9 +53,12 @@ storage/tiny/
 
 # ⚠️ CRÍTICO: Dados operacionais - NUNCA versionados (risco de perda em git reset)
 storage/orders/
+storage/commerce_signals.json
 storage/codex-bridge/state.json
 storage/orchestrator/queue.json
+storage/products-cache-ativos.json
 .agent-heartbeats/
+tasks-queue.json
 .git-sync.lock
 .git-auto-sync.log
 ai-system/config/orchestrator.json
