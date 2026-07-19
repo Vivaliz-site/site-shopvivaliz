@@ -83,9 +83,11 @@ def sync_server(config: dict, branch: str) -> str:
     server_path = config["triad_sync"]["ubuntu_server"]["repo_path"]
     command = (
         f"cd {server_path} && "
+        f"status=$(git status --porcelain) && "
+        f"if [ -n \"$status\" ]; then printf '%s\\n' 'Remote worktree dirty; aborting safe sync' \"$status\"; exit 2; fi && "
         f"git fetch origin {branch} --prune && "
-        f"git checkout {branch} && "
-        f"git reset --hard origin/{branch} && "
+        f"git switch {branch} && "
+        f"git merge --ff-only origin/{branch} && "
         f"git rev-parse HEAD"
     )
     return ssh_cmd(config, command, check=True).splitlines()[-1].strip()

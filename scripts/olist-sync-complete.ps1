@@ -201,7 +201,7 @@ while (-not $callbackReached -and $callbackWaitTime -lt $maxCallbackWait) {
 
             # Extrair código da página
             $pageHtml = $ie.Document.DocumentElement.innerHTML
-            if ($pageHtml -match 'code["\']?\s*[:\=]\s*["\']?([a-zA-Z0-9`-_.]+)["\']?') {
+            if ($pageHtml -match "code[`"']?\s*[:=]\s*[`"']?([a-zA-Z0-9_.-]+)[`"']?") {
                 $authCode = $matches[1]
                 Write-Status "Authorization code capturado: $($authCode.Substring(0,30))..." "OK"
             }

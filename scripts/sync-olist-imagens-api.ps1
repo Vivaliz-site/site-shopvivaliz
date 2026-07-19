@@ -76,9 +76,9 @@ foreach ($id in $produtosIds) {
         if ($data -and $data.retorno -and $data.retorno.produtos -and $data.retorno.produtos.Count -gt 0) {
             $produto = $data.retorno.produtos[0]
 
-            $sku = $produto.codigo ?? ""
+            $sku = if ($null -ne $produto.codigo) { $produto.codigo } else { "" }
             $olistId = $id
-            $imagensInternas = $produto.imagensInternas ?? @()
+            $imagensInternas = if ($null -ne $produto.imagensInternas) { $produto.imagensInternas } else { @() }
 
             if ($imagensInternas.Count -eq 0) {
                 Write-Host "  -> Sem imagens" -ForegroundColor Gray
@@ -93,13 +93,13 @@ foreach ($id in $produtosIds) {
                         sku = $sku
                         olist_product_id = $olistId
                         image_position = $position
-                        image_id = $img.id ?? ""
-                        descricao = $img.descricao ?? ""
-                        tipo = $img.tipo ?? ""
-                        src = $img.src ?? ""
-                        srcReal = $img.srcReal ?? ""
-                        tamanho = $img.tamanho ?? ""
-                        excluido = $img.excluido ?? "0"
+                        image_id = if ($null -ne $img.id) { $img.id } else { "" }
+                        descricao = if ($null -ne $img.descricao) { $img.descricao } else { "" }
+                        tipo = if ($null -ne $img.tipo) { $img.tipo } else { "" }
+                        src = if ($null -ne $img.src) { $img.src } else { "" }
+                        srcReal = if ($null -ne $img.srcReal) { $img.srcReal } else { "" }
+                        tamanho = if ($null -ne $img.tamanho) { $img.tamanho } else { "" }
+                        excluido = if ($null -ne $img.excluido) { $img.excluido } else { "0" }
                         status = "ativo"
                     }
 
@@ -107,12 +107,12 @@ foreach ($id in $produtosIds) {
                 }
             }
         } else {
-            $erros += "Produto $id: resposta inválida ou vazia"
+            $erros += "Produto ${id}: resposta inválida ou vazia"
             Write-Host "  -> ERRO: resposta inválida" -ForegroundColor Red
         }
 
     } catch {
-        $erros += "Produto $id: $($_.Exception.Message)"
+        $erros += "Produto ${id}: $($_.Exception.Message)"
         Write-Host "  -> ERRO: $($_.Exception.Message)" -ForegroundColor Red
     }
 }

@@ -161,8 +161,8 @@ else
     echo "✅ Sync corretamente bloqueou arquivo real"
 fi
 
-# Limpar
-git reset --hard HEAD
+# Limpar apenas o arquivo temporário criado por este teste
+git -C "$REPO_DIR" rm -f --cached test-blocking-file.php >/dev/null 2>&1 || true
 rm -f "$REPO_DIR/test-blocking-file.php"
 echo "✓ Limpeza concluída"
 

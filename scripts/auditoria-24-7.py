@@ -148,7 +148,7 @@ class AuditoriaDisponibilidade:
         return apis_ok >= 3
 
 # ============ TESTES DE SEGURANÇA ============
-class AuditoriaSeguran ça:
+class AuditoriaSegurança:
     """Testa vulnerabilidades de segurança"""
 
     def __init__(self):

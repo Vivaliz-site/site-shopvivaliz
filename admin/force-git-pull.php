@@ -4,7 +4,7 @@ declare(strict_types=1);
  * ADMIN ENDPOINT - Force git pull on server
  * Access: https://shopvivaliz.com.br/admin/force-git-pull.php
  *
- * This endpoint forces a git pull from GitHub to update checkout to latest main branch
+ * This endpoint fast-forwards from GitHub to update checkout to latest main branch.
  * Use when automatic cron sync fails or is delayed
  */
 
@@ -52,8 +52,8 @@ file_put_contents($log_file, "[$timestamp] Git config attempted\n", FILE_APPEND)
 $local_fix = "cd $safe_repo && git config --local user.email 'ci@shopvivaliz.com.br' 2>&1";
 @exec($local_fix, $local_output);
 
-// 3. Execute git pull (use array form to avoid shell injection)
-$cmd = "cd $safe_repo && git fetch origin main 2>&1 && git reset --hard origin/main 2>&1";
+// 3. Execute safe fast-forward sync. Never reset: dirty production trees must be inspected.
+$cmd = "cd $safe_repo && status=\$(git status --porcelain) && if [ -n \"\$status\" ]; then printf '%s\n' 'Working tree dirty; aborting safe sync' \"\$status\"; exit 2; fi && git fetch origin main --prune 2>&1 && git merge --ff-only FETCH_HEAD 2>&1";
 @exec($cmd, $output, $return_code);
 @touch($rate_limit_file); // Mark as pulled
 
@@ -73,8 +73,8 @@ $response = [
     'git_return_code' => $return_code,
     'git_output' => $last_10_lines,
     'message' => $success
-        ? 'Git pull successful'
-        : 'Git pull failed (see git_output for details)'
+        ? 'Git fast-forward sync successful'
+        : 'Git fast-forward sync failed (see git_output for details)'
 ];
 
 // Log result

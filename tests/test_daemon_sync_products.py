@@ -14,7 +14,7 @@ def test_enrich_products_uses_detail_stock_and_attachments(monkeypatch):
     monkeypatch.setattr(
         daemon,
         "api_get",
-        lambda path, token: {
+        lambda path, token, **kwargs: {
             "id": 10,
             "sku": "SKU-10",
             "situacao": "A",

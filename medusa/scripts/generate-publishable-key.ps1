@@ -1,5 +1,3 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [string]$BackendUrl = "http://localhost:9000",
     [string]$AdminToken = "",
@@ -7,6 +5,8 @@ param(
     [string]$SalesChannelId = "",
     [string]$StorefrontEnvPath = ""
 )
+
+$ErrorActionPreference = "Stop"
 
 if ([string]::IsNullOrWhiteSpace($StorefrontEnvPath)) {
     $StorefrontEnvPath = Join-Path $PSScriptRoot "..\apps\storefront\.env.local"
