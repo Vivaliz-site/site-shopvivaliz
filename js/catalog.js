@@ -149,6 +149,49 @@
       </article>`;
   }
 
+  // Paginacao client-side: so ligada no grid do dashboard admin
+  // (id="product-grid" com a classe "admin-grid"), onde ate 200 produtos
+  // eram listados de uma vez sem nenhum controle de pagina. O /catalogo
+  // publico ja pagina no servidor (20/pagina) e nao usa essa classe.
+  const isPaginatedGrid = !!(grid && grid.classList.contains('admin-grid'));
+  const GRID_PAGE_SIZE = 20;
+  let gridPage = 1;
+  let gridProducts = [];
+
+  function gridPagerEl() {
+    if (!grid) return null;
+    let pager = document.getElementById('catalog-grid-pager');
+    if (!pager) {
+      pager = document.createElement('div');
+      pager.id = 'catalog-grid-pager';
+      pager.style.cssText = 'grid-column:1/-1; display:flex; align-items:center; justify-content:center; gap:12px; padding:16px 0;';
+      grid.insertAdjacentElement('afterend', pager);
+    }
+    return pager;
+  }
+
+  function renderGridPage(page) {
+    const totalPages = Math.max(1, Math.ceil(gridProducts.length / GRID_PAGE_SIZE));
+    gridPage = Math.max(1, Math.min(totalPages, page));
+    const start = (gridPage - 1) * GRID_PAGE_SIZE;
+    const pageItems = gridProducts.slice(start, start + GRID_PAGE_SIZE);
+    grid.innerHTML = pageItems.map(card).join('');
+    bindBuyButtons(grid);
+
+    const pager = gridPagerEl();
+    if (pager) {
+      pager.innerHTML = `
+        <button class="btn btn-secondary" type="button" id="grid-pager-prev" ${gridPage <= 1 ? 'disabled' : ''}>&laquo; Anterior</button>
+        <span class="muted">Página ${gridPage} de ${totalPages}</span>
+        <button class="btn btn-secondary" type="button" id="grid-pager-next" ${gridPage >= totalPages ? 'disabled' : ''}>Próxima &raquo;</button>
+      `;
+      const prevBtn = document.getElementById('grid-pager-prev');
+      const nextBtn = document.getElementById('grid-pager-next');
+      if (prevBtn) prevBtn.addEventListener('click', function () { renderGridPage(gridPage - 1); window.scrollTo({ top: grid.offsetTop - 80, behavior: 'smooth' }); });
+      if (nextBtn) nextBtn.addEventListener('click', function () { renderGridPage(gridPage + 1); window.scrollTo({ top: grid.offsetTop - 80, behavior: 'smooth' }); });
+    }
+  }
+
   async function loadCatalog(query, category) {
     if (!grid || !status) return;
     const activeCategory = String(category || '').trim();
@@ -181,13 +224,20 @@
           ? 'Não encontramos esse produto. Tente outro nome ou explore as categorias.'
           : 'Novos produtos estarão disponíveis em breve.';
         grid.innerHTML = '';
+        const pager = document.getElementById('catalog-grid-pager');
+        if (pager) pager.innerHTML = '';
         setCount(0);
         return;
       }
       status.textContent = customerStatus(query, activeCategory);
       setCount(products.length);
-      grid.innerHTML = products.map(card).join('');
-      bindBuyButtons(grid);
+      if (isPaginatedGrid) {
+        gridProducts = products;
+        renderGridPage(1);
+      } else {
+        grid.innerHTML = products.map(card).join('');
+        bindBuyButtons(grid);
+      }
     } catch (error) {
       status.textContent = 'Não conseguimos exibir os produtos agora. Tente novamente em instantes.';
       grid.innerHTML = '';
