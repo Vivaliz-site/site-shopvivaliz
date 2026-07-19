@@ -144,10 +144,12 @@ function sv_home_featured_products(int $limit = 8): array
             continue;
         }
 
+        $images = is_array($row['images'] ?? null) ? $row['images'] : [];
         $products[] = [
             'sku' => trim((string)($row['sku'] ?? (string)($row['id'] ?? ''))),
             'name' => trim((string)($row['name'] ?? 'Produto Vivaliz')),
             'image_url' => $image,
+            'images' => array_slice(array_filter($images), 0, 10),
             'price' => (float)($row['price'] ?? 0),
             'stock' => (int)($row['stock'] ?? 0),
             'olist_product_id' => (string)($row['olist_product_id'] ?? $row['id'] ?? ''),
