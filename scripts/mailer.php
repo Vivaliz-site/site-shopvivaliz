@@ -21,6 +21,21 @@ if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
     }
 }
 
+function sv_mailer_site_url(): string
+{
+    $official = @include dirname(__DIR__) . '/config/official-site.php';
+    if (is_array($official) && !empty($official['base_url'])) {
+        return rtrim((string)$official['base_url'], '/');
+    }
+
+    $configured = trim((string)(getenv('SHOPVIVALIZ_BASE_URL') ?: getenv('APP_URL') ?: getenv('SITE_URL') ?: ''));
+    if ($configured !== '') {
+        return rtrim($configured, '/');
+    }
+
+    return 'https://www.shopvivaliz.com.br';
+}
+
 function get_mailer_config(): array
 {
     return [
@@ -108,12 +123,13 @@ function send_email_native(string $to, string $subject, string $html, array $con
 
 function send_welcome_email(string $email, string $name): bool
 {
+    $siteBaseUrl = sv_mailer_site_url();
     $subject = 'Bem-vindo à ShopVivaliz!';
 
     $html = "<h2>Oi $name!</h2>";
     $html .= "<p>Obrigado por se cadastrar na ShopVivaliz.</p>";
     $html .= "<p>Sua conta foi criada com sucesso e você já pode começar a comprar.</p>";
-    $html .= "<p><a href='https://dev.shopvivaliz.com.br' style='background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Ir para a Loja</a></p>";
+    $html .= "<p><a href='{$siteBaseUrl}' style='background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Ir para a Loja</a></p>";
     $html .= "<p>Se tiver dúvidas, nos envie um email!</p>";
 
     return send_email($email, $subject, $html);
@@ -121,7 +137,7 @@ function send_welcome_email(string $email, string $name): bool
 
 function send_password_reset_email(string $email, string $name, string $reset_token): bool
 {
-    $reset_link = 'https://dev.shopvivaliz.com.br/auth/reset-password.php?token=' . urlencode($reset_token);
+    $reset_link = sv_mailer_site_url() . '/auth/reset-password.php?token=' . urlencode($reset_token);
 
     $subject = 'Redefinir sua senha na ShopVivaliz';
 
@@ -203,6 +219,7 @@ function send_order_confirmation_email(
     string $order_total,
     array $items
 ): bool {
+    $siteBaseUrl = sv_mailer_site_url();
     $items_html = '';
     foreach ($items as $item) {
         $items_html .= "<tr>";
@@ -223,7 +240,7 @@ function send_order_confirmation_email(
     $html .= $items_html;
     $html .= "</table>";
     $html .= "<p style='margin-top: 20px;'><strong>Total: R$ $order_total</strong></p>";
-    $html .= "<p><a href='https://dev.shopvivaliz.com.br/meus-pedidos' style='background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Acompanhar Pedido</a></p>";
+    $html .= "<p><a href='{$siteBaseUrl}/meus-pedidos' style='background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Acompanhar Pedido</a></p>";
 
     return send_email($email, $subject, $html);
 }

@@ -43,6 +43,7 @@ function svem_send_order_email(array $order, string $event = 'order_created'): b
 
 function svem_build_email_content(array $order, string $event, string $customerName): array
 {
+    $siteBaseUrl = rtrim((string)(getenv('SHOPVIVALIZ_BASE_URL') ?: getenv('APP_URL') ?: getenv('SITE_URL') ?: 'https://www.shopvivaliz.com.br'), '/');
     $orderNumber = isset($order['order_number']) ? $order['order_number'] : 'N/A';
     $orderDate = date('d/m/Y H:i', strtotime(isset($order['created_at']) ? $order['created_at'] : 'now'));
     $total = number_format(isset($order['total']) ? $order['total'] : 0, 2, ',', '.');
@@ -182,7 +183,7 @@ function svem_build_email_content(array $order, string $event, string $customerN
                 <strong>Precisa de ajuda?</strong><br>
                 📞 WhatsApp: <a href='$whatsappLink' style='color: #25D366; text-decoration: none;'>$whatsapp</a><br>
                 📧 Email: contato@shopvivaliz.com.br<br>
-                🌐 Site: <a href='https://dev.shopvivaliz.com.br' style='color: #667eea; text-decoration: none;'>dev.shopvivaliz.com.br</a>
+                🌐 Site: <a href='{$siteBaseUrl}' style='color: #667eea; text-decoration: none;'>{$siteBaseUrl}</a>
             </p>
 
             <p style='text-align: center; color: #999; font-size: 11px; margin-top: 20px;'>

@@ -91,7 +91,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             <div class="form-row-2">
                 <label class="form-group">
                     <span>Telefone / WhatsApp *</span>
-                    <input name="customer_phone" maxlength="20" required autocomplete="tel" aria-label="Telefone ou WhatsApp">
+                    <input name="customer_phone" type="tel" inputmode="tel" maxlength="20" required autocomplete="tel" aria-label="Telefone ou WhatsApp">
                 </label>
                 <label class="form-group">
                     <span>CEP *</span>
@@ -662,6 +662,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 document.getElementById('boleto-line-group').hidden = !boleto.digitable_line;
                 document.getElementById('boleto-open-link').href = boleto.ticket_url;
                 document.getElementById('boleto-modal').hidden = false;
+                triggerGoogleAdsConversion(order.order_number, total);
             } else if (method === 'mercado_pago') {
                 btn.textContent = 'Abrindo Mercado Pago…';
                 var preference = await postJson('/api/mercadopago/create-preference.php', {
@@ -677,10 +678,12 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                     document.getElementById('pix-amount-display').textContent = total > 0 ? totalFmt : 'Confirmar com a loja';
                     document.getElementById('wpp-confirm-link').href = wppLink;
                     document.getElementById('pix-modal').hidden = false;
+                    triggerGoogleAdsConversion(order.order_number, total);
                 } else {
                     document.getElementById('order-number-msg').textContent = 'Pedido ' + order.order_number;
                     document.getElementById('success-wpp-link').href = wppLink;
                     document.getElementById('success-modal').hidden = false;
+                    triggerGoogleAdsConversion(order.order_number, total);
                 }
             }
         } catch (err) {
@@ -819,6 +822,22 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         }, 1000);
     })();
 })();
+</script>
+<script>
+function triggerGoogleAdsConversion(orderNumber, totalValue) {
+    if (typeof gtag === 'function') {
+        const adsId = <?= json_encode(getenv('GOOGLE_ADS_ID') ?: '') ?>;
+        const label = <?= json_encode(getenv('GOOGLE_ADS_CONVERSION_LABEL') ?: '') ?>;
+        if (adsId && label) {
+            gtag('event', 'conversion', {
+                'send_to': adsId + '/' + label,
+                'value': parseFloat(totalValue) || 0,
+                'currency': 'BRL',
+                'transaction_id': orderNumber
+            });
+        }
+    }
+}
 </script>
 </body>
 </html>

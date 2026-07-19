@@ -110,6 +110,21 @@ function svtnf_extract_estimated_delivery(array $data): string
     ]);
 }
 
+function svtnf_site_base_url(): string
+{
+    $official = @include dirname(__DIR__, 2) . '/config/official-site.php';
+    if (is_array($official) && !empty($official['base_url'])) {
+        return rtrim((string)$official['base_url'], '/');
+    }
+
+    $configured = trim((string)(getenv('SHOPVIVALIZ_BASE_URL') ?: getenv('APP_URL') ?: getenv('SITE_URL') ?: ''));
+    if ($configured !== '') {
+        return rtrim($configured, '/');
+    }
+
+    return 'https://www.shopvivaliz.com.br';
+}
+
 // Validar token do webhook
 $webhook_token = getenv('OLIST_WEBHOOK_TOKEN') ?: getenv('ERP_WEBHOOK_TOKEN') ?: '';
 
@@ -362,6 +377,7 @@ function send_order_status_email(
     string $tracking,
     string $estimated_delivery
 ): void {
+    $siteBaseUrl = svtnf_site_base_url();
     $status_labels = [
         'aguardando_pagamento' => 'Aguardando Pagamento',
         'pagamento_aprovado' => 'Pagamento Aprovado',
@@ -388,7 +404,7 @@ function send_order_status_email(
         $html .= "<p><strong>Entrega Estimada:</strong> $estimated_delivery</p>";
     }
 
-    $html .= "<p><a href='https://dev.shopvivaliz.com.br/meus-pedidos' style='background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Ver Detalhes do Pedido</a></p>";
+    $html .= "<p><a href='{$siteBaseUrl}/meus-pedidos' style='background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Ver Detalhes do Pedido</a></p>";
     $html .= "<p>Obrigado por sua compra!</p>";
 
     // Usar função de envio de email

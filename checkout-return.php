@@ -1,5 +1,4 @@
 <?php
-
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -31,6 +30,33 @@ $message = $approved
     <title><?= htmlspecialchars($title) ?> | Vivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/checkout.css">
+    <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
+    <?php
+    $orderTotal = 0.0;
+    if ($orderNumber !== '') {
+        $orderFile = __DIR__ . '/storage/orders/' . substr($orderNumber, 2, 8) . '/' . $orderNumber . '.json';
+        if (is_file($orderFile)) {
+            $orderData = json_decode((string)file_get_contents($orderFile), true);
+            if (is_array($orderData)) {
+                $orderTotal = (float)($orderData['total'] ?? 0.0);
+            }
+        }
+    }
+    if ($approved && $orderNumber !== '' && getenv('GOOGLE_ADS_ID') && getenv('GOOGLE_ADS_CONVERSION_LABEL')):
+    ?>
+    <script>
+      window.addEventListener('load', function() {
+        if (typeof gtag === 'function') {
+          gtag('event', 'conversion', {
+            'send_to': '<?= htmlspecialchars(getenv('GOOGLE_ADS_ID')) ?>/<?= htmlspecialchars(getenv('GOOGLE_ADS_CONVERSION_LABEL')) ?>',
+            'value': <?= $orderTotal ?>,
+            'currency': 'BRL',
+            'transaction_id': '<?= htmlspecialchars($orderNumber) ?>'
+          });
+        }
+      });
+    </script>
+    <?php endif; ?>
 </head>
 <body>
 <?php $svNavCurrent = 'checkout'; include __DIR__ . '/includes/navbar.php'; ?>

@@ -8,12 +8,20 @@ class AnalyticsTracking {
     private $ga4_id = '';
     private $facebook_pixel = '';
     private $tiktok_pixel = '';
+    private $google_ads_id = '';
+    private $google_ads_conversion_label = '';
     private $events = [];
 
     public function __construct() {
         $this->ga4_id = getenv('GA4_ID') ?: 'G-XXXXXXXXXX';
         $this->facebook_pixel = getenv('FACEBOOK_PIXEL') ?: '';
         $this->tiktok_pixel = getenv('TIKTOK_PIXEL') ?: '';
+        $id = getenv('GOOGLE_ADS_ID') ?: (getenv('GOOGLE_ADS_CONVERSION_ID') ?: '');
+        if ($id !== '' && !str_starts_with($id, 'AW-') && is_numeric($id)) {
+            $id = 'AW-' . $id;
+        }
+        $this->google_ads_id = $id;
+        $this->google_ads_conversion_label = getenv('GOOGLE_ADS_CONVERSION_LABEL') ?: '';
     }
 
     public function trackPageView($page_title, $page_path) {
@@ -299,6 +307,19 @@ class AnalyticsTracking {
 
     public function getTrackingCode() {
         $blocks = [];
+
+        if ($this->google_ads_id !== '') {
+            $blocks[] = <<<JS
+<!-- Google Ads -->
+<script async src="https://www.googletagmanager.com/gtag/js?id={$this->google_ads_id}"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', '{$this->google_ads_id}');
+</script>
+JS;
+        }
 
         if ($this->ga4_id !== '' && $this->ga4_id !== 'G-XXXXXXXXXX') {
             $blocks[] = <<<JS
