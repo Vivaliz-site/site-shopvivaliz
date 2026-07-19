@@ -427,8 +427,8 @@ function svtop_tiny_build_transportador_block(array $order): array
 
     $shippingLabel = strtolower((string)($order['shipping_label'] ?? ''));
     $formaEnvioIds = [
-        'correios'      => 337724753,
-        'jadlog'        => 337724757,
+        'correios'      => 357119973,
+        'jadlog'        => 357119976,
         'jet'           => 357119979,
         'loggi'         => 357119982,
         'total express' => 357119984,
@@ -443,6 +443,8 @@ function svtop_tiny_build_transportador_block(array $order): array
     $formaFreteId = svtop_tiny_int_env('TINY_DESPACHO_FORMA_FRETE_ID', 'TINY_FORMA_FRETE_ID');
     if ($formaFreteId !== null) {
         $block['formaFrete'] = ['id' => $formaFreteId];
+    } elseif (($formaFreteId = svtop_tiny_melhorenvio_forma_frete_id($order)) !== null) {
+        $block['formaFrete'] = ['id' => $formaFreteId];
     } elseif (str_contains($shippingLabel, 'pac')) {
         $pacId = svtop_tiny_int_env('TINY_DESPACHO_FORMA_FRETE_ID_PAC');
         if ($pacId !== null) {
@@ -456,6 +458,26 @@ function svtop_tiny_build_transportador_block(array $order): array
     }
 
     return $block;
+}
+
+function svtop_tiny_melhorenvio_forma_frete_id(array $order): ?int
+{
+    $label = strtolower(svtop_tiny_first_non_empty([
+        $order['shipping_label'] ?? '',
+        $order['shipping_method'] ?? '',
+    ]));
+    $service = trim((string)($order['shipping_service'] ?? ''));
+
+    // IDs confirmados em GET /formas-envio/357119976:
+    // Jadlog via Melhor envio -> .Package codigo 3, .Com codigo 4.
+    if ($service === '3' || str_contains($label, '.package') || str_contains($label, 'package')) {
+        return svtop_tiny_int_env('TINY_DESPACHO_FORMA_FRETE_ID_JADLOG_PACKAGE', 'TINY_FORMA_FRETE_ID_JADLOG_PACKAGE') ?? 357119977;
+    }
+    if ($service === '4' || str_contains($label, '.com')) {
+        return svtop_tiny_int_env('TINY_DESPACHO_FORMA_FRETE_ID_JADLOG_COM', 'TINY_FORMA_FRETE_ID_JADLOG_COM') ?? 357119978;
+    }
+
+    return null;
 }
 
 function svtop_tiny_build_business_block(array $order): array
@@ -579,10 +601,10 @@ function svtop_tiny_dispatch_forma_envio_id(array $order): ?int
     ]));
 
     if (str_contains($label, 'correios')) {
-        return 337724753;
+        return 357119973;
     }
     if (str_contains($label, 'jadlog')) {
-        return 337724757;
+        return 357119976;
     }
 
     return null;
@@ -599,6 +621,11 @@ function svtop_tiny_dispatch_forma_frete_id(array $order): ?int
         $order['shipping_label'] ?? '',
         $order['shipping_service'] ?? '',
     ]));
+
+    $melhorEnvioFormaFreteId = svtop_tiny_melhorenvio_forma_frete_id($order);
+    if ($melhorEnvioFormaFreteId !== null) {
+        return $melhorEnvioFormaFreteId;
+    }
 
     if (str_contains($label, 'pac')) {
         return svtop_tiny_int_env('TINY_DESPACHO_FORMA_FRETE_ID_PAC');
