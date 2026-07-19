@@ -1,0 +1,31 @@
+name: Export Products for Text Audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/export-products-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  REMOTE_PROJECT_DIR: /home/ubuntu/site-shopvivaliz
+
+jobs:
+  export-products:
+    name: Export product catalog read-only
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          SSH_HOST_SECRET: ${{ secrets.ORACLE_VM_HOST }}
+          SSH_USER_SECRET: ${{ secrets.ORACLE_VM_USER }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY"
+          mkdir -
