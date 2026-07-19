@@ -149,11 +149,10 @@
       </article>`;
   }
 
-  // Paginacao client-side: so ligada no grid do dashboard admin
-  // (id="product-grid" com a classe "admin-grid"), onde ate 200 produtos
-  // eram listados de uma vez sem nenhum controle de pagina. O /catalogo
-  // publico ja pagina no servidor (20/pagina) e nao usa essa classe.
-  const isPaginatedGrid = !!(grid && grid.classList.contains('admin-grid'));
+  // Paginacao client-side para qualquer grid que use este script -- antes,
+  // este loadCatalog() buscava ate 200 produtos e jogava tudo de uma vez no
+  // grid via JS, o que inclusive sobrescrevia a paginacao server-side de
+  // 20/pagina do /catalogo publico assim que a pagina carregava.
   const GRID_PAGE_SIZE = 20;
   let gridPage = 1;
   let gridProducts = [];
