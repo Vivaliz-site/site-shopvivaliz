@@ -20,12 +20,16 @@ print(f"  ANTHROPIC_API_KEY: {'OK' if claude_key else 'FALTANDO'}")
 print(f"  OPENAI_API_KEY: {'OK' if openai_key else 'FALTANDO'}")
 
 # Testar Gemini
-print(f"\n[TEST 1] Gemini API (gemini-2.5-flash)")
+gemini_model = os.getenv('GEMINI_MODEL') or 'gemini-2.5-flash'
+claude_model = os.getenv('ANTHROPIC_MODEL') or 'claude-haiku-4-5-20251001'
+openai_model = os.getenv('OPENAI_MODEL') or 'gpt-4o-mini'
+
+print(f"\n[TEST 1] Gemini API ({gemini_model})")
 try:
     import google.genai
     client = google.genai.Client(api_key=gemini_key)
     response = client.models.generate_content(
-        model='gemini-2.5-flash',
+        model=gemini_model,
         contents='Responda com "Gemini OK" apenas'
     )
     print(f"  [OK] Resposta: {response.text[:50]}")
@@ -33,12 +37,12 @@ except Exception as e:
     print(f"  [ERRO] {str(e)[:100]}")
 
 # Testar Claude
-print(f"\n[TEST 2] Claude API (claude-sonnet-4-6)")
+print(f"\n[TEST 2] Claude API ({claude_model})")
 try:
     import anthropic
     client = anthropic.Anthropic(api_key=claude_key)
     response = client.messages.create(
-        model='claude-sonnet-4-6',
+        model=claude_model,
         max_tokens=50,
         messages=[{'role': 'user', 'content': 'Responda com "Claude OK" apenas'}]
     )
@@ -47,12 +51,12 @@ except Exception as e:
     print(f"  [ERRO] {str(e)[:100]}")
 
 # Testar OpenAI
-print(f"\n[TEST 3] OpenAI API (gpt-4o-mini)")
+print(f"\n[TEST 3] OpenAI API ({openai_model})")
 try:
     import openai
     client = openai.OpenAI(api_key=openai_key)
     response = client.chat.completions.create(
-        model='gpt-4o-mini',
+        model=openai_model,
         messages=[{'role': 'user', 'content': 'Responda com "OpenAI OK" apenas'}],
         max_tokens=50
     )

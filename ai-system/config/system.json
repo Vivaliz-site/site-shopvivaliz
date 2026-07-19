@@ -24,14 +24,14 @@
         "cost_per_1m_output": 0.60
       },
       "anthropic": {
-        "model": "claude-opus-4-1",
-        "cost_per_1m_input": 15,
-        "cost_per_1m_output": 75
+        "model": "claude-haiku-4-5-20251001",
+        "cost_per_1m_input": 0.8,
+        "cost_per_1m_output": 4
       },
       "google": {
-        "model": "gemini-pro",
-        "cost_per_1m_input": 0.5,
-        "cost_per_1m_output": 1.5
+        "model": "gemini-2.5-flash",
+        "cost_per_1m_input": 0.3,
+        "cost_per_1m_output": 2.5
       }
     }
   },
@@ -45,8 +45,8 @@
   "routing": {
     "simple_tasks": "ollama",
     "medium_tasks": "ollama_with_fallback",
-    "complex_tasks": "openai_or_anthropic",
-    "critical_tasks": "anthropic_with_approval"
+    "complex_tasks": "openai_mini_with_approval",
+    "critical_tasks": "openai_mini_or_manual_approval"
   },
   "agents": {
     "enabled": [

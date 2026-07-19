@@ -34,9 +34,9 @@ class AIOrchestrator:
 
         # Cost limits
         self.cost_limits = {
-            "daily": 10.0,
-            "weekly": 50.0,
-            "monthly": 200.0,
+            "daily": float(os.getenv("AI_DAILY_BUDGET_USD", "1.0")),
+            "weekly": float(os.getenv("AI_WEEKLY_BUDGET_USD", "7.0")),
+            "monthly": float(os.getenv("AI_MONTHLY_BUDGET_USD", "30.0")),
         }
 
         self._init_database()
@@ -91,6 +91,10 @@ class AIOrchestrator:
             self.config = {
                 "local_model": "mistral:7b-instruct-q4_K_M",
                 "ollama_endpoint": "http://localhost:11434",
+                "economy_mode": os.getenv("AI_ECONOMY_MODE", "true").lower() != "false",
+                "openai_model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                "anthropic_model": os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
+                "google_model": os.getenv("GEMINI_MODEL") or os.getenv("GOOGLE_MODEL", "gemini-2.5-flash"),
                 "openai_key": os.getenv("OPENAI_API_KEY"),
                 "anthropic_key": os.getenv("ANTHROPIC_API_KEY"),
                 "google_key": os.getenv("GOOGLE_API_KEY"),
@@ -122,6 +126,13 @@ class AIOrchestrator:
         return TaskComplexity.SIMPLE
 
     def recommend_provider(self, complexity: TaskComplexity, remaining_budget: float) -> ModelProvider:
+        economy_mode = self.config.get("economy_mode", True)
+
+        if economy_mode:
+            if complexity in (TaskComplexity.CRITICAL, TaskComplexity.COMPLEX):
+                return ModelProvider.OPENAI if remaining_budget >= 0.05 else ModelProvider.OLLAMA
+            return ModelProvider.OLLAMA
+
         if complexity == TaskComplexity.CRITICAL:
             return ModelProvider.ANTHROPIC
 
@@ -161,6 +172,9 @@ class AIOrchestrator:
         return self.cost_limits.get(period, 0)
 
     def can_use_api(self, estimated_cost: float, complexity: TaskComplexity) -> bool:
+        if self.config.get("economy_mode", True) and estimated_cost > 0.05:
+            return False
+
         if complexity == TaskComplexity.CRITICAL:
             return True
 

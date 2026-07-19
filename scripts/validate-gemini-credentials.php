@@ -23,7 +23,9 @@ echo "✅ API Key encontrada: " . substr($geminiApiKey, 0, 20) . "...\n\n";
 // 2. Testar conectividade
 echo "🚀 Testando conectividade com Gemini API...\n";
 
-$url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent";
+$geminiModel = getenv('GEMINI_MODEL') ?: 'gemini-2.5-flash';
+$urlModel = rawurlencode($geminiModel);
+$url = "https://generativelanguage.googleapis.com/v1beta/models/{$urlModel}:generateContent";
 $url .= "?key=" . urlencode($geminiApiKey);
 
 $payload = json_encode([
@@ -62,7 +64,7 @@ if ($httpCode === 200) {
     
     if (isset($data['candidates']) && count($data['candidates']) > 0) {
         echo "📝 Resposta Recebida:\n";
-        echo "   Modelo: Gemini Pro\n";
+        echo "   Modelo: {$geminiModel}\n";
         echo "   Status: ✅ Funcionando\n";
         echo "   Tokens: ~5-10 (teste)\n";
     }

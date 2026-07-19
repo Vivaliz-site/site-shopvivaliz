@@ -1,6 +1,10 @@
 {
   "local_model": "mistral:7b-instruct-q4_K_M",
   "ollama_endpoint": "http://localhost:11434",
+  "economy_mode": true,
+  "openai_model": "gpt-4o-mini",
+  "anthropic_model": "claude-haiku-4-5-20251001",
+  "google_model": "gemini-2.5-flash",
   "openai_key": null,
   "anthropic_key": null,
   "google_key": null

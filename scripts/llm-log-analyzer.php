@@ -8,6 +8,9 @@ class LLMLogAnalyzer {
     private $anthropicKey = '';
     private $geminiKey = '';
     private $openaiKey = '';
+    private $anthropicModel = '';
+    private $geminiModel = '';
+    private $openaiModel = '';
     private $logDirs = [
         '/var/log/',
         '/home/ubuntu/site-shopvivaliz/logs/',
@@ -19,6 +22,9 @@ class LLMLogAnalyzer {
         $this->anthropicKey = getenv('ANTHROPIC_API_KEY') ?: '';
         $this->geminiKey = getenv('GEMINI_API_KEY') ?: '';
         $this->openaiKey = getenv('OPENAI_API_KEY') ?: '';
+        $this->anthropicModel = getenv('ANTHROPIC_MODEL') ?: 'claude-haiku-4-5-20251001';
+        $this->geminiModel = getenv('GEMINI_MODEL') ?: 'gemini-2.5-flash';
+        $this->openaiModel = getenv('OPENAI_MODEL') ?: 'gpt-4o-mini';
     }
 
     public function run() {
@@ -122,8 +128,8 @@ class LLMLogAnalyzer {
                   "Responda em JSON:\n" .
                   '{"severity":"low|medium|high","root_cause":"...","fix":"...","file_path":"...","line_number":0}';
 
-        // Tentar Claude primeiro
-        $response = $this->callClaudeAPI($prompt);
+        // Tentar OpenAI mini primeiro para manter o analisador 24/7 economico.
+        $response = $this->callOpenAIAPI($prompt);
 
         if (!$response) {
             // Fallback para Gemini
@@ -131,8 +137,8 @@ class LLMLogAnalyzer {
         }
 
         if (!$response) {
-            // Fallback para GPT
-            $response = $this->callOpenAIAPI($prompt);
+            // Fallback para Claude Haiku
+            $response = $this->callClaudeAPI($prompt);
         }
 
         if ($response) {
@@ -150,8 +156,8 @@ class LLMLogAnalyzer {
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => json_encode([
-                'model' => 'claude-3-sonnet-20240229',
-                'max_tokens' => 1024,
+                'model' => $this->anthropicModel,
+                'max_tokens' => 512,
                 'messages' => [
                     ['role' => 'user', 'content' => $prompt],
                 ],
@@ -177,7 +183,8 @@ class LLMLogAnalyzer {
     private function callGeminiAPI($prompt) {
         if (!$this->geminiKey) return null;
 
-        $ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent');
+        $model = rawurlencode($this->geminiModel);
+        $ch = curl_init("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent");
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST => true,
@@ -189,7 +196,7 @@ class LLMLogAnalyzer {
             CURLOPT_HTTPHEADER => [
                 'Content-Type: application/json',
             ],
-            CURLOPT_URL => 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' . $this->geminiKey,
+            CURLOPT_URL => "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . $this->geminiKey,
         ]);
 
         $response = curl_exec($ch);
@@ -211,7 +218,7 @@ class LLMLogAnalyzer {
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => json_encode([
-                'model' => 'gpt-4',
+                'model' => $this->openaiModel,
                 'messages' => [
                     ['role' => 'user', 'content' => $prompt],
                 ],

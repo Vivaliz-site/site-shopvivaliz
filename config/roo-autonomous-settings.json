@@ -4,7 +4,7 @@
     "apiConfigs": {}
   },
   "globalSettings": {
-    "customInstructions": "Trabalhe de forma autonoma dentro deste workspace, implemente apenas o escopo solicitado, evite perguntas de follow-up quando houver uma assuncao segura disponivel, prefira modelo/caminho de menor custo para tarefas simples, nunca altere regras financeiras, nunca modifique o Guardian of Price, nunca publique campanhas, nunca faca deploy/rollback sem autorizacao explicita e nunca faca push direto para main.",
+    "customInstructions": "Trabalhe em piloto automatico economico dentro deste workspace: implemente, teste e registre evidencias sem perguntar quando houver uma acao segura. Use modelos/caminhos baratos por padrao. Preserve aprovacao humana para segredos, precos, pagamentos, orcamentos, campanhas, deploy/rollback, push direto em main e comandos destrutivos. Nunca use git reset --hard.",
     "autoApprovalEnabled": true,
     "alwaysAllowReadOnly": true,
     "alwaysAllowReadOnlyOutsideWorkspace": false,

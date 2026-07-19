@@ -31,10 +31,10 @@ from urllib.request import Request, urlopen
 
 OPENAI_CHAT_URL    = "https://api.openai.com/v1/chat/completions"
 OPENAI_IMAGE_URL   = "https://api.openai.com/v1/images/generations"
-VISION_MODEL       = os.getenv("OPENAI_VISION_MODEL",  "gpt-4o")
+VISION_MODEL       = os.getenv("OPENAI_VISION_MODEL",  os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
 GENERATION_MODEL   = os.getenv("OPENAI_IMAGE_MODEL",   "dall-e-3")
 IMAGE_SIZE         = os.getenv("OPENAI_IMAGE_SIZE",     "1024x1024")
-IMAGE_QUALITY      = os.getenv("OPENAI_IMAGE_QUALITY",  "hd")
+IMAGE_QUALITY      = os.getenv("OPENAI_IMAGE_QUALITY",  "standard")
 DEFAULT_IN_CSV     = Path(os.getenv("AI_INPUT_CSV",     "logs/olist-images-export.csv"))
 DEFAULT_OUT_DIR    = Path(os.getenv("AI_IMAGES_DIR",    "storage/ai-images"))
 DEFAULT_REPORTS    = Path(os.getenv("AI_REPORTS_DIR",   "logs"))
@@ -247,7 +247,7 @@ def analyze_product_image(image_url: str, api_key: str, product_name: str) -> Pr
                 "content": [
                     {
                         "type":      "image_url",
-                        "image_url": {"url": image_url, "detail": "high"},
+                        "image_url": {"url": image_url, "detail": os.getenv("OPENAI_VISION_DETAIL", "low")},
                     },
                     {
                         "type": "text",

@@ -28,9 +28,9 @@ TIKTOK_SHOP_ID = os.getenv('TIKTOK_SHOP_ID', '')
 
 # Configurações IA
 IA_CONFIG = {
-    'model': 'gpt-4-vision',
+    'model': os.getenv('OPENAI_VISION_MODEL') or os.getenv('OPENAI_MODEL') or 'gpt-4o-mini',
     'images_per_product': 4,
-    'image_quality': 'high',
+    'image_quality': os.getenv('OPENAI_IMAGE_QUALITY') or 'standard',
     'timeout': 60,
 }
 

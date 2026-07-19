@@ -13,6 +13,14 @@ jobs:
   orchestrate:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      AI_ECONOMY_MODE: "true"
+      AI_DAILY_BUDGET_USD: "1.0"
+      OPENAI_MODEL: gpt-4o-mini
+      GEMINI_MODEL: gemini-2.5-flash
+      ANTHROPIC_MODEL: claude-haiku-4-5-20251001
+      MODEL_REASONING_EFFORT: low
+      MODEL_VERBOSITY: low
     permissions:
       contents: write
       pull-requests: write

@@ -16,7 +16,7 @@ class AnthropicClient:
             raise ImportError("anthropic package not installed. Run: pip install anthropic")
 
         self.client = anthropic.Anthropic(api_key=api_key)
-        self.model = "claude-opus-4-1"  # Best reasoning
+        self.model = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 
     def complete(self, prompt: str, max_tokens: int = 2000, temperature: float = 0.7) -> dict:
         """Get completion from Claude"""
@@ -35,8 +35,8 @@ class AnthropicClient:
         }
 
     def estimate_cost(self, tokens_in: int, tokens_out: int) -> float:
-        """Estimate cost for Claude 3 Opus"""
-        # Claude 3 Opus: $15 per 1M input, $75 per 1M output
-        cost_in = (tokens_in / 1_000_000) * 15
-        cost_out = (tokens_out / 1_000_000) * 75
+        """Estimate cost for the default economical Claude model."""
+        # Claude Haiku-class default: inexpensive fallback for autonomous cycles.
+        cost_in = (tokens_in / 1_000_000) * 0.8
+        cost_out = (tokens_out / 1_000_000) * 4
         return cost_in + cost_out

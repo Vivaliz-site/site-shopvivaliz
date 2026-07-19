@@ -38,11 +38,11 @@ def _analyze_product_image(image_url: str) -> str:
     """Usa GPT-4o Vision para descrever o produto na imagem."""
     try:
         resp = _openai().chat.completions.create(
-            model="gpt-4o",
+            model=os.getenv("OPENAI_VISION_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4o-mini",
             messages=[{
                 "role": "user",
                 "content": [
-                    {"type": "image_url", "image_url": {"url": image_url, "detail": "high"}},
+                    {"type": "image_url", "image_url": {"url": image_url, "detail": os.getenv("OPENAI_VISION_DETAIL", "low")}},
                     {"type": "text", "text": "Describe this product in detail for image generation: product type, color, material, shape, size, any distinguishing features. Be specific and concise (max 100 words)."},
                 ],
             }],
@@ -61,7 +61,7 @@ def _generate_one(product_description: str, image_type: str, retry: int = 2) -> 
     for attempt in range(1, retry + 2):
         try:
             resp = _openai().images.generate(
-                model="dall-e-3",
+                model=os.getenv("OPENAI_IMAGE_MODEL") or "dall-e-3",
                 prompt=full_prompt,
                 size="1024x1024",
                 quality="standard",

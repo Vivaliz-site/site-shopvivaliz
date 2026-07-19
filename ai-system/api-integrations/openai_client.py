@@ -18,7 +18,7 @@ class OpenAIClient:
             raise ImportError("openai package not installed. Run: pip install openai")
 
         self.client = OpenAI(api_key=api_key)
-        self.model = "gpt-4o-mini"  # Cost-optimized
+        self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
     def complete(self, prompt: str, max_tokens: int = 2000, temperature: float = 0.7) -> dict:
         """Get completion from GPT"""

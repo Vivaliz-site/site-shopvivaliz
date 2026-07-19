@@ -38,6 +38,36 @@
     ]
   },
   "operations": {
+    "autopilot": {
+      "enabled": true,
+      "default": true,
+      "mode": "autopilot_economy",
+      "auto_execute_safe_actions": true,
+      "preserve_human_approval_for": [
+        "secrets_or_credentials",
+        "price_changes",
+        "payment_actions",
+        "budget_increase",
+        "campaign_publish_or_activation",
+        "deploy_or_rollback",
+        "push_direct_to_main",
+        "destructive_git_or_filesystem_operations"
+      ]
+    },
+    "ai_economy": {
+      "enabled": true,
+      "reasoning_effort": "low",
+      "verbosity": "low",
+      "prefer_local_first": true,
+      "default_models": {
+        "openai": "gpt-4o-mini",
+        "anthropic": "claude-haiku-4-5-20251001",
+        "gemini": "gemini-2.5-flash",
+        "local": "mistral:7b-instruct-q4_K_M"
+      },
+      "daily_budget_usd": 1.0,
+      "manual_approval_required_for_model_escalation": true
+    },
     "git": {
       "auto_pull": {
         "enabled": true,
