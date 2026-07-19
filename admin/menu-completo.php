@@ -82,6 +82,10 @@ require_once __DIR__ . '/../includes/admin-guard.php';
                     <div class="menu-item-title">Clientes</div>
                     <div class="menu-item-desc">Base de clientes</div>
                 </a>
+                <a href="/admin/cupons.php" class="menu-item">
+                    <div class="menu-item-title">Cupons</div>
+                    <div class="menu-item-desc">Cadastrar e gerenciar cupons</div>
+                </a>
                 <a href="/admin/company-profile.php" class="menu-item">
                     <div class="menu-item-title">Perfil Empresa</div>
                     <div class="menu-item-desc">Dados da empresa</div>
