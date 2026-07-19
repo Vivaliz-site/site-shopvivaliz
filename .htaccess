@@ -110,6 +110,8 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^p/termos/?$ termos.php [L]
     RewriteRule ^p/politica-privacidade/?$ politica-privacidade/index.php [L]
     RewriteRule ^politica-privacidade/?$ politica-privacidade/index.php [L]
+    RewriteRule ^politica-devolucoes/?$ politica-devolucoes.php [L]
+    RewriteRule ^politica-entrega/?$ politica-entrega.php [L]
     RewriteRule ^produto/?$ produto.php [L]
     RewriteRule ^produto/([a-z0-9][a-z0-9\-]*)/?$ produto.php?slug=$1 [L,QSA]
     RewriteRule ^sitemap\.xml$ sitemap.php [L]

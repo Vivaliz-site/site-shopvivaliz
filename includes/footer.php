@@ -29,10 +29,10 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
 
             <div>
                 <strong>Termos e Condicoes</strong>
-                <a href="/termos.php">Termos e Condicoes</a>
-                <a href="/politica-privacidade.php">Politica de Privacidade</a>
-                <a href="/politica-devolucoes.php">Politica de Trocas e Devolucoes</a>
-                <a href="/politica-entrega.php">Politica de Frete</a>
+                <a href="/termos">Termos e Condicoes</a>
+                <a href="/politica-privacidade/">Politica de Privacidade</a>
+                <a href="/politica-devolucoes">Politica de Trocas e Devolucoes</a>
+                <a href="/politica-entrega">Politica de Frete</a>
             </div>
 
             <div>
