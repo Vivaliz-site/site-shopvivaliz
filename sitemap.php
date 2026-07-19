@@ -20,15 +20,15 @@ echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . PHP_EOL;
 
 $pages = [
     ['loc' => '/',          'priority' => '1.0', 'freq' => 'daily'],
-    ['loc' => '/catalogo',  'priority' => '0.9', 'freq' => 'daily'],
-    ['loc' => '/sobre',     'priority' => '0.5', 'freq' => 'monthly'],
-    ['loc' => '/contato',   'priority' => '0.5', 'freq' => 'monthly'],
-    ['loc' => '/faq',       'priority' => '0.5', 'freq' => 'monthly'],
-    ['loc' => '/termos.php', 'priority' => '0.3', 'freq' => 'yearly'],
-    ['loc' => '/politica-privacidade.php', 'priority' => '0.3', 'freq' => 'yearly'],
-    ['loc' => '/politica-devolucoes.php', 'priority' => '0.3', 'freq' => 'yearly'],
-    ['loc' => '/politica-entrega.php', 'priority' => '0.3', 'freq' => 'yearly'],
-    ['loc' => '/blog',      'priority' => '0.6', 'freq' => 'weekly'],
+    ['loc' => '/catalogo/',  'priority' => '0.9', 'freq' => 'daily'],
+    ['loc' => '/sobre/',     'priority' => '0.5', 'freq' => 'monthly'],
+    ['loc' => '/contato/',   'priority' => '0.5', 'freq' => 'monthly'],
+    ['loc' => '/faq/',       'priority' => '0.5', 'freq' => 'monthly'],
+    ['loc' => '/termos', 'priority' => '0.3', 'freq' => 'yearly'],
+    ['loc' => '/politica-privacidade/', 'priority' => '0.3', 'freq' => 'yearly'],
+    ['loc' => '/politica-devolucoes', 'priority' => '0.3', 'freq' => 'yearly'],
+    ['loc' => '/politica-entrega', 'priority' => '0.3', 'freq' => 'yearly'],
+    ['loc' => '/blog/',      'priority' => '0.6', 'freq' => 'weekly'],
 ];
 
 foreach ($pages as $p) {
