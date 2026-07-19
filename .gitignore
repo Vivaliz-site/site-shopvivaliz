@@ -64,3 +64,4 @@ tasks-queue.json
 ai-system/config/orchestrator.json
 ai-system/memory/*.db
 ai-system/memory/*_status.json
+ai-system/
