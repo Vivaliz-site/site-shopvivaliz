@@ -153,11 +153,29 @@ function sv_account_ensure_schema(): void
         }
     }
 
-    $pdo->exec(
-        "INSERT INTO coupons (code, description, discount_type, discount_value, min_order_value, starts_at, ends_at, expires_at, max_uses, used_count, is_active)
-         VALUES ('VOLTEI5', 'Cupom carrinho abandonado (5%)', 'percent', 5.00, 0.00, NULL, NULL, NULL, 0, 0, 1)
-         ON DUPLICATE KEY UPDATE code = code"
+    $seedCoupons = [
+        ['VOLTEI5', 'Cupom carrinho abandonado (5%)', 'percent', 5.00],
+        ['VIVALIZ10', 'Primeira compra: 10% de desconto', 'percent', 10.00],
+        ['PRIMEIRA10', 'Primeira compra: 10% de desconto', 'percent', 10.00],
+    ];
+    $seedCouponStmt = $pdo->prepare(
+        'INSERT INTO coupons (code, description, discount_type, discount_value, min_order_value, starts_at, ends_at, expires_at, max_uses, used_count, is_active)
+         VALUES (:code, :description, :discount_type, :discount_value, 0.00, NULL, NULL, NULL, 0, 0, 1)
+         ON DUPLICATE KEY UPDATE
+            description = VALUES(description),
+            discount_type = VALUES(discount_type),
+            discount_value = VALUES(discount_value),
+            is_active = 1,
+            updated_at = NOW()'
     );
+    foreach ($seedCoupons as [$code, $description, $discountType, $discountValue]) {
+        $seedCouponStmt->execute([
+            ':code' => $code,
+            ':description' => $description,
+            ':discount_type' => $discountType,
+            ':discount_value' => $discountValue,
+        ]);
+    }
 
     $pdo->exec(
         'CREATE TABLE IF NOT EXISTS password_resets (

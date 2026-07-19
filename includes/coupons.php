@@ -15,7 +15,8 @@ require_once __DIR__ . '/pdo-database.php';
 function svcp_builtin_coupons(string $code): ?array
 {
     $builtins = [
-        'VIVALIZ10' => ['type' => 'percent', 'value' => 10.0, 'label' => 'Desconto 10%'],
+        'PRIMEIRA10' => ['type' => 'percent', 'value' => 10.0, 'label' => 'Primeira compra: 10% de desconto'],
+        'VIVALIZ10' => ['type' => 'percent', 'value' => 10.0, 'label' => 'Primeira compra: 10% de desconto'],
         'BEMVINDO5' => ['type' => 'fixed', 'value' => 5.0, 'label' => 'Desconto R$ 5,00'],
         'VOLTEI5' => ['type' => 'percent', 'value' => 5.0, 'label' => 'Desconto 5%'],
         'FRETEGRATIS' => ['type' => 'shipping', 'value' => 0.0, 'label' => 'Frete Grátis'],
