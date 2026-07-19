@@ -486,10 +486,14 @@
             <div class="newsletter-card">
                 <div class="newsletter-info">
                     <h2>Fique por dentro das novidades 📩</h2>
-                    <p>Receba ofertas exclusivas, cupons de desconto e dicas de organização diretamente no seu e-mail.</p>
+                    <p>Receba ofertas exclusivas, novidades e dicas diretamente no seu e-mail. Você pode cancelar a inscrição quando quiser.</p>
                 </div>
-                <form class="newsletter-form" onsubmit="event.preventDefault(); alert('Inscrição realizada com sucesso! Aproveite seus benefícios.'); this.reset();">
+                <form class="newsletter-form" onsubmit="event.preventDefault(); alert('Inscrição realizada com sucesso!'); this.reset();">
                     <input type="email" placeholder="Digite seu melhor e-mail" required aria-label="Seu endereço de e-mail">
+                    <label style="display:flex; align-items:flex-start; gap:10px; margin:10px 0 14px; font-size:13px; color:#475569; line-height:1.4;">
+                        <input type="checkbox" required style="margin-top:3px; width:16px; height:16px; accent-color:#0b4f88;">
+                        <span>Concordo em receber e-mails da ShopVivaliz sobre ofertas, novidades e conteúdos. Posso cancelar a inscrição a qualquer momento.</span>
+                    </label>
                     <button type="submit" class="btn btn-primary">Inscrever-se</button>
                 </form>
             </div>

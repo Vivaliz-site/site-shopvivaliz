@@ -9,4 +9,4 @@ Total: R$ {{total}}
 Forma de pagamento: {{payment_label}}
 {{payment_instructions}}
 
-Acompanhe o andamento no link: https://dev.shopvivaliz.com.br/meus-pedidos
+Acompanhe o andamento no link: https://www.shopvivaliz.com.br/meus-pedidos
