@@ -708,7 +708,8 @@ $svNavCurrent = '';
                     <p>Receba ofertas exclusivas, cupons de desconto e dicas de organização diretamente no seu e-mail.</p>
                 </div>
                 <form class="newsletter-form" onsubmit="event.preventDefault(); alert('Inscrição realizada com sucesso! Aproveite seus benefícios.'); this.reset();">
-                    <input type="email" placeholder="Digite seu melhor e-mail" required aria-label="Seu endereço de e-mail">
+                    <label for="newsletter-email-input" class="sr-only">Seu endereço de e-mail</label>
+                    <input id="newsletter-email-input" type="email" placeholder="Digite seu melhor e-mail" required aria-label="Seu endereço de e-mail">
                     <button type="submit" class="btn btn-primary">Inscrever-se</button>
                 </form>
             </div>
