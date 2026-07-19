@@ -470,6 +470,6 @@ $svNavCurrent = 'catalogo';
         } catch(e){}
     })();
     </script>
-    <script src="/includes/auto-image-carousel.js"></script>
+    <script src="/js/auto-image-carousel.js"></script>
 </body>
 </html>
