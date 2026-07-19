@@ -836,6 +836,7 @@ if ($notFound) {
 
     <script src="/js/cro-interactions.js"></script>
     <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
+    <script src="/includes/auto-image-carousel.js"></script>
     <?php include __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>
