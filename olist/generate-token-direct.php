@@ -133,6 +133,6 @@ echo json_encode([
     'access_token_preview' => substr($accessToken, 0, 50) . '...',
     'expires_in_horas' => round($expiresIn / 3600, 1),
     'arquivo' => '.env',
-    'proximo_passo' => 'Teste em: https://dev.shopvivaliz.com.br/olist/test-token-v3.php',
+    'proximo_passo' => 'Teste em: https://shopvivaliz.com.br/olist/test-token-v3.php',
 ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 ?>

@@ -8,7 +8,7 @@ $official = __DIR__ . '/config/official-site.php';
 $officialData = is_file($official) ? (@include $official) : [];
 $baseUrl = is_array($officialData) && trim((string)($officialData['base_url'] ?? '')) !== ''
     ? rtrim((string)$officialData['base_url'], '/')
-    : 'https://www.shopvivaliz.com.br';
+    : 'https://shopvivaliz.com.br';
 
 $products = svcr_products();
 

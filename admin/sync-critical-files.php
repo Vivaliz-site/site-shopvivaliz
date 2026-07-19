@@ -5,7 +5,7 @@ declare(strict_types=1);
  * Bypass git when "dubious ownership" error occurs
  * Download direto de GitHub
  *
- * Access: https://dev.shopvivaliz.com.br/admin/sync-critical-files.php
+ * Access: https://shopvivaliz.com.br/admin/sync-critical-files.php
  */
 
 require_once __DIR__ . '/../includes/admin-guard.php';

@@ -34,7 +34,7 @@ function svmp_base_url(): string
     if ($configured !== '' && filter_var($configured, FILTER_VALIDATE_URL) && str_starts_with(strtolower($configured), 'https://')) {
         return $configured;
     }
-    return 'https://dev.shopvivaliz.com.br';
+    return 'https://shopvivaliz.com.br';
 }
 
 function svmp_order_number_is_valid(string $orderNumber): bool

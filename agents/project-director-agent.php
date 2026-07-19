@@ -149,7 +149,7 @@ class ProjectDirectorAgent {
             '/api/health.php' => 'Health check',
             '/api/catalog/products.php' => 'Produtos',
         ];
-        $baseUrl = 'https://dev.shopvivaliz.com.br';
+        $baseUrl = 'https://shopvivaliz.com.br';
 
         foreach ($readEndpoints as $endpoint => $desc) {
             $ctx = stream_context_create(['http' => ['method' => 'GET', 'timeout' => 10, 'ignore_errors' => true]]);

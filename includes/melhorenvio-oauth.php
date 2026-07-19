@@ -68,7 +68,7 @@ function me_exchange_code(string $code): array {
     // nunca completava a troca de code por token (client_id sempre vazio).
     $clientId = me_oauth_env('MELHORENVIO_CLIENT_ID', 'MELHORENVIO_CLIENTE_ID');
     $clientSecret = me_oauth_env('MELHORENVIO_CLIENT_SECRET', 'MELHORENVIO_CLIENTE_SECRET');
-    $redirectUri = me_oauth_env('MELHORENVIO_REDIRECT_URI') ?: 'https://dev.shopvivaliz.com.br/api/melhorenvio/webhook.php';
+    $redirectUri = me_oauth_env('MELHORENVIO_REDIRECT_URI') ?: 'https://shopvivaliz.com.br/api/melhorenvio/webhook.php';
 
     $fields = [
         'grant_type' => 'authorization_code',

@@ -84,7 +84,7 @@ $log_orch  = orch_tail_log($root . '/logs/orchestrator.log', 20);
 $log_cron  = orch_tail_log($root . '/logs/cron-dispatcher.log', 20);
 
 // Watchdog — tenta via HTTP para refletir estado real do servidor
-$base_url   = rtrim(orch_env('SITE_URL') ?: 'https://dev.shopvivaliz.com.br', '/');
+$base_url   = rtrim(orch_env('SITE_URL') ?: 'https://shopvivaliz.com.br', '/');
 $watchdog   = orch_read_json($root . '/logs/autonomous-hourly-guardian.json', []);
 $report_api = orch_read_json($root . '/logs/autonomous-cycle-report.json', []);
 

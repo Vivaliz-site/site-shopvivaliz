@@ -52,7 +52,7 @@ if (!$code) {
 // PASSO 2: Trocar código por token
 // ============================================================
 
-$redirectUri = 'https://dev.shopvivaliz.com.br/olist/callback.php';
+$redirectUri = getenv('OLIST_REDIRECT_URI') ?: getenv('URL_REDIRCT_OLIST') ?: getenv('TINY_REDIRECT_URI') ?: 'https://shopvivaliz.com.br/olist/callback.php';
 $tokenUrl = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
 
 $postData = http_build_query([
@@ -147,6 +147,6 @@ echo json_encode([
     'access_token' => substr($accessToken, 0, 50) . '...',
     'expires_in_horas' => round($expiresIn / 3600, 1),
     'arquivo_atualizado' => '.env',
-    'proximo_passo' => 'Acesse https://dev.shopvivaliz.com.br/olist/test-token-v3.php para testar',
+    'proximo_passo' => 'Acesse https://shopvivaliz.com.br/olist/test-token-v3.php para testar',
 ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 ?>

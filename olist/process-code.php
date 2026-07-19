@@ -1,7 +1,7 @@
 <?php
 /**
  * Process OAuth Code - Recebe código via GET e sincroniza
- * URL: https://dev.shopvivaliz.com.br/olist/process-code.php?code=XXX
+ * URL: https://shopvivaliz.com.br/olist/process-code.php?code=XXX
  */
 
 header('Content-Type: application/json; charset=utf-8');

@@ -27,7 +27,7 @@ $clientId = getenv('OLIST_CLIENT_ID') ?: getenv('TINY_CLIENT_ID') ?: getenv('CLI
 $redirectUri = getenv('OLIST_REDIRECT_URI')
     ?: getenv('URL_REDIRCT_OLIST')
     ?: getenv('TINY_REDIRECT_URI')
-    ?: 'https://dev.shopvivaliz.com.br/olist/callback.php';
+    ?: 'https://shopvivaliz.com.br/olist/callback.php';
 
 if ($clientId === '') {
     http_response_code(500);

@@ -63,7 +63,7 @@ function olist_complete_persist_tokens(string $accessToken, string $refreshToken
 
 $client_id = getenv('OLIST_CLIENT_ID') ?: die('ERRO: OLIST_CLIENT_ID nao configurado');
 $client_secret = getenv('OLIST_CLIENT_SECRET') ?: die('ERRO: OLIST_CLIENT_SECRET nao configurado');
-$redirect_uri = getenv('OLIST_REDIRECT_URI') ?: getenv('URL_REDIRCT_OLIST') ?: 'https://dev.shopvivaliz.com.br/olist/oauth-callback-simple.php';
+$redirect_uri = getenv('OLIST_REDIRECT_URI') ?: getenv('URL_REDIRCT_OLIST') ?: 'https://shopvivaliz.com.br/olist/oauth-callback-simple.php';
 
 log_msg('=== COMPLETE OAUTH FLOW ===');
 

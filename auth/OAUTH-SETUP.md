@@ -50,7 +50,7 @@
    - **Nome**: `ShopVivaliz Web`
    - **URIs autorizados de redirecionamento**: 
      ```
-     https://dev.shopvivaliz.com.br/auth/google-callback.php
+     https://shopvivaliz.com.br/auth/google-callback.php
      http://localhost:8000/auth/google-callback.php  (opcional, para testes local)
      ```
 5. Clique em **CRIAR**
@@ -101,7 +101,7 @@ GOOGLE_OAUTH_CLIENT_SECRET=YOUR_CLIENT_SECRET_HERE
    - **Web Domain**: `dev.shopvivaliz.com.br`
    - **Return URLs**: 
      ```
-     https://dev.shopvivaliz.com.br/auth/apple-callback.php
+     https://shopvivaliz.com.br/auth/apple-callback.php
      ```
 7. Clique em **Save**
 
@@ -157,7 +157,7 @@ php -r "echo getenv('GOOGLE_OAUTH_CLIENT_ID');"
 
 ### 2. Testar Login
 
-1. Acesse https://dev.shopvivaliz.com.br/auth/login.php
+1. Acesse https://shopvivaliz.com.br/auth/login.php
 2. Clique em "Google" ou "Apple"
 3. Complete o fluxo de autenticação
 4. Você deve ser redirecionado para a home com sessão ativa

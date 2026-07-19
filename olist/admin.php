@@ -78,7 +78,7 @@ $withPrice = is_array($catalog) ? count(array_filter($catalog, fn($p) => (float)
 /* ── URL de autorização OAuth ── */
 $clientId    = oa_env('OLIST_CLIENT_ID', 'TINY_CLIENT_ID');
 $redirectUri = oa_env('OLIST_REDIRECT_URI', 'TINY_REDIRECT_URI')
-    ?: 'https://dev.shopvivaliz.com.br/olist/callback.php';
+    ?: 'https://shopvivaliz.com.br/olist/callback.php';
 $oauthUrl = $clientId !== ''
     ? 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth?' . http_build_query([
         'client_id'     => $clientId,

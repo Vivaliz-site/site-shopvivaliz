@@ -37,7 +37,7 @@ if (!file_put_contents($webhookFile, $content)) {
 echo "✅ Webhook-processor.php ativado!\n";
 echo "\n   Próximas ações:\n";
 echo "   1. Configure Olist para enviar webhooks para:\n";
-echo "      https://dev.shopvivaliz.com.br/api/olist/webhook.php\n";
+echo "      https://shopvivaliz.com.br/api/olist/webhook.php\n";
 echo "\n   2. Teste alterando um produto na Olist\n";
 echo "\n   3. Verifique logs em:\n";
 echo "      /logs/olist-webhook-processor.log\n";
