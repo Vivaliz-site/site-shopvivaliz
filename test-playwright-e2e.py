@@ -39,7 +39,7 @@ async def test_checkout():
         "tests": []
     }
 
-    BASE_URL = "https://www.shopvivaliz.com.br"
+    BASE_URL = "http://127.0.0.1:8000"
 
     async with async_playwright() as p:
         print("[TESTE] E2E REAL COM PLAYWRIGHT - CLICANDO NOS BOTOES")

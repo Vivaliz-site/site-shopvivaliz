@@ -262,12 +262,15 @@ def run_agent():
         f"Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
     )
     subprocess.run(["git", "commit", "-m", full_msg], check=True)
-    subprocess.run("git pull --rebase origin main || true", shell=True)
-    result2 = subprocess.run("git push origin main", shell=True)
+    pull_result = subprocess.run(["git", "pull", "--rebase", "origin", "main"], capture_output=True)
+    if pull_result.returncode != 0:
+        print(f"AVISO: rebase falhou — {pull_result.stderr.decode('utf-8', errors='replace')}")
+        return
+    result2 = subprocess.run(["git", "push", "origin", "main"], capture_output=True)
     if result2.returncode == 0:
         print(f"Deploy disparado: {commit_msg}")
     else:
-        print("Push falhou — sera tentado na proxima execucao")
+        print(f"Push falhou: {result2.stderr.decode('utf-8', errors='replace')}")
 
     # Log
     log_path = Path("automation/proactive/logs/runs.jsonl")
