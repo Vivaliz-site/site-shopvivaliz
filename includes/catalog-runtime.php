@@ -12,7 +12,13 @@ function svcr_products(): array
     $fallback = $root . '/api/catalog/fallback-products.json';
     $rows = is_file($fallback) ? json_decode((string)file_get_contents($fallback), true) : [];
     if (is_array($rows) && $rows !== []) {
-        return array_values(array_filter($rows, 'is_array'));
+        return array_values(array_filter($rows, static function ($row): bool {
+            if (!is_array($row)) {
+                return false;
+            }
+
+            return trim((string)($row['sku'] ?? '')) !== '';
+        }));
     }
 
     $cache = $root . '/storage/products-cache-ativos.json';

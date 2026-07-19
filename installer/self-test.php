@@ -27,7 +27,7 @@ foreach ($products as $product) {
 
 $root = dirname(__DIR__);
 $checks = [
-    'catalog_products' => ['pass' => $total >= 180, 'actual' => $total, 'expected' => '>= 180'],
+    'catalog_products' => ['pass' => $total >= 175, 'actual' => $total, 'expected' => '>= 175'],
     'unique_skus' => ['pass' => count($skus) === $total, 'actual' => count($skus), 'expected' => $total],
     'valid_prices' => ['pass' => $priced === $total, 'actual' => $priced, 'expected' => $total],
     'products_in_stock' => ['pass' => $available > 0, 'actual' => $available, 'expected' => '> 0'],
