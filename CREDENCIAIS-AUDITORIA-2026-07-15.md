@@ -186,7 +186,7 @@ sudo grep -c "MERCADOPAGO" /home/ubuntu/site-shopvivaliz/config/runtime-secrets.
 
 ### 2. Webhook Funciona
 ```bash
-curl -s -X POST https://dev.shopvivaliz.com.br/api/webhook-mercadopago.php \
+curl -s -X POST https://shopvivaliz.com.br/api/webhook-mercadopago.php \
   -H "Content-Type: application/json" \
   -H "X-Signature: test" \
   -H "X-Request-ID: test123" \
@@ -197,7 +197,7 @@ curl -s -X POST https://dev.shopvivaliz.com.br/api/webhook-mercadopago.php \
 
 ### 3. Checkout Carrega Public Key
 ```bash
-curl -s https://dev.shopvivaliz.com.br/checkout | grep -c "MercadoPago\|mp-checkout"
+curl -s https://shopvivaliz.com.br/checkout | grep -c "MercadoPago\|mp-checkout"
 # Esperado: > 0
 ```
 

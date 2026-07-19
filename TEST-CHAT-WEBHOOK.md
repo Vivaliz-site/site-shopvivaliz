@@ -9,7 +9,7 @@
 
 ### 1. Acessar o Monitor
 ```
-URL: https://dev.shopvivaliz.com.br/admin/monitor/
+URL: https://shopvivaliz.com.br/admin/monitor/
 ```
 
 **Esperado:**

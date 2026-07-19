@@ -24,7 +24,7 @@ function sv_official_base_url(): string
     }
 
     $official = __DIR__ . '/config/official-site.php';
-    $fallback = 'https://www.shopvivaliz.com.br';
+    $fallback = 'https://shopvivaliz.com.br';
     if (!is_file($official)) {
         return $base = $fallback;
     }

@@ -64,7 +64,7 @@ fi
 # 5. Testar endpoint de webhook
 echo "" >> "$LOG_FILE"
 echo "5. Testando webhook..." >> "$LOG_FILE"
-WEBHOOK_RESPONSE=$(curl -s -X POST https://dev.shopvivaliz.com.br/api/webhook-mercadopago.php \
+WEBHOOK_RESPONSE=$(curl -s -X POST https://shopvivaliz.com.br/api/webhook-mercadopago.php \
   -H "Content-Type: application/json" \
   -H "X-Signature: invalid" \
   -H "X-Request-ID: test" \
@@ -80,8 +80,8 @@ fi
 # 6. Verificar site respondendo
 echo "" >> "$LOG_FILE"
 echo "6. Verificando site..." >> "$LOG_FILE"
-HOME_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://dev.shopvivaliz.com.br/)
-CHECKOUT_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://dev.shopvivaliz.com.br/checkout)
+HOME_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://shopvivaliz.com.br/)
+CHECKOUT_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://shopvivaliz.com.br/checkout)
 
 if [ "$HOME_CODE" = "200" ]; then
     echo "✅ Home respondendo (HTTP 200)" >> "$LOG_FILE"

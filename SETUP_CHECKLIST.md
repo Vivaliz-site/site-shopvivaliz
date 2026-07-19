@@ -203,13 +203,13 @@ Após tudo passar, verifique:
 
 ```bash
 # Testar deploy
-curl -v https://dev.shopvivaliz.com.br/
+curl -v https://shopvivaliz.com.br/
 
 # Testar watchdog
-curl -v https://dev.shopvivaliz.com.br/api/agent/autonomous-watchdog.php
+curl -v https://shopvivaliz.com.br/api/agent/autonomous-watchdog.php
 
 # Testar health
-curl -v https://dev.shopvivaliz.com.br/api/health.php
+curl -v https://shopvivaliz.com.br/api/health.php
 ```
 
 ---
@@ -236,7 +236,7 @@ curl -v https://dev.shopvivaliz.com.br/api/health.php
 
 **Solução:**
 1. Verifique se `api/agent/autonomous-watchdog.php` foi deployado
-2. Teste: `curl -v https://dev.shopvivaliz.com.br/api/agent/autonomous-watchdog.php`
+2. Teste: `curl -v https://shopvivaliz.com.br/api/agent/autonomous-watchdog.php`
 3. Se retorna 404, o deploy pode ter falhado
 4. Verifique FTP_REMOTE_DIR
 

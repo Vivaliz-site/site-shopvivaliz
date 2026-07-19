@@ -177,7 +177,7 @@ Após gerar e testar, as imagens são enviadas para:
 
 ### Dashboard em Tempo Real
 
-Acesse: https://dev.shopvivaliz.com.br/admin/automation-dashboard.html
+Acesse: https://shopvivaliz.com.br/admin/automation-dashboard.html
 
 Mostra:
 - ✓ Produtos processados

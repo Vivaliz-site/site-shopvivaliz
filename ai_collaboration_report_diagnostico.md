@@ -61,7 +61,7 @@ Com base na análise, os "testes de rede que falharam" e o deploy podem ser impa
 *   **Certificado SSL Inválido/Ausente:**
     *   **Problema:** O domínio principal (`shopvivaliz.com.br`) não possui um certificado SSL válido, foi instalado incorretamente, ou está expirado. A HostGator geralmente oferece Let's Encrypt gratuito, mas problemas podem surgir.
     *   **Impacto:** Navegadores exibirão `ERR_SSL_PROTOCOL_ERROR` ou avisos de segurança ao tentar acessar `https://shopvivaliz.com.br`. Se o site força HTTPS via `.htaccess` ou configuração da aplicação, ele ficará inacessível.
-    *   **Relacionamento com ShopVivaliz:** O ambiente de desenvolvimento usa HTTPS (`https://dev.shopvivaliz.com.br`). Se o ambiente de produção não tiver SSL funcionando, todas as chamadas `https://` internas ou externas (para as APIs Olist/Tiny, Pagar.me, etc.) falhariam ou gerariam erros de "mixed content" no navegador.
+    *   **Relacionamento com ShopVivaliz:** O ambiente de desenvolvimento usa HTTPS (`https://shopvivaliz.com.br`). Se o ambiente de produção não tiver SSL funcionando, todas as chamadas `https://` internas ou externas (para as APIs Olist/Tiny, Pagar.me, etc.) falhariam ou gerariam erros de "mixed content" no navegador.
 *   **Conteúdo Misto (Mixed Content):**
     *   **Problema:** A página principal é carregada via HTTPS, mas alguns recursos (imagens, CSS, JavaScript, chamadas de API) são carregados via HTTP.
     *   **Impacto:** Navegadores bloqueiam esses recursos inseguros, resultando em um site quebrado (sem estilo, sem funcionalidades JavaScript) e falha de chamadas de API.
@@ -78,7 +78,7 @@ Com base na análise, os "testes de rede que falharam" e o deploy podem ser impa
     *   **Impacto:** URLs amigáveis (friendly URLs) não funcionam, resultando em 404 Not Found para todas as páginas da aplicação, exceto talvez `index.php`. Endpoints de API (como `api/agent/squad-chat.php` se não for acessado diretamente) também podem falhar com 404.
     *   **Relacionamento com ShopVivaliz:** É fundamental para qualquer framework PHP que use um front controller (ex: `index.php` roteando todas as requisições) e para o funcionamento correto das APIs.
 *   **Configuração da Base URL na Aplicação:**
-    *   **Problema:** A configuração interna da ShopVivaliz (em algum arquivo de configuração PHP) para a "base URL" não corresponde ao domínio real onde o site está acessível na HostGator (ex: configurado para `http://localhost` ou `https://dev.shopvivaliz.com.br` em produção).
+    *   **Problema:** A configuração interna da ShopVivaliz (em algum arquivo de configuração PHP) para a "base URL" não corresponde ao domínio real onde o site está acessível na HostGator (ex: configurado para `http://localhost` ou `https://shopvivaliz.com.br` em produção).
     *   **Impacto:** Links internos, caminhos para assets (CSS/JS/Imagens), e chamadas de API internas geram URLs incorretas, levando a 404s e funcionalidades quebradas.
     *   **Relacionamento com ShopVivaliz:** Afetaria a navegação do usuário, o carregamento de recursos e a comunicação entre os próprios módulos da aplicação (incluindo os agentes de IA).
 *   **Localização Incorreta do `.env`:**

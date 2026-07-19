@@ -26,7 +26,7 @@ Configure em `Settings > Secrets and variables > Actions`:
 Valor padrao recomendado para `SHOPVIVALIZ_UPDATE_URL`:
 
 ```txt
-https://dev.shopvivaliz.com.br/installer/update.php
+https://shopvivaliz.com.br/installer/update.php
 ```
 
 Nao commitar tokens reais.

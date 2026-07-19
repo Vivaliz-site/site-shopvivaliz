@@ -42,7 +42,7 @@ while true; do
 
   # 1. Verificar site online
   echo -e "${YELLOW}1️⃣  SITE:${NC}"
-  if curl -s -I https://dev.shopvivaliz.com.br/ | grep -q "200\|301"; then
+  if curl -s -I https://shopvivaliz.com.br/ | grep -q "200\|301"; then
     echo -e "   ${GREEN}✅ Online${NC}"
   else
     echo -e "   ${RED}❌ Offline${NC}"
@@ -112,7 +112,7 @@ while true; do
   # 8. Instruções
   echo -e "${BLUE}════════════════════════════════════════════${NC}"
   echo -e "${YELLOW}⚡ O QUE FAZER AGORA:${NC}"
-  echo "   1. Abra: https://dev.shopvivaliz.com.br/"
+  echo "   1. Abra: https://shopvivaliz.com.br/"
   echo "   2. Faça a compra com seus dados"
   echo "   3. Gere o boleto"
   echo "   4. Este monitor atualizará a cada 5 segundos"

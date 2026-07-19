@@ -177,7 +177,7 @@ Commit: 0e73ff12
 
 | Aspecto | Status | Detalhes |
 |---------|--------|----------|
-| **URL** | ✅ | https://dev.shopvivaliz.com.br |
+| **URL** | ✅ | https://shopvivaliz.com.br |
 | **Checkout MP** | ✅ | Único método disponível |
 | **CEP Autofill** | ✅ | ViaCEP funcionando |
 | **Webhook** | ✅ | Rejeita sem assinatura (seguro) |
@@ -224,7 +224,7 @@ Commit: 0e73ff12
    - `gh workflow run sync-oracle-vm-secrets.yml`
 
 3. **Validar produção** (10 min)
-   - Abrir https://dev.shopvivaliz.com.br/checkout
+   - Abrir https://shopvivaliz.com.br/checkout
    - Confirmar Mercado Pago carregando
 
 ### Claude/GPT (após secrets) - Prioridade: 🟠 MÉDIA

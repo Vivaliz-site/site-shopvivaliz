@@ -79,7 +79,7 @@ check_api_endpoint() {
     # Test API endpoint responds
     local response=$(curl -s -w "\n%{http_code}" \
         -H "Accept: application/json" \
-        "https://dev.shopvivaliz.com.br/api/catalog/products.php?limit=1" 2>/dev/null)
+        "https://shopvivaliz.com.br/api/catalog/products.php?limit=1" 2>/dev/null)
 
     local http_code=$(echo "$response" | tail -n 1)
     local body=$(echo "$response" | head -n -1)

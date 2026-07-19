@@ -180,7 +180,7 @@ window.MercadoPago.deviceId();
 
 ### Webhook Validação
 ```
-Endpoint: https://dev.shopvivaliz.com.br/api/webhook-mercadopago.php
+Endpoint: https://shopvivaliz.com.br/api/webhook-mercadopago.php
 Método: POST
 Headers: X-Signature, X-Request-ID
 Validação: HMAC-SHA256
@@ -239,9 +239,9 @@ A integração Mercado Pago é completa, segura e pronta para produção. Todos 
 | Item | Link/Comando |
 |------|-------------|
 | Painel MP | https://www.mercadopago.com.br/developers/panel |
-| Site Produção | https://dev.shopvivaliz.com.br/checkout |
+| Site Produção | https://shopvivaliz.com.br/checkout |
 | GitHub Secrets | https://github.com/Vivaliz-site/site-shopvivaliz/settings/secrets/actions |
-| Webhook Endpoint | https://dev.shopvivaliz.com.br/api/webhook-mercadopago.php |
+| Webhook Endpoint | https://shopvivaliz.com.br/api/webhook-mercadopago.php |
 | Boleto Teste | https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=112962856-b34645b8-90e5-45dc-9b50-57b78abfd21a |
 
 ---

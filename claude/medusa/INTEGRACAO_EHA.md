@@ -64,7 +64,7 @@ Medusa valida
 Medusa emite: product.created
     ↓
 Webhook HTTP POST para:
-  https://dev.shopvivaliz.com.br/claude/api/medusa-webhook.php
+  https://shopvivaliz.com.br/claude/api/medusa-webhook.php
     ↓
 EHA recebe evento
     ↓
@@ -220,7 +220,7 @@ COOKIE_SECRET=seu_secret_cookie_mudar_em_producao
 
 # EHA Webhooks
 EHA_WEBHOOK_SECRET=seu_secret_eha_mudar_em_producao
-MEDUSA_WEBHOOK_URL=https://dev.shopvivaliz.com.br/claude/api/medusa-webhook.php
+MEDUSA_WEBHOOK_URL=https://shopvivaliz.com.br/claude/api/medusa-webhook.php
 
 # Marketplaces
 SHOPEE_API_KEY=sua_chave

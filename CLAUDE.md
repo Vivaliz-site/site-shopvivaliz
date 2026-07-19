@@ -351,8 +351,8 @@ Se algo não funcionar:
 3. Se necessário, rodar: `git fetch && git pull origin main`
 
 **Repositório:** https://github.com/Vivaliz-site/site-shopvivaliz  
-**Live Site:** https://dev.shopvivaliz.com.br/  
-**Admin Monitor:** https://dev.shopvivaliz.com.br/admin/monitor/  
+**Live Site:** https://shopvivaliz.com.br/  
+**Admin Monitor:** https://shopvivaliz.com.br/admin/monitor/  
 **Histórico de bugs resolvidos:** `CHANGELOG.md` (raiz do repo) — consulte antes de investigar algo
 que parece já ter sido corrigido.
 

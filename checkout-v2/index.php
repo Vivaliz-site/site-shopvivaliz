@@ -167,7 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
         $body .= "TOTAL: R$ {$totalFmt} (frete a calcular)
 
 ";
-        $body .= "Acesse os pedidos em: https://dev.shopvivaliz.com.br/admin/
+        $body .= "Acesse os pedidos em: https://shopvivaliz.com.br/admin/
 ";
         @mail($adminEmail, $subject, $body, "From: pedidos@dev.shopvivaliz.com.br
 

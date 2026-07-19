@@ -75,7 +75,7 @@ https://github.com/Vivaliz-site/site-shopvivaliz/settings/secrets/actions
 # (requerer chave privada do usuário)
 
 # Opção B: Testar site diretamente
-curl -I https://dev.shopvivaliz.com.br/
+curl -I https://shopvivaliz.com.br/
 # Esperado: HTTP/1.1 200 OK ou 301 (redirect)
 
 # Opção C: Monitorar via GitHub Actions
@@ -196,7 +196,7 @@ Status: tail -f logs/email-*.log
 
 ### Testar VM Oracle
 ```
-Site: curl -I https://dev.shopvivaliz.com.br/
+Site: curl -I https://shopvivaliz.com.br/
 SSH: ssh -i chave.pem ubuntu@137.131.156.17
 ```
 

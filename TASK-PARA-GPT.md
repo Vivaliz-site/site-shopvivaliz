@@ -158,7 +158,7 @@ ps aux | grep git-auto-sync
 sudo systemctl status apache2
 
 # Testar site
-curl -I https://dev.shopvivaliz.com.br
+curl -I https://shopvivaliz.com.br
 # Esperado: HTTP/1.1 200 OK
 
 # Verificar .env

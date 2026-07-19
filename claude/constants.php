@@ -17,7 +17,7 @@ define('LOGS_PATH', STORAGE_PATH . '/logs');
 define('UPLOADS_PATH', STORAGE_PATH . '/uploads');
 
 // URLs
-define('BASE_URL', getenv('BASE_URL') ?: 'https://dev.shopvivaliz.com.br');
+define('BASE_URL', getenv('BASE_URL') ?: 'https://shopvivaliz.com.br');
 define('API_URL', BASE_URL . '/api');
 define('ADMIN_URL', BASE_URL . '/admin');
 

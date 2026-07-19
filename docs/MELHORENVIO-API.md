@@ -46,7 +46,7 @@ Se o endpoint não responder com sucesso em até 6 segundos, o Melhor Envio tent
 
 ### Cadastro do endpoint
 
-Painel Melhor Envio → `Integrações → Área Dev` → selecionar o aplicativo → `Novo Webhook` → informar a URL pública (ex: `https://dev.shopvivaliz.com.br/api/melhorenvio/webhook.php`). Só é possível cadastrar depois de ter um aplicativo criado.
+Painel Melhor Envio → `Integrações → Área Dev` → selecionar o aplicativo → `Novo Webhook` → informar a URL pública (ex: `https://shopvivaliz.com.br/api/melhorenvio/webhook.php`). Só é possível cadastrar depois de ter um aplicativo criado.
 
 ## Eventos (todos com prefixo `order.`)
 

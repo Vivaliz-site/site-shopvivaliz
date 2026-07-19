@@ -203,7 +203,7 @@ Mesmo eu sendo autônomo, você tem controle total:
 
 ### Opção 1: Pedir Tarefa Específica
 ```
-1. Vai a https://dev.shopvivaliz.com.br/admin/monitor/
+1. Vai a https://shopvivaliz.com.br/admin/monitor/
 2. Clica em "Nova Tarefa"
 3. Descreve o que quer
 4. Agentes começam em minutos
@@ -214,7 +214,7 @@ Mesmo eu sendo autônomo, você tem controle total:
 - Logs: logs/validation-report.json
 - Fixes: logs/auto-fix-log.json
 - Agentes: logs/autonomous-tasks.json
-- Site: https://dev.shopvivaliz.com.br/catalogo/
+- Site: https://shopvivaliz.com.br/catalogo/
 ```
 
 ### Opção 3: Parar Workflows

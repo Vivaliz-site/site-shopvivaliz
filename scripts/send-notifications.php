@@ -29,7 +29,7 @@ class TriaNotifier {
             'description' => $description,
             'task_id' => $taskId,
             'timestamp' => date('Y-m-d H:i:s'),
-            'status_url' => 'https://dev.shopvivaliz.com.br/admin/monitor/'
+            'status_url' => 'https://shopvivaliz.com.br/admin/monitor/'
         ]);
 
         $this->send($subject, $body, 'blockage', $title);
@@ -47,7 +47,7 @@ class TriaNotifier {
             'error' => $errorMessage,
             'task_id' => $taskId,
             'timestamp' => date('Y-m-d H:i:s'),
-            'status_url' => 'https://dev.shopvivaliz.com.br/admin/monitor/'
+            'status_url' => 'https://shopvivaliz.com.br/admin/monitor/'
         ]);
 
         $this->send($subject, $body, 'error', $title);
@@ -64,7 +64,7 @@ class TriaNotifier {
             'title' => $title,
             'task_id' => $taskId,
             'timestamp' => date('Y-m-d H:i:s'),
-            'status_url' => 'https://dev.shopvivaliz.com.br/admin/monitor/'
+            'status_url' => 'https://shopvivaliz.com.br/admin/monitor/'
         ]);
 
         $this->send($subject, $body, 'success', $title);
@@ -82,7 +82,7 @@ class TriaNotifier {
             'description' => $description,
             'action_required' => $requiredAction,
             'timestamp' => date('Y-m-d H:i:s'),
-            'status_url' => 'https://dev.shopvivaliz.com.br/admin/monitor/'
+            'status_url' => 'https://shopvivaliz.com.br/admin/monitor/'
         ]);
 
         $this->send($subject, $body, 'attention', $title);
@@ -98,7 +98,7 @@ class TriaNotifier {
             'type' => 'report',
             'stats' => $stats,
             'timestamp' => date('Y-m-d H:i:s'),
-            'status_url' => 'https://dev.shopvivaliz.com.br/admin/monitor/'
+            'status_url' => 'https://shopvivaliz.com.br/admin/monitor/'
         ]);
 
         $this->send($subject, $body, 'report', 'Relatório Diário');

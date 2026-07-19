@@ -38,7 +38,7 @@ if (PUBLIC_KEY && window.MercadoPago) {
 
 **Uso:**
 ```bash
-curl https://dev.shopvivaliz.com.br/api/generate-test-order.php
+curl https://shopvivaliz.com.br/api/generate-test-order.php
 ```
 
 **Resposta esperada:**
@@ -185,8 +185,8 @@ bash scripts/generate-quality-metrics.sh
 ## 📞 REFERÊNCIAS
 
 - **Painel Mercado Pago:** https://www.mercadopago.com.br/developers/panel/app/4737281715738852
-- **Site Produção:** https://dev.shopvivaliz.com.br/checkout
-- **Webhook URL:** https://dev.shopvivaliz.com.br/api/webhook-mercadopago.php
+- **Site Produção:** https://shopvivaliz.com.br/checkout
+- **Webhook URL:** https://shopvivaliz.com.br/api/webhook-mercadopago.php
 - **GitHub Secrets:** https://github.com/Vivaliz-site/site-shopvivaliz/settings/secrets/actions
 
 ---

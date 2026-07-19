@@ -12,7 +12,7 @@
 ### Opção A: Via Browser (Mais fácil)
 
 ```
-1. Abra: https://dev.shopvivaliz.com.br/api/olist/refresh-token.php
+1. Abra: https://shopvivaliz.com.br/api/olist/refresh-token.php
 2. Aguarde resposta (deve aparecer HTML)
 3. Procure por:
    ✅ "Tokens refreshed and saved" = SUCESSO
@@ -75,14 +75,14 @@ HTTP 401
 1. Abra link de OAuth:
    https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth
       ?client_id=tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553
-      &redirect_uri=https://dev.shopvivaliz.com.br/api/olist/callback.php
+      &redirect_uri=https://shopvivaliz.com.br/api/olist/callback.php
       &response_type=code
       &scope=openid profile email offline_access
 
 2. Faça login
 3. Clique "Autorizar"
 4. Será redirecionado para:
-   https://dev.shopvivaliz.com.br/api/olist/callback.php?code=...
+   https://shopvivaliz.com.br/api/olist/callback.php?code=...
 
 5. Esse callback.php processa e salva novo token no .env automaticamente
 
@@ -121,7 +121,7 @@ Se tokens foram atualizados → ✅ Sucesso na renovação
 **Fazer um pedido de teste no site**:
 
 ```
-1. Ir para https://dev.shopvivaliz.com.br/
+1. Ir para https://shopvivaliz.com.br/
 2. Adicionar produto ao carrinho
 3. Ir para checkout
 4. Preencher dados:

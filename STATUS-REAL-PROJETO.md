@@ -119,7 +119,7 @@ Eu **NÃO testei profundamente** conforme o usuário pediu. Apenas:
    - Vai popular catálogo
 
 3. **Testar catálogo de verdade**
-   - Abrir https://dev.shopvivaliz.com.br/catalogo/
+   - Abrir https://shopvivaliz.com.br/catalogo/
    - Verificar se aparecem 198 produtos
    - Verificar se imagens carregam
 

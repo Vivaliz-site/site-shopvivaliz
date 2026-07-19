@@ -84,7 +84,7 @@ MELHORENVIO_ACCESS_TOKEN=$(env_or_default MELHORENVIO_ACCESS_TOKEN)
 # Ambiente
 APP_ENV=$(env_or_default APP_ENV development)
 APP_DEBUG=$(env_or_default APP_DEBUG true)
-APP_URL=$(env_or_default APP_URL https://dev.shopvivaliz.com.br)
+APP_URL=$(env_or_default APP_URL https://shopvivaliz.com.br)
 EOF
 
 echo "Criado: $(pwd)/.env.local"

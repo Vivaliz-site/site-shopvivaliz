@@ -123,7 +123,7 @@ PARTNER_ID = os.getenv("SHOPEE_TEST_PARTNER_ID", "")
 PARTNER_KEY = os.getenv("SHOPEE_TEST_PARTNER_KEY", "")
 USER = os.getenv("SHOPEE_SANDBOX_USER", "")
 PASS = os.getenv("SHOPEE_SANDBOX_PASS", "")
-REDIRECT = "https://dev.shopvivaliz.com.br"
+REDIRECT = "https://shopvivaliz.com.br"
 AUTH = "https://openplatform.sandbox.test-stable.shopee.sg/api/v2/shop/auth_partner"
 
 def sign(p, t):

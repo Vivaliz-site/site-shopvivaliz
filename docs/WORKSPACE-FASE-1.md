@@ -21,5 +21,5 @@ Organizar o projeto para entregas rapidas com GitHub, Codex, agentes, QA e relea
 
 ## Ambientes
 
-- Dev: `https://dev.shopvivaliz.com.br`
+- Dev: `https://shopvivaliz.com.br`
 - Repo: `fredmourao-ai/site-shopvivaliz`

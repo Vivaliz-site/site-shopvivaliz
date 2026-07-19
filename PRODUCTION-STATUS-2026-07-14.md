@@ -119,7 +119,7 @@ Vê detalhes: Cliente, Itens, Total, Status
 
 ### Ambiente
 - **Host:** VM Oracle Cloud (137.131.156.17)
-- **Domain:** https://dev.shopvivaliz.com.br/
+- **Domain:** https://shopvivaliz.com.br/
 - **DB:** MySQL 8.0+
 - **PHP:** 8.1+
 - **SSL:** Let's Encrypt (ativo)

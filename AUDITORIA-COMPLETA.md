@@ -62,7 +62,7 @@
 
 2. **Verificar se agentes respondendo de verdade**
    - Status: Squad Chat API funciona
-   - Teste: Abrir https://dev.shopvivaliz.com.br/admin/monitor-real.html
+   - Teste: Abrir https://shopvivaliz.com.br/admin/monitor-real.html
    - Enviar mensagem e confirmar resposta real
 
 3. **Monitorar primeira execução do workflow**
@@ -172,8 +172,8 @@ GitHub Actions vai executar:
 ```
 
 ### Como Monitorar:
-- **Verificar tarefas:** https://dev.shopvivaliz.com.br/admin/monitor-completo-v2.html
-- **Chatcom agentes:** https://dev.shopvivaliz.com.br/admin/monitor-real.html
+- **Verificar tarefas:** https://shopvivaliz.com.br/admin/monitor-completo-v2.html
+- **Chatcom agentes:** https://shopvivaliz.com.br/admin/monitor-real.html
 - **Progresso:** GitHub Actions → agent-continuous-task-processor
 - **Logs:** logs/tasks-execution.jsonl (registra cada tarefa completa)
 

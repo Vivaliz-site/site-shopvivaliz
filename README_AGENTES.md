@@ -238,7 +238,7 @@ Host: FTP_SERVER
 User: FTP_USERNAME
 Pass: FTP_PASSWORD
 Path: /public_html/dev/uploads/olist/
-URL: https://dev.shopvivaliz.com.br/uploads/olist/
+URL: https://shopvivaliz.com.br/uploads/olist/
 ```
 
 **Como usar:**
@@ -520,7 +520,7 @@ openai.timeout = 60  # De 30 para 60 segundos
 - [ ] Testar conexões: `python scripts/verify_secrets.py`
 - [ ] Executar pipeline: `python scripts/main.py`
 - [ ] Verificar logs: `cat logs/pipeline_execution_advanced.json`
-- [ ] Acessar painel: https://dev.shopvivaliz.com.br/admin/monitor/
+- [ ] Acessar painel: https://shopvivaliz.com.br/admin/monitor/
 
 ---
 

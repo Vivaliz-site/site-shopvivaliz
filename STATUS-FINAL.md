@@ -210,12 +210,12 @@ STATUS-FINAL.md            - Este arquivo
 
 1. **Verificar homepage:**
    ```
-   https://dev.shopvivaliz.com.br/
+   https://shopvivaliz.com.br/
    ```
 
 2. **Teste do chat:**
    ```
-   Ir para: https://dev.shopvivaliz.com.br/admin/monitor/
+   Ir para: https://shopvivaliz.com.br/admin/monitor/
    Enviar mensagem: "Qual é o status?"
    Esperar: Resposta em ~2 minutos
    ```

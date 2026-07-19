@@ -10,7 +10,7 @@
 1. **OAuth Login**
    - ✅ Login manual via browser implementado
    - ✅ Refresh token salvo em `.tokens/olist-config.json`
-   - ✅ Endpoint: `https://dev.shopvivaliz.com.br/olist/login-form.php`
+   - ✅ Endpoint: `https://shopvivaliz.com.br/olist/login-form.php`
 
 2. **Sincronização de 198 Produtos**
    - ✅ Todos os 198 produtos importados da Olist
@@ -77,17 +77,17 @@
 
 ### 2. Download de Imagens
 ```
-https://dev.shopvivaliz.com.br/olist/download-images.php
+https://shopvivaliz.com.br/olist/download-images.php
 ```
 
 ### 3. Sincronizar com Banco
 ```
-https://dev.shopvivaliz.com.br/olist/sync-images-to-site.php
+https://shopvivaliz.com.br/olist/sync-images-to-site.php
 ```
 
 ### 4. Testar Catálogo
 ```
-https://dev.shopvivaliz.com.br/catalogo/
+https://shopvivaliz.com.br/catalogo/
 # Deve exibir 198 produtos com imagens
 ```
 

@@ -80,7 +80,7 @@ $orderPayload = [
 
 // Helper for Curl requests
 function postJsonLocal(string $path, array $data): array {
-    $url = 'https://dev.shopvivaliz.com.br' . $path;
+    $url = 'https://shopvivaliz.com.br' . $path;
     $ch = curl_init($url);
     $payload = json_encode($data);
     
