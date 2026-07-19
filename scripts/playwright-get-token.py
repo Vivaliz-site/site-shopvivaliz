@@ -97,7 +97,7 @@ def main():
         # Interceptar a URL de redirect antes de carregar
         def handle_route(route):
             url = route.request.url
-            if "dev.shopvivaliz.com.br/olist/callback.php" in url:
+            if "shopvivaliz.com.br/olist/callback.php" in url:
                 parsed = urlparse(url)
                 params = parse_qs(parsed.query)
                 code = params.get("code", [None])[0]

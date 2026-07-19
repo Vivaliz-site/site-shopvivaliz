@@ -98,7 +98,7 @@ GOOGLE_OAUTH_CLIENT_SECRET=YOUR_CLIENT_SECRET_HERE
 5. Clique em **Create new Web Authentication Configuration**
 6. Preencha:
    - **Primary App ID**: Seu App ID (já preenchido)
-   - **Web Domain**: `dev.shopvivaliz.com.br`
+   - **Web Domain**: `shopvivaliz.com.br`
    - **Return URLs**: 
      ```
      https://shopvivaliz.com.br/auth/apple-callback.php

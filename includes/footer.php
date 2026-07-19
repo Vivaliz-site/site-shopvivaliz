@@ -1,10 +1,10 @@
-﻿<?php
+<?php
 $company = @include(dirname(__DIR__) . '/config/company-profile.php') ?: [];
 $legalName = $company['legal_name'] ?? 'SHOPVIVALIZ LTDA';
 $fantasyName = $company['fantasy_name'] ?? 'Shopvivaliz';
 $email = $company['email'] ?? 'atendimento@shopvivaliz.com.br';
 $phone = $company['phone'] ?? '(37) 99937-4112';
-$website = $company['website'] ?? 'www.shopvivaliz.com.br';
+$website = $company['website'] ?? 'shopvivaliz.com.br';
 $cnpj = $company['cnpj'] ?? '49.903.300/0001-70';
 $address = ($company['address'] ?? 'RUA CAMPINA VERDE') . ', ' . ($company['number'] ?? '841');
 $neighborhood = $company['neighborhood'] ?? 'SAO JOSE';

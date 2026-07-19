@@ -95,7 +95,7 @@ Node.js: Sim, instalado localmente
 Banco: Tenho acesso a PostgreSQL? SIM/NÃO
 SSH: Tenho acesso root? SIM/NÃO
 Docker: Servidor suporta? SIM/NÃO
-Domínio: dev.shopvivaliz.com.br
+Domínio: shopvivaliz.com.br
 ```
 
 ---

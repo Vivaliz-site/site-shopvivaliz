@@ -153,7 +153,7 @@ def upload_to_shopee(creds: dict) -> bool:
 
 def upload_to_tiktok(creds: dict) -> bool:
     """Faz upload real para TikTok Shop: vincula as URLs de imagem (ja publicas em
-    dev.shopvivaliz.com.br) direto via update_product -- a API do TikTok Shop aceita
+    shopvivaliz.com.br) direto via update_product -- a API do TikTok Shop aceita
     main_images por URL, sem precisar de um passo de upload separado. Usa
     scripts/utils/tiktok_client.py. Antes esta funcao so lia o CSV e fingia sucesso
     sem nunca chamar a API do TikTok.

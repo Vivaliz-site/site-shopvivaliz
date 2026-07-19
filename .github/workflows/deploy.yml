@@ -1,7 +1,7 @@
 name: Deploy Automático Seguro - Shop Vivaliz
 
 # Desativado o gatilho automatico em push: a producao real e a VM Oracle
-# (dev.shopvivaliz.com.br -> 137.131.156.17, sincronizada via cron
+# (shopvivaliz.com.br -> 137.131.156.17, sincronizada via cron
 # git-auto-sync.py), nao o HostGator. Mantido workflow_dispatch para
 # rodar manualmente se o HostGator voltar a ser usado no futuro.
 on:

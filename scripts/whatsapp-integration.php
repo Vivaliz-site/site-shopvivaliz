@@ -68,8 +68,8 @@ class WhatsAppIntegration {
             'HORARIO' => 'Olá! 👋 Nosso horário de atendimento é de segunda a sexta das 8h às 18h. Estamos aqui para ajudar!',
             'AQUI' => 'Opa! 👋 Estamos aqui! Como podemos ajudar você?',
             'FRETE' => 'Frete grátis para todo o Brasil! 🚚 Enviamos em até 24h após confirmação do pagamento.',
-            'TROCA' => 'Você pode trocar ou devolver em até 7 dias! Confira nossa política aqui: dev.shopvivaliz.com.br/politica-devolucoes',
-            'FAQ' => 'Dúvidas frequentes: dev.shopvivaliz.com.br/faq',
+            'TROCA' => 'Você pode trocar ou devolver em até 7 dias! Confira nossa política aqui: shopvivaliz.com.br/politica-devolucoes',
+            'FAQ' => 'Dúvidas frequentes: shopvivaliz.com.br/faq',
             'PAGAMENTO' => 'Aceitamos Pix, crédito, débito e boleto. Qual é sua preferência?',
         ];
     }

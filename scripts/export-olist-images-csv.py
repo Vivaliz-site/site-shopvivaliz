@@ -142,7 +142,7 @@ def http_get_json(url: str, auth: dict, params: dict, timeout: int = 45) -> dict
         req_headers  = {
             "User-Agent":   "Mozilla/5.0 (compatible; ShopVivaliz/1.0)",
             "Content-Type": "application/x-www-form-urlencoded",
-            "Host":         "dev.shopvivaliz.com.br",  # Bypass Cloudflare via IP de origem
+            "Host":         "shopvivaliz.com.br",  # Bypass Cloudflare via IP de origem
             "X-Squad":      auth.get("squad_token", ""),
         }
         request = Request(auth["proxy_url"], data=post_data, headers=req_headers, method="POST")

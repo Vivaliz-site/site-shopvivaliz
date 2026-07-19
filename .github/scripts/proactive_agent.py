@@ -108,7 +108,7 @@ def build_context() -> str:
             health_last = lines[-1][:200]
 
     return f"""
-PROJETO: Vivaliz e-commerce (dev.shopvivaliz.com.br)
+PROJETO: Vivaliz e-commerce (shopvivaliz.com.br)
 DATA: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}
 FOCO: {FOCUS or 'varredura geral'}
 
