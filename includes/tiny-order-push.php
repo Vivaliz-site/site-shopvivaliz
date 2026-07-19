@@ -388,6 +388,31 @@ function svtop_tiny_optional_object_from_env(string $envKey): ?array
     return $id !== null ? ['id' => $id] : null;
 }
 
+function svtop_tiny_payment_method_key(array $order): string
+{
+    // $order['payment_method'] sozinho e sempre "mercado_pago" (generico --
+    // e o unico metodo oferecido no checkout, ver checkout.php). O
+    // sub-metodo real (pix/boleto/cartao) so aparece em
+    // mercadopago.payment_method_id/payment_type_id, setados pelo webhook
+    // apos o pagamento ser processado (api/webhook-mercadopago.php).
+    $paymentMethodKey = strtolower(trim((string)($order['payment_method'] ?? '')));
+    $mp = is_array($order['mercadopago'] ?? null) ? $order['mercadopago'] : [];
+    $mpMethod = strtolower(trim((string)($mp['payment_method_id'] ?? '')));
+    $mpType = strtolower(trim((string)($mp['payment_type_id'] ?? '')));
+
+    if ($mpMethod === 'pix' || ($mpType === 'bank_transfer' && str_contains($mpMethod, 'pix'))) {
+        return 'pix';
+    }
+    if (in_array($mpMethod, ['bolbradesco', 'pec'], true) || $mpType === 'ticket') {
+        return 'boleto';
+    }
+    if ($mpType === 'credit_card' || $mpType === 'debit_card') {
+        return 'mercado_pago';
+    }
+
+    return $paymentMethodKey !== '' ? $paymentMethodKey : 'pix';
+}
+
 function svtop_tiny_build_payment_block(array $order): array
 {
     // Usa svtop_tiny_payment_method_key(), que detecta o sub-metodo real
