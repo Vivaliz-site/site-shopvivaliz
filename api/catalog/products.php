@@ -75,6 +75,7 @@ $limit = min(200, max(1, (int)($_GET['limit'] ?? 48)));
 $q = trim((string)($_GET['q'] ?? ''));
 
 $all_erp = array_map(static function (array $row): array {
+    $images = is_array($row['images'] ?? null) ? array_slice(array_filter($row['images']), 0, 10) : [];
     return [
         'id' => (string)($row['id'] ?? $row['sku'] ?? ''),
         'sku' => trim((string)($row['sku'] ?? '')),
@@ -84,6 +85,7 @@ $all_erp = array_map(static function (array $row): array {
         'price' => (float)($row['price'] ?? 0),
         'stock' => (int)($row['stock'] ?? 0),
         'image_url' => trim((string)($row['image_url'] ?? '')),
+        'images' => $images,
         'images_count' => (int)($row['images_count'] ?? 0),
         'category' => trim((string)($row['category'] ?? '')),
         'status' => 'active',
