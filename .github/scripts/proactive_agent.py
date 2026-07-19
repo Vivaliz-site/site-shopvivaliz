@@ -85,7 +85,13 @@ def build_context() -> str:
     catalog_data = json.loads(Path("api/catalog/fallback-products.json").read_text(encoding="utf-8"))
     total    = len(catalog_data)
     no_desc  = sum(1 for p in catalog_data if not str(p.get("description", "")).strip())
-    no_price = sum(1 for p in catalog_data if not float(p.get("price", 0) or 0))
+    no_price = 0
+    for p in catalog_data:
+        try:
+            if not float(p.get("price", 0) or 0):
+                no_price += 1
+        except (ValueError, TypeError):
+            no_price += 1
     cats = {}
     for p in catalog_data:
         c = p.get("category", "")
