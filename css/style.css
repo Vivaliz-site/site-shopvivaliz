@@ -636,7 +636,6 @@ a {
 .product-detail-image {
     position: sticky;
     top: 90px;
-    aspect-ratio: 1 / 1;
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: 20px;
