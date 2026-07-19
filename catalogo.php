@@ -274,19 +274,6 @@ $svNavCurrent = 'catalogo';
     <meta property="og:title" content="<?= sv_catalog_esc($pageTitle) ?>">
     <meta property="og:description" content="<?= sv_catalog_esc($metaDescription) ?>">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="<?= sv_catalog_esc($canonicalUrl) ?>">
-    <meta property="og:site_name" content="Vivaliz">
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
-    <link rel="canonical" href="<?= sv_catalog_esc($canonicalUrl) ?>">
-    <title><?= sv_catalog_esc($pageTitle) ?></title>
-    <link rel="stylesheet" href="/css/style.css">
-    <script type="application/ld+json"><?= json_encode($structuredData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
-</head>
-<body>
-    <?php include __DIR__ . '/includes/navbar.php'; ?>
-
-    <main class="catalog-page">
-        <section class="catalog-header">
             <div class="container catalog-header-inner">
                 <div>
                     <p class="eyebrow"><?= $category !== '' ? sv_catalog_esc($category) : 'Todos os produtos' ?></p>
