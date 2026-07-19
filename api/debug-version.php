@@ -1,59 +1,51 @@
 <?php
-/**
- * Debug script para verificar qual versão do products.php o servidor está usando
- * URL: https://dev.shopvivaliz.com.br/api/debug-version.php
- */
+declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
 
-$products_php = __DIR__ . '/catalog/products.php';
-$content = file_get_contents($products_php) ?: '';
+$root = dirname(__DIR__);
+$versionFile = $root . '/config/shopvivaliz-version.php';
+$version = is_file($versionFile) ? require $versionFile : [];
 
-// Verificar qual versão
-$is_erp_version = strpos($content, 'fetch_erp_products') !== false;
-$is_db_version = strpos($content, 'svcat_db_products') !== false;
-
-// Verificar commit
-$git_dir = dirname(__DIR__) . '/.git';
-$git_head = is_dir($git_dir) ? trim(file_get_contents("$git_dir/HEAD")) : 'unknown';
-
-// Extrair commit atual
-$commit = 'unknown';
-if (preg_match('/ref: refs\/heads\/(.+)/', $git_head, $m)) {
-  $branch_file = "$git_dir/refs/heads/" . $m[1];
-  $commit = file_exists($branch_file) ? trim(file_get_contents($branch_file)) : 'unknown';
-}
-
-$result = [
-  'ok' => true,
-  'timestamp' => date('Y-m-d H:i:s UTC', time()),
-  'server' => $_SERVER['HTTP_HOST'] ?? 'unknown',
-  'php_version' => phpversion(),
-  'api_version' => [
-    'is_erp_version' => $is_erp_version,
-    'is_db_version' => $is_db_version,
-    'has_fetch_erp_products' => $is_erp_version,
-    'has_svcat_db_products' => $is_db_version,
-  ],
-  'git' => [
-    'commit' => substr($commit, 0, 7),
-    'branch' => basename(trim(preg_replace('/^ref: refs\/heads\//', '', $git_head))),
-  ],
-  'recommendations' => [],
+$gitDir = $root . '/.git';
+$git = [
+    'available' => false,
+    'branch' => 'unknown',
+    'commit' => 'unknown',
+    'commit_short' => 'unknown',
 ];
 
-// Diagnóstico
-if ($is_erp_version && $is_db_version) {
-  $result['status'] = 'mixed';
-  $result['recommendations'][] = 'Arquivo tem AMBOS os códigos - verificar se é transição';
-} elseif ($is_erp_version) {
-  $result['status'] = 'erp_olist';
-  $result['recommendations'][] = 'Correto: buscando do ERP Olist';
-} else {
-  $result['status'] = 'ecommerce_or_db';
-  $result['recommendations'][] = 'ERRO: Ainda usando ecommerce/database';
-  $result['recommendations'][] = 'Ação: git reset --hard origin/main';
+if (is_dir($gitDir)) {
+    $gitHead = trim((string)@file_get_contents($gitDir . '/HEAD'));
+    $git['available'] = $gitHead !== '';
+    if (preg_match('/^ref: refs\/heads\/(.+)$/', $gitHead, $matches)) {
+        $branchRef = $matches[1];
+        $git['branch'] = basename($branchRef);
+        $branchFile = $gitDir . '/refs/heads/' . $branchRef;
+        if (is_file($branchFile)) {
+            $commit = trim((string)file_get_contents($branchFile));
+            if ($commit !== '') {
+                $git['commit'] = $commit;
+                $git['commit_short'] = substr($commit, 0, 7);
+            }
+        }
+    }
 }
 
-echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
-?>
+echo json_encode([
+    'ok' => true,
+    'endpoint' => 'debug-version',
+    'timestamp' => date('c'),
+    'server' => $_SERVER['HTTP_HOST'] ?? 'unknown',
+    'version' => [
+        'version' => (string)($version['version'] ?? 'unknown'),
+        'version_code' => (int)($version['version_code'] ?? 0),
+        'channel' => (string)($version['channel'] ?? 'unknown'),
+        'codename' => (string)($version['codename'] ?? 'unknown'),
+        'release_type' => (string)($version['release_type'] ?? 'unknown'),
+        'generated_at' => (string)($version['generated_at'] ?? 'unknown'),
+    ],
+    'git' => $git,
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
