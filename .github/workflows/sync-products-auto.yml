@@ -31,6 +31,12 @@ jobs:
           OLIST_ACCESS_TOKEN: ${{ secrets.OLIST_ACCESS_TOKEN }}
           TINY_ACCESS_TOKEN: ${{ secrets.TINY_ACCESS_TOKEN }}
           TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
+          OLIST_CLIENT_ID: ${{ secrets.OLIST_CLIENT_ID }}
+          OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
+          OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
+          TINY_CLIENT_ID: ${{ secrets.TINY_CLIENT_ID }}
+          TINY_CLIENT_SECRET: ${{ secrets.TINY_CLIENT_SECRET }}
+          TINY_REFRESH_TOKEN: ${{ secrets.TINY_REFRESH_TOKEN }}
 
       - name: Sincronizar produtos
         run: |
@@ -39,6 +45,12 @@ jobs:
           OLIST_ACCESS_TOKEN: ${{ secrets.OLIST_ACCESS_TOKEN }}
           TINY_ACCESS_TOKEN: ${{ secrets.TINY_ACCESS_TOKEN }}
           TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
+          OLIST_CLIENT_ID: ${{ secrets.OLIST_CLIENT_ID }}
+          OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
+          OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
+          TINY_CLIENT_ID: ${{ secrets.TINY_CLIENT_ID }}
+          TINY_CLIENT_SECRET: ${{ secrets.TINY_CLIENT_SECRET }}
+          TINY_REFRESH_TOKEN: ${{ secrets.TINY_REFRESH_TOKEN }}
 
       - name: Commit & Push
         run: |
