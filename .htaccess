@@ -41,10 +41,10 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteEngine On
 
     # Canonical host migration: redirect browser/SEO traffic from legacy hosts
-    # to the apex domain without changing POST webhook/callback semantics.
+    # to the www domain without changing POST webhook/callback semantics.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
-    RewriteCond %{HTTP_HOST} ^(?:www\.|dev\.)shopvivaliz\.com\.br$ [NC]
-    RewriteRule ^ https://shopvivaliz.com.br%{REQUEST_URI} [R=301,L,NE]
+    RewriteCond %{HTTP_HOST} ^(?:shopvivaliz\.com\.br|dev\.shopvivaliz\.com\.br)$ [NC]
+    RewriteRule ^ https://www.shopvivaliz.com.br%{REQUEST_URI} [R=301,L,NE]
 
     # Nunca expor arquivos internos de configuracao e operacao
     RewriteRule ^config/ - [F,L]
