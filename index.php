@@ -514,7 +514,7 @@ $svNavCurrent = '';
                 <div class="hero-carousel-track">
                     <?php foreach ($heroBanners as $index => $banner): ?>
                         <article class="hero-slide hero-image-slide<?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>" style="position:relative;">
-                            <img src="<?= sv_home_esc($banner['image']) ?>" alt="<?= sv_home_esc($banner['alt']) ?>" class="hero-banner-image" loading="<?= $index === 0 ? 'eager' : 'lazy' ?>" style="width:100%;height:100%;object-fit:cover;">
+                            <img src="<?= sv_home_esc($banner['image']) ?> loading="eager"" alt="<?= sv_home_esc($banner['alt']) ?>" class="hero-banner-image" loading="<?= $index === 0 ? 'eager' : 'lazy' ?>" style="width:100%;height:100%;object-fit:cover;">
                             <div class="hero-overlay" class="banner-overlay">
                                 <?php if (!empty($banner['tag'])): ?>
                                     <span class="banner-tag color-accent-green"><?= sv_home_esc($banner['tag']) ?></span>
