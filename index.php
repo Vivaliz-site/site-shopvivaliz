@@ -5,7 +5,7 @@ require_once __DIR__ . '/config/bootstrap-env.php';
 
 // Configuração Dinâmica de Ambiente
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host = $_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.com.br';
+$host = $_SERVER['HTTP_HOST'] ?? 'shopvivaliz.com.br';
 define('BASE_URL', $scheme . '://' . $host);
 define('APP_NAME', 'ShopVivaliz');
 require_once __DIR__ . '/includes/product-price-enrich.php';

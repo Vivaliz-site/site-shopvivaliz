@@ -5,7 +5,7 @@ const { chromium } = require('playwright');
   const page = await browser.newPage();
 
   console.log('[TESTE] Abrindo homepage...');
-  await page.goto('http://dev.shopvivaliz.com.br', { waitUntil: 'networkidle' });
+  await page.goto('https://shopvivaliz.com.br', { waitUntil: 'networkidle' });
 
   console.log('[TESTE] Aguardando conteúdo carregar...');
   await page.waitForTimeout(2000);
