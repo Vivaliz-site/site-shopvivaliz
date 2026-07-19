@@ -57,37 +57,24 @@ $cmd = "cd $safe_repo && git fetch origin main 2>&1 && git reset --hard origin/m
 @exec($cmd, $output, $return_code);
 @touch($rate_limit_file); // Mark as pulled
 
-// 3. Check if checkout file was updated
-$checkout_file = "$repo_root/checkout/index.php";
-$has_pagarme = false;
-$has_mercado = false;
-
-if (file_exists($checkout_file)) {
-    $content = file_get_contents($checkout_file);
-    $has_pagarme = strpos($content, 'pagarme') !== false;
-    $has_mercado = strpos($content, 'mercado_pago') !== false;
-}
-
 // 4. Clear OPcache if available
 if (function_exists('opcache_reset')) {
     opcache_reset();
     file_put_contents($log_file, "[$timestamp] OPcache cleared\n", FILE_APPEND);
 }
 
-// 5. Prepare response
-$success = ($return_code === 0 && $has_pagarme && $has_mercado);
+// 5. Prepare response - success only if git succeeded
+$success = ($return_code === 0);
+$last_10_lines = implode("\n", array_slice($output ?? [], -10));
 
 $response = [
-    'status' => $success ? 'success' : 'partial',
+    'status' => $success ? 'success' : 'error',
     'timestamp' => $timestamp,
     'git_return_code' => $return_code,
-    'git_output' => implode("\n", array_slice($output, -10)), // Last 10 lines
-    'checkout_file_exists' => file_exists($checkout_file),
-    'pagarme_found' => $has_pagarme,
-    'mercado_pago_found' => $has_mercado,
+    'git_output' => $last_10_lines,
     'message' => $success
-        ? 'Git pull successful and both payment gateways are present'
-        : 'Git pull completed but verification issues detected'
+        ? 'Git pull successful'
+        : 'Git pull failed (see git_output for details)'
 ];
 
 // Log result
