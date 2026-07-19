@@ -565,7 +565,8 @@ function svs_removed_products(array $mirrored, string $catalogPath): array {
 }
 
 /* ════════════════════════ MAIN ════════════════════════ */
-$dryRun  = isset($_GET['dry_run']) && $_GET['dry_run'] !== '0';
+$dryRun  = (isset($_GET['dry_run']) && $_GET['dry_run'] !== '0')
+    || (PHP_SAPI === 'cli' && getenv('SVS_DRY_RUN') === '1');
 $errors  = [];
 $fetched = [];
 $source  = 'none';
@@ -639,5 +640,6 @@ svs_json($ok ? 200 : 207, [
     'dry_run'      => $dryRun,
     'saved'        => $saved,
     'errors'       => $errors,
+    'operational'  => $ok && count($errors) === 0,
     'synced_at'    => date('c'),
 ]);

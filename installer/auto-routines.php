@@ -76,12 +76,30 @@ function svi_fetch_json(string $url, int $timeout = 45): array
     ];
 }
 
+function svi_run_sync_cli(int $expected, int $limit): array
+{
+    // /olist/* e bloqueado no perimetro de seguranca (deploy/apache/shopvivaliz-private-paths.conf),
+    // entao chama-lo via HTTP (como os outros diagnosticos abaixo) sempre retorna 403 e
+    // olist_sync fica null -- ver docs/MEMORIA-AGENTES.md. Roda via CLI local, que nao
+    // passa pelo Apache/htaccess.
+    $script = escapeshellarg(dirname(__DIR__) . '/olist/sync-products.php');
+    $cmd = 'SVS_DRY_RUN=1 php ' . $script . ' 2>&1';
+    $output = shell_exec($cmd);
+    $json = is_string($output) ? json_decode($output, true) : null;
+    return [
+        'status' => is_array($json) ? 200 : 0,
+        'error' => is_array($json) ? '' : 'cli_invocation_failed',
+        'json' => is_array($json) ? $json : null,
+        'raw' => is_string($output) ? $output : '',
+    ];
+}
+
 $expected = max(1, (int)($_GET['expected'] ?? 200));
 $limit = max(1, min(250, (int)($_GET['limit'] ?? 50)));
 $baseUrl = svi_base_url();
 
 $update = svi_fetch_json($baseUrl . '/installer/update-applied-check.php');
-$sync = svi_fetch_json($baseUrl . '/olist/sync-products.php?dry_run=1&expected=' . $expected . '&limit=' . $limit);
+$sync = svi_run_sync_cli($expected, $limit);
 $melhorEnvio = svi_fetch_json($baseUrl . '/api/melhorenvio/diagnostic.php?cep=35500025');
 $pagarme = svi_fetch_json($baseUrl . '/api/pagarme/diagnostic.php');
 $beforeCount = (int)($sync['json']['before_count'] ?? 0);
