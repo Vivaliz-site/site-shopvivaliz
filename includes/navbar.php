@@ -29,6 +29,9 @@ $svWhatsappRaw = is_array($svCompanyProfile) ? (string)($svCompanyProfile['socia
 $svWhatsappDigits = preg_replace('/\D+/', '', $svWhatsappRaw);
 $svWhatsappMessage = rawurlencode('Ola! Vim pelo site da ShopVivaliz e gostaria de falar com a equipe.');
 $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?text={$svWhatsappMessage}" : '/contato';
+$svRecoveryCoupon = function_exists('svcp_builtin_coupons') ? svcp_builtin_coupons('VOLTEI5') : null;
+$svRecoveryCouponCode = is_array($svRecoveryCoupon) ? (string)($svRecoveryCoupon['code'] ?? 'VOLTEI5') : 'VOLTEI5';
+$svRecoveryCouponLabel = is_array($svRecoveryCoupon) ? (string)($svRecoveryCoupon['label'] ?? 'Desconto 5%') : 'Desconto 5%';
 ?>
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0b4f88">
@@ -201,8 +204,9 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
         <button type="button" id="exit-intent-close" style="position:absolute; top:16px; right:16px; border:0; background:#f1f5f9; width:32px; height:32px; border-radius:50%; font-size:18px; cursor:pointer; color:#64748b; display:flex; align-items:center; justify-content:center; transition:background 0.2s;">&times;</button>
         <div style="font-size:40px; margin-bottom:16px;">🎁</div>
         <h2 style="font-size:22px; font-weight:800; color:#0f172a; margin:0 0 10px; letter-spacing:-0.02em;">Espere! Não vá embora ainda...</h2>
-        <p style="font-size:14px; color:#64748b; line-height:1.5; margin:0 0 20px;">Identificamos itens salvos no seu carrinho. Conclua seu pedido nos próximos 15 minutos e garanta **5% de desconto extra** com o cupom abaixo:</p>
-        <div style="background:#f8fafc; border:2px dashed #0b4f88; padding:12px 18px; border-radius:12px; font-weight:800; font-size:18px; color:#0b4f88; letter-spacing:0.05em; display:inline-block; margin-bottom:20px; user-select:all; cursor:pointer;" title="Clique para copiar" id="exit-intent-coupon">VOLTEI5</div>
+        <p style="font-size:14px; color:#64748b; line-height:1.5; margin:0 0 20px;">Identificamos itens salvos no seu carrinho. Conclua seu pedido nos próximos 15 minutos e aproveite a oferta de recuperação abaixo, conforme elegibilidade do carrinho:</p>
+        <div style="background:#f8fafc; border:2px dashed #0b4f88; padding:12px 18px; border-radius:12px; font-weight:800; font-size:18px; color:#0b4f88; letter-spacing:0.05em; display:inline-block; margin-bottom:12px; user-select:all; cursor:pointer;" title="Clique para copiar" id="exit-intent-coupon"><?= htmlspecialchars($svRecoveryCouponCode, ENT_QUOTES, 'UTF-8') ?></div>
+        <div style="font-size:12px; color:#475569; margin-bottom:20px; line-height:1.4;"><?= htmlspecialchars($svRecoveryCouponLabel, ENT_QUOTES, 'UTF-8') ?> disponível quando aplicável.</div>
         <div id="exit-intent-timer" style="font-size:12px; color:#ef4444; font-weight:700; margin-bottom:20px;">Oferta expira em: 15:00</div>
         <button type="button" class="btn btn-primary" onclick="if(window.openMiniCart){window.openMiniCart(); document.getElementById('exit-intent-overlay').style.display='none';}else{window.location.href='/carrinho';}" style="width:100%; padding:14px; font-weight:700; border-radius:12px; cursor:pointer;">Ver Meu Carrinho</button>
     </div>
