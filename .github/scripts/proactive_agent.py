@@ -3,7 +3,7 @@ Agente Proativo Autonomo Vivaliz
 Orquestrador: Anthropic -> OpenAI -> Gemini
 Roda a cada 4h via GitHub Actions
 """
-import json, os, subprocess, sys
+import json, os, subprocess, sys, shlex
 from pathlib import Path
 from datetime import datetime
 
