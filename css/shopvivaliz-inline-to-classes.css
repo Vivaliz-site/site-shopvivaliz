@@ -1,0 +1,150 @@
+/* ============================================================================
+   INLINE STYLES CONSOLIDATED TO CSS CLASSES
+   Refactored: 2026-07-19
+   ============================================================================ */
+
+/* Hero CTA Container */
+.hero-cta-mt-24 {
+    margin-top: 24px;
+}
+
+/* Trust Bar Icons */
+.trust-bar-icon-lock {
+    color: #10b981;
+}
+
+.trust-bar-icon-truck {
+    color: #10b981;
+}
+
+.trust-bar-icon-zap {
+    color: #10b981;
+}
+
+.trust-bar-icon-reply {
+    color: #10b981;
+}
+
+/* Banner Overlay Styles */
+.banner-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0) 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 5%;
+    color: #fff;
+    text-align: left;
+}
+
+.banner-tag {
+    font-size: 12px;
+    letter-spacing: 2px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #10b981;
+    margin-bottom: 12px;
+}
+
+.banner-title {
+    font-size: clamp(32px, 5vw, 56px);
+    font-weight: 800;
+    line-height: 1.1;
+    margin: 0 0 16px;
+    max-width: 600px;
+    text-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.banner-subtitle {
+    font-size: clamp(16px, 2vw, 20px);
+    font-weight: 400;
+    color: #cbd5e1;
+    max-width: 500px;
+    margin: 0 0 32px;
+    line-height: 1.5;
+}
+
+.banner-cta-container {
+    display: flex;
+    gap: 16px;
+}
+
+.banner-cta-button {
+    background: #10b981;
+    border: none;
+    padding: 14px 28px !important;
+    font-size: 16px !important;
+    border-radius: 8px !important;
+    color: #fff;
+    text-decoration: none;
+    font-weight: 600;
+    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+}
+
+/* Hero Section Slide Positioning */
+.hero-slide-position {
+    position: relative;
+}
+
+/* Hero Banner Image */
+.hero-banner-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Slide Width/Height */
+.category-slide-responsive {
+    width: 100%;
+    height: auto;
+}
+
+/* Product Card Spacing */
+.product-card-max-width {
+    max-width: 600px;
+}
+
+/* FAQ Search Input Custom Styles */
+.faq-search-input-custom {
+    width: 100%;
+    padding: 12px 18px;
+    border-radius: 12px;
+    border: 1.5px solid #e2e8f0;
+    font-size: 14px;
+    color: #1e293b;
+    background: #f8fafc;
+    transition: all 0.25s ease;
+}
+
+.faq-search-input-custom:focus {
+    border-color: #0066cc;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+    outline: none;
+}
+
+/* Max Width Container for Newsletter */
+.newsletter-max-width {
+    max-width: 460px;
+    margin: 16px auto 0;
+    width: 100%;
+}
+
+/* Responsive Containers */
+.container-position-relative {
+    position: relative;
+}
+
+/* Image Width/Height for Category Slides */
+.image-full-cover {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
+/* Slide Wrapper Position */
+.slide-wrapper-position {
+    position: relative;
+}
