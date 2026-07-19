@@ -479,7 +479,10 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     }
     (function initCoupon() {
         var existing = getCoupon();
+        var pendingCoupon = '';
+        try { pendingCoupon = localStorage.getItem('shopvivaliz_pending_coupon') || ''; } catch(e) {}
         if (existing && couponInput) couponInput.value = existing.code || '';
+        else if (pendingCoupon && couponInput) couponInput.value = pendingCoupon;
         updateCouponRemoveVisibility();
         if (couponApplyBtn) {
             couponApplyBtn.addEventListener('click', function () {
@@ -526,6 +529,12 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 var statusEl = document.getElementById('coupon-status');
                 if (statusEl) { statusEl.hidden = false; statusEl.className = 'sv-checkout-note'; statusEl.textContent = 'Cupom removido.'; }
             });
+        }
+        if (!existing && pendingCoupon && couponApplyBtn && getCart().length > 0) {
+            setTimeout(function () {
+                couponApplyBtn.click();
+                try { localStorage.removeItem('shopvivaliz_pending_coupon'); } catch(e) {}
+            }, 350);
         }
     })();
 

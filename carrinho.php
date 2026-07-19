@@ -14,6 +14,7 @@ header('Content-Type: text/html; charset=UTF-8');
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/shipping-v7.css">
+    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
     <style>
         .cart-page { padding: 36px 0 64px; }
         .cart-layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; }
@@ -245,5 +246,6 @@ header('Content-Type: text/html; charset=UTF-8');
 </script>
 <script src="/js/cro-interactions.js"></script>
 <script src="/js/cart-shipping-v7.js"></script>
+<script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
 </body>
 </html>
