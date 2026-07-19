@@ -91,7 +91,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             <div class="form-row-2">
                 <label class="form-group">
                     <span>Telefone / WhatsApp *</span>
-                    <input name="customer_phone" maxlength="20" required autocomplete="tel" aria-label="Telefone ou WhatsApp">
+                    <input name="customer_phone" type="tel" inputmode="tel" maxlength="20" required autocomplete="tel" aria-label="Telefone ou WhatsApp">
                 </label>
                 <label class="form-group">
                     <span>CEP *</span>
