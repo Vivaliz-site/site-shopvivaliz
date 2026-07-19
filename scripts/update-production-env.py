@@ -37,19 +37,8 @@ ALLOWED_KEYS = {
     "TIKTOK_REDIRECT_URL",
 }
 
-APEX_DOMAIN_KEYS = {
-    "SHOPVIVALIZ_BASE_URL",
-    "APP_URL",
-    "SITE_URL",
-    "BASE_URL",
-}
-
-
 def normalize_value(key: str, value: object) -> str:
-    text = str(value)
-    if key in APEX_DOMAIN_KEYS:
-        return text.replace("https://www.shopvivaliz.com.br", "https://shopvivaliz.com.br")
-    return text
+    return str(value).replace("https://www.shopvivaliz.com.br", "https://shopvivaliz.com.br")
 
 
 def merge_env(path: Path, incoming: dict[str, object]) -> list[str]:
