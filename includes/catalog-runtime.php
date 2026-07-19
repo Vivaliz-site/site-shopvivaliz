@@ -50,19 +50,7 @@ function svcr_products(): array
             continue;
         }
 
-        $attachments = is_array($item['anexos'] ?? null)
-            ? $item['anexos']
-            : (is_array($item['attachments'] ?? null) ? $item['attachments'] : []);
-
-        $imagesList = [];
-        foreach ($attachments as $attachment) {
-            $candidate = is_array($attachment)
-                ? trim((string)($attachment['url'] ?? $attachment['link'] ?? ''))
-                : '';
-            if (preg_match('~^https?://~i', $candidate) && !in_array($candidate, $imagesList, true)) {
-                $imagesList[] = $candidate;
-            }
-        }
+        $imagesList = svcr_collect_image_urls($item);
 
         $image = trim((string)($item['imagem_principal_url'] ?? $item['image_url'] ?? $item['imagem'] ?? ''));
         if ($image === '') {
@@ -99,4 +87,67 @@ function svcr_products(): array
     }
 
     return $products;
+}
+
+function svcr_collect_image_urls(array $item): array
+{
+    $images = [];
+    $fields = [
+        'images',
+        'imagens',
+        'gallery',
+        'galeria',
+        'fotos',
+        'photos',
+        'attachments',
+        'anexos',
+    ];
+
+    $push = static function (string $candidate) use (&$images): void {
+        $candidate = trim($candidate);
+        if ($candidate !== '' && preg_match('~^https?://~i', $candidate) && !in_array($candidate, $images, true)) {
+            $images[] = $candidate;
+        }
+    };
+
+    foreach ($fields as $field) {
+        $value = $item[$field] ?? null;
+        if (is_string($value)) {
+            $push($value);
+            continue;
+        }
+
+        if (!is_array($value)) {
+            continue;
+        }
+
+        foreach ($value as $entry) {
+            if (is_string($entry)) {
+                $push($entry);
+                continue;
+            }
+
+            if (!is_array($entry)) {
+                continue;
+            }
+
+            foreach (['url', 'link', 'src', 'image', 'imagem', 'image_url'] as $key) {
+                $candidate = trim((string)($entry[$key] ?? ''));
+                if ($candidate !== '') {
+                    $push($candidate);
+                }
+            }
+        }
+    }
+
+    for ($i = 1; $i <= 12; $i++) {
+        foreach (["imagem{$i}", "image{$i}", "foto{$i}", "photo{$i}"] as $key) {
+            $candidate = trim((string)($item[$key] ?? ''));
+            if ($candidate !== '') {
+                $push($candidate);
+            }
+        }
+    }
+
+    return array_slice($images, 0, 12);
 }
