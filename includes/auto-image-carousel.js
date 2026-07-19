@@ -52,21 +52,32 @@
   }
 
   function initProductCardCarousels() {
+    let count = 0;
     document.querySelectorAll('.product-card .product-image').forEach(element => {
       const img = element.querySelector('img');
-      if (!img) return;
+      if (!img) {
+        console.log('[Carousel] Element has no img');
+        return;
+      }
 
       let imagesJson = element.getAttribute('data-images');
       if (!imagesJson) {
         const link = element.closest('article').querySelector('a.product-image');
         if (link) imagesJson = link.getAttribute('data-images');
       }
-      if (!imagesJson) return;
+      if (!imagesJson) {
+        console.log('[Carousel] No data-images attribute');
+        return;
+      }
 
       try {
         const unescaped = imagesJson.replace(/&quot;/g, '"');
         const images = JSON.parse(unescaped);
-        if (!Array.isArray(images) || images.length < 2) return;
+        if (!Array.isArray(images) || images.length < 2) {
+          console.log('[Carousel] Less than 2 images:', images.length);
+          return;
+        }
+        count++;
 
         let currentIndex = 0;
         let isAutoPlay = true;
