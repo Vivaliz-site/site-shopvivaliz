@@ -19,6 +19,142 @@
 
 ---
 
+## ⚠️ DETALHES INFRA QUE PODEM ESTAR ESQUECIDOS
+
+### **Analytics Tracking Code** (Crítico - sem isso GA não coleta)
+**Status:** ❓ Verificar  
+**Onde:** `<head>` da página principal (index.php ou layout.php)
+
+```html
+<!-- Google Analytics Code (GA-4) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXX"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-XXXXX'); <!-- Substituir G-XXXXX pelo ID real -->
+</script>
+```
+
+**Como encontrar ID:** Google Analytics → Account Settings → Property → Data Streams → Web → Google tag ID
+
+---
+
+### **robots.txt**
+**Status:** ❓ Verificar  
+**Localização:** `/public_html/robots.txt` (raiz)
+
+```
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/private/
+Disallow: /tmp/
+
+Sitemap: https://shopvivaliz.com.br/sitemap.xml
+```
+
+---
+
+### **SSL/HTTPS Certificate**
+**Status:** ✅ Cloudflare está proxiando (SSL automático)  
+**Verificar:**
+```bash
+curl -I https://shopvivaliz.com.br  # Deve ter "200 OK"
+```
+
+---
+
+### **Open Graph / Meta Tags (Compartilhamento Redes Sociais)**
+**Onde:** `<head>` de cada página
+
+```html
+<meta property="og:title" content="ShopVivaliz - Loja Online">
+<meta property="og:description" content="Roupas de qualidade com melhor preço">
+<meta property="og:image" content="https://shopvivaliz.com.br/images/logo.png">
+<meta property="og:url" content="https://shopvivaliz.com.br">
+<meta property="og:type" content="website">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="ShopVivaliz">
+<meta name="twitter:description" content="Roupas de qualidade com melhor preço">
+<meta name="twitter:image" content="https://shopvivaliz.com.br/images/logo.png">
+```
+
+---
+
+### **Schema.org / JSON-LD (Dados Estruturados)**
+**Onde:** `<head>` ou antes de `</body>`
+
+**Para Loja:**
+```json
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org/",
+  "@type": "Organization",
+  "name": "ShopVivaliz",
+  "url": "https://shopvivaliz.com.br",
+  "logo": "https://shopvivaliz.com.br/images/logo.png",
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "contactType": "Customer Service",
+    "telephone": "+55-11-XXXXX-XXXX",
+    "email": "contato@shopvivaliz.com.br"
+  }
+}
+</script>
+```
+
+**Para Produto (em página de produto):**
+```json
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org/",
+  "@type": "Product",
+  "name": "Nome do Produto",
+  "image": "https://shopvivaliz.com.br/images/produto.jpg",
+  "description": "Descrição",
+  "brand": {
+    "@type": "Brand",
+    "name": "ShopVivaliz"
+  },
+  "offers": {
+    "@type": "Offer",
+    "url": "https://shopvivaliz.com.br/produto/123",
+    "priceCurrency": "BRL",
+    "price": "99.99",
+    "availability": "https://schema.org/InStock"
+  },
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "4.5",
+    "reviewCount": "88"
+  }
+}
+</script>
+```
+
+---
+
+### **Cloudflare Rules (Otimizações)**
+**URL:** Cloudflare Dashboard → Rules  
+**Sugestões:**
+- Cache Rules: cache `/sitemap.xml` por 24h
+- Page Rules: Cache Everything para `/produtos/*`
+- WAF: Ativar proteção contra bots
+
+---
+
+### **Verificação de DNS Propagação**
+```bash
+# Verificar todos os nameservers
+nslookup shopvivaliz.com.br
+# ou
+dig shopvivaliz.com.br @8.8.8.8
+```
+
+---
+
 ## ⏳ FALTA CONFIGURAR (EM ORDEM)
 
 ### 2. **Google Search Console**
