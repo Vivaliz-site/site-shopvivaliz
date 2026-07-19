@@ -39,7 +39,7 @@ async def test_checkout():
         "tests": []
     }
 
-    BASE_URL = os.getenv("BASE_URL") or "http://127.0.0.1:8000"
+    BASE_URL = "http://127.0.0.1:8000"
 
     async with async_playwright() as p:
         print("[TESTE] E2E REAL COM PLAYWRIGHT - CLICANDO NOS BOTOES")
@@ -56,6 +56,14 @@ async def test_checkout():
             # ========================================================
             print("[1] Checkout carrega?")
             try:
+                # Passo 0: Autenticar sessao com Google Mock Login
+                try:
+                    print("Autenticando sessao de teste...")
+                    await page.goto(f"{BASE_URL}/auth/google-mock-login.php?is_admin=1", timeout=15000)
+                    await asyncio.sleep(1)
+                except Exception as e:
+                    print(f"Aviso: Nao foi possivel autenticar: {e}")
+
                 # Pre-requisito: adicionar produto ao carrinho na Home
                 try:
                     print("Adicionando produto ao carrinho na Home...")
@@ -67,7 +75,7 @@ async def test_checkout():
                     print(f"Aviso: Nao foi possivel adicionar item: {e}")
 
                 await page.goto(f"{BASE_URL}/checkout/", timeout=15000)
-                await page.wait_for_selector("form", timeout=5000)
+                await page.wait_for_selector("#checkout-form", timeout=5000)
                 print("[OK] PASSOU\n")
                 results["passed"] += 1
                 results["tests"].append({
@@ -76,6 +84,15 @@ async def test_checkout():
                 })
             except Exception as e:
                 print(f"[FALHOU] FALHOU: {e}\n")
+                try:
+                    url = page.url
+                    print(f"URL atual: {url}")
+                    shot_path = "C:/Users/FRED/.gemini/antigravity/brain/b2d1b366-35b1-40e0-a03e-be6a6a0f2d91/checkout_failed.png"
+                    # Run screenshot synchronously in async context
+                    await page.screenshot(path=shot_path)
+                    print(f"Screenshot salvo em: {shot_path}")
+                except Exception as ex:
+                    print(f"Nao foi possivel salvar screenshot: {ex}")
                 results["failed"] += 1
                 results["tests"].append({
                     "name": "Checkout carrega",
