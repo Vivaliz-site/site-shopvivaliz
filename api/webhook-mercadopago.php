@@ -29,6 +29,21 @@ $body = is_array($body) ? $body : [];
 
 $dataId = trim((string)($_GET['data.id'] ?? $_GET['data_id'] ?? $body['data']['id'] ?? $body['id'] ?? ''));
 $topic = strtolower(trim((string)($_GET['type'] ?? $_GET['topic'] ?? $body['type'] ?? $body['action'] ?? '')));
+
+// O topico "merchant_order" (ex: "topic_merchant_order_wh") manda o ID do
+// merchant order, nao de um pagamento -- mas o codigo abaixo so sabe tratar
+// 'order' (Order API v2) ou pagamento avulso, entao tratava esse ID como se
+// fosse um payment ID por engano. Isso gerava um GET /v1/payments/{merchant_
+// order_id} que ou falha ou (pior) acerta em outro recurso, sobrescrevendo o
+// pedido com dados errados/incompletos (confirmado ao vivo: pedido real teve
+// nome do cliente e forma de pagamento trocados por isso). O topico
+// "payment" ja chega em paralelo pra cada merchant_order e carrega tudo que
+// precisamos -- ignoramos merchant_order por completo em vez de tentar
+// tratar direito (a Order API v2, unico jeito de ler merchant_order certo,
+// exige outro endpoint that nao usamos aqui).
+if (str_contains($topic, 'merchant_order')) {
+    svmp_webhook_response(200, 'ignored_topic');
+}
 $signature = trim((string)($_SERVER['HTTP_X_SIGNATURE'] ?? ''));
 if ($signature === '' && function_exists('getallheaders')) {
     foreach (getallheaders() as $headerName => $headerValue) {
