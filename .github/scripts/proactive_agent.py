@@ -193,7 +193,17 @@ def run_agent():
     print("Consultando LLM...")
     raw = call_llm(prompt)
     if not raw:
-        print("Nenhum provider disponivel — encerrando sem acao.")
+        print("ERRO: Nenhum provider disponivel — encerrando sem acao.")
+        # Log error
+        log_path = Path("automation/proactive/logs/runs.jsonl")
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "action": "error",
+            "reason": "Todos os providers AI falharam",
+        }
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
         sys.exit(0)
     print(f"Resposta recebida: {len(raw)} chars")
 
