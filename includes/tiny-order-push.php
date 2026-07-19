@@ -399,9 +399,16 @@ function svtop_tiny_build_payment_block(array $order): array
     $total = round((float)($order['total'] ?? 0), 2);
     $createdAt = svtop_tiny_order_date((string)($order['created_at'] ?? ''));
 
+    // 'meioPagamento' removido: apesar de documentado como objeto {id} igual
+    // 'formaRecebimento', a Tiny rejeita o MESMO id de forma de pagamento
+    // valido (ex: 337683284 = Pix, confirmado existente via GET
+    // /formas-pagamento) quando enviado em 'meioPagamento', com erro
+    // "Meio de pagamento nao encontrado" -- bloqueava toda criacao de
+    // pedido novo. meioPagamento provavelmente exige um catalogo/enum
+    // diferente que nao foi identificado ainda; formaRecebimento sozinho e
+    // o que ja funcionava antes.
     $block = [
         'formaRecebimento' => ['id' => $paymentFormId],
-        'meioPagamento' => ['id' => $paymentFormId],
     ];
 
     if ($total > 0) {
@@ -410,7 +417,6 @@ function svtop_tiny_build_payment_block(array $order): array
             'data' => $createdAt,
             'valor' => $total,
             'formaRecebimento' => ['id' => $paymentFormId],
-            'meioPagamento' => ['id' => $paymentFormId],
         ]];
     }
 
