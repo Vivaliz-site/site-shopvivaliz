@@ -614,7 +614,7 @@ $svNavCurrent = '';
                                 <?php if ($isBestSeller && $stock > 0): ?>
                                     <span class="product-card-ribbon">Mais Vendido</span>
                                 <?php endif; ?>
-                                <a class="product-image" href="<?= sv_home_esc($productUrl) ?>">
+                                <a class="product-image" href="<?= sv_home_esc($productUrl) ?>" data-images="<?= sv_home_esc(json_encode(array_slice(array_filter($product['images'] ?? [$image]), 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
                                     <img src="<?= sv_home_esc($image) ?>" alt="<?= sv_home_esc($product['name']) ?>" loading="lazy" onerror="this.src='<?= sv_home_default_image() ?>'">
                                     <?php if ($stock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                                 </a>
