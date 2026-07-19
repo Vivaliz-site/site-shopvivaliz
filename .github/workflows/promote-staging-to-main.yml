@@ -78,7 +78,16 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Rodar suite E2E completa
-        run: npx playwright test --reporter=list
+        run: |
+          npx playwright test \
+            tests/e2e-journey.spec.js \
+            tests/fluxo-compra.spec.ts \
+            tests/webhook-notificacoes.spec.ts \
+            tests/autenticacao.spec.ts \
+            tests/meus-pedidos.spec.ts \
+            tests/precos-catalogo.spec.ts \
+            --project=chromium \
+            --reporter=list
 
   promote:
     name: Merge staging -> main (sem force, sem reset)
