@@ -283,9 +283,10 @@ echo "   3. Execute: python3 scripts/google_ads_campaign_automation.py --launch"
         return setup_file
 
     def run(self):
-        """Executa automação"""
+        """Executa automacao"""
+        sys.stdout.reconfigure(encoding='utf-8') if hasattr(sys.stdout, 'reconfigure') else None
         print("\n" + "="*70)
-        print("🚀 GOOGLE ADS CAMPAIGN AUTOMATION - SHOPVIVALIZ")
+        print("[GOOGLE ADS CAMPAIGN AUTOMATION] - SHOPVIVALIZ")
         print("="*70)
         print(f"📅 Data: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"💰 Orçamento: R$ {self.config['budget_daily']:.2f}/dia")
