@@ -338,6 +338,7 @@ $svNavCurrent = '';
     <link rel="stylesheet" href="/css/shopvivaliz-core-consolidated.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/shopvivaliz-premium-consolidated.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/shopvivaliz-inline-to-classes.css?v=2026-07-19">
+    <link rel="stylesheet" href="/css/shopvivaliz-webp-optimization.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
