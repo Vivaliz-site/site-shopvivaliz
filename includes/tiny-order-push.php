@@ -622,16 +622,16 @@ function svtop_tiny_dispatch_forma_frete_id(array $order): ?int
         $order['shipping_service'] ?? '',
     ]));
 
+    $melhorEnvioFormaFreteId = svtop_tiny_melhorenvio_forma_frete_id($order);
+    if ($melhorEnvioFormaFreteId !== null) {
+        return $melhorEnvioFormaFreteId;
+    }
+
     if (str_contains($label, 'pac')) {
         return svtop_tiny_int_env('TINY_DESPACHO_FORMA_FRETE_ID_PAC');
     }
     if (str_contains($label, 'sedex')) {
         return svtop_tiny_int_env('TINY_DESPACHO_FORMA_FRETE_ID_SEDEX');
-    }
-
-    $melhorEnvioFormaFreteId = svtop_tiny_melhorenvio_forma_frete_id($order);
-    if ($melhorEnvioFormaFreteId !== null) {
-        return $melhorEnvioFormaFreteId;
     }
 
     return null;
