@@ -106,6 +106,12 @@ try {
         $order['mercadopago']['payment_id'] = (string)($payment['id'] ?? $dataId);
         $order['mercadopago']['status'] = $providerStatus;
         $order['mercadopago']['status_detail'] = $statusDetail;
+        $order['mercadopago']['payment_method_id'] = trim((string)($payment['payment_method_id'] ?? $payment['payment_method']['id'] ?? ''));
+        $order['mercadopago']['payment_type_id'] = trim((string)($payment['payment_type_id'] ?? $payment['payment_type']['id'] ?? ''));
+        $order['mercadopago']['card_brand'] = trim((string)($payment['card']['brand'] ?? $payment['payment_method_id'] ?? ''));
+        $order['mercadopago']['installments'] = (int)($payment['installments'] ?? 1);
+        $order['mercadopago']['authorization_code'] = trim((string)($payment['transaction_details']['authorization_code'] ?? $payment['authorization_code'] ?? ''));
+        $order['mercadopago']['transaction_amount'] = round((float)($payment['transaction_amount'] ?? $order['total'] ?? 0), 2);
         $order['mercadopago']['last_webhook_at'] = date(DATE_ATOM);
         $order['mercadopago']['last_webhook_topic'] = $isOrder ? 'order' : 'payment';
 
