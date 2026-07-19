@@ -339,10 +339,10 @@ function renderMiniCart() {
         
         // Set dynamic gamification status messages
         if (total >= GOAL_SHIPPING) {
-            if (text) text.innerHTML = '🎉 <strong>Nível Máximo!</strong> Você ganhou <strong>Frete Grátis</strong> e o cupom <strong>VIVALIZ5</strong>!';
+            if (text) text.innerHTML = '🎉 <strong>Nível Máximo!</strong> Você ganhou <strong>Frete Grátis</strong> e o cupom <strong>VOLTEI5</strong>!';
         } else if (total >= GOAL_COUPON) {
             const rem = (GOAL_SHIPPING - total).toFixed(2).replace('.', ',');
-            if (text) text.innerHTML = `🎁 <strong>Cupom VIVALIZ5 Liberado!</strong> Faltam <strong>R$ ${rem}</strong> para ganhar <strong>Frete Grátis</strong>!`;
+            if (text) text.innerHTML = `🎁 <strong>Cupom VOLTEI5 Liberado!</strong> Faltam <strong>R$ ${rem}</strong> para ganhar <strong>Frete Grátis</strong>!`;
         } else {
             const rem = (GOAL_COUPON - total).toFixed(2).replace('.', ',');
             if (text) text.innerHTML = `Faltam <strong>R$ ${rem}</strong> para desbloquear o cupom de <strong>5% de desconto</strong>!`;

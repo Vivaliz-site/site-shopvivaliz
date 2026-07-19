@@ -58,6 +58,31 @@ uasort($clientes, fn($a, $b) => $b['total_gasto'] <=> $a['total_gasto']);
         .clients-table td { padding: 1rem; border-bottom: 1px solid #dee2e6; }
         .clients-table tr:hover { background: #f8f9fa; }
         .empty-state { text-align: center; padding: 3rem; color: #666; }
+        .admin-searchbar {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        .admin-searchbar input {
+            flex: 1 1 320px;
+            padding: 0.85rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 1rem;
+            background: #fff;
+        }
+        .admin-searchbar input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
+        }
+        .admin-search-meta {
+            color: #6b7280;
+            font-size: 0.95rem;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -73,6 +98,11 @@ uasort($clientes, fn($a, $b) => $b['total_gasto'] <=> $a['total_gasto']);
     <div class="container">
         <h1 class="page-title">Gestão de Clientes (<?= count($clientes) ?>)</h1>
 
+        <div class="admin-searchbar">
+            <input type="search" id="client-search" placeholder="Buscar por nome, e-mail ou telefone" autocomplete="off" aria-label="Buscar cliente no admin">
+            <div class="admin-search-meta" id="client-search-meta"><?= count($clientes) ?> clientes</div>
+        </div>
+
         <div style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
             <table class="clients-table">
                 <thead>
@@ -86,10 +116,10 @@ uasort($clientes, fn($a, $b) => $b['total_gasto'] <=> $a['total_gasto']);
                 </thead>
                 <tbody>
                     <?php if (!$clientes): ?>
-                        <tr><td colspan="5" class="empty-state">Nenhum cliente ainda. Clientes aparecem aqui após o primeiro pedido no checkout.</td></tr>
+                        <tr id="clients-empty-row"><td colspan="5" class="empty-state">Nenhum cliente ainda. Clientes aparecem aqui após o primeiro pedido no checkout.</td></tr>
                     <?php else: ?>
                         <?php foreach ($clientes as $c): ?>
-                        <tr>
+                        <tr data-search="<?= htmlspecialchars(strtolower(trim($c['nome'] . ' ' . $c['email'] . ' ' . $c['telefone']))) ?>">
                             <td><?= htmlspecialchars($c['nome']) ?></td>
                             <td><?= htmlspecialchars($c['email']) ?></td>
                             <td><?= htmlspecialchars($c['telefone']) ?></td>
@@ -102,5 +132,42 @@ uasort($clientes, fn($a, $b) => $b['total_gasto'] <=> $a['total_gasto']);
             </table>
         </div>
     </div>
+    <script>
+    (function () {
+        const input = document.getElementById('client-search');
+        const meta = document.getElementById('client-search-meta');
+        const rows = Array.from(document.querySelectorAll('tbody tr[data-search]'));
+        const emptyRow = document.getElementById('clients-empty-row');
+        const total = rows.length;
+
+        function render() {
+            const q = (input?.value || '').trim().toLowerCase();
+            let visible = 0;
+
+            rows.forEach((row) => {
+                const haystack = (row.getAttribute('data-search') || '').toLowerCase();
+                const match = q === '' || haystack.includes(q);
+                row.style.display = match ? '' : 'none';
+                if (match) visible++;
+            });
+
+            if (emptyRow) {
+                emptyRow.style.display = total === 0 ? '' : (visible === 0 ? '' : 'none');
+                if (total === 0) {
+                    emptyRow.querySelector('td')?.textContent = 'Nenhum cliente ainda. Clientes aparecem aqui após o primeiro pedido no checkout.';
+                } else if (visible === 0) {
+                    emptyRow.querySelector('td')?.textContent = 'Nenhum cliente encontrado para esta busca.';
+                }
+            }
+
+            if (meta) {
+                meta.textContent = q === '' ? `${visible} cliente(s)` : `${visible} resultado(s) para "${input.value}"`;
+            }
+        }
+
+        input?.addEventListener('input', render);
+        render();
+    })();
+    </script>
 </body>
 </html>

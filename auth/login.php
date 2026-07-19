@@ -138,6 +138,34 @@ $google_auth_url = sv_social_google_auth_url('login', $redirectTo);
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
+        .password-field {
+            position: relative;
+        }
+        .password-field input {
+            padding-right: 92px;
+        }
+        .password-toggle {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: auto;
+            min-width: 74px;
+            padding: 8px 10px;
+            margin-top: 0;
+            border: 1px solid #d1d5db;
+            border-radius: 999px;
+            background: #fff;
+            color: #374151;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+            box-shadow: none;
+        }
+        .password-toggle:hover {
+            background: #f8fafc;
+            box-shadow: none;
+        }
         .error {
             background: #fee;
             color: #c33;
@@ -258,8 +286,11 @@ $google_auth_url = sv_social_google_auth_url('login', $redirectTo);
 
             <div class="form-group">
                 <label for="password">Senha</label>
-                <input type="password" id="password" name="password" required
-                    placeholder="••••••••">
+                <div class="password-field">
+                    <input type="password" id="password" name="password" required
+                        placeholder="••••••••" autocomplete="current-password">
+                    <button type="button" class="password-toggle" data-password-toggle="password" aria-pressed="false" aria-label="Mostrar senha">Mostrar</button>
+                </div>
             </div>
 
             <button type="submit" class="btn-primary">Entrar</button>
@@ -293,5 +324,21 @@ $google_auth_url = sv_social_google_auth_url('login', $redirectTo);
             Não tem conta? <a href="/auth/register.php">Cadastre-se aqui</a>
         </div>
     </div>
+    <script>
+    (function () {
+        document.querySelectorAll('[data-password-toggle]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var targetId = btn.getAttribute('data-password-toggle');
+                var input = targetId ? document.getElementById(targetId) : null;
+                if (!input) return;
+                var hidden = input.type === 'password';
+                input.type = hidden ? 'text' : 'password';
+                btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+                btn.setAttribute('aria-label', hidden ? 'Ocultar senha' : 'Mostrar senha');
+                btn.textContent = hidden ? 'Ocultar' : 'Mostrar';
+            });
+        });
+    })();
+    </script>
 </body>
 </html>
