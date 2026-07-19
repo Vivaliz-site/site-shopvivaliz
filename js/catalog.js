@@ -230,13 +230,8 @@
       }
       status.textContent = customerStatus(query, activeCategory);
       setCount(products.length);
-      if (isPaginatedGrid) {
-        gridProducts = products;
-        renderGridPage(1);
-      } else {
-        grid.innerHTML = products.map(card).join('');
-        bindBuyButtons(grid);
-      }
+      gridProducts = products;
+      renderGridPage(1);
     } catch (error) {
       status.textContent = 'Não conseguimos exibir os produtos agora. Tente novamente em instantes.';
       grid.innerHTML = '';
