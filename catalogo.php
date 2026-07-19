@@ -181,7 +181,7 @@ function sv_catalog_page_title(string $category, string $query): string
     if ($category !== '') {
         return $category . ' | Produtos Vivaliz';
     }
-    return 'Produtos | Vivaliz';
+    return 'Catálogo | Vivaliz';
 }
 
 function sv_catalog_meta_description(string $category, string $query, int $count): string
