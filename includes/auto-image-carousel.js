@@ -52,11 +52,15 @@
   }
 
   function initProductCardCarousels() {
-    document.querySelectorAll('.product-card .product-image').forEach(link => {
-      const img = link.querySelector('img');
+    document.querySelectorAll('.product-card .product-image').forEach(element => {
+      const img = element.querySelector('img');
       if (!img) return;
 
-      const imagesJson = link.getAttribute('data-images');
+      let imagesJson = element.getAttribute('data-images');
+      if (!imagesJson) {
+        const link = element.closest('article').querySelector('a.product-image');
+        if (link) imagesJson = link.getAttribute('data-images');
+      }
       if (!imagesJson) return;
 
       try {
