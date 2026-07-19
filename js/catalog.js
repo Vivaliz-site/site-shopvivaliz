@@ -149,10 +149,57 @@
       </article>`;
   }
 
+  // Paginacao client-side para qualquer grid que use este script -- antes,
+  // este loadCatalog() buscava ate 200 produtos e jogava tudo de uma vez no
+  // grid via JS, o que inclusive sobrescrevia a paginacao server-side de
+  // 20/pagina do /catalogo publico assim que a pagina carregava.
+  const GRID_PAGE_SIZE = 20;
+  let gridPage = 1;
+  let gridProducts = [];
+
+  function gridPagerEl() {
+    if (!grid) return null;
+    let pager = document.getElementById('catalog-grid-pager');
+    if (!pager) {
+      pager = document.createElement('div');
+      pager.id = 'catalog-grid-pager';
+      pager.style.cssText = 'display:flex; align-items:center; justify-content:center; gap:12px; padding:16px 0;';
+      grid.insertAdjacentElement('afterend', pager);
+    }
+    return pager;
+  }
+
+  function renderGridPage(page) {
+    const totalPages = Math.max(1, Math.ceil(gridProducts.length / GRID_PAGE_SIZE));
+    gridPage = Math.max(1, Math.min(totalPages, page));
+    const start = (gridPage - 1) * GRID_PAGE_SIZE;
+    const pageItems = gridProducts.slice(start, start + GRID_PAGE_SIZE);
+    grid.innerHTML = pageItems.map(card).join('');
+    bindBuyButtons(grid);
+
+    const pager = gridPagerEl();
+    if (pager) {
+      pager.innerHTML = `
+        <button class="btn btn-secondary" type="button" id="grid-pager-prev" ${gridPage <= 1 ? 'disabled' : ''}>&laquo; Anterior</button>
+        <span class="muted">Página ${gridPage} de ${totalPages}</span>
+        <button class="btn btn-secondary" type="button" id="grid-pager-next" ${gridPage >= totalPages ? 'disabled' : ''}>Próxima &raquo;</button>
+      `;
+      const prevBtn = document.getElementById('grid-pager-prev');
+      const nextBtn = document.getElementById('grid-pager-next');
+      if (prevBtn) prevBtn.addEventListener('click', function () { renderGridPage(gridPage - 1); window.scrollTo({ top: grid.offsetTop - 80, behavior: 'smooth' }); });
+      if (nextBtn) nextBtn.addEventListener('click', function () { renderGridPage(gridPage + 1); window.scrollTo({ top: grid.offsetTop - 80, behavior: 'smooth' }); });
+    }
+  }
+
   async function loadCatalog(query, category) {
     if (!grid || !status) return;
     const activeCategory = String(category || '').trim();
     status.textContent = 'Preparando as melhores opções para você...';
+
+    // A paginacao renderizada pelo PHP (ex: catalogo.php) fica redundante
+    // assim que este script assume o grid com paginacao propria.
+    var serverPagination = document.querySelector('.catalog-pagination');
+    if (serverPagination) serverPagination.hidden = true;
 
     grid.innerHTML = `
       <div class="product-card sv-skeleton-card" style="box-shadow:none; border:1px solid #e2e8f0; opacity:0.8;">
@@ -181,13 +228,15 @@
           ? 'Não encontramos esse produto. Tente outro nome ou explore as categorias.'
           : 'Novos produtos estarão disponíveis em breve.';
         grid.innerHTML = '';
+        const pager = document.getElementById('catalog-grid-pager');
+        if (pager) pager.innerHTML = '';
         setCount(0);
         return;
       }
       status.textContent = customerStatus(query, activeCategory);
       setCount(products.length);
-      grid.innerHTML = products.map(card).join('');
-      bindBuyButtons(grid);
+      gridProducts = products;
+      renderGridPage(1);
     } catch (error) {
       status.textContent = 'Não conseguimos exibir os produtos agora. Tente novamente em instantes.';
       grid.innerHTML = '';
