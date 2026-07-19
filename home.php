@@ -28,10 +28,12 @@ function home_products(int $limit = 8): array
         $name = trim((string)($row['name'] ?? $row['descricao'] ?? ''));
         if ($sku === '' || $name === '') continue;
         $image = trim((string)($row['image_url'] ?? ''));
+        $images = is_array($row['images'] ?? null) ? $row['images'] : [];
         $products[] = [
             'sku' => $sku,
             'name' => $name,
             'image_url' => $image !== '' ? $image : '/images/logo-vivaliz-square.png',
+            'images' => array_slice(array_filter($images), 0, 10),
             'price' => (float)($row['price'] ?? 0),
             'category' => trim((string)($row['category'] ?? '')),
         ];
