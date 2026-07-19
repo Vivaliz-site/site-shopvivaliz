@@ -5,18 +5,25 @@ PHP vai ler esse JSON
 """
 
 import json
+import os
 import urllib.request
 from pathlib import Path
 
 print("[*] Sincronizando produtos para JSON...")
 
 env_file = Path(".env")
-token = ""
+token = (
+    os.getenv("OLIST_ACCESS_TOKEN", "").strip()
+    or os.getenv("TINY_ACCESS_TOKEN", "").strip()
+    or os.getenv("TOKEN_API_OLIST", "").strip()
+)
 
-for line in env_file.read_text().split('\n'):
-    if line.startswith('OLIST_ACCESS_TOKEN='):
-        token = line.split('=', 1)[1].strip()
-        break
+if not token and env_file.exists():
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        if line.startswith(("OLIST_ACCESS_TOKEN=", "TINY_ACCESS_TOKEN=", "TOKEN_API_OLIST=")):
+            token = line.split('=', 1)[1].strip()
+            if token:
+                break
 
 if not token:
     print("[!] Token não encontrado!")

@@ -5,6 +5,9 @@ on:
     - cron: '0 */2 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -20,11 +23,22 @@ jobs:
 
       - name: Carregar credenciais
         run: |
-          echo "${{ secrets.ENV_FILE }}" > .env
+          {
+            echo "OLIST_ACCESS_TOKEN=${OLIST_ACCESS_TOKEN:-${TINY_ACCESS_TOKEN:-${TOKEN_API_OLIST:-}}}"
+            echo "TINY_ACCESS_TOKEN=${TINY_ACCESS_TOKEN:-}"
+          } > .env
+        env:
+          OLIST_ACCESS_TOKEN: ${{ secrets.OLIST_ACCESS_TOKEN }}
+          TINY_ACCESS_TOKEN: ${{ secrets.TINY_ACCESS_TOKEN }}
+          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
 
       - name: Sincronizar produtos
         run: |
           python sync-products-to-json.py
+        env:
+          OLIST_ACCESS_TOKEN: ${{ secrets.OLIST_ACCESS_TOKEN }}
+          TINY_ACCESS_TOKEN: ${{ secrets.TINY_ACCESS_TOKEN }}
+          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
 
       - name: Commit & Push
         run: |
