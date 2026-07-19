@@ -893,24 +893,19 @@ function svtop_push_order_tiny(array $order): ?string
     }
 
     $c = $order['customer'] ?? [];
-    $paymentMethod = (string)($order['payment_label'] ?? $order['payment_method'] ?? 'PIX');
+    $paymentMethodLabels = [
+        'pix' => 'Pix',
+        'boleto' => 'Boleto',
+        'mercado_pago' => 'Cartão de crédito',
+        'pagarme' => 'Pagar.me',
+        'transferencia' => 'Transferência',
+        'whatsapp' => 'WhatsApp',
+    ];
+    $paymentMethod = $paymentMethodLabels[svtop_tiny_payment_method_key($order)]
+        ?? (string)($order['payment_label'] ?? $order['payment_method'] ?? 'PIX');
     $notes = trim((string)($order['notes'] ?? ''));
     $siteOrderNumber = (string)($order['order_number'] ?? '');
     $obs = trim("Pedido no site: {$siteOrderNumber}\nForma de pagamento: {$paymentMethod}\n" . $notes);
-
-    // Mapa forma de pagamento do site -> id cadastrado na Tiny (GET
-    // /formas-pagamento). Cartao de credito/pix/boleto sao os unicos meios
-    // reais oferecidos no checkout (ver svop_payment_method/svo_payment_method).
-    $paymentFormIds = [
-        'pix' => 337683284,
-        'boleto' => 337683279,
-        'mercado_pago' => 337683277, // pago via Mercado Pago = cartao de credito na pratica
-        'pagarme' => 337683277,
-        'transferencia' => 337683281,
-        'whatsapp' => 337683282,
-    ];
-    $paymentMethodKey = strtolower(trim((string)($order['payment_method'] ?? 'pix')));
-    $paymentFormId = $paymentFormIds[$paymentMethodKey] ?? null;
 
     $docDigits = preg_replace('/\D/', '', (string)($c['cpf'] ?? ''));
     if ($docDigits === '') {
