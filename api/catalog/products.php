@@ -93,7 +93,13 @@ $all_erp = array_map(static function (array $row): array {
 if ($q !== '') {
     $qNormalized = svcat_search_normalize($q);
     $all_erp = array_filter($all_erp, function($p) use ($qNormalized) {
-        $searchText = svcat_search_normalize($p['sku'] . ' ' . $p['name']);
+        $searchText = svcat_search_normalize(
+            $p['sku'] . ' ' .
+            $p['name'] . ' ' .
+            ($p['description'] ?? '') . ' ' .
+            ($p['category'] ?? '') . ' ' .
+            ($p['olist_product_id'] ?? '')
+        );
         return strpos($searchText, $qNormalized) !== false;
     });
 }
