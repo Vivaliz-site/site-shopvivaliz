@@ -144,14 +144,34 @@ function svi_run_sync_cli(int $expected, int $limit): array
     ];
 }
 
+function svi_run_melhorenvio_cli(): array
+{
+    // /api/melhorenvio/diagnostic.php e bloqueado no perimetro de seguranca
+    // (mesmo padrao do Olist acima) -- chamado via HTTP sempre da 403 e o
+    // painel mostra "Melhor Envio pronto para cotacao: false" mesmo com a
+    // integracao funcionando de verdade. Roda via CLI local.
+    $script = escapeshellarg(dirname(__DIR__) . '/api/melhorenvio/diagnostic.php');
+    $output = shell_exec('php ' . $script . ' cep=35500025 2>&1');
+    $json = is_string($output) ? json_decode($output, true) : null;
+    return [
+        'status' => is_array($json) ? 200 : 0,
+        'error' => is_array($json) ? '' : 'cli_invocation_failed',
+        'json' => is_array($json) ? $json : null,
+        'raw' => is_string($output) ? $output : '',
+    ];
+}
+
 $expected = max(1, (int)($_GET['expected'] ?? 200));
 $limit = max(1, min(250, (int)($_GET['limit'] ?? 50)));
 $baseUrl = svi_base_url();
 
 $update = svi_fetch_json($baseUrl . '/installer/update-applied-check.php');
 $sync = svi_run_sync_cli($expected, $limit);
-$melhorEnvio = svi_fetch_json($baseUrl . '/api/melhorenvio/diagnostic.php?cep=35500025');
-$pagarme = svi_fetch_json($baseUrl . '/api/pagarme/diagnostic.php');
+$melhorEnvio = svi_run_melhorenvio_cli();
+// Pagar.me foi desativado -- o checkout so oferece Mercado Pago (ver
+// checkout.php). Nao faz sentido reportar "atencao" permanente pra uma
+// integracao que nao esta em uso por decisao, entao nem checamos mais.
+$pagarme = ['status' => 200, 'error' => '', 'json' => ['ok' => true, 'disabled' => true], 'raw' => ''];
 $beforeCount = (int)($sync['json']['before_count'] ?? 0);
 $afterCount = (int)($sync['json']['after_count'] ?? 0);
 $baselineExpected = $beforeCount > 0 ? min($expected, $beforeCount) : $expected;
