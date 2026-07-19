@@ -163,7 +163,7 @@
     if (!pager) {
       pager = document.createElement('div');
       pager.id = 'catalog-grid-pager';
-      pager.style.cssText = 'grid-column:1/-1; display:flex; align-items:center; justify-content:center; gap:12px; padding:16px 0;';
+      pager.style.cssText = 'display:flex; align-items:center; justify-content:center; gap:12px; padding:16px 0;';
       grid.insertAdjacentElement('afterend', pager);
     }
     return pager;
