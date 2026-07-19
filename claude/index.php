@@ -1,6 +1,6 @@
 <?php
 /**
- * EHA Status Dashboard — dev.shopvivaliz.com.br/claude
+ * EHA Status Dashboard — shopvivaliz.com.br/claude
  */
 header('Content-Type: text/html; charset=utf-8');
 

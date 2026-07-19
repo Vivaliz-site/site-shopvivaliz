@@ -37,8 +37,8 @@ function sv_social_host(): string
         }
     }
 
-    $host = trim((string)($_SERVER['HTTP_HOST'] ?? 'www.shopvivaliz.com.br'));
-    return $host !== '' ? $host : 'www.shopvivaliz.com.br';
+    $host = trim((string)($_SERVER['HTTP_HOST'] ?? 'shopvivaliz.com.br'));
+    return $host !== '' ? $host : 'shopvivaliz.com.br';
 }
 
 function sv_social_base_url(): string

@@ -1,7 +1,7 @@
-﻿<?php
+<?php
 declare(strict_types=1);
 
-$baseUrl = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.com.br');
+$baseUrl = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'shopvivaliz.com.br');
 $currentPage = basename($_SERVER['PHP_SELF'] ?? '');
 ?>
 <!DOCTYPE html>
