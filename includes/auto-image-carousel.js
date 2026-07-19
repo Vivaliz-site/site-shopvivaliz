@@ -1,76 +1,125 @@
 /**
  * AUTO IMAGE CAROUSEL - 3 SEGUNDOS
  * Alterna automaticamente entre imagens em todas as páginas
- * Funciona na página de produto e qualquer página com .product-gallery-thumbnails
+ * Suporta:
+ * 1. Página de produto: .product-gallery-thumbnails .thumb-btn
+ * 2. Catálogo/listagens: .product-card .product-image com data-images
  */
 
 (function() {
   'use strict';
 
-  let autoCarouselInterval = null;
-  let currentImageIndex = 0;
-  let thumbnailButtons = [];
-  let isAutoPlay = true;
+  const carousels = new Map(); // Map de <elemento> -> { interval, currentIndex, images }
+  const ROTATION_INTERVAL = 3000; // 3 segundos
 
-  function initAutoCarousel() {
-    thumbnailButtons = document.querySelectorAll('.product-gallery-thumbnails .thumb-btn');
+  function initProductGallery() {
+    const thumbnailButtons = document.querySelectorAll('.product-gallery-thumbnails .thumb-btn');
+    if (thumbnailButtons.length > 1) {
+      let currentImageIndex = 0;
+      let isAutoPlay = true;
+      let autoCarouselInterval = null;
 
-    if (thumbnailButtons.length === 0) {
-      return;
-    }
+      function startAutoCarousel() {
+        if (autoCarouselInterval) clearInterval(autoCarouselInterval);
 
-    startAutoCarousel();
-    addClickListeners();
-  }
+        autoCarouselInterval = setInterval(() => {
+          if (!isAutoPlay || thumbnailButtons.length === 0) return;
 
-  function startAutoCarousel() {
-    if (autoCarouselInterval) {
-      clearInterval(autoCarouselInterval);
-    }
-
-    autoCarouselInterval = setInterval(() => {
-      if (!isAutoPlay || thumbnailButtons.length === 0) {
-        return;
+          currentImageIndex = (currentImageIndex + 1) % thumbnailButtons.length;
+          const nextButton = thumbnailButtons[currentImageIndex];
+          if (nextButton) nextButton.click();
+        }, ROTATION_INTERVAL);
       }
 
-      currentImageIndex = (currentImageIndex + 1) % thumbnailButtons.length;
-      const nextButton = thumbnailButtons[currentImageIndex];
-
-      if (nextButton) {
-        nextButton.click();
-      }
-    }, 3000); // 3 segundos
-  }
-
-  function addClickListeners() {
-    thumbnailButtons.forEach((button, index) => {
-      button.addEventListener('click', () => {
-        currentImageIndex = index;
-        isAutoPlay = false;
-
-        // Resume autoplay após 10 segundos de inatividade
-        clearTimeout(window.autoCarouselResumeTimer);
-        window.autoCarouselResumeTimer = setTimeout(() => {
-          isAutoPlay = true;
-          startAutoCarousel();
-        }, 10000);
+      thumbnailButtons.forEach((button, index) => {
+        button.addEventListener('click', () => {
+          currentImageIndex = index;
+          isAutoPlay = false;
+          clearTimeout(window.autoCarouselResumeTimer);
+          window.autoCarouselResumeTimer = setTimeout(() => {
+            isAutoPlay = true;
+            startAutoCarousel();
+          }, 10000);
+        });
       });
+
+      startAutoCarousel();
+
+      window.addEventListener('beforeunload', () => {
+        if (autoCarouselInterval) clearInterval(autoCarouselInterval);
+      });
+    }
+  }
+
+  function initProductCardCarousels() {
+    document.querySelectorAll('.product-card .product-image').forEach(link => {
+      const img = link.querySelector('img');
+      if (!img) return;
+
+      const imagesJson = link.getAttribute('data-images');
+      if (!imagesJson) return;
+
+      try {
+        const images = JSON.parse(imagesJson);
+        if (!Array.isArray(images) || images.length < 2) return;
+
+        let currentIndex = 0;
+        let isAutoPlay = true;
+        let timer = null;
+
+        function startRotation() {
+          if (timer) clearInterval(timer);
+
+          timer = setInterval(() => {
+            if (!isAutoPlay) return;
+
+            currentIndex = (currentIndex + 1) % images.length;
+            img.style.opacity = '0.7';
+            img.src = images[currentIndex];
+
+            setTimeout(() => {
+              img.style.opacity = '1';
+            }, 200);
+          }, ROTATION_INTERVAL);
+        }
+
+        img.addEventListener('mouseenter', () => {
+          isAutoPlay = false;
+          if (timer) clearInterval(timer);
+        });
+
+        img.addEventListener('mouseleave', () => {
+          isAutoPlay = true;
+          startRotation();
+        });
+
+        link.addEventListener('click', () => {
+          isAutoPlay = false;
+          if (timer) clearInterval(timer);
+        });
+
+        startRotation();
+
+        carousels.set(link, { timer, images });
+      } catch (e) {
+        console.error('Erro ao parsear imagens do produto:', e);
+      }
     });
   }
 
-  // Inicializar quando o DOM estiver pronto
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initAutoCarousel);
-  } else {
-    initAutoCarousel();
+  function initAll() {
+    initProductGallery();
+    initProductCardCarousels();
   }
 
-  // Reinicializar se novos elementos forem adicionados dinamicamente
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAll);
+  } else {
+    initAll();
+  }
+
   const observer = new MutationObserver(() => {
-    const newButtons = document.querySelectorAll('.product-gallery-thumbnails .thumb-btn');
-    if (newButtons.length !== thumbnailButtons.length) {
-      initAutoCarousel();
-    }
+    setTimeout(initProductCardCarousels, 100);
   });
 
   observer.observe(document.body, {
@@ -78,11 +127,10 @@
     subtree: true,
   });
 
-  // Cleanup
   window.addEventListener('beforeunload', () => {
-    if (autoCarouselInterval) {
-      clearInterval(autoCarouselInterval);
-    }
+    carousels.forEach(carousel => {
+      if (carousel.timer) clearInterval(carousel.timer);
+    });
     observer.disconnect();
   });
 })();
