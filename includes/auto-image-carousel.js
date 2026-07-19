@@ -121,6 +121,7 @@
         console.error('Erro ao parsear imagens do produto:', e);
       }
     });
+    console.log('[Carousel] Initialized', count, 'product carousels');
   }
 
   function initAll() {
