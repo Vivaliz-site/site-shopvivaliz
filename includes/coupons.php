@@ -12,6 +12,30 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/pdo-database.php';
 
+function svcp_builtin_coupons(string $code): ?array
+{
+    $builtins = [
+        'VIVALIZ10' => ['type' => 'percent', 'value' => 10.0, 'label' => 'Desconto 10%'],
+        'BEMVINDO5' => ['type' => 'fixed', 'value' => 5.0, 'label' => 'Desconto R$ 5,00'],
+        'VOLTEI5' => ['type' => 'percent', 'value' => 5.0, 'label' => 'Desconto 5%'],
+        'FRETEGRATIS' => ['type' => 'shipping', 'value' => 0.0, 'label' => 'Frete Grátis'],
+    ];
+
+    if (!isset($builtins[$code])) {
+        return null;
+    }
+
+    return [
+        'ok' => true,
+        'code' => $code,
+        'percent' => $builtins[$code]['type'] === 'percent' ? $builtins[$code]['value'] : 0.0,
+        'amount' => $builtins[$code]['type'] === 'fixed' ? $builtins[$code]['value'] : 0.0,
+        'label' => $builtins[$code]['label'],
+        'type' => $builtins[$code]['type'],
+        'error' => '',
+    ];
+}
+
 /**
  * @return array{ok: bool, code: string, percent: float, amount: float, label: string, type: string, error: string}
  */
@@ -28,22 +52,38 @@ function svcp_validate(string $rawCode, float $itemsSubtotal): array
     try {
         $pdo = sv_pdo();
         $stmt = $pdo->prepare(
-            'SELECT code, description, discount_type, discount_value
+            'SELECT code, description, discount_type, discount_value, min_order_value, starts_at, ends_at, expires_at, max_uses, used_count, is_active
              FROM coupons
              WHERE code = :code AND is_active = 1
-               AND (starts_at IS NULL OR starts_at <= NOW())
-               AND (ends_at IS NULL OR ends_at >= NOW())
              LIMIT 1'
         );
         $stmt->execute([':code' => $code]);
         $row = $stmt->fetch();
     } catch (Throwable $e) {
         error_log('[coupons] lookup failed: ' . $e->getMessage());
-        return ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_lookup_failed'];
+        $row = null;
     }
 
     if (!is_array($row)) {
-        return ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_invalid'];
+        return svcp_builtin_coupons($code) ?? ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_invalid'];
+    }
+
+    $startsAt = trim((string)($row['starts_at'] ?? ''));
+    $endsAt = trim((string)($row['ends_at'] ?? ''));
+    $expiresAt = trim((string)($row['expires_at'] ?? ''));
+    $now = time();
+    if ($startsAt !== '' && strtotime($startsAt) > $now) {
+        return svcp_builtin_coupons($code) ?? ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_not_started'];
+    }
+    $effectiveExpiry = $expiresAt !== '' ? $expiresAt : $endsAt;
+    if ($effectiveExpiry !== '' && strtotime($effectiveExpiry) < $now) {
+        return svcp_builtin_coupons($code) ?? ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_expired'];
+    }
+
+    $maxUses = (int)($row['max_uses'] ?? 0);
+    $usedCount = (int)($row['used_count'] ?? 0);
+    if ($maxUses > 0 && $usedCount >= $maxUses) {
+        return svcp_builtin_coupons($code) ?? ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_exhausted'];
     }
 
     $type = (string)($row['discount_type'] ?? 'percent');
@@ -66,7 +106,15 @@ function svcp_validate(string $rawCode, float $itemsSubtotal): array
         return ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => $type, 'error' => 'coupon_unsupported_type'];
     }
 
-    return ['ok' => true, 'code' => (string)$row['code'], 'percent' => $percent, 'amount' => $amount, 'label' => $label, 'type' => $type, 'error' => ''];
+    return [
+        'ok' => true,
+        'code' => (string)$row['code'],
+        'percent' => $percent,
+        'amount' => $amount,
+        'label' => $label,
+        'type' => $type,
+        'error' => '',
+    ];
 }
 
 function svcp_default_label(string $type, float $value): string

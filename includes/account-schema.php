@@ -117,8 +117,12 @@ function sv_account_ensure_schema(): void
             description VARCHAR(255) NULL,
             discount_type VARCHAR(20) NOT NULL DEFAULT "percent",
             discount_value DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+            min_order_value DECIMAL(12,2) NOT NULL DEFAULT 0.00,
             starts_at DATETIME NULL,
             ends_at DATETIME NULL,
+            expires_at DATETIME NULL,
+            max_uses INT NOT NULL DEFAULT 0,
+            used_count INT NOT NULL DEFAULT 0,
             is_active TINYINT(1) NOT NULL DEFAULT 1,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME NULL,
@@ -129,9 +133,29 @@ function sv_account_ensure_schema(): void
     // Cupom referenciado no popup de carrinho abandonado (includes/navbar.php)
     // e no assistente Liz -- antes disso nunca existia como registro real,
     // entao o desconto prometido nunca era de fato aplicado.
+    $couponColumns = [];
+    $couponStmt = $pdo->query('SHOW COLUMNS FROM coupons');
+    foreach ($couponStmt->fetchAll() as $row) {
+        $couponColumns[$row['Field']] = true;
+    }
+    $couponAlterations = [
+        'min_order_value' => 'ALTER TABLE coupons ADD COLUMN min_order_value DECIMAL(12,2) NOT NULL DEFAULT 0.00',
+        'starts_at' => 'ALTER TABLE coupons ADD COLUMN starts_at DATETIME NULL',
+        'ends_at' => 'ALTER TABLE coupons ADD COLUMN ends_at DATETIME NULL',
+        'expires_at' => 'ALTER TABLE coupons ADD COLUMN expires_at DATETIME NULL',
+        'max_uses' => 'ALTER TABLE coupons ADD COLUMN max_uses INT NOT NULL DEFAULT 0',
+        'used_count' => 'ALTER TABLE coupons ADD COLUMN used_count INT NOT NULL DEFAULT 0',
+    ];
+    foreach ($couponAlterations as $column => $sql) {
+        if (!isset($couponColumns[$column])) {
+            $pdo->exec($sql);
+            $couponColumns[$column] = true;
+        }
+    }
+
     $pdo->exec(
-        "INSERT INTO coupons (code, description, discount_type, discount_value, is_active)
-         VALUES ('VOLTEI5', 'Cupom carrinho abandonado (5%)', 'percent', 5.00, 1)
+        "INSERT INTO coupons (code, description, discount_type, discount_value, min_order_value, starts_at, ends_at, expires_at, max_uses, used_count, is_active)
+         VALUES ('VOLTEI5', 'Cupom carrinho abandonado (5%)', 'percent', 5.00, 0.00, NULL, NULL, NULL, 0, 0, 1)
          ON DUPLICATE KEY UPDATE code = code"
     );
 
