@@ -106,7 +106,7 @@ $htmlBody = <<<HTML
             </ol>
 
             <p style="text-align: center;">
-                <a href="$siteBaseUrl" class="button">Ver meu pedido</a>
+                <a href="$siteBaseUrl/meus-pedidos" class="button">Ver meu pedido</a>
             </p>
 
             <p style="color: #666; font-size: 13px; margin-top: 30px;">
