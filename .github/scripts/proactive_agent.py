@@ -246,9 +246,9 @@ def run_agent():
     print(f"Arquivo escrito: {file_path} ({len(content)} chars)")
 
     # Commit
-    subprocess.run("git config user.name 'Claude Autonomo'", shell=True)
-    subprocess.run("git config user.email 'fredmourao@gmail.com'", shell=True)
-    subprocess.run(f"git add '{file_path}'", shell=True)
+    subprocess.run(["git", "config", "user.name", "Claude Autonomo"])
+    subprocess.run(["git", "config", "user.email", "fredmourao@gmail.com"])
+    subprocess.run(["git", "add", file_path])
 
     diff = shell("git diff --cached --stat")
     if not diff:
