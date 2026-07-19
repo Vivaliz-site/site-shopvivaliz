@@ -21,6 +21,36 @@ if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
     }
 }
 
+function sv_mailer_load_env(): void
+{
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+    $loaded = true;
+
+    $envPath = dirname(__DIR__) . '/.env';
+    if (!is_file($envPath) || !is_readable($envPath)) {
+        return;
+    }
+
+    foreach (file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
+            continue;
+        }
+        [$key, $value] = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim($value, " \t\n\r\0\x0B\"'");
+        if ($key === '' || getenv($key) !== false) {
+            continue;
+        }
+        putenv($key . '=' . $value);
+        $_ENV[$key] = $value;
+        $_SERVER[$key] = $value;
+    }
+}
+
 function sv_mailer_site_url(): string
 {
     $official = @include dirname(__DIR__) . '/config/official-site.php';
@@ -38,6 +68,8 @@ function sv_mailer_site_url(): string
 
 function get_mailer_config(): array
 {
+    sv_mailer_load_env();
+
     return [
         'from_email' => getenv('EMAIL_FROM') ?: getenv('SMTP_USER') ?: getenv('EMAIL_USER') ?: getenv('MAIL_USER') ?: 'agentes@shopvivaliz.com.br',
         'from_name' => 'ShopVivaliz',
