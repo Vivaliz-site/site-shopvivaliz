@@ -40,6 +40,12 @@
 
 ## Entradas
 
+### 2026-07-19 — Migração de domínio: produção canônica é apex/no-www
+**Sistema/arquivo:** `.htaccess`, `.env`, `.github/workflows/sync-oracle-vm-secrets.yml`, `scripts/update-production-env.py`, qualquer fallback/callback público
+**O que descobri:** o domínio principal da loja depois da migração é **`https://shopvivaliz.com.br`** (apex, sem `www`). Não trocar fallbacks, callbacks, feed, sitemap, Mercado Pago, Melhor Envio, OAuth ou regras de Apache para `https://www.shopvivaliz.com.br`. Hosts legados (`www.shopvivaliz.com.br` e `dev.shopvivaliz.com.br`) podem redirecionar tráfego de navegador/SEO (`GET`/`HEAD`) para o apex, mas **não** redirecionar `POST`, para não quebrar webhooks/callbacks de provedores.
+**Por quê importa:** um commit automático já reverteu a regra para "canonical www", fazendo o domínio principal redirecionar para `www` e desorganizando a migração. Isso também pode contaminar URLs assinadas, webhooks, OAuth e feeds se algum agente "normalizar" para `www` sem validar o domínio decidido pelo usuário.
+**Ver também:** `.htaccess`, `scripts/update-production-env.py`
+
 ### 2026-07-19 — Tiny/API v3: pedido pago deve nascer como `situacao=3` [`pagamento.meioPagamento` CORRIGIDO: NÃO enviar, ver entrada abaixo]
 **Sistema/arquivo:** `includes/tiny-order-push.php`, `api/webhook-mercadopago.php`
 **O que descobri:** o payload de criação do pedido na Tiny fica mais consistente para faturamento quando o pedido já entra como `situacao=3` (Aprovada) depois do pagamento aprovado, em vez de `0` (Aberta). Além disso, `listaPreco`, `naturezaOperacao` e `intermediador` só devem ser enviados quando houver ID real configurado na conta.
