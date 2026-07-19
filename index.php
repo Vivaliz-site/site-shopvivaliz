@@ -454,7 +454,7 @@ $svNavCurrent = '';
                     </form>
                 </div>
 
-                <div class="cta-buttons hero-cta" style="margin-top: 24px;">
+                <div class="cta-buttons hero-cta hero-cta-mt-24">
                     <a href="/catalogo" class="btn btn-hero-primary">
                         🛍️ Ver catálogo completo
                     </a>
