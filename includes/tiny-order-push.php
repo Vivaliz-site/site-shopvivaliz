@@ -390,7 +390,13 @@ function svtop_tiny_optional_object_from_env(string $envKey): ?array
 
 function svtop_tiny_build_payment_block(array $order): array
 {
-    $paymentMethodKey = strtolower(trim((string)($order['payment_method'] ?? '')));
+    // Usa svtop_tiny_payment_method_key(), que detecta o sub-metodo real
+    // (pix/boleto/cartao) a partir de mercadopago.payment_method_id --
+    // $order['payment_method'] sozinho e sempre "mercado_pago" (generico),
+    // entao usa-lo direto aqui sempre resolvia pra "Cartao de credito"
+    // mesmo em pagamentos Pix (confirmado ao vivo: pedido 3055 recriado
+    // ainda saiu com formaRecebimento=Cartao de credito apesar do PIX).
+    $paymentMethodKey = svtop_tiny_payment_method_key($order);
     $paymentFormId = svtop_tiny_payment_form_id($paymentMethodKey);
     if ($paymentFormId === null) {
         return [];
