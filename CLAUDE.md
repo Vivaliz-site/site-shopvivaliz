@@ -5,11 +5,11 @@
 > Status: ✅ Produção - deploy real via VM Oracle (não FTP, ver abaixo)  
 > Repositório real: **https://github.com/Vivaliz-site/site-shopvivaliz** (não `fredmourao-ai/site-shopvivaliz`)
 
-> ⚠️ **LEIA `docs/MEMORIA-AGENTES.md` ANTES DE COMEÇAR.** Múltiplos agentes autônomos
-> diferentes (Claude, GPT, Gemini) trabalham neste repo em sessões isoladas sem memória
-> compartilhada — esse arquivo é o único lugar combinado onde erros e descobertas não
-> óbvias já feitas ficam registrados, pra ninguém redescobrir o mesmo bug do zero. Ao
-> final da sua sessão, se você aprendeu algo não-óbvio, adicione uma entrada lá.
+> ⚠️ **LEIA `KNOWN_ISSUES.md` E `docs/MEMORIA-AGENTES.md` ANTES DE COMEÇAR.** 
+> - `KNOWN_ISSUES.md`: Problemas recorrentes (ex: pasta `/includes/` bloqueada) que voltam múltiplas vezes
+> - `docs/MEMORIA-AGENTES.md`: Múltiplos agentes autônomos (Claude, GPT, Gemini) trabalham em sessões isoladas
+> 
+> Esses arquivos são o **único lugar centralizado** onde erros não-óbvios ficam registrados, pra ninguém redescobrir o mesmo bug. Ao final da sua sessão, **ADICIONE UMA ENTRADA** se aprendeu algo recorrente.
 
 ---
 
