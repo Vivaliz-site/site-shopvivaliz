@@ -1,7 +1,7 @@
 {
   "campaign": {
     "name": "Rodizios-Search-ShopVivaliz-2026-07",
-    "daily_budget": 15.0,
+    "daily_budget": 10.0,
     "budget_currency": "BRL",
     "campaign_type": "SEARCH",
     "status": "PAUSED",
@@ -14,52 +14,52 @@
       "Paraná"
     ],
     "estimated_daily_reach": 450,
-    "estimated_monthly_budget": 450.0
+    "estimated_monthly_budget": 300.0
   },
   "keywords": {
     "high_value": [
       {
         "text": "rodizios gel soprano 35mm",
-        "bid": "R$ 2.50",
+        "bid": "R$ 0.95",
         "match": "PHRASE"
       },
       {
         "text": "rodizio giratório com freio",
-        "bid": "R$ 2.30",
+        "bid": "R$ 0.95",
         "match": "PHRASE"
       },
       {
         "text": "kit rodizios 35mm freio",
-        "bid": "R$ 2.40",
+        "bid": "R$ 0.95",
         "match": "PHRASE"
       }
     ],
     "medium_value": [
       {
         "text": "rodizios para móvel",
-        "bid": "R$ 1.80",
+        "bid": "R$ 0.95",
         "match": "PHRASE"
       },
       {
         "text": "rodizio gel silicone",
-        "bid": "R$ 1.90",
+        "bid": "R$ 0.95",
         "match": "PHRASE"
       },
       {
         "text": "rodizio giratório com freio",
-        "bid": "R$ 1.70",
+        "bid": "R$ 0.95",
         "match": "PHRASE"
       }
     ],
     "broad": [
       {
         "text": "comprar rodizios gel",
-        "bid": "R$ 1.50",
+        "bid": "R$ 0.95",
         "match": "PHRASE"
       },
       {
         "text": "rodizios para armario",
-        "bid": "R$ 1.40",
+        "bid": "R$ 0.95",
         "match": "PHRASE"
       }
     ]
