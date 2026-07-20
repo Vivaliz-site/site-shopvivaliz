@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 
 test.describe('Página de Pedidos', () => {
-  const baseUrl = process.env.E2E_BASE_URL || 'https://dev.shopvivaliz.com.br';
+  const baseUrl = process.env.E2E_BASE_URL || 'https://shopvivaliz.com.br';
 
   test('página de pedidos deve redirecionar para login se não autenticado', async ({ page }) => {
     // Limpar cookies para garantir logout

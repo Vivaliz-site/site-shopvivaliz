@@ -3,7 +3,7 @@
 Git Auto-Sync Daemon (SEGURO)
 Executado via cron a cada 2 minutos na VM Oracle.
 
-CRÍTICO: Este daemon NÃO usa git reset --hard (perigoso em produção).
+CRÍTICO: Este daemon não usa reset destrutivo de Git em produção.
 Usa git fetch + git merge --ff-only que é seguro.
 
 Regras obrigatórias:
@@ -29,13 +29,16 @@ LOG_DIR = "/var/log/shopvivaliz"
 LOG_FILE = f"{LOG_DIR}/git-auto-sync-{datetime.now().strftime('%Y%m%d')}.log"
 LOCK_FILE = f"{REPO_DIR}/.git-sync.lock"
 
-# Arquivos que NÃO devem ser commitados (proteção de dados)
+# Arquivos que NÃO devem ser commitados (proteção de dados). Eles continuam
+# bloqueando sync se estiverem sujos: a política atual exige árvore limpa antes
+# de fetch/merge para não descartar runtime sem revisão humana.
 PROTECTED_FILES = [
     ".git-sync.lock",
     ".agent-heartbeats/",
     "storage/orders/",
     "storage/codex-bridge/state.json",
     "storage/orchestrator/queue.json",
+    "tasks-queue.json",
 ]
 
 def log_message(level: str, msg: str):
@@ -107,19 +110,27 @@ def run_command(cmd: str, cwd: str = None) -> tuple[int, str, str]:
     except Exception as e:
         return 1, "", str(e)
 
+def _is_protected_path(path: str) -> bool:
+    """Verifica se um caminho de arquivo esta na lista PROTECTED_FILES
+    (prefixo de diretorio ou nome exato de arquivo)."""
+    return any(path == p or path.startswith(p) for p in PROTECTED_FILES)
+
 def check_working_tree():
-    """Validar working tree antes de operações git"""
+    """Validar working tree antes de operações git.
+
+    Qualquer mudança bloqueia o sync automático. Mesmo runtime protegido deve
+    ser preservado por desenho operacional, nunca descartado automaticamente.
+    """
     code, out, err = run_command("git status --porcelain")
     if code != 0:
         log_message("ERROR", f"Não conseguiu verificar status: {err}")
         return False, "git status falhou"
 
-    # Se há saída, há mudanças não commitadas
-    if out.strip():
-        log_message("WARNING", f"Working tree sujo, rejeitando merge:\n{out}")
-        return False, "working tree sujo"
+    if not out.strip():
+        return True, "OK"
 
-    return True, "OK"
+    log_message("WARNING", f"Working tree sujo, rejeitando sync seguro:\n{out.strip()}")
+    return False, "working tree sujo"
 
 def get_current_sha():
     """Obter SHA completo do HEAD"""
@@ -129,7 +140,7 @@ def get_current_sha():
     return None
 
 def sync():
-    """Executar sincronização (SEGURA - SEM git reset --hard)"""
+    """Executar sincronização segura sem reset destrutivo."""
     log_message("INFO", "========== Git Auto-Sync (SEGURO) ==========")
 
     # Verificar lock
@@ -154,7 +165,7 @@ def sync():
         sha_before = get_current_sha()
         log_message("INFO", f"SHA antes: {sha_before}")
 
-        # 3. Validar working tree
+        # 3. Validar working tree antes de qualquer fetch/merge
         is_clean, status = check_working_tree()
         if not is_clean:
             log_message("ERROR", f"Working tree inválida: {status}")

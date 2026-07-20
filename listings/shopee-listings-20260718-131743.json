@@ -1,0 +1,15 @@
+{
+    "agent": "shopee_listings_extractor",
+    "version": "9.2.85",
+    "generated_at": "2026-07-18T13:17:43+00:00",
+    "secrets_check": {
+        "token_source": "oauth2_refresh",
+        "token_refreshed": true
+    },
+    "status": "partial",
+    "total_products": 0,
+    "products": [],
+    "errors": [
+        "Resposta inesperada da API: {\"error\":\"invalid_json\",\"_http_status\":429}"
+    ]
+}

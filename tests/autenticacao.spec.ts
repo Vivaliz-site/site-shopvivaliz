@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 
 test.describe('Autenticação', () => {
-  const baseUrl = process.env.E2E_BASE_URL || 'https://dev.shopvivaliz.com.br';
+  const baseUrl = process.env.E2E_BASE_URL || 'https://shopvivaliz.com.br';
 
   test('página de login deve estar acessível', async ({ page }) => {
     await page.goto(`${baseUrl}/auth/login.php`, { waitUntil: 'networkidle' });

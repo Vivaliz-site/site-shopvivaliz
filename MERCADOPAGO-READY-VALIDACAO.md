@@ -207,7 +207,7 @@ hash_equals($expectedSignature, $signature); // Timing-safe comparison
 ### Validação (Teste)
 ```bash
 # Fazer uma compra real de teste no checkout
-# https://dev.shopvivaliz.com.br/checkout
+# https://shopvivaliz.com.br/checkout
 
 # Usar dados de teste do Mercado Pago
 # CPF: 12345678909
@@ -222,7 +222,7 @@ hash_equals($expectedSignature, $signature); // Timing-safe comparison
 **Solução:** Configure a URL do webhook no painel do Mercado Pago
 ```
 Painel > Configurações > Webhooks
-URL: https://dev.shopvivaliz.com.br/api/webhook-mercadopago.php
+URL: https://shopvivaliz.com.br/api/webhook-mercadopago.php
 Eventos: payment.approved, payment.pending
 ```
 

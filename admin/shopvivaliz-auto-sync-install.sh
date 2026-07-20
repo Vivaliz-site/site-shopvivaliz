@@ -253,35 +253,21 @@ if [[ $MODIFIED_COUNT -gt 0 ]]; then
     log "Working tree modificado no safety check:"
     git status --porcelain | tee -a "$LOG_FILE"
 
-    # Permitir somente arquivos conhecidos
-    BLOCKING_FOUND=0
-    while IFS= read -r line; do
-        file=$(echo "$line" | awk '{print $2}')
-        if ! is_allowed_file "$file"; then
-            log_error "Arquivo bloqueante encontrado: $file"
-            BLOCKING_FOUND=1
-        fi
-    done < <(git status --porcelain)
-
-    if [[ $BLOCKING_FOUND -eq 1 ]]; then
-        log_error "Safety check falhou - abortando reset"
-        exit 1
-    fi
-
-    log "✓ Apenas arquivos de runtime modificados, prosseguindo..."
+    log_error "Safety check falhou - working tree sujo; abortando sync seguro"
+    exit 1
 fi
 
 # ============================================================================
-# RESET PARA ORIGIN/MAIN
+# FAST-FORWARD PARA ORIGIN/MAIN
 # ============================================================================
 
 log ""
-log "Executando git reset --hard origin/main..."
+log "Executando git merge --ff-only origin/main..."
 
-if git reset --hard origin/main 2>&1 | tee -a "$LOG_FILE"; then
-    log "✓ Reset executado com sucesso"
+if git merge --ff-only origin/main 2>&1 | tee -a "$LOG_FILE"; then
+    log "✓ Fast-forward executado com sucesso"
 else
-    log_error "Falha no git reset"
+    log_error "Falha no git merge --ff-only"
     exit 1
 fi
 

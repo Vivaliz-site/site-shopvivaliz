@@ -5,7 +5,7 @@
 ```
 App Key: 6kf502maarj2k
 App Secret: f0a2a1e58a7le4ca8b5f0f7fdfdb2o0ebee06c
-Redirect URL: https://dev.shopvivaliz.com.br
+Redirect URL: https://shopvivaliz.com.br
 ```
 
 ## ⚙️ Instalação
@@ -22,7 +22,7 @@ Acesse:
 ```
 https://partner.tiktokshop.com/authorize?
   client_id=6kf502maarj2k&
-  redirect_uri=https://dev.shopvivaliz.com.br&
+  redirect_uri=https://shopvivaliz.com.br&
   scope=shop.basic&
   response_type=code
 ```
@@ -30,7 +30,7 @@ https://partner.tiktokshop.com/authorize?
 #### Passo 2: Capturar o código
 Após autorizar, você será redirecionado com:
 ```
-https://dev.shopvivaliz.com.br?code=XXXX&shop_id=XXXX
+https://shopvivaliz.com.br?code=XXXX&shop_id=XXXX
 ```
 
 #### Passo 3: Trocar código por token

@@ -1,6 +1,9 @@
 <?php
-
 declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 header('Content-Type: text/html; charset=UTF-8');
 header('Cache-Control: no-store');
@@ -18,6 +21,29 @@ $message = $approved
     : ($failed
         ? 'O pagamento não foi concluído. Você pode voltar ao checkout e tentar novamente.'
         : 'O meio de pagamento foi gerado e aguarda conclusão ou compensação.');
+$orderTotal = 0.0;
+$orderItems = [];
+if ($orderNumber !== '') {
+    $orderFile = __DIR__ . '/storage/orders/' . substr($orderNumber, 2, 8) . '/' . $orderNumber . '.json';
+    if (is_file($orderFile)) {
+        $orderData = json_decode((string)file_get_contents($orderFile), true);
+        if (is_array($orderData)) {
+            $orderTotal = (float)($orderData['total'] ?? 0.0);
+            $rawItems = is_array($orderData['items'] ?? null) ? $orderData['items'] : [];
+            foreach ($rawItems as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $orderItems[] = [
+                    'sku' => (string)($item['sku'] ?? $item['item_id'] ?? ''),
+                    'name' => (string)($item['name'] ?? $item['item_name'] ?? 'Produto Vivaliz'),
+                    'price' => (float)($item['price'] ?? 0),
+                    'quantity' => (int)($item['quantity'] ?? 1),
+                ];
+            }
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -27,6 +53,32 @@ $message = $approved
     <title><?= htmlspecialchars($title) ?> | Vivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/checkout.css">
+    <?php if ($approved && $orderNumber !== ''): ?>
+    <script>
+      window.ShopVivalizPurchaseContext = <?= json_encode([
+          'transaction_id' => $orderNumber,
+          'value' => $orderTotal,
+          'items' => $orderItems,
+      ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    </script>
+    <?php endif; ?>
+    <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
+    <?php
+    if ($approved && $orderNumber !== '' && getenv('GOOGLE_ADS_ID') && getenv('GOOGLE_ADS_CONVERSION_LABEL')):
+    ?>
+    <script>
+      window.addEventListener('load', function() {
+        if (typeof gtag === 'function') {
+          gtag('event', 'conversion', {
+            'send_to': '<?= htmlspecialchars(getenv('GOOGLE_ADS_ID')) ?>/<?= htmlspecialchars(getenv('GOOGLE_ADS_CONVERSION_LABEL')) ?>',
+            'value': <?= $orderTotal ?>,
+            'currency': 'BRL',
+            'transaction_id': '<?= htmlspecialchars($orderNumber) ?>'
+          });
+        }
+      });
+    </script>
+    <?php endif; ?>
 </head>
 <body>
 <?php $svNavCurrent = 'checkout'; include __DIR__ . '/includes/navbar.php'; ?>

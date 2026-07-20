@@ -57,7 +57,7 @@ DB_CHARSET=utf8mb4
 Após criar `.env`, acesse:
 
 ```
-https://dev.shopvivaliz.com.br/sync-final.php
+https://shopvivaliz.com.br/sync-final.php
 ```
 
 **Resposta esperada (JSON):**
@@ -76,7 +76,7 @@ https://dev.shopvivaliz.com.br/sync-final.php
 Após confirmar que `.env` funciona, acesse:
 
 ```
-https://dev.shopvivaliz.com.br/sync-agora-198.php
+https://shopvivaliz.com.br/sync-agora-198.php
 ```
 
 **Resposta esperada (JSON):**
@@ -93,7 +93,7 @@ https://dev.shopvivaliz.com.br/sync-agora-198.php
 
 Acesse:
 ```
-https://dev.shopvivaliz.com.br/admin/
+https://shopvivaliz.com.br/admin/
 ```
 
 Deve mostrar:
@@ -106,25 +106,25 @@ Deve mostrar:
 
 ### Teste Simples (3 produtos)
 ```
-GET https://dev.shopvivaliz.com.br/sync-final.php
+GET https://shopvivaliz.com.br/sync-final.php
 ```
 ✅ Para testar se banco está acessível
 
 ### Sincronizar 198 Produtos
 ```
-GET https://dev.shopvivaliz.com.br/sync-agora-198.php
+GET https://shopvivaliz.com.br/sync-agora-198.php
 ```
 ✅ Sincroniza todos os 198 produtos
 
 ### Diagnóstico Completo
 ```
-GET https://dev.shopvivaliz.com.br/api/olist/diagnostic-full.php
+GET https://shopvivaliz.com.br/api/olist/diagnostic-full.php
 ```
 ✅ Valida 14 verificações de integração
 
 ### Catálogo
 ```
-GET https://dev.shopvivaliz.com.br/catalogo/
+GET https://shopvivaliz.com.br/catalogo/
 ```
 ✅ Já mostra 198 produtos (hardcoded)
 

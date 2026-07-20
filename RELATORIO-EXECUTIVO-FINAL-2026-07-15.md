@@ -237,9 +237,9 @@ Emails funcionarão automaticamente a partir do próximo pagamento.
 
 | Item | Detalhes |
 |------|----------|
-| **Site** | https://dev.shopvivaliz.com.br |
-| **Checkout** | https://dev.shopvivaliz.com.br/checkout |
-| **Webhook Endpoint** | https://dev.shopvivaliz.com.br/api/webhook-mercadopago.php |
+| **Site** | https://shopvivaliz.com.br |
+| **Checkout** | https://shopvivaliz.com.br/checkout |
+| **Webhook Endpoint** | https://shopvivaliz.com.br/api/webhook-mercadopago.php |
 | **Painel MP** | https://www.mercadopago.com.br/developers/panel |
 | **GitHub Secrets** | https://github.com/Vivaliz-site/site-shopvivaliz/settings/secrets/actions |
 | **Gmail App Passwords** | https://myaccount.google.com/apppasswords |

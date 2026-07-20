@@ -1,10 +1,19 @@
 {
   "version": "1.0.0",
   "project": "ShopVivaliz",
-  "goal": "Preferir modelos de menor custo para tarefas simples sem remover governanca.",
+  "goal": "Executar chats, CLIs e agentes 24/7 no modo mais economico por padrao sem remover governanca.",
+  "default_mode": "autopilot_economy",
+  "default_models": {
+    "openai": "gpt-4o-mini",
+    "anthropic": "claude-haiku-4-5-20251001",
+    "gemini": "gemini-2.5-flash",
+    "local": "mistral:7b-instruct-q4_K_M"
+  },
   "default_behavior": {
     "ask_user": "only_when_required_by_governance_or_missing_critical_context",
     "autonomous_safe_tasks": true,
+    "auto_execute_safe_actions": true,
+    "permanent_default": true,
     "preserve_human_approval_for": [
       "price_changes",
       "campaign_publish_or_activation",
@@ -27,8 +36,8 @@
       "verbosity": "medium"
     },
     "high_risk_or_architecture": {
-      "openai": "quality_first_model",
-      "reasoning_effort": "medium",
+      "openai": "gpt-4o-mini",
+      "reasoning_effort": "low",
       "requires_extra_validation": true
     }
   },

@@ -140,7 +140,7 @@ python --version
 ```
 Possível causa: site offline ou DNS lento
 Solução: Verificar em navegador manualmente
-         Testar: curl https://dev.shopvivaliz.com.br/
+         Testar: curl https://shopvivaliz.com.br/
 ```
 
 ### Erro: "Não encontra elementos"

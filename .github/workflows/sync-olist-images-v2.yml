@@ -23,7 +23,7 @@ jobs:
           set -euo pipefail
           report="$RUNNER_TEMP/olist-image-health.json"
           curl --fail --silent --show-error --max-time 20 \
-            https://dev.shopvivaliz.com.br/api/catalog/image-health.php \
+            https://shopvivaliz.com.br/api/catalog/image-health.php \
             --output "$report"
           python3 - "$report" <<'PY'
           import json

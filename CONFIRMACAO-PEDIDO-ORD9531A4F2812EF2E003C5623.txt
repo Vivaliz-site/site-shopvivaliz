@@ -30,7 +30,7 @@ PRÓXIMOS PASSOS
 
 LINK DE PAGAMENTO
 
-https://dev.shopvivaliz.com.br/checkout?order=ORD9531A4F2812EF2E003C5623
+https://shopvivaliz.com.br/checkout?order=ORD9531A4F2812EF2E003C5623
 
 ═══════════════════════════════════════════════════════════════
 
@@ -38,7 +38,7 @@ DÚVIDAS?
 
 📞 WhatsApp: 11 4041-5850
 📧 Email: contato@shopvivaliz.com.br
-🌐 Site: https://dev.shopvivaliz.com.br
+🌐 Site: https://shopvivaliz.com.br
 
 ═══════════════════════════════════════════════════════════════
 

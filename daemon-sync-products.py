@@ -34,9 +34,20 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
         if isinstance(attachment, dict) and str(attachment.get("url", "")).startswith("https://"):
             attachments.append({"url": str(attachment["url"])})
     quantity = max(0, int(item.get("estoque_disponivel") or stock.get("quantidade") or 0))
+    kit_composition = []
+    for component in item.get("kit", []) if isinstance(item.get("kit"), list) else []:
+        if not isinstance(component, dict):
+            continue
+        produto = component.get("produto") if isinstance(component.get("produto"), dict) else {}
+        sku = str(produto.get("sku") or "").strip()
+        qty = int(component.get("quantidade") or 0)
+        if sku and qty > 0:
+            kit_composition.append({"sku": sku, "quantidade": qty})
     return {
         "id": item.get("id"),
         "sku": str(item.get("sku") or item.get("codigo") or "").strip(),
+        "tipo": str(item.get("tipo") or "P"),
+        "kit": kit_composition,
         "descricao": str(item.get("descricao") or item.get("nome") or "").strip(),
         "descricaoComplementar": str(item.get("descricaoComplementar") or item.get("descricao_complementar") or "").strip(),
         "situacao": str(item.get("situacao") or "A"),
@@ -156,7 +167,23 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
         merged = dict(summary)
         merged.update(detail)
         stock = merged.get("estoque") if isinstance(merged.get("estoque"), dict) else {}
-        merged["estoque_disponivel"] = max(0, int(stock.get("quantidade") or 0))
+        quantity = max(0, int(stock.get("quantidade") or 0))
+
+        # O endpoint /estoque/{id} calcula "disponivel" no lado da Tiny
+        # (saldo - reservado, considerando composicao de kits automaticamente
+        # e depositos que devem ser desconsiderados) -- mais confiavel que
+        # estoque.quantidade do /produtos/{id}, que para kits fica sempre 0
+        # ou desatualizado. Usa disponivel quando o endpoint responde; cai
+        # para estoque.quantidade se a chamada falhar (produto raramente
+        # controla estoque, ou instabilidade pontual da API).
+        try:
+            stock_detail = api_get(f"estoque/{product_id}", token, attempts=2)
+            if "disponivel" in stock_detail:
+                quantity = max(0, int(stock_detail.get("disponivel") or 0))
+        except RuntimeError:
+            pass
+
+        merged["estoque_disponivel"] = quantity
         merged["_detail_synced_at"] = datetime.now(timezone.utc).isoformat()
         return product_id, public_product(merged)
 
@@ -178,6 +205,38 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
 
     ordered = [enriched[str(item.get("id", ""))] for item in summaries if str(item.get("id", "")) in enriched]
     return ordered, failures
+
+
+def apply_kit_stock(products: list[dict[str, Any]]) -> int:
+    """Produtos tipo kit (tipo == "K") nao tem estoque proprio confiavel na
+    Tiny -- o campo estoque_disponivel para eles costuma ficar zerado ou
+    desatualizado, porque a disponibilidade real depende da composicao
+    (quantidade de cada componente em estoque). Recalcula estoque_disponivel
+    dos kits como o minimo, entre os componentes, de estoque_do_componente
+    dividido pela quantidade exigida por kit.
+    """
+    stock_by_sku = {
+        str(item.get("sku") or ""): int(item.get("estoque_disponivel") or 0)
+        for item in products
+        if item.get("sku")
+    }
+    updated = 0
+    for item in products:
+        if item.get("tipo") != "K":
+            continue
+        composition = item.get("kit") or []
+        if not composition:
+            continue
+        possible = [
+            stock_by_sku.get(str(component.get("sku") or ""), 0) // max(1, int(component.get("quantidade") or 1))
+            for component in composition
+        ]
+        kit_stock = max(0, min(possible)) if possible else 0
+        if item.get("estoque_disponivel") != kit_stock:
+            item["estoque_disponivel"] = kit_stock
+            item["estoque"] = {"quantidade": kit_stock}
+            updated += 1
+    return updated
 
 
 def save_products(products: list[dict[str, Any]]) -> Path:
@@ -202,6 +261,9 @@ def sync_once(workers: int) -> bool:
     if not products:
         print("[!] Nenhum detalhe utilizável; cache existente preservado")
         return False
+    kits_updated = apply_kit_stock(products)
+    if kits_updated:
+        print(f"[+] Estoque recalculado pela composicao em {kits_updated} produtos tipo kit")
     output = save_products(products)
     with_stock = sum(1 for item in products if int(item.get("estoque_disponivel") or 0) > 0)
     with_images = sum(1 for item in products if isinstance(item.get("anexos"), list) and item["anexos"])

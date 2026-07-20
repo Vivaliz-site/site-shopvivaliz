@@ -47,7 +47,7 @@
 SELECT * FROM products WHERE sku='ARM-08' OR name LIKE '%ARM-08%';
 
 # OU via API:
-curl -s "https://dev.shopvivaliz.com.br/api/catalog/stock-by-product.php?sku=ARM-08"
+curl -s "https://shopvivaliz.com.br/api/catalog/stock-by-product.php?sku=ARM-08"
 ```
 
 ---
@@ -117,7 +117,7 @@ A cache `products-cache.json` não inclui quantidade de estoque. Sistema pode es
 2. Checar webhook de estoque em `/api/tiny/stock-webhook.php`
 3. Executar full sync manualmente:
    ```bash
-   curl -X POST "https://dev.shopvivaliz.com.br/api/sync/full-sync.php"
+   curl -X POST "https://shopvivaliz.com.br/api/sync/full-sync.php"
    ```
 
 ---
@@ -212,10 +212,10 @@ Refs: CHANGELOG.md, CLAUDE.md"
 ### Fase 2: Sincronizar Estoque (15-30 min)
 ```bash
 # 1. Testar API de estoque
-curl "https://dev.shopvivaliz.com.br/api/catalog/stock-by-product.php?sku=ARM-08" | jq .
+curl "https://shopvivaliz.com.br/api/catalog/stock-by-product.php?sku=ARM-08" | jq .
 
 # 2. Se retornar stock: 0 → Executar sync
-curl -X POST "https://dev.shopvivaliz.com.br/api/sync/full-sync.php" \
+curl -X POST "https://shopvivaliz.com.br/api/sync/full-sync.php" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 
 # 3. Verificar log
@@ -290,8 +290,8 @@ Ver `CHANGELOG.md` para:
 
 ## 🔗 Referências Rápidas
 
-- **Live Site:** https://dev.shopvivaliz.com.br/
-- **Admin:** https://dev.shopvivaliz.com.br/admin/
+- **Live Site:** https://shopvivaliz.com.br/
+- **Admin:** https://shopvivaliz.com.br/admin/
 - **Docs:** `CLAUDE.md`, `CHANGELOG.md`
 - **Repo:** https://github.com/Vivaliz-site/site-shopvivaliz
 - **VM:** `ssh -i key ubuntu@137.131.156.17`

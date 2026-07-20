@@ -36,7 +36,7 @@
 
 **Como testar:**
 ```
-1. Abrir https://dev.shopvivaliz.com.br/
+1. Abrir https://shopvivaliz.com.br/
 2. Verificar visual
 3. Testar em 3 devices (desktop, tablet, mobile)
 4. Clicar em links de navegação
@@ -147,7 +147,7 @@
 
 **Como testar:**
 ```
-1. Abrir https://dev.shopvivaliz.com.br/admin/
+1. Abrir https://shopvivaliz.com.br/admin/
 2. Verificar menu
 3. Clicar em cada opção
 ```
@@ -288,7 +288,7 @@
 
 **Como testar:**
 ```
-curl https://dev.shopvivaliz.com.br/api/agent/squad-chat.php?health=1
+curl https://shopvivaliz.com.br/api/agent/squad-chat.php?health=1
 Deve retornar JSON com status OK
 ```
 

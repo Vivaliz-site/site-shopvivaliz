@@ -41,14 +41,14 @@ $action = trim($_GET['action'] ?? $_POST['action'] ?? '');
 
 $result = match($action) {
     'watchdog' => (function() {
-        $url = 'https://dev.shopvivaliz.com.br/api/agent/autonomous-watchdog.php';
+        $url = 'https://shopvivaliz.com.br/api/agent/autonomous-watchdog.php';
         $ctx = stream_context_create(['http' => ['timeout' => 10, 'ignore_errors' => true]]);
         $body = @file_get_contents($url, false, $ctx);
         return ['action' => 'watchdog', 'response' => json_decode($body ?: '{}', true)];
     })(),
 
     'report' => (function() {
-        $url = 'https://dev.shopvivaliz.com.br/api/agent/autonomous-report.php';
+        $url = 'https://shopvivaliz.com.br/api/agent/autonomous-report.php';
         $ctx = stream_context_create(['http' => ['timeout' => 10, 'ignore_errors' => true]]);
         $body = @file_get_contents($url, false, $ctx);
         return ['action' => 'report', 'response' => json_decode($body ?: '{}', true)];
@@ -56,12 +56,12 @@ $result = match($action) {
 
     'status' => [
         'action'  => 'status',
-        'site'    => 'https://dev.shopvivaliz.com.br',
+        'site'    => 'https://shopvivaliz.com.br',
         'agents'  => [
-            'watchdog'  => 'https://dev.shopvivaliz.com.br/api/agent/autonomous-watchdog.php',
-            'report'    => 'https://dev.shopvivaliz.com.br/api/agent/autonomous-report.php',
-            'squad'     => 'https://dev.shopvivaliz.com.br/api/agent/squad-chat.php',
-            'ml_token'  => 'https://dev.shopvivaliz.com.br/api/ml/token.php',
+            'watchdog'  => 'https://shopvivaliz.com.br/api/agent/autonomous-watchdog.php',
+            'report'    => 'https://shopvivaliz.com.br/api/agent/autonomous-report.php',
+            'squad'     => 'https://shopvivaliz.com.br/api/agent/squad-chat.php',
+            'ml_token'  => 'https://shopvivaliz.com.br/api/ml/token.php',
         ],
         'available_actions' => ['watchdog', 'report', 'status'],
     ],

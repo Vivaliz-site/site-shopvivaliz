@@ -22,7 +22,7 @@ from urllib.request import Request, urlopen
 # Constantes
 # ---------------------------------------------------------------------------
 
-SITE_BASE_URL  = os.getenv("SITE_BASE_URL", "https://dev.shopvivaliz.com.br").rstrip("/")
+SITE_BASE_URL  = os.getenv("SITE_BASE_URL", "https://shopvivaliz.com.br").rstrip("/")
 SQUAD_TOKEN    = os.getenv("SQUAD_TOKEN", "")
 DEFAULT_REPORT = Path(os.getenv("AI_REPORT_JSON", "logs/ai-images-report.json"))
 DEFAULT_OUT    = Path(os.getenv("OPTIMIZE_REPORT", "logs/auto-optimize-report.json"))

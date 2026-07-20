@@ -11,10 +11,10 @@
 
 ### ✅ PÁGINAS LEGAIS (Live agora)
 ```
-✓ https://dev.shopvivaliz.com.br/termos.php
-✓ https://dev.shopvivaliz.com.br/politica-privacidade.php
-✓ https://dev.shopvivaliz.com.br/politica-devolucoes.php
-✓ https://dev.shopvivaliz.com.br/politica-entrega.php
+✓ https://shopvivaliz.com.br/termos.php
+✓ https://shopvivaliz.com.br/politica-privacidade.php
+✓ https://shopvivaliz.com.br/politica-devolucoes.php
+✓ https://shopvivaliz.com.br/politica-entrega.php
 ```
 
 **Acessar via navbar:** Hover em "Políticas" → Dropdown com 4 links

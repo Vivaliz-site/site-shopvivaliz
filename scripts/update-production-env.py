@@ -13,6 +13,8 @@ from pathlib import Path
 
 ALLOWED_KEYS = {
     "MELHORENVIO_ACCESS_TOKEN",
+    "MELHORENVIO_CLIENTE_ID",
+    "MELHORENVIO_CLIENTE_SECRET",
     "MELHORENVIO_FROM_POSTAL_CODE",
     "MERCADOPAGO_ACCESS_TOKEN",
     "MERCADOPAGO_PUBLIC_KEY",
@@ -20,11 +22,24 @@ ALLOWED_KEYS = {
     "ML_CLIENT_ID",
     "ML_CLIENT_SECRET",
     "ML_REDIRECT_URI",
+    "SHOPVIVALIZ_BASE_URL",
+    "APP_URL",
+    "SITE_URL",
+    "BASE_URL",
+    "MELHORENVIO_REDIRECT_URI",
     "OLIST_CLIENT_ID",
     "OLIST_CLIENT_SECRET",
+    "OLIST_REDIRECT_URI",
     "URL_REDIRCT_OLIST",
     "URL_TINY_OLIST",
+    "TINY_REDIRECT_URI",
+    "SHOPEE_REDIRECT_URI",
+    "TIKTOK_REDIRECT_URL",
+    "SHOPVIVALIZ_AGENT_KEY",
 }
+
+def normalize_value(key: str, value: object) -> str:
+    return str(value).replace("https://www.shopvivaliz.com.br", "https://shopvivaliz.com.br")
 
 
 def merge_env(path: Path, incoming: dict[str, object]) -> list[str]:
@@ -33,7 +48,7 @@ def merge_env(path: Path, incoming: dict[str, object]) -> list[str]:
         raise ValueError("unsupported environment keys: " + ", ".join(invalid))
 
     updates = {
-        key: str(value)
+        key: normalize_value(key, value)
         for key, value in incoming.items()
         if key in ALLOWED_KEYS and value is not None and str(value) != ""
     }

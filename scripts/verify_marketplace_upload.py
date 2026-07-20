@@ -13,6 +13,14 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # Em producao/CI as credenciais ja vem via env real
+
+sys.path.insert(0, str(Path(__file__).parent / 'utils'))
+
 if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8')
 
@@ -80,7 +88,9 @@ class MarketplaceVerifier:
         return configured
 
     def verify_shopee_items(self, images: Dict[str, List[str]]) -> List[Dict]:
-        """Verifica itens na Shopee"""
+        """Verifica itens na Shopee consultando a API real: confere se o
+        produto existe na loja pelo SKU e quantas imagens estao de fato
+        publicadas la (nao so quantas estavam no CSV de upload)."""
         verified = []
 
         if not self.check_shopee_configured():
@@ -92,23 +102,48 @@ class MarketplaceVerifier:
 
         logger.info("🔍 Verificando itens na Shopee...")
 
-        # Simular verificação (em produção, usaria a API real)
-        for idx, (sku, urls) in enumerate(list(images.items())[:3]):
-            item_data = {
-                'sku': sku,
-                'images_uploadadas': sum(1 for u in urls.values() if u),
-                'imagens': urls,
-                'timestamp': datetime.now().isoformat(),
-                'status_verificacao': 'simulado (faltam credenciais)'
+        try:
+            from shopee_client import ShopeeClient
+            client = ShopeeClient()
+            item_ids = [item.get('item_id') for item in client.iter_all_products() if item.get('item_id')]
+            details = client.get_product_details(item_ids)
+            sku_to_detail = {
+                str(d.get('item_sku') or '').strip(): d
+                for d in details if d.get('item_sku')
             }
+        except Exception as exc:
+            logger.error(f"  ❌ Falha ao consultar API Shopee: {exc}")
+            self.report['shopee']['errors'].append(f"Falha na consulta a API: {exc}")
+            return verified
+
+        for sku, urls in images.items():
+            detail = sku_to_detail.get(sku)
+            if detail is None:
+                item_data = {
+                    'sku': sku,
+                    'images_uploadadas': 0,
+                    'imagens': urls,
+                    'timestamp': datetime.now().isoformat(),
+                    'status_verificacao': 'nao encontrado na loja Shopee'
+                }
+                logger.warning(f"  ⚠️  SKU {sku}: nao encontrado na loja Shopee")
+            else:
+                live_images = (detail.get('image') or {}).get('image_url_list') or []
+                item_data = {
+                    'sku': sku,
+                    'images_uploadadas': len(live_images),
+                    'imagens': urls,
+                    'timestamp': datetime.now().isoformat(),
+                    'status_verificacao': 'verificado via API real'
+                }
+                logger.info(f"  ✅ SKU {sku}: {len(live_images)} imagens publicadas na loja")
             verified.append(item_data)
-            logger.info(f"  ✅ SKU {sku}: {sum(1 for u in urls.values() if u)} imagens")
 
         self.report['shopee']['verified_items'] = verified
         return verified
 
     def verify_tiktok_items(self, images: Dict[str, List[str]]) -> List[Dict]:
-        """Verifica itens no TikTok Shop"""
+        """Verifica itens no TikTok Shop consultando a API real."""
         verified = []
 
         if not self.check_tiktok_configured():
@@ -120,17 +155,51 @@ class MarketplaceVerifier:
 
         logger.info("🔍 Verificando itens no TikTok Shop...")
 
-        # Simular verificação (em produção, usaria a API real)
-        for idx, (sku, urls) in enumerate(list(images.items())[3:6]):
-            item_data = {
-                'sku': sku,
-                'images_uploadadas': sum(1 for u in urls.values() if u),
-                'imagens': urls,
-                'timestamp': datetime.now().isoformat(),
-                'status_verificacao': 'simulado (faltam credenciais)'
-            }
+        try:
+            from tiktok_client import TikTokClient
+            client = TikTokClient()
+            sku_to_product = {}
+            for product in client.iter_all_products():
+                product_id = product.get('id') or product.get('product_id')
+                if not product_id:
+                    continue
+                skus = product.get('skus') or []
+                if not skus:
+                    try:
+                        skus = client.get_product_detail(str(product_id)).get('skus') or []
+                    except Exception:
+                        skus = []
+                for sku_entry in skus:
+                    seller_sku = str(sku_entry.get('seller_sku') or '').strip()
+                    if seller_sku:
+                        sku_to_product[seller_sku] = product
+        except Exception as exc:
+            logger.error(f"  ❌ Falha ao consultar API TikTok: {exc}")
+            self.report['tiktok']['errors'].append(f"Falha na consulta a API: {exc}")
+            return verified
+
+        for sku, urls in images.items():
+            product = sku_to_product.get(sku)
+            if product is None:
+                item_data = {
+                    'sku': sku,
+                    'images_uploadadas': 0,
+                    'imagens': urls,
+                    'timestamp': datetime.now().isoformat(),
+                    'status_verificacao': 'nao encontrado na loja TikTok'
+                }
+                logger.warning(f"  ⚠️  SKU {sku}: nao encontrado na loja TikTok")
+            else:
+                live_images = product.get('main_images') or []
+                item_data = {
+                    'sku': sku,
+                    'images_uploadadas': len(live_images),
+                    'imagens': urls,
+                    'timestamp': datetime.now().isoformat(),
+                    'status_verificacao': 'verificado via API real'
+                }
+                logger.info(f"  ✅ SKU {sku}: {len(live_images)} imagens publicadas na loja")
             verified.append(item_data)
-            logger.info(f"  ✅ SKU {sku}: {sum(1 for u in urls.values() if u)} imagens")
 
         self.report['tiktok']['verified_items'] = verified
         return verified

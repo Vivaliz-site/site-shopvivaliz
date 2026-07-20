@@ -106,7 +106,7 @@ COMO EXECUTAR
 
 OPÇÃO 1: MANUAL (Uma execução)
 ─────────────────────────────
-curl https://dev.shopvivaliz.com.br/api/pipeline/v12-execucao-global.php
+curl https://shopvivaliz.com.br/api/pipeline/v12-execucao-global.php
 
 OPÇÃO 2: AUTOMÁTICO (A cada 5 minutos)
 ──────────────────────────────────────
@@ -115,7 +115,7 @@ Nenhuma ação manual necessária.
 
 OPÇÃO 3: AGENDADO (Via CRON)
 ────────────────────────────
-*/5 * * * * curl https://dev.shopvivaliz.com.br/api/pipeline/v12-execucao-global.php
+*/5 * * * * curl https://shopvivaliz.com.br/api/pipeline/v12-execucao-global.php
 
 ================================================================================
 EXEMPLOS DE RESPOSTA

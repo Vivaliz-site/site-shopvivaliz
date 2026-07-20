@@ -59,7 +59,7 @@ Os menus aparecem:
 
 ## 🔄 Como Ver
 
-1. **Acesse:** https://dev.shopvivaliz.com.br/admin/
+1. **Acesse:** https://shopvivaliz.com.br/admin/
 2. **Hard refresh:** `Ctrl+Shift+R` (ou `Cmd+Shift+R` no Mac)
 3. **Limpe cache:** Se ainda não aparecer, use navegação privada/anônima
 4. **Aguarde sync:** A VM sincroniza a cada 30 minutos

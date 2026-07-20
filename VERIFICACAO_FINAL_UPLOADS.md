@@ -142,7 +142,7 @@ Após fazer `git push`:
 ## 📈 Próximas Etapas Após Upload
 
 1. **Monitorar Performance**
-   - Acesse: https://dev.shopvivaliz.com.br/admin/monitor/
+   - Acesse: https://shopvivaliz.com.br/admin/monitor/
    - Veja: cliques, vendas, CTR das imagens
 
 2. **A/B Testing**

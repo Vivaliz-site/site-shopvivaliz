@@ -36,7 +36,7 @@ $payment_data = [
             "number" => "12345678901"
         ]
     ],
-    "notification_url" => "https://dev.shopvivaliz.com.br/api/webhook-mercadopago.php"
+    "notification_url" => "https://shopvivaliz.com.br/api/webhook-mercadopago.php"
 ];
 
 $ch = curl_init('https://api.mercadopago.com/v1/payments');

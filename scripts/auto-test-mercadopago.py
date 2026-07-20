@@ -15,7 +15,7 @@ import sys
 def check_server_ready():
     """Verifica se servidor tem Mercado Pago sincronizado"""
     try:
-        req = urllib.request.Request("https://dev.shopvivaliz.com.br/checkout")
+        req = urllib.request.Request("https://shopvivaliz.com.br/checkout")
         with urllib.request.urlopen(req, timeout=5) as response:
             content = response.read().decode('utf-8')
             return "mercado_pago" in content
@@ -30,7 +30,7 @@ async def complete_checkout():
         page.on("console", lambda msg: print(f"[CONSOLE] {msg.text}"))
 
         print("\n[TEST] Acessando carrinho para preparar itens...")
-        await page.goto("https://dev.shopvivaliz.com.br/carrinho", wait_until="networkidle")
+        await page.goto("https://shopvivaliz.com.br/carrinho", wait_until="networkidle")
 
         # Injetar produto real no carrinho
         await page.evaluate("""() => {
@@ -56,7 +56,7 @@ async def complete_checkout():
 
         # Acessar checkout
         print("[TEST] Acessando checkout...")
-        await page.goto("https://dev.shopvivaliz.com.br/checkout", wait_until="networkidle")
+        await page.goto("https://shopvivaliz.com.br/checkout", wait_until="networkidle")
 
         # Preencher dados
         print("[TEST] Preenchendo formulário...")

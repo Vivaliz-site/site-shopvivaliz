@@ -122,7 +122,7 @@ As decisões pertencem ao squad. O Diretor é o árbitro final em caso de confli
 
 ## Repositório
 - **GitHub:** `fredmourao-ai/site-shopvivaliz`
-- **Dev:** `https://dev.shopvivaliz.com.br`
+- **Dev:** `https://shopvivaliz.com.br`
 - **Prod:** `https://shopvivaliz.com.br`
-- **Squad Chat:** `https://dev.shopvivaliz.com.br/admin/squad-chat.php`
-- **API:** `https://dev.shopvivaliz.com.br/api/agent/squad-chat.php`
+- **Squad Chat:** `https://shopvivaliz.com.br/admin/squad-chat.php`
+- **API:** `https://shopvivaliz.com.br/api/agent/squad-chat.php`

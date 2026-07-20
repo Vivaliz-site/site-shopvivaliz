@@ -305,10 +305,10 @@ sudo systemctl status shopvivaliz-sync.timer
 PRODUCT_ID="test-no-stock"
 
 # 1. Verificar se está oculto no catálogo
-curl -s "https://dev.shopvivaliz.com.br/api/catalog?product_id=$PRODUCT_ID" | jq '.results | length'
+curl -s "https://shopvivaliz.com.br/api/catalog?product_id=$PRODUCT_ID" | jq '.results | length'
 
 # 2. Tentar criar ordem (deve falhar)
-curl -s -X POST "https://dev.shopvivaliz.com.br/api/orders/create-validated.php" \
+curl -s -X POST "https://shopvivaliz.com.br/api/orders/create-validated.php" \
   -H "Content-Type: application/json" \
   -d "{\"items\":[{\"product_id\":\"$PRODUCT_ID\",\"quantity\":1}]}" | jq '.ok'
 
@@ -325,7 +325,7 @@ curl -s -X POST "https://dev.shopvivaliz.com.br/api/orders/create-validated.php"
 **Tempo estimado:** 20 minutos
 
 #### Passos (em janela anônima):
-1. [ ] Abrir https://dev.shopvivaliz.com.br
+1. [ ] Abrir https://shopvivaliz.com.br
 2. [ ] Navegar ao catálogo
 3. [ ] Verificar: apenas Mercado Pago visível
 4. [ ] Adicionar produto ao carrinho

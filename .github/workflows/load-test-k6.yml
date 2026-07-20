@@ -39,7 +39,7 @@ jobs:
 
           export default function () {
             // 1. Homepage
-            let homepage = http.get('https://dev.shopvivaliz.com.br/');
+            let homepage = http.get('https://shopvivaliz.com.br/');
             check(homepage, {
               'Homepage 200': r => r.status === 200,
               'Homepage < 2s': r => r.timings.duration < 2000,
@@ -48,7 +48,7 @@ jobs:
             sleep(1);
 
             // 2. Produtos
-            let products = http.get('https://dev.shopvivaliz.com.br/produtos/');
+            let products = http.get('https://shopvivaliz.com.br/produtos/');
             check(products, {
               'Produtos 200': r => r.status === 200,
               'Produtos < 3s': r => r.timings.duration < 3000,
@@ -57,7 +57,7 @@ jobs:
             sleep(1);
 
             // 3. API
-            let api = http.get('https://dev.shopvivaliz.com.br/api/products/');
+            let api = http.get('https://shopvivaliz.com.br/api/products/');
             check(api, {
               'API 200': r => r.status === 200,
               'API < 1s': r => r.timings.duration < 1000,
@@ -81,7 +81,7 @@ jobs:
           # 📈 Load Test Report
 
           **Date:** $(date)
-          **Target URL:** https://dev.shopvivaliz.com.br/
+          **Target URL:** https://shopvivaliz.com.br/
 
           ## Test Scenario
 

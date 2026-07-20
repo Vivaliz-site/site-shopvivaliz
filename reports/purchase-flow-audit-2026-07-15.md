@@ -2,7 +2,7 @@
 
 ## Resultado executivo
 
-O funil publicado em `https://dev.shopvivaliz.com.br` permite navegar, manter carrinho, consultar CEP e obter frete real do Melhor Envio. As proteções de preço, estoque e cotação assinada também estão ativas.
+O funil publicado em `https://shopvivaliz.com.br` permite navegar, manter carrinho, consultar CEP e obter frete real do Melhor Envio. As proteções de preço, estoque e cotação assinada também estão ativas.
 
 O fluxo financeiro Mercado Pago ainda não pode ser considerado funcional no ambiente publicado: o checkout mostra emissão manual de boleto, não chama o endpoint novo, a rota de retorno responde 404 e o webhook responde 500. Nenhum pedido, cobrança ou boleto foi criado nesta auditoria para não contaminar o ERP nem executar ação financeira desnecessária.
 

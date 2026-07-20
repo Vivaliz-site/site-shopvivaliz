@@ -16,7 +16,7 @@ from email.message import EmailMessage
 from pathlib import Path
 
 
-DEFAULT_BASE_URL = "https://dev.shopvivaliz.com.br"
+DEFAULT_BASE_URL = "https://shopvivaliz.com.br"
 DEFAULT_RECIPIENTS = "fredmourao@gmail.com,atendimento@shopvivaliz.com.br"
 DEFAULT_REPORT_LOG = "logs/email-activity-report.txt"
 

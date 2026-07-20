@@ -22,6 +22,13 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      AI_ECONOMY_MODE: "true"
+      OPENAI_MODEL: gpt-4o-mini
+      GEMINI_MODEL: gemini-2.5-flash
+      ANTHROPIC_MODEL: claude-haiku-4-5-20251001
+      MODEL_REASONING_EFFORT: low
+      MODEL_VERBOSITY: low
+      CLAUDE_MAX_BUDGET_USD: "0.05"
       GH_TOKEN: ${{ github.token }}
 
     steps:

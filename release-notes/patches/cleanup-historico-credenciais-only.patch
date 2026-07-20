@@ -68,7 +68,7 @@ index 507662e..0000000
 -
 -2. **Verificar se agentes respondendo de verdade**
 -   - Status: Squad Chat API funciona
--   - Teste: Abrir https://dev.shopvivaliz.com.br/admin/monitor-real.html
+-   - Teste: Abrir https://shopvivaliz.com.br/admin/monitor-real.html
 -   - Enviar mensagem e confirmar resposta real
 -
 -3. **Monitorar primeira execução do workflow**
@@ -178,8 +178,8 @@ index 507662e..0000000
 -```
 -
 -### Como Monitorar:
--- **Verificar tarefas:** https://dev.shopvivaliz.com.br/admin/monitor-completo-v2.html
--- **Chatcom agentes:** https://dev.shopvivaliz.com.br/admin/monitor-real.html
+-- **Verificar tarefas:** https://shopvivaliz.com.br/admin/monitor-completo-v2.html
+-- **Chatcom agentes:** https://shopvivaliz.com.br/admin/monitor-real.html
 -- **Progresso:** GitHub Actions → agent-continuous-task-processor
 -- **Logs:** logs/tasks-execution.jsonl (registra cada tarefa completa)
 -
@@ -727,7 +727,7 @@ index a618a69..0000000
 -
 -**Acesso:**
 -```
--GET https://dev.shopvivaliz.com.br/api/olist/diagnostic-full.php
+-GET https://shopvivaliz.com.br/api/olist/diagnostic-full.php
 -```
 -
 -**Resposta:**
@@ -803,7 +803,7 @@ index a618a69..0000000
 -
 -### Testar Diagnostic:
 -```bash
--curl https://dev.shopvivaliz.com.br/api/olist/diagnostic-full.php
+-curl https://shopvivaliz.com.br/api/olist/diagnostic-full.php
 -```
 -
 -### Testar Rate Limit Status:
@@ -815,7 +815,7 @@ index a618a69..0000000
 -
 -### Sincronizar 198 ao Banco:
 -```bash
--curl https://dev.shopvivaliz.com.br/olist/sync-database-from-catalog.php
+-curl https://shopvivaliz.com.br/olist/sync-database-from-catalog.php
 -```
 -
 ----

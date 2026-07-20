@@ -74,6 +74,7 @@ class ShopeeConfig {
 
     public static function getStatus() {
         $config = self::load();
+        $validation = self::validate();
 
         return [
             'configurado' => !empty($config),
@@ -83,7 +84,10 @@ class ShopeeConfig {
                 'shop_id' => !empty(self::getShopee('shop_id')) ? 'OK' : 'FALTANDO',
                 'access_token' => !empty(self::getShopee('access_token')) ? 'OK' : 'FALTANDO'
             ],
-            'modo' => self::get('SHOPEE_MODE', 'simulado'),
+            // Reflete o estado real das credenciais em vez de assumir "simulado"
+            // por padrao -- 'modo' so vira 'real' quando validate() confirma
+            // que todas as credenciais obrigatorias estao presentes.
+            'modo' => self::get('SHOPEE_MODE', $validation['valid'] ? 'real' : 'nao_configurado'),
             'batch_size' => self::get('SHOPEE_BATCH_SIZE', 50)
         ];
     }

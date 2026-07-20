@@ -31,7 +31,7 @@ LOG_FILE = PROJECT_ROOT / 'logs' / 'olist-headless-login.log'
 CLIENT_ID = os.getenv('OLIST_CLIENT_ID') or os.getenv('TINY_CLIENT_ID') or ''
 OLIST_EMAIL = os.getenv('OLIST_EMAIL') or os.getenv('OLIST_USER') or os.getenv('EMAIL_USER') or ''
 OLIST_PASSWORD = os.getenv('OLIST_PASSWORD') or os.getenv('EMAIL_PASSWORD') or ''
-REDIRECT_URI = 'https://dev.shopvivaliz.com.br/olist/handle-callback.php'
+REDIRECT_URI = 'https://shopvivaliz.com.br/olist/handle-callback.php'
 
 def log_msg(msg):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')

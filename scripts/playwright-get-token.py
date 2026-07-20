@@ -20,7 +20,7 @@ from playwright.sync_api import sync_playwright
 
 CLIENT_ID     = os.environ.get("OLIST_CLIENT_ID", "")
 CLIENT_SECRET = os.environ.get("OLIST_CLIENT_SECRET", "")
-REDIRECT_URI  = os.environ.get("OLIST_REDIRECT_URI", "https://dev.shopvivaliz.com.br/olist/callback.php")
+REDIRECT_URI  = os.environ.get("OLIST_REDIRECT_URI", "https://shopvivaliz.com.br/olist/callback.php")
 TOKEN_URL     = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
 
 if not CLIENT_ID or not CLIENT_SECRET:
@@ -97,7 +97,7 @@ def main():
         # Interceptar a URL de redirect antes de carregar
         def handle_route(route):
             url = route.request.url
-            if "dev.shopvivaliz.com.br/olist/callback.php" in url:
+            if "shopvivaliz.com.br/olist/callback.php" in url:
                 parsed = urlparse(url)
                 params = parse_qs(parsed.query)
                 code = params.get("code", [None])[0]

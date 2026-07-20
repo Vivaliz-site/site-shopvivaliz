@@ -92,11 +92,11 @@ $tiny_push_result = svo_push_order_tiny($order_data, $access_token);
 
 1. **Ir para endpoint de renovação**
    ```
-   GET https://dev.shopvivaliz.com.br/api/olist/refresh-token.php
+   GET https://shopvivaliz.com.br/api/olist/refresh-token.php
    ```
    Ou rodar via CLI:
    ```bash
-   curl https://dev.shopvivaliz.com.br/api/olist/refresh-token.php
+   curl https://shopvivaliz.com.br/api/olist/refresh-token.php
    ```
 
 2. **Script tenta renovar usando OLIST_REFRESH_TOKEN**
@@ -119,7 +119,7 @@ $tiny_push_result = svo_push_order_tiny($order_data, $access_token);
 ```
 Abrir: https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth
    ?client_id=OLIST_CLIENT_ID
-   &redirect_uri=https://dev.shopvivaliz.com.br/api/olist/callback.php
+   &redirect_uri=https://shopvivaliz.com.br/api/olist/callback.php
    &response_type=code
    &scope=openid profile email
 ```
@@ -146,7 +146,7 @@ O callback.php recebe `code` e troca por:
 ## ✅ CHECKLIST DE RESOLUÇÃO
 
 ### AGORA (5-30 min)
-- [ ] Ir para https://dev.shopvivaliz.com.br/api/olist/refresh-token.php
+- [ ] Ir para https://shopvivaliz.com.br/api/olist/refresh-token.php
 - [ ] Observar resposta (sucesso ou erro)
 - [ ] Se sucesso: Testar novo pedido
 - [ ] Se erro 401: Ir para re-autenticação
@@ -210,8 +210,8 @@ Para cada pedido falhado:
 ## 🔐 INFORMAÇÕES DE ACESSO
 
 ### URLs Importantes
-- **Token Refresh**: https://dev.shopvivaliz.com.br/api/olist/refresh-token.php
-- **OAuth Callback**: https://dev.shopvivaliz.com.br/api/olist/callback.php
+- **Token Refresh**: https://shopvivaliz.com.br/api/olist/refresh-token.php
+- **OAuth Callback**: https://shopvivaliz.com.br/api/olist/callback.php
 - **Olist Dashboard**: https://www.tiny.com.br/admin (se tiver acesso)
 
 ### Arquivos Relacionados

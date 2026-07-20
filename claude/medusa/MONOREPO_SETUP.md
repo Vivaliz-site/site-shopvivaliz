@@ -176,7 +176,7 @@ styles/
 No backend, quando um produto é criado/atualizado:
 ```javascript
 // apps/backend/src/api/hooks/product-updated.ts
-POST /admin/webhooks → https://dev.shopvivaliz.com.br/claude/api/medusa-webhook.php
+POST /admin/webhooks → https://shopvivaliz.com.br/claude/api/medusa-webhook.php
 ```
 
 ### 2️⃣ Arquivo Webhook em PHP

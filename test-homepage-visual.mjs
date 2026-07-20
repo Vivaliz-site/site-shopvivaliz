@@ -8,7 +8,7 @@ import { chromium } from 'playwright';
 import fs from 'fs';
 import path from 'path';
 
-const SITE_URL = 'https://dev.shopvivaliz.com.br/?nocache=1';
+const SITE_URL = 'https://shopvivaliz.com.br/?nocache=1';
 const SCREENSHOT_DIR = './playwright-report/screenshots';
 const REPORT_FILE = './playwright-report/visual-test-report.json';
 

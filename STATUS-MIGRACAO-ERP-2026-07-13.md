@@ -79,14 +79,14 @@ Para verificar se sincronizou, executar:
 
 ```bash
 # Opção 1: Curl da API
-curl "https://dev.shopvivaliz.com.br/api/catalog/products.php?limit=1" | jq '.source'
+curl "https://shopvivaliz.com.br/api/catalog/products.php?limit=1" | jq '.source'
 
 # Resposta esperada: "erp_olist"
 ```
 
 Ou via browser:
 ```
-https://dev.shopvivaliz.com.br/api/catalog/products.php?limit=1
+https://shopvivaliz.com.br/api/catalog/products.php?limit=1
 ```
 
 ---

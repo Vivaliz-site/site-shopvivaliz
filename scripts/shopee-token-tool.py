@@ -24,7 +24,7 @@ load_dotenv()
 
 
 DEFAULT_BASE_URL = "https://partner.shopeemobile.com/api/v2"
-DEFAULT_REDIRECT = "https://dev.shopvivaliz.com.br"
+DEFAULT_REDIRECT = "https://shopvivaliz.com.br"
 
 
 def parse_args() -> argparse.Namespace:

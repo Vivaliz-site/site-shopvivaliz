@@ -1,6 +1,6 @@
 {
-  "total": 1059,
-  "timestamp": "2026-07-13T23:44:51.552211",
+  "total": 1042,
+  "timestamp": "2026-07-19T22:38:20.756840",
   "itens": [
     {
       "id": 337702887,
@@ -318,27 +318,6 @@
       "tipoVariacao": "N"
     },
     {
-      "id": 337703161,
-      "sku": "9976-95",
-      "descricao": "Estopa Polimento Automotivo Algodão 1kg Aquatools Branco",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 17:30:28",
-      "dataAlteracao": "2026-06-19 08:10:32",
-      "unidade": "UN",
-      "gtin": "7899887510664",
-      "precos": {
-        "preco": 31.53,
-        "precoPromocional": 0,
-        "precoCusto": 0,
-        "precoCustoMedio": 0
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
-    },
-    {
       "id": 337703165,
       "sku": "9976-216",
       "descricao": "Kit 10 Rodo Vedador Vedante De Porta Em Alumínio C/ Borracha Prateado 90 Cm",
@@ -353,27 +332,6 @@
         "precoPromocional": 0,
         "precoCusto": 70,
         "precoCustoMedio": 70
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
-    },
-    {
-      "id": 337703175,
-      "sku": "9975-90",
-      "descricao": "Vaso Plantas Decorativo Japi Unique 16 14x16cm Preto Lisa",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 17:30:29",
-      "dataAlteracao": "2026-06-19 08:08:40",
-      "unidade": "UN",
-      "gtin": "7894023139075",
-      "precos": {
-        "preco": 29.02,
-        "precoPromocional": 0,
-        "precoCusto": 7,
-        "precoCustoMedio": 7
       },
       "estoque": {
         "localizacao": ""
@@ -416,27 +374,6 @@
         "precoPromocional": 0,
         "precoCusto": 14,
         "precoCustoMedio": 14
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
-    },
-    {
-      "id": 337703226,
-      "sku": "9976-453",
-      "descricao": "Tesoura Costura Profissional Aço Inox 8  Aquatools Te-co8 Azul",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 17:30:34",
-      "dataAlteracao": "2026-06-19 08:12:04",
-      "unidade": "UN",
-      "gtin": "7899887506261",
-      "precos": {
-        "preco": 30.31,
-        "precoPromocional": 0,
-        "precoCusto": 14.5,
-        "precoCustoMedio": 14.5
       },
       "estoque": {
         "localizacao": ""
@@ -528,27 +465,6 @@
       "tipoVariacao": "N"
     },
     {
-      "id": 337703307,
-      "sku": "9976-281",
-      "descricao": "Líquido Ultraclor Ultra Decantador Finalizador Piscinas 1l",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 17:30:40",
-      "dataAlteracao": "2026-06-19 08:11:24",
-      "unidade": "UN",
-      "gtin": "7898724670004",
-      "precos": {
-        "preco": 27.78,
-        "precoPromocional": 0,
-        "precoCusto": 0,
-        "precoCustoMedio": 0
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
-    },
-    {
       "id": 337703311,
       "sku": "9977-494",
       "descricao": "Comedouro Antiformiga 350ml Pet/cmf2 Vermelho Astra",
@@ -631,27 +547,6 @@
         "localizacao": ""
       },
       "tipoVariacao": "V"
-    },
-    {
-      "id": 337703392,
-      "sku": "9976-466",
-      "descricao": "Ultra Decantador Liquido Finalizador Piscinas 1l Ultraclor",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 17:30:51",
-      "dataAlteracao": "2026-06-19 08:12:08",
-      "unidade": "UN",
-      "gtin": "7898724670004",
-      "precos": {
-        "preco": 27.78,
-        "precoPromocional": 0,
-        "precoCusto": 0,
-        "precoCustoMedio": 0
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
     },
     {
       "id": 337703408,
@@ -822,27 +717,6 @@
       "tipoVariacao": "N"
     },
     {
-      "id": 337703582,
-      "sku": "9975-91",
-      "descricao": "Vaso Plantas Decorativo Japi Unique 16 14x16cm Preto Lisa Preto Lisa",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 17:31:11",
-      "dataAlteracao": "2026-06-19 08:08:42",
-      "unidade": "UN",
-      "gtin": "7894023139075",
-      "precos": {
-        "preco": 28.95,
-        "precoPromocional": 0,
-        "precoCusto": 7,
-        "precoCustoMedio": 7
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
-    },
-    {
       "id": 337703599,
       "sku": "9977-429",
       "descricao": "Carrinho P/ Ferramentas 6gavetas Chaveado Preto Fercar C08pr",
@@ -878,27 +752,6 @@
         "precoPromocional": 0,
         "precoCusto": 350,
         "precoCustoMedio": 350
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
-    },
-    {
-      "id": 337703619,
-      "sku": "9976-452",
-      "descricao": "Tesoura Costura Profissional Aço Inox 8  Aquatools Te-co8 A Azul",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 17:31:14",
-      "dataAlteracao": "2026-06-19 08:12:04",
-      "unidade": "UN",
-      "gtin": "7899887506261",
-      "precos": {
-        "preco": 31.25,
-        "precoPromocional": 0,
-        "precoCusto": 14.5,
-        "precoCustoMedio": 14.5
       },
       "estoque": {
         "localizacao": ""
@@ -1053,27 +906,6 @@
       "tipoVariacao": "N"
     },
     {
-      "id": 337703780,
-      "sku": "9976-145",
-      "descricao": "Floreira Flat 77 (39l) Cor Preto Ardosia Japi",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 17:31:29",
-      "dataAlteracao": "2026-06-19 08:10:45",
-      "unidade": "UN",
-      "gtin": "7894023127287",
-      "precos": {
-        "preco": 315,
-        "precoPromocional": 0,
-        "precoCusto": 152,
-        "precoCustoMedio": 152
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
-    },
-    {
       "id": 337703800,
       "sku": "9977-478",
       "descricao": "Cofrinho Infantil Segredo Senha Cofre Metal Moedas Cédulas Lisa Variadas",
@@ -1088,27 +920,6 @@
         "precoPromocional": 0,
         "precoCusto": 9,
         "precoCustoMedio": 9
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
-    },
-    {
-      "id": 337703805,
-      "sku": "9975-83",
-      "descricao": "Vaso Floreira Jardineira Flat Polietileno 77x29x29cm Japi Preto/ardósia Lisa",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 17:31:31",
-      "dataAlteracao": "2026-06-19 08:08:39",
-      "unidade": "UN",
-      "gtin": "7894023127287",
-      "precos": {
-        "preco": 316,
-        "precoPromocional": 0,
-        "precoCusto": 152,
-        "precoCustoMedio": 152
       },
       "estoque": {
         "localizacao": ""
@@ -1200,27 +1011,6 @@
       "tipoVariacao": "N"
     },
     {
-      "id": 337704447,
-      "sku": "9976-371",
-      "descricao": "Resistencia Enerbras Enerducha Plus 5500w 127v Original Outr",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 17:31:47",
-      "dataAlteracao": "2026-06-19 08:11:47",
-      "unidade": "UN",
-      "gtin": "7898192564751",
-      "precos": {
-        "preco": 35.65,
-        "precoPromocional": 0,
-        "precoCusto": 17,
-        "precoCustoMedio": 17
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
-    },
-    {
       "id": 337704498,
       "sku": "9977-341",
       "descricao": "Carrinho De Ferramentas Fercar Com Fechadura 3 Gavetas Preto",
@@ -1263,48 +1053,6 @@
       "tipoVariacao": "N"
     },
     {
-      "id": 337704735,
-      "sku": "9975-42",
-      "descricao": "Vaso Decorativo Planta Japi 43x32cm 10 Ano Jvtbma32 Preto Ardósia Tribo",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 17:32:01",
-      "dataAlteracao": "2026-06-19 08:08:31",
-      "unidade": "UN",
-      "gtin": "7894023139136",
-      "precos": {
-        "preco": 139.98,
-        "precoPromocional": 0,
-        "precoCusto": 80,
-        "precoCustoMedio": 80
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
-    },
-    {
-      "id": 337704829,
-      "sku": "9975-43",
-      "descricao": "Vaso Decorativo Planta Japi 43x32cm 10 Ano Jvtbma32 Preto Ardósia Tribo",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 17:32:01",
-      "dataAlteracao": "2026-06-19 08:08:31",
-      "unidade": "UN",
-      "gtin": "7894023139136",
-      "precos": {
-        "preco": 217.55,
-        "precoPromocional": 0,
-        "precoCusto": 80,
-        "precoCustoMedio": 80
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
-    },
-    {
       "id": 337705051,
       "sku": "9977-79",
       "descricao": "Assento Almofadado Thema Incepa/hawaii Branco Astra",
@@ -1340,48 +1088,6 @@
         "precoPromocional": 0,
         "precoCusto": 52,
         "precoCustoMedio": 52
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
-    },
-    {
-      "id": 337705076,
-      "sku": "9975-44",
-      "descricao": "Vaso Decorativo Planta Tribo Japi 43x32cm Jvtbma32 Ardósia Preto/ardósia Tribo",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 17:32:05",
-      "dataAlteracao": "2026-06-19 08:08:31",
-      "unidade": "UN",
-      "gtin": "7894023139136",
-      "precos": {
-        "preco": 139.98,
-        "precoPromocional": 0,
-        "precoCusto": 80,
-        "precoCustoMedio": 80
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
-    },
-    {
-      "id": 337705106,
-      "sku": "9976-477",
-      "descricao": "Vaso Cachepô Japi Floreira Flat 77 (39l) Polietileno Cor Cimento Queimado",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 17:32:09",
-      "dataAlteracao": "2026-06-19 08:12:10",
-      "unidade": "UN",
-      "gtin": "7894023127317",
-      "precos": {
-        "preco": 344.25,
-        "precoPromocional": 0,
-        "precoCusto": 152,
-        "precoCustoMedio": 152
       },
       "estoque": {
         "localizacao": ""
@@ -1445,27 +1151,6 @@
         "precoPromocional": 0,
         "precoCusto": 700,
         "precoCustoMedio": 700
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
-    },
-    {
-      "id": 337705140,
-      "sku": "9975-22",
-      "descricao": "Vaso Decorativo Floreira Jardineira Flat 77x29x29cm Japi",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 17:32:12",
-      "dataAlteracao": "2026-06-19 08:08:27",
-      "unidade": "UN",
-      "gtin": "7894023127317",
-      "precos": {
-        "preco": 344.25,
-        "precoPromocional": 0,
-        "precoCusto": 152,
-        "precoCustoMedio": 152
       },
       "estoque": {
         "localizacao": ""
@@ -3216,27 +2901,6 @@
       "tipoVariacao": "N"
     },
     {
-      "id": 337765831,
-      "sku": "9976-92",
-      "descricao": "Enerbras Resistência Enerducha UP 5500W 127V",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-03-26 21:12:18",
-      "dataAlteracao": "2026-06-19 08:10:32",
-      "unidade": "UN",
-      "gtin": "7898192564751",
-      "precos": {
-        "preco": 35.89,
-        "precoPromocional": 0,
-        "precoCusto": 0,
-        "precoCustoMedio": 0
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "N"
-    },
-    {
       "id": 337765843,
       "sku": "9977-134",
       "descricao": "Astra, Assento Sanitário Almofadado Thema Branco 01",
@@ -3516,14 +3180,14 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-04-03 10:31:10",
-      "dataAlteracao": "2026-06-22 07:13:37",
+      "dataAlteracao": "2026-07-18 20:04:21",
       "unidade": "UN",
       "gtin": "7904013466354",
       "precos": {
         "preco": 45,
         "precoPromocional": 0,
-        "precoCusto": 16.02,
-        "precoCustoMedio": 16.02
+        "precoCusto": 0,
+        "precoCustoMedio": 2.35
       },
       "estoque": {
         "localizacao": ""
@@ -3579,13 +3243,13 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-04-03 10:33:20",
-      "dataAlteracao": "2026-06-13 10:34:10",
+      "dataAlteracao": "2026-07-18 14:21:30",
       "unidade": "UN",
       "gtin": "7896004822563",
       "precos": {
-        "preco": 76,
+        "preco": 76.02,
         "precoPromocional": 0,
-        "precoCusto": 40,
+        "precoCusto": 0,
         "precoCustoMedio": 40
       },
       "estoque": {
@@ -3600,14 +3264,14 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-04-03 10:34:08",
-      "dataAlteracao": "2026-06-20 11:41:51",
+      "dataAlteracao": "2026-07-18 20:02:48",
       "unidade": "UN",
       "gtin": "",
       "precos": {
         "preco": 129,
         "precoPromocional": 0,
-        "precoCusto": 44.82,
-        "precoCustoMedio": 46.2
+        "precoCusto": 0,
+        "precoCustoMedio": 0
       },
       "estoque": {
         "localizacao": "A1"
@@ -3726,13 +3390,13 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-04-03 10:58:44",
-      "dataAlteracao": "2026-06-19 14:17:33",
+      "dataAlteracao": "2026-07-18 20:02:29",
       "unidade": "UN",
       "gtin": "7895741956487",
       "precos": {
         "preco": 798.91,
         "precoPromocional": 0,
-        "precoCusto": 320,
+        "precoCusto": 0,
         "precoCustoMedio": 320
       },
       "estoque": {
@@ -3758,27 +3422,6 @@
       },
       "estoque": {
         "localizacao": "A1"
-      },
-      "tipoVariacao": "N"
-    },
-    {
-      "id": 341450850,
-      "sku": "9975-23",
-      "descricao": "Vaso Decorativo Floreira Jardineira Polietileno 77x29 Japi  Aço Corten",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-04-03 11:16:43",
-      "dataAlteracao": "2026-06-19 08:08:27",
-      "unidade": "UN",
-      "gtin": "7894023127867",
-      "precos": {
-        "preco": 499,
-        "precoPromocional": 0,
-        "precoCusto": 0,
-        "precoCustoMedio": 0
-      },
-      "estoque": {
-        "localizacao": ""
       },
       "tipoVariacao": "N"
     },
@@ -3873,14 +3516,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-03 11:46:20",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 20:09:39",
       "unidade": "UN",
       "gtin": "7894023150797",
       "precos": {
-        "preco": 459,
+        "preco": 397.72,
         "precoPromocional": 0,
-        "precoCusto": 175,
-        "precoCustoMedio": 175
+        "precoCusto": 0,
+        "precoCustoMedio": 120.52
       },
       "estoque": {
         "localizacao": "A1"
@@ -3999,13 +3642,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-03 17:40:58",
-      "dataAlteracao": "2026-06-13 10:35:09",
+      "dataAlteracao": "2026-07-18 20:02:33",
       "unidade": "UN",
       "gtin": "7891249011642",
       "precos": {
         "preco": 118.87,
         "precoPromocional": 0,
-        "precoCusto": 51,
+        "precoCusto": 0,
         "precoCustoMedio": 51
       },
       "estoque": {
@@ -4104,13 +3747,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-03 18:44:19",
-      "dataAlteracao": "2026-06-17 19:56:25",
+      "dataAlteracao": "2026-07-18 19:53:20",
       "unidade": "UN",
       "gtin": "7891222222652",
       "precos": {
         "preco": 78.99,
         "precoPromocional": 0,
-        "precoCusto": 45.04,
+        "precoCusto": 0,
         "precoCustoMedio": 45.04
       },
       "estoque": {
@@ -4167,13 +3810,13 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-04-03 19:07:07",
-      "dataAlteracao": "2026-06-13 09:34:19",
+      "dataAlteracao": "2026-07-18 20:04:14",
       "unidade": "UN",
       "gtin": "7891194054206",
       "precos": {
         "preco": 339.15,
         "precoPromocional": 0,
-        "precoCusto": 180,
+        "precoCusto": 0,
         "precoCustoMedio": 180
       },
       "estoque": {
@@ -4188,13 +3831,13 @@
       "tipo": "S",
       "situacao": "I",
       "dataCriacao": "2026-04-03 19:09:50",
-      "dataAlteracao": "2026-07-03 19:16:42",
+      "dataAlteracao": "2026-07-18 19:55:26",
       "unidade": "UN",
       "gtin": "7891194000371",
       "precos": {
         "preco": 78,
         "precoPromocional": 0,
-        "precoCusto": 36,
+        "precoCusto": 0,
         "precoCustoMedio": 36
       },
       "estoque": {
@@ -4251,14 +3894,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-04 12:38:03",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 20:09:37",
       "unidade": "UN",
       "gtin": "7894023148732",
       "precos": {
-        "preco": 573.27,
+        "preco": 576.6,
         "precoPromocional": 0,
-        "precoCusto": 191.09,
-        "precoCustoMedio": 191.09
+        "precoCusto": 0,
+        "precoCustoMedio": 192.2
       },
       "estoque": {
         "localizacao": "A1"
@@ -4272,13 +3915,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-04 12:38:03",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 20:09:35",
       "unidade": "UN",
       "gtin": "7894023148695",
       "precos": {
         "preco": 574.9,
         "precoPromocional": 0,
-        "precoCusto": 185.45,
+        "precoCusto": 0,
         "precoCustoMedio": 185.45
       },
       "estoque": {
@@ -4293,13 +3936,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-04 12:38:04",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 20:10:18",
       "unidade": "UN",
       "gtin": "7894023148749",
       "precos": {
         "preco": 471.19,
         "precoPromocional": 0,
-        "precoCusto": 138.18,
+        "precoCusto": 0,
         "precoCustoMedio": 138.18
       },
       "estoque": {
@@ -4335,13 +3978,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-05 19:56:54",
-      "dataAlteracao": "2026-06-19 15:23:17",
+      "dataAlteracao": "2026-07-18 19:57:16",
       "unidade": "UN",
       "gtin": "7894162001493",
       "precos": {
         "preco": 329,
         "precoPromocional": 0,
-        "precoCusto": 133.25,
+        "precoCusto": 0,
         "precoCustoMedio": 133.25
       },
       "estoque": {
@@ -4356,13 +3999,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-05 19:58:12",
-      "dataAlteracao": "2026-07-03 18:55:05",
+      "dataAlteracao": "2026-07-18 19:56:46",
       "unidade": "UN",
       "gtin": "7894162000922",
       "precos": {
         "preco": 198.31,
         "precoPromocional": 0,
-        "precoCusto": 95.34,
+        "precoCusto": 0,
         "precoCustoMedio": 95.46
       },
       "estoque": {
@@ -4398,13 +4041,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-05 20:09:12",
-      "dataAlteracao": "2026-07-03 18:55:05",
+      "dataAlteracao": "2026-07-18 19:56:52",
       "unidade": "UN",
       "gtin": "7894162000274",
       "precos": {
         "preco": 709.85,
         "precoPromocional": 0,
-        "precoCusto": 308.63,
+        "precoCusto": 0,
         "precoCustoMedio": 310.26
       },
       "estoque": {
@@ -4503,13 +4146,13 @@
       "tipo": "S",
       "situacao": "I",
       "dataCriacao": "2026-04-05 20:23:22",
-      "dataAlteracao": "2026-07-03 19:16:42",
+      "dataAlteracao": "2026-07-18 19:55:32",
       "unidade": "UN",
       "gtin": "7894162000229",
       "precos": {
         "preco": 78.9,
         "precoPromocional": 0,
-        "precoCusto": 43.08,
+        "precoCusto": 0,
         "precoCustoMedio": 43.08
       },
       "estoque": {
@@ -4545,13 +4188,13 @@
       "tipo": "S",
       "situacao": "I",
       "dataCriacao": "2026-04-05 20:30:26",
-      "dataAlteracao": "2026-07-01 08:18:25",
+      "dataAlteracao": "2026-07-18 19:53:28",
       "unidade": "UN",
       "gtin": "7891222355428",
       "precos": {
         "preco": 39,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -4587,13 +4230,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-05 20:34:11",
-      "dataAlteracao": "2026-06-13 10:34:11",
+      "dataAlteracao": "2026-07-18 19:56:56",
       "unidade": "UN",
       "gtin": "7894162001127",
       "precos": {
         "preco": 119,
         "precoPromocional": 0,
-        "precoCusto": 57.17,
+        "precoCusto": 0,
         "precoCustoMedio": 56.38
       },
       "estoque": {
@@ -4629,14 +4272,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-05 20:40:36",
-      "dataAlteracao": "2026-06-19 06:06:52",
+      "dataAlteracao": "2026-07-18 19:57:05",
       "unidade": "UN",
       "gtin": "7894162000168",
       "precos": {
-        "preco": 245,
+        "preco": 213.19,
         "precoPromocional": 0,
-        "precoCusto": 83,
-        "precoCustoMedio": 83
+        "precoCusto": 0,
+        "precoCustoMedio": 92.69
       },
       "estoque": {
         "localizacao": "A1"
@@ -4692,13 +4335,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-05 20:44:26",
-      "dataAlteracao": "2026-07-10 11:40:18",
+      "dataAlteracao": "2026-07-18 19:56:48",
       "unidade": "UN",
       "gtin": "7894162000298",
       "precos": {
         "preco": 327.37,
         "precoPromocional": 0,
-        "precoCusto": 141.72,
+        "precoCusto": 0,
         "precoCustoMedio": 141.69
       },
       "estoque": {
@@ -4755,14 +4398,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-05 20:51:56",
-      "dataAlteracao": "2026-06-13 10:35:09",
+      "dataAlteracao": "2026-07-18 19:57:18",
       "unidade": "UN",
       "gtin": "7894162000984",
       "precos": {
         "preco": 299.25,
         "precoPromocional": 0,
-        "precoCusto": 150,
-        "precoCustoMedio": 150
+        "precoCusto": 0,
+        "precoCustoMedio": 0
       },
       "estoque": {
         "localizacao": "A1"
@@ -4818,13 +4461,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-05 21:13:11",
-      "dataAlteracao": "2026-06-19 14:17:55",
+      "dataAlteracao": "2026-07-18 19:56:44",
       "unidade": "UN",
       "gtin": "7894162000106",
       "precos": {
         "preco": 75,
         "precoPromocional": 0,
-        "precoCusto": 30.22,
+        "precoCusto": 0,
         "precoCustoMedio": 29.55
       },
       "estoque": {
@@ -5007,13 +4650,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-05 21:24:30",
-      "dataAlteracao": "2026-06-13 10:34:11",
+      "dataAlteracao": "2026-07-18 19:58:53",
       "unidade": "UN",
       "gtin": "7894162003756",
       "precos": {
         "preco": 721.05,
         "precoPromocional": 0,
-        "precoCusto": 385,
+        "precoCusto": 0,
         "precoCustoMedio": 385
       },
       "estoque": {
@@ -5238,13 +4881,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-05 21:45:59",
-      "dataAlteracao": "2026-06-13 09:34:13",
+      "dataAlteracao": "2026-07-18 20:01:19",
       "unidade": "UN",
       "gtin": "7899887510664",
       "precos": {
         "preco": 42.75,
         "precoPromocional": 0,
-        "precoCusto": 12,
+        "precoCusto": 0,
         "precoCustoMedio": 12
       },
       "estoque": {
@@ -5280,13 +4923,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-05 21:49:18",
-      "dataAlteracao": "2026-06-13 10:34:19",
+      "dataAlteracao": "2026-07-18 20:02:39",
       "unidade": "UN",
       "gtin": "7899887513887",
       "precos": {
         "preco": 46.55,
         "precoPromocional": 0,
-        "precoCusto": 17,
+        "precoCusto": 0,
         "precoCustoMedio": 17
       },
       "estoque": {
@@ -5301,13 +4944,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-05 21:50:00",
-      "dataAlteracao": "2026-06-13 09:34:15",
+      "dataAlteracao": "2026-07-18 20:02:41",
       "unidade": "UN",
       "gtin": "7899887513726",
       "precos": {
         "preco": 51.3,
         "precoPromocional": 0,
-        "precoCusto": 23,
+        "precoCusto": 0,
         "precoCustoMedio": 23
       },
       "estoque": {
@@ -5322,13 +4965,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-05 21:51:28",
-      "dataAlteracao": "2026-06-13 10:34:19",
+      "dataAlteracao": "2026-07-18 20:02:43",
       "unidade": "UN",
       "gtin": "7899887505486",
       "precos": {
         "preco": 130.64,
         "precoPromocional": 0,
-        "precoCusto": 45,
+        "precoCusto": 0,
         "precoCustoMedio": 45
       },
       "estoque": {
@@ -5364,13 +5007,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-06 00:02:22",
-      "dataAlteracao": "2026-06-21 11:02:22",
+      "dataAlteracao": "2026-07-18 20:10:24",
       "unidade": "UN",
       "gtin": "7894023139075",
       "precos": {
         "preco": 20.8,
         "precoPromocional": 0,
-        "precoCusto": 7,
+        "precoCusto": 0,
         "precoCustoMedio": 7
       },
       "estoque": {
@@ -5385,13 +5028,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-06 00:03:38",
-      "dataAlteracao": "2026-06-13 10:34:20",
+      "dataAlteracao": "2026-07-18 20:02:35",
       "unidade": "UN",
       "gtin": "7891249011673",
       "precos": {
         "preco": 78.41,
         "precoPromocional": 0,
-        "precoCusto": 40.94,
+        "precoCusto": 0,
         "precoCustoMedio": 41.97
       },
       "estoque": {
@@ -5448,13 +5091,13 @@
       "tipo": "K",
       "situacao": "I",
       "dataCriacao": "2026-04-06 07:38:41",
-      "dataAlteracao": "2026-07-03 19:16:42",
+      "dataAlteracao": "2026-07-18 19:55:22",
       "unidade": "UN",
       "gtin": "7891194000371",
       "precos": {
         "preco": 399,
         "precoPromocional": 0,
-        "precoCusto": 170,
+        "precoCusto": 0,
         "precoCustoMedio": 170
       },
       "estoque": {
@@ -5595,13 +5238,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-07 08:05:50",
-      "dataAlteracao": "2026-06-13 10:34:04",
+      "dataAlteracao": "2026-07-18 20:07:58",
       "unidade": "UN",
       "gtin": "7899887506261",
       "precos": {
         "preco": 99.99,
         "precoPromocional": 0,
-        "precoCusto": 14.5,
+        "precoCusto": 0,
         "precoCustoMedio": 14.5
       },
       "estoque": {
@@ -5616,13 +5259,13 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-04-07 08:06:48",
-      "dataAlteracao": "2026-06-13 10:35:09",
+      "dataAlteracao": "2026-07-18 20:04:16",
       "unidade": "UN",
       "gtin": "7891194000371",
       "precos": {
         "preco": 390.15,
         "precoPromocional": 0,
-        "precoCusto": 216,
+        "precoCusto": 0,
         "precoCustoMedio": 216
       },
       "estoque": {
@@ -5679,13 +5322,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-07 08:11:56",
-      "dataAlteracao": "2026-06-13 14:45:05",
+      "dataAlteracao": "2026-07-18 20:06:19",
       "unidade": "UN",
       "gtin": "7898945401005",
       "precos": {
         "preco": 33.24,
         "precoPromocional": 0,
-        "precoCusto": 16,
+        "precoCusto": 0,
         "precoCustoMedio": 16
       },
       "estoque": {
@@ -5700,13 +5343,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-07 08:12:19",
-      "dataAlteracao": "2026-06-19 14:17:25",
+      "dataAlteracao": "2026-07-18 20:06:21",
       "unidade": "UN",
       "gtin": "7898945401395",
       "precos": {
         "preco": 36.67,
         "precoPromocional": 0,
-        "precoCusto": 16,
+        "precoCusto": 0,
         "precoCustoMedio": 16
       },
       "estoque": {
@@ -5784,13 +5427,13 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-04-07 08:16:24",
-      "dataAlteracao": "2026-06-20 11:41:48",
+      "dataAlteracao": "2026-07-18 20:11:19",
       "unidade": "UN",
       "gtin": "",
       "precos": {
         "preco": 45,
         "precoPromocional": 0,
-        "precoCusto": 75.7,
+        "precoCusto": 0,
         "precoCustoMedio": 91.2
       },
       "estoque": {
@@ -5805,13 +5448,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-07 08:18:05",
-      "dataAlteracao": "2026-06-19 14:17:40",
+      "dataAlteracao": "2026-07-18 19:58:55",
       "unidade": "UN",
       "gtin": "7891222355695",
       "precos": {
         "preco": 215.1,
         "precoPromocional": 0,
-        "precoCusto": 70,
+        "precoCusto": 0,
         "precoCustoMedio": 70
       },
       "estoque": {
@@ -5847,13 +5490,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-07 08:20:02",
-      "dataAlteracao": "2026-06-20 00:45:06",
+      "dataAlteracao": "2026-07-18 20:01:14",
       "unidade": "UN",
       "gtin": "7898129830027",
       "precos": {
         "preco": 140.04,
         "precoPromocional": 0,
-        "precoCusto": 72,
+        "precoCusto": 0,
         "precoCustoMedio": 72
       },
       "estoque": {
@@ -5889,14 +5532,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-07 13:48:20",
-      "dataAlteracao": "2026-06-13 09:34:02",
+      "dataAlteracao": "2026-07-18 19:56:50",
       "unidade": "UN",
       "gtin": "7894162000304",
       "precos": {
         "preco": 436.03,
         "precoPromocional": 0,
-        "precoCusto": 189.58,
-        "precoCustoMedio": 185.92
+        "precoCusto": 0,
+        "precoCustoMedio": 154.93
       },
       "estoque": {
         "localizacao": "A1"
@@ -5910,13 +5553,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-07 14:01:00",
-      "dataAlteracao": "2026-06-13 09:33:53",
+      "dataAlteracao": "2026-07-18 19:53:11",
       "unidade": "UN",
       "gtin": "7894162000861",
       "precos": {
         "preco": 584.29,
         "precoPromocional": 0,
-        "precoCusto": 261.04,
+        "precoCusto": 0,
         "precoCustoMedio": 263.11
       },
       "estoque": {
@@ -5931,13 +5574,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-07 14:03:12",
-      "dataAlteracao": "2026-06-19 15:23:02",
+      "dataAlteracao": "2026-07-18 19:53:34",
       "unidade": "UN",
       "gtin": "7899887503062",
       "precos": {
         "preco": 78.31,
         "precoPromocional": 0,
-        "precoCusto": 44,
+        "precoCusto": 0,
         "precoCustoMedio": 44
       },
       "estoque": {
@@ -5952,13 +5595,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-07 14:04:17",
-      "dataAlteracao": "2026-06-21 14:41:50",
+      "dataAlteracao": "2026-07-18 19:53:24",
       "unidade": "UN",
       "gtin": "7891222045879",
       "precos": {
         "preco": 44.1,
         "precoPromocional": 0,
-        "precoCusto": 20,
+        "precoCusto": 0,
         "precoCustoMedio": 20
       },
       "estoque": {
@@ -6036,14 +5679,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-07 23:03:00",
-      "dataAlteracao": "2026-06-17 19:56:25",
+      "dataAlteracao": "2026-07-18 19:53:06",
       "unidade": "UN",
       "gtin": "7891222105122",
       "precos": {
         "preco": 78.99,
         "precoPromocional": 0,
-        "precoCusto": 47.68,
-        "precoCustoMedio": 47.18
+        "precoCusto": 0,
+        "precoCustoMedio": 24.71
       },
       "estoque": {
         "localizacao": "Depósito Principal"
@@ -6057,13 +5700,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-07 23:03:26",
-      "dataAlteracao": "2026-06-13 10:34:20",
+      "dataAlteracao": "2026-07-18 19:53:08",
       "unidade": "UN",
       "gtin": "7891222124574",
       "precos": {
         "preco": 129,
         "precoPromocional": 0,
-        "precoCusto": 56.29,
+        "precoCusto": 0,
         "precoCustoMedio": 56.29
       },
       "estoque": {
@@ -6078,14 +5721,14 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-04-07 23:05:36",
-      "dataAlteracao": "2026-06-13 09:34:24",
+      "dataAlteracao": "2026-07-18 20:06:27",
       "unidade": "UN",
       "gtin": "7791799605028",
       "precos": {
         "preco": 54.5,
         "precoPromocional": 0,
-        "precoCusto": 24.18,
-        "precoCustoMedio": 24.78
+        "precoCusto": 0,
+        "precoCustoMedio": 0
       },
       "estoque": {
         "localizacao": "A1"
@@ -6099,14 +5742,14 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-04-07 23:09:47",
-      "dataAlteracao": "2026-06-20 11:41:51",
+      "dataAlteracao": "2026-07-18 20:04:08",
       "unidade": "UN",
       "gtin": "",
       "precos": {
         "preco": 45,
         "precoPromocional": 0,
-        "precoCusto": 14.94,
-        "precoCustoMedio": 15.4
+        "precoCusto": 0,
+        "precoCustoMedio": 0
       },
       "estoque": {
         "localizacao": "A1"
@@ -6141,13 +5784,13 @@
       "tipo": "S",
       "situacao": "I",
       "dataCriacao": "2026-04-08 08:12:16",
-      "dataAlteracao": "2026-07-01 08:18:25",
+      "dataAlteracao": "2026-07-18 20:00:45",
       "unidade": "UN",
       "gtin": "7891222356005",
       "precos": {
         "preco": 28.63,
         "precoPromocional": 0,
-        "precoCusto": 5,
+        "precoCusto": 0,
         "precoCustoMedio": 5
       },
       "estoque": {
@@ -6162,13 +5805,13 @@
       "tipo": "S",
       "situacao": "I",
       "dataCriacao": "2026-04-08 08:13:15",
-      "dataAlteracao": "2026-07-01 08:18:25",
+      "dataAlteracao": "2026-07-18 20:00:35",
       "unidade": "UN",
       "gtin": "7891222355992",
       "precos": {
         "preco": 28.63,
         "precoPromocional": 0,
-        "precoCusto": 5,
+        "precoCusto": 0,
         "precoCustoMedio": 5
       },
       "estoque": {
@@ -6183,13 +5826,13 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:14:48",
-      "dataAlteracao": "2026-06-20 11:42:09",
+      "dataAlteracao": "2026-07-18 20:07:54",
       "unidade": "UN",
       "gtin": "",
       "precos": {
         "preco": 78,
         "precoPromocional": 0,
-        "precoCusto": 40,
+        "precoCusto": 0,
         "precoCustoMedio": 40
       },
       "estoque": {
@@ -6204,13 +5847,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:15:29",
-      "dataAlteracao": "2026-06-13 09:34:24",
+      "dataAlteracao": "2026-07-18 20:06:25",
       "unidade": "UN",
       "gtin": "7892327895598",
       "precos": {
         "preco": 34.9,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -6225,13 +5868,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:15:40",
-      "dataAlteracao": "2026-06-13 09:34:24",
+      "dataAlteracao": "2026-07-18 20:06:23",
       "unidade": "UN",
       "gtin": "7892327895611",
       "precos": {
         "preco": 38.9,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -6246,14 +5889,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:17:57",
-      "dataAlteracao": "2026-06-21 09:34:00",
+      "dataAlteracao": "2026-07-18 20:06:29",
       "unidade": "UN",
       "gtin": "7892327013428",
       "precos": {
         "preco": 19.9,
         "precoPromocional": 0,
-        "precoCusto": 3.01,
-        "precoCustoMedio": 3.6
+        "precoCusto": 0,
+        "precoCustoMedio": 3.12
       },
       "estoque": {
         "localizacao": "A1"
@@ -6267,14 +5910,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:18:09",
-      "dataAlteracao": "2026-06-21 09:33:41",
+      "dataAlteracao": "2026-07-18 20:07:33",
       "unidade": "UN",
       "gtin": "7892327013466",
       "precos": {
         "preco": 19.9,
         "precoPromocional": 0,
-        "precoCusto": 5,
-        "precoCustoMedio": 5
+        "precoCusto": 0,
+        "precoCustoMedio": 0.78
       },
       "estoque": {
         "localizacao": "A1"
@@ -6288,14 +5931,14 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:18:25",
-      "dataAlteracao": "2026-06-20 11:41:54",
+      "dataAlteracao": "2026-07-18 20:04:18",
       "unidade": "UN",
       "gtin": "",
       "precos": {
         "preco": 42.98,
         "precoPromocional": 0,
-        "precoCusto": 15.05,
-        "precoCustoMedio": 18
+        "precoCusto": 0,
+        "precoCustoMedio": 0
       },
       "estoque": {
         "localizacao": "A1"
@@ -6309,14 +5952,14 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:18:37",
-      "dataAlteracao": "2026-06-14 12:31:14",
+      "dataAlteracao": "2026-07-18 14:17:01",
       "unidade": "UN",
       "gtin": "",
       "precos": {
         "preco": 77.98,
         "precoPromocional": 0,
-        "precoCusto": 30.1,
-        "precoCustoMedio": 36
+        "precoCusto": 0,
+        "precoCustoMedio": 0
       },
       "estoque": {
         "localizacao": "A1-01"
@@ -6624,13 +6267,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:29:57",
-      "dataAlteracao": "2026-06-13 09:34:08",
+      "dataAlteracao": "2026-07-18 19:58:59",
       "unidade": "UN",
       "gtin": "7899887505042",
       "precos": {
         "preco": 37.7,
         "precoPromocional": 0,
-        "precoCusto": 9.45,
+        "precoCusto": 0,
         "precoCustoMedio": 11.3
       },
       "estoque": {
@@ -6645,13 +6288,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:29:58",
-      "dataAlteracao": "2026-06-13 10:34:29",
+      "dataAlteracao": "2026-07-18 19:59:01",
       "unidade": "UN",
       "gtin": "7899887505073",
       "precos": {
         "preco": 35,
         "precoPromocional": 0,
-        "precoCusto": 9.46,
+        "precoCusto": 0,
         "precoCustoMedio": 9.46
       },
       "estoque": {
@@ -6708,13 +6351,13 @@
       "tipo": "S",
       "situacao": "I",
       "dataCriacao": "2026-04-08 08:34:26",
-      "dataAlteracao": "2026-07-01 08:18:25",
+      "dataAlteracao": "2026-07-18 20:00:59",
       "unidade": "UN",
       "gtin": "7891222355633",
       "precos": {
         "preco": 26.33,
         "precoPromocional": 0,
-        "precoCusto": 5,
+        "precoCusto": 0,
         "precoCustoMedio": 5
       },
       "estoque": {
@@ -6729,13 +6372,13 @@
       "tipo": "S",
       "situacao": "I",
       "dataCriacao": "2026-04-08 08:34:27",
-      "dataAlteracao": "2026-07-01 08:18:25",
+      "dataAlteracao": "2026-07-18 20:01:07",
       "unidade": "UN",
       "gtin": "7891222355473",
       "precos": {
         "preco": 28.63,
         "precoPromocional": 0,
-        "precoCusto": 5,
+        "precoCusto": 0,
         "precoCustoMedio": 5
       },
       "estoque": {
@@ -6750,13 +6393,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:34:41",
-      "dataAlteracao": "2026-06-13 09:34:28",
+      "dataAlteracao": "2026-07-18 20:07:55",
       "unidade": "UN",
       "gtin": "7898724670059",
       "precos": {
         "preco": 24.9,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -6771,13 +6414,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:35:38",
-      "dataAlteracao": "2026-06-25 02:40:23",
+      "dataAlteracao": "2026-07-18 20:06:08",
       "unidade": "UN",
       "gtin": "7891222411933",
       "precos": {
         "preco": 55,
         "precoPromocional": 0,
-        "precoCusto": 23,
+        "precoCusto": 0,
         "precoCustoMedio": 23
       },
       "estoque": {
@@ -6792,13 +6435,13 @@
       "tipo": "S",
       "situacao": "I",
       "dataCriacao": "2026-04-08 08:35:39",
-      "dataAlteracao": "2026-07-01 08:18:25",
+      "dataAlteracao": "2026-07-18 19:53:26",
       "unidade": "UN",
       "gtin": "7891222384916",
       "precos": {
         "preco": 28.63,
         "precoPromocional": 0,
-        "precoCusto": 8,
+        "precoCusto": 0,
         "precoCustoMedio": 8
       },
       "estoque": {
@@ -6813,13 +6456,13 @@
       "tipo": "S",
       "situacao": "I",
       "dataCriacao": "2026-04-08 08:35:39",
-      "dataAlteracao": "2026-07-01 08:18:25",
+      "dataAlteracao": "2026-07-18 20:06:03",
       "unidade": "UN",
       "gtin": "7891222355930",
       "precos": {
         "preco": 26.33,
         "precoPromocional": 0,
-        "precoCusto": 5,
+        "precoCusto": 0,
         "precoCustoMedio": 5
       },
       "estoque": {
@@ -6834,14 +6477,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:36:46",
-      "dataAlteracao": "2026-06-17 19:56:25",
+      "dataAlteracao": "2026-07-18 19:55:34",
       "unidade": "UN",
       "gtin": "7891222100028",
       "precos": {
         "preco": 69,
         "precoPromocional": 0,
-        "precoCusto": 39.73,
-        "precoCustoMedio": 39.73
+        "precoCusto": 0,
+        "precoCustoMedio": 5.68
       },
       "estoque": {
         "localizacao": "A1"
@@ -6855,13 +6498,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:38:07",
-      "dataAlteracao": "2026-06-13 09:34:04",
+      "dataAlteracao": "2026-07-18 19:57:12",
       "unidade": "UN",
       "gtin": "7894162001363",
       "precos": {
         "preco": 329,
         "precoPromocional": 0,
-        "precoCusto": 115,
+        "precoCusto": 0,
         "precoCustoMedio": 115
       },
       "estoque": {
@@ -6897,13 +6540,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:41:57",
-      "dataAlteracao": "2026-06-13 09:34:28",
+      "dataAlteracao": "2026-07-18 20:08:04",
       "unidade": "UN",
       "gtin": "7899887501723",
       "precos": {
         "preco": 34.9,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -6960,14 +6603,14 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:43:36",
-      "dataAlteracao": "2026-06-20 11:41:51",
+      "dataAlteracao": "2026-07-18 20:04:10",
       "unidade": "UN",
       "gtin": "",
       "precos": {
         "preco": 49,
         "precoPromocional": 0,
-        "precoCusto": 20,
-        "precoCustoMedio": 20
+        "precoCusto": 0,
+        "precoCustoMedio": 0
       },
       "estoque": {
         "localizacao": "A1"
@@ -7065,13 +6708,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:48:48",
-      "dataAlteracao": "2026-06-13 09:34:04",
+      "dataAlteracao": "2026-07-18 19:57:07",
       "unidade": "UN",
       "gtin": "7894162000328",
       "precos": {
         "preco": 269.79,
         "precoPromocional": 0,
-        "precoCusto": 120,
+        "precoCusto": 0,
         "precoCustoMedio": 120
       },
       "estoque": {
@@ -7086,13 +6729,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:50:23",
-      "dataAlteracao": "2026-06-13 09:34:04",
+      "dataAlteracao": "2026-07-18 19:57:10",
       "unidade": "UN",
       "gtin": "7894162000960",
       "precos": {
         "preco": 349,
         "precoPromocional": 0,
-        "precoCusto": 125,
+        "precoCusto": 0,
         "precoCustoMedio": 125
       },
       "estoque": {
@@ -7149,13 +6792,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 08:53:18",
-      "dataAlteracao": "2026-06-20 00:47:05",
+      "dataAlteracao": "2026-07-18 20:01:17",
       "unidade": "UN",
       "gtin": "7898192564751",
       "precos": {
         "preco": 35.9,
         "precoPromocional": 0,
-        "precoCusto": 20,
+        "precoCusto": 0,
         "precoCustoMedio": 20
       },
       "estoque": {
@@ -7233,13 +6876,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 22:04:42",
-      "dataAlteracao": "2026-06-21 11:03:43",
+      "dataAlteracao": "2026-07-18 20:10:30",
       "unidade": "UN",
       "gtin": "7894023139112",
       "precos": {
         "preco": 19.11,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -7254,13 +6897,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 22:04:42",
-      "dataAlteracao": "2026-06-21 11:04:41",
+      "dataAlteracao": "2026-07-18 20:10:34",
       "unidade": "UN",
       "gtin": "7894023139044",
       "precos": {
         "preco": 21.49,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -7275,13 +6918,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 22:04:43",
-      "dataAlteracao": "2026-06-21 11:03:18",
+      "dataAlteracao": "2026-07-18 20:10:28",
       "unidade": "UN",
       "gtin": "7894023139006",
       "precos": {
         "preco": 19.4,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -7296,13 +6939,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-08 22:04:43",
-      "dataAlteracao": "2026-06-21 11:04:17",
+      "dataAlteracao": "2026-07-18 20:10:32",
       "unidade": "UN",
       "gtin": "7894023139068",
       "precos": {
         "preco": 20.41,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -7401,14 +7044,14 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-04-08 23:44:30",
-      "dataAlteracao": "2026-06-20 11:42:09",
+      "dataAlteracao": "2026-07-18 20:07:52",
       "unidade": "UN",
       "gtin": "",
       "precos": {
         "preco": 66.9,
         "precoPromocional": 0,
-        "precoCusto": 14.94,
-        "precoCustoMedio": 15.4
+        "precoCusto": 0,
+        "precoCustoMedio": 0
       },
       "estoque": {
         "localizacao": "A1"
@@ -7422,13 +7065,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-10 15:42:09",
-      "dataAlteracao": "2026-06-13 09:34:25",
+      "dataAlteracao": "2026-07-18 20:07:37",
       "unidade": "UN",
       "gtin": "7892327903439",
       "precos": {
         "preco": 15.45,
         "precoPromocional": 0,
-        "precoCusto": 3.44,
+        "precoCusto": 0,
         "precoCustoMedio": 3.57
       },
       "estoque": {
@@ -7443,13 +7086,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-10 15:43:44",
-      "dataAlteracao": "2026-06-13 09:34:25",
+      "dataAlteracao": "2026-07-18 20:07:35",
       "unidade": "UN",
       "gtin": "7892327903392",
       "precos": {
         "preco": 18,
         "precoPromocional": 0,
-        "precoCusto": 4.03,
+        "precoCusto": 0,
         "precoCustoMedio": 4.13
       },
       "estoque": {
@@ -7485,13 +7128,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-15 07:21:55",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 19:55:16",
       "unidade": "UN",
       "gtin": "7894023169911",
       "precos": {
         "preco": 319,
         "precoPromocional": 0,
-        "precoCusto": 160,
+        "precoCusto": 0,
         "precoCustoMedio": 160
       },
       "estoque": {
@@ -11937,13 +11580,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-17 21:29:10",
-      "dataAlteracao": "2026-06-13 10:34:38",
+      "dataAlteracao": "2026-07-18 20:04:25",
       "unidade": "UN",
       "gtin": "7899887503000",
       "precos": {
         "preco": 118.14,
         "precoPromocional": 0,
-        "precoCusto": 55,
+        "precoCusto": 0,
         "precoCustoMedio": 55
       },
       "estoque": {
@@ -13344,14 +12987,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-23 20:31:14",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 20:09:51",
       "unidade": "UN",
       "gtin": "7894023150827",
       "precos": {
-        "preco": 459,
+        "preco": 477.26,
         "precoPromocional": 0,
-        "precoCusto": 175,
-        "precoCustoMedio": 175
+        "precoCusto": 0,
+        "precoCustoMedio": 180.78
       },
       "estoque": {
         "localizacao": "A1"
@@ -13428,13 +13071,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-24 05:53:03",
-      "dataAlteracao": "2026-06-13 14:47:05",
+      "dataAlteracao": "2026-07-18 20:08:12",
       "unidade": "UN",
       "gtin": "7898724670004",
       "precos": {
         "preco": 37.04,
         "precoPromocional": 0,
-        "precoCusto": 11,
+        "precoCusto": 0,
         "precoCustoMedio": 11
       },
       "estoque": {
@@ -13512,13 +13155,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-24 08:27:51",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 20:09:45",
       "unidade": "UN",
       "gtin": "7894023137941",
       "precos": {
         "preco": 429,
         "precoPromocional": 0,
-        "precoCusto": 153,
+        "precoCusto": 0,
         "precoCustoMedio": 153
       },
       "estoque": {
@@ -13596,13 +13239,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-24 12:24:47",
-      "dataAlteracao": "2026-06-25 03:09:29",
+      "dataAlteracao": "2026-07-18 20:09:41",
       "unidade": "UN",
       "gtin": "7894023147940",
       "precos": {
         "preco": 93.94,
         "precoPromocional": 0,
-        "precoCusto": 33.23,
+        "precoCusto": 0,
         "precoCustoMedio": 33.23
       },
       "estoque": {
@@ -14079,14 +13722,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-03 11:10:03",
-      "dataAlteracao": "2026-06-19 14:17:02",
+      "dataAlteracao": "2026-07-18 20:09:55",
       "unidade": "UN",
       "gtin": "7894023150353",
       "precos": {
         "preco": 459,
         "precoPromocional": 0,
-        "precoCusto": 175,
-        "precoCustoMedio": 175
+        "precoCusto": 0,
+        "precoCustoMedio": 77.78
       },
       "estoque": {
         "localizacao": "Depósito Principal"
@@ -14100,13 +13743,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-03 15:30:39",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 20:09:43",
       "unidade": "UN",
       "gtin": "7894023150803",
       "precos": {
         "preco": 429,
         "precoPromocional": 0,
-        "precoCusto": 155,
+        "precoCusto": 0,
         "precoCustoMedio": 155
       },
       "estoque": {
@@ -14121,13 +13764,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-03 15:32:06",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 20:09:49",
       "unidade": "UN",
       "gtin": "7894023137934",
       "precos": {
         "preco": 399,
         "precoPromocional": 0,
-        "precoCusto": 155,
+        "precoCusto": 0,
         "precoCustoMedio": 155
       },
       "estoque": {
@@ -14142,13 +13785,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-03 15:33:18",
-      "dataAlteracao": "2026-06-21 10:43:59",
+      "dataAlteracao": "2026-07-18 20:09:59",
       "unidade": "UN",
       "gtin": "7894023150834",
       "precos": {
         "preco": 429,
         "precoPromocional": 0,
-        "precoCusto": 155,
+        "precoCusto": 0,
         "precoCustoMedio": 155
       },
       "estoque": {
@@ -14163,13 +13806,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-03 15:34:24",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 20:09:47",
       "unidade": "UN",
       "gtin": "7894023150247",
       "precos": {
         "preco": 429,
         "precoPromocional": 0,
-        "precoCusto": 155,
+        "precoCusto": 0,
         "precoCustoMedio": 155
       },
       "estoque": {
@@ -14184,13 +13827,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-03 15:35:35",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 20:09:53",
       "unidade": "UN",
       "gtin": "7894023137965",
       "precos": {
         "preco": 459,
         "precoPromocional": 0,
-        "precoCusto": 173.8,
+        "precoCusto": 0,
         "precoCustoMedio": 174.73
       },
       "estoque": {
@@ -14226,13 +13869,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-03 17:45:26",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 20:10:09",
       "unidade": "UN",
       "gtin": "7894023153019",
       "precos": {
         "preco": 572.28,
         "precoPromocional": 0,
-        "precoCusto": 191.09,
+        "precoCusto": 0,
         "precoCustoMedio": 191.09
       },
       "estoque": {
@@ -14268,13 +13911,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-03 17:50:49",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 20:10:20",
       "unidade": "UN",
       "gtin": "7894023170740",
       "precos": {
         "preco": 640.3,
         "precoPromocional": 0,
-        "precoCusto": 257,
+        "precoCusto": 0,
         "precoCustoMedio": 257
       },
       "estoque": {
@@ -14289,13 +13932,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-03 17:52:37",
-      "dataAlteracao": "2026-06-20 00:05:11",
+      "dataAlteracao": "2026-07-18 19:56:59",
       "unidade": "UN",
       "gtin": "7894162000144",
       "precos": {
         "preco": 149,
         "precoPromocional": 0,
-        "precoCusto": 66,
+        "precoCusto": 0,
         "precoCustoMedio": 66
       },
       "estoque": {
@@ -14310,13 +13953,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-03 17:53:26",
-      "dataAlteracao": "2026-06-30 10:25:40",
+      "dataAlteracao": "2026-07-18 19:55:19",
       "unidade": "UN",
       "gtin": "7894023170337",
       "precos": {
         "preco": 749.48,
         "precoPromocional": 0,
-        "precoCusto": 299.79,
+        "precoCusto": 0,
         "precoCustoMedio": 299.79
       },
       "estoque": {
@@ -14415,13 +14058,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 08:13:55",
-      "dataAlteracao": "2026-06-13 09:34:13",
+      "dataAlteracao": "2026-07-18 20:02:25",
       "unidade": "UN",
       "gtin": "7899884526170",
       "precos": {
         "preco": 1599,
         "precoPromocional": 0,
-        "precoCusto": 550,
+        "precoCusto": 0,
         "precoCustoMedio": 550
       },
       "estoque": {
@@ -14541,13 +14184,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 17:52:45",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 20:09:57",
       "unidade": "UN",
       "gtin": "7894023137958",
       "precos": {
         "preco": 473.7,
         "precoPromocional": 0,
-        "precoCusto": 179.73,
+        "precoCusto": 0,
         "precoCustoMedio": 178.83
       },
       "estoque": {
@@ -14814,13 +14457,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 18:24:28",
-      "dataAlteracao": "2026-06-13 09:34:28",
+      "dataAlteracao": "2026-07-18 23:03:36",
       "unidade": "UN",
       "gtin": "7899887501723",
       "precos": {
         "preco": 29.9,
         "precoPromocional": 0,
-        "precoCusto": 5,
+        "precoCusto": 0,
         "precoCustoMedio": 5
       },
       "estoque": {
@@ -14835,13 +14478,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 18:24:29",
-      "dataAlteracao": "2026-06-13 09:34:28",
+      "dataAlteracao": "2026-07-18 20:08:06",
       "unidade": "UN",
       "gtin": "7899887501709",
       "precos": {
         "preco": 19.9,
         "precoPromocional": 0,
-        "precoCusto": 5,
+        "precoCusto": 0,
         "precoCustoMedio": 5
       },
       "estoque": {
@@ -16704,13 +16347,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 20:28:46",
-      "dataAlteracao": "2026-06-20 23:32:39",
+      "dataAlteracao": "2026-07-18 19:55:24",
       "unidade": "UN",
       "gtin": "7891194000401",
       "precos": {
         "preco": 59,
         "precoPromocional": 0,
-        "precoCusto": 18.95,
+        "precoCusto": 0,
         "precoCustoMedio": 18.97
       },
       "estoque": {
@@ -16725,13 +16368,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 20:32:25",
-      "dataAlteracao": "2026-06-21 09:38:57",
+      "dataAlteracao": "2026-07-18 19:56:54",
       "unidade": "UN",
       "gtin": "7894162000175",
       "precos": {
         "preco": 169,
         "precoPromocional": 0,
-        "precoCusto": 99,
+        "precoCusto": 0,
         "precoCustoMedio": 99
       },
       "estoque": {
@@ -16746,13 +16389,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 20:34:08",
-      "dataAlteracao": "2026-06-13 09:34:04",
+      "dataAlteracao": "2026-07-18 19:57:14",
       "unidade": "UN",
       "gtin": "7894162000366",
       "precos": {
         "preco": 303,
         "precoPromocional": 0,
-        "precoCusto": 127,
+        "precoCusto": 0,
         "precoCustoMedio": 127
       },
       "estoque": {
@@ -16767,13 +16410,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 20:35:20",
-      "dataAlteracao": "2026-06-20 00:05:23",
+      "dataAlteracao": "2026-07-18 19:57:01",
       "unidade": "UN",
       "gtin": "7894162000151",
       "precos": {
         "preco": 179,
         "precoPromocional": 0,
-        "precoCusto": 74,
+        "precoCusto": 0,
         "precoCustoMedio": 74
       },
       "estoque": {
@@ -16788,13 +16431,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 20:36:49",
-      "dataAlteracao": "2026-06-20 00:05:34",
+      "dataAlteracao": "2026-07-18 19:57:03",
       "unidade": "UN",
       "gtin": "7894162004258",
       "precos": {
         "preco": 149,
         "precoPromocional": 0,
-        "precoCusto": 74,
+        "precoCusto": 0,
         "precoCustoMedio": 74
       },
       "estoque": {
@@ -16809,13 +16452,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 20:39:46",
-      "dataAlteracao": "2026-07-03 18:56:29",
+      "dataAlteracao": "2026-07-18 19:58:26",
       "unidade": "UN",
       "gtin": "7894162000465",
       "precos": {
         "preco": 1409.76,
         "precoPromocional": 0,
-        "precoCusto": 704.88,
+        "precoCusto": 0,
         "precoCustoMedio": 704.95
       },
       "estoque": {
@@ -16868,18 +16511,18 @@
     {
       "id": 353692956,
       "sku": "C06PT",
-      "descricao": "Carrinho Fechado Ferramentas C06 3 Gavetas Preto Cinza Fercar ",
+      "descricao": "Carrinho Fechado Ferramentas C06 3 Gavetas Preto Cinza Fercar",
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 20:44:38",
-      "dataAlteracao": "2026-06-21 09:53:08",
+      "dataAlteracao": "2026-07-18 19:58:33",
       "unidade": "UN",
       "gtin": "7894162002407",
       "precos": {
         "preco": 1399,
         "precoPromocional": 0,
-        "precoCusto": 700,
-        "precoCustoMedio": 700
+        "precoCusto": 0,
+        "precoCustoMedio": 661.11
       },
       "estoque": {
         "localizacao": "A1"
@@ -16893,13 +16536,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 20:45:43",
-      "dataAlteracao": "2026-07-10 11:40:18",
+      "dataAlteracao": "2026-07-18 19:58:37",
       "unidade": "UN",
       "gtin": "7894162004685",
       "precos": {
         "preco": 1414.52,
         "precoPromocional": 0,
-        "precoCusto": 707.26,
+        "precoCusto": 0,
         "precoCustoMedio": 707.26
       },
       "estoque": {
@@ -16914,13 +16557,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 20:46:37",
-      "dataAlteracao": "2026-06-20 00:09:36",
+      "dataAlteracao": "2026-07-18 19:58:35",
       "unidade": "UN",
       "gtin": "7894162004845",
       "precos": {
         "preco": 1399,
         "precoPromocional": 0,
-        "precoCusto": 700,
+        "precoCusto": 0,
         "precoCustoMedio": 700
       },
       "estoque": {
@@ -16935,13 +16578,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 20:47:28",
-      "dataAlteracao": "2026-06-23 08:37:37",
+      "dataAlteracao": "2026-07-18 19:58:39",
       "unidade": "UN",
       "gtin": "7894162002063",
       "precos": {
         "preco": 1391.6,
         "precoPromocional": 0,
-        "precoCusto": 713.64,
+        "precoCusto": 0,
         "precoCustoMedio": 702.73
       },
       "estoque": {
@@ -17040,13 +16683,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 21:01:59",
-      "dataAlteracao": "2026-06-13 09:34:04",
+      "dataAlteracao": "2026-07-18 19:57:22",
       "unidade": "UN",
       "gtin": "7894162004418",
       "precos": {
         "preco": 1499,
         "precoPromocional": 0,
-        "precoCusto": 900,
+        "precoCusto": 0,
         "precoCustoMedio": 900
       },
       "estoque": {
@@ -17124,13 +16767,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 21:41:07",
-      "dataAlteracao": "2026-06-21 09:09:32",
+      "dataAlteracao": "2026-07-18 19:58:58",
       "unidade": "UN",
       "gtin": "7890428162595",
       "precos": {
         "preco": 129,
         "precoPromocional": 0,
-        "precoCusto": 80,
+        "precoCusto": 0,
         "precoCustoMedio": 80
       },
       "estoque": {
@@ -17187,13 +16830,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 21:45:48",
-      "dataAlteracao": "2026-06-13 10:05:17",
+      "dataAlteracao": "2026-07-18 20:00:54",
       "unidade": "UN",
       "gtin": "7894162000502",
       "precos": {
         "preco": 103.09,
         "precoPromocional": 0,
-        "precoCusto": 44.82,
+        "precoCusto": 0,
         "precoCustoMedio": 40.11
       },
       "estoque": {
@@ -17313,14 +16956,14 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-05-08 21:53:58",
-      "dataAlteracao": "2026-06-13 09:34:17",
+      "dataAlteracao": "2026-07-18 20:04:12",
       "unidade": "UN",
       "gtin": "7897447900467",
       "precos": {
         "preco": 49,
         "precoPromocional": 0,
-        "precoCusto": 33.08,
-        "precoCustoMedio": 34
+        "precoCusto": 0,
+        "precoCustoMedio": 0
       },
       "estoque": {
         "localizacao": "A1"
@@ -17334,13 +16977,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 21:55:05",
-      "dataAlteracao": "2026-06-21 10:17:42",
+      "dataAlteracao": "2026-07-18 20:04:31",
       "unidade": "UN",
       "gtin": "7898055525646",
       "precos": {
         "preco": 22.44,
         "precoPromocional": 0,
-        "precoCusto": 11.22,
+        "precoCusto": 0,
         "precoCustoMedio": 10.37
       },
       "estoque": {
@@ -17355,13 +16998,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 21:55:48",
-      "dataAlteracao": "2026-06-21 09:30:18",
+      "dataAlteracao": "2026-07-18 20:04:37",
       "unidade": "UN",
       "gtin": "7898055524878",
       "precos": {
         "preco": 24.9,
         "precoPromocional": 0,
-        "precoCusto": 10.51,
+        "precoCusto": 0,
         "precoCustoMedio": 10.51
       },
       "estoque": {
@@ -17376,14 +17019,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 21:56:22",
-      "dataAlteracao": "2026-06-21 10:19:13",
+      "dataAlteracao": "2026-07-18 20:04:39",
       "unidade": "UN",
       "gtin": "7898055524823",
       "precos": {
         "preco": 23.43,
         "precoPromocional": 0,
-        "precoCusto": 10,
-        "precoCustoMedio": 10
+        "precoCusto": 0,
+        "precoCustoMedio": 8
       },
       "estoque": {
         "localizacao": "A1"
@@ -17397,13 +17040,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 21:57:04",
-      "dataAlteracao": "2026-06-21 10:21:49",
+      "dataAlteracao": "2026-07-18 20:04:41",
       "unidade": "UN",
       "gtin": "7898055524830",
       "precos": {
         "preco": 22.44,
         "precoPromocional": 0,
-        "precoCusto": 11.22,
+        "precoCusto": 0,
         "precoCustoMedio": 11.22
       },
       "estoque": {
@@ -17418,13 +17061,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 21:57:48",
-      "dataAlteracao": "2026-06-21 10:21:21",
+      "dataAlteracao": "2026-07-18 20:05:57",
       "unidade": "UN",
       "gtin": "7899519910633",
       "precos": {
         "preco": 24.9,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -17439,13 +17082,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 21:58:27",
-      "dataAlteracao": "2026-06-21 09:29:55",
+      "dataAlteracao": "2026-07-18 20:06:00",
       "unidade": "UN",
       "gtin": "7898055525660",
       "precos": {
         "preco": 31.12,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -17460,14 +17103,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 21:59:04",
-      "dataAlteracao": "2026-06-23 20:17:54",
+      "dataAlteracao": "2026-07-18 20:04:43",
       "unidade": "UN",
       "gtin": "7898055524861",
       "precos": {
         "preco": 24.9,
         "precoPromocional": 0,
-        "precoCusto": 10.51,
-        "precoCustoMedio": 10.26
+        "precoCusto": 0,
+        "precoCustoMedio": 9.47
       },
       "estoque": {
         "localizacao": "A1"
@@ -17481,13 +17124,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 21:59:47",
-      "dataAlteracao": "2026-06-21 09:29:15",
+      "dataAlteracao": "2026-07-18 20:04:45",
       "unidade": "UN",
       "gtin": "7898055524847",
       "precos": {
         "preco": 31.12,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -17502,13 +17145,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 22:00:32",
-      "dataAlteracao": "2026-06-25 02:37:46",
+      "dataAlteracao": "2026-07-18 20:05:54",
       "unidade": "UN",
       "gtin": "7898055525981",
       "precos": {
         "preco": 31.12,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -17523,13 +17166,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 22:01:17",
-      "dataAlteracao": "2026-06-21 09:28:50",
+      "dataAlteracao": "2026-07-18 20:04:33",
       "unidade": "UN",
       "gtin": "7898055524922",
       "precos": {
         "preco": 24.9,
         "precoPromocional": 0,
-        "precoCusto": 10.51,
+        "precoCusto": 0,
         "precoCustoMedio": 10.51
       },
       "estoque": {
@@ -17586,13 +17229,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 22:05:09",
-      "dataAlteracao": "2026-06-20 00:00:53",
+      "dataAlteracao": "2026-07-18 19:55:08",
       "unidade": "UN",
       "gtin": "7894023127867",
       "precos": {
         "preco": 398.88,
         "precoPromocional": 0,
-        "precoCusto": 160,
+        "precoCusto": 0,
         "precoCustoMedio": 160
       },
       "estoque": {
@@ -17607,13 +17250,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 22:06:05",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 19:55:12",
       "unidade": "UN",
       "gtin": "7894023127317",
       "precos": {
         "preco": 411.81,
         "precoPromocional": 0,
-        "precoCusto": 160,
+        "precoCusto": 0,
         "precoCustoMedio": 160
       },
       "estoque": {
@@ -17628,13 +17271,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 22:06:44",
-      "dataAlteracao": "2026-06-30 10:25:40",
+      "dataAlteracao": "2026-07-18 19:55:10",
       "unidade": "UN",
       "gtin": "7899887502157",
       "precos": {
         "preco": 357.6,
         "precoPromocional": 0,
-        "precoCusto": 155.48,
+        "precoCusto": 0,
         "precoCustoMedio": 155.48
       },
       "estoque": {
@@ -17649,13 +17292,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 22:07:31",
-      "dataAlteracao": "2026-06-20 00:01:19",
+      "dataAlteracao": "2026-07-18 19:55:14",
       "unidade": "UN",
       "gtin": "7894023127287",
       "precos": {
         "preco": 399,
         "precoPromocional": 0,
-        "precoCusto": 160,
+        "precoCusto": 0,
         "precoCustoMedio": 160
       },
       "estoque": {
@@ -17670,13 +17313,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 23:04:25",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 19:54:53",
       "unidade": "UN",
       "gtin": "7894023116168",
       "precos": {
         "preco": 159.89,
         "precoPromocional": 0,
-        "precoCusto": 63.81,
+        "precoCusto": 0,
         "precoCustoMedio": 64.06
       },
       "estoque": {
@@ -17691,14 +17334,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 23:05:30",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 19:54:55",
       "unidade": "UN",
       "gtin": "7894023158328",
       "precos": {
         "preco": 159.89,
         "precoPromocional": 0,
-        "precoCusto": 65,
-        "precoCustoMedio": 65
+        "precoCusto": 0,
+        "precoCustoMedio": 37.92
       },
       "estoque": {
         "localizacao": "A1"
@@ -17712,13 +17355,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 23:07:08",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 19:53:36",
       "unidade": "UN",
       "gtin": "7894023113822",
       "precos": {
         "preco": 174.51,
         "precoPromocional": 0,
-        "precoCusto": 63.8,
+        "precoCusto": 0,
         "precoCustoMedio": 63.8
       },
       "estoque": {
@@ -17733,14 +17376,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 23:07:56",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 19:54:57",
       "unidade": "UN",
       "gtin": "7894023127300",
       "precos": {
         "preco": 159.89,
         "precoPromocional": 0,
-        "precoCusto": 63.81,
-        "precoCustoMedio": 63.81
+        "precoCusto": 0,
+        "precoCustoMedio": 25.52
       },
       "estoque": {
         "localizacao": "A1"
@@ -17943,13 +17586,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 23:18:42",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 20:10:01",
       "unidade": "UN",
       "gtin": "7894023139136",
       "precos": {
         "preco": 219,
         "precoPromocional": 0,
-        "precoCusto": 75,
+        "precoCusto": 0,
         "precoCustoMedio": 75
       },
       "estoque": {
@@ -18132,13 +17775,13 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-05-08 23:47:04",
-      "dataAlteracao": "2026-06-13 09:34:17",
+      "dataAlteracao": "2026-07-18 20:02:52",
       "unidade": "UN",
       "gtin": "7898912189097",
       "precos": {
         "preco": 45,
         "precoPromocional": 0,
-        "precoCusto": 20,
+        "precoCusto": 0,
         "precoCustoMedio": 20
       },
       "estoque": {
@@ -18153,13 +17796,13 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-05-08 23:50:01",
-      "dataAlteracao": "2026-06-13 09:34:17",
+      "dataAlteracao": "2026-07-18 20:02:50",
       "unidade": "UN",
       "gtin": "7898465460148",
       "precos": {
         "preco": 45,
         "precoPromocional": 0,
-        "precoCusto": 20,
+        "precoCusto": 0,
         "precoCustoMedio": 20
       },
       "estoque": {
@@ -18174,13 +17817,13 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-05-08 23:55:37",
-      "dataAlteracao": "2026-06-20 01:16:06",
+      "dataAlteracao": "2026-07-18 20:02:57",
       "unidade": "UN",
       "gtin": "7898465460094",
       "precos": {
         "preco": 50.99,
         "precoPromocional": 0,
-        "precoCusto": 20,
+        "precoCusto": 0,
         "precoCustoMedio": 20
       },
       "estoque": {
@@ -18195,13 +17838,13 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-05-09 00:02:06",
-      "dataAlteracao": "2026-06-20 11:41:51",
+      "dataAlteracao": "2026-07-18 20:02:54",
       "unidade": "UN",
       "gtin": "",
       "precos": {
         "preco": 45,
         "precoPromocional": 0,
-        "precoCusto": 20,
+        "precoCusto": 0,
         "precoCustoMedio": 20
       },
       "estoque": {
@@ -18237,13 +17880,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 07:18:06",
-      "dataAlteracao": "2026-06-20 00:00:35",
+      "dataAlteracao": "2026-07-18 19:55:04",
       "unidade": "UN",
       "gtin": "7894023113815",
       "precos": {
         "preco": 309.12,
         "precoPromocional": 0,
-        "precoCusto": 113.42,
+        "precoCusto": 0,
         "precoCustoMedio": 114.44
       },
       "estoque": {
@@ -18258,13 +17901,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 07:20:14",
-      "dataAlteracao": "2026-06-21 09:28:13",
+      "dataAlteracao": "2026-07-18 20:04:35",
       "unidade": "UN",
       "gtin": "7898055524854",
       "precos": {
         "preco": 31.12,
         "precoPromocional": 0,
-        "precoCusto": 10.51,
+        "precoCusto": 0,
         "precoCustoMedio": 10.14
       },
       "estoque": {
@@ -18300,13 +17943,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 07:24:40",
-      "dataAlteracao": "2026-06-13 09:34:00",
+      "dataAlteracao": "2026-07-18 19:55:30",
       "unidade": "UN",
       "gtin": "7894162001783",
       "precos": {
         "preco": 78.9,
         "precoPromocional": 0,
-        "precoCusto": 37.53,
+        "precoCusto": 0,
         "precoCustoMedio": 35.89
       },
       "estoque": {
@@ -18321,13 +17964,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 09:50:30",
-      "dataAlteracao": "2026-06-21 11:02:49",
+      "dataAlteracao": "2026-07-18 20:10:26",
       "unidade": "UN",
       "gtin": "7894023138986",
       "precos": {
         "preco": 24.9,
         "precoPromocional": 0,
-        "precoCusto": 7,
+        "precoCusto": 0,
         "precoCustoMedio": 7
       },
       "estoque": {
@@ -18342,13 +17985,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 09:50:59",
-      "dataAlteracao": "2026-06-21 09:27:16",
+      "dataAlteracao": "2026-07-18 20:08:02",
       "unidade": "UN",
       "gtin": "7899887504823",
       "precos": {
         "preco": 25,
         "precoPromocional": 0,
-        "precoCusto": 5,
+        "precoCusto": 0,
         "precoCustoMedio": 5
       },
       "estoque": {
@@ -18403,15 +18046,15 @@
       "sku": "PET/ORBM*SORT",
       "descricao": "Ossinho Rex Tamanho M Astra",
       "tipo": "S",
-      "situacao": "A",
+      "situacao": "I",
       "dataCriacao": "2026-05-09 09:52:31",
-      "dataAlteracao": "2026-07-10 09:27:44",
+      "dataAlteracao": "2026-07-18 20:06:06",
       "unidade": "UN",
       "gtin": "7891222355947",
       "precos": {
         "preco": 35,
         "precoPromocional": 0,
-        "precoCusto": 5,
+        "precoCusto": 0,
         "precoCustoMedio": 5
       },
       "estoque": {
@@ -18487,15 +18130,15 @@
       "sku": "PET/CMGF*RSP",
       "descricao": "Comedouro para Gatos 200ml Astra Rosa Pet",
       "tipo": "S",
-      "situacao": "A",
+      "situacao": "I",
       "dataCriacao": "2026-05-09 09:53:01",
-      "dataAlteracao": "2026-07-10 09:27:45",
+      "dataAlteracao": "2026-07-18 20:01:01",
       "unidade": "UN",
       "gtin": "7891222355480",
       "precos": {
         "preco": 35,
         "precoPromocional": 0,
-        "precoCusto": 5,
+        "precoCusto": 0,
         "precoCustoMedio": 5
       },
       "estoque": {
@@ -19476,13 +19119,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:14:19",
-      "dataAlteracao": "2026-06-25 02:45:50",
+      "dataAlteracao": "2026-07-18 20:07:45",
       "unidade": "UN",
       "gtin": "7894682000037",
       "precos": {
         "preco": 29,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -19497,13 +19140,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:15:28",
-      "dataAlteracao": "2026-06-13 09:34:26",
+      "dataAlteracao": "2026-07-18 20:07:43",
       "unidade": "UN",
       "gtin": "7898618121032",
       "precos": {
         "preco": 29,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -19518,13 +19161,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:16:30",
-      "dataAlteracao": "2026-06-25 02:43:12",
+      "dataAlteracao": "2026-07-18 20:07:39",
       "unidade": "UN",
       "gtin": "17896417223879",
       "precos": {
         "preco": 29.9,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -19539,13 +19182,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:17:33",
-      "dataAlteracao": "2026-06-13 09:34:26",
+      "dataAlteracao": "2026-07-18 20:07:41",
       "unidade": "UN",
       "gtin": "7898465422498",
       "precos": {
         "preco": 29,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -19560,13 +19203,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:20:09",
-      "dataAlteracao": "2026-07-03 18:56:29",
+      "dataAlteracao": "2026-07-18 20:00:28",
       "unidade": "UN",
       "gtin": "7894162000083",
       "precos": {
         "preco": 24.21,
         "precoPromocional": 0,
-        "precoCusto": 8.29,
+        "precoCusto": 0,
         "precoCustoMedio": 9.96
       },
       "estoque": {
@@ -19623,13 +19266,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:23:13",
-      "dataAlteracao": "2026-06-17 19:56:25",
+      "dataAlteracao": "2026-07-18 19:53:18",
       "unidade": "UN",
       "gtin": "7891222044445",
       "precos": {
         "preco": 189,
         "precoPromocional": 0,
-        "precoCusto": 99.99,
+        "precoCusto": 0,
         "precoCustoMedio": 93.82
       },
       "estoque": {
@@ -19665,13 +19308,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:24:24",
-      "dataAlteracao": "2026-07-10 11:40:18",
+      "dataAlteracao": "2026-07-18 20:00:50",
       "unidade": "UN",
       "gtin": "7894162000182",
       "precos": {
         "preco": 94.44,
         "precoPromocional": 0,
-        "precoCusto": 41.06,
+        "precoCusto": 0,
         "precoCustoMedio": 41.14
       },
       "estoque": {
@@ -19686,13 +19329,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:25:06",
-      "dataAlteracao": "2026-07-10 11:40:18",
+      "dataAlteracao": "2026-07-18 20:00:52",
       "unidade": "UN",
       "gtin": "7894162000199",
       "precos": {
         "preco": 141.13,
         "precoPromocional": 0,
-        "precoCusto": 61.36,
+        "precoCusto": 0,
         "precoCustoMedio": 61.94
       },
       "estoque": {
@@ -19707,13 +19350,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:25:49",
-      "dataAlteracao": "2026-06-13 10:05:17",
+      "dataAlteracao": "2026-07-18 20:00:48",
       "unidade": "UN",
       "gtin": "7894162000205",
       "precos": {
         "preco": 218,
         "precoPromocional": 0,
-        "precoCusto": 81.04,
+        "precoCusto": 0,
         "precoCustoMedio": 81.8
       },
       "estoque": {
@@ -19728,13 +19371,13 @@
       "tipo": "S",
       "situacao": "I",
       "dataCriacao": "2026-05-09 10:26:38",
-      "dataAlteracao": "2026-07-01 08:18:25",
+      "dataAlteracao": "2026-07-18 20:00:33",
       "unidade": "UN",
       "gtin": "7891222355800",
       "precos": {
         "preco": 28.63,
         "precoPromocional": 0,
-        "precoCusto": 5,
+        "precoCusto": 0,
         "precoCustoMedio": 5
       },
       "estoque": {
@@ -19749,13 +19392,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:27:43",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 19:55:06",
       "unidade": "UN",
       "gtin": "7894023127294",
       "precos": {
         "preco": 329,
         "precoPromocional": 0,
-        "precoCusto": 115,
+        "precoCusto": 0,
         "precoCustoMedio": 115
       },
       "estoque": {
@@ -19770,14 +19413,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:28:27",
-      "dataAlteracao": "2026-06-20 00:00:15",
+      "dataAlteracao": "2026-07-18 19:54:59",
       "unidade": "UN",
       "gtin": "7894023116151",
       "precos": {
         "preco": 249.11,
         "precoPromocional": 0,
-        "precoCusto": 113.42,
-        "precoCustoMedio": 113.42
+        "precoCusto": 0,
+        "precoCustoMedio": 85.07
       },
       "estoque": {
         "localizacao": "A1"
@@ -19791,14 +19434,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:29:21",
-      "dataAlteracao": "2026-06-19 13:07:56",
+      "dataAlteracao": "2026-07-18 19:55:01",
       "unidade": "UN",
       "gtin": "7894023158335",
       "precos": {
         "preco": 260.43,
         "precoPromocional": 0,
-        "precoCusto": 115,
-        "precoCustoMedio": 115
+        "precoCusto": 0,
+        "precoCustoMedio": 86.25
       },
       "estoque": {
         "localizacao": "A1"
@@ -19812,13 +19455,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:30:28",
-      "dataAlteracao": "2026-06-13 09:34:06",
+      "dataAlteracao": "2026-07-18 19:58:47",
       "unidade": "UN",
       "gtin": "7894162004784",
       "precos": {
         "preco": 1575.47,
         "precoPromocional": 0,
-        "precoCusto": 880.15,
+        "precoCusto": 0,
         "precoCustoMedio": 890.08
       },
       "estoque": {
@@ -19833,13 +19476,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:31:25",
-      "dataAlteracao": "2026-06-13 09:34:06",
+      "dataAlteracao": "2026-07-18 19:58:41",
       "unidade": "UN",
       "gtin": "7894162000878",
       "precos": {
         "preco": 1599,
         "precoPromocional": 0,
-        "precoCusto": 900,
+        "precoCusto": 0,
         "precoCustoMedio": 900
       },
       "estoque": {
@@ -19854,13 +19497,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:32:13",
-      "dataAlteracao": "2026-06-13 09:34:06",
+      "dataAlteracao": "2026-07-18 19:58:43",
       "unidade": "UN",
       "gtin": "7894162001882",
       "precos": {
         "preco": 1599,
         "precoPromocional": 0,
-        "precoCusto": 885.37,
+        "precoCusto": 0,
         "precoCustoMedio": 895.12
       },
       "estoque": {
@@ -19875,13 +19518,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:33:47",
-      "dataAlteracao": "2026-07-03 18:56:29",
+      "dataAlteracao": "2026-07-18 19:58:49",
       "unidade": "UN",
       "gtin": "7894162004692",
       "precos": {
         "preco": 1591.88,
         "precoPromocional": 0,
-        "precoCusto": 879.49,
+        "precoCusto": 0,
         "precoCustoMedio": 882.42
       },
       "estoque": {
@@ -19896,13 +19539,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:34:33",
-      "dataAlteracao": "2026-07-03 18:56:30",
+      "dataAlteracao": "2026-07-18 19:58:51",
       "unidade": "UN",
       "gtin": "7894162002322",
       "precos": {
         "preco": 1688.62,
         "precoPromocional": 0,
-        "precoCusto": 882.97,
+        "precoCusto": 0,
         "precoCustoMedio": 895.13
       },
       "estoque": {
@@ -19917,13 +19560,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:35:04",
-      "dataAlteracao": "2026-07-03 18:55:05",
+      "dataAlteracao": "2026-07-18 19:58:45",
       "unidade": "UN",
       "gtin": "7894162002544",
       "precos": {
         "preco": 1699,
         "precoPromocional": 0,
-        "precoCusto": 882.97,
+        "precoCusto": 0,
         "precoCustoMedio": 891.99
       },
       "estoque": {
@@ -20043,13 +19686,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-14 20:30:21",
-      "dataAlteracao": "2026-06-13 10:35:09",
+      "dataAlteracao": "2026-07-18 20:04:27",
       "unidade": "UN",
       "gtin": "7898505142270",
       "precos": {
         "preco": 28.4,
         "precoPromocional": 0,
-        "precoCusto": 9.5,
+        "precoCusto": 0,
         "precoCustoMedio": 9.5
       },
       "estoque": {
@@ -20064,13 +19707,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-14 20:31:01",
-      "dataAlteracao": "2026-06-13 10:35:09",
+      "dataAlteracao": "2026-07-18 20:06:14",
       "unidade": "UN",
       "gtin": "7898505142287",
       "precos": {
         "preco": 33.15,
         "precoPromocional": 0,
-        "precoCusto": 13.4,
+        "precoCusto": 0,
         "precoCustoMedio": 13.4
       },
       "estoque": {
@@ -20148,13 +19791,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-04 11:28:28",
-      "dataAlteracao": "2026-06-13 09:34:26",
+      "dataAlteracao": "2026-07-18 20:07:50",
       "unidade": "UN",
       "gtin": "7897801301596",
       "precos": {
         "preco": 23.9,
         "precoPromocional": 0,
-        "precoCusto": 6,
+        "precoCusto": 0,
         "precoCustoMedio": 6
       },
       "estoque": {
@@ -20190,13 +19833,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-04 11:28:34",
-      "dataAlteracao": "2026-06-13 09:34:13",
+      "dataAlteracao": "2026-07-18 20:01:12",
       "unidade": "UN",
       "gtin": "7892327509440",
       "precos": {
         "preco": 153.9,
         "precoPromocional": 0,
-        "precoCusto": 65,
+        "precoCusto": 0,
         "precoCustoMedio": 65
       },
       "estoque": {
@@ -20637,7 +20280,7 @@
       "precos": {
         "preco": 49,
         "precoPromocional": 0,
-        "precoCusto": 17,
+        "precoCusto": 0,
         "precoCustoMedio": 17
       },
       "estoque": {
@@ -20692,9 +20335,9 @@
       "sku": "PET/CMF3*RSP",
       "descricao": "Comedouro Antiformiga 550ml Rosa Astra",
       "tipo": "S",
-      "situacao": "A",
+      "situacao": "I",
       "dataCriacao": "2026-06-09 14:44:50",
-      "dataAlteracao": "2026-07-10 09:27:44",
+      "dataAlteracao": "2026-07-14 08:45:08",
       "unidade": "UN",
       "gtin": "7891222355763",
       "precos": {
@@ -20736,7 +20379,7 @@
       "tipo": "K",
       "situacao": "A",
       "dataCriacao": "2026-06-09 14:45:57",
-      "dataAlteracao": "2026-06-25 01:48:45",
+      "dataAlteracao": "2026-07-18 20:06:10",
       "unidade": "UN",
       "gtin": "17898505142277",
       "precos": {
@@ -20757,7 +20400,7 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-09 14:46:31",
-      "dataAlteracao": "2026-06-20 00:23:51",
+      "dataAlteracao": "2026-07-18 19:59:03",
       "unidade": "UN",
       "gtin": "7899612795090",
       "precos": {
@@ -20778,13 +20421,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-09 14:47:03",
-      "dataAlteracao": "2026-06-30 10:25:40",
+      "dataAlteracao": "2026-07-18 20:10:06",
       "unidade": "UN",
       "gtin": "7894023148725",
       "precos": {
         "preco": 574.24,
         "precoPromocional": 0,
-        "precoCusto": 185.24,
+        "precoCusto": 0,
         "precoCustoMedio": 185.24
       },
       "estoque": {
@@ -20799,13 +20442,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-09 14:47:28",
-      "dataAlteracao": "2026-06-30 10:25:40",
+      "dataAlteracao": "2026-07-18 20:10:04",
       "unidade": "UN",
       "gtin": "7894023152999",
       "precos": {
         "preco": 574.24,
         "precoPromocional": 0,
-        "precoCusto": 185.24,
+        "precoCusto": 0,
         "precoCustoMedio": 185.24
       },
       "estoque": {
@@ -20820,7 +20463,7 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-09 14:48:01",
-      "dataAlteracao": "2026-06-21 10:33:47",
+      "dataAlteracao": "2026-07-18 20:10:16",
       "unidade": "UN",
       "gtin": "7894023148718",
       "precos": {
@@ -20841,7 +20484,7 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-09 14:48:30",
-      "dataAlteracao": "2026-06-21 10:34:44",
+      "dataAlteracao": "2026-07-18 20:10:13",
       "unidade": "UN",
       "gtin": "7894023153057",
       "precos": {
@@ -20862,7 +20505,7 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-09 14:48:59",
-      "dataAlteracao": "2026-06-21 11:01:13",
+      "dataAlteracao": "2026-07-18 20:10:22",
       "unidade": "UN",
       "gtin": "7894023127379",
       "precos": {
@@ -20883,7 +20526,7 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-09 14:49:32",
-      "dataAlteracao": "2026-06-21 10:35:43",
+      "dataAlteracao": "2026-07-18 20:10:11",
       "unidade": "UN",
       "gtin": "7894023148701",
       "precos": {
@@ -20902,9 +20545,9 @@
       "sku": "PET/CMF3*AZP",
       "descricao": "Comedouro N 2 Antiformiga 600ml Astra Azul Pet",
       "tipo": "S",
-      "situacao": "A",
+      "situacao": "I",
       "dataCriacao": "2026-06-09 14:50:10",
-      "dataAlteracao": "2026-07-10 09:27:45",
+      "dataAlteracao": "2026-07-18 20:00:56",
       "unidade": "UN",
       "gtin": "7891222355756",
       "precos": {
@@ -20925,7 +20568,7 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-09 14:50:44",
-      "dataAlteracao": "2026-06-20 01:05:05",
+      "dataAlteracao": "2026-07-18 20:02:45",
       "unidade": "UN",
       "gtin": "7899887501891",
       "precos": {
@@ -20967,7 +20610,7 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-09 14:52:02",
-      "dataAlteracao": "2026-06-20 00:58:05",
+      "dataAlteracao": "2026-07-18 20:02:37",
       "unidade": "UN",
       "gtin": "7893308004992",
       "precos": {
@@ -20988,7 +20631,7 @@
       "tipo": "S",
       "situacao": "I",
       "dataCriacao": "2026-06-09 14:52:49",
-      "dataAlteracao": "2026-07-01 08:18:25",
+      "dataAlteracao": "2026-07-18 19:53:30",
       "unidade": "UN",
       "gtin": "7891222355435",
       "precos": {
@@ -21009,7 +20652,7 @@
       "tipo": "S",
       "situacao": "I",
       "dataCriacao": "2026-06-09 14:53:18",
-      "dataAlteracao": "2026-07-01 08:18:25",
+      "dataAlteracao": "2026-07-18 19:53:32",
       "unidade": "UN",
       "gtin": "7891222355459",
       "precos": {
@@ -21051,7 +20694,7 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-09 14:54:20",
-      "dataAlteracao": "2026-06-21 13:36:59",
+      "dataAlteracao": "2026-07-18 19:53:04",
       "unidade": "UN",
       "gtin": "7899887506315",
       "precos": {
@@ -21091,9 +20734,9 @@
       "sku": "PET/CMGF*VMP",
       "descricao": "Comedouro para Gatos 200ml Astra Vermelho Pet",
       "tipo": "S",
-      "situacao": "A",
+      "situacao": "I",
       "dataCriacao": "2026-06-09 14:55:24",
-      "dataAlteracao": "2026-07-10 09:27:44",
+      "dataAlteracao": "2026-07-18 20:01:04",
       "unidade": "UN",
       "gtin": "7891222355497",
       "precos": {
@@ -21387,13 +21030,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-10 11:56:38",
-      "dataAlteracao": "2026-06-17 19:56:25",
+      "dataAlteracao": "2026-07-18 19:53:22",
       "unidade": "UN",
       "gtin": "7891222044483",
       "precos": {
         "preco": 199,
         "precoPromocional": 0,
-        "precoCusto": 99.99,
+        "precoCusto": 0,
         "precoCustoMedio": 99.99
       },
       "estoque": {
@@ -21702,13 +21345,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-13 13:50:48",
-      "dataAlteracao": "2026-06-22 14:59:12",
+      "dataAlteracao": "2026-07-18 19:53:16",
       "unidade": "UN",
       "gtin": "7891222044445",
       "precos": {
         "preco": 189,
         "precoPromocional": 0,
-        "precoCusto": 10,
+        "precoCusto": 0,
         "precoCustoMedio": 10
       },
       "estoque": {
@@ -21723,14 +21366,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-13 13:51:44",
-      "dataAlteracao": "2026-06-20 00:51:49",
+      "dataAlteracao": "2026-07-18 20:02:31",
       "unidade": "UN",
       "gtin": "7891222411650",
       "precos": {
         "preco": 29.22,
         "precoPromocional": 0,
-        "precoCusto": 8.62,
-        "precoCustoMedio": 8.62
+        "precoCusto": 0,
+        "precoCustoMedio": 1.62
       },
       "estoque": {
         "localizacao": "A1"
@@ -21744,7 +21387,7 @@
       "tipo": "S",
       "situacao": "I",
       "dataCriacao": "2026-06-13 13:52:31",
-      "dataAlteracao": "2026-07-01 08:18:25",
+      "dataAlteracao": "2026-07-18 19:55:28",
       "unidade": "UN",
       "gtin": "7891222355466",
       "precos": {
@@ -21765,14 +21408,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-13 13:54:33",
-      "dataAlteracao": "2026-06-20 00:51:25",
+      "dataAlteracao": "2026-07-18 20:07:48",
       "unidade": "UN",
       "gtin": "7891222411636",
       "precos": {
         "preco": 49,
         "precoPromocional": 0,
-        "precoCusto": 15.62,
-        "precoCustoMedio": 15.62
+        "precoCusto": 0,
+        "precoCustoMedio": 1.2
       },
       "estoque": {
         "localizacao": "A1"
@@ -21786,13 +21429,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-13 13:55:30",
-      "dataAlteracao": "2026-06-20 00:50:13",
+      "dataAlteracao": "2026-07-18 20:06:17",
       "unidade": "UN",
       "gtin": "7891222411803",
       "precos": {
         "preco": 74,
         "precoPromocional": 0,
-        "precoCusto": 28,
+        "precoCusto": 0,
         "precoCustoMedio": 28
       },
       "estoque": {
@@ -21826,9 +21469,9 @@
       "sku": "PETCM2AZP",
       "descricao": "Comedouro Vasilha Ração Agua Pet Cachorro Gato Astra Azul",
       "tipo": "S",
-      "situacao": "A",
+      "situacao": "I",
       "dataCriacao": "2026-06-13 13:58:48",
-      "dataAlteracao": "2026-07-10 09:28:03",
+      "dataAlteracao": "2026-07-18 20:01:10",
       "unidade": "UN",
       "gtin": "7891222355534",
       "precos": {
@@ -21954,14 +21597,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-20 11:24:01",
-      "dataAlteracao": "2026-06-20 11:25:12",
+      "dataAlteracao": "2026-07-18 20:08:00",
       "unidade": "UN",
       "gtin": "7890428177759",
       "precos": {
         "preco": 58.5,
-        "precoPromocional": 55.58,
-        "precoCusto": 20,
-        "precoCustoMedio": 20
+        "precoPromocional": 0,
+        "precoCusto": 0,
+        "precoCustoMedio": 13.33
       },
       "estoque": {
         "localizacao": "A1"
@@ -22038,12 +21681,12 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-21 12:33:39",
-      "dataAlteracao": "2026-07-04 14:18:40",
+      "dataAlteracao": "2026-07-18 19:58:30",
       "unidade": "UN",
       "gtin": "7894162004401",
       "precos": {
         "preco": 2364.31,
-        "precoPromocional": 1891.45,
+        "precoPromocional": 0,
         "precoCusto": 0,
         "precoCustoMedio": 0
       },
@@ -22059,12 +21702,12 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-21 12:33:39",
-      "dataAlteracao": "2026-07-04 14:18:40",
+      "dataAlteracao": "2026-07-18 19:58:28",
       "unidade": "UN",
       "gtin": "7894162001875",
       "precos": {
         "preco": 2364.31,
-        "precoPromocional": 1891.45,
+        "precoPromocional": 0,
         "precoCusto": 0,
         "precoCustoMedio": 0
       },
@@ -22080,12 +21723,12 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-21 12:33:39",
-      "dataAlteracao": "2026-07-04 14:18:40",
+      "dataAlteracao": "2026-07-18 19:57:20",
       "unidade": "UN",
       "gtin": "7898505234104",
       "precos": {
         "preco": 65.91,
-        "precoPromocional": 52.73,
+        "precoPromocional": 0,
         "precoCusto": 0,
         "precoCustoMedio": 0
       },
@@ -22122,13 +21765,13 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-21 14:30:15",
-      "dataAlteracao": "2026-06-21 14:30:15",
+      "dataAlteracao": "2026-07-18 19:53:00",
       "unidade": "UN",
       "gtin": "7898964344048",
       "precos": {
         "preco": 39,
         "precoPromocional": 0,
-        "precoCusto": 25,
+        "precoCusto": 0,
         "precoCustoMedio": 25
       },
       "estoque": {
@@ -22143,7 +21786,7 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-30 10:24:29",
-      "dataAlteracao": "2026-07-04 14:18:40",
+      "dataAlteracao": "2026-07-17 14:36:01",
       "unidade": "UN",
       "gtin": "7894023160000",
       "precos": {
@@ -22164,7 +21807,7 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-30 10:24:35",
-      "dataAlteracao": "2026-07-04 14:18:40",
+      "dataAlteracao": "2026-07-17 14:36:01",
       "unidade": "UN",
       "gtin": "7894023159950",
       "precos": {
@@ -22185,7 +21828,7 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-06-30 10:24:42",
-      "dataAlteracao": "2026-07-04 14:18:40",
+      "dataAlteracao": "2026-07-17 14:36:01",
       "unidade": "UN",
       "gtin": "7894023159981",
       "precos": {
@@ -22225,14 +21868,14 @@
       "sku": "TVT-K-NOVO-2",
       "descricao": "Assento Almofadado Branco Astra para Sanitários Avant/fit/versato/angra Astra",
       "tipo": "S",
-      "situacao": "A",
+      "situacao": "I",
       "dataCriacao": "2026-07-12 15:56:35",
-      "dataAlteracao": "2026-07-12 15:56:35",
+      "dataAlteracao": "2026-07-18 19:53:14",
       "unidade": "UN",
       "gtin": "7891222044445",
       "precos": {
         "preco": 249.59,
-        "precoPromocional": 199.67,
+        "precoPromocional": 0,
         "precoCusto": 0,
         "precoCustoMedio": 0
       },

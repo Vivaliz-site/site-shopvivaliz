@@ -1,5 +1,8 @@
 <?php
 declare(strict_types=1);
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 header('Content-Type: text/html; charset=UTF-8');
 ?>
 <!DOCTYPE html>
@@ -11,6 +14,7 @@ header('Content-Type: text/html; charset=UTF-8');
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/shipping-v7.css">
+    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
     <style>
         .cart-page { padding: 36px 0 64px; }
         .cart-layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; }
@@ -62,6 +66,7 @@ header('Content-Type: text/html; charset=UTF-8');
             .cart-layout { grid-template-columns: 1fr; }
         }
     </style>
+    <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
 </head>
 <body>
 <?php $svNavCurrent = 'carrinho'; include __DIR__ . '/includes/navbar.php'; ?>
@@ -97,6 +102,7 @@ header('Content-Type: text/html; charset=UTF-8');
                 Seu carrinho é salvo localmente para que você possa continuar a compra quando voltar.
             </div>
             <a href="/checkout" class="btn btn-primary btn-checkout" id="btn-checkout">Finalizar pedido</a>
+            <div id="checkout-validate-status" style="font-size:13px;color:#b00020;margin-top:8px;line-height:1.5"></div>
             <a href="/catalogo" class="btn-continue">Continuar comprando</a>
             <div class="sv-trust-badge">
                 <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
@@ -118,7 +124,7 @@ header('Content-Type: text/html; charset=UTF-8');
     <div class="container">
         <div class="footer-cols">
             <div><strong>Vivaliz</strong><p>Qualidade e entrega rápida para todo o Brasil.</p></div>
-            <div><strong>Navegação</strong><a href="/catalogo">Catálogo</a><a href="/sobre">Sobre</a><a href="/contato">Contato</a></div>
+            <div><strong>Navegação</strong><a href="/catalogo">Produtos</a><a href="/sobre">Sobre</a><a href="/contato">Contato</a></div>
             <div><strong>Atendimento</strong><a href="/contato">Fale conosco</a><a href="/faq">Dúvidas frequentes</a><a href="/politica-privacidade">Privacidade</a></div>
         </div>
         <p class="footer-copy">&copy; 2026 Vivaliz. Todos os direitos reservados.</p>
@@ -240,5 +246,6 @@ header('Content-Type: text/html; charset=UTF-8');
 </script>
 <script src="/js/cro-interactions.js"></script>
 <script src="/js/cart-shipping-v7.js"></script>
+<script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
 </body>
 </html>

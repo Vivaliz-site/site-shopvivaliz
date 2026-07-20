@@ -6,7 +6,7 @@
     <button id="sv-liz-launcher" type="button" aria-label="Abrir assistente Liz" aria-controls="sv-liz-panel" aria-expanded="false">
       <img src="/public/assets/liz-assistant/liz-avatar.png" alt="Liz">
     </button>
-    <div id="sv-liz-bubble">Ei! Vi que você tem produtos no carrinho. Finalize agora com 5% de desconto via PIX! 💸</div>
+    <div id="sv-liz-bubble">Ei! Vi que você tem produtos no carrinho. Finalize agora e use o cupom VOLTEI5 para 5% de desconto! 💸</div>
     <section id="sv-liz-panel" role="dialog" aria-modal="false" aria-label="Liz - Assistente Virtual">
       <div class="sv-head">
         <img src="/public/assets/liz-assistant/logo-oficial.svg" alt="ShopVivaliz">

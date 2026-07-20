@@ -28,7 +28,7 @@ if (is_file(dirname(__DIR__) . '/.env')) {
 if (!isset($_GET['code']) && !isset($_GET['error'])) {
     // Usuário ainda não clicou no link
     $clientId = getenv('OLIST_CLIENT_ID') ?: 'CONFIGURE OLIST_CLIENT_ID NO .env';
-    $redirectUri = "https://dev.shopvivaliz.com.br/olist/oauth-flow-official.php";
+    $redirectUri = getenv('OLIST_OFFICIAL_REDIRECT_URI') ?: "https://shopvivaliz.com.br/olist/oauth-flow-official.php";
 
     $authUrl = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth?" . http_build_query([
         'client_id' => $clientId,
@@ -96,7 +96,7 @@ echo json_encode([
 
 $clientId = getenv('OLIST_CLIENT_ID') ?: die('ERRO: OLIST_CLIENT_ID não configurado em .env');
 $clientSecret = getenv('OLIST_CLIENT_SECRET') ?: die('ERRO: OLIST_CLIENT_SECRET não configurado em .env');
-$redirectUri = "https://dev.shopvivaliz.com.br/olist/oauth-flow-official.php";
+$redirectUri = getenv('OLIST_OFFICIAL_REDIRECT_URI') ?: "https://shopvivaliz.com.br/olist/oauth-flow-official.php";
 
 $tokenEndpoint = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token";
 

@@ -35,9 +35,9 @@ function loadDbCoupons(string $code): ?array {
         if ($row['expires_at'] && strtotime($row['expires_at']) < time()) return ['ok'=>false,'error'=>'Cupom expirado'];
         if ($row['max_uses'] > 0 && $row['used_count'] >= $row['max_uses']) return ['ok'=>false,'error'=>'Cupom esgotado'];
         $label = match($row['discount_type']) {
-            'pct'   => 'Desconto ' . (int)$row['discount_value'] . '%',
+            'pct', 'percent' => 'Desconto ' . (int)$row['discount_value'] . '%',
             'fixed' => 'Desconto R$ ' . number_format((float)$row['discount_value'], 2, ',', '.'),
-            'frete' => 'Frete Grátis',
+            'frete', 'shipping' => 'Frete Grátis',
             default => 'Desconto aplicado',
         };
         return [
@@ -67,7 +67,8 @@ function loadFileCoupons(string $code): ?array {
 /* ── Cupons hardcoded para demonstração / fallback final ── */
 function builtinCoupons(string $code): ?array {
     $builtins = [
-        'VIVALIZ10'   => ['type'=>'pct',   'value'=>10, 'label'=>'Desconto 10%'],
+        'PRIMEIRA10' => ['type'=>'percent', 'value'=>10, 'label'=>'Primeira compra: 10% de desconto'],
+        'VIVALIZ10'   => ['type'=>'percent', 'value'=>10, 'label'=>'Primeira compra: 10% de desconto'],
         'BEMVINDO5'   => ['type'=>'fixed', 'value'=>5,  'label'=>'Desconto R$ 5,00'],
         'FRETEGRATIS' => ['type'=>'frete', 'value'=>0,  'label'=>'Frete Grátis'],
     ];

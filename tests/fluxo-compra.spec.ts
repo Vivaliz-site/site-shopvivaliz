@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 
 test.describe('Fluxo de Compra', () => {
-  const baseUrl = process.env.E2E_BASE_URL || 'https://dev.shopvivaliz.com.br';
+  const baseUrl = process.env.E2E_BASE_URL || 'https://shopvivaliz.com.br';
 
   test('homepage deve responder e carregar estrutura basica', async ({ page }) => {
     const response = await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });

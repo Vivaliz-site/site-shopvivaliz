@@ -52,14 +52,14 @@
 2. Crie um novo projeto
 3. Habilite "Google+ API"
 4. Crie um OAuth 2.0 Client ID
-5. Configure Redirect URI: `https://dev.shopvivaliz.com.br/auth/google-callback.php`
+5. Configure Redirect URI: `https://shopvivaliz.com.br/auth/google-callback.php`
 6. Copie: Client ID e Client Secret
 
 ### Passo 2: Obter Credenciais Apple
 1. Acesse: https://developer.apple.com/account/
 2. Configure Sign In with Apple para seu App ID
 3. Crie uma Private Key (arquivo .p8)
-4. Configure Redirect URI: `https://dev.shopvivaliz.com.br/auth/apple-callback.php`
+4. Configure Redirect URI: `https://shopvivaliz.com.br/auth/apple-callback.php`
 5. Copie: Service ID, Team ID, Key ID, Private Key (arquivo .p8)
 
 ### Passo 3: Adicionar Credenciais ao .env
@@ -89,7 +89,7 @@ APPLE_PRIVATE_KEY=<conteúdo_do_arquivo_.p8>
 ```
 
 ### Passo 4: Testar
-1. Acesse: https://dev.shopvivaliz.com.br/auth/login.php
+1. Acesse: https://shopvivaliz.com.br/auth/login.php
 2. Clique em "Google" ou "Apple"
 3. Verifique se os botões estão ativos (não desabilitados)
 4. Complete o fluxo de autenticação

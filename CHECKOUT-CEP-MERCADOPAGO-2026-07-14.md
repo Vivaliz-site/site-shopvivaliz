@@ -127,7 +127,7 @@ fetch('/api/melhorenvio/shipping-check-v2.php', {
 
 ```
 1. Cliente acessa
-   https://dev.shopvivaliz.com.br/checkout/
+   https://shopvivaliz.com.br/checkout/
 
 2. Preenche dados:
    ✓ Nome
@@ -176,7 +176,7 @@ fetch('/api/melhorenvio/shipping-check-v2.php', {
 6. Esperar ~30min para VM Oracle sincronizar
 
 ### Opção 2: Force Git Pull (Imediato)
-1. Acessar: https://dev.shopvivaliz.com.br/admin/force-git-pull.php
+1. Acessar: https://shopvivaliz.com.br/admin/force-git-pull.php
 2. Força sincronização imediata
 3. Testar no navegador
 
@@ -234,7 +234,7 @@ fetch('/api/melhorenvio/shipping-check-v2.php', {
 2. Review das mudanças
 3. Merge para main
 4. Aguardar sincronização
-5. Testar em https://dev.shopvivaliz.com.br/checkout/
+5. Testar em https://shopvivaliz.com.br/checkout/
 
 ---
 

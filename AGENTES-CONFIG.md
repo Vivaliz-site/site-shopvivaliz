@@ -53,7 +53,7 @@ Status: ✅ Pronto, delega para agentes
 ### Teste 1: Squad Chat
 ```bash
 # Abrir no browser:
-https://dev.shopvivaliz.com.br/admin/squad-chat.php
+https://shopvivaliz.com.br/admin/squad-chat.php
 
 # Se agentes respondem = chaves estão OK
 # Se "offline" = problema nas chaves ou endpoint
@@ -62,7 +62,7 @@ https://dev.shopvivaliz.com.br/admin/squad-chat.php
 ### Teste 2: Monitor v2
 ```bash
 # Abrir no browser:
-https://dev.shopvivaliz.com.br/admin/monitor-v2.html
+https://shopvivaliz.com.br/admin/monitor-v2.html
 
 # Enviar mensagem
 # Se agentes respondem = tudo funciona
@@ -70,7 +70,7 @@ https://dev.shopvivaliz.com.br/admin/monitor-v2.html
 
 ### Teste 3: Via API Diretamente
 ```bash
-curl -X POST https://dev.shopvivaliz.com.br/api/agent/squad-chat.php \
+curl -X POST https://shopvivaliz.com.br/api/agent/squad-chat.php \
   -H "Content-Type: application/json" \
   -d '{
     "token": "SEU_SQUAD_TOKEN",

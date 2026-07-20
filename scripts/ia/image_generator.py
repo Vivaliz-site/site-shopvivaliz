@@ -159,7 +159,6 @@ class IAImageGenerator:
         bad_images = []
 
         for img in images:
-            # Simulado - em produção analisaria métricas reais
             quality_score = self._analyze_image_quality(img)
 
             if quality_score < 0.6:
@@ -173,9 +172,51 @@ class IAImageGenerator:
         return bad_images
 
     def _analyze_image_quality(self, image_url: str) -> float:
-        """Analisa qualidade da imagem (0-1)"""
-        # Simulado - em produção usaria Computer Vision
-        return 0.75
+        """Analisa qualidade real da imagem (0-1): resolucao, nitidez (deteccao
+        de blur via variancia de bordas) e exposicao (brilho medio nem escuro
+        nem estourado). Nao usa CV pago (sem credenciais pra isso) -- heuristica
+        real com PIL, nao mais um valor fixo simulado (0.75 pra tudo).
+        """
+        try:
+            from PIL import Image, ImageFilter
+            import io
+
+            if image_url.startswith('http://') or image_url.startswith('https://'):
+                resp = requests.get(image_url, timeout=15)
+                resp.raise_for_status()
+                img = Image.open(io.BytesIO(resp.content))
+            else:
+                img = Image.open(image_url)
+
+            img = img.convert('L')  # escala de cinza
+            width, height = img.size
+
+            # Resolucao: penaliza imagens muito pequenas (thumbnails/miniaturas
+            # roubadas), satura o score em 800x800+.
+            resolution_score = min(1.0, (width * height) / (800 * 800))
+
+            # Nitidez: filtro de bordas + variancia dos pixels. Imagem borrada
+            # tem bordas fracas e uniformes (variancia baixa); imagem nitida
+            # tem bordas fortes e variadas (variancia alta).
+            edges = img.filter(ImageFilter.FIND_EDGES)
+            pixels = list(edges.getdata())
+            mean = sum(pixels) / len(pixels)
+            variance = sum((p - mean) ** 2 for p in pixels) / len(pixels)
+            sharpness_score = min(1.0, variance / 2000.0)
+
+            # Exposicao: brilho medio da imagem original deve ficar longe dos
+            # extremos (0=preto, 255=estourado de branco).
+            original_pixels = list(img.getdata())
+            brightness = sum(original_pixels) / len(original_pixels)
+            exposure_score = 1.0 - abs(brightness - 128) / 128.0
+
+            return round(
+                resolution_score * 0.3 + sharpness_score * 0.5 + exposure_score * 0.2,
+                3
+            )
+        except Exception as e:
+            print(f"[!] Falha ao analisar qualidade de {image_url}: {e}")
+            return 0.0  # falha na analise = tratado como qualidade ruim, nao como "ok por padrao"
 
     def select_best_image(self, images: List[Dict]) -> Dict:
         """Seleciona melhor imagem baseado em A/B test"""

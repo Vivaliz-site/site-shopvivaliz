@@ -4,6 +4,8 @@ declare(strict_types=1);
 header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
+set_time_limit(0);
+ignore_user_abort(true);
 
 /* ── helpers ── */
 function svs_root(): string { return dirname(__DIR__); }
@@ -194,44 +196,73 @@ function svs_fetch_v3(string $token): array {
 
         foreach ($itens as $i) { $all[] = $i; }
 
-        $total = (int)($json['paginacao']['totalRegistros'] ?? $json['total'] ?? count($all));
+        // A API v3 real retorna 'paginacao.total', nao 'paginacao.totalRegistros'
+        // (confirmado ao vivo: {"paginacao":{"limit":100,"offset":0,"total":181}}).
+        // Com o nome errado, $total sempre caia no fallback count($all) -- que
+        // e igual ao proprio $itens buscado, entao count($all) >= $total ficava
+        // sempre verdadeiro e o sync parava sempre na 1a pagina (100 produtos),
+        // mesmo com mais paginas disponiveis (confirmado: 181 produtos reais,
+        // fallback-products.json ficava travado em 100 havia dias).
+        $total = (int)($json['paginacao']['total'] ?? $json['paginacao']['totalRegistros'] ?? count($all));
         if (count($all) >= $total || count($itens) < $pageSize) break;
         $page++;
         usleep(400000); // 400ms entre páginas
     }
 
+    // A listagem /produtos NÃO retorna estoque.quantidade nem anexos (imagens) --
+    // esses campos só existem na resposta do endpoint de detalhe /produtos/{id}.
+    // Sem isso o catálogo espelhado sempre caía com estoque=0 e sem imagem,
+    // derrubando o "Catálogo em destaque" e travando o checkout. Rate limit da
+    // Tiny é 60 req/min, por isso o espaçamento de ~1.1s entre chamadas.
+    foreach ($all as &$item) {
+        $id = $item['id'] ?? null;
+        if (!$id) continue;
+        $detail = svs_fetch_v3_detail((string)$id, $token);
+        if ($detail !== null) {
+            if (!empty($detail['anexos']) && is_array($detail['anexos'])) {
+                $item['imagens'] = $detail['anexos'];
+            }
+            // Mescla o objeto de detalhe INTEIRO (schema completo confirmado em
+            // api-docs.erp.olist.com/api-reference/produtos/obter-produto) por
+            // cima do item da listagem -- a listagem /produtos so tem um
+            // subconjunto raso dos campos; o detalhe tem tudo: situacao,
+            // produtoPai, unidade, unidadePorCaixa, ncm, gtin, origem, garantia,
+            // observacoes, categoria, marca, dimensoes, precos, estoque,
+            // fornecedores, seo (titulo/descricao/keywords/slug/linkVideo),
+            // tributacao, variacoes (com grade = atributos reais), kit,
+            // tipoVariacao, tipo. So exclui 'anexos' (ja tratado acima como
+            // 'imagens') e 'id'/'sku' (a listagem ja tem, nao precisa sobrescrever).
+            foreach ($detail as $field => $value) {
+                if (in_array($field, ['anexos', 'id', 'sku'], true)) continue;
+                if ($value === null || $value === '' || $value === []) continue;
+                $item[$field] = $value;
+            }
+        }
+        usleep(1100000); // ~1.1s entre chamadas (limite: 60 req/min)
+    }
+    unset($item);
+
     return $all;
 }
 
-/* ── Tiny v2 fallback (token estático) ── */
-function svs_fetch_v2(string $apiToken): array {
-    $all  = [];
-    $seen = [];
-    for ($page = 1; $page <= 20; $page++) {
-        $url = 'https://api.tiny.com.br/api2/produtos.pesquisa.php?' . http_build_query([
-            'token'   => $apiToken,
-            'formato' => 'json',
-            'pagina'  => $page,
-            'limite'  => 100,
-        ]);
-        $res = svs_http_get($url, ['Accept: application/json', 'User-Agent: ShopVivaliz-OlistSync/3.0']);
-        if ($res['status'] !== 200) break;
-        $json  = json_decode($res['body'], true);
-        $items = $json['retorno']['produtos'] ?? [];
-        if (!is_array($items) || count($items) === 0) break;
-        $batch = 0;
-        foreach ($items as $item) {
-            $p  = is_array($item['produto'] ?? null) ? $item['produto'] : $item;
-            $id = (string)($p['id'] ?? $p['idProduto'] ?? md5(json_encode($p)));
-            if (isset($seen[$id])) continue;
-            $seen[$id] = true;
-            $all[] = $p;
-            $batch++;
-        }
-        if ($batch === 0) break;
-        usleep(300000);
+function svs_fetch_v3_detail(string $id, string $token): ?array {
+    $BASE = 'https://api.tiny.com.br/public-api/v3';
+    $headers = [
+        "Authorization: Bearer $token",
+        'Accept: application/json',
+        'User-Agent: ShopVivaliz-OlistSync/3.0',
+    ];
+    $res = svs_http_get("$BASE/produtos/$id", $headers);
+    if ($res['status'] === 429) {
+        usleep(2000000);
+        $res = svs_http_get("$BASE/produtos/$id", $headers);
     }
-    return $all;
+    if ($res['status'] !== 200) {
+        svs_log("v3 /produtos/$id HTTP {$res['status']}");
+        return null;
+    }
+    $json = json_decode($res['body'], true);
+    return is_array($json) ? $json : null;
 }
 
 /* ── Normalizar produto bruto → formato Vivaliz ── */
@@ -244,12 +275,31 @@ function svs_normalize(array $p, string $source): array {
         $p['preco_venda']   ??  // v2
         0
     );
-    $stock = (int)(
-        $p['estoque']['saldoFisicoTotal'] ??  // v3
+    // Os campos reais retornados pela API Tiny v3 sao estoque.quantidade e
+    // estoque_disponivel (confirmado na resposta real de storage/products-cache-ativos.json).
+    // saldoFisicoTotal/saldoEstoque nao existem nessa API -- por isso o campo
+    // sempre caia no default 0 e zerava o estoque de TODOS os produtos no
+    // catalogo espelhado, bloqueando toda venda no checkout.
+    //
+    // O fallback v2 (usado quando o OAuth v3 falha) nao tem nenhum desses
+    // campos na listagem e nao faz fetch de detalhe por produto -- por isso
+    // NUNCA retorna estoque real. Se tratassemos "sem campo" como estoque=0
+    // aqui, toda vez que o OAuth v3 falhasse (o que ja aconteceu de forma
+    // recorrente por token expirado) o catalogo inteiro seria zerado e
+    // bloquearia checkout de TODOS os produtos, mesmo os com estoque real.
+    // Por isso o fallback v2 retorna null (estoque desconhecido) em vez de 0,
+    // e o merge em svs_mirror_catalog preserva o estoque anterior nesse caso.
+    $stockRaw = $p['estoque_disponivel']          ??
+        $p['estoque']['quantidade']       ??
+        $p['estoque']['saldoFisicoTotal'] ??  // v3 (nome alternativo, mantido por seguranca)
         $p['saldoEstoque']                ??  // v2
-        $p['estoque']                     ??
-        0
-    );
+        (is_scalar($p['estoque'] ?? null) ? $p['estoque'] : null) ??
+        null;
+    // estoque.quantidade da Tiny e o saldo bruto e pode ficar negativo (venda alem
+    // do saldo/backorder) -- nunca faz sentido exibir estoque negativo pro cliente,
+    // entao zeramos aqui. O calculo "disponivel" correto (GET /estoque/{id}) e mais
+    // caro (1 chamada por produto) e fica pro enriquecimento sob demanda.
+    $stock = $stockRaw !== null ? max(0, (int)$stockRaw) : ($source === 'tiny_v2' ? null : 0);
 
     // imagens
     $images = [];
@@ -275,6 +325,94 @@ function svs_normalize(array $p, string $source): array {
         ''
     ));
 
+    // SEO: usa o slug/titulo/descricao/keywords ja cadastrados na Tiny
+    // (bloco 'seo' do detalhe do produto) quando existirem. Sem slug real
+    // cadastrado, gera um a partir do nome+sku (mesmo algoritmo usado como
+    // fallback em tempo real por catalogo.php/produto.php/index.php) --
+    // mas agora persistido, entao a URL do produto fica estavel mesmo se
+    // esse algoritmo mudar no futuro.
+    $seo = is_array($p['seo'] ?? null) ? $p['seo'] : [];
+    $slug = trim((string)($seo['slug'] ?? ''));
+    if ($slug === '' && $name !== '') {
+        $slug = svs_slugify($name, $sku);
+    }
+    $seoTitle = trim((string)($seo['titulo'] ?? ''));
+    $seoDescription = trim((string)($seo['descricao'] ?? ''));
+    $keywords = is_array($seo['keywords'] ?? null) ? array_values(array_filter(array_map('strval', $seo['keywords']))) : [];
+
+    $marca = trim((string)($p['marca']['nome'] ?? ''));
+    $gtin = trim((string)($p['gtin'] ?? ''));
+    $ncm = trim((string)($p['ncm'] ?? ''));
+    $unidade = trim((string)($p['unidade'] ?? ''));
+
+    // Restante do schema oficial de "Obter produto" que ainda nao tinha
+    // campo dedicado no catalogo espelhado -- ver comentario no loop de
+    // fetch de detalhe pra lista completa da doc.
+    $situacao = trim((string)($p['situacao'] ?? ''));
+    $tipo = trim((string)($p['tipo'] ?? ''));
+    $tipoVariacao = trim((string)($p['tipoVariacao'] ?? ''));
+    $unidadePorCaixa = trim((string)($p['unidadePorCaixa'] ?? ''));
+    $origem = trim((string)($p['origem'] ?? ''));
+    $garantia = trim((string)($p['garantia'] ?? ''));
+    $notes = trim((string)($p['observacoes'] ?? ''));
+    $parentProduct = is_array($p['produtoPai'] ?? null) ? [
+        'id' => (string)($p['produtoPai']['id'] ?? ''),
+        'sku' => (string)($p['produtoPai']['sku'] ?? ''),
+        'name' => (string)($p['produtoPai']['descricao'] ?? ''),
+    ] : null;
+    $prices = is_array($p['precos'] ?? null) ? [
+        'price' => (float)($p['precos']['preco'] ?? $price),
+        'promotional_price' => (float)($p['precos']['precoPromocional'] ?? 0),
+        'cost_price' => (float)($p['precos']['precoCusto'] ?? 0),
+        'avg_cost_price' => (float)($p['precos']['precoCustoMedio'] ?? 0),
+    ] : null;
+    $stockDetail = is_array($p['estoque'] ?? null) ? [
+        'controlled' => (bool)($p['estoque']['controlar'] ?? true),
+        'made_to_order' => (bool)($p['estoque']['sobEncomenda'] ?? false),
+        'prep_days' => (int)($p['estoque']['diasPreparacao'] ?? 0),
+        'location' => (string)($p['estoque']['localizacao'] ?? ''),
+        'min' => (float)($p['estoque']['minimo'] ?? 0),
+        'max' => (float)($p['estoque']['maximo'] ?? 0),
+    ] : null;
+    $dimensions = is_array($p['dimensoes'] ?? null) ? [
+        'width' => (float)($p['dimensoes']['largura'] ?? 0),
+        'height' => (float)($p['dimensoes']['altura'] ?? 0),
+        'length' => (float)($p['dimensoes']['comprimento'] ?? 0),
+        'diameter' => (float)($p['dimensoes']['diametro'] ?? 0),
+        'net_weight' => (float)($p['dimensoes']['pesoLiquido'] ?? 0),
+        'gross_weight' => (float)($p['dimensoes']['pesoBruto'] ?? 0),
+        'volumes' => (int)($p['dimensoes']['quantidadeVolumes'] ?? 1),
+    ] : null;
+    $suppliers = [];
+    foreach ((is_array($p['fornecedores'] ?? null) ? $p['fornecedores'] : []) as $supplier) {
+        $supplierName = trim((string)($supplier['nome'] ?? ''));
+        if ($supplierName !== '') $suppliers[] = $supplierName;
+    }
+    $taxation = is_array($p['tributacao'] ?? null) ? [
+        'gtin_packaging' => (string)($p['tributacao']['gtinEmbalagem'] ?? ''),
+        'ipi_fixed_value' => (float)($p['tributacao']['valorIPIFixo'] ?? 0),
+        'ipi_class' => (string)($p['tributacao']['classeIPI'] ?? ''),
+    ] : null;
+    $kitItems = [];
+    foreach ((is_array($p['kit'] ?? null) ? $p['kit'] : []) as $kitItem) {
+        $kitSku = trim((string)($kitItem['produto']['sku'] ?? ''));
+        $kitQty = (float)($kitItem['quantidade'] ?? 0);
+        if ($kitSku !== '') $kitItems[] = ['sku' => $kitSku, 'quantity' => $kitQty];
+    }
+
+    // 'grade' das variacoes = atributos reais do produto (ex: cor=Azul,
+    // tamanho=M) -- so existe quando o produto tem variacoes cadastradas.
+    $attributes = [];
+    foreach ((is_array($p['variacoes'] ?? null) ? $p['variacoes'] : []) as $variation) {
+        foreach ((is_array($variation['grade'] ?? null) ? $variation['grade'] : []) as $pair) {
+            $key = trim((string)($pair['chave'] ?? ''));
+            $value = trim((string)($pair['valor'] ?? ''));
+            if ($key !== '' && $value !== '' && !in_array("$key: $value", $attributes, true)) {
+                $attributes[] = "$key: $value";
+            }
+        }
+    }
+
     return [
         'olist_product_id' => $id,
         'sku'              => $sku,
@@ -285,9 +423,43 @@ function svs_normalize(array $p, string $source): array {
         'images'           => $images,
         'description'      => $description,
         'category'         => $category,
+        'slug'             => $slug,
+        'seo_title'        => $seoTitle,
+        'seo_description'  => $seoDescription,
+        'keywords'         => $keywords,
+        'brand'            => $marca,
+        'gtin'             => $gtin,
+        'ncm'              => $ncm,
+        'unit'             => $unidade,
+        'attributes'       => $attributes,
+        'status'           => $situacao,
+        'type'             => $tipo,
+        'variation_type'   => $tipoVariacao,
+        'unit_per_box'     => $unidadePorCaixa,
+        'origin'           => $origem,
+        'warranty'         => $garantia,
+        'notes'            => $notes,
+        'parent_product'   => $parentProduct,
+        'prices'           => $prices,
+        'stock_detail'     => $stockDetail,
+        'dimensions'       => $dimensions,
+        'suppliers'        => $suppliers,
+        'taxation'         => $taxation,
+        'kit_items'        => $kitItems,
         'sync_source'      => $source,
         'synced_at'        => date('c'),
     ];
+}
+
+function svs_slugify(string $name, string $sku): string {
+    $accents = ['á'=>'a','à'=>'a','ã'=>'a','â'=>'a','ä'=>'a','é'=>'e','è'=>'e','ê'=>'e','ë'=>'e','í'=>'i','ì'=>'i','î'=>'i','ï'=>'i','ó'=>'o','ò'=>'o','õ'=>'o','ô'=>'o','ö'=>'o','ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ç'=>'c','ñ'=>'n'];
+    $lower = function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
+    $base = strtr($lower, $accents);
+    $base = preg_replace('/[^a-z0-9]+/', '-', $base);
+    $base = trim((string)$base, '-');
+    $base = function_exists('mb_substr') ? mb_substr($base, 0, 60) : substr($base, 0, 60);
+    $skuPart = strtolower((string)preg_replace('/[^a-zA-Z0-9]+/', '', $sku));
+    return trim($base . '-' . $skuPart, '-') ?: $skuPart;
 }
 
 /* ── Espelho: a lista final deve ser a lista ativa retornada pela Tiny/Olist ── */
@@ -355,6 +527,12 @@ function svs_mirror_catalog(array $fetched, string $catalogPath): array {
             $merged['price'] = $old['price'];
         }
 
+        // stock=null significa "fonte nao sabe" (fallback v2 sem dado real) --
+        // preserva o estoque anterior em vez de zerar o catalogo inteiro.
+        if (array_key_exists('stock', $new) && $new['stock'] === null) {
+            $merged['stock'] = (int)($old['stock'] ?? 0);
+        }
+
         if (!isset($seen[$key])) {
             $seen[$key] = true;
             $mirrored[] = $merged;
@@ -387,37 +565,26 @@ function svs_removed_products(array $mirrored, string $catalogPath): array {
 }
 
 /* ════════════════════════ MAIN ════════════════════════ */
-$dryRun  = isset($_GET['dry_run']) && $_GET['dry_run'] !== '0';
-$forceV2 = isset($_GET['v2'])      && $_GET['v2']      !== '0';
+$dryRun  = (isset($_GET['dry_run']) && $_GET['dry_run'] !== '0')
+    || (PHP_SAPI === 'cli' && getenv('SVS_DRY_RUN') === '1');
 $errors  = [];
 $fetched = [];
 $source  = 'none';
 
-// Tentar v3 OAuth
-if (!$forceV2) {
-    try {
-        $token   = svs_get_access_token();
-        $raw     = svs_fetch_v3($token);
-        $source  = 'tiny_v3';
-        foreach ($raw as $p) { $fetched[] = svs_normalize($p, $source); }
-        svs_log("v3 sync: " . count($fetched) . ' produtos');
-    } catch (Throwable $e) {
-        $errors[] = $e->getMessage();
-        svs_log('v3 error: ' . $e->getMessage());
-    }
-}
-
-// Fallback v2 token estático
-if (count($fetched) === 0) {
-    $apiToken = svs_env('TOKEN_API_OLIST', 'TINY_API_TOKEN', 'OLIST_API_TOKEN');
-    if ($apiToken !== '') {
-        $raw    = svs_fetch_v2($apiToken);
-        $source = 'tiny_v2';
-        foreach ($raw as $p) { $fetched[] = svs_normalize($p, $source); }
-        svs_log("v2 sync: " . count($fetched) . ' produtos');
-    } else {
-        $errors[] = 'no_api_credentials';
-    }
+// Tiny v3 OAuth -- unico caminho suportado. A API v2 legada (token estatico,
+// api2/produtos.pesquisa.php) foi removida em 2026-07-18: alem de obsoleta,
+// o schema dela usa terminologia de "pedido ecommerce" que nao corresponde
+// a como este projeto realmente integra com o Tiny (venda direta do site,
+// nao um canal de marketplace).
+try {
+    $token   = svs_get_access_token();
+    $raw     = svs_fetch_v3($token);
+    $source  = 'tiny_v3';
+    foreach ($raw as $p) { $fetched[] = svs_normalize($p, $source); }
+    svs_log("v3 sync: " . count($fetched) . ' produtos');
+} catch (Throwable $e) {
+    $errors[] = $e->getMessage();
+    svs_log('v3 error: ' . $e->getMessage());
 }
 
 $catalogPath = svs_root() . '/api/catalog/fallback-products.json';
@@ -473,5 +640,6 @@ svs_json($ok ? 200 : 207, [
     'dry_run'      => $dryRun,
     'saved'        => $saved,
     'errors'       => $errors,
+    'operational'  => $ok && count($errors) === 0,
     'synced_at'    => date('c'),
 ]);

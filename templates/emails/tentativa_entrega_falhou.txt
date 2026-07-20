@@ -1,0 +1,4 @@
+Olá {{customer_name}},
+
+Houve uma falha na tentativa de entrega do seu pedido #{{order_id}}.
+A transportadora realizará novas tentativas. Acompanhe a entrega pelo link: {{tracking_url}}

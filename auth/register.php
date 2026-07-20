@@ -20,6 +20,59 @@ $error = '';
 $success = '';
 $name = '';
 $email = '';
+$cpfInput = '';
+
+function sv_register_valid_cpf(string $digits): bool
+{
+    if (strlen($digits) !== 11 || preg_match('/^(\d)\1{10}$/', $digits)) {
+        return false;
+    }
+    for ($t = 9; $t <= 10; $t++) {
+        $sum = 0;
+        for ($i = 0; $i < $t; $i++) {
+            $sum += (int)$digits[$i] * (($t + 1) - $i);
+        }
+        $digit = ((10 * $sum) % 11) % 10;
+        if ((int)$digits[$t] !== $digit) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function sv_register_valid_cnpj(string $digits): bool
+{
+    if (strlen($digits) !== 14 || preg_match('/^(\d)\1{13}$/', $digits)) {
+        return false;
+    }
+    $calc = static function (string $digits, int $length) {
+        $weights = $length === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+        $sum = 0;
+        for ($i = 0; $i < $length; $i++) {
+            $sum += (int)$digits[$i] * $weights[$i];
+        }
+        $rest = $sum % 11;
+        return $rest < 2 ? 0 : 11 - $rest;
+    };
+    if ((int)$digits[12] !== $calc($digits, 12)) {
+        return false;
+    }
+    if ((int)$digits[13] !== $calc($digits, 13)) {
+        return false;
+    }
+    return true;
+}
+
+function sv_register_valid_document(string $digits): bool
+{
+    if (strlen($digits) === 11) {
+        return sv_register_valid_cpf($digits);
+    }
+    if (strlen($digits) === 14) {
+        return sv_register_valid_cnpj($digits);
+    }
+    return false;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_POST['csrf_token'] ?? null)) {
     $error = 'Sua sessão expirou. Recarregue a página e tente novamente.';
@@ -28,6 +81,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_P
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     $password_confirm = $_POST['password_confirm'] ?? '';
+    $cpfInput = trim($_POST['cpf'] ?? '');
+    $cpfDigits = preg_replace('/\D/', '', $cpfInput);
 
     // Validações
     if (empty($name)) {
@@ -36,6 +91,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_P
         $error = 'Nome deve ter pelo menos 3 caracteres';
     } elseif (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Email inválido';
+    } elseif ($cpfDigits !== '' && !sv_register_valid_document($cpfDigits)) {
+        $error = 'CPF/CNPJ inválido';
     } elseif (empty($password)) {
         $error = 'Senha é obrigatória';
     } elseif (strlen($password) < 8) {
@@ -55,13 +112,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_P
 
                 if ($result->num_rows > 0) {
                     $error = 'Este email já está cadastrado';
+                } elseif ($cpfDigits !== '' && ($cpfCheck = $db->prepare('SELECT id FROM users WHERE cpf = ? LIMIT 1')) && (function () use ($cpfCheck, $cpfDigits) {
+                    $cpfCheck->bind_param('s', $cpfDigits);
+                    $cpfCheck->execute();
+                    return $cpfCheck->get_result()->num_rows > 0;
+                })()) {
+                    $error = 'Este CPF/CNPJ já está cadastrado em outra conta. Se o cadastro é seu, faça login ou use "Esqueci minha senha".';
                 } else {
                     // Criar novo usuário
                     $password_hash = password_hash($password, PASSWORD_BCRYPT);
                     // NULL, nao string vazia: cpf tem UNIQUE KEY no schema,
                     // e '' colide para todo cadastro sem CPF (preenchido
                     // depois no checkout). NULL nao conflita com NULL.
-                    $cpf = null;
+                    $cpf = $cpfDigits !== '' ? $cpfDigits : null;
                     $phone = '';
 
                     $insert = $db->prepare(
@@ -76,6 +139,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_P
                             $success = 'Cadastro realizado com sucesso! Você pode fazer login agora.';
                             $name = '';
                             $email = '';
+                            $cpfInput = '';
+                        } elseif ($db->errno === 1062) {
+                            $error = 'Este CPF/CNPJ já está cadastrado em outra conta. Se o cadastro é seu, faça login ou use "Esqueci minha senha".';
                         } else {
                             $error = 'Erro ao criar a conta. Tente novamente.';
                         }
@@ -160,6 +226,34 @@ $apple_auth_url = sv_social_apple_auth_url('register', '/');
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .password-field {
+            position: relative;
+        }
+        .password-field input {
+            padding-right: 92px;
+        }
+        .password-toggle {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: auto;
+            min-width: 74px;
+            padding: 8px 10px;
+            margin-top: 0;
+            border: 1px solid #d1d5db;
+            border-radius: 999px;
+            background: #fff;
+            color: #374151;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+            box-shadow: none;
+        }
+        .password-toggle:hover {
+            background: #f8fafc;
+            box-shadow: none;
         }
         .error {
             background: #fee;
@@ -287,9 +381,19 @@ $apple_auth_url = sv_social_apple_auth_url('register', '/');
             </div>
 
             <div class="form-group">
+                <label for="cpf">CPF/CNPJ (opcional)</label>
+                <input type="text" id="cpf" name="cpf" inputmode="numeric" maxlength="18"
+                    value="<?php echo htmlspecialchars($cpfInput); ?>"
+                    placeholder="000.000.000-00 ou 00.000.000/0000-00">
+            </div>
+
+            <div class="form-group">
                 <label for="password">Senha</label>
-                <input type="password" id="password" name="password" required
-                    placeholder="••••••••">
+                <div class="password-field">
+                    <input type="password" id="password" name="password" required
+                        placeholder="••••••••" autocomplete="new-password">
+                    <button type="button" class="password-toggle" data-password-toggle="password" aria-pressed="false" aria-label="Mostrar senha">Mostrar</button>
+                </div>
                 <div class="password-requirements">
                     Mínimo 8 caracteres
                 </div>
@@ -297,8 +401,11 @@ $apple_auth_url = sv_social_apple_auth_url('register', '/');
 
             <div class="form-group">
                 <label for="password_confirm">Confirmar Senha</label>
-                <input type="password" id="password_confirm" name="password_confirm" required
-                    placeholder="••••••••">
+                <div class="password-field">
+                    <input type="password" id="password_confirm" name="password_confirm" required
+                        placeholder="••••••••" autocomplete="new-password">
+                    <button type="button" class="password-toggle" data-password-toggle="password_confirm" aria-pressed="false" aria-label="Mostrar senha">Mostrar</button>
+                </div>
             </div>
 
             <button type="submit">Cadastrar</button>
@@ -322,5 +429,21 @@ $apple_auth_url = sv_social_apple_auth_url('register', '/');
             Já tem conta? <a href="/auth/login.php">Faça login</a>
         </div>
     </div>
+    <script>
+    (function () {
+        document.querySelectorAll('[data-password-toggle]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var targetId = btn.getAttribute('data-password-toggle');
+                var input = targetId ? document.getElementById(targetId) : null;
+                if (!input) return;
+                var hidden = input.type === 'password';
+                input.type = hidden ? 'text' : 'password';
+                btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+                btn.setAttribute('aria-label', hidden ? 'Ocultar senha' : 'Mostrar senha');
+                btn.textContent = hidden ? 'Ocultar' : 'Mostrar';
+            });
+        });
+    })();
+    </script>
 </body>
 </html>

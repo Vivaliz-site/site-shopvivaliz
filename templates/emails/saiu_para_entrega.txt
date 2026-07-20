@@ -1,0 +1,4 @@
+Olá {{customer_name}},
+
+Seu pedido #{{order_id}} saiu para entrega hoje!
+Certifique-se de que haverá alguém no endereço para receber a encomenda.

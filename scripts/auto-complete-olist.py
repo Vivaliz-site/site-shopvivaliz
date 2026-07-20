@@ -23,7 +23,7 @@ CLIENT_ID = os.getenv('OLIST_CLIENT_ID', 'SEU_OLIST_CLIENT_ID_AQUI')
 CLIENT_SECRET = os.getenv('OLIST_CLIENT_SECRET', 'SEU_OLIST_CLIENT_SECRET_AQUI')
 OLIST_EMAIL = os.getenv('OLIST_EMAIL') or os.getenv('OLIST_USER') or os.getenv('EMAIL_USER') or ''
 OLIST_PASSWORD = os.getenv('OLIST_PASSWORD') or os.getenv('EMAIL_PASSWORD') or ''
-REDIRECT_URI = 'https://dev.shopvivaliz.com.br/olist/handle-callback.php'
+REDIRECT_URI = 'https://shopvivaliz.com.br/olist/handle-callback.php'
 
 def log_msg(msg):
     """Log com timestamp"""
@@ -130,7 +130,7 @@ def sync_products():
 
     log_msg("Chamando complete-oauth-flow.php para sincronizar...")
 
-    url = "https://dev.shopvivaliz.com.br/olist/complete-oauth-flow.php"
+    url = "https://shopvivaliz.com.br/olist/complete-oauth-flow.php"
 
     req = urllib.request.Request(
         url,

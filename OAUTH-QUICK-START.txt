@@ -24,7 +24,7 @@ STEP 1: GET GOOGLE CREDENTIALS
   3. Enable "Google+ API"
   4. Create OAuth 2.0 credentials (Web Application)
   5. Add Authorized Redirect URI:
-     → https://dev.shopvivaliz.com.br/auth/google-callback.php
+     → https://shopvivaliz.com.br/auth/google-callback.php
   6. Copy Client ID and Client Secret
 
 STEP 2: GET APPLE CREDENTIALS
@@ -32,7 +32,7 @@ STEP 2: GET APPLE CREDENTIALS
   2. Configure Sign In with Apple for your App ID
   3. Create Private Key (.p8 file)
   4. Add Redirect URI:
-     → https://dev.shopvivaliz.com.br/auth/apple-callback.php
+     → https://shopvivaliz.com.br/auth/apple-callback.php
   5. Copy: Service ID, Team ID, Key ID, and .p8 file content
 
 STEP 3: ADD CREDENTIALS TO .env (Oracle Cloud)
@@ -68,7 +68,7 @@ STEP 3: ADD CREDENTIALS TO .env (Oracle Cloud)
 After adding credentials:
 
 1. Test Login Page
-   → Visit: https://dev.shopvivaliz.com.br/auth/login.php
+   → Visit: https://shopvivaliz.com.br/auth/login.php
    → Google button should be ENABLED (not greyed out)
    → Apple button should be ENABLED (not greyed out)
 
@@ -150,7 +150,7 @@ For detailed setup instructions:
 
 For troubleshooting:
   → Check: /logs/ directory
-  → Monitor: https://dev.shopvivaliz.com.br/admin/monitor/
+  → Monitor: https://shopvivaliz.com.br/admin/monitor/
 
 For implementation details:
   → Read: /includes/social-auth.php

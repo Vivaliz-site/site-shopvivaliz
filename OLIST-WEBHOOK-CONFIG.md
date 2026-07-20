@@ -11,37 +11,37 @@
 
 ### ✅ Produtos (CRÍTICO)
 ```
-https://dev.shopvivaliz.com.br/olist/webhook-receiver.php?event=product
+https://shopvivaliz.com.br/olist/webhook-receiver.php?event=product
 ```
 **Eventos:** produto.criado, produto.atualizado, preco.alterado, estoque.alterado
 
 ### ✅ Estoque
 ```
-https://dev.shopvivaliz.com.br/olist/webhook-receiver.php?event=stock
+https://shopvivaliz.com.br/olist/webhook-receiver.php?event=stock
 ```
 **Eventos:** estoque.alterado
 
 ### ✅ Preços
 ```
-https://dev.shopvivaliz.com.br/olist/webhook-receiver.php?event=price
+https://shopvivaliz.com.br/olist/webhook-receiver.php?event=price
 ```
 **Eventos:** preco.alterado
 
 ### ✅ Pedidos (Opcional inicialmente)
 ```
-https://dev.shopvivaliz.com.br/olist/webhook-receiver.php?event=order
+https://shopvivaliz.com.br/olist/webhook-receiver.php?event=order
 ```
 **Eventos:** pedido.criado, pedido.alterado, pedido.cancelado
 
 ### ✅ Rastreio (Opcional inicialmente)
 ```
-https://dev.shopvivaliz.com.br/olist/webhook-receiver.php?event=tracking
+https://shopvivaliz.com.br/olist/webhook-receiver.php?event=tracking
 ```
 **Eventos:** rastreio.alterado
 
 ### ✅ Nota Fiscal (Opcional inicialmente)
 ```
-https://dev.shopvivaliz.com.br/olist/webhook-receiver.php?event=invoice
+https://shopvivaliz.com.br/olist/webhook-receiver.php?event=invoice
 ```
 **Eventos:** nota_fiscal.emitida
 
@@ -65,7 +65,7 @@ Após configurar:
 1. Na Olist, clique em "Testar" para cada webhook
 2. Verifique logs em: `/logs/webhook.log`
 3. Atualize um produto no ERP
-4. Confirm que: `https://dev.shopvivaliz.com.br/api/catalog/products.php` retorna o produto atualizado em ~10 segundos
+4. Confirm que: `https://shopvivaliz.com.br/api/catalog/products.php` retorna o produto atualizado em ~10 segundos
 
 ---
 
@@ -94,7 +94,7 @@ Site mostra alterações em tempo real ⚡
 **Webhook não chega:**
 - Verifique se URL está correta (HTTPS)
 - Verifique se servidor está online
-- Teste manualmente: `curl -X POST https://dev.shopvivaliz.com.br/olist/webhook-receiver.php`
+- Teste manualmente: `curl -X POST https://shopvivaliz.com.br/olist/webhook-receiver.php`
 
 **Produtos não atualizam:**
 - Verifique `/logs/webhook.log`

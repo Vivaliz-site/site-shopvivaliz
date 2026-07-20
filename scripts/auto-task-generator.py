@@ -91,7 +91,7 @@ def get_gemini_suggestions():
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel(os.getenv('GEMINI_MODEL') or 'gemini-2.5-flash')
         prompt = """Voce esta analisando o projeto ShopVivaliz.
 
 Considere que a fila precisa de tarefas novas, seguras e executaveis.
@@ -121,8 +121,8 @@ def get_claude_analysis():
         from anthropic import Anthropic
         client = Anthropic()
         message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=1024,
+            model=os.getenv("ANTHROPIC_MODEL") or "claude-haiku-4-5-20251001",
+            max_tokens=int(os.getenv("ANTHROPIC_MAX_TOKENS") or "512"),
             messages=[{
                 "role": "user",
                 "content": """Analise o ecommerce ShopVivaliz e retorne ate 3 tarefas urgentes, seguras e auditaveis.

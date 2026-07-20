@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 from datetime import datetime
 
-BASE_URL = "https://dev.shopvivaliz.com.br"
+BASE_URL = "https://shopvivaliz.com.br"
 OLIST_AUTH_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth"
 OLIST_TOKEN_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
 

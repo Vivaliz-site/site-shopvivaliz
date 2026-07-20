@@ -15,7 +15,13 @@ class FTPUploader:
         self.ftp_path = '/public_html/storage/ia_images/'
 
     def upload_images(self, local_path):
-        """Upload de imagens para FTP"""
+        """Upload de imagens para FTP.
+
+        NOTA: o deploy FTP/HostGator esta desativado em producao (ver
+        CLAUDE.md) -- a producao real roda via cron na VM Oracle. Este
+        metodo so faz sentido se FTP_HOST/FTP_USER estiverem configurados
+        explicitamente para um uso pontual/manual.
+        """
         print("\n[FTP] Iniciando upload de imagens")
         print("="*70)
 
@@ -25,41 +31,40 @@ class FTPUploader:
 
         uploaded_count = 0
         failed_count = 0
+        failed_files = []
 
         if not self.ftp_host or not self.ftp_user:
-            for img_file in Path(local_path).glob('*'):
-                if img_file.suffix in ['.jpg', '.png', '.jpeg']:
-                    print(f"[ENVIADO] {img_file.name} (simulado)")
-                    uploaded_count += 1
-            print("\n" + "="*70)
-            print(f"Resultados: {uploaded_count} uploads (simulado)")
-            return True
+            print("[ERRO] FTP_HOST/FTP_USER nao configurados -- nenhum upload foi feito.")
+            print("Este script nao envia nada sem credenciais reais (nao ha simulacao de sucesso).")
+            return False
 
         try:
             from ftplib import FTP_TLS
             ftp = FTP_TLS(self.ftp_host, self.ftp_user, self.ftp_pass)
             ftp.prot_p()
-
-            for img_file in Path(local_path).glob('*'):
-                if img_file.suffix in ['.jpg', '.png', '.jpeg']:
-                    try:
-                        with open(img_file, 'rb') as f:
-                            ftp.storbinary(f'STOR {self.ftp_path}{img_file.name}', f)
-                        print(f"[ENVIADO] {img_file.name}")
-                        uploaded_count += 1
-                    except Exception as e:
-                        failed_count += 1
-
-            ftp.quit()
         except Exception as e:
-            for img_file in Path(local_path).glob('*'):
-                if img_file.suffix in ['.jpg', '.png', '.jpeg']:
-                    print(f"[ENVIADO] {img_file.name} (simulado)")
+            print(f"[ERRO] Nao foi possivel conectar ao FTP: {e}")
+            return False
+
+        for img_file in Path(local_path).glob('*'):
+            if img_file.suffix in ['.jpg', '.png', '.jpeg']:
+                try:
+                    with open(img_file, 'rb') as f:
+                        ftp.storbinary(f'STOR {self.ftp_path}{img_file.name}', f)
+                    print(f"[ENVIADO] {img_file.name}")
                     uploaded_count += 1
+                except Exception as e:
+                    print(f"[FALHOU] {img_file.name}: {e}")
+                    failed_count += 1
+                    failed_files.append(img_file.name)
+
+        ftp.quit()
 
         print("\n" + "="*70)
         print(f"Resultados: {uploaded_count} uploads, {failed_count} falhas")
-        return True
+        if failed_files:
+            print(f"Arquivos que falharam: {', '.join(failed_files)}")
+        return failed_count == 0
 
 # CLI
 if __name__ == '__main__':

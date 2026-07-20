@@ -154,7 +154,7 @@ Exemplo de resposta:
 
         try:
             response = self.gemini_client.models.generate_content(
-                model='gemini-2.5-flash',
+                model=os.getenv('GEMINI_MODEL') or 'gemini-2.5-flash',
                 contents=prompt
             )
 
@@ -209,7 +209,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 define('APP_NAME', 'ShopVivaliz');
-define('BASE_URL', 'https://dev.shopvivaliz.com.br');
+define('BASE_URL', 'https://shopvivaliz.com.br');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -244,8 +244,8 @@ Gere o código PHP completo, pronto para produção:"""
 
         try:
             response = self.claude_client.messages.create(
-                model='claude-sonnet-4-6',
-                max_tokens=4000,
+                model=os.getenv('ANTHROPIC_MODEL') or 'claude-haiku-4-5-20251001',
+                max_tokens=int(os.getenv('ANTHROPIC_MAX_TOKENS') or '2000'),
                 messages=[{'role': 'user', 'content': prompt}]
             )
 
@@ -306,7 +306,7 @@ Retorne JSON:
 
         try:
             response = self.openai_client.chat.completions.create(
-                model='gpt-4o-mini',
+                model=os.getenv('OPENAI_MODEL') or 'gpt-4o-mini',
                 messages=[{'role': 'user', 'content': prompt}],
                 max_tokens=500
             )

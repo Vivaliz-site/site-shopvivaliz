@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      E2E_BASE_URL: https://dev.shopvivaliz.com.br
+      E2E_BASE_URL: https://shopvivaliz.com.br
     steps:
       - name: Checkout
         uses: actions/checkout@v7

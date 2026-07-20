@@ -76,9 +76,9 @@
 **Status:** Aguardando deploy FTP  
 **Solução:** Execute uma destas URLs assim que deploiar:
 ```
-https://dev.shopvivaliz.com.br/sync-198-now.php
-https://dev.shopvivaliz.com.br/sync-198-simple.php
-https://dev.shopvivaliz.com.br/olist/sync-database-from-catalog.php
+https://shopvivaliz.com.br/sync-198-now.php
+https://shopvivaliz.com.br/sync-198-simple.php
+https://shopvivaliz.com.br/olist/sync-database-from-catalog.php
 ```
 
 **Resultado esperado:**
@@ -206,10 +206,10 @@ GERAL:              [████████░░]  85% 🟡
 ## 📞 Contatos Úteis
 
 - **Documentação Olist:** https://api-docs.erp.olist.com/llms.txt
-- **Dashboard Admin:** https://dev.shopvivaliz.com.br/admin/
-- **Catálogo:** https://dev.shopvivaliz.com.br/catalogo/
-- **Diagnóstico:** https://dev.shopvivaliz.com.br/api/olist/diagnostic-full.php
-- **Sincronizar 198:** https://dev.shopvivaliz.com.br/sync-198-simple.php (após deploy)
+- **Dashboard Admin:** https://shopvivaliz.com.br/admin/
+- **Catálogo:** https://shopvivaliz.com.br/catalogo/
+- **Diagnóstico:** https://shopvivaliz.com.br/api/olist/diagnostic-full.php
+- **Sincronizar 198:** https://shopvivaliz.com.br/sync-198-simple.php (após deploy)
 
 ---
 

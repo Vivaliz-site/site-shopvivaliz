@@ -43,11 +43,25 @@ config/runtime-secrets*.php
 test-results/
 playwright-report/
 storage/order-rate-limit/
+storage/order-idempotency/
+storage/private/
+storage/tiny/
+
+# Backups pontuais deixados por agentes em produção -- nunca devem ser
+# versionados nem travar o auto-sync seguro da VM.
+*.backup-*
 
 # ⚠️ CRÍTICO: Dados operacionais - NUNCA versionados (risco de perda em git reset)
 storage/orders/
+storage/commerce_signals.json
 storage/codex-bridge/state.json
 storage/orchestrator/queue.json
+storage/products-cache-ativos.json
 .agent-heartbeats/
+tasks-queue.json
 .git-sync.lock
 .git-auto-sync.log
+ai-system/config/orchestrator.json
+ai-system/memory/*.db
+ai-system/memory/*_status.json
+ai-system/

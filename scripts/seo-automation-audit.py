@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = ROOT / "api" / "catalog" / "fallback-products.json"
 REPORT_JSON = ROOT / "logs" / "seo-automation-audit.json"
 REPORT_MD = ROOT / "logs" / "seo-automation-audit.md"
-BASE_URL = "https://dev.shopvivaliz.com.br"
+BASE_URL = "https://shopvivaliz.com.br"
 
 COLOR_HINTS = {
     "preto", "preta", "branco", "branca", "azul", "vermelho", "vermelha", "verde",

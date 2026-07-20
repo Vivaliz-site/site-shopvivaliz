@@ -15,7 +15,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 define('APP_NAME', 'ShopVivaliz');
-define('BASE_URL', 'https://dev.shopvivaliz.com.br');
+define('BASE_URL', 'https://shopvivaliz.com.br');
 
 // Dados de teste
 $produtos = [
@@ -195,7 +195,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 define('APP_NAME', 'ShopVivaliz');
-define('BASE_URL', 'https://dev.shopvivaliz.com.br');
+define('BASE_URL', 'https://shopvivaliz.com.br');
 
 session_start();
 
@@ -634,7 +634,7 @@ def main():
     print("[CRIADO] /carrinho/index.php - Carrinho com session PHP")
     print("\n[PROXIMOS PASSOS]")
     print("1. git push para fazer deploy")
-    print("2. Acessar https://dev.shopvivaliz.com.br/catalogo/")
+    print("2. Acessar https://shopvivaliz.com.br/catalogo/")
     print("3. Testar: adicionar ao carrinho -> ir para checkout")
     print("\n[PRONTO] Site esta pronto para venda HOJE!")
 

@@ -12,14 +12,14 @@ $layoutConfig = [
         [
             'id' => 'banner-1',
             'title' => 'Banner 1',
-            'image' => '/images/placeholder-banner-1.jpg',
+            'image' => '/public/assets/home-banners/banner-primeira-compra.jpg',
             'link' => '#',
             'active' => true,
         ],
         [
             'id' => 'banner-2',
             'title' => 'Banner 2',
-            'image' => '/images/placeholder-banner-2.jpg',
+            'image' => '/public/assets/home-banners/banner-casa-estilo.jpg',
             'link' => '#',
             'active' => true,
         ],

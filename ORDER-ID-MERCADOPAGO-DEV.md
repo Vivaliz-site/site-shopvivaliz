@@ -40,9 +40,9 @@ PED-20260714213526
 
 | Recurso | URL |
 |---------|-----|
-| Pedido | https://dev.shopvivaliz.com.br/pedido?id=PED-20260714213526 |
-| Admin | https://dev.shopvivaliz.com.br/admin/pedidos.php |
-| Checkout | https://dev.shopvivaliz.com.br/checkout |
+| Pedido | https://shopvivaliz.com.br/pedido?id=PED-20260714213526 |
+| Admin | https://shopvivaliz.com.br/admin/pedidos.php |
+| Checkout | https://shopvivaliz.com.br/checkout |
 
 ---
 

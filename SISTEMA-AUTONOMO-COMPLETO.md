@@ -203,7 +203,7 @@ logs/
 
 Acessar dashboard ao vivo:
 ```
-https://dev.shopvivaliz.com.br/admin/monitor/
+https://shopvivaliz.com.br/admin/monitor/
 ```
 
 ---

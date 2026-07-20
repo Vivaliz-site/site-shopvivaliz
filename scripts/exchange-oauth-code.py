@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 
 CLIENT_ID     = os.environ.get("OLIST_CLIENT_ID", "")
 CLIENT_SECRET = os.environ.get("OLIST_CLIENT_SECRET", "")
-REDIRECT_URI  = os.environ.get("OLIST_REDIRECT_URI", "https://dev.shopvivaliz.com.br/olist/callback.php")
+REDIRECT_URI  = os.environ.get("OLIST_REDIRECT_URI", "https://shopvivaliz.com.br/olist/callback.php")
 TOKEN_URL     = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
 
 if not CLIENT_ID or not CLIENT_SECRET:

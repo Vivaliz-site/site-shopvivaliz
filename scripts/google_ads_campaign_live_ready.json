@@ -1,0 +1,110 @@
+{
+  "campaign": {
+    "name": "Ferramentas-Vasos-ROI10-ABC-2026-07",
+    "channel": "SEARCH",
+    "status_on_create": "PAUSED",
+    "daily_budget_brl": 15.0,
+    "monthly_budget_brl": 450.0,
+    "landing_page": "https://shopvivaliz.com.br/catalogo/?busca=carrinho%20ferramentas",
+    "language": "pt",
+    "locations": ["Brasil"],
+    "bidding": {
+      "strategy": "MANUAL_CPC",
+      "max_cpc_brl": 1.2
+    }
+  },
+  "ad_group": {
+    "name": "ABC Alto Ticket",
+    "default_cpc_brl": 1.2
+  },
+  "keywords": [
+    {"text": "carrinho ferramentas fercar", "match_type": "EXACT", "cpc_brl": 1.2},
+    {"text": "carrinho fechado ferramentas fercar", "match_type": "EXACT", "cpc_brl": 1.2},
+    {"text": "carrinho ferramentas 3 gavetas", "match_type": "PHRASE", "cpc_brl": 1.1},
+    {"text": "carrinho ferramentas 6 gavetas", "match_type": "PHRASE", "cpc_brl": 1.1},
+    {"text": "caixa ferramentas fercar n16", "match_type": "EXACT", "cpc_brl": 1.0},
+    {"text": "caixa ferramentas bau fercar", "match_type": "PHRASE", "cpc_brl": 1.0},
+    {"text": "cachepot floreira japi 77", "match_type": "EXACT", "cpc_brl": 0.9},
+    {"text": "vaso decorativo japi 34", "match_type": "PHRASE", "cpc_brl": 0.9}
+  ],
+  "negative_keywords": [
+    "gratis",
+    "free",
+    "download",
+    "usado",
+    "segunda mao",
+    "emprego",
+    "curso",
+    "tutorial",
+    "como fazer",
+    "caseiro",
+    "reclamacao",
+    "defeito",
+    "brinquedo",
+    "olx",
+    "mercado livre usado",
+    "barato",
+    "preco tabela",
+    "peso capacidade",
+    "rodizio de pizza",
+    "restaurante",
+    "escala de trabalho",
+    "sp trans",
+    "detector",
+    "tutorial youtube",
+    "reparo",
+    "aluguel",
+    "projeto",
+    "planta baixa",
+    "gratis olx",
+    "pdf",
+    "manual",
+    "assistencia tecnica",
+    "pecas usadas"
+  ],
+  "responsive_search_ad": {
+    "final_url": "https://shopvivaliz.com.br/catalogo/?busca=carrinho%20ferramentas",
+    "headlines": [
+      "Carrinhos Fercar",
+      "Ferramentas Com Estoque",
+      "Caixas Fercar Online",
+      "Compra Segura Vivaliz",
+      "Entrega Para Todo Brasil",
+      "Alto Padrao Para Oficina",
+      "Use Cupom PRIMEIRA10",
+      "Vasos Japi Em Estoque",
+      "Carrinho 3 Ou 6 Gavetas",
+      "Vivaliz Casa E Ferragens",
+      "Compre Ferragens Online",
+      "Compre Online Hoje",
+      "Pagamento Seguro",
+      "Envio Com Rastreamento",
+      "Ofertas Com Nota Fiscal"
+    ],
+    "descriptions": [
+      "Compre carrinhos e caixas Fercar com pagamento seguro e envio rastreado.",
+      "Use PRIMEIRA10: 10% off na primeira compra. Estoque validado no site.",
+      "Produtos campeoes da Curva ABC: ferramentas, vasos Japi e ferragens.",
+      "Compra segura no Pix ou cartao. Nota fiscal e atendimento Vivaliz."
+    ]
+  },
+  "tracking": {
+    "ga4_measurement_id": "G-1H55K1TZ5D",
+    "coupon": "PRIMEIRA10",
+    "utm_source": "google",
+    "utm_medium": "cpc",
+    "utm_campaign": "abc_alto_ticket_roi10_2026_07"
+  },
+  "guardrails": {
+    "no_broad_match": true,
+    "create_paused_first": true,
+    "require_human_review_before_enable": true,
+    "max_daily_budget_brl": 15.0,
+    "max_cpc_brl": 1.2,
+    "target_roi": 10.0,
+    "target_roas": 10.0,
+    "target_average_order_value_brl": 600.0,
+    "target_conversion_rate_percent": 2.0,
+    "pause_if_spend_without_conversion_brl": 30.0
+  }
+}

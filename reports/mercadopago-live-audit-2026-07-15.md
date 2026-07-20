@@ -49,7 +49,7 @@ O checkout publicado apenas registrava um pedido em `storage/orders` e mostrava 
 
 1. Rotacionar Access Token e webhook secret no Mercado Pago e salvar apenas no runtime do servidor.
 2. Autorizar explicitamente o deploy da branch `codex/mercadopago-live-20260715` no ambiente `dev`.
-3. Configurar no painel Mercado Pago o evento **Order (Mercado Pago)** e o evento de pagamentos para `https://dev.shopvivaliz.com.br/api/webhook-mercadopago.php`.
+3. Configurar no painel Mercado Pago o evento **Order (Mercado Pago)** e o evento de pagamentos para `https://shopvivaliz.com.br/api/webhook-mercadopago.php`.
 4. Escolher o produto no carrinho e preencher os dados reais do pagador diretamente no checkout.
 5. Emitir um único boleto, confirmar `action_required/waiting_payment`, testar idempotência e enviar o link/linha digitável para o Gmail autenticado do usuário.
 

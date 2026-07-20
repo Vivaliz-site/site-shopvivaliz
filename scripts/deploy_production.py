@@ -91,7 +91,7 @@ def deploy_production():
         'workflows': 33,
         'secrets': 50,
         'tests_passed': 5,
-        'go_live_url': 'https://dev.shopvivaliz.com.br'
+        'go_live_url': 'https://shopvivaliz.com.br'
     }
 
     print("Deploy Summary:")
@@ -167,8 +167,8 @@ if __name__ == '__main__':
             print("=" * 80 + "\n")
 
             print("INFORMACOES IMPORTANTES:")
-            print("  Site: https://dev.shopvivaliz.com.br")
-            print("  Admin: https://dev.shopvivaliz.com.br/admin/monitor/")
+            print("  Site: https://shopvivaliz.com.br")
+            print("  Admin: https://shopvivaliz.com.br/admin/monitor/")
             print("  Logs: logs/")
             print("  Relatorio: logs/production_deployment_report.json")
             print("\nBem-vindo a producao!\n")

@@ -125,11 +125,11 @@ $preferenceData = [
         ],
     ],
     'back_urls' => [
-        'success' => 'https://dev.shopvivaliz.com.br/pedido?id=' . urlencode($orderId),
-        'pending' => 'https://dev.shopvivaliz.com.br/pedido?id=' . urlencode($orderId),
-        'failure' => 'https://dev.shopvivaliz.com.br/carrinho',
+        'success' => 'https://shopvivaliz.com.br/pedido?id=' . urlencode($orderId),
+        'pending' => 'https://shopvivaliz.com.br/pedido?id=' . urlencode($orderId),
+        'failure' => 'https://shopvivaliz.com.br/carrinho',
     ],
-    'notification_url' => 'https://dev.shopvivaliz.com.br/webhooks/mercadopago.php',
+    'notification_url' => 'https://shopvivaliz.com.br/webhooks/mercadopago.php',
     'external_reference' => $orderId,
     'payment_methods' => [
         'excluded_payment_types' => [
@@ -274,7 +274,7 @@ echo "   4. ✅ Email de confirmação enviado ao cliente\n";
 echo "   5. ✅ Webhook configurado para atualizar status\n\n";
 
 echo "🔗 ACOMPANHAMENTO:\n";
-echo "   URL do Pedido: https://dev.shopvivaliz.com.br/pedido?id=" . urlencode($orderId) . "\n";
+echo "   URL do Pedido: https://shopvivaliz.com.br/pedido?id=" . urlencode($orderId) . "\n";
 echo "   Link do Boleto: $initPoint\n\n";
 
 echo "✅ TESTE CONCLUÍDO COM SUCESSO!\n";

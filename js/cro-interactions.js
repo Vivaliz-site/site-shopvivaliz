@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', function() {
     initStickyAddToCart();
     initSkeletonLoaders();
     initImageHoverZoom();
-    initSocialProofPopup();
     initFreeShippingProgress();
 });
 
@@ -89,79 +88,65 @@ function initImageHoverZoom() {
 }
 
 /**
- * Social Proof Popup
- */
-function initSocialProofPopup() {
-    const popup = document.getElementById('social-proof-popup');
-    if (!popup) return;
-
-    const names = ['Maria', 'João', 'Ana', 'Carlos', 'Juliana', 'Rafael', 'Amanda', 'Pedro', 'Lucas', 'Fernanda'];
-    const cities = ['São Paulo', 'Rio de Janeiro', 'Belo Horizonte', 'Curitiba', 'Salvador', 'Fortaleza', 'Brasília', 'Porto Alegre'];
-    
-    function showRandomPopup() {
-        const name = names[Math.floor(Math.random() * names.length)];
-        const city = cities[Math.floor(Math.random() * cities.length)];
-        
-        const textElement = popup.querySelector('.proof-text');
-        const timeElement = popup.querySelector('.proof-time');
-        
-        if (textElement) {
-            textElement.innerHTML = `<strong>${name}</strong> de ${city} acabou de comprar este produto!`;
-        }
-        if (timeElement) {
-            const minutes = Math.floor(Math.random() * 59) + 1;
-            timeElement.innerText = `Há ${minutes} minuto${minutes > 1 ? 's' : ''}`;
-        }
-
-        popup.classList.add('show');
-        
-        setTimeout(() => {
-            popup.classList.remove('show');
-            const nextDelay = (Math.floor(Math.random() * 30) + 15) * 1000;
-            setTimeout(showRandomPopup, nextDelay);
-        }, 5000);
-    }
-
-    setTimeout(showRandomPopup, 8000);
-
-    const closeBtn = popup.querySelector('.proof-close');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', () => popup.classList.remove('show'));
-    }
-}
-
-/**
  * Free Shipping Progress
  */
 function initFreeShippingProgress() {
-    const bar = document.querySelector('.free-shipping-progress-bar');
-    const text = document.querySelector('.free-shipping-text');
+    const bars = document.querySelectorAll('.free-shipping-progress-bar');
+    const texts = document.querySelectorAll('.free-shipping-text');
     const cartTotalEl = document.querySelector('.cart-subtotal-value');
-    
-    if (!bar || !cartTotalEl) return;
+    const markers = document.querySelectorAll('[data-free-shipping-marker]');
 
-    const FREE_SHIPPING_LIMIT = 299.00;
-    
-    window.updateFreeShippingVisual = function() {
-        let totalStr = cartTotalEl.innerText.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
-        let currentTotal = parseFloat(totalStr) || 0;
-        
-        let percentage = (currentTotal / FREE_SHIPPING_LIMIT) * 100;
-        if (percentage > 100) percentage = 100;
-        
-        bar.style.width = `${percentage}%`;
-        
-        if (currentTotal >= FREE_SHIPPING_LIMIT) {
-            bar.classList.add('bg-success');
-            if (text) text.innerHTML = '🎉 Parabéns! Você ganhou <strong>Frete Grátis</strong>!';
-        } else {
-            bar.classList.remove('bg-success');
-            const remaining = (FREE_SHIPPING_LIMIT - currentTotal).toFixed(2).replace('.', ',');
-            if (text) text.innerHTML = `Faltam apenas <strong>R$ ${remaining}</strong> para você ganhar <strong>Frete Grátis!</strong>`;
-        }
-    };
+    if (!bars.length || !cartTotalEl) return;
 
-    window.updateFreeShippingVisual();
+    const wrappers = Array.from(bars).map(function (bar) {
+        return bar.closest('.free-shipping-progress-wrapper, .free-shipping-rewards, .gamification-rewards-container') || bar;
+    });
+
+    // Escondido por padrao ate confirmarmos que frete gratis esta habilitado
+    // no admin -- evita mostrar "Calculando frete gratis..." indefinidamente
+    // quando a loja nunca configurou um valor.
+    texts.forEach(function (t) { t.textContent = ''; });
+    wrappers.forEach(function (w) { w.style.display = 'none'; });
+
+    fetch('/api/settings/free-shipping.php')
+        .then(function (r) { return r.json(); })
+        .then(function (cfg) {
+            if (!cfg || !cfg.enabled || !(cfg.threshold > 0)) {
+                return;
+            }
+            const FREE_SHIPPING_LIMIT = cfg.threshold;
+            wrappers.forEach(function (w) { w.style.display = ''; });
+            markers.forEach(function (m) { m.style.display = 'flex'; });
+
+            window.updateFreeShippingVisual = function() {
+                let totalStr = cartTotalEl.innerText.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
+                let currentTotal = parseFloat(totalStr) || 0;
+
+                let percentage = (currentTotal / FREE_SHIPPING_LIMIT) * 100;
+                if (percentage > 100) percentage = 100;
+
+                bars.forEach(function (bar) {
+                    bar.style.width = `${percentage}%`;
+                    if (currentTotal >= FREE_SHIPPING_LIMIT) {
+                        bar.classList.add('bg-success');
+                    } else {
+                        bar.classList.remove('bg-success');
+                    }
+                });
+
+                texts.forEach(function (text) {
+                    if (currentTotal >= FREE_SHIPPING_LIMIT) {
+                        text.innerHTML = '🎉 Parabéns! Você ganhou <strong>Frete Grátis</strong>!';
+                    } else {
+                        const remaining = (FREE_SHIPPING_LIMIT - currentTotal).toFixed(2).replace('.', ',');
+                        text.innerHTML = `Faltam apenas <strong>R$ ${remaining}</strong> para você ganhar <strong>Frete Grátis!</strong>`;
+                    }
+                });
+            };
+
+            window.updateFreeShippingVisual();
+        })
+        .catch(function () {});
 }
 
 /**
@@ -354,10 +339,10 @@ function renderMiniCart() {
         
         // Set dynamic gamification status messages
         if (total >= GOAL_SHIPPING) {
-            if (text) text.innerHTML = '🎉 <strong>Nível Máximo!</strong> Você ganhou <strong>Frete Grátis</strong> e o cupom <strong>VIVALIZ5</strong>!';
+            if (text) text.innerHTML = '🎉 <strong>Nível Máximo!</strong> Você ganhou <strong>Frete Grátis</strong> e o cupom <strong>VOLTEI5</strong>!';
         } else if (total >= GOAL_COUPON) {
             const rem = (GOAL_SHIPPING - total).toFixed(2).replace('.', ',');
-            if (text) text.innerHTML = `🎁 <strong>Cupom VIVALIZ5 Liberado!</strong> Faltam <strong>R$ ${rem}</strong> para ganhar <strong>Frete Grátis</strong>!`;
+            if (text) text.innerHTML = `🎁 <strong>Cupom VOLTEI5 Liberado!</strong> Faltam <strong>R$ ${rem}</strong> para ganhar <strong>Frete Grátis</strong>!`;
         } else {
             const rem = (GOAL_COUPON - total).toFixed(2).replace('.', ',');
             if (text) text.innerHTML = `Faltam <strong>R$ ${rem}</strong> para desbloquear o cupom de <strong>5% de desconto</strong>!`;

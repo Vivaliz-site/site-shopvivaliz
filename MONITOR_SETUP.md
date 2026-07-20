@@ -1,6 +1,6 @@
 # 📊 Monitor Web - Configuração
 
-Seu monitor web está em: **https://dev.shopvivaliz.com.br/admin/monitor/**
+Seu monitor web está em: **https://shopvivaliz.com.br/admin/monitor/**
 
 ---
 
@@ -19,7 +19,7 @@ Seu monitor web está em: **https://dev.shopvivaliz.com.br/admin/monitor/**
 
 Abra no navegador:
 ```
-https://dev.shopvivaliz.com.br/admin/monitor/
+https://shopvivaliz.com.br/admin/monitor/
 ```
 
 Você verá:
@@ -166,7 +166,7 @@ Histórico de tarefas que já foram executadas.
 
 1. Verifique se `/api/monitor/api.php` está acessível:
    ```
-   https://dev.shopvivaliz.com.br/api/monitor/api.php?action=status
+   https://shopvivaliz.com.br/api/monitor/api.php?action=status
    ```
 
 2. Se receber JSON, a API está funcionando
@@ -196,7 +196,7 @@ Você pode:
 
 ## 🎯 Fluxo Típico
 
-1. **Acesso Monitor** → https://dev.shopvivaliz.com.br/admin/monitor/
+1. **Acesso Monitor** → https://shopvivaliz.com.br/admin/monitor/
 2. **Visualiza Status** → Dashboard mostra tudo em tempo real
 3. **Recebe Email** → Se houver erro ou impedimento
 4. **Intervém se Necessário** → Chat ou GitHub Issues
@@ -223,7 +223,7 @@ Se precisar pausar o sistema:
 
 ## ✅ Checklist de Configuração
 
-- [ ] Abrir https://dev.shopvivaliz.com.br/admin/monitor/
+- [ ] Abrir https://shopvivaliz.com.br/admin/monitor/
 - [ ] Gerar senha de app Google
 - [ ] Adicionar `EMAIL_USER` secret
 - [ ] Adicionar `EMAIL_PASSWORD` secret

@@ -83,8 +83,8 @@ scripts/
 
 ### Monitor Dashboard
 ```
-WEB:  https://dev.shopvivaliz.com.br/admin/monitor/
-API:  https://dev.shopvivaliz.com.br/api/monitor/api.php
+WEB:  https://shopvivaliz.com.br/admin/monitor/
+API:  https://shopvivaliz.com.br/api/monitor/api.php
 ```
 
 ### Chat com Agentes

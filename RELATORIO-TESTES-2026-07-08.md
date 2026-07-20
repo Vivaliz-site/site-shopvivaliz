@@ -119,7 +119,7 @@ git push origin agent/task-038-implementar-gamificacao-badges-e-achievements
 ```
 ❌ Página de pedidos deve redirecionar para login se não autenticado
    Esperado: URL contendo "login"
-   Recebido: "https://dev.shopvivaliz.com.br/meus-pedidos.php" (200 OK)
+   Recebido: "https://shopvivaliz.com.br/meus-pedidos.php" (200 OK)
 ```
 
 **Causa:** Página retorna 200 OK em vez de redirecionar. A sessão PHP não está validando corretamente.
@@ -258,7 +258,7 @@ error_log("Session user_id: " . ($_SESSION['user_id'] ?? 'NOT SET'));
 ### 3. **Verificar renderização de preços**
 ```bash
 # Testar se fallback-products.json está sendo lido
-curl "https://dev.shopvivaliz.com.br/api/catalog/products.php?limit=4" | jq '.[0].price'
+curl "https://shopvivaliz.com.br/api/catalog/products.php?limit=4" | jq '.[0].price'
 ```
 
 **Impacto:** Resolveria 2/11 falhas

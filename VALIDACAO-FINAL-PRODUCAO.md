@@ -58,7 +58,7 @@ APÓS COMPRA:
 
 ### AGORA (Você faz):
 ```
-1. Abrir: https://dev.shopvivaliz.com.br/
+1. Abrir: https://shopvivaliz.com.br/
 2. Fazer compra teste com dados reais (1 produto barato)
 3. Gerar boleto
 4. Anotar: número do pedido
@@ -90,14 +90,14 @@ Se EMAIL não chega:
 - Verificar SPAM/Promotions
 - Logs: tail -20 logs/email-*.log
 - Comando teste: 
-  curl -X POST https://dev.shopvivaliz.com.br/api/mail/test.php \
+  curl -X POST https://shopvivaliz.com.br/api/mail/test.php \
   -d "to=fredmourao@gmail.com&subject=TesteSMTP"
 - Ação: Verificar credenciais Gmail em .env
 
 Se PEDIDO não aparece em ERP:
 - Token Olist pode estar expirado
 - Renovar: php api/olist/refresh-token.php
-- Sync manual: curl -X POST https://dev.shopvivaliz.com.br/api/olist/sync-catalog.php
+- Sync manual: curl -X POST https://shopvivaliz.com.br/api/olist/sync-catalog.php
 - Verificar: logs/olist-sync.log
 - Ação: Gerar novo token via dashboard Olist
 ```
@@ -154,14 +154,14 @@ Se precisar de debug:
    tail -50 logs/orchestrator.log
 
 4. Health Check:
-   curl https://dev.shopvivaliz.com.br/admin/health-check.php
+   curl https://shopvivaliz.com.br/admin/health-check.php
 
 5. Test Email:
-   curl -X POST https://dev.shopvivaliz.com.br/api/mail/test.php \
+   curl -X POST https://shopvivaliz.com.br/api/mail/test.php \
    -d "to=seu-email@gmail.com"
 
 6. Test Olist Sync:
-   curl -X POST https://dev.shopvivaliz.com.br/api/olist/sync-catalog.php
+   curl -X POST https://shopvivaliz.com.br/api/olist/sync-catalog.php
 
 7. Check Daemon:
    git log -1 --oneline

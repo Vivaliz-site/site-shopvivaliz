@@ -7,6 +7,11 @@ require_once __DIR__ . '/../includes/admin-guard.php';
  */
 header('Content-Type: text/html; charset=UTF-8');
 
+function svml_lower(string $value): string
+{
+    return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+}
+
 // Detecta se há tokens salvos
 $tokensPath = dirname(__DIR__) . '/storage/private/ml-tokens.json';
 $tokens     = null;
@@ -292,9 +297,9 @@ $tokenOk   = $connected && ($expiresMs === 0 || $expiresMs > $nowMs);
                 $descRaw = $p['description'] ?? '';
                 $catRaw  = $p['category'] ?? '';
             ?>
-                <tr data-name="<?= mb_strtolower($nameRaw) ?>"
-                    data-sku="<?= mb_strtolower($sku) ?>"
-                    data-cat="<?= mb_strtolower($catRaw) ?>"
+                <tr data-name="<?= svml_lower($nameRaw) ?>"
+                    data-sku="<?= svml_lower($sku) ?>"
+                    data-cat="<?= svml_lower($catRaw) ?>"
                     data-ready="<?= $ready ? 'yes' : 'no' ?>">
                     <td>
                         <?php if ($imgUrl): ?>

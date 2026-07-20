@@ -40,7 +40,7 @@ REPORT_FILE = LOGS_DIR / "autonomous-cycle-report.json"
 REPORT_EVENTS_FILE = LOGS_DIR / "autonomous-cycle-events.jsonl"
 EMAIL_CONFIG_FILE = LOGS_DIR / "email-config-check.json"
 
-SITE_URL = os.getenv("SHOPVIVALIZ_SITE_URL", "https://www.shopvivaliz.com.br")
+SITE_URL = os.getenv("SHOPVIVALIZ_SITE_URL", "https://shopvivaliz.com.br")
 QUEUE_LOW_WATERMARK = int(os.getenv("AUTONOMOUS_QUEUE_LOW_WATERMARK", "3"))
 MAX_GENERATED_PER_CYCLE = int(os.getenv("AUTONOMOUS_MAX_GENERATED_TASKS", "6"))
 
@@ -227,7 +227,7 @@ def fetch_url(url: str, *, timeout: int = 20) -> tuple[int | None, str]:
     request = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "ShopVivalizAutonomousExecutor/1.0 (+https://www.shopvivaliz.com.br)",
+            "User-Agent": "ShopVivalizAutonomousExecutor/1.0 (+https://shopvivaliz.com.br)",
             "Accept": "text/html,application/xml,text/plain,*/*",
         },
     )

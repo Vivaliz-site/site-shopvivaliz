@@ -13,7 +13,7 @@
 
 ```
 1. Abrir browser (Chrome/Firefox)
-2. Navegar para: https://dev.shopvivaliz.com.br/
+2. Navegar para: https://shopvivaliz.com.br/
 3. Verificar:
    ✅ Página carrega rapidamente (< 3 segundos)
    ✅ Logo ShopVivaliz visível
@@ -135,7 +135,7 @@ SE NÃO CHEGOU:
    ⚠️ CRÍTICO! Verificar:
    - Pasta Spam/Promotions
    - Abrir logs: tail -f logs/email-*.log
-   - Testar: curl -X POST https://dev.shopvivaliz.com.br/api/mail/test.php -d "to=seu-email@gmail.com"
+   - Testar: curl -X POST https://shopvivaliz.com.br/api/mail/test.php -d "to=seu-email@gmail.com"
 ```
 
 ---
@@ -159,7 +159,7 @@ SE NÃO APARECER:
    - Verificar: logs/olist-sync.log
    - Token pode estar expirado
    - Executar: php api/olist/refresh-token.php
-   - Testar sync manual: curl -X POST https://dev.shopvivaliz.com.br/api/olist/sync-catalog.php
+   - Testar sync manual: curl -X POST https://shopvivaliz.com.br/api/olist/sync-catalog.php
 ```
 
 ---
@@ -225,7 +225,7 @@ RESULTADO FINAL:
 
 ### Site não carrega (erro 404/500)
 ```
-→ Verificar: https://dev.shopvivaliz.com.br/admin/health-check.php
+→ Verificar: https://shopvivaliz.com.br/admin/health-check.php
 → Se vermelho: problema servidor
 → Logs: /var/log/apache2/error.log na VM Oracle
 ```
@@ -289,7 +289,7 @@ Após completar os testes:
 ---
 
 **Começar testes AGORA:**
-1. Abrir https://dev.shopvivaliz.com.br/
+1. Abrir https://shopvivaliz.com.br/
 2. Seguir PASSO 1-7 acima
 3. Completar checklist
 4. Reportar resultados

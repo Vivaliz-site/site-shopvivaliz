@@ -11,7 +11,7 @@ const path = require('path');
 
 const EMAIL = process.env.OLIST_EMAIL || process.env.EMAIL_USER || '';
 const SENHA = process.env.OLIST_PASSWORD || process.env.EMAIL_PASSWORD || '';
-const SITE_URL = 'https://dev.shopvivaliz.com.br';
+const SITE_URL = 'https://shopvivaliz.com.br';
 const CONNECT_URL = `${SITE_URL}/olist/connect.php`;
 const CALLBACK_URL = `${SITE_URL}/olist/callback.php`;
 const SYNC_URL = `${SITE_URL}/olist/sync-products.php`;

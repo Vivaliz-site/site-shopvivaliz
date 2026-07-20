@@ -1,5 +1,5 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://www.shopvivaliz.com.br/sitemap.php
-# Merchant feed: https://www.shopvivaliz.com.br/google-merchant-feed.php
+Sitemap: https://shopvivaliz.com.br/sitemap.xml
+# Merchant feed: https://shopvivaliz.com.br/google-merchant-feed.php

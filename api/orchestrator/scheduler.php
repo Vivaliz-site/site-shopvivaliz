@@ -167,7 +167,7 @@ if (!$isCli) {
 }
 
 // ── Execução Principal ────────────────────────────────────────────────────────
-$baseUrl   = rtrim(osch_env('SITE_URL') ?: 'https://dev.shopvivaliz.com.br', '/');
+$baseUrl   = rtrim(osch_env('SITE_URL') ?: 'https://shopvivaliz.com.br', '/');
 $maxProc   = (int)($_GET['max'] ?? $argv[1] ?? 3);
 $maxProc   = max(1, min(10, $maxProc));
 

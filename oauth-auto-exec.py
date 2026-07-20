@@ -38,7 +38,7 @@ async def main():
 
     client_id = env.get('OLIST_CLIENT_ID', '')
     client_secret = env.get('OLIST_CLIENT_SECRET', '')
-    redirect_uri = env.get('URL_REDIRCT_OLIST', 'https://dev.shopvivaliz.com.br/olist/callback.php')
+    redirect_uri = env.get('URL_REDIRCT_OLIST', 'https://shopvivaliz.com.br/olist/callback.php')
 
     if not client_id or not client_secret:
         print("[!] CLIENT_ID ou CLIENT_SECRET nao configurados")
@@ -194,7 +194,7 @@ async def main():
 
     print(f"\n[+] SUCESSO TOTAL!")
     print(f"    Token salvo em: {env_file}")
-    print(f"    Teste: https://dev.shopvivaliz.com.br/olist/test-token-v3.php")
+    print(f"    Teste: https://shopvivaliz.com.br/olist/test-token-v3.php")
 
     return True
 

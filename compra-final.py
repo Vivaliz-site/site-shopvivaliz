@@ -15,7 +15,7 @@ except ImportError:
     print("[ERRO] requests nao instalado. Instale: pip install requests")
     sys.exit(1)
 
-SITE = "https://dev.shopvivaliz.com.br"
+SITE = "https://shopvivaliz.com.br"
 LOGS_DIR = Path("logs")
 LOGS_DIR.mkdir(exist_ok=True)
 

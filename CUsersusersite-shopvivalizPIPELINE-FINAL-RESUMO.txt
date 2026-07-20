@@ -60,7 +60,7 @@ ARQUIVOS GERADOS
 
 7. ENDPOINT PHP (LIVE)
    File: /api/pipeline/v13-estrategia-autonoma.php
-   Uso: curl https://dev.shopvivaliz.com.br/api/pipeline/v13-estrategia-autonoma.php
+   Uso: curl https://shopvivaliz.com.br/api/pipeline/v13-estrategia-autonoma.php
 
 ================================================================================
 ESTRUTURA DO PIPELINE
@@ -133,7 +133,7 @@ OPCAO 1: IMPORTAR MANUALMENTE NA SHOPEE
 
 OPCAO 2: EXECUTAR PIPELINE VIA API
 ──────────────────────────────────
-curl https://dev.shopvivaliz.com.br/api/pipeline/v13-estrategia-autonoma.php
+curl https://shopvivaliz.com.br/api/pipeline/v13-estrategia-autonoma.php
 
 Resposta JSON:
 {

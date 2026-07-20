@@ -21,7 +21,7 @@ if (!$accessToken) {
     http_response_code(400);
     echo json_encode([
         'erro' => 'Token não configurado',
-        'acao' => 'Execute o OAuth flow primeiro: https://dev.shopvivaliz.com.br/olist/callback.php',
+        'acao' => 'Execute o OAuth flow primeiro: https://shopvivaliz.com.br/olist/callback.php',
     ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     exit;
 }

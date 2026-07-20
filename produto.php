@@ -1,4 +1,7 @@
 <?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 header('Content-Type: text/html; charset=UTF-8');
 require_once __DIR__ . '/includes/catalog-runtime.php';
 
@@ -21,7 +24,7 @@ function sv_official_base_url(): string
     }
 
     $official = __DIR__ . '/config/official-site.php';
-    $fallback = 'https://www.shopvivaliz.com.br';
+    $fallback = 'https://shopvivaliz.com.br';
     if (!is_file($official)) {
         return $base = $fallback;
     }
@@ -126,7 +129,7 @@ function sv_product_merge_db(array $product, array $dbRow): array
         return $product;
     }
 
-    foreach (['sku', 'name', 'description', 'olist_product_id'] as $field) {
+    foreach (['sku', 'name', 'olist_product_id'] as $field) {
         if (trim((string)($dbRow[$field] ?? '')) !== '') {
             $product[$field] = (string)$dbRow[$field];
         }
@@ -136,16 +139,16 @@ function sv_product_merge_db(array $product, array $dbRow): array
         $product['image_url'] = (string)$dbRow['image_url'];
     }
 
-    if ((float)($dbRow['price'] ?? 0) > 0) {
-        $product['price'] = (float)$dbRow['price'];
-    }
-
-    // So sobrescreve quando o banco tiver estoque > 0 -- a tabela local
-    // pode estar desatualizada (0 default) enquanto o catalogo estatico
-    // ja tem o valor real sincronizado direto da Tiny.
-    if ((int)($dbRow['stock'] ?? 0) > 0) {
-        $product['stock'] = (int)$dbRow['stock'];
-    }
+    // Preco, descricao e estoque nunca vem do banco local: a tabela
+    // `products` pode ficar desatualizada em qualquer direcao (preco 100x
+    // maior/menor, descricao antiga ou com texto de teste/agente, estoque
+    // zerado ou com valor antigo maior que o real). O catalogo sincronizado
+    // (svcr_products(), direto da Tiny) e a unica fonte confiavel para esses
+    // tres campos -- sobrescrever com o banco ja mostrou preco 100x errado
+    // (ex: R$ 7.798,00 em vez de R$ 77,98) e "X unidades restantes" para
+    // produto com estoque real 0, deixando o cliente adicionar ao carrinho
+    // um item indisponivel que so falha (com mensagem confusa) na
+    // validacao do checkout.
 
     return $product;
 }
@@ -244,10 +247,26 @@ function sv_product_related(string $sku, string $category, int $limit = 4): arra
     return array_slice(array_merge($related, $fallback), 0, $limit);
 }
 
+function sv_slugify(string $name, string $sku): string
+{
+    $accents = ['á'=>'a','à'=>'a','ã'=>'a','â'=>'a','ä'=>'a','é'=>'e','è'=>'e','ê'=>'e','ë'=>'e','í'=>'i','ì'=>'i','î'=>'i','ï'=>'i','ó'=>'o','ò'=>'o','õ'=>'o','ô'=>'o','ö'=>'o','ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ç'=>'c','ñ'=>'n'];
+    $base = strtr(sv_lower($name), $accents);
+    $base = preg_replace('/[^a-z0-9]+/', '-', $base);
+    $base = trim((string)$base, '-');
+    $base = function_exists('mb_substr') ? mb_substr($base, 0, 60) : substr($base, 0, 60);
+
+    $skuPart = strtolower((string)preg_replace('/[^a-zA-Z0-9]+/', '', $sku));
+
+    return trim($base . '-' . $skuPart, '-') ?: $skuPart;
+}
+
 function sv_product_find_slug(string $slug): array
 {
     foreach (sv_product_catalog() as $row) {
-        if (is_array($row) && trim((string)($row['slug'] ?? '')) === $slug) return $row;
+        if (!is_array($row)) continue;
+        $persistedSlug = trim((string)($row['slug'] ?? ''));
+        $computedSlug = sv_slugify((string)($row['name'] ?? ''), (string)($row['sku'] ?? ''));
+        if ($persistedSlug === $slug || $computedSlug === $slug) return $row;
     }
     return [];
 }
@@ -305,7 +324,9 @@ function sv_qv(string $key, string $fallback = ''): string
 
 function sv_product_url(array $product): string
 {
-    $slug = trim((string)($product['slug'] ?? ''));
+    $sku = trim((string)($product['sku'] ?? ''));
+    $name = trim((string)($product['name'] ?? ''));
+    $slug = trim((string)($product['slug'] ?? '')) ?: ($sku !== '' && $name !== '' ? sv_slugify($name, $sku) : '');
     if ($slug !== '') {
         return '/produto/' . $slug;
     }
@@ -345,7 +366,7 @@ $olistId  = trim((string)($resolved['olist_product_id']?? '')) ?: sv_qv('olist_p
 $category = trim((string)($resolved['category']        ?? ''));
 $tags     = is_array($resolved['tags'] ?? null) ? $resolved['tags'] : [];
 $qScore   = (int)($resolved['quality_score'] ?? 0);
-$rawSlug  = trim((string)($resolved['slug'] ?? ''));
+$rawSlug  = trim((string)($resolved['slug'] ?? '')) ?: ($sku !== '' && $name !== '' ? sv_slugify($name, $sku) : '');
 
 $priceRaw   = (float)($resolved['price'] ?? (float)sv_qv('price', '0'));
 $stockRaw   = (int)($resolved['stock'] ?? 0);
@@ -356,6 +377,21 @@ $priceLabel = $priceRaw > 0 ? 'R$ ' . number_format($priceRaw, 2, ',', '.') : 'C
 $contactUrl = sv_product_contact_url($sku, $name);
 $baseUrl = sv_official_base_url();
 $canonicalUrl = $baseUrl . ($rawSlug !== '' ? '/produto/' . $rawSlug : '/produto?sku=' . rawurlencode($sku));
+
+$galleryImages = [];
+foreach (is_array($resolved['images'] ?? null) ? $resolved['images'] : [] as $galleryUrl) {
+    $galleryUrl = trim((string)$galleryUrl);
+    if ($galleryUrl !== '' && !in_array($galleryUrl, $galleryImages, true)) {
+        $galleryImages[] = $galleryUrl;
+    }
+}
+if ($galleryImages === [] && $image !== '') {
+    $galleryImages[] = $image;
+}
+$galleryImages = $image !== '' && !in_array($image, $galleryImages, true)
+    ? array_merge([$image], $galleryImages)
+    : $galleryImages;
+$galleryImages = array_slice($galleryImages, 0, 12);
 
 $related = $notFound ? [] : sv_product_enrich_many(sv_product_related($sku, $category));
 $svNavCurrent = 'produto';
@@ -389,7 +425,7 @@ $breadcrumbItems = [
     [
         '@type' => 'ListItem',
         'position' => 2,
-        'name' => 'Catálogo',
+        'name' => 'Produtos',
         'item' => $baseUrl . '/catalogo',
     ],
 ];
@@ -442,6 +478,7 @@ if ($notFound) {
             'priceCurrency' => 'BRL',
             'price'         => $priceRaw > 0 ? number_format($priceRaw, 2, '.', '') : '0',
             'availability'  => $availability,
+            'priceValidUntil' => date('Y-12-31'),
             'itemCondition' => 'https://schema.org/NewCondition',
             'seller'        => ['@type' => 'Organization', 'name' => 'Shopvivaliz'],
         ],
@@ -474,18 +511,33 @@ if ($notFound) {
     <title><?= sv_esc($name) ?> | Vivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/premium-theme.css?v=2026-07-11">
+    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script type="application/ld+json"><?= json_encode($jsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
     <script type="application/ld+json"><?= json_encode($breadcrumbJsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
+    <?php if (!$notFound): ?>
+    <script>
+      window.ShopVivalizProductContext = <?= json_encode([
+          'sku' => $sku,
+          'name' => $name,
+          'brand' => $brandName,
+          'category' => $category,
+          'price' => $priceRaw,
+          'quantity' => 1,
+          'olist_product_id' => $olistId,
+      ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    </script>
+    <?php endif; ?>
+    <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
 </head>
 <body>
     <?php include __DIR__ . '/includes/navbar.php'; ?>
 
     <main class="container produto-layout">
         <nav class="breadcrumb" aria-label="Navegação estrutural">
-            <a href="/">Início</a> › <a href="/catalogo">Catálogo</a>
+            <a href="/">Início</a> › <a href="/catalogo">Produtos</a>
             <?php if ($category !== ''): ?> › <a href="/catalogo?categoria=<?= rawurlencode($category) ?>"><?= sv_esc($category) ?></a><?php endif; ?>
             › <span><?= sv_esc(sv_product_trim($name, 40, '...')) ?></span>
         </nav>
@@ -506,15 +558,13 @@ if ($notFound) {
                     <img id="main-product-image" src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" onerror="this.src='<?= sv_product_default_image() ?>'" loading="eager">
                 </div>
                 <!-- Interactive Product Gallery Thumbnails -->
-                <div class="product-gallery-thumbnails" style="display:flex; gap:10px; justify-content:center; margin-bottom:12px;">
-                    <button type="button" class="thumb-btn active" data-src="<?= sv_esc($image) ?>" aria-label="Ver imagem principal"
-                            style="width:54px; height:54px; border:2px solid #0b4f88; border-radius:8px; overflow:hidden; cursor:pointer; padding:0; background:#fff; transition: border-color 0.2s;">
-                        <img src="<?= sv_esc($image) ?>" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='<?= sv_product_default_image() ?>'">
+                <div class="product-gallery-thumbnails" style="display:flex; gap:10px; justify-content:center; margin-bottom:12px; flex-wrap:wrap;">
+                    <?php foreach ($galleryImages as $galleryIndex => $galleryUrl): ?>
+                    <button type="button" class="thumb-btn<?= $galleryIndex === 0 ? ' active' : '' ?>" data-src="<?= sv_esc($galleryUrl) ?>" aria-label="Ver imagem <?= $galleryIndex + 1 ?>"
+                            style="width:54px; height:54px; border:<?= $galleryIndex === 0 ? '2px solid #0b4f88' : '1px solid #e2e8f0' ?>; border-radius:8px; overflow:hidden; cursor:pointer; padding:0; background:#fff; transition: border-color 0.2s;">
+                        <img src="<?= sv_esc($galleryUrl) ?>" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='<?= sv_product_default_image() ?>'">
                     </button>
-                    <button type="button" class="thumb-btn" data-src="/images/logo-vivaliz-square.png" aria-label="Ver selo Vivaliz"
-                            style="width:54px; height:54px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; cursor:pointer; padding:0; background:#fff; transition: border-color 0.2s;">
-                        <img src="/images/logo-vivaliz-square.png" style="width:100%; height:100%; object-fit:cover; opacity: 0.85;">
-                    </button>
+                    <?php endforeach; ?>
                 </div>
             </div>
             <div class="product-detail-copy">
@@ -525,7 +575,7 @@ if ($notFound) {
                 <div style="color: #fbbf24; font-size: 14px; margin-bottom: 10px;">
                     ★★★★★ <span style="color: #6b7280; font-size: 12px; margin-left: 5px;">(4.9/5 - Excelente)</span>
                 </div>
-                <p class="product-description"><?= sv_esc($description) ?></p>
+                <div class="product-description"><?= $description ?></div>
                 <div class="product-price-block">
                     <?php if ($stockRaw > 0 && $stockRaw <= 5): ?>
                         <div class="urgency-tag">
@@ -734,15 +784,6 @@ if ($notFound) {
         }
     })();
     </script>
-    <div id="social-proof-popup">
-        <div class="proof-icon">🛍️</div>
-        <div class="proof-content">
-            <p class="proof-text"></p>
-            <p class="proof-time"></p>
-        </div>
-        <button class="proof-close">&times;</button>
-    </div>
-
     <div class="sticky-buy-wrapper">
         <div class="sticky-buy-info">
             <span class="sticky-buy-title"><?= sv_esc($name) ?></span>
@@ -808,6 +849,8 @@ if ($notFound) {
     </script>
 
     <script src="/js/cro-interactions.js"></script>
+    <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
+    <script src="/includes/auto-image-carousel.js"></script>
     <?php include __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>

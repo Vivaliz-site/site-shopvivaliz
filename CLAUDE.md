@@ -5,6 +5,12 @@
 > Status: ✅ Produção - deploy real via VM Oracle (não FTP, ver abaixo)  
 > Repositório real: **https://github.com/Vivaliz-site/site-shopvivaliz** (não `fredmourao-ai/site-shopvivaliz`)
 
+> ⚠️ **LEIA `KNOWN_ISSUES.md` E `docs/MEMORIA-AGENTES.md` ANTES DE COMEÇAR.** 
+> - `KNOWN_ISSUES.md`: Problemas recorrentes (ex: pasta `/includes/` bloqueada) que voltam múltiplas vezes
+> - `docs/MEMORIA-AGENTES.md`: Múltiplos agentes autônomos (Claude, GPT, Gemini) trabalham em sessões isoladas
+> 
+> Esses arquivos são o **único lugar centralizado** onde erros não-óbvios ficam registrados, pra ninguém redescobrir o mesmo bug. Ao final da sua sessão, **ADICIONE UMA ENTRADA** se aprendeu algo recorrente.
+
 ---
 
 ## 📊 Visão Geral do Sistema
@@ -263,6 +269,47 @@ EOF
 | Modificar pipeline | `.github/workflows/*.yml` | Editar + push |
 | Resolver conflito merge | `scripts/resolve_git_agent_conflict.ps1` | Executar |
 | Sincronizar ambientes | `git fetch && git pull origin main` | Bash/PowerShell |
+| Integrar com Tiny/Olist ERP | `docs/TINY-ERP-API-V3.md` | Ler ANTES de mexer em `includes/tiny-order-push.php`, `daemon-sync-products.py`, `api/olist/*` |
+
+---
+
+## 🧠 Memória compartilhada entre agentes — `docs/MEMORIA-AGENTES.md`
+
+Múltiplos agentes diferentes (Claude, GPT, Gemini) trabalham autonomamente neste repo,
+cada um em sessões isoladas sem memória compartilhada entre si. Isso já causou o mesmo
+bug de integração (ex: enum `situacao` do Tiny invertido) ser "descoberto" e corrigido
+mais de uma vez, em sessões diferentes, sem que a segunda soubesse que a primeira já
+tinha mapeado o problema.
+
+**`docs/MEMORIA-AGENTES.md` é o único lugar combinado pra isso — leia antes de investigar
+um bug que parece familiar ou integrar com um sistema externo (Tiny/Olist, Mercado Pago,
+Melhor Envio, Mercado Livre).** Se você descobrir algo não-óbvio (campo de API com nome
+diferente do esperado, enum contra-intuitivo, limite de taxa, comportamento assíncrono),
+adicione uma entrada lá seguindo o formato descrito no topo do arquivo. Documentação
+extensa (schema completo de uma API, por exemplo) vai num arquivo dedicado em `docs/`
+(ex: `docs/TINY-ERP-API-V3.md`), com só um resumo e link em `MEMORIA-AGENTES.md`. O
+objetivo é que cada agente que passar por aqui saia mais capaz que o anterior — não que
+cada um recomece do zero.
+
+---
+
+## 🧠 Conhecimento acumulado (`docs/*.md`) — leia antes de reinventar
+
+Múltiplos agentes diferentes (Claude, GPT, Gemini) trabalham autonomamente neste repo,
+cada um em sessões isoladas sem memória compartilhada entre si. Isso já causou o mesmo
+bug de integração (ex: enum `situacao` do Tiny invertido) ser "descoberto" e corrigido
+mais de uma vez, em sessões diferentes, sem que a segunda soubesse que a primeira já
+tinha mapeado o problema.
+
+**Antes de integrar com um sistema externo (Tiny/Olist, Mercado Pago, Melhor Envio,
+Mercado Livre) ou investigar um bug que parece familiar, procure em `docs/*.md` por um
+arquivo já existente sobre aquele sistema.** Se você descobrir algo não-óbvio sobre uma
+API externa (um campo com nome diferente do esperado, um enum com significado
+contra-intuitivo, um limite de taxa, um comportamento assíncrono/eventual-consistency),
+**registre em `docs/<SISTEMA>.md`** (crie se não existir, seguindo o formato de
+`docs/TINY-ERP-API-V3.md`) em vez de deixar esse conhecimento morrer com a sessão atual.
+O objetivo é que cada agente que passar por aqui saia mais capaz que o anterior — não
+que cada um recomece do zero.
 
 ---
 
@@ -304,8 +351,8 @@ Se algo não funcionar:
 3. Se necessário, rodar: `git fetch && git pull origin main`
 
 **Repositório:** https://github.com/Vivaliz-site/site-shopvivaliz  
-**Live Site:** https://dev.shopvivaliz.com.br/  
-**Admin Monitor:** https://dev.shopvivaliz.com.br/admin/monitor/  
+**Live Site:** https://shopvivaliz.com.br/  
+**Admin Monitor:** https://shopvivaliz.com.br/admin/monitor/  
 **Histórico de bugs resolvidos:** `CHANGELOG.md` (raiz do repo) — consulte antes de investigar algo
 que parece já ter sido corrigido.
 

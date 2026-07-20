@@ -4,7 +4,7 @@ import json, os, time, requests
 from datetime import datetime
 from pathlib import Path
 
-BASE_URL = "https://dev.shopvivaliz.com.br"
+BASE_URL = "https://shopvivaliz.com.br"
 LOG_DIR = Path(__file__).parent.parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 

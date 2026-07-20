@@ -233,7 +233,7 @@ tail -f ../pipeline_execution_final.log
 cat ../logs/pipeline_execution_advanced.json | jq .
 
 # Acessar painel web
-# https://dev.shopvivaliz.com.br/admin/monitor/
+# https://shopvivaliz.com.br/admin/monitor/
 ```
 
 ---

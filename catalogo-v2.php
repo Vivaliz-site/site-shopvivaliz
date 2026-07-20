@@ -324,5 +324,6 @@ $categorias = obter_categorias();
             // TODO: Implementar carrinho de verdade
         }
     </script>
+    <script src="/includes/auto-image-carousel.js"></script>
 </body>
 </html>

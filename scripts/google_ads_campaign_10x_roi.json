@@ -1,0 +1,187 @@
+{
+  "campanha_agressiva": {
+    "nome": "Rodizios-Search-AGRESSIVO-10xROI-2026-07",
+    "objetivo": "Vendas (10x ROI minimo)",
+    "tipo": "Pesquisa (Search)",
+    "budget_diario": 15.00,
+    "budget_mensal": 450.00,
+    "target_roi": "10x+ (minimo R$ 4,500 revenue/mes)",
+    "status": "PAUSED",
+    "duracao_dias": 30,
+    "localizacoes": ["São Paulo", "Minas Gerais", "Paraná"],
+    "idioma": "português"
+  },
+
+  "estrategia": {
+    "descricao": "Foco em HIGH-INTENT keywords apenas + aumento de ticket médio via kits combo",
+    "ticket_medio_alvo": "R$ 250-300 (em vez de R$ 171.60)",
+    "conversoes_alvo": "8-12 vendas/mes (ROI 3-5x) + kits maiores (ROI 10x+)",
+    "premissas": [
+      "Aumentar ticket medio com kits combo (12x, 20x rodizios)",
+      "Remover keywords genéricas (BROAD) de baixa conversao",
+      "Focar APENAS em keywords PHRASE high-intent",
+      "Aumentar CPC para keywords branded + produto especifico",
+      "Testar anuncios com destaque em 'Kit Maior' e 'Economize'",
+      "Landing page deve showcasear kits maiores (12x, 20x)"
+    ]
+  },
+
+  "keywords_agressivas": {
+    "descricao": "APENAS high-intent keywords (PHRASE match)",
+    "total": 6,
+    "keywords": [
+      {
+        "texto": "kit 12 rodizios soprano 35mm com freio",
+        "tipo": "PHRASE",
+        "cpc": "R$ 3.50",
+        "prioridade": "CRITICA",
+        "intencao": "Comprar kit grande",
+        "ticket_esperado": "R$ 380-420"
+      },
+      {
+        "texto": "20 rodizios gel silicone 35mm com freio",
+        "tipo": "PHRASE",
+        "cpc": "R$ 3.30",
+        "prioridade": "CRITICA",
+        "intencao": "Comprar kit muito grande",
+        "ticket_esperado": "R$ 550-600"
+      },
+      {
+        "texto": "rodizios soprano 35mm comprar online",
+        "tipo": "PHRASE",
+        "cpc": "R$ 2.80",
+        "prioridade": "ALTA",
+        "intencao": "Comprar agora",
+        "ticket_esperado": "R$ 200-250"
+      },
+      {
+        "texto": "kit rodizios gel 35mm com freio soprano",
+        "tipo": "PHRASE",
+        "cpc": "R$ 2.90",
+        "prioridade": "ALTA",
+        "intencao": "Comprar especifico",
+        "ticket_esperado": "R$ 250-300"
+      },
+      {
+        "texto": "comprar rodizios giratório gel 35mm",
+        "tipo": "PHRASE",
+        "cpc": "R$ 2.50",
+        "prioridade": "MEDIA",
+        "intencao": "Comprar agora",
+        "ticket_esperado": "R$ 150-200"
+      },
+      {
+        "texto": "rodizios de qualidade para móvel soprano",
+        "tipo": "PHRASE",
+        "cpc": "R$ 2.40",
+        "prioridade": "MEDIA",
+        "intencao": "Comprar qualidade",
+        "ticket_esperado": "R$ 180-220"
+      }
+    ]
+  },
+
+  "negativas_agressivas": {
+    "descricao": "Bloquear TODAS as buscas de baixa conversao",
+    "total": 15,
+    "keywords": [
+      "rodizio barato",
+      "rodizio gratis",
+      "rodizio free download",
+      "rodizio usado segunda mao",
+      "rodizio emprego curso",
+      "rodizio de brinquedo",
+      "rodizio decorativo",
+      "rodizio madeira plástico",
+      "como fazer rodizio",
+      "rodizio DIY caseiro",
+      "rodizio manual tutorial",
+      "rodizio preço tabela",
+      "rodizio peso capacidade",
+      "rodizio defeitoso problema",
+      "rodizio reclamacao review"
+    ]
+  },
+
+  "anuncios_agressivos": {
+    "descricao": "Destaque em kits maiores + economias + urgencia",
+    "tipo": "RSA (Responsive Search Ads)",
+
+    "headlines_focus_kit_grande": [
+      "Kit 12 Rodízios Soprano - Frete Grátis Brasil",
+      "20 Rodízios Gel 35mm - Compra Protegida 100%",
+      "Kit Combo Rodízios - Economize Até 40%",
+      "12x Rodízios com Freio - Entrega 3 Dias",
+      "Rodízios Soprano Premium - Qualidade Soprano",
+      "Kit 20 Rodízios Giratórios - Oferta Limitada",
+      "Rodízios Gel Soprano - 7 Dias Troca Grátis",
+      "Kit Grande Rodízios - Melhor Preço Brasil",
+      "12 Rodízios Anti-Risco - Frete Incluído",
+      "Rodízios Soprano 35mm - Compra com Segurança"
+    ],
+
+    "descriptions_focus_economia": [
+      "Kit 12 rodízios em gel. Frete grátis. Economize comprando quantidade maior. Compra 100% segura.",
+      "20 rodízios soprano 35mm com freio. Entrega rápida Brasil. Melhor preço garantido! Confira!",
+      "Kits combo com até 40% desconto. Rodízios profissionais. 7 dias para troca sem burocracia.",
+      "Compre rodízios em quantidade e economize. Frete grátis acima de R$ 150. Parcelado até 6x.",
+      "Rodízios gel silicone anti-risco. Kits com desconto. Movimentação suave. Pronta entrega!",
+      "Kit grande rodízios soprano. Ambiente protegido. Pagamento seguro PIX/Cartão/Boleto. Compre!"
+    ]
+  },
+
+  "cpc_strategy": {
+    "descricao": "Budget allocation para HIGH-INTENT keywords",
+    "cpc_medio": "R$ 2.90",
+    "cpc_min": "R$ 2.40",
+    "cpc_max": "R$ 3.50",
+    "alocacao_budget": {
+      "keywords_criticas": "40% (R$ 180/dia)",
+      "keywords_altas": "35% (R$ 157.50/dia)",
+      "keywords_medias": "25% (R$ 112.50/dia)"
+    }
+  },
+
+  "conversion_targets": {
+    "target_conversoes_mes": "8-12 vendas",
+    "ticket_medio": "R$ 250-300",
+    "revenue_alvo": "R$ 2,000-3,600",
+    "roi_esperado": "4-8x (com ticket maior = 10x+)",
+    "premissa": "Kits maiores (12x, 20x) terão ticket 50%+ maior que media atual (R$ 171.60)"
+  },
+
+  "landing_pages": {
+    "principal": "https://shopvivaliz.com.br/catalogo?categoria=Rodízios",
+    "otimizacoes_necessarias": [
+      "Destacar kits maiores (12x, 20x rodizios) NO TOPO",
+      "Mostrar economia de preço (calc: 'economize R$ XX ao comprar 12x')",
+      "Adicionar calculadora: 'Quanto você vai economizar com kits maiores?'",
+      "Badges: 'MAIS VENDIDO', 'ECONOMIZE 40%', 'FRETE GRÁTIS'",
+      "Testimonials com kits grandes: 'Comprei 20x, chegou perfeito!'",
+      "CTA botão grande: 'Comprar Kit Completo'"
+    ]
+  },
+
+  "monitoring": {
+    "metricas_criticas": [
+      "Cost per conversion (CPC)",
+      "Conversion rate % (click to sale)",
+      "Average order value (ticket médio)",
+      "ROAS (Return on Ad Spend)",
+      "ROI (Return on Investment)"
+    ],
+    "alerts": [
+      "Se CPC > R$ 4.00: pausar keyword",
+      "Se conversion rate < 1%: revisar landing page",
+      "Se ROI < 2x: aumentar ticket com bundle offers",
+      "Se ROI > 10x: aumentar budget (scaling)"
+    ]
+  },
+
+  "roadmap_scaling": {
+    "semana_1-2": "Teste com 6 keywords altas. Monitor diariamente.",
+    "semana_3-4": "Se ROI >= 5x: escalar budget +50%",
+    "semana_5-6": "Se ROI >= 10x: expandir para novo estado + produtos relacionados",
+    "mes_2": "Com ROI confirmado: replicar em outras categorias (ferramentas, utensílios)"
+  }
+}

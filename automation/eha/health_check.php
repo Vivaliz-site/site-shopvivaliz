@@ -46,7 +46,7 @@ function http_status(string $url, int $timeout = 10): array {
 
 function check_checkout(): bool {
     // code 0 = timeout/sem rota do GitHub Actions — SKIP (E2E Playwright testa isso de forma mais confiável)
-    $url = (getenv('BASE_URL') ?: 'https://dev.shopvivaliz.com.br') . '/';
+    $url = (getenv('BASE_URL') ?: 'https://shopvivaliz.com.br') . '/';
     $res = http_status($url, 10);
     if ($res['code'] === 0) return true;
     if ($res['code'] !== 200) return false;
@@ -55,7 +55,7 @@ function check_checkout(): bool {
 }
 
 function check_api(): bool {
-    $url = (getenv('BASE_URL') ?: 'https://dev.shopvivaliz.com.br') . '/api/health.php';
+    $url = (getenv('BASE_URL') ?: 'https://shopvivaliz.com.br') . '/api/health.php';
     $res = http_status($url, 8);
     // code 0 = timeout/WAF bloqueou IP do GitHub Actions — SKIP, não é falha real do servidor
     if ($res['code'] === 0) return true;
@@ -84,7 +84,7 @@ function check_db(): bool {
 }
 
 function check_pages(): bool {
-    $base  = getenv('BASE_URL') ?: 'https://dev.shopvivaliz.com.br';
+    $base  = getenv('BASE_URL') ?: 'https://shopvivaliz.com.br';
     // Verifica páginas críticas; falha APENAS em 5xx (erro real do servidor).
     // code 0 (timeout de IP do CI/WAF) é SKIP — não indica que o site está fora do ar.
     $pages = ['/', '/produtos'];

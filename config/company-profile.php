@@ -25,7 +25,7 @@ return [
     'phone'             => '(37) 99937-4112',
     'mobile'            => '(37) 99937-4112',
     'email'             => 'atendimento@shopvivaliz.com.br',
-    'website'           => 'www.shopvivaliz.com.br',
+    'website'           => 'shopvivaliz.com.br',
 
     // Dados Fiscais
     'cnpj'              => '49.903.300/0001-70',

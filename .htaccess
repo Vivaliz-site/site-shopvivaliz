@@ -2,6 +2,9 @@
 
 Options -Indexes
 
+# Error Pages
+ErrorDocument 404 /404.php
+
 # Bloquear acesso a arquivos sensiveis
 <FilesMatch "^(\.env(?:\..*)?|\.htaccess|tasks-queue\.json|mcp-servers\.json|package(?:-lock)?\.json)$">
     Require all denied
@@ -16,10 +19,11 @@ AddCharset UTF-8 .html .txt .php .json
 
 <IfModule mod_headers.c>
     Header always set Strict-Transport-Security "max-age=31536000"
+    Header always set X-UA-Compatible "IE=edge"
     Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
-    Header always set X-Frame-Options "SAMEORIGIN"
     Header always set Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
 </IfModule>
 
@@ -37,18 +41,25 @@ AddCharset UTF-8 .html .txt .php .json
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # Canonical host migration: apex/no-www is the production domain.
+    # Redirect only browser/SEO traffic from legacy hosts, without changing
+    # POST webhook/callback semantics.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{HTTP_HOST} ^(?:www\.shopvivaliz\.com\.br|dev\.shopvivaliz\.com\.br)$ [NC]
+    RewriteRule ^ https://shopvivaliz.com.br%{REQUEST_URI} [R=301,L,NE]
+
     # Nunca expor arquivos internos de configuracao e operacao
     RewriteRule ^config/ - [F,L]
     RewriteRule ^storage/ - [F,L]
     RewriteRule ^(?:criar-pagamento-teste-real|criar-pagamento-producao|gerar-payment-id-agora|fazer-pagamento-real-agora|simular-pagamento-real)\.php$ - [F,L,NC]
     RewriteRule ^logs/ - [F,L]
-    RewriteRule ^(?:\.git|\.env(?:\.|$)|\.claude|\.codex|\.github|\.githooks|\.vscode|\.tmp_shopvivaliz|__pycache__|scripts|tests|test-results|deploy|docs|reports|scratch|olist|automation|automations|autodev|core|dashboards|imports|kong|listings|medusa|migrations|planilhas|public_html|release-notes|tools|utils|CheckoutPageOptimizer)(?:/|$) - [F,L,NC]
+    RewriteRule ^(?:\.git|\.env(?:\.|$)|\.claude|\.codex|\.github|\.githooks|\.vscode|\.tmp_shopvivaliz|__pycache__|scripts|tests|test-results|deploy|docs|reports|scratch|automation|automations|autodev|core|dashboards|imports|kong|listings|medusa|migrations|planilhas|public_html|release-notes|tools|utils|CheckoutPageOptimizer)(?:/|$) - [F,L,NC]
     RewriteRule ^(?:debug|test|teste|check|gen-token)(?:[-_.][^/]*)?$ - [F,L,NC]
     RewriteRule ^(?:setup-webhooks|update-fallback-prices)\.php$ - [F,L,NC]
     RewriteRule ^sync(?:[-a-z0-9]*)?\.php$ - [F,L,NC]
     RewriteRule ^(?:discover-db|do-sync-[a-z0-9-]+|find-db-host|fix-database|full-sync|get_ext_dir|get_php_info|shop-catalog-export)\.php$ - [F,L,NC]
     RewriteRule ^C.*shopee-sync\.php$ - [F,L,NC]
-    RewriteRule ^api/(?:debug-version\.php|catalog/test-normalize\.php|(?:pagarme|melhorenvio|olist)/diagnostic(?:-full)?\.php|sync-cache-endpoint\.php|sync/full-sync\.php)$ - [F,L,NC]
+    RewriteRule ^api/(?:catalog/test-normalize\.php|(?:pagarme|melhorenvio|olist)/diagnostic(?:-full)?\.php|sync-cache-endpoint\.php|sync/full-sync\.php)$ - [F,L,NC]
 
     # Valida frete no servidor antes de criar o pedido
     RewriteRule ^api/orders/create\.php$ api/orders/create-validated.php [L]
@@ -99,7 +110,12 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^contato/?$ contato/index.php [L]
     RewriteRule ^faq/?$ faq/index.php [L]
     RewriteRule ^blog/?$ blog/index.php [L]
+    RewriteRule ^termos/?$ termos.php [L]
+    RewriteRule ^p/termos/?$ termos.php [L]
+    RewriteRule ^p/politica-privacidade/?$ politica-privacidade/index.php [L]
     RewriteRule ^politica-privacidade/?$ politica-privacidade/index.php [L]
+    RewriteRule ^politica-devolucoes/?$ politica-devolucoes.php [L]
+    RewriteRule ^politica-entrega/?$ politica-entrega.php [L]
     RewriteRule ^produto/?$ produto.php [L]
     RewriteRule ^produto/([a-z0-9][a-z0-9\-]*)/?$ produto.php?slug=$1 [L,QSA]
     RewriteRule ^sitemap\.xml$ sitemap.php [L]

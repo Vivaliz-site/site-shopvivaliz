@@ -32,7 +32,7 @@ def get_token_from_code(code):
     log_msg(f"Codigo recebido: {code[:30]}...")
 
     # Chamar sync-agora.php com o código
-    url = f"https://dev.shopvivaliz.com.br/olist/sync-agora.php?refresh_token={code}"
+    url = f"https://shopvivaliz.com.br/olist/sync-agora.php?refresh_token={code}"
 
     log_msg(f"Chamando: {url[:80]}...")
 

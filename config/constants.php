@@ -8,7 +8,7 @@ if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
     $runtimeSecrets = require $runtimeSecretsFile;
     if (is_array($runtimeSecrets)) {
         foreach ($runtimeSecrets as $key => $value) {
-            if (!is_string($key) || $key === '' || getenv($key) !== false) {
+            if (!is_string($key) || $key === '' || (getenv($key) !== false && trim((string)getenv($key)) !== '')) {
                 continue;
             }
             $stringValue = is_scalar($value) ? (string)$value : '';
@@ -32,7 +32,7 @@ if (is_file($envFile) && is_readable($envFile)) {
         [$key, $value] = explode('=', $line, 2);
         $key = trim($key);
         $value = trim(trim($value), "\"'");
-        if ($key === '' || getenv($key) !== false) {
+        if ($key === '' || (getenv($key) !== false && trim((string)getenv($key)) !== '')) {
             continue;
         }
         putenv($key . '=' . $value);
@@ -56,7 +56,7 @@ define('UPLOADS_PATH', STORAGE_PATH . '/uploads');
 
 // URLs
 if (!defined('BASE_URL')) {
-    define('BASE_URL', getenv('BASE_URL') ?: 'https://dev.shopvivaliz.com.br');
+    define('BASE_URL', getenv('BASE_URL') ?: 'https://shopvivaliz.com.br');
 }
 if (!defined('API_URL')) {
     define('API_URL', BASE_URL . '/api');
@@ -145,6 +145,9 @@ define('FTP_USER', getenv('FTP_USERNAME') ?: '');
 define('FTP_PASS', getenv('FTP_PASSWORD') ?: getenv('FTP_PASS') ?: '');
 define('FTP_PORT', getenv('FTP_PORT') ?: 21);
 define('FTP_DIR', getenv('FTP_REMOTE_DIR') ?: '/');
+
+// Frete
+define('FREE_SHIPPING_THRESHOLD', (float)(getenv('FREE_SHIPPING_THRESHOLD') ?: 299));
 
 // Features flags
 define('FEATURE_CART_PERSISTENCE', true);

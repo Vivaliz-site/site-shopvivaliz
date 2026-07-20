@@ -168,7 +168,7 @@ class IncidentResponseAutomation {
     }
 
     private function detectAPIDown() {
-        $response = @file_get_contents('https://dev.shopvivaliz.com.br/api/health', false, stream_context_create(['http' => ['timeout' => 5]]));
+        $response = @file_get_contents('https://shopvivaliz.com.br/api/health', false, stream_context_create(['http' => ['timeout' => 5]]));
         return $response === false;
     }
 

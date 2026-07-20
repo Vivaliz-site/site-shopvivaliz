@@ -77,7 +77,7 @@ Após confirmar a ordem no painel do Mercado Pago:
    - Status atualizado: `pago`
 
 3. **Validar resultado**
-   - Acessar: https://dev.shopvivaliz.com.br/admin/orders
+   - Acessar: https://shopvivaliz.com.br/admin/orders
    - Pedido deve aparecer como: **PAGO**
 
 ---

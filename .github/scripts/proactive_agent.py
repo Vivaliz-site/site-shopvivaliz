@@ -3,7 +3,7 @@ Agente Proativo Autonomo Vivaliz
 Orquestrador: Anthropic -> OpenAI -> Gemini
 Roda a cada 4h via GitHub Actions
 """
-import json, os, subprocess, sys
+import json, os, subprocess, sys, shlex
 from pathlib import Path
 from datetime import datetime
 
@@ -85,7 +85,13 @@ def build_context() -> str:
     catalog_data = json.loads(Path("api/catalog/fallback-products.json").read_text(encoding="utf-8"))
     total    = len(catalog_data)
     no_desc  = sum(1 for p in catalog_data if not str(p.get("description", "")).strip())
-    no_price = sum(1 for p in catalog_data if not float(p.get("price", 0) or 0))
+    no_price = 0
+    for p in catalog_data:
+        try:
+            if not float(p.get("price", 0) or 0):
+                no_price += 1
+        except (ValueError, TypeError):
+            no_price += 1
     cats = {}
     for p in catalog_data:
         c = p.get("category", "")
@@ -108,7 +114,7 @@ def build_context() -> str:
             health_last = lines[-1][:200]
 
     return f"""
-PROJETO: Vivaliz e-commerce (dev.shopvivaliz.com.br)
+PROJETO: Vivaliz e-commerce (shopvivaliz.com.br)
 DATA: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}
 FOCO: {FOCUS or 'varredura geral'}
 
@@ -187,7 +193,17 @@ def run_agent():
     print("Consultando LLM...")
     raw = call_llm(prompt)
     if not raw:
-        print("Nenhum provider disponivel — encerrando sem acao.")
+        print("ERRO: Nenhum provider disponivel — encerrando sem acao.")
+        # Log error
+        log_path = Path("automation/proactive/logs/runs.jsonl")
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "action": "error",
+            "reason": "Todos os providers AI falharam",
+        }
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
         sys.exit(0)
     print(f"Resposta recebida: {len(raw)} chars")
 
@@ -220,7 +236,8 @@ def run_agent():
         return
 
     # Validacoes de seguranca
-    if any(file_path == b or file_path.startswith(b) for b in BLOCKED_PATHS):
+    norm_path = file_path.rstrip("/")
+    if any(norm_path == b.rstrip("/") or norm_path.startswith(b.rstrip("/") + "/") for b in BLOCKED_PATHS):
         print(f"BLOQUEADO por seguranca: {file_path}")
         return
 
@@ -239,9 +256,9 @@ def run_agent():
     print(f"Arquivo escrito: {file_path} ({len(content)} chars)")
 
     # Commit
-    subprocess.run("git config user.name 'Claude Autonomo'", shell=True)
-    subprocess.run("git config user.email 'fredmourao@gmail.com'", shell=True)
-    subprocess.run(f"git add '{file_path}'", shell=True)
+    subprocess.run(["git", "config", "user.name", "Claude Autonomo"])
+    subprocess.run(["git", "config", "user.email", "fredmourao@gmail.com"])
+    subprocess.run(["git", "add", file_path])
 
     diff = shell("git diff --cached --stat")
     if not diff:
@@ -255,12 +272,15 @@ def run_agent():
         f"Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
     )
     subprocess.run(["git", "commit", "-m", full_msg], check=True)
-    subprocess.run("git pull --rebase origin main || true", shell=True)
-    result2 = subprocess.run("git push origin main", shell=True)
+    pull_result = subprocess.run(["git", "pull", "--rebase", "origin", "main"], capture_output=True)
+    if pull_result.returncode != 0:
+        print(f"AVISO: rebase falhou — {pull_result.stderr.decode('utf-8', errors='replace')}")
+        return
+    result2 = subprocess.run(["git", "push", "origin", "main"], capture_output=True)
     if result2.returncode == 0:
         print(f"Deploy disparado: {commit_msg}")
     else:
-        print("Push falhou — sera tentado na proxima execucao")
+        print(f"Push falhou: {result2.stderr.decode('utf-8', errors='replace')}")
 
     # Log
     log_path = Path("automation/proactive/logs/runs.jsonl")

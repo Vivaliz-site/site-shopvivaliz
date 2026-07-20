@@ -31,7 +31,7 @@ Método: POST automático ao checkout
 
 ## Fluxo Executado
 
-1. ✅ Navegação ao site (https://dev.shopvivaliz.com.br)
+1. ✅ Navegação ao site (https://shopvivaliz.com.br)
 2. ✅ Adição de produto ao carrinho
 3. ✅ Acesso à página de checkout
 4. ✅ Preenchimento de dados do cliente

@@ -35,7 +35,7 @@ import requests
 # CONFIGURACAO
 # ============================================================================
 
-BASE_URL = "https://dev.shopvivaliz.com.br"
+BASE_URL = "https://shopvivaliz.com.br"
 OLIST_AUTH_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth"
 
 CLIENT_ID = os.getenv("OLIST_CLIENT_ID") or os.getenv("TINY_CLIENT_ID") or ""

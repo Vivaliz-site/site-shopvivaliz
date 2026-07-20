@@ -34,6 +34,6 @@ bash deploy/install-audit-monitor-24-7.sh
 Email automático quando status muda para RED:
 - Para: EMAIL_TO (.env)
 - Subject: 🚨 ShopVivaliz Alert
-- Link: https://dev.shopvivaliz.com.br/admin/monitor/
+- Link: https://shopvivaliz.com.br/admin/monitor/
 
 Status: ✅ Production-Ready (2026-07-14)
