@@ -128,6 +128,7 @@ $tokenOk   = $connected && ($expiresMs === 0 || $expiresMs > $nowMs);
         .spinner { display: none; font-size: 13px; color: #64748b; margin-top: 8px; }
         .spinner.active { display: block; }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
 

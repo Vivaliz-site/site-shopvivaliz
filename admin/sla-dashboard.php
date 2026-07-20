@@ -208,6 +208,7 @@ $projectedUptime = (($uptime / 100 * $currentDay) + ($uptime / 100 * $daysRemain
         .progress-fill.fail { background: #f85149; }
     </style>
     <meta http-equiv="refresh" content="60">
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
     <div class="container">

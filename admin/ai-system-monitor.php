@@ -346,6 +346,7 @@ $page_title = 'AI Hybrid System Monitor — ShopVivaliz';
             .container { padding: 16px; }
         }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
 

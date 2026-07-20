@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 header('Content-Type: application/xml; charset=UTF-8');
 require_once __DIR__ . '/includes/catalog-runtime.php';
+require_once __DIR__ . '/includes/product-seo.php';
 
 $official = __DIR__ . '/config/official-site.php';
 $officialData = is_file($official) ? (@include $official) : [];
@@ -63,9 +64,9 @@ function gm_absolute_url(string $baseUrl, string $url): string
     return rtrim($baseUrl, '/') . '/' . ltrim($url, '/');
 }
 
-function gm_title(array $product, string $brand): string
+function gm_title(array $product, string $brand, string $name): string
 {
-    $name = trim((string)($product['name'] ?? 'Produto Vivaliz'));
+    $name = trim($name) !== '' ? trim($name) : 'Produto Vivaliz';
     $category = trim((string)($product['category'] ?? ''));
     $sku = trim((string)($product['sku'] ?? $product['olist_product_id'] ?? $product['id'] ?? ''));
     $parts = [];
@@ -77,7 +78,7 @@ function gm_title(array $product, string $brand): string
         $parts[] = $category;
     }
     $parts[] = $name;
-    if ($sku !== '' && stripos($name, $sku) === false) {
+    if ($sku !== '' && preg_match('/^PRODUTO_\d+$/i', $sku) !== 1 && stripos($name, $sku) === false) {
         $parts[] = $sku;
     }
 
@@ -94,6 +95,20 @@ function gm_product_type(array $product): string
     return $category !== '' ? $category : 'Casa, jardim e utilidades';
 }
 
+function gm_human_name(array $product): string
+{
+    $name = trim((string)($product['name'] ?? ''));
+    if ($name !== '' && preg_match('/^PRODUTO_\d+$/i', $name) !== 1) {
+        return $name;
+    }
+
+    $description = trim(strip_tags((string)($product['description'] ?? '')));
+    $description = preg_replace('/\s+/', ' ', $description) ?: '';
+    $description = preg_replace('/\s*FOTOS MERAMENTE ILUSTRATIVAS\s*$/i', '', $description) ?: $description;
+
+    return $description !== '' ? trim($description) : $name;
+}
+
 echo '<?xml version="1.0" encoding="UTF-8"?>' . PHP_EOL;
 echo '<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">' . PHP_EOL;
 echo '<channel>' . PHP_EOL;
@@ -108,8 +123,8 @@ foreach ($products as $product) {
 
     $id = trim((string)($product['sku'] ?? $product['olist_product_id'] ?? $product['id'] ?? ''));
     $slug = trim((string)($product['slug'] ?? ''));
-    $name = trim((string)($product['name'] ?? ''));
-    $description = trim((string)($product['description'] ?? ''));
+    $name = svseo_human_name($product);
+    $description = svseo_description($product);
     $image = trim((string)($product['image_url'] ?? ''));
     $price = (float)($product['price'] ?? 0);
     $stock = (int)($product['stock'] ?? 0);
@@ -118,15 +133,11 @@ foreach ($products as $product) {
         continue;
     }
 
-    if ($description === '') {
-        $description = 'Produto ShopVivaliz com entrega para todo o Brasil.';
-    }
-
-    $brand = gm_brand($product);
+    $brand = svseo_brand($product);
     $gtin = gm_gtin($product);
     $link = $baseUrl . '/produto/' . $slug;
-    $title = gm_title($product, $brand);
-    $productType = gm_product_type($product);
+    $title = svseo_title($product);
+    $productType = svseo_product_type($product, $name);
     $image = gm_absolute_url($baseUrl, $image);
     $additionalImages = [];
     foreach (is_array($product['images'] ?? null) ? $product['images'] : [] as $candidateImage) {

@@ -33,6 +33,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         button { background: #173B63; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; }
         .saved { background: #dcfce7; color: #166534; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
     <h1>Configurações de Frete Grátis</h1>

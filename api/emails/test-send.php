@@ -25,7 +25,7 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 }
 
 // Validar evento
-$valid_events = ['order_created', 'payment_received', 'shipping_dispatched', 'boleto_generated', 'status_changed'];
+$valid_events = ['order_created', 'payment_received', 'shipping_dispatched', 'boleto_generated', 'payment_link_generated', 'status_changed'];
 if (!in_array($event, $valid_events)) {
     http_response_code(400);
     echo json_encode(['ok' => false, 'error' => 'Evento inválido']);

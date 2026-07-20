@@ -39,6 +39,7 @@ header('Content-Type: text/html; charset=utf-8');
   <meta charset="utf-8">
   <title>Auditoria imagens do catálogo</title>
   <style>body{font-family:Arial,sans-serif;margin:24px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}th{background:#f6f6f6;text-align:left}.err{color:#b00020}</style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
   <h1>Auditoria de imagens do catálogo por SKU</h1>

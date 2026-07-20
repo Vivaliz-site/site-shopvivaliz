@@ -56,10 +56,21 @@ function svem_build_email_content(array $order, string $event, string $customerN
     $city = isset($order['customer']['city']) ? $order['customer']['city'] : '';
     $state = isset($order['customer']['state']) ? $order['customer']['state'] : '';
     $cep = isset($order['customer']['cep']) ? $order['customer']['cep'] : '';
+    $paymentMethod = strtolower((string)($order['payment_method'] ?? ''));
+    $mercadoPago = is_array($order['mercadopago'] ?? null) ? $order['mercadopago'] : [];
+    $boleto = is_array($mercadoPago['boleto'] ?? null) ? $mercadoPago['boleto'] : [];
+    $preference = is_array($mercadoPago['preference'] ?? null) ? $mercadoPago['preference'] : [];
+    $ticketUrl = trim((string)($boleto['ticket_url'] ?? ''));
+    $digitableLine = trim((string)($boleto['digitable_line'] ?? ''));
+    $barcodeContent = trim((string)($boleto['barcode_content'] ?? ''));
+    $checkoutUrl = trim((string)($preference['checkout_url'] ?? ''));
+    $pixKey = trim((string)(getenv('LOJA_PIX_KEY') ?: getenv('PIX_KEY') ?: ''));
+
+    $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
     $itemsHtml = '';
     foreach ($order['items'] ?? [] as $item) {
-        $itemName = $item['name'] ?? '';
+        $itemName = $escape((string)($item['name'] ?? ''));
         $qty = $item['quantity'] ?? 0;
         $price = number_format($item['price'] ?? 0, 2, ',', '.');
         $itemsHtml .= "<tr>
@@ -76,9 +87,47 @@ function svem_build_email_content(array $order, string $event, string $customerN
         'shipped' => '<span style="background:#FF9800; color:white; padding:6px 12px; border-radius:4px; font-weight:bold;">📦 EM TRÂNSITO</span>',
         'delivered' => '<span style="background:#8BC34A; color:white; padding:6px 12px; border-radius:4px; font-weight:bold;">✅ ENTREGUE</span>',
         'boleto_generated' => '<span style="background:#FFC107; color:#333; padding:6px 12px; border-radius:4px; font-weight:bold;">📄 BOLETO DISPONÍVEL</span>',
+        'payment_link_generated' => '<span style="background:#00A650; color:white; padding:6px 12px; border-radius:4px; font-weight:bold;">💳 PAGAMENTO DISPONÍVEL</span>',
         'status_changed' => '<span style="background:#9C27B0; color:white; padding:6px 12px; border-radius:4px; font-weight:bold;">🔄 ATUALIZAÇÃO</span>',
         default => '<span style="background:#757575; color:white; padding:6px 12px; border-radius:4px; font-weight:bold;">📋 PEDIDO ATUALIZADO</span>',
     };
+
+    $paymentActionHtml = '';
+    if ($event === 'boleto_generated') {
+        $ticketLink = $ticketUrl !== ''
+            ? "<p style='margin:16px 0 0;'><a href='" . $escape($ticketUrl) . "' style='display:inline-block; background:#00A650; color:#fff; padding:12px 18px; border-radius:6px; text-decoration:none; font-weight:bold;'>Abrir boleto</a></p>"
+            : '';
+        $lineBlock = $digitableLine !== ''
+            ? "<p><strong>Linha digitável:</strong><br><code style='display:block; background:#fff; border:1px solid #e6d48a; padding:10px; border-radius:4px; word-break:break-word; font-size:14px;'>" . $escape($digitableLine) . "</code></p>"
+            : '';
+        $barcodeBlock = $barcodeContent !== '' && $barcodeContent !== $digitableLine
+            ? "<p><strong>Código de barras:</strong><br><code style='display:block; background:#fff; border:1px solid #e6d48a; padding:10px; border-radius:4px; word-break:break-word; font-size:14px;'>" . $escape($barcodeContent) . "</code></p>"
+            : '';
+        $paymentActionHtml = "
+            <div style='background:#fff8e1; border:1px solid #ffe082; padding:16px; border-radius:6px; margin:20px 0;'>
+                <h3 style='margin:0 0 10px; color:#6d4c00;'>Pagamento por boleto</h3>
+                $lineBlock
+                $barcodeBlock
+                $ticketLink
+            </div>
+        ";
+    } elseif ($event === 'payment_link_generated' && $checkoutUrl !== '') {
+        $paymentActionHtml = "
+            <div style='background:#e8f5e9; border:1px solid #a5d6a7; padding:16px; border-radius:6px; margin:20px 0;'>
+                <h3 style='margin:0 0 10px; color:#1b5e20;'>Pague com Mercado Pago</h3>
+                <p>Use o checkout seguro para escolher Pix, boleto ou cartão.</p>
+                <p style='margin:16px 0 0;'><a href='" . $escape($checkoutUrl) . "' style='display:inline-block; background:#00A650; color:#fff; padding:12px 18px; border-radius:6px; text-decoration:none; font-weight:bold;'>Pagar agora</a></p>
+            </div>
+        ";
+    } elseif ($event === 'order_created' && $paymentMethod === 'pix' && $pixKey !== '') {
+        $paymentActionHtml = "
+            <div style='background:#e8f5e9; border:1px solid #a5d6a7; padding:16px; border-radius:6px; margin:20px 0;'>
+                <h3 style='margin:0 0 10px; color:#1b5e20;'>Pagamento por Pix</h3>
+                <p><strong>Chave Pix:</strong><br><code style='display:block; background:#fff; border:1px solid #a5d6a7; padding:10px; border-radius:4px; word-break:break-word; font-size:14px;'>" . $escape($pixKey) . "</code></p>
+                <p><strong>Valor:</strong> R\$ $total</p>
+            </div>
+        ";
+    }
 
     $messageBodies = [
         'order_created' => "
@@ -88,9 +137,9 @@ function svem_build_email_content(array $order, string $event, string $customerN
             Data: <strong>$orderDate</strong></p>
             <p><strong>Próximos passos:</strong></p>
             <ul>
-                <li>Você receberá confirmação de frete em breve</li>
-                <li>Assim que confirmado, enviaremos link de pagamento</li>
-                <li>Acompanhe seu pedido através do número acima</li>
+                <li>Seu frete e total já foram registrados no pedido</li>
+                <li>Se você escolheu Pix ou boleto no Mercado Pago, enviaremos os dados de pagamento assim que o Mercado Pago confirmar a geração</li>
+                <li>Acompanhe seu pedido pelo número acima</li>
             </ul>
             <p>❓ Dúvidas? <a href='$whatsappLink' style='color:#25D366; text-decoration:none; font-weight:bold;'>Fale conosco no WhatsApp</a></p>
         ",
@@ -114,8 +163,15 @@ function svem_build_email_content(array $order, string $event, string $customerN
             <p>Boleto bancário gerado! 📄</p>
             <p>Número do pedido: <strong>$orderNumber</strong><br>
             Valor: <strong>R\$ $total</strong></p>
-            <p>Você pode pagar o boleto através do link que foi enviado em seu email ou aplicativo bancário.</p>
+            <p>Você pode pagar pelo link do boleto ou copiar a linha digitável no aplicativo do seu banco.</p>
             <p>⚠️ Data de vencimento: Verificar boleto</p>
+        ",
+        'payment_link_generated' => "
+            <p>Olá <strong>$customerName</strong>,</p>
+            <p>O link de pagamento do seu pedido está disponível.</p>
+            <p>Número do pedido: <strong>$orderNumber</strong><br>
+            Valor: <strong>R\$ $total</strong></p>
+            <p>Escolha Pix, boleto ou cartão no checkout seguro do Mercado Pago.</p>
         ",
     ];
 
@@ -124,6 +180,7 @@ function svem_build_email_content(array $order, string $event, string $customerN
         'payment_received' => "Pagamento confirmado - Pedido $orderNumber",
         'shipping_dispatched' => "Seu pedido foi enviado! - $orderNumber",
         'boleto_generated' => "Boleto disponível para pagamento - $orderNumber",
+        'payment_link_generated' => "Pagamento disponível - Pedido $orderNumber",
         default => "Atualização de pedido - $orderNumber",
     };
 
@@ -149,6 +206,7 @@ function svem_build_email_content(array $order, string $event, string $customerN
             </div>
 
             $messageBody
+            $paymentActionHtml
 
             <hr style='border: none; border-top: 1px solid #eee; margin: 30px 0;'>
 

@@ -132,6 +132,7 @@ header('Content-Type: text/html; charset=UTF-8');
             background: rgba(255,255,255,0.3);
         }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
     <div class="navbar">
