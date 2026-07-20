@@ -10,10 +10,10 @@
 
 ```bash
 # Via curl
-curl "https://dev.shopvivaliz.com.br/api/olist/refresh-token.php"
+curl "https://shopvivaliz.com.br/api/olist/refresh-token.php"
 
 # Ou abrir no browser
-https://dev.shopvivaliz.com.br/api/olist/refresh-token.php
+https://shopvivaliz.com.br/api/olist/refresh-token.php
 ```
 
 **Se tiver sucesso**: 
@@ -42,7 +42,7 @@ https://dev.shopvivaliz.com.br/api/olist/refresh-token.php
 ```
 https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth
    ?client_id=tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553
-   &redirect_uri=https://dev.shopvivaliz.com.br/api/olist/callback.php
+   &redirect_uri=https://shopvivaliz.com.br/api/olist/callback.php
    &response_type=code
    &scope=openid profile email
 ```

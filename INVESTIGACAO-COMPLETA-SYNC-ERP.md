@@ -223,7 +223,7 @@ Cliente não recebe produto
 
 ### PASSO 1: Tentar Renovação Automática (5 min)
 ```bash
-curl https://dev.shopvivaliz.com.br/api/olist/refresh-token.php
+curl https://shopvivaliz.com.br/api/olist/refresh-token.php
 ```
 
 **Resposta esperada se sucesso**:

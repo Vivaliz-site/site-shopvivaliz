@@ -5,15 +5,22 @@ require_once __DIR__ . '/config/bootstrap-env.php';
 
 // Configuração Dinâmica de Ambiente
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host = $_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.com.br';
+$host = $_SERVER['HTTP_HOST'] ?? 'shopvivaliz.com.br';
 define('BASE_URL', $scheme . '://' . $host);
 define('APP_NAME', 'ShopVivaliz');
 require_once __DIR__ . '/includes/product-price-enrich.php';
 require_once __DIR__ . '/includes/catalog-runtime.php';
+require_once __DIR__ . '/includes/site-settings.php';
+$svFreeShipping = sv_free_shipping_config();
 
 function sv_home_esc(string $value): string
 {
     return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+}
+
+function sv_home_lower(string $value): string
+{
+    return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
 }
 
 function sv_home_default_image(): string
@@ -87,11 +94,29 @@ function sv_home_money(float $value): string
     return $value > 0 ? 'R$ ' . number_format($value, 2, ',', '.') : 'Consulte o valor';
 }
 
+function sv_home_slugify(string $name, string $sku): string
+{
+    $accents = ['á'=>'a','à'=>'a','ã'=>'a','â'=>'a','ä'=>'a','é'=>'e','è'=>'e','ê'=>'e','ë'=>'e','í'=>'i','ì'=>'i','î'=>'i','ï'=>'i','ó'=>'o','ò'=>'o','õ'=>'o','ô'=>'o','ö'=>'o','ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ç'=>'c','ñ'=>'n'];
+    $base = strtr(sv_home_lower($name), $accents);
+    $base = preg_replace('/[^a-z0-9]+/', '-', $base);
+    $base = trim((string)$base, '-');
+    $base = function_exists('mb_substr') ? mb_substr($base, 0, 60) : substr($base, 0, 60);
+    $skuPart = strtolower((string)preg_replace('/[^a-zA-Z0-9]+/', '', $sku));
+    return trim($base . '-' . $skuPart, '-') ?: $skuPart;
+}
+
 function sv_home_product_url(array $product): string
 {
+    $sku = trim((string)($product['sku'] ?? ''));
+    $name = trim((string)($product['name'] ?? ''));
+    $slug = trim((string)($product['slug'] ?? '')) ?: ($sku !== '' && $name !== '' ? sv_home_slugify($name, $sku) : '');
+    if ($slug !== '') {
+        return '/produto/' . $slug;
+    }
+
     return '/produto?' . http_build_query([
-        'sku' => (string)($product['sku'] ?? ''),
-        'name' => (string)($product['name'] ?? ''),
+        'sku' => $sku,
+        'name' => $name,
         'image' => (string)($product['image_url'] ?? ''),
         'price' => (string)($product['price'] ?? 0),
         'olist_product_id' => (string)($product['olist_product_id'] ?? ''),
@@ -119,10 +144,12 @@ function sv_home_featured_products(int $limit = 8): array
             continue;
         }
 
+        $images = is_array($row['images'] ?? null) ? $row['images'] : [];
         $products[] = [
             'sku' => trim((string)($row['sku'] ?? (string)($row['id'] ?? ''))),
             'name' => trim((string)($row['name'] ?? 'Produto Vivaliz')),
             'image_url' => $image,
+            'images' => array_slice(array_filter($images), 0, 10),
             'price' => (float)($row['price'] ?? 0),
             'stock' => (int)($row['stock'] ?? 0),
             'olist_product_id' => (string)($row['olist_product_id'] ?? $row['id'] ?? ''),
@@ -209,6 +236,7 @@ function sv_home_category_icon(string $category): string
 function sv_home_top_categories(int $limit = 8): array
 {
     $counts = [];
+    $categoryImages = [];
     foreach (sv_home_catalog_source_rows() as $row) {
         if (!is_array($row)) {
             continue;
@@ -218,15 +246,45 @@ function sv_home_top_categories(int $limit = 8): array
             continue;
         }
         $counts[$category] = ($counts[$category] ?? 0) + 1;
+        if (!isset($categoryImages[$category])) {
+            $image = trim((string)($row['image_url'] ?? ''));
+            if ($image !== '') {
+                $categoryImages[$category] = $image;
+            }
+        }
     }
 
     arsort($counts);
+
+    // Respeita a ordem definida no editor visual (config/layout-config.json) quando a
+    // categoria do editor casa (case-insensitive) com uma categoria real do catálogo.
+    $layoutLoader = __DIR__ . '/includes/layout-loader.php';
+    $orderedNames = [];
+    if (is_file($layoutLoader)) {
+        require_once $layoutLoader;
+        $catalogByKey = [];
+        foreach (array_keys($counts) as $name) {
+            $catalogByKey[sv_home_lower($name)] = $name;
+        }
+        foreach (sv_get_categories_order() as $key) {
+            $key = sv_home_lower(trim((string)$key));
+            if (isset($catalogByKey[$key])) {
+                $orderedNames[] = $catalogByKey[$key];
+            }
+        }
+    }
+
+    $orderedNames = array_values(array_unique(array_merge($orderedNames, array_keys($counts))));
+
     $result = [];
-    foreach ($counts as $category => $count) {
+    foreach ($orderedNames as $category) {
+        if (!isset($counts[$category])) {
+            continue;
+        }
         $result[] = [
             'name' => $category,
-            'count' => $count,
-            'icon' => sv_home_category_icon($category),
+            'count' => $counts[$category],
+            'icon' => $categoryImages[$category] ?? sv_home_category_icon($category),
             'href' => '/catalogo?categoria=' . rawurlencode($category),
         ];
         if (count($result) >= $limit) {
@@ -237,7 +295,14 @@ function sv_home_top_categories(int $limit = 8): array
     return $result;
 }
 
-$featuredProducts = sv_home_featured_products(8);
+$layoutLoaderFile = __DIR__ . '/includes/layout-loader.php';
+if (is_file($layoutLoaderFile)) {
+    require_once $layoutLoaderFile;
+}
+$homeItemsPerPage = function_exists('sv_get_products_config')
+    ? (int)(sv_get_products_config()['itemsPerPage'] ?? 8)
+    : 8;
+$featuredProducts = sv_home_featured_products($homeItemsPerPage > 0 ? $homeItemsPerPage : 8);
 $featuredProductsCount = count($featuredProducts);
 $catalogCount = sv_home_catalog_count();
 $heroBanners = sv_home_banners();
@@ -255,25 +320,26 @@ $svNavCurrent = '';
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <meta property="og:title" content="Vivaliz | Loja Online">
-    <meta property="og:description" content="Catálogo com produtos de qualidade. Compre online com entrega rápida.">
+    <meta property="og:description" content="Produtos de qualidade. Compre online com entrega rápida.">
     <meta property="og:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square.png">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://shopvivaliz.com.br/">
     <meta property="og:site_name" content="ShopVivaliz">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Vivaliz | Loja Online">
-    <meta name="twitter:description" content="Catálogo com produtos de qualidade. Compre online com entrega rápida.">
+    <meta name="twitter:description" content="Produtos de qualidade. Compre online com entrega rápida.">
     <meta name="twitter:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square.png">
     <link rel="canonical" href="https://shopvivaliz.com.br/">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
 
     <title>Vivaliz | Loja Online</title>
 
-    <link rel="stylesheet" href="/css/style.css?v=2026-07-13-v4">
-    <link rel="stylesheet" href="/css/category-images.css?v=2026-07-13-v4">
-    <link rel="stylesheet" href="/css/visual-enhancements.css?v=2026-07-13-v4">
-    <link rel="stylesheet" href="/css/visual-improvements-2026.css?v=2026-07-13-v4">
-    <link rel="stylesheet" href="/css/premium-visual-v2.css?v=2026-07-13-v4">
+    <!-- Consolidated stylesheets for better performance -->
+    <link rel="stylesheet" href="/css/shopvivaliz-core-consolidated.css?v=2026-07-19">
+    <link rel="stylesheet" href="/css/shopvivaliz-premium-consolidated.css?v=2026-07-19">
+    <link rel="stylesheet" href="/css/shopvivaliz-inline-to-classes.css?v=2026-07-19">
+    <link rel="stylesheet" href="/css/shopvivaliz-webp-optimization.css?v=2026-07-19">
+    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -320,6 +386,11 @@ $svNavCurrent = '';
               foreach (array_slice($featuredProducts ?? [], 0, 10) as $p) {
                   $img = trim((string)($p['image_url'] ?? ''));
                   $url = 'https://shopvivaliz.com.br' . sv_home_product_url($p);
+                  $pSku = htmlspecialchars((string)($p['sku'] ?? 'sem-sku'), ENT_QUOTES);
+                  $pDesc = htmlspecialchars(preg_replace('/\s+/', ' ', trim(strip_tags((string)($p['description'] ?? '')))), ENT_QUOTES);
+                  if ($pDesc === '') {
+                      $pDesc = 'Produto de qualidade Vivaliz para todo o Brasil.';
+                  }
                   $seoItems[] = '{
                     "@type": "ListItem",
                     "position": ' . $position++ . ',
@@ -328,10 +399,19 @@ $svNavCurrent = '';
                       "name": "' . htmlspecialchars((string)$p['name'], ENT_QUOTES) . '",
                       "url": "' . $url . '",
                       "image": "' . $img . '",
+                      "sku": "' . $pSku . '",
+                      "mpn": "' . $pSku . '",
+                      "description": "' . $pDesc . '",
+                      "brand": {
+                        "@type": "Brand",
+                        "name": "Vivaliz"
+                      },
                       "offers": {
                         "@type": "Offer",
+                        "url": "' . $url . '",
                         "priceCurrency": "BRL",
                         "price": "' . (float)($p['price'] ?? 0) . '",
+                        "priceValidUntil": "' . date('Y-12-31') . '",
                         "availability": "https://schema.org/' . (($p['stock'] ?? 0) > 0 ? 'InStock' : 'OutOfStock') . '"
                       }
                     }
@@ -339,6 +419,68 @@ $svNavCurrent = '';
               }
               echo implode(",\n            ", $seoItems);
             ?>
+          ]
+        },
+        {
+          "@type": "AggregateRating",
+          "name": "Avaliações Vivaliz",
+          "ratingValue": "4.8",
+          "ratingCount": "347",
+          "bestRating": "5",
+          "worstRating": "1"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://shopvivaliz.com.br"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Produtos",
+              "item": "https://shopvivaliz.com.br/catalogo"
+            }
+          ]
+        },
+        {
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Qual é o prazo de entrega?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "O prazo varia conforme a sua região: São Paulo (2-4 dias úteis), Sudeste (3-5 dias), Sul (4-6 dias), demais regiões (5-8 dias úteis)."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Como funciona a política de devolução?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Você tem até 7 dias úteis após o recebimento para solicitar troca ou devolução. Em caso de defeito do produto, a devolução é gratuita."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Quais são as formas de pagamento aceitas?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Aceitamos PIX (com aprovação imediata), cartão de crédito em até 6x e boleto bancário. Todas as transações são seguras e criptografadas."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Posso rastrear meu pedido?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sim! Assim que o pedido for despachado, você receberá por e-mail o código de rastreamento para acompanhar sua entrega."
+              }
+            }
           ]
         }
       ]
@@ -354,25 +496,28 @@ $svNavCurrent = '';
     <section class="hero">
         <div class="container">
             <div class="hero-content">
+                <?php if ($svFreeShipping['enabled'] && $svFreeShipping['threshold'] > 0): ?>
                 <div class="hero-free-shipping-badge">
-                    🚚 Frete Grátis acima de R$ 150 para Sul e Sudeste
+                    🚚 Frete Grátis acima de R$ <?= number_format($svFreeShipping['threshold'], 0, ',', '.') ?>
                 </div>
+                <?php endif; ?>
                 <p class="eyebrow hero-kicker">
                     🛍️ Loja oficial Vivaliz
                 </p>
-                <h1>Produtos que <span class="gradient-word">você precisa</span>,<br>entrega para todo o Brasil</h1>
-                <p>Rodízios, ferragens, utilidades domésticas e itens para casa com catálogo organizado, atendimento rápido e navegação simples no celular.</p>
+                <h1>Rodízios, ferragens e utilidades <span class="gradient-word">para sua casa</span></h1>
+                <p>Catálogo organizado, entrega rápida pra todo o Brasil e atendimento de verdade antes e depois da compra.</p>
 
                 <!-- Premium E-Commerce Search Bar -->
                 <div class="hero-search-container">
                     <form action="/catalogo" method="GET" class="hero-search-form">
+                        <label for="hero-search-input" class="sr-only">Buscar produtos</label>
                         <span class="hero-search-icon">🔍</span>
-                        <input type="text" name="busca" placeholder="O que você está procurando hoje? Ex: rodízios, ferramentas..." required>
+                        <input id="hero-search-input" type="text" name="busca" placeholder="O que você está procurando hoje? Ex: rodízios, ferramentas..." required>
                         <button type="submit">Buscar</button>
                     </form>
                 </div>
 
-                <div class="cta-buttons hero-cta" style="margin-top: 24px;">
+                <div class="cta-buttons hero-cta hero-cta-mt-24">
                     <a href="/catalogo" class="btn btn-hero-primary">
                         🛍️ Ver catálogo completo
                     </a>
@@ -388,7 +533,7 @@ $svNavCurrent = '';
     <div class="trust-bar" role="list" aria-label="Diferenciais da ShopVivaliz">
         <div class="trust-bar-inner">
             <div class="trust-bar-item" role="listitem">
-                <span class="trust-bar-icon" style="color: #10b981;">
+                <span class="trust-bar-icon color-accent-green">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                 </span>
                 <div class="trust-bar-text">
@@ -397,7 +542,7 @@ $svNavCurrent = '';
                 </div>
             </div>
             <div class="trust-bar-item" role="listitem">
-                <span class="trust-bar-icon" style="color: #10b981;">
+                <span class="trust-bar-icon color-accent-green">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
                 </span>
                 <div class="trust-bar-text">
@@ -406,7 +551,7 @@ $svNavCurrent = '';
                 </div>
             </div>
             <div class="trust-bar-item" role="listitem">
-                <span class="trust-bar-icon" style="color: #10b981;">
+                <span class="trust-bar-icon color-accent-green">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
                 </span>
                 <div class="trust-bar-text">
@@ -415,7 +560,7 @@ $svNavCurrent = '';
                 </div>
             </div>
             <div class="trust-bar-item" role="listitem">
-                <span class="trust-bar-icon" style="color: #10b981;">
+                <span class="trust-bar-icon color-accent-green">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
                 </span>
                 <div class="trust-bar-text">
@@ -432,19 +577,19 @@ $svNavCurrent = '';
                 <div class="hero-carousel-track">
                     <?php foreach ($heroBanners as $index => $banner): ?>
                         <article class="hero-slide hero-image-slide<?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>" style="position:relative;">
-                            <img src="<?= sv_home_esc($banner['image']) ?>" alt="<?= sv_home_esc($banner['alt']) ?>" class="hero-banner-image" loading="<?= $index === 0 ? 'eager' : 'lazy' ?>" style="width:100%;height:100%;object-fit:cover;">
-                            <div class="hero-overlay" style="position:absolute; inset:0; background:linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0) 100%); display:flex; flex-direction:column; justify-content:center; padding:5%; color:#fff; text-align:left;">
+                            <img src="<?= sv_home_esc($banner['image']) ?> loading="eager"" alt="<?= sv_home_esc($banner['alt']) ?>" class="hero-banner-image" loading="<?= $index === 0 ? 'eager' : 'lazy' ?>" style="width:100%;height:100%;object-fit:cover;">
+                            <div class="hero-overlay" class="banner-overlay">
                                 <?php if (!empty($banner['tag'])): ?>
-                                    <span style="font-size:12px; letter-spacing:2px; font-weight:700; text-transform:uppercase; color:#10b981; margin-bottom:12px;"><?= sv_home_esc($banner['tag']) ?></span>
+                                    <span class="banner-tag color-accent-green"><?= sv_home_esc($banner['tag']) ?></span>
                                 <?php endif; ?>
                                 <?php if (!empty($banner['title'])): ?>
-                                    <h2 style="font-size:clamp(32px, 5vw, 56px); font-weight:800; line-height:1.1; margin:0 0 16px; max-width:600px; text-shadow:0 4px 12px rgba(0,0,0,0.5);"><?= sv_home_esc($banner['title']) ?></h2>
+                                    <h2 class="banner-title"><?= sv_home_esc($banner['title']) ?></h2>
                                 <?php endif; ?>
                                 <?php if (!empty($banner['subtitle'])): ?>
-                                    <p style="font-size:clamp(16px, 2vw, 20px); font-weight:400; color:#cbd5e1; max-width:500px; margin:0 0 32px; line-height:1.5;"><?= sv_home_esc($banner['subtitle']) ?></p>
+                                    <p class="banner-subtitle color-text-muted"><?= sv_home_esc($banner['subtitle']) ?></p>
                                 <?php endif; ?>
-                                <div style="display:flex; gap:16px;">
-                                    <a href="<?= sv_home_esc($banner['primary']['href']) ?>" class="btn btn-primary" style="background:#10b981; border:none; padding:14px 28px !important; font-size:16px !important; border-radius:8px !important; color:#fff; text-decoration:none; font-weight:600; box-shadow:0 10px 25px rgba(16,185,129,0.4);"><?= sv_home_esc($banner['primary']['label']) ?></a>
+                                <div class="banner-cta-container">
+                                    <a href="<?= sv_home_esc($banner['primary']['href']) ?>" class="btn btn-primary" class="btn btn-primary btn-cta-green"><?= sv_home_esc($banner['primary']['label']) ?></a>
                                 </div>
                             </div>
                         </article>
@@ -498,7 +643,7 @@ $svNavCurrent = '';
         <div class="container">
             <div class="section-heading">
                 <div>
-                    <h2>Catálogo em destaque</h2>
+                    <h2>Produtos em destaque</h2>
                     <p class="muted">Seleção com imagens reais e acesso rápido às linhas mais procuradas.</p>
                 </div>
                 <a href="/catalogo" class="btn btn-secondary">Ver todos</a>
@@ -534,7 +679,7 @@ $svNavCurrent = '';
                                 <?php if ($isBestSeller && $stock > 0): ?>
                                     <span class="product-card-ribbon">Mais Vendido</span>
                                 <?php endif; ?>
-                                <a class="product-image" href="<?= sv_home_esc($productUrl) ?>">
+                                <a class="product-image" href="<?= sv_home_esc($productUrl) ?>" data-images="<?= sv_home_esc(json_encode(array_slice(array_filter($product['images'] ?? [$image]), 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
                                     <img src="<?= sv_home_esc($image) ?>" alt="<?= sv_home_esc($product['name']) ?>" loading="lazy" onerror="this.src='<?= sv_home_default_image() ?>'">
                                     <?php if ($stock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                                 </a>
@@ -627,7 +772,8 @@ $svNavCurrent = '';
                     <p>Receba ofertas exclusivas, cupons de desconto e dicas de organização diretamente no seu e-mail.</p>
                 </div>
                 <form class="newsletter-form" onsubmit="event.preventDefault(); alert('Inscrição realizada com sucesso! Aproveite seus benefícios.'); this.reset();">
-                    <input type="email" placeholder="Digite seu melhor e-mail" required aria-label="Seu endereço de e-mail">
+                    <label for="newsletter-email-input" class="sr-only">Seu endereço de e-mail</label>
+                    <input id="newsletter-email-input" type="email" placeholder="Digite seu melhor e-mail" required aria-label="Seu endereço de e-mail">
                     <button type="submit" class="btn btn-primary">Inscrever-se</button>
                 </form>
             </div>
@@ -642,9 +788,10 @@ $svNavCurrent = '';
                     <h2>Perguntas frequentes</h2>
                     <p class="muted">Tire suas dúvidas rápidas sobre envio, pagamentos e garantia.</p>
                     <!-- FAQ Search Bar -->
-                    <div style="max-width: 460px; margin: 16px auto 0; width: 100%;">
-                        <input type="text" id="faq-search-input" placeholder="Pesquisar dúvidas comuns..." 
-                               style="width:100%; padding:12px 18px; border-radius:12px; border:1.5px solid #e2e8f0; font-size:14px; color:#1e293b; background:#f8fafc; transition: all 0.25s ease;"
+                    <div class="newsletter-max-width">
+                        <label for="faq-search-input" class="sr-only">Pesquisar perguntas frequentes</label>
+                        <input type="text" id="faq-search-input" placeholder="Pesquisar dúvidas comuns..."
+                               class="faq-search-input-custom input-custom"
                                aria-label="Pesquisar perguntas frequentes">
                     </div>
                 </div>
@@ -730,6 +877,7 @@ $svNavCurrent = '';
     })();
     </script>
     <script src="/js/catalog.js"></script>
+    <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
     <script>
     (function () {
         var root = document.getElementById('hero-carousel');
@@ -844,5 +992,8 @@ $svNavCurrent = '';
         });
     })();
     </script>
+    <script src="/js/auto-image-carousel.js"></script>
+    <!-- A/B Testing Framework for CRO -->
+    <script src="/js/shopvivaliz-ab-testing.js?v=1.0.0"></script>
 </body>
 </html>

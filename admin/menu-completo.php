@@ -82,6 +82,10 @@ require_once __DIR__ . '/../includes/admin-guard.php';
                     <div class="menu-item-title">Clientes</div>
                     <div class="menu-item-desc">Base de clientes</div>
                 </a>
+                <a href="/admin/cupons.php" class="menu-item">
+                    <div class="menu-item-title">Cupons</div>
+                    <div class="menu-item-desc">Cadastrar e gerenciar cupons</div>
+                </a>
                 <a href="/admin/company-profile.php" class="menu-item">
                     <div class="menu-item-title">Perfil Empresa</div>
                     <div class="menu-item-desc">Dados da empresa</div>
@@ -218,8 +222,19 @@ require_once __DIR__ . '/../includes/admin-guard.php';
             </div>
         </div>
 
+        <!-- LEGADO -->
+        <div class="section">
+            <div class="section-header">🗂️ Legado & Compatibilidade</div>
+            <div class="section-grid">
+                <a href="/admin/admin-back.php" class="menu-item">
+                    <div class="menu-item-title">Admin Back</div>
+                    <div class="menu-item-desc">Painéis antigos, manutenção e scripts legados</div>
+                </a>
+            </div>
+        </div>
+
         <div style="text-align: center; padding: 2rem; color: #666;">
-            <p>✅ Total: <strong>26 rotinas</strong> disponíveis</p>
+            <p>✅ Total: <strong>31 rotinas</strong> disponíveis</p>
         </div>
     </div>
 </body>

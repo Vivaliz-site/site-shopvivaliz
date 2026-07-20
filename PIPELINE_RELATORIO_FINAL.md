@@ -107,7 +107,7 @@ Pipeline de e-commerce automatizado com **11 etapas** foi **100% IMPLEMENTADO, T
 
 ### 1️⃣1️⃣ PAINEL WEB - Dashboard
 - **Status:** ✅ 100% OPERACIONAL
-- **URL:** `https://dev.shopvivaliz.com.br/admin/monitor/`
+- **URL:** `https://shopvivaliz.com.br/admin/monitor/`
 - **Arquivos:**
   - ✅ `admin/monitor-completo.php` - Dashboard completo
   - ✅ `admin/squad-chat.php` - Chat com agentes

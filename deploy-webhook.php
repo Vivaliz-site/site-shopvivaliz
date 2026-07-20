@@ -8,7 +8,7 @@
  *        DEPLOY_SECRET=<qualquer string aleatória>
  *        GITHUB_TOKEN=<personal access token com permissão repo:read>
  *   3. No GitHub: Settings → Webhooks → Add webhook
- *        Payload URL: https://dev.shopvivaliz.com.br/deploy-webhook.php
+ *        Payload URL: https://shopvivaliz.com.br/deploy-webhook.php
  *        Content type: application/json
  *        Secret: <o mesmo DEPLOY_SECRET>
  *        Events: Just the push event

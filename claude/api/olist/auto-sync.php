@@ -3,7 +3,7 @@
  * Sincronizacao Automatica - Gera tokens e sincroniza 198 produtos
  * Claude pode executar isso SEM precisar do usuario fazer login manualmente
  *
- * Uso: https://dev.shopvivaliz.com.brapi/olist/auto-sync.php
+ * Uso: https://shopvivaliz.com.brapi/olist/auto-sync.php
  */
 
 header('Content-Type: application/json; charset=utf-8');

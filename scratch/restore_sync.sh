@@ -12,13 +12,16 @@ mkdir -p ~/shopvivaliz-runtime-backup
 git diff > ~/shopvivaliz-runtime-backup/local-changes.patch || true
 git status --short > ~/shopvivaliz-runtime-backup/status.txt || true
 
-echo "Stashing runtime changes..."
-git stash push -u -m "runtime VM antes de restaurar auto-sync" || true
+if [ -n "$(git status --porcelain)" ]; then
+  echo "Working tree suja; abortando antes de fetch/merge seguro."
+  git status --porcelain
+  exit 1
+fi
 
-echo "Fetching and resetting to origin/main..."
+echo "Fetching and fast-forwarding to origin/main..."
 git fetch origin main
-git checkout main
-git reset --hard origin/main
+git switch main
+git merge --ff-only origin/main
 
 echo "Creating new shopvivaliz-auto-sync.sh..."
 sudo tee /usr/local/bin/shopvivaliz-auto-sync.sh >/dev/null <<'EOF'
@@ -32,19 +35,19 @@ cd "$REPO"
 
 echo "[$(date '+%F %T')] iniciando" >> "$LOG"
 
-git fetch origin main >> "$LOG" 2>&1
-
 LOCAL="$(git rev-parse HEAD)"
+
+if [ -n "$(git status --porcelain)" ]; then
+    echo "[$(date '+%F %T')] bloqueado: working tree suja" >> "$LOG"
+    exit 1
+fi
+
+git fetch origin main >> "$LOG" 2>&1
 REMOTE="$(git rev-parse origin/main)"
 
 if [ "$LOCAL" = "$REMOTE" ]; then
     echo "[$(date '+%F %T')] já atualizado: $LOCAL" >> "$LOG"
     exit 0
-fi
-
-if [ -n "$(git status --porcelain)" ]; then
-    echo "[$(date '+%F %T')] bloqueado: working tree suja" >> "$LOG"
-    exit 1
 fi
 
 git merge --ff-only origin/main >> "$LOG" 2>&1

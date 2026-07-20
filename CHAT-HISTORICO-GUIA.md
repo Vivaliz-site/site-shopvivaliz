@@ -47,7 +47,7 @@ Um sistema completo de chat com histórico persistente que permite:
 ### 1️⃣ ACESSAR O MONITOR
 
 ```
-https://dev.shopvivaliz.com.br/admin/monitor/
+https://shopvivaliz.com.br/admin/monitor/
 ```
 
 ### 2️⃣ CRIAR UMA NOVA CONVERSA
@@ -295,7 +295,7 @@ logs/monitor-messages.log  644
 
 ### Exemplo 1: Primeira Conversa
 ```
-1. Acessa https://dev.shopvivaliz.com.br/admin/monitor/
+1. Acessa https://shopvivaliz.com.br/admin/monitor/
 2. Digita: "Como importar produtos?"
 3. Clica: Enviar
 4. Sistema cria chat automaticamente

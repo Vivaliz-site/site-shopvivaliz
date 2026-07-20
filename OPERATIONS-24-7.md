@@ -223,7 +223,7 @@ git push origin main --force
    - Possível: site offline temporariamente
    - Solução: GitHub Actions > Re-run job
 4. Ou: footer estrutura mudou?
-   - Verificar: curl https://dev.shopvivaliz.com.br/ | grep footer-cols
+   - Verificar: curl https://shopvivaliz.com.br/ | grep footer-cols
 ```
 
 ### "Oracle VM não sincronizou dentro de 30 min"

@@ -100,7 +100,7 @@ O pipeline executará automaticamente:
 Nome da Aplicação: ShopVivaliz Pipeline
 Descrição: Integração automática de produtos e imagens
 Tipo: E-commerce Integration
-URL Callback: https://dev.shopvivaliz.com.br/callback/tiktok
+URL Callback: https://shopvivaliz.com.br/callback/tiktok
 ```
 
 ### Passo 3: Obter Credenciais

@@ -4,16 +4,30 @@
  * Impacto: Insights +100%, Retargeting optimization
  */
 
+require_once dirname(__DIR__) . '/config/bootstrap-env.php';
+
 class AnalyticsTracking {
     private $ga4_id = '';
     private $facebook_pixel = '';
     private $tiktok_pixel = '';
+    private $google_ads_id = '';
+    private $google_ads_conversion_label = '';
+    private $gtm_id = '';
+    private $google_site_verification = '';
     private $events = [];
 
     public function __construct() {
-        $this->ga4_id = getenv('GA4_ID') ?: 'G-XXXXXXXXXX';
+        $this->ga4_id = getenv('GA4_ID') ?: (getenv('GOOGLE_ANALYTICS_ID') ?: (getenv('GOOGLE_ANALYTICS') ?: (getenv('GOOGLE_ANALITYCS') ?: 'G-1H55K1TZ5D')));
         $this->facebook_pixel = getenv('FACEBOOK_PIXEL') ?: '';
         $this->tiktok_pixel = getenv('TIKTOK_PIXEL') ?: '';
+        $this->gtm_id = getenv('GOOGLE_TAG_MANAGER_ID') ?: (getenv('GTM_ID') ?: (getenv('TAG_MANAGER') ?: 'GTM-PHZ55CP3'));
+        $this->google_site_verification = getenv('GOOGLE_SITE_VERIFICATION') ?: '';
+        $id = getenv('GOOGLE_ADS_ID') ?: (getenv('GOOGLE_ADS_CONVERSION_ID') ?: '');
+        if ($id !== '' && !str_starts_with($id, 'AW-') && is_numeric($id)) {
+            $id = 'AW-' . $id;
+        }
+        $this->google_ads_id = $id;
+        $this->google_ads_conversion_label = getenv('GOOGLE_ADS_CONVERSION_LABEL') ?: '';
     }
 
     public function trackPageView($page_title, $page_path) {
@@ -300,17 +314,61 @@ class AnalyticsTracking {
     public function getTrackingCode() {
         $blocks = [];
 
-        if ($this->ga4_id !== '' && $this->ga4_id !== 'G-XXXXXXXXXX') {
+        if ($this->google_site_verification !== '' && $this->google_site_verification !== 'YOUR_GOOGLE_SITE_VERIFICATION_CODE') {
+            $verification = htmlspecialchars($this->google_site_verification, ENT_QUOTES, 'UTF-8');
+            $blocks[] = '<meta name="google-site-verification" content="' . $verification . '">';
+        }
+
+        if ($this->gtm_id !== '') {
+            $gtmId = htmlspecialchars($this->gtm_id, ENT_QUOTES, 'UTF-8');
             $blocks[] = <<<JS
-<!-- GA4 -->
-<script async src="https://www.googletagmanager.com/gtag/js?id={$this->ga4_id}"></script>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','{$gtmId}');</script>
+<!-- End Google Tag Manager -->
+JS;
+        }
+
+        $gtagConfigs = [];
+        if ($this->ga4_id !== '' && $this->ga4_id !== 'G-XXXXXXXXXX') {
+            $ga4Id = htmlspecialchars($this->ga4_id, ENT_QUOTES, 'UTF-8');
+            $gtagConfigs[] = <<<JS
+  gtag('config', '{$ga4Id}', {
+    'send_page_view': true,
+    'anonymize_ip': true,
+    'cookie_flags': 'SameSite=None;Secure'
+  });
+JS;
+        }
+
+        if ($this->google_ads_id !== '') {
+            $adsId = htmlspecialchars($this->google_ads_id, ENT_QUOTES, 'UTF-8');
+            $gtagConfigs[] = "  gtag('config', '{$adsId}');";
+        }
+
+        if ($gtagConfigs !== []) {
+            $loaderId = htmlspecialchars(
+                ($this->ga4_id !== '' && $this->ga4_id !== 'G-XXXXXXXXXX') ? $this->ga4_id : $this->google_ads_id,
+                ENT_QUOTES,
+                'UTF-8'
+            );
+            $configs = implode("\n", $gtagConfigs);
+            $trackingGa4Id = $ga4Id ?? '';
+            $trackingAdsId = $adsId ?? '';
+            $blocks[] = <<<JS
+<!-- Google tag (GA4/Ads) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id={$loaderId}"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', '{$this->ga4_id}', {
-    'anonymize_ip': true,
-    'cookie_flags': 'SameSite=None;Secure'
+{$configs}
+  window.ShopVivalizTrackingConfig = Object.assign({}, window.ShopVivalizTrackingConfig || {}, {
+    ga4MeasurementId: '{$trackingGa4Id}',
+    googleAdsId: '{$trackingAdsId}'
   });
 </script>
 JS;

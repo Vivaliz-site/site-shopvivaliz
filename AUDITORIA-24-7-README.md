@@ -77,7 +77,7 @@ python3 scripts/auditoria-24-7.py
 ### Acessar Dashboard
 
 ```
-https://dev.shopvivaliz.com.br/admin/monitor-24-7.html
+https://shopvivaliz.com.br/admin/monitor-24-7.html
 ```
 
 **Mostra em tempo real:**
@@ -215,7 +215,7 @@ sudo tail -f /var/log/syslog | grep CRON
 
 ```bash
 # Verificar se API está acessível
-curl https://dev.shopvivaliz.com.br/api/auditoria-monitor.php
+curl https://shopvivaliz.com.br/api/auditoria-monitor.php
 
 # Verificar permissões de arquivos
 ls -la /home/ubuntu/site-shopvivaliz/logs/reports/

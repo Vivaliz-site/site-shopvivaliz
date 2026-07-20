@@ -111,7 +111,7 @@ chmod +x C:\site-shopvivaliz\.git\hooks\post-commit
 
 ```bash
 # Testar logging de acesso
-curl https://dev.shopvivaliz.com.br/api/catalog/
+curl https://shopvivaliz.com.br/api/catalog/
 
 # Verificar log
 tail -f logs/audit/access-2026-07-12.log
@@ -205,7 +205,7 @@ cat logs/audit/security-alerts-2026-07-12.log
 ### Via Painel Web
 
 ```
-Acessar: https://dev.shopvivaliz.com.br/admin/audit-dashboard.php
+Acessar: https://shopvivaliz.com.br/admin/audit-dashboard.php
 
 Visualizar:
 - KPIs de segurança

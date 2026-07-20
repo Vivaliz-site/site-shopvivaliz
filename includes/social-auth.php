@@ -21,8 +21,24 @@ function sv_social_env(string ...$keys): string
 
 function sv_social_host(): string
 {
-    $host = trim((string)($_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.com.br'));
-    return $host !== '' ? $host : 'dev.shopvivaliz.com.br';
+    $official = @include dirname(__DIR__) . '/config/official-site.php';
+    if (is_array($official) && !empty($official['base_url'])) {
+        $host = parse_url((string)$official['base_url'], PHP_URL_HOST);
+        if (is_string($host) && trim($host) !== '') {
+            return trim($host);
+        }
+    }
+
+    $configured = trim((string)(getenv('SHOPVIVALIZ_BASE_URL') ?: getenv('APP_URL') ?: getenv('SITE_URL') ?: ''));
+    if ($configured !== '') {
+        $host = parse_url($configured, PHP_URL_HOST);
+        if (is_string($host) && trim($host) !== '') {
+            return trim($host);
+        }
+    }
+
+    $host = trim((string)($_SERVER['HTTP_HOST'] ?? 'shopvivaliz.com.br'));
+    return $host !== '' ? $host : 'shopvivaliz.com.br';
 }
 
 function sv_social_base_url(): string

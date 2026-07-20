@@ -101,7 +101,7 @@ ps aux | grep git-auto-sync
 sudo systemctl status apache2
 
 # 4. Testar site
-curl -I https://dev.shopvivaliz.com.br
+curl -I https://shopvivaliz.com.br
 
 # 5. Verificar .env em produção
 cat /home/ubuntu/site-shopvivaliz/.env
@@ -186,5 +186,5 @@ cat /home/ubuntu/site-shopvivaliz/.env
 - SYNC-VALIDATION-REPORT.md: Validação de sync
 - audit_findings_critical.md (memory): Findings detalhados
 - VM: `ubuntu@137.131.156.17`
-- Live Site: `https://dev.shopvivaliz.com.br/`
-- Admin Monitor: `https://dev.shopvivaliz.com.br/admin/monitor/`
+- Live Site: `https://shopvivaliz.com.br/`
+- Admin Monitor: `https://shopvivaliz.com.br/admin/monitor/`

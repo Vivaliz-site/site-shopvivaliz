@@ -1,7 +1,7 @@
 <?php
 /**
  * Endpoint de teste para envio de email de pedidos
- * Acesso: https://dev.shopvivaliz.com.br/api/emails/test-send.php?email=seu@email.com
+ * Acesso: https://shopvivaliz.com.br/api/emails/test-send.php?email=seu@email.com
  */
 
 declare(strict_types=1);

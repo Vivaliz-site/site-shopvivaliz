@@ -467,6 +467,6 @@ The system will automatically:
 **System Generated:** 2026-07-15 00:42 UTC  
 **Deployed To:** VM Oracle Cloud (137.131.156.17)  
 **Repository:** https://github.com/Vivaliz-site/site-shopvivaliz  
-**Live Site:** https://dev.shopvivaliz.com.br/
+**Live Site:** https://shopvivaliz.com.br/
 
 **🚀 ShopVivaliz is now operating as a 24/7 autonomous multi-agent system.**

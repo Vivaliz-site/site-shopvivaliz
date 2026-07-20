@@ -4,8 +4,72 @@
  * Usa PHPMailer ou mail() nativo
  */
 
+// class_exists() abaixo so encontra o PHPMailer se algo mais no request ja
+// tiver carregado essas classes -- quando send_email() e chamado por um
+// fluxo que nao passa por isso antes (ex: auth/forgot-password.php), o
+// PHPMailer nunca e encontrado e cai no fallback mail() nativo, que falha
+// sempre porque o servidor nao tem /usr/sbin/sendmail instalado. Confirmado
+// ao vivo: send_email() retornava false sempre nesse cenario. Garantimos
+// aqui que o PHPMailer real esteja sempre disponivel, independente de quem
+// chamou este arquivo primeiro.
+if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
+    $phpMailerDir = dirname(__DIR__) . '/includes/PHPMailer';
+    if (is_file($phpMailerDir . '/Exception.php')) {
+        require_once $phpMailerDir . '/Exception.php';
+        require_once $phpMailerDir . '/PHPMailer.php';
+        require_once $phpMailerDir . '/SMTP.php';
+    }
+}
+
+function sv_mailer_load_env(): void
+{
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+    $loaded = true;
+
+    $envPath = dirname(__DIR__) . '/.env';
+    if (!is_file($envPath) || !is_readable($envPath)) {
+        return;
+    }
+
+    foreach (file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
+            continue;
+        }
+        [$key, $value] = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim($value, " \t\n\r\0\x0B\"'");
+        if ($key === '' || getenv($key) !== false) {
+            continue;
+        }
+        putenv($key . '=' . $value);
+        $_ENV[$key] = $value;
+        $_SERVER[$key] = $value;
+    }
+}
+
+function sv_mailer_site_url(): string
+{
+    $official = @include dirname(__DIR__) . '/config/official-site.php';
+    if (is_array($official) && !empty($official['base_url'])) {
+        return rtrim((string)$official['base_url'], '/');
+    }
+
+    $configured = trim((string)(getenv('SHOPVIVALIZ_BASE_URL') ?: getenv('APP_URL') ?: getenv('SITE_URL') ?: ''));
+    if ($configured !== '') {
+        return rtrim($configured, '/');
+    }
+
+    return 'https://shopvivaliz.com.br';
+}
+
 function get_mailer_config(): array
 {
+    sv_mailer_load_env();
+
     return [
         'from_email' => getenv('EMAIL_FROM') ?: getenv('SMTP_USER') ?: getenv('EMAIL_USER') ?: getenv('MAIL_USER') ?: 'agentes@shopvivaliz.com.br',
         'from_name' => 'ShopVivaliz',
@@ -91,12 +155,13 @@ function send_email_native(string $to, string $subject, string $html, array $con
 
 function send_welcome_email(string $email, string $name): bool
 {
+    $siteBaseUrl = sv_mailer_site_url();
     $subject = 'Bem-vindo à ShopVivaliz!';
 
     $html = "<h2>Oi $name!</h2>";
     $html .= "<p>Obrigado por se cadastrar na ShopVivaliz.</p>";
     $html .= "<p>Sua conta foi criada com sucesso e você já pode começar a comprar.</p>";
-    $html .= "<p><a href='https://dev.shopvivaliz.com.br' style='background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Ir para a Loja</a></p>";
+    $html .= "<p><a href='{$siteBaseUrl}' style='background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Ir para a Loja</a></p>";
     $html .= "<p>Se tiver dúvidas, nos envie um email!</p>";
 
     return send_email($email, $subject, $html);
@@ -104,7 +169,7 @@ function send_welcome_email(string $email, string $name): bool
 
 function send_password_reset_email(string $email, string $name, string $reset_token): bool
 {
-    $reset_link = 'https://dev.shopvivaliz.com.br/auth/reset-password.php?token=' . urlencode($reset_token);
+    $reset_link = sv_mailer_site_url() . '/auth/reset-password.php?token=' . urlencode($reset_token);
 
     $subject = 'Redefinir sua senha na ShopVivaliz';
 
@@ -118,6 +183,67 @@ function send_password_reset_email(string $email, string $name, string $reset_to
     return send_email($email, $subject, $html);
 }
 
+function svmp_send_pix_qr_email(
+    string $email,
+    string $name,
+    string $orderNumber,
+    float $total,
+    string $qrCode,
+    string $qrCodeBase64
+): bool {
+    $config = get_mailer_config();
+    $totalFmt = number_format($total, 2, ',', '.');
+    $subject = "Pague com Pix - Pedido $orderNumber - ShopVivaliz";
+
+    $html = "<h2>Oi $name,</h2>";
+    $html .= "<p>Recebemos seu pedido <strong>#$orderNumber</strong>! Falta só o pagamento via Pix para confirmarmos.</p>";
+    $html .= "<p><strong>Valor:</strong> R$ $totalFmt</p>";
+    if ($qrCodeBase64 !== '') {
+        $html .= "<p>Escaneie o QR Code abaixo no app do seu banco:</p>";
+        $html .= "<p><img src=\"cid:pixqrcode\" alt=\"QR Code Pix\" style=\"max-width:260px;\"></p>";
+    }
+    if ($qrCode !== '') {
+        $html .= "<p>Ou copie e cole o código Pix:</p>";
+        $html .= "<p style=\"background:#f4f4f4;padding:12px;border-radius:6px;word-break:break-all;font-family:monospace;font-size:12px;\">" . htmlspecialchars($qrCode) . "</p>";
+    }
+    $html .= "<p>O Pix é aprovado na hora. Assim que identificarmos o pagamento, você recebe a confirmação por email.</p>";
+
+    if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
+        return false;
+    }
+
+    try {
+        $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+        $mail->isSMTP();
+        $mail->Host = $config['smtp_host'];
+        $mail->Port = $config['smtp_port'];
+        $mail->SMTPSecure = $config['smtp_secure'];
+        $mail->SMTPAuth = true;
+        $mail->Timeout = 30;
+        $mail->Username = $config['smtp_user'];
+        $mail->Password = $config['smtp_pass'];
+        $mail->setFrom($config['from_email'], $config['from_name']);
+        $mail->addAddress($email);
+        $mail->Subject = $subject;
+        $mail->isHTML(true);
+        $mail->Body = $html;
+        $mail->CharSet = 'UTF-8';
+        $mail->Encoding = '8bit';
+
+        if ($qrCodeBase64 !== '') {
+            $decoded = base64_decode($qrCodeBase64, true);
+            if ($decoded !== false) {
+                $mail->addStringEmbeddedImage($decoded, 'pixqrcode', 'pix-qrcode.png', 'base64', 'image/png');
+            }
+        }
+
+        return $mail->send();
+    } catch (Exception $e) {
+        error_log('PHPMailer error (pix qr): ' . $e->getMessage());
+        return false;
+    }
+}
+
 function send_order_confirmation_email(
     string $email,
     string $name,
@@ -125,6 +251,7 @@ function send_order_confirmation_email(
     string $order_total,
     array $items
 ): bool {
+    $siteBaseUrl = sv_mailer_site_url();
     $items_html = '';
     foreach ($items as $item) {
         $items_html .= "<tr>";
@@ -145,7 +272,7 @@ function send_order_confirmation_email(
     $html .= $items_html;
     $html .= "</table>";
     $html .= "<p style='margin-top: 20px;'><strong>Total: R$ $order_total</strong></p>";
-    $html .= "<p><a href='https://dev.shopvivaliz.com.br/meus-pedidos' style='background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Acompanhar Pedido</a></p>";
+    $html .= "<p><a href='{$siteBaseUrl}/meus-pedidos' style='background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;'>Acompanhar Pedido</a></p>";
 
     return send_email($email, $subject, $html);
 }

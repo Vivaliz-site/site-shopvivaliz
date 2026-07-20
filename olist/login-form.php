@@ -1,14 +1,14 @@
 <?php
 /**
  * Olist Login Form - Interface para fazer login e sincronizar
- * URL: https://dev.shopvivaliz.com.br/olist/login-form.php
+ * URL: https://shopvivaliz.com.br/olist/login-form.php
  */
 
 header('Content-Type: text/html; charset=utf-8');
 
 $client_id = getenv('OLIST_CLIENT_ID') ?: die('ERRO: OLIST_CLIENT_ID não configurado');
 $client_secret = getenv('OLIST_CLIENT_SECRET') ?: die('ERRO: OLIST_CLIENT_SECRET não configurado');
-$redirect_uri = 'https://dev.shopvivaliz.com.br/olist/handle-callback.php';
+$redirect_uri = getenv('OLIST_HANDLE_REDIRECT_URI') ?: 'https://shopvivaliz.com.br/olist/handle-callback.php';
 
 // URL de autorização
 $auth_url = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth?" . http_build_query([
@@ -178,11 +178,11 @@ if ($token_exists) {
                 </div>
             </div>
 
-            <a href="https://dev.shopvivaliz.com.br/olist/complete-oauth-flow.php" class="button">
+            <a href="https://shopvivaliz.com.br/olist/complete-oauth-flow.php" class="button">
                 → Sincronizar Agora
             </a>
 
-            <button onclick="location.href='https://dev.shopvivaliz.com.br/olist/login-form.php'" class="button secondary">
+            <button onclick="location.href='https://shopvivaliz.com.br/olist/login-form.php'" class="button secondary">
                 Fazer Login Novamente
             </button>
         <?php else: ?>

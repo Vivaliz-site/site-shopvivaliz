@@ -292,10 +292,10 @@ gh pr create \
 
 ```bash
 # Verificar endpoints após deploy
-curl -sf https://dev.shopvivaliz.com.br/ -o /dev/null && echo "home: OK"
-curl -sf https://dev.shopvivaliz.com.br/api/health.php | python3 -c "import sys,json; d=json.load(sys.stdin); print('health:', d.get('status','?'))"
-curl -sf https://dev.shopvivaliz.com.br/api/agent/autonomous-report.php | python3 -c "import sys,json; d=json.load(sys.stdin); print('catalog:', d['catalog']['total'], 'produtos')"
-curl -sf "https://dev.shopvivaliz.com.br/api/orchestrator/status.php?secret=$CRON_SECRET" | python3 -c "import sys,json; d=json.load(sys.stdin); print('queue:', d['queue']['counts'])"
+curl -sf https://shopvivaliz.com.br/ -o /dev/null && echo "home: OK"
+curl -sf https://shopvivaliz.com.br/api/health.php | python3 -c "import sys,json; d=json.load(sys.stdin); print('health:', d.get('status','?'))"
+curl -sf https://shopvivaliz.com.br/api/agent/autonomous-report.php | python3 -c "import sys,json; d=json.load(sys.stdin); print('catalog:', d['catalog']['total'], 'produtos')"
+curl -sf "https://shopvivaliz.com.br/api/orchestrator/status.php?secret=$CRON_SECRET" | python3 -c "import sys,json; d=json.load(sys.stdin); print('queue:', d['queue']['counts'])"
 ```
 
 ### Rollback de emergência
@@ -318,16 +318,16 @@ gh pr merge --admin --merge
 
 ```bash
 # Status do orquestrador
-curl -s "https://dev.shopvivaliz.com.br/api/orchestrator/status.php?secret=$CRON_SECRET"
+curl -s "https://shopvivaliz.com.br/api/orchestrator/status.php?secret=$CRON_SECRET"
 
 # Diretor toma decisões
-curl -s "https://dev.shopvivaliz.com.br/api/orchestrator/director.php?secret=$CRON_SECRET"
+curl -s "https://shopvivaliz.com.br/api/orchestrator/director.php?secret=$CRON_SECRET"
 
 # Forçar execução imediata do scheduler
-curl -s "https://dev.shopvivaliz.com.br/api/orchestrator/scheduler.php?secret=$CRON_SECRET"
+curl -s "https://shopvivaliz.com.br/api/orchestrator/scheduler.php?secret=$CRON_SECRET"
 
 # Painel admin visual
-open https://dev.shopvivaliz.com.br/admin/orchestrator.php
+open https://shopvivaliz.com.br/admin/orchestrator.php
 ```
 
 ---

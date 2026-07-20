@@ -91,7 +91,7 @@ Opção A: Esperar cron (30 minutos)
   - VM Oracle sincroniza automaticamente a cada 30min
 
 Opção B: Forçar imediato
-  - Acessar: https://dev.shopvivaliz.com.br/admin/force-git-pull.php
+  - Acessar: https://shopvivaliz.com.br/admin/force-git-pull.php
   - Aguardar resposta
   - Testar checkout
 ```
@@ -99,7 +99,7 @@ Opção B: Forçar imediato
 ### PASSO 5: Testar de Verdade
 ```bash
 # Teste 1: Abrir checkout
-https://dev.shopvivaliz.com.br/checkout/
+https://shopvivaliz.com.br/checkout/
 
 # Teste 2: Preencher CEP
 - Digitar: 01310100
@@ -144,7 +144,7 @@ python3 test-playwright-e2e.py
 php test-full-e2e.php
 
 # Via HTTP (funciona melhor)
-curl https://dev.shopvivaliz.com.br/test-full-e2e.php
+curl https://shopvivaliz.com.br/test-full-e2e.php
 ```
 
 ---
@@ -238,13 +238,13 @@ git reset --hard origin/main
 ### Checkout não atualiza?
 ```bash
 # Forçar imediato
-curl "https://dev.shopvivaliz.com.br/admin/force-git-pull.php"
+curl "https://shopvivaliz.com.br/admin/force-git-pull.php"
 ```
 
 ### BD não salva pedidos?
 ```bash
 # Verificar tabelas
-curl "https://dev.shopvivaliz.com.br/test-full-e2e.php"
+curl "https://shopvivaliz.com.br/test-full-e2e.php"
 ```
 
 ### Email não envia?
@@ -261,7 +261,7 @@ cat /home/ubuntu/site-shopvivaliz/.env | grep MAIL
 Após completar todos os passos:
 
 ```
-1. Acessar https://dev.shopvivaliz.com.br/checkout/
+1. Acessar https://shopvivaliz.com.br/checkout/
 2. Preencher CEP 01310100
 3. Ver endereço preenchido
 4. Ver opções de transportadora

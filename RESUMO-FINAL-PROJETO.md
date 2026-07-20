@@ -22,7 +22,7 @@
 
 ### **1. Teste o E-commerce:**
 ```
-1. Abra: https://dev.shopvivaliz.com.br/catalogo/
+1. Abra: https://shopvivaliz.com.br/catalogo/
 2. Clique em qualquer produto
 3. Mude a quantidade
 4. Clique "Adicionar ao Carrinho"
@@ -44,7 +44,7 @@
 
 ### **3. Teste Agentes Respondendo:**
 ```
-1. Abra: https://dev.shopvivaliz.com.br/admin/monitor-completo-v2.html
+1. Abra: https://shopvivaliz.com.br/admin/monitor-completo-v2.html
 2. Vá para aba "Chat"
 3. Digite uma pergunta: "Qual é a primeira tarefa?"
 4. Agentes devem responder em tempo real
@@ -113,7 +113,7 @@
 
 | Função | URL | Descrição |
 |--------|-----|-----------|
-| **Site Principal** | https://dev.shopvivaliz.com.br/ | Homepage do site |
+| **Site Principal** | https://shopvivaliz.com.br/ | Homepage do site |
 | **Catálogo** | /catalogo/ | Lista de produtos |
 | **Produto** | /produto.php?id=1 | Detalhe do produto |
 | **Carrinho** | /carrinho/ | Gerenciar carrinho |

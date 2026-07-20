@@ -20,7 +20,7 @@ function svpd_file(string $path): array
 
 function svpd_probe(string $path): array
 {
-    $url = 'https://dev.shopvivaliz.com.br/' . ltrim($path, '/');
+    $url = 'https://shopvivaliz.com.br/' . ltrim($path, '/');
     $ctx = stream_context_create(array('http' => array('method' => 'GET', 'timeout' => 8, 'ignore_errors' => true)));
     $body = @file_get_contents($url, false, $ctx);
     $status = 0;

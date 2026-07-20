@@ -374,7 +374,7 @@ function squad_github_commits(): string
 }
 
 $allowed_origins = [
-    'https://dev.shopvivaliz.com.br',
+    'https://shopvivaliz.com.br',
     'https://shopvivaliz.com.br',
 ];
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';

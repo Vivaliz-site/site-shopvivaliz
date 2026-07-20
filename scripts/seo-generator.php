@@ -5,7 +5,7 @@
  */
 
 class SEOGenerator {
-    private $baseUrl = 'https://dev.shopvivaliz.com.br';
+    private $baseUrl = 'https://shopvivaliz.com.br';
     private $dbHost = 'localhost';
     private $dbUser = '';
     private $dbPass = '';
@@ -124,9 +124,9 @@ Allow: /cart/$
 Crawl-delay: 1
 
 # Sitemap
-Sitemap: https://dev.shopvivaliz.com.br/sitemap.xml
-Sitemap: https://dev.shopvivaliz.com.br/sitemap-products.xml
-Sitemap: https://dev.shopvivaliz.com.br/sitemap-blog.xml
+Sitemap: https://shopvivaliz.com.br/sitemap.xml
+Sitemap: https://shopvivaliz.com.br/sitemap-products.xml
+Sitemap: https://shopvivaliz.com.br/sitemap-blog.xml
 
 # Google-specific
 User-agent: Googlebot

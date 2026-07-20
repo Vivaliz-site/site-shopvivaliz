@@ -4,7 +4,7 @@
  * Valida: Checkout → BD → Admin → Email → APIs
  *
  * Execute: php test-full-e2e.php
- * Acesso web: https://dev.shopvivaliz.com.br/test-full-e2e.php
+ * Acesso web: https://shopvivaliz.com.br/test-full-e2e.php
  */
 
 declare(strict_types=1);
@@ -227,7 +227,7 @@ if (strpos($checkout, 'csrf_token\|sv_csrf') !== false) {
 
 // Test 4.2: HTTPS/HSTS
 echo "[4.2] HTTPS/HSTS (header presente)? ";
-$headers = @get_headers('https://dev.shopvivaliz.com.br/');
+$headers = @get_headers('https://shopvivaliz.com.br/');
 $has_hsts = false;
 if ($headers) {
     foreach ($headers as $h) {

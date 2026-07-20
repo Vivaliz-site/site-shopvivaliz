@@ -189,7 +189,7 @@ Toda página DEVE ter:
 
 ### Teste 1: Homepage no Celular
 ```
-1. Acesse: https://dev.shopvivaliz.com.br/
+1. Acesse: https://shopvivaliz.com.br/
 2. Abra pelo celular OU DevTools mobile
 3. Verifique:
    ✅ Logo pequeno no topo
@@ -201,7 +201,7 @@ Toda página DEVE ter:
 
 ### Teste 2: Monitor no Celular
 ```
-1. Acesse: https://dev.shopvivaliz.com.br/admin/monitor/
+1. Acesse: https://shopvivaliz.com.br/admin/monitor/
 2. Abra pelo celular
 3. Verifique:
    ✅ Sidebar desaparece

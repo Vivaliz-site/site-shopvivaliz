@@ -54,7 +54,7 @@ $preference = [
         ],
         'installments' => 1,
     ],
-    'notification_url' => (getenv('SITE_URL') ?: 'https://dev.shopvivaliz.com.br') . '/api/webhook-mercadopago.php',
+    'notification_url' => (getenv('SITE_URL') ?: 'https://shopvivaliz.com.br') . '/api/webhook-mercadopago.php',
     'external_reference' => 'TEST-' . time(),
     'auto_return' => 'approved',
 ];

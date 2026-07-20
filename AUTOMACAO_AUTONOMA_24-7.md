@@ -193,7 +193,7 @@ Mostra:
 
 ### 2. Painel Web
 ```
-URL: https://dev.shopvivaliz.com.br/admin/monitor/
+URL: https://shopvivaliz.com.br/admin/monitor/
 
 Mostra:
   ✅ Status em tempo real
@@ -390,7 +390,7 @@ Mostra:
    - https://github.com/fredmourao-ai/site-shopvivaliz/actions
 
 2. **Admin Dashboard**
-   - https://dev.shopvivaliz.com.br/admin/monitor/
+   - https://shopvivaliz.com.br/admin/monitor/
 
 3. **Logs Locais**
    - `logs/pipeline_execution_advanced.json`

@@ -62,7 +62,7 @@ if ($cronSecret !== '' && ($_GET['secret'] ?? '') !== $cronSecret) {
 }
 
 $dryRun  = (bool)($_GET['dry_run'] ?? false);
-$baseUrl = rtrim(odir_env('SITE_URL') ?: 'https://dev.shopvivaliz.com.br', '/');
+$baseUrl = rtrim(odir_env('SITE_URL') ?: 'https://shopvivaliz.com.br', '/');
 
 // ── Busca relatório atual ─────────────────────────────────────────────────────
 odir_log('início análise' . ($dryRun ? ' (dry_run)' : ''));

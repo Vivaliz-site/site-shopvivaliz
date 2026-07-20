@@ -6,7 +6,7 @@
  */
 
 class WatchdogHealthCheck {
-    private $baseUrl = 'https://dev.shopvivaliz.com.br';
+    private $baseUrl = 'https://shopvivaliz.com.br';
     private $gitPath = '/home/ubuntu/site-shopvivaliz';
     private $alertWebhook = ''; // Será preenchido via env
     private $maxRetries = 3;

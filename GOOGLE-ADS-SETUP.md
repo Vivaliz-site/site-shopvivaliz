@@ -115,12 +115,12 @@ TIKTOK_PIXEL_TOKEN=c_xxx...
 
 ### Google Tag Assistant
 1. Instale: https://tagassistant.google.com/
-2. Visite: https://dev.shopvivaliz.com.br
+2. Visite: https://shopvivaliz.com.br
 3. Procure por "Google Analytics" e "Google Ads" ✅
 
 ### Facebook Pixel Helper
 1. Instale Chrome Extension: "Facebook Pixel Helper"
-2. Visite: https://dev.shopvivaliz.com.br
+2. Visite: https://shopvivaliz.com.br
 3. Deveria mostrar "Pixel ativo" ✅
 
 ### Verificar no GA4

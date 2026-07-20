@@ -5,7 +5,7 @@
 Todas as páginas foram testadas e possuem **design responsivo completo**:
 
 ### 1. **Catálogo**
-URL: `https://dev.shopvivaliz.com.br/catalogo/`
+URL: `https://shopvivaliz.com.br/catalogo/`
 
 **Desktop (1025px+):**
 - Grid 3 colunas de produtos
@@ -26,7 +26,7 @@ URL: `https://dev.shopvivaliz.com.br/catalogo/`
 ---
 
 ### 2. **Página do Produto**
-URL: `https://dev.shopvivaliz.com.br/produto.php?id=1`
+URL: `https://shopvivaliz.com.br/produto.php?id=1`
 
 **Desktop (1025px+):**
 - Layout: Imagem LEFT + Info RIGHT (grid 2 colunas)
@@ -44,7 +44,7 @@ URL: `https://dev.shopvivaliz.com.br/produto.php?id=1`
 ---
 
 ### 3. **Carrinho**
-URL: `https://dev.shopvivaliz.com.br/carrinho/`
+URL: `https://shopvivaliz.com.br/carrinho/`
 
 **Desktop (1025px+):**
 - Tabela completa LEFT + Resumo RIGHT (grid 2 cols)
@@ -63,7 +63,7 @@ URL: `https://dev.shopvivaliz.com.br/carrinho/`
 ---
 
 ### 4. **Checkout**
-URL: `https://dev.shopvivaliz.com.br/checkout/`
+URL: `https://shopvivaliz.com.br/checkout/`
 
 **Desktop (1025px+):**
 - Formulário LEFT + Resumo RIGHT (grid 2 cols)

@@ -10,7 +10,7 @@ $svNavCurrent = preg_replace('#^index\.php$#', '', $svNavCurrent);
 
 $svNavLinks = [
     ['href' => '/', 'label' => 'Home', 'match' => ['']],
-    ['href' => '/catalogo', 'label' => 'Catálogo', 'match' => ['catalogo', 'produtos', 'produto']],
+    ['href' => '/catalogo', 'label' => 'Produtos', 'match' => ['catalogo', 'produtos', 'produto']],
     ['href' => '/sobre', 'label' => 'Sobre', 'match' => ['sobre']],
     ['href' => '/contato', 'label' => 'Contato', 'match' => ['contato']],
     ['href' => '/carrinho', 'label' => 'Carrinho', 'match' => ['carrinho', 'checkout']],
@@ -29,20 +29,23 @@ $svWhatsappRaw = is_array($svCompanyProfile) ? (string)($svCompanyProfile['socia
 $svWhatsappDigits = preg_replace('/\D+/', '', $svWhatsappRaw);
 $svWhatsappMessage = rawurlencode('Ola! Vim pelo site da ShopVivaliz e gostaria de falar com a equipe.');
 $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?text={$svWhatsappMessage}" : '/contato';
+$svRecoveryCoupon = function_exists('svcp_builtin_coupons') ? svcp_builtin_coupons('VOLTEI5') : null;
+$svRecoveryCouponCode = is_array($svRecoveryCoupon) ? (string)($svRecoveryCoupon['code'] ?? 'VOLTEI5') : 'VOLTEI5';
+$svRecoveryCouponLabel = is_array($svRecoveryCoupon) ? (string)($svRecoveryCoupon['label'] ?? 'Desconto 5%') : 'Desconto 5%';
 ?>
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0b4f88">
 <link rel="preconnect" href="https://s3.amazonaws.com">
 <link rel="dns-prefetch" href="https://s3.amazonaws.com">
 <link rel="dns-prefetch" href="https://images.unsplash.com">
-<link rel="stylesheet" href="/css/shopvivaliz-visual-v3.css?v=3.0.8">
-<link rel="stylesheet" href="/css/accessibility-v11.css?v=11.0.0">
-<link rel="stylesheet" href="/css/loading-states-v21.css?v=21.0.0">
-<link rel="stylesheet" href="/css/network-status-v22.css?v=22.0.0">
+<link rel="stylesheet" href="/css/shopvivaliz-unified-theme.css?v=2026-07-18">
+<!-- accessibility-v11.css bundled -->
+<!-- loading-states-v21.css bundled -->
+<!-- network-status-v22.css bundled -->
 <link rel="stylesheet" href="/css/print-v27.css?v=27.0.0" media="print">
-<link rel="stylesheet" href="/css/premium-theme.css?v=2026-07-12">
-<link rel="stylesheet" href="/css/premium-visual-v2.css?v=2026-07-13-v4">
-<link rel="stylesheet" href="/css/dazzle-v1.css?v=1.2.0">
+<!-- premium-theme.css bundled -->
+<!-- premium-visual-v2.css bundled -->
+<!-- dazzle-v1.css bundled -->
 <?php if ($svIsHome): ?><link rel="stylesheet" href="/css/home-polish-v17.css?v=17.0.0"><link rel="stylesheet" href="/css/category-real-images-v52.css?v=52.0.0"><?php endif; ?>
 <?php if ($svIsCatalog): ?><link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=4.0.0"><link rel="stylesheet" href="/css/product-image-integrity-v63.css?v=63.0.0"><link rel="stylesheet" href="/css/price-integrity-v73.css?v=73.0.0"><link rel="stylesheet" href="/css/stock-integrity-v83.css?v=83.0.0"><?php endif; ?>
 <?php if ($svIsProduct): ?><link rel="stylesheet" href="/css/product-conversion-v5.css?v=5.0.0"><link rel="stylesheet" href="/css/product-image-integrity-v63.css?v=63.0.0"><link rel="stylesheet" href="/css/price-integrity-v73.css?v=73.0.0"><link rel="stylesheet" href="/css/stock-integrity-v83.css?v=83.0.0"><?php endif; ?>
@@ -57,7 +60,7 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
                 <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
             </button>
         </div>
-<a href="/" class="brand-link" aria-label="Ir para a home da Vivaliz"><img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" width="210" height="46" decoding="async" onerror="this.src='/images/logo-vivaliz-square.png'"></a><button class="menu-toggle" id="menuToggle" type="button" aria-expanded="false" aria-controls="navMenu" aria-label="Abrir menu"><span aria-hidden="true">☰</span></button><div class="navbar-menu" id="navMenu"><?php foreach ($svNavLinks as $link): ?><?php $isCurrent = in_array($svNavCurrent, $link['match'], true); ?><a href="<?= htmlspecialchars($link['href'], ENT_QUOTES, 'UTF-8') ?>"<?= $isCurrent ? ' aria-current="page"' : '' ?><?= $link['href'] === '/catalogo' ? ' class="sv-nav-cta"' : '' ?><?= $link['href'] === '/carrinho' ? ' id="nav-cart-link" class="nav-cart-link"' : '' ?>><?= htmlspecialchars($link['label'], ENT_QUOTES, 'UTF-8') ?><?php if ($link['href'] === '/carrinho'): ?><span class="cart-badge" id="nav-cart-count" aria-live="polite"></span><?php endif; ?></a><?php endforeach; ?><?php if ($svLoggedIn): ?><a href="/meus-pedidos.php" class="nav-account-link">👤 <?= htmlspecialchars($svUserFirstName, ENT_QUOTES, 'UTF-8') ?></a><a href="/auth/logout.php">Sair</a><?php else: ?><a href="/auth/login.php" class="nav-account-link">Entrar</a><?php endif; ?></div></nav></header>
+<a href="/" class="brand-link" aria-label="Ir para a home da Vivaliz"><img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" width="210" height="46" decoding="async" onerror="this.src='/images/logo-vivaliz-square.png'"></a><button class="menu-toggle" id="menuToggle" type="button" aria-expanded="false" aria-controls="navMenu" aria-label="Abrir menu"><span aria-hidden="true">☰</span></button><div class="navbar-menu" id="navMenu"><?php foreach ($svNavLinks as $link): ?><?php $isCurrent = in_array($svNavCurrent, $link['match'], true); ?><a href="<?= htmlspecialchars($link['href'], ENT_QUOTES, 'UTF-8') ?>"<?= $isCurrent ? ' aria-current="page"' : '' ?><?= $link['href'] === '/catalogo' ? ' class="sv-nav-cta"' : '' ?><?= $link['href'] === '/carrinho' ? ' id="nav-cart-link" class="nav-cart-link"' : '' ?>><?= htmlspecialchars($link['label'], ENT_QUOTES, 'UTF-8') ?><?php if ($link['href'] === '/carrinho'): ?><span class="cart-badge" id="nav-cart-count" aria-live="polite"></span><?php endif; ?></a><?php endforeach; ?><?php if ($svLoggedIn): ?><a href="/minha-conta/" class="nav-account-link">👤 <?= htmlspecialchars($svUserFirstName, ENT_QUOTES, 'UTF-8') ?></a><a href="/auth/logout.php">Sair</a><?php else: ?><a href="/auth/login.php" class="nav-account-link">Entrar</a><?php endif; ?></div></nav></header>
 
 <div class="sv-live-region" id="svLiveRegion" aria-live="polite"></div>
 <script>(function(){var main=document.querySelector('main');if(main&&!main.id)main.id='conteudo-principal';var menuToggle=document.getElementById('menuToggle');var navMenu=document.getElementById('navMenu');if(menuToggle&&navMenu){menuToggle.addEventListener('click',function(){var isOpen=navMenu.classList.toggle('active');menuToggle.setAttribute('aria-expanded',isOpen?'true':'false');menuToggle.setAttribute('aria-label',isOpen?'Fechar menu':'Abrir menu');});}if('serviceWorker' in navigator&&location.protocol==='https:'){window.addEventListener('load',function(){navigator.serviceWorker.register('/service-worker.js').catch(function(){});});}})();</script>
@@ -66,7 +69,7 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 <?php if ($svIsCatalog): ?><script src="/js/catalog-conversion-v4.js?v=4.0.0" defer></script><script src="/js/search-enhancements-v25.js?v=25.0.0" defer></script><script src="/js/catalog-image-integrity-v62.js?v=62.0.0" defer></script><script src="/js/catalog-price-integrity-v72.js?v=72.0.0" defer></script><script src="/js/catalog-stock-integrity-v82.js?v=82.0.0" defer></script><?php endif; ?>
 <?php if ($svIsProduct): ?><script src="/js/product-conversion-v5.js?v=5.0.0" defer></script><script src="/js/product-schema-v16.js?v=16.0.0" defer></script><script src="/js/recently-viewed-v24.js?v=24.0.0" defer></script><script src="/js/product-image-integrity-v63.js?v=63.0.0" defer></script><script src="/js/product-price-integrity-v73.js?v=73.0.0" defer></script><script src="/js/product-stock-integrity-v83.js?v=83.0.0" defer></script><?php endif; ?>
 <?php if ($svIsCart): ?><script src="/js/cart-shipping-v7.js?v=7.0.0" defer></script><script src="/js/cart-server-validation-v92.js?v=92.0.0" defer></script><?php endif; ?>
-<?php if ($svIsCheckout): ?><script src="/js/checkout-conversion-v6.js?v=6.1.0" defer></script><script src="/js/checkout-resilience-v15.js?v=15.1.0" defer></script><script src="/js/checkout-shipping-v7.js?v=7.0.0" defer></script><script src="/js/checkout-cart-freshness-v93.js?v=93.1.0" defer></script><script src="/js/checkout-idempotency-v122.js?v=122.0.0" defer></script><?php endif; ?>
+<?php if ($svIsCheckout): ?><script src="/js/checkout-conversion-v6.js?v=6.1.0" defer></script><script src="/js/checkout-resilience-v15.js?v=15.1.0" defer></script><script src="/js/checkout-shipping-v7.js?v=7.0.0" defer></script><script src="/js/checkout-cart-freshness-v94.js?v=94.0.0" defer></script><script src="/js/checkout-idempotency-v122.js?v=122.0.0" defer></script><?php endif; ?>
 
 <style>
 .sv-whatsapp-float{
@@ -136,6 +139,13 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
 }
 </style>
 
+<?php if (getenv('TAG_MANAGER')): ?>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=<?= htmlspecialchars(getenv('TAG_MANAGER')) ?>"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<?php endif; ?>
+
 <!-- Mini-Cart Side Drawer -->
 <div class="mini-cart-overlay" id="mini-cart-overlay"></div>
 <div class="mini-cart-drawer" id="mini-cart-drawer">
@@ -159,9 +169,9 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
                 <!-- Goal 1 Marker: R$ 150 -->
                 <div class="gamification-goal-marker" id="goal-150-marker" title="Meta R$ 150: Cupom VIVALIZ5"
                      style="position:absolute; left:50%; top:-4px; width:16px; height:16px; border-radius:50%; background:#fff; border:2.5px solid #cbd5e1; transform:translateX(-50%); display:flex; align-items:center; justify-content:center; font-size:8px; z-index:2; transition:all 0.3s; cursor:pointer;">🎁</div>
-                <!-- Goal 2 Marker: R$ 299 -->
-                <div class="gamification-goal-marker" id="goal-299-marker" title="Meta R$ 299: Frete Grátis"
-                     style="position:absolute; right:0; top:-4px; width:16px; height:16px; border-radius:50%; background:#fff; border:2.5px solid #cbd5e1; display:flex; align-items:center; justify-content:center; font-size:8px; z-index:2; transition:all 0.3s; cursor:pointer;">🚚</div>
+                <!-- Goal 2 Marker: Frete Gratis (visibilidade controlada via JS conforme configuracao no admin) -->
+                <div class="gamification-goal-marker" id="goal-299-marker" data-free-shipping-marker="1" title="Frete Grátis"
+                     style="position:absolute; right:0; top:-4px; width:16px; height:16px; border-radius:50%; background:#fff; border:2.5px solid #cbd5e1; display:none; align-items:center; justify-content:center; font-size:8px; z-index:2; transition:all 0.3s; cursor:pointer;">🚚</div>
             </div>
         </div>
         <a href="/carrinho" class="btn btn-primary btn-large" style="width:100%; display:block; text-align:center;">Ir para o Checkout</a>
@@ -201,8 +211,9 @@ $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?
         <button type="button" id="exit-intent-close" style="position:absolute; top:16px; right:16px; border:0; background:#f1f5f9; width:32px; height:32px; border-radius:50%; font-size:18px; cursor:pointer; color:#64748b; display:flex; align-items:center; justify-content:center; transition:background 0.2s;">&times;</button>
         <div style="font-size:40px; margin-bottom:16px;">🎁</div>
         <h2 style="font-size:22px; font-weight:800; color:#0f172a; margin:0 0 10px; letter-spacing:-0.02em;">Espere! Não vá embora ainda...</h2>
-        <p style="font-size:14px; color:#64748b; line-height:1.5; margin:0 0 20px;">Identificamos itens salvos no seu carrinho. Conclua seu pedido nos próximos 15 minutos e garanta **5% de desconto extra** com o cupom abaixo:</p>
-        <div style="background:#f8fafc; border:2px dashed #0b4f88; padding:12px 18px; border-radius:12px; font-weight:800; font-size:18px; color:#0b4f88; letter-spacing:0.05em; display:inline-block; margin-bottom:20px; user-select:all; cursor:pointer;" title="Clique para copiar" id="exit-intent-coupon">VOLTEI5</div>
+        <p style="font-size:14px; color:#64748b; line-height:1.5; margin:0 0 20px;">Identificamos itens salvos no seu carrinho. Conclua seu pedido nos próximos 15 minutos e aproveite a oferta de recuperação abaixo, conforme elegibilidade do carrinho:</p>
+        <div style="background:#f8fafc; border:2px dashed #0b4f88; padding:12px 18px; border-radius:12px; font-weight:800; font-size:18px; color:#0b4f88; letter-spacing:0.05em; display:inline-block; margin-bottom:12px; user-select:all; cursor:pointer;" title="Clique para copiar" id="exit-intent-coupon"><?= htmlspecialchars($svRecoveryCouponCode, ENT_QUOTES, 'UTF-8') ?></div>
+        <div style="font-size:12px; color:#475569; margin-bottom:20px; line-height:1.4;"><?= htmlspecialchars($svRecoveryCouponLabel, ENT_QUOTES, 'UTF-8') ?> disponível quando aplicável.</div>
         <div id="exit-intent-timer" style="font-size:12px; color:#ef4444; font-weight:700; margin-bottom:20px;">Oferta expira em: 15:00</div>
         <button type="button" class="btn btn-primary" onclick="if(window.openMiniCart){window.openMiniCart(); document.getElementById('exit-intent-overlay').style.display='none';}else{window.location.href='/carrinho';}" style="width:100%; padding:14px; font-weight:700; border-radius:12px; cursor:pointer;">Ver Meu Carrinho</button>
     </div>

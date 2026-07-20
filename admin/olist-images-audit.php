@@ -2,68 +2,34 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../includes/admin-guard.php';
 /**
- * v9.2.86 - Auditoria de imagens Olist por SKU.
+ * Auditoria de imagens do catálogo por SKU.
  *
- * Esta tela nao deve exibir credenciais. Ela apenas lista produtos sem imagem local
- * e orienta a importacao por SKU usando o cadastro ERP/Olist como origem oficial.
+ * Esta tela nao deve exibir credenciais. Ela apenas lista produtos sem imagem real
+ * (foto do produto vinda do ERP/Tiny) no catálogo espelhado do site.
  */
 
-require_once __DIR__ . '/../includes/product-image-resolver.php';
-
-function olist_images_pdo(): PDO
-{
-    if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
-        return $GLOBALS['pdo'];
-    }
-
-    $candidates = [
-        __DIR__ . '/../config/database.php',
-        __DIR__ . '/../includes/db.php',
-        __DIR__ . '/../config.php',
-    ];
-
-    foreach ($candidates as $file) {
-        if (is_file($file)) {
-            require_once $file;
-            if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
-                return $GLOBALS['pdo'];
-            }
-            if (isset($pdo) && $pdo instanceof PDO) {
-                return $pdo;
-            }
-        }
-    }
-
-    throw new RuntimeException('Conexao PDO nao localizada.');
-}
-
-function olist_images_detect_products_table(PDO $pdo): ?string
-{
-    foreach (['products', 'produtos', 'olist_products'] as $table) {
-        $stmt = $pdo->prepare('SHOW TABLES LIKE ?');
-        $stmt->execute([$table]);
-        if ($stmt->fetchColumn()) {
-            return $table;
-        }
-    }
-    return null;
-}
-
-$pdo = olist_images_pdo();
-$table = olist_images_detect_products_table($pdo);
-$rows = [];
+$catalogPath = dirname(__DIR__) . '/api/catalog/fallback-products.json';
+$catalog = [];
 $error = null;
 
 try {
-    if (!$table) {
-        throw new RuntimeException('Tabela de produtos nao localizada.');
+    if (!is_file($catalogPath)) {
+        throw new RuntimeException('Catálogo não encontrado em api/catalog/fallback-products.json.');
     }
-
-    $sql = "SELECT p.* FROM {$table} p LEFT JOIN olist_product_images i ON i.sku = p.sku AND i.status = 'active' WHERE p.sku IS NOT NULL GROUP BY p.sku HAVING COUNT(i.id) = 0 ORDER BY p.sku LIMIT 200";
-    $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    $decoded = json_decode((string)file_get_contents($catalogPath), true);
+    if (!is_array($decoded)) {
+        throw new RuntimeException('Catálogo inválido ou vazio.');
+    }
+    $catalog = $decoded;
 } catch (Throwable $e) {
     $error = $e->getMessage();
 }
+
+$semImagem = array_values(array_filter($catalog, function ($p) {
+    if (!is_array($p)) return false;
+    $img = trim((string)($p['image_url'] ?? ''));
+    return $img === '';
+}));
 
 header('Content-Type: text/html; charset=utf-8');
 ?>
@@ -71,30 +37,33 @@ header('Content-Type: text/html; charset=utf-8');
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Auditoria imagens Olist</title>
+  <title>Auditoria imagens do catálogo</title>
   <style>body{font-family:Arial,sans-serif;margin:24px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}th{background:#f6f6f6;text-align:left}.err{color:#b00020}</style>
 </head>
 <body>
-  <h1>Auditoria imagens Olist por SKU</h1>
-  <p>Origem oficial: cadastro ERP/Olist. Chave principal: SKU.</p>
+  <h1>Auditoria de imagens do catálogo por SKU</h1>
+  <p>Origem oficial: cadastro ERP (Tiny), sincronizado em <code>api/catalog/fallback-products.json</code>. Chave principal: SKU.</p>
   <?php if ($error): ?>
     <p class="err"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></p>
   <?php else: ?>
-    <p>Produtos sem imagem reconciliada: <?= count($rows) ?></p>
+    <p>Total no catálogo: <?= count($catalog) ?> · Produtos sem imagem real: <strong><?= count($semImagem) ?></strong></p>
     <table>
-      <thead><tr><th>SKU</th><th>Nome</th><th>Imagem resolvida</th><th>Acao</th></tr></thead>
+      <thead><tr><th>SKU</th><th>Nome</th><th>Categoria</th><th>Estoque</th></tr></thead>
       <tbody>
-      <?php foreach ($rows as $row): ?>
-        <?php $image = product_image_resolve($pdo, (string)($row['sku'] ?? '')); ?>
+      <?php foreach ($semImagem as $row): ?>
         <tr>
           <td><?= htmlspecialchars((string)($row['sku'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-          <td><?= htmlspecialchars((string)($row['name'] ?? $row['nome'] ?? $row['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-          <td><?= htmlspecialchars($image ?? '', ENT_QUOTES, 'UTF-8') ?></td>
-          <td><a href="olist-images-import-by-sku.php?sku=<?= urlencode((string)($row['sku'] ?? '')) ?>">importar por SKU</a></td>
+          <td><?= htmlspecialchars((string)($row['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+          <td><?= htmlspecialchars((string)($row['category'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+          <td><?= (int)($row['stock'] ?? 0) ?></td>
         </tr>
       <?php endforeach; ?>
+      <?php if (!$semImagem): ?>
+        <tr><td colspan="4">Todos os produtos do catálogo têm imagem real. 🎉</td></tr>
+      <?php endif; ?>
       </tbody>
     </table>
+    <p style="margin-top:16px;color:#666;font-size:13px;">Para corrigir: cadastre a foto do produto no Tiny ERP. O próximo sync automático (~10 min) reflete aqui.</p>
   <?php endif; ?>
 </body>
 </html>

@@ -54,9 +54,9 @@ OLIST_INTEGRADOR_TOKEN=9fc7a699f6946099733fd...
 - `tipo: "produto"` (formato Olist v1)
 
 ### URLs Configuradas
-- **Produtos:** https://dev.shopvivaliz.com.br/olist/webhook-receiver.php?event=product
-- **Estoque:** https://dev.shopvivaliz.com.br/olist/webhook-receiver.php?event=stock
-- **Preços:** https://dev.shopvivaliz.com.br/olist/webhook-receiver.php?event=price
+- **Produtos:** https://shopvivaliz.com.br/olist/webhook-receiver.php?event=product
+- **Estoque:** https://shopvivaliz.com.br/olist/webhook-receiver.php?event=stock
+- **Preços:** https://shopvivaliz.com.br/olist/webhook-receiver.php?event=price
 
 ### Fluxo
 ```

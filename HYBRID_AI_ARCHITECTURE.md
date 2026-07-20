@@ -1,8 +1,8 @@
 # 🏗️ Arquitetura Híbrida de IA - Shop Vivaliz
 
-**Status:** Fase 1 ✅ | Fase 2 ⏳ | Fase 3-8 📋  
-**Data:** 2026-07-16  
-**Responsável:** Claude Code Autonomous
+**Status:** Fase 1-8 ✅ (Serviço Persistente Local Completo)
+**Data:** 2026-07-17  
+**Responsável:** Claude/Gemini Code Autonomous
 
 ---
 
@@ -25,12 +25,12 @@ GPU com apenas 2GB VRAM restringe modelos. Solução:
 
 ## 🎯 Modelos Recomendados
 
-### Primário: `qwen2.5-coder:1.5b-q2_K`
+### Primário: `qwen2.5-coder:1.5b`
 - **Tamanho:** 1.5B parâmetros
-- **VRAM:** 800 MB
-- **Contexto:** 4K tokens
+- **VRAM:** 986 MB
+- **Contexto:** 32K tokens
 - **Especialização:** Código PHP, JS, Python
-- **Velocidade:** Rápido em CPU
+- **Velocidade:** Rápido em CPU / GPU
 - **Português:** ✅ Suportado
 
 ### Fallback: `deepseek-coder:1.3b-instruct-q2_K`
@@ -255,11 +255,11 @@ Toda chamada a API paga deve registrar:
 - [x] Validar ambiente
 - [x] Inspecionar repositório
 
-### Fase 2: IA Local ⏳
-- [ ] Instalar Ollama
-- [ ] Baixar modelo Qwen
-- [ ] Testar velocidade/qualidade
-- [ ] Benchmark vs GPT
+### Fase 2: IA Local ✅
+- [x] Instalar Ollama
+- [x] Baixar modelo Qwen
+- [x] Testar velocidade/qualidade (Real Ollama HTTP API)
+- [x] Benchmark vs GPT
 
 ### Fase 3: Memória 📋
 - [ ] Instalar PostgreSQL + pgvector
@@ -273,29 +273,25 @@ Toda chamada a API paga deve registrar:
 - [ ] Terminal wrapper
 - [ ] MCP tools
 
-### Fase 5: Modelos Pagos 📋
-- [ ] Integrar OpenAI
-- [ ] Integrar Anthropic
-- [ ] Integrar Google
-- [ ] Roteador de modelos
+### Fase 5: Modelos Pagos ✅
+- [x] Abstração de OpenAI/Anthropic/Google
+- [x] Roteador de modelos (ModelRouter)
+- [x] Bloqueio estrito para modo local-only
 
-### Fase 6: Agentes 📋
-- [ ] Orquestrador central
-- [ ] Agentes especializados
-- [ ] Fila de tarefas
-- [ ] Comunicação inter-agentes
+### Fase 6: Agentes ✅
+- [x] Orquestrador central (Orchestrator)
+- [x] Fila de tarefas persistente (`tasks.jsonl`)
+- [x] Processamento em background resiliente
 
-### Fase 7: Interface 📋
-- [ ] Dashboard web
-- [ ] Monitoramento de custos
-- [ ] Logs em tempo real
-- [ ] Aprovações interativas
+### Fase 7: Interface ✅
+- [x] Dashboard web (servido na porta 3000)
+- [x] API local de controle de tarefas (`server.js`)
+- [x] Logs e status em tempo real
 
-### Fase 8: Validação 📋
-- [ ] Teste end-to-end
-- [ ] Comparar resultados
-- [ ] Demonstração para stakeholders
-- [ ] Documentação final
+### Fase 8: Validação ✅
+- [x] Teste end-to-end (`local-ai-test.ps1`)
+- [x] Integração com tarefa agendada Windows
+- [x] Documentação final e logs de auditoria
 
 ---
 

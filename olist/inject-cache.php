@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Se GET, retornar o comando curl para injetar
-$curl_cmd = "curl -X POST https://dev.shopvivaliz.com.br/olist/inject-cache.php \\\n";
+$curl_cmd = "curl -X POST https://shopvivaliz.com.br/olist/inject-cache.php \\\n";
 $curl_cmd .= "  -H 'Content-Type: application/json' \\\n";
 $curl_cmd .= "  -d '@" . $local_cache . "'";
 
@@ -58,7 +58,7 @@ echo json_encode([
     'sucesso' => false,
     'mensagem' => 'Para injetar cache, execute:',
     'comando' => $curl_cmd,
-    'alternativa' => 'curl -X POST https://dev.shopvivaliz.com.br/olist/inject-cache.php -H "Content-Type: application/json" -d "' . json_encode($cache_data) . '"',
+    'alternativa' => 'curl -X POST https://shopvivaliz.com.br/olist/inject-cache.php -H "Content-Type: application/json" -d "' . json_encode($cache_data) . '"',
     'total_produtos_local' => count($cache_data['produtos'] ?? [])
 ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 ?>

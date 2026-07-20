@@ -148,7 +148,7 @@
 
 **Como testar:**
 ```
-1. Acesse https://dev.shopvivaliz.com.br/admin/monitor/
+1. Acesse https://shopvivaliz.com.br/admin/monitor/
 2. Clique na aba Chat
 3. Envie mensagem: "teste"
 4. Aguarde 2 minutos

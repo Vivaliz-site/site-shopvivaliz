@@ -2,9 +2,9 @@
 /**
  * ShopVivaliz external smoke test.
  * Usage:
- *   php tools/external-smoke-test.php https://dev.shopvivaliz.com.br 9.2.69-external-monitor-agent
+ *   php tools/external-smoke-test.php https://shopvivaliz.com.br 9.2.69-external-monitor-agent
  */
-$base = rtrim($argv[1] ?? getenv('SHOPVIVALIZ_BASE_URL') ?: 'https://dev.shopvivaliz.com.br', '/');
+$base = rtrim($argv[1] ?? getenv('SHOPVIVALIZ_BASE_URL') ?: 'https://shopvivaliz.com.br', '/');
 $expectedVersion = $argv[2] ?? getenv('SHOPVIVALIZ_EXPECTED_VERSION') ?: '';
 $timeout = (int)(getenv('SHOPVIVALIZ_SMOKE_TIMEOUT') ?: 20);
 

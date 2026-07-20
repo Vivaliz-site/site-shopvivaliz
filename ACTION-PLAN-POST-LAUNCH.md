@@ -120,7 +120,7 @@
 
 **Ferramenta:** Apache Bench ou K6
 ```bash
-ab -n 1000 -c 100 https://dev.shopvivaliz.com.br/
+ab -n 1000 -c 100 https://shopvivaliz.com.br/
 ```
 
 **Meta:** Mínimo 100 usuários simultâneos sem travamento
@@ -177,7 +177,7 @@ Relatório em: `logs/project-director-report.json`
 - [ ] Commit final
 - [ ] Push para main
 - [ ] Verificar se VM sincroniza
-- [ ] Testar URL https://dev.shopvivaliz.com.br/
+- [ ] Testar URL https://shopvivaliz.com.br/
 
 ### Próximas 24h (Consolidação)
 - [ ] BD conectado no admin

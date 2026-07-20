@@ -19,7 +19,7 @@ api/tiktok-integration/
 ### App Information
 - **App Key**: 6kf502maarj2k
 - **App Secret**: f0a2a1e58a7le4ca8b5f0f7fdfdb2o0ebee06c
-- **Redirect URL**: https://dev.shopvivaliz.com.br
+- **Redirect URL**: https://shopvivaliz.com.br
 - **Environment**: Sandbox/Production
 
 ## 📋 GitHub Secrets

@@ -25,5 +25,5 @@ fi
 
 echo ""
 echo "[NEXT] Aguarde 1-2 minutos para o workflow executar"
-echo "[THEN] Abra: https://dev.shopvivaliz.com.br/admin/monitor/"
+echo "[THEN] Abra: https://shopvivaliz.com.br/admin/monitor/"
 echo "[TEST] Envie uma mensagem e veja a resposta real dos agentes!"

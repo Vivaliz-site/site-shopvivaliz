@@ -1,12 +1,12 @@
 <?php
 /**
- * EHA Status Dashboard — dev.shopvivaliz.com.br/claude
+ * EHA Status Dashboard — shopvivaliz.com.br/claude
  * Health check ao vivo + status dos providers de IA.
  */
 header('Content-Type: text/html; charset=utf-8');
 
 $base = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http')
-      . '://' . ($_SERVER['HTTP_HOST'] ?? 'dev.shopvivaliz.com.br');
+      . '://' . ($_SERVER['HTTP_HOST'] ?? 'shopvivaliz.com.br');
 
 $t0 = microtime(true);
 

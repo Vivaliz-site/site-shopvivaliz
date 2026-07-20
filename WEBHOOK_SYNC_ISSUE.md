@@ -40,7 +40,7 @@ require_once __DIR__ . '/webhook-processor.php';
 
 Ou melhor ainda: configurar a Olist para enviar webhooks direto para:
 ```
-https://dev.shopvivaliz.com.br/api/olist/webhook-processor.php
+https://shopvivaliz.com.br/api/olist/webhook-processor.php
 ```
 
 ### 3. Status de Cada Componente

@@ -52,7 +52,7 @@ if (!$code) {
 // PASSO 2: Trocar código por token
 // ============================================================
 
-$redirectUri = 'https://dev.shopvivaliz.com.br/olist/callback.php';
+$redirectUri = getenv('OLIST_REDIRECT_URI') ?: getenv('URL_REDIRCT_OLIST') ?: getenv('TINY_REDIRECT_URI') ?: 'https://shopvivaliz.com.br/olist/callback.php';
 $tokenUrl = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
 
 $postData = http_build_query([
@@ -126,7 +126,15 @@ foreach ($replacements as $key => $value) {
     }
 }
 
-file_put_contents($envFile, $envContent);
+$written = file_put_contents($envFile, $envContent);
+
+if ($written === false) {
+    http_response_code(500);
+    echo json_encode([
+        'erro' => 'Token obtido do Tiny mas falha ao gravar em .env (verifique permissao de escrita para o usuario do PHP)',
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    exit;
+}
 
 // ============================================================
 // SUCESSO!
@@ -139,6 +147,6 @@ echo json_encode([
     'access_token' => substr($accessToken, 0, 50) . '...',
     'expires_in_horas' => round($expiresIn / 3600, 1),
     'arquivo_atualizado' => '.env',
-    'proximo_passo' => 'Acesse https://dev.shopvivaliz.com.br/olist/test-token-v3.php para testar',
+    'proximo_passo' => 'Acesse https://shopvivaliz.com.br/olist/test-token-v3.php para testar',
 ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 ?>

@@ -6,12 +6,12 @@
  *   php tools/execute-update.php /path/to/shopvivaliz-v9270.zip 9.2.70-update-executor-agent
  *
  * Env:
- *   SHOPVIVALIZ_UPDATE_URL=https://dev.shopvivaliz.com.br/installer/update.php
+ *   SHOPVIVALIZ_UPDATE_URL=https://shopvivaliz.com.br/installer/update.php
  *   SHOPVIVALIZ_UPDATE_TOKEN=optional-token
  */
 $zip = $argv[1] ?? '';
 $expectedVersion = $argv[2] ?? getenv('SHOPVIVALIZ_EXPECTED_VERSION') ?: '';
-$updateUrl = getenv('SHOPVIVALIZ_UPDATE_URL') ?: 'https://dev.shopvivaliz.com.br/installer/update.php';
+$updateUrl = getenv('SHOPVIVALIZ_UPDATE_URL') ?: 'https://shopvivaliz.com.br/installer/update.php';
 $token = getenv('SHOPVIVALIZ_UPDATE_TOKEN') ?: '';
 $timeout = (int)(getenv('SHOPVIVALIZ_UPDATE_TIMEOUT') ?: 300);
 

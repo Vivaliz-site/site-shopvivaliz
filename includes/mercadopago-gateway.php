@@ -34,7 +34,7 @@ function svmp_base_url(): string
     if ($configured !== '' && filter_var($configured, FILTER_VALIDATE_URL) && str_starts_with(strtolower($configured), 'https://')) {
         return $configured;
     }
-    return 'https://dev.shopvivaliz.com.br';
+    return 'https://shopvivaliz.com.br';
 }
 
 function svmp_order_number_is_valid(string $orderNumber): bool
@@ -119,6 +119,131 @@ function svmp_truncate(string $value, int $length): string
     return function_exists('mb_substr') ? mb_substr($value, 0, $length, 'UTF-8') : substr($value, 0, $length);
 }
 
+/**
+ * @return array{status:int, raw:string, transport_error:bool}
+ */
+function svmp_python_request(string $method, string $path, string $accessToken, array $headers, string $payload): array
+{
+    $python = svmp_env('PYTHON_BINARY');
+    if ($python === '') {
+        $python = 'python';
+    }
+
+    $script = <<<'PY'
+import json
+import sys
+
+import requests
+
+method = sys.argv[1]
+url = sys.argv[2]
+headers_path = sys.argv[3]
+body_path = sys.argv[4] if len(sys.argv) > 4 else ""
+
+with open(headers_path, "r", encoding="utf-8") as fh:
+    headers = json.load(fh)
+
+body = ""
+if body_path:
+    with open(body_path, "r", encoding="utf-8") as fh:
+        body = fh.read()
+
+kwargs = {"headers": headers, "timeout": 20}
+if body:
+    kwargs["data"] = body.encode("utf-8")
+
+try:
+    response = requests.request(method, url, **kwargs)
+    print(json.dumps({
+        "status": response.status_code,
+        "raw": response.text,
+    }, ensure_ascii=False))
+except Exception as exc:
+    print(json.dumps({
+        "error": str(exc),
+    }, ensure_ascii=False))
+PY;
+
+    $tempDir = sys_get_temp_dir();
+    $scriptFile = tempnam($tempDir, 'svmp_py_');
+    if ($scriptFile === false) {
+        return ['status' => 0, 'raw' => '', 'transport_error' => true];
+    }
+    $scriptPath = $scriptFile . '.py';
+    @rename($scriptFile, $scriptPath);
+    if (@file_put_contents($scriptPath, $script) === false) {
+        @unlink($scriptPath);
+        return ['status' => 0, 'raw' => '', 'transport_error' => true];
+    }
+
+    $headersFile = tempnam($tempDir, 'svmp_hdr_');
+    $bodyFile = tempnam($tempDir, 'svmp_bdy_');
+    if ($headersFile === false || $bodyFile === false) {
+        @unlink($scriptPath);
+        if (is_string($headersFile)) {
+            @unlink($headersFile);
+        }
+        if (is_string($bodyFile)) {
+            @unlink($bodyFile);
+        }
+        return ['status' => 0, 'raw' => '', 'transport_error' => true];
+    }
+    if (@file_put_contents($headersFile, json_encode($headers, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) === false) {
+        @unlink($scriptPath);
+        @unlink($headersFile);
+        @unlink($bodyFile);
+        return ['status' => 0, 'raw' => '', 'transport_error' => true];
+    }
+    if (@file_put_contents($bodyFile, $payload) === false) {
+        @unlink($scriptPath);
+        @unlink($headersFile);
+        @unlink($bodyFile);
+        return ['status' => 0, 'raw' => '', 'transport_error' => true];
+    }
+
+    $command = escapeshellarg($python)
+        . ' ' . escapeshellarg($scriptPath)
+        . ' ' . escapeshellarg(strtoupper($method))
+        . ' ' . escapeshellarg('https://api.mercadopago.com' . $path)
+        . ' ' . escapeshellarg($headersFile)
+        . ' ' . escapeshellarg($bodyFile);
+
+    $descriptorSpec = [
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ];
+    $process = @proc_open($command, $descriptorSpec, $pipes);
+    if (!is_resource($process)) {
+        @unlink($scriptPath);
+        return ['status' => 0, 'raw' => '', 'transport_error' => true];
+    }
+
+    fclose($pipes[0]);
+    $output = stream_get_contents($pipes[1]);
+    $errorOutput = stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    $exitCode = proc_close($process);
+    @unlink($scriptPath);
+    @unlink($headersFile);
+    @unlink($bodyFile);
+    if (!is_string($output) || trim($output) === '' || ($exitCode !== 0 && trim((string)$errorOutput) !== '')) {
+        return ['status' => 0, 'raw' => '', 'transport_error' => true];
+    }
+
+    $decoded = json_decode(trim($output), true);
+    if (!is_array($decoded) || isset($decoded['error'])) {
+        return ['status' => 0, 'raw' => '', 'transport_error' => true];
+    }
+
+    return [
+        'status' => (int)($decoded['status'] ?? 0),
+        'raw' => (string)($decoded['raw'] ?? ''),
+        'transport_error' => false,
+    ];
+}
+
 
 /** @return array */
 function svmp_build_items(array $order): array
@@ -153,6 +278,19 @@ function svmp_build_items(array $order): array
             'unit_price' => $shipping,
             'category_id' => 'others',
             'external_code' => 'shipping_fee',
+        ];
+    }
+    $discount = round((float)($order['coupon_discount'] ?? 0), 2);
+    if ($discount > 0) {
+        $couponCode = (string)($order['coupon_code'] ?? '');
+        $items[] = [
+            'id' => 'desconto',
+            'title' => svmp_truncate('Desconto' . ($couponCode !== '' ? ' (' . $couponCode . ')' : ''), 120),
+            'quantity' => 1,
+            'currency_id' => 'BRL',
+            'unit_price' => -$discount,
+            'category_id' => 'others',
+            'external_code' => 'coupon_discount',
         ];
     }
     return $items;
@@ -332,6 +470,14 @@ function svmp_api_request(string $method, string $path, string $accessToken, ?ar
             }
         }
         $transportError = $raw === false;
+    }
+    if (($raw === false || $transportError) && function_exists('shell_exec')) {
+        $fallback = svmp_python_request($method, $path, $accessToken, $headers, $encodedPayload);
+        if (!$fallback['transport_error']) {
+            $raw = $fallback['raw'];
+            $status = $fallback['status'];
+            $transportError = false;
+        }
     }
     if ($raw === false || $transportError) {
         throw new SvMercadoPagoApiException(502, 'gateway_network_error');

@@ -1,5 +1,8 @@
 <?php
 declare(strict_types=1);
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 header('Content-Type: text/html; charset=UTF-8');
 
 $runtimeSecretsFile = __DIR__ . '/config/runtime-secrets.php';
@@ -20,6 +23,8 @@ if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
 require_once __DIR__ . '/includes/mercadopago-gateway.php';
 
 $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
+$pixKey = svmp_env('LOJA_PIX_KEY');
+$pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -86,7 +91,7 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
             <div class="form-row-2">
                 <label class="form-group">
                     <span>Telefone / WhatsApp *</span>
-                    <input name="customer_phone" maxlength="20" required autocomplete="tel" aria-label="Telefone ou WhatsApp">
+                    <input name="customer_phone" type="tel" inputmode="tel" maxlength="20" required autocomplete="tel" aria-label="Telefone ou WhatsApp">
                 </label>
                 <label class="form-group">
                     <span>CEP *</span>
@@ -105,20 +110,26 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
             </div>
             <div class="form-row-2">
                 <label class="form-group">
-                    <span>Bairro *</span>
-                    <input name="neighborhood" id="neighborhood-input" maxlength="120" required aria-label="Bairro">
+                    <span>Complemento</span>
+                    <input name="complement" id="complement-input" maxlength="120" autocomplete="address-line3" aria-label="Complemento (apto, bloco, referência)" placeholder="Apto, bloco, referência (opcional)">
                 </label>
                 <label class="form-group">
-                    <span>Cidade *</span>
-                    <input name="city" id="city-input" maxlength="120" required autocomplete="address-level2" aria-label="Cidade">
+                    <span>Bairro *</span>
+                    <input name="neighborhood" id="neighborhood-input" maxlength="120" required aria-label="Bairro">
                 </label>
             </div>
             <div class="form-row-2">
                 <label class="form-group">
+                    <span>Cidade *</span>
+                    <input name="city" id="city-input" maxlength="120" required autocomplete="address-level2" aria-label="Cidade">
+                </label>
+                <label class="form-group">
                     <span>Estado (UF) *</span>
                     <input name="state" id="state-input" maxlength="2" minlength="2" required autocomplete="address-level1" aria-label="Estado" style="text-transform:uppercase">
                 </label>
-                <label class="form-group" id="boleto-cpf-field" hidden>
+            </div>
+            <div class="form-row-2">
+                <label class="form-group" id="boleto-cpf-field">
                     <span>CPF do pagador *</span>
                     <input name="cpf" id="cpf-input" inputmode="numeric" maxlength="14" autocomplete="off" aria-label="CPF do pagador">
                 </label>
@@ -130,10 +141,13 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
                     <input type="radio" name="payment_method" value="mercado_pago" checked required>
                     <span class="payment-opt-box">
                         <img src="/assets/payments/mercado-pago-official.svg" alt="Mercado Pago" style="max-height:48px; margin-bottom:8px">
-                        <strong>Pagar com segurança</strong>
-                        <small>Cartão, PIX, Boleto ou saldo em conta</small>
+                        <strong>Mercado Pago</strong>
+                        <small>Cartão, PIX e boleto em checkout seguro</small>
                     </span>
                 </label>
+            </div>
+            <div class="payment-options-note">
+                Pagamento processado com segurança pelo Mercado Pago: cartão, PIX ou boleto, sem cadastro extra.
             </div>
 
             <label class="form-group">
@@ -159,15 +173,27 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
         <h2 class="checkout-title">Resumo</h2>
         <div id="cart-items" class="summary-items"></div>
 
+        <div class="sv-coupon-box" style="display:flex; gap:8px; margin:14px 0;">
+            <input type="text" id="coupon-input" placeholder="Cupom de desconto" maxlength="30" style="flex:1; text-transform:uppercase;" aria-label="Código do cupom de desconto">
+            <button type="button" id="coupon-apply-btn" class="btn btn-secondary">Aplicar</button>
+            <button type="button" id="coupon-remove-btn" class="btn btn-secondary" hidden>Remover</button>
+        </div>
+        <div id="coupon-status" class="sv-checkout-note" hidden></div>
+
         <div class="summary-totals">
             <div class="summary-row">
                 <span>Subtotal</span>
                 <strong id="cart-subtotal">—</strong>
             </div>
+            <div class="summary-row" id="coupon-discount-row" hidden>
+                <span id="coupon-discount-label">Desconto</span>
+                <strong id="cart-discount">— R$ 0,00</strong>
+            </div>
             <div class="summary-row">
                 <span>Frete</span>
                 <strong id="cart-shipping">A calcular</strong>
             </div>
+            <div id="checkout-shipping-status" class="sv-checkout-note" hidden></div>
             <div class="summary-row summary-total">
                 <span>Total estimado</span>
                 <strong id="cart-total">—</strong>
@@ -244,12 +270,16 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
 (function () {
     // MercadoPago.js V2 initialization with Public Key
     var PUBLIC_KEY = <?= json_encode(svmp_env('MERCADOPAGO_PUBLIC_KEY')) ?>;
-    if (PUBLIC_KEY && window.MercadoPago) {
-        window.MercadoPago.configure({
-            publicKey: PUBLIC_KEY
-        });
-        // Initialize Device ID for fraud detection
-        window.MercadoPago.deviceId();
+    try {
+        if (PUBLIC_KEY && window.MercadoPago) {
+            // SDK V2 usa o construtor `new MercadoPago(...)`, nao o metodo
+            // estatico `.configure()` da API antiga (V1). O Device ID de
+            // fraude ja e coletado automaticamente pelo v2/security.js
+            // carregado no <head>, nao precisa de chamada manual.
+            new MercadoPago(PUBLIC_KEY, { locale: 'pt-BR' });
+        }
+    } catch (mpInitError) {
+        console.error('MercadoPago SDK init failed', mpInitError);
     }
 
     var PIX_KEY = <?= json_encode($pixKey) ?>;
@@ -262,6 +292,48 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
     function getShippingQuote() {
         try { return JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null'); } catch(e) { return null; }
     }
+    function getCoupon() {
+        try { return JSON.parse(localStorage.getItem('shopvivaliz_coupon') || 'null'); } catch(e) { return null; }
+    }
+    function saveCoupon(coupon) { localStorage.setItem('shopvivaliz_coupon', JSON.stringify(coupon)); }
+    function clearCoupon() { localStorage.removeItem('shopvivaliz_coupon'); }
+
+    /* Persistencia dos dados do formulario: sem isso, sair da tela (ex: pra
+       revisar o carrinho) e voltar limpava nome/email/endereco e o usuario
+       tinha que redigitar tudo. CPF fica de fora por ser dado sensivel --
+       nao vale a pena persistir em localStorage. */
+    (function persistCheckoutForm() {
+        var STORAGE_KEY = 'shopvivaliz_checkout_form';
+        var FIELDS = ['customer_name', 'customer_email', 'customer_phone', 'cep', 'address', 'street_number', 'complement', 'neighborhood', 'city', 'state'];
+        var form = document.getElementById('checkout-form');
+        if (!form) return;
+
+        function restore() {
+            var saved;
+            try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (e) { saved = null; }
+            if (!saved) return;
+            FIELDS.forEach(function (name) {
+                var el = form.querySelector('[name="' + name + '"]');
+                if (el && !el.value && saved[name]) el.value = saved[name];
+            });
+        }
+
+        function save() {
+            var data = {};
+            FIELDS.forEach(function (name) {
+                var el = form.querySelector('[name="' + name + '"]');
+                if (el) data[name] = el.value;
+            });
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+        }
+
+        restore();
+        form.addEventListener('input', save);
+        form.addEventListener('change', save);
+        form.addEventListener('submit', function () {
+            try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        });
+    })();
     function clearCart() { localStorage.removeItem('shopvivaliz_cart'); }
     function clearShippingQuote() { localStorage.removeItem('shopvivaliz_shipping_quote'); }
     function fmtMoney(v) {
@@ -277,6 +349,9 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
         var totEl = document.getElementById('cart-total');
         var shippingEl = document.getElementById('cart-shipping');
         var badge = document.getElementById('nav-cart-count');
+        var discountRow = document.getElementById('coupon-discount-row');
+        var discountLabel = document.getElementById('coupon-discount-label');
+        var discountEl = document.getElementById('cart-discount');
         if (!el) return;
 
         var total = 0;
@@ -284,6 +359,8 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
         var html = '';
         var quote = getShippingQuote();
         var shippingTotal = quote && Number(quote.total || 0) > 0 ? Number(quote.total || 0) : 0;
+        var coupon = getCoupon();
+        var discountTotal = coupon && Number(coupon.amount || 0) > 0 ? Number(coupon.amount || 0) : 0;
 
         if (!items.length) {
             html = '<p class="empty-cart">Carrinho vazio. <a href="/catalogo">Ver produtos</a></p>';
@@ -301,12 +378,18 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
                     + '</div></div>';
             });
         }
+        discountTotal = Math.min(discountTotal, total);
 
         el.innerHTML = html;
         var fmt = hasPrice ? fmtMoney(total) : 'Consultar';
         if (subEl) subEl.textContent = fmt;
         if (shippingEl) shippingEl.textContent = shippingTotal > 0 ? fmtMoney(shippingTotal) : 'A calcular';
-        if (totEl) totEl.textContent = hasPrice ? fmtMoney(total + shippingTotal) : 'Consultar';
+        if (discountRow) discountRow.hidden = discountTotal <= 0;
+        if (discountTotal > 0) {
+            if (discountLabel) discountLabel.textContent = 'Desconto' + (coupon && coupon.code ? ' (' + coupon.code + ')' : '');
+            if (discountEl) discountEl.textContent = '- ' + fmtMoney(discountTotal);
+        }
+        if (totEl) totEl.textContent = hasPrice ? fmtMoney(total - discountTotal + shippingTotal) : 'Consultar';
         if (badge) badge.textContent = items.reduce(function(a,i){ return a+(i.quantity||1); }, 0);
     }
 
@@ -331,6 +414,130 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
                 }
             }).catch(function(){});
     }
+    /* Cotacao de frete automatica: antes, o checkout so lia a cotacao ja
+       salva em localStorage pelo carrinho -- se o cliente chegasse aqui
+       direto (ou mudasse o CEP nesta tela), o pedido travava com "Selecione
+       uma cotacao de frete valida" sem nenhuma forma visivel de resolver
+       sem voltar pro carrinho. Agora calcula direto ao preencher o CEP,
+       igual ao js/cart-shipping-v7.js do carrinho. */
+    function makeShippingQuote(option, cep) {
+        return {
+            cep: cep,
+            total: Number(option.price) || 0,
+            option: option,
+            label: (option.company ? option.company + ' - ' : '') + (option.name || 'Frete'),
+            quote_id: option.quote_id || '',
+            expires_at: Number(option.expires_at) || 0,
+            provider: 'melhorenvio'
+        };
+    }
+    function calculateShipping(cep) {
+        var statusEl = document.getElementById('checkout-shipping-status');
+        var items = getCart();
+        if (!items.length) return;
+        if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Calculando frete para ' + cep.substring(0,5) + '-' + cep.substring(5,8) + '…'; }
+        fetch('/api/melhorenvio/shipping-check-v2.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                cep: cep,
+                items: items.map(function (item) {
+                    return { sku: item.sku || '', product_id: item.id || '', olist_product_id: item.olist_product_id || '', quantity: item.quantity || 1 };
+                })
+            })
+        })
+            .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+            .then(function (result) {
+                if (!result.ok || !result.data.ok) {
+                    clearShippingQuote();
+                    renderCart();
+                    if (statusEl) { statusEl.hidden = false; statusEl.textContent = result.data.message || 'Não foi possível calcular o frete para este CEP. Volte ao carrinho e tente novamente.'; }
+                    return;
+                }
+                var options = result.data.shipping_options || [];
+                var selected = result.data.selected_option || options[0];
+                if (!selected) {
+                    clearShippingQuote();
+                    renderCart();
+                    if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Nenhuma opção de frete disponível para este CEP.'; }
+                    return;
+                }
+                var quote = makeShippingQuote(selected, cep);
+                localStorage.setItem('shopvivaliz_shipping_quote', JSON.stringify(quote));
+                renderCart();
+                if (statusEl) { statusEl.hidden = true; statusEl.textContent = ''; }
+            })
+            .catch(function () {
+                if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Falha de conexão ao calcular o frete. Tente novamente.'; }
+            });
+    }
+    var couponApplyBtn = document.getElementById('coupon-apply-btn');
+    var couponRemoveBtn = document.getElementById('coupon-remove-btn');
+    var couponInput = document.getElementById('coupon-input');
+    function updateCouponRemoveVisibility() {
+        if (couponRemoveBtn) couponRemoveBtn.hidden = !getCoupon();
+    }
+    (function initCoupon() {
+        var existing = getCoupon();
+        var pendingCoupon = '';
+        try { pendingCoupon = localStorage.getItem('shopvivaliz_pending_coupon') || ''; } catch(e) {}
+        if (existing && couponInput) couponInput.value = existing.code || '';
+        else if (pendingCoupon && couponInput) couponInput.value = pendingCoupon;
+        updateCouponRemoveVisibility();
+        if (couponApplyBtn) {
+            couponApplyBtn.addEventListener('click', function () {
+                var statusEl = document.getElementById('coupon-status');
+                var code = (couponInput.value || '').trim().toUpperCase();
+                if (!code) { clearCoupon(); renderCart(); updateCouponRemoveVisibility(); if (statusEl) { statusEl.hidden = true; } return; }
+                couponApplyBtn.disabled = true;
+                couponApplyBtn.textContent = 'Aplicando…';
+                if (statusEl) { statusEl.hidden = true; }
+                fetch('/api/orders/validate-coupon.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ coupon_code: code, items: getCart() })
+                })
+                    .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+                    .then(function (result) {
+                        couponApplyBtn.disabled = false;
+                        couponApplyBtn.textContent = 'Aplicar';
+                        if (!result.ok || !result.data.ok) {
+                            clearCoupon();
+                            renderCart();
+                            updateCouponRemoveVisibility();
+                            if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Cupom inválido ou não aplicável a este carrinho.'; }
+                            return;
+                        }
+                        saveCoupon({ code: result.data.code, amount: result.data.amount, percent: result.data.percent, label: result.data.label });
+                        renderCart();
+                        updateCouponRemoveVisibility();
+                        if (statusEl) { statusEl.hidden = false; statusEl.className = 'sv-checkout-note'; statusEl.textContent = result.data.label + ' aplicado!'; }
+                    })
+                    .catch(function () {
+                        couponApplyBtn.disabled = false;
+                        couponApplyBtn.textContent = 'Aplicar';
+                        if (statusEl) { statusEl.hidden = false; statusEl.textContent = 'Falha de conexão ao validar o cupom.'; }
+                    });
+            });
+        }
+        if (couponRemoveBtn) {
+            couponRemoveBtn.addEventListener('click', function () {
+                clearCoupon();
+                if (couponInput) couponInput.value = '';
+                renderCart();
+                updateCouponRemoveVisibility();
+                var statusEl = document.getElementById('coupon-status');
+                if (statusEl) { statusEl.hidden = false; statusEl.className = 'sv-checkout-note'; statusEl.textContent = 'Cupom removido.'; }
+            });
+        }
+        if (!existing && pendingCoupon && couponApplyBtn && getCart().length > 0) {
+            setTimeout(function () {
+                couponApplyBtn.click();
+                try { localStorage.removeItem('shopvivaliz_pending_coupon'); } catch(e) {}
+            }, 350);
+        }
+    })();
+
     if (cepInput) {
         cepInput.addEventListener('input', function () {
             var val = this.value.replace(/\D/g, '');
@@ -341,12 +548,15 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
             }
             if (val.length === 8) {
                 fetchAddress(val);
+                calculateShipping(val);
             }
         });
         cepInput.addEventListener('blur', function () {
             var val = this.value.replace(/\D/g, '');
             if (val.length === 8) {
                 fetchAddress(val);
+                var existing = getShippingQuote();
+                if (!existing || existing.cep !== val) calculateShipping(val);
             }
         });
     }
@@ -357,11 +567,10 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
     }
 
     function updatePaymentFields() {
-        var boleto = selectedPaymentMethod() === 'boleto';
         var group = document.getElementById('boleto-cpf-field');
         var input = document.getElementById('cpf-input');
-        if (group) group.hidden = !boleto;
-        if (input) input.required = boleto;
+        if (group) group.hidden = false;
+        if (input) input.required = true;
     }
     document.querySelectorAll('input[name="payment_method"]').forEach(function(input) {
         input.addEventListener('change', updatePaymentFields);
@@ -421,6 +630,10 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
                 payload.shipping_expires_at = Number(q.expires_at) || 0;
             }
         } catch (ignore) {}
+        try {
+            var appliedCoupon = getCoupon();
+            if (appliedCoupon && appliedCoupon.code) payload.coupon_code = appliedCoupon.code;
+        } catch (ignore) {}
 
         var method = fd.get('payment_method') || 'pix';
         var key = pendingKey(items, method);
@@ -451,31 +664,34 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
                     order_number: order.order_number,
                     payment_session_token: order.payment_session_token
                 });
-                clearPendingPayment(); clearCart(); clearShippingQuote(); renderCart();
+                clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon(); renderCart();
                 document.getElementById('boleto-order-msg').textContent = 'Pedido ' + order.order_number;
                 document.getElementById('boleto-digitable-line').value = boleto.digitable_line || '';
                 document.getElementById('boleto-line-group').hidden = !boleto.digitable_line;
                 document.getElementById('boleto-open-link').href = boleto.ticket_url;
                 document.getElementById('boleto-modal').hidden = false;
+                triggerGoogleAdsConversion(order.order_number, total);
             } else if (method === 'mercado_pago') {
                 btn.textContent = 'Abrindo Mercado Pago…';
                 var preference = await postJson('/api/mercadopago/create-preference.php', {
                     order_number: order.order_number,
                     payment_session_token: order.payment_session_token
                 });
-                clearPendingPayment(); clearCart(); clearShippingQuote();
+                clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon();
                 window.location.assign(preference.checkout_url);
                 return;
             } else {
-                clearPendingPayment(); clearCart(); clearShippingQuote(); renderCart();
+                clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon(); renderCart();
                 if (method === 'pix') {
                     document.getElementById('pix-amount-display').textContent = total > 0 ? totalFmt : 'Confirmar com a loja';
                     document.getElementById('wpp-confirm-link').href = wppLink;
                     document.getElementById('pix-modal').hidden = false;
+                    triggerGoogleAdsConversion(order.order_number, total);
                 } else {
                     document.getElementById('order-number-msg').textContent = 'Pedido ' + order.order_number;
                     document.getElementById('success-wpp-link').href = wppLink;
                     document.getElementById('success-modal').hidden = false;
+                    triggerGoogleAdsConversion(order.order_number, total);
                 }
             }
         } catch (err) {
@@ -614,6 +830,22 @@ $whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
         }, 1000);
     })();
 })();
+</script>
+<script>
+function triggerGoogleAdsConversion(orderNumber, totalValue) {
+    if (typeof gtag === 'function') {
+        const adsId = <?= json_encode(getenv('GOOGLE_ADS_ID') ?: '') ?>;
+        const label = <?= json_encode(getenv('GOOGLE_ADS_CONVERSION_LABEL') ?: '') ?>;
+        if (adsId && label) {
+            gtag('event', 'conversion', {
+                'send_to': adsId + '/' + label,
+                'value': parseFloat(totalValue) || 0,
+                'currency': 'BRL',
+                'transaction_id': orderNumber
+            });
+        }
+    }
+}
 </script>
 </body>
 </html>

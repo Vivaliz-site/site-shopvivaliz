@@ -118,7 +118,7 @@ Content-Type: application/json
 
 #### URL
 ```
-https://dev.shopvivaliz.com.br/meus-pedidos
+https://shopvivaliz.com.br/meus-pedidos
 ```
 
 #### Acesso
@@ -179,7 +179,7 @@ Flow:
 
 ### Olist/Tiny ERP Webhook
 ```
-POST https://dev.shopvivaliz.com.br/api/webhooks/order-status-update.php
+POST https://shopvivaliz.com.br/api/webhooks/order-status-update.php
 Authorization: Bearer <WEBHOOK_TOKEN>
 
 Flow:
@@ -279,14 +279,14 @@ CREATE TABLE orders (
 
 **1. Fazer Login**
 ```
-1. Ir para https://dev.shopvivaliz.com.br/auth/login.php
+1. Ir para https://shopvivaliz.com.br/auth/login.php
 2. Inserir email e senha OU
 3. Clicar "Login com Google" ou "Login com Apple"
 ```
 
 **2. Se Novo Cliente**
 ```
-1. Ir para https://dev.shopvivaliz.com.br/auth/register.php
+1. Ir para https://shopvivaliz.com.br/auth/register.php
 2. Preencher formulário OU
 3. Cadastrar com Google/Apple
 ```
@@ -294,7 +294,7 @@ CREATE TABLE orders (
 **3. Acompanhar Pedidos**
 ```
 1. Estar logado
-2. Ir para https://dev.shopvivaliz.com.br/meus-pedidos
+2. Ir para https://shopvivaliz.com.br/meus-pedidos
 3. Ver status, rastreamento e entrega estimada
 ```
 
@@ -302,7 +302,7 @@ CREATE TABLE orders (
 
 **1. Configurar Webhook**
 ```
-Endpoint: https://dev.shopvivaliz.com.br/api/webhooks/order-status-update.php
+Endpoint: https://shopvivaliz.com.br/api/webhooks/order-status-update.php
 Authorization Header: Bearer <OLIST_WEBHOOK_TOKEN>
 Events: order_status_updated
 ```
@@ -310,7 +310,7 @@ Events: order_status_updated
 **2. Enviar Atualizações**
 ```
 Quando status muda no ERP:
-POST https://dev.shopvivaliz.com.br/api/webhooks/order-status-update.php
+POST https://shopvivaliz.com.br/api/webhooks/order-status-update.php
 Authorization: Bearer seu-token-aqui
 Content-Type: application/json
 

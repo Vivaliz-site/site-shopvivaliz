@@ -11,7 +11,7 @@ Acesse uma destas URLs para sincronizar os 198 produtos ao banco de dados:
 
 ### Opção 1: Via Endpoint (recomendado quando deploy completar)
 ```
-https://dev.shopvivaliz.com.br/olist/sync-database-from-catalog.php
+https://shopvivaliz.com.br/olist/sync-database-from-catalog.php
 ```
 
 **Resposta esperada:**

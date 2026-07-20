@@ -4,7 +4,7 @@ $legalName = $company['legal_name'] ?? 'SHOPVIVALIZ LTDA';
 $fantasyName = $company['fantasy_name'] ?? 'Shopvivaliz';
 $email = $company['email'] ?? 'atendimento@shopvivaliz.com.br';
 $phone = $company['phone'] ?? '(37) 99937-4112';
-$website = $company['website'] ?? 'www.shopvivaliz.com.br';
+$website = $company['website'] ?? 'shopvivaliz.com.br';
 $cnpj = $company['cnpj'] ?? '49.903.300/0001-70';
 $address = ($company['address'] ?? 'RUA CAMPINA VERDE') . ', ' . ($company['number'] ?? '841');
 $neighborhood = $company['neighborhood'] ?? 'SAO JOSE';
@@ -29,16 +29,16 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
 
             <div>
                 <strong>Termos e Condicoes</strong>
-                <a href="/termos.php">Termos e Condicoes</a>
-                <a href="/politica-privacidade.php">Politica de Privacidade</a>
-                <a href="/politica-devolucoes.php">Politica de Trocas e Devolucoes</a>
-                <a href="/politica-entrega.php">Politica de Frete</a>
+                <a href="/termos">Termos e Condicoes</a>
+                <a href="/politica-privacidade/">Politica de Privacidade</a>
+                <a href="/politica-devolucoes">Politica de Trocas e Devolucoes</a>
+                <a href="/politica-entrega">Politica de Frete</a>
             </div>
 
             <div>
                 <strong>Institucional</strong>
                 <a href="/sobre">Quem somos</a>
-                <a href="/catalogo">Catalogo</a>
+                <a href="/catalogo">Produtos</a>
                 <a href="/gamificacao.php">Gamificacao</a>
             </div>
 
@@ -96,6 +96,7 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
                         <div><?= htmlspecialchars($address) ?></div>
                         <div><?= htmlspecialchars($neighborhood) ?> - <?= htmlspecialchars($city) ?>, <?= htmlspecialchars($state) ?></div>
                         <div>CEP: <?= htmlspecialchars($zipcode) ?></div>
+                        <div style="margin-top: 6px;"><a href="https://maps.app.goo.gl/pziyvVNHGD2i7KQS6" target="_blank" rel="noopener" style="color: #157347; text-decoration: none; font-weight: 700;">Ver no mapa</a></div>
                     </div>
                 </div>
 
@@ -123,7 +124,7 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
 <nav class="sv-mobile-nav">
   <a href="/" class="sv-mobile-nav-item <?= empty($svNavCurrent) || $svNavCurrent === "home" ? "active" : "" ?>">
     <svg class="sv-mobile-nav-icon" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-    Início
+    InÃ­cio
   </a>
   <a href="/catalogo" class="sv-mobile-nav-item <?= $svNavCurrent === "catalogo" ? "active" : "" ?>">
     <svg class="sv-mobile-nav-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
@@ -134,4 +135,5 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
     Carrinho
   </a>
 </nav>
+
 

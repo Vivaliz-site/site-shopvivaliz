@@ -27,7 +27,7 @@ ls -la admin/monitor/index.html
 
 ### 2️⃣ TESTAR NO NAVEGADOR
 
-**URL:** https://dev.shopvivaliz.com.br/admin/monitor/
+**URL:** https://shopvivaliz.com.br/admin/monitor/
 
 **Verificar:**
 - [ ] Dashboard carrega sem erros

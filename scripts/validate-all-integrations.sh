@@ -90,7 +90,7 @@ fi
 echo ""
 echo "5. SITE EM PRODUÇÃO"
 echo "==================="
-home_status=$(curl -s -o /dev/null -w "%{http_code}" https://dev.shopvivaliz.com.br/ 2>/dev/null || echo "000")
+home_status=$(curl -s -o /dev/null -w "%{http_code}" https://shopvivaliz.com.br/ 2>/dev/null || echo "000")
 if [ "$home_status" = "200" ]; then
   echo -e "${GREEN}✅ Home Page respondendo (HTTP $home_status)${NC}"
   ((passed++))
@@ -99,7 +99,7 @@ else
   ((failed++))
 fi
 
-checkout_status=$(curl -s -o /dev/null -w "%{http_code}" https://dev.shopvivaliz.com.br/checkout 2>/dev/null || echo "000")
+checkout_status=$(curl -s -o /dev/null -w "%{http_code}" https://shopvivaliz.com.br/checkout 2>/dev/null || echo "000")
 if [ "$checkout_status" = "200" ]; then
   echo -e "${GREEN}✅ Checkout respondendo (HTTP $checkout_status)${NC}"
   ((passed++))
@@ -108,7 +108,7 @@ else
   ((failed++))
 fi
 
-webhook_status=$(curl -s -X POST https://dev.shopvivaliz.com.br/api/webhook-mercadopago.php \
+webhook_status=$(curl -s -X POST https://shopvivaliz.com.br/api/webhook-mercadopago.php \
   -H "Content-Type: application/json" \
   -o /dev/null -w "%{http_code}" 2>/dev/null || echo "000")
 if [ "$webhook_status" = "401" ]; then

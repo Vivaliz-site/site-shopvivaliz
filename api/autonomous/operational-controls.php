@@ -318,7 +318,8 @@ class AutomaticSafeRollback
             'commit_base' => exec('git rev-parse HEAD'),
             'files_affected' => $task['reserved_files'] ?? [],
             'timestamp' => date('c'),
-            'rollback_command' => "git reset --hard " . exec('git rev-parse HEAD')
+            'rollback_command' => null,
+            'rollback_note' => 'Automatic destructive rollback disabled; inspect safepoint and apply an intentional targeted fix.'
         ];
     }
 
@@ -327,13 +328,9 @@ class AutomaticSafeRollback
      */
     public static function rollbackTask(array $savepoint): bool
     {
-        // Revert only files affected by THIS task
-        $files = $savepoint['files_affected'];
-        foreach ($files as $file) {
-            exec('git checkout HEAD -- ' . escapeshellarg($file));
-        }
-
-        return true;
+        // Destructive automatic rollback can erase runtime or user changes.
+        // Keep the safepoint metadata, but require an operator to apply a targeted fix.
+        return false;
     }
 }
 

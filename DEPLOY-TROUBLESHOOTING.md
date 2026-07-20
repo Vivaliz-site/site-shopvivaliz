@@ -151,7 +151,7 @@ Value: (seu token)
 
 3. Teste o acesso:
    ```
-   https://dev.shopvivaliz.com.br/
+   https://shopvivaliz.com.br/
    ```
 
 ---

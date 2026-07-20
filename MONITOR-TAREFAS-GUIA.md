@@ -62,7 +62,7 @@ Sistema completo para visualizar todas as tarefas e seu status no monitor:
 
 ### 1️⃣ ACESSAR ABA DE TAREFAS
 
-**URL:** https://dev.shopvivaliz.com.br/admin/monitor/
+**URL:** https://shopvivaliz.com.br/admin/monitor/
 
 ```
 1. Acesse o monitor

@@ -28,7 +28,7 @@
 ┌─────────────────────────────────────────────────────────────┐
 │ 3. MERCADO PAGO ENVIA WEBHOOK                               │
 ├─────────────────────────────────────────────────────────────┤
-│ POST https://dev.shopvivaliz.com.br/api/webhook-mp.php      │
+│ POST https://shopvivaliz.com.br/api/webhook-mp.php      │
 │                                                              │
 │ Headers:                                                     │
 │ - X-Signature: [HMAC-SHA256 assinado]                       │
@@ -195,7 +195,7 @@ PRÓXIMOS PASSOS
 3. ⏳ Você receberá rastreamento
 4. ⏳ Acompanhe seu pedido
 
-Link: https://dev.shopvivaliz.com.br/meu-pedido?order=ORD...
+Link: https://shopvivaliz.com.br/meu-pedido?order=ORD...
 
 ═══════════════════════════════════════════════════════
 ```

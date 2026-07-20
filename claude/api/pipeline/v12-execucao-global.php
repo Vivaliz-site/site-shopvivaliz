@@ -68,7 +68,7 @@ try {
 
         // Gerar descrição
         $descricao = "Produto de alta qualidade categoria {$cat}. " .
-                    "Ideal para clientes que buscam {$this->getAtributo($cat)}. " .
+                    "Ideal para clientes que buscam " . getAtributo($cat) . ". " .
                     "Envio rápido e garantia de satisfação.";
 
         // Calcular preço
@@ -80,8 +80,10 @@ try {
         };
         $preco = $preco_base * $margem;
 
-        // Gerar imagem (simulado)
-        $imagem = $prod['imagem_url'] ?? "https://via.placeholder.com/400x400?text={$prod['id']}";
+        // Usa a imagem real do CSV importado; sem imagem real, deixa vazio
+        // em vez de apontar pra um placeholder externo (via.placeholder.com)
+        // que nunca corresponderia ao produto de verdade.
+        $imagem = $prod['imagem_url'] ?? '';
 
         $produtos_otimizados[] = [
             'id' => $prod['id'],
@@ -91,6 +93,7 @@ try {
             'preco' => round($preco, 2),
             'imagem' => $imagem,
             'categoria' => $cat,
+            'margem_aplicada' => $margem,
             'status' => 'otimizado'
         ];
 
@@ -140,9 +143,12 @@ try {
     // ========== ETAPA 5: RESUMO ==========
     $resultado['etapas']['resumo'] = 'gerando';
 
+    $margens = array_column($produtos_otimizados, 'margem_aplicada');
+    $margem_media_pct = $margens ? round((array_sum($margens) / count($margens) - 1) * 100, 1) : 0.0;
+
     $resultado['resumo'] = [
         'total_processado' => count($produtos_otimizados),
-        'margem_media' => 'Alta',
+        'margem_media_pct' => $margem_media_pct,
         'precos_ajustados' => count($produtos_otimizados),
         'imagens_geradas' => count($produtos_otimizados),
         'titulos_otimizados' => count($produtos_otimizados),

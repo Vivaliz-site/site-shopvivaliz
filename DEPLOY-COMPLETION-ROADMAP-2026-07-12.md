@@ -203,9 +203,9 @@ gh run view <run-number>
 
 **Testar endpoints após deploy:**
 ```bash
-curl -v https://dev.shopvivaliz.com.br/api/catalog/stock-alert.php
-curl -v https://dev.shopvivaliz.com.br/api/catalog/category-images.php
-curl -v https://dev.shopvivaliz.com.br/
+curl -v https://shopvivaliz.com.br/api/catalog/stock-alert.php
+curl -v https://shopvivaliz.com.br/api/catalog/category-images.php
+curl -v https://shopvivaliz.com.br/
 ```
 
 **SSH para VM Oracle (pós-deploy):**

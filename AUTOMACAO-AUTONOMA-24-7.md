@@ -150,7 +150,7 @@ Conteúdo:
 
 ### Etapa 4: Dashboard Live Atualizado
 ```
-https://dev.shopvivaliz.com.br/admin/automation-dashboard.html
+https://shopvivaliz.com.br/admin/automation-dashboard.html
 
 Mostra em tempo real:
 - Status: Ativo/Inativo
@@ -198,7 +198,7 @@ Ver cada execução, logs, duração.
 
 ### Dashboard Live
 ```
-https://dev.shopvivaliz.com.br/admin/automation-dashboard.html
+https://shopvivaliz.com.br/admin/automation-dashboard.html
 ```
 
 Ver estatísticas em tempo real.
