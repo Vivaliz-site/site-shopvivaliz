@@ -347,9 +347,9 @@ Produtos relacionados:
 | SKU | Produto | Preco | Estoque | Motivo |
 |---|---|---:|---:|---|
 | `Parafuso5x16` | Parafuso 5x16 | R$ 0,01 | 499776 | imagem ausente |
-| `(sem SKU)` | FLOREIRA ANTIQUE 55 MACCHIATO | R$ 450,18 | 6 | id/sku ausente; imagem ausente |
-| `(sem SKU)` | FLOREIRA ANTIQUE 55 ACO CORTEN | R$ 450,18 | 2 | id/sku ausente; imagem ausente |
-| `(sem SKU)` | FLOREIRA ANTIQUE 55 CIMENTO QUEIMADO | R$ 450,16 | 4 | id/sku ausente; imagem ausente |
+| `(sem SKU)` | FLOREIRA ANTIQUE 55 MACCHIATO | R$ 300,18 | 6 | id/sku ausente; imagem ausente |
+| `(sem SKU)` | FLOREIRA ANTIQUE 55 ACO CORTEN | R$ 300,18 | 2 | id/sku ausente; imagem ausente |
+| `(sem SKU)` | FLOREIRA ANTIQUE 55 CIMENTO QUEIMADO | R$ 300,16 | 4 | id/sku ausente; imagem ausente |
 
 Conclusao:
 
@@ -469,7 +469,7 @@ Evidencias:
 - Readiness local:
   - `READY_FOR_REAL_GOOGLE_ADS_CREATE_PAUSED`
   - Campanha: `Ferramentas-Vasos-ROI10-ABC-2026-07`
-  - Orcamento diario: R$ 15,00.
+  - Orcamento diario: R$ 10,00.
   - CPC maximo: R$ 1,20.
   - Keywords: 8.
   - Headlines: 15.
