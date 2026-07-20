@@ -156,7 +156,7 @@ def check_alerts(day, data):
     if metrics["roas"] >= 10.0:
         alerts.append({
             "level": "SUCCESS",
-            "message": f"EXCELENTE! ROI 10x+ atingido: {metrics['roas']:.2f}x"
+            "message": f"EXCELENTE! ROI > 10x atingido: {metrics['roas']:.2f}x"
         })
 
     return alerts

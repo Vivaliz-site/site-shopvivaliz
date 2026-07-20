@@ -209,7 +209,7 @@ def generate_report(all_data):
     # Anlise
     log(f"\n ANLISE:")
     if roi_final >= 10:
-        log(f" EXCELENTE! ROI 10x+ atingido!")
+        log(f" EXCELENTE! ROI > 10x atingido!")
         log(f"   Prximo passo: Escalar +100% budget")
     elif roi_final >= 5:
         log(f" BOM! ROI 5x+ atingido!")
@@ -250,7 +250,7 @@ def main():
     """ORQUESTRADOR PRINCIPAL"""
     print("\n" + "="*70)
     print("[GOOGLE ADS 30-DAY ORCHESTRATOR]")
-    print("   Campaign ROI 10x+ Automatic")
+    print("   Campaign ROI > 10x Automatic")
     print("="*70 + "\n")
 
     # FASE 1: Criar

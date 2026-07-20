@@ -68,7 +68,7 @@ def calculate_daily_metrics(ga4_data):
         "clicks": ga4_data.get("clicks", 0),
         "conversions": ga4_data.get("conversions", 0),
         "revenue": ga4_data.get("revenue", 0),
-        "spend": 15.00,  # Budget diario fixo
+        "spend": BUDGET_DAILY,  # Budget diario fixo
     }
 
     # Calculos
@@ -105,7 +105,7 @@ def check_performance_alerts(day, metrics):
     if metrics["roas"] >= 10.0:
         alerts.append({
             "level": "SUCCESS",
-            "message": f"ROI 10x+ atingido! {metrics['roas']:.2f}x - ESCALAR BUDGET"
+            "message": f"ROI > 10x atingido! {metrics['roas']:.2f}x - ESCALAR BUDGET"
         })
 
     for alert in alerts:
@@ -156,8 +156,8 @@ def monitor_campaign_real_time(days=30):
     """MONITOR PRINCIPAL - Roda por 30 dias REAL"""
     log_event("START", f"Iniciando monitoramento REAL de {days} dias")
     log_event("INFO", "Campanha: Rodizios-Search-AGRESSIVO-10xROI-2026-07")
-    log_event("INFO", "Budget: R$ 15.00/dia")
-    log_event("INFO", "Objetivo: ROI 10x+")
+    log_event("INFO", "Budget: R$ 10.00/dia")
+    log_event("INFO", "Objetivo: ROI > 10x")
 
     all_metrics = []
     start_date = date.today()

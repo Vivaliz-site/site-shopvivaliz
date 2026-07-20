@@ -1,0 +1,11 @@
+ATIVAR_CAMPANHA_10X_AGORA.md
+reports/auditoria-google-tools-2026-07-19.md
+scripts/autonomous_campaign_system.py
+scripts/campaign_30day_real_executor.py
+scripts/google_ads_30day_orchestrator.py
+scripts/google_ads_30day_real_monitor.py
+scripts/google_ads_campaign_10x_roi.json
+scripts/google_ads_campaign_automation.py
+scripts/google_ads_campaign_live_ready.json
+scripts/launch_google_ads.py
+scripts/production_campaign_activate.py

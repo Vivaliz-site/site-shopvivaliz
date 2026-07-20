@@ -185,7 +185,7 @@ def main():
     print(f"- Status: {status['status']}")
     print(f"- Ativada: {status['activated_at']}")
     print(f"- Duracao: {status['duration_days']} dias")
-    print(f"- ROI Esperado: 10x+ (meta)")
+    print(f"- ROI Esperado: >10x (meta)")
 
 if __name__ == "__main__":
     main()

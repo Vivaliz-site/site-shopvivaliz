@@ -127,7 +127,7 @@ class AutonomousCampaignSystem:
         if metrics["roas"] >= 10:
             alerts.append({
                 "level": "SUCCESS",
-                "message": f"EXCELENTE! ROI 10x+ atingido: {metrics['roas']:.2f}x",
+                "message": f"EXCELENTE! ROI > 10x atingido: {metrics['roas']:.2f}x",
                 "action": "Aumentar budget 50%"
             })
 

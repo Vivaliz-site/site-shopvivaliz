@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 CAMPAIGN_CONFIG = {
     "customer_id": "5104079137",  # Google Ads Account ID
     "campaign_name": "Rodizios-Search-ShopVivaliz-2026-07",
-    "budget_daily": 10.00,  # R$ 15/dia
+    "budget_daily": 10.00,  # R$ 10/dia
     "currency": "BRL",
     "language": "pt",
     "location_targets": [2076, 2032, 2033],  # São Paulo, Minas Gerais, Paraná (maior conversão)
