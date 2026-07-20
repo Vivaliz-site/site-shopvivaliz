@@ -3,7 +3,7 @@
 """
 LANCADOR DE CAMPANHA GOOGLE ADS - ShopVivaliz
 Produto Campeao: Rodizios 35mm Gel
-Orcamento: R$ 15.00/dia
+Orcamento: R$ 10.00/dia
 """
 
 import json
@@ -12,14 +12,14 @@ from datetime import datetime
 # ===== CONFIG =====
 CAMPAIGN = {
     "name": "Rodizios-Search-ShopVivaliz-2026-07",
-    "budget_daily": 15.00,
+    "budget_daily": 10.00,
     "status": "PAUSED",  # Iniciar pausada para review
     "keywords": 8,
     "headlines": 12,
     "descriptions": 6,
     "negative_keywords": 8,
     "locations": ["SP", "MG", "PR"],
-    "cpc_target": "R$ 1.50-2.50"
+    "cpc_target": "R$ 0.75-0.95"
 }
 
 print("\n" + "="*70)
@@ -68,7 +68,7 @@ print("\n5. CRIAR ANUNCIOS (RSA - Responsive Search Ads):")
 print("   Usar os 12 headlines e 6 descriptions do arquivo")
 print("   scripts/google_ads_campaign_config.json")
 print("\n6. REVISAR E ATIVAR:")
-print("   - CPC recomendado: R$ 1.50-2.50 por keyword")
+print("   - CPC recomendado: R$ 0.75-0.95 por keyword")
 print("   - Ativar quando pronto")
 print("\n" + "="*70)
 print("ARQUIVO REFERENCIA: " + config_file + "\n")

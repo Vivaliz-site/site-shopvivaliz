@@ -24,23 +24,23 @@ import subprocess
 DAYS = 30
 START_DATE = datetime.now()
 END_DATE = START_DATE + timedelta(days=DAYS)
-BUDGET_DAILY = 15.00
+BUDGET_DAILY = 10.00
 CAMPAIGN_NAME = "Rodizios-Search-AGRESSIVO-10xROI-2026-07"
 
 # Dados da campanha
 CAMPAIGN_CONFIG = {
     "name": CAMPAIGN_NAME,
     "budget_daily": BUDGET_DAILY,
-    "status": "ENABLED",
+    "status": "PAUSED",
     "type": "SEARCH",
     "objective": "SALES",
     "keywords": [
-        {"text": "kit 12 rodizios soprano 35mm com freio", "match": "PHRASE", "cpc": 3.50},
-        {"text": "20 rodizios gel silicone 35mm com freio", "match": "PHRASE", "cpc": 3.30},
-        {"text": "rodizios soprano 35mm comprar online", "match": "PHRASE", "cpc": 2.80},
-        {"text": "kit rodizios gel 35mm com freio soprano", "match": "PHRASE", "cpc": 2.90},
-        {"text": "comprar rodizios giratrio gel 35mm", "match": "PHRASE", "cpc": 2.50},
-        {"text": "rodizios de qualidade para mvel soprano", "match": "PHRASE", "cpc": 2.40},
+        {"text": "kit 12 rodizios soprano 35mm com freio", "match": "PHRASE", "cpc": 0.95},
+        {"text": "20 rodizios gel silicone 35mm com freio", "match": "PHRASE", "cpc": 0.95},
+        {"text": "rodizios soprano 35mm comprar online", "match": "PHRASE", "cpc": 0.90},
+        {"text": "kit rodizios gel 35mm com freio soprano", "match": "PHRASE", "cpc": 0.90},
+        {"text": "comprar rodizios giratrio gel 35mm", "match": "PHRASE", "cpc": 0.85},
+        {"text": "rodizios de qualidade para mvel soprano", "match": "PHRASE", "cpc": 0.85},
     ],
     "negatives": [
         "rodizio barato", "rodizio gratis", "rodizio free", "rodizio download",

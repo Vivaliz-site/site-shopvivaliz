@@ -23,8 +23,8 @@ def activate_campaign_production():
         "status": "PRODUCTION_ACTIVE",
         "activated_at": datetime.now().isoformat(),
         "duration_days": 30,
-        "budget_daily": 15.00,
-        "total_budget": 450.00,
+        "budget_daily": 10.00,
+        "total_budget": 300.00,
         "keywords": 6,
         "negatives": 15,
         "headlines": 10,
@@ -75,45 +75,45 @@ def create_campaign_json_export():
             "name": "Rodizios-Search-AGRESSIVO-10xROI-2026-07",
             "type": "SEARCH",
             "objective": "SALES",
-            "status": "ENABLED",
-            "budget_daily": 15.00,
+            "status": "PAUSED",
+            "budget_daily": 10.00,
         },
         "keywords": [
             {
                 "text": "kit 12 rodizios soprano 35mm com freio",
                 "match_type": "PHRASE",
-                "cpc_bid": 3.50,
-                "status": "ACTIVE"
+                "cpc_bid": 0.95,
+                "status": "PAUSED"
             },
             {
                 "text": "20 rodizios gel silicone 35mm com freio",
                 "match_type": "PHRASE",
-                "cpc_bid": 3.30,
-                "status": "ACTIVE"
+                "cpc_bid": 0.95,
+                "status": "PAUSED"
             },
             {
                 "text": "rodizios soprano 35mm comprar online",
                 "match_type": "PHRASE",
-                "cpc_bid": 2.80,
-                "status": "ACTIVE"
+                "cpc_bid": 0.90,
+                "status": "PAUSED"
             },
             {
                 "text": "kit rodizios gel 35mm com freio soprano",
                 "match_type": "PHRASE",
-                "cpc_bid": 2.90,
-                "status": "ACTIVE"
+                "cpc_bid": 0.90,
+                "status": "PAUSED"
             },
             {
                 "text": "comprar rodizios giratório gel 35mm",
                 "match_type": "PHRASE",
-                "cpc_bid": 2.50,
-                "status": "ACTIVE"
+                "cpc_bid": 0.85,
+                "status": "PAUSED"
             },
             {
                 "text": "rodizios de qualidade para móvel soprano",
                 "match_type": "PHRASE",
-                "cpc_bid": 2.40,
-                "status": "ACTIVE"
+                "cpc_bid": 0.85,
+                "status": "PAUSED"
             }
         ],
         "negative_keywords": [

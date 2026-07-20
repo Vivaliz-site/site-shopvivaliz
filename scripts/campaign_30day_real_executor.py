@@ -38,7 +38,7 @@ def create_campaign_active_marker():
         "active": True,
         "started_at": datetime.now().isoformat(),
         "duration_days": 30,
-        "budget_daily": 15.00,
+        "budget_daily": 10.00,
     }
 
     with open(status_file, "w", encoding="utf-8") as f:
@@ -73,7 +73,7 @@ def generate_realistic_daily_data(day):
     revenue_per_conversion = 150 + (day / 30) * 100  # R$ 150 a R$ 250
     revenue = conversions * revenue_per_conversion
 
-    spend = 15.00  # Budget diario fixo
+    spend = BUDGET_DAILY  # Budget diario fixo
 
     # Calculos de metricas
     ctr = (clicks / impressions * 100) if impressions > 0 else 0
