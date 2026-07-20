@@ -1,0 +1,16 @@
+{
+    "agent": "shopee_listings_extractor",
+    "version": "9.2.85",
+    "generated_at": "2026-07-20T09:15:59+00:00",
+    "secrets_check": {
+        "token_source": "TINY_ACCESS_TOKEN",
+        "token_available": true
+    },
+    "status": "partial",
+    "total_products": 0,
+    "products": [],
+    "errors": [
+        "Falha ao renovar token: Token is not active",
+        "Autenticação falhou (401). Token inválido ou expirado."
+    ]
+}
