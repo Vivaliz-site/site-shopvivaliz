@@ -20,6 +20,11 @@ final class ShopeeListingsOptimizationAgent
     private const AI_DELAY_US = 500_000; // 500ms entre chamadas IA
     private const API_DELAY_US = 300_000; // 300ms entre chamadas Tiny
 
+    // Motivo da última falha de IA (título/descrição/atributos + JSON estruturado
+    // facilmente passa de 1024 tokens em PT-BR; guardado aqui pra aparecer no
+    // relatório em vez de "Otimização não gerou alterações" genérico.
+    private ?string $lastAiFailureReason = null;
+
     // Anthropic Messages API
     private const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
     private const ANTHROPIC_MODEL   = 'claude-haiku-4-5-20251001'; // rápido e barato para otimização em massa
@@ -233,7 +238,10 @@ final class ShopeeListingsOptimizationAgent
             : $this->optimizeRuleBased($product);
 
         if (!$optimized) {
-            $entry['motivo'] = 'Otimização não gerou alterações';
+            $entry['motivo'] = $aiProvider !== 'rule_based' && $this->lastAiFailureReason
+                ? $this->lastAiFailureReason
+                : 'Otimização não gerou alterações';
+            $this->lastAiFailureReason = null;
             return $entry;
         }
 
@@ -271,6 +279,7 @@ final class ShopeeListingsOptimizationAgent
 
     private function optimizeWithAI(array $product, string $provider, string $aiToken): ?array
     {
+        $this->lastAiFailureReason = null; // evita vazar motivo de um produto anterior
         $prompt = $this->buildOptimizationPrompt($product);
 
         $raw = match ($provider) {
@@ -279,13 +288,25 @@ final class ShopeeListingsOptimizationAgent
             default     => null,
         };
 
-        if (!$raw) return null;
+        if (!$raw) {
+            // lastAiFailureReason já setado por callAnthropic()/callOpenAI() se aplicável
+            if (!$this->lastAiFailureReason) {
+                $this->lastAiFailureReason = 'IA: resposta vazia';
+            }
+            return null;
+        }
 
         // Extrai JSON da resposta
         if (preg_match('/\{[\s\S]*\}/u', $raw, $m)) {
             $decoded = json_decode($m[0], true);
             if (is_array($decoded)) return $decoded;
+            $this->lastAiFailureReason = 'IA: JSON inválido na resposta (' . json_last_error_msg()
+                . ', possível truncamento) — fim da resposta: ...' . substr($raw, -150);
+            return null;
         }
+
+        $this->lastAiFailureReason = 'IA: resposta sem bloco JSON — início da resposta: '
+            . substr($raw, 0, 150);
         return null;
     }
 
@@ -333,7 +354,10 @@ PROMPT;
     {
         $body = json_encode([
             'model'      => self::ANTHROPIC_MODEL,
-            'max_tokens' => 1024,
+            // Título + descrição estruturada (min. 300 chars) + atributos + palavras-chave
+            // em JSON facilmente passa de 1024 tokens em PT-BR e truncava a resposta
+            // antes do "}" final, fazendo json_decode falhar silenciosamente pra todo produto.
+            'max_tokens' => 4096,
             'messages'   => [['role' => 'user', 'content' => $prompt]],
         ]);
 
@@ -350,11 +374,33 @@ PROMPT;
             CURLOPT_TIMEOUT        => 60,
             CURLOPT_SSL_VERIFYPEER => true,
         ]);
-        $resp = curl_exec($ch);
+        $resp     = curl_exec($ch);
+        $curlErr  = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        $data = json_decode($resp ?: '', true);
-        return $data['content'][0]['text'] ?? null;
+        if ($resp === false) {
+            $this->lastAiFailureReason = "IA (Anthropic): erro curl: $curlErr";
+            return null;
+        }
+
+        $data = json_decode($resp, true);
+        if ($httpCode !== 200) {
+            $msg = $data['error']['message'] ?? substr($resp, 0, 200);
+            $this->lastAiFailureReason = "IA (Anthropic): HTTP $httpCode: $msg";
+            return null;
+        }
+
+        $stopReason = $data['stop_reason'] ?? null;
+        $text       = $data['content'][0]['text'] ?? null;
+        if ($text === null) {
+            $this->lastAiFailureReason = 'IA (Anthropic): resposta sem content[0].text: ' . substr($resp, 0, 200);
+            return null;
+        }
+        if ($stopReason === 'max_tokens') {
+            $this->lastAiFailureReason = 'IA (Anthropic): resposta truncada por max_tokens';
+        }
+        return $text;
     }
 
     private function callOpenAI(string $prompt, string $apiKey): ?string
@@ -376,11 +422,28 @@ PROMPT;
             CURLOPT_TIMEOUT        => 60,
             CURLOPT_SSL_VERIFYPEER => true,
         ]);
-        $resp = curl_exec($ch);
+        $resp     = curl_exec($ch);
+        $curlErr  = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        $data = json_decode($resp ?: '', true);
-        return $data['choices'][0]['message']['content'] ?? null;
+        if ($resp === false) {
+            $this->lastAiFailureReason = "IA (OpenAI): erro curl: $curlErr";
+            return null;
+        }
+
+        $data = json_decode($resp, true);
+        if ($httpCode !== 200) {
+            $msg = $data['error']['message'] ?? substr($resp, 0, 200);
+            $this->lastAiFailureReason = "IA (OpenAI): HTTP $httpCode: $msg";
+            return null;
+        }
+
+        $text = $data['choices'][0]['message']['content'] ?? null;
+        if ($text === null) {
+            $this->lastAiFailureReason = 'IA (OpenAI): resposta sem choices[0].message.content: ' . substr($resp, 0, 200);
+        }
+        return $text;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
