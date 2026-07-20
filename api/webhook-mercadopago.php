@@ -9,12 +9,59 @@ header('X-Content-Type-Options: nosniff');
 
 require_once dirname(__DIR__) . '/includes/mercadopago-gateway.php';
 require_once dirname(__DIR__) . '/includes/tiny-order-push.php';
+require_once dirname(__DIR__) . '/api/emails/send-order-notification.php';
 
 function svmp_webhook_response(int $status, string $result): never
 {
     http_response_code($status);
     echo json_encode(['ok' => $status >= 200 && $status < 300, 'result' => $result]);
     exit;
+}
+
+function svmp_webhook_extract_boleto(array $payment, array $paymentDetail = []): array
+{
+    $details = is_array($payment['transaction_details'] ?? null) ? $payment['transaction_details'] : [];
+    $detailDetails = is_array($paymentDetail['transaction_details'] ?? null) ? $paymentDetail['transaction_details'] : [];
+    $merged = array_replace($details, $detailDetails);
+
+    $ticketUrl = trim((string)(
+        $merged['external_resource_url']
+        ?? $merged['ticket_url']
+        ?? $payment['external_resource_url']
+        ?? $paymentDetail['external_resource_url']
+        ?? ''
+    ));
+    $digitableLine = trim((string)(
+        $merged['digitable_line']
+        ?? $merged['line']
+        ?? $merged['payment_method_reference_id']
+        ?? $payment['barcode']['content']
+        ?? $paymentDetail['barcode']['content']
+        ?? ''
+    ));
+    $barcodeContent = trim((string)(
+        $merged['barcode_content']
+        ?? $merged['barcode']
+        ?? $payment['barcode']['content']
+        ?? $paymentDetail['barcode']['content']
+        ?? ''
+    ));
+
+    return [
+        'ticket_url' => $ticketUrl,
+        'digitable_line' => $digitableLine,
+        'barcode_content' => $barcodeContent,
+    ];
+}
+
+function svmp_webhook_send_boleto_email(array $order): bool
+{
+    try {
+        return svem_send_order_email($order, 'boleto_generated');
+    } catch (Throwable $e) {
+        error_log('[MercadoPago] boleto webhook email failure: order=' . ($order['order_number'] ?? 'N/A') . ' ' . $e->getMessage());
+        return false;
+    }
 }
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     svmp_webhook_response(405, 'method_not_allowed');
@@ -129,6 +176,34 @@ try {
         $order['mercadopago']['transaction_amount'] = round((float)($payment['transaction_amount'] ?? $order['total'] ?? 0), 2);
         $order['mercadopago']['last_webhook_at'] = date(DATE_ATOM);
         $order['mercadopago']['last_webhook_topic'] = $isOrder ? 'order' : 'payment';
+
+        $paymentMethodId = strtolower((string)$order['mercadopago']['payment_method_id']);
+        $paymentTypeId = strtolower((string)$order['mercadopago']['payment_type_id']);
+        if ($localStatus !== 'payment_approved' && $paymentTypeId === 'ticket' && empty($order['mercadopago']['boleto']['email_sent'])) {
+            try {
+                $paymentDetail = [];
+                if (!$isOrder && !empty($payment['id'])) {
+                    $paymentDetail = svmp_api_request('GET', '/v1/payments/' . rawurlencode((string)$payment['id']), $accessToken);
+                }
+                $boletoData = svmp_webhook_extract_boleto($payment, is_array($paymentDetail) ? $paymentDetail : []);
+                if ($boletoData['ticket_url'] !== '' || $boletoData['digitable_line'] !== '' || $boletoData['barcode_content'] !== '') {
+                    $order['mercadopago']['boleto'] = array_merge(
+                        is_array($order['mercadopago']['boleto'] ?? null) ? $order['mercadopago']['boleto'] : [],
+                        $boletoData,
+                        [
+                            'status' => $providerStatus,
+                            'payment_method_id' => $paymentMethodId,
+                            'source' => 'webhook',
+                        ]
+                    );
+                    $sent = svmp_webhook_send_boleto_email($order);
+                    $order['mercadopago']['boleto']['email_sent'] = $sent;
+                    $order['mercadopago']['boleto']['email_sent_at'] = date(DATE_ATOM);
+                }
+            } catch (Throwable $e) {
+                error_log('[MercadoPago] boleto webhook capture error: order=' . $externalReference . ' ' . $e->getMessage());
+            }
+        }
 
         // O cliente nunca recebia o QR/codigo Pix por email -- so existia
         // envio apos pagamento aprovado. O Pix e criado inteiramente na

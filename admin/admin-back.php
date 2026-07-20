@@ -211,6 +211,7 @@ $totalLegacyItems = array_sum(array_map(static fn(array $group): int => count($g
             .hero h1 { font-size: 28px; }
         }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
     <div class="wrap">

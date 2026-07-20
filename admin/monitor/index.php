@@ -52,6 +52,7 @@ header('Content-Type: text/html; charset=UTF-8');
         @media (max-width: 1080px){.ops-grid,.chat-layout{grid-template-columns:1fr}.ops-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
         @media (max-width: 680px){.ops-shell{padding:16px 12px 40px}.ops-kpis{grid-template-columns:1fr}.ops-head{display:block}}
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
 <nav class="navbar">

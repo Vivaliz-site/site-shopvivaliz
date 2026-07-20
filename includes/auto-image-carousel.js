@@ -12,6 +12,29 @@
   const carousels = new Map(); // Map de <elemento> -> { interval, currentIndex, images }
   const ROTATION_INTERVAL = 3000; // 3 segundos
 
+  function parseImages(rawValue) {
+    if (!rawValue) return [];
+
+    const candidates = [rawValue];
+    try {
+      candidates.push(decodeURIComponent(rawValue));
+    } catch (e) {}
+    candidates.push(rawValue.replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, '&'));
+
+    for (const candidate of candidates) {
+      try {
+        const parsed = JSON.parse(candidate);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .map(value => String(value || '').trim())
+            .filter(Boolean);
+        }
+      } catch (e) {}
+    }
+
+    return [];
+  }
+
   function initProductGallery() {
     const thumbnailButtons = document.querySelectorAll('.product-gallery-thumbnails .thumb-btn');
     if (thumbnailButtons.length > 1) {
@@ -53,31 +76,31 @@
 
   function initProductCardCarousels() {
     let count = 0;
-    document.querySelectorAll('.product-card .product-image').forEach(element => {
+    document.querySelectorAll('.product-image[data-images], .product-card .product-image').forEach(element => {
+      if (carousels.has(element)) return;
+
       const img = element.querySelector('img');
       if (!img) {
-        console.log('[Carousel] Element has no img');
         return;
       }
 
       let imagesJson = element.getAttribute('data-images');
       if (!imagesJson) {
-        const link = element.closest('article').querySelector('a.product-image');
+        const article = element.closest('article');
+        const link = article ? article.querySelector('a.product-image[data-images]') : null;
         if (link) imagesJson = link.getAttribute('data-images');
       }
       if (!imagesJson) {
-        console.log('[Carousel] No data-images attribute');
         return;
       }
 
       try {
-        let unescaped = imagesJson.replace(/&quot;/g, '"');
-        try {
-          unescaped = decodeURIComponent(imagesJson);
-        } catch (e) {}
-        const images = JSON.parse(unescaped);
+        const images = parseImages(imagesJson);
+        const currentSrc = img.getAttribute('src') || '';
+        if (currentSrc && !images.includes(currentSrc)) {
+          images.unshift(currentSrc);
+        }
         if (!Array.isArray(images) || images.length < 2) {
-          console.log('[Carousel] Less than 2 images:', images.length);
           return;
         }
         count++;
@@ -117,6 +140,12 @@
           if (timer) clearInterval(timer);
         });
 
+        img.addEventListener('error', () => {
+          if (images.length < 2) return;
+          currentIndex = (currentIndex + 1) % images.length;
+          img.src = images[currentIndex];
+        });
+
         startRotation();
 
         carousels.set(element, { timer, images });
@@ -124,7 +153,7 @@
         console.error('Erro ao parsear imagens do produto:', e);
       }
     });
-    console.log('[Carousel] Initialized', count, 'product carousels');
+    if (count > 0) console.log('[Carousel] Initialized', count, 'product carousels');
   }
 
   function initAll() {

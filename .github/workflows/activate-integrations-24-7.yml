@@ -34,37 +34,44 @@ jobs:
         uses: actions/checkout@v7
 
       - name: 🔑 Validar Credenciais
+        shell: bash
         run: |
+          set -Eeuo pipefail
           echo "✅ Validando credenciais das integrações..."
           [ -n "$SHOPEE_PARTNER_ID" ] && echo "✓ Shopee Partner ID" || echo "✗ Shopee Partner ID"
           [ -n "$SHOPEE_SHOP_ID" ] && echo "✓ Shopee Shop ID" || echo "✗ Shopee Shop ID"
           [ -n "$ML_CLIENT_ID" ] && echo "✓ Mercado Livre Client ID" || echo "✗ Mercado Livre"
-          [ -n "$GOOGLE_ADS_CUSTOMER_ID" ] && echo "✓ Google Ads Customer ID" || echo "✗ Google Ads"
+          [ -n "$GOOGLE_ADS_CUSTOMER_ID" ] && echo "✓ Google Ads Customer ID presente" || echo "✗ Google Ads Customer ID ausente"
+          [ -n "$GOOGLE_ADS_DEVELOPER_TOKEN" ] && echo "✓ Google Ads Developer Token presente" || echo "✗ Google Ads Developer Token ausente"
           echo ""
-          echo "✅ Todas as credenciais validadas!"
+          echo "Credenciais validadas por presenca, sem exibir valores."
 
       - name: 🚀 Ativar Tarefas de Integração
+        shell: bash
         run: |
+          set -Eeuo pipefail
           echo "🔗 Ativando integrações no tasks-queue.json..."
-          
+
           cat > activate-integrations.sh << 'SCRIPT'
           #!/bin/bash
-          
+          set -Eeuo pipefail
+
           echo "[SHOPEE] Iniciando sincronização de catálogo..."
-          echo "  ✓ Partner ID: $SHOPEE_PARTNER_ID"
-          echo "  ✓ Shop ID: $SHOPEE_SHOP_ID"
+          echo "  ✓ Partner ID presente: $([ -n "${SHOPEE_PARTNER_ID:-}" ] && echo sim || echo nao)"
+          echo "  ✓ Shop ID presente: $([ -n "${SHOPEE_SHOP_ID:-}" ] && echo sim || echo nao)"
           echo "  → Status: ATIVO 24/7"
-          
+
           echo ""
           echo "[MERCADO LIVRE] Iniciando sincronização de catálogo..."
-          echo "  ✓ Client ID: $ML_CLIENT_ID"
-          echo "  ✓ Seller ID: $ML_SELLER_ID"
+          echo "  ✓ Client ID presente: $([ -n "${ML_CLIENT_ID:-}" ] && echo sim || echo nao)"
+          echo "  ✓ Seller ID presente: $([ -n "${ML_SELLER_ID:-}" ] && echo sim || echo nao)"
           echo "  → Status: ATIVO 24/7"
-          
+
           echo ""
           echo "[GOOGLE ADS] Preparando stack..."
-          echo "  ✓ Customer ID: $GOOGLE_ADS_CUSTOMER_ID"
-          echo "  → Status: PRONTO PARA AUTOMAÇÃO"
+          echo "  ✓ Customer ID presente: $([ -n "${GOOGLE_ADS_CUSTOMER_ID:-}" ] && echo sim || echo nao)"
+          echo "  ✓ Developer Token presente: $([ -n "${GOOGLE_ADS_DEVELOPER_TOKEN:-}" ] && echo sim || echo nao)"
+          echo "  → Status: BLOQUEADO se readiness local retornar NOT_READY"
           
           echo ""
           echo "✅ Todas as integrações ativadas!"
@@ -74,7 +81,9 @@ jobs:
           ./activate-integrations.sh
 
       - name: 📋 Atualizar Fila de Tarefas
+        shell: bash
         run: |
+          set -Eeuo pipefail
           git config user.email "agente-autonomo@shopvivaliz.com.br"
           git config user.name "Agente Autonomo ShopVivaliz"
           
@@ -90,14 +99,16 @@ jobs:
           fi
 
       - name: ✅ Status Final
+        shell: bash
         run: |
+          set -Eeuo pipefail
           echo "════════════════════════════════════════"
-          echo "🎉 INTEGRAÇÕES ATIVADAS COM SUCESSO"
+          echo "STATUS DAS INTEGRAÇÕES"
           echo "════════════════════════════════════════"
           echo ""
           echo "✅ Shopee: Operacional 24/7"
           echo "✅ Mercado Livre: Operacional 24/7"
-          echo "✅ Google Ads: Pronto para automação"
+          echo "⚠️ Google Ads: validar readiness antes de campanha real"
           echo "✅ Auditoria: Monitorando continuamente"
           echo ""
           echo "Próxima sincronização: em 6 horas"

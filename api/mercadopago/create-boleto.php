@@ -8,12 +8,34 @@ header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
 require_once dirname(__DIR__, 2) . '/includes/mercadopago-gateway.php';
+require_once dirname(__DIR__) . '/emails/send-order-notification.php';
 
 function svmp_boleto_response(int $status, array $payload): never
 {
     http_response_code($status);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
+}
+
+function svmp_boleto_persist_order($handle, array $order, string $orderNumber): void
+{
+    $encoded = json_encode($order, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    rewind($handle);
+    ftruncate($handle, 0);
+    if (fwrite($handle, $encoded) === false || !fflush($handle)) {
+        error_log('[MercadoPago] boleto order persistence failed: order=' . $orderNumber);
+        svmp_boleto_response(500, ['ok' => false, 'error' => 'boleto_persistence_failed']);
+    }
+}
+
+function svmp_boleto_send_notification(array $order): bool
+{
+    try {
+        return svem_send_order_email($order, 'boleto_generated');
+    } catch (Throwable $e) {
+        error_log('[MercadoPago] boleto email failure: order=' . ($order['order_number'] ?? 'N/A') . ' type=' . get_class($e));
+        return false;
+    }
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
@@ -56,6 +78,13 @@ try {
 
     $existing = is_array($order['mercadopago']['boleto'] ?? null) ? $order['mercadopago']['boleto'] : [];
     if ((string)($existing['ticket_url'] ?? '') !== '') {
+        $emailSent = (bool)($existing['email_sent'] ?? false);
+        if (!$emailSent) {
+            $emailSent = svmp_boleto_send_notification($order);
+            $order['mercadopago']['boleto']['email_sent'] = $emailSent;
+            $order['mercadopago']['boleto']['email_sent_at'] = date(DATE_ATOM);
+            svmp_boleto_persist_order($handle, $order, $orderNumber);
+        }
         svmp_boleto_response(200, [
             'ok' => true,
             'reused' => true,
@@ -63,6 +92,7 @@ try {
             'status' => (string)($existing['status'] ?? 'action_required'),
             'ticket_url' => (string)$existing['ticket_url'],
             'digitable_line' => (string)($existing['digitable_line'] ?? ''),
+            'email_sent' => $emailSent,
         ]);
     }
 
@@ -86,13 +116,12 @@ try {
         'status' => $boleto['status'],
     ];
     $order['mercadopago']['created_at'] = date(DATE_ATOM);
-    $encoded = json_encode($order, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
-    rewind($handle);
-    ftruncate($handle, 0);
-    if (fwrite($handle, $encoded) === false || !fflush($handle)) {
-        error_log('[MercadoPago] boleto created but order persistence failed: order=' . $orderNumber . ' mp_order=' . $boleto['order_id']);
-        svmp_boleto_response(500, ['ok' => false, 'error' => 'boleto_persistence_failed']);
-    }
+    svmp_boleto_persist_order($handle, $order, $orderNumber);
+
+    $emailSent = svmp_boleto_send_notification($order);
+    $order['mercadopago']['boleto']['email_sent'] = $emailSent;
+    $order['mercadopago']['boleto']['email_sent_at'] = date(DATE_ATOM);
+    svmp_boleto_persist_order($handle, $order, $orderNumber);
 
     error_log('[MercadoPago] boleto created: order=' . $orderNumber . ' mp_order=' . $boleto['order_id'] . ' status=' . $boleto['status']);
     svmp_boleto_response(201, [
@@ -102,6 +131,7 @@ try {
         'status' => $boleto['status'],
         'ticket_url' => $boleto['ticket_url'],
         'digitable_line' => $boleto['digitable_line'],
+        'email_sent' => $emailSent,
     ]);
 } catch (SvMercadoPagoApiException $e) {
     error_log('[MercadoPago] boleto API failure: order=' . $orderNumber . ' code=' . $e->publicCode);

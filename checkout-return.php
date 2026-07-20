@@ -65,12 +65,31 @@ if ($orderNumber !== '') {
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
     <?php
     if ($approved && $orderNumber !== '' && getenv('GOOGLE_ADS_ID') && getenv('GOOGLE_ADS_CONVERSION_LABEL')):
+        $customer = is_array($orderData['customer'] ?? null) ? $orderData['customer'] : [];
+        $email = strtolower(trim((string)($customer['email'] ?? '')));
+        $phone = preg_replace('/\D+/', '', (string)($customer['phone'] ?? ''));
+        $name = trim((string)($customer['name'] ?? ''));
+        $parts = explode(' ', $name, 2);
+        $firstName = strtolower(trim($parts[0] ?? ''));
+        $lastName = strtolower(trim($parts[1] ?? ''));
+        $cep = preg_replace('/\D+/', '', (string)($customer['cep'] ?? ''));
     ?>
+    <!-- Google Ads Enhanced Conversions -->
     <script>
       window.addEventListener('load', function() {
         if (typeof gtag === 'function') {
+          gtag('set', 'user_data', {
+            'email': '<?= hash('sha256', $email) ?>',
+            'phone_number': '<?= $phone !== "" ? hash('sha256', "+55" . $phone) : "" ?>',
+            'address': {
+              'first_name': '<?= hash('sha256', $firstName) ?>',
+              'last_name': '<?= hash('sha256', $lastName) ?>',
+              'postal_code': '<?= hash('sha256', $cep) ?>',
+              'country': '<?= hash('sha256', "br") ?>'
+            }
+          });
           gtag('event', 'conversion', {
-            'send_to': '<?= htmlspecialchars(getenv('GOOGLE_ADS_ID')) ?>/<?= htmlspecialchars(getenv('GOOGLE_ADS_CONVERSION_LABEL')) ?>',
+            'send_to': '<?= htmlspecialchars(getenv("GOOGLE_ADS_ID")) ?>/<?= htmlspecialchars(getenv("GOOGLE_ADS_CONVERSION_LABEL")) ?>',
             'value': <?= $orderTotal ?>,
             'currency': 'BRL',
             'transaction_id': '<?= htmlspecialchars($orderNumber) ?>'

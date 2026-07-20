@@ -49,8 +49,8 @@ class AutonomousCampaignSystem:
             "activated_at": datetime.now().isoformat(),
             "activation_mode": "FULL_AUTOMATION",
             "duration_days": 30,
-            "budget_daily": 15.00,
-            "total_budget": 450.00,
+            "budget_daily": 10.00,
+            "total_budget": 300.00,
             "keywords": 6,
             "tracking": "GA4_REALTIME",
             "optimization": "AUTOMATIC",
@@ -80,7 +80,7 @@ class AutonomousCampaignSystem:
         conversions = int(clicks * conv_rate)
 
         revenue = conversions * 180.0  # R$ 180 por conversao (media)
-        spend = 15.00
+        spend = BUDGET_DAILY
 
         return {
             "date": (datetime.now() - timedelta(days=(30 - day))).date().isoformat(),
@@ -127,7 +127,7 @@ class AutonomousCampaignSystem:
         if metrics["roas"] >= 10:
             alerts.append({
                 "level": "SUCCESS",
-                "message": f"EXCELENTE! ROI 10x+ atingido: {metrics['roas']:.2f}x",
+                "message": f"EXCELENTE! ROI > 10x atingido: {metrics['roas']:.2f}x",
                 "action": "Aumentar budget 50%"
             })
 

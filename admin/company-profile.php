@@ -205,6 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('admin-company', $_P
             font-size: 13px;
         }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
     <div class="container">

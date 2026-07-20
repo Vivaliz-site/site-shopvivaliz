@@ -165,6 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('admin-integrations'
         .status.active { background: #d4edda; color: #155724; }
         .status.inactive { background: #f8d7da; color: #721c24; }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
     <div class="container">

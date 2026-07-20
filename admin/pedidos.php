@@ -102,6 +102,7 @@ foreach (array_slice($files, 0, 100) as $file) {
         .count-badge { background: #173B63; color: white; padding: 4px 10px; border-radius: 20px; font-size: 13px; margin-left: 8px; }
         .erp-warn { color: #b91c1c; }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
     <h1>Pedidos <span class="count-badge"><?= count($pedidos) ?></span></h1>

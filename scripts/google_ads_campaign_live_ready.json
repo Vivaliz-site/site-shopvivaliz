@@ -3,29 +3,63 @@
     "name": "Ferramentas-Vasos-ROI10-ABC-2026-07",
     "channel": "SEARCH",
     "status_on_create": "PAUSED",
-    "daily_budget_brl": 15.0,
-    "monthly_budget_brl": 450.0,
+    "daily_budget_brl": 10.0,
+    "monthly_budget_brl": 300.0,
     "landing_page": "https://shopvivaliz.com.br/catalogo/?busca=carrinho%20ferramentas",
     "language": "pt",
-    "locations": ["Brasil"],
+    "locations": [
+      "Brasil"
+    ],
     "bidding": {
       "strategy": "MANUAL_CPC",
-      "max_cpc_brl": 1.2
+      "max_cpc_brl": 0.95
     }
   },
   "ad_group": {
     "name": "ABC Alto Ticket",
-    "default_cpc_brl": 1.2
+    "default_cpc_brl": 0.95
   },
   "keywords": [
-    {"text": "carrinho ferramentas fercar", "match_type": "EXACT", "cpc_brl": 1.2},
-    {"text": "carrinho fechado ferramentas fercar", "match_type": "EXACT", "cpc_brl": 1.2},
-    {"text": "carrinho ferramentas 3 gavetas", "match_type": "PHRASE", "cpc_brl": 1.1},
-    {"text": "carrinho ferramentas 6 gavetas", "match_type": "PHRASE", "cpc_brl": 1.1},
-    {"text": "caixa ferramentas fercar n16", "match_type": "EXACT", "cpc_brl": 1.0},
-    {"text": "caixa ferramentas bau fercar", "match_type": "PHRASE", "cpc_brl": 1.0},
-    {"text": "cachepot floreira japi 77", "match_type": "EXACT", "cpc_brl": 0.9},
-    {"text": "vaso decorativo japi 34", "match_type": "PHRASE", "cpc_brl": 0.9}
+    {
+      "text": "carrinho ferramentas fercar",
+      "match_type": "EXACT",
+      "cpc_brl": 0.95
+    },
+    {
+      "text": "carrinho fechado ferramentas fercar",
+      "match_type": "EXACT",
+      "cpc_brl": 0.95
+    },
+    {
+      "text": "carrinho ferramentas 3 gavetas",
+      "match_type": "PHRASE",
+      "cpc_brl": 0.9
+    },
+    {
+      "text": "carrinho ferramentas 6 gavetas",
+      "match_type": "PHRASE",
+      "cpc_brl": 0.9
+    },
+    {
+      "text": "caixa ferramentas fercar n16",
+      "match_type": "EXACT",
+      "cpc_brl": 0.85
+    },
+    {
+      "text": "caixa ferramentas bau fercar",
+      "match_type": "PHRASE",
+      "cpc_brl": 0.85
+    },
+    {
+      "text": "cachepot floreira japi 77",
+      "match_type": "EXACT",
+      "cpc_brl": 0.75
+    },
+    {
+      "text": "vaso decorativo japi 34",
+      "match_type": "PHRASE",
+      "cpc_brl": 0.75
+    }
   ],
   "negative_keywords": [
     "gratis",
@@ -45,6 +79,7 @@
     "mercado livre usado",
     "barato",
     "preco tabela",
+    "preço tabela",
     "peso capacidade",
     "rodizio de pizza",
     "restaurante",
@@ -60,7 +95,17 @@
     "pdf",
     "manual",
     "assistencia tecnica",
-    "pecas usadas"
+    "pecas usadas",
+    "peças usadas",
+    "mercado livre",
+    "shopee",
+    "amazon",
+    "atacado gratis",
+    "fabricar",
+    "desenho tecnico",
+    "desenho técnico",
+    "medidas pdf",
+    "reclame aqui"
   ],
   "responsive_search_ad": {
     "final_url": "https://shopvivaliz.com.br/catalogo/?busca=carrinho%20ferramentas",
@@ -99,12 +144,12 @@
     "no_broad_match": true,
     "create_paused_first": true,
     "require_human_review_before_enable": true,
-    "max_daily_budget_brl": 15.0,
-    "max_cpc_brl": 1.2,
-    "target_roi": 10.0,
-    "target_roas": 10.0,
+    "max_daily_budget_brl": 10.0,
+    "max_cpc_brl": 0.95,
+    "target_roi": 10.1,
+    "target_roas": 10.1,
     "target_average_order_value_brl": 600.0,
     "target_conversion_rate_percent": 2.0,
-    "pause_if_spend_without_conversion_brl": 30.0
+    "pause_if_spend_without_conversion_brl": 20.0
   }
 }

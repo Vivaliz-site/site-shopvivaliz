@@ -193,7 +193,9 @@ $shippingCep = preg_replace('/\D+/', '', (string)($body['shipping_cep'] ?? $cep)
 
 $itemsTotal = 0.0;
 $cleanItems = [];
-foreach ($items as $item) {
+$authoritativeItems = function_exists('svorc_items') ? svorc_items() : [];
+$sourceItems = $authoritativeItems !== [] ? $authoritativeItems : $items;
+foreach ($sourceItems as $item) {
     $price = round((float)($item['price'] ?? 0), 2);
     $quantity = (int)($item['quantity'] ?? 0);
     $itemsTotal += $price * $quantity;

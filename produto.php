@@ -4,6 +4,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 header('Content-Type: text/html; charset=UTF-8');
 require_once __DIR__ . '/includes/catalog-runtime.php';
+require_once __DIR__ . '/includes/product-seo.php';
 
 /* ── helpers ── */
 function sv_product_default_image(): string
@@ -377,6 +378,8 @@ $priceLabel = $priceRaw > 0 ? 'R$ ' . number_format($priceRaw, 2, ',', '.') : 'C
 $contactUrl = sv_product_contact_url($sku, $name);
 $baseUrl = sv_official_base_url();
 $canonicalUrl = $baseUrl . ($rawSlug !== '' ? '/produto/' . $rawSlug : '/produto?sku=' . rawurlencode($sku));
+$seoTitle = $resolved !== [] ? svseo_title($resolved, 70) : $name;
+$seoDescription = $resolved !== [] ? svseo_meta_description($resolved) : '';
 
 $galleryImages = [];
 foreach (is_array($resolved['images'] ?? null) ? $resolved['images'] : [] as $galleryUrl) {
@@ -403,11 +406,14 @@ if ($description === '') {
     $tagPart  = !empty($tags) ? ' (' . implode(', ', array_slice($tags, 0, 3)) . ')' : '';
     $description = "Confira {$name}{$catPart}{$tagPart}. Produto de qualidade com entrega para todo o Brasil. Compre na Vivaliz.";
 }
+$seoDescription = $seoDescription !== '' ? $seoDescription : sv_product_trim(strip_tags($description), 155, '');
 
 if ($notFound) {
     http_response_code(404);
     $name = 'Produto não encontrado';
     $description = 'O produto solicitado não foi localizado no catálogo atual da Vivaliz. Explore outras opções ou fale com a equipe comercial.';
+    $seoTitle = $name;
+    $seoDescription = $description;
     $canonicalUrl = $baseUrl . '/catalogo';
     $priceRaw = 0.0;
     $priceLabel = 'Produto indisponível';
@@ -452,6 +458,8 @@ $breadcrumbJsonLd = [
     'itemListElement' => $breadcrumbItems,
 ];
 
+$faqJsonLd = null;
+
 if ($notFound) {
     $jsonLd = [
         '@context' => 'https://schema.org',
@@ -487,6 +495,39 @@ if ($notFound) {
     if ($gtin !== '') {
         $jsonLd['gtin'] = $gtin;
     }
+
+    $faqJsonLd = [
+        '@context' => 'https://schema.org',
+        '@type' => 'FAQPage',
+        'mainEntity' => [
+            [
+                '@type' => 'Question',
+                'name' => 'O produto ' . $name . ' está disponível?',
+                'acceptedAnswer' => [
+                    '@type' => 'Answer',
+                    'text' => $stockRaw > 0
+                        ? 'Sim. O produto está disponível no catálogo atual da ShopVivaliz com preço de ' . $priceLabel . '.'
+                        : 'No momento, o produto aparece como esgotado. Você pode solicitar aviso de estoque ou falar com a equipe comercial.',
+                ],
+            ],
+            [
+                '@type' => 'Question',
+                'name' => 'A ShopVivaliz entrega ' . $name . ' para todo o Brasil?',
+                'acceptedAnswer' => [
+                    '@type' => 'Answer',
+                    'text' => 'Sim. O frete é calculado por CEP no carrinho antes do pagamento, conforme disponibilidade das transportadoras.',
+                ],
+            ],
+            [
+                '@type' => 'Question',
+                'name' => 'Como confirmar se ' . $name . ' é compatível com minha necessidade?',
+                'acceptedAnswer' => [
+                    '@type' => 'Answer',
+                    'text' => 'Confira título, descrição, imagens, SKU e categoria na página do produto. Em caso de dúvida sobre medida, aplicação ou compatibilidade, fale com a equipe antes de comprar.',
+                ],
+            ],
+        ],
+    ];
 }
 ?>
 <!DOCTYPE html>
@@ -496,27 +537,39 @@ if ($notFound) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#173B63">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
-    <meta name="description" content="<?= sv_esc($description) ?>">
+    <meta name="description" content="<?= sv_esc($seoDescription) ?>">
     <?php if ($notFound): ?>
         <meta name="robots" content="noindex,follow">
     <?php endif; ?>
-    <meta property="og:title" content="<?= sv_esc($name) ?> | Vivaliz">
-    <meta property="og:description" content="<?= sv_esc($description) ?>">
+    <meta property="og:title" content="<?= sv_esc($seoTitle) ?> | Vivaliz">
+    <meta property="og:description" content="<?= sv_esc($seoDescription) ?>">
     <meta property="og:image" content="<?= sv_esc(str_starts_with($image, 'http') ? $image : $baseUrl . $image) ?>">
     <meta property="og:type" content="<?= $notFound ? 'website' : 'product' ?>">
     <meta property="og:url" content="<?= sv_esc($canonicalUrl) ?>">
     <meta property="og:site_name" content="Vivaliz">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="canonical" href="<?= sv_esc($canonicalUrl) ?>">
-    <title><?= sv_esc($name) ?> | Vivaliz</title>
+    <?php if (!$notFound && $image !== ''): ?>
+        <link rel="preload" as="image" href="<?= sv_esc(str_starts_with($image, 'http') ? $image : $baseUrl . $image) ?>" fetchpriority="high">
+    <?php endif; ?>
+    <?php if (!$notFound): ?>
+        <meta property="product:price:amount" content="<?= sv_esc(number_format($priceRaw, 2, '.', '')) ?>">
+        <meta property="product:price:currency" content="BRL">
+        <meta property="product:availability" content="<?= $stockRaw > 0 ? 'in stock' : 'out of stock' ?>">
+    <?php endif; ?>
+    <title><?= sv_esc($seoTitle) ?> | Vivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/premium-theme.css?v=2026-07-11">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
+    <link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script type="application/ld+json"><?= json_encode($jsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
     <script type="application/ld+json"><?= json_encode($breadcrumbJsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
+    <?php if ($faqJsonLd !== null): ?>
+    <script type="application/ld+json"><?= json_encode($faqJsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
+    <?php endif; ?>
     <?php if (!$notFound): ?>
     <script>
       window.ShopVivalizProductContext = <?= json_encode([
@@ -555,14 +608,14 @@ if ($notFound) {
         <div class="product-detail">
             <div style="display:flex; flex-direction:column; gap:12px; max-width: 100%;">
                 <div class="product-detail-image skeleton hover-zoom-container" id="product-zoom-box">
-                    <img id="main-product-image" src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" onerror="this.src='<?= sv_product_default_image() ?>'" loading="eager">
+                    <img id="main-product-image" src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" onerror="this.src='<?= sv_product_default_image() ?>'" loading="eager" fetchpriority="high">
                 </div>
                 <!-- Interactive Product Gallery Thumbnails -->
                 <div class="product-gallery-thumbnails" style="display:flex; gap:10px; justify-content:center; margin-bottom:12px; flex-wrap:wrap;">
                     <?php foreach ($galleryImages as $galleryIndex => $galleryUrl): ?>
                     <button type="button" class="thumb-btn<?= $galleryIndex === 0 ? ' active' : '' ?>" data-src="<?= sv_esc($galleryUrl) ?>" aria-label="Ver imagem <?= $galleryIndex + 1 ?>"
                             style="width:54px; height:54px; border:<?= $galleryIndex === 0 ? '2px solid #0b4f88' : '1px solid #e2e8f0' ?>; border-radius:8px; overflow:hidden; cursor:pointer; padding:0; background:#fff; transition: border-color 0.2s;">
-                        <img src="<?= sv_esc($galleryUrl) ?>" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='<?= sv_product_default_image() ?>'">
+                        <img src="<?= sv_esc($galleryUrl) ?>" alt="<?= sv_esc('Imagem adicional de ' . $name) ?>" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='<?= sv_product_default_image() ?>'">
                     </button>
                     <?php endforeach; ?>
                 </div>
@@ -850,7 +903,7 @@ if ($notFound) {
 
     <script src="/js/cro-interactions.js"></script>
     <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
-    <script src="/includes/auto-image-carousel.js"></script>
+    <script src="/js/auto-image-carousel.js?v=20260719-2"></script>
     <?php include __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>

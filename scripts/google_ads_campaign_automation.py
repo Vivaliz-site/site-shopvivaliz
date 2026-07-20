@@ -4,7 +4,7 @@
 Google Ads Campaign Automation - ShopVivaliz
 Automacao de criacao de campanha de Pesquisa (Search)
 Produto Campeao: Rodizios 35mm Gel
-Orcamento: R$ 15.00/dia
+Orcamento: R$ 10.00/dia
 Data: 2026-07-19
 """
 
@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 CAMPAIGN_CONFIG = {
     "customer_id": "5104079137",  # Google Ads Account ID
     "campaign_name": "Rodizios-Search-ShopVivaliz-2026-07",
-    "budget_daily": 15.00,  # R$ 15/dia
+    "budget_daily": 10.00,  # R$ 10/dia
     "currency": "BRL",
     "language": "pt",
     "location_targets": [2076, 2032, 2033],  # São Paulo, Minas Gerais, Paraná (maior conversão)
@@ -29,18 +29,18 @@ CAMPAIGN_CONFIG = {
     # Keywords (Pesquisa - Search)
     "keywords": [
         # Alto valor (Branded + Produto específico)
-        {"text": "rodizios gel soprano 35mm", "match_type": "PHRASE", "bid": 2.50},
-        {"text": "rodizio giratório com freio", "match_type": "PHRASE", "bid": 2.30},
-        {"text": "kit rodizios 35mm freio", "match_type": "PHRASE", "bid": 2.40},
+        {"text": "rodizios gel soprano 35mm", "match_type": "PHRASE", "bid": 0.95},
+        {"text": "rodizio giratório com freio", "match_type": "PHRASE", "bid": 0.90},
+        {"text": "kit rodizios 35mm freio", "match_type": "PHRASE", "bid": 0.90},
 
         # Médio valor (Categoria)
-        {"text": "rodizios para móvel", "match_type": "PHRASE", "bid": 1.80},
-        {"text": "rodizio gel silicone", "match_type": "PHRASE", "bid": 1.90},
-        {"text": "rodizio giratório", "match_type": "BROAD", "bid": 1.70},
+        {"text": "rodizios para móvel", "match_type": "PHRASE", "bid": 0.85},
+        {"text": "rodizio gel silicone", "match_type": "PHRASE", "bid": 0.85},
+        {"text": "rodizio giratório", "match_type": "PHRASE", "bid": 0.80},
 
         # Baixo valor (Genérico)
-        {"text": "rodizios", "match_type": "BROAD", "bid": 1.50},
-        {"text": "ferragens para móvel", "match_type": "BROAD", "bid": 1.40},
+        {"text": "rodizios", "match_type": "PHRASE", "bid": 0.75},
+        {"text": "ferragens para móvel", "match_type": "PHRASE", "bid": 0.75},
     ],
 
     # Negative Keywords (não gastar com)

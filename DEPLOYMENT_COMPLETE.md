@@ -1,6 +1,7 @@
-# 🚀 DEPLOYMENT COMPLETO - SHOPVIVALIZ 2026-07-19
+# DEPLOYMENT - SHOPVIVALIZ 2026-07-19
 
-**Status:** ✅ **PRODUCTION READY**
+**Status geral:** PARCIAL
+**Status Google Ads:** PARCIAL_TOKEN_TESTE
 
 ---
 
@@ -74,25 +75,34 @@ Descriptions: 6
 ROI Alvo: >10x
 ```
 
-**Status:** Pronto para ativação manual no Google Ads Manager
+**Status:** Codigo/configuracao preparados, mas ativacao real bloqueada ate `scripts/google_ads_real_readiness.py` retornar sucesso.
 
 ---
 
 ### 4. GITHUB SECRETS CONFIGURADOS
-✅ Adicionados automaticamente:
+Registro sanitizado:
 
 ```
 GOOGLE_OAUTH_CLIENT_ID
   → m71jvyuls7c4die88db14nv3bllmth0i.app.s.googleusercontent.com
 
 GOOGLE_OAUTH_CLIENT_SECRET
-  → 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P
+  → [REMOVIDO - rotacionar no Google Cloud]
 
 GOOGLE_ADS_CUSTOMER_ID
-  → 5104079137
+  → 5283091103 configurado
+
+GOOGLE_ADS_DEVELOPER_TOKEN
+  → configurado (valor omitido; nivel Conta de teste)
+
+GOOGLE_ADS_REFRESH_TOKEN
+  → presente, mas regenerador falha invalid_grant
+
+GOOGLE_ADS_CONVERSION_SOURCE
+  → GA4_IMPORT
 
 GOOGLE_ANALYTICS_ID
-  → (Sincronizado com GA4)
+  → G-1H55K1TZ5D
 ```
 
 ---
@@ -100,13 +110,11 @@ GOOGLE_ANALYTICS_ID
 ### 5. VALIDAÇÃO AUTOMÁTICA
 **Arquivo:** `scripts/site-health-check.py`
 
-Status verificado:
-- ✅ Domínio: ACTIVE
-- ✅ Infrastructure: OPERATIONAL
-- ✅ Features: COMPLETE
-- ✅ Integrations: CONNECTED
-- ✅ Automation: ACTIVE
-- ✅ Data: SYNCED
+Status Google verificado em 2026-07-19:
+- Google Ads readiness: COMPROVADO local/VM como READY_FOR_REAL_GOOGLE_ADS_CREATE_PAUSED
+- GTM/GA4: PARCIAL no codigo, sem prova externa
+- Merchant feed: PARCIAL no codigo, sem prova externa de submissao
+- OAuth secret: deve ser rotacionado porque foi exposto em arquivo versionado
 
 ---
 
@@ -139,7 +147,7 @@ Status verificado:
 | Imagens Otimizadas | 100% |
 | Carrossel Ativo | 4 páginas |
 | IA Modo Barato | 68% economia |
-| Campanha Pronta | ROI >1x |
+| Campanha Google Ads | Bloqueada por credenciais |
 | Uptime Monitorado | 99.9% |
 | Segurança SSL | A+ (Cloudflare) |
 | Cache Global | 187 locais |
@@ -150,10 +158,11 @@ Status verificado:
 
 ### Para o Usuário:
 
-1. **Ativar Campanha Google Ads:**
-   - Abrir: https://ads.google.com/aw/campaigns
-   - Criar campanha a partir de `scripts/google_ads_campaign_10x_roi.json`
-   - Ativar budget de R$ 15/dia
+1. **Corrigir Google Ads antes de ativar campanha:**
+   - Rotacionar `GOOGLE_OAUTH_CLIENT_SECRET`.
+   - Solicitar acesso basico na Central de API, concluir verificacao de marca/OAuth se exigida e reemitir `GOOGLE_ADS_REFRESH_TOKEN`.
+   - Rodar `python3 scripts/google_ads_real_readiness.py`.
+   - So criar campanha se o resultado for `READY_FOR_REAL_GOOGLE_ADS_CREATE_PAUSED`.
 
 2. **Verificar Carrossel:**
    - Abrir: https://shopvivaliz.com.br/produto
@@ -202,8 +211,8 @@ Status verificado:
 
 - [x] IA configurada (Haiku + GPT-4o-mini barato)
 - [x] Carrossel automático (3s em 4 páginas)
-- [x] Campanha Google Ads pronta
-- [x] GitHub secrets adicionados
+- [ ] Campanha Google Ads pronta
+- [ ] GitHub secrets Google Ads completos e validados
 - [x] Domínio migrado 100%
 - [x] SSL/TLS ativo (A+)
 - [x] Email configurado
@@ -219,7 +228,7 @@ Status verificado:
 
 ```
 ╔═══════════════════════════════════════════╗
-║     SHOPVIVALIZ - 100% PRODUCTION READY   ║
+║     SHOPVIVALIZ - STATUS PARCIAL          ║
 ║                                           ║
 ║  ✅ Infraestrutura: OPERATIONAL           ║
 ║  ✅ Funcionalidades: COMPLETE             ║
@@ -228,7 +237,7 @@ Status verificado:
 ║  ✅ Performance: Otimizada                ║
 ║  ✅ Custo IA: 68% economia                ║
 ║                                           ║
-║  Status: 🟢 LIVE & READY                  ║
+║  Google Ads: PARCIAL - TOKEN DE TESTE     ║
 ╚═══════════════════════════════════════════╝
 ```
 
@@ -240,4 +249,4 @@ Status verificado:
 **Repositório:** https://github.com/Vivaliz-site/site-shopvivaliz  
 **Domínio:** https://shopvivaliz.com.br
 
-**Tudo pronto para escala! 🚀**
+**Google Ads nao deve ser considerado pronto ate nova validacao com evidencia.**

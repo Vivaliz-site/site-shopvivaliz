@@ -89,6 +89,47 @@ function sv_home_catalog_source_rows(): array
     return $rows;
 }
 
+function sv_home_latest_sales_rows(): array
+{
+    $directory = __DIR__ . '/storage/reports';
+    if (!is_dir($directory)) {
+        return [];
+    }
+
+    $files = glob($directory . '/tiny-sales-ranking-*.json') ?: [];
+    if ($files === []) {
+        return [];
+    }
+
+    usort($files, static fn(string $a, string $b): int => filemtime($b) <=> filemtime($a));
+    $decoded = json_decode((string)file_get_contents($files[0]), true);
+    $rows = is_array($decoded) && is_array($decoded['rows'] ?? null) ? $decoded['rows'] : [];
+
+    return array_values(array_filter($rows, 'is_array'));
+}
+
+function sv_home_sales_rank_map(): array
+{
+    $map = [];
+    foreach (sv_home_latest_sales_rows() as $index => $row) {
+        $score = (float)($row['quantity'] ?? 0) * 100000
+            + (float)($row['orders'] ?? 0) * 1000
+            + (float)($row['revenue'] ?? 0);
+        if ($score <= 0) {
+            continue;
+        }
+
+        foreach (['sku', 'product_id', 'olist_product_id', 'id'] as $field) {
+            $key = strtoupper(trim((string)($row[$field] ?? '')));
+            if ($key !== '' && !isset($map[$key])) {
+                $map[$key] = ['score' => $score, 'position' => $index + 1];
+            }
+        }
+    }
+
+    return $map;
+}
+
 function sv_home_money(float $value): string
 {
     return $value > 0 ? 'R$ ' . number_format($value, 2, ',', '.') : 'Consulte o valor';
@@ -134,6 +175,7 @@ function sv_home_contact_url(array $product): string
 function sv_home_featured_products(int $limit = 8): array
 {
     $products = [];
+    $salesRank = sv_home_sales_rank_map();
     foreach (sv_home_catalog_source_rows() as $row) {
         if (!is_array($row)) {
             continue;
@@ -145,24 +187,47 @@ function sv_home_featured_products(int $limit = 8): array
         }
 
         $images = is_array($row['images'] ?? null) ? $row['images'] : [];
+        $sku = trim((string)($row['sku'] ?? (string)($row['id'] ?? '')));
+        $olistProductId = (string)($row['olist_product_id'] ?? $row['id'] ?? '');
+        $rank = $salesRank[strtoupper($sku)] ?? $salesRank[strtoupper($olistProductId)] ?? null;
+
         $products[] = [
-            'sku' => trim((string)($row['sku'] ?? (string)($row['id'] ?? ''))),
+            'sku' => $sku,
             'name' => trim((string)($row['name'] ?? 'Produto Vivaliz')),
             'image_url' => $image,
             'images' => array_slice(array_filter($images), 0, 10),
             'price' => (float)($row['price'] ?? 0),
             'stock' => (int)($row['stock'] ?? 0),
-            'olist_product_id' => (string)($row['olist_product_id'] ?? $row['id'] ?? ''),
+            'olist_product_id' => $olistProductId,
             'category' => trim((string)($row['category'] ?? '')),
             'slug' => trim((string)($row['slug'] ?? '')),
+            'sales_score' => (float)($rank['score'] ?? 0),
+            'sales_position' => (int)($rank['position'] ?? 999999),
         ];
-
-        if (count($products) >= $limit) {
-            break;
-        }
     }
 
-    return svp_enrich_products($products);
+    $products = svp_enrich_products($products);
+    usort($products, static function (array $a, array $b): int {
+        $aPurchasable = ((float)($a['price'] ?? 0) > 0 && (int)($a['stock'] ?? 0) > 0) ? 1 : 0;
+        $bPurchasable = ((float)($b['price'] ?? 0) > 0 && (int)($b['stock'] ?? 0) > 0) ? 1 : 0;
+        if ($aPurchasable !== $bPurchasable) {
+            return $bPurchasable <=> $aPurchasable;
+        }
+
+        $scoreCompare = (float)($b['sales_score'] ?? 0) <=> (float)($a['sales_score'] ?? 0);
+        if ($scoreCompare !== 0) {
+            return $scoreCompare;
+        }
+
+        $stockCompare = (int)($b['stock'] ?? 0) <=> (int)($a['stock'] ?? 0);
+        if ($stockCompare !== 0) {
+            return $stockCompare;
+        }
+
+        return (float)($b['price'] ?? 0) <=> (float)($a['price'] ?? 0);
+    });
+
+    return array_slice($products, 0, $limit);
 }
 
 function sv_home_catalog_count(): int
@@ -340,6 +405,7 @@ $svNavCurrent = '';
     <link rel="stylesheet" href="/css/shopvivaliz-inline-to-classes.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/shopvivaliz-webp-optimization.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
+    <link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -577,8 +643,8 @@ $svNavCurrent = '';
                 <div class="hero-carousel-track">
                     <?php foreach ($heroBanners as $index => $banner): ?>
                         <article class="hero-slide hero-image-slide<?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>" style="position:relative;">
-                            <img src="<?= sv_home_esc($banner['image']) ?> loading="eager"" alt="<?= sv_home_esc($banner['alt']) ?>" class="hero-banner-image" loading="<?= $index === 0 ? 'eager' : 'lazy' ?>" style="width:100%;height:100%;object-fit:cover;">
-                            <div class="hero-overlay" class="banner-overlay">
+                            <img src="<?= sv_home_esc($banner['image']) ?>" alt="<?= sv_home_esc($banner['alt']) ?>" class="hero-banner-image" loading="<?= $index === 0 ? 'eager' : 'lazy' ?>" style="width:100%;height:100%;object-fit:cover;">
+                            <div class="hero-overlay banner-overlay">
                                 <?php if (!empty($banner['tag'])): ?>
                                     <span class="banner-tag color-accent-green"><?= sv_home_esc($banner['tag']) ?></span>
                                 <?php endif; ?>
@@ -589,7 +655,7 @@ $svNavCurrent = '';
                                     <p class="banner-subtitle color-text-muted"><?= sv_home_esc($banner['subtitle']) ?></p>
                                 <?php endif; ?>
                                 <div class="banner-cta-container">
-                                    <a href="<?= sv_home_esc($banner['primary']['href']) ?>" class="btn btn-primary" class="btn btn-primary btn-cta-green"><?= sv_home_esc($banner['primary']['label']) ?></a>
+                                    <a href="<?= sv_home_esc($banner['primary']['href']) ?>" class="btn btn-primary btn-cta-green"><?= sv_home_esc($banner['primary']['label']) ?></a>
                                 </div>
                             </div>
                         </article>
@@ -679,7 +745,8 @@ $svNavCurrent = '';
                                 <?php if ($isBestSeller && $stock > 0): ?>
                                     <span class="product-card-ribbon">Mais Vendido</span>
                                 <?php endif; ?>
-                                <a class="product-image" href="<?= sv_home_esc($productUrl) ?>" data-images="<?= sv_home_esc(json_encode(array_slice(array_filter($product['images'] ?? [$image]), 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
+                                <?php $cardImages = array_values(array_unique(array_filter(array_merge([$image], is_array($product['images'] ?? null) ? $product['images'] : [])))); ?>
+                                <a class="product-image" href="<?= sv_home_esc($productUrl) ?>" data-images="<?= sv_home_esc(json_encode(array_slice($cardImages, 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
                                     <img src="<?= sv_home_esc($image) ?>" alt="<?= sv_home_esc($product['name']) ?>" loading="lazy" onerror="this.src='<?= sv_home_default_image() ?>'">
                                     <?php if ($stock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                                 </a>
@@ -992,7 +1059,7 @@ $svNavCurrent = '';
         });
     })();
     </script>
-    <script src="/js/auto-image-carousel.js"></script>
+    <script src="/js/auto-image-carousel.js?v=20260719-2"></script>
     <!-- A/B Testing Framework for CRO -->
     <script src="/js/shopvivaliz-ab-testing.js?v=1.0.0"></script>
 </body>
