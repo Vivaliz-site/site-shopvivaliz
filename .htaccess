@@ -68,6 +68,9 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
+    # Redirecionar URLs de produto antigas com ID numérico para o novo slug
+    RewriteRule ^produto/([a-z0-9][a-z0-9\-]*)-[0-9]+/?$ /produto/$1 [R=301,L]
+
     # Cart API endpoints
     RewriteRule ^api/cart/validate/?$ api/cart/validate.php [L,QSA]
     RewriteRule ^api/cart/sync/?$ api/cart/sync.php [L,QSA]

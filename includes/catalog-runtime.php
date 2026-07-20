@@ -2,6 +2,24 @@
 declare(strict_types=1);
 
 /**
+ * Generate URL-friendly slug from product name/SKU
+ */
+function svcr_slug(string $name, string $sku = ''): string
+{
+    $text = $name !== '' ? $name : $sku;
+    if ($text === '') {
+        return '';
+    }
+
+    $text = mb_strtolower($text, 'UTF-8');
+    $text = preg_replace('/[^\p{L}\p{N}\s\-]/u', '', $text);
+    $text = preg_replace('/[\s\-]+/', '-', trim($text));
+    $text = trim($text, '-');
+
+    return $text !== '' ? $text : '';
+}
+
+/**
  * Canonical read-only catalog source for storefront, checkout and health APIs.
  * Prefer the curated fallback when populated; otherwise normalize the live
  * Olist/Tiny detail cache produced by daemon-sync-products.py.
@@ -76,11 +94,13 @@ function svcr_products(): array
             continue;
         }
 
+        $name = trim((string)($item['descricao'] ?? $item['nome'] ?? $item['name'] ?? $sku));
         $products[] = [
             'id' => (string)($item['id'] ?? $sku),
             'sku' => $sku,
             'olist_product_id' => (string)($item['id'] ?? $item['olist_product_id'] ?? ''),
-            'name' => trim((string)($item['descricao'] ?? $item['nome'] ?? $item['name'] ?? $sku)),
+            'name' => $name,
+            'slug' => svcr_slug($name, $sku),
             'description' => trim((string)($item['descricaoComplementar'] ?? $item['descricao_complementar'] ?? $item['description'] ?? $item['descricao'] ?? '')),
             'price' => (float)($prices['preco'] ?? $prices['preco_venda'] ?? $item['preco'] ?? $item['price'] ?? 0),
             'stock' => max(0, (int)($item['estoque_disponivel'] ?? $stockInfo['quantidade'] ?? $item['stock'] ?? 0)),
