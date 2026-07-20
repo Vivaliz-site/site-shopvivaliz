@@ -8,12 +8,34 @@ header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
 require_once dirname(__DIR__, 2) . '/includes/mercadopago-gateway.php';
+require_once dirname(__DIR__) . '/emails/send-order-notification.php';
 
 function svmp_preference_response(int $status, array $payload): never
 {
     http_response_code($status);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
+}
+
+function svmp_preference_persist_order($handle, array $order, string $orderNumber): void
+{
+    $encoded = json_encode($order, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    rewind($handle);
+    ftruncate($handle, 0);
+    if (fwrite($handle, $encoded) === false || !fflush($handle)) {
+        error_log('[MercadoPago] preference order persistence failed: order=' . $orderNumber);
+        svmp_preference_response(500, ['ok' => false, 'error' => 'preference_persistence_failed']);
+    }
+}
+
+function svmp_preference_send_notification(array $order): bool
+{
+    try {
+        return svem_send_order_email($order, 'payment_link_generated');
+    } catch (Throwable $e) {
+        error_log('[MercadoPago] preference email failure: order=' . ($order['order_number'] ?? 'N/A') . ' type=' . get_class($e));
+        return false;
+    }
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
@@ -56,11 +78,19 @@ try {
 
     $existing = is_array($order['mercadopago']['preference'] ?? null) ? $order['mercadopago']['preference'] : [];
     if ((string)($existing['checkout_url'] ?? '') !== '') {
+        $emailSent = (bool)($existing['email_sent'] ?? false);
+        if (!$emailSent) {
+            $emailSent = svmp_preference_send_notification($order);
+            $order['mercadopago']['preference']['email_sent'] = $emailSent;
+            $order['mercadopago']['preference']['email_sent_at'] = date(DATE_ATOM);
+            svmp_preference_persist_order($handle, $order, $orderNumber);
+        }
         svmp_preference_response(200, [
             'ok' => true,
             'reused' => true,
             'order_number' => $orderNumber,
             'checkout_url' => (string)$existing['checkout_url'],
+            'email_sent' => $emailSent,
         ]);
     }
 
@@ -77,13 +107,12 @@ try {
         'checkout_url' => $preference['checkout_url'],
         'created_at' => date(DATE_ATOM),
     ];
-    $encoded = json_encode($order, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
-    rewind($handle);
-    ftruncate($handle, 0);
-    if (fwrite($handle, $encoded) === false || !fflush($handle)) {
-        error_log('[MercadoPago] preference created but order persistence failed: order=' . $orderNumber);
-        svmp_preference_response(500, ['ok' => false, 'error' => 'preference_persistence_failed']);
-    }
+    svmp_preference_persist_order($handle, $order, $orderNumber);
+
+    $emailSent = svmp_preference_send_notification($order);
+    $order['mercadopago']['preference']['email_sent'] = $emailSent;
+    $order['mercadopago']['preference']['email_sent_at'] = date(DATE_ATOM);
+    svmp_preference_persist_order($handle, $order, $orderNumber);
 
     error_log('[MercadoPago] preference created: order=' . $orderNumber . ' preference=' . $preference['preference_id']);
     svmp_preference_response(201, [
@@ -91,6 +120,7 @@ try {
         'reused' => false,
         'order_number' => $orderNumber,
         'checkout_url' => $preference['checkout_url'],
+        'email_sent' => $emailSent,
     ]);
 } catch (SvMercadoPagoApiException $e) {
     error_log('[MercadoPago] preference API failure: order=' . $orderNumber . ' code=' . $e->publicCode);

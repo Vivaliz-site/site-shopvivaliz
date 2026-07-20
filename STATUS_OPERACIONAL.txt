@@ -1,14 +1,11 @@
-╔═══════════════════════════════════════════════════════════════════════╗
-║                      SHOPVIVALIZ - STATUS OPERACIONAL                 ║
-║                                                                       ║
-║                        🟢 PRODUCTION READY                           ║
-║                                                                       ║
-╚═══════════════════════════════════════════════════════════════════════╝
+SHOPVIVALIZ - STATUS OPERACIONAL
 
 DATA: 2026-07-19 11:12:38 UTC
 RESPONSÁVEL: Claude Code Autonomous
 REPOSITÓRIO: github.com/Vivaliz-site/site-shopvivaliz
 DOMÍNIO: shopvivaliz.com.br
+REVISAO CODEX: 2026-07-19
+STATUS GOOGLE ADS: PARCIAL_TOKEN_TESTE / READINESS COMPROVADO
 
 ═══════════════════════════════════════════════════════════════════════════
 
@@ -38,17 +35,20 @@ DOMÍNIO: shopvivaliz.com.br
       • Responsivo: Mobile + Desktop ready
 
   [3] Campanha Google Ads Autônoma
-      • Status: Pronto para ativação
+      • Status: PARCIAL_TOKEN_TESTE
       • Budget: R$ 15/dia (R$ 450/mês)
       • Keywords: 6 (PHRASE match)
       • ROI Target: >10x
-      • Scripts: 3 arquivos Python prontos
+      • Scripts: Python prontos; readiness passou local/VM; acesso basico pendente no Google
 
   [4] GitHub Secrets Configurados
-      • GOOGLE_OAUTH_CLIENT_ID ✓
-      • GOOGLE_OAUTH_CLIENT_SECRET ✓
-      • GOOGLE_ADS_CUSTOMER_ID ✓
-      • GOOGLE_ANALYTICS_ID ✓
+      • GOOGLE_OAUTH_CLIENT_ID: documentado
+      • GOOGLE_OAUTH_CLIENT_SECRET: deve ser rotacionado; valor antigo foi exposto
+      • GOOGLE_ADS_CUSTOMER_ID: configurado
+      • GOOGLE_ADS_DEVELOPER_TOKEN: configurado (Conta de teste)
+      • GOOGLE_ADS_REFRESH_TOKEN: presente, mas regenerador falha invalid_grant
+      • GOOGLE_ADS_CONVERSION_SOURCE: GA4_IMPORT
+      • GOOGLE_ANALYTICS_ID: configurado
 
   [5] Monitoramento 24/7
       • Health check: A cada hora
@@ -71,10 +71,12 @@ DOMÍNIO: shopvivaliz.com.br
 
 ═══════════════════════════════════════════════════════════════════════════
 
-✅ INTEGRAÇÕES CONECTADAS
+INTEGRAÇÕES GOOGLE
 
-  Google Analytics 4:         Ativo
-  Google Merchant Center:     Sincronizado
+  Google Analytics 4:         PARCIAL (codigo/fallback; conta externa nao verificada)
+  Google Merchant Center:     PARCIAL (feed local e merchant id; submissao externa nao verificada)
+  Google Ads API:             PARCIAL token em Conta de teste
+  Conversao Ads:              PARCIAL via GA4_IMPORT
   Mercado Pago:               Webhook OK (CORRIGIDO 2026-07-19)
   Tiny ERP:                   Sync 30min
   Olist:                      Connected (tokens refresh auto)
@@ -109,7 +111,7 @@ DOMÍNIO: shopvivaliz.com.br
 ✅ AUTOMAÇÃO
 
   A cada 30 minutos:
-    • git fetch + reset --hard origin/main
+    • git fetch + merge --ff-only origin/main
     • Validação de catálogo
     • Cache invalidation
     • Email de pedidos
@@ -140,10 +142,12 @@ DOMÍNIO: shopvivaliz.com.br
 
 🚀 PRÓXIMAS AÇÕES
 
-  1. [IMEDIATO] Ativar Campanha Google Ads
-     → Abrir: https://ads.google.com/aw/campaigns
-     → Usar config: scripts/google_ads_campaign_10x_roi.json
-     → Budget: R$ 15/dia (R$ 450/mês)
+  1. [IMEDIATO] Corrigir credenciais Google Ads
+     → Rotacionar GOOGLE_OAUTH_CLIENT_SECRET
+     → Solicitar Acesso basico na Central de API
+     → Verificar marca/OAuth no Google Cloud se exigido
+     → Reemitir GOOGLE_ADS_REFRESH_TOKEN para corrigir invalid_grant
+     → Manter campanha pausada ate aprovacao do Google
 
   2. [HOJE] Verificar Carrossel Automático
      → Abrir: https://shopvivaliz.com.br/produto
@@ -166,14 +170,14 @@ DOMÍNIO: shopvivaliz.com.br
 
   ✅ Infraestrutura:       100% Operacional
   ✅ Funcionalidades:       100% Implementadas
-  ✅ Integrações:           100% Conectadas
+  ⚠️ Integrações Google:    PARCIAL / BLOQUEADAS POR CREDENCIAIS
   ✅ Automação:             100% Ativa
   ✅ Segurança:             100% Configurada
   ✅ Performance:           100% Otimizada
   ✅ Monitoramento:         100% Ativo
   ✅ Documentação:          100% Completa
 
-  🟢 RESULTADO: PRODUCTION READY - 100%
+  RESULTADO GOOGLE ADS: NAO COMPROVADO
 
 ═══════════════════════════════════════════════════════════════════════════
 

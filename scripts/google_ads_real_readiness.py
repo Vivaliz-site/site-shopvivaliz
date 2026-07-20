@@ -22,9 +22,9 @@ REQUIRED_ENV = [
     "GOOGLE_ADS_CUSTOMER_ID",
     "GOOGLE_ADS_DEVELOPER_TOKEN",
     "GOOGLE_ADS_REFRESH_TOKEN",
-    "GOOGLE_ADS_ID",
-    "GOOGLE_ADS_CONVERSION_LABEL",
 ]
+MANUAL_CONVERSION_ENV = ["GOOGLE_ADS_ID", "GOOGLE_ADS_CONVERSION_LABEL"]
+GA4_IMPORT_ENV = ["GOOGLE_ANALYTICS_ID"]
 
 
 def load_dotenv(path: Path) -> None:
@@ -59,6 +59,11 @@ def main() -> int:
         return 1
 
     missing = [key for key in REQUIRED_ENV if is_placeholder(os.getenv(key, ""))]
+    conversion_source = os.getenv("GOOGLE_ADS_CONVERSION_SOURCE", "MANUAL_GTAG").strip().upper()
+    if conversion_source == "GA4_IMPORT":
+        missing.extend(key for key in GA4_IMPORT_ENV if is_placeholder(os.getenv(key, "")))
+    else:
+        missing.extend(key for key in MANUAL_CONVERSION_ENV if is_placeholder(os.getenv(key, "")))
     if missing:
         errors.append("missing_or_placeholder_env=" + ",".join(missing))
 

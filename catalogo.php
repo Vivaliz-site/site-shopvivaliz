@@ -47,6 +47,54 @@ function sv_catalog_search_normalize(string $value): string
     return function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
 }
 
+function sv_catalog_search_aliases(string $query): array
+{
+    $normalized = sv_catalog_search_normalize($query);
+    $aliases = [$normalized];
+    $rules = [
+        'RODIZIO' => ['RODIZIO', 'RODIZIOS', 'RODINHA', 'RODINHAS', 'RODAS', 'GEL', 'SILICONE'],
+        'CADEADO' => ['CADEADO', 'CADEADOS', 'PAPAIZ', 'TRAVA', 'SEGURANCA'],
+        'ASSENTO' => ['ASSENTO', 'TAMPA', 'VASO SANITARIO', 'SANITARIO', 'BANHEIRO', 'ASTRA'],
+        'FERRAMENTA' => ['FERRAMENTA', 'FERRAMENTAS', 'ALICATE', 'CHAVE', 'CAIXA', 'CARRINHO', 'GEDORE', 'FERCAR'],
+        'VASO' => ['VASO', 'VASOS', 'FLOREIRA', 'FLOREIRAS', 'CACHEPOT', 'JARDIM', 'JAPI'],
+        'PET' => ['PET', 'COMEDOURO', 'RACAO', 'RACAO', 'CACHORRO', 'GATO'],
+    ];
+
+    foreach ($rules as $canonical => $terms) {
+        foreach ($terms as $term) {
+            if (str_contains($normalized, sv_catalog_search_normalize($term))) {
+                $aliases[] = $canonical;
+                foreach ($terms as $related) {
+                    $aliases[] = sv_catalog_search_normalize($related);
+                }
+                break;
+            }
+        }
+    }
+
+    return array_values(array_unique(array_filter($aliases)));
+}
+
+function sv_catalog_fuzzy_contains(string $haystack, string $needle): bool
+{
+    if ($needle === '' || strlen($needle) < 5) {
+        return false;
+    }
+
+    $tokens = preg_split('/\s+/', $haystack) ?: [];
+    foreach ($tokens as $token) {
+        $token = trim($token);
+        if (strlen($token) < 5 || abs(strlen($token) - strlen($needle)) > 2) {
+            continue;
+        }
+        if (levenshtein($token, $needle) <= 2) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function sv_catalog_matches_query(array $row, string $query): bool
 {
     if ($query === '') {
@@ -64,7 +112,14 @@ function sv_catalog_matches_query(array $row, string $query): bool
         is_array($row['tags'] ?? null) ? implode(' ', array_map('strval', $row['tags'])) : '',
     ]));
 
-    return strpos(sv_catalog_search_normalize($haystack), sv_catalog_search_normalize($query)) !== false;
+    $normalizedHaystack = sv_catalog_search_normalize($haystack);
+    foreach (sv_catalog_search_aliases($query) as $candidate) {
+        if (strpos($normalizedHaystack, $candidate) !== false || sv_catalog_fuzzy_contains($normalizedHaystack, $candidate)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function sv_catalog_load(): array
@@ -294,6 +349,59 @@ function sv_catalog_structured_data(array $products, string $canonicalUrl, strin
     ];
 }
 
+function sv_catalog_website_schema(): array
+{
+    return [
+        '@context' => 'https://schema.org',
+        '@type' => 'WebSite',
+        'name' => 'Vivaliz',
+        'url' => sv_catalog_base_url() . '/',
+        'potentialAction' => [
+            '@type' => 'SearchAction',
+            'target' => [
+                '@type' => 'EntryPoint',
+                'urlTemplate' => sv_catalog_base_url() . '/catalogo?q={search_term_string}',
+            ],
+            'query-input' => 'required name=search_term_string',
+        ],
+    ];
+}
+
+function sv_catalog_faq_schema(string $category, string $query): array
+{
+    $scope = $category !== '' ? $category : ($query !== '' ? 'produtos encontrados' : 'produtos Vivaliz');
+    return [
+        '@context' => 'https://schema.org',
+        '@type' => 'FAQPage',
+        'mainEntity' => [
+            [
+                '@type' => 'Question',
+                'name' => 'Os produtos do catálogo têm preço e estoque atualizados?',
+                'acceptedAnswer' => [
+                    '@type' => 'Answer',
+                    'text' => 'O catálogo usa a origem canônica de produtos da ShopVivaliz e exibe preço e disponibilidade disponíveis no momento da consulta.',
+                ],
+            ],
+            [
+                '@type' => 'Question',
+                'name' => 'A Vivaliz entrega ' . $scope . ' para todo o Brasil?',
+                'acceptedAnswer' => [
+                    '@type' => 'Answer',
+                    'text' => 'Sim. A ShopVivaliz calcula entrega por CEP no carrinho e atende pedidos para diferentes regiões do Brasil conforme transportadoras disponíveis.',
+                ],
+            ],
+            [
+                '@type' => 'Question',
+                'name' => 'Como encontrar o produto certo no catálogo?',
+                'acceptedAnswer' => [
+                    '@type' => 'Answer',
+                    'text' => 'Use a busca por nome, SKU, categoria, descrição ou característica do produto. Também é possível filtrar por categoria e abrir a página de detalhes antes da compra.',
+                ],
+            ],
+        ],
+    ];
+}
+
 $query        = sv_catalog_query();
 $category     = trim((string)($_GET['categoria'] ?? ''));
 $perPage      = 20;
@@ -321,6 +429,8 @@ $pageTitle = sv_catalog_page_title($category, $query);
 $metaDescription = sv_catalog_meta_description($category, $query, count($products));
 $canonicalUrl = sv_catalog_canonical_url($category);
 $structuredData = sv_catalog_structured_data($products, $canonicalUrl, $pageTitle, $metaDescription);
+$websiteSchema = sv_catalog_website_schema();
+$faqSchema = sv_catalog_faq_schema($category, $query);
 $searchNoindex = $query !== '';
 $svNavCurrent = 'catalogo';
 ?>
@@ -344,7 +454,10 @@ $svNavCurrent = 'catalogo';
     <title><?= sv_catalog_esc($pageTitle) ?></title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
+    <link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
     <script type="application/ld+json"><?= json_encode($structuredData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
+    <script type="application/ld+json"><?= json_encode($websiteSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
+    <script type="application/ld+json"><?= json_encode($faqSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
 </head>
 <body>
@@ -410,7 +523,8 @@ $svNavCurrent = 'catalogo';
                 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
                 ?>
                 <article class="product-card<?= $stock <= 0 ? ' is-out-of-stock' : '' ?>">
-                    <a class="product-image" href="<?= sv_catalog_esc($productUrl) ?>" data-images="<?= sv_catalog_esc(json_encode(array_slice(array_filter($product['images'] ?? [$image]), 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
+                    <?php $cardImages = array_values(array_unique(array_filter(array_merge([$image], is_array($product['images'] ?? null) ? $product['images'] : [])))); ?>
+                    <a class="product-image" href="<?= sv_catalog_esc($productUrl) ?>" data-images="<?= sv_catalog_esc(json_encode(array_slice($cardImages, 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
                         <img src="<?= sv_catalog_esc($image) ?>" alt="<?= sv_catalog_esc($product['name']) ?>" loading="lazy" onerror="this.src='<?= sv_catalog_default_image() ?>'">
                         <?php if ($stock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                     </a>
@@ -470,6 +584,6 @@ $svNavCurrent = 'catalogo';
         } catch(e){}
     })();
     </script>
-    <script src="/js/auto-image-carousel.js"></script>
+    <script src="/js/auto-image-carousel.js?v=20260719-2"></script>
 </body>
 </html>

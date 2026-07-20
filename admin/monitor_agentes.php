@@ -38,6 +38,7 @@ header('Content-Type: text/html; charset=UTF-8');
         @media (max-width:1100px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
         @media (max-width:640px){.stats{grid-template-columns:1fr}.head{display:block}.command{grid-template-columns:1fr}}
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
 <main class="wrap">

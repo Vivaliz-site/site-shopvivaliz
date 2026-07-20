@@ -369,6 +369,7 @@ $page_title = 'Orquestrador 24/7 — ShopVivaliz Admin';
         /* ── REFRESH INDICATOR ── */
         .refresh-info { font-size: .78rem; color: var(--muted); text-align: right; padding-top: 8px; }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
 

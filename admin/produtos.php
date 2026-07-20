@@ -66,6 +66,7 @@ try {
             white-space: nowrap;
         }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
     <div class="navbar">

@@ -23,9 +23,9 @@ REQUIRED_ENV = [
     "GOOGLE_ADS_CUSTOMER_ID",
     "GOOGLE_ADS_DEVELOPER_TOKEN",
     "GOOGLE_ADS_REFRESH_TOKEN",
-    "GOOGLE_ADS_ID",
-    "GOOGLE_ADS_CONVERSION_LABEL",
 ]
+MANUAL_CONVERSION_ENV = ["GOOGLE_ADS_ID", "GOOGLE_ADS_CONVERSION_LABEL"]
+GA4_IMPORT_ENV = ["GOOGLE_ANALYTICS_ID"]
 
 
 def load_dotenv(path: Path) -> dict[str, str]:
@@ -194,16 +194,19 @@ class GoogleAdsReadonlyMCP:
 
     def google_ads_env_status(self) -> dict[str, Any]:
         env = {**load_dotenv(ROOT / ".env"), **os.environ}
+        conversion_source = env.get("GOOGLE_ADS_CONVERSION_SOURCE", "MANUAL_GTAG").strip().upper()
+        required = REQUIRED_ENV + (GA4_IMPORT_ENV if conversion_source == "GA4_IMPORT" else MANUAL_CONVERSION_ENV)
         keys = {
             key: {
                 "present": bool(env.get(key, "")),
                 "placeholder_or_missing": is_placeholder(env.get(key, "")),
             }
-            for key in REQUIRED_ENV
+            for key in required
         }
         missing = [key for key, info in keys.items() if info["placeholder_or_missing"]]
         return {
             "status": "COMPROVADO" if not missing else "FALHOU",
+            "conversion_source": conversion_source,
             "required_env": keys,
             "missing_or_placeholder_env": missing,
         }

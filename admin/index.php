@@ -14,6 +14,7 @@ $codename = (string)($version['codename'] ?? '');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Central ShopVivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
     <nav class="navbar" style="background: #1a1a2e; padding: 1rem 0;">

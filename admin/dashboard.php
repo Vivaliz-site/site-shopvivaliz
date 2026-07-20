@@ -48,6 +48,7 @@ $appVersion = (string)($version['version'] ?? '0.0.0');
             margin-bottom: 0.5rem;
         }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
     <nav class="navbar" style="background: #1a1a2e; padding: 1rem 0;">
