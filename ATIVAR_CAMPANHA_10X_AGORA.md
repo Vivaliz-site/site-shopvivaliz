@@ -25,7 +25,7 @@ Conta: 5104079137
 |-------|-------|
 | **Nome da Campanha** | `Rodizios-Search-AGRESSIVO-10xROI-2026-07` |
 | **Website** | `https://shopvivaliz.com.br` |
-| **Orçamento Diário** | `15.00` (em BRL) |
+| **Orçamento Diário** | `10.00` (em BRL) |
 | **Estratégia de Lances** | Manual CPC |
 | **Localidades** | São Paulo, Minas Gerais, Paraná |
 | **Idioma** | Português |
@@ -48,7 +48,7 @@ rodizios de qualidade para móvel soprano
 
 **Configuração de cada keyword:**
 - Tipo Match: **PHRASE** (não BROAD!)
-- CPC Max: **R$ 3.50**
+- CPC Max: **R$ 0.95**
 
 ---
 
@@ -127,7 +127,7 @@ Vá para "Anúncios" → "Novo Anúncio Responsivo de Pesquisa"
 - [ ] 6 keywords adicionadas
 - [ ] 15 negative keywords adicionadas
 - [ ] 10 headlines + 6 descriptions adicionadas
-- [ ] Budget: R$ 15.00/dia
+- [ ] Budget: R$ 10.00/dia
 - [ ] Status: ATIVADO
 
 **Clique: SALVAR E PUBLICAR**
@@ -164,7 +164,7 @@ Observar:
 
 - [ ] Objetivo: VENDAS ✅
 - [ ] Tipo: PESQUISA ✅
-- [ ] Budget: R$ 15/dia ✅
+- [ ] Budget: R$ 10/dia ✅
 - [ ] 6 Keywords PHRASE ✅
 - [ ] 15 Negatives ✅
 - [ ] 10 Headlines ✅
@@ -215,7 +215,7 @@ Se algo der errado:
 
 ## 🎉 SUCESSO!
 
-Após 30 dias com ROI 10x+:
+Após 30 dias com ROI > 10x:
 - Ganho esperado: R$ 4,500+
 - Lucro esperado (40% margin): R$ 1,800+
 - Próximo passo: Escalar +100% budget ou expandir para novo estado

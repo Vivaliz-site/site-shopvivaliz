@@ -15,6 +15,22 @@ function svoa_catalog_map(): array {
     return $map;
 }
 
+function svoa_human_product_name(array $row, string $fallback): string {
+    $name = trim((string)($row['name'] ?? ''));
+    if ($name !== '' && preg_match('/^PRODUTO_\d+$/i', $name) !== 1) {
+        return $name;
+    }
+
+    $description = trim(strip_tags((string)($row['description'] ?? '')));
+    $description = preg_replace('/\s+/', ' ', $description) ?: '';
+    $description = preg_replace('/\s*FOTOS MERAMENTE ILUSTRATIVAS\s*$/i', '', $description) ?: $description;
+    if ($description !== '') {
+        return trim($description);
+    }
+
+    return $name !== '' ? $name : $fallback;
+}
+
 function svoa_resolve_items(array $items): array {
     $catalog = svoa_catalog_map();
     $quantities = [];
@@ -36,7 +52,7 @@ function svoa_resolve_items(array $items): array {
         if ($stock < $quantity) { $errors[] = ['sku'=>(string)($row['sku'] ?? $key),'error'=>'insufficient_stock','available'=>$stock,'requested'=>$quantity]; continue; }
         $resolved[] = [
             'sku' => (string)($row['sku'] ?? $key),
-            'name' => trim((string)($row['name'] ?? $row['sku'] ?? $key)),
+            'name' => svoa_human_product_name($row, (string)($row['sku'] ?? $key)),
             'quantity' => $quantity,
             'price' => round($price, 2),
             'olist_product_id' => trim((string)($row['olist_product_id'] ?? $row['id'] ?? '')),

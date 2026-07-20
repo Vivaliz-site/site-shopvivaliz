@@ -387,6 +387,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             background: #229954;
         }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
     <div class="header">

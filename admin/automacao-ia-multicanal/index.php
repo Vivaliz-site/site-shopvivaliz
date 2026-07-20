@@ -24,6 +24,7 @@ $page = $_GET['page'] ?? 'dashboard';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Automação IA Multi-Canal - ShopVivaliz</title>
     <link rel="stylesheet" href="/css/admin-automation.css">
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
     <div class="admin-container">

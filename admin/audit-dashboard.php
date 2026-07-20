@@ -245,6 +245,7 @@ $latestAlert = $alerts[0] ?? null;
             header { flex-direction: column; gap: 15px; text-align: center; }
         }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
     <div class="container">

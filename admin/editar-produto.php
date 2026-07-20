@@ -110,6 +110,7 @@ $produto = $index !== null ? $catalog[$index] : null;
         .readonly-box { background: #f8f8fb; border-radius: 6px; padding: 0.75rem 1rem; font-size: 0.9rem; color: #555; margin-bottom: 1rem; }
         .readonly-box ul { margin: 0.25rem 0 0 1.25rem; padding: 0; }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
     <div class="navbar">

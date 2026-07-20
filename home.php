@@ -22,6 +22,7 @@ function home_normalize(string $value): string
 function home_products(int $limit = 8): array
 {
     $products = [];
+    $salesRank = home_sales_rank_map();
     foreach (svcr_products() as $row) {
         if (!is_array($row)) continue;
         $sku = trim((string)($row['sku'] ?? ''));
@@ -29,17 +30,73 @@ function home_products(int $limit = 8): array
         if ($sku === '' || $name === '') continue;
         $image = trim((string)($row['image_url'] ?? ''));
         $images = is_array($row['images'] ?? null) ? $row['images'] : [];
+        $olistProductId = (string)($row['olist_product_id'] ?? $row['id'] ?? '');
+        $rank = $salesRank[strtoupper($sku)] ?? $salesRank[strtoupper($olistProductId)] ?? null;
         $products[] = [
             'sku' => $sku,
             'name' => $name,
             'image_url' => $image !== '' ? $image : '/images/logo-vivaliz-square.png',
             'images' => array_slice(array_filter($images), 0, 10),
             'price' => (float)($row['price'] ?? 0),
+            'stock' => (int)($row['stock'] ?? 0),
             'category' => trim((string)($row['category'] ?? '')),
+            'olist_product_id' => $olistProductId,
+            'sales_score' => (float)($rank['score'] ?? 0),
+            'sales_position' => (int)($rank['position'] ?? 999999),
         ];
-        if (count($products) >= $limit) break;
     }
-    return svp_enrich_products($products);
+
+    $products = svp_enrich_products($products);
+    usort($products, static function (array $a, array $b): int {
+        $aPurchasable = ((float)($a['price'] ?? 0) > 0 && (int)($a['stock'] ?? 0) > 0) ? 1 : 0;
+        $bPurchasable = ((float)($b['price'] ?? 0) > 0 && (int)($b['stock'] ?? 0) > 0) ? 1 : 0;
+        if ($aPurchasable !== $bPurchasable) return $bPurchasable <=> $aPurchasable;
+
+        $scoreCompare = (float)($b['sales_score'] ?? 0) <=> (float)($a['sales_score'] ?? 0);
+        if ($scoreCompare !== 0) return $scoreCompare;
+
+        $stockCompare = (int)($b['stock'] ?? 0) <=> (int)($a['stock'] ?? 0);
+        if ($stockCompare !== 0) return $stockCompare;
+
+        return (float)($b['price'] ?? 0) <=> (float)($a['price'] ?? 0);
+    });
+
+    return array_slice($products, 0, $limit);
+}
+
+function home_latest_sales_rows(): array
+{
+    $directory = __DIR__ . '/storage/reports';
+    if (!is_dir($directory)) return [];
+
+    $files = glob($directory . '/tiny-sales-ranking-*.json') ?: [];
+    if ($files === []) return [];
+
+    usort($files, static fn(string $a, string $b): int => filemtime($b) <=> filemtime($a));
+    $decoded = json_decode((string)file_get_contents($files[0]), true);
+    $rows = is_array($decoded) && is_array($decoded['rows'] ?? null) ? $decoded['rows'] : [];
+
+    return array_values(array_filter($rows, 'is_array'));
+}
+
+function home_sales_rank_map(): array
+{
+    $map = [];
+    foreach (home_latest_sales_rows() as $index => $row) {
+        $score = (float)($row['quantity'] ?? 0) * 100000
+            + (float)($row['orders'] ?? 0) * 1000
+            + (float)($row['revenue'] ?? 0);
+        if ($score <= 0) continue;
+
+        foreach (['sku', 'product_id', 'olist_product_id', 'id'] as $field) {
+            $key = strtoupper(trim((string)($row[$field] ?? '')));
+            if ($key !== '' && !isset($map[$key])) {
+                $map[$key] = ['score' => $score, 'position' => $index + 1];
+            }
+        }
+    }
+
+    return $map;
 }
 
 function home_category_image(array $products, array $terms): string
@@ -100,6 +157,7 @@ $metrics = ['itens'=>'Seleção organizada','imagens'=>'Imagens reais','operacao
 <meta name="theme-color" content="#173B63">
 <title>Vivaliz | Loja online</title>
 <link rel="stylesheet" href="/css/responsive.css">
+<link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
 <link rel="icon" type="image/png" href="/images/logo-vivaliz-square.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -130,9 +188,9 @@ html,body{font-family:'Manrope','Segoe UI',sans-serif;background:#F5F8FB;color:v
 <aside class="hero-side"><article class="mini-banner"><strong>Categorias em destaque</strong><h2>Rodízios, ferragens e utilidades para casa.</h2><p>Imagens reais do catálogo e acesso direto aos produtos.</p><a href="/catalogo?q=rodizio">Explorar rodízios</a></article><article class="mini-banner"><strong>Compra assistida</strong><h2>Atendimento rápido antes e depois da compra.</h2><p>Conte com a equipe para compatibilidade, prazo e quantidade.</p><a href="/contato">Falar com a equipe</a></article></aside>
 </div></div></section>
 <section class="section-shell"><div class="container"><div class="section-head"><div><h2>Categorias em foco</h2><p>Atalhos com imagens reais dos produtos da loja.</p></div><a href="/catalogo">Abrir todo o catálogo</a></div><div class="categories-grid"><?php foreach($categoryLinks as $category): ?><a class="category-card" href="/catalogo?q=<?=urlencode($category['query'])?>"><div class="category-image"><img src="<?=htmlspecialchars($category['image'],ENT_QUOTES,'UTF-8')?>" alt="<?=htmlspecialchars($category['title'],ENT_QUOTES,'UTF-8')?>" loading="lazy" onerror="this.src='/images/logo-vivaliz-square.png'"></div><div class="category-body"><h3><?=htmlspecialchars($category['title'],ENT_QUOTES,'UTF-8')?></h3><p><?=htmlspecialchars($category['note'],ENT_QUOTES,'UTF-8')?></p></div></a><?php endforeach; ?></div></div></section>
-<section class="section-shell"><div class="container"><div class="section-head"><div><h2>Produtos em destaque</h2><p>Seleção carregada diretamente da origem canônica do catálogo.</p></div><a href="/catalogo">Ver todos</a></div><?php if($featuredProducts): ?><div class="products-grid"><?php foreach($featuredProducts as $product): $tags=home_product_tags($product['name']); $imagesJson = json_encode(array_slice(array_filter($product['images'] ?? [$product['image_url']]), 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?><article class="product-card"><div class="product-image" data-images="<?=htmlspecialchars($imagesJson, ENT_QUOTES, 'UTF-8')?>"><img src="<?=htmlspecialchars($product['image_url'],ENT_QUOTES,'UTF-8')?>" alt="<?=htmlspecialchars($product['name'],ENT_QUOTES,'UTF-8')?>" loading="lazy" onerror="this.src='/images/logo-vivaliz-square.png'"></div><div class="product-body"><?php foreach(array_slice($tags?:['Catálogo'],0,2) as $tag): ?><span class="product-tag"><?=htmlspecialchars($tag,ENT_QUOTES,'UTF-8')?></span><?php endforeach; ?><div class="product-title"><?=htmlspecialchars($product['name'],ENT_QUOTES,'UTF-8')?></div><div class="product-meta"><span><?=htmlspecialchars($product['sku'],ENT_QUOTES,'UTF-8')?></span><a class="product-link" href="/catalogo?q=<?=urlencode($product['sku'])?>">Ver item</a></div></div></article><?php endforeach; ?></div><?php else: ?><div class="empty-products">Nenhum produto disponível no catálogo neste momento.</div><?php endif; ?></div></section>
+<section class="section-shell"><div class="container"><div class="section-head"><div><h2>Produtos em destaque</h2><p>Seleção carregada diretamente da origem canônica do catálogo.</p></div><a href="/catalogo">Ver todos</a></div><?php if($featuredProducts): ?><div class="products-grid"><?php foreach($featuredProducts as $product): $tags=home_product_tags($product['name']); $cardImages = array_values(array_unique(array_filter(array_merge([$product['image_url']], is_array($product['images'] ?? null) ? $product['images'] : [])))); $imagesJson = json_encode(array_slice($cardImages, 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?><article class="product-card"><div class="product-image" data-images="<?=htmlspecialchars($imagesJson, ENT_QUOTES, 'UTF-8')?>"><img src="<?=htmlspecialchars($product['image_url'],ENT_QUOTES,'UTF-8')?>" alt="<?=htmlspecialchars($product['name'],ENT_QUOTES,'UTF-8')?>" loading="lazy" onerror="this.src='/images/logo-vivaliz-square.png'"></div><div class="product-body"><?php foreach(array_slice($tags?:['Catálogo'],0,2) as $tag): ?><span class="product-tag"><?=htmlspecialchars($tag,ENT_QUOTES,'UTF-8')?></span><?php endforeach; ?><div class="product-title"><?=htmlspecialchars($product['name'],ENT_QUOTES,'UTF-8')?></div><div class="product-meta"><span><?=htmlspecialchars($product['sku'],ENT_QUOTES,'UTF-8')?></span><a class="product-link" href="/catalogo?q=<?=urlencode($product['sku'])?>">Ver item</a></div></div></article><?php endforeach; ?></div><?php else: ?><div class="empty-products">Nenhum produto disponível no catálogo neste momento.</div><?php endif; ?></div></section>
 </main>
 <footer><div class="container footer-grid"><div><img src="/images/logo-vivaliz.png" alt="Vivaliz" style="height:42px;width:auto;margin-bottom:12px" onerror="this.src='/images/logo.svg'"><p>Vitrine digital da Vivaliz.</p></div><div><h3>Navegação</h3><p><a href="/catalogo">Catálogo</a></p><p><a href="/sobre">Sobre</a></p><p><a href="/contato">Contato</a></p></div><div><h3>Operação</h3><p><a href="/carrinho">Carrinho</a></p><p><a href="/faq">Perguntas frequentes</a></p><p><a href="/politica-privacidade">Privacidade</a></p></div></div></footer>
-<script src="/includes/auto-image-carousel.js"></script>
+<script src="/js/auto-image-carousel.js?v=20260719-2"></script>
 </body>
 </html>

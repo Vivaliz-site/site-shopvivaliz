@@ -218,6 +218,7 @@ $form = $coupon ?: [
         .muted { color: #64748b; font-size: 0.95rem; }
         .small { font-size: 0.88rem; color: #64748b; }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
     <div class="navbar">

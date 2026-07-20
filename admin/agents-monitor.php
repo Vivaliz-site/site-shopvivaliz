@@ -32,6 +32,7 @@ $watchdog = am_json_file('/logs/autonomous-hourly-guardian.json');
         .fail { color:#ef4444; }
         pre { background:#020617; padding:10px; overflow:auto; }
     </style>
+    <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
 <body>
 

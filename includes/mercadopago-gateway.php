@@ -119,6 +119,41 @@ function svmp_truncate(string $value, int $length): string
     return function_exists('mb_substr') ? mb_substr($value, 0, $length, 'UTF-8') : substr($value, 0, $length);
 }
 
+function svmp_state_name(string $state): string
+{
+    $uf = strtoupper(trim($state));
+    $names = [
+        'AC' => 'Acre',
+        'AL' => 'Alagoas',
+        'AP' => 'Amapá',
+        'AM' => 'Amazonas',
+        'BA' => 'Bahia',
+        'CE' => 'Ceará',
+        'DF' => 'Distrito Federal',
+        'ES' => 'Espírito Santo',
+        'GO' => 'Goiás',
+        'MA' => 'Maranhão',
+        'MT' => 'Mato Grosso',
+        'MS' => 'Mato Grosso do Sul',
+        'MG' => 'Minas Gerais',
+        'PA' => 'Pará',
+        'PB' => 'Paraíba',
+        'PR' => 'Paraná',
+        'PE' => 'Pernambuco',
+        'PI' => 'Piauí',
+        'RJ' => 'Rio de Janeiro',
+        'RN' => 'Rio Grande do Norte',
+        'RS' => 'Rio Grande do Sul',
+        'RO' => 'Rondônia',
+        'RR' => 'Roraima',
+        'SC' => 'Santa Catarina',
+        'SP' => 'São Paulo',
+        'SE' => 'Sergipe',
+        'TO' => 'Tocantins',
+    ];
+    return $names[$uf] ?? $state;
+}
+
 /**
  * @return array{status:int, raw:string, transport_error:bool}
  */
@@ -331,7 +366,7 @@ function svmp_boleto_payload(array $order): array
                 'street_number' => (string)$customer['street_number'],
                 'zip_code' => preg_replace('/\D+/', '', (string)$customer['cep']),
                 'neighborhood' => (string)$customer['neighborhood'],
-                'state' => strtoupper((string)$customer['state']),
+                'state' => svmp_state_name((string)$customer['state']),
                 'city' => (string)$customer['city'],
             ],
         ],
@@ -357,6 +392,8 @@ function svmp_preference_payload(array $order): array
     $baseUrl = svmp_base_url();
     $orderNumber = (string)($order['order_number'] ?? '');
     $cpf = preg_replace('/\D+/', '', (string)($customer['cpf'] ?? '')) ?? '';
+    $stateUf = strtoupper((string)($customer['state'] ?? ''));
+    $stateName = svmp_state_name($stateUf);
 
     $payload = [
         'items' => $items,
@@ -374,7 +411,7 @@ function svmp_preference_payload(array $order): array
                 'street_number' => (string)($customer['street_number'] ?? 'SN'),
                 'zip_code' => preg_replace('/\D+/', '', (string)($customer['cep'] ?? '')),
                 'neighborhood' => (string)($customer['neighborhood'] ?? ''),
-                'state' => strtoupper((string)($customer['state'] ?? '')),
+                'state' => $stateName,
                 'city' => (string)($customer['city'] ?? ''),
             ],
         ],
@@ -398,7 +435,7 @@ function svmp_preference_payload(array $order): array
                 'express_shipments' => false,
                 'receivers_address' => [
                     'zip_code' => preg_replace('/\D+/', '', (string)($customer['cep'] ?? '')),
-                    'state_name' => strtoupper((string)($customer['state'] ?? '')),
+                    'state_name' => $stateName,
                     'city_name' => (string)($customer['city'] ?? ''),
                     'street_number' => (string)($customer['street_number'] ?? 'SN'),
                     'street_name' => (string)($customer['street_name'] ?? $customer['address'] ?? ''),
