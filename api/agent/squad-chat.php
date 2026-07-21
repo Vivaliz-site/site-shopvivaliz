@@ -176,24 +176,8 @@ function processLizChat(string $message, string $context): string
         }
     }
 
-    if ($geminiKey === '') {
-        $lowerMsg = strtolower($message);
-        if (preg_match('/(produto|item|sku|código)/i', $lowerMsg)) {
-            return 'Posso te ajudar a encontrar o item ideal. Temos linhas como casa, jardim, organização, ferramentas e pet. Qual categoria você procura?';
-        }
-        if (preg_match('/(entrega|frete|prazo|demora)/i', $lowerMsg)) {
-            return 'Entregamos para todo o Brasil. O prazo e o frete variam conforme o CEP e os itens do carrinho.';
-        }
-        if (preg_match('/(seguro|pagamento|boleto|cartão|pix)/i', $lowerMsg)) {
-            return 'Aceitamos PIX, boleto e cartão, com transações protegidas e ambiente seguro.';
-        }
-        if (preg_match('/(troca|devolução|reembolso)/i', $lowerMsg)) {
-            return 'Você pode solicitar troca ou devolução dentro do prazo legal, e nosso atendimento orienta todo o processo.';
-        }
-        if (preg_match('/(contato|email|telefone|whatsapp)/i', $lowerMsg)) {
-            return 'Você pode falar com a equipe pelo e-mail atendimento@shopvivaliz.com.br.';
-        }
-        return 'Olá, eu sou a Liz. Posso te ajudar com produtos, frete, pagamento e informações da loja.';
+    if ($geminiKey === '' || $geminiKey === 'PLACEHOLDER') {
+        return processLizChatAdvanced($message, $productsSummary, $context);
     }
 
     $systemPrompt = "Você é a Liz, assistente virtual oficial da ShopVivaliz.\n";
@@ -234,6 +218,90 @@ function processLizChat(string $message, string $context): string
     file_put_contents($learningFile, json_encode($learningData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
     return $answer;
+}
+
+function processLizChatAdvanced(string $message, string $productsSummary, string $context): string
+{
+    $lowerMsg = strtolower(trim($message));
+
+    // Produtos/Catálogo
+    if (preg_match('/(produto|item|sku|categoria|procuro|busca|encontro|qual|recomenda)/i', $lowerMsg)) {
+        if (str_contains($lowerMsg, 'preço') || str_contains($lowerMsg, 'caro') || str_contains($lowerMsg, 'valor')) {
+            return 'Temos produtos em várias faixas de preço! De itens econômicos a premium. Qual seu orçamento?';
+        }
+        if (str_contains($lowerMsg, 'categoria') || str_contains($lowerMsg, 'linha')) {
+            return 'Oferecemos: Casa & Organização, Jardim & Plantas, Ferramentas, Pet & Animais, e muito mais. Qual te interessa?';
+        }
+        if (!empty($productsSummary)) {
+            return 'Temos um ótimo catálogo! Posso ajudar com recomendações de produtos em casa, jardim, organização e ferramentas. O que você procura?';
+        }
+        return 'Posso ajudar você a encontrar o produto perfeito! Qual categoria ou tipo de item você está procurando?';
+    }
+
+    // Entrega/Frete
+    if (preg_match('/(entrega|frete|prazo|demora|envio|cep|endereço|quando|quanto)/i', $lowerMsg)) {
+        if (str_contains($lowerMsg, 'grátis') || str_contains($lowerMsg, 'sem')) {
+            return 'Oferecemos frete com melhores preços do mercado. O valor final depende do CEP e dos itens. Quer que eu calcule?';
+        }
+        if (str_contains($lowerMsg, 'quanto') || str_contains($lowerMsg, 'custa')) {
+            return 'O frete é calculado conforme o CEP e os produtos. Compartilhe seu CEP que consigo detalhar!';
+        }
+        return 'Entregamos para todo o Brasil em prazos competitivos. O frete é calculado por CEP. Qual é seu código?';
+    }
+
+    // Pagamento/Segurança
+    if (preg_match('/(pagamento|paga|boleto|pix|cartão|crédito|débito|seguro|segurança|confiável)/i', $lowerMsg)) {
+        if (str_contains($lowerMsg, 'pix')) {
+            return 'Aceitamos PIX com desconto em muitos produtos! É seguro, rápido e instantâneo.';
+        }
+        if (str_contains($lowerMsg, 'boleto') || str_contains($lowerMsg, 'prazo')) {
+            return 'Oferecemos boleto com opções de parcelamento. Confira as condições no checkout!';
+        }
+        if (str_contains($lowerMsg, 'cartão')) {
+            return 'Cartão de crédito em até 12x sem juros em seleção de produtos. Ambiente 100% seguro com certificação SSL.';
+        }
+        return 'Aceitamos PIX, boleto e cartão de crédito (parcelado). Todas as transações são protegidas e criptografadas.';
+    }
+
+    // Devoluções/Trocas
+    if (preg_match('/(devolução|troca|reembolso|arrependimento|problema|defeito|reclamação)/i', $lowerMsg)) {
+        if (str_contains($lowerMsg, 'passo') || str_contains($lowerMsg, 'como')) {
+            return 'Para devolver: contate atendimento@shopvivaliz.com.br com a nota fiscal. Nós orientamos tudo! Prazo legal de 7 dias.';
+        }
+        if (str_contains($lowerMsg, 'defeito') || str_contains($lowerMsg, 'quebrou') || str_contains($lowerMsg, 'problema')) {
+            return 'Sentimos que chegou com problema! Abra um chamado com fotos e a nota. Resolvemos rápido com troca ou reembolso.';
+        }
+        return 'Você tem direito a devolver ou trocar dentro de 7 dias. Nossa equipe guia todo o processo. Quer começar?';
+    }
+
+    // Contato
+    if (preg_match('/(contato|email|telefone|whatsapp|fale|conversa|atendimento|suporte)/i', $lowerMsg)) {
+        if (str_contains($lowerMsg, 'whatsapp') || str_contains($lowerMsg, 'chat') || str_contains($lowerMsg, 'direto')) {
+            return 'No site tem nosso WhatsApp! Lá você fala diretamente com o time. Respondemos rapidinho!';
+        }
+        return 'Estamos aqui para ajudar! Email: atendimento@shopvivaliz.com.br | WhatsApp disponível no site | Chat 24/7';
+    }
+
+    // Rastreamento/Pedido
+    if (preg_match('/(rastreament|pedido|compra|meu|onde|status|acompanhar)/i', $lowerMsg)) {
+        return 'Você pode acompanhar seu pedido no email de confirmação ou na sua conta. Quer ajuda para localizar?';
+    }
+
+    // Saudações e genéricas
+    if (preg_match('/(oi|olá|opa|hey|opa|tudo bem|como vai)/i', $lowerMsg)) {
+        return 'Oi! Sou a Liz, assistente da ShopVivaliz. 😊 Posso ajudar com produtos, pedidos, frete, pagamento e tudo mais. Como posso te servir?';
+    }
+
+    if (preg_match('/(obrigado|valeu|thanks|vlw|legal)/i', $lowerMsg)) {
+        return 'De nada! Fico feliz em ajudar. Se precisar de mais, é só chamar! 🎉';
+    }
+
+    // Fallback inteligente
+    if (strlen($message) > 50) {
+        return 'Entendi sua pergunta! Resumindo: posso ajudar com catálogo de produtos, cálculo de frete, formas de pagamento, devoluções e muito mais. Qual desses temas você quer explorar?';
+    }
+
+    return 'Oi! Sou a Liz, assistente inteligente da ShopVivaliz. 👋 Posso ajudar com: 📦 Produtos | 🚚 Frete | 💳 Pagamento | 🔄 Devoluções | 📞 Contato. Qual é sua dúvida?';
 }
 
 function callGeminiAPI(string $url, array $payload): array
