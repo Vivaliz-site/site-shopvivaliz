@@ -222,7 +222,7 @@ function processLizChat(string $message, string $context): string
             'role' => 'user'
         ],
         'contents' => $contents,
-        'generationConfig' => ['maxOutputTokens' => 500, 'temperature' => 0.7],
+        'generationConfig' => ['maxOutputTokens' => 1024, 'temperature' => 0.7],
     ];
 
     $chat = callGeminiAPI($url, $payload);
