@@ -1,182 +1,342 @@
 <?php
-/**
- * Webhook receiver para notificações da Olist/Tiny
- * Processa: product, stock, price, orders
- * GET/POST /api/olist/webhook-receiver.php?event=price
- */
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=UTF-8');
+header('Cache-Control: no-store');
 
-$log_dir = __DIR__ . '/../../logs';
-if (!is_dir($log_dir)) {
-    mkdir($log_dir, 0755, true);
+$root = dirname(__DIR__, 2);
+$logDir = $root . '/logs';
+$cacheFile = $root . '/storage/products-cache-ativos.json';
+$logFile = $logDir . '/olist-webhook-receiver.log';
+@mkdir($logDir, 0755, true);
+
+function log_event(string $message): void
+{
+    global $logFile;
+    @file_put_contents(
+        $logFile,
+        '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL,
+        FILE_APPEND | LOCK_EX
+    );
 }
 
-$event = $_GET['event'] ?? $_POST['event'] ?? '';
-$log_file = $log_dir . '/olist-webhook-receiver.log';
-
-function log_event($message) {
-    global $log_file;
-    $timestamp = date('Y-m-d H:i:s');
-    file_put_contents($log_file, "[{$timestamp}] {$message}\n", FILE_APPEND);
-}
-
-// Log inicial
-log_event("Webhook recebido: event={$event} method=" . $_SERVER['REQUEST_METHOD']);
-
-if (!$event) {
-    http_response_code(400);
-    log_event("ERRO: Parametro 'event' nao fornecido");
-    echo json_encode(['error' => 'Missing event parameter']);
+function respond(int $status, array $payload): never
+{
+    http_response_code($status);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
-// Ler payload
-$input = file_get_contents('php://input');
-$data = json_decode($input, true);
-
-if (!$data) {
-    $data = $_POST;
+function first_value(array $data, array $paths): mixed
+{
+    foreach ($paths as $path) {
+        $value = $data;
+        foreach (explode('.', $path) as $segment) {
+            if (!is_array($value) || !array_key_exists($segment, $value)) {
+                $value = null;
+                break;
+            }
+            $value = $value[$segment];
+        }
+        if ($value !== null && $value !== '') {
+            return $value;
+        }
+    }
+    return null;
 }
 
-log_event("Event: {$event} | Payload size: " . strlen($input) . " bytes");
-
-// Processar por tipo de evento
-switch ($event) {
-    case 'price':
-        handle_price_update($data, $log_file);
-        break;
-
-    case 'stock':
-        handle_stock_update($data, $log_file);
-        break;
-
-    case 'product':
-        handle_product_update($data, $log_file);
-        break;
-
-    case 'order':
-        handle_order_update($data, $log_file);
-        break;
-
-    default:
-        http_response_code(400);
-        log_event("Evento desconhecido: {$event}");
-        echo json_encode(['error' => 'Unknown event type']);
-        exit;
+function is_list_array(array $value): bool
+{
+    return $value === [] || array_keys($value) === range(0, count($value) - 1);
 }
 
-function handle_price_update($data, $log_file) {
-    log_event("PRICE UPDATE");
-
-    if (!$data) {
-        http_response_code(400);
-        log_event("  ❌ Payload vazio");
-        echo json_encode(['error' => 'Empty payload']);
-        return;
-    }
-
-    // Extrair SKU e novo preço
-    $sku = $data['sku'] ?? $data['produto_sku'] ?? $data['codigo'] ?? '';
-    $price = $data['preco'] ?? $data['price'] ?? $data['preco_venda'] ?? null;
-
-    if (!$sku || $price === null) {
-        http_response_code(400);
-        log_event("  ❌ SKU ou preco ausente");
-        echo json_encode(['error' => 'Missing SKU or price']);
-        return;
-    }
-
-    log_event("  SKU: {$sku} | Novo preço: R$ {$price}");
-
-    // Invalidar cache
-    $cache_file = __DIR__ . '/../../storage/products-cache-ativos.json';
-    if (file_exists($cache_file)) {
-        $backup = $cache_file . '.webhook-' . time();
-        if (rename($cache_file, $backup)) {
-            log_event("  ✓ Cache invalidado (backup: " . basename($backup) . ")");
+function collect_items(array $payload): array
+{
+    foreach (['itens', 'items', 'produtos', 'products', 'data', 'payload', 'registros'] as $key) {
+        if (!isset($payload[$key]) || !is_array($payload[$key])) {
+            continue;
+        }
+        $candidate = $payload[$key];
+        if (is_list_array($candidate)) {
+            return array_values(array_filter($candidate, 'is_array'));
+        }
+        foreach (['itens', 'items', 'produtos', 'products', 'registros'] as $nested) {
+            if (isset($candidate[$nested]) && is_array($candidate[$nested]) && is_list_array($candidate[$nested])) {
+                return array_values(array_filter($candidate[$nested], 'is_array'));
+            }
         }
     }
 
-    // Disparar sincronização em background
-    $daemon = __DIR__ . '/../../daemon-sync-products.py';
-    if (is_file($daemon)) {
-        $cmd = "cd " . escapeshellarg(__DIR__ . '/../../') . " && /usr/bin/python3 daemon-sync-products.py >> " . escapeshellarg(__DIR__ . '/../../logs/sync-products.log') . " 2>&1 &";
-        exec($cmd, $output, $code);
-        log_event("  ✓ Sincronização disparada (código: {$code})");
-    }
-
-    http_response_code(200);
-    echo json_encode(['status' => 'received', 'sku' => $sku, 'price' => $price, 'action' => 'sync queued']);
-    log_event("  ✅ Processado com sucesso");
+    return is_list_array($payload)
+        ? array_values(array_filter($payload, 'is_array'))
+        : [$payload];
 }
 
-function handle_stock_update($data, $log_file) {
-    log_event("STOCK UPDATE");
+function normalize_item(array $item): array
+{
+    $sku = trim((string)(first_value($item, [
+        'sku', 'codigo', 'produto_sku', 'produto.sku', 'produto.codigo',
+        'product.sku', 'product.code', 'data.sku', 'data.codigo'
+    ]) ?? ''));
 
-    $sku = $data['sku'] ?? $data['produto_sku'] ?? $data['codigo'] ?? '';
-    $quantity = $data['estoque'] ?? $data['quantity'] ?? $data['estoque_disponivel'] ?? 0;
+    $id = trim((string)(first_value($item, [
+        'id', 'idProduto', 'produto_id', 'produto.id', 'product.id', 'data.id'
+    ]) ?? ''));
 
-    if (!$sku) {
-        http_response_code(400);
-        log_event("  ❌ SKU ausente");
-        echo json_encode(['error' => 'Missing SKU']);
-        return;
-    }
+    $priceRaw = first_value($item, [
+        'preco', 'price', 'preco_venda', 'valor', 'precos.preco',
+        'produto.preco', 'produto.precos.preco', 'product.price',
+        'data.preco', 'data.price'
+    ]);
 
-    log_event("  SKU: {$sku} | Novo estoque: {$quantity}");
+    $stockRaw = first_value($item, [
+        'estoque_disponivel', 'estoque', 'quantity', 'quantidade',
+        'estoque.quantidade', 'produto.estoque.quantidade',
+        'product.stock', 'data.estoque', 'data.quantity'
+    ]);
 
-    // Invalidar cache
-    $cache_file = __DIR__ . '/../../storage/products-cache-ativos.json';
-    if (file_exists($cache_file)) {
-        rename($cache_file, $cache_file . '.webhook-' . time());
-        log_event("  ✓ Cache invalidado");
-    }
-
-    http_response_code(200);
-    echo json_encode(['status' => 'received', 'sku' => $sku, 'quantity' => $quantity]);
-    log_event("  ✅ Processado com sucesso");
+    return [
+        'sku' => $sku,
+        'id' => $id,
+        'price' => is_numeric($priceRaw) ? (float)$priceRaw : null,
+        'stock' => is_numeric($stockRaw) ? max(0, (int)$stockRaw) : null,
+    ];
 }
 
-function handle_product_update($data, $log_file) {
-    log_event("PRODUCT UPDATE");
+function update_cache(array $updates): array
+{
+    global $cacheFile;
 
-    $sku = $data['sku'] ?? $data['produto_sku'] ?? $data['codigo'] ?? '';
-    if (!$sku) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Missing SKU']);
-        return;
+    if (!is_file($cacheFile)) {
+        return ['updated' => 0, 'missing' => count($updates), 'cache' => 'not_found'];
     }
 
-    log_event("  SKU: {$sku}");
-
-    // Invalidar cache
-    $cache_file = __DIR__ . '/../../storage/products-cache-ativos.json';
-    if (file_exists($cache_file)) {
-        rename($cache_file, $cache_file . '.webhook-' . time());
-        log_event("  ✓ Cache invalidado");
+    $fp = @fopen($cacheFile, 'c+');
+    if (!$fp || !flock($fp, LOCK_EX)) {
+        if (is_resource($fp)) {
+            fclose($fp);
+        }
+        return ['updated' => 0, 'missing' => count($updates), 'cache' => 'lock_failed'];
     }
 
-    http_response_code(200);
-    echo json_encode(['status' => 'received', 'sku' => $sku]);
-    log_event("  ✅ Processado com sucesso");
+    rewind($fp);
+    $raw = stream_get_contents($fp);
+    $payload = json_decode($raw ?: '', true);
+    if (!is_array($payload)) {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        return ['updated' => 0, 'missing' => count($updates), 'cache' => 'invalid_json'];
+    }
+
+    $wrapped = isset($payload['itens']) && is_array($payload['itens']);
+    $products = $wrapped ? $payload['itens'] : $payload;
+    $updated = 0;
+    $matched = [];
+
+    foreach ($products as &$product) {
+        if (!is_array($product)) {
+            continue;
+        }
+
+        $productSku = strtoupper(trim((string)($product['sku'] ?? $product['codigo'] ?? '')));
+        $productId = trim((string)($product['id'] ?? $product['olist_product_id'] ?? ''));
+
+        foreach ($updates as $index => $change) {
+            $sameSku = $change['sku'] !== '' && $productSku !== '' && $productSku === strtoupper($change['sku']);
+            $sameId = $change['id'] !== '' && $productId !== '' && $productId === $change['id'];
+            if (!$sameSku && !$sameId) {
+                continue;
+            }
+
+            if ($change['price'] !== null) {
+                $product['price'] = $change['price'];
+                $product['preco'] = $change['price'];
+                $product['preco_venda'] = $change['price'];
+                $product['precos'] = is_array($product['precos'] ?? null) ? $product['precos'] : [];
+                $product['precos']['preco'] = $change['price'];
+            }
+
+            if ($change['stock'] !== null) {
+                $product['stock'] = $change['stock'];
+                $product['estoque_disponivel'] = $change['stock'];
+                $product['estoque'] = is_array($product['estoque'] ?? null) ? $product['estoque'] : [];
+                $product['estoque']['quantidade'] = $change['stock'];
+            }
+
+            $product['synced_at'] = date('c');
+            $product['_webhook_synced_at'] = date('c');
+            $matched[$index] = true;
+            $updated++;
+            break;
+        }
+    }
+    unset($product);
+
+    if ($wrapped) {
+        $payload['itens'] = $products;
+        $payload['timestamp'] = date('c');
+        $payload['total'] = count($products);
+    } else {
+        $payload = $products;
+    }
+
+    $encoded = json_encode(
+        $payload,
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
+    );
+
+    if ($encoded === false) {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        return ['updated' => 0, 'missing' => count($updates), 'cache' => 'encode_failed'];
+    }
+
+    rewind($fp);
+    ftruncate($fp, 0);
+    fwrite($fp, $encoded);
+    fflush($fp);
+    flock($fp, LOCK_UN);
+    fclose($fp);
+
+    return [
+        'updated' => $updated,
+        'missing' => max(0, count($updates) - count($matched)),
+        'cache' => 'ok',
+    ];
 }
 
-function handle_order_update($data, $log_file) {
-    log_event("ORDER UPDATE");
+function queue_full_sync(): array
+{
+    global $root;
 
-    $order_id = $data['id'] ?? $data['pedido_id'] ?? $data['order_id'] ?? '';
-    if (!$order_id) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Missing order ID']);
-        return;
+    $daemon = $root . '/daemon-sync-products.py';
+    if (!is_file($daemon)) {
+        return ['queued' => false, 'reason' => 'daemon_not_found'];
     }
 
-    log_event("  Order ID: {$order_id}");
+    $log = $root . '/logs/sync-products.log';
+    $command = 'cd ' . escapeshellarg($root)
+        . ' && nohup /usr/bin/python3 ' . escapeshellarg($daemon)
+        . ' >> ' . escapeshellarg($log) . ' 2>&1 < /dev/null &';
 
-    http_response_code(200);
-    echo json_encode(['status' => 'received', 'order_id' => $order_id]);
-    log_event("  ✅ Processado com sucesso");
+    @exec($command, $output, $code);
+    return ['queued' => $code === 0, 'exit_code' => $code];
 }
-?>
+
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+
+if ($method === 'GET' && (string)($_GET['health'] ?? '') === '1') {
+    respond(200, [
+        'ok' => true,
+        'endpoint' => 'olist-webhook-receiver',
+        'cache_exists' => is_file($cacheFile),
+        'cache_writable' => is_file($cacheFile) ? is_writable($cacheFile) : is_writable(dirname($cacheFile)),
+        'timestamp' => date('c'),
+    ]);
+}
+
+if ($method !== 'POST') {
+    respond(405, ['ok' => false, 'error' => 'method_not_allowed', 'allowed' => ['POST']]);
+}
+
+$raw = (string)file_get_contents('php://input');
+$data = json_decode($raw, true);
+if (!is_array($data)) {
+    $data = $_POST;
+}
+
+$event = strtolower(trim((string)(
+    $_GET['event']
+    ?? $_POST['event']
+    ?? first_value($data, ['event', 'tipo', 'type', 'evento'])
+    ?? 'product'
+)));
+
+$aliases = [
+    'price_update' => 'price',
+    'product_price' => 'price',
+    'stock_update' => 'stock',
+    'produto' => 'product',
+    'pedido' => 'order',
+    'orders' => 'order',
+];
+$event = $aliases[$event] ?? $event;
+
+if (!in_array($event, ['price', 'stock', 'product', 'order'], true)) {
+    respond(400, ['ok' => false, 'error' => 'unknown_event', 'event' => $event]);
+}
+
+log_event('Webhook recebido: event=' . $event . ' method=' . $method . ' bytes=' . strlen($raw));
+
+if ($event === 'order') {
+    $orderId = trim((string)(first_value($data, ['id', 'pedido_id', 'order_id', 'pedido.id', 'order.id']) ?? ''));
+    if ($orderId === '') {
+        respond(400, ['ok' => false, 'error' => 'missing_order_id']);
+    }
+    log_event('Pedido recebido: id=' . $orderId);
+    respond(200, ['ok' => true, 'event' => 'order', 'order_id' => $orderId]);
+}
+
+$items = collect_items($data);
+$updates = [];
+$invalid = 0;
+
+foreach ($items as $item) {
+    $normalized = normalize_item($item);
+
+    if ($normalized['sku'] === '' && $normalized['id'] === '') {
+        $invalid++;
+        continue;
+    }
+    if ($event === 'price' && $normalized['price'] === null) {
+        $invalid++;
+        continue;
+    }
+    if ($event === 'stock' && $normalized['stock'] === null) {
+        $invalid++;
+        continue;
+    }
+    if ($event === 'product' && $normalized['price'] === null && $normalized['stock'] === null) {
+        $invalid++;
+        continue;
+    }
+
+    $updates[] = $normalized;
+}
+
+if ($updates === []) {
+    log_event('ERRO: nenhum item valido. recebidos=' . count($items) . ' invalidos=' . $invalid);
+    respond(400, [
+        'ok' => false,
+        'error' => 'no_valid_items',
+        'received' => count($items),
+        'invalid' => $invalid,
+    ]);
+}
+
+$result = update_cache($updates);
+$sync = ['queued' => false, 'reason' => 'not_required'];
+
+if ($result['cache'] !== 'ok' || $result['missing'] > 0) {
+    $sync = queue_full_sync();
+}
+
+log_event(
+    'Processado: recebidos=' . count($items)
+    . ' validos=' . count($updates)
+    . ' atualizados=' . $result['updated']
+    . ' ausentes=' . $result['missing']
+    . ' cache=' . $result['cache']
+);
+
+respond(200, [
+    'ok' => true,
+    'event' => $event,
+    'received' => count($items),
+    'valid' => count($updates),
+    'updated' => $result['updated'],
+    'missing' => $result['missing'],
+    'invalid' => $invalid,
+    'cache' => $result['cache'],
+    'full_sync' => $sync,
+]);
