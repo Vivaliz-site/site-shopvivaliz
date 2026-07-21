@@ -42,8 +42,8 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - name: Install lftp
-        run: sudo apt-get update && sudo apt-get install -y lftp
+      - name: Install deploy tools
+        run: sudo apt-get update && sudo apt-get install -y lftp jq
       - name: Deploy safely
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
@@ -73,29 +73,46 @@ jobs:
             --exclude-glob logs/** \
             --exclude-glob .env \
             ./ "$REMOTE"
+          put -O "$REMOTE" index.php
+          put -O "$REMOTE" home.php
           put -O "$REMOTE" .htaccess
           put -O "$REMOTE/includes" includes/header.php
           put -O "$REMOTE/includes" includes/footer.php
           put -O "$REMOTE/css" css/shopvivaliz-core-consolidated.css
           bye
           EOF
+      - name: Purge Cloudflare cache when configured
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "CLOUDFLARE_API_TOKEN not configured; skipping purge"
+            exit 0
+          fi
+          zone_response="$(curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' 'https://api.cloudflare.com/client/v4/zones?name=shopvivaliz.com.br&status=active')"
+          zone_id="$(printf '%s' "$zone_response" | jq -r '.result[0].id // empty')"
+          test -n "$zone_id"
+          purge_response="$(curl -fsS -X POST -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' --data '{"purge_everything":true}' "https://api.cloudflare.com/client/v4/zones/${zone_id}/purge_cache")"
+          test "$(printf '%s' "$purge_response" | jq -r '.success')" = "true"
 
   smoke-test:
     needs: deploy
     runs-on: ubuntu-latest
     steps:
       - name: Wait for propagation
-        run: sleep 20
+        run: sleep 25
       - name: Verify storefront and CSS
         run: |
           set -Eeuo pipefail
-          curl -fLsS --retry 3 --retry-delay 5 https://shopvivaliz.com.br/ -o /tmp/home.html
-          curl -fLsS --retry 3 --retry-delay 5 https://shopvivaliz.com.br/css/shopvivaliz-core-consolidated.css -o /tmp/core.css
+          curl -fLsS --retry 4 --retry-delay 5 https://shopvivaliz.com.br/ -o /tmp/home.html
+          curl -fLsS --retry 4 --retry-delay 5 https://shopvivaliz.com.br/css/shopvivaliz-core-consolidated.css -o /tmp/core.css
           test "$(wc -c < /tmp/core.css)" -gt 1000
           grep -qi 'Vivaliz' /tmp/home.html
+          ! grep -q 'InÃ­cio' /tmp/home.html
       - name: Verify canonical domain and health endpoints
         run: |
           set -Eeuo pipefail
           final_url="$(curl -LsS -o /dev/null -w '%{url_effective}' https://www.shopvivaliz.com.br/)"
           test "$final_url" = "https://shopvivaliz.com.br/"
-          curl -fLsS --retry 3 --retry-delay 5 'https://shopvivaliz.com.br/api/olist/webhook-receiver.php?health=1'
+          curl -fLsS --retry 4 --retry-delay 5 'https://shopvivaliz.com.br/api/olist/webhook-receiver.php?health=1'
