@@ -1,0 +1,5 @@
+.mini-cart-body:empty::before {
+  content: "Seu carrinho esta vazio.";
+  display: block;
+  color: #64748b;
+}

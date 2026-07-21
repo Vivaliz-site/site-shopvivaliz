@@ -1,0 +1,5 @@
+.shipping-box {
+  border: 1px solid var(--sv-line, #e2e8f0);
+  border-radius: 8px;
+  padding: 14px;
+}

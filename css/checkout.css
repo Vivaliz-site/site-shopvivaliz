@@ -1,0 +1,16 @@
+@import url("/css/style.css");
+
+.checkout-container,
+.checkout-page {
+  width: min(1180px, calc(100% - 32px));
+  margin: 32px auto;
+}
+.checkout-card,
+.order-summary,
+.cart-summary {
+  background: #fff;
+  border: 1px solid var(--sv-border, #dfe5ec);
+  border-radius: 8px;
+  padding: 18px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, .06);
+}

@@ -1,0 +1,8 @@
+.checkout-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 24px;
+}
+@media (max-width: 900px) {
+  .checkout-layout { grid-template-columns: 1fr; }
+}

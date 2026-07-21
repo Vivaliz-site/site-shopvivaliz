@@ -1,0 +1,4 @@
+.hero-cta-mt-24 { margin-top: 24px; }
+.color-accent-green { color: var(--sv-green); }
+.color-text-muted { color: var(--sv-muted); }
+.btn-cta-green { background: var(--sv-green); color: #fff; }
