@@ -22,11 +22,11 @@ SSH para a VM:
 ```bash
 ssh -i <chave-privada> ubuntu@137.131.156.17
 
-# Adicionar ao .env da VM
+# Adicionar ao .env da VM (usar sua própria chave de https://aistudio.google.com/app/apikey)
 cd /home/ubuntu/site-shopvivaliz
 echo "" >> .env
 echo "# === CREDENCIAIS IA ===" >> .env
-echo "GEMINI_API_KEY=***REMOVED***" >> .env
+echo "GEMINI_API_KEY=[SUA_CHAVE_AQUI]" >> .env
 
 # Verificar
 grep GEMINI_API_KEY .env
