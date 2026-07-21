@@ -8,11 +8,13 @@
 *.pem
 
 # IDE & Editor
-.vscode/
 .idea/
+.vscode/launch.json
+.vscode/tasks.json.backup
 *.swp
 *.swo
 *~
+# .vscode/ config files ARE committed (extensions.json, tasks.json, settings.json)
 
 # Python
 __pycache__/
