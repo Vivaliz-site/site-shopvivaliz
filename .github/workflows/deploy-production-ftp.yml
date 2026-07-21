@@ -65,6 +65,9 @@ jobs:
           set net:timeout 20
           mkdir -p "$REMOTE/includes"
           mkdir -p "$REMOTE/css"
+          mkdir -p "$REMOTE/images"
+          mkdir -p "$REMOTE/autodev"
+          mkdir -p "$REMOTE/public/assets/home-banners"
           put -O "$REMOTE" index.php
           put -O "$REMOTE" catalogo.php
           put -O "$REMOTE" home.php
@@ -74,6 +77,13 @@ jobs:
           put -O "$REMOTE/includes" includes/footer.php
           put -O "$REMOTE/css" css/shopvivaliz-core-consolidated.css
           put -O "$REMOTE/css" css/shopvivaliz-premium-consolidated.css
+          put -O "$REMOTE/images" images/logo-vivaliz.png
+          put -O "$REMOTE/images" images/logo-vivaliz-square.png
+          put -O "$REMOTE/autodev" autodev/client.js
+          put -O "$REMOTE/public/assets/home-banners" public/assets/home-banners/banner-primeira-compra.jpg
+          put -O "$REMOTE/public/assets/home-banners" public/assets/home-banners/banner-casa-estilo.jpg
+          put -O "$REMOTE/public/assets/home-banners" public/assets/home-banners/banner-primeira-compra.png
+          put -O "$REMOTE/public/assets/home-banners" public/assets/home-banners/banner-casa-estilo.png
           bye
           EOF
       - name: Purge Cloudflare cache when configured
