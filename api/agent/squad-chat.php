@@ -166,8 +166,11 @@ if ($method === 'POST' && !empty($payload['message'])) {
             $response['received'] = ['message' => $message, 'context' => $context];
             $response['version'] = 'liz-smart-1.0';
         } catch (Exception $e) {
-            error_log("Liz Smart Error: " . $e->getMessage());
+            $errMsg = "Liz Smart Error: " . $e->getMessage() . " | File: " . $e->getFile() . ":" . $e->getLine();
+            error_log($errMsg);
+            file_put_contents('/tmp/liz-error.log', date('Y-m-d H:i:s') . " | " . $errMsg . PHP_EOL, FILE_APPEND);
             $response['answer'] = "Desculpe, tive um problema aqui. Tente novamente!";
+            $response['debug_error'] = $e->getMessage();
         }
     } else {
         // Fallback para processLizChat se Smart não existir

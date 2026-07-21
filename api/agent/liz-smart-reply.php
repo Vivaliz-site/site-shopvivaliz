@@ -182,7 +182,9 @@ class LizSmartReply
             $stmt->execute([$userId, $message, $response]);
 
             // Atualizar perfil do usuário
-            $existing = $this->db->query("SELECT * FROM liz_users WHERE user_id = ?")->fetch();
+            $checkStmt = $this->db->prepare("SELECT * FROM liz_users WHERE user_id = ?");
+            $checkStmt->execute([$userId]);
+            $existing = $checkStmt->fetch();
 
             if (!$existing) {
                 $stmt = $this->db->prepare("
