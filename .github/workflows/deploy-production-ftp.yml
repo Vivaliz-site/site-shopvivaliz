@@ -65,18 +65,17 @@ jobs:
           set ssl:verify-certificate false
           set net:max-retries 2
           set net:timeout 20
-          mirror --reverse --verbose --only-newer --parallel=4 \
-            --exclude-glob .git/** \
-            --exclude-glob .github/** \
-            --exclude-glob node_modules/** \
-            --exclude-glob vendor/** \
-            --exclude-glob storage/logs/** \
-            --exclude-glob logs/** \
-            --exclude-glob .env \
-            ./ "$REMOTE"
+          mkdir -p "$REMOTE/css"
+          mkdir -p "$REMOTE/js"
+          mkdir -p "$REMOTE/includes"
+          mkdir -p "$REMOTE/public/assets/liz-assistant"
+          mirror --reverse --verbose --only-newer --parallel=4 css "$REMOTE/css"
+          mirror --reverse --verbose --only-newer --parallel=4 js "$REMOTE/js"
+          mirror --reverse --verbose --only-newer --parallel=2 public/assets/liz-assistant "$REMOTE/public/assets/liz-assistant"
           put -O "$REMOTE" index.php
           put -O "$REMOTE" home.php
           put -O "$REMOTE" .htaccess
+          put -O "$REMOTE/includes" includes/navbar.php
           put -O "$REMOTE/includes" includes/header.php
           put -O "$REMOTE/includes" includes/footer.php
           put -O "$REMOTE/css" css/shopvivaliz-core-consolidated.css
