@@ -217,9 +217,12 @@ function processLizChat(string $message, string $context): string
     $model = getenv('SQUAD_GEMINI_MODEL') ?: 'gemini-3.5-flash';
     $url = 'https://generativelanguage.googleapis.com/v1/models/' . rawurlencode($model) . ':generateContent?key=' . $geminiKey;
     $payload = [
-        'system_instruction' => ['parts' => [['text' => $systemPrompt]]],
+        'system_instruction' => [
+            'parts' => [['text' => $systemPrompt]],
+            'role' => 'user'
+        ],
         'contents' => $contents,
-        'generationConfig' => ['maxOutputTokens' => 500, 'temperature' => 0.5],
+        'generationConfig' => ['maxOutputTokens' => 500, 'temperature' => 0.7],
     ];
 
     $chat = callGeminiAPI($url, $payload);
