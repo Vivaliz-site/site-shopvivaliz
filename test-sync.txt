@@ -1,0 +1,3 @@
+TEST SYNC - Bidirectional Mirror Test
+Date: 2026-07-21 23:50
+LOCAL (C:\site-shopvivaliz) → GitHub → VM (137.131.156.17)
