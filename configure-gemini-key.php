@@ -7,12 +7,18 @@
 header('Content-Type: application/json; charset=utf-8');
 
 $env_file = '/home/ubuntu/site-shopvivaliz/.env';
-$gemini_key = '***REMOVED***';
+$gemini_key = getenv('GEMINI_API_KEY') ?: (defined('GEMINI_API_KEY') ? GEMINI_API_KEY : '');
 $output = [];
 $success = false;
 
-// Verificar se arquivo existe
-if (!file_exists($env_file)) {
+// Se não tem chave em variável de ambiente, buscar de arquivo de configuração
+if (!$gemini_key && file_exists('/home/ubuntu/.gemini-key')) {
+    $gemini_key = trim(file_get_contents('/home/ubuntu/.gemini-key'));
+}
+
+if (!$gemini_key) {
+    $output[] = "❌ GEMINI_API_KEY não configurada (use variável de ambiente ou arquivo /home/ubuntu/.gemini-key)";
+} else if (!file_exists($env_file)) {
     $output[] = "Arquivo .env não encontrado em: $env_file";
 } else {
     // Ler conteúdo atual
@@ -29,7 +35,7 @@ if (!file_exists($env_file)) {
         );
     } else {
         // Adicionar nova linha
-        $current_content = trim($current_content) . "\n\n# === CREDENCIAIS IA ===\nGEMINI_API_KEY=$gemini_key\n";
+        $current_content = trim($current_content) . "\n\n# === CREDENCIAIS IA ===\nGEMINI_API_KEY=" . (strlen($gemini_key) > 0 ? "[CONFIGURED]" : "[MISSING]") . "\n";
         $output[] = "Adicionando GEMINI_API_KEY ao .env";
     }
 
