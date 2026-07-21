@@ -1,0 +1,84 @@
+{
+  "schema_version": "1.0",
+  "project": "ShopVivaliz",
+  "orchestrator": {
+    "id": "shopvivaliz-orchestrator",
+    "mission": "Coordenar diagnostico, correcao, testes, deploy e auditoria com evidencias.",
+    "knowledge_base": "docs/knowledge",
+    "message_transport": "codex-mesh-bridge",
+    "default_branch": "main",
+    "rules": [
+      "Ler AGENTS.md e VALIDATION-POLICY.md antes de qualquer tarefa.",
+      "Nunca declarar sucesso sem evidencia verificavel.",
+      "Nunca usar git reset --hard em producao.",
+      "Preservar dados operacionais e segredos.",
+      "Toda atualizacao deve ser cumulativa.",
+      "SQLs, migrations e reparos de vinculo devem ser executados pelo atualizador automaticamente.",
+      "Identificar a causa antes de propor ou aplicar a solucao.",
+      "Em caso de falha, interromper o fluxo e produzir diagnostico objetivo."
+    ]
+  },
+  "agents": [
+    {
+      "id": "architect",
+      "name": "Arquiteto",
+      "responsibilities": ["analisar impacto", "definir plano", "aprovar arquitetura"],
+      "writes": ["docs", "planos", "decisoes tecnicas"]
+    },
+    {
+      "id": "diagnostics",
+      "name": "Diagnostico",
+      "responsibilities": ["inspecionar logs", "testar endpoints", "validar health checks", "localizar causa raiz"],
+      "writes": ["reports", "issues"]
+    },
+    {
+      "id": "backend",
+      "name": "Backend",
+      "responsibilities": ["corrigir PHP", "corrigir APIs", "criar migrations", "manter compatibilidade"],
+      "writes": ["api", "scripts", "migrations"]
+    },
+    {
+      "id": "frontend",
+      "name": "Frontend",
+      "responsibilities": ["corrigir desktop e mobile", "remover placeholders", "melhorar UX"],
+      "writes": ["public", "assets", "templates"]
+    },
+    {
+      "id": "integrations",
+      "name": "Integracoes",
+      "responsibilities": ["validar Tiny", "validar Olist", "validar Pagar.me", "validar Melhor Envio", "reprocessar sincronizacoes"],
+      "writes": ["api", "scripts", "docs"]
+    },
+    {
+      "id": "qa",
+      "name": "QA",
+      "responsibilities": ["executar testes reais", "comparar antes e depois", "bloquear regressao"],
+      "writes": ["tests", "reports"]
+    },
+    {
+      "id": "deploy",
+      "name": "Deploy",
+      "responsibilities": ["validar artefato", "publicar com seguranca", "executar migrations", "verificar rollback"],
+      "writes": [".github/workflows", "scripts", "reports"]
+    },
+    {
+      "id": "audit",
+      "name": "Auditoria",
+      "responsibilities": ["monitorar saude", "detectar recorrencia", "abrir tarefa corretiva", "gerar relatorio final"],
+      "writes": ["reports", "issues"]
+    }
+  ],
+  "workflow": [
+    "architect",
+    "diagnostics",
+    "backend|frontend|integrations",
+    "qa",
+    "deploy",
+    "audit"
+  ],
+  "completion_policy": {
+    "required_status": "COMPROVADO",
+    "required_evidence": ["commit_sha", "test_results", "deployment_observation"],
+    "final_report_path": "reports/agents"
+  }
+}
