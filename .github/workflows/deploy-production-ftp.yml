@@ -56,7 +56,8 @@ jobs:
           : "${FTP_SERVER:?Missing FTP_SERVER}"
           : "${FTP_USERNAME:?Missing FTP_USERNAME}"
           : "${FTP_PASSWORD:?Missing FTP_PASSWORD}"
-          PORT="${FTP_PORT:-21}"
+          PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"
+          PORT="${PORT:-21}"
           REMOTE="${FTP_REMOTE_DIR:-/}"
           lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF
           set ftp:ssl-force true
