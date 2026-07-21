@@ -9,7 +9,7 @@ A chave Gemini API **NUNCA deve ser commitada no repo** (GitHub Secret Scanning 
 ### Método 1: GitHub Secrets (Recomendado para CI/CD)
 
 1. Ir para: `https://github.com/Vivaliz-site/site-shopvivaliz/settings/secrets/actions`
-2. Adicionar secret: `GEMINI_API_KEY` = `***REMOVED***`
+2. Adicionar secret: `GEMINI_API_KEY` = `[SUA_CHAVE_AQUI - obter em https://aistudio.google.com/app/apikey]`
 3. Usar em workflows `.github/workflows/*.yml`:
    ```yaml
    env:
