@@ -214,8 +214,8 @@ function processLizChat(string $message, string $context): string
     }
     $contents[] = ['role' => 'user', 'parts' => [['text' => $message]]];
 
-    $model = getenv('SQUAD_GEMINI_MODEL') ?: 'gemini-1.5-flash';
-    $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . $geminiKey;
+    $model = getenv('SQUAD_GEMINI_MODEL') ?: 'gemini-3.5-flash';
+    $url = 'https://generativelanguage.googleapis.com/v1/models/' . rawurlencode($model) . ':generateContent?key=' . $geminiKey;
     $payload = [
         'system_instruction' => ['parts' => [['text' => $systemPrompt]]],
         'contents' => $contents,
