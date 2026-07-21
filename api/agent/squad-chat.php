@@ -152,20 +152,28 @@ if ($method === 'POST' && !empty($payload['message'])) {
     $context = (string) ($payload['context'] ?? 'site-shopvivaliz');
     $userId = (string) ($payload['user_id'] ?? 'anonymous');
 
-    // Tentar usar sistema avançado primeiro
-    $advancedFile = __DIR__ . '/liz-advanced.php';
-    if (is_file($advancedFile)) {
-        // Usar advanced se Gemini não está configurado (fallback inteligente)
-        $geminiKey = getenv('GEMINI_API_KEY') ?: '';
-        if ($geminiKey === '' || $geminiKey === 'PLACEHOLDER') {
-            require_once $advancedFile;
-            exit;
-        }
-    }
+    // USAR LIZ SMART REPLY (v1.0)
+    $smartFile = __DIR__ . '/liz-smart-reply.php';
+    if (is_file($smartFile)) {
+        require_once $smartFile;
 
-    // Fallback para Gemini
-    $response['answer'] = processLizChat($message, $context, $userId);
-    $response['received'] = ['message' => $message, 'context' => $context];
+        try {
+            $liz = new LizSmartReply();
+            $answer = $liz->getSmartResponse($message, $userId);
+            $liz->saveChat($userId, $message, $answer);
+
+            $response['answer'] = $answer;
+            $response['received'] = ['message' => $message, 'context' => $context];
+            $response['version'] = 'liz-smart-1.0';
+        } catch (Exception $e) {
+            error_log("Liz Smart Error: " . $e->getMessage());
+            $response['answer'] = "Desculpe, tive um problema aqui. Tente novamente!";
+        }
+    } else {
+        // Fallback para processLizChat se Smart não existir
+        $response['answer'] = processLizChat($message, $context, $userId);
+        $response['received'] = ['message' => $message, 'context' => $context];
+    }
 }
 
 echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
