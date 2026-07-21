@@ -206,6 +206,10 @@ require_once __DIR__ . '/../includes/admin-guard.php';
         <div class="section">
             <div class="section-header">⚡ Ferramentas Avançadas</div>
             <div class="section-grid">
+                <a href="/admin/css-editor.php" class="menu-item">
+                    <div class="menu-item-title">✏️ Editor CSS</div>
+                    <div class="menu-item-desc">Customizar CSS de todas as páginas</div>
+                </a>
                 <a href="/admin/visual-editor.php" class="menu-item">
                     <div class="menu-item-title">Visual Editor</div>
                     <div class="menu-item-desc">Editar conteúdo visual</div>
