@@ -553,6 +553,7 @@ $svNavCurrent = '';
     }
     </script>
 
+    <?php require_once __DIR__ . '/includes/load-custom-css.php'; ?>
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
 </head>
 <body>
