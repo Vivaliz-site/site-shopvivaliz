@@ -31,6 +31,7 @@ require_once __DIR__ . '/../includes/admin-guard.php';
         .badge { display: inline-block; background: #667eea; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; margin-top: 0.5rem; }
     </style>
     <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
+    <?php require_once __DIR__ . '/../includes/load-custom-css.php'; ?>
 </head>
 <body>
     <div class="navbar">
