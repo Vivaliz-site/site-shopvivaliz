@@ -75,6 +75,7 @@ jobs:
           mirror --reverse --verbose --only-newer --parallel=2 images "$REMOTE/images"
           mirror --reverse --verbose --only-newer --parallel=2 public/assets/liz-assistant "$REMOTE/public/assets/liz-assistant"
           put -O "$REMOTE" index.php
+          put -O "$REMOTE" catalogo.php
           put -O "$REMOTE" home.php
           put -O "$REMOTE" .htaccess
           put -O "$REMOTE/includes" includes/navbar.php
