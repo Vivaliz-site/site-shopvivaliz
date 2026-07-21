@@ -79,9 +79,6 @@ function configure_session(): void
     if (session_status() === PHP_SESSION_NONE) {
         @session_start();
     }
-
-    // Regenerate session ID to prevent fixation
-    session_regenerate_id(true);
 }
 
 /**
