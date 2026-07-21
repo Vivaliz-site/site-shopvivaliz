@@ -17,7 +17,7 @@ const LIZ_DB_PATH = __DIR__ . '/../../storage/private/liz_smart.db';
 
 class LizSmartReply
 {
-    private \PDO $db;
+    private ?\PDO $db = null;
     private array $catalog = [];
 
     public function __construct()
@@ -59,6 +59,7 @@ class LizSmartReply
             ");
         } catch (Exception $e) {
             error_log("Liz DB Error: " . $e->getMessage());
+            throw new Exception("Liz Database initialization failed: " . $e->getMessage());
         }
     }
 
@@ -174,6 +175,11 @@ class LizSmartReply
 
     public function saveChat(string $userId, string $message, string $response): void
     {
+        if ($this->db === null) {
+            error_log("Liz Save Error: Database not initialized");
+            return;
+        }
+
         try {
             $stmt = $this->db->prepare("
                 INSERT INTO liz_chats (user_id, message, response, created_at)
@@ -181,7 +187,6 @@ class LizSmartReply
             ");
             $stmt->execute([$userId, $message, $response]);
 
-            // Atualizar perfil do usuário
             $checkStmt = $this->db->prepare("SELECT * FROM liz_users WHERE user_id = ?");
             $checkStmt->execute([$userId]);
             $existing = $checkStmt->fetch();
@@ -207,6 +212,10 @@ class LizSmartReply
 
     public function getUserHistory(string $userId): array
     {
+        if ($this->db === null) {
+            return [];
+        }
+
         try {
             $stmt = $this->db->prepare("
                 SELECT * FROM liz_chats
