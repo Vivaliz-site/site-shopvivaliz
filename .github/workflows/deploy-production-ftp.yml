@@ -63,17 +63,8 @@ jobs:
           set ssl:verify-certificate false
           set net:max-retries 2
           set net:timeout 20
-          mkdir -p "$REMOTE/css"
-          mkdir -p "$REMOTE/js"
-          mkdir -p "$REMOTE/assets"
-          mkdir -p "$REMOTE/images"
           mkdir -p "$REMOTE/includes"
-          mkdir -p "$REMOTE/public/assets/liz-assistant"
-          mirror --reverse --verbose --only-newer --parallel=4 css "$REMOTE/css"
-          mirror --reverse --verbose --only-newer --parallel=4 js "$REMOTE/js"
-          mirror --reverse --verbose --only-newer --parallel=2 assets "$REMOTE/assets"
-          mirror --reverse --verbose --only-newer --parallel=2 images "$REMOTE/images"
-          mirror --reverse --verbose --only-newer --parallel=2 public/assets/liz-assistant "$REMOTE/public/assets/liz-assistant"
+          mkdir -p "$REMOTE/css"
           put -O "$REMOTE" index.php
           put -O "$REMOTE" catalogo.php
           put -O "$REMOTE" home.php
@@ -82,6 +73,7 @@ jobs:
           put -O "$REMOTE/includes" includes/header.php
           put -O "$REMOTE/includes" includes/footer.php
           put -O "$REMOTE/css" css/shopvivaliz-core-consolidated.css
+          put -O "$REMOTE/css" css/shopvivaliz-premium-consolidated.css
           bye
           EOF
       - name: Purge Cloudflare cache when configured
