@@ -68,6 +68,7 @@ jobs:
           mkdir -p "$REMOTE/images"
           mkdir -p "$REMOTE/autodev"
           mkdir -p "$REMOTE/public/assets/home-banners"
+          mkdir -p "$REMOTE/public/assets/liz-assistant"
           put -O "$REMOTE" index.php
           put -O "$REMOTE" catalogo.php
           put -O "$REMOTE" home.php
@@ -84,6 +85,12 @@ jobs:
           put -O "$REMOTE/public/assets/home-banners" public/assets/home-banners/banner-casa-estilo.jpg
           put -O "$REMOTE/public/assets/home-banners" public/assets/home-banners/banner-primeira-compra.png
           put -O "$REMOTE/public/assets/home-banners" public/assets/home-banners/banner-casa-estilo.png
+          put -O "$REMOTE/public/assets/liz-assistant" public/assets/liz-assistant/liz-assistant.css
+          put -O "$REMOTE/public/assets/liz-assistant" public/assets/liz-assistant/liz-assistant.js
+          put -O "$REMOTE/public/assets/liz-assistant" public/assets/liz-assistant/liz-avatar.png
+          put -O "$REMOTE/public/assets/liz-assistant" public/assets/liz-assistant/liz-acenando.webm
+          put -O "$REMOTE/public/assets/liz-assistant" public/assets/liz-assistant/logo-oficial.svg
+          put -O "$REMOTE/public/assets/liz-assistant" public/assets/liz-assistant/liz-widget.html
           bye
           EOF
       - name: Purge Cloudflare cache when configured

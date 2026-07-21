@@ -1,1 +1,122 @@
-(function(){const API="/api/agent/squad-chat.php";function init(){if(!document.getElementById("sv-liz-panel"))createPanel();attachListeners()}function createPanel(){const p=document.createElement("div");p.id="sv-liz-panel";p.innerHTML='<div class="sv-liz-header"><h2>🤖 Assistente Liz</h2><button onclick="document.getElementById(\'sv-liz-panel\').classList.remove(\'open\');document.body.classList.remove(\'sv-liz-is-open\');">×</button></div><div class="sv-liz-messages" id="sv-liz-messages"><div class="sv-liz-message bot"><div class="sv-liz-message-content">Olá! Eu sou a Liz. Como posso ajudá-lo?</div></div></div><div class="sv-liz-input-area"><input type="text" id="sv-liz-input" placeholder="Digite sua pergunta..."><button id="sv-liz-send">Enviar</button></div>';document.body.appendChild(p)}function attachListeners(){const i=document.getElementById("sv-liz-input"),s=document.getElementById("sv-liz-send");i&&s&&(s.addEventListener("click",()=>send()),i.addEventListener("keypress",e=>{"Enter"===e.key&&send()}))}function send(){const i=document.getElementById("sv-liz-input"),s=document.getElementById("sv-liz-send"),m=document.getElementById("sv-liz-messages");if(!i||!m||!s)return;const t=i.value.trim();if(!t)return;const e=document.createElement("div");e.className="sv-liz-message user";e.innerHTML='<div class="sv-liz-message-content">'+escapeHtml(t)+'</div>';m.appendChild(e);i.value="";i.focus();s.disabled=!0;const a=document.createElement("div");a.className="sv-liz-message bot";a.innerHTML='<div class="sv-liz-message-content">Enviando...</div>';m.appendChild(a);m.scrollTop=m.scrollHeight;fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:t,context:"site-shopvivaliz"})}).then(r=>r.json()).then(r=>{a.remove();const o=r.answer||"Erro ao processar.";const n=document.createElement("div");n.className="sv-liz-message bot";n.innerHTML='<div class="sv-liz-message-content">'+escapeHtml(o)+'</div>';m.appendChild(n);m.scrollTop=m.scrollHeight;s.disabled=!1}).catch(()=>{a.remove();const r=document.createElement("div");r.className="sv-liz-message bot";r.innerHTML='<div class="sv-liz-message-content">Erro. Tente novamente.</div>';m.appendChild(r);s.disabled=!1})}function escapeHtml(r){const t=document.createElement("div");return t.textContent=r,t.innerHTML}document.readyState==="loading"?document.addEventListener("DOMContentLoaded",init):init()})();
+(() => {
+  const API = '/api/agent/squad-chat.php';
+  const root = document.createElement('div');
+
+  root.innerHTML = `
+    <button id="sv-liz-launcher" type="button" aria-label="Abrir assistente Liz" aria-controls="sv-liz-panel" aria-expanded="false">
+      <img src="/public/assets/liz-assistant/liz-avatar.png" alt="Liz">
+    </button>
+    <div id="sv-liz-bubble">Ei! Vi que você tem produtos no carrinho. Finalize agora com 5% de desconto via PIX! 💸</div>
+    <section id="sv-liz-panel" role="dialog" aria-modal="false" aria-label="Liz - Assistente Virtual">
+      <div class="sv-head">
+        <img src="/public/assets/liz-assistant/logo-oficial.svg" alt="ShopVivaliz">
+        <strong>Liz - Assistente Virtual</strong>
+        <button class="sv-close" type="button" aria-label="Fechar assistente">×</button>
+      </div>
+      <div class="sv-hero">
+        <video autoplay muted loop playsinline src="/public/assets/liz-assistant/liz-acenando.webm"></video>
+      </div>
+      <div class="sv-msgs">
+        <div class="sv-msg sv-bot">Oi! Eu sou a Liz. Posso ajudar você a encontrar um produto, acompanhar uma compra ou tirar dúvidas.</div>
+      </div>
+      <div class="sv-quick">
+        <button type="button">Encontrar produto</button>
+        <button type="button">Compra segura</button>
+        <button type="button">Entrega</button>
+        <button type="button">Ofertas</button>
+      </div>
+      <form class="sv-form">
+        <input placeholder="Digite sua pergunta" autocomplete="off">
+        <button type="submit">Enviar</button>
+      </form>
+    </section>`;
+
+  document.body.append(root);
+
+  const launcher = root.querySelector('#sv-liz-launcher');
+  const panel = root.querySelector('#sv-liz-panel');
+  const close = root.querySelector('.sv-close');
+  const msgs = root.querySelector('.sv-msgs');
+  const input = root.querySelector('input');
+
+  function setOpen(open) {
+    panel.classList.toggle('open', open);
+    root.classList.toggle('sv-liz-is-open', open);
+    launcher.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      setTimeout(() => input.focus(), 60);
+    }
+  }
+
+  launcher.addEventListener('click', () => setOpen(!panel.classList.contains('open')));
+  close.addEventListener('click', () => setOpen(false));
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && panel.classList.contains('open')) setOpen(false);
+  });
+
+  const add = (text, className) => {
+    const item = document.createElement('div');
+    item.className = `sv-msg ${className}`;
+    item.textContent = text;
+    msgs.append(item);
+    msgs.scrollTop = msgs.scrollHeight;
+    return item;
+  };
+
+  async function ask(text) {
+    add(text, 'sv-user');
+    const waiting = add('Só um instante...', 'sv-bot');
+
+    try {
+      const response = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, context: 'site-shopvivaliz' }),
+      });
+      const data = await response.json();
+      waiting.textContent = data.answer || data.reply || data.message || data.response || 'Recebi sua mensagem. Nossa equipe pode continuar o atendimento com você.';
+    } catch (error) {
+      waiting.textContent = 'Não consegui conectar. Tente novamente em instantes.';
+    }
+  }
+
+  root.querySelector('form').addEventListener('submit', event => {
+    event.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    ask(text);
+  });
+
+  root.querySelectorAll('.sv-quick button').forEach(button => {
+    button.addEventListener('click', () => ask(button.textContent.trim()));
+  });
+
+  fetch(`${API}?health=1`)
+    .then(response => response.json())
+    .then(health => {
+      root.dataset.health = (health.ok === true && health.endpoint === 'squad-chat' && health.providers) ? 'ok' : 'degraded';
+    })
+    .catch(() => {
+      root.dataset.health = 'offline';
+    });
+
+  // Cart Abandonment Recovery (Exit Intent)
+  let abandonmentTriggered = false;
+  document.addEventListener('mouseleave', event => {
+    if (event.clientY <= 0 && !abandonmentTriggered && !panel.classList.contains('open')) {
+      try {
+        const cart = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
+        if (cart.length > 0) {
+          abandonmentTriggered = true;
+          const bubble = root.querySelector('#sv-liz-bubble');
+          if (bubble) {
+            bubble.classList.add('show-bubble');
+            setTimeout(() => bubble.classList.remove('show-bubble'), 8000);
+          }
+        }
+      } catch (err) {}
+    }
+  });
+
+})();
