@@ -150,13 +150,27 @@ $response = [
 if ($method === 'POST' && !empty($payload['message'])) {
     $message = (string) ($payload['message'] ?? '');
     $context = (string) ($payload['context'] ?? 'site-shopvivaliz');
-    $response['answer'] = processLizChat($message, $context);
+    $userId = (string) ($payload['user_id'] ?? 'anonymous');
+
+    // Tentar usar sistema avançado primeiro
+    $advancedFile = __DIR__ . '/liz-advanced.php';
+    if (is_file($advancedFile)) {
+        // Usar advanced se Gemini não está configurado (fallback inteligente)
+        $geminiKey = getenv('GEMINI_API_KEY') ?: '';
+        if ($geminiKey === '' || $geminiKey === 'PLACEHOLDER') {
+            require_once $advancedFile;
+            exit;
+        }
+    }
+
+    // Fallback para Gemini
+    $response['answer'] = processLizChat($message, $context, $userId);
     $response['received'] = ['message' => $message, 'context' => $context];
 }
 
 echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 
-function processLizChat(string $message, string $context): string
+function processLizChat(string $message, string $context, string $userId = 'anonymous'): string
 {
     $geminiKey = getenv('GEMINI_API_KEY') ?: '';
     $learningFile = dirname(__DIR__, 2) . '/storage/private/liz_learning_base.json';
