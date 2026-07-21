@@ -19,16 +19,20 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate PHP syntax
         run: |
-          set -e
+          set -Eeuo pipefail
           find . -type f -name '*.php' \
             -not -path './vendor/*' \
             -not -path './node_modules/*' \
             -print0 | xargs -0 -n1 php -l
       - name: Validate critical files
         run: |
+          set -Eeuo pipefail
           test -s index.php
           test -s home.php
+          test -s .htaccess
           test -s css/shopvivaliz-core-consolidated.css
+          test -s includes/header.php
+          test -s includes/footer.php
           test -s includes/catalog-runtime.php
           test -s api/olist/webhook-receiver.php
 
@@ -48,7 +52,7 @@ jobs:
           FTP_PORT: ${{ secrets.FTP_PORT }}
           FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           : "${FTP_SERVER:?Missing FTP_SERVER}"
           : "${FTP_USERNAME:?Missing FTP_USERNAME}"
           : "${FTP_PASSWORD:?Missing FTP_PASSWORD}"
@@ -69,6 +73,10 @@ jobs:
             --exclude-glob logs/** \
             --exclude-glob .env \
             ./ "$REMOTE"
+          put -O "$REMOTE" .htaccess
+          put -O "$REMOTE/includes" includes/header.php
+          put -O "$REMOTE/includes" includes/footer.php
+          put -O "$REMOTE/css" css/shopvivaliz-core-consolidated.css
           bye
           EOF
 
@@ -80,11 +88,14 @@ jobs:
         run: sleep 20
       - name: Verify storefront and CSS
         run: |
-          set -e
+          set -Eeuo pipefail
           curl -fLsS --retry 3 --retry-delay 5 https://shopvivaliz.com.br/ -o /tmp/home.html
           curl -fLsS --retry 3 --retry-delay 5 https://shopvivaliz.com.br/css/shopvivaliz-core-consolidated.css -o /tmp/core.css
           test "$(wc -c < /tmp/core.css)" -gt 1000
           grep -qi 'Vivaliz' /tmp/home.html
-      - name: Verify health endpoints
+      - name: Verify canonical domain and health endpoints
         run: |
+          set -Eeuo pipefail
+          final_url="$(curl -LsS -o /dev/null -w '%{url_effective}' https://www.shopvivaliz.com.br/)"
+          test "$final_url" = "https://shopvivaliz.com.br/"
           curl -fLsS --retry 3 --retry-delay 5 'https://shopvivaliz.com.br/api/olist/webhook-receiver.php?health=1'
