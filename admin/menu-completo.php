@@ -239,7 +239,7 @@ require_once __DIR__ . '/../includes/admin-guard.php';
         </div>
 
         <div style="text-align: center; padding: 2rem; color: #666;">
-            <p>✅ Total: <strong>31 rotinas</strong> disponíveis</p>
+            <p>✅ Total: <strong>32 rotinas</strong> disponíveis</p>
         </div>
     </div>
 </body>
