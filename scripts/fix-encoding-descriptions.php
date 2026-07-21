@@ -51,11 +51,8 @@ foreach ($files as $filepath) {
         continue;
     }
 
-    $items = &$data['itens'] ?? $data['items'] ?? $data['produtos'] ?? $data['products'] ?? $data;
-    if (!is_array($items)) {
-        echo "❌ Estrutura JSON não reconhecida\n";
-        continue;
-    }
+    // Estrutura do JSON: objeto com índices numéricos como chaves
+    $items = &$data;
 
     foreach ($items as &$item) {
         if (!is_array($item)) continue;
