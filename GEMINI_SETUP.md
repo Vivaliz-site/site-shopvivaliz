@@ -64,8 +64,8 @@ curl -X POST https://shopvivaliz.com.br/api/agent/squad-chat.php \
 
 ## 🔄 Rotação de Chave (se comprometida)
 
-1. **Gerar nova chave** no Google Cloud Console
-2. **Desabilitar chave antiga**: `***REMOVED***`
+1. **Gerar nova chave** em https://aistudio.google.com/app/apikey
+2. **Desabilitar chave antiga** no Google Console
 3. **Atualizar** `/home/ubuntu/site-shopvivaliz/.env` com nova chave
 4. **Verificar** logs para erros de autenticação
 5. **Notificar** se a chave foi comprometida (GitHub secret scanning o detectará)
