@@ -44,7 +44,9 @@ $categories = [];
 foreach ($products as $product) {
     if (!is_array($product)) continue;
     $category = trim((string)($product['category'] ?? ''));
-    if ($category === '') continue;
+    $stock = (int)($product['stock'] ?? 0);
+    $price = (float)($product['price'] ?? 0);
+    if ($category === '' || $stock <= 0 || $price <= 0) continue;
     $categories[$category] = true;
 }
 

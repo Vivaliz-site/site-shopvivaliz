@@ -12,9 +12,8 @@ http_response_code(404);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex">
-    <title>Página não encontrada | Vivaliz</title>
-    <link rel="stylesheet" href="/css/style.css">
-    <link rel="stylesheet" href="/css/responsive.css">
+    <title>Página não encontrada | ShopVivaliz</title>
+    <link rel="stylesheet" href="/css/shopvivaliz-unified-theme.css?v=2026-07-18">
     <style>
         .error-shell {
             min-height: 60vh;
@@ -27,16 +26,17 @@ http_response_code(404);
         .error-code {
             font-size: 88px;
             font-weight: 900;
-            color: var(--primary, #2dbb57);
+            color: #0b4f88;
             line-height: 1;
             margin-bottom: 12px;
         }
         .error-shell h1 {
             margin: 0 0 12px;
             font-size: 26px;
+            color: #0f172a;
         }
         .error-shell p {
-            color: var(--muted, #64748b);
+            color: #64748b;
             max-width: 440px;
             margin: 0 auto 28px;
         }
@@ -45,15 +45,6 @@ http_response_code(404);
             gap: 12px;
             justify-content: center;
             flex-wrap: wrap;
-        }
-        .error-actions .btn-primary {
-            background: var(--primary, #2dbb57);
-            color: #fff;
-        }
-        .error-actions .btn-outline {
-            background: #fff;
-            color: var(--dark, #173B63);
-            border: 2px solid var(--dark, #173B63);
         }
     </style>
 </head>
@@ -66,9 +57,10 @@ http_response_code(404);
         <p>O link que você acessou pode estar desatualizado, ou o endereço foi digitado errado. Vamos te ajudar a continuar por aqui.</p>
         <div class="error-actions">
             <a class="btn btn-primary" href="/catalogo">Ver catálogo</a>
-            <a class="btn btn-outline" href="/">Voltar para a home</a>
+            <a class="btn btn-secondary" href="/">Voltar para a home</a>
         </div>
     </div>
 </main>
+<?php include __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>
