@@ -57,42 +57,34 @@ jobs:
           PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"
           PORT="${PORT:-21}"
           REMOTE="${FTP_REMOTE_DIR:-/}"
-          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF
-          set ftp:ssl-force true
-          set ftp:ssl-protect-data true
-          set ssl:verify-certificate false
-          set net:max-retries 2
-          set net:timeout 20
-          mkdir -p "$REMOTE/includes"
-          mkdir -p "$REMOTE/css"
-          mkdir -p "$REMOTE/images"
-          mkdir -p "$REMOTE/autodev"
-          mkdir -p "$REMOTE/public/assets/home-banners"
-          mkdir -p "$REMOTE/public/assets/liz-assistant"
-          put -O "$REMOTE" index.php
-          put -O "$REMOTE" catalogo.php
-          put -O "$REMOTE" home.php
-          put -O "$REMOTE" .htaccess
-          put -O "$REMOTE/includes" includes/navbar.php
-          put -O "$REMOTE/includes" includes/header.php
-          put -O "$REMOTE/includes" includes/footer.php
-          put -O "$REMOTE/css" css/shopvivaliz-core-consolidated.css
-          put -O "$REMOTE/css" css/shopvivaliz-premium-consolidated.css
-          put -O "$REMOTE/images" images/logo-vivaliz.png
-          put -O "$REMOTE/images" images/logo-vivaliz-square.png
-          put -O "$REMOTE/autodev" autodev/client.js
-          put -O "$REMOTE/public/assets/home-banners" public/assets/home-banners/banner-primeira-compra.jpg
-          put -O "$REMOTE/public/assets/home-banners" public/assets/home-banners/banner-casa-estilo.jpg
-          put -O "$REMOTE/public/assets/home-banners" public/assets/home-banners/banner-primeira-compra.png
-          put -O "$REMOTE/public/assets/home-banners" public/assets/home-banners/banner-casa-estilo.png
-          put -O "$REMOTE/public/assets/liz-assistant" public/assets/liz-assistant/liz-assistant.css
-          put -O "$REMOTE/public/assets/liz-assistant" public/assets/liz-assistant/liz-assistant.js
-          put -O "$REMOTE/public/assets/liz-assistant" public/assets/liz-assistant/liz-avatar.png
-          put -O "$REMOTE/public/assets/liz-assistant" public/assets/liz-assistant/liz-acenando.webm
-          put -O "$REMOTE/public/assets/liz-assistant" public/assets/liz-assistant/logo-oficial.svg
-          put -O "$REMOTE/public/assets/liz-assistant" public/assets/liz-assistant/liz-widget.html
-          bye
-          EOF
+          deploy_script="$(mktemp)"
+          {
+            printf '%s\n' \
+              'set ftp:ssl-force true' \
+              'set ftp:ssl-protect-data true' \
+              'set ssl:verify-certificate false' \
+              'set net:max-retries 2' \
+              'set net:timeout 20'
+            find \
+              index.php catalogo.php produto.php carrinho.php checkout.php home.php .htaccess \
+              includes css js images public/assets assets/brand assets/css assets/images api/catalog/fallback-products.json \
+              -type f \
+              ! -path '*/storage/orders/*' \
+              ! -path '*/storage/codex-bridge/state.json' \
+              ! -path '*/storage/orchestrator/queue.json' \
+              -print | sort | while IFS= read -r file; do
+                dir="$(dirname "$file")"
+                if [ "$dir" = "." ]; then
+                  remote_dir="$REMOTE"
+                else
+                  remote_dir="${REMOTE%/}/$dir"
+                fi
+                printf 'mkdir -p "%s"\n' "$remote_dir"
+                printf 'put -O "%s" "%s"\n' "$remote_dir" "$file"
+              done
+            printf '%s\n' 'bye'
+          } > "$deploy_script"
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" -f "$deploy_script"
       - name: Purge Cloudflare cache when configured
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

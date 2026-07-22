@@ -1,2 +1,1 @@
-.price,
-.product-price { font-weight: 900; color: var(--sv-blue, #173b63); }
+.product-card.has-invalid-price{opacity:.82}.product-card.has-invalid-price .product-price{color:#8a3a2f!important;font-weight:800}.product-card.has-invalid-price .buy-button{cursor:not-allowed;opacity:.55}.product-detail.has-invalid-price .product-price-label{color:#8a3a2f}.product-detail.has-invalid-price .price-hint{display:block;color:#6d4b47}.sv-price-contact{background:linear-gradient(135deg,#173b63,#0b4f88)!important}.sv-price-status{padding:10px 12px;border-radius:12px;background:#fff7ed;color:#8a3a2f;font-size:13px;font-weight:700}.has-valid-price .product-price{color:#0b4f88}

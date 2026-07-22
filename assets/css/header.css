@@ -1,0 +1,55 @@
+/* Header avec logo VIVALIZ */
+header {
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0.75rem 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.navbar-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  gap: 0.5rem;
+}
+
+.navbar-brand img,
+.navbar-brand svg {
+  height: 50px;
+  width: auto;
+  max-width: 200px;
+}
+
+.navbar-brand:hover {
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .navbar-brand img,
+  .navbar-brand svg {
+    height: 40px;
+  }
+  
+  header {
+    padding: 0.5rem 0.75rem;
+  }
+}
+
+/* Favicon */
+link[rel="icon"] {
+  href: '/assets/images/logo/vivaliz-favicon.png';
+  type: 'image/png';
+}

@@ -1,5 +1,1 @@
-.shipping-box {
-  border: 1px solid var(--sv-line, #e2e8f0);
-  border-radius: 8px;
-  padding: 14px;
-}
+.sv-shipping-options{display:grid;gap:8px;margin-top:10px}.sv-shipping-option{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:11px 12px;border:1px solid rgba(11,79,136,.12);border-radius:13px;background:#fff;cursor:pointer}.sv-shipping-option:has(input:checked){border-color:#35c759;box-shadow:0 0 0 3px rgba(53,199,89,.1)}.sv-shipping-option span{display:grid;gap:2px}.sv-shipping-option strong{font-size:13px;color:#102033}.sv-shipping-option small{font-size:11px;color:#66788d}.sv-shipping-option b{font-size:13px;color:#07345d}.sv-shipping-validity{margin-top:8px;color:#66788d;font-size:11px;line-height:1.45}.frete-calc{margin-top:16px;padding-top:16px;border-top:1px solid rgba(11,79,136,.1)}
