@@ -1,7 +1,12 @@
 /* Resilience for browser zoom, large text, narrow viewports, and zoomed-out desktops. */
 html {
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+html,
+body {
+    overflow-x: hidden;
 }
 
 body {
