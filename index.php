@@ -401,6 +401,8 @@ $svNavCurrent = '';
     <meta name="twitter:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square.png">
     <link rel="canonical" href="https://shopvivaliz.com.br/">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="apple-touch-icon" href="/images/logo-vivaliz-square.png">
 
     <title>Vivaliz | Loja Online</title>
 

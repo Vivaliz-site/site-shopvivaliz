@@ -12,6 +12,8 @@ header('Content-Type: text/html; charset=UTF-8');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Carrinho | Vivaliz</title>
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="apple-touch-icon" href="/images/logo-vivaliz-square.png">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/shipping-v7.css">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">

@@ -42,6 +42,9 @@ $whatsappLink = $whatsapp !== '' ? "https://wa.me/{$whatsapp}?text={$whatsappMsg
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Entre em contato com a Vivaliz para suporte comercial, pedidos e atendimento.">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="apple-touch-icon" href="/images/logo-vivaliz-square.png">
     <title>Contato | Vivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/responsive.css">
