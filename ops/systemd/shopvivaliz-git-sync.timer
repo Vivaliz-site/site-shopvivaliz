@@ -1,0 +1,12 @@
+[Unit]
+Description=Deploy ShopVivaliz origin/main every two minutes
+
+[Timer]
+OnActiveSec=20s
+OnUnitActiveSec=2min
+AccuracySec=5s
+Persistent=true
+Unit=shopvivaliz-git-sync.service
+
+[Install]
+WantedBy=timers.target
