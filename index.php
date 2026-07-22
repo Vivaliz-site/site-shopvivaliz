@@ -577,7 +577,7 @@ $svNavCurrent = '';
                     🛍️ Loja oficial Vivaliz
                 </p>
                 <h1>Rodízios, ferragens e utilidades <span class="gradient-word">para sua casa</span></h1>
-                <p>Catálogo organizado, entrega rápida pra todo o Brasil e atendimento de verdade antes e depois da compra.</p>
+                <p>Com mais de <?php echo number_format(sv_home_catalog_count()); ?> produtos em estoque, oferecemos soluções práticas e confiáveis. Entrega rápida e atendimento que realmente ouve.</p>
 
                 <!-- Premium E-Commerce Search Bar -->
                 <div class="hero-search-container">
