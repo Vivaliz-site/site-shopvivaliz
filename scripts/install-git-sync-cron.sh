@@ -2,10 +2,10 @@
 # Instalar git-auto-sync como cron job na VM Oracle
 # Executar: bash /home/ubuntu/site-shopvivaliz/scripts/install-git-sync-cron.sh
 
-set -e
+set -Eeuo pipefail
 
 REPO_DIR="/home/ubuntu/site-shopvivaliz"
-SCRIPT_PATH="$REPO_DIR/scripts/git-auto-sync.py"
+SCRIPT_PATH="$REPO_DIR/git-auto-sync.py"
 LOG_DIR="/var/log/shopvivaliz"
 CRON_JOB="*/30 * * * * /usr/bin/python3 $SCRIPT_PATH >> $LOG_DIR/cron.log 2>&1"
 
@@ -51,11 +51,12 @@ echo ""
 echo "📋 Instalando cron job (a cada 30 minutos)..."
 
 # Verificar se job já existe
-if crontab -l 2>/dev/null | grep -q "git-auto-sync.py"; then
+CURRENT_CRONTAB="$(crontab -l 2>/dev/null || printf '')"
+if grep -q "git-auto-sync.py" <<<"$CURRENT_CRONTAB"; then
     echo "⚠️  Cron job já existe, removendo versão antiga..."
-    (crontab -l 2>/dev/null | grep -v "git-auto-sync.py"; echo "$CRON_JOB") | crontab -
+    (grep -v "git-auto-sync.py" <<<"$CURRENT_CRONTAB" || printf ''; printf '%s\n' "$CRON_JOB") | crontab -
 else
-    (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+    (printf '%s\n' "$CURRENT_CRONTAB"; printf '%s\n' "$CRON_JOB") | crontab -
 fi
 
 echo "✅ Cron job instalado"

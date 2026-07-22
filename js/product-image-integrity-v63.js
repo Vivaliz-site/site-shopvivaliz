@@ -4,6 +4,7 @@
   var box=detail.querySelector('.product-detail-image');
   var image=box?box.querySelector('img'):null;
   if(!box||!image)return;
+  var fallback='/images/logo-vivaliz-square.png';
 
   function invalid(src){
     var value=String(src||'').toLowerCase();
@@ -11,12 +12,8 @@
   }
 
   function unavailable(){
-    box.innerHTML='';
     box.classList.add('product-image-unavailable');
-    var panel=document.createElement('div');
-    panel.className='product-image-unavailable-panel';
-    panel.innerHTML='<strong>Imagem indisponível</strong><span>Este produto ainda não possui uma imagem validada no catálogo.</span>';
-    box.appendChild(panel);
+    if(image.getAttribute('src')!==fallback)image.setAttribute('src',fallback);
     var schema=document.querySelector('script[type="application/ld+json"]');
     if(schema&&schema.textContent.indexOf('"@type": "Product"')!==-1){
       try{var data=JSON.parse(schema.textContent);delete data.image;schema.textContent=JSON.stringify(data); }catch(e){}

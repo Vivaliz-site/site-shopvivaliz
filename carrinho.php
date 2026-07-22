@@ -138,9 +138,20 @@ header('Content-Type: text/html; charset=UTF-8');
     function getCart() {
         try { return JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'); } catch(e) { return []; }
     }
+    function saveCart(items) {
+        if (window.ShopVivalizCart && typeof window.ShopVivalizCart.set === 'function') {
+            return window.ShopVivalizCart.set(items);
+        }
+        localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+        window.dispatchEvent(new CustomEvent('shopvivaliz:cart-updated', { detail: { items: items } }));
+        return items;
+    }
     function fmtMoney(v) {
         if (!v || isNaN(v)) return 'Consulte o valor';
         return 'R$ ' + parseFloat(v).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    }
+    function clearShippingQuote() {
+        try { localStorage.removeItem('shopvivaliz_shipping_quote'); } catch(e) {}
     }
 
     function render() {
@@ -245,7 +256,6 @@ header('Content-Type: text/html; charset=UTF-8');
     updateTotalFromQuote();
 })();
 </script>
-<script src="/js/cro-interactions.js"></script>
 <script src="/js/cart-shipping-v7.js"></script>
 <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
 </body>

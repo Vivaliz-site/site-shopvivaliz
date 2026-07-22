@@ -1,0 +1,2 @@
+Automatic deployment validation marker.
+Created for the no-intervention production timer test on 2026-07-22.

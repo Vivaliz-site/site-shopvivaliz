@@ -1,5 +1,14 @@
 (() => {
   const API = '/api/agent/squad-chat.php';
+  const userIdKey = 'shopvivaliz_liz_user_id';
+  let userId = `liz_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  try {
+    userId = localStorage.getItem(userIdKey) || userId;
+    localStorage.setItem(userIdKey, userId);
+  } catch (error) {
+    // Keep chat usable even when storage is blocked.
+  }
+
   const root = document.createElement('div');
 
   root.innerHTML = `
@@ -42,11 +51,16 @@
   function setOpen(open) {
     panel.classList.toggle('open', open);
     root.classList.toggle('sv-liz-is-open', open);
+    document.body.classList.toggle('sv-liz-is-open', open);
     launcher.setAttribute('aria-expanded', open ? 'true' : 'false');
     if (open) {
       setTimeout(() => input.focus(), 60);
     }
   }
+
+  window.openLizAssistant = () => setOpen(true);
+  window.closeLizAssistant = () => setOpen(false);
+  setOpen(false);
 
   launcher.addEventListener('click', () => setOpen(!panel.classList.contains('open')));
   close.addEventListener('click', () => setOpen(false));
@@ -71,7 +85,7 @@
       const response = await fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, context: 'site-shopvivaliz' }),
+        body: JSON.stringify({ message: text, context: 'site-shopvivaliz', user_id: userId }),
       });
       const data = await response.json();
       waiting.textContent = data.answer || data.reply || data.message || data.response || 'Recebi sua mensagem. Nossa equipe pode continuar o atendimento com você.';

@@ -12,6 +12,34 @@
   --sv-spring-transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+#mini-cart-drawer:not(.active):not(.open) {
+  display: none !important;
+  right: auto !important;
+  left: 100% !important;
+  transform: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+#mini-cart-drawer:not(.active):not(.open) * {
+  visibility: hidden !important;
+}
+
+#mini-cart-drawer.active,
+#mini-cart-drawer.open {
+  display: flex !important;
+  right: 0 !important;
+  left: auto !important;
+  transform: none !important;
+  visibility: visible !important;
+}
+
+.mini-cart-footer .btn,
+.mini-cart-footer .btn-large {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
 /* Launcher Button */
 #sv-liz-launcher {
   position: fixed;
@@ -84,15 +112,20 @@
   transition: var(--sv-spring-transition);
 }
 
-#sv-liz-panel.open {
-  display: flex;
-  flex-direction: column;
-  animation: panelEntrance 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+#sv-liz-panel:not(.open) {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
-@keyframes panelEntrance {
-  from { opacity: 0; transform: translateY(40px) scale(0.95); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+#sv-liz-panel.open {
+  display: flex !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  transform: none !important;
+  flex-direction: column;
+  animation: none !important;
 }
 
 /* Panel Header - Glassmorphic */
@@ -447,19 +480,19 @@
 }
 
 /* Super Overrides to match standard view overrides */
-#sv-liz-panel, #sv-liz-panel.open {
+#sv-liz-panel.open {
   top: 12px !important;
   bottom: 12px !important;
-  height: calc(100vh - 24px) !important;
+  height: auto !important;
 }
 
 @media (max-width: 600px) {
-  #sv-liz-panel, #sv-liz-panel.open {
+  #sv-liz-panel.open {
     top: 10px !important;
     bottom: 10px !important;
     left: 10px !important;
     right: 10px !important;
     width: auto !important;
-    height: calc(100vh - 20px) !important;
+    height: auto !important;
   }
 }

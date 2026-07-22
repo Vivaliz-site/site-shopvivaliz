@@ -77,21 +77,6 @@ function sv_catalog_search_aliases(string $query): array
 
 function sv_catalog_fuzzy_contains(string $haystack, string $needle): bool
 {
-    if ($needle === '' || strlen($needle) < 5) {
-        return false;
-    }
-
-    $tokens = preg_split('/\s+/', $haystack) ?: [];
-    foreach ($tokens as $token) {
-        $token = trim($token);
-        if (strlen($token) < 5 || abs(strlen($token) - strlen($needle)) > 2) {
-            continue;
-        }
-        if (levenshtein($token, $needle) <= 2) {
-            return true;
-        }
-    }
-
     return false;
 }
 
@@ -114,7 +99,7 @@ function sv_catalog_matches_query(array $row, string $query): bool
 
     $normalizedHaystack = sv_catalog_search_normalize($haystack);
     foreach (sv_catalog_search_aliases($query) as $candidate) {
-        if (strpos($normalizedHaystack, $candidate) !== false || sv_catalog_fuzzy_contains($normalizedHaystack, $candidate)) {
+        if (strpos($normalizedHaystack, $candidate) !== false) {
             return true;
         }
     }
@@ -572,7 +557,6 @@ $svNavCurrent = 'catalogo';
 
     <?php include __DIR__ . '/includes/footer.php'; ?>
 
-    <script src="/autodev/client.js"></script>
     <script src="/js/catalog.js?v=<?= filemtime(__DIR__ . '/js/catalog.js') ?: '1' ?>"></script>
     <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
     <script>
@@ -585,6 +569,6 @@ $svNavCurrent = 'catalogo';
         } catch(e){}
     })();
     </script>
-    <script src="/js/auto-image-carousel.js?v=20260719-2"></script>
+    <script src="/js/auto-image-carousel.js?v=20260722-1"></script>
 </body>
 </html>

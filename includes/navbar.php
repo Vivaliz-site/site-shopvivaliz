@@ -51,7 +51,10 @@ $svRecoveryCouponLabel = is_array($svRecoveryCoupon) ? (string)($svRecoveryCoupo
 <?php if ($svIsProduct): ?><link rel="stylesheet" href="/css/product-conversion-v5.css?v=5.0.0"><link rel="stylesheet" href="/css/product-image-integrity-v63.css?v=63.0.0"><link rel="stylesheet" href="/css/price-integrity-v73.css?v=73.0.0"><link rel="stylesheet" href="/css/stock-integrity-v83.css?v=83.0.0"><?php endif; ?>
 <?php if ($svIsCart || $svIsCheckout): ?><link rel="stylesheet" href="/css/cart-integrity-v94.css?v=94.0.0"><?php endif; ?>
 <?php if ($svIsCart): ?><link rel="stylesheet" href="/css/cart-polish-v14.css?v=14.0.0"><?php endif; ?>
-<?php if ($svIsCheckout): ?><link rel="stylesheet" href="/css/checkout-conversion-v6.css?v=6.0.0"><?php endif; ?>
+<?php if ($svIsCheckout): ?>
+<link rel="stylesheet" href="/css/checkout-conversion-v6.css?v=6.0.0">
+<link rel="stylesheet" href="/css/checkout-responsive-fix-v7.css?v=7.0.1">
+<?php endif; ?>
 <?php if ($svIsCart || $svIsCheckout): ?><link rel="stylesheet" href="/css/shipping-v7.css?v=7.0.0"><?php endif; ?>
 <a class="sv-skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
 <header class="navbar sv-navbar"><nav class="container nav-inner" aria-label="Navegação principal">
@@ -64,10 +67,10 @@ $svRecoveryCouponLabel = is_array($svRecoveryCoupon) ? (string)($svRecoveryCoupo
 
 <div class="sv-live-region" id="svLiveRegion" aria-live="polite"></div>
 <script>(function(){var main=document.querySelector('main');if(main&&!main.id)main.id='conteudo-principal';var menuToggle=document.getElementById('menuToggle');var navMenu=document.getElementById('navMenu');if(menuToggle&&navMenu){menuToggle.addEventListener('click',function(){var isOpen=navMenu.classList.toggle('active');menuToggle.setAttribute('aria-expanded',isOpen?'true':'false');menuToggle.setAttribute('aria-label',isOpen?'Fechar menu':'Abrir menu');});}if('serviceWorker' in navigator&&location.protocol==='https:'){window.addEventListener('load',function(){navigator.serviceWorker.register('/service-worker.js').catch(function(){});});}})();</script>
-<script src="/js/cart-persistence-v23.js?v=23.0.0" defer></script><script src="/js/shopvivaliz-visual-v3.js?v=3.0.0" defer></script><script src="/js/dazzle-v1.js?v=1.2.0" defer></script><script src="/js/performance-v12.js?v=12.0.0" defer></script><script src="/js/offline-status-v22.js?v=22.0.0" defer></script><script src="/js/storefront-events-v26.js?v=26.0.0" defer></script><script src="/js/install-prompt-v29.js?v=29.0.0" defer></script><script src="/js/cro-interactions.js?v=2026-07-12" defer></script>
+<script src="/js/cart-persistence-v23.js?v=23.1.1" defer></script><script src="/js/shopvivaliz-visual-v3.js?v=3.0.0" defer></script><script src="/js/dazzle-v1.js?v=1.2.0" defer></script><script src="/js/performance-v12.js?v=12.0.0" defer></script><script src="/js/offline-status-v22.js?v=22.0.0" defer></script><script src="/js/storefront-events-v26.js?v=26.0.0" defer></script><script src="/js/install-prompt-v29.js?v=29.0.0" defer></script><script src="/js/cro-interactions.js?v=2026-07-22.1" defer></script>
 <?php if ($svIsHome): ?><script src="/js/category-real-images-v52.js?v=52.0.0" defer></script><?php endif; ?>
 <?php if ($svIsCatalog): ?><script src="/js/catalog-conversion-v4.js?v=4.0.0" defer></script><script src="/js/search-enhancements-v25.js?v=25.0.0" defer></script><script src="/js/catalog-image-integrity-v62.js?v=62.0.0" defer></script><script src="/js/catalog-price-integrity-v72.js?v=72.0.0" defer></script><script src="/js/catalog-stock-integrity-v82.js?v=82.0.0" defer></script><?php endif; ?>
-<?php if ($svIsProduct): ?><script src="/js/product-conversion-v5.js?v=5.0.0" defer></script><script src="/js/product-schema-v16.js?v=16.0.0" defer></script><script src="/js/recently-viewed-v24.js?v=24.0.0" defer></script><script src="/js/product-image-integrity-v63.js?v=63.0.0" defer></script><script src="/js/product-price-integrity-v73.js?v=73.0.0" defer></script><script src="/js/product-stock-integrity-v83.js?v=83.0.0" defer></script><?php endif; ?>
+<?php if ($svIsProduct): ?><script src="/js/product-conversion-v5.js?v=5.1.1" defer></script><script src="/js/product-schema-v16.js?v=16.0.0" defer></script><script src="/js/recently-viewed-v24.js?v=24.0.0" defer></script><script src="/js/product-image-integrity-v63.js?v=63.0.0" defer></script><script src="/js/product-price-integrity-v73.js?v=73.0.0" defer></script><script src="/js/product-stock-integrity-v83.js?v=83.0.0" defer></script><?php endif; ?>
 <?php if ($svIsCart): ?><script src="/js/cart-shipping-v7.js?v=7.0.0" defer></script><script src="/js/cart-server-validation-v92.js?v=92.0.0" defer></script><?php endif; ?>
 <?php if ($svIsCheckout): ?><script src="/js/checkout-conversion-v6.js?v=6.1.0" defer></script><script src="/js/checkout-resilience-v15.js?v=15.1.0" defer></script><script src="/js/checkout-shipping-v7.js?v=7.0.0" defer></script><script src="/js/checkout-cart-freshness-v94.js?v=94.0.0" defer></script><script src="/js/checkout-idempotency-v122.js?v=122.0.0" defer></script><?php endif; ?>
 
@@ -199,7 +202,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <span class="nav-icon">💬</span>
         <span class="nav-label">WhatsApp</span>
     </a>
-    <a href="#" onclick="var p=document.getElementById('sv-liz-panel'); if(p){p.classList.add('open'); document.body.classList.add('sv-liz-is-open');} return false;" aria-label="Abrir assistente Liz">
+    <a href="#" onclick="if(window.openLizAssistant){window.openLizAssistant();} return false;" aria-label="Abrir assistente Liz">
         <span class="nav-icon">🤖</span>
         <span class="nav-label">Liz</span>
     </a>
@@ -220,8 +223,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </div>
 
 <!-- Liz Assistant Premium Mascot Widget -->
-<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=7.0">
-<script src="/public/assets/liz-assistant/liz-assistant.js"></script>
+<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=9.2">
+<script src="/public/assets/liz-assistant/liz-assistant.js?v=9.2"></script>
 
 <script>
 // Dark Mode Logic
@@ -252,22 +255,31 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 <style>
 /* CRITICAL LIZ E BUTTON OVERRIDES VIA INLINE STYLE PARA FURAR CACHE CDN */
-#sv-liz-panel, #sv-liz-panel.open {
+#sv-liz-panel:not(.open) {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+#sv-liz-panel.open {
+  display: flex !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
   top: 12px !important;
   bottom: 12px !important;
-  height: calc(100dvh - 24px) !important;
+  height: auto !important;
   max-height: none !important;
   width: 460px !important;
 }
 
 @media(max-width: 600px) {
-  #sv-liz-panel, #sv-liz-panel.open {
+  #sv-liz-panel.open {
     top: 10px !important;
     bottom: 10px !important;
     left: 10px !important;
     right: 10px !important;
     width: auto !important;
-    height: calc(100dvh - 20px) !important;
+    height: auto !important;
   }
 }
 
@@ -286,6 +298,46 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   height: 32px !important;
   line-height: 32px !important;
   border-radius: 4px !important;
+}
+
+.mini-cart-overlay,
+.mini-cart-drawer,
+.mini-cart-drawer *,
+.mini-cart-footer .btn,
+.mini-cart-footer .btn-large {
+  box-sizing: border-box !important;
+}
+
+.mini-cart-drawer {
+  max-width: 100vw !important;
+}
+
+#mini-cart-drawer:not(.active):not(.open) {
+  display: none !important;
+  right: auto !important;
+  left: 100% !important;
+  transform: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+#mini-cart-drawer:not(.active):not(.open) * {
+  visibility: hidden !important;
+}
+
+#mini-cart-drawer.active,
+#mini-cart-drawer.open {
+  display: flex !important;
+  right: 0 !important;
+  left: auto !important;
+  transform: none !important;
+  visibility: visible !important;
+}
+
+.mini-cart-footer .btn,
+.mini-cart-footer .btn-large {
+  width: 100% !important;
+  max-width: 100% !important;
 }
 </style>
 
