@@ -1070,5 +1070,7 @@ $svNavCurrent = '';
     <script src="/js/auto-image-carousel.js?v=20260719-2"></script>
     <!-- A/B Testing Framework for CRO -->
     <script src="/js/shopvivaliz-ab-testing.js?v=1.0.0"></script>
+    <!-- Liz Intelligent Assistant with Claude API -->
+    <script src="/public/assets/liz-assistant/liz-assistant.js?v=20260722-1"></script>
 </body>
 </html>
