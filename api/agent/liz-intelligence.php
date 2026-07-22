@@ -249,6 +249,6 @@ try {
 } catch (Throwable $e) {
     http_response_code(500);
     error_log("Liz Error: " . $e->getMessage() . " at " . $e->getFile() . ":" . $e->getLine());
-    echo json_encode(['error' => 'Erro ao processar', 'debug' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['error' => 'Erro ao processar'], JSON_UNESCAPED_UNICODE);
 }
 ?>
