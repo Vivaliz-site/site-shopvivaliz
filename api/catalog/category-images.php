@@ -42,6 +42,7 @@ foreach (is_array($decoded) ? $decoded : [] as $row) {
     if (!is_array($row)) continue;
     $category = trim((string)($row['category'] ?? ''));
     if ($category === '') continue;
+    if ((int)($row['stock'] ?? 0) <= 0 || (float)($row['price'] ?? 0) <= 0) continue;
 
     $key = svci_normalize($category);
     $generic_image = $generic_images[$key] ?? 'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?w=320&q=80';

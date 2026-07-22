@@ -192,7 +192,11 @@ function sv_catalog_categories(): array
     $cats = [];
     foreach ($decoded as $row) {
         $cat = trim((string)($row['category'] ?? ''));
-        if ($cat !== '') $cats[$cat] = ($cats[$cat] ?? 0) + 1;
+        $stock = (int)($row['stock'] ?? 0);
+        $price = (float)($row['price'] ?? 0);
+        if ($cat !== '' && $stock > 0 && $price > 0) {
+            $cats[$cat] = ($cats[$cat] ?? 0) + 1;
+        }
     }
     arsort($cats);
     return $cats;

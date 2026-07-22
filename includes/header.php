@@ -12,12 +12,30 @@ $currentPage = basename($_SERVER['PHP_SELF'] ?? '');
 
         <button class="mobile-menu-toggle" id="mobileMenuToggle" type="button" aria-label="Abrir menu" aria-controls="headerNav" aria-expanded="false">☰</button>
 
+<?php
+require_once __DIR__ . '/catalog-runtime.php';
+$svHeaderCats = [];
+if (function_exists('svcr_products')) {
+    $allProds = svcr_products();
+    $catCounts = [];
+    foreach ($allProds as $p) {
+        $c = trim((string)($p['category'] ?? ''));
+        if ($c !== '' && ($p['stock'] ?? 0) > 0 && ($p['price'] ?? 0) > 0) {
+            $catCounts[$c] = ($catCounts[$c] ?? 0) + 1;
+        }
+    }
+    arsort($catCounts);
+    $svHeaderCats = array_slice(array_keys($catCounts), 0, 4);
+}
+if ($svHeaderCats === []) {
+    $svHeaderCats = ['Rodízios', 'Vasos Decorativos', 'Ferramentas Manuais', 'Banheiro'];
+}
+?>
         <nav class="header-nav" id="headerNav" aria-label="Navegação principal">
             <a href="/"<?= in_array($currentPage, ['', 'index.php', 'home.php'], true) ? ' class="active" aria-current="page"' : '' ?>>Início</a>
-            <a href="/catalogo?categoria=Ferramentas">Ferramentas</a>
-            <a href="/catalogo?categoria=Jardim">Jardim</a>
-            <a href="/catalogo?categoria=Cozinha">Cozinha</a>
-            <a href="/catalogo?categoria=Banheiro">Banheiro</a>
+            <?php foreach ($svHeaderCats as $catName): ?>
+                <a href="/catalogo?categoria=<?= urlencode($catName) ?>"><?= htmlspecialchars($catName, ENT_QUOTES, 'UTF-8') ?></a>
+            <?php endforeach; ?>
         </nav>
 
         <div class="header-actions">

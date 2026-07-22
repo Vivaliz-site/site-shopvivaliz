@@ -5,7 +5,7 @@ function svcr_slug(string $name, string $sku = ''): string
 {
     $text = $name !== '' ? $name : $sku;
     if ($text === '') return '';
-    $text = mb_strtolower($text, 'UTF-8');
+    $text = function_exists('mb_strtolower') ? mb_strtolower($text, 'UTF-8') : strtolower($text);
     $text = preg_replace('/[^\p{L}\p{N}\s\-]/u', '', $text);
     $text = preg_replace('/[\s\-]+/', '-', trim((string)$text));
     return trim((string)$text, '-');
@@ -18,6 +18,16 @@ function svcr_extract_rows(string $file): array
     if (!is_array($payload)) return [];
 
     if (array_is_list($payload)) return array_values(array_filter($payload, 'is_array'));
+
+    $numericRows = [];
+    foreach ($payload as $k => $v) {
+        if (is_numeric($k) && is_array($v)) {
+            $numericRows[] = $v;
+        }
+    }
+    if ($numericRows !== []) {
+        return $numericRows;
+    }
 
     foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
         if (!isset($payload[$key]) || !is_array($payload[$key])) continue;

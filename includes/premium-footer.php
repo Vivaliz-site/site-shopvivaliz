@@ -3,6 +3,17 @@
  * Footer Premium - Incluir no fim de todas as páginas
  * <?php include __DIR__ . '/premium-footer.php'; ?>
  */
+$company = @include(dirname(__DIR__) . '/config/company-profile.php') ?: [];
+$legalName = $company['legal_name'] ?? 'SHOPVIVALIZ LTDA';
+$fantasyName = $company['fantasy_name'] ?? 'ShopVivaliz';
+$email = $company['email'] ?? 'atendimento@shopvivaliz.com.br';
+$phone = $company['phone'] ?? '(37) 99937-4112';
+$socialMedia = is_array($company['social_media'] ?? null) ? $company['social_media'] : [];
+$whatsappDigits = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? '5537999374112'));
+$whatsappMsg = rawurlencode('Olá! Vim pelo site da ShopVivaliz e gostaria de tirar uma dúvida.');
+$whatsappUrl = $whatsappDigits !== '' ? "https://wa.me/{$whatsappDigits}?text={$whatsappMsg}" : '/contato';
+$instagramUrl = !empty($socialMedia['instagram']) ? $socialMedia['instagram'] : $whatsappUrl;
+$facebookUrl = !empty($socialMedia['facebook']) ? $socialMedia['facebook'] : $whatsappUrl;
 ?>
     </main>
 
@@ -11,13 +22,13 @@
         <div class="footer-container">
             <!-- Coluna 1: Brand -->
             <div class="footer-col">
-                <h3 class="footer-title">🛍️ ShopVivaliz</h3>
+                <h3 class="footer-title">🛍️ <?= htmlspecialchars($fantasyName, ENT_QUOTES, 'UTF-8') ?></h3>
                 <p class="footer-text">Loja oficial de produtos de qualidade com entrega rápida para todo Brasil.</p>
                 <div class="footer-social">
-                    <a href="#" title="Facebook">f</a>
-                    <a href="#" title="Instagram">📷</a>
-                    <a href="#" title="WhatsApp">📱</a>
-                    <a href="#" title="Email">✉️</a>
+                    <a href="<?= htmlspecialchars($facebookUrl, ENT_QUOTES, 'UTF-8') ?>" <?= !empty($socialMedia['facebook']) ? 'target="_blank" rel="noopener"' : '' ?> title="Facebook">f</a>
+                    <a href="<?= htmlspecialchars($instagramUrl, ENT_QUOTES, 'UTF-8') ?>" <?= !empty($socialMedia['instagram']) ? 'target="_blank" rel="noopener"' : '' ?> title="Instagram">📷</a>
+                    <a href="<?= htmlspecialchars($whatsappUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" title="WhatsApp">📱</a>
+                    <a href="mailto:<?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?>" title="E-mail">✉️</a>
                 </div>
             </div>
 
@@ -26,9 +37,8 @@
                 <h4 class="footer-subtitle">Sobre</h4>
                 <ul class="footer-links">
                     <li><a href="/sobre/">Sobre nós</a></li>
-                    <li><a href="/blog/">Blog</a></li>
                     <li><a href="/faq/">FAQ</a></li>
-                    <li><a href="/carreiras/">Carreiras</a></li>
+                    <li><a href="/contato/">Fale Conosco</a></li>
                 </ul>
             </div>
 
@@ -47,8 +57,8 @@
             <div class="footer-col">
                 <h4 class="footer-subtitle">Contato</h4>
                 <p class="footer-contact">
-                    📧 <a href="mailto:agentes@shopvivaliz.com.br">agentes@shopvivaliz.com.br</a><br>
-                    📱 <a href="tel:+5537999374112">(37) 9993-7-4112</a><br>
+                    📧 <a href="mailto:<?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?></a><br>
+                    📱 <a href="<?= htmlspecialchars($whatsappUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><?= htmlspecialchars($phone, ENT_QUOTES, 'UTF-8') ?></a><br>
                     📍 Rua Campina Verde, 841<br>
                     São José, Divinópolis, MG
                 </p>
@@ -60,8 +70,7 @@
 
         <!-- Copyright -->
         <div class="footer-bottom">
-            <p>&copy; 2026 ShopVivaliz. Todos os direitos reservados.</p>
-            <p>Desenvolvido com <span style="color: #ef4444;">❤️</span> por <strong>Claude Code Autonomous</strong></p>
+            <p>&copy; <?= date('Y') ?> <?= htmlspecialchars($fantasyName, ENT_QUOTES, 'UTF-8') ?>. Todos os direitos reservados.</p>
         </div>
     </footer>
 

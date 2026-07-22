@@ -315,6 +315,11 @@ function sv_home_top_categories(int $limit = 8): array
         if ($category === '') {
             continue;
         }
+        $stock = (int)($row['stock'] ?? 0);
+        $price = (float)($row['price'] ?? 0);
+        if ($stock <= 0 || $price <= 0) {
+            continue;
+        }
         $counts[$category] = ($counts[$category] ?? 0) + 1;
         if (!isset($categoryImages[$category])) {
             $image = trim((string)($row['image_url'] ?? ''));
