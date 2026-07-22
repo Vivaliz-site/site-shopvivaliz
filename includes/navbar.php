@@ -199,7 +199,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <span class="nav-icon">💬</span>
         <span class="nav-label">WhatsApp</span>
     </a>
-    <a href="#" onclick="var p=document.getElementById('sv-liz-panel'); if(p){p.classList.add('open'); document.body.classList.add('sv-liz-is-open');} return false;" aria-label="Abrir assistente Liz">
+    <a href="#" onclick="if(window.openLizAssistant){window.openLizAssistant();} return false;" aria-label="Abrir assistente Liz">
         <span class="nav-icon">🤖</span>
         <span class="nav-label">Liz</span>
     </a>
@@ -220,8 +220,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </div>
 
 <!-- Liz Assistant Premium Mascot Widget -->
-<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=9.1">
-<script src="/public/assets/liz-assistant/liz-assistant.js"></script>
+<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=9.2">
+<script src="/public/assets/liz-assistant/liz-assistant.js?v=9.2"></script>
 
 <script>
 // Dark Mode Logic
@@ -252,22 +252,31 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 <style>
 /* CRITICAL LIZ E BUTTON OVERRIDES VIA INLINE STYLE PARA FURAR CACHE CDN */
-#sv-liz-panel, #sv-liz-panel.open {
+#sv-liz-panel:not(.open) {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+#sv-liz-panel.open {
+  display: flex !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
   top: 12px !important;
   bottom: 12px !important;
-  height: calc(100dvh - 24px) !important;
+  height: auto !important;
   max-height: none !important;
   width: 460px !important;
 }
 
 @media(max-width: 600px) {
-  #sv-liz-panel, #sv-liz-panel.open {
+  #sv-liz-panel.open {
     top: 10px !important;
     bottom: 10px !important;
     left: 10px !important;
     right: 10px !important;
     width: auto !important;
-    height: calc(100dvh - 20px) !important;
+    height: auto !important;
   }
 }
 

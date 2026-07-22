@@ -51,11 +51,16 @@
   function setOpen(open) {
     panel.classList.toggle('open', open);
     root.classList.toggle('sv-liz-is-open', open);
+    document.body.classList.toggle('sv-liz-is-open', open);
     launcher.setAttribute('aria-expanded', open ? 'true' : 'false');
     if (open) {
       setTimeout(() => input.focus(), 60);
     }
   }
+
+  window.openLizAssistant = () => setOpen(true);
+  window.closeLizAssistant = () => setOpen(false);
+  setOpen(false);
 
   launcher.addEventListener('click', () => setOpen(!panel.classList.contains('open')));
   close.addEventListener('click', () => setOpen(false));
