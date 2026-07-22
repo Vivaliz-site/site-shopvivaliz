@@ -1,12 +1,11 @@
 <?php
 declare(strict_types=1);
 
-session_start();
-
+require_once __DIR__ . '/../includes/social-auth.php';
+sv_ensure_session_started();
 require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/csrf.php';
-require_once __DIR__ . '/../includes/social-auth.php';
 
 $redirectTo = sv_social_sanitize_redirect((string)($_GET['redirect'] ?? $_POST['redirect'] ?? '/'));
 

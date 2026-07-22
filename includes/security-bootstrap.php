@@ -44,39 +44,27 @@ function initialize_security(): void
  */
 function configure_session(): void
 {
-    $sessionOptions = [
-        // Strict mode: Session IDs valid only after explicit start
-        'use_strict_mode' => 1,
+    if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
+        $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (int)($_SERVER['SERVER_PORT'] ?? 80) === 443
+            || strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
 
-        // Only transmit session ID over HTTP(S)
-        'httponly' => 1,
+        ini_set('session.use_strict_mode', '1');
+        ini_set('session.use_only_cookies', '1');
+        ini_set('session.gc_maxlifetime', '1800');
+        ini_set('session.cookie_httponly', '1');
+        ini_set('session.cookie_secure', $isSecure ? '1' : '0');
+        ini_set('session.cookie_samesite', 'Lax');
 
-        // Transmit only over HTTPS in production
-        'secure' => getenv('APP_ENV') === 'production' ? 1 : 0,
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path' => '/',
+            'domain' => '',
+            'secure' => $isSecure,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
 
-        // Prevent session fixation
-        'use_only_cookies' => 1,
-
-        // SameSite cookie attribute
-        'samesite' => 'Lax',
-
-        // Session lifetime (30 minutes)
-        'gc_maxlifetime' => 1800,
-
-        // Probability to trigger garbage collection
-        'gc_probability' => 1,
-        'gc_divisor' => 100,
-    ];
-
-    // Apply session options
-    foreach ($sessionOptions as $option => $value) {
-        if (ini_set("session.{$option}", (string)$value) === false) {
-            error_log("Failed to set session.{$option}");
-        }
-    }
-
-    // Start session if not already started
-    if (session_status() === PHP_SESSION_NONE) {
         @session_start();
     }
 }

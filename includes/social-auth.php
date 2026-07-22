@@ -82,11 +82,37 @@ function sv_social_sanitize_redirect(?string $redirect): string
     return $redirect;
 }
 
+
+function sv_ensure_session_started(): void
+{
+    if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
+        $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (int)($_SERVER['SERVER_PORT'] ?? 80) === 443
+            || strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+
+        ini_set('session.use_strict_mode', '1');
+        ini_set('session.use_only_cookies', '1');
+        ini_set('session.gc_maxlifetime', '1800');
+        ini_set('session.cookie_httponly', '1');
+        ini_set('session.cookie_secure', $isSecure ? '1' : '0');
+        ini_set('session.cookie_samesite', 'Lax');
+
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path' => '/',
+            'domain' => '',
+            'secure' => $isSecure,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+
+        @session_start();
+    }
+}
+
 function sv_social_store_request(string $provider, string $action, string $redirect): array
 {
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        session_start();
-    }
+    sv_ensure_session_started();
 
     $payload = [
         'state' => bin2hex(random_bytes(16)),
@@ -103,9 +129,7 @@ function sv_social_store_request(string $provider, string $action, string $redir
 
 function sv_social_consume_request(string $provider, string $state): ?array
 {
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        session_start();
-    }
+    sv_ensure_session_started();
 
     $payload = $_SESSION['social_oauth'][$provider] ?? null;
     unset($_SESSION['social_oauth'][$provider]);
@@ -348,9 +372,7 @@ function sv_social_random_password_hash(): string
 
 function sv_social_login_user(array $user): void
 {
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        session_start();
-    }
+    sv_ensure_session_started();
 
     $_SESSION['user_id'] = $user['id'];
     $_SESSION['user_name'] = $user['name'];
