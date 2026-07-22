@@ -12,6 +12,28 @@
   --sv-spring-transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+#mini-cart-drawer:not(.active):not(.open) {
+  right: auto !important;
+  left: 100% !important;
+  transform: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+#mini-cart-drawer.active,
+#mini-cart-drawer.open {
+  right: 0 !important;
+  left: auto !important;
+  transform: none !important;
+  visibility: visible !important;
+}
+
+.mini-cart-footer .btn,
+.mini-cart-footer .btn-large {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
 /* Launcher Button */
 #sv-liz-launcher {
   position: fixed;

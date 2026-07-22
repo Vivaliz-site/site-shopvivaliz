@@ -220,7 +220,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </div>
 
 <!-- Liz Assistant Premium Mascot Widget -->
-<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=7.0">
+<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=9.0">
 <script src="/public/assets/liz-assistant/liz-assistant.js"></script>
 
 <script>
@@ -301,12 +301,24 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 }
 
 #mini-cart-drawer:not(.active):not(.open) {
+  right: auto !important;
+  left: 100% !important;
+  transform: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+#mini-cart-drawer.active,
+#mini-cart-drawer.open {
   right: 0 !important;
-  transform: translateX(110%) !important;
+  left: auto !important;
+  transform: none !important;
+  visibility: visible !important;
 }
 
 .mini-cart-footer .btn,
 .mini-cart-footer .btn-large {
+  width: 100% !important;
   max-width: 100% !important;
 }
 </style>
