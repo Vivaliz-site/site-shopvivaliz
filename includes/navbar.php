@@ -53,7 +53,7 @@ $svRecoveryCouponLabel = is_array($svRecoveryCoupon) ? (string)($svRecoveryCoupo
 <?php if ($svIsCart): ?><link rel="stylesheet" href="/css/cart-polish-v14.css?v=14.0.0"><?php endif; ?>
 <?php if ($svIsCheckout): ?>
 <link rel="stylesheet" href="/css/checkout-conversion-v6.css?v=6.0.0">
-<link rel="stylesheet" href="/css/checkout-responsive-fix-v7.css?v=7.0.0">
+<link rel="stylesheet" href="/css/checkout-responsive-fix-v7.css?v=7.0.1">
 <?php endif; ?>
 <?php if ($svIsCart || $svIsCheckout): ?><link rel="stylesheet" href="/css/shipping-v7.css?v=7.0.0"><?php endif; ?>
 <a class="sv-skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
