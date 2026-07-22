@@ -220,8 +220,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </div>
 
 <!-- Liz Assistant Premium Mascot Widget -->
-<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=20260722-1">
-<script src="/public/assets/liz-assistant/liz-assistant.js?v=20260722-1"></script>
+<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=20260722-v3">
+<script src="/public/assets/liz-assistant/liz-assistant.js?v=20260722-v3"></script>
 
 <script>
 // Dark Mode Logic
