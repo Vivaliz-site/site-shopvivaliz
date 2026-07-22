@@ -32,14 +32,40 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Glassmorphism Header & Sticky Navbar */
-.navbar, .sv-navbar {
-  background: rgba(255, 255, 255, 0.94) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.8) !important;
-  box-shadow: var(--sv-shadow-sm) !important;
+/* Glassmorphism Header & Sticky Navbar (Official Vivaliz Blue) */
+.navbar, .sv-navbar, .site-header, header.site-header {
+  background: #0b4f88 !important;
+  color: #ffffff !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 4px 20px rgba(11, 79, 136, 0.25) !important;
   transition: all 0.3s ease !important;
+}
+
+.navbar a, .sv-navbar a, .site-header a, .navbar-menu a, .header-nav a, .brand-logo-text {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+.navbar a:hover, .sv-navbar a:hover, .site-header a:hover, .navbar-menu a:hover, .header-nav a:hover {
+  color: #93c5fd !important;
+}
+
+.navbar-menu a.sv-nav-cta, .header-nav a.active {
+  background: rgba(255, 255, 255, 0.22) !important;
+  color: #ffffff !important;
+  border-radius: 999px !important;
+  padding: 6px 16px !important;
+}
+
+/* Completely remove any top-left square icon box */
+.nav-icons, .nav-icons button {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 /* Category & Product Cards Hover Micro-Animations */

@@ -26,7 +26,16 @@ $whatsappUrl = $whatsapp !== '' ? "https://wa.me/{$whatsapp}?text={$whatsappMsg}
       <div><strong>Institucional</strong><a href="/sobre">Quem somos</a><a href="/catalogo">Produtos</a><a href="/gamificacao.php">Gamificação</a></div>
       <div><strong>Ajuda</strong><a href="/faq">Dúvidas Frequentes</a><a href="/contato">Fale Conosco</a></div>
     </div>
-    <div class="footer-legal" style="margin-top:30px;padding-top:20px;border-top:1px solid #dfe5ec;font-size:12px;color:#667085">
+    <div class="footer-payments-strip" style="margin-top: 24px; padding: 16px 0; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <span style="display:block; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">Formas de Pagamento Processadas pelo Mercado Pago</span>
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <img src="https://img.shields.io/badge/Mercado_Pago-Pix_%7C_Cart%C3%A3o_12x_%7C_Boleto-009ee3?style=for-the-badge&logo=mercadopago&logoColor=white" alt="Pagamentos Seguros com Mercado Pago" height="30" style="border-radius: 4px;" loading="lazy">
+          <span style="font-size: 13px; color: #059669; font-weight: 700;">⚡ 5% de Desconto Imediato no Pix</span>
+        </div>
+      </div>
+    </div>
+    <div class="footer-legal" style="margin-top:16px;padding-top:16px;border-top:1px solid #dfe5ec;font-size:12px;color:#667085">
       <p><strong>Razão Social:</strong> <?= htmlspecialchars($legalName, ENT_QUOTES, 'UTF-8') ?> · <strong>CNPJ:</strong> <?= htmlspecialchars($cnpj, ENT_QUOTES, 'UTF-8') ?></p>
       <p><?= htmlspecialchars($address, ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars($neighborhood, ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars($city, ENT_QUOTES, 'UTF-8') ?>/<?= htmlspecialchars($state, ENT_QUOTES, 'UTF-8') ?> · CEP <?= htmlspecialchars($zipcode, ENT_QUOTES, 'UTF-8') ?></p>
       <p><a href="mailto:<?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?></a> · <?= htmlspecialchars($phone, ENT_QUOTES, 'UTF-8') ?></p>

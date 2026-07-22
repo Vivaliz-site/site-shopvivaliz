@@ -65,8 +65,16 @@ $facebookUrl = !empty($socialMedia['facebook']) ? $socialMedia['facebook'] : $wh
             </div>
         </div>
 
-        <!-- Divider -->
-        <div class="footer-divider"></div>
+        <!-- Payments Strip -->
+        <div class="footer-payments-strip" style="max-width: 1600px; margin: 1.5rem auto 0 auto; padding: 1.5rem 2rem 0 2rem; border-top: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <span style="display:block; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">Pagamentos 100% Seguros via Mercado Pago</span>
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                    <img src="https://img.shields.io/badge/Mercado_Pago-Pix_%7C_Cart%C3%A3o_12x_%7C_Boleto-009ee3?style=for-the-badge&logo=mercadopago&logoColor=white" alt="Pagamentos Seguros com Mercado Pago" height="32" style="border-radius: 4px;" loading="lazy">
+                    <span style="font-size: 13px; color: #10b981; font-weight: 700;">⚡ 5% de Desconto no Pix</span>
+                </div>
+            </div>
+        </div>
 
         <!-- Copyright -->
         <div class="footer-bottom">
