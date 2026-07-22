@@ -1,7 +1,12 @@
 (function(){
+  var fallback='/images/logo-vivaliz-square.png';
   function invalid(src){
     var value=String(src||'').toLowerCase();
     return !value||value.indexOf('placeholder')!==-1||value.indexOf('logo-vivaliz')!==-1;
+  }
+  function markFallback(card,image){
+    card.classList.add('has-image-fallback');
+    if(image&&image.getAttribute('src')!==fallback)image.setAttribute('src',fallback);
   }
 
   function verifyCard(card) {
@@ -15,23 +20,19 @@
     
     var src = image.getAttribute('src');
     if (invalid(src)) {
-      console.warn('[ImageIntegrity] Removing card due to invalid src:', src);
-      card.remove();
+      markFallback(card,image);
       return;
     }
     
     image.addEventListener('error', function() {
-      console.error('[ImageIntegrity] Image load error. Removing card. Src:', src);
-      card.remove();
+      markFallback(card,image);
     });
     
     image.addEventListener('load', function() {
-      console.log('[ImageIntegrity] Image loaded successfully. Src:', src);
       card.classList.add('has-real-product-image');
     });
     
     if (image.complete && image.naturalWidth > 0) {
-      console.log('[ImageIntegrity] Image complete (cached). Src:', src);
       card.classList.add('has-real-product-image');
     }
   }

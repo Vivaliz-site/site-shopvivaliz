@@ -15,23 +15,26 @@ function svci_valid_image(string $value): bool {
     if ($value === '') return false;
     $lower = strtolower($value);
     if (str_contains($lower, 'placeholder') || str_contains($lower, 'logo-vivaliz')) return false;
-    return str_starts_with($value, '/') || str_starts_with($value, 'http://') || str_starts_with($value, 'https://');
+    if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://')) return true;
+    if (!str_starts_with($value, '/')) return false;
+    $path = dirname(__DIR__, 2) . parse_url($value, PHP_URL_PATH);
+    return is_file($path);
 }
 
 $decoded = svcr_products();
 $categories = [];
 
 $generic_images = [
-    'armários e organização' => '/public/assets/category-images/cat-organizacao.jpg',
+    'armários e organização' => 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=320&q=80',
     'banheiro' => 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=320&q=80',
     'cadeados e segurança' => 'https://images.unsplash.com/photo-1558025137-0b407a944810?w=320&q=80',
     'caixas de ferramentas' => 'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?w=320&q=80',
     'elétrico e automotivo' => 'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=320&q=80',
-    'ferramentas' => '/public/assets/category-images/cat-ferramentas.jpg',
-    'fixação e ferragem' => '/public/assets/category-images/cat-ferragens.jpg',
-    'floreiras e jardim' => '/public/assets/category-images/cat-jardim.jpg',
+    'ferramentas' => 'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?w=320&q=80',
+    'fixação e ferragem' => 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=320&q=80',
+    'floreiras e jardim' => 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=320&q=80',
     'pet' => 'https://images.unsplash.com/photo-1450778869180-41d0601e046e?w=320&q=80',
-    'rodízios' => '/public/assets/category-images/cat-rodizios.jpg',
+    'rodízios' => 'https://images.unsplash.com/photo-1581235720704-06d3acfcb36f?w=320&q=80',
     'utilidades' => 'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?w=320&q=80',
 ];
 

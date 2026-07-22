@@ -13,27 +13,27 @@
 .category-slide-img[alt*="Medicao" i],
 .category-slide-img[alt*="Pintura" i],
 .category-slide-img[alt*="Construção" i],
-.category-slide-img[alt*="Construcao" i]{content:url('/storage/original/341481451.jpg')}
+.category-slide-img[alt*="Construcao" i]{content:normal}
 
 /* Vasos, cachepots, floreiras e jardim. */
 .category-slide-img[alt*="Vaso" i],
 .category-slide-img[alt*="Cachepot" i],
 .category-slide-img[alt*="Floreira" i],
-.category-slide-img[alt*="Jardim" i]{content:url('/storage/original/1C7Q-LKW4-FI2Y.jpg')}
+.category-slide-img[alt*="Jardim" i]{content:normal}
 
 /* Rodízios. */
 .category-slide-img[alt*="Rodízio" i],
-.category-slide-img[alt*="Rodizio" i]{content:url('/uploads/olist/CONJ-10-RODIZIOS-35MM-GEL/002-9434fc7a841b.jpg')}
+.category-slide-img[alt*="Rodizio" i]{content:normal}
 
 /* Fercar, carrinhos, armários e organização metálica. */
 .category-slide-img[alt*="Fercar" i],
 .category-slide-img[alt*="Carrinho" i],
 .category-slide-img[alt*="Armário" i],
-.category-slide-img[alt*="Armario" i]{content:url('/uploads/olist/ARM-08/004-09c708d77d14.jpg')}
+.category-slide-img[alt*="Armario" i]{content:normal}
 
 /* Banheiro e assentos. */
 .category-slide-img[alt*="Banheiro" i],
-.category-slide-img[alt*="Assento" i]{content:url('/uploads/olist/A21/003-55e4d9f70c8a.jpg')}
+.category-slide-img[alt*="Assento" i]{content:normal}
 
 /* Ferragens, fixação, cadeados e segurança. */
 .category-slide-img[alt*="Ferragem" i],
@@ -41,20 +41,20 @@
 .category-slide-img[alt*="Fixacao" i],
 .category-slide-img[alt*="Cadeado" i],
 .category-slide-img[alt*="Segurança" i],
-.category-slide-img[alt*="Seguranca" i]{content:url('/uploads/olist/FITAPERFAFBA/004-926848c209da.jpg')}
+.category-slide-img[alt*="Seguranca" i]{content:normal}
 
 /* Caixas de ferramentas e armazenamento. */
 .category-slide-img[alt*="Caixa" i],
-.category-slide-img[alt*="Armazenamento" i]{content:url('/storage/original/13.jpg')}
+.category-slide-img[alt*="Armazenamento" i]{content:normal}
 
 /* Elétrico e automotivo. */
 .category-slide-img[alt*="Elétrico" i],
 .category-slide-img[alt*="Eletrico" i],
-.category-slide-img[alt*="Automotivo" i]{content:url('/storage/original/CHB-40025.jpg')}
+.category-slide-img[alt*="Automotivo" i]{content:normal}
 
 /* Pet e comedouros. */
 .category-slide-img[alt*="Pet" i],
-.category-slide-img[alt*="Comedouro" i]{content:url('/storage/original/CPAZ.jpg')}
+.category-slide-img[alt*="Comedouro" i]{content:normal}
 
 /* Utilidades, organização, domésticos, cozinha e limpeza. */
 .category-slide-img[alt*="Utilidade" i],
@@ -63,6 +63,6 @@
 .category-slide-img[alt*="Doméstica" i],
 .category-slide-img[alt*="Domestica" i],
 .category-slide-img[alt*="Cozinha" i],
-.category-slide-img[alt*="Limpeza" i]{content:url('/storage/original/13.jpg')}
+.category-slide-img[alt*="Limpeza" i]{content:normal}
 
 @media(max-width:640px){.category-slide-image-wrapper{height:128px}}

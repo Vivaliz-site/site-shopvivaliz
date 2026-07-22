@@ -142,6 +142,9 @@ header('Content-Type: text/html; charset=UTF-8');
         if (!v || isNaN(v)) return 'Consulte o valor';
         return 'R$ ' + parseFloat(v).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     }
+    function clearShippingQuote() {
+        try { localStorage.removeItem('shopvivaliz_shipping_quote'); } catch(e) {}
+    }
 
     function render() {
         var items = getCart();

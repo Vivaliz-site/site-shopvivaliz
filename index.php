@@ -400,7 +400,7 @@ $svNavCurrent = '';
     <title>Vivaliz | Loja Online</title>
 
     <!-- Consolidated stylesheets for better performance -->
-    <link rel="stylesheet" href="/css/shopvivaliz-core-consolidated.css?v=2026-07-19">
+    <link rel="stylesheet" href="/css/shopvivaliz-core-consolidated.css?v=2026-07-22-1">
     <link rel="stylesheet" href="/css/shopvivaliz-premium-consolidated.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/shopvivaliz-inline-to-classes.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/shopvivaliz-webp-optimization.css?v=2026-07-19">
@@ -927,7 +927,7 @@ $svNavCurrent = '';
     <!-- Footer -->
     <?php include __DIR__ . '/includes/footer.php'; ?>
 
-    <script src="/autodev/client.js"></script>
+    <?php if (is_file(__DIR__ . '/autodev/client.js')): ?><script src="/autodev/client.js"></script><?php endif; ?>
     <!-- Scroll Reveal -->
     <script>
     (function () {

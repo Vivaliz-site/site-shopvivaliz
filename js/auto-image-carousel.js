@@ -40,6 +40,30 @@
     let currentImageIndex = 0;
     let isAutoPlay = true;
     let autoCarouselInterval = null;
+    const mainImage = document.getElementById('main-product-image');
+
+    function activateThumbnail(button, index) {
+      if (!button || !mainImage) return;
+      const nextSrc = button.getAttribute('data-src') || '';
+      if (!nextSrc) return;
+      currentImageIndex = index;
+      thumbnailButtons.forEach(item => {
+        item.classList.remove('active');
+        item.style.borderColor = '#e2e8f0';
+      });
+      button.classList.add('active');
+      button.style.borderColor = '#0b4f88';
+      mainImage.src = nextSrc;
+    }
+
+    function pauseThenResume() {
+      isAutoPlay = false;
+      clearTimeout(window.autoCarouselResumeTimer);
+      window.autoCarouselResumeTimer = setTimeout(() => {
+        isAutoPlay = true;
+        startAutoCarousel();
+      }, 10000);
+    }
 
     function startAutoCarousel() {
       if (autoCarouselInterval) clearInterval(autoCarouselInterval);
@@ -49,20 +73,17 @@
 
         currentImageIndex = (currentImageIndex + 1) % thumbnailButtons.length;
         const nextButton = thumbnailButtons[currentImageIndex];
-        if (nextButton) nextButton.click();
+        activateThumbnail(nextButton, currentImageIndex);
       }, ROTATION_INTERVAL);
     }
 
     thumbnailButtons.forEach((button, index) => {
       button.addEventListener('click', () => {
-        currentImageIndex = index;
-        isAutoPlay = false;
-        clearTimeout(window.autoCarouselResumeTimer);
-        window.autoCarouselResumeTimer = setTimeout(() => {
-          isAutoPlay = true;
-          startAutoCarousel();
-        }, 10000);
+        activateThumbnail(button, index);
+        pauseThenResume();
       });
+      button.addEventListener('mouseenter', pauseThenResume);
+      button.addEventListener('focus', pauseThenResume);
     });
 
     startAutoCarousel();

@@ -615,7 +615,7 @@ if ($notFound) {
                     <img id="main-product-image" src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" onerror="this.src='<?= sv_product_default_image() ?>'" loading="eager" fetchpriority="high">
                 </div>
                 <!-- Interactive Product Gallery Thumbnails -->
-                <div class="product-gallery-thumbnails" style="display:flex; gap:10px; justify-content:center; margin-bottom:12px; flex-wrap:wrap;">
+                <div class="product-gallery-thumbnails" style="position:relative; z-index:5; display:flex; gap:10px; justify-content:center; margin:12px 0; flex-wrap:wrap;">
                     <?php foreach ($galleryImages as $galleryIndex => $galleryUrl): ?>
                     <button type="button" class="thumb-btn<?= $galleryIndex === 0 ? ' active' : '' ?>" data-src="<?= sv_esc($galleryUrl) ?>" aria-label="Ver imagem <?= $galleryIndex + 1 ?>"
                             style="width:54px; height:54px; border:<?= $galleryIndex === 0 ? '2px solid #0b4f88' : '1px solid #e2e8f0' ?>; border-radius:8px; overflow:hidden; cursor:pointer; padding:0; background:#fff; transition: border-color 0.2s;">
@@ -907,7 +907,7 @@ if ($notFound) {
 
     <script src="/js/cro-interactions.js"></script>
     <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
-    <script src="/js/auto-image-carousel.js?v=20260719-2"></script>
+    <script src="/js/auto-image-carousel.js?v=20260722-1"></script>
     <?php include __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>

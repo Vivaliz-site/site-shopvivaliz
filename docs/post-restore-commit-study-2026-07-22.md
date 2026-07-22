@@ -31,6 +31,30 @@ Base avaliada: storefront restaurada em `f9ce4738` e commits posteriores ate `f4
 - Checkout mantem apenas Mercado Pago, com botao de remover cupom e calculo automatico de frete por CEP.
 - Tiny usa `mercadopago.payment_method_id/payment_type_id` para distinguir Pix, boleto e cartao.
 - Navegador local confirmou catalogo com 177 produtos validos; o item `Parafuso5x16` com preco R$ 0,01 e imagem vazia foi removido da exposicao.
+- Catalogo agora prioriza `storage/products-cache-ativos.json` quando existir e usa `api/catalog/fallback-products.json` somente como complemento.
+- Busca fuzzy/Levenshtein foi desativada para evitar correspondencias amplas demais; a busca fica por texto normalizado e sinonimos controlados.
+- Validadores JavaScript de imagem nao removem mais cards/produtos quando uma imagem falha; eles aplicam fallback visual sem esconder o item.
+- Galeria do produto troca a imagem principal diretamente pelo thumbnail, sem click sintetico que podia ser bloqueado por overlay/zoom.
+- `auto-image-carousel.js` recebeu cache-busting novo nas paginas de catalogo e produto.
+- Home/categorias nao recebem nem forcam via CSS caminhos locais de imagem que nao existem, e nao carregam `/autodev/client.js` quando o arquivo nao esta presente.
+- `api/olist/webhook-receiver.php` restaurado com health check, processamento em lote, lock de cache e sync completo apenas quando necessario.
+
+## Checklist de problemas lembrados em 20/07/2026
+
+| Problema | Situacao nesta base |
+| --- | --- |
+| Disco no lugar de vedante | Mitigado por prioridade do cache vivo e filtro de catalogo invalido; exige dados Olist/Tiny corretos em producao. |
+| Thumbnails invisiveis / carousel quebrado | Corrigido em `produto.php` e `js/auto-image-carousel.js`, testado no navegador. |
+| Cloudflare segurando codigo antigo | `catalog.js` usa `filemtime`; carousel recebeu versao nova. Purga Cloudflare fica para deploy/staging com credenciais. |
+| Force resets / instabilidade Git | Regra reforcada em `AGENTS.md` e `VALIDATION-POLICY.md`; nenhum reset hard usado nesta etapa. |
+| Busca fuzzy complexa | Desativada nesta base. |
+| Tokens Olist expirados | Codigo de refresh reporta credenciais ausentes/invalidas; validacao real depende de segredo ativo. |
+| Email ausente | Configuracao depende de SMTP/env; servico ja evita assumir sucesso sem configuracao. |
+| Product cache sync / raw_json antigo | Webhook seguro restaurado e catalogo passa a preferir cache vivo. |
+| Tabela `products` inexistente/desatualizada | Storefront nao depende dela para preco/estoque canonico. |
+| Validator JS bloqueando imagens validas | Corrigido para nao remover card/produto. |
+| CSS aspect-ratio empurrando thumbnails | Corrigido via z-index/margem/flex wrap na galeria do produto. |
+| 404 de imagens/assets locais antigos | Corrigido em categorias e includes publicos de autodev. |
 
 ## Nao reaplicado nesta etapa
 
