@@ -75,6 +75,33 @@ git merge --ff-only # ← Não roda se git fetch falhou
 
 ---
 
+### 5. SEMPRE validar em BASE DE TESTE antes de PRODUÇÃO
+
+Toda alteração que possa afetar páginas públicas, checkout, carrinho, catálogo, chatbot, integrações, automações ou deploy deve passar primeiro por uma base de teste local ou staging.
+
+**Obrigatório antes de produção:**
+- Subir a alteração em uma base de teste separada da produção.
+- Registrar a URL/porta da base de teste usada.
+- Navegar de verdade no navegador, preferencialmente com Playwright/Chrome, pelas telas afetadas.
+- Validar fluxos reais com DOM renderizado, recursos carregados e interação quando aplicável.
+- Só depois de evidência da base de teste, promover para produção.
+- Após deploy, repetir smoke test real no domínio público.
+
+**Proibido:**
+- Fazer deploy direto em produção sem teste local/staging.
+- Chamar teste de navegador uma simples checagem por `curl`.
+- Considerar screenshot antigo, HTML estático ou inspeção de código como substituto de navegação real.
+- Declarar que layout/chatbot/checkout "funciona" sem abrir a página renderizada e medir o estado final.
+
+**Evidência mínima para páginas web:**
+- HTTP status da página.
+- Título ou `h1` esperado.
+- Ausência de erro visual crítico: logo/imagens essenciais carregadas, chatbot visível quando aplicável, sem overflow horizontal indevido.
+- Fluxo básico navegado no navegador: home, catálogo, produto, carrinho e checkout quando o escopo afetar loja.
+- Teste de zoom negativo e positivo quando a alteração afetar layout/responsividade.
+
+---
+
 ## 🚩 RED FLAGS - PROIBIÇÕES AUTOMÁTICAS
 
 **Se qualquer destes eventos ocorrer, agente fica PROIBIDO de concluir sucesso:**
