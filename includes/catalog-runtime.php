@@ -30,7 +30,7 @@ function svcr_products(): array
     $fallback = $root . '/api/catalog/fallback-products.json';
     $rows = is_file($fallback) ? json_decode((string)file_get_contents($fallback), true) : [];
     if (is_array($rows) && $rows !== []) {
-        return array_values(array_filter($rows, 'is_array'));
+        return svcr_normalize_product_rows($rows);
     }
 
     $cache = $root . '/storage/products-cache-ativos.json';
@@ -57,6 +57,11 @@ function svcr_products(): array
         $items = $payload;
     }
 
+    return svcr_normalize_product_rows($items);
+}
+
+function svcr_normalize_product_rows(array $items): array
+{
     $products = [];
     foreach ($items as $item) {
         if (!is_array($item)) {
@@ -85,15 +90,22 @@ function svcr_products(): array
         }
 
         $name = trim((string)($item['descricao'] ?? $item['nome'] ?? $item['name'] ?? $sku));
+        $price = (float)($prices['preco'] ?? $prices['preco_venda'] ?? $prices['price'] ?? $item['preco'] ?? $item['price'] ?? 0);
+        $stock = max(0, (int)($item['estoque_disponivel'] ?? $stockInfo['quantidade'] ?? $item['stock'] ?? 0));
+
+        if ($price < 1 || $image === '') {
+            continue;
+        }
+
         $products[] = [
             'id' => (string)($item['id'] ?? $sku),
             'sku' => $sku,
             'olist_product_id' => (string)($item['id'] ?? $item['olist_product_id'] ?? ''),
             'name' => $name,
-            'slug' => svcr_slug($name, $sku),
+            'slug' => trim((string)($item['slug'] ?? '')) ?: svcr_slug($name, $sku),
             'description' => trim((string)($item['descricaoComplementar'] ?? $item['descricao_complementar'] ?? $item['description'] ?? $item['descricao'] ?? '')),
-            'price' => (float)($prices['preco'] ?? $prices['preco_venda'] ?? $item['preco'] ?? $item['price'] ?? 0),
-            'stock' => max(0, (int)($item['estoque_disponivel'] ?? $stockInfo['quantidade'] ?? $item['stock'] ?? 0)),
+            'price' => $price,
+            'stock' => $stock,
             'image_url' => $image,
             'images' => $imagesList,
             'images_count' => count($imagesList),

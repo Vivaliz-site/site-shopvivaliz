@@ -21,6 +21,16 @@ Base avaliada: storefront restaurada em `f9ce4738` e commits posteriores ate `f4
 - `api/agent/liz-smart-reply.php`: restaura memoria persistente da Liz, adaptada para poder ser incluida pelo endpoint atual.
 - `api/agent/squad-chat.php`: usa a Liz com memoria quando disponivel, mas cai para a resposta anterior se SQLite/cURL/Gemini falhar.
 - `public/assets/liz-assistant/liz-assistant.js`: envia `user_id` persistente no navegador sem alterar layout do widget.
+- `includes/catalog-runtime.php`: filtra o catalogo canonico para nao expor produtos sem SKU, sem imagem real ou com preco menor que R$ 1.
+- `produto.php`: aceita links antigos/novos de produto pelo SKU normalizado no fim do slug.
+
+## Correcoes criticas verificadas
+
+- Preco/estoque nao sao sobrescritos pela tabela local `products`; `includes/product-price-enrich.php` continua no-op para evitar preco multiplicado/desatualizado.
+- `api/cart/validate.php` valida preco e estoque no servidor antes do checkout.
+- Checkout mantem apenas Mercado Pago, com botao de remover cupom e calculo automatico de frete por CEP.
+- Tiny usa `mercadopago.payment_method_id/payment_type_id` para distinguir Pix, boleto e cartao.
+- Navegador local confirmou catalogo com 177 produtos validos; o item `Parafuso5x16` com preco R$ 0,01 e imagem vazia foi removido da exposicao.
 
 ## Nao reaplicado nesta etapa
 
