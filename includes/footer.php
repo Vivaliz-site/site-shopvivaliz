@@ -49,7 +49,7 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
             </div>
         </div>
 
-        <div class="footer-legal" style="border-top: 2px solid #eee; margin-top: 30px; padding-top: 20px; background: #f9f9f9; margin-left: -20px; margin-right: -20px; margin-bottom: -20px; padding-left: 20px; padding-right: 20px; padding-bottom: 20px; font-size: 12px; color: #666; line-height: 1.8;">
+        <div class="footer-legal" style="border-top: 2px solid #eee; width: 100%; box-sizing: border-box; margin: 30px 0 0; padding: 20px; background: #f9f9f9; font-size: 12px; color: #666; line-height: 1.8;">
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 18px; margin-bottom: 22px;">
                 <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px;">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
