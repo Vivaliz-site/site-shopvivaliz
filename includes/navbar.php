@@ -220,7 +220,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 </div>
 
 <!-- Liz Assistant Premium Mascot Widget -->
-<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=9.0">
+<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=9.1">
 <script src="/public/assets/liz-assistant/liz-assistant.js"></script>
 
 <script>

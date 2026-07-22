@@ -20,6 +20,10 @@
   pointer-events: none !important;
 }
 
+#mini-cart-drawer:not(.active):not(.open) * {
+  visibility: hidden !important;
+}
+
 #mini-cart-drawer.active,
 #mini-cart-drawer.open {
   right: 0 !important;
