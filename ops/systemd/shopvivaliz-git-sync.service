@@ -11,4 +11,3 @@ WorkingDirectory=/home/ubuntu
 ExecStart=/usr/bin/python3 /usr/local/bin/shopvivaliz-git-auto-sync.py
 NoNewPrivileges=true
 PrivateTmp=true
-
