@@ -51,7 +51,10 @@ $svRecoveryCouponLabel = is_array($svRecoveryCoupon) ? (string)($svRecoveryCoupo
 <?php if ($svIsProduct): ?><link rel="stylesheet" href="/css/product-conversion-v5.css?v=5.0.0"><link rel="stylesheet" href="/css/product-image-integrity-v63.css?v=63.0.0"><link rel="stylesheet" href="/css/price-integrity-v73.css?v=73.0.0"><link rel="stylesheet" href="/css/stock-integrity-v83.css?v=83.0.0"><?php endif; ?>
 <?php if ($svIsCart || $svIsCheckout): ?><link rel="stylesheet" href="/css/cart-integrity-v94.css?v=94.0.0"><?php endif; ?>
 <?php if ($svIsCart): ?><link rel="stylesheet" href="/css/cart-polish-v14.css?v=14.0.0"><?php endif; ?>
-<?php if ($svIsCheckout): ?><link rel="stylesheet" href="/css/checkout-conversion-v6.css?v=6.0.0"><?php endif; ?>
+<?php if ($svIsCheckout): ?>
+<link rel="stylesheet" href="/css/checkout-conversion-v6.css?v=6.0.0">
+<link rel="stylesheet" href="/css/checkout-responsive-fix-v7.css?v=7.0.0">
+<?php endif; ?>
 <?php if ($svIsCart || $svIsCheckout): ?><link rel="stylesheet" href="/css/shipping-v7.css?v=7.0.0"><?php endif; ?>
 <a class="sv-skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
 <header class="navbar sv-navbar"><nav class="container nav-inner" aria-label="Navegação principal">
