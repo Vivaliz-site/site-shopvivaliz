@@ -11,20 +11,21 @@
 
 declare(strict_types=1);
 
-require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
+require_once dirname(__DIR__, 2) . '/includes/catalog-runtime.php';
 
 const LIZ_DB_PATH = __DIR__ . '/../../storage/private/liz_intelligence.db';
-const LIZ_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 class LizIntelligence
 {
     private ?\PDO $db = null;
     private array $catalog = [];
     private string $apiKey;
+    private string $model;
 
     public function __construct()
     {
-        $this->apiKey = getenv('GOOGLE_GEMINI_API_KEY') ?: '';
+        $this->apiKey = getenv('GOOGLE_GEMINI_API_KEY') ?: getenv('GEMINI_API_KEY') ?: '';
+        $this->model = getenv('LIZ_GEMINI_MODEL') ?: getenv('GOOGLE_GEMINI_MODEL') ?: 'gemini-1.5-flash';
         $this->initDatabase();
         $this->loadCatalog();
     }
@@ -43,7 +44,7 @@ class LizIntelligence
                     user_id TEXT,
                     message TEXT,
                     response TEXT,
-                    model TEXT DEFAULT 'gemini-2.5-flash',
+                    model TEXT DEFAULT 'gemini-1.5-flash',
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
 
@@ -59,50 +60,77 @@ class LizIntelligence
             ");
         } catch (Exception $e) {
             error_log("Liz DB Error: " . $e->getMessage());
-            throw new Exception("Liz Database initialization failed");
+            $this->db = null;
         }
     }
 
     private function loadCatalog(): void
     {
-        $file = dirname(__DIR__, 2) . '/api/catalog/fallback-products.json';
-        if (is_file($file)) {
-            $this->catalog = json_decode((string)file_get_contents($file), true) ?: [];
+        if (function_exists('svcr_products')) {
+            $this->catalog = svcr_products();
         }
     }
 
-    private function getCatalogContext(): string
+    private function findRelevantProducts(string $query, int $max = 4): array
     {
-        if (empty($this->catalog)) {
-            return "Temos um catálogo variado de produtos para casa, ferragens e organização.";
-        }
-
-        $categories = [];
-        $totalProducts = count($this->catalog);
-        $priceRange = [PHP_INT_MAX, 0];
+        if (empty($this->catalog)) return [];
+        $queryLower = function_exists('mb_strtolower') ? mb_strtolower($query, 'UTF-8') : strtolower($query);
+        $matches = [];
 
         foreach ($this->catalog as $p) {
-            $cat = $p['category'] ?? 'Diversos';
-            $categories[$cat] = ($categories[$cat] ?? 0) + 1;
-            $price = (float)($p['price'] ?? 0);
-            if ($price > 0) {
-                $priceRange[0] = min($priceRange[0], $price);
-                $priceRange[1] = max($priceRange[1], $price);
+            $name = (string)($p['name'] ?? '');
+            $category = (string)($p['category'] ?? '');
+            $sku = (string)($p['sku'] ?? '');
+            $haystack = function_exists('mb_strtolower') ? mb_strtolower("$name $category $sku", 'UTF-8') : strtolower("$name $category $sku");
+
+            $score = 0;
+            $words = preg_split('/\s+/', $queryLower) ?: [];
+            foreach ($words as $w) {
+                if (strlen($w) >= 3 && str_contains($haystack, $w)) {
+                    $score++;
+                }
+            }
+
+            if ($score > 0 && ($p['stock'] ?? 0) > 0 && ($p['price'] ?? 0) > 0) {
+                $matches[] = [
+                    'name' => $name,
+                    'price' => 'R$ ' . number_format((float)$p['price'], 2, ',', '.'),
+                    'stock' => (int)($p['stock'] ?? 0),
+                    'sku' => $sku,
+                    'slug' => $p['slug'] ?? '',
+                    'url' => '/produto/' . ($p['slug'] ?? svcr_slug($name, $sku)),
+                    'score' => $score,
+                ];
             }
         }
 
-        $catList = implode(', ', array_keys(array_slice($categories, 0, 5, true)));
-        $minPrice = $priceRange[0] !== PHP_INT_MAX ? number_format($priceRange[0], 2, ',', '.') : 'desde R$ 50';
-        $maxPrice = number_format($priceRange[1], 2, ',', '.');
-
-        return "Catálogo com $totalProducts produtos em categorias como: $catList. Preços de R$ $minPrice até R$ $maxPrice.";
+        usort($matches, fn($a, $b) => $b['score'] <=> $a['score']);
+        return array_slice($matches, 0, $max);
     }
 
-    private function getConversationHistory(string $userId, int $limit = 5): array
+    private function getCatalogContext(string $query): string
     {
-        if ($this->db === null) {
-            return [];
+        $totalProducts = count($this->catalog);
+        $relevant = $this->findRelevantProducts($query, 4);
+        
+        $relevantText = "";
+        if (!empty($relevant)) {
+            $relevantText = "\nProdutos encontrados relacionados com a busca do cliente:\n";
+            foreach ($relevant as $item) {
+                $relevantText .= "- {$item['name']} | Preço: {$item['price']} | Estoque: {$item['stock']} un | Link: https://shopvivaliz.com.br{$item['url']}\n";
+            }
         }
+
+        return "ShopVivaliz - Loja de ferramentas, rodízios, vasos decorativos e utilidades para casa. " .
+            "Possuímos $totalProducts produtos em estoque. " .
+            "Cupom primeira compra: VIVALIZ10 (10% desconto). " .
+            "Políticas: Frete grátis conforme região/carrinho, Pix com 5% de desconto, envio rápido para todo Brasil. " .
+            "Contatos: atendimento@shopvivaliz.com.br | WhatsApp: (37) 99937-4112." . $relevantText;
+    }
+
+    private function getConversationHistory(string $userId, int $limit = 6): array
+    {
+        if ($this->db === null) return [];
 
         try {
             $stmt = $this->db->prepare("
@@ -125,32 +153,106 @@ class LizIntelligence
         }
     }
 
+    private function generateIntelligentFallback(string $message): string
+    {
+        $relevant = $this->findRelevantProducts($message, 3);
+        $msgLower = function_exists('mb_strtolower') ? mb_strtolower($message, 'UTF-8') : strtolower($message);
+
+        if (!empty($relevant)) {
+            $reply = "Encontrei opções incríveis no nosso catálogo em estoque:\n\n";
+            foreach ($relevant as $item) {
+                $reply .= "• [" . $item['name'] . "](" . $item['url'] . ") — **" . $item['price'] . "** (" . $item['stock'] . " un disponíveis)\n";
+            }
+            $reply .= "\n💡 Aproveite 5% de desconto no Pix e utilize o cupom **VIVALIZ10** na sua primeira compra!";
+            return $reply;
+        }
+
+        if (str_contains($msgLower, 'frete') || str_contains($msgLower, 'entrega') || str_contains($msgLower, 'prazo')) {
+            return "Entregamos para todo o Brasil com código de rastreamento! Você pode calcular o prazo e valor exato informando seu CEP no carrinho ou na página do produto. Aproveite Frete Grátis em compras elegíveis!";
+        }
+
+        if (str_contains($msgLower, 'pagamento') || str_contains($msgLower, 'pix') || str_contains($msgLower, 'cartao') || str_contains($msgLower, 'cupom')) {
+            return "Aceitamos Pix (com 5% de desconto imediato), Cartões de Crédito em até 12x e Boleto Bancário via Mercado Pago. Use o cupom **VIVALIZ10** para ganhar 10% de desconto na primeira compra!";
+        }
+
+        if (str_contains($msgLower, 'contato') || str_contains($msgLower, 'atendimento') || str_contains($msgLower, 'whatsapp') || str_contains($msgLower, 'telefone')) {
+            return "Nossa equipe de atendimento está disponível pelo WhatsApp [(37) 99937-4112](https://wa.me/5537999374112) ou pelo e-mail atendimento@shopvivaliz.com.br.";
+        }
+
+        return "Olá! Sou a Liz da ShopVivaliz. Temos centenas de produtos para casa, ferramentas, rodízios e organização com os melhores preços! Como posso te ajudar com produtos, frete ou pagamentos?";
+    }
+
     public function generateResponse(string $message, string $userId): string
     {
-        if (empty($this->apiKey)) {
-            return "Assistente temporariamente indisponível. Favor usar contato@shopvivaliz.com.br";
+        $history = $this->getConversationHistory($userId, 4);
+        $catalogContext = $this->getCatalogContext($message);
+
+        if (!empty($this->apiKey)) {
+            $systemPrompt = "Você é Liz, a assistente virtual hyperinteligente da loja online ShopVivaliz (www.shopvivaliz.com.br). " .
+                "Responda sempre em português brasileiro de forma cortês, profissional, ágil e muito útil. " .
+                "Instruções:\n" .
+                "1. Sempre que recomendar produtos, forneça o nome, preço e o link no formato [Nome do Produto](URL_DO_PRODUTO).\n" .
+                "2. Se o cliente perguntar de entregas, frete, pagamentos (Pix, cartão, boleto) ou cupons (VIVALIZ10), responda com precisão.\n" .
+                "3. Se o produto estiver esgotado ou você não tiver certeza, ofereça atendimento humano no WhatsApp (37) 99937-4112 ou e-mail atendimento@shopvivaliz.com.br.\n" .
+                "Contexto do Catálogo e Loja:\n" . $catalogContext;
+
+            $contents = array_merge($history, [
+                ['role' => 'user', 'parts' => [['text' => $systemPrompt . "\n\nMensagem do cliente: " . $message]]]
+            ]);
+
+            try {
+                $response = $this->callGeminiAPI($contents);
+                if (!empty($response)) {
+                    $this->saveConversation($userId, $message, $response);
+                    return $response;
+                }
+            } catch (Exception $e) {
+                error_log("Liz Gemini API Notice: " . $e->getMessage());
+            }
         }
 
-        $history = $this->getConversationHistory($userId, 3);
+        $fallback = $this->generateIntelligentFallback($message);
+        $this->saveConversation($userId, $message, $fallback);
+        return $fallback;
+    }
 
-        $systemPrompt = "Você é Liz, assistente inteligente da loja Vivaliz. " .
-            "Responda em português brasileiro, de forma amigável e concisa. " .
-            "Contexto: " . $this->getCatalogContext() . " " .
-            "Você ajuda com: produtos, preços, frete, pagamentos, devoluções e contato. " .
-            "Se não sabe a resposta, sugira contato com atendimento@shopvivaliz.com.br ou WhatsApp.";
+    private function callGeminiHttp(string $url, array $payload): array
+    {
+        $jsonPayload = json_encode($payload);
 
-        $contents = array_merge($history, [
-            ['role' => 'user', 'parts' => [['text' => $systemPrompt . "\n\n" . $message]]]
-        ]);
-
-        try {
-            $response = $this->callGeminiAPI($contents);
-            $this->saveConversation($userId, $message, $response);
-            return $response;
-        } catch (Exception $e) {
-            error_log("Liz API Error: " . $e->getMessage());
-            return "Desculpe, encontrei um erro ao processar sua mensagem. Tente novamente ou entre em contato.";
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonPayload);
+            $result = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            return ['code' => (int)$httpCode, 'body' => (string)$result];
         }
+
+        $opts = [
+            'http' => [
+                'method' => 'POST',
+                'header' => "Content-Type: application/json\r\n",
+                'content' => $jsonPayload,
+                'timeout' => 12,
+                'ignore_errors' => true,
+            ]
+        ];
+        $ctx = stream_context_create($opts);
+        $result = @file_get_contents($url, false, $ctx);
+        $httpCode = 200;
+        if (isset($http_response_header) && is_array($http_response_header)) {
+            foreach ($http_response_header as $header) {
+                if (preg_match('#HTTP/\d\.\d\s+(\d+)#i', $header, $m)) {
+                    $httpCode = (int)$m[1];
+                    break;
+                }
+            }
+        }
+        return ['code' => $httpCode, 'body' => (string)$result];
     }
 
     private function callGeminiAPI(array $contents): string
@@ -159,31 +261,32 @@ class LizIntelligence
             'contents' => $contents,
             'generationConfig' => [
                 'maxOutputTokens' => 1024,
-                'temperature' => 0.7,
+                'temperature' => 0.6,
                 'topP' => 0.9,
             ]
         ];
 
-        $url = LIZ_API_URL . '?key=' . urlencode($this->apiKey);
+        // Modelo Flash mais econômico e rápido
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . urlencode($this->model) . ':generateContent?key=' . urlencode($this->apiKey);
+        $res = $this->callGeminiHttp($url, $payload);
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json'
-        ]);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-
-        $result = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200 || !$result) {
-            throw new Exception("Gemini API returned $httpCode");
+        if ($res['code'] === 200 && !empty($res['body'])) {
+            $data = json_decode($res['body'], true);
+            $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
+            if (trim($text) !== '') return $text;
         }
 
-        $data = json_decode($result, true);
-        return $data['candidates'][0]['content']['parts'][0]['text'] ?? 'Desculpe, não consegui gerar uma resposta.';
+        if ($this->model !== 'gemini-1.5-flash') {
+            $fallbackUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . urlencode($this->apiKey);
+            $res2 = $this->callGeminiHttp($fallbackUrl, $payload);
+            if ($res2['code'] === 200 && !empty($res2['body'])) {
+                $data2 = json_decode($res2['body'], true);
+                $text2 = $data2['candidates'][0]['content']['parts'][0]['text'] ?? '';
+                if (trim($text2) !== '') return $text2;
+            }
+        }
+
+        throw new Exception("Gemini API response empty or returned " . $res['code']);
     }
 
     private function saveConversation(string $userId, string $message, string $response): void
@@ -224,17 +327,18 @@ class LizIntelligence
 }
 
 // Request handler
-header('Content-Type: application/json; charset=utf-8');
+if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === 'liz-intelligence.php' || !empty($_SERVER['HTTP_HOST'])) {
+    header('Content-Type: application/json; charset=utf-8');
 
-$input = json_decode((string)file_get_contents('php://input'), true) ?? [];
-$message = trim((string)($input['message'] ?? ''));
-$userId = (string)($input['user_id'] ?? md5(($_SERVER['REMOTE_ADDR'] ?? 'anon') . date('Y-m-d')));
+    $input = json_decode((string)file_get_contents('php://input'), true) ?? [];
+    $message = trim((string)($input['message'] ?? ''));
+    $userId = (string)($input['user_id'] ?? md5(($_SERVER['REMOTE_ADDR'] ?? 'anon') . date('Y-m-d')));
 
-if (empty($message)) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Mensagem vazia'], JSON_UNESCAPED_UNICODE);
-    exit;
-}
+    if (empty($message)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Mensagem vazia'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 
 try {
     $liz = new LizIntelligence();
@@ -250,5 +354,6 @@ try {
     http_response_code(500);
     error_log("Liz Error: " . $e->getMessage() . " at " . $e->getFile() . ":" . $e->getLine());
     echo json_encode(['error' => 'Erro ao processar'], JSON_UNESCAPED_UNICODE);
+}
 }
 ?>

@@ -84,3 +84,5 @@ if ($svHeaderCats === []) {
     }
 })();
 </script>
+<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=20260722-1">
+<script src="/public/assets/liz-assistant/liz-assistant.js?v=20260722-1"></script>
