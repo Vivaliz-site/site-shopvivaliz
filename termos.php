@@ -76,10 +76,10 @@ $state = $company['state'] ?? 'MG';
         <p>A contagem do prazo de entrega inicia-se apos a confirmacao do pagamento e o processamento do pedido. Eventuais atrasos causados por fatores externos, operadores logisticos, indisponibilidade momentanea de transportadora, caso fortuito ou forca maior nao configuram descumprimento automatico por parte da loja.</p>
 
         <h2>9. Trocas, devolucoes e cancelamentos</h2>
-        <p>As regras aplicaveis a direito de arrependimento, devolucao por defeito, avaria, desacordo com o pedido, reembolso e cancelamento observam a legislacao brasileira e as condicoes descritas na <a href="/politica-devolucoes.php">Politica de Trocas e Devolucoes</a>.</p>
+        <p>As regras aplicaveis a direito de arrependimento, devolucao por defeito, avaria, desacordo com o pedido, reembolso e cancelamento observam a legislacao brasileira e as condicoes descritas na <a href="/politica-devolucoes">Politica de Trocas e Devolucoes</a>.</p>
 
         <h2>10. Privacidade e protecao de dados</h2>
-        <p>O tratamento de dados pessoais do usuario ocorre de acordo com a legislacao aplicavel e com a <a href="/politica-privacidade.php">Politica de Privacidade</a> publicada pela plataforma.</p>
+        <p>O tratamento de dados pessoais do usuario ocorre de acordo com a legislacao aplicavel e com a <a href="/politica-privacidade">Politica de Privacidade</a> publicada pela plataforma.</p>
         <p>Ao utilizar o site, o usuario declara ciencia das praticas de coleta, uso, armazenamento e compartilhamento de dados necessarios ao funcionamento da operacao.</p>
 
         <h2>11. Propriedade intelectual</h2>

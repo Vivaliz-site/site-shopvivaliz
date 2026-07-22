@@ -12,6 +12,7 @@ header('Content-Type: text/html; charset=UTF-8');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Conteudos da Vivaliz sobre catalogo, produtos, marketplace e operacao digital.">
     <title>Blog | Vivaliz</title>
+    <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/responsive.css">
     <style>
         .brand-card-icon {

@@ -1,0 +1,138 @@
+# ShopVivaliz - Apache routing
+
+Options -Indexes
+
+# Error Pages
+ErrorDocument 404 /404.php
+
+# Bloquear acesso a arquivos sensiveis
+<FilesMatch "^(\.env(?:\..*)?|\.htaccess|tasks-queue\.json|mcp-servers\.json|package(?:-lock)?\.json)$">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "^config/.*\.php$">
+    Require all denied
+</FilesMatch>
+
+# Charset UTF-8
+AddCharset UTF-8 .html .txt .php .json
+
+<IfModule mod_headers.c>
+    Header always set Strict-Transport-Security "max-age=31536000"
+    Header always set X-UA-Compatible "IE=edge"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    Header always set Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
+</IfModule>
+
+# Uniform session-cookie protection for every PHP entry point. Lax preserves
+# OAuth/payment return flows while blocking cross-site subrequests.
+<IfModule mod_php.c>
+    php_flag session.use_strict_mode On
+    php_flag session.use_only_cookies On
+    php_flag session.cookie_httponly On
+    php_flag session.cookie_secure On
+    php_value session.cookie_samesite Lax
+    php_flag expose_php Off
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Canonical host migration: apex/no-www is the production domain.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{HTTP_HOST} ^(?:www\.shopvivaliz\.com\.br|dev\.shopvivaliz\.com\.br)$ [NC]
+    RewriteRule ^ https://shopvivaliz.com.br%{REQUEST_URI} [R=301,L,NE]
+
+    # Nunca expor arquivos internos de configuracao e operacao
+    RewriteRule ^config/ - [F,L]
+    RewriteRule ^storage/ - [F,L]
+    RewriteRule ^(?:criar-pagamento-teste-real|criar-pagamento-producao|gerar-payment-id-agora|fazer-pagamento-real-agora|simular-pagamento-real)\.php$ - [F,L,NC]
+    RewriteRule ^logs/ - [F,L]
+    RewriteRule ^(?:\.git|\.env(?:\.|$)|\.claude|\.codex|\.github|\.githooks|\.vscode|\.tmp_shopvivaliz|__pycache__|scripts|tests|test-results|deploy|docs|reports|scratch|automation|automations|autodev|core|dashboards|imports|kong|listings|medusa|migrations|planilhas|public_html|release-notes|tools|utils|CheckoutPageOptimizer)(?:/|$) - [F,L,NC]
+    RewriteRule ^(?:debug|test|teste|check|gen-token)(?:[-_.][^/]*)?$ - [F,L,NC]
+    RewriteRule ^(?:setup-webhooks|update-fallback-prices)\.php$ - [F,L,NC]
+    RewriteRule ^sync(?:[-a-z0-9]*)?\.php$ - [F,L,NC]
+    RewriteRule ^(?:discover-db|do-sync-[a-z0-9-]+|find-db-host|fix-database|full-sync|get_ext_dir|get_php_info|shop-catalog-export)\.php$ - [F,L,NC]
+    RewriteRule ^C.*shopee-sync\.php$ - [F,L,NC]
+    RewriteRule ^api/(?:catalog/test-normalize\.php|(?:pagarme|melhorenvio|olist)/diagnostic(?:-full)?\.php|sync-cache-endpoint\.php|sync/full-sync\.php)$ - [F,L,NC]
+
+    # Valida frete no servidor antes de criar o pedido
+    RewriteRule ^api/orders/create\.php$ api/orders/create-validated.php [L]
+
+    # Mantem o dashboard operacional isolado na subpasta /claude/
+    RewriteRule ^claude/?$ claude/index.php [L]
+    RewriteRule ^claude/(.*)$ claude/$1 [L]
+
+    # Normaliza URLs legadas para as rotas canonicas
+    RewriteCond %{THE_REQUEST} \s/carrinho\.php[\s?]
+    RewriteRule ^carrinho\.php$ /carrinho [R=301,L]
+    RewriteCond %{THE_REQUEST} \s/checkout\.php[\s?]
+    RewriteRule ^checkout\.php$ /checkout [R=301,L]
+
+    # Nao reescrever arquivos e diretorios reais
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Redirecionar URLs de produto antigas com ID numerico para o novo slug
+    RewriteRule ^produto/([a-z0-9][a-z0-9\-]*)-[0-9]+/?$ /produto/$1 [R=301,L]
+
+    # Cart API endpoints
+    RewriteRule ^api/cart/validate/?$ api/cart/validate.php [L,QSA]
+    RewriteRule ^api/cart/sync/?$ api/cart/sync.php [L,QSA]
+
+    # Mercado Livre OAuth
+    RewriteRule ^api/ml/login/?$ api/ml/login.php [L]
+    RewriteRule ^api/ml/callback/?$ api/ml/callback.php [L,QSA]
+    RewriteRule ^api/ml/token/status/?$ api/ml/token.php [L]
+    RewriteRule ^api/ml/token/refresh/?$ api/ml/token.php [L]
+    RewriteRule ^api/ml/me/?$ api/ml/me.php [L]
+    RewriteRule ^api/ml/webhook/?$ api/ml/webhook.php [L,QSA]
+    RewriteRule ^api/ml/products/?$ api/ml/products.php [L,QSA]
+    RewriteRule ^api/ml/optimizer/?$ api/ml/optimizer.php [L,QSA]
+    RewriteRule ^api/maintenance/opcache-reset/?$ api/maintenance/opcache-reset.php [L,QSA]
+    RewriteRule ^admin/mercadolivre/?$ admin/mercadolivre.php [L]
+    RewriteRule ^auth/google-callback/?$ auth/google-callback.php [L,QSA]
+    RewriteRule ^auth/apple-callback/?$ auth/apple-callback.php [L,QSA]
+
+    # Rotas principais da loja
+    RewriteRule ^$ index.php [L]
+    RewriteRule ^home/?$ home.php [L]
+    RewriteRule ^produtos/?$ catalogo.php [L]
+    RewriteRule ^catalogo/?$ catalogo.php [L]
+    RewriteRule ^carrinho/?$ carrinho.php [L]
+    RewriteRule ^checkout/?$ checkout.php [L]
+    RewriteRule ^checkout/retorno/?$ checkout-return.php [L,QSA]
+    RewriteRule ^sobre/?$ sobre/index.php [L]
+    RewriteRule ^contato/?$ contato/index.php [L]
+    RewriteRule ^faq/?$ faq/index.php [L]
+    RewriteRule ^blog/?$ blog/index.php [L]
+    RewriteRule ^google-ads-api-app/?$ google-ads-api-app.php [L]
+    RewriteRule ^termos/?$ termos.php [L]
+    RewriteRule ^p/termos/?$ termos.php [L]
+    RewriteRule ^p/politica-privacidade/?$ politica-privacidade/index.php [L]
+    RewriteRule ^politica-privacidade/?$ politica-privacidade/index.php [L]
+    RewriteRule ^politica-devolucoes/?$ politica-devolucoes.php [L]
+    RewriteRule ^politica-entrega/?$ politica-entrega.php [L]
+    RewriteRule ^produto/?$ produto.php [L]
+    RewriteRule ^produto/([a-z0-9][a-z0-9\-]*)/?$ produto.php?slug=$1 [L,QSA]
+    RewriteRule ^sitemap\.xml$ sitemap.php [L]
+</IfModule>
+
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json image/svg+xml
+</IfModule>
+
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg "access plus 30 days"
+    ExpiresByType image/png "access plus 30 days"
+    ExpiresByType image/webp "access plus 30 days"
+    ExpiresByType image/avif "access plus 30 days"
+    ExpiresByType image/svg+xml "access plus 30 days"
+    ExpiresByType text/css "access plus 30 days"
+    ExpiresByType application/javascript "access plus 30 days"
+</IfModule>
