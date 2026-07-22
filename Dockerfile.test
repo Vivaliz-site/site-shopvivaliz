@@ -1,0 +1,20 @@
+FROM php:8.1-apache
+
+# Habilitar rewrite e PHP
+RUN a2enmod rewrite && a2enmod php8.1
+
+# Copiar vhost config
+COPY --chown=www-data:www-data . /var/www/html
+
+# Configurar DocumentRoot
+RUN echo '<VirtualHost *:80>' > /etc/apache2/sites-enabled/000-default.conf && \
+    echo '  ServerName localhost' >> /etc/apache2/sites-enabled/000-default.conf && \
+    echo '  DocumentRoot /var/www/html' >> /etc/apache2/sites-enabled/000-default.conf && \
+    echo '  <Directory /var/www/html>' >> /etc/apache2/sites-enabled/000-default.conf && \
+    echo '    AllowOverride All' >> /etc/apache2/sites-enabled/000-default.conf && \
+    echo '    Require all granted' >> /etc/apache2/sites-enabled/000-default.conf && \
+    echo '  </Directory>' >> /etc/apache2/sites-enabled/000-default.conf && \
+    echo '</VirtualHost>' >> /etc/apache2/sites-enabled/000-default.conf
+
+EXPOSE 80
+CMD ["apache2-foreground"]

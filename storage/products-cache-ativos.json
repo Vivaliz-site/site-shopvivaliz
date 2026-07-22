@@ -1,0 +1,48 @@
+{
+  "0": {
+    "id": "342371996",
+    "sku": "KIT10RODOVEDADOR90CM",
+    "olist_product_id": "342371996",
+    "name": "Kit 10 Rodo Vedante Borracha Friso Porta Aluminio 90 Cm",
+    "slug": "kit-10-rodo-vedante-borracha-friso-porta-aluminio-90-cm-kit10rodovedador90cm",
+    "description": "Friso para porta ideal para proteger sua casa contra água, chuva, insetos, ratos, escorpião, poeira entre outros. Possui todos os parafusos necessários para instalação e roldana para o batente.",
+    "descricao_complementar": "1- Posicione o vedante na parte de baixo da porta, deixando 5mm de espaço entre o piso e a borracha do vedante. 2- Fixe o vedante na porta usando os parafusos. 3- Fixe a roldana no batente da porta com o parafuso no mesmo lado da fechadura, de modo que quando a porta estiver fechada a roldana pressione o vedante para baixo selando a porta.",
+    "price": 180.99,
+    "preco_venda": 180.99,
+    "preco": 180.99,
+    "stock": 50,
+    "estoque_disponivel": 50,
+    "image_url": "https://shopvivaliz.com.br/images/KIT10RODOVEDADOR90CM.jpg",
+    "imagem_principal_url": "https://shopvivaliz.com.br/images/KIT10RODOVEDADOR90CM.jpg",
+    "imagem": "https://shopvivaliz.com.br/images/KIT10RODOVEDADOR90CM.jpg",
+    "images": [
+      "https://shopvivaliz.com.br/images/KIT10RODOVEDADOR90CM.jpg",
+      "https://shopvivaliz.com.br/images/KIT10RODOVEDADOR90CM.jpg",
+      "https://shopvivaliz.com.br/images/KIT10RODOVEDADOR90CM.jpg",
+      "https://shopvivaliz.com.br/images/KIT10RODOVEDADOR90CM.jpg",
+      "https://shopvivaliz.com.br/images/KIT10RODOVEDADOR90CM.jpg"
+    ],
+    "images_count": 5,
+    "category": "Ferramentas Manuais",
+    "categoria": {
+      "nome": "Ferramentas Manuais"
+    },
+    "status": "active",
+    "situacao": "A",
+    "tipo": "K",
+    "tipoVariacao": "N",
+    "unit": "UN",
+    "unidade": "UN",
+    "warranty": "3 meses",
+    "weight": 0.5,
+    "width": 10,
+    "height": 10,
+    "length": 10,
+    "gtin": "",
+    "brand": "Vivaliz"
+  },
+  "itens": null,
+  "items": null,
+  "produtos": null,
+  "products": null
+}

@@ -17,7 +17,7 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
 <footer>
   <div class="container">
     <div class="footer-cols">
-      <div><strong>Vivaliz</strong><p>Qualidade e entrega rápida para todo o Brasil.</p><?php if ($whatsapp !== ''): ?><a href="https://wa.me/<?= htmlspecialchars($whatsapp, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">WhatsApp</a><?php endif; ?></div>
+      <div><strong>Vivaliz</strong><p>Rodízios, ferragens, ferramentas e utilidades para sua casa.</p><?php if ($whatsapp !== ''): ?><a href="https://wa.me/<?= htmlspecialchars($whatsapp, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">WhatsApp</a><?php endif; ?></div>
       <div><strong>Termos e Condições</strong><a href="/termos">Termos e Condições</a><a href="/politica-privacidade/">Política de Privacidade</a><a href="/politica-devolucoes">Trocas e Devoluções</a><a href="/politica-entrega">Política de Frete</a></div>
       <div><strong>Institucional</strong><a href="/sobre">Quem somos</a><a href="/catalogo">Produtos</a><a href="/gamificacao.php">Gamificação</a></div>
       <div><strong>Ajuda</strong><a href="/faq">Dúvidas Frequentes</a><a href="/contato">Fale Conosco</a></div>

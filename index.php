@@ -390,14 +390,14 @@ $svNavCurrent = '';
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <meta property="og:title" content="Vivaliz | Loja Online">
-    <meta property="og:description" content="Produtos de qualidade. Compre online com entrega rápida.">
+    <meta property="og:description" content="Rodízios, ferragens, utilidades e produtos de organização. Loja online de qualidade.">
     <meta property="og:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square.png">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://shopvivaliz.com.br/">
     <meta property="og:site_name" content="ShopVivaliz">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Vivaliz | Loja Online">
-    <meta name="twitter:description" content="Produtos de qualidade. Compre online com entrega rápida.">
+    <meta name="twitter:description" content="Rodízios, ferragens, utilidades e produtos de organização. Loja online de qualidade.">
     <meta name="twitter:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square.png">
     <link rel="canonical" href="https://shopvivaliz.com.br/">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
