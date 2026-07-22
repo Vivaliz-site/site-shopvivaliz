@@ -83,7 +83,7 @@ define('SESSION_NAME', 'SHOPVIVALIZ_SESSION');
 define('COOKIE_DOMAIN', '.shopvivaliz.com.br');
 define('COOKIE_SECURE', true);
 define('COOKIE_HTTPONLY', true);
-define('COOKIE_SAMESITE', 'Strict');
+define('COOKIE_SAMESITE', 'Lax');
 
 // Paginação
 define('ITEMS_PER_PAGE', 20);

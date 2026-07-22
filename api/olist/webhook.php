@@ -15,6 +15,8 @@ $eventId = 'olist:' . md5($raw !== '' ? $raw : json_encode($_REQUEST));
 // Processar webhook antes de responder
 require_once __DIR__ . '/webhook-processor.php';
 
+// Responder após processamento
+http_response_code(200);
 echo json_encode([
     'ok' => true,
     'provider' => 'olist',
@@ -23,5 +25,6 @@ echo json_encode([
     'method' => $_SERVER['REQUEST_METHOD'] ?? 'GET',
     'received_at' => date('c'),
     'message' => 'Webhook recebido pelo ShopVivaliz.',
-], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+exit;
 
