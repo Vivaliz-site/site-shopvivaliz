@@ -6,7 +6,6 @@ $currentPage = basename($_SERVER['PHP_SELF'] ?? '');
 <header class="site-header">
     <div class="header-container">
         <a href="/" class="header-logo" aria-label="ShopVivaliz - página inicial">
-            <span class="header-logo-icon" aria-hidden="true">🏪</span>
             <span>ShopVivaliz</span>
         </a>
 
