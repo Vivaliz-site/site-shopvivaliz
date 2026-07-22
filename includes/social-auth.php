@@ -48,6 +48,13 @@ function sv_social_base_url(): string
 
 function sv_social_callback_url(string $provider): string
 {
+    if ($provider === 'google') {
+        $configured = sv_social_env('GOOGLE_OAUTH_REDIRECT_URI', 'GOOGLE_REDIRECT_URI');
+        if ($configured !== '') {
+            return $configured;
+        }
+    }
+
     return sv_social_base_url() . '/auth/' . $provider . '-callback.php';
 }
 

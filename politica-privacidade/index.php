@@ -12,6 +12,7 @@ header('Content-Type: text/html; charset=UTF-8');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Politica de privacidade da ShopVivaliz para tratamento de dados, contato e operacao da loja.">
     <title>Privacidade | ShopVivaliz</title>
+    <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/responsive.css">
 </head>
 <body>
@@ -41,5 +42,6 @@ header('Content-Type: text/html; charset=UTF-8');
         </section>
     </div>
 </main>
+<?php include __DIR__ . '/../includes/footer.php'; ?>
 </body>
 </html>

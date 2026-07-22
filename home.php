@@ -156,6 +156,7 @@ $metrics = ['itens'=>'Seleção organizada','imagens'=>'Imagens reais','operacao
 <meta name="description" content="Vivaliz com catálogo ativo, produtos reais e operação preparada para venda online e marketplace.">
 <meta name="theme-color" content="#173B63">
 <title>Vivaliz | Loja online</title>
+<link rel="stylesheet" href="/css/style.css">
 <link rel="stylesheet" href="/css/responsive.css">
 <link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
 <link rel="icon" type="image/png" href="/images/logo-vivaliz-square.png">

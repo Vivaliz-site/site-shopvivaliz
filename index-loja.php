@@ -110,6 +110,7 @@ $categoryLinks = [
     <meta name="description" content="Vivaliz com catalogo ativo, produtos reais e operacao preparada para venda online e marketplace.">
     <meta name="theme-color" content="#173B63">
     <title>Vivaliz | Loja online</title>
+    <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/responsive.css">
     <link rel="icon" type="image/png" href="/images/logo-vivaliz-square.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
