@@ -9,6 +9,7 @@ header('Content-Type: text/html; charset=UTF-8');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Conheça a Vivaliz: uma loja online de rodízios, ferragens e utilidades para casa, com catálogo organizado, atendimento rápido e entrega para todo o Brasil.">
     <title>Sobre | Vivaliz</title>
+    <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/responsive.css">
 </head>
 <body>

@@ -237,10 +237,15 @@ function sv_home_catalog_count(): int
 
 function sv_home_banners(): array
 {
+    $fallbackOne = 'https://images.unsplash.com/photo-1586864387967-d02ef85d93e8?auto=format&fit=crop&w=1400&q=80';
+    $fallbackTwo = 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=1400&q=80';
+    $localOne = '/public/assets/home-banners/banner-primeira-compra.jpg';
+    $localTwo = '/public/assets/home-banners/banner-casa-estilo.jpg';
+
     return [
         [
             'alt' => 'Banner Vivaliz com 10% de desconto na primeira compra',
-            'image' => '/public/assets/home-banners/banner-primeira-compra.jpg',
+            'image' => is_file(__DIR__ . $localOne) ? $localOne : $fallbackOne,
             'tag' => 'OFERTA EXCLUSIVA',
             'title' => 'Tudo o que você precisa.',
             'subtitle' => 'Ganhe 10% de desconto na sua primeira compra com o cupom VIVALIZ10.',
@@ -249,7 +254,7 @@ function sv_home_banners(): array
         ],
         [
             'alt' => 'Banner Vivaliz para casa, jardim e organização',
-            'image' => '/public/assets/home-banners/banner-casa-estilo.jpg',
+            'image' => is_file(__DIR__ . $localTwo) ? $localTwo : $fallbackTwo,
             'tag' => 'COLEÇÃO 2026',
             'title' => 'Renove o seu espaço.',
             'subtitle' => 'Ferramentas de alta precisão e organização inteligente para uma casa impecável.',
@@ -292,7 +297,7 @@ function sv_home_category_icon(string $category): string
     ];
     foreach ($map as $needle => $img_url) {
         if (stripos($category, $needle) !== false) {
-            return $img_url;
+            return is_file(__DIR__ . $img_url) ? $img_url : 'https://images.unsplash.com/photo-1581783898377-1c85bf937427?auto=format&fit=crop&w=500&q=80';
         }
     }
     return 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=400&fit=crop';
@@ -927,7 +932,9 @@ $svNavCurrent = '';
     <!-- Footer -->
     <?php include __DIR__ . '/includes/footer.php'; ?>
 
+    <?php if (is_file(__DIR__ . '/autodev/client.js')): ?>
     <script src="/autodev/client.js"></script>
+    <?php endif; ?>
     <!-- Scroll Reveal -->
     <script>
     (function () {

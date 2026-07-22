@@ -58,7 +58,7 @@ function configure_session(): void
         'use_only_cookies' => 1,
 
         // SameSite cookie attribute
-        'samesite' => 'Strict',
+        'samesite' => 'Lax',
 
         // Session lifetime (30 minutes)
         'gc_maxlifetime' => 1800,
@@ -79,9 +79,6 @@ function configure_session(): void
     if (session_status() === PHP_SESSION_NONE) {
         @session_start();
     }
-
-    // Regenerate session ID to prevent fixation
-    session_regenerate_id(true);
 }
 
 /**

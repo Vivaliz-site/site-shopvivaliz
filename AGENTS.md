@@ -124,10 +124,28 @@ git log --oneline -1
 
 - Se você executa `git pull/reset/fetch` DEPOIS do push, invalidou o teste
 - Teste real = push + aguardar daemon + SEM intervir
+- Para site/layout/checkout/chatbot, teste real exige base de teste local ou staging ANTES de produção
+- Teste de página web exige navegação real no navegador com DOM renderizado; `curl`, inspeção de código ou screenshot antigo não bastam
 
 ---
 
-### 8. Separar Claramente: Preparação, Disparo, Espera, Observação
+### 8. Base de Teste Antes de Produção
+
+**Obrigatório para qualquer mudança que afete páginas públicas, carrinho, checkout, catálogo, chatbot, integrações ou deploy:**
+
+1. Subir a alteração primeiro em base local/staging separada da produção
+2. Registrar URL/porta e estado ANTES/DEPOIS
+3. Navegar de verdade no navegador pelas telas afetadas
+4. Validar home, catálogo, produto, carrinho e checkout quando a loja for impactada
+5. Validar zoom negativo e positivo quando houver qualquer impacto visual/responsivo
+6. Só promover para produção depois de evidência real
+7. Após produção, repetir smoke test no domínio público
+
+**Proibido:** deploy direto em produção sem teste em base de teste.
+
+---
+
+### 9. Separar Claramente: Preparação, Disparo, Espera, Observação
 
 ```bash
 # FASE 1: PREPARAÇÃO
@@ -153,7 +171,7 @@ ACTUAL_SHA=$(ssh ubuntu@vm "git -C /home/ubuntu/site-shopvivaliz rev-parse HEAD"
 
 ---
 
-### 9. Proteja Dados Operacionais
+### 10. Proteja Dados Operacionais
 
 **NUNCA comitte:**
 
@@ -167,7 +185,7 @@ storage/orchestrator/queue.json
 
 ---
 
-### 10. Em Caso de Erro: PARAR Imediatamente
+### 11. Em Caso de Erro: PARAR Imediatamente
 
 ```bash
 set -Eeuo pipefail  # Faz script falhar automaticamente em erros
@@ -183,6 +201,8 @@ git merge --ff-only origin/main
 - [ ] Validei código de saída
 - [ ] Registrei ANTES e DEPOIS
 - [ ] Teste é REAL
+- [ ] Testei primeiro em base local/staging
+- [ ] Naveguei de verdade no navegador
 - [ ] NÃO usei `git reset --hard`
 - [ ] Nenhuma falsa afirmação
 - [ ] Status é COMPROVADO/FALHOU/INCONCLUSIVO

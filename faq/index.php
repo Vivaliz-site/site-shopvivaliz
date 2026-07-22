@@ -9,6 +9,7 @@ header('Content-Type: text/html; charset=UTF-8');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Perguntas frequentes sobre pedidos, pagamento, frete e atendimento da ShopVivaliz.">
     <title>FAQ | ShopVivaliz</title>
+    <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/responsive.css">
 </head>
 <body>
@@ -40,7 +41,7 @@ header('Content-Type: text/html; charset=UTF-8');
                 </article>
                 <article class="brand-card">
                     <h2>Como faço para trocar ou devolver um produto?</h2>
-                    <p>Você tem até 30 dias corridos após o recebimento para solicitar troca ou devolução. Confira as condições completas na <a href="/politica-devolucoes.php">Política de Trocas e Devoluções</a>.</p>
+                    <p>Você tem até 30 dias corridos após o recebimento para solicitar troca ou devolução. Confira as condições completas na <a href="/politica-devolucoes">Política de Trocas e Devoluções</a>.</p>
                 </article>
                 <article class="brand-card">
                     <h2>O site é seguro para comprar?</h2>

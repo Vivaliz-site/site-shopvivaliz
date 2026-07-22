@@ -43,6 +43,7 @@ $whatsappLink = $whatsapp !== '' ? "https://wa.me/{$whatsapp}?text={$whatsappMsg
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Entre em contato com a Vivaliz para suporte comercial, pedidos e atendimento.">
     <title>Contato | Vivaliz</title>
+    <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/responsive.css">
     <style>
         .whatsapp-cta {
