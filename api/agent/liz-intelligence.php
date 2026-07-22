@@ -14,7 +14,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
 
 const LIZ_DB_PATH = __DIR__ . '/../../storage/private/liz_intelligence.db';
-const LIZ_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+const LIZ_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 class LizIntelligence
 {
@@ -43,7 +43,7 @@ class LizIntelligence
                     user_id TEXT,
                     message TEXT,
                     response TEXT,
-                    model TEXT DEFAULT 'gemini-1.5-flash',
+                    model TEXT DEFAULT 'gemini-2.5-flash',
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
 
