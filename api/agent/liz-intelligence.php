@@ -1,8 +1,8 @@
 <?php
 /**
- * LIZ INTELLIGENCE - IA Conversacional Real com Claude API
+ * LIZ INTELLIGENCE - IA Conversacional Real com Google Gemini API
  *
- * Usa integração real com Anthropic Claude para respostas inteligentes.
+ * Usa integração real com Google Gemini para respostas inteligentes.
  * ✅ Contexto do catálogo
  * ✅ Histórico de conversas persistente
  * ✅ Análise de intenção automática
@@ -14,7 +14,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
 
 const LIZ_DB_PATH = __DIR__ . '/../../storage/private/liz_intelligence.db';
-const LIZ_API_URL = 'https://api.anthropic.com/v1/messages';
+const LIZ_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
 
 class LizIntelligence
 {
@@ -24,7 +24,7 @@ class LizIntelligence
 
     public function __construct()
     {
-        $this->apiKey = getenv('ANTHROPIC_API_KEY') ?: '';
+        $this->apiKey = getenv('GOOGLE_GEMINI_API_KEY') ?: '';
         $this->initDatabase();
         $this->loadCatalog();
     }
@@ -43,7 +43,7 @@ class LizIntelligence
                     user_id TEXT,
                     message TEXT,
                     response TEXT,
-                    model TEXT DEFAULT 'claude-3-5-sonnet-20241022',
+                    model TEXT DEFAULT 'gemini-pro',
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
 
@@ -116,11 +116,11 @@ class LizIntelligence
 
             $history = [];
             foreach (array_reverse($rows) as $row) {
-                $history[] = ['role' => 'user', 'content' => $row['message']];
-                $history[] = ['role' => 'assistant', 'content' => $row['response']];
+                $history[] = ['role' => 'user', 'parts' => [['text' => $row['message']]]];
+                $history[] = ['role' => 'model', 'parts' => [['text' => $row['response']]]];
             }
             return $history;
-        } catch (Exception $e) {
+        } catch (Exception) {
             return [];
         }
     }
@@ -139,12 +139,12 @@ class LizIntelligence
             "Você ajuda com: produtos, preços, frete, pagamentos, devoluções e contato. " .
             "Se não sabe a resposta, sugira contato com atendimento@shopvivaliz.com.br ou WhatsApp.";
 
-        $messages = array_merge($history, [
-            ['role' => 'user', 'content' => $message]
+        $contents = array_merge($history, [
+            ['role' => 'user', 'parts' => [['text' => $systemPrompt . "\n\n" . $message]]]
         ]);
 
         try {
-            $response = $this->callClaudeAPI($systemPrompt, $messages);
+            $response = $this->callGeminiAPI($contents);
             $this->saveConversation($userId, $message, $response);
             return $response;
         } catch (Exception $e) {
@@ -153,21 +153,24 @@ class LizIntelligence
         }
     }
 
-    private function callClaudeAPI(string $system, array $messages): string
+    private function callGeminiAPI(array $contents): string
     {
         $payload = [
-            'model' => 'claude-3-5-sonnet-20241022',
-            'max_tokens' => 1024,
-            'system' => $system,
-            'messages' => $messages
+            'contents' => $contents,
+            'generationConfig' => [
+                'maxOutputTokens' => 1024,
+                'temperature' => 0.7,
+                'topP' => 0.9,
+            ]
         ];
 
-        $ch = curl_init(LIZ_API_URL);
+        $url = LIZ_API_URL . '?key=' . urlencode($this->apiKey);
+
+        $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'x-api-key: ' . $this->apiKey
+            'Content-Type: application/json'
         ]);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
 
@@ -176,11 +179,11 @@ class LizIntelligence
         curl_close($ch);
 
         if ($httpCode !== 200 || !$result) {
-            throw new Exception("Claude API returned $httpCode");
+            throw new Exception("Gemini API returned $httpCode");
         }
 
         $data = json_decode($result, true);
-        return $data['content'][0]['text'] ?? 'Desculpe, não consegui gerar uma resposta.';
+        return $data['candidates'][0]['content']['parts'][0]['text'] ?? 'Desculpe, não consegui gerar uma resposta.';
     }
 
     private function saveConversation(string $userId, string $message, string $response): void
@@ -241,7 +244,7 @@ try {
         'status' => 'ok',
         'answer' => $response,
         'version' => '2.0-intelligence',
-        'powered_by' => 'Claude 3.5 Sonnet'
+        'powered_by' => 'Google Gemini Pro'
     ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     http_response_code(500);
