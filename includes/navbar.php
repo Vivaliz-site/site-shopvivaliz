@@ -287,5 +287,27 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   line-height: 32px !important;
   border-radius: 4px !important;
 }
+
+.mini-cart-overlay,
+.mini-cart-drawer,
+.mini-cart-drawer *,
+.mini-cart-footer .btn,
+.mini-cart-footer .btn-large {
+  box-sizing: border-box !important;
+}
+
+.mini-cart-drawer {
+  max-width: 100vw !important;
+}
+
+#mini-cart-drawer:not(.active):not(.open) {
+  right: 0 !important;
+  transform: translateX(110%) !important;
+}
+
+.mini-cart-footer .btn,
+.mini-cart-footer .btn-large {
+  max-width: 100% !important;
+}
 </style>
 
