@@ -460,9 +460,6 @@ $svNavCurrent = '';
                   $url = 'https://shopvivaliz.com.br' . sv_home_product_url($p);
                   $pSku = htmlspecialchars((string)($p['sku'] ?? 'sem-sku'), ENT_QUOTES);
                   $pDesc = htmlspecialchars(preg_replace('/\s+/', ' ', trim(strip_tags((string)($p['description'] ?? '')))), ENT_QUOTES);
-                  if ($pDesc === '') {
-                      $pDesc = 'Produto de qualidade Vivaliz para todo o Brasil.';
-                  }
                   $seoItems[] = '{
                     "@type": "ListItem",
                     "position": ' . $position++ . ',
