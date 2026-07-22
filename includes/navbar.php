@@ -301,6 +301,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 }
 
 #mini-cart-drawer:not(.active):not(.open) {
+  display: none !important;
   right: auto !important;
   left: 100% !important;
   transform: none !important;
@@ -314,6 +315,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 #mini-cart-drawer.active,
 #mini-cart-drawer.open {
+  display: flex !important;
   right: 0 !important;
   left: auto !important;
   transform: none !important;
