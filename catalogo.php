@@ -557,7 +557,6 @@ $svNavCurrent = 'catalogo';
 
     <?php include __DIR__ . '/includes/footer.php'; ?>
 
-    <?php if (is_file(__DIR__ . '/autodev/client.js')): ?><script src="/autodev/client.js"></script><?php endif; ?>
     <script src="/js/catalog.js?v=<?= filemtime(__DIR__ . '/js/catalog.js') ?: '1' ?>"></script>
     <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
     <script>

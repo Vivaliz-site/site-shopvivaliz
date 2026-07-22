@@ -927,7 +927,6 @@ $svNavCurrent = '';
     <!-- Footer -->
     <?php include __DIR__ . '/includes/footer.php'; ?>
 
-    <?php if (is_file(__DIR__ . '/autodev/client.js')): ?><script src="/autodev/client.js"></script><?php endif; ?>
     <!-- Scroll Reveal -->
     <script>
     (function () {
