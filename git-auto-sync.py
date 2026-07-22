@@ -1,95 +1,107 @@
 #!/usr/bin/env python3
-"""
-Git Auto-Sync for VM Oracle
-Syncs main branch every 2 minutes via cron
-"""
+"""Keep the Oracle VM production checkout exactly aligned with origin/main."""
 
-import subprocess
+from __future__ import annotations
+
 import os
+import re
+import subprocess
 import sys
 from datetime import datetime
 
 REPO_DIR = "/home/ubuntu/site-shopvivaliz"
 LOG_FILE = "/var/log/git-auto-sync.log"
+INSTALLATION_TOKEN_RE = re.compile(r"^ghs_[A-Za-z0-9.\-_]{36,}$")
 
-def log(msg):
-    """Log message with timestamp"""
-    timestamp = datetime.now().isoformat()
-    log_msg = f"[{timestamp}] {msg}"
 
-    # Print to stdout (captured by cron)
-    print(log_msg)
-
-    # Append to log file
+def log(message: str) -> None:
+    line = f"[{datetime.now().isoformat()}] {message}"
+    print(line)
     try:
-        with open(LOG_FILE, "a") as f:
-            f.write(log_msg + "\n")
-    except Exception as e:
-        print(f"Warning: Could not write to {LOG_FILE}: {e}")
+        with open(LOG_FILE, "a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+    except OSError as exc:
+        print(f"Warning: Could not write to {LOG_FILE}: {exc}")
 
-def run_cmd(cmd, cwd=REPO_DIR):
-    """Run command and return output"""
+
+def run_cmd(command: list[str]) -> tuple[int, str, str]:
     try:
         result = subprocess.run(
-            cmd,
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=60
+            command, cwd=REPO_DIR, capture_output=True, text=True,
+            timeout=60, check=False,
         )
         return result.returncode, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
         return 124, "", "Command timed out"
-    except Exception as e:
-        return 1, "", str(e)
+    except OSError as exc:
+        return 1, "", str(exc)
 
-def main():
-    """Main sync logic"""
-    os.chdir(REPO_DIR)
+
+def require_success(command: list[str], label: str) -> tuple[str, str]:
+    code, stdout, stderr = run_cmd(command)
+    if code != 0:
+        detail = stderr.strip() or stdout.strip() or f"exit status {code}"
+        raise RuntimeError(f"{label} failed: {detail}")
+    return stdout, stderr
+
+
+def log_token_compatibility() -> None:
+    """Accept classic and JWT-format GitHub App tokens without exposing them."""
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if not token:
+        return
+    if token.startswith("ghs_"):
+        if not INSTALLATION_TOKEN_RE.fullmatch(token):
+            raise RuntimeError("invalid GitHub App installation token format")
+        kind = "stateless JWT" if token.count(".") == 2 else "classic opaque"
+        log(f"GitHub App installation token accepted ({kind})")
+    else:
+        log("Git credential uses a non-installation-token format")
+
+
+def main() -> int:
+    if not os.path.isdir(os.path.join(REPO_DIR, ".git")):
+        log(f"ERROR: Git repository not found at {REPO_DIR}")
+        return 1
 
     try:
-        # Fetch latest from origin
-        log("Fetching from origin...")
-        code, out, err = run_cmd(["git", "fetch", "origin"])
-        if code != 0:
-            log(f"ERROR: git fetch failed: {err}")
-            return 1
+        log_token_compatibility()
+        log("Fetching origin/main...")
+        require_success(
+            ["git", "fetch", "--prune", "origin",
+             "+refs/heads/main:refs/remotes/origin/main"],
+            "git fetch",
+        )
+        require_success(
+            ["git", "rev-parse", "--verify", "origin/main^{commit}"],
+            "verify origin/main",
+        )
 
-        # Check for local changes
-        code, out, err = run_cmd(["git", "status", "--porcelain"])
-        if code != 0:
-            log(f"ERROR: git status failed: {err}")
-            return 1
+        status, _ = require_success(["git", "status", "--porcelain"], "git status")
+        if status.strip():
+            stamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+            log("Local changes detected; preserving them in stash...")
+            require_success(
+                ["git", "stash", "push", "--include-untracked",
+                 "-m", f"auto-sync-{stamp}"],
+                "git stash",
+            )
 
-        if out.strip():
-            # Local changes exist - stash and sync
-            log(f"Local changes detected, stashing...")
-            code, out, err = run_cmd(["git", "stash"])
-            if code != 0:
-                log(f"WARNING: git stash failed: {err}")
-
-        # Pull main branch with fast-forward only
-        log("Pulling main branch...")
-        code, out, err = run_cmd(["git", "checkout", "main"])
-        if code != 0:
-            log(f"ERROR: git checkout main failed: {err}")
-            return 1
-
-        code, out, err = run_cmd(["git", "pull", "--ff-only", "origin", "main"])
-        if code == 0:
-            log("SUCCESS: Repository synced to latest main")
-            return 0
-        elif "fatal: Not a valid object name" in err or "fatal: your current branch" in err:
-            # Branch doesn't exist or is empty, that's OK
-            log("INFO: main branch already up to date or doesn't exist")
-            return 0
-        else:
-            log(f"WARNING: git pull failed: {err}")
-            return 1
-
-    except Exception as e:
-        log(f"ERROR: Unexpected error: {e}")
+        # Deployment checkout follows the remote even after an intentional rollback.
+        require_success(["git", "checkout", "-B", "main", "origin/main"], "git checkout")
+        require_success(["git", "reset", "--hard", "origin/main"], "git reset")
+        revision, _ = require_success(
+            ["git", "rev-parse", "--short", "HEAD"], "git rev-parse"
+        )
+        log(f"SUCCESS: Production checkout synchronized to {revision.strip()}")
+        return 0
+    except RuntimeError as exc:
+        log(f"ERROR: {exc}")
         return 1
+    except Exception as exc:
+        log(f"ERROR: Unexpected error: {exc}")
+        return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())
