@@ -764,12 +764,16 @@ if ($notFound) {
             olist_product_id: <?= json_encode($olistId, JSON_UNESCAPED_UNICODE) ?>
         };
         function addToCart(p) {
+            if (window.ShopVivalizCart && typeof window.ShopVivalizCart.add === 'function') {
+                return window.ShopVivalizCart.add(Object.assign({}, p, { quantity: 1 }));
+            }
             var items;
             try { items = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'); } catch(e) { items = []; }
             var ex = items.find(function(i){ return i.sku === p.sku; });
             if (ex) ex.quantity = (ex.quantity || 1) + 1;
             else items.push(Object.assign({}, p, { quantity: 1 }));
             localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+            window.dispatchEvent(new CustomEvent('shopvivaliz:cart-updated', { detail: { items: items } }));
             return items;
         }
 
@@ -905,7 +909,6 @@ if ($notFound) {
     })();
     </script>
 
-    <script src="/js/cro-interactions.js"></script>
     <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
     <script src="/js/auto-image-carousel.js?v=20260722-1"></script>
     <?php include __DIR__ . '/includes/footer.php'; ?>
