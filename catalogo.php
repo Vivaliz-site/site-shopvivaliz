@@ -269,7 +269,7 @@ function sv_catalog_product_href(array $product): string
 {
     $sku = trim((string)($product['sku'] ?? ''));
     $name = trim((string)($product['name'] ?? ''));
-    $slug = trim((string)($product['slug'] ?? '')) ?: ($sku !== '' && $name !== '' ? sv_catalog_slugify($name, $sku) : '');
+    $slug = sv_catalog_slugify($name, $sku);
     return $slug !== '' ? '/produto/' . $slug : sv_catalog_product_url($product);
 }
 

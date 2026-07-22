@@ -118,3 +118,46 @@ body {
   background-color: #1e293b !important;
   border-color: #334155 !important;
 }
+
+/* Catalog Category Filter Pills Styling */
+.category-filters {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin: 16px 0 24px 0 !important;
+}
+
+.cat-filter {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 8px 16px !important;
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  border-radius: 999px !important;
+  text-decoration: none !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.cat-filter:hover, .cat-filter.active {
+  background: #0b4f88 !important;
+  color: #ffffff !important;
+  border-color: #0b4f88 !important;
+}
+
+.cat-filter .cat-count {
+  background: rgba(15, 23, 42, 0.08) !important;
+  color: inherit !important;
+  padding: 2px 8px !important;
+  border-radius: 999px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+.cat-filter.active .cat-count {
+  background: rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+}

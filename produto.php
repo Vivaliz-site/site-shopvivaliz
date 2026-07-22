@@ -330,7 +330,7 @@ function sv_product_url(array $product): string
 {
     $sku = trim((string)($product['sku'] ?? ''));
     $name = trim((string)($product['name'] ?? ''));
-    $slug = trim((string)($product['slug'] ?? '')) ?: ($sku !== '' && $name !== '' ? sv_slugify($name, $sku) : '');
+    $slug = sv_slugify($name, $sku);
     if ($slug !== '') {
         return '/produto/' . $slug;
     }
