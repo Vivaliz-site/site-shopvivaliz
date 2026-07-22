@@ -1,8 +1,0 @@
-{
-  "recommendations": [
-    "eamodio.gitlens",
-    "PHP Intelephense",
-    "ES7+ React/Redux/React-Native snippets"
-  ],
-  "unwantedRecommendations": []
-}

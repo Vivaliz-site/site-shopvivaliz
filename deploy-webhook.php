@@ -100,11 +100,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
 }
 
 if ($secret === '') {
-    // Fallback: usar uma secret padrão se não configurada
-    $secret = getenv('GITHUB_WEBHOOK_SECRET') ?: 'shopvivaliz-default-webhook-secret';
-    if ($secret === 'shopvivaliz-default-webhook-secret') {
-        dw_log('WARNING: Using default DEPLOY_SECRET - configure DEPLOY_SECRET no .env para segurança');
-    }
+    dw_abort(503, 'DEPLOY_SECRET não configurado no servidor.');
 }
 
 $sig      = $_SERVER['HTTP_X_HUB_SIGNATURE_256'] ?? '';

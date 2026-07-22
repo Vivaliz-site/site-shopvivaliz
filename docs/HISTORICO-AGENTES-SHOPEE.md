@@ -203,7 +203,6 @@ Base URL da API: `https://api.tiny.com.br/public-api/v3`
 | 2026-07-05 (~04h UTC) | `main` (rotina agendada, sem branch dedicada) | 7º ciclo consecutivo, ~28h após o ciclo anterior (maior intervalo que os 6h nominais, sem run intermediário registrado). Ambos os bloqueadores seguem idênticos ao ciclo 6: token Tiny sem renovação (`shopee-listings-20260702-181749.json`, o mais recente com conteúdo real, ainda mostra `401` e `total_products: 0`; nenhum arquivo novo desde `optimization-report-20260703-041044.json`) e os workflows `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` seguem pausados (`on: workflow_dispatch`) desde `71bb308`. Nenhum secret `TINY_*`/`OLIST_*` neste ambiente de sessão. Nenhuma otimização aplicada — sem dados reais não há base para decisão orientada a dados. Nenhuma notificação push enviada: nenhum fato novo além do já comunicado no ciclo 6 (mesma recomendação: renovar o token e reativar os dois workflows, ou pausar esta rotina até lá). |
 | 2026-07-07 (~19h UTC) | `main` (rotina agendada, sem branch dedicada) | 8º ciclo consecutivo, ~63h após o ciclo anterior (maior gap ainda que os 6h nominais — nenhum run intermediário registrado). Estado idêntico ao ciclo 7: `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` seguem `on: workflow_dispatch` apenas (commit `6e32ce0` de 2026-07-05 tocou o modo/permissões de dezenas de arquivos, incluindo `sync-shopee-6h.yml`, mas não reverteu a pausa nem reativou o `schedule`); nenhum `listings/shopee-listings-*.json` ou `optimization-report-*.json` novo desde `20260703-041044`; nenhum secret `TINY_*`/`OLIST_*`/`SHOPEE_*` neste ambiente de sessão. Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada — sem dados reais não há base para decisão orientada a dados. Nenhuma notificação push enviada: nenhum fato novo além do já comunicado nos ciclos 6 e 7 (mesma recomendação: renovar o token Tiny e reativar os dois workflows, ou pausar esta rotina agendada até que o bloqueador seja resolvido). |
 | 2026-07-08 (~19h UTC) | `main` (rotina agendada, sem branch dedicada) | 9º ciclo consecutivo. Fato novo desde o ciclo 8: em `2026-07-08T09:54:33-03:00` (commit `e714686`, PR #153, autor `fredmourao-ai`) o usuário reativou `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` com o trigger `schedule` restaurado (resolve o bloqueador secundário descrito nos ciclos 6-8). O primeiro run automático após a reativação (`fetch-shopee-listings.yml`, 2026-07-08T17:12:37Z, commit `dd4d439`) já confirma que o pipeline volta a executar sozinho, mas gerou `listings/shopee-listings-20260708-171237.json` com `status: partial`, `total_products: 0` e o mesmo erro `"Autenticação falhou (401). Token inválido ou expirado."` — ou seja, o bloqueador primário (token Tiny) permanece sem renovação, agora ~8 dias desde a última extração real (`20260630-113006.json`). Nenhum `optimization-report-*.json` novo desde `20260703-041044`. Nenhuma credencial `TINY_*`/`OLIST_*` neste ambiente de sessão para tentar renovação direta. Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada — sem dados reais não há base para decisão orientada a dados. Notificação push enviada neste ciclo: há fato novo e acionável (pipeline reativado com sucesso, mas ainda bloqueado só pelo token — a ação restante do usuário é unicamente renovar `TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN`). |
-| 2026-07-22 (~14h UTC) | `main` (rotina agendada, sem branch dedicada) | 12º ciclo consecutivo, ~7 dias após o ciclo 11 (maior gap que o nominal de 6h — sem run intermediário documentado). Fato novo grave: todo o pipeline mecânico (`agents/v9.2.85/app/ShopeeListingsExtractorAgent.php`, `ShopeeListingsOptimizationAgent.php`, os workflows `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` e o diretório `listings/` inteiro com todo o histórico de relatórios) desapareceu do repositório entre 2026-07-16 e hoje, confirmado via API do GitHub (não só clone local raso) — `.github/workflows/` só contém `agents-runtime-ci.yml` e `deploy-production-ftp.yml`. Nenhum commit de deleção visível no histórico acessível. `claude/logs/shopee-sync.log` (arquivo que o prompt desta rotina manda ler primeiro) também não existe. Nenhuma credencial `TINY_*`/`OLIST_*`/`SHOPEE_*`/`ANTHROPIC_API_KEY`/`OPENAI_API_KEY` neste ambiente de sessão. Nenhuma otimização aplicada e nenhum dado de CTR/conversão/venda foi inventado — ver seção 9.9. Notificação push enviada: fato novo que muda a ação recomendada (antes só "renovar client credentials Tiny"; agora também é preciso restaurar/recriar os arquivos do pipeline antes de qualquer renovação de credencial fazer diferença). |
 
 ---
 
@@ -492,52 +491,3 @@ reconfiguração manual do app no painel Tiny + atualização de `TINY_CLIENT_ID
 pipeline vai funcionar, mesmo os que não exigem dado de performance do Shopee. Reforçada
 também a conclusão estrutural: a rotina de CTR/conversão/preço não é implementável sem
 integração real com a API de analytics do Shopee Open Platform.
-
-### 9.9 Atualização — ciclo de 2026-07-22 (~14h UTC), 12º ciclo
-
-**Achado novo: o pipeline inteiro sumiu do repositório, não só as credenciais.** Ao seguir o
-passo 1 das instruções desta rotina ("ler `claude/logs/shopee-sync.log`"), o arquivo não existe.
-Investigação seguinte encontrou que todo o pipeline mecânico documentado nas seções 1-6 deste
-documento não está mais presente:
-
-- `.github/workflows/` contém apenas 2 arquivos (`agents-runtime-ci.yml`,
-  `deploy-production-ftp.yml`) — `fetch-shopee-listings.yml` e `optimize-shopee-listings.yml`
-  não existem mais.
-- O diretório `listings/` (destino de todo o histórico de `shopee-listings-*.json` e
-  `optimization-report-*.json` citado nas seções 7 e 9-9.8) não existe mais.
-- Confirmado via `mcp__github__get_file_contents` diretamente na API do GitHub (owner
-  `fredmourao-ai`, repo `site-shopvivaliz`), não apenas no clone local raso (`shallow`, 50
-  commits) deste ambiente — ou seja, não é artefato de clone incompleto, é o estado real do
-  repositório.
-- `git log` local (limitado pelo shallow clone) não mostra nenhum commit de deleção para esses
-  caminhos; a atividade mais recente que os toca é de 2026-07-16 (commits `f914bb2`, `0c4bea9`,
-  `506e59d`, `dfaf054`, `6612f4c`). O HEAD atual (`3242e54`, "cleanup: remover código legado e
-  riscos de segurança", 2026-07-21) só apagou arquivos não relacionados (scripts de pagamento de
-  teste, `carrinho-legacy/`, `checkout-legacy/`, etc.) — não explica o sumiço do pipeline Shopee.
-  Não foi possível determinar neste ciclo exatamente qual commit removeu esses arquivos nem por
-  quê (possivelmente um squash/rebase de outro agente, ou limpeza feita fora da janela do clone
-  raso disponível aqui).
-
-Isso se soma, sem substituir, ao bloqueador já documentado na seção 9.8 (credenciais Tiny
-`TINY_CLIENT_ID`/`TINY_CLIENT_SECRET` inválidas, exigindo reconfiguração manual no painel Tiny) —
-mesmo que as credenciais fossem corrigidas agora, não haveria workflow nem agente para usá-las.
-
-Nenhum secret novo de performance/analytics do Shopee (`SHOPEE_PARTNER_ID`, `SHOPEE_PARTNER_KEY`,
-`SHOPEE_SHOP_ID`, `SHOPEE_ACCESS_TOKEN`) foi adicionado — o achado estrutural das seções 9.7/9.8
-permanece válido e inalterado. Nenhuma credencial `TINY_*`/`OLIST_*`/`SHOPEE_*`/
-`ANTHROPIC_API_KEY`/`OPENAI_API_KEY` está presente neste ambiente de sessão
-(`printenv | grep -E 'TINY|OLIST|SHOPEE|ANTHROPIC|OPENAI'` só mostra `ANTHROPIC_BASE_URL`).
-Nenhuma otimização de título/descrição/imagem/atributo/preço foi aplicada e nenhum dado de
-CTR/conversão/venda foi inventado neste ciclo, conforme a regra de segurança da seção 6.
-
-**Notificação push enviada neste ciclo:** fato novo e acionável que muda a recomendação anterior.
-Antes (ciclo 11) a única ação pendente era reconfigurar as credenciais Tiny no painel do ERP.
-Agora isso não basta — os arquivos do pipeline (`ShopeeListingsExtractorAgent.php`,
-`ShopeeListingsOptimizationAgent.php`, os dois workflows e o diretório `listings/`) precisam ser
-restaurados ou recriados primeiro, já que não há commit de deleção visível para simplesmente
-reverter. Recomenda-se ao usuário: (1) verificar se a remoção foi intencional (limpeza) ou
-acidental, olhando o histórico completo (não raso) do repositório; (2) se acidental, restaurar
-os arquivos a partir do último commit conhecido que os continha (por volta de 2026-07-16); (3)
-só depois retomar a renovação de credenciais Tiny descrita na seção 9.8. Até lá, esta rotina
-agendada não tem nada para executar a cada 6h além de repetir este mesmo diagnóstico — vale
-considerar pausá-la.
