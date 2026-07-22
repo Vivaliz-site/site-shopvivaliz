@@ -65,6 +65,17 @@ jobs:
               'set ssl:verify-certificate false' \
               'set net:max-retries 2' \
               'set net:timeout 20'
+            for file in index.php catalogo.php produto.php carrinho.php checkout.php home.php css/zoom-responsive.css; do
+              test -f "$file"
+              dir="$(dirname "$file")"
+              if [ "$dir" = "." ]; then
+                remote_dir="$REMOTE"
+              else
+                remote_dir="${REMOTE%/}/$dir"
+              fi
+              printf 'mkdir -p "%s"\n' "$remote_dir"
+              printf 'put -O "%s" "%s"\n' "$remote_dir" "$file"
+            done
             find \
               index.php catalogo.php produto.php carrinho.php checkout.php home.php .htaccess \
               includes css js images public/assets assets/brand assets/css assets/images api/catalog/fallback-products.json \
