@@ -150,11 +150,32 @@ $response = [
 if ($method === 'POST' && !empty($payload['message'])) {
     $message = (string) ($payload['message'] ?? '');
     $context = (string) ($payload['context'] ?? 'site-shopvivaliz');
-    $response['answer'] = processLizChat($message, $context);
-    $response['received'] = ['message' => $message, 'context' => $context];
+    $userId = preg_replace('/[^a-zA-Z0-9_\-:.]/', '', (string) ($payload['user_id'] ?? 'anonymous')) ?: 'anonymous';
+    $response['answer'] = processLizSmartChat($message, $context, $userId);
+    $response['received'] = ['message' => $message, 'context' => $context, 'user_id' => $userId === 'anonymous' ? 'anonymous' : 'persisted'];
 }
 
 echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+function processLizSmartChat(string $message, string $context, string $userId): string
+{
+    $smartReply = __DIR__ . '/liz-smart-reply.php';
+    if (is_file($smartReply)) {
+        try {
+            require_once $smartReply;
+            if (class_exists('LizSmartReply')) {
+                $liz = new LizSmartReply();
+                $answer = $liz->getSmartResponse($message, $userId);
+                $liz->saveChat($userId, $message, $answer);
+                return $answer;
+            }
+        } catch (Throwable $e) {
+            error_log('Liz smart fallback: ' . $e->getMessage());
+        }
+    }
+
+    return processLizChat($message, $context);
+}
 
 function processLizChat(string $message, string $context): string
 {
@@ -176,7 +197,7 @@ function processLizChat(string $message, string $context): string
         }
     }
 
-    if ($geminiKey === '') {
+    if ($geminiKey === '' || !function_exists('curl_init')) {
         $lowerMsg = strtolower($message);
         if (preg_match('/(produto|item|sku|código)/i', $lowerMsg)) {
             return 'Posso te ajudar a encontrar o item ideal. Temos linhas como casa, jardim, organização, ferramentas e pet. Qual categoria você procura?';
@@ -235,6 +256,10 @@ function processLizChat(string $message, string $context): string
 
 function callGeminiAPI(string $url, array $payload): array
 {
+    if (!function_exists('curl_init')) {
+        return [];
+    }
+
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);

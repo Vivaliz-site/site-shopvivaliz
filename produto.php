@@ -263,11 +263,14 @@ function sv_slugify(string $name, string $sku): string
 
 function sv_product_find_slug(string $slug): array
 {
+    $requestedCompact = strtolower((string)preg_replace('/[^a-zA-Z0-9]+/', '', $slug));
     foreach (sv_product_catalog() as $row) {
         if (!is_array($row)) continue;
         $persistedSlug = trim((string)($row['slug'] ?? ''));
         $computedSlug = sv_slugify((string)($row['name'] ?? ''), (string)($row['sku'] ?? ''));
         if ($persistedSlug === $slug || $computedSlug === $slug) return $row;
+        $skuPart = strtolower((string)preg_replace('/[^a-zA-Z0-9]+/', '', (string)($row['sku'] ?? '')));
+        if ($skuPart !== '' && $requestedCompact !== '' && str_ends_with($requestedCompact, $skuPart)) return $row;
     }
     return [];
 }
