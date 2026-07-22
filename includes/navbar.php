@@ -308,6 +308,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   pointer-events: none !important;
 }
 
+#mini-cart-drawer:not(.active):not(.open) * {
+  visibility: hidden !important;
+}
+
 #mini-cart-drawer.active,
 #mini-cart-drawer.open {
   right: 0 !important;
