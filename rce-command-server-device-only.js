@@ -16,8 +16,14 @@ const PORT = parseInt(process.env.PORT) || 5557;
 const BIND_IP = process.env.BIND_IP || '127.0.0.1';
 const LOG_FILE = path.join(__dirname, 'logs', 'rce-server.log');
 
-// 📱 DEVICE ID DO SEU IPHONE (ÚNICA PROTEÇÃO)
-const YOUR_DEVICE_ID = 'iphone-3cc2c19459524e3cb79d7bdfaa1b456a';
+// 📱 IDENTIFICADORES AUTORIZADOS (QUALQUER UM FUNCIONA)
+const AUTHORIZED_IDS = {
+  'imei-vivo': '356935402541129',           // IMEI Vivo (4G, WiFi)
+  'imei-claro': '356935402400383',          // IMEI2 Claro (4G, WiFi)
+  'mac-wifi': 'B8:01:1F:42:B1:78',          // MAC Address WiFi
+  'serial': 'FR924W3X26',                   // Serial Number
+  'device-id': 'iphone-3cc2c19459524e3cb79d7bdfaa1b456a' // Device ID
+};
 
 // Criar pasta de logs
 if (!fs.existsSync(path.dirname(LOG_FILE))) {
