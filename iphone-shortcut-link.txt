@@ -1,0 +1,30 @@
+COPIE O LINK ABAIXO E ABRA NO IPHONE:
+
+https://www.icloud.com/shortcuts/create?url=https://rce-shopvivaliz.trycloudflare.com/execute&method=POST&headers=Authorization:Bearer%20hBu-3gs3meFOp82AnXLzljmIvNaf-7ih&headers=X-Device-ID:iphone-3cc2c19459524e3cb79d7bdfaa1b456a&headers=Content-Type:application/json&body=%7B%22cmd%22:%22git%20status%22,%22timeout%22:30%7D&name=RCE%20Execute%20Command
+
+COMO USAR:
+1. Copie o link acima
+2. Abra Safari no iPhone
+3. Cole o link
+4. Clique "Add Shortcut"
+5. Pronto! Shortcut criado
+
+---
+
+LINK ALTERNATIVO (mais simples):
+https://www.icloud.com/shortcuts/create
+
+Depois configure manualmente conforme instruções abaixo.
+
+---
+
+CLAUDE/GPT CONFIGURAR MANUALMENTE:
+
+Se perguntar ao Claude ou ChatGPT:
+"Configure um Shortcut no meu iPhone com:
+- POST: https://rce-shopvivaliz.trycloudflare.com/execute
+- Header Authorization: Bearer hBu-3gs3meFOp82AnXLzljmIvNaf-7ih
+- Header X-Device-ID: iphone-3cc2c19459524e3cb79d7bdfaa1b456a
+- Body: {\"cmd\":\"git status\",\"timeout\":30}"
+
+Claude/GPT vai guiar passo a passo no app Shortcuts.
