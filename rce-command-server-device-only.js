@@ -229,39 +229,50 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, BIND_IP, () => {
   log('INIT', '═══════════════════════════════════════════════════');
-  log('INIT', '🔓 RCE SERVER - DEVICE ID ONLY - SEM RESTRIÇÕES');
+  log('INIT', '🔓 RCE SERVER - MÚLTIPLOS IDENTIFICADORES');
   log('INIT', '═══════════════════════════════════════════════════');
   log('INIT', `✅ Servidor rodando em http://${BIND_IP}:${PORT}`);
-  log('INIT', `📱 Device ID Autorizado: ${YOUR_DEVICE_ID}`);
+  log('INIT', '📱 Identificadores Autorizados:');
+
+  for (const [type, value] of Object.entries(AUTHORIZED_IDS)) {
+    log('INIT', `   ✓ ${type}: ${value}`);
+  }
   log('INIT', '');
 
   console.log(`
 ╔══════════════════════════════════════════════════════════════════╗
 ║          🔓 RCE SERVER - ACESSO COMPLETO                        ║
-║              Apenas seu iPhone consegue acessar                  ║
-║                   (via Device ID único)                          ║
+║         WiFi + 4G (Múltiplos Identificadores)                   ║
 ╚══════════════════════════════════════════════════════════════════╝
 
 📍 URL: http://${BIND_IP}:${PORT}
-📱 Device ID Autorizado: ${YOUR_DEVICE_ID}
 
-🚀 COMO USAR DO IPHONE:
+📱 IDENTIFICADORES AUTORIZADOS:
 
-  Header ÚNICO requerido:
-  X-Device-ID: ${YOUR_DEVICE_ID}
+Para 4G (IMEI):
+  X-IMEI: 356935402541129 (Vivo)
+  X-IMEI: 356935402400383 (Claro)
 
-  Exemplo com curl:
+Para WiFi (MAC):
+  X-MAC: B8:01:1F:42:B1:78
+
+Backup (Serial/Device ID):
+  X-Serial: FR924W3X26
+  X-Device-ID: iphone-3cc2c19459524e3cb79d7bdfaa1b456a
+
+🚀 EXEMPLOS:
+
+Para 4G:
   curl -X POST https://rce-shopvivaliz.trycloudflare.com/execute \\
-    -H "X-Device-ID: ${YOUR_DEVICE_ID}" \\
+    -H "X-IMEI: 356935402541129" \\
     -H "Content-Type: application/json" \\
-    -d '{"cmd": "dir", "timeout": 30}'
+    -d '{"cmd": "git status", "timeout": 30}'
 
-📋 ENDPOINTS:
-  POST /execute → Executar qualquer comando
-  POST /open-terminal → Abrir Terminal
-  POST /open-browser → Abrir Navegador
-  POST /open-app → Abrir App
-  GET /status → Ver status
+Para WiFi:
+  curl -X POST https://rce-shopvivaliz.trycloudflare.com/execute \\
+    -H "X-MAC: B8:01:1F:42:B1:78" \\
+    -H "Content-Type: application/json" \\
+    -d '{"cmd": "git status", "timeout": 30}'
 
 `);
 });
