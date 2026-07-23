@@ -1,0 +1,16 @@
+# Cloudflare Tunnel Configuration
+# RCE Server via Cloudflare (seguro, criptografado, acesso total)
+
+tunnel: site-shopvivaliz-rce
+credentials-file: C:\Users\FRED\.cloudflared\site-shopvivaliz-rce.json
+
+ingress:
+  # RCE Server - acesso completo
+  - hostname: rce.shopvivaliz.workers.dev
+    service: http://127.0.0.1:5557
+    originRequest:
+      httpHostHeader: 127.0.0.1:5557
+      noTLSVerify: true
+
+  # Fallback
+  - service: http_status:404
