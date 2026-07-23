@@ -1,0 +1,96 @@
+name: Restore domingo v2 (ONE TIME)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/restore-domingo-v2-once.yml
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout healthy snapshot
+        uses: actions/checkout@v4
+        with:
+          ref: restore-domingo-v2
+
+      - name: Validate snapshot
+        run: |
+          set -Eeuo pipefail
+          find . -type f -name '*.php' -not -path './vendor/*' -not -path './node_modules/*' -print0 | xargs -0 -n1 php -l
+          for f in index.php home.php catalogo.php .htaccess includes/header.php includes/footer.php includes/navbar.php includes/catalog-runtime.php api/agent/squad-chat.php; do
+            test -s "$f" || { echo "Missing $f"; exit 1; }
+          done
+
+      - name: Install deploy tools
+        run: sudo apt-get update && sudo apt-get install -y lftp jq
+
+      - name: Force complete restore by FTP
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
+          FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+        run: |
+          set -Eeuo pipefail
+          : "${FTP_SERVER:?Missing FTP_SERVER}"
+          : "${FTP_USERNAME:?Missing FTP_USERNAME}"
+          : "${FTP_PASSWORD:?Missing FTP_PASSWORD}"
+          PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"; PORT="${PORT:-21}"
+          REMOTE="${FTP_REMOTE_DIR:-/}"
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF
+          set ftp:ssl-force true
+          set ftp:ssl-protect-data true
+          set ssl:verify-certificate false
+          set net:max-retries 3
+          set net:timeout 30
+          set cmd:fail-exit true
+          mirror --reverse --verbose --ignore-time --parallel=3 api "$REMOTE/api"
+          mirror --reverse --verbose --ignore-time --parallel=3 includes "$REMOTE/includes"
+          mirror --reverse --verbose --ignore-time --parallel=4 css "$REMOTE/css"
+          mirror --reverse --verbose --ignore-time --parallel=4 js "$REMOTE/js"
+          mirror --reverse --verbose --ignore-time --parallel=3 assets "$REMOTE/assets"
+          mirror --reverse --verbose --ignore-time --parallel=3 images "$REMOTE/images"
+          mirror --reverse --verbose --ignore-time --parallel=2 public/assets/liz-assistant "$REMOTE/public/assets/liz-assistant"
+          mirror --reverse --verbose --ignore-time sobre "$REMOTE/sobre"
+          mirror --reverse --verbose --ignore-time contato "$REMOTE/contato"
+          mirror --reverse --verbose --ignore-time faq "$REMOTE/faq"
+          mirror --reverse --verbose --ignore-time blog "$REMOTE/blog"
+          mirror --reverse --verbose --ignore-time politica-privacidade "$REMOTE/politica-privacidade"
+          mput -O "$REMOTE" *.php
+          put -O "$REMOTE" .htaccess
+          bye
+          EOF
+
+      - name: Purge Cloudflare cache when configured
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || exit 0
+          zone_response="$(curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' 'https://api.cloudflare.com/client/v4/zones?name=shopvivaliz.com.br&status=active')"
+          zone_id="$(printf '%s' "$zone_response" | jq -r '.result[0].id // empty')"
+          test -n "$zone_id"
+          curl -fsS -X POST -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' --data '{"purge_everything":true}' "https://api.cloudflare.com/client/v4/zones/${zone_id}/purge_cache" | jq -e '.success == true'
+
+      - name: Smoke test storefront and Liz
+        run: |
+          set -Eeuo pipefail
+          sleep 30
+          curl -fLsS --retry 5 --retry-delay 6 https://shopvivaliz.com.br/ -o /tmp/home.html
+          curl -fLsS --retry 5 --retry-delay 6 https://shopvivaliz.com.br/css/shopvivaliz-core-consolidated.css -o /tmp/core.css
+          curl -fLsS --retry 5 --retry-delay 6 'https://shopvivaliz.com.br/api/agent/squad-chat.php?health=1' -o /tmp/liz-health.json
+          test "$(wc -c < /tmp/home.html)" -gt 1000
+          test "$(wc -c < /tmp/core.css)" -gt 1000
+          grep -qi 'Vivaliz' /tmp/home.html
+          php -r '$d=json_decode(file_get_contents("/tmp/liz-health.json"),true); if(!is_array($d)||($d["ok"]??null)!==true||($d["endpoint"]??null)!=="squad-chat"||empty($d["providers"])) exit(1);'
