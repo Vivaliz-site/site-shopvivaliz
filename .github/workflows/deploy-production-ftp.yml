@@ -110,6 +110,7 @@ jobs:
           set ftp:ssl-force true
           set ftp:ssl-protect-data true
           set ssl:verify-certificate false
+          set ssl:priority "NORMAL:-VERS-TLS1.3"
           set ftp:passive-mode on
           set ftp:prefer-epsv false
           set net:timeout 20
@@ -120,6 +121,38 @@ jobs:
           set cmd:fail-exit true
           set mirror:parallel-transfer-count 2
           CFG
+
+      - name: Preflight - diagnostico de conexao FTP
+        timeout-minutes: 3
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
+        run: |
+          set -Eeuo pipefail
+          PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"; PORT="${PORT:-21}"
+          echo "== [preflight] 1/3 TCP connect =="
+          if timeout 12 bash -c "exec 3<>/dev/tcp/${FTP_SERVER}/${PORT}"; then
+            echo "TCP: OK"
+          else
+            echo "::error::TCP connect falhou/pendurou - firewall do host provavelmente bloqueando IPs do GitHub Actions. Liberar FTP no painel do host."
+            exit 1
+          fi
+          echo "== [preflight] 2/3 FTPS handshake + login (curl, TLS auto) =="
+          if timeout 30 curl -sS -v --ssl-reqd --connect-timeout 10 --max-time 25 \
+               "ftp://${FTP_SERVER}:${PORT}/" --user "${FTP_USERNAME}:${FTP_PASSWORD}" -o /dev/null 2>&1 | tail -8; then
+            echo "FTPS login: OK"
+          else
+            echo "== [preflight] 3/3 retry com TLS 1.2 forcado =="
+            if timeout 30 curl -sS -v --ssl-reqd --tlsv1.2 --tls-max 1.2 --connect-timeout 10 --max-time 25 \
+                 "ftp://${FTP_SERVER}:${PORT}/" --user "${FTP_USERNAME}:${FTP_PASSWORD}" -o /dev/null 2>&1 | tail -8; then
+              echo "FTPS login: OK apenas com TLS1.2 (stall de TLS1.3 confirmado - mitigacao do lftprc resolve)"
+            else
+              echo "::error::FTPS falhou em TCP-ok: problema de TLS ou credenciais/limite de conexoes no host"
+              exit 1
+            fi
+          fi
 
       - name: Deploy bloco 1 - backend (api, includes, admin, auth, olist)
         env:
@@ -132,7 +165,7 @@ jobs:
           set -Eeuo pipefail
           REMOTE="${FTP_REMOTE_DIR:-/}"
           PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"; PORT="${PORT:-21}"
-          timeout --signal=TERM 360 lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 1 (backend) excedeu 6min ou falhou - veja acima o ultimo diretorio logado"; exit 1; }
+          timeout --signal=TERM 360 stdbuf -oL -eL lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 1 (backend) excedeu 6min ou falhou - veja acima o ultimo diretorio logado"; exit 1; }
           mkdir -p "$REMOTE/api"
           mkdir -p "$REMOTE/includes"
           mkdir -p "$REMOTE/admin"
@@ -162,7 +195,7 @@ jobs:
           set -Eeuo pipefail
           REMOTE="${FTP_REMOTE_DIR:-/}"
           PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"; PORT="${PORT:-21}"
-          timeout --signal=TERM 360 lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 2 (frontend) excedeu 6min ou falhou - veja acima o ultimo diretorio logado"; exit 1; }
+          timeout --signal=TERM 360 stdbuf -oL -eL lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 2 (frontend) excedeu 6min ou falhou - veja acima o ultimo diretorio logado"; exit 1; }
           mkdir -p "$REMOTE/css"
           mkdir -p "$REMOTE/js"
           mkdir -p "$REMOTE/assets"
@@ -192,7 +225,7 @@ jobs:
           set -Eeuo pipefail
           REMOTE="${FTP_REMOTE_DIR:-/}"
           PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"; PORT="${PORT:-21}"
-          timeout --signal=TERM 240 lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 3 (institucional) excedeu 4min ou falhou - veja acima o ultimo diretorio logado"; exit 1; }
+          timeout --signal=TERM 240 stdbuf -oL -eL lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 3 (institucional) excedeu 4min ou falhou - veja acima o ultimo diretorio logado"; exit 1; }
           mkdir -p "$REMOTE/sobre"
           mkdir -p "$REMOTE/contato"
           mkdir -p "$REMOTE/faq"
@@ -228,7 +261,7 @@ jobs:
           set -Eeuo pipefail
           REMOTE="${FTP_REMOTE_DIR:-/}"
           PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"; PORT="${PORT:-21}"
-          timeout --signal=TERM 240 lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 4 (raiz) excedeu 4min ou falhou"; exit 1; }
+          timeout --signal=TERM 240 stdbuf -oL -eL lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 4 (raiz) excedeu 4min ou falhou"; exit 1; }
           echo "== [deploy] raiz *.php =="
           mput -O "$REMOTE" *.php
           echo "== [deploy] .htaccess =="
