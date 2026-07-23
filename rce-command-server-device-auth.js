@@ -20,7 +20,7 @@ const LOG_FILE = path.join(__dirname, 'logs', 'rce-server.log');
 // 📱 WHITELIST DE DEVICES PERMITIDOS
 // Formato: "Device Name" → "Device ID"
 const ALLOWED_DEVICES = {
-  "iPhone Pessoal": "iphone-device-id-unique-8392847",
+  "iPhone Pessoal": "iphone-3cc2c19459524e3cb79d7bdfaa1b456a",
 };
 
 // Criar pasta de logs
@@ -308,3 +308,4 @@ process.on('SIGINT', () => {
     process.exit(0);
   });
 });
+
