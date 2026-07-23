@@ -1,0 +1,66 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "🔴 Start RCE Server",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/start-rce-bg.ps1"
+      ],
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*)$",
+          "file": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "🚀",
+          "endsPattern": "✅"
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    },
+    {
+      "label": "Stop RCE Server",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "Get-Process -Name node | Where-Object { $_.CommandLine -like '*rce-command-server*' } | Stop-Process -Force -ErrorAction SilentlyContinue; Write-Host '✅ RCE Server parado'"
+      ],
+      "presentation": {
+        "reveal": "silent"
+      }
+    },
+    {
+      "label": "Check RCE Server Status",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "$token = 'hBu-3gs3meFOp82AnXLzljmIvNaf-7ih'; try { $r = curl -s -X GET 'http://127.0.0.1:5557/status' -H \"Authorization: Bearer $token\" -ErrorAction Stop; if ($r) { Write-Host '✅ RCE Server RODANDO'; Write-Host $r } else { Write-Host '❌ Servidor não respondeu' } } catch { Write-Host '❌ RCE Server NÃO ESTÁ RODANDO'; Write-Host \"Erro: $_\" }"
+      ],
+      "presentation": {
+        "reveal": "always"
+      }
+    }
+  ]
+}
