@@ -6,6 +6,9 @@ on:
       - main
   workflow_dispatch:
 
+# Fila deploys em sequencia; NAO cancela deploy em andamento (cancelar FTP
+# no meio deixa producao em estado parcial). Runs travados sao encerrados
+# pelo timeout-minutes de cada job, liberando a fila com falha clara.
 concurrency:
   group: production-deploy
   cancel-in-progress: false
@@ -13,9 +16,23 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  LFTP_EXCLUDES: >-
+    --exclude-glob .git*
+    --exclude-glob node_modules/
+    --exclude-glob vendor/
+    --exclude-glob cache/
+    --exclude-glob tmp/
+    --exclude-glob *.log
+    --exclude-glob *.bak
+    --exclude-glob *backup*
+    --exclude-glob *.tmp
+    --exclude-glob *.swp
+
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -56,7 +73,7 @@ jobs:
             arte-papelaria-e-armarinho/index.php
           )
           for file in "${required[@]}"; do
-            test -s "$file" || { echo "Missing critical file: $file"; exit 1; }
+            test -s "$file" || { echo "::error::Missing critical file: $file"; exit 1; }
           done
           test -d assets
           test -d images
@@ -65,13 +82,46 @@ jobs:
   deploy:
     needs: validate
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
       - name: Install deploy tools
-        run: sudo apt-get update && sudo apt-get install -y lftp jq
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends lftp jq
 
-      - name: Deploy production snapshot
+      - name: Prepare lftp config
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
+        run: |
+          set -Eeuo pipefail
+          : "${FTP_SERVER:?Missing FTP_SERVER}"
+          : "${FTP_USERNAME:?Missing FTP_USERNAME}"
+          : "${FTP_PASSWORD:?Missing FTP_PASSWORD}"
+          PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"
+          PORT="${PORT:-21}"
+          # Configuracao anti-stall: passive-mode forcado, EPSV desativado
+          # (causa classica de data-channel congelado em FTPS de host
+          # compartilhado), retries curtos e timeouts agressivos para que
+          # falhas de rede ESTOUREM ERRO em segundos em vez de pendurar.
+          cat > ~/.lftprc <<CFG
+          set ftp:ssl-force true
+          set ftp:ssl-protect-data true
+          set ssl:verify-certificate false
+          set ftp:passive-mode on
+          set ftp:prefer-epsv false
+          set net:timeout 20
+          set net:max-retries 2
+          set net:persist-retries 1
+          set net:reconnect-interval-base 5
+          set net:reconnect-interval-max 15
+          set cmd:fail-exit true
+          set mirror:parallel-transfer-count 2
+          CFG
+
+      - name: Deploy bloco 1 - backend (api, includes, admin, auth, olist)
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
@@ -80,32 +130,69 @@ jobs:
           FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
         run: |
           set -Eeuo pipefail
-          : "${FTP_SERVER:?Missing FTP_SERVER}"
-          : "${FTP_USERNAME:?Missing FTP_USERNAME}"
-          : "${FTP_PASSWORD:?Missing FTP_PASSWORD}"
-
-          PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"
-          PORT="${PORT:-21}"
           REMOTE="${FTP_REMOTE_DIR:-/}"
-
-          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF
-          set ftp:ssl-force true
-          set ftp:ssl-protect-data true
-          set ssl:verify-certificate false
-          set net:max-retries 3
-          set net:timeout 30
-          set cmd:fail-exit true
-
+          PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"; PORT="${PORT:-21}"
+          timeout --signal=TERM 360 lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 1 (backend) excedeu 6min ou falhou - veja acima o ultimo diretorio logado"; exit 1; }
           mkdir -p "$REMOTE/api"
           mkdir -p "$REMOTE/includes"
+          mkdir -p "$REMOTE/admin"
+          mkdir -p "$REMOTE/auth"
+          mkdir -p "$REMOTE/olist"
+          echo "== [deploy] api =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES api "$REMOTE/api"
+          echo "== [deploy] includes =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES includes "$REMOTE/includes"
+          echo "== [deploy] admin =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES admin "$REMOTE/admin"
+          echo "== [deploy] auth =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES auth "$REMOTE/auth"
+          echo "== [deploy] olist =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES olist "$REMOTE/olist"
+          bye
+          EOF
+
+      - name: Deploy bloco 2 - frontend (css, js, assets, images, liz)
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
+          FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+        run: |
+          set -Eeuo pipefail
+          REMOTE="${FTP_REMOTE_DIR:-/}"
+          PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"; PORT="${PORT:-21}"
+          timeout --signal=TERM 360 lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 2 (frontend) excedeu 6min ou falhou - veja acima o ultimo diretorio logado"; exit 1; }
           mkdir -p "$REMOTE/css"
           mkdir -p "$REMOTE/js"
           mkdir -p "$REMOTE/assets"
           mkdir -p "$REMOTE/images"
           mkdir -p "$REMOTE/public/assets/liz-assistant"
-          mkdir -p "$REMOTE/admin"
-          mkdir -p "$REMOTE/auth"
-          mkdir -p "$REMOTE/olist"
+          echo "== [deploy] css =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES css "$REMOTE/css"
+          echo "== [deploy] js =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES js "$REMOTE/js"
+          echo "== [deploy] assets =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES assets "$REMOTE/assets"
+          echo "== [deploy] images =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES images "$REMOTE/images"
+          echo "== [deploy] liz-assistant =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES public/assets/liz-assistant "$REMOTE/public/assets/liz-assistant"
+          bye
+          EOF
+
+      - name: Deploy bloco 3 - paginas institucionais e rotas legadas
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
+          FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+        run: |
+          set -Eeuo pipefail
+          REMOTE="${FTP_REMOTE_DIR:-/}"
+          PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"; PORT="${PORT:-21}"
+          timeout --signal=TERM 240 lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 3 (institucional) excedeu 4min ou falhou - veja acima o ultimo diretorio logado"; exit 1; }
           mkdir -p "$REMOTE/sobre"
           mkdir -p "$REMOTE/contato"
           mkdir -p "$REMOTE/faq"
@@ -113,31 +200,45 @@ jobs:
           mkdir -p "$REMOTE/politica-privacidade"
           mkdir -p "$REMOTE/ferramentas"
           mkdir -p "$REMOTE/arte-papelaria-e-armarinho"
-
-          mirror --reverse --verbose --ignore-time --parallel=3 api "$REMOTE/api"
-          mirror --reverse --verbose --ignore-time --parallel=3 includes "$REMOTE/includes"
-          mirror --reverse --verbose --ignore-time --parallel=4 css "$REMOTE/css"
-          mirror --reverse --verbose --ignore-time --parallel=4 js "$REMOTE/js"
-          mirror --reverse --verbose --ignore-time --parallel=3 assets "$REMOTE/assets"
-          mirror --reverse --verbose --ignore-time --parallel=3 images "$REMOTE/images"
-          mirror --reverse --verbose --ignore-time --parallel=2 public/assets/liz-assistant "$REMOTE/public/assets/liz-assistant"
-          mirror --reverse --verbose --ignore-time --parallel=3 admin "$REMOTE/admin"
-          mirror --reverse --verbose --ignore-time --parallel=2 auth "$REMOTE/auth"
-          mirror --reverse --verbose --ignore-time --parallel=2 olist "$REMOTE/olist"
-          mirror --reverse --verbose --ignore-time sobre "$REMOTE/sobre"
-          mirror --reverse --verbose --ignore-time contato "$REMOTE/contato"
-          mirror --reverse --verbose --ignore-time faq "$REMOTE/faq"
-          mirror --reverse --verbose --ignore-time blog "$REMOTE/blog"
-          mirror --reverse --verbose --ignore-time politica-privacidade "$REMOTE/politica-privacidade"
-          mirror --reverse --verbose --ignore-time ferramentas "$REMOTE/ferramentas"
-          mirror --reverse --verbose --ignore-time arte-papelaria-e-armarinho "$REMOTE/arte-papelaria-e-armarinho"
-
-          mput -O "$REMOTE" *.php
-          put -O "$REMOTE" .htaccess
+          echo "== [deploy] sobre =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES sobre "$REMOTE/sobre"
+          echo "== [deploy] contato =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES contato "$REMOTE/contato"
+          echo "== [deploy] faq =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES faq "$REMOTE/faq"
+          echo "== [deploy] blog =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES blog "$REMOTE/blog"
+          echo "== [deploy] politica-privacidade =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES politica-privacidade "$REMOTE/politica-privacidade"
+          echo "== [deploy] ferramentas =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES ferramentas "$REMOTE/ferramentas"
+          echo "== [deploy] arte-papelaria-e-armarinho =="
+          mirror --reverse --verbose --ignore-time $LFTP_EXCLUDES arte-papelaria-e-armarinho "$REMOTE/arte-papelaria-e-armarinho"
           bye
           EOF
 
+      - name: Deploy bloco 4 - raiz (.htaccess e PHPs)
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
+          FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+        run: |
+          set -Eeuo pipefail
+          REMOTE="${FTP_REMOTE_DIR:-/}"
+          PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"; PORT="${PORT:-21}"
+          timeout --signal=TERM 240 lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 4 (raiz) excedeu 4min ou falhou"; exit 1; }
+          echo "== [deploy] raiz *.php =="
+          mput -O "$REMOTE" *.php
+          echo "== [deploy] .htaccess =="
+          put -O "$REMOTE" .htaccess
+          bye
+          EOF
+          echo "Deploy FTP concluido com sucesso."
+
       - name: Purge Cloudflare cache when configured
+        timeout-minutes: 3
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
@@ -162,6 +263,7 @@ jobs:
   smoke-test:
     needs: deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Wait for propagation
         run: sleep 30
@@ -192,13 +294,13 @@ jobs:
           admin_code="$(curl -sS -o /tmp/admin.html -w '%{http_code}' https://shopvivaliz.com.br/admin/)"
           case "$admin_code" in
             200|301|302|303|307|308|401|403) ;;
-            *) echo "Admin returned unexpected HTTP $admin_code"; exit 1 ;;
+            *) echo "::error::Admin returned unexpected HTTP $admin_code"; exit 1 ;;
           esac
 
           olist_code="$(curl -sS -o /tmp/olist.txt -w '%{http_code}' https://shopvivaliz.com.br/olist/webhook-receiver.php)"
           case "$olist_code" in
             200|204|400|401|403|405) ;;
-            *) echo "Olist webhook returned unexpected HTTP $olist_code"; exit 1 ;;
+            *) echo "::error::Olist webhook returned unexpected HTTP $olist_code"; exit 1 ;;
           esac
 
           php -r '
