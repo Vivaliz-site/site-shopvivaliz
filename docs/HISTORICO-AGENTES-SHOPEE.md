@@ -522,3 +522,54 @@ documentado e conhecido do usuário desde 07-22) — é que o pipeline inteiro d
 QA lint que bloqueia regressões de produção) está ausente de `main` há pelo menos 2 dias, sem
 commit de deleção rastreável, o que exige investigação manual do force-push/heartbeat antes de
 qualquer outro workflow autônomo (Shopee ou não) voltar a funcionar de forma confiável.
+
+### 9.10 Atualização — ciclo de 2026-07-23 (~UTC), 13º ciclo
+
+**Bloqueador estrutural do Shopee (seções 9.1–9.9) sem mudança:** confirmado de novo que nenhum
+secret de analytics/performance do Shopee existe no repo/sandbox. Nenhuma otimização de CTR,
+título, imagem, atributo ou preço foi aplicada; nenhum dado foi inventado. `.github/workflows/`
+segue com apenas os arquivos observados no ciclo anterior — na verdade, no meio deste ciclo,
+mudou de novo (ver abaixo), o que é evidência adicional e mais direta do padrão de force-push já
+documentado na seção 9.9 e em `docs/MEMORIA-AGENTES.md`.
+
+**Achado novo e mais urgente que o Shopee/Tiny: o usuário está em meio a um incidente de produção
+ativo, restaurando manualmente via dois workflows FTP one-time (`restore-domingo-once.yml` /
+branch `restore-domingo`, e `restore-domingo-v2-once.yml` / branch `restore-domingo-v2`), ambos
+falhando por motivos diferentes:**
+
+1. **`restore-domingo` (mais antigo) — falha na validação do snapshot, não é rede.** Run
+   `29999316037` (`Deploy production FTP (ONE-TIME ROLLBACK)`, branch `restore-domingo`): o job
+   falhou no passo de validação, com `test -s "$f"` retornando falso para pelo menos um dos
+   arquivos obrigatórios (`index.php`, `home.php`, `.htaccess`,
+   `css/shopvivaliz-core-consolidated.css`, `includes/header.php`, `includes/footer.php`,
+   `includes/catalog-runtime.php`) — ou seja, o snapshot dessa branch está incompleto/tem arquivo
+   vazio, e o restore nunca chegou a tentar o FTP.
+
+2. **`restore-domingo-v2` (mais novo) — passa na validação, mas trava ~83min e falha por DNS no
+   secret `FTP_SERVER`.** Run `29999945931` (`Restore domingo v2 (ONE TIME)`, branch
+   `restore-domingo-v2`): passou na validação (snapshot completo), instalou `lftp`/`jq`, mas o
+   passo "Force complete restore by FTP" rodou de `10:37:05Z` até `12:00:21Z` (~83 minutos) antes
+   de falhar com `open: FTP_SERVER: Temporary failure in name resolution` — o runner do GitHub
+   Actions não conseguiu resolver via DNS o hostname configurado no secret `FTP_SERVER`. Isso não
+   é timeout de conexão (o `lftp` já seta `net:timeout 30`/`net:max-retries 3`) — é falha de
+   resolução de nome, o que sugere o valor do secret `FTP_SERVER` pode estar incorreto/mal
+   formatado (ex: incluindo protocolo `ftp://`, porta embutida, ou um hostname que não existe
+   mais), não um problema transitório de rede do runner.
+
+3. **Um segundo disparo do mesmo workflow v2 (run `30000088671`, commit `ad9c7ea`, "ci: forca
+   disparo da restauracao completa") estava em `in_progress` há ~82 minutos no momento desta
+   checagem (`created_at` `10:38:48Z`, `updated_at` `12:00:28Z`)** — tempo quase idêntico ao da
+   falha anterior, então é muito provável que vá falhar pelo mesmo motivo (DNS) assim que
+   completar. Não fica esperando esse resultado (rotina agendada não deve poll longo), mas o
+   padrão de tempo é forte o suficiente pra reportar como achado.
+
+**Recomendação prática pro usuário (não uma ação autônoma — envolve secret de produção):**
+verificar o valor atual do secret `FTP_SERVER` em `Settings > Secrets and variables > Actions`
+(deve ser só o hostname, ex: `ftp.hostgator.com.br`, sem `ftp://` nem porta embutida) e, se
+usando `restore-domingo` (branch mais antiga), verificar qual arquivo obrigatório está
+faltando/vazio nessa branch antes de tentar de novo.
+
+**Notificação push enviada neste ciclo:** resumo dos dois motivos de falha diferentes acima
+(DNS no `FTP_SERVER` para v2; arquivo de snapshot ausente/vazio para a branch mais antiga), já
+que o usuário está ativamente tentando restaurar produção agora e esses são achados acionáveis
+que não estavam visíveis sem entrar nos logs brutos dos jobs.
