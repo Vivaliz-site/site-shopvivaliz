@@ -1,11 +1,13 @@
 name: Restore domingo v2 (ONE TIME)
-# force-run: 2026-07-23T10:40:00Z
 
 on:
   push:
     branches: [main]
     paths:
       - .github/workflows/restore-domingo-v2-once.yml
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
 
 concurrency:
   group: production-deploy
@@ -19,12 +21,41 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+      - name: Decide whether restore is still needed
+        id: precheck
+        shell: bash
+        run: |
+          set +e
+          home_ok=0
+          css_ok=0
+          liz_ok=0
+
+          curl -fLsS --max-time 20 https://shopvivaliz.com.br/ -o /tmp/home.html
+          [ $? -eq 0 ] && [ "$(wc -c < /tmp/home.html 2>/dev/null)" -gt 1000 ] && grep -qi 'Vivaliz' /tmp/home.html && home_ok=1
+
+          curl -fLsS --max-time 20 https://shopvivaliz.com.br/css/shopvivaliz-core-consolidated.css -o /tmp/core.css
+          [ $? -eq 0 ] && [ "$(wc -c < /tmp/core.css 2>/dev/null)" -gt 1000 ] && css_ok=1
+
+          curl -fLsS --max-time 20 'https://shopvivaliz.com.br/api/agent/squad-chat.php?health=1' -o /tmp/liz-health.json
+          php -r '$d=json_decode(@file_get_contents("/tmp/liz-health.json"),true); exit(is_array($d)&&($d["ok"]??null)===true&&($d["endpoint"]??null)==="squad-chat"&&!empty($d["providers"])?0:1);'
+          [ $? -eq 0 ] && liz_ok=1
+
+          if [ "$home_ok" -eq 1 ] && [ "$css_ok" -eq 1 ] && [ "$liz_ok" -eq 1 ]; then
+            echo "need_restore=false" >> "$GITHUB_OUTPUT"
+            echo "Production already healthy; no restore required."
+          else
+            echo "need_restore=true" >> "$GITHUB_OUTPUT"
+            echo "Restore required: home=$home_ok css=$css_ok liz=$liz_ok"
+          fi
+
       - name: Checkout healthy snapshot
+        if: steps.precheck.outputs.need_restore == 'true'
         uses: actions/checkout@v4
         with:
           ref: restore-domingo-v2
 
       - name: Validate snapshot
+        if: steps.precheck.outputs.need_restore == 'true'
         run: |
           set -Eeuo pipefail
           find . -type f -name '*.php' -not -path './vendor/*' -not -path './node_modules/*' -print0 | xargs -0 -n1 php -l
@@ -33,9 +64,11 @@ jobs:
           done
 
       - name: Install deploy tools
+        if: steps.precheck.outputs.need_restore == 'true'
         run: sudo apt-get update && sudo apt-get install -y lftp jq
 
       - name: Force complete restore by FTP
+        if: steps.precheck.outputs.need_restore == 'true'
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
@@ -74,6 +107,7 @@ jobs:
           EOF
 
       - name: Purge Cloudflare cache when configured
+        if: steps.precheck.outputs.need_restore == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
@@ -85,6 +119,7 @@ jobs:
           curl -fsS -X POST -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' --data '{"purge_everything":true}' "https://api.cloudflare.com/client/v4/zones/${zone_id}/purge_cache" | jq -e '.success == true'
 
       - name: Smoke test storefront and Liz
+        if: steps.precheck.outputs.need_restore == 'true'
         run: |
           set -Eeuo pipefail
           sleep 30
