@@ -8,7 +8,7 @@ $logFile = "logs/rce-startup.log"
 
 # Verificar se servidor já está rodando
 try {
-    $response = curl -X GET "http://$ip:$port/status" `
+    $response = curl -X GET "http://${ip}:${port}/status" `
         -H "Authorization: Bearer $token" `
         -ErrorAction SilentlyContinue
 
