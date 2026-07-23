@@ -40,12 +40,12 @@ Start-Sleep -Milliseconds 500
 
 # Verificar se iniciou corretamente
 try {
-    $response = curl -X GET "http://$ip:$port/status" `
+    $response = curl -X GET "http://${ip}:${port}/status" `
         -H "Authorization: Bearer $token" `
         -ErrorAction SilentlyContinue
 
     if ($response) {
-        Write-Host "✅ RCE Server respondendo em http://$ip:$port" | Tee-Object -Append $logFile
+        Write-Host "✅ RCE Server respondendo em http://${ip}:${port}" | Tee-Object -Append $logFile
         Write-Host "📝 Token: $token" | Tee-Object -Append $logFile
         exit 0
     }
