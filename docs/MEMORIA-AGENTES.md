@@ -228,3 +228,9 @@ O mesmo bug já tinha sido "corrigido" 2 vezes antes só no `.env` do servidor (
 **O que descobri:** chamar `mb_strtolower()`/`mb_substr()`/etc diretamente sem checar `function_exists()` primeiro derruba a página inteira com HTTP 500 em produção — a extensão mbstring não está instalada nesse PHP. O padrão correto já usado em vários lugares do código (`sv_lower()` em `produto.php`) é `function_exists('mb_strtolower') ? mb_strtolower(...) : strtolower(...)`.
 **Por quê importa:** causou uma queda real do site (/catalogo e /produto fora do ar por ~15min) nesta sessão. `[RESOLVIDO em 2026-07-17, PR #386]`
 **Ver também:** —
+
+### 2026-07-23 — `.github/workflows/` inteiro some de `main` sem commit de deleção rastreável (2º dia confirmado)
+**Sistema/arquivo:** `.github/workflows/*` (todos), inclusive `shopvivaliz-qa.yml` e os 3 workflows Shopee
+**O que descobri:** achado primeiro em 2026-07-22 (commit `abe3622`): a pasta `.github/workflows/` inteira desapareceu de `main`, não só arquivos Shopee. Confirmado de novo hoje (2026-07-23) que persiste — só existem 2 arquivos (`agents-runtime-ci.yml`, `deploy-production-ftp.yml`), nenhum deles é o QA lint. `git log --diff-filter=D --all` pros arquivos sumidos não mostra nenhum commit de deleção alcançável, e `git fetch` mostrou `(forced update)` na ref de tracking — consistente com um bot de heartbeat/auto-sync fazendo force-push que reescreve histórico de `main` e derruba commits já aceitos (mesmo padrão de sumiço já visto em `listings/`).
+**Por quê importa:** o QA lint que bloqueia regressões de produção (CSS wildcard quebrando a home, etc — ver CHANGELOG.md) está inativo há pelo menos 2 dias sem que nenhum commit explique por quê. Qualquer agente que assumir "QA lint vai pegar" está enganado até isso ser restaurado manualmente.
+**Ver também:** `docs/HISTORICO-AGENTES-SHOPEE.md` seção 9.9

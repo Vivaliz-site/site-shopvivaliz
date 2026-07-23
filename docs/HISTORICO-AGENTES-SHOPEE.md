@@ -491,3 +491,34 @@ reconfiguração manual do app no painel Tiny + atualização de `TINY_CLIENT_ID
 pipeline vai funcionar, mesmo os que não exigem dado de performance do Shopee. Reforçada
 também a conclusão estrutural: a rotina de CTR/conversão/preço não é implementável sem
 integração real com a API de analytics do Shopee Open Platform.
+
+### 9.9 Atualização — ciclo de 2026-07-23 (~UTC), 12º ciclo
+
+**Achado estrutural (seções 9.1–9.8) confirmado, sem mudança:** nenhum secret ou workflow de
+performance/analytics do Shopee (`SHOPEE_PARTNER_ID`, `SHOPEE_PARTNER_KEY`, `SHOPEE_SHOP_ID`,
+`SHOPEE_ACCESS_TOKEN`) existe neste repo. `printenv | grep -E 'TINY|SHOPEE'` neste sandbox não
+retornou nenhuma variável — nem mesmo as credenciais Tiny já documentadas como quebradas. As
+instruções desta rotina (CTR real, teste A/B de preço, comparar concorrentes, reordenar imagens
+por engagement) seguem tecnicamente inexequíveis. Nenhuma otimização foi aplicada e nenhum dado
+de CTR/conversão/venda foi inventado neste ciclo, conforme a regra da seção 6.
+
+**Regressão nova e mais severa que o token Tiny (achada em 2026-07-22, confirmada hoje persistindo
+pelo segundo dia):** `.github/workflows/` inteiro sumiu de `main` — não só os 3 workflows Shopee
+(`fetch-shopee-listings.yml`, `optimize-shopee-listings.yml`, `sync-shopee-6h.yml`), mas também o
+`shopvivaliz-qa.yml` (o gate de lint/smoke-test descrito no `CLAUDE.md` como crítico e ativo).
+Hoje `.github/workflows/` contém apenas 2 arquivos, nenhum relacionado a Shopee ou QA:
+`agents-runtime-ci.yml` e `deploy-production-ftp.yml`. `git log --diff-filter=D --all` para os
+arquivos sumidos não mostra nenhum commit de deleção alcançável — consistente com a teoria
+registrada em `abe3622` (2026-07-22) de que um bot de heartbeat/auto-sync está fazendo force-push
+que reescreve o histórico de `main` e derruba commits que já tinham sido aceitos (ex:
+`400dcb2` de 07-20 e `8dc2969` de 07-21, existentes via SHA mas inalcançáveis a partir do HEAD
+atual). `git fetch origin main` neste ciclo também reportou `(forced update)` na ref de
+tracking local, o que é consistente com (mas não prova isolada de) esse padrão continuando.
+Também confirmado: `listings/` não existe mais em `HEAD` (só via `git log --all`), então mesmo o
+catálogo de 2026-07-09 citado na seção 9.8 não está mais acessível no working tree atual.
+
+**Notificação push enviada neste ciclo:** o achado mais urgente não é mais o token Tiny (já
+documentado e conhecido do usuário desde 07-22) — é que o pipeline inteiro de CI/CD (incluindo o
+QA lint que bloqueia regressões de produção) está ausente de `main` há pelo menos 2 dias, sem
+commit de deleção rastreável, o que exige investigação manual do force-push/heartbeat antes de
+qualquer outro workflow autônomo (Shopee ou não) voltar a funcionar de forma confiável.
