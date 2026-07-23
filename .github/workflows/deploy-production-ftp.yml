@@ -1,11 +1,9 @@
-name: Restore complete production snapshot (ONE TIME)
+name: Deploy production FTP
 
 on:
   push:
     branches:
-      - restore-domingo-v2
-    paths:
-      - .github/workflows/deploy-production-ftp.yml
+      - main
   workflow_dispatch:
 
 concurrency:
@@ -29,7 +27,7 @@ jobs:
             -not -path './node_modules/*' \
             -print0 | xargs -0 -n1 php -l
 
-      - name: Validate complete snapshot
+      - name: Validate production snapshot
         run: |
           set -Eeuo pipefail
           required=(
@@ -45,6 +43,8 @@ jobs:
             includes/navbar.php
             includes/catalog-runtime.php
             api/agent/squad-chat.php
+            ferramentas/index.php
+            arte-papelaria-e-armarinho/index.php
           )
           for file in "${required[@]}"; do
             test -s "$file" || { echo "Missing critical file: $file"; exit 1; }
@@ -63,7 +63,7 @@ jobs:
       - name: Install deploy tools
         run: sudo apt-get update && sudo apt-get install -y lftp jq
 
-      - name: Restore complete healthy snapshot
+      - name: Deploy production snapshot
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
@@ -100,6 +100,8 @@ jobs:
           mkdir -p "$REMOTE/faq"
           mkdir -p "$REMOTE/blog"
           mkdir -p "$REMOTE/politica-privacidade"
+          mkdir -p "$REMOTE/ferramentas"
+          mkdir -p "$REMOTE/arte-papelaria-e-armarinho"
 
           mirror --reverse --verbose --ignore-time --parallel=3 api "$REMOTE/api"
           mirror --reverse --verbose --ignore-time --parallel=3 includes "$REMOTE/includes"
@@ -113,6 +115,8 @@ jobs:
           mirror --reverse --verbose --ignore-time faq "$REMOTE/faq"
           mirror --reverse --verbose --ignore-time blog "$REMOTE/blog"
           mirror --reverse --verbose --ignore-time politica-privacidade "$REMOTE/politica-privacidade"
+          mirror --reverse --verbose --ignore-time ferramentas "$REMOTE/ferramentas"
+          mirror --reverse --verbose --ignore-time arte-papelaria-e-armarinho "$REMOTE/arte-papelaria-e-armarinho"
 
           mput -O "$REMOTE" *.php
           put -O "$REMOTE" .htaccess
@@ -148,7 +152,7 @@ jobs:
       - name: Wait for propagation
         run: sleep 30
 
-      - name: Verify storefront, CSS and Liz health
+      - name: Verify storefront, CSS, redirects and Liz health
         run: |
           set -Eeuo pipefail
           curl -fLsS --retry 5 --retry-delay 6 https://shopvivaliz.com.br/ -o /tmp/home.html
@@ -158,6 +162,11 @@ jobs:
           test "$(wc -c < /tmp/home.html)" -gt 1000
           test "$(wc -c < /tmp/core.css)" -gt 1000
           grep -qi 'Vivaliz' /tmp/home.html
+
+          test "$(curl -sS -o /dev/null -w '%{http_code}' https://www.shopvivaliz.com.br/)" = "301"
+          test "$(curl -sS -o /dev/null -w '%{http_code}' https://shopvivaliz.com.br/ferramentas/)" = "301"
+          test "$(curl -sS -o /dev/null -w '%{http_code}' https://shopvivaliz.com.br/arte-papelaria-e-armarinho/)" = "301"
+
           php -r '
             $data = json_decode(file_get_contents("/tmp/liz-health.json"), true);
             if (!is_array($data)) { fwrite(STDERR, "Invalid Liz health JSON\n"); exit(1); }
