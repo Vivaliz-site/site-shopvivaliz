@@ -1,6 +1,11 @@
-name: Deploy production FTP (MANUAL ONLY)
+name: Deploy production FTP (ONE-TIME ROLLBACK)
 
 on:
+  push:
+    branches:
+      - restore-domingo
+    paths:
+      - .github/workflows/deploy-production-ftp.yml
   workflow_dispatch:
 
 concurrency:
