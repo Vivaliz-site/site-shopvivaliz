@@ -53,25 +53,32 @@ function checkRateLimit(ip) {
   return true;
 }
 
-// ============= AUTENTICAÇÃO (DEVICE ID APENAS) =============
+// ============= AUTENTICAÇÃO (QUALQUER IDENTIFICADOR AUTORIZADO) =============
 
 function validateAuth(req) {
   const ip = req.socket.remoteAddress;
 
-  // Validar Device ID (ÚNICA AUTENTICAÇÃO)
-  const deviceHeader = req.headers['x-device-id'];
-  if (!deviceHeader) {
-    log('WARN', `❌ Device ID faltando de ${ip}`);
-    return { valid: false, reason: 'Missing X-Device-ID header' };
+  // Tentar qualquer identificador (IMEI, MAC, Serial, Device ID)
+  const headers = ['x-imei', 'x-mac', 'x-serial', 'x-device-id', 'x-identifier'];
+
+  for (const headerName of headers) {
+    const headerValue = req.headers[headerName];
+
+    if (!headerValue) continue;
+
+    // Verificar se está na whitelist
+    for (const [type, authorizedValue] of Object.entries(AUTHORIZED_IDS)) {
+      if (headerValue === authorizedValue || headerValue.toUpperCase() === authorizedValue.toUpperCase()) {
+        log('INFO', `✅ iPhone autorizado (${type}): ${ip}`);
+        return { valid: true, type, value: headerValue };
+      }
+    }
   }
 
-  if (deviceHeader !== YOUR_DEVICE_ID) {
-    log('WARN', `⛔ Device ID incorreto de ${ip}: ${deviceHeader}`);
-    return { valid: false, reason: 'Device ID not authorized' };
-  }
-
-  log('INFO', `✅ iPhone autorizado de ${ip}`);
-  return { valid: true };
+  // Se chegou aqui, nenhum identificador válido
+  const providedId = req.headers['x-imei'] || req.headers['x-mac'] || req.headers['x-device-id'] || 'nenhum';
+  log('WARN', `⛔ Identificador não autorizado de ${ip}: ${providedId}`);
+  return { valid: false, reason: 'No valid identifier. Use: X-IMEI, X-MAC, X-Serial, or X-Device-ID' };
 }
 
 // ============= SERVIDOR =============
