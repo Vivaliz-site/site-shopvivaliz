@@ -7,5 +7,28 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "playwright": "^1.61.1"
-  }
+  },
+  "name": "site-shopvivaliz",
+  "version": "1.0.0",
+  "description": "Código-fonte e automações do e-commerce ShopVivaliz operado por **Gemini + Claude + ChatGPT** trabalhando autonomamente.",
+  "main": "service-worker.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vivaliz-site/site-shopvivaliz.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Vivaliz-site/site-shopvivaliz/issues"
+  },
+  "homepage": "https://github.com/Vivaliz-site/site-shopvivaliz#readme"
 }
