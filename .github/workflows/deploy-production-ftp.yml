@@ -38,11 +38,20 @@ jobs:
             checkout.php
             .htaccess
             css/shopvivaliz-core-consolidated.css
+            css/admin-zoom-responsive.css
             includes/header.php
             includes/footer.php
             includes/navbar.php
             includes/catalog-runtime.php
+            includes/admin-guard.php
             api/agent/squad-chat.php
+            admin/index.php
+            admin/produtos.php
+            admin/pedidos.php
+            admin/clientes.php
+            admin/integrations.php
+            auth/logout.php
+            olist/webhook-receiver.php
             ferramentas/index.php
             arte-papelaria-e-armarinho/index.php
           )
@@ -95,6 +104,9 @@ jobs:
           mkdir -p "$REMOTE/assets"
           mkdir -p "$REMOTE/images"
           mkdir -p "$REMOTE/public/assets/liz-assistant"
+          mkdir -p "$REMOTE/admin"
+          mkdir -p "$REMOTE/auth"
+          mkdir -p "$REMOTE/olist"
           mkdir -p "$REMOTE/sobre"
           mkdir -p "$REMOTE/contato"
           mkdir -p "$REMOTE/faq"
@@ -110,6 +122,9 @@ jobs:
           mirror --reverse --verbose --ignore-time --parallel=3 assets "$REMOTE/assets"
           mirror --reverse --verbose --ignore-time --parallel=3 images "$REMOTE/images"
           mirror --reverse --verbose --ignore-time --parallel=2 public/assets/liz-assistant "$REMOTE/public/assets/liz-assistant"
+          mirror --reverse --verbose --ignore-time --parallel=3 admin "$REMOTE/admin"
+          mirror --reverse --verbose --ignore-time --parallel=2 auth "$REMOTE/auth"
+          mirror --reverse --verbose --ignore-time --parallel=2 olist "$REMOTE/olist"
           mirror --reverse --verbose --ignore-time sobre "$REMOTE/sobre"
           mirror --reverse --verbose --ignore-time contato "$REMOTE/contato"
           mirror --reverse --verbose --ignore-time faq "$REMOTE/faq"
@@ -152,20 +167,40 @@ jobs:
       - name: Wait for propagation
         run: sleep 30
 
-      - name: Verify storefront, CSS, redirects and Liz health
+      - name: Verify storefront, commerce, admin, redirects and integrations
         run: |
           set -Eeuo pipefail
+
           curl -fLsS --retry 5 --retry-delay 6 https://shopvivaliz.com.br/ -o /tmp/home.html
+          curl -fLsS --retry 5 --retry-delay 6 https://shopvivaliz.com.br/catalogo -o /tmp/catalogo.html
+          curl -fLsS --retry 5 --retry-delay 6 https://shopvivaliz.com.br/carrinho -o /tmp/carrinho.html
+          curl -fLsS --retry 5 --retry-delay 6 https://shopvivaliz.com.br/checkout -o /tmp/checkout.html
           curl -fLsS --retry 5 --retry-delay 6 https://shopvivaliz.com.br/css/shopvivaliz-core-consolidated.css -o /tmp/core.css
           curl -fLsS --retry 5 --retry-delay 6 'https://shopvivaliz.com.br/api/agent/squad-chat.php?health=1' -o /tmp/liz-health.json
 
           test "$(wc -c < /tmp/home.html)" -gt 1000
+          test "$(wc -c < /tmp/catalogo.html)" -gt 1000
+          test "$(wc -c < /tmp/carrinho.html)" -gt 500
+          test "$(wc -c < /tmp/checkout.html)" -gt 500
           test "$(wc -c < /tmp/core.css)" -gt 1000
           grep -qi 'Vivaliz' /tmp/home.html
+          grep -qi 'produto\|catálogo\|catalogo' /tmp/catalogo.html
 
           test "$(curl -sS -o /dev/null -w '%{http_code}' https://www.shopvivaliz.com.br/)" = "301"
           test "$(curl -sS -o /dev/null -w '%{http_code}' https://shopvivaliz.com.br/ferramentas/)" = "301"
           test "$(curl -sS -o /dev/null -w '%{http_code}' https://shopvivaliz.com.br/arte-papelaria-e-armarinho/)" = "301"
+
+          admin_code="$(curl -sS -o /tmp/admin.html -w '%{http_code}' https://shopvivaliz.com.br/admin/)"
+          case "$admin_code" in
+            200|301|302|303|307|308|401|403) ;;
+            *) echo "Admin returned unexpected HTTP $admin_code"; exit 1 ;;
+          esac
+
+          olist_code="$(curl -sS -o /tmp/olist.txt -w '%{http_code}' https://shopvivaliz.com.br/olist/webhook-receiver.php)"
+          case "$olist_code" in
+            200|204|400|401|403|405) ;;
+            *) echo "Olist webhook returned unexpected HTTP $olist_code"; exit 1 ;;
+          esac
 
           php -r '
             $data = json_decode(file_get_contents("/tmp/liz-health.json"), true);
