@@ -129,14 +129,34 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_PORT: ${{ secrets.FTP_PORT }}
+          FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
         run: |
           set -Eeuo pipefail
+          : "${FTP_SERVER:?secret FTP_SERVER vazio}"
+          : "${FTP_USERNAME:?secret FTP_USERNAME vazio}"
+          : "${FTP_PASSWORD:?secret FTP_PASSWORD vazio}"
+          echo "== [preflight] 0/3 forense dos secrets (sem expor valores) =="
+          for v in FTP_SERVER FTP_USERNAME FTP_PASSWORD FTP_PORT FTP_REMOTE_DIR; do
+            val="${!v:-}"
+            printf '%s: len=%s scheme=%s eq=%s space=%s nl=%s\n' "$v" "${#val}" \
+              "$([[ "$val" == *"://"* ]] && echo S || echo n)" \
+              "$([[ "$val" == *"="* ]] && echo S || echo n)" \
+              "$([[ "$val" == *" "* ]] && echo S || echo n)" \
+              "$(printf '%s' "$val" | wc -l)"
+          done
+          # Sanitizar secrets (remove esquema, espacos, quebras de linha, prefixo NOME=)
+          FTP_SERVER="$(printf '%s' "$FTP_SERVER" | tr -d '[:space:]')"
+          FTP_SERVER="${FTP_SERVER#ftp://}"; FTP_SERVER="${FTP_SERVER#ftps://}"
+          FTP_SERVER="${FTP_SERVER#FTP_SERVER=}"; FTP_SERVER="${FTP_SERVER%/}"
+          FTP_USERNAME="$(printf '%s' "$FTP_USERNAME" | tr -d '\r\n')"
+          FTP_PASSWORD="$(printf '%s' "$FTP_PASSWORD" | tr -d '\r\n')"
           PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"; PORT="${PORT:-21}"
-          echo "== [preflight] 1/3 TCP connect =="
-          if timeout 12 bash -c "exec 3<>/dev/tcp/${FTP_SERVER}/${PORT}"; then
-            echo "TCP: OK"
+          echo "hostname sanitizado valido: $([[ "$FTP_SERVER" =~ ^[a-zA-Z0-9.-]+$ ]] && echo SIM || echo NAO)"
+          echo "== [preflight] 1/3 TCP connect (porta $PORT) =="
+          if timeout 15 python3 -c "import socket,os; socket.create_connection((os.environ['FTP_SERVER'], int('$PORT')), timeout=10); print('TCP: OK')" 2>&1; then
+            true
           else
-            echo "::error::TCP connect falhou/pendurou - firewall do host provavelmente bloqueando IPs do GitHub Actions. Liberar FTP no painel do host."
+            echo "::error::TCP connect falhou - hostname invalido no secret OU firewall do host bloqueando IPs do GitHub Actions"
             exit 1
           fi
           echo "== [preflight] 2/3 FTPS handshake + login (curl, TLS auto) =="
@@ -164,6 +184,12 @@ jobs:
         run: |
           set -Eeuo pipefail
           REMOTE="${FTP_REMOTE_DIR:-/}"
+          # Sanitizar secrets (remove esquema, espacos, quebras de linha, prefixo NOME=)
+          FTP_SERVER="$(printf '%s' "$FTP_SERVER" | tr -d '[:space:]')"
+          FTP_SERVER="${FTP_SERVER#ftp://}"; FTP_SERVER="${FTP_SERVER#ftps://}"
+          FTP_SERVER="${FTP_SERVER#FTP_SERVER=}"; FTP_SERVER="${FTP_SERVER%/}"
+          FTP_USERNAME="$(printf '%s' "$FTP_USERNAME" | tr -d '\r\n')"
+          FTP_PASSWORD="$(printf '%s' "$FTP_PASSWORD" | tr -d '\r\n')"
           PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"; PORT="${PORT:-21}"
           timeout --signal=TERM 360 stdbuf -oL -eL lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 1 (backend) excedeu 6min ou falhou - veja acima o ultimo diretorio logado"; exit 1; }
           mkdir -p "$REMOTE/api"
@@ -194,6 +220,12 @@ jobs:
         run: |
           set -Eeuo pipefail
           REMOTE="${FTP_REMOTE_DIR:-/}"
+          # Sanitizar secrets (remove esquema, espacos, quebras de linha, prefixo NOME=)
+          FTP_SERVER="$(printf '%s' "$FTP_SERVER" | tr -d '[:space:]')"
+          FTP_SERVER="${FTP_SERVER#ftp://}"; FTP_SERVER="${FTP_SERVER#ftps://}"
+          FTP_SERVER="${FTP_SERVER#FTP_SERVER=}"; FTP_SERVER="${FTP_SERVER%/}"
+          FTP_USERNAME="$(printf '%s' "$FTP_USERNAME" | tr -d '\r\n')"
+          FTP_PASSWORD="$(printf '%s' "$FTP_PASSWORD" | tr -d '\r\n')"
           PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"; PORT="${PORT:-21}"
           timeout --signal=TERM 360 stdbuf -oL -eL lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 2 (frontend) excedeu 6min ou falhou - veja acima o ultimo diretorio logado"; exit 1; }
           mkdir -p "$REMOTE/css"
@@ -224,6 +256,12 @@ jobs:
         run: |
           set -Eeuo pipefail
           REMOTE="${FTP_REMOTE_DIR:-/}"
+          # Sanitizar secrets (remove esquema, espacos, quebras de linha, prefixo NOME=)
+          FTP_SERVER="$(printf '%s' "$FTP_SERVER" | tr -d '[:space:]')"
+          FTP_SERVER="${FTP_SERVER#ftp://}"; FTP_SERVER="${FTP_SERVER#ftps://}"
+          FTP_SERVER="${FTP_SERVER#FTP_SERVER=}"; FTP_SERVER="${FTP_SERVER%/}"
+          FTP_USERNAME="$(printf '%s' "$FTP_USERNAME" | tr -d '\r\n')"
+          FTP_PASSWORD="$(printf '%s' "$FTP_PASSWORD" | tr -d '\r\n')"
           PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"; PORT="${PORT:-21}"
           timeout --signal=TERM 240 stdbuf -oL -eL lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 3 (institucional) excedeu 4min ou falhou - veja acima o ultimo diretorio logado"; exit 1; }
           mkdir -p "$REMOTE/sobre"
@@ -260,6 +298,12 @@ jobs:
         run: |
           set -Eeuo pipefail
           REMOTE="${FTP_REMOTE_DIR:-/}"
+          # Sanitizar secrets (remove esquema, espacos, quebras de linha, prefixo NOME=)
+          FTP_SERVER="$(printf '%s' "$FTP_SERVER" | tr -d '[:space:]')"
+          FTP_SERVER="${FTP_SERVER#ftp://}"; FTP_SERVER="${FTP_SERVER#ftps://}"
+          FTP_SERVER="${FTP_SERVER#FTP_SERVER=}"; FTP_SERVER="${FTP_SERVER%/}"
+          FTP_USERNAME="$(printf '%s' "$FTP_USERNAME" | tr -d '\r\n')"
+          FTP_PASSWORD="$(printf '%s' "$FTP_PASSWORD" | tr -d '\r\n')"
           PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"; PORT="${PORT:-21}"
           timeout --signal=TERM 240 stdbuf -oL -eL lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF || { echo "::error::Bloco 4 (raiz) excedeu 4min ou falhou"; exit 1; }
           echo "== [deploy] raiz *.php =="
