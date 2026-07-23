@@ -1,57 +1,81 @@
 # Script que inicia RCE Server em background (silenciosamente)
-# Usado pelo VS Code para inicializar servidor automaticamente
+# Usado para inicialização automática ao login
 
 $port = 5557
 $ip = "127.0.0.1"
 $token = "hBu-3gs3meFOp82AnXLzljmIvNaf-7ih"
-$logFile = "logs/rce-startup.log"
+$logDir = Join-Path $PSScriptRoot "logs"
+$logFile = Join-Path $logDir "rce-startup.log"
+
+# Criar pasta de logs se não existir
+if (-not (Test-Path $logDir)) {
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+}
+
+function Log {
+    param([string]$Message)
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    "$timestamp - $Message" | Tee-Object -Append -FilePath $logFile
+}
 
 # Verificar se servidor já está rodando
-try {
-    $response = curl -X GET "http://${ip}:${port}/status" `
-        -H "Authorization: Bearer $token" `
-        -ErrorAction SilentlyContinue
+Log "Verificando se servidor já está rodando..."
 
-    if ($response) {
-        Write-Host "✅ RCE Server já rodando" | Tee-Object -Append $logFile
+try {
+    $uri = "http://${ip}:${port}/status"
+    $response = Invoke-WebRequest -Uri $uri `
+        -Headers @{"Authorization" = "Bearer $token"} `
+        -Method GET `
+        -TimeoutSec 2 `
+        -ErrorAction Stop
+
+    if ($response.StatusCode -eq 200) {
+        Log "✅ RCE Server já rodando"
         exit 0
     }
 } catch {
-    # Servidor não está rodando, iniciar
+    Log "Servidor não está respondendo, iniciando..."
 }
 
-Write-Host "🚀 Iniciando RCE Server..." | Tee-Object -Append $logFile
+Log "🚀 Iniciando RCE Server..."
 
-# Iniciar servidor em background
+# Configurar variáveis de ambiente
 $env:PORT = $port
 $env:BIND_IP = $ip
 $env:COMMAND_SERVER_TOKEN = $token
 
-# Rodar em background sem janela visível
-$process = Start-Process powershell -ArgumentList `
-    "-NoProfile -Command `"cd '$PSScriptRoot'; node rce-command-server.js`"" `
-    -WindowStyle Hidden `
-    -PassThru `
-    -RedirectStandardOutput "$logFile" `
-    -RedirectStandardError "$logFile"
+# Iniciar servidor em background (em novo processo PowerShell)
+$processStartInfo = New-Object System.Diagnostics.ProcessStartInfo
+$processStartInfo.FileName = "powershell.exe"
+$processStartInfo.Arguments = "-NoProfile -Command `"cd '$PSScriptRoot'; node rce-command-server.js`""
+$processStartInfo.UseShellExecute = $false
+$processStartInfo.RedirectStandardOutput = $true
+$processStartInfo.RedirectStandardError = $true
+$processStartInfo.CreateNoWindow = $true
 
-Write-Host "✅ RCE Server iniciado (PID: $($process.Id))" | Tee-Object -Append $logFile
+$process = [System.Diagnostics.Process]::Start($processStartInfo)
+Log "✅ RCE Server iniciado (PID: $($process.Id))"
+
 Start-Sleep -Milliseconds 500
 
 # Verificar se iniciou corretamente
 try {
-    $response = curl -X GET "http://${ip}:${port}/status" `
-        -H "Authorization: Bearer $token" `
-        -ErrorAction SilentlyContinue
+    $uri = "http://${ip}:${port}/status"
+    $response = Invoke-WebRequest -Uri $uri `
+        -Headers @{"Authorization" = "Bearer $token"} `
+        -Method GET `
+        -TimeoutSec 2 `
+        -ErrorAction Stop
 
-    if ($response) {
-        Write-Host "✅ RCE Server respondendo em http://${ip}:${port}" | Tee-Object -Append $logFile
-        Write-Host "📝 Token: $token" | Tee-Object -Append $logFile
+    if ($response.StatusCode -eq 200) {
+        Log "✅ RCE Server respondendo em http://${ip}:${port}"
+        Log "📝 Token: $token"
+        Log "🔐 Servidor rodando em background"
         exit 0
     }
 } catch {
-    Write-Host "⚠️ Servidor iniciado mas não respondeu ainda. Aguardando..." | Tee-Object -Append $logFile
-    Start-Sleep -Seconds 2
+    Log "⚠️ Servidor iniciado mas aguardando resposta..."
+    Start-Sleep -Seconds 1
 }
 
 exit 0
