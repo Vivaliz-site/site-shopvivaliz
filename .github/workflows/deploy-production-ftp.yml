@@ -1,0 +1,113 @@
+name: Deploy production FTP (MANUAL ONLY)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate PHP syntax
+        run: |
+          set -Eeuo pipefail
+          find . -type f -name '*.php' \
+            -not -path './vendor/*' \
+            -not -path './node_modules/*' \
+            -print0 | xargs -0 -n1 php -l
+      - name: Validate critical files
+        run: |
+          set -Eeuo pipefail
+          test -s index.php
+          test -s home.php
+          test -s .htaccess
+          test -s css/shopvivaliz-core-consolidated.css
+          test -s includes/header.php
+          test -s includes/footer.php
+          test -s includes/catalog-runtime.php
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deploy tools
+        run: sudo apt-get update && sudo apt-get install -y lftp jq
+      - name: Deploy safely (ROLLBACK MODE - forca sobrescrita)
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
+          FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
+        run: |
+          set -Eeuo pipefail
+          : "${FTP_SERVER:?Missing FTP_SERVER}"
+          : "${FTP_USERNAME:?Missing FTP_USERNAME}"
+          : "${FTP_PASSWORD:?Missing FTP_PASSWORD}"
+          PORT="$(printf '%s' "${FTP_PORT:-21}" | tr -cd '0-9')"
+          PORT="${PORT:-21}"
+          REMOTE="${FTP_REMOTE_DIR:-/}"
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" -p "$PORT" "$FTP_SERVER" <<EOF
+          set ftp:ssl-force true
+          set ftp:ssl-protect-data true
+          set ssl:verify-certificate false
+          set net:max-retries 2
+          set net:timeout 20
+          mkdir -p "$REMOTE/css"
+          mkdir -p "$REMOTE/js"
+          mkdir -p "$REMOTE/assets"
+          mkdir -p "$REMOTE/images"
+          mkdir -p "$REMOTE/includes"
+          mkdir -p "$REMOTE/public/assets/liz-assistant"
+          mirror --reverse --verbose --ignore-time --parallel=4 css "$REMOTE/css"
+          mirror --reverse --verbose --ignore-time --parallel=4 js "$REMOTE/js"
+          mirror --reverse --verbose --ignore-time --parallel=2 assets "$REMOTE/assets"
+          mirror --reverse --verbose --ignore-time --parallel=2 images "$REMOTE/images"
+          mirror --reverse --verbose --ignore-time --parallel=2 public/assets/liz-assistant "$REMOTE/public/assets/liz-assistant"
+          put -O "$REMOTE" index.php
+          put -O "$REMOTE" catalogo.php
+          put -O "$REMOTE" home.php
+          put -O "$REMOTE" .htaccess
+          put -O "$REMOTE/includes" includes/navbar.php
+          put -O "$REMOTE/includes" includes/header.php
+          put -O "$REMOTE/includes" includes/footer.php
+          put -O "$REMOTE/css" css/shopvivaliz-core-consolidated.css
+          bye
+          EOF
+      - name: Purge Cloudflare cache when configured
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "CLOUDFLARE_API_TOKEN not configured; skipping purge"
+            exit 0
+          fi
+          zone_response="$(curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' 'https://api.cloudflare.com/client/v4/zones?name=shopvivaliz.com.br&status=active')"
+          zone_id="$(printf '%s' "$zone_response" | jq -r '.result[0].id // empty')"
+          test -n "$zone_id"
+          purge_response="$(curl -fsS -X POST -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' --data '{"purge_everything":true}' "https://api.cloudflare.com/client/v4/zones/${zone_id}/purge_cache")"
+          test "$(printf '%s' "$purge_response" | jq -r '.success')" = "true"
+
+  smoke-test:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for propagation
+        run: sleep 25
+      - name: Verify storefront and CSS
+        run: |
+          set -Eeuo pipefail
+          curl -fLsS --retry 4 --retry-delay 5 https://shopvivaliz.com.br/ -o /tmp/home.html
+          curl -fLsS --retry 4 --retry-delay 5 https://shopvivaliz.com.br/css/shopvivaliz-core-consolidated.css -o /tmp/core.css
+          test "$(wc -c < /tmp/core.css)" -gt 1000
+          grep -qi 'Vivaliz' /tmp/home.html
