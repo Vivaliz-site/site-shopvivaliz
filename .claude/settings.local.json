@@ -3,7 +3,10 @@
     "allow": [
       "Bash(gh run *)",
       "Skill(run)",
-      "Skill(run:*)"
+      "Skill(run:*)",
+      "mcp__codex-mesh-bridge__post_message",
+      "mcp__codex-mesh-bridge__read_messages",
+      "Bash(bash -c 'last_id=\"11ecc120-a9f4-4c98-a5c8-8c72c2152ed4\"; while true; do messages=$\\(curl -s \"http://localhost:8000/api/codex/messages?thread=22300e21-a500-473b-b598-721f63e1021f&since_id=$last_id\" 2>/dev/null\\); if [ ! -z \"$messages\" ] && echo \"$messages\" | grep -q \"\\\\\"from\\\\\"\"; then echo \"$messages\" | jq -r \".messages[] | \\\\\"[\\\\\\(.from\\)] \\\\\\(.body\\)\\\\\"\"; last_id=$\\(echo \"$messages\" | jq -r \".messages[-1].id\"\\); fi; sleep 5; done')"
     ],
     "additionalDirectories": [
       "C:\\Users\\FRED\\site-shopvivaliz\\.vscode"
