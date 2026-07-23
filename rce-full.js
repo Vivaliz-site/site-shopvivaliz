@@ -200,6 +200,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(CONFIG.PORT, CONFIG.HOST, () => {
+  // Salvar API Key em arquivo
+  fs.writeFileSync('c:\\site-shopvivaliz\\.api-key.txt', CONFIG.API_KEY, 'utf8');
+
   console.log(`
 ╔════════════════════════════════════════════════════╗
 ║         🔴 RCE FULL SERVER INICIADO                ║
