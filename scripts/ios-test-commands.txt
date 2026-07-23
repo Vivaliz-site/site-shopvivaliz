@@ -1,0 +1,111 @@
+🎯 TESTE RÁPIDO - Commands via cURL (iPhone ou PC)
+
+═══════════════════════════════════════════════════════════════════
+
+PASSO 1: Abra Terminal/PowerShell AQUI na PC e execute:
+
+node scripts/ios-command-listener.js
+
+Você vai ver:
+  ✅ 🎯 iOS Command Listener rodando na porta 9999
+  ✅ 📱 Acesse do iPhone: http://seu-pc-ip:9999/execute
+
+═══════════════════════════════════════════════════════════════════
+
+PASSO 2: Do iPhone, abra Safari e copie este comando:
+
+curl -X POST http://SEU-PC-IP:9999/execute \
+  -H "X-Token: hBu-3gs3meFOp82AnXLzljmIvNaf-7ih" \
+  -H "Content-Type: application/json" \
+  -d '{"cmd":"git status"}'
+
+(Substitua SEU-PC-IP pelo IP real, ex: 192.168.1.100)
+
+═══════════════════════════════════════════════════════════════════
+
+PASSO 3: Testar do próprio PC (rápido):
+
+Windows PowerShell:
+─────────────────────
+curl.exe -X POST http://localhost:9999/execute `
+  -Headers @{"X-Token"="hBu-3gs3meFOp82AnXLzljmIvNaf-7ih"} `
+  -ContentType "application/json" `
+  -Body '{"cmd":"git status"}'
+
+Unix/Mac (Bash/Zsh):
+─────────────────────
+curl -X POST http://localhost:9999/execute \
+  -H "X-Token: hBu-3gs3meFOp82AnXLzljmIvNaf-7ih" \
+  -H "Content-Type: application/json" \
+  -d '{"cmd":"git status"}'
+
+═══════════════════════════════════════════════════════════════════
+
+EXEMPLOS DE COMANDOS PARA TESTAR:
+
+1. Ver status Git:
+   {"cmd":"git status"}
+
+2. Ver últimos commits:
+   {"cmd":"git log --oneline -5"}
+
+3. Ver hora:
+   {"cmd":"date"}
+
+4. Listar arquivos:
+   {"cmd":"ls -la"}
+   ou (Windows)
+   {"cmd":"dir"}
+
+5. Info do sistema:
+   {"cmd":"powershell -Command 'Get-ComputerInfo'"}
+
+═══════════════════════════════════════════════════════════════════
+
+RESPOSTA ESPERADA:
+
+{
+  "success": true,
+  "command": "git status",
+  "output": "On branch main\nYour branch is up to date...",
+  "error": "",
+  "code": 0,
+  "duration": 234,
+  "timestamp": "2026-07-23T12:34:56.789Z"
+}
+
+═══════════════════════════════════════════════════════════════════
+
+ERROS COMUNS:
+
+❌ "Connection refused"
+   → Listener não está rodando (execute node command primeiro)
+
+❌ "Invalid token"
+   → Token errado (use: hBu-3gs3meFOp82AnXLzljmIvNaf-7ih)
+
+❌ "ERR_NAME_NOT_RESOLVED" (iPhone)
+   → IP errado (execute ipconfig pra descobrir)
+
+❌ "Connection timed out"
+   → Firewall bloqueando porta 9999
+      → Windows Defender > Firewall > Allow app > Node.js
+
+═══════════════════════════════════════════════════════════════════
+
+FIREWALL - Se não conectar do iPhone:
+
+Windows Defender Firewall:
+1. Win + R → wf.msc
+2. Inbound Rules → New Rule
+3. Port → TCP → 9999
+4. Allow connection
+5. Nome: "iOS Command Listener"
+
+Ou via PowerShell:
+New-NetFirewallRule -DisplayName "iOS Commands" `
+  -Direction Inbound -Action Allow -Protocol TCP -LocalPort 9999
+
+═══════════════════════════════════════════════════════════════════
+
+PRÓXIMO: Criar Siri Shortcut (ver iOS-SETUP-GUIA.md)
