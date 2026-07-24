@@ -2282,3 +2282,203 @@ footer h3 {
     white-space: nowrap;
     border-width: 0;
 }
+
+/* ============================================================================
+   DISABLED & INACTIVE STATES
+   ============================================================================ */
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: #f3f4f6;
+    border-color: var(--line);
+}
+
+button:disabled:hover {
+    transform: none;
+    background-color: #f3f4f6;
+}
+
+.disabled, [aria-disabled="true"] {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* ============================================================================
+   SCROLL BEHAVIOR
+   ============================================================================ */
+
+html {
+    scroll-behavior: smooth;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--muted);
+    border-radius: var(--radius-full);
+    transition: background var(--transition-normal);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--brand);
+}
+
+/* ============================================================================
+   LOADING ANIMATIONS
+   ============================================================================ */
+
+@keyframes shimmer {
+    0% { background-position: -1000px 0; }
+    100% { background-position: 1000px 0; }
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 1000px 100%;
+    animation: shimmer 2s infinite;
+    border-radius: var(--radius);
+}
+
+.loading {
+    animation: pulse var(--transition-slow) infinite;
+}
+
+.fade-in {
+    animation: fadeIn var(--transition-normal);
+}
+
+/* ============================================================================
+   ACCESSIBILITY - FOCUS VISIBLE
+   ============================================================================ */
+
+:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+}
+
+/* Remove default outline when using mouse */
+:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: more) {
+    a { text-decoration: underline; }
+    .btn, .btn-primary, .btn-secondary { border: 2px solid currentColor; }
+    .product-card { border-width: 2px; }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+/* ============================================================================
+   FORM VALIDATION STATES
+   ============================================================================ */
+
+input:valid, textarea:valid {
+    border-color: var(--accent);
+    background-image: linear-gradient(var(--surface), var(--surface)), linear-gradient(to right, var(--accent-bg), var(--accent-bg));
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+}
+
+input:invalid:not(:placeholder-shown),
+textarea:invalid:not(:placeholder-shown) {
+    border-color: #ef4444;
+    background-color: #fef2f2;
+}
+
+.error-message {
+    color: #dc2626;
+    font-size: var(--text-xs);
+    margin-top: 4px;
+    font-weight: 500;
+}
+
+.success-message {
+    color: var(--accent);
+    font-size: var(--text-xs);
+    margin-top: 4px;
+    font-weight: 500;
+}
+
+.form-group {
+    margin-bottom: var(--space-lg);
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: var(--space-sm);
+    font-weight: 600;
+    font-size: var(--text-sm);
+}
+
+/* ============================================================================
+   VISIBILITY & DISPLAY TRANSITIONS
+   ============================================================================ */
+
+.hidden, [hidden] {
+    display: none !important;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity var(--transition-normal), visibility var(--transition-normal);
+}
+
+.show, [aria-hidden="false"] {
+    display: block !important;
+    visibility: visible;
+    opacity: 1;
+    animation: fadeIn var(--transition-normal);
+}
+
+.collapse {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height var(--transition-slow), opacity var(--transition-normal);
+}
+
+.collapse.show {
+    max-height: 1000px;
+    opacity: 1;
+}
+
+/* Responsive visibility helpers */
+@media (max-width: 768px) {
+    .hide-mobile { display: none !important; }
+}
+
+@media (min-width: 769px) {
+    .show-mobile { display: none !important; }
+}
