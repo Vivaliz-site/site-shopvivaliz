@@ -107,9 +107,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_P
         } elseif (strlen($password) < 8) {
             $error = 'Senha deve ter pelo menos 8 caracteres';
         } elseif ($password !== $password_confirm) {
-        $error = 'As senhas não conferem';
-    } else {
-        try {
+            $error = 'As senhas não conferem';
+        } else {
+            try {
             $db = Database::getInstance()->getConnection();
 
             // Verificar se email já existe
@@ -157,9 +157,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_P
                     }
                 }
             }
-        } catch (Exception $e) {
-            error_log('[auth/register] ' . $e->getMessage());
-            $error = 'Erro ao conectar ao banco de dados';
+            } catch (Exception $e) {
+                error_log('[auth/register] ' . $e->getMessage());
+                $error = 'Erro ao conectar ao banco de dados';
+            }
         }
     }
 }

@@ -77,6 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-login', $_POST
             error_log('[auth/login] ' . $e->getMessage());
             $error = 'Erro ao conectar ao banco de dados';
         }
+        }
     }
 }
 

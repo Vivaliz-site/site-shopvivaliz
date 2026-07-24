@@ -158,13 +158,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
 ";
         $body .= "Telefone: " . $sanitize($cliente['telefone']) . "
 ";
-        $body .= "Endereco: " . $sanitize($cliente['endereco']) . ", " . $sanitize($cliente['numero']) . " " . $sanitize($cliente['complemento']) . "
-";
-        $body .= "Cidade/CEP: " . $sanitize($cliente['cidade']) . " - " . $sanitize($cliente['cep'])
-
-";
-        $body .= "ITENS
-{$itemLines}
+        $body .= "Endereco: " . $sanitize($cliente['endereco']) . ", " . $sanitize($cliente['numero']) . " " . $sanitize($cliente['complemento']) . "\n";
+        $body .= "Cidade/CEP: " . $sanitize($cliente['cidade']) . " - " . $sanitize($cliente['cep']) . "\n";
+        $body .= "ITENS\n";
+        $body .= "{$itemLines}
 
 ";
         $body .= "TOTAL: R$ {$totalFmt} (frete a calcular)
