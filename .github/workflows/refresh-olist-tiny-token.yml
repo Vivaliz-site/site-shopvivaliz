@@ -1,0 +1,84 @@
+name: Renovar token Olist/Tiny (proativo)
+
+# DIAGNOSTICO (2026-07-23): o token de acesso do Tiny ERP (integrado via
+# Olist) ficava expirando repetidamente porque nada chamava o refresh de
+# forma proativa e agendada. O script api/olist/refresh-token.php ja fazia
+# o refresh corretamente e ja persistia o novo access_token + refresh_token
+# rotacionado no .env - mas so quando alguem o executava manualmente.
+#
+# Os workflows de sincronizacao (sync-olist-6h.yml e outros) rodam em
+# runners efemeros do GitHub Actions: qualquer refresh feito ali se perde
+# quando o runner termina, entao o proximo ciclo tentava usar o MESMO
+# refresh_token antigo - que o Tiny ja tinha invalidado (refresh token e
+# de uso unico/rotativo). Isso batia certo com o sintoma "token vence de
+# novo o tempo todo".
+#
+# A correcao: rodar api/olist/refresh-token.php DIRETO na VM Oracle (via
+# SSH), que e o unico lugar persistente (nao efemero) onde o .env vive de
+# fato entre execucoes. Roda antes do token de acesso expirar (a cada 3h -
+# tokens do Tiny costumam durar ~4h, entao 3h da folga confortavel).
+#
+# O valor do token NUNCA aparece no log deste workflow (o script PHP so
+# imprime um preview de 10 caracteres do access_token, nunca o valor
+# completo, e nunca imprime o refresh_token).
+
+on:
+  schedule:
+    - cron: '0 */3 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-olist-tiny-token
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Chamar refresh-token.php na VM Oracle
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
+      VM_USER: ${{ secrets.ORACLE_VM_USER }}
+      VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+    steps:
+      - name: Validar acesso configurado
+        id: preflight
+        shell: bash
+        run: |
+          if [[ -z "$VM_HOST" || -z "$VM_USER" || -z "$VM_SSH_KEY" ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Credenciais da VM ausentes; refresh ignorado com seguranca."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Rodar refresh-token.php remotamente via SSH
+        if: steps.preflight.outputs.configured == 'true'
+        shell: bash
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s' "$VM_SSH_KEY" > ~/.ssh/vm_key
+          chmod 600 ~/.ssh/vm_key
+          ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          # A saida do script (JSON) so contem status, http_code e um
+          # preview de 10 caracteres do access_token - nunca o valor
+          # completo do access_token nem o refresh_token.
+          ssh -i ~/.ssh/vm_key "${VM_USER}@${VM_HOST}" \
+            'cd /home/ubuntu/site-shopvivaliz && php api/olist/refresh-token.php' \
+            | tee refresh-result.json
+
+          STATUS=$(jq -r '.status // "unknown"' refresh-result.json 2>/dev/null || echo "unknown")
+          if [[ "$STATUS" != "ok" ]]; then
+            echo "::error::Refresh do token Olist/Tiny falhou (status=$STATUS). Revise refresh-result.json (sem segredos, mas com o motivo do erro)."
+            exit 1
+          fi
+          echo "✓ Token Olist/Tiny renovado com sucesso."
+
+      - name: Remover chave temporaria
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vm_key
