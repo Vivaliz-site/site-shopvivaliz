@@ -7,6 +7,8 @@ require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/csrf.php';
 require_once __DIR__ . '/../includes/social-auth.php';
+require_once __DIR__ . '/../includes/input-validator.php';
+require_once __DIR__ . '/../includes/rate-limiter.php';
 
 $redirectTo = sv_social_sanitize_redirect((string)($_GET['redirect'] ?? $_POST['redirect'] ?? '/'));
 
@@ -22,14 +24,23 @@ $email = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-login', $_POST['csrf_token'] ?? null)) {
     $error = 'Sua sessão expirou. Recarregue a página e tente novamente.';
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = trim($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
+    $clientIp = $_SERVER['REMOTE_ADDR'];
 
-    if (empty($email) || empty($password)) {
-        $error = 'Email e senha são obrigatórios';
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error = 'Email inválido';
+    // ✅ Rate limiting: máximo 5 tentativas por minuto por IP
+    if (!RateLimiter::isAllowed('login_' . $clientIp, 5, 60)) {
+        $error = 'Muitas tentativas de login. Tente novamente em 1 minuto.';
+        http_response_code(429);
     } else {
+        // ✅ Input validation com InputValidator
+        $v = validator();
+        $email = $v->getEmail('email', true);
+        $password = $v->getString('password', '', 8, 255);
+
+        if ($email === null || $v->getError('email')) {
+            $error = 'Email inválido';
+        } elseif ($password === '' || strlen($password) < 1) {
+            $error = 'Email e senha são obrigatórios';
+        } else {
         try {
             $db = Database::getInstance()->getConnection();
 

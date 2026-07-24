@@ -7,11 +7,45 @@ header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 require_once dirname(__DIR__, 2) . '/includes/catalog-runtime.php';
 require_once dirname(__DIR__, 2) . '/includes/tiny-order-push.php';
+require_once dirname(__DIR__, 2) . '/includes/cors.php';
+require_once dirname(__DIR__, 2) . '/includes/idempotency.php';
+require_once dirname(__DIR__, 2) . '/includes/rate-limiter.php';
+require_once dirname(__DIR__, 2) . '/includes/input-validator.php';
+
+// ✅ Handle CORS preflight requests
+if (CorsManager::handlePreflight()) {
+    exit;
+}
+
+// ✅ Check rate limiting (5 pedidos por minuto por IP)
+$clientIp = $_SERVER['REMOTE_ADDR'];
+if (!RateLimiter::isAllowed('order_' . $clientIp, 5, 60)) {
+    svo_json(429, ['ok' => false, 'error' => 'rate_limited', 'message' => 'Muitas requisições. Tente novamente em 1 minuto.']);
+}
+
+// ✅ Check idempotency (previne double-submit)
+if (check_idempotency() === false) {
+    exit; // Already handled (cached response sent)
+}
 
 function svo_json(int $status, array $payload): never
 {
     http_response_code($status);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+// ✅ svo_json with idempotency recording
+function svo_json_idempotent(int $status, array $payload, ?string $idempotencyKey = null): never
+{
+    http_response_code($status);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    // ✅ Record response for idempotency if key provided
+    if ($idempotencyKey !== null && IdempotencyManager::isValidKey($idempotencyKey)) {
+        record_idempotent_response($idempotencyKey, $payload, $status);
+    }
+
     exit;
 }
 
@@ -401,7 +435,8 @@ try {
     error_log('[OrderCreate] MySQL orders mirror failed: ' . $e->getMessage());
 }
 
-svo_json(200, [
+$idempotencyKey = $_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? $_POST['idempotency_key'] ?? null;
+$successPayload = [
     'ok' => true,
     'order_number' => $orderNumber,
     'payment_session_token' => $paymentSessionToken,
@@ -415,4 +450,6 @@ svo_json(200, [
     'shipping_total' => round($shippingTotal, 2),
     'shipping_label' => $shippingLabel,
     'total' => round($grandTotal, 2),
-]);
+];
+
+svo_json_idempotent(200, $successPayload, $idempotencyKey);

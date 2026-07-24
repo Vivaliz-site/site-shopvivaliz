@@ -15,6 +15,8 @@ require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/social-auth.php';
 require_once __DIR__ . '/../includes/csrf.php';
+require_once __DIR__ . '/../includes/input-validator.php';
+require_once __DIR__ . '/../includes/rate-limiter.php';
 
 $error = '';
 $success = '';
@@ -77,27 +79,34 @@ function sv_register_valid_document(string $digits): bool
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_POST['csrf_token'] ?? null)) {
     $error = 'Sua sessão expirou. Recarregue a página e tente novamente.';
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name = trim($_POST['name'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
-    $password_confirm = $_POST['password_confirm'] ?? '';
-    $cpfInput = trim($_POST['cpf'] ?? '');
-    $cpfDigits = preg_replace('/\D/', '', $cpfInput);
+    $clientIp = $_SERVER['REMOTE_ADDR'];
 
-    // Validações
-    if (empty($name)) {
-        $error = 'Nome é obrigatório';
-    } elseif (strlen($name) < 3) {
-        $error = 'Nome deve ter pelo menos 3 caracteres';
-    } elseif (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error = 'Email inválido';
-    } elseif ($cpfDigits !== '' && !sv_register_valid_document($cpfDigits)) {
-        $error = 'CPF/CNPJ inválido';
-    } elseif (empty($password)) {
-        $error = 'Senha é obrigatória';
-    } elseif (strlen($password) < 8) {
-        $error = 'Senha deve ter pelo menos 8 caracteres';
-    } elseif ($password !== $password_confirm) {
+    // ✅ Rate limiting: máximo 3 tentativas por hora por IP
+    if (!RateLimiter::isAllowed('register_' . $clientIp, 3, 3600)) {
+        $error = 'Muitas tentativas de registro. Tente novamente em 1 hora.';
+        http_response_code(429);
+    } else {
+        // ✅ Input validation com InputValidator
+        $v = validator();
+        $name = $v->requireString('name', 3, 120, 'Nome');
+        $email = $v->getEmail('email', true);
+        $password = $v->getString('password', '', 8, 255);
+        $password_confirm = $v->getString('password_confirm', '', 8, 255);
+        $cpfInput = $v->getString('cpf', '', 0, 20);
+        $cpfDigits = preg_replace('/\D/', '', $cpfInput);
+
+        // Validações
+        if ($name === null) {
+            $error = 'Nome é obrigatório (3-120 caracteres)';
+        } elseif ($email === null || $v->getError('email')) {
+            $error = 'Email inválido';
+        } elseif ($cpfDigits !== '' && !sv_register_valid_document($cpfDigits)) {
+            $error = 'CPF/CNPJ inválido';
+        } elseif ($password === '' || strlen($password) < 1) {
+            $error = 'Senha é obrigatória';
+        } elseif (strlen($password) < 8) {
+            $error = 'Senha deve ter pelo menos 8 caracteres';
+        } elseif ($password !== $password_confirm) {
         $error = 'As senhas não conferem';
     } else {
         try {
