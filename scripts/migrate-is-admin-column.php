@@ -45,7 +45,15 @@ if (!file_exists($env_file)) {
     exit(1);
 }
 
-$env = parse_ini_file($env_file);
+// Carregar .env com parser robusto
+$env = [];
+$lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+foreach ($lines as $line) {
+    if (strpos($line, '=') === false || strpos($line, '#') === 0) continue;
+    list($key, $value) = explode('=', $line, 2);
+    $env[trim($key)] = trim($value);
+}
+
 $db_host = $env['DB_HOST'] ?? 'localhost';
 $db_user = $env['DB_USER'] ?? 'root';
 $db_pass = $env['DB_PASS'] ?? 'root';
