@@ -7,12 +7,12 @@
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {
-    // Configure secure cookie parameters BEFORE session_start()
+    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['SERVER_PORT'] ?? 80) == 443;
     session_set_cookie_params([
-        'httponly' => true,      // Prevent XSS access to session cookie
-        'secure' => true,         // HTTPS only (set to false for local dev)
-        'samesite' => 'Strict',   // Prevent CSRF attacks
-        'lifetime' => 3600        // 1 hour session timeout
+        'httponly' => true,
+        'secure'   => $isHttps,
+        'samesite' => 'Lax',
+        'lifetime' => 86400 * 7
     ]);
 
     session_start();
