@@ -9,9 +9,10 @@
 ## 📋 O que foi feito
 
 1. ✅ **Client Secret atualizado**
-   - Valor antigo: `ZCr4ymUHY4M8pi69OXnGLOIPJNRXaouP`
-   - Novo: `2lGdMfxZjUh25f8Feha3CqInywGR55jG`
-   - Local: `.env` (linhas OLIST_CLIENT_SECRET)
+   - [REDACTED 2026 - valor real removido deste doc; nunca commitar segredos
+     em texto plano. Ambos os valores que estavam aqui ja devem ser
+     tratados como comprometidos/expostos e nao devem mais ser usados.]
+   - Local: GitHub Secrets (`OLIST_CLIENT_SECRET`) + `.env` na VM Oracle
 
 2. ✅ **Scripts de OAuth criados**
    - `api/olist/login.php` → Gera URL de autorização

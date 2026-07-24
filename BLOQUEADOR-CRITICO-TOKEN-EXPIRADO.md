@@ -33,10 +33,10 @@ Se isso fosse produção hoje:
 
 ### Credenciais Encontradas em `.env`
 ```
-OLIST_ACCESS_TOKEN = 9fc7a699f6946099733fd722929652d38bb56b6f02!
-OLIST_CLIENT_ID = tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553
-OLIST_CLIENT_SECRET = sh1MLgXhFlvycybhlShnvQMcEL8T2GWv
-OLIST_REFRESH_TOKEN = [JWT]
+OLIST_ACCESS_TOKEN = [REDACTED - nunca commitar segredos em texto plano; valor tratado como comprometido]
+OLIST_CLIENT_ID = [REDACTED]
+OLIST_CLIENT_SECRET = [REDACTED - valor tratado como comprometido, nao usar mais]
+OLIST_REFRESH_TOKEN = [JWT - REDACTED]
 ```
 
 ### Token JWT Decodificado
