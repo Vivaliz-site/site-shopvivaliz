@@ -14,8 +14,6 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../config/database.php';
-
 const COLOR_GREEN = "\033[92m";
 const COLOR_RED = "\033[91m";
 const COLOR_YELLOW = "\033[93m";
@@ -27,12 +25,28 @@ function log_error(string $msg): void { echo COLOR_RED . "❌ " . $msg . COLOR_R
 function log_info(string $msg): void { echo COLOR_YELLOW . "ℹ️  " . $msg . COLOR_RESET . "\n"; }
 function log_debug(string $msg): void { echo COLOR_BLUE . "🔍 " . $msg . COLOR_RESET . "\n"; }
 
+// Carregar .env
+log_info("Carregando configurações...");
+$env_file = __DIR__ . '/../.env';
+if (!file_exists($env_file)) {
+    log_error("Arquivo .env não encontrado");
+    exit(1);
+}
+
+$env = [];
+$lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+foreach ($lines as $line) {
+    if (strpos($line, '=') === false || strpos($line, '#') === 0) continue;
+    list($key, $value) = explode('=', $line, 2);
+    $env[trim($key)] = trim($value);
+}
+
 // Conectar ao banco
 $db = new mysqli(
-    getenv('DB_HOST') ?: 'localhost',
-    getenv('DB_USER') ?: 'root',
-    getenv('DB_PASSWORD') ?: '',
-    getenv('DB_NAME') ?: 'shopvivaliz'
+    $env['DB_HOST'] ?? 'localhost',
+    $env['DB_USER'] ?? 'root',
+    $env['DB_PASS'] ?? 'root',
+    $env['DB_NAME'] ?? 'shopvivaliz'
 );
 
 if ($db->connect_error) {
