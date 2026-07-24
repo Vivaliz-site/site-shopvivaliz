@@ -1,7 +1,7 @@
 # Histórico de Agentes Shopee — ShopVivaliz
 
 **Repositório:** `fredmourao-ai/site-shopvivaliz`  
-**Última atualização:** 2026-06-27  
+**Última atualização:** 2026-07-24  
 **Branch de origem:** `claude/guth-portfolio-access-81jjq2`
 
 > Documento de consulta para agentes. Descreve o que foi implementado, como usar, quais secrets são necessários e quais limitações existem.
@@ -203,6 +203,7 @@ Base URL da API: `https://api.tiny.com.br/public-api/v3`
 | 2026-07-05 (~04h UTC) | `main` (rotina agendada, sem branch dedicada) | 7º ciclo consecutivo, ~28h após o ciclo anterior (maior intervalo que os 6h nominais, sem run intermediário registrado). Ambos os bloqueadores seguem idênticos ao ciclo 6: token Tiny sem renovação (`shopee-listings-20260702-181749.json`, o mais recente com conteúdo real, ainda mostra `401` e `total_products: 0`; nenhum arquivo novo desde `optimization-report-20260703-041044.json`) e os workflows `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` seguem pausados (`on: workflow_dispatch`) desde `71bb308`. Nenhum secret `TINY_*`/`OLIST_*` neste ambiente de sessão. Nenhuma otimização aplicada — sem dados reais não há base para decisão orientada a dados. Nenhuma notificação push enviada: nenhum fato novo além do já comunicado no ciclo 6 (mesma recomendação: renovar o token e reativar os dois workflows, ou pausar esta rotina até lá). |
 | 2026-07-07 (~19h UTC) | `main` (rotina agendada, sem branch dedicada) | 8º ciclo consecutivo, ~63h após o ciclo anterior (maior gap ainda que os 6h nominais — nenhum run intermediário registrado). Estado idêntico ao ciclo 7: `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` seguem `on: workflow_dispatch` apenas (commit `6e32ce0` de 2026-07-05 tocou o modo/permissões de dezenas de arquivos, incluindo `sync-shopee-6h.yml`, mas não reverteu a pausa nem reativou o `schedule`); nenhum `listings/shopee-listings-*.json` ou `optimization-report-*.json` novo desde `20260703-041044`; nenhum secret `TINY_*`/`OLIST_*`/`SHOPEE_*` neste ambiente de sessão. Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada — sem dados reais não há base para decisão orientada a dados. Nenhuma notificação push enviada: nenhum fato novo além do já comunicado nos ciclos 6 e 7 (mesma recomendação: renovar o token Tiny e reativar os dois workflows, ou pausar esta rotina agendada até que o bloqueador seja resolvido). |
 | 2026-07-08 (~19h UTC) | `main` (rotina agendada, sem branch dedicada) | 9º ciclo consecutivo. Fato novo desde o ciclo 8: em `2026-07-08T09:54:33-03:00` (commit `e714686`, PR #153, autor `fredmourao-ai`) o usuário reativou `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` com o trigger `schedule` restaurado (resolve o bloqueador secundário descrito nos ciclos 6-8). O primeiro run automático após a reativação (`fetch-shopee-listings.yml`, 2026-07-08T17:12:37Z, commit `dd4d439`) já confirma que o pipeline volta a executar sozinho, mas gerou `listings/shopee-listings-20260708-171237.json` com `status: partial`, `total_products: 0` e o mesmo erro `"Autenticação falhou (401). Token inválido ou expirado."` — ou seja, o bloqueador primário (token Tiny) permanece sem renovação, agora ~8 dias desde a última extração real (`20260630-113006.json`). Nenhum `optimization-report-*.json` novo desde `20260703-041044`. Nenhuma credencial `TINY_*`/`OLIST_*` neste ambiente de sessão para tentar renovação direta. Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada — sem dados reais não há base para decisão orientada a dados. Notificação push enviada neste ciclo: há fato novo e acionável (pipeline reativado com sucesso, mas ainda bloqueado só pelo token — a ação restante do usuário é unicamente renovar `TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN`). |
+| 2026-07-24 (~07h UTC) | `main` (rotina agendada, sem branch dedicada) | 12º ciclo documentado (gap de ciclos 07-16 a 07-23 não documentado nesta tabela, mas coberto por relatórios commitados — ver seção 9.9). Achado principal: ~1h antes deste ciclo, outra sessão de agente (commits `1cb092a`/`5fce107`/`e3305a9`, 2026-07-24T04:45–04:50Z) criou um fluxo OAuth2 authorization-code novo para o Tiny (`api/olist/login.php`/`callback.php`) e rotacionou o `TINY_CLIENT_SECRET` — mas só em `.env` local/VM, aguardando o usuário clicar num link de login (ver `docs/TINY-TOKEN-RENEWAL-SETUP.md`). Confirmado via `mcp__github__actions_list` que tanto o run de `fetch-shopee-listings.yml` das 01:47:28Z (antes do fix) quanto o de `optimize-shopee-listings.yml` das 05:52:56Z (depois do fix) continuam falhando com o mesmo erro `"Invalid client or Invalid client credentials"` — ou seja, o novo Client Secret ainda não está refletido nos GitHub Secrets que esses dois workflows usam (`TINY_CLIENT_SECRET`/`TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN` em Settings→Secrets), só no `.env`. Mesmo que o usuário complete o login, o pipeline via GitHub Actions provavelmente continua quebrado até alguém atualizar os GitHub Secrets também. Nenhuma otimização aplicada — sem credencial neste ambiente de sessão e sem dado real de catálogo. Notificação push enviada: fato novo e acionável, com prazo (fix parcial de horas atrás, ainda incompleto para o caminho GitHub Actions). |
 
 ---
 
@@ -491,3 +492,53 @@ reconfiguração manual do app no painel Tiny + atualização de `TINY_CLIENT_ID
 pipeline vai funcionar, mesmo os que não exigem dado de performance do Shopee. Reforçada
 também a conclusão estrutural: a rotina de CTR/conversão/preço não é implementável sem
 integração real com a API de analytics do Shopee Open Platform.
+
+### 9.9 Atualização — ciclo de 2026-07-24 (~07h UTC), 12º ciclo documentado
+
+Gap de documentação: nenhuma entrada nova foi escrita neste arquivo entre o ciclo 11 (07-15) e
+hoje, mas os relatórios commitados em `listings/` cobrem o período inteiro e mostram o mesmo
+bloqueador oscilando entre os dois sintomas já conhecidos, sem nunca produzir uma otimização
+real:
+
+- 07-16 e 07-17: `Falha OAuth2 refresh: Token is not active`.
+- 07-18 (`optimization-report-20260718-090909.json`): único sucesso do período —
+  `status: success`, `total_products: 100`, mas **`optimized: 0`** — bug distinto e já registrado
+  em `docs/MEMORIA-AGENTES.md` (entrada 2026-07-19): `callAnthropic()`/`optimizeWithAI()` retorna
+  `null` porque `max_tokens: 1024` é insuficiente para o JSON estruturado exigido pelo prompt,
+  então todo produto é marcado `skipped` sem erro visível.
+- 07-20: de volta a `Token is not active`.
+- 07-24 (hoje, antes do fix de OAuth descrito abaixo): `Invalid client or Invalid client
+  credentials` (`shopee-listings-20260724-014740.json`, run `fetch-shopee-listings.yml` de
+  01:47:28Z).
+
+**Achado novo deste ciclo:** por volta de 2026-07-24T04:45–04:50Z (commits `1cb092a` "feat:
+OAuth2 authorization code flow for Tiny ERP token renewal", `5fce107` "docs: add Tiny OAuth
+authentication setup guide", `e3305a9` "fix: improve error handling in OAuth callback"), uma
+sessão de agente diferente desta rotina implementou um fluxo OAuth2 authorization-code completo
+para o Tiny (`api/olist/login.php`, `api/olist/callback.php`), rotacionou o `TINY_CLIENT_SECRET`
+(documentado em `docs/TINY-TOKEN-RENEWAL-SETUP.md`) e deixou uma URL de autorização pronta,
+aguardando o usuário logar manualmente no Tiny e autorizar. Esse fix atualiza `.env` local e da
+VM Oracle (usado por `daemon-sync-products.py`/site), **não** os GitHub Secrets
+(`TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`/`TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN` em
+Settings→Secrets) que `fetch-shopee-listings.yml` e `optimize-shopee-listings.yml` leem.
+
+Confirmado via `mcp__github__actions_list` (não só pelos relatórios commitados, que podem
+atrasar por corrida de commit) que o run de `optimize-shopee-listings.yml` das 05:52:56Z —
+**depois** da janela do fix de OAuth — ainda terminou com o mesmo erro `Invalid client or
+Invalid client credentials`, `total_products: 0`. Duas explicações possíveis, não excludentes:
+(a) o usuário ainda não clicou no link de login/autorização; (b) mesmo depois de logar, os
+GitHub Secrets usados por esses dois workflows continuam com o Client Secret antigo, porque o
+fix só tocou `.env`. Sem acesso para ler/editar GitHub Secrets nem para completar um login
+interativo no Tiny, este agente não pode confirmar nem resolver qual dos dois é o caso.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada neste ciclo — sem
+credencial neste ambiente de sessão e sem dado real de catálogo desde `20260709-011652`
+(1058 produtos, ~15 dias atrás). Nenhum dado de CTR/conversão/venda foi inventado. Achado
+estrutural das seções 9.7/9.8 (rotina de CTR/conversão/preço tecnicamente inexequível sem
+integração com Shopee Open Platform analytics) permanece sem mudança.
+
+**Notificação push enviada neste ciclo:** fato novo, recente (horas, não dias) e acionável —
+existe um fix de renovação de token pronto e esperando só o clique do usuário, mas há um risco
+concreto de o usuário completar o login, ver "sucesso" na tela do callback, e assumir que o
+pipeline Shopee/GitHub Actions voltou a funcionar quando na verdade ele depende de um secret
+diferente (GitHub Secrets) que esse fluxo não atualiza.
