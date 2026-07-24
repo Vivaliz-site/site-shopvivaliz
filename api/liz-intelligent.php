@@ -71,10 +71,11 @@ if (!empty($claudeKey)) {
     $providers[] = ['name' => 'claude', 'key' => trim($claudeKey)];
 }
 
-// Se nenhum provedor, usar fallback com respostas determinísticas
+// Se nenhum provedor de IA, retornar erro (não fallback)
 if (empty($providers)) {
-    // Modo degradado - sem IA, apenas regras
-    $providers = [['name' => 'rules', 'key' => 'fallback']];
+    http_response_code(503);
+    echo json_encode(['error' => 'Nenhuma IA disponível. Configure GEMINI_API_KEY, OPENAI_API_KEY ou ANTHROPIC_API_KEY']);
+    exit;
 }
 
 // ============================================================================
@@ -126,15 +127,19 @@ function liz_search_products(string $query): array
 // ============================================================================
 function liz_call_gemini(string $message, array $history, array $products, string $apiKey): string
 {
-    $systemPrompt = "Você é Liz, assistente virtual inteligente da ShopVivaliz - loja online de produtos para casa.\n";
-    $systemPrompt .= "Responda de forma concisa, amigável e útil. Máximo 3 linhas.\n\n";
-    $systemPrompt .= "DADOS DA LOJA:\n";
+    $systemPrompt = "Você é Liz, assistente virtual INTELIGENTE da ShopVivaliz - loja online de produtos para casa.\n";
+    $systemPrompt .= "IMPORTANTE: Use sua inteligência para PENSAR e responder, não apenas regras fixas.\n";
+    $systemPrompt .= "Responda de forma concisa, amigável, útil e personalizada. Máximo 3 linhas.\n\n";
+    $systemPrompt .= "INFORMAÇÕES DA LOJA:\n";
+    $systemPrompt .= "- Nome: ShopVivaliz\n";
+    $systemPrompt .= "- Tipo: E-commerce online (não tem loja física)\n";
     $systemPrompt .= "- Email: atendimento@shopvivaliz.com.br\n";
     $systemPrompt .= "- WhatsApp: (37) 99937-4112\n";
+    $systemPrompt .= "- Endereço: 100% online, entregamos para todo o Brasil\n";
     $systemPrompt .= "- Frete Grátis: Acima de R$ 199 (todo Brasil)\n";
     $systemPrompt .= "- Devolução: 7 dias sem burocracia\n";
     $systemPrompt .= "- Cupom: VOLTEI5 (5% OFF primeira compra)\n";
-    $systemPrompt .= "- Catálogo: 180+ produtos\n\n";
+    $systemPrompt .= "- Catálogo: 180+ produtos (rodízios, ferramentas, utensílios, jardim)\n\n";
 
     if (!empty($products)) {
         $systemPrompt .= "PRODUTOS ENCONTRADOS:\n";
