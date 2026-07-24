@@ -92,7 +92,7 @@ body::before {
 }
 .product-image { position: relative; background: linear-gradient(145deg,#fff,#f4f8fb) !important; }
 .product-image::after {
-  content: "Vivaliz"; position: absolute; right: 14px; bottom: 10px; color: rgba(11,79,136,.13);
+  content: ""; position: absolute; right: 14px; bottom: 10px; color: rgba(11,79,136,.13);
   font-weight: 800; letter-spacing: .08em; text-transform: uppercase; font-size: 11px;
 }
 .product-image img { object-fit: contain !important; padding: 14px; transition: transform .4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
