@@ -1,5 +1,5 @@
 (() => {
-  const API = '/api/agent/squad-chat.php';
+  const API = '/api/liz-intelligent.php';
   const root = document.createElement('div');
 
   root.innerHTML = `
@@ -65,18 +65,36 @@
 
   async function ask(text) {
     add(text, 'sv-user');
-    const waiting = add('Só um instante...', 'sv-bot');
+    const waiting = add('Liz está pensando...', 'sv-bot');
 
     try {
+      // Colher histórico de mensagens
+      const allMessages = Array.from(msgs.querySelectorAll('.sv-msg')).map(el => ({
+        role: el.classList.contains('sv-user') ? 'user' : 'bot',
+        content: el.textContent.trim(),
+      })).filter(m => m.content !== 'Liz está pensando...');
+
       const response = await fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, context: 'site-shopvivaliz' }),
+        body: JSON.stringify({
+          message: text,
+          history: allMessages.slice(-10), // Últimas 10 mensagens
+          context: 'site-shopvivaliz',
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
       const data = await response.json();
-      waiting.textContent = data.answer || data.reply || data.message || data.response || 'Recebi sua mensagem. Nossa equipe pode continuar o atendimento com você.';
+      const answer = data.answer || data.reply || data.message || data.response ||
+                     'Oi! Não consegui processar sua pergunta. Tente novamente ou fale com nosso atendimento (37) 99937-4112.';
+      waiting.textContent = answer;
     } catch (error) {
-      waiting.textContent = 'Não consegui conectar. Tente novamente em instantes.';
+      console.error('Liz error:', error);
+      waiting.textContent = 'Desculpe, estou com uma pequena indisponibilidade. Fale com nosso atendimento: (37) 99937-4112';
     }
   }
 
