@@ -64,6 +64,35 @@ jobs:
           )
           PY
 
+      - name: Reparar imagens precos e estoque automaticamente
+        run: |
+          set -euo pipefail
+          php -l scripts/quality/repair-olist-catalog.php
+          php scripts/quality/repair-olist-catalog.php > logs/olist-catalog-repair-response.json
+          cat logs/olist-catalog-repair-response.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(
+              Path("logs/olist-catalog-repair-response.json").read_text(encoding="utf-8")
+          )
+          if payload.get("ok") is not True:
+              raise SystemExit(f"catalog repair failed: {payload}")
+
+          products = int(payload.get("products") or 0)
+          if products <= 0:
+              raise SystemExit(f"catalog repair returned no products: {payload}")
+
+          print(
+              "Reparo concluido: "
+              f"products={products} "
+              f"images={payload.get('images_repaired')} "
+              f"prices={payload.get('prices_repaired')} "
+              f"stock={payload.get('stock_repaired')}"
+          )
+          PY
+
       - name: Bloquear reducao anomala do catalogo
         run: |
           set -euo pipefail
@@ -109,7 +138,7 @@ jobs:
               )
           PY
 
-      - name: Validar catalogo sincronizado
+      - name: Validar catalogo sincronizado e reparado
         run: |
           set -euo pipefail
           php scripts/quality/validate-product-prices.php
@@ -154,7 +183,7 @@ jobs:
 
           if [[ -n "$changes_catalog" ]]; then
             git add api/catalog/fallback-products.json
-            git commit -m "chore: espelhar catalogo Olist/Tiny"
+            git commit -m "chore: espelhar e reparar catalogo Olist/Tiny"
             git push
           else
             echo "Sem alteracoes no catalogo."
