@@ -157,9 +157,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_P
                     }
                 }
             }
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 error_log('[auth/register] ' . $e->getMessage());
-                $error = 'Erro ao conectar ao banco de dados';
+                $error = 'Erro ao processar o cadastro. Tente novamente.';
             }
         }
     }
