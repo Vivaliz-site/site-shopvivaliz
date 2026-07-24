@@ -3001,3 +3001,291 @@ p + p, p + h1, p + h2, p + h3 {
 .shadow-md { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
 .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
 .shadow-xl { box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+
+/* ============================================================================
+   IMAGE EFFECTS
+   ============================================================================ */
+
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+.img-responsive {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.img-hover-zoom {
+    transition: transform var(--transition-slow), filter var(--transition-slow);
+    transform-origin: center;
+}
+
+.img-hover-zoom:hover {
+    transform: scale(1.1);
+    filter: brightness(1.1) contrast(1.05);
+}
+
+.img-hover-blur:hover {
+    filter: blur(2px);
+}
+
+.img-overlay {
+    position: relative;
+    overflow: hidden;
+}
+
+.img-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    transition: opacity var(--transition-normal);
+    z-index: 1;
+}
+
+.img-overlay:hover::before {
+    opacity: 1;
+}
+
+.img-grayscale {
+    filter: grayscale(100%);
+    transition: filter var(--transition-normal);
+}
+
+.img-grayscale:hover {
+    filter: grayscale(0%);
+}
+
+/* ============================================================================
+   LISTS
+   ============================================================================ */
+
+ul, ol {
+    margin: 0;
+    padding-left: var(--space-xl);
+    line-height: 1.8;
+}
+
+li {
+    margin-bottom: var(--space-sm);
+    color: var(--ink);
+}
+
+ul li::marker {
+    color: var(--brand);
+    font-weight: 600;
+}
+
+ol li::marker {
+    color: var(--brand);
+    font-weight: 600;
+}
+
+.list-unstyled {
+    list-style: none;
+    padding-left: 0;
+}
+
+.list-unstyled li {
+    padding-left: 0;
+}
+
+.list-inline {
+    list-style: none;
+    padding-left: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+}
+
+.list-inline li {
+    display: inline-block;
+    margin-bottom: 0;
+}
+
+.list-checked {
+    list-style: none;
+    padding-left: 0;
+}
+
+.list-checked li {
+    padding-left: var(--space-lg);
+    position: relative;
+}
+
+.list-checked li::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 18px;
+}
+
+.breadcrumb {
+    display: flex;
+    list-style: none;
+    padding: 0;
+    gap: var(--space-sm);
+    margin: 0;
+}
+
+.breadcrumb li {
+    margin: 0;
+}
+
+.breadcrumb li::after {
+    content: '/';
+    margin-left: var(--space-sm);
+    color: var(--muted);
+}
+
+.breadcrumb li:last-child::after {
+    content: '';
+}
+
+/* ============================================================================
+   BLOCKQUOTES & CITATIONS
+   ============================================================================ */
+
+blockquote {
+    margin: 0;
+    padding: var(--space-lg) var(--space-lg) var(--space-lg) var(--space-xl);
+    border-left: 4px solid var(--brand);
+    background-color: var(--bg);
+    border-radius: var(--radius);
+    font-size: var(--text-lg);
+    line-height: 1.8;
+    color: var(--muted);
+    font-style: italic;
+}
+
+blockquote p {
+    margin: 0;
+    font-style: italic;
+}
+
+blockquote cite {
+    display: block;
+    margin-top: var(--space-md);
+    font-style: normal;
+    font-weight: 600;
+    color: var(--ink);
+    font-size: var(--text-sm);
+}
+
+blockquote cite::before {
+    content: '— ';
+}
+
+.quote-highlight {
+    background: linear-gradient(120deg, rgba(5, 150, 105, 0.2) 0%, rgba(5, 150, 105, 0.1) 100%);
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+}
+
+code {
+    background: var(--bg);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    color: #d73a49;
+}
+
+pre {
+    background: var(--ink);
+    color: #fff;
+    padding: var(--space-lg);
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0;
+}
+
+pre code {
+    background: none;
+    padding: 0;
+    color: #fff;
+}
+
+/* ============================================================================
+   DIVIDERS & SEPARATORS
+   ============================================================================ */
+
+hr {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: var(--space-xl) 0;
+    height: 0;
+}
+
+.divider {
+    border-top: 1px solid var(--line);
+    margin: var(--space-lg) 0;
+}
+
+.divider-thick {
+    border-top: 2px solid var(--line);
+    margin: var(--space-lg) 0;
+}
+
+.divider-dashed {
+    border-top: 2px dashed var(--line);
+    margin: var(--space-lg) 0;
+}
+
+.divider-dotted {
+    border-top: 2px dotted var(--line);
+    margin: var(--space-lg) 0;
+}
+
+.divider-brand {
+    border-top: 2px solid var(--brand);
+    margin: var(--space-lg) 0;
+}
+
+.divider-accent {
+    border-top: 2px solid var(--accent);
+    margin: var(--space-lg) 0;
+}
+
+.divider-text {
+    position: relative;
+    text-align: center;
+    margin: var(--space-xl) 0;
+}
+
+.divider-text::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--line);
+    z-index: 0;
+}
+
+.divider-text span {
+    position: relative;
+    padding: 0 var(--space-md);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    z-index: 1;
+}
+
+.vertical-divider {
+    display: inline-block;
+    width: 1px;
+    height: 24px;
+    background: var(--line);
+    margin: 0 var(--space-md);
+}
