@@ -51,25 +51,30 @@ if (empty($message)) {
 // ============================================================================
 $providers = [];
 
-$geminiKey = getenv('GEMINI_API_KEY') ?: '';
+// Tentar múltiplos nomes de variáveis para cada provedor
+$geminiKey = getenv('GEMINI_API_KEY') ?: (getenv('GOOGLE_GEMINI_API_KEY') ?: '');
 if (!empty($geminiKey)) {
-    $providers[] = ['name' => 'gemini', 'key' => $geminiKey];
+    // Limpar espaços/duplicatas
+    $geminiKey = trim(explode(' ', $geminiKey)[0]);
+    if (!empty($geminiKey)) {
+        $providers[] = ['name' => 'gemini', 'key' => $geminiKey];
+    }
 }
 
 $gptKey = getenv('OPENAI_API_KEY') ?: '';
 if (!empty($gptKey)) {
-    $providers[] = ['name' => 'gpt', 'key' => $gptKey];
+    $providers[] = ['name' => 'gpt', 'key' => trim($gptKey)];
 }
 
 $claudeKey = getenv('ANTHROPIC_API_KEY') ?: '';
 if (!empty($claudeKey)) {
-    $providers[] = ['name' => 'claude', 'key' => $claudeKey];
+    $providers[] = ['name' => 'claude', 'key' => trim($claudeKey)];
 }
 
+// Se nenhum provedor, usar fallback com respostas determinísticas
 if (empty($providers)) {
-    http_response_code(503);
-    echo json_encode(['error' => 'Nenhum provedor de IA configurado (Gemini, GPT, Claude)']);
-    exit;
+    // Modo degradado - sem IA, apenas regras
+    $providers = [['name' => 'rules', 'key' => 'fallback']];
 }
 
 // ============================================================================
@@ -301,6 +306,37 @@ function liz_call_claude_api(string $message, array $history, array $products, s
 }
 
 // ============================================================================
+// FALLBACK: Respostas baseadas em regras (sem IA)
+// ============================================================================
+function liz_call_rules(string $message): string
+{
+    $norm = strtolower($message);
+    $norm = strtr($norm, ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ã'=>'a','õ'=>'o','ç'=>'c']);
+
+    // Busca por categorias de pergunta
+    if (preg_match('/(troca|devolucao|devolver|reembolso|retorno)/i', $norm)) {
+        return 'Você tem 7 dias após o recebimento para devolver ou trocar seu produto sem burocracia! Fale com a gente no WhatsApp (37) 99937-4112 ou email atendimento@shopvivaliz.com.br.';
+    }
+    if (preg_match('/(frete|entrega|prazo|envio|demora|chega|cep)/i', $norm)) {
+        return 'Entregamos para todo o Brasil! Frete GRÁTIS em compras acima de R$ 199. O prazo é calculado no carrinho conforme seu CEP.';
+    }
+    if (preg_match('/(pagamento|pix|boleto|cartao|credito|parce)/i', $norm)) {
+        return 'Aceitamos PIX (aprovação imediata), Boleto e Cartão de Crédito até 12x. Todos pagamentos são 100% seguros!';
+    }
+    if (preg_match('/(cupom|desconto|promocao|oferta|voltei)/i', $norm)) {
+        return 'Use o cupom VOLTEI5 para ganhar 5% OFF na sua primeira compra!';
+    }
+    if (preg_match('/(produto|rodizio|ferramenta|vaso|assentos|utilidade|organiza)/i', $norm)) {
+        return 'Temos 180+ produtos: rodízios, ferramentas, organização, vasos e muito mais! Veja nosso catálogo completo: www.shopvivaliz.com.br/catalogo';
+    }
+    if (preg_match('/(oi|ola|oi tudo|como vai|tudo bem|saudacao)/i', $norm)) {
+        return 'Oi! 👋 Bem-vindo à ShopVivaliz! Como posso te ajudar com produtos, frete ou pedidos?';
+    }
+
+    return 'Olá! Sou a Liz, assistente virtual da ShopVivaliz. Posso ajudar com produtos, frete, pagamento, trocas e devoluções. O que você gostaria de saber?';
+}
+
+// ============================================================================
 // ORCHESTRADOR: Tentar múltiplos provedores em ordem
 // ============================================================================
 
@@ -318,6 +354,9 @@ function liz_call_with_fallback(string $message, array $history, array $products
             $answer = liz_call_gpt($message, $history, $products, $provider['key']);
         } elseif ($provider['name'] === 'claude') {
             $answer = liz_call_claude_api($message, $history, $products, $provider['key']);
+        } elseif ($provider['name'] === 'rules') {
+            // Modo fallback com regras inteligentes
+            $answer = liz_call_rules($message);
         }
 
         if (!empty($answer)) {
