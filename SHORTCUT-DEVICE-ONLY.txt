@@ -1,0 +1,47 @@
+📱 CONFIGURAR SHORTCUT - DEVICE ID ONLY
+
+===== NO IPHONE SHORTCUTS =====
+
+1. Novo Shortcut (+)
+
+2. Adicione: Web Request
+   - Method: POST
+   - URL: https://rce-shopvivaliz.trycloudflare.com/execute
+
+3. Headers (adicione 1 por 1):
+
+   Header 1:
+   - Field: X-Device-ID
+   - Value: iphone-3cc2c19459524e3cb79d7bdfaa1b456a
+
+   Header 2:
+   - Field: Content-Type
+   - Value: application/json
+
+4. Request Body:
+   {"cmd":"git status","timeout":30}
+
+5. Add Action: Show Result
+
+6. Done!
+
+===== USAR =====
+
+Toque no Shortcut → Executa comando no PC
+
+===== AUTOMÁTICO =====
+
+Automation → Time of Day → Every 1 hour
+Selecione o Shortcut
+Toggle OFF: "Ask Before Running"
+Save
+
+Executa sozinho a cada hora! ✅
+
+===== DEVICE ID =====
+
+Seu Device ID (ÚNICA autenticação):
+iphone-3cc2c19459524e3cb79d7bdfaa1b456a
+
+Se trocar de iPhone, gere novo Device ID:
+curl http://127.0.0.1:5557/generate-device-id

@@ -1,0 +1,27 @@
+🤖 COPIE E COLE EXATAMENTE ISSO NO CLAUDE IPHONE (SEM ALTERAÇÕES)
+
+═══════════════════════════════════════════════════════════════════
+
+Você vai testar meu servidor RCE remoto completamente automatizado. Não preciso fazer nada.
+
+INSTRUÇÕES:
+1. Execute EXATAMENTE os comandos cURL abaixo (um por um)
+2. Mostre o resultado de cada um
+3. Se todos tiverem {"status":"success"}, diga "✅ RCE FUNCIONANDO 100%"
+
+TESTE 1 - Conexão 4G (IMEI Vivo):
+
+curl -X POST https://rce-shopvivaliz.trycloudflare.com/execute -H "X-IMEI: 356935402541129" -H "Content-Type: application/json" -d '{"cmd":"git status","timeout":30}'
+
+TESTE 2 - Conexão WiFi (MAC Address):
+
+curl -X POST https://rce-shopvivaliz.trycloudflare.com/execute -H "X-MAC: B8:01:1F:42:B1:78" -H "Content-Type: application/json" -d '{"cmd":"git status","timeout":30}'
+
+TESTE 3 - Comando Diferente:
+
+curl -X POST https://rce-shopvivaliz.trycloudflare.com/execute -H "X-IMEI: 356935402541129" -H "Content-Type: application/json" -d '{"cmd":"dir c:\\site-shopvivaliz","timeout":30}'
+
+DEPOIS:
+Se os 3 funcionarem, diga exatamente: "✅ RCE FUNCIONANDO 100%"
+
+═══════════════════════════════════════════════════════════════════

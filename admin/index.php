@@ -15,6 +15,7 @@ $codename = (string)($version['codename'] ?? '');
     <title>Admin - Central ShopVivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
+    <?php require_once __DIR__ . '/../includes/load-custom-css.php'; ?>
 </head>
 <body>
     <nav class="navbar" style="background: #1a1a2e; padding: 1rem 0;">

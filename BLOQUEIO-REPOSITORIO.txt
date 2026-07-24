@@ -1,0 +1,22 @@
+================================================================================
+🔒 REPOSITÓRIO BLOQUEADO
+================================================================================
+
+Data: 2026-07-23 16:22:53
+Motivo: Restauração completa de 20/07 - NÃO SOBRESCREVER
+
+Commit Restaurado: 43ff014f
+Data: 2026-07-20 23:39:39
+Mensagem: auto: sincronizar 2026-07-20 23:39:39
+
+STATUS: 🔴 BLOQUEADO - Aguardando ordem para desbloquear
+
+ATENÇÃO:
+- Não faça commits ou push até receber liberação
+- Não modifique arquivos do repositório
+- Aguarde instruções explícitas do usuário
+- Contato: fredmourao@gmail.com
+
+Desbloqueio será feito por: cli unlock-repo
+
+================================================================================

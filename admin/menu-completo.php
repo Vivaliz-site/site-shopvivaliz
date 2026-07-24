@@ -31,6 +31,7 @@ require_once __DIR__ . '/../includes/admin-guard.php';
         .badge { display: inline-block; background: #667eea; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; margin-top: 0.5rem; }
     </style>
     <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
+    <?php require_once __DIR__ . '/../includes/load-custom-css.php'; ?>
 </head>
 <body>
     <div class="navbar">
@@ -206,6 +207,10 @@ require_once __DIR__ . '/../includes/admin-guard.php';
         <div class="section">
             <div class="section-header">⚡ Ferramentas Avançadas</div>
             <div class="section-grid">
+                <a href="/admin/css-editor.php" class="menu-item">
+                    <div class="menu-item-title">✏️ Editor CSS</div>
+                    <div class="menu-item-desc">Customizar CSS de todas as páginas</div>
+                </a>
                 <a href="/admin/visual-editor.php" class="menu-item">
                     <div class="menu-item-title">Visual Editor</div>
                     <div class="menu-item-desc">Editar conteúdo visual</div>
@@ -235,7 +240,7 @@ require_once __DIR__ . '/../includes/admin-guard.php';
         </div>
 
         <div style="text-align: center; padding: 2rem; color: #666;">
-            <p>✅ Total: <strong>31 rotinas</strong> disponíveis</p>
+            <p>✅ Total: <strong>32 rotinas</strong> disponíveis</p>
         </div>
     </div>
 </body>

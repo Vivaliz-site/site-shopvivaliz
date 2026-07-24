@@ -178,5 +178,12 @@
   },
   "gitlens.currentLine.enabled": true,
   "gitlens.hovers.enabled": true,
-  "gitlens.codeLens.enabled": true
+  "gitlens.codeLens.enabled": true,
+  "runOnSave.commands": [
+    {
+      "match": ".*",
+      "isAsync": true,
+      "cmd": "echo RCE Server starting..."
+    }
+  ]
 }

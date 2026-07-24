@@ -2,100 +2,162 @@
 /**
  * Webhook para sincronizar preços de produtos do Tiny em tempo real
  * POST /api/webhooks/tiny-product-price-sync.php
+ *
+ * Atualiza preços IMEDIATAMENTE no cache quando Tiny notifica mudanças
  */
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=UTF-8');
 
-// Log inicial
 $log_file = __DIR__ . '/../../logs/tiny-webhook-price.log';
 $timestamp = date('Y-m-d H:i:s');
 
 function log_event($message) {
     global $log_file, $timestamp;
-    file_put_contents($log_file, "[{$timestamp}] {$message}\n", FILE_APPEND);
+    @file_put_contents($log_file, "[{$timestamp}] {$message}\n", FILE_APPEND);
 }
 
-// Validar token (se configurado no Tiny)
-$headers = getallheaders();
-$bearer = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-if ($bearer && str_starts_with($bearer, 'Bearer ')) {
-    $token = substr($bearer, 7);
-    // Você pode validar o token do Tiny aqui
-    log_event("Token recebido: " . substr($token, 0, 10) . "...");
+function update_cache_price($sku, $new_price) {
+    $cache_files = [
+        __DIR__ . '/../../storage/products-cache-ativos.json',
+        __DIR__ . '/../../api/catalog/fallback-products.json',
+    ];
+
+    $updated_count = 0;
+
+    foreach ($cache_files as $cache_file) {
+        if (!is_file($cache_file)) {
+            continue;
+        }
+
+        $content = @file_get_contents($cache_file);
+        if (!$content) {
+            continue;
+        }
+
+        $data = json_decode($content, true);
+        if (!is_array($data)) {
+            continue;
+        }
+
+        // Procurar pelo SKU nos produtos
+        $items = $data['itens'] ?? $data['items'] ?? $data['produtos'] ?? $data['products'] ?? $data;
+        if (!is_array($items)) {
+            continue;
+        }
+
+        $found = false;
+        foreach ($items as &$item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $item_sku = $item['sku'] ?? $item['codigo'] ?? '';
+            if ($item_sku === $sku) {
+                // Atualizar preço
+                if (!isset($item['precos']) || !is_array($item['precos'])) {
+                    $item['precos'] = [];
+                }
+
+                $old_price = $item['precos']['preco'] ?? $item['preco'] ?? 0;
+                $item['precos']['preco'] = (float)$new_price;
+                $item['preco'] = (float)$new_price;
+                $item['preco_venda'] = (float)$new_price;
+                $item['price'] = (float)$new_price;
+
+                log_event("Preço atualizado em {$cache_file}: {$sku} de R$ {$old_price} para R$ {$new_price}");
+
+                $found = true;
+                $updated_count++;
+                break;
+            }
+        }
+
+        if ($found) {
+            // Salvar arquivo atualizado
+            $json_flags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT;
+            if (json_encode($data, $json_flags) !== false) {
+                @file_put_contents($cache_file, json_encode($data, $json_flags));
+                log_event("Cache salvo: {$cache_file}");
+            }
+        }
+    }
+
+    return $updated_count > 0;
 }
 
 // Ler payload
-$input = file_get_contents('php://input');
-log_event("Webhook recebido, tamanho: " . strlen($input) . " bytes");
+$input = @file_get_contents('php://input');
+log_event("=== WEBHOOK RECEBIDO ===");
+log_event("Tamanho: " . strlen($input) . " bytes");
 
 if (!$input) {
     http_response_code(400);
-    echo json_encode(['error' => 'Empty payload']);
+    echo json_encode(['error' => 'Empty payload', 'timestamp' => $timestamp]);
+    log_event("ERRO: Payload vazio");
     exit;
 }
 
 $data = json_decode($input, true);
-if (!$data) {
+if (!is_array($data)) {
     http_response_code(400);
-    echo json_encode(['error' => 'Invalid JSON']);
-    log_event("Erro: JSON inválido");
+    echo json_encode(['error' => 'Invalid JSON', 'timestamp' => $timestamp]);
+    log_event("ERRO: JSON inválido");
     exit;
 }
 
-log_event("Tipo: " . ($data['tipo'] ?? $data['event'] ?? 'unknown'));
-
-// Validar tipo de evento (product.updated, produto.atualizado, etc)
-$event = $data['tipo'] ?? $data['event'] ?? '';
-if (!in_array($event, ['produto.atualizado', 'product.updated', 'PRODUTO_ATUALIZADO'], true)) {
-    // Mesmo que não seja específico de preço, processa se for update
-    if (!str_contains($event, 'atualiz') && !str_contains($event, 'update')) {
-        http_response_code(200);
-        echo json_encode(['status' => 'ignored', 'reason' => 'Not a product update event']);
-        exit;
-    }
-}
+log_event("Evento: " . json_encode($data, JSON_UNESCAPED_UNICODE));
 
 // Extrair informações do produto
 $product = $data['produto'] ?? $data['product'] ?? $data;
 $sku = $product['sku'] ?? $product['codigo'] ?? '';
+$price = $product['precos']['preco'] ?? $product['preco'] ?? $product['price'] ?? null;
 
 if (!$sku) {
     http_response_code(400);
-    echo json_encode(['error' => 'Missing SKU']);
-    log_event("Erro: SKU não encontrado");
+    echo json_encode(['error' => 'Missing SKU', 'timestamp' => $timestamp]);
+    log_event("ERRO: SKU não encontrado");
     exit;
 }
 
-log_event("Processando produto SKU: {$sku}");
+log_event("SKU: {$sku}");
 
-// Verificar se é mudança de preço
-$price = $product['precos']['preco'] ?? $product['preco'] ?? $product['price'] ?? null;
+// Se tem preço, atualizar no cache
 if ($price !== null) {
-    log_event("Novo preço para {$sku}: R$ {$price}");
+    log_event("Novo preço: R$ {$price}");
 
-    // Invalidar cache para forçar sincronização
-    $cache_file = __DIR__ . '/../../storage/products-cache-ativos.json';
-    if (file_exists($cache_file)) {
-        // Renomear para versão antiga (será regenerada na próxima sincronização)
-        $backup = $cache_file . '.webhook-backup-' . time();
-        rename($cache_file, $backup);
-        log_event("Cache invalidado, backup: {$backup}");
+    if (update_cache_price($sku, $price)) {
+        http_response_code(200);
+        echo json_encode([
+            'status' => 'updated',
+            'sku' => $sku,
+            'price' => (float)$price,
+            'timestamp' => $timestamp,
+            'message' => 'Preço atualizado com sucesso no cache'
+        ]);
+        log_event("✓ SUCESSO: Preço atualizado no cache");
+    } else {
+        http_response_code(200);
+        echo json_encode([
+            'status' => 'received',
+            'sku' => $sku,
+            'price' => (float)$price,
+            'timestamp' => $timestamp,
+            'message' => 'Webhook recebido, mas SKU não encontrado no cache'
+        ]);
+        log_event("⚠ AVISO: SKU não encontrado nos caches");
     }
-
-    // Disparar sincronização via background job
-    $cmd = "cd " . escapeshellarg(__DIR__ . '/../../') . " && /usr/bin/python3 daemon-sync-products.py >> " . escapeshellarg(__DIR__ . '/../../logs/sync-products.log') . " 2>&1 &";
-    exec($cmd, $output, $return_code);
-    log_event("Sincronização disparada, código: {$return_code}");
+} else {
+    // Não tem preço no webhook, apenas reconhecer
+    http_response_code(200);
+    echo json_encode([
+        'status' => 'received',
+        'sku' => $sku,
+        'timestamp' => $timestamp,
+        'message' => 'Webhook recebido, sem informação de preço'
+    ]);
+    log_event("ℹ INFO: Webhook recebido sem preço");
 }
 
-// Responder com sucesso
-http_response_code(200);
-echo json_encode([
-    'status' => 'received',
-    'sku' => $sku,
-    'timestamp' => $timestamp,
-    'action' => 'sync queued'
-]);
-log_event("Webhook processado com sucesso");
+log_event("=== FIM DO WEBHOOK ===\n");
 ?>

@@ -66,6 +66,7 @@ header('Content-Type: text/html; charset=UTF-8');
             .cart-layout { grid-template-columns: 1fr; }
         }
     </style>
+    <?php require_once __DIR__ . '/includes/load-custom-css.php'; ?>
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
 </head>
 <body>

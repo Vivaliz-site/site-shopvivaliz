@@ -1,0 +1,49 @@
+📱 LINK PARA CRIAR SHORTCUT AUTOMATICAMENTE
+
+Copie um dos links abaixo:
+
+LINK 1 - Download Direto (Recomendado):
+https://github.com/Vivaliz-site/site-shopvivaliz/raw/main/RCE-Execute-Auto.shortcut
+
+LINK 2 - Via Shortcuts App:
+shortcuts://open-shortcut?name=RCE-Execute-Auto&url=https://github.com/Vivaliz-site/site-shopvivaliz/raw/main/RCE-Execute-Auto.shortcut
+
+---
+
+NO IPHONE:
+
+OPÇÃO A - Clique no Link (Mais Fácil):
+1. Abra Safari no iPhone
+2. Cole o LINK 1 acima na URL bar
+3. Toque Download
+4. Vai aparecer notificação "Add Shortcut"
+5. Toque "Add Shortcut"
+6. Pronto! ✅
+
+OPÇÃO B - Usar Shortcuts App Direto:
+1. Abra Safari
+2. Cole o LINK 2
+3. iPhone abre Shortcuts app automaticamente
+4. Toque "Add Shortcut"
+5. Pronto! ✅
+
+OPÇÃO C - QR Code:
+1. Abra Câmera no iPhone
+2. Escaneie o QR Code (RCE-Shortcut-QR.png)
+3. Toque no link
+4. Toque "Add Shortcut"
+5. Pronto! ✅
+
+---
+
+DEPOIS DE IMPORTAR:
+
+1. Vá para Automation (aba inferior)
+2. Crie nova automação:
+   - Time of Day: Every 1 hour
+   - OU WiFi: Sua WiFi
+3. Selecione: RCE-Execute-Auto
+4. Toggle OFF: "Ask Before Running"
+5. Save
+
+Pronto! Executa automaticamente 🚀

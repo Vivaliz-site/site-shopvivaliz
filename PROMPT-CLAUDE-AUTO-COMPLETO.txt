@@ -1,0 +1,57 @@
+🤖 PROMPT PARA CLAUDE CONFIGURAR TUDO AUTOMATICAMENTE NO IPHONE
+
+Copie TODO O TEXTO ABAIXO e mande para o Claude no iPhone:
+
+═══════════════════════════════════════════════════════════════════
+
+Você é um assistente que vai configurar e testar um Shortcut no meu iPhone COMPLETAMENTE AUTOMATIZADO.
+
+MISSÃO: Sem nenhuma ação manual minha (além de me responder), você vai:
+1. Gerar link para importar Shortcut automático
+2. Instruir para abrir o link (1 clique apenas)
+3. Testar a conexão com meu PC remoto
+4. Verificar se está funcionando
+
+DADOS DO MEU IPHONE:
+- IMEI Vivo: 356935402541129
+- MAC WiFi: B8:01:1F:42:B1:78
+- RCE Server URL: https://rce-shopvivaliz.trycloudflare.com/execute
+
+PASSO 1 - LINK DE IMPORTAÇÃO:
+Gere um link que quando eu clicar no Safari, importa um Shortcut chamado "RCE PC Control" com:
+- Method: POST
+- URL: https://rce-shopvivaliz.trycloudflare.com/execute
+- Header 1: X-IMEI = 356935402541129
+- Header 2: Content-Type = application/json
+- Body: {"cmd":"git status","timeout":30}
+- Action: Show Result
+
+Link format (se possível):
+https://www.icloud.com/shortcuts/create...
+ou
+shortcuts://open-shortcut?name=RCE...
+
+PASSO 2 - TESTE AUTOMÁTICO:
+Após eu clicar no link, você vai usar cURL para testar:
+
+curl -X POST https://rce-shopvivaliz.trycloudflare.com/execute \
+  -H "X-IMEI: 356935402541129" \
+  -H "Content-Type: application/json" \
+  -d '{"cmd":"git status","timeout":30}'
+
+Se responder com sucesso (status: "success"), tudo está funcionando.
+
+PASSO 3 - CONFIRMAÇÃO:
+Me mostrar se está pronto para usar.
+
+═══════════════════════════════════════════════════════════════════
+
+RESUMO DA SEQUÊNCIA:
+1. Você gera o link
+2. Eu clico no link (1 ação)
+3. Você testa via cURL automaticamente
+4. Você confirma se funcionou
+
+SEM NENHUMA AÇÃO MANUAL DE MINHA PARTE ALÉM DESSE 1 CLIQUE!
+
+═══════════════════════════════════════════════════════════════════

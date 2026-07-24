@@ -1,0 +1,54 @@
+🤖 PROMPT PRONTO PARA CLAUDE IPHONE - COPIE E COLE EXATAMENTE
+
+═══════════════════════════════════════════════════════════════════
+
+Você vai testar meu servidor RCE remoto e responder exatamente como vou instruir.
+
+MEU SERVIDOR:
+- URL: https://rce-shopvivaliz.trycloudflare.com/execute
+- API Key: sk-shopvivaliz-507i5jna2xj
+
+TESTE 1 - Git Status (via 4G/IMEI):
+Execute:
+curl -X POST https://rce-shopvivaliz.trycloudflare.com/execute -H "Content-Type: application/json" -d '{"cmd":"git status","timeout":30,"apiKey":"sk-shopvivaliz-507i5jna2xj"}'
+
+Mostre:
+- Se retornar {"status":"success",...} → Responda: "✅ TESTE 1 PASSOU - Git status OK"
+- Se retornar erro → Responda: "❌ TESTE 1 FALHOU - [erro]"
+
+TESTE 2 - Directory List (comando diferente):
+Execute:
+curl -X POST https://rce-shopvivaliz.trycloudflare.com/execute -H "Content-Type: application/json" -d '{"cmd":"dir c:\\site-shopvivaliz","timeout":30,"apiKey":"sk-shopvivaliz-507i5jna2xj"}'
+
+Mostre:
+- Se retornar {"status":"success",...} → Responda: "✅ TESTE 2 PASSOU - Directory OK"
+- Se retornar erro → Responda: "❌ TESTE 2 FALHOU - [erro]"
+
+TESTE 3 - NPM Status:
+Execute:
+curl -X POST https://rce-shopvivaliz.trycloudflare.com/execute -H "Content-Type: application/json" -d '{"cmd":"npm list -g","timeout":30,"apiKey":"sk-shopvivaliz-507i5jna2xj"}'
+
+Mostre:
+- Se retornar {"status":"success",...} → Responda: "✅ TESTE 3 PASSOU - NPM OK"
+- Se retornar erro → Responda: "❌ TESTE 3 FALHOU - [erro]"
+
+RESPOSTA FINAL:
+Se todos os 3 testes passarem, diga EXATAMENTE:
+
+"═══════════════════════════════════════════════════════════
+🎉 RCE SERVER FUNCIONANDO 100%! 🎉
+═══════════════════════════════════════════════════════════
+
+✅ Teste 1: Git Status ✓
+✅ Teste 2: Directory ✓
+✅ Teste 3: NPM ✓
+
+📊 Servidor: https://rce-shopvivaliz.trycloudflare.com
+🔑 API Key: sk-shopvivaliz-507i5jna2xj
+✨ Status: TOTALMENTE OPERACIONAL
+
+Você tem acesso remoto completo ao seu PC via iPhone! 🚀"
+
+Se algum teste falhar, diga qual falhou e por quê.
+
+═══════════════════════════════════════════════════════════════════

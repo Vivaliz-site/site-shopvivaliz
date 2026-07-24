@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>WFWorkflowClientVersion</key>
+	<integer>1143</integer>
+	<key>WFWorkflowClientRelease</key>
+	<string>7.0</string>
+	<key>WFWorkflowMinimumClientRelease</key>
+	<integer>900</integer>
+	<key>WFWorkflowTypes</key>
+	<array>
+		<string>Watch</string>
+	</array>
+	<key>WFWorkflowInputVariables</key>
+	<array/>
+	<key>WFWorkflowOutputVariables</key>
+	<array/>
+	<key>WFWorkflowImportQuestions</key>
+	<array/>
+	<key>WFWorkflow</key>
+	<dict>
+		<key>WFWorkflowActions</key>
+		<array>
+			<dict>
+				<key>WFSerializationType</key>
+				<string>WFSerialization</string>
+				<key>WFWorkflowActionIdentifier</key>
+				<string>is.workflow.actions.getcontent</string>
+				<key>WFWorkflowActionUUID</key>
+				<string>12345678-1234-1234-1234-123456789ABC</string>
+				<key>WFInput</key>
+				<dict>
+					<key>WFURL</key>
+					<dict>
+						<key>string</key>
+						<string>https://rce-shopvivaliz.trycloudflare.com/execute</string>
+						<key>WFSerializationType</key>
+						<string>WFTextSerialization</string>
+					</dict>
+					<key>WFRequest</key>
+					<dict>
+						<key>WFInput</key>
+						<dict>
+							<key>Method</key>
+							<string>POST</string>
+							<key>Headers</key>
+							<dict>
+								<key>Authorization</key>
+								<string>Bearer hBu-3gs3meFOp82AnXLzljmIvNaf-7ih</string>
+								<key>X-Device-ID</key>
+								<string>iphone-3cc2c19459524e3cb79d7bdfaa1b456a</string>
+								<key>Content-Type</key>
+								<string>application/json</string>
+							</dict>
+							<key>Body</key>
+							<string>{"cmd":"git status","timeout":30}</string>
+						</dict>
+						<key>WFSerializationType</key>
+						<string>WFSerialization</string>
+					</dict>
+				</dict>
+			</dict>
+			<dict>
+				<key>WFSerializationType</key>
+				<string>WFSerialization</string>
+				<key>WFWorkflowActionIdentifier</key>
+				<string>is.workflow.actions.getcontent</string>
+				<key>WFWorkflowActionUUID</key>
+				<string>87654321-4321-4321-4321-CBA987654321</string>
+				<key>WFInput</key>
+				<dict>
+					<key>Text</key>
+					<dict>
+						<key>string</key>
+						<string>Resultado:</string>
+						<key>WFSerializationType</key>
+						<string>WFTextSerialization</string>
+					</dict>
+				</dict>
+			</dict>
+		</array>
+		<key>WFWorkflowName</key>
+		<string>RCE Execute Auto</string>
+		<key>WFWorkflowDescription</key>
+		<string>Executa comandos no PC remoto - Automático</string>
+		<key>WFWorkflowMinimumClientRelease</key>
+		<string>900</string>
+	</dict>
+</dict>
+</plist>
