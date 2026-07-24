@@ -13,9 +13,6 @@
 
 declare(strict_types=1);
 
-// Incluir configuração de banco
-require_once __DIR__ . '/../config/database.php';
-
 // Cores para terminal
 const COLOR_GREEN = "\033[92m";
 const COLOR_RED = "\033[91m";
@@ -38,24 +35,38 @@ function log_info(string $message): void
 }
 
 // ============================================================================
-// STEP 1: Conectar ao banco de dados
+// STEP 1: Carregar credenciais do .env
+// ============================================================================
+log_info("Carregando configurações...");
+
+$env_file = __DIR__ . '/../.env';
+if (!file_exists($env_file)) {
+    log_error("Arquivo .env não encontrado");
+    exit(1);
+}
+
+$env = parse_ini_file($env_file);
+$db_host = $env['DB_HOST'] ?? 'localhost';
+$db_user = $env['DB_USER'] ?? 'root';
+$db_pass = $env['DB_PASS'] ?? 'root';
+$db_name = $env['DB_NAME'] ?? 'shopvivaliz';
+
+log_success("Configurações carregadas");
+
+// ============================================================================
+// STEP 2: Conectar ao banco de dados
 // ============================================================================
 log_info("Conectando ao banco de dados...");
 
 try {
-    $db = new mysqli(
-        getenv('DB_HOST') ?: 'localhost',
-        getenv('DB_USER') ?: 'root',
-        getenv('DB_PASSWORD') ?: '',
-        getenv('DB_NAME') ?: 'shopvivaliz'
-    );
+    $db = new mysqli($db_host, $db_user, $db_pass, $db_name);
 
     if ($db->connect_error) {
         throw new Exception("Erro de conexão: " . $db->connect_error);
     }
 
     $db->set_charset("utf8mb4");
-    log_success("Conectado ao banco: " . getenv('DB_NAME'));
+    log_success("Conectado ao banco: " . $db_name);
 } catch (Exception $e) {
     log_error("Falha ao conectar: " . $e->getMessage());
     exit(1);
