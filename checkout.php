@@ -32,7 +32,11 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Finalizar Pedido | Vivaliz</title>
+    <link rel="icon" href="/images/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/favicon.ico">
+    <meta name="msapplication-TileColor" content="#173B63">
+    <meta name="theme-color" content="#173B63">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/checkout.css">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
@@ -171,7 +175,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 <label class="payment-opt">
                     <input type="radio" name="payment_method" value="mercado_pago" checked required>
                     <span class="payment-opt-box">
-                        <img src="/assets/payments/mercado-pago-official.svg" alt="Mercado Pago" style="max-height:48px; margin-bottom:8px">
+                        <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago - PIX, Cartão e Boleto" style="max-height:60px; margin-bottom:8px; width: auto;">
                         <strong>Mercado Pago</strong>
                         <small>Cartão, PIX e boleto em checkout seguro</small>
                     </span>

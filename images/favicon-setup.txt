@@ -1,0 +1,17 @@
+FAVICON SETUP:
+- Imagem: Menina com fundo azul (quadro 4)
+- Formatos: ico (16x16, 32x32), png (180x180), webp
+- Cor tema: Azul (#173B63)
+- Nome arquivo: favicon.ico, favicon.png, favicon.webp
+
+Para converter online:
+1. Acesse: https://favicon-generator.org/ ou https://icoconvert.com/
+2. Upload: A imagem da menina
+3. Gerar: ico + png + webp
+4. Download e salve em /images/
+
+Formatos recomendados:
+- favicon.ico (16x16, 32x32)
+- favicon-192.png (Android)
+- favicon-512.png (Android)
+- apple-touch-icon.png (iOS)
