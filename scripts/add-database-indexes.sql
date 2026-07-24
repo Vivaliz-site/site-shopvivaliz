@@ -28,8 +28,8 @@ ALTER TABLE orders ADD UNIQUE INDEX idx_order_number (order_number);
 ALTER TABLE products ADD INDEX idx_olist_id (olist_id);
 ALTER TABLE products ADD INDEX idx_olist_updated (olist_id, updated_at);
 
--- ✅ ÍNDICE 7: Busca por categoria
-ALTER TABLE products ADD INDEX idx_category_active (category_id, active);
+-- ✅ ÍNDICE 7: Busca por categoria (REMOVIDO - coluna category_id não existe)
+-- ALTER TABLE products ADD INDEX idx_category_active (category_id, active);
 
 -- ============================================================================
 -- VALIDAÇÃO: Verificar índices criados
