@@ -27,7 +27,7 @@ $phone = $company['phone'] ?? '(37) 99937-4112';
     </style>
 </head>
 <body>
-<?php include __DIR__ . '/includes/header.php'; ?>
+<?php include __DIR__ . '/includes/navbar.php'; ?>
 <div class="legal-page">
     <h1>Politica de Privacidade</h1>
     <div class="legal-intro">
