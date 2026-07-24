@@ -176,30 +176,44 @@ function processLizChat(string $message, string $context): string
         }
     }
 
+    $normMsg = strtr(strtolower($message), [
+        'á'=>'a','à'=>'a','ã'=>'a','â'=>'a','ä'=>'a','é'=>'e','è'=>'e','ê'=>'e','ë'=>'e',
+        'í'=>'i','ì'=>'i','î'=>'i','ï'=>'i','ó'=>'o','ò'=>'o','õ'=>'o','ô'=>'o','ö'=>'o',
+        'ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ç'=>'c','ñ'=>'n'
+    ]);
+
     if ($geminiKey === '') {
-        $lowerMsg = strtolower($message);
-        if (preg_match('/(produto|item|sku|código)/i', $lowerMsg)) {
-            return 'Posso te ajudar a encontrar o item ideal. Temos linhas como casa, jardim, organização, ferramentas e pet. Qual categoria você procura?';
+        if (preg_match('/(troca|devolucao|devolver|reembolso)/i', $normMsg)) {
+            return 'Você tem até 7 dias após o recebimento para solicitar a troca ou devolução do seu produto sem burocracia! Basta enviar um e-mail para atendimento@shopvivaliz.com.br ou falar no WhatsApp (37) 99937-4112 informando o número do seu pedido.';
         }
-        if (preg_match('/(entrega|frete|prazo|demora)/i', $lowerMsg)) {
-            return 'Entregamos para todo o Brasil. O prazo e o frete variam conforme o CEP e os itens do carrinho.';
+        if (preg_match('/(entrega|frete|prazo|demora|envio|chega)/i', $normMsg)) {
+            return 'Enviamos para todo o Brasil! O prazo e o frete são calculados no carrinho pelo seu CEP. Compras acima de R$ 199 possuem FRETE GRÁTIS!';
         }
-        if (preg_match('/(seguro|pagamento|boleto|cartão|pix)/i', $lowerMsg)) {
-            return 'Aceitamos PIX, boleto e cartão, com transações protegidas e ambiente seguro.';
+        if (preg_match('/(seguro|pagamento|boleto|cartao|pix|parcela)/i', $normMsg)) {
+            return 'Aceitamos PIX (com aprovação imediata), Boleto Bancário e Cartão de Crédito em até 12x. Todos os pagamentos são protegidos por criptografia SSL.';
         }
-        if (preg_match('/(troca|devolução|reembolso)/i', $lowerMsg)) {
-            return 'Você pode solicitar troca ou devolução dentro do prazo legal, e nosso atendimento orienta todo o processo.';
+        if (preg_match('/(contato|email|telefone|whatsapp|atendimento|falar)/i', $normMsg)) {
+            return 'Você pode falar com nosso atendimento humano pelo WhatsApp (37) 99937-4112 ou e-mail atendimento@shopvivaliz.com.br.';
         }
-        if (preg_match('/(contato|email|telefone|whatsapp)/i', $lowerMsg)) {
-            return 'Você pode falar com a equipe pelo e-mail atendimento@shopvivaliz.com.br.';
+        if (preg_match('/(desconto|cupom|promocao|oferta)/i', $normMsg)) {
+            return 'Use o cupom VOLTEI5 na finalização da sua compra para ganhar 5% OFF imediato na sua primeira compra!';
         }
-        return 'Olá, eu sou a Liz. Posso te ajudar com produtos, frete, pagamento e informações da loja.';
+        if (preg_match('/(rodizio|rodinha|roda|silicone|gel)/i', $normMsg)) {
+            return 'Temos excelentes opções de rodízios em silicone gel e aço, como o Kit 4 Rodízios Soprano 35mm giratórios com e sem freio (R$ 45,00). Você pode conferir todos no nosso catálogo!';
+        }
+        if (preg_match('/(produto|item|sku|codigo|catalogo|comprar)/i', $normMsg)) {
+            return 'Temos mais de 180 produtos organizados em nosso catálogo oficial (rodízios, utilidades, ferramentas, organização e jardim). Qual linha você gostaria de ver?';
+        }
+        return 'Olá! Sou a Liz, assistente virtual da ShopVivaliz. Posso te ajudar com produtos, frete, cupons, trocas e devoluções. Como posso te ajudar hoje?';
     }
 
     $systemPrompt = "Você é a Liz, assistente virtual oficial da ShopVivaliz.\n";
     $systemPrompt .= "Atenda o cliente de forma objetiva, gentil e útil.\n\n";
     $systemPrompt .= "Dados da loja:\n";
-    $systemPrompt .= "- Atendimento: atendimento@shopvivaliz.com.br\n";
+    $systemPrompt .= "- Atendimento: atendimento@shopvivaliz.com.br / WhatsApp (37) 99937-4112\n";
+    $systemPrompt .= "- Devolução / Troca: Prazo de 7 dias sem burocracia via e-mail ou WhatsApp\n";
+    $systemPrompt .= "- Frete Grátis: Em compras acima de R$ 199 pra todo o Brasil\n";
+    $systemPrompt .= "- Cupom: VOLTEI5 (5% OFF na 1ª compra)\n";
     $systemPrompt .= "- Contexto: {$context}\n";
     if ($productsSummary !== '') {
         $systemPrompt .= "Produtos de contexto:\n{$productsSummary}\n";
@@ -225,15 +239,16 @@ function processLizChat(string $message, string $context): string
     $chat = callGeminiAPI($url, $payload);
     $answer = trim($chat['candidates'][0]['content']['parts'][0]['text'] ?? '');
     if ($answer === '') {
-        $lowerMsg = strtolower($message);
-        if (preg_match('/(rodízio|rodizio|rodinha|roda|silicone|gel)/i', $lowerMsg)) {
+        if (preg_match('/(troca|devolucao|devolver|reembolso)/i', $normMsg)) {
+            $answer = 'Você tem até 7 dias após o recebimento para solicitar a troca ou devolução do seu produto sem burocracia! Basta enviar um e-mail para atendimento@shopvivaliz.com.br ou falar no WhatsApp (37) 99937-4112 informando o número do seu pedido.';
+        } elseif (preg_match('/(rodizio|rodinha|roda|silicone|gel)/i', $normMsg)) {
             $answer = 'Temos excelentes opções de rodízios em silicone gel e aço, como o Kit 4 Rodízios Soprano 35mm giratórios com e sem freio (R$ 45,00). Você pode conferir todos no nosso catálogo!';
-        } elseif (preg_match('/(produto|item|sku|código|comprar)/i', $lowerMsg)) {
+        } elseif (preg_match('/(produto|item|sku|codigo|comprar)/i', $normMsg)) {
             $answer = 'Temos mais de 180 produtos organizados em nosso catálogo oficial (rodízios, utilidades, ferramentas, organização e jardim). Posso te ajudar a encontrar algum item específico?';
-        } elseif (preg_match('/(entrega|frete|prazo|envio)/i', $lowerMsg)) {
+        } elseif (preg_match('/(entrega|frete|prazo|envio)/i', $normMsg)) {
             $answer = 'Enviamos para todo o Brasil com frete grátis nas compras acima de R$ 199. Você também ganha 5% OFF na 1ª compra usando o cupom VOLTEI5!';
         } else {
-            $answer = 'Olá! Sou a Liz, assistente virtual da ShopVivaliz. Posso te ajudar a localizar produtos no catálogo, consultar frete ou cupom de desconto. Como posso te ajudar hoje?';
+            $answer = 'Olá! Sou a Liz, assistente virtual da ShopVivaliz. Posso te ajudar a localizar produtos no catálogo, consultar frete, trocas ou cupom de desconto. Como posso te ajudar hoje?';
         }
     }
 
