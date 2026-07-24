@@ -35,6 +35,7 @@ $svRecoveryCouponLabel = is_array($svRecoveryCoupon) ? (string)($svRecoveryCoupo
 ?>
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0b4f88">
+<style>body { opacity: 1 !important; visibility: visible !important; }</style>
 <link rel="preconnect" href="https://s3.amazonaws.com">
 <link rel="dns-prefetch" href="https://s3.amazonaws.com">
 <link rel="dns-prefetch" href="https://images.unsplash.com">

@@ -452,8 +452,8 @@ $svNavCurrent = 'catalogo';
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <link rel="canonical" href="<?= sv_catalog_esc($canonicalUrl) ?>">
     <title><?= sv_catalog_esc($pageTitle) ?></title>
-    <link rel="stylesheet" href="/css/shopvivaliz-unified-theme.css?v=2026-07-24-v2">
-    <link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=2026-07-24-v2">
+    <style>body { opacity: 1 !important; visibility: visible !important; }</style>
+    <link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=2026-07-24-v3">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
