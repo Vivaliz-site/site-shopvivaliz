@@ -64,6 +64,51 @@ jobs:
           )
           PY
 
+      - name: Bloquear reducao anomala do catalogo
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          path = "api/catalog/fallback-products.json"
+          current = json.loads(Path(path).read_text(encoding="utf-8"))
+          if not isinstance(current, list):
+              raise SystemExit("catalogo atual invalido: raiz JSON nao e uma lista")
+
+          try:
+              previous_raw = subprocess.check_output(
+                  ["git", "show", f"HEAD:{path}"],
+                  text=True,
+              )
+              previous = json.loads(previous_raw)
+          except Exception as exc:
+              print(f"Sem base anterior valida para comparar: {exc}")
+              raise SystemExit(0)
+
+          if not isinstance(previous, list) or not previous:
+              print("Catalogo anterior vazio ou invalido; comparacao ignorada.")
+              raise SystemExit(0)
+
+          before = len(previous)
+          after = len(current)
+          minimum_allowed = max(1, int(before * 0.80))
+          removed_ratio = (before - after) / before if after < before else 0
+
+          print(
+              f"Protecao de volume: before={before} after={after} "
+              f"minimum_allowed={minimum_allowed} removed_ratio={removed_ratio:.1%}"
+          )
+
+          if after < minimum_allowed:
+              raise SystemExit(
+                  "reducao anomala detectada: o novo catalogo possui menos de 80% "
+                  "dos produtos anteriores; commit bloqueado para evitar perda por "
+                  "paginacao incompleta ou falha temporaria da API"
+              )
+          PY
+
       - name: Validar catalogo sincronizado
         run: |
           set -euo pipefail
