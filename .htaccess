@@ -124,7 +124,7 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^politica-devolucoes/?$ politica-devolucoes.php [L]
     RewriteRule ^politica-entrega/?$ politica-entrega.php [L]
     RewriteRule ^produto/?$ produto.php [L]
-    RewriteRule ^produto/([a-z0-9][a-z0-9\-]*)/?$ produto.php?slug=$1 [L,QSA]
+    RewriteRule ^produto/([^/]+)/?$ produto.php?slug=$1 [L,QSA]
     RewriteRule ^sitemap\.xml$ sitemap.php [L]
 </IfModule>
 
