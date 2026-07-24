@@ -205,6 +205,7 @@ git merge --ff-only # ← Não roda se git fetch falhou
 ❌ "Nenhum erro visto, então funcionou" (ausência ≠ sucesso)
 ❌ "O agente deve ter executado" (onde está o log?)
 ❌ "API respondeu 200, deve estar funcionando" (validar corpo também)
+❌ "O visual/layout foi corrigido e está funcionando" (sem carregar no browser real e produzir evidência por screenshot)
 
 ---
 
