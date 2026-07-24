@@ -1,0 +1,28 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fundo azul Vivaliz -->
+  <rect width="512" height="512" fill="#173B63"/>
+
+  <!-- Cabeça (círculo branco) -->
+  <circle cx="256" cy="150" r="80" fill="#FFFFFF"/>
+
+  <!-- Cabelo (semicírculo preto) -->
+  <path d="M 176 150 A 80 80 0 0 1 336 150" fill="#2C2C2C"/>
+
+  <!-- Olhos -->
+  <circle cx="230" cy="140" r="8" fill="#2C2C2C"/>
+  <circle cx="282" cy="140" r="8" fill="#2C2C2C"/>
+
+  <!-- Boca (sorriso) -->
+  <path d="M 235 165 Q 256 175 277 165" stroke="#2C2C2C" stroke-width="4" fill="none" stroke-linecap="round"/>
+
+  <!-- Corpo (retângulo branco) -->
+  <rect x="200" y="240" width="112" height="150" rx="20" fill="#FFFFFF"/>
+
+  <!-- Braços -->
+  <rect x="110" y="270" width="90" height="30" rx="15" fill="#FFFFFF"/>
+  <rect x="312" y="270" width="90" height="30" rx="15" fill="#FFFFFF"/>
+
+  <!-- Pernas -->
+  <rect x="220" y="390" width="30" height="80" rx="15" fill="#FFFFFF"/>
+  <rect x="262" y="390" width="30" height="80" rx="15" fill="#FFFFFF"/>
+</svg>

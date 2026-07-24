@@ -381,6 +381,7 @@ $svNavCurrent = '';
     <meta name="twitter:description" content="Produtos de qualidade. Compre online com entrega rápida.">
     <meta name="twitter:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square.png">
     <link rel="canonical" href="https://shopvivaliz.com.br/">
+    <link rel="icon" href="/images/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <link rel="apple-touch-icon" href="/favicon.ico">
     <meta name="msapplication-TileColor" content="#173B63">
