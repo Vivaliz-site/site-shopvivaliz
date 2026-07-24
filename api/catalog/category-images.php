@@ -41,6 +41,13 @@ foreach (is_array($decoded) ? $decoded : [] as $row) {
     if ($category === '') continue;
 
     $key = svci_normalize($category);
+    $productName = strtolower(trim((string)($row['name'] ?? '')));
+
+    // Evitar descompasso (ex: gancho de rede na categoria banheiro)
+    if ($key === 'banheiro' && (str_contains($productName, 'gancho de rede') || str_contains($productName, 'rede'))) {
+        continue;
+    }
+
     $generic_image = $generic_images[$key] ?? 'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?w=320&q=80';
     $realImage = trim((string)($row['image_url'] ?? ''));
     $image = svci_valid_image($realImage) ? $realImage : $generic_image;
