@@ -2,7 +2,7 @@
     --bg: #f4f6fb;
     --surface: #ffffff;
     --ink: #111827;
-    --muted: #6b7280;
+    --muted: #4b5563;
     --line: #e5e9f0;
     /* Vivaliz brand palette */
     --brand-navy: #173B63;
@@ -253,7 +253,14 @@ a {
     font-weight: 800;
     text-decoration: none;
     cursor: pointer;
-    transition: background 0.18s ease, transform 0.18s ease;
+    transition: background 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.btn:focus,
+.catalog-search button:focus,
+.buy-button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(23, 59, 99, 0.1), inset 0 0 0 2px rgba(23, 59, 99, 0.3);
 }
 
 .btn-primary,
@@ -279,12 +286,18 @@ a {
 .btn-secondary {
     background: #e8eef7;
     color: var(--ink);
+    transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.btn-secondary:hover {
+    background: #d4dce9;
+    transform: translateY(-1px);
 }
 
 .home-products,
 .agents-status,
 .stats {
-    padding: 34px 0;
+    padding: 48px 0;
 }
 
 .hero-carousel-section {
@@ -530,7 +543,7 @@ a {
     position: absolute;
     top: 10px;
     left: 10px;
-    background: #ef4444;
+    background: #9ca3af;
     color: #fff;
     font-size: 11px;
     font-weight: 800;
@@ -539,6 +552,7 @@ a {
     padding: 5px 10px;
     border-radius: 999px;
     z-index: 1;
+    opacity: 0.75;
 }
 
 .btn-disabled {
@@ -1742,8 +1756,8 @@ input:focus,
 select:focus,
 textarea:focus {
     outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px rgba(23, 59, 99, 0.15), inset 0 0 0 1px var(--brand);
 }
 
 /* ============================================================================
