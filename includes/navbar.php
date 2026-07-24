@@ -38,7 +38,7 @@ $svRecoveryCouponLabel = is_array($svRecoveryCoupon) ? (string)($svRecoveryCoupo
 <link rel="preconnect" href="https://s3.amazonaws.com">
 <link rel="dns-prefetch" href="https://s3.amazonaws.com">
 <link rel="dns-prefetch" href="https://images.unsplash.com">
-<link rel="stylesheet" href="/css/shopvivaliz-unified-theme.css?v=2026-07-18">
+<link rel="stylesheet" href="/css/shopvivaliz-unified-theme.css?v=2026-07-24">
 <!-- accessibility-v11.css bundled -->
 <!-- loading-states-v21.css bundled -->
 <!-- network-status-v22.css bundled -->
