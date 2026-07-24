@@ -263,22 +263,31 @@ function sv_slugify(string $name, string $sku): string
 
 function sv_product_find_slug(string $slug): array
 {
+    $slugNorm = strtolower(trim(urldecode($slug)));
+    if ($slugNorm === '') return [];
+
     foreach (sv_product_catalog() as $row) {
         if (!is_array($row)) continue;
-        $persistedSlug = trim((string)($row['slug'] ?? ''));
-        $computedSlug = sv_slugify((string)($row['name'] ?? ''), (string)($row['sku'] ?? ''));
-        if ($persistedSlug === $slug || $computedSlug === $slug) return $row;
+        $pSlug = strtolower(trim((string)($row['slug'] ?? '')));
+        $cSlug = strtolower(sv_slugify((string)($row['name'] ?? ''), (string)($row['sku'] ?? '')));
+        $rSku  = strtolower(trim((string)($row['sku'] ?? '')));
+
+        if ($pSlug === $slugNorm || $cSlug === $slugNorm || $rSku === $slugNorm || ($rSku !== '' && str_ends_with($slugNorm, '-' . $rSku))) {
+            return $row;
+        }
     }
     return [];
 }
 
 function sv_product_find(string $sku, string $id): array
 {
+    $skuNorm = strtolower(trim($sku));
+    $idNorm  = trim($id);
     foreach (sv_product_catalog() as $row) {
         if (!is_array($row)) continue;
-        $rSku = trim((string)($row['sku'] ?? ''));
+        $rSku = strtolower(trim((string)($row['sku'] ?? '')));
         $rId  = trim((string)($row['olist_product_id'] ?? $row['id'] ?? ''));
-        if (($sku && strcasecmp($rSku, $sku) === 0) || ($id && $rId === $id)) return $row;
+        if (($skuNorm !== '' && $rSku === $skuNorm) || ($idNorm !== '' && $rId === $idNorm)) return $row;
     }
     return [];
 }
