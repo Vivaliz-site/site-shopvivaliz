@@ -3,13 +3,18 @@ import json
 
 url = "https://shopvivaliz.com.br/api/agent/squad-chat.php"
 payload = json.dumps({
-    "message": "Olá Liz, quais são os produtos mais vendidos de rodízios e utilidades?",
+    "message": "Olá Liz, quais são os rodízios mais vendidos para móveis?",
     "context": "site-shopvivaliz"
 }).encode('utf-8')
 
-req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+headers = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+}
 
-print("💬 Testando conversa com a Liz...")
+req = urllib.request.Request(url, data=payload, headers=headers)
+
+print("💬 Conversando com a Liz como cliente...")
 try:
     with urllib.request.urlopen(req) as response:
         res = json.loads(response.read().decode('utf-8'))
