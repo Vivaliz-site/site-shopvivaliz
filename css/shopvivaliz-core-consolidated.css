@@ -439,9 +439,12 @@ a:hover {
     grid-auto-flow: column;
     gap: 14px;
     overflow-x: auto;
+    overflow-y: hidden;
     scroll-snap-type: x mandatory;
     scrollbar-width: thin;
     padding: 8px 2px 8px 2px;
+    max-width: 100%;
+    width: 100%;
 }
 
 .home-scroller-track > * {
