@@ -43,9 +43,7 @@
     panel.classList.toggle('open', open);
     root.classList.toggle('sv-liz-is-open', open);
     launcher.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) {
-      setTimeout(() => input.focus(), 60);
-    }
+    if (open) setTimeout(() => input.focus(), 60);
   }
 
   launcher.addEventListener('click', () => setOpen(!panel.classList.contains('open')));
@@ -68,33 +66,32 @@
     const waiting = add('Liz está pensando...', 'sv-bot');
 
     try {
-      // Colher histórico de mensagens
       const allMessages = Array.from(msgs.querySelectorAll('.sv-msg')).map(el => ({
-        role: el.classList.contains('sv-user') ? 'user' : 'bot',
+        role: el.classList.contains('sv-user') ? 'user' : 'assistant',
         content: el.textContent.trim(),
-      })).filter(m => m.content !== 'Liz está pensando...');
+      })).filter(message => message.content !== 'Liz está pensando...');
 
       const response = await fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
-          history: allMessages.slice(-10), // Últimas 10 mensagens
+          history: allMessages.slice(-10),
           context: 'site-shopvivaliz',
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) {
+        throw new Error(data.error || data.answer || `HTTP ${response.status}`);
       }
 
-      const data = await response.json();
-      const answer = data.answer || data.reply || data.message || data.response ||
-                     'Oi! Não consegui processar sua pergunta. Tente novamente ou fale com nosso atendimento (37) 99937-4112.';
-      waiting.textContent = answer;
+      waiting.textContent = data.answer || data.reply || data.message || data.response ||
+        'Não consegui processar sua pergunta. Tente novamente ou fale com nosso atendimento (37) 99937-4112.';
+      root.dataset.provider = data.provider || 'unknown';
     } catch (error) {
       console.error('Liz error:', error);
-      waiting.textContent = 'Desculpe, estou com uma pequena indisponibilidade. Fale com nosso atendimento: (37) 99937-4112';
+      waiting.textContent = 'Desculpe, a inteligência da Liz está temporariamente indisponível. Fale com nosso atendimento: (37) 99937-4112.';
     }
   }
 
@@ -110,16 +107,18 @@
     button.addEventListener('click', () => ask(button.textContent.trim()));
   });
 
-  fetch(`${API}?health=1`)
+  fetch(`${API}?health=1`, { cache: 'no-store' })
     .then(response => response.json())
     .then(health => {
-      root.dataset.health = (health.ok === true && health.endpoint === 'squad-chat' && health.providers) ? 'ok' : 'degraded';
+      const hasProvider = health.providers && Object.values(health.providers).some(Boolean);
+      root.dataset.health = health.ok === true && health.endpoint === 'liz-intelligent' && hasProvider
+        ? 'ok'
+        : 'degraded';
     })
     .catch(() => {
       root.dataset.health = 'offline';
     });
 
-  // Cart Abandonment Recovery (Exit Intent)
   let abandonmentTriggered = false;
   document.addEventListener('mouseleave', event => {
     if (event.clientY <= 0 && !abandonmentTriggered && !panel.classList.contains('open')) {
@@ -133,8 +132,9 @@
             setTimeout(() => bubble.classList.remove('show-bubble'), 8000);
           }
         }
-      } catch (err) {}
+      } catch (error) {
+        console.debug('Liz cart recovery unavailable:', error);
+      }
     }
   });
-
 })();
