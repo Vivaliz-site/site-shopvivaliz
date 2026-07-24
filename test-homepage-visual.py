@@ -25,7 +25,7 @@ except ImportError:
     SELENIUM_AVAILABLE = False
     print("⚠️  Selenium não instalado. Use: pip install selenium")
 
-SITE_URL = "http://127.0.0.1:8888/"
+SITE_URL = "https://shopvivaliz.com.br/"
 SCREENSHOT_DIR = "./playwright-report/screenshots"
 REPORT_FILE = "./playwright-report/visual-test-report.json"
 
@@ -96,6 +96,14 @@ def test_with_selenium():
             json.dump(report, f, indent=2, default=str)
 
         print(f"\n✅ Relatório: {REPORT_FILE}")
+
+        # Capturar console logs
+        try:
+            print("\n🚨 CONSOLE LOGS DO BROWSER:")
+            for entry in driver.get_log('browser'):
+                print(f"[{entry['level']}] {entry['message']}")
+        except Exception as log_err:
+            print(f"⚠️ Não foi possível obter logs do browser: {log_err}")
 
         driver.quit()
         return True
