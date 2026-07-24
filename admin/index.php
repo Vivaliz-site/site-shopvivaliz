@@ -142,7 +142,6 @@ $codename = (string)($version['codename'] ?? '');
                     <a class="btn btn-secondary" href="/installer/update-applied-check.php" target="_blank" rel="noreferrer">Update check</a>
                     <a class="btn btn-secondary" href="/installer/auto-routines.php?expected=200&limit=50" target="_blank" rel="noreferrer">Auto routines</a>
                     <a class="btn btn-secondary" href="/api/melhorenvio/diagnostic.php?cep=35500025" target="_blank" rel="noreferrer">Diag frete</a>
-                    <a class="btn btn-secondary" href="/api/pagarme/diagnostic.php" target="_blank" rel="noreferrer">Diag Pagar.me</a>
                     <a class="btn btn-secondary" href="/api/health.php" target="_blank" rel="noreferrer">API health</a>
                 </div>
             </article>
