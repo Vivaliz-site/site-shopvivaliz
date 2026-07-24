@@ -55,13 +55,11 @@ Read: [`AGENT-DUAL-VALIDATION-POLICY.md`](AGENT-DUAL-VALIDATION-POLICY.md)
 
 ### Self-Validation (Every Agent Does This)
 
-When you make changes, run:
-
-```bash
 npm run lint           # ✅ No lint errors?
 npm run type-check     # ✅ All types correct?
 npm run test           # ✅ Tests pass?
 npm run build          # ✅ Builds successfully?
+# ✅ Visual browser validation performed (if layout, HTML, CSS, JS or templates were changed)
 ```
 
 **If ANY fail:** Fix the issue, commit again, push again. Validation re-runs automatically.

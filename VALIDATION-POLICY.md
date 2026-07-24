@@ -186,6 +186,14 @@ git merge --ff-only # ← Não roda se git fetch falhou
 | Validação | Efeito verificado independentemente |
 | Erro | Qualquer erro em log; agente não continua |
 
+### Alterações de Interface (UI/UX) / Frontend
+| Componente | Evidência Mínima |
+|-----------|-----------------|
+| Renderização | Captura de tela (screenshot) no browser demonstrando a página carregada |
+| Responsividade | Captura de tela em resoluções Desktop e Mobile (se aplicável) |
+| Estilo/Layout | Sem quebras de layout aparentes, imagens quebradas ou fontes padrão quebradas |
+| Interações (JS) | Screenshot do estado final após interação (ex: modal aberto, dropdown ativo) |
+
 ---
 
 ## 🛑 PROIBIÇÃO DE INFERÊNCIA
@@ -197,6 +205,7 @@ git merge --ff-only # ← Não roda se git fetch falhou
 ❌ "Nenhum erro visto, então funcionou" (ausência ≠ sucesso)
 ❌ "O agente deve ter executado" (onde está o log?)
 ❌ "API respondeu 200, deve estar funcionando" (validar corpo também)
+❌ "O visual/layout foi corrigido e está funcionando" (sem carregar no browser real e produzir evidência por screenshot)
 
 ---
 

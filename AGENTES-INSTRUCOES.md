@@ -90,19 +90,24 @@
 
 ### 3️⃣ TESTAR EM AMBOS OS TAMANHOS
 
-Antes de marcar tarefa como **COMPLETA**, OBRIGATORIAMENTE testar:
+Antes de marcar tarefa como **COMPLETA**, OBRIGATORIAMENTE testar e validar visualmente via browser:
 
 ```bash
-# 1. SMARTPHONE (DevTools)
-F12 → Responsive Design Mode → iPhone 12
+# 1. SMARTPHONE (DevTools / Browser Subagent)
+F12 → Responsive Design Mode → iPhone 12 (ou viewport 375x812)
 - Verificar sem scroll horizontal
 - Botões tocáveis
 - Texto legível
+- Tirar screenshot do resultado mobile para comprovação
 
-# 2. DESKTOP (Janela maximizada)
+# 2. DESKTOP (Janela maximizada / Browser Subagent)
 - Layout correto
 - Hover effects funcionam
 - Espaçamento adequado
+- Tirar screenshot do resultado desktop para comprovação
+
+# 3. VALIDAÇÃO AUTOMATIZADA
+- Utilizar ferramenta de browser do agente (ex: playwright) para abrir a página e registrar evidência visual.
 ```
 
 ---
@@ -130,6 +135,7 @@ F12 → Responsive Design Mode → iPhone 12
 - [ ] Fonts legíveis em mobile (14px+)?
 - [ ] Grid/tabelas adaptam?
 - [ ] Menu funciona em mobile?
+- [ ] **Validou visualmente abrindo no browser (gerou screenshot de evidência)?**
 
 **Nenhum "SIM" ✅? NÃO marque como completo!**
 
