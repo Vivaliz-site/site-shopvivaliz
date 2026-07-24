@@ -710,6 +710,36 @@ if ($notFound) {
     </main>
 
     <?php if (!empty($related)): ?>
+    <section class="container sv-compre-junto" style="margin: 40px auto; padding: 24px; background: linear-gradient(135deg, #f8fafc, #edf5fd); border: 1px solid rgba(11,79,136,0.12); border-radius: 20px;">
+        <h2 style="font-size: 20px; font-weight: 800; color: #07345d; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#35c759" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 11V7a4 4 0 0 0-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+            Compre Junto e Economize (Combo Recomendado)
+        </h2>
+        <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 12px; background: #fff; padding: 12px 16px; border-radius: 14px; border: 1px solid rgba(0,0,0,0.08);">
+                <img src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" style="width: 54px; height: 54px; object-fit: contain;">
+                <div>
+                    <strong style="display: block; font-size: 13px; color: #0d1a29; max-width: 220px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"><?= sv_esc($name) ?></strong>
+                    <span style="color: #0b4f88; font-weight: 800; font-size: 14px;"><?= sv_esc(sv_money($priceRaw)) ?></span>
+                </div>
+            </div>
+            <span style="font-size: 22px; font-weight: 800; color: #35c759;">+</span>
+            <?php $comboItem = $related[0]; ?>
+            <div style="display: flex; align-items: center; gap: 12px; background: #fff; padding: 12px 16px; border-radius: 14px; border: 1px solid rgba(0,0,0,0.08);">
+                <img src="<?= sv_esc($comboItem['image_url']) ?>" alt="<?= sv_esc($comboItem['name']) ?>" style="width: 54px; height: 54px; object-fit: contain;">
+                <div>
+                    <strong style="display: block; font-size: 13px; color: #0d1a29; max-width: 220px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"><?= sv_esc($comboItem['name']) ?></strong>
+                    <span style="color: #0b4f88; font-weight: 800; font-size: 14px;"><?= sv_esc(sv_money((float)$comboItem['price'])) ?></span>
+                </div>
+            </div>
+            <div style="margin-left: auto; text-align: right; min-width: 180px;">
+                <div style="font-size: 12px; color: #66788d;">Valor dos 2 itens:</div>
+                <div style="font-size: 22px; font-weight: 900; color: #07345d;">R$ <?= number_format($priceRaw + (float)$comboItem['price'], 2, ',', '.') ?></div>
+                <a href="<?= sv_esc(sv_product_url($comboItem)) ?>" class="btn buy-button" style="display: inline-flex; margin-top: 6px; padding: 8px 16px; font-size: 13px; font-weight: 800; background: linear-gradient(135deg, #0b4f88, #35c759); color: #fff; border-radius: 10px; text-decoration: none;">Adicionar Combo</a>
+            </div>
+        </div>
+    </section>
+
     <section class="container related-products">
         <h2 class="related-title">Você também pode gostar</h2>
         <div class="product-grid related-grid">
