@@ -128,7 +128,21 @@ foreach ($replacements as $key => $value) {
     }
 }
 
-file_put_contents($envFile, $updatedEnv);
+// Tentar salvar com tratamento de erro
+$written = @file_put_contents($envFile, $updatedEnv);
+
+if ($written === false) {
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Token obtained from Tiny but failed to save to .env',
+        'reason' => 'Check file permissions: ' . substr((string)shell_exec("ls -l {$envFile}"), 0, 100),
+        'solution' => 'Run: chmod 666 ' . $envFile,
+        'access_token_preview' => substr($newAccess, 0, 30) . '...',
+        'refresh_token_preview' => $newRefresh ? substr($newRefresh, 0, 30) . '...' : 'null',
+    ]);
+    exit;
+}
 
 // Sucesso
 http_response_code(200);
@@ -136,6 +150,7 @@ echo json_encode([
     'status' => 'ok',
     'message' => 'Tokens obtained and saved successfully',
     'timestamp' => date('c'),
+    'bytes_written' => $written,
     'access_token_preview' => substr($newAccess, 0, 30) . '...',
     'refresh_token_preview' => $newRefresh ? substr($newRefresh, 0, 30) . '...' : 'null',
     'next_step' => 'Daemon will sync products automatically. No further action needed.',
