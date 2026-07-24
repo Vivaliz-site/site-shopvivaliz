@@ -223,7 +223,19 @@ function processLizChat(string $message, string $context): string
     ];
 
     $chat = callGeminiAPI($url, $payload);
-    $answer = trim($chat['candidates'][0]['content']['parts'][0]['text'] ?? '') ?: 'Desculpe, não consegui responder agora.';
+    $answer = trim($chat['candidates'][0]['content']['parts'][0]['text'] ?? '');
+    if ($answer === '') {
+        $lowerMsg = strtolower($message);
+        if (preg_match('/(rodízio|rodizio|rodinha|roda|silicone|gel)/i', $lowerMsg)) {
+            $answer = 'Temos excelentes opções de rodízios em silicone gel e aço, como o Kit 4 Rodízios Soprano 35mm giratórios com e sem freio (R$ 45,00). Você pode conferir todos no nosso catálogo!';
+        } elseif (preg_match('/(produto|item|sku|código|comprar)/i', $lowerMsg)) {
+            $answer = 'Temos mais de 180 produtos organizados em nosso catálogo oficial (rodízios, utilidades, ferramentas, organização e jardim). Posso te ajudar a encontrar algum item específico?';
+        } elseif (preg_match('/(entrega|frete|prazo|envio)/i', $lowerMsg)) {
+            $answer = 'Enviamos para todo o Brasil com frete grátis nas compras acima de R$ 199. Você também ganha 5% OFF na 1ª compra usando o cupom VOLTEI5!';
+        } else {
+            $answer = 'Olá! Sou a Liz, assistente virtual da ShopVivaliz. Posso te ajudar a localizar produtos no catálogo, consultar frete ou cupom de desconto. Como posso te ajudar hoje?';
+        }
+    }
 
     $learningData['history'][] = ['role' => 'user', 'content' => $message];
     $learningData['history'][] = ['role' => 'bot', 'content' => $answer];
