@@ -870,7 +870,12 @@ $svNavCurrent = '';
                         Quais são as formas de pagamento aceitas?
                         <span class="faq-icon">+</span>
                     </summary>
-                    <p class="faq-body">Aceitamos PIX (com aprovação imediata), cartão de crédito em até 6x e boleto bancário. Todas as transações são protegidas com criptografia SSL.</p>
+                    <div class="faq-body">
+                        <p>Aceitamos PIX (com aprovação imediata), cartão de crédito em até 6x e boleto bancário. Todas as transações são protegidas com criptografia SSL.</p>
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e9f0;">
+                            <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago - Formas de Pagamento" style="max-width: 100%; height: auto; max-width: 300px;">
+                        </div>
+                    </div>
                 </details>
                 <details class="faq-item sv-reveal sv-reveal-delay-4">
                     <summary>

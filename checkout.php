@@ -171,7 +171,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 <label class="payment-opt">
                     <input type="radio" name="payment_method" value="mercado_pago" checked required>
                     <span class="payment-opt-box">
-                        <img src="/assets/payments/mercado-pago-official.svg" alt="Mercado Pago" style="max-height:48px; margin-bottom:8px">
+                        <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago - PIX, Cartão e Boleto" style="max-height:60px; margin-bottom:8px; width: auto;">
                         <strong>Mercado Pago</strong>
                         <small>Cartão, PIX e boleto em checkout seguro</small>
                     </span>
