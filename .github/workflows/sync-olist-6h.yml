@@ -1,8 +1,7 @@
-name: Sincronizar Olist/Tiny - Auto-Renew Token (2h)
+name: Sincronizar Olist/Tiny - Catalogo (10min)
 
 on:
   schedule:
-    # ATIVO: A cada 5 MINUTOS para renovar token automaticamente
     - cron: '*/10 * * * *'
   workflow_dispatch:
 
@@ -42,89 +41,76 @@ jobs:
           TINY_ACCESS_TOKEN: ${{ secrets.TINY_ACCESS_TOKEN }}
           TINY_API_TOKEN: ${{ secrets.TINY_API_TOKEN }}
         run: |
+          set -euo pipefail
           mkdir -p logs
           php olist/sync-products.php > logs/olist-live-sync-response.json
           cat logs/olist-live-sync-response.json
           python3 - <<'PY'
           import json
           from pathlib import Path
+
           payload = json.loads(Path("logs/olist-live-sync-response.json").read_text(encoding="utf-8"))
           if payload.get("ok") is not True:
               raise SystemExit(f"sync failed: {payload}")
+
           fetched = int(payload.get("fetched") or 0)
           after = int(payload.get("after_count") or 0)
           if fetched <= 0 or after <= 0:
               raise SystemExit(f"sync returned empty catalog: {payload}")
-          print(f"Catalogo espelhado: fetched={fetched} after={after} removed={payload.get('removed_count')}")
+
+          print(
+              f"Catalogo espelhado: fetched={fetched} "
+              f"after={after} removed={payload.get('removed_count')}"
+          )
           PY
 
       - name: Validar catalogo sincronizado
         run: |
-          set +e
+          set -euo pipefail
           php scripts/quality/validate-product-prices.php
-          php scripts/quality/validate-product-stock.php || echo "⚠️  Stock validation warning (allowed)"
-          php scripts/quality/validate-product-images.php || echo "⚠️  Image validation warning (allowed)"
-          exit 0
+          php scripts/quality/validate-product-stock.php || echo "WARNING: stock validation warning"
+          php scripts/quality/validate-product-images.php || echo "WARNING: image validation warning"
 
-      - name: Renovar tokens no .env (se foram atualizados)
+      - name: Verificar renovacao de token sem expor credenciais
         run: |
+          set -euo pipefail
           if [[ -f storage/private/tokens.json ]]; then
             python3 - <<'PY'
           import json
-          import re
           from pathlib import Path
 
-          # Ler tokens renovados
-          tokens = json.loads(Path("storage/private/tokens.json").read_text())
+          tokens = json.loads(Path("storage/private/tokens.json").read_text(encoding="utf-8"))
           access = tokens.get("OLIST_ACCESS_TOKEN", "")
           refresh = tokens.get("OLIST_REFRESH_TOKEN", "")
-
           if not access or not refresh:
-              print("WARN: tokens.json vazio ou incompleto")
-              exit(0)
-
-          # Atualizar .env
-          env_path = Path(".env")
-          content = env_path.read_text() if env_path.exists() else ""
-
-          # Substituir linhas existentes ou adicionar
-          def update_or_add(content, key, value):
-              pattern = f"^{re.escape(key)}=.*$"
-              if re.search(pattern, content, re.MULTILINE):
-                  return re.sub(pattern, f"{key}={value}", content, flags=re.MULTILINE)
-              else:
-                  return content + (f"\n{key}={value}" if content.strip() else f"{key}={value}")
-
-          content = update_or_add(content, "OLIST_ACCESS_TOKEN", access)
-          content = update_or_add(content, "OLIST_REFRESH_TOKEN", refresh)
-          env_path.write_text(content)
-          print(f"✅ Tokens atualizados em .env")
-          print(f"   ACCESS_TOKEN: {access[:20]}...")
-          print(f"   REFRESH_TOKEN: {refresh[:20]}...")
+              raise SystemExit("tokens.json vazio ou incompleto")
+          print("Tokens renovados durante esta execucao; valores mantidos fora do Git.")
           PY
           else
-            echo "WARN: tokens.json não encontrado em storage/private/"
+            echo "Nenhum arquivo local de tokens foi gerado nesta execucao."
           fi
 
-      - name: Fazer commit do catalogo espelhado + tokens renovados
+      - name: Garantir que credenciais nao serao versionadas
         run: |
+          set -euo pipefail
+          if ! git diff --quiet -- .env storage/private/tokens.json; then
+            echo "ERRO: tentativa de alterar arquivo de credenciais detectada."
+            git diff --name-only -- .env storage/private/tokens.json
+            exit 1
+          fi
+
+      - name: Fazer commit somente do catalogo espelhado
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           changes_catalog=$(git status --short api/catalog/fallback-products.json)
-          changes_env=$(git status --short .env)
 
-          if [[ -n "$changes_catalog" || -n "$changes_env" ]]; then
-            [[ -n "$changes_catalog" ]] && git add api/catalog/fallback-products.json
-            [[ -n "$changes_env" ]] && git add .env
-
-            if [[ -n "$changes_env" ]]; then
-              git commit -m "chore: atualizar tokens Olist/Tiny + sincronizar catalogo"
-            else
-              git commit -m "chore: espelhar catalogo Olist/Tiny"
-            fi
+          if [[ -n "$changes_catalog" ]]; then
+            git add api/catalog/fallback-products.json
+            git commit -m "chore: espelhar catalogo Olist/Tiny"
             git push
           else
-            echo "Sem alteracoes no catalogo ou tokens."
+            echo "Sem alteracoes no catalogo."
           fi
-
