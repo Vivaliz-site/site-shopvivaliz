@@ -109,6 +109,7 @@ function create_tables() {
             name VARCHAR(255) NOT NULL,
             phone VARCHAR(20),
             cpf VARCHAR(14) UNIQUE,
+            is_admin BOOLEAN DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_email (email),
