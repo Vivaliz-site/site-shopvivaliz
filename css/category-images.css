@@ -65,14 +65,19 @@
 .category-slide-img[alt*="Cozinha" i],
 .category-slide-img[alt*="Limpeza" i]{content:url('/storage/original/13.jpg')}
 
+@media(max-width:768px){
+  .category-slide{min-width:140px;max-width:140px}
+  .category-slide-image-wrapper{height:120px}
+}
+
 @media(max-width:640px){
-  .category-slide{min-width:120px;max-width:100%;flex:0 0 auto}
-  .category-slide-image-wrapper{height:128px}
+  .category-slide{min-width:120px;max-width:120px}
+  .category-slide-image-wrapper{height:110px}
   .category-slide-count{font-size:12px}
 }
 
 @media(max-width:480px){
-  .category-slide{min-width:100px}
-  .category-slide-image-wrapper{height:110px}
+  .category-slide{min-width:100px;max-width:100px}
+  .category-slide-image-wrapper{height:90px}
   .category-slide-count{font-size:11px}
 }
