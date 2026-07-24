@@ -24,7 +24,7 @@ $email = $company['email'] ?? 'atendimento@shopvivaliz.com.br';
     </style>
 </head>
 <body>
-<?php include __DIR__ . '/includes/header.php'; ?>
+<?php include __DIR__ . '/includes/navbar.php'; ?>
 <div class="legal-page">
     <h1>Politica de Frete</h1>
     <div class="legal-intro">

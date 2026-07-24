@@ -29,7 +29,7 @@ $state = $company['state'] ?? 'MG';
     </style>
 </head>
 <body>
-    <?php include __DIR__ . '/includes/header.php'; ?>
+    <?php include __DIR__ . '/includes/navbar.php'; ?>
     <div class="legal-page">
         <h1>Termos e Condicoes de Uso</h1>
         <div class="legal-intro">

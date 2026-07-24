@@ -127,11 +127,106 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
                 <p style="margin: 0;">
                     &copy; <?= date('Y') ?> <?= htmlspecialchars($fantasyName) ?>. Todos os direitos reservados. |
                     Desenvolvido por <a href="https://shopvivaliz.com.br" style="color: #999; text-decoration: none;">ShopVivaliz</a>
+            </div>
+
+            <div>
+                <strong>Institucional</strong>
+                <a href="/sobre">Quem somos</a>
+                <a href="/catalogo">Produtos</a>
+                <a href="/gamificacao.php">Gamificacao</a>
+            </div>
+
+            <div>
+                <strong>Ajuda</strong>
+                <a href="/faq">Duvidas Frequentes</a>
+                <a href="/contato">Fale Conosco</a>
+            </div>
+        </div>
+
+        <div class="footer-legal" style="border-top: 2px solid #eee; margin-top: 30px; padding-top: 20px; background: #f9f9f9; margin-left: -20px; margin-right: -20px; margin-bottom: -20px; padding-left: 20px; padding-right: 20px; padding-bottom: 20px; font-size: 12px; color: #666; line-height: 1.8;">
+            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 18px; margin-bottom: 22px;">
+                <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                        <span style="display: inline-flex; width: 34px; height: 34px; border-radius: 999px; align-items: center; justify-content: center; background: #e8f5ee; color: #157347; font-size: 16px; font-weight: 700;">SSL</span>
+                        <div>
+                            <strong style="display: block; color: #22324a;">Site seguro</strong>
+                            <span style="color: #667085;">Compra protegida com conexao criptografada e ambiente monitorado.</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        <span style="display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #f3f7fb; color: #284b7a; font-weight: 700;">Certificacao SSL</span>
+                        <span style="display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #f3f7fb; color: #284b7a; font-weight: 700;">Checkout protegido</span>
+                        <span style="display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #f3f7fb; color: #284b7a; font-weight: 700;">Dados protegidos</span>
+                    </div>
+                </div>
+
+                <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px;">
+                    <strong style="display: block; color: #22324a; margin-bottom: 10px;">Pagamentos aceitos</strong>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        <span style="display: inline-flex; min-width: 74px; justify-content: center; align-items: center; padding: 8px 12px; border-radius: 8px; border: 1px solid #d7e0ea; background: #fff; color: #17324f; font-weight: 700;">PIX</span>
+                        <span style="display: inline-flex; min-width: 74px; justify-content: center; align-items: center; padding: 8px 12px; border-radius: 8px; border: 1px solid #d7e0ea; background: #fff; color: #17324f; font-weight: 700;">Visa</span>
+                        <span style="display: inline-flex; min-width: 74px; justify-content: center; align-items: center; padding: 8px 12px; border-radius: 8px; border: 1px solid #d7e0ea; background: #fff; color: #17324f; font-weight: 700;">Mastercard</span>
+                        <span style="display: inline-flex; min-width: 74px; justify-content: center; align-items: center; padding: 8px 12px; border-radius: 8px; border: 1px solid #d7e0ea; background: #fff; color: #17324f; font-weight: 700;">Boleto</span>
+                    </div>
+                    <div style="margin-top: 10px; color: #667085;">
+                        Os meios exibidos seguem o ecossistema oficial mapeado da ShopVivaliz.
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 30px; margin-bottom: 20px;">
+                <div>
+                    <strong style="display: block; color: #333; margin-bottom: 8px;">IDENTIFICACAO</strong>
+                    <div style="line-height: 1.6;">
+                        <div><strong>Razao Social:</strong> <?= htmlspecialchars($legalName) ?></div>
+                        <div><strong>Nome Fantasia:</strong> <?= htmlspecialchars($fantasyName) ?></div>
+                        <div><strong>CNPJ:</strong> <?= htmlspecialchars($cnpj) ?></div>
+                    </div>
+                </div>
+
+                <div>
+                    <strong style="display: block; color: #333; margin-bottom: 8px;">ENDERECO</strong>
+                    <div style="line-height: 1.6;">
+                        <div><?= htmlspecialchars($address) ?></div>
+                        <div><?= htmlspecialchars($neighborhood) ?> - <?= htmlspecialchars($city) ?>, <?= htmlspecialchars($state) ?></div>
+                        <div>CEP: <?= htmlspecialchars($zipcode) ?></div>
+                        <div style="margin-top: 6px;"><a href="https://maps.app.goo.gl/pziyvVNHGD2i7KQS6" target="_blank" rel="noopener" style="color: #157347; text-decoration: none; font-weight: 700;">Ver no mapa</a></div>
+                    </div>
+                </div>
+
+                <div>
+                    <strong style="display: block; color: #333; margin-bottom: 8px;">CONTATOS</strong>
+                    <div style="line-height: 1.6;">
+                        <div><strong>Telefone:</strong> <a href="tel:<?= preg_replace('/\D/', '', $phone) ?>" style="color: #666; text-decoration: none;"><?= htmlspecialchars($phone) ?></a></div>
+                        <div><strong>E-mail:</strong> <a href="mailto:<?= htmlspecialchars($email) ?>" style="color: #666; text-decoration: none;"><?= htmlspecialchars($email) ?></a></div>
+                        <div><strong>Website:</strong> <a href="https://<?= htmlspecialchars($website) ?>" target="_blank" rel="noopener" style="color: #666; text-decoration: none;"><?= htmlspecialchars($website) ?></a></div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align: center; color: #999; font-size: 11px; border-top: 1px solid #ddd; padding-top: 15px;">
+                <p style="margin: 0;">
+                    &copy; <?= date('Y') ?> <?= htmlspecialchars($fantasyName) ?>. Todos os direitos reservados. |
+                    Desenvolvido por <a href="https://shopvivaliz.com.br" style="color: #999; text-decoration: none;">ShopVivaliz</a>
                 </p>
             </div>
         </div>
     </div>
 </footer>
+
+<!-- Floating WhatsApp Button (Left Side) -->
+<a href="https://wa.me/5537999374112?text=Ola!%20Vim%20pelo%20site%20da%20ShopVivaliz%20e%20gostaria%20de%20falar%20com%20a%20equipe." 
+   class="sv-whatsapp-float" 
+   target="_blank" 
+   rel="noopener" 
+   aria-label="Atendimento via WhatsApp"
+   style="position: fixed; left: 24px; bottom: 24px; z-index: 99990; display: inline-flex; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: 50%; background: #25D366; color: #fff; box-shadow: 0 10px 30px rgba(37,211,102,0.4); text-decoration: none; transition: transform 0.2s ease;">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="#ffffff"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
+</a>
+
+<!-- Floating Liz Virtual Assistant Widget (Right Side) -->
+<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=2.0.0">
+<script src="/public/assets/liz-assistant/liz-assistant.js?v=2.0.0" defer></script>
 
 <!-- Mobile App-Like Navigation -->
 <nav class="sv-mobile-nav">
@@ -148,5 +243,6 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
     Carrinho
   </a>
 </nav>
+
 
 

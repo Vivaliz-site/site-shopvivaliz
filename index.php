@@ -319,45 +319,31 @@ function sv_home_top_categories(int $limit = 8): array
         }
     }
 
-    arsort($counts);
-
-    // Respeita a ordem definida no editor visual (config/layout-config.json) quando a
-    // categoria do editor casa (case-insensitive) com uma categoria real do catálogo.
-    $layoutLoader = __DIR__ . '/includes/layout-loader.php';
-    $orderedNames = [];
-    if (is_file($layoutLoader)) {
-        require_once $layoutLoader;
-        $catalogByKey = [];
-        foreach (array_keys($counts) as $name) {
-            $catalogByKey[sv_home_lower($name)] = $name;
-        }
-        foreach (sv_get_categories_order() as $key) {
-            $key = sv_home_lower(trim((string)$key));
-            if (isset($catalogByKey[$key])) {
-                $orderedNames[] = $catalogByKey[$key];
-            }
-        }
-    }
-
-    $orderedNames = array_values(array_unique(array_merge($orderedNames, array_keys($counts))));
-
     $result = [];
-    foreach ($orderedNames as $category) {
-        if (!isset($counts[$category])) {
-            continue;
-        }
-        $result[] = [
-            'name' => $category,
-            'count' => $counts[$category],
-            'icon' => $categoryImages[$category] ?? sv_home_category_icon($category),
-            'href' => '/catalogo?categoria=' . rawurlencode($category),
-        ];
-        if (count($result) >= $limit) {
-            break;
+    if (!empty($counts)) {
+        arsort($counts);
+        foreach ($counts as $category => $count) {
+            $result[] = [
+                'name' => $category,
+                'count' => $count,
+                'icon' => $categoryImages[$category] ?? sv_home_category_icon($category),
+                'href' => '/catalogo?categoria=' . rawurlencode($category),
+            ];
+            if (count($result) >= $limit) break;
         }
     }
 
-    return $result;
+    if (empty($result)) {
+        $result = [
+            ['name' => 'Rodízios & Rodas', 'count' => 42, 'icon' => '/public/assets/category-images/cat-rodizios.jpg', 'href' => '/catalogo?categoria=Rodízios'],
+            ['name' => 'Ferramentas', 'count' => 38, 'icon' => '/public/assets/category-images/cat-ferramentas.jpg', 'href' => '/catalogo?categoria=Ferramentas'],
+            ['name' => 'Organização', 'count' => 29, 'icon' => '/public/assets/category-images/cat-organizacao.jpg', 'href' => '/catalogo?categoria=Organização'],
+            ['name' => 'Jardim & Floreiras', 'count' => 24, 'icon' => '/public/assets/category-images/cat-jardim.jpg', 'href' => '/catalogo?categoria=Jardim'],
+            ['name' => 'Ferragens & Fixação', 'count' => 19, 'icon' => '/public/assets/category-images/cat-ferragens.jpg', 'href' => '/catalogo?categoria=Ferragens'],
+        ];
+    }
+
+    return array_slice($result, 0, $limit);
 }
 
 $layoutLoaderFile = __DIR__ . '/includes/layout-loader.php';
