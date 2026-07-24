@@ -64,6 +64,12 @@ AddCharset UTF-8 .html .txt .php .json
     # Valida frete no servidor antes de criar o pedido
     RewriteRule ^api/orders/create\.php$ api/orders/create-validated.php [L]
 
+    # Case-insensitive routing para /admin (Linux diferencia maiúsculas)
+    # Redireciona /ADMIN, /Admin, /aDmIn etc. para /admin/ canonicamente
+    RewriteCond %{REQUEST_URI} ^/[aA][dD][mM][iI][nN](?:/|$) [NC]
+    RewriteCond %{REQUEST_URI} !^/admin(?:/|$) [NC]
+    RewriteRule ^(.*)$ /admin/$1 [R=301,L,NE]
+
     # Mantem o dashboard operacional isolado na subpasta /claude/
     RewriteRule ^claude/?$ claude/index.php [L]
     RewriteRule ^claude/(.*)$ claude/$1 [L]
