@@ -16,4 +16,4 @@ content = content.replace('body{opacity:0;', 'body{opacity:1;')
 with open(path, 'w', encoding='utf-8') as f:
     f.write(content)
 
-print("✅ Cleaned shopvivaliz-unified-theme.css successfully!")
+print("Cleaned shopvivaliz-unified-theme.css successfully!")
