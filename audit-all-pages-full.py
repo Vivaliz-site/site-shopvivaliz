@@ -15,7 +15,7 @@ PAGES = [
     {"name": "03_sobre", "url": f"{BASE_URL}/sobre"},
     {"name": "04_contato", "url": f"{BASE_URL}/contato"},
     {"name": "05_carrinho", "url": f"{BASE_URL}/carrinho"},
-    {"name": "06_produto_detalhe", "url": f"{BASE_URL}/produto/kit4r-soprao-kit4rsopro"}
+    {"name": "06_produto_detalhe", "url": f"{BASE_URL}/produto/armario-ferramentas-duas-portas-arm-08-fercar"}
 ]
 
 def audit():
@@ -40,7 +40,6 @@ def audit():
             driver.get(url)
             time.sleep(2)
 
-            # Caputra de tela
             file_path = os.path.join(SCREENSHOT_DIR, f"{name}.png")
             driver.save_screenshot(file_path)
 
