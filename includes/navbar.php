@@ -78,6 +78,20 @@ header.sv-navbar .brand-logo-img {
     width: auto;
     object-fit: contain;
 }
+header.sv-navbar .menu-toggle {
+    display: none;
+    width: 44px;
+    height: 44px;
+    border: 1px solid rgba(255,255,255,.35);
+    border-radius: 10px;
+    background: rgba(255,255,255,.12);
+    color: #fff;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+}
 .sv-announcement-bar {
     background: linear-gradient(90deg, #07345d, #0b4f88, #07345d);
     color: #ffffff;
@@ -89,7 +103,42 @@ header.sv-navbar .brand-logo-img {
     border-bottom: 1px solid rgba(255,255,255,0.15);
 }
 @media (max-width: 768px) {
-    header.sv-navbar .navbar-menu { gap: 12px; font-size: 13px; }
+    header.sv-navbar { padding: 8px 0; }
+    header.sv-navbar .nav-inner {
+        min-height: 56px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    header.sv-navbar .brand-logo-img { height: 36px; max-width: 210px; }
+    header.sv-navbar .menu-toggle { display: inline-flex; margin-left: auto; }
+    header.sv-navbar .navbar-menu {
+        display: none !important;
+        width: 100%;
+        max-height: min(60vh, 420px);
+        overflow-y: auto;
+        margin: 4px 0 0;
+        padding: 8px;
+        border-radius: 12px;
+        background: #ffffff;
+        box-shadow: 0 14px 32px rgba(15, 23, 42, .22);
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+    }
+    header.sv-navbar .navbar-menu.active { display: flex !important; }
+    header.sv-navbar .navbar-menu a {
+        color: #173b63 !important;
+        background: #f8fbff;
+        padding: 11px 13px;
+        border-radius: 9px;
+        font-size: 15px;
+    }
+    header.sv-navbar .navbar-menu a.sv-nav-cta {
+        color: #ffffff !important;
+        text-align: center;
+    }
+    header.sv-navbar .navbar-menu a[aria-current="page"] { background: #e8eef7; }
+    .sv-announcement-bar { font-size: 11px; padding: 7px 10px; }
 }
 </style>
 
@@ -102,6 +151,7 @@ header.sv-navbar .brand-logo-img {
         <a href="/" class="brand-link" aria-label="Ir para a home da Vivaliz">
             <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" width="210" height="46" decoding="async" onerror="this.src='/images/logo-vivaliz-square.png'">
         </a>
+        <button type="button" class="menu-toggle" id="svMenuToggle" aria-controls="navMenu" aria-expanded="false" aria-label="Abrir menu">☰</button>
         <div class="navbar-menu" id="navMenu">
             <?php foreach ($svNavLinks as $link): ?>
                 <?php $isCurrent = in_array($svNavCurrent, $link['match'], true); ?>
@@ -118,3 +168,37 @@ header.sv-navbar .brand-logo-img {
         </div>
     </nav>
 </header>
+<script>
+(function () {
+    var toggle = document.getElementById('svMenuToggle');
+    var menu = document.getElementById('navMenu');
+    if (!toggle || !menu) return;
+
+    function closeMenu() {
+        menu.classList.remove('active');
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.setAttribute('aria-label', 'Abrir menu');
+        toggle.textContent = '☰';
+    }
+
+    toggle.addEventListener('click', function () {
+        var open = menu.classList.toggle('active');
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        toggle.setAttribute('aria-label', open ? 'Fechar menu' : 'Abrir menu');
+        toggle.textContent = open ? '×' : '☰';
+    });
+
+    menu.addEventListener('click', function (event) {
+        if (event.target.closest('a')) closeMenu();
+    });
+
+    document.addEventListener('click', function (event) {
+        if (!menu.classList.contains('active')) return;
+        if (!menu.contains(event.target) && !toggle.contains(event.target)) closeMenu();
+    });
+
+    window.addEventListener('resize', function () {
+        if (window.innerWidth > 768) closeMenu();
+    });
+})();
+</script>
