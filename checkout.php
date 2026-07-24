@@ -33,6 +33,9 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Finalizar Pedido | Vivaliz</title>
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/favicon.ico">
+    <meta name="msapplication-TileColor" content="#173B63">
+    <meta name="theme-color" content="#173B63">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/checkout.css">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">

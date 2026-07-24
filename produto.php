@@ -546,6 +546,9 @@ if ($notFound) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#173B63">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/favicon.ico">
+    <meta name="msapplication-TileColor" content="#173B63">
+    <meta name="theme-color" content="#173B63">
     <meta name="description" content="<?= sv_esc($seoDescription) ?>">
     <?php if ($notFound): ?>
         <meta name="robots" content="noindex,follow">

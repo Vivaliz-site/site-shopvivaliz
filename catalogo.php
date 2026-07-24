@@ -473,6 +473,9 @@ $svNavCurrent = 'catalogo';
     <meta property="og:url" content="<?= sv_catalog_esc($canonicalUrl) ?>">
     <meta property="og:site_name" content="Vivaliz">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/favicon.ico">
+    <meta name="msapplication-TileColor" content="#173B63">
+    <meta name="theme-color" content="#173B63">
     <link rel="canonical" href="<?= sv_catalog_esc($canonicalUrl) ?>">
     <title><?= sv_catalog_esc($pageTitle) ?></title>
     <style>body { opacity: 1 !important; visibility: visible !important; }</style>

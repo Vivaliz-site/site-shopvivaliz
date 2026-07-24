@@ -12,6 +12,9 @@ header('Content-Type: text/html; charset=UTF-8');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Carrinho | Vivaliz</title>
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/favicon.ico">
+    <meta name="msapplication-TileColor" content="#173B63">
+    <meta name="theme-color" content="#173B63">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/shipping-v7.css">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
