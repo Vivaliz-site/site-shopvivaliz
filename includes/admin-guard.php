@@ -21,7 +21,7 @@ if (empty($_SESSION['is_admin'])) {
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $_SESSION['is_admin'] = !empty($row['is_admin']) ? 1 : 0;
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         error_log('[admin-guard] ' . $e->getMessage());
         $_SESSION['is_admin'] = 0;
     }
