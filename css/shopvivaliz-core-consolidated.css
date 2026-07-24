@@ -3289,3 +3289,298 @@ hr {
     background: var(--line);
     margin: 0 var(--space-md);
 }
+
+/* ============================================================================
+   CUSTOM FORM CONTROLS
+   ============================================================================ */
+
+input[type="checkbox"],
+input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--brand);
+    transition: all var(--transition-fast);
+}
+
+input[type="checkbox"]:hover,
+input[type="radio"]:hover {
+    transform: scale(1.1);
+}
+
+input[type="checkbox"]:focus,
+input[type="radio"]:focus {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+}
+
+input[type="checkbox"]:checked,
+input[type="radio"]:checked {
+    background-color: var(--brand);
+    border-color: var(--brand);
+}
+
+.checkbox-wrapper, .radio-wrapper {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    cursor: pointer;
+    padding: var(--space-sm);
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-normal);
+}
+
+.checkbox-wrapper:hover, .radio-wrapper:hover {
+    background-color: var(--bg);
+}
+
+.checkbox-wrapper label, .radio-wrapper label {
+    cursor: pointer;
+    font-size: var(--text-sm);
+    margin: 0;
+}
+
+.checkbox-group, .radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+/* ============================================================================
+   PROGRESS BARS
+   ============================================================================ */
+
+.progress {
+    width: 100%;
+    height: 8px;
+    background-color: var(--line);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    margin: var(--space-md) 0;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--brand) 0%, var(--accent) 100%);
+    transition: width var(--transition-slow);
+    border-radius: var(--radius-full);
+}
+
+.progress-bar.success {
+    background: linear-gradient(90deg, var(--accent) 0%, #10b981 100%);
+}
+
+.progress-bar.warning {
+    background: linear-gradient(90deg, var(--warn) 0%, #f97316 100%);
+}
+
+.progress-bar.danger {
+    background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+}
+
+.progress-bar.striped {
+    background: repeating-linear-gradient(
+        45deg,
+        var(--brand),
+        var(--brand) 10px,
+        rgba(23, 59, 99, 0.8) 10px,
+        rgba(23, 59, 99, 0.8) 20px
+    );
+    animation: progress-animation 1s linear infinite;
+}
+
+@keyframes progress-animation {
+    0% { background-position: 0 0; }
+    100% { background-position: 40px 0; }
+}
+
+.progress-text {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--text-xs);
+    margin-bottom: var(--space-sm);
+}
+
+/* ============================================================================
+   ALERTS & NOTIFICATIONS
+   ============================================================================ */
+
+.alert {
+    padding: var(--space-lg);
+    border-radius: var(--radius);
+    border-left: 4px solid;
+    margin-bottom: var(--space-lg);
+    animation: slideDown var(--transition-normal);
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.alert-success {
+    background-color: var(--accent-bg);
+    border-color: var(--accent);
+    color: #065f46;
+}
+
+.alert-error {
+    background-color: #fef2f2;
+    border-color: #ef4444;
+    color: #7f1d1d;
+}
+
+.alert-warning {
+    background-color: #fffbeb;
+    border-color: var(--warn);
+    color: #78350f;
+}
+
+.alert-info {
+    background-color: #eff6ff;
+    border-color: #3b82f6;
+    color: #0c2340;
+}
+
+.alert-close {
+    float: right;
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity var(--transition-normal);
+}
+
+.alert-close:hover {
+    opacity: 1;
+}
+
+.alert-title {
+    font-weight: 600;
+    margin-bottom: var(--space-sm);
+}
+
+.toast {
+    position: fixed;
+    bottom: var(--space-lg);
+    right: var(--space-lg);
+    padding: var(--space-lg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-hover);
+    z-index: 2000;
+    animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(400px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+.toast.success {
+    background-color: var(--accent);
+    color: #fff;
+}
+
+.toast.error {
+    background-color: #ef4444;
+    color: #fff;
+}
+
+.toast.warning {
+    background-color: var(--warn);
+    color: #fff;
+}
+
+.toast.info {
+    background-color: #3b82f6;
+    color: #fff;
+}
+
+/* ============================================================================
+   STEPPER & STEPS
+   ============================================================================ */
+
+.stepper {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: var(--space-2xl);
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    position: relative;
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background: var(--line);
+    border: 2px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: var(--text-base);
+    color: var(--muted);
+    transition: all var(--transition-normal);
+    z-index: 10;
+    margin-bottom: var(--space-md);
+}
+
+.step.active .step-number {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #fff;
+}
+
+.step.completed .step-number {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.step.completed .step-number::before {
+    content: '✓';
+}
+
+.step.completed .step-number {
+    font-size: 0;
+}
+
+.step-label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    text-align: center;
+    color: var(--muted);
+}
+
+.step.active .step-label,
+.step.completed .step-label {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.step-connector {
+    position: absolute;
+    top: 20px;
+    left: calc(50% + 20px);
+    right: calc(-50% + 20px);
+    height: 2px;
+    background: var(--line);
+    transition: background var(--transition-normal);
+    z-index: 5;
+}
+
+.step.completed ~ .step .step-connector {
+    background: var(--line);
+}
+
+.step:not(:last-child) .step-connector {
+    display: block;
+}
