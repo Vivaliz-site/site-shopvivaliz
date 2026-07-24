@@ -18,6 +18,29 @@
     --shadow: 0 2px 12px rgba(17, 24, 39, 0.07), 0 1px 3px rgba(17,24,39,0.05);
     --shadow-hover: 0 8px 28px rgba(17, 24, 39, 0.13), 0 2px 8px rgba(17,24,39,0.07);
     --radius: 10px;
+    --radius-sm: 6px;
+    --radius-lg: 16px;
+    --radius-full: 999px;
+    /* Typography System */
+    --text-xs: 12px;
+    --text-sm: 14px;
+    --text-base: 16px;
+    --text-lg: 18px;
+    --text-xl: 22px;
+    --text-2xl: 28px;
+    --text-3xl: 32px;
+    --text-4xl: 44px;
+    /* Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.18s ease;
+    --transition-slow: 0.3s ease;
+    /* Spacing System */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 12px;
+    --space-lg: 16px;
+    --space-xl: 24px;
+    --space-2xl: 32px;
 }
 
 * {
@@ -33,6 +56,11 @@ body {
 
 a {
     color: inherit;
+    transition: color var(--transition-normal), text-decoration-color var(--transition-normal);
+}
+
+a:hover {
+    color: var(--brand);
 }
 
 .container {
@@ -74,7 +102,7 @@ a {
     width: 34px; height: 34px;
     background: var(--brand);
     color: #fff;
-    border-radius: 8px;
+    border-radius: var(--radius);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -115,7 +143,7 @@ a {
 
 .version {
     padding: 4px 8px;
-    border-radius: 999px;
+    border-radius: var(--radius-full);
     background: #eef4ff;
     color: var(--brand);
     font-size: 12px;
@@ -145,7 +173,7 @@ a {
     color: #fff;
     background: var(--brand);
     padding: 8px 16px;
-    border-radius: 999px;
+    border-radius: var(--radius-full);
 }
 
 .navbar-menu a.nav-account-link:hover {
@@ -158,7 +186,7 @@ a {
     width: 44px;
     height: 44px;
     border: 1px solid rgba(23, 59, 99, 0.14);
-    border-radius: 12px;
+    border-radius: var(--radius);
     background: #fff;
     color: var(--brand);
     align-items: center;
@@ -248,7 +276,7 @@ a {
 .catalog-search button,
 .buy-button {
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--radius);
     padding: 12px 18px;
     font-weight: 800;
     text-decoration: none;
@@ -369,7 +397,7 @@ a {
 .hero-carousel-dot {
     width: 10px;
     height: 10px;
-    border-radius: 999px;
+    border-radius: var(--radius-full);
     background: rgba(23, 59, 99, 0.18);
 }
 
@@ -381,7 +409,7 @@ a {
 .hero-carousel-arrow {
     width: 42px;
     height: 42px;
-    border-radius: 999px;
+    border-radius: var(--radius-full);
     background: var(--brand);
     color: #fff;
     font-size: 22px;
@@ -420,7 +448,7 @@ a {
 .home-scroller-arrow {
     width: 44px;
     height: 44px;
-    border-radius: 999px;
+    border-radius: var(--radius-full);
     border: 0;
     background: var(--brand);
     color: #fff;
@@ -439,7 +467,7 @@ a {
 .category-slide {
     position: relative;
     min-width: 168px;
-    border-radius: 16px;
+    border-radius: var(--radius-lg);
     border: 1px solid var(--line);
     background: var(--surface);
     text-decoration: none;
@@ -462,7 +490,7 @@ a {
     justify-content: center;
     width: 44px;
     height: 44px;
-    border-radius: 12px;
+    border-radius: var(--radius);
     background: var(--accent-bg);
     font-size: 22px;
 }
@@ -550,7 +578,7 @@ a {
     text-transform: uppercase;
     letter-spacing: 0.03em;
     padding: 5px 10px;
-    border-radius: 999px;
+    border-radius: var(--radius-full);
     z-index: 1;
     opacity: 0.75;
 }
@@ -578,11 +606,13 @@ a {
     height: 100%;
     object-fit: contain;
     display: block;
-    transition: transform 0.22s ease;
+    transition: transform var(--transition-slow), filter 0.22s ease;
+    filter: brightness(1);
 }
 
 .product-card:hover .product-image img {
     transform: scale(1.04);
+    filter: brightness(1.08);
 }
 
 .product-info {
@@ -704,7 +734,7 @@ a {
 .catalog-search input {
     width: 100%;
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--radius);
     padding: 12px 14px;
     font-size: 15px;
 }
@@ -720,7 +750,7 @@ a {
     gap: 10px;
     padding: 12px 14px;
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: var(--radius);
     background: #f8fbff;
 }
 
@@ -741,7 +771,7 @@ a {
 .admin-card {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--radius);
     box-shadow: var(--shadow);
     padding: 18px;
     min-width: 0;
@@ -768,7 +798,7 @@ a {
     display: inline-flex;
     align-items: center;
     padding: 6px 10px;
-    border-radius: 999px;
+    border-radius: var(--radius-full);
     background: #eef1f6;
     color: var(--muted);
     font-size: 12px;
@@ -813,7 +843,7 @@ a {
 
 .admin-map-item {
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--radius);
     background: #fbfcfe;
     padding: 14px;
     display: grid;
@@ -896,7 +926,7 @@ footer {
 .checkout-panel {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--radius);
     box-shadow: var(--shadow);
     padding: 20px;
 }
@@ -921,7 +951,7 @@ footer {
 .checkout-form textarea {
     width: 100%;
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--radius);
     padding: 12px 14px;
     color: var(--ink);
     font: inherit;
@@ -941,7 +971,7 @@ footer {
     height: 72px;
     object-fit: contain;
     background: #eef1f6;
-    border-radius: 8px;
+    border-radius: var(--radius);
 }
 
 .cart-item strong,
@@ -959,14 +989,14 @@ footer {
 .cart-item input {
     width: 72px;
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--radius);
     padding: 10px;
 }
 
 .cart-item button {
     border: 1px solid var(--line);
     background: #fff;
-    border-radius: 8px;
+    border-radius: var(--radius);
     padding: 10px 12px;
     cursor: pointer;
 }
@@ -992,7 +1022,7 @@ footer {
 .empty-cart {
     padding: 18px;
     background: #f3f6fb;
-    border-radius: 8px;
+    border-radius: var(--radius);
     color: var(--muted);
 }
 
@@ -1018,7 +1048,7 @@ footer {
         margin-top: 12px;
         padding: 10px;
         border: 1px solid rgba(23, 59, 99, 0.08);
-        border-radius: 16px;
+        border-radius: var(--radius-lg);
         background: #fff;
         box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
         flex-direction: column;
@@ -1035,7 +1065,7 @@ footer {
         align-items: center;
         justify-content: space-between;
         padding: 12px 14px;
-        border-radius: 12px;
+        border-radius: var(--radius);
         background: #f8fbff;
         font-size: 15px;
     }
@@ -1253,7 +1283,7 @@ footer {
     margin: 18px 0 0;
     padding: 14px 16px;
     border: 1px solid rgba(45, 187, 87, 0.18);
-    border-radius: 12px;
+    border-radius: var(--radius);
     background: linear-gradient(180deg, rgba(223, 245, 231, 0.75), rgba(255, 255, 255, 0.95));
 }
 
@@ -1481,7 +1511,7 @@ body {
 .agent-card,
 .stat-item,
 .admin-card {
-    border-radius: 16px;
+    border-radius: var(--radius-lg);
 }
 
 .product-card {
@@ -1690,7 +1720,7 @@ small { font-size: 0.875rem; color: #666; }
 
 /* Botões */
 button, [role="button"], .btn {
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 10px 16px;
     border: none;
     cursor: pointer;
@@ -1726,7 +1756,7 @@ button:active {
 
 /* Cards */
 .card {
-    border-radius: 8px;
+    border-radius: var(--radius);
     overflow: hidden;
     transition: var(--transition);
     box-shadow: var(--shadow-sm);
@@ -1745,7 +1775,7 @@ input[type="search"],
 select,
 textarea {
     border: 1px solid var(--color-border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 10px 12px;
     font-size: 0.95rem;
     transition: var(--transition);
@@ -1847,7 +1877,7 @@ section > h2 {
 
 .product-item {
     background: white;
-    border-radius: 8px;
+    border-radius: var(--radius);
     overflow: hidden;
     box-shadow: var(--shadow-sm);
     transition: var(--transition);
@@ -1910,7 +1940,7 @@ section > h2 {
     display: block;
     position: relative;
     overflow: hidden;
-    border-radius: 8px;
+    border-radius: var(--radius);
 }
 
 .home-scroller-track {
@@ -2047,7 +2077,7 @@ footer h3 {
 
 .alert, .message {
     padding: 12px 16px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     margin-bottom: 1rem;
     border-left: 4px solid;
 }
