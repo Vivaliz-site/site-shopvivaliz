@@ -191,11 +191,10 @@ header('Content-Type: text/html; charset=UTF-8');
                 </div>
             </div>
 
-            <!-- PAGAMENTOS -->
+            <!-- DEPLOY -->
             <div class="menu-section">
-                <div class="menu-section-header">💳 Pagamentos</div>
+                <div class="menu-section-header">🚀 Deploy</div>
                 <div class="menu-section-items">
-                    <a href="/api/pagarme/diagnostic.php" class="menu-item external-link">Diag Pagar.me</a>
                     <a href="/admin/force-git-pull.php" class="menu-item external-link">Forçar Git Pull</a>
                 </div>
             </div>
