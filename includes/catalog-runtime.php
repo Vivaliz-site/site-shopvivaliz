@@ -20,6 +20,37 @@ function svcr_slug(string $name, string $sku = ''): string
 }
 
 /**
+ * ShopVivaliz não opera com pré-venda. Qualquer marcação equivalente vinda
+ * da Tiny/Olist, cache legado ou fallback remove o item da vitrine.
+ */
+function svcr_is_preorder(array $item): bool
+{
+    $stockInfo = is_array($item['estoque'] ?? null)
+        ? $item['estoque']
+        : (is_array($item['stock_detail'] ?? null) ? $item['stock_detail'] : []);
+
+    foreach (['preorder', 'pre_order', 'pre_venda', 'preVenda', 'made_to_order', 'sob_encomenda'] as $field) {
+        $value = $item[$field] ?? $stockInfo[$field] ?? null;
+        if ($value === true || $value === 1 || $value === '1') {
+            return true;
+        }
+        if (is_string($value) && in_array(strtolower(trim($value)), ['true', 'yes', 'sim', 'preorder', 'pre-order', 'pre-venda', 'sob encomenda'], true)) {
+            return true;
+        }
+    }
+
+    $availability = strtolower(trim((string)($item['availability'] ?? $item['disponibilidade'] ?? $item['sale_status'] ?? '')));
+    return in_array($availability, ['preorder', 'pre-order', 'pre_venda', 'pre-venda', 'made_to_order', 'sob_encomenda', 'sob encomenda'], true);
+}
+
+function svcr_filter_storefront_rows(array $rows): array
+{
+    return array_values(array_filter($rows, static function ($row): bool {
+        return is_array($row) && !svcr_is_preorder($row);
+    }));
+}
+
+/**
  * Canonical read-only catalog source for storefront, checkout and health APIs.
  * The live Olist/Tiny cache is authoritative. The curated JSON is used only
  * when the live cache is missing, unreadable or empty.
@@ -53,14 +84,12 @@ function svcr_products(): array
     if ($items === []) {
         $fallback = $root . '/api/catalog/fallback-products.json';
         $rows = is_file($fallback) ? json_decode((string)file_get_contents($fallback), true) : [];
-        return is_array($rows)
-            ? array_values(array_filter($rows, 'is_array'))
-            : [];
+        return is_array($rows) ? svcr_filter_storefront_rows($rows) : [];
     }
 
     $products = [];
     foreach ($items as $item) {
-        if (!is_array($item)) {
+        if (!is_array($item) || svcr_is_preorder($item)) {
             continue;
         }
 
@@ -140,9 +169,7 @@ function svcr_products(): array
 
     $fallback = $root . '/api/catalog/fallback-products.json';
     $rows = is_file($fallback) ? json_decode((string)file_get_contents($fallback), true) : [];
-    return is_array($rows)
-        ? array_values(array_filter($rows, 'is_array'))
-        : [];
+    return is_array($rows) ? svcr_filter_storefront_rows($rows) : [];
 }
 
 function svcr_collect_image_urls(array $item): array
