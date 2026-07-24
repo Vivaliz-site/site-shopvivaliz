@@ -38,12 +38,24 @@
   const close = root.querySelector('.sv-close');
   const msgs = root.querySelector('.sv-msgs');
   const input = root.querySelector('input');
+  const submitButton = root.querySelector('.sv-form button[type="submit"]');
+  const quickButtons = Array.from(root.querySelectorAll('.sv-quick button'));
+  const conversation = [];
+  let requestInFlight = false;
 
   function setOpen(open) {
     panel.classList.toggle('open', open);
     root.classList.toggle('sv-liz-is-open', open);
     launcher.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) setTimeout(() => input.focus(), 60);
+    if (open && !requestInFlight) setTimeout(() => input.focus(), 60);
+  }
+
+  function setBusy(busy) {
+    requestInFlight = busy;
+    input.disabled = busy;
+    submitButton.disabled = busy;
+    quickButtons.forEach(button => { button.disabled = busy; });
+    root.dataset.loading = busy ? 'true' : 'false';
   }
 
   launcher.addEventListener('click', () => setOpen(!panel.classList.contains('open')));
@@ -61,49 +73,71 @@
     return item;
   };
 
-  async function ask(text) {
+  async function ask(rawText) {
+    const text = rawText.trim();
+    if (!text || requestInFlight) return;
+
+    const history = conversation.slice(-12);
+    conversation.push({ role: 'user', content: text });
     add(text, 'sv-user');
     const waiting = add('Liz está pensando...', 'sv-bot');
+    setBusy(true);
 
     try {
-      const allMessages = Array.from(msgs.querySelectorAll('.sv-msg')).map(el => ({
-        role: el.classList.contains('sv-user') ? 'user' : 'assistant',
-        content: el.textContent.trim(),
-      })).filter(message => message.content !== 'Liz está pensando...');
-
       const response = await fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
-          history: allMessages.slice(-10),
+          history,
           context: 'site-shopvivaliz',
         }),
       });
 
       const data = await response.json().catch(() => ({}));
+      root.dataset.provider = data.provider || 'none';
+
       if (!response.ok || data.ok === false) {
-        throw new Error(data.error || data.answer || `HTTP ${response.status}`);
+        const backendMessage = data.error || data.answer || data.message;
+        if (backendMessage) {
+          waiting.textContent = backendMessage;
+        } else if (response.status === 429) {
+          waiting.textContent = 'A Liz recebeu muitas mensagens agora. Aguarde alguns instantes e tente novamente.';
+        } else if (response.status === 503) {
+          waiting.textContent = 'A Liz está temporariamente indisponível. Tente novamente em alguns instantes.';
+        } else {
+          waiting.textContent = 'Não foi possível concluir sua solicitação agora. Tente novamente.';
+        }
+        return;
       }
 
-      waiting.textContent = data.answer || data.reply || data.message || data.response ||
-        'Não consegui processar sua pergunta. Tente novamente ou fale com nosso atendimento (37) 99937-4112.';
-      root.dataset.provider = data.provider || 'unknown';
+      const answer = String(data.answer || data.reply || data.message || data.response || '').trim();
+      if (!answer) {
+        waiting.textContent = 'A Liz não recebeu uma resposta completa. Tente novamente em alguns instantes.';
+        return;
+      }
+
+      waiting.textContent = answer;
+      conversation.push({ role: 'assistant', content: answer });
     } catch (error) {
       console.error('Liz error:', error);
-      waiting.textContent = 'Desculpe, a inteligência da Liz está temporariamente indisponível. Fale com nosso atendimento: (37) 99937-4112.';
+      waiting.textContent = 'Não foi possível conectar à Liz agora. Verifique sua conexão e tente novamente.';
+      root.dataset.provider = 'none';
+    } finally {
+      setBusy(false);
+      input.focus();
     }
   }
 
   root.querySelector('form').addEventListener('submit', event => {
     event.preventDefault();
     const text = input.value.trim();
-    if (!text) return;
+    if (!text || requestInFlight) return;
     input.value = '';
     ask(text);
   });
 
-  root.querySelectorAll('.sv-quick button').forEach(button => {
+  quickButtons.forEach(button => {
     button.addEventListener('click', () => ask(button.textContent.trim()));
   });
 
