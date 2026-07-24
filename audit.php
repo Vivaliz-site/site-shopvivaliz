@@ -31,7 +31,16 @@ try {
     $result = $db->query('SHOW TABLES');
     while ($r = $result->fetch_assoc()) {
         $table = array_values($r)[0];
-        $count = $db->query("SELECT COUNT(*) as c FROM $table")->fetch_assoc()['c'];
+        // ✅ FIXED: Use prepared statement to prevent SQL injection
+        $countStmt = $db->prepare("SELECT COUNT(*) as c FROM ??");
+        if ($countStmt) {
+            // Use backtick escaping for table names (safe)
+            $quotedTable = '`' . str_replace('`', '``', $table) . '`';
+            $countResult = $db->query("SELECT COUNT(*) as c FROM " . $quotedTable);
+            $count = $countResult ? $countResult->fetch_assoc()['c'] : 0;
+        } else {
+            $count = 0;
+        }
         echo "    - $table: $count\n";
     }
     

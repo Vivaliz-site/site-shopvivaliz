@@ -139,25 +139,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'finaliz
             return $s + (float)($it['price'] ?? 0) * (int)($it['quantity'] ?? 1);
         }, 0.0);
         $totalFmt = number_format($total, 2, ',', '.');
+        // Sanitizar valores para prevenir email injection
+        $sanitize = fn($v) => str_replace(["\n", "\r", "\0"], "", (string)$v);
+
         $body  = "Novo pedido recebido pelo site Vivaliz.
 
 ";
-        $body .= "ID: {$pedidoId}
+        $body .= "ID: " . $sanitize($pedidoId) . "
 ";
         $body .= "Data: " . date('d/m/Y H:i') . "
 
 ";
         $body .= "CLIENTE
 ";
-        $body .= "Nome: {$cliente['nome']}
+        $body .= "Nome: " . $sanitize($cliente['nome']) . "
 ";
-        $body .= "Email: {$cliente['email']}
+        $body .= "Email: " . $sanitize($cliente['email']) . "
 ";
-        $body .= "Telefone: {$cliente['telefone']}
+        $body .= "Telefone: " . $sanitize($cliente['telefone']) . "
 ";
-        $body .= "Endereco: {$cliente['endereco']}, {$cliente['numero']} {$cliente['complemento']}
+        $body .= "Endereco: " . $sanitize($cliente['endereco']) . ", " . $sanitize($cliente['numero']) . " " . $sanitize($cliente['complemento']) . "
 ";
-        $body .= "Cidade/CEP: {$cliente['cidade']} - {$cliente['cep']}
+        $body .= "Cidade/CEP: " . $sanitize($cliente['cidade']) . " - " . $sanitize($cliente['cep'])
 
 ";
         $body .= "ITENS

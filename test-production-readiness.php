@@ -31,7 +31,15 @@ echo "\n";
 echo "[2] Verificando tabelas...\n";
 $tables = ['orders', 'order_items', 'products'];
 foreach ($tables as $table) {
-    $result = $db->query("SELECT 1 FROM $table LIMIT 1");
+    // ✅ FIXED: Whitelist + escape table name to prevent SQL injection
+    $allowedTables = ['orders', 'order_items', 'products', 'users'];
+    if (!in_array($table, $allowedTables, true)) {
+        echo "❌ Tabela $table não permitida\n";
+        $results["table_$table"] = 'FALHA';
+        continue;
+    }
+    $quotedTable = '`' . str_replace('`', '``', $table) . '`';
+    $result = $db->query("SELECT 1 FROM " . $quotedTable . " LIMIT 1");
     if ($result === false) {
         echo "❌ Tabela $table não existe\n";
         $results["table_$table"] = 'FALHA';
@@ -68,18 +76,25 @@ try {
 
     // TEST 4: Verificar se pedido foi salvo
     echo "\n[4] Verificando se pedido foi salvo...\n";
-    $result = $db->query("SELECT * FROM orders WHERE id = '$testOrderId'");
+    // ✅ FIXED: Use prepared statement to prevent SQL injection
+    $selectStmt = $db->prepare("SELECT * FROM orders WHERE id = ? LIMIT 1");
+    $selectStmt->bind_param('s', $testOrderId);
+    $selectStmt->execute();
+    $result = $selectStmt->get_result();
+
     if ($result && $result->num_rows > 0) {
         $order = $result->fetch_assoc();
         echo "✅ Pedido recuperado do BD\n";
-        echo "   - Nome: " . $order['customer_name'] . "\n";
-        echo "   - Email: " . $order['customer_email'] . "\n";
+        echo "   - Nome: " . htmlspecialchars($order['customer_name'] ?? '') . "\n";
+        echo "   - Email: " . htmlspecialchars($order['customer_email'] ?? '') . "\n";
         echo "   - Total: R$ " . $order['total'] . "\n";
-        echo "   - Status: " . $order['status'] . "\n";
+        echo "   - Status: " . htmlspecialchars($order['status'] ?? '') . "\n";
         $results['order_retrieve'] = 'OK';
 
-        // Limpar teste
-        $db->query("DELETE FROM orders WHERE id = '$testOrderId'");
+        // Limpar teste - ✅ FIXED: Use prepared statement
+        $deleteStmt = $db->prepare("DELETE FROM orders WHERE id = ?");
+        $deleteStmt->bind_param('s', $testOrderId);
+        $deleteStmt->execute();
         echo "\n✅ Dados de teste removidos\n";
     } else {
         echo "❌ Pedido não encontrado\n";

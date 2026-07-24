@@ -64,9 +64,7 @@ class Database {
         return $this->connection->prepare($sql);
     }
 
-    public function escape($str) {
-        return $this->connection->real_escape_string($str);
-    }
+    // ❌ DEPRECATED: real_escape_string() removed - use prepare() instead
 
     public function lastInsertId() {
         return $this->connection->insert_id;

@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-session_start();
+require_once __DIR__ . '/../includes/secure-session.php';
 
 require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../config/database.php';
@@ -41,6 +41,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-login', $_POST
                 $user = $result->fetch_assoc();
 
                 if ($user && password_verify($password, $user['password_hash'])) {
+                    // Regenerar session ID para prevenir Session Fixation
+                    session_regenerate_id(true);
+
                     // Login bem-sucedido
                     $_SESSION['user_id'] = $user['id'];
                     $_SESSION['user_name'] = $user['name'];
