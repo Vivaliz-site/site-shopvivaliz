@@ -73,9 +73,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-login', $_POST
                     $error = 'Email ou senha incorretos';
                 }
             }
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             error_log('[auth/login] ' . $e->getMessage());
-            $error = 'Erro ao conectar ao banco de dados';
+            $error = 'Erro ao conectar ao sistema de autenticação. Tente novamente.';
         }
         }
     }

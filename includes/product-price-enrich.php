@@ -118,6 +118,45 @@ function svp_bulk_price_stock(?mysqli $db, array $skus): array
  */
 function svp_enrich_products(array $products): array
 {
+    static $fallbackMap = null;
+    if ($fallbackMap === null) {
+        $path = dirname(__DIR__) . '/api/catalog/fallback-products.json';
+        $fallbackMap = [];
+        if (is_file($path)) {
+            $json = json_decode((string)file_get_contents($path), true);
+            if (is_array($json)) {
+                foreach ($json as $item) {
+                    if (!is_array($item)) continue;
+                    $s = strtoupper(trim((string)($item['sku'] ?? '')));
+                    if ($s !== '') {
+                        $fallbackMap[$s] = $item;
+                    }
+                }
+            }
+        }
+    }
+
+    foreach ($products as &$p) {
+        if (!is_array($p)) continue;
+        $sku = strtoupper(trim((string)($p['sku'] ?? '')));
+        $fb = $fallbackMap[$sku] ?? null;
+        if ($fb) {
+            if (((float)($p['price'] ?? 0)) <= 0 && ((float)($fb['price'] ?? 0)) > 0) {
+                $p['price'] = (float)$fb['price'];
+            }
+            if (((int)($p['stock'] ?? 0)) <= 0 && ((int)($fb['stock'] ?? 0)) > 0) {
+                $p['stock'] = (int)$fb['stock'];
+            }
+            if (trim((string)($p['image_url'] ?? '')) === '' && !empty($fb['image_url'])) {
+                $p['image_url'] = trim((string)$fb['image_url']);
+            }
+            if (empty($p['images']) && !empty($fb['images'])) {
+                $p['images'] = $fb['images'];
+            }
+        }
+    }
+    unset($p);
+
     return $products;
 }
 

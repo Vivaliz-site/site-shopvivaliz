@@ -113,13 +113,36 @@ function sv_catalog_matches_query(array $row, string $query): bool
     ]));
 
     $normalizedHaystack = sv_catalog_search_normalize($haystack);
-    foreach (sv_catalog_search_aliases($query) as $candidate) {
-        if (strpos($normalizedHaystack, $candidate) !== false || sv_catalog_fuzzy_contains($normalizedHaystack, $candidate)) {
-            return true;
+    $queryNorm = sv_catalog_search_normalize($query);
+
+    if (strpos($normalizedHaystack, $queryNorm) !== false) {
+        return true;
+    }
+
+    $words = array_filter(explode(' ', $queryNorm));
+    if ($words === []) {
+        return true;
+    }
+
+    foreach ($words as $word) {
+        if (strlen($word) < 2) continue;
+        $wordMatched = false;
+        if (strpos($normalizedHaystack, $word) !== false) {
+            $wordMatched = true;
+        } else {
+            foreach (sv_catalog_search_aliases($word) as $alias) {
+                if (strpos($normalizedHaystack, $alias) !== false) {
+                    $wordMatched = true;
+                    break;
+                }
+            }
+        }
+        if (!$wordMatched) {
+            return false;
         }
     }
 
-    return false;
+    return true;
 }
 
 function sv_catalog_load(): array
@@ -166,7 +189,7 @@ function sv_catalog_products(int $limit, string $query, string $category = '', i
         if (count($products) >= $limit) break;
     }
 
-    return $products;
+    return svp_enrich_products($products);
 }
 
 function sv_catalog_count_matching(string $query, string $category = ''): int
