@@ -55,6 +55,9 @@ $svRecoveryCouponLabel = is_array($svRecoveryCoupon) ? (string)($svRecoveryCoupo
 <?php if ($svIsCheckout): ?><link rel="stylesheet" href="/css/checkout-conversion-v6.css?v=6.0.0"><?php endif; ?>
 <?php if ($svIsCart || $svIsCheckout): ?><link rel="stylesheet" href="/css/shipping-v7.css?v=7.0.0"><?php endif; ?>
 <a class="sv-skip-link" href="#conteudo-principal">Pular para o conteúdo</a>
+<div class="sv-announcement-bar" style="background: linear-gradient(90deg, #07345d, #0b4f88, #07345d); color: #ffffff; text-align: center; padding: 7px 14px; font-size: 12px; font-weight: 700; letter-spacing: 0.03em; border-bottom: 1px solid rgba(255,255,255,0.15);">
+    <span>🚚 FRETE GRÁTIS ACIMA DE R$ 199 | 🎁 5% OFF NA 1ª COMPRA COM O CUPOM <strong style="color: #35c759; background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px;">VOLTEI5</strong></span>
+</div>
 <header class="navbar sv-navbar"><nav class="container nav-inner" aria-label="Navegação principal">
         <div class="nav-icons">
             <button class="sv-theme-toggle" id="theme-toggle" aria-label="Alternar tema">

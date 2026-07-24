@@ -13,18 +13,31 @@ $state = $company['state'] ?? 'MG';
 $zipcode = $company['zipcode'] ?? '35501-236';
 $socialMedia = is_array($company['social_media'] ?? null) ? $company['social_media'] : [];
 $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
+$cnpj = $company['cnpj'] ?? '49.903.300/0001-70';
+$address = ($company['address'] ?? 'RUA CAMPINA VERDE') . ', ' . ($company['number'] ?? '841');
+$neighborhood = $company['neighborhood'] ?? 'SAO JOSE';
+$city = $company['city'] ?? 'Divinopolis';
+$state = $company['state'] ?? 'MG';
+$zipcode = $company['zipcode'] ?? '35501-236';
+$socialMedia = is_array($company['social_media'] ?? null) ? $company['social_media'] : [];
+$whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
 ?>
 <footer>
     <div class="container">
         <div class="footer-cols">
             <div>
                 <strong>Vivaliz</strong>
-                <p>Qualidade e entrega rapida para todo o Brasil.</p>
-                <?php if ($whatsapp !== ''): ?>
-                    <div style="margin-top: 15px; display: flex; gap: 15px;">
-                        <a href="https://wa.me/<?= htmlspecialchars($whatsapp, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" title="WhatsApp" style="color: #157347; text-decoration: none; font-weight: 700;">WhatsApp</a>
-                    </div>
-                <?php endif; ?>
+                <p>Qualidade e entrega rápida para todo o Brasil.</p>
+                <div style="margin-top: 15px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                    <?php if ($whatsapp !== ''): ?>
+                        <a href="https://wa.me/<?= htmlspecialchars($whatsapp, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" title="WhatsApp" style="color: #25D366; text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg> WhatsApp
+                        </a>
+                    <?php endif; ?>
+                    <a href="https://instagram.com/shopvivaliz" target="_blank" rel="noopener" title="Instagram" style="color: #E1306C; text-decoration: none; font-weight: 700;">Instagram</a>
+                    <a href="https://tiktok.com/@shopvivaliz" target="_blank" rel="noopener" title="TikTok" style="color: #000; text-decoration: none; font-weight: 700;">TikTok</a>
+                    <a href="https://youtube.com/@shopvivaliz" target="_blank" rel="noopener" title="YouTube" style="color: #FF0000; text-decoration: none; font-weight: 700;">YouTube</a>
+                </div>
             </div>
 
             <div>
