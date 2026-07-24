@@ -177,6 +177,15 @@ git merge --ff-only origin/main
 
 ---
 
+### 11. Validação Visual Obrigatória via Browser
+
+**Obrigatório para toda alteração de layout, HTML, CSS, Javascript ou templates de interface:**
+- **Inviolável:** Antes de declarar sucesso, a IA deve rodar um teste visual real abrindo as páginas afetadas no browser (usando `playwright`, `puppeteer`, subagente de navegação ou similar).
+- **Evidência:** Deve ser gerada pelo menos uma captura de tela (screenshot) ou gravação comprovando que a interface renderizou corretamente (sem quebras de layout, sem sobreposição de textos, responsiva e com estilos aplicados).
+- **Registro:** O caminho da captura de tela deve ser documentado explicitamente no relatório final.
+
+---
+
 ## 📋 CHECKLIST
 
 - [ ] `set -Eeuo pipefail` em scripts

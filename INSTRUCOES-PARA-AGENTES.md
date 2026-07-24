@@ -107,6 +107,7 @@ path.write_text("\n".join(lines) + "\n", encoding="utf-8")  # Quebra de linha re
      --user dev5@dev.shopvivaliz.com.br:[senha]
    ```
 5. ✅ Fazer review do diff antes de merge
+6. ✅ **Validar visualmente no browser:** Antes de declarar sucesso, abra as páginas web alteradas no browser e tire prints/gravações para comprovar que o visual e a interação estão 100% corretos.
 
 ---
 

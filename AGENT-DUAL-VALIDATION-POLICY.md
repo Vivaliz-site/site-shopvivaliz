@@ -46,6 +46,7 @@ BOTH APPROVE?
 ✓ Build completes without errors
 ✓ No hardcoded secrets/credentials
 ✓ No breaking changes to APIs
+✓ Visual browser validation (for layout, HTML, CSS, JS, templates)
 ```
 
 ### Peer Validation (Another Agent)
