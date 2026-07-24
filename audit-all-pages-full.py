@@ -15,7 +15,7 @@ PAGES = [
     {"name": "03_sobre", "url": f"{BASE_URL}/sobre"},
     {"name": "04_contato", "url": f"{BASE_URL}/contato"},
     {"name": "05_carrinho", "url": f"{BASE_URL}/carrinho"},
-    {"name": "06_produto_detalhe", "url": f"{BASE_URL}/produto/armario-ferramentas-duas-portas-arm-08-fercar"}
+    {"name": "06_produto_detalhe", "url": f"{BASE_URL}/produto?sku=ARM-08"}
 ]
 
 def audit():
