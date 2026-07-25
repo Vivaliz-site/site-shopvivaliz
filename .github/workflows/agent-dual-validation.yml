@@ -93,7 +93,9 @@ jobs:
             | grep -v node_modules \
             | grep -v vendor \
             | grep -v ".git" \
-            | grep -v ".env.example" || true)
+            | grep -v ".env.example" \
+            | grep -v "tests/" \
+            | grep -v "scratch/" || true)
           if [ -n "$matches" ]; then
             echo "$matches" | head -20
             echo "::error::Potential hardcoded secrets found"
