@@ -148,8 +148,8 @@ $produto = $index !== null ? $catalog[$index] : null;
                     <input type="number" id="stock" name="stock" min="0" value="<?= htmlspecialchars((string)($produto['stock'] ?? 0)) ?>" required>
 
                     <div class="checkbox-row">
-                        <input type="checkbox" id="exibir_para_venda" name="exibir_para_venda" <?= in_array($produto['status'] ?? 'A', ['A', 'active'], true) ? 'checked' : '' ?>>
-                        <label for="exibir_para_venda" style="margin: 0;">Exibir para venda</label>
+                        <input type="checkbox" id="exibir_para_venda" name="exibir_para_venda" <?= ($produto['is_published'] ?? true) ? 'checked' : '' ?>>
+                        <label for="exibir_para_venda" style="margin: 0;">Exibir para venda (marcação local do site)</label>
                     </div>
 
                     <fieldset>
