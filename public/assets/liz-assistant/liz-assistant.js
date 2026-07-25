@@ -2,11 +2,24 @@
   const API = '/api/liz-intelligent.php';
   const root = document.createElement('div');
 
+  function localGreeting(date = new Date()) {
+    const hour = Number(new Intl.DateTimeFormat('pt-BR', {
+      hour: '2-digit',
+      hour12: false,
+      timeZone: 'America/Sao_Paulo',
+    }).format(date));
+    if (hour >= 5 && hour < 12) return 'Bom dia';
+    if (hour >= 12 && hour < 18) return 'Boa tarde';
+    return 'Boa noite';
+  }
+
+  const greeting = localGreeting();
+
   root.innerHTML = `
     <button id="sv-liz-launcher" type="button" aria-label="Abrir assistente Liz" aria-controls="sv-liz-panel" aria-expanded="false">
       <img src="/public/assets/liz-assistant/liz-avatar.png" alt="Liz">
     </button>
-    <div id="sv-liz-bubble">Ei! Vi que você tem produtos no carrinho. Finalize agora e use o cupom VOLTEI5 para 5% de desconto! 💸</div>
+    <div id="sv-liz-bubble">Posso ajudar com os produtos do seu carrinho. O cupom VOLTEI5 oferece 5% de desconto na primeira compra.</div>
     <section id="sv-liz-panel" role="dialog" aria-modal="false" aria-label="Liz - Assistente Virtual">
       <div class="sv-head">
         <img src="/public/assets/liz-assistant/logo-oficial.svg" alt="ShopVivaliz">
@@ -16,17 +29,19 @@
       <div class="sv-hero">
         <video autoplay muted loop playsinline src="/public/assets/liz-assistant/liz-acenando.webm"></video>
       </div>
-      <div class="sv-msgs">
-        <div class="sv-msg sv-bot">Oi! Eu sou a Liz. Posso ajudar você a encontrar um produto, acompanhar uma compra ou tirar dúvidas.</div>
+      <div class="sv-msgs" aria-live="polite" aria-relevant="additions text">
+        <div class="sv-msg sv-bot">${greeting}! Eu sou a Liz, assistente virtual da ShopVivaliz. Posso ajudar a encontrar produtos, acompanhar uma compra ou esclarecer dúvidas.</div>
       </div>
-      <div class="sv-quick">
-        <button type="button">Encontrar produto</button>
-        <button type="button">Compra segura</button>
-        <button type="button">Entrega</button>
-        <button type="button">Ofertas</button>
+      <div class="sv-quick" aria-label="Atalhos de atendimento">
+        <button type="button" data-message="Quero encontrar um produto">Encontrar produto</button>
+        <button type="button" data-message="Como funciona a compra segura?">Compra segura</button>
+        <button type="button" data-message="Quero informações sobre entrega">Entrega</button>
+        <button type="button" data-message="Quais ofertas estão confirmadas?">Ofertas</button>
+        <button type="button" data-message="Quero falar com um atendente humano">Falar com atendente</button>
       </div>
       <form class="sv-form">
-        <input placeholder="Digite sua pergunta" autocomplete="off">
+        <label for="sv-liz-input" class="sv-sr-only">Digite sua pergunta</label>
+        <input id="sv-liz-input" placeholder="Digite sua pergunta" autocomplete="off" maxlength="4000">
         <button type="submit">Enviar</button>
       </form>
     </section>`;
@@ -77,10 +92,10 @@
     const text = rawText.trim();
     if (!text || requestInFlight) return;
 
-    const history = conversation.slice(-12);
+    const history = conversation.slice(-16);
     conversation.push({ role: 'user', content: text });
     add(text, 'sv-user');
-    const waiting = add('Liz está pensando...', 'sv-bot');
+    const waiting = add('Estou consultando as informações para você...', 'sv-bot');
     setBusy(true);
 
     try {
@@ -91,6 +106,7 @@
           message: text,
           history,
           context: 'site-shopvivaliz',
+          clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       });
 
@@ -99,21 +115,16 @@
 
       if (!response.ok || data.ok === false) {
         const backendMessage = data.error || data.answer || data.message;
-        if (backendMessage) {
-          waiting.textContent = backendMessage;
-        } else if (response.status === 429) {
-          waiting.textContent = 'A Liz recebeu muitas mensagens agora. Aguarde alguns instantes e tente novamente.';
-        } else if (response.status === 503) {
-          waiting.textContent = 'A Liz está temporariamente indisponível. Tente novamente em alguns instantes.';
-        } else {
-          waiting.textContent = 'Não foi possível concluir sua solicitação agora. Tente novamente.';
-        }
+        if (backendMessage) waiting.textContent = backendMessage;
+        else if (response.status === 429) waiting.textContent = 'Recebemos muitas mensagens agora. Aguarde alguns instantes e tente novamente.';
+        else if (response.status === 503) waiting.textContent = 'A Liz está temporariamente indisponível. Tente novamente em alguns instantes ou fale conosco pelo WhatsApp (37) 99937-4112.';
+        else waiting.textContent = 'Não foi possível concluir sua solicitação agora. Tente novamente.';
         return;
       }
 
       const answer = String(data.answer || data.reply || data.message || data.response || '').trim();
       if (!answer) {
-        waiting.textContent = 'A Liz não recebeu uma resposta completa. Tente novamente em alguns instantes.';
+        waiting.textContent = 'Não recebi uma resposta completa. Tente novamente ou fale conosco pelo WhatsApp (37) 99937-4112.';
         return;
       }
 
@@ -121,7 +132,7 @@
       conversation.push({ role: 'assistant', content: answer });
     } catch (error) {
       console.error('Liz error:', error);
-      waiting.textContent = 'Não foi possível conectar à Liz agora. Verifique sua conexão e tente novamente.';
+      waiting.textContent = 'Não foi possível conectar à Liz agora. Verifique sua conexão ou fale conosco pelo WhatsApp (37) 99937-4112.';
       root.dataset.provider = 'none';
     } finally {
       setBusy(false);
@@ -138,20 +149,16 @@
   });
 
   quickButtons.forEach(button => {
-    button.addEventListener('click', () => ask(button.textContent.trim()));
+    button.addEventListener('click', () => ask(button.dataset.message || button.textContent.trim()));
   });
 
   fetch(`${API}?health=1`, { cache: 'no-store' })
     .then(response => response.json())
     .then(health => {
       const hasProvider = health.providers && Object.values(health.providers).some(Boolean);
-      root.dataset.health = health.ok === true && health.endpoint === 'liz-intelligent' && hasProvider
-        ? 'ok'
-        : 'degraded';
+      root.dataset.health = health.ok === true && health.endpoint === 'liz-intelligent' && hasProvider ? 'ok' : 'degraded';
     })
-    .catch(() => {
-      root.dataset.health = 'offline';
-    });
+    .catch(() => { root.dataset.health = 'offline'; });
 
   let abandonmentTriggered = false;
   document.addEventListener('mouseleave', event => {
