@@ -2,9 +2,10 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/content.php';
+require_once __DIR__ . '/../includes/blog-article-repository.php';
 
 $slug = trim((string)($_GET['slug'] ?? ''));
-$article = sv_blog_find_article($slug);
+$article = BlogArticleRepository::fromApplicationDatabase()->findPublishedBySlug($slug);
 
 if ($article === null) {
     http_response_code(404);

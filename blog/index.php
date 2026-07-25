@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/content.php';
+require_once __DIR__ . '/../includes/blog-article-repository.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -10,9 +11,18 @@ if (session_status() === PHP_SESSION_NONE) {
 header('Content-Type: text/html; charset=UTF-8');
 $query = trim((string)($_GET['q'] ?? ''));
 $categoryFilter = trim((string)($_GET['categoria'] ?? ''));
-$articles = sv_blog_search_articles($query, $categoryFilter, 30);
-$categories = sv_blog_categories();
-$totalArticles = count(sv_blog_articles());
+$repository = BlogArticleRepository::fromApplicationDatabase();
+$allPublished = $repository->published('', '', 200);
+$articles = $repository->published($query, $categoryFilter, 30);
+$categories = [];
+foreach ($allPublished as $publishedArticle) {
+    $category = trim((string)($publishedArticle['category'] ?? ''));
+    if ($category !== '') {
+        $categories[$category] = ($categories[$category] ?? 0) + 1;
+    }
+}
+ksort($categories, SORT_NATURAL | SORT_FLAG_CASE);
+$totalArticles = count($allPublished);
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">

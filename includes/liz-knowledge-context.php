@@ -1,13 +1,10 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../blog/content.php';
+require_once __DIR__ . '/blog-article-repository.php';
 
 /**
- * Retorna artigos da Central de Conhecimento relevantes para uma mensagem da Liz.
- *
- * Esta camada fica isolada para permitir evoluir de PHP estatico para MySQL/CMS
- * sem alterar o contrato usado pela assistente.
+ * Retorna artigos publicados da Central de Conhecimento relevantes para uma mensagem da Liz.
  */
 function sv_liz_knowledge_context(string $query, int $limit = 3): array
 {
@@ -32,8 +29,9 @@ function sv_liz_knowledge_context(string $query, int $limit = 3): array
         return [];
     }
 
+    $repository = BlogArticleRepository::fromApplicationDatabase();
     $matches = [];
-    foreach (sv_blog_articles() as $article) {
+    foreach ($repository->published('', '', 200) as $article) {
         $haystack = sv_liz_knowledge_normalize(implode(' ', [
             (string)($article['title'] ?? ''),
             (string)($article['excerpt'] ?? ''),
@@ -78,7 +76,7 @@ function sv_liz_knowledge_prompt_block(array $articles): string
     }
 
     $lines = [
-        'CONTEUDOS DA CENTRAL DE CONHECIMENTO RELACIONADOS A PERGUNTA:',
+        'CONTEUDOS PUBLICADOS DA CENTRAL DE CONHECIMENTO RELACIONADOS A PERGUNTA:',
     ];
 
     foreach ($articles as $article) {
