@@ -28,3 +28,17 @@ runtime-secrets
 ^\.github/sensitive-paths\.txt$
 CODEOWNERS
 branch-protection
+
+# Precos e promocoes (dinheiro saindo errado do bolso do cliente ou da
+# empresa se um valor/desconto/cupom for alterado por engano) - categoria
+# adicionada em 2026-07-25, junto com as demais acima, nao em lugar delas.
+^api/coupons/
+^api/orders/validate-coupon\.php
+^api/catalog/price-by-product\.php
+^api/catalog/price-health\.php
+^api/catalog/products-with-valid-price\.php
+^api/webhooks/tiny-product-price-sync\.php
+cupom
+coupon
+promocao
+frete-gratis
