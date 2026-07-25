@@ -46,7 +46,14 @@ function svcr_is_preorder(array $item): bool
 function svcr_filter_storefront_rows(array $rows): array
 {
     return array_values(array_filter($rows, static function ($row): bool {
-        return is_array($row) && !svcr_is_preorder($row);
+        if (!is_array($row) || svcr_is_preorder($row)) {
+            return false;
+        }
+        // Filtrar por status: apenas 'active' (ou sem status = padrão active)
+        if (($row['status'] ?? 'active') !== 'active') {
+            return false;
+        }
+        return true;
     }));
 }
 
