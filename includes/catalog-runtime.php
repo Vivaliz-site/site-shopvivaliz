@@ -49,8 +49,9 @@ function svcr_filter_storefront_rows(array $rows): array
         if (!is_array($row) || svcr_is_preorder($row)) {
             return false;
         }
-        // Filtrar por status: apenas 'active' (ou sem status = padrão active)
-        if (($row['status'] ?? 'active') !== 'active') {
+        // Filtrar por status: 'active', 'A' (Tiny), ou sem status = padrão ativo
+        $status = strtoupper(trim((string)($row['status'] ?? 'active')));
+        if (!in_array($status, ['ACTIVE', 'A'], true)) {
             return false;
         }
         return true;
