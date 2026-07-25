@@ -210,7 +210,7 @@ $produto = $index !== null ? $catalog[$index] : null;
                         <div class="grid-2">
                             <div>
                                 <label for="dim_net_weight">Peso líquido (kg)</label>
-                                <input type="number" step="0.001" min="0" id="dim_net_weight" name="dim_net_weight" value="<?= htmlspecialchars((string)($produto['dimensions']['net_weight'] ?? 0)) ?>">
+                                <input type="number" step="0.001" min="0" id="dim_net_weight" name="dim_net_weight" value="<?= htmlspecialchars((string)(($produto['dimensions'] ?? [])['net_weight'] ?? 0)) ?>">
                             </div>
                             <div>
                                 <label for="dim_gross_weight">Peso bruto (kg)</label>
