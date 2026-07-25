@@ -84,16 +84,31 @@ jobs:
           chmod +x activate-integrations.sh
           ./activate-integrations.sh
 
+      - name: 🔍 Verificar Agente Autônomo
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          AGENT_KEY="${SHOPVIVALIZ_AGENT_KEY:-${RUNTIME_AGENT_KEY:-${WATCHDOG_AGENT_KEY:-${AUTONOMOUS_AGENT_KEY:-}}}}"
+
+          if [ -z "$AGENT_KEY" ]; then
+            echo "⚠️ Nenhuma agent key configurada"
+          else
+            echo "✅ Agent key disponível"
+            curl -s -o /dev/null -w "Status do agente: %{http_code}\n" \
+              -H "X-ShopVivaliz-Agent-Key: $AGENT_KEY" \
+              "https://shopvivaliz.com.br/api/agent/autonomous-watchdog.php?run_loop=0&cycles=1" || true
+          fi
+
       - name: 📋 Atualizar Fila de Tarefas
         shell: bash
         run: |
           set -Eeuo pipefail
           git config user.email "agente-autonomo@shopvivaliz.com.br"
           git config user.name "Agente Autonomo ShopVivaliz"
-          
+
           # Adicionar tarefas de integração à fila
           cp tasks-queue-activate.json tasks-queue.json
-          
+
           git add tasks-queue.json tasks-queue-activate.json
           if git diff --cached --quiet; then
             echo "Sem alteracoes na fila."
