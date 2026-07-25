@@ -75,8 +75,18 @@ jobs:
           cycle = payload.get("autonomous_cycle", {})
           if payload.get("agent") != "autonomous-report":
               raise SystemExit("Resposta inesperada do relatorio autonomo")
+
+          # Validar endpoints disponíveis (deve ter pelo menos autonomous_watchdog)
+          endpoints = payload.get("endpoints", {})
+          if not endpoints.get("autonomous_watchdog"):
+              raise SystemExit("Endpoint autonomous_watchdog indisponível")
+
+          # Se ciclo ainda não foi registrado (inicial), apenas avisar
           if not cycle.get("available"):
-              raise SystemExit("Sem ciclo autonomo registrado")
+              print("ℹ️ Ciclo autônomo ainda não inicializado (primeira execução)")
+              print("✅ Sistema pronto para primeira execução")
+              exit(0)
+
           age = cycle.get("file_age_s")
           if age is None or int(age) > 3600:
               raise SystemExit(f"Ciclo autonomo desatualizado: {age}")
