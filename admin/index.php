@@ -63,6 +63,9 @@ $codename = (string)($version['codename'] ?? '');
                 <a href="/admin/cupons.php" style="background: #10b981; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
                     🎟️ Cupons
                 </a>
+                <a href="/admin/settings-frete.php" style="background: #d946ef; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    🚚 Frete Grátis
+                </a>
                 <a href="/admin/menu-completo.php" style="background: #6c757d; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
                     🎯 Menu Completo
                 </a>
