@@ -64,6 +64,9 @@ ai-system/config/orchestrator.json
 ai-system/memory/*.db
 ai-system/memory/*_status.json
 !ai-system/requirements.txt
+!ai-system/orchestrator/runtime.py
+!ai-system/orchestrator/
+!ai-system/memory/.gitkeep
 
 # ============================================================================
 # ARQUITETURA DE RELEASES IMUTÁVEIS (2026-07-25)
