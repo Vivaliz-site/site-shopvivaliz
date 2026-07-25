@@ -1,5 +1,7 @@
 (() => {
-  const API = '/api/liz-intelligent.php';
+  const lizConfig = window.ShopVivalizLizConfig || {};
+  const API = lizConfig.knowledgeEnabled === true && lizConfig.knowledgeApi ? lizConfig.knowledgeApi : (lizConfig.baseApi || '/api/liz-intelligent.php');
+  const HEALTH_API = lizConfig.baseApi || '/api/liz-intelligent.php';
   const root = document.createElement('div');
 
   function localGreeting(date = new Date()) {
@@ -47,6 +49,7 @@
     </section>`;
 
   document.body.append(root);
+  root.dataset.knowledge = lizConfig.knowledgeEnabled === true ? 'enabled' : 'disabled';
 
   const launcher = root.querySelector('#sv-liz-launcher');
   const panel = root.querySelector('#sv-liz-panel');
@@ -112,6 +115,8 @@
 
       const data = await response.json().catch(() => ({}));
       root.dataset.provider = data.provider || 'none';
+      if (typeof data.knowledge_found !== 'undefined') root.dataset.knowledgeFound = String(data.knowledge_found);
+      if (data.knowledge_mode) root.dataset.knowledgeMode = String(data.knowledge_mode);
 
       if (!response.ok || data.ok === false) {
         const backendMessage = data.error || data.answer || data.message;
@@ -152,7 +157,7 @@
     button.addEventListener('click', () => ask(button.dataset.message || button.textContent.trim()));
   });
 
-  fetch(`${API}?health=1`, { cache: 'no-store' })
+  fetch(`${HEALTH_API}?health=1`, { cache: 'no-store' })
     .then(response => response.json())
     .then(health => {
       root.dataset.health = health.ok === true && health.endpoint === 'liz-intelligent' ? 'ok' : 'degraded';
