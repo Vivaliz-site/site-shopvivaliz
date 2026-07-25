@@ -2,6 +2,7 @@
 declare(strict_types=1);
 header('Content-Type: application/xml; charset=UTF-8');
 require_once __DIR__ . '/includes/catalog-runtime.php';
+require_once __DIR__ . '/blog/content.php';
 
 $official = __DIR__ . '/config/official-site.php';
 $officialData = is_file($official) ? (@include $official) : [];
@@ -28,7 +29,7 @@ $pages = [
     ['loc' => '/politica-privacidade/', 'priority' => '0.3', 'freq' => 'yearly'],
     ['loc' => '/politica-devolucoes', 'priority' => '0.3', 'freq' => 'yearly'],
     ['loc' => '/politica-entrega', 'priority' => '0.3', 'freq' => 'yearly'],
-    ['loc' => '/blog/',      'priority' => '0.6', 'freq' => 'weekly'],
+    ['loc' => '/blog/',      'priority' => '0.7', 'freq' => 'weekly'],
 ];
 
 foreach ($pages as $p) {
@@ -37,6 +38,26 @@ foreach ($pages as $p) {
     echo "    <lastmod>{$today}</lastmod>\n";
     echo '    <changefreq>' . $p['freq'] . "</changefreq>\n";
     echo '    <priority>' . $p['priority'] . "</priority>\n";
+    echo "  </url>\n";
+}
+
+foreach (sv_blog_articles() as $article) {
+    $slug = trim((string)($article['slug'] ?? ''));
+    if ($slug === '') continue;
+    $lastmod = trim((string)($article['updated_at'] ?? $article['published_at'] ?? $today));
+    $image = trim((string)($article['image'] ?? ''));
+    echo "  <url>\n";
+    echo '    <loc>' . sx($base . '/blog/' . rawurlencode($slug)) . "</loc>\n";
+    echo '    <lastmod>' . sx($lastmod) . "</lastmod>\n";
+    echo "    <changefreq>monthly</changefreq>\n";
+    echo "    <priority>0.7</priority>\n";
+    if ($image !== '') {
+        $absoluteImage = str_starts_with($image, 'http') ? $image : $base . '/' . ltrim($image, '/');
+        echo "    <image:image>\n";
+        echo '      <image:loc>' . sx($absoluteImage) . "</image:loc>\n";
+        echo '      <image:title>' . sx((string)($article['title'] ?? '')) . "</image:title>\n";
+        echo "    </image:image>\n";
+    }
     echo "  </url>\n";
 }
 

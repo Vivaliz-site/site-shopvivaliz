@@ -1,5 +1,17 @@
 (() => {
-  const API = '/api/liz-intelligent.php';
+  const lizConfig = window.ShopVivalizLizConfig || {};
+  const lizParams = new URLSearchParams(window.location.search || '');
+  const storageKey = 'shopvivaliz_liz_knowledge';
+  const storedKnowledge = (() => {
+    try {
+      return window.localStorage ? window.localStorage.getItem(storageKey) : null;
+    } catch (error) {
+      return null;
+    }
+  })();
+  const lizKnowledgeEnabled = lizConfig.knowledgeEnabled === true || lizParams.get('lizKnowledge') === '1' || storedKnowledge === '1';
+  const API = lizKnowledgeEnabled && lizConfig.knowledgeApi ? lizConfig.knowledgeApi : (lizKnowledgeEnabled ? '/api/liz/intelligent-knowledge' : (lizConfig.baseApi || '/api/liz-intelligent.php'));
+  const HEALTH_API = lizConfig.baseApi || '/api/liz-intelligent.php';
   const root = document.createElement('div');
 
   function localGreeting(date = new Date()) {
@@ -47,6 +59,8 @@
     </section>`;
 
   document.body.append(root);
+  root.dataset.knowledge = lizKnowledgeEnabled ? 'enabled' : 'disabled';
+  root.dataset.knowledgeSource = lizParams.get('lizKnowledge') === '1' ? 'query' : (storedKnowledge === '1' ? 'localStorage' : (lizConfig.knowledgeEnabled === true ? 'config' : 'default'));
 
   const launcher = root.querySelector('#sv-liz-launcher');
   const panel = root.querySelector('#sv-liz-panel');
@@ -112,6 +126,8 @@
 
       const data = await response.json().catch(() => ({}));
       root.dataset.provider = data.provider || 'none';
+      if (typeof data.knowledge_found !== 'undefined') root.dataset.knowledgeFound = String(data.knowledge_found);
+      if (data.knowledge_mode) root.dataset.knowledgeMode = String(data.knowledge_mode);
 
       if (!response.ok || data.ok === false) {
         const backendMessage = data.error || data.answer || data.message;
@@ -152,7 +168,7 @@
     button.addEventListener('click', () => ask(button.dataset.message || button.textContent.trim()));
   });
 
-  fetch(`${API}?health=1`, { cache: 'no-store' })
+  fetch(`${HEALTH_API}?health=1`, { cache: 'no-store' })
     .then(response => response.json())
     .then(health => {
       root.dataset.health = health.ok === true && health.endpoint === 'liz-intelligent' ? 'ok' : 'degraded';
