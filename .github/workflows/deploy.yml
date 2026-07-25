@@ -1,11 +1,24 @@
-name: Deploy Automático Seguro - Shop Vivaliz
+name: Deploy Automático Seguro - Shop Vivaliz (DESATIVADO - VM Oracle é a produção real)
 
-# Desativado o gatilho automatico em push: a producao real e a VM Oracle
-# (shopvivaliz.com.br -> 137.131.156.17, sincronizada via cron
-# git-auto-sync.py), nao o HostGator. Mantido workflow_dispatch para
-# rodar manualmente se o HostGator voltar a ser usado no futuro.
+# ⚠️ DESATIVADO: FTP deploy não é usado em produção.
+#
+# A produção real é a VM Oracle Cloud (137.131.156.17) que roda:
+# - git-auto-sync.py a cada 30 minutos
+# - Faz `git fetch` + `reset --hard origin/main`
+#
+# Este workflow foi mantido apenas para referência histórica.
+# Se precisar fazer deploy manual via FTP, configure os secrets FTP_* no GitHub
+# e remova o comentário de desativação abaixo.
+#
+# Secrets necessários (se ativar):
+# - FTP_SERVER, FTP_USERNAME, FTP_PASSWORD, FTP_PORT, FTP_REMOTE_DIR
 on:
   workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Forçar deploy FTP (aviso: produção está em VM Oracle)'
+        required: false
+        default: 'false'
 
 permissions:
   contents: read
