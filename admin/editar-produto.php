@@ -224,7 +224,7 @@ $produto = $index !== null ? $catalog[$index] : null;
                         <div class="grid-2">
                             <div>
                                 <label for="cost_price">Preço de custo (R$)</label>
-                                <input type="number" step="0.01" min="0" id="cost_price" name="cost_price" value="<?= htmlspecialchars((string)($produto['prices']['cost_price'] ?? 0)) ?>">
+                                <input type="number" step="0.01" min="0" id="cost_price" name="cost_price" value="<?= htmlspecialchars((string)(($produto['prices'] ?? [])['cost_price'] ?? 0)) ?>">
                             </div>
                             <div>
                                 <label for="promotional_price">Preço promocional (R$)</label>
