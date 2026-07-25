@@ -101,8 +101,9 @@ function svcr_products(): array
             continue;
         }
 
-        // Filtrar por status: apenas 'active' (padrão se não especificado)
-        if (($item['status'] ?? 'active') !== 'active') {
+        // Filtrar por status: 'active', 'A' (Tiny), ou sem status = padrão ativo
+        $status = strtoupper(trim((string)($item['status'] ?? 'A')));
+        if (!in_array($status, ['ACTIVE', 'A'], true)) {
             continue;
         }
 
