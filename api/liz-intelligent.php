@@ -96,7 +96,7 @@ function liz_local_context(?string $timeStr = null): array
     $timezone = new DateTimeZone('America/Sao_Paulo');
     $now = new DateTimeImmutable($timeStr ?? 'now', $timezone);
     $hour = (int)$now->format('G');
-    
+
     // Regra correta de saudação por horário local:
     // 00:00 até 04:59 -> Boa noite
     // 05:00 até 11:59 -> Bom dia
@@ -128,7 +128,7 @@ function liz_normalize_simple_text(string $text): string
     // Remover pontuações simples comum
     $text = preg_replace('/[.!?,;\-]/u', '', $text);
     $text = trim(preg_replace('/\s+/', ' ', $text) ?? '');
-    
+
     // Substituir acentos
     $from = ['á', 'à', 'â', 'ã', 'ä', 'é', 'è', 'ê', 'ë', 'í', 'ì', 'î', 'ï', 'ó', 'ò', 'ô', 'õ', 'ö', 'ú', 'ù', 'û', 'ü', 'ç'];
     $to   = ['a', 'a', 'a', 'a', 'a', 'e', 'e', 'e', 'e', 'i', 'i', 'i', 'i', 'o', 'o', 'o', 'o', 'o', 'u', 'u', 'u', 'u', 'c'];
@@ -143,12 +143,12 @@ function liz_check_rate_limit(): void
     // Usamos REMOTE_ADDR para evitar spoofing por cabeçalhos do cliente (ex: X-Forwarded-For)
     // visto que não há validação estrita de proxy confiável configurada neste momento.
     $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-    
+
     $limitDir = dirname(__DIR__) . '/storage/liz-rate-limit';
     if (!is_dir($limitDir)) {
         mkdir($limitDir, 0755, true);
     }
-    
+
     // Limpeza ocasional de arquivos antigos (1% de chance por requisição)
     if (random_int(1, 100) === 1) {
         $now = time();
@@ -158,18 +158,18 @@ function liz_check_rate_limit(): void
             }
         }
     }
-    
+
     $ipHash = md5($ip);
     $limitFile = $limitDir . '/' . $ipHash . '.json';
-    
+
     $fp = fopen($limitFile, 'c+');
     if ($fp === false) {
         return; // Falha silenciosa se não puder criar arquivo
     }
-    
+
     // Lock exclusivo para evitar condição de corrida
     flock($fp, LOCK_EX);
-    
+
     $size = filesize($limitFile);
     $data = [];
     if ($size > 0) {
@@ -179,25 +179,25 @@ function liz_check_rate_limit(): void
             $data = json_decode($content, true) ?: [];
         }
     }
-    
+
     $now = time();
     $windowSize = 60; // 60 segundos
     $maxRequests = 60; // Máximo 60 requisições
-    
+
     if (!isset($data['reset']) || $now > $data['reset']) {
         $data['count'] = 1;
         $data['reset'] = $now + $windowSize;
     } else {
         $data['count']++;
     }
-    
+
     ftruncate($fp, 0);
     rewind($fp);
     fwrite($fp, json_encode($data));
     fflush($fp);
     flock($fp, LOCK_UN);
     fclose($fp);
-    
+
     if ($data['count'] > $maxRequests) {
         $retryAfter = $data['reset'] - $now;
         header('Retry-After: ' . $retryAfter);
@@ -303,19 +303,19 @@ function liz_search_products(string $query): array
     if (!is_array($products)) {
         return [];
     }
-    
+
     // Normalizar busca
     $queryNorm = liz_strtolower($query);
-    
+
     // Remover Stop Words para evitar cruzamento falso de termos comuns
     $stopWords = ['bom', 'boa', 'dia', 'tarde', 'noite', 'oi', 'ola', 'olá', 'quero', 'preciso', 'produto', 'produtos', 'casa', 'favor', 'ajuda', 'comprar'];
-    
+
     $terms = preg_split('/\s+/u', preg_replace('/[^\p{L}\p{N}\s-]/u', ' ', $queryNorm) ?? '') ?: [];
     $terms = array_values(array_filter($terms, static function(string $term) use ($stopWords): bool {
         $len = function_exists('mb_strlen') ? mb_strlen($term, 'UTF-8') : strlen($term);
         return $len >= 3 && !in_array($term, $stopWords, true);
     }));
-    
+
     $relevant = [];
     foreach ($products as $product) {
         if (!is_array($product)) {
@@ -325,7 +325,7 @@ function liz_search_products(string $query): array
         $category = liz_strtolower((string)($product['category'] ?? ''));
         $haystack = $name . ' ' . $category;
         $score = 0;
-        
+
         // Se a busca inteira normalizada está contida
         if ($queryNorm !== '' && (str_contains($name, $queryNorm) || str_contains($category, $queryNorm))) {
             $score += 10;
@@ -336,7 +336,7 @@ function liz_search_products(string $query): array
                 $score += 2;
             }
         }
-        
+
         if ($score > 0) {
             $relevant[] = [
                 'sku' => $product['sku'] ?? null,
@@ -347,9 +347,9 @@ function liz_search_products(string $query): array
             ];
         }
     }
-    
+
     usort($relevant, static fn(array $a, array $b): int => $b['score'] <=> $a['score']);
-    
+
     // Limite máximo rígido de 5 produtos retornados
     return array_slice($relevant, 0, 5);
 }
@@ -481,36 +481,36 @@ function liz_normalized_history(array $history, string $assistantRole, string $c
 {
     $clean = [];
     $currentNormalized = liz_strtolower(trim($currentMessage));
-    
+
     // Limita o histórico processado aos últimos 30 elementos para evitar abuse
     foreach (array_slice($history, -30) as $entry) {
         if (!is_array($entry)) {
             continue;
         }
         $rawRole = strtolower(trim((string)($entry['role'] ?? '')));
-        
+
         // Rejeitar explicitamente a role system enviada do cliente
         if ($rawRole === 'system') {
             continue;
         }
-        
+
         if (!in_array($rawRole, ['user', 'assistant', 'model'], true)) {
             continue;
         }
-        
+
         $content = trim((string)($entry['content'] ?? ''));
         if (liz_is_ignored_history_text($content)) {
             continue;
         }
-        
+
         // Truncar mensagens individuais do histórico em 2500 caracteres
         $content = liz_substr($content, 0, 2500);
-        
+
         $role = $rawRole === 'user' ? 'user' : $assistantRole;
         if ($role === 'user' && $currentNormalized !== '' && liz_strtolower($content) === $currentNormalized) {
             continue;
         }
-        
+
         $last = count($clean) - 1;
         if ($last >= 0 && $clean[$last]['role'] === $role) {
             $clean[$last]['content'] .= "\n" . $content;
@@ -518,14 +518,14 @@ function liz_normalized_history(array $history, string $assistantRole, string $c
             $clean[] = ['role' => $role, 'content' => $content];
         }
     }
-    
+
     while ($clean !== [] && $clean[0]['role'] !== 'user') {
         array_shift($clean);
     }
     while ($clean !== [] && $clean[count($clean) - 1]['role'] === 'user') {
         array_pop($clean);
     }
-    
+
     // Limite rígido de 16 mensagens no histórico enviado para a IA
     return array_slice($clean, -16);
 }
@@ -536,7 +536,7 @@ function liz_log_provider_error(string $provider, int $httpCode, string $curlErr
     if (strlen($body) > 1000) {
         $body = substr($body, 0, 1000) . '…';
     }
-    
+
     // Ocultar chaves de API ou segredos do Authorization header nos logs caso vazem de alguma forma
     $body = preg_replace('/(AIzaSy[A-Za-z0-9_\-]{35}|Bearer\s+[A-Za-z0-9_\-\.]+)/i', '***REDACTED***', $body) ?? $body;
     $curlError = preg_replace('/(AIzaSy[A-Za-z0-9_\-]{35}|Bearer\s+[A-Za-z0-9_\-\.]+)/i', '***REDACTED***', $curlError) ?? $curlError;
@@ -562,22 +562,22 @@ function liz_extract_gemini_text(array $data): ?string
     if (!is_array($parts)) {
         return null;
     }
-    
+
     $texts = [];
     foreach ($parts as $part) {
         if (!is_array($part)) {
             continue;
         }
-        
+
         // Ignora pensamentos ou metadados de pensamento internos caso o Gemini retorne estruturado
         if (isset($part['thought']) && $part['thought'] === true) {
             continue;
         }
-        
+
         if (!isset($part['text']) || !is_string($part['text'])) {
             continue;
         }
-        
+
         $text = trim($part['text']);
         if ($text !== '') {
             $texts[] = $text;
@@ -594,10 +594,10 @@ function liz_call_gemini(string $message, array $history, array $products, strin
         $contents[] = ['role' => $entry['role'], 'parts' => [['text' => $entry['content']]]];
     }
     $contents[] = ['role' => 'user', 'parts' => [['text' => $message]]];
-    
+
     $model = liz_env('GEMINI_MODEL') ?: 'gemini-1.5-flash';
     $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent';
-    
+
     $payload = [
         'system_instruction' => ['parts' => [['text' => liz_system_prompt($products)]]],
         'contents' => $contents,
@@ -606,20 +606,20 @@ function liz_call_gemini(string $message, array $history, array $products, strin
             'temperature' => 0.35,
         ],
     ];
-    
+
     // Adicionar thinkingConfig apenas se o modelo suportar thinking explicitamente
     if (str_contains(strtolower($model), 'thinking') || str_contains(strtolower($model), 'gemini-2.')) {
         $payload['generationConfig']['thinkingConfig'] = ['thinkingLevel' => 'minimal'];
     }
-    
+
     $encodedPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if (!is_string($encodedPayload)) {
         return null;
     }
-    
+
     $retryable = [429, 500, 502, 503, 504];
     $maxAttempts = 3;
-    
+
     for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
         if ($attempt > 0) {
             // Jitter + Exponential Backoff
@@ -627,12 +627,12 @@ function liz_call_gemini(string $message, array $history, array $products, strin
             $jitter = random_int(0, 100000);
             usleep($backoff + $jitter);
         }
-        
+
         $ch = curl_init($url);
         if ($ch === false) {
             return null;
         }
-        
+
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'x-goog-api-key: ' . $apiKey],
@@ -642,29 +642,29 @@ function liz_call_gemini(string $message, array $history, array $products, strin
             CURLOPT_TIMEOUT => 30, // Reduzido para evitar prender worker
             CURLOPT_HEADER => true, // Para ler headers de resposta como Retry-After
         ]);
-        
+
         $response = curl_exec($ch);
         $curlError = curl_error($ch);
         $curlErrno = curl_errno($ch);
         $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         curl_close($ch);
-        
+
         if ($response === false) {
             $internalCode = $curlErrno === CURLE_OPERATION_TIMEDOUT ? 'timeout' : 'network_error';
             liz_log_provider_error('Gemini', $httpCode, $curlError, '', $internalCode);
             continue;
         }
-        
+
         $headersStr = substr((string)$response, 0, $headerSize);
         $body = substr((string)$response, $headerSize);
-        
+
         // Tratar Retry-After
         $retryAfterSecs = null;
         if ($httpCode === 429 && preg_match('/retry-after:\s*(\d+)/i', $headersStr, $matches)) {
             $retryAfterSecs = (int)$matches[1];
         }
-        
+
         if ($httpCode === 200 && $body !== '') {
             $data = json_decode($body, true);
             if (is_array($data)) {
@@ -672,7 +672,7 @@ function liz_call_gemini(string $message, array $history, array $products, strin
                 if ($answer !== null) {
                     return $answer;
                 }
-                
+
                 $finishReason = $data['candidates'][0]['finishReason'] ?? '';
                 $internalCode = ($finishReason === 'SAFETY') ? 'safety_block' : 'empty_response';
                 liz_log_provider_error('Gemini resposta vazia', $httpCode, $curlError, $body, $internalCode);
@@ -681,7 +681,7 @@ function liz_call_gemini(string $message, array $history, array $products, strin
             liz_log_provider_error('Gemini JSON invalido', $httpCode, $curlError, $body, 'invalid_response');
             return null;
         }
-        
+
         $internalCode = 'network_error';
         if ($httpCode === 400) {
             $internalCode = 'invalid_request';
@@ -694,13 +694,13 @@ function liz_call_gemini(string $message, array $history, array $products, strin
         } elseif ($httpCode >= 500) {
             $internalCode = 'provider_unavailable';
         }
-        
+
         liz_log_provider_error('Gemini', $httpCode, $curlError, $body, $internalCode);
-        
+
         if (!in_array($httpCode, $retryable, true) || $attempt === ($maxAttempts - 1)) {
             return null;
         }
-        
+
         // Se temos Retry-After em segundos, respeitar
         if ($retryAfterSecs !== null && $retryAfterSecs > 0 && $retryAfterSecs < 10) {
             sleep($retryAfterSecs);
@@ -714,19 +714,19 @@ function liz_call_gpt(string $message, array $history, array $products, string $
     $messages = [['role' => 'system', 'content' => liz_system_prompt($products)]];
     $messages = array_merge($messages, liz_normalized_history($history, 'assistant', $message));
     $messages[] = ['role' => 'user', 'content' => $message];
-    
+
     $payload = [
         'model' => liz_env('OPENAI_MODEL') ?: 'gpt-4o-mini',
         'messages' => $messages,
         'max_tokens' => 1000,
         'temperature' => 0.35
     ];
-    
+
     $ch = curl_init('https://api.openai.com/v1/chat/completions');
     if ($ch === false) {
         return null;
     }
-    
+
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $apiKey],
@@ -735,13 +735,13 @@ function liz_call_gpt(string $message, array $history, array $products, string $
         CURLOPT_CONNECTTIMEOUT => 5,
         CURLOPT_TIMEOUT => 30
     ]);
-    
+
     $response = curl_exec($ch);
     $curlError = curl_error($ch);
     $curlErrno = curl_errno($ch);
     $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    
+
     if ($httpCode !== 200 || !is_string($response) || $response === '') {
         $internalCode = 'network_error';
         if ($curlErrno === CURLE_OPERATION_TIMEDOUT) {
@@ -758,7 +758,7 @@ function liz_call_gpt(string $message, array $history, array $products, string $
         liz_log_provider_error('OpenAI', $httpCode, $curlError, is_string($response) ? $response : '', $internalCode);
         return null;
     }
-    
+
     $data = json_decode($response, true);
     $answer = $data['choices'][0]['message']['content'] ?? null;
     return is_string($answer) && trim($answer) !== '' ? trim($answer) : null;
@@ -768,19 +768,19 @@ function liz_call_claude(string $message, array $history, array $products, strin
 {
     $messages = liz_normalized_history($history, 'assistant', $message);
     $messages[] = ['role' => 'user', 'content' => $message];
-    
+
     $payload = [
         'model' => liz_env('ANTHROPIC_MODEL') ?: 'claude-3-5-haiku-20241022',
         'max_tokens' => 1000,
         'system' => liz_system_prompt($products),
         'messages' => $messages
     ];
-    
+
     $ch = curl_init('https://api.anthropic.com/v1/messages');
     if ($ch === false) {
         return null;
     }
-    
+
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HTTPHEADER => [
@@ -793,13 +793,13 @@ function liz_call_claude(string $message, array $history, array $products, strin
         CURLOPT_CONNECTTIMEOUT => 5,
         CURLOPT_TIMEOUT => 30
     ]);
-    
+
     $response = curl_exec($ch);
     $curlError = curl_error($ch);
     $curlErrno = curl_errno($ch);
     $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    
+
     if ($httpCode !== 200 || !is_string($response) || $response === '') {
         $internalCode = 'network_error';
         if ($curlErrno === CURLE_OPERATION_TIMEDOUT) {
@@ -816,7 +816,7 @@ function liz_call_claude(string $message, array $history, array $products, strin
         liz_log_provider_error('Claude', $httpCode, $curlError, is_string($response) ? $response : '', $internalCode);
         return null;
     }
-    
+
     $data = json_decode($response, true);
     $answer = $data['content'][0]['text'] ?? null;
     return is_string($answer) && trim($answer) !== '' ? trim($answer) : null;
