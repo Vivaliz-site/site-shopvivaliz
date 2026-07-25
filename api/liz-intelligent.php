@@ -607,8 +607,8 @@ function liz_call_gemini(string $message, array $history, array $products, strin
         ],
     ];
 
-    // Adicionar thinkingConfig apenas se o modelo suportar thinking explicitamente
-    if (str_contains(strtolower($model), 'thinking') || str_contains(strtolower($model), 'gemini-2.')) {
+    // Adicionar thinkingConfig apenas se o modelo suportar thinking de forma explícita
+    if (str_contains(strtolower($model), 'thinking') || str_contains(strtolower($model), 'deep-think') || str_contains(strtolower($model), 'deep-research')) {
         $payload['generationConfig']['thinkingConfig'] = ['thinkingLevel' => 'minimal'];
     }
 
