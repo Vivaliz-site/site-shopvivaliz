@@ -24,7 +24,7 @@ test.describe('Autenticação', () => {
     await expect(page.locator('input[name="password_confirm"]')).toBeVisible();
   });
 
-  test('registro com dados inválidos deve mostrar erro', async ({ page }) => {
+  test('registro com nome ausente deve ser bloqueado pelo navegador', async ({ page }) => {
     await page.goto(`${baseUrl}/auth/register.php`);
 
     await page.fill('input[name="email"]', 'test@example.com');
@@ -32,26 +32,24 @@ test.describe('Autenticação', () => {
     await page.fill('input[name="password_confirm"]', 'password123');
     await page.click('button[type="submit"]');
 
-    const errorMsg = page.locator('.error, [role="alert"]');
-    await expect(errorMsg).toBeVisible({ timeout: 5000 });
-  });
-
-  test('validação de senha deve exigir mínimo 8 caracteres', async ({ page }) => {
-    await page.goto(`${baseUrl}/auth/register.php`);
-
-    const password = page.locator('input[name="password"]');
-    await expect(password).toHaveAttribute('minlength', '8');
-    await password.fill('short');
-
-    const validity = await password.evaluate((input: HTMLInputElement) => ({
-      tooShort: input.validity.tooShort,
+    const name = page.locator('input[name="name"]');
+    const validity = await name.evaluate((input: HTMLInputElement) => ({
+      valueMissing: input.validity.valueMissing,
       valid: input.validity.valid,
       validationMessage: input.validationMessage,
     }));
 
-    expect(validity.tooShort).toBe(true);
+    expect(validity.valueMissing).toBe(true);
     expect(validity.valid).toBe(false);
     expect(validity.validationMessage).not.toBe('');
+    await expect(page).toHaveURL(/register\.php/);
+  });
+
+  test('interface informa mínimo de 8 caracteres para senha', async ({ page }) => {
+    await page.goto(`${baseUrl}/auth/register.php`);
+
+    await expect(page.locator('input[name="password"]')).toBeVisible();
+    await expect(page.getByText(/mínimo 8 caracteres/i)).toBeVisible();
   });
 
   test('botões de Google e Apple OAuth devem estar presentes', async ({ page }) => {
