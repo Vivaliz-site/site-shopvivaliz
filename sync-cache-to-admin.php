@@ -43,10 +43,10 @@ foreach ($items as $item) {
 
     if (!$id || !$sku) continue;
 
-    $sql = "INSERT INTO products (olist_product_id, sku, name, price, stock, category, is_published, created_at, updated_at)
-            VALUES ($id, '$sku', '" . $db->real_escape_string($name) . "', $price, $stock, '" . $db->real_escape_string($cat) . "', 1, NOW(), NOW())
+    $sql = "INSERT INTO products (olist_id, sku, name, price, stock, active, created_at, updated_at)
+            VALUES ($id, '$sku', '" . $db->real_escape_string($name) . "', $price, $stock, 1, NOW(), NOW())
             ON DUPLICATE KEY UPDATE
-            name='" . $db->real_escape_string($name) . "', price=$price, stock=$stock, category='" . $db->real_escape_string($cat) . "', updated_at=NOW()";
+            name='" . $db->real_escape_string($name) . "', price=$price, stock=$stock, active=1, updated_at=NOW()";
 
     if ($db->query($sql)) {
         $synced++;
