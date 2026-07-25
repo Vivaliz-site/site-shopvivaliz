@@ -57,6 +57,7 @@ storage/commerce_signals.json
 storage/codex-bridge/state.json
 storage/orchestrator/queue.json
 storage/products-cache-ativos.json
+!storage/autonomous_cycle.json
 .agent-heartbeats/
 .git-sync.lock
 .git-auto-sync.log
