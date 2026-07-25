@@ -10,7 +10,7 @@ readonly RELEASES_DIR="/home/ubuntu/shopvivaliz-deploy/releases"
 readonly SHARED_DIR="/home/ubuntu/shopvivaliz-deploy/shared"
 readonly CURRENT_LINK="/home/ubuntu/shopvivaliz-deploy/current"
 readonly LOCK_FILE="/var/lock/shopvivaliz-deploy.lock"
-readonly LOG_FILE="/var/log/shopvivaliz-deploy.log"
+readonly LOG_FILE="/home/ubuntu/shopvivaliz-deploy/logs/deploy.log"
 readonly RETENTION_COUNT=5
 
 # Logging
