@@ -23,6 +23,7 @@ REPORT_JSON = REPORT_DIR / "report.json"
 REPORT_MD = REPORT_DIR / "report.md"
 
 EXECUTABLE_SUFFIXES = {".py", ".js", ".ts", ".php", ".sh", ".yml", ".yaml", ".json"}
+EXCLUDED_FILES = {"scripts/audit-agents-real-work.py"}
 EXCLUDED_PREFIXES = (
     ".git/",
     "node_modules/",
@@ -83,7 +84,7 @@ def tracked_files() -> list[Path]:
         if not raw:
             continue
         rel = raw.decode("utf-8", errors="replace")
-        if rel.startswith(EXCLUDED_PREFIXES):
+        if rel in EXCLUDED_FILES or rel.startswith(EXCLUDED_PREFIXES):
             continue
         path = ROOT / rel
         if path.suffix.lower() in EXECUTABLE_SUFFIXES and path.is_file():
