@@ -95,7 +95,7 @@
       "title": "Auditoria Contínua de Integrações",
       "description": "Monitorar sincronizações Shopee, ML, Google Ads 24/7",
       "priority": "high",
-      "status": "in_progress",
+      "status": "pending",
       "assigned_to": ["claude", "gemini"],
       "schedule": "*/30 * * * *",
       "estimated_hours": 0.5,
