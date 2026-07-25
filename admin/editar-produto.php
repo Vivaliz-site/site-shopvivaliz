@@ -228,7 +228,7 @@ $produto = $index !== null ? $catalog[$index] : null;
                             </div>
                             <div>
                                 <label for="promotional_price">Preço promocional (R$)</label>
-                                <input type="number" step="0.01" min="0" id="promotional_price" name="promotional_price" value="<?= htmlspecialchars((string)($produto['prices']['promotional_price'] ?? 0)) ?>">
+                                <input type="number" step="0.01" min="0" id="promotional_price" name="promotional_price" value="<?= htmlspecialchars((string)(($produto['prices'] ?? [])['promotional_price'] ?? 0)) ?>">
                             </div>
                         </div>
                     </fieldset>
