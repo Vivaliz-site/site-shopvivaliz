@@ -100,7 +100,12 @@ function svcr_products(): array
             continue;
         }
 
-        $situation = strtoupper(trim((string)($item['situacao'] ?? $item['status'] ?? 'A')));
+        // Filtrar por status: apenas 'active' (padrão se não especificado)
+        if (($item['status'] ?? 'active') !== 'active') {
+            continue;
+        }
+
+        $situation = strtoupper(trim((string)($item['situacao'] ?? 'A')));
         if (!in_array($situation, ['A', 'ATIVO', 'ACTIVE'], true)) {
             continue;
         }
