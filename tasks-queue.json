@@ -64,7 +64,7 @@
       "title": "Sincronizar Pedidos do Mercado Livre",
       "description": "Importar pedidos do Mercado Livre para o sistema",
       "priority": "high",
-      "status": "in_progress",
+      "status": "pending",
       "assigned_to": ["claude", "gemini"],
       "requires_secrets": ["ML_SELLER_ID", "ML_CLIENT_ID"],
       "estimated_hours": 2,
