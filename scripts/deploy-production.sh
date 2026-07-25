@@ -70,7 +70,7 @@ else
 fi
 
 # Idempotent check
-if [ "$REMOTE_SHA" = "$ACTIVE_SHA" ]; then
+if [ "${REMOTE_SHA:0:8}" = "$ACTIVE_SHA" ]; then
   log "INFO" "Já está alinhado (SHA idêntico). Nada a fazer."
   exit 0
 fi
