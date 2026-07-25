@@ -58,7 +58,6 @@ storage/codex-bridge/state.json
 storage/orchestrator/queue.json
 storage/products-cache-ativos.json
 .agent-heartbeats/
-tasks-queue.json
 .git-sync.lock
 .git-auto-sync.log
 ai-system/config/orchestrator.json
