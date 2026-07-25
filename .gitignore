@@ -63,7 +63,7 @@ storage/products-cache-ativos.json
 ai-system/config/orchestrator.json
 ai-system/memory/*.db
 ai-system/memory/*_status.json
-ai-system/
+!ai-system/requirements.txt
 
 # ============================================================================
 # ARQUITETURA DE RELEASES IMUTÁVEIS (2026-07-25)
