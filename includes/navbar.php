@@ -166,8 +166,15 @@ header.sv-navbar .menu-toggle {
 }
 </style>
 
+<?php
+$svFreeShippingConfig = sv_free_shipping_config();
+?>
 <div class="sv-announcement-bar">
-    <span>🚚 FRETE GRÁTIS ACIMA DE R$ 199 | 🎁 5% OFF NA 1ª COMPRA COM O CUPOM <strong style="color: #35c759; background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px;">VOLTEI5</strong></span>
+    <?php if ($svFreeShippingConfig['enabled'] && $svFreeShippingConfig['threshold'] > 0): ?>
+        <span>🚚 FRETE GRÁTIS ACIMA DE R$ <?= number_format($svFreeShippingConfig['threshold'], 2, ',', '.') ?> | 🎁 5% OFF NA 1ª COMPRA COM O CUPOM <strong style="color: #35c759; background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px;">VOLTEI5</strong></span>
+    <?php else: ?>
+        <span>🎁 5% OFF NA 1ª COMPRA COM O CUPOM <strong style="color: #35c759; background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px;">VOLTEI5</strong></span>
+    <?php endif; ?>
 </div>
 
 <header class="navbar sv-navbar">
