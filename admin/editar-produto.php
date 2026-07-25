@@ -214,7 +214,7 @@ $produto = $index !== null ? $catalog[$index] : null;
                             </div>
                             <div>
                                 <label for="dim_gross_weight">Peso bruto (kg)</label>
-                                <input type="number" step="0.001" min="0" id="dim_gross_weight" name="dim_gross_weight" value="<?= htmlspecialchars((string)($produto['dimensions']['gross_weight'] ?? 0)) ?>">
+                                <input type="number" step="0.001" min="0" id="dim_gross_weight" name="dim_gross_weight" value="<?= htmlspecialchars((string)(($produto['dimensions'] ?? [])['gross_weight'] ?? 0)) ?>">
                             </div>
                         </div>
                     </fieldset>
