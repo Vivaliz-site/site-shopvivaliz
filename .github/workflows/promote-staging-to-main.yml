@@ -167,7 +167,12 @@ jobs:
       - name: Navegar pelas paginas principais e tirar screenshots reais
         run: |
           mkdir -p smoke-screenshots
-          cat > /tmp/smoke.spec.js << 'EOF'
+          # Escrito dentro de tests/ (nao /tmp/) porque playwright.config.ts
+          # define testDir: './tests' - um arquivo fora dessa pasta e
+          # ignorado mesmo passando o caminho explicito, o que fazia essa
+          # camada falhar sempre com "No tests found" independente do
+          # conteudo real do site (achado em 2026-07-25, run 30157785154).
+          cat > tests/__ci-smoke-generated__.spec.js << 'EOF'
           const { test, expect } = require('@playwright/test');
           const pages = [
             ['/', 'home'],
@@ -188,11 +193,13 @@ jobs:
             });
           }
           EOF
-          npx playwright test /tmp/smoke.spec.js --reporter=list || (echo "::error::Smoke visual falhou - ver screenshots/log" && exit 1)
+          npx playwright test tests/__ci-smoke-generated__.spec.js --reporter=list || (echo "::error::Smoke visual falhou - ver screenshots/log" && exit 1)
 
-      - name: Encerrar servidor local
+      - name: Encerrar servidor local e limpar spec gerado
         if: always()
-        run: kill $(cat /tmp/php-server.pid) 2>/dev/null || true
+        run: |
+          kill $(cat /tmp/php-server.pid) 2>/dev/null || true
+          rm -f tests/__ci-smoke-generated__.spec.js
 
       - name: Publicar screenshots como evidencia
         if: always()
