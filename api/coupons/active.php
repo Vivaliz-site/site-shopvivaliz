@@ -26,13 +26,13 @@ foreach ($builtins as $coupon) {
     ];
 }
 
-// Cupons do banco
+// Cupons do banco (apenas cupons marcados para popup)
 try {
     $pdo = sv_pdo();
     $stmt = $pdo->query(
         'SELECT code, description, discount_type, discount_value
          FROM coupons
-         WHERE is_active = 1 AND (ends_at IS NULL OR ends_at > NOW())
+         WHERE is_active = 1 AND display_in_popup = 1 AND (ends_at IS NULL OR ends_at > NOW())
          ORDER BY RAND()
          LIMIT 5'
     );
