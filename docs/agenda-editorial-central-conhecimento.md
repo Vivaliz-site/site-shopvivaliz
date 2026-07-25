@@ -6,6 +6,41 @@ Documento de planejamento para manter a Central de Conhecimento ativa, previsív
 
 Publicar conteúdos úteis para clientes que pesquisam sobre ferramentas, organização, ferragens, rodízios, fixadores, cadeados e utilidades domésticas, fortalecendo SEO, atendimento da Liz e descoberta de produtos.
 
+## Regra obrigatória de automação
+
+As publicações da Central de Conhecimento e as interações rotineiras com o público devem ocorrer sem intervenção humana em cada execução.
+
+O fluxo alvo é:
+
+1. manter uma fila editorial versionada;
+2. executar publicação automática por agenda;
+3. gerar ou selecionar o próximo artigo pendente;
+4. validar estrutura mínima do artigo;
+5. publicar na data programada;
+6. atualizar sitemap e metadados automaticamente;
+7. permitir que a Liz use os artigos publicados para responder dúvidas do público;
+8. coletar dúvidas frequentes do público como sugestões de novas pautas;
+9. registrar logs de publicação, busca, resposta e erro;
+10. notificar responsáveis apenas em caso de falha, anomalia ou risco.
+
+A intervenção humana deve ficar restrita a decisões estratégicas, como alterar categorias, pausar a automação, revisar regras editoriais, ajustar tom de marca ou corrigir falhas. A publicação rotineira e o primeiro atendimento ao público não devem depender de aprovação manual.
+
+## Interações automatizadas com o público
+
+A Central de Conhecimento deve alimentar automaticamente a Liz e outros pontos de atendimento do site.
+
+As interações automáticas devem cobrir:
+
+- resposta a dúvidas sobre artigos publicados;
+- indicação de artigos relacionados;
+- sugestão de produtos ou buscas relacionadas no catálogo;
+- coleta de perguntas recorrentes para novas pautas;
+- identificação de temas sem resposta suficiente;
+- registro de intenção do cliente, quando disponível;
+- encaminhamento para atendimento humano somente quando houver pedido explícito, baixa confiança, reclamação, problema de pedido, assunto sensível ou falha técnica.
+
+A automação não deve prometer resultados técnicos absolutos, garantia de compatibilidade sem validação, orientação jurídica, orientação médica/veterinária ou instalação especializada. Nesses casos, deve orientar de forma segura e recomendar suporte profissional quando necessário.
+
 ## Frequência inicial
 
 - 3 artigos por semana.
@@ -27,6 +62,24 @@ Cada artigo deve conter:
 - metatítulo e metadescrição;
 - data de publicação e atualização;
 - linguagem simples, sem promessa técnica exagerada.
+
+## Critérios mínimos para autopublicação
+
+Antes de publicar automaticamente, o sistema deve validar:
+
+- slug único;
+- título preenchido;
+- resumo preenchido;
+- categoria válida;
+- ao menos 3 seções de conteúdo;
+- ao menos 2 perguntas frequentes;
+- URL de produtos relacionados;
+- metatítulo e metadescrição;
+- ausência de HTML inseguro;
+- ausência de promessas absolutas, técnicas, jurídicas, médicas ou veterinárias;
+- inclusão no sitemap após publicação.
+
+Se qualquer validação falhar, a automação deve bloquear a publicação daquele artigo, registrar o erro e notificar os responsáveis. Não deve publicar conteúdo incompleto, inseguro ou sem metadados mínimos.
 
 ## Categorias prioritárias
 
@@ -114,4 +167,6 @@ Cada artigo deve conter:
 
 ## Próximo passo operacional
 
-Após aprovação desta agenda, transformar as pautas em registros editoriais versionados e selecionar as primeiras 6 pautas para produção em Sprint 2.
+Transformar esta agenda em uma fila editorial automatizada, com registros versionados, rotina agendada de publicação e integração com a Liz para respostas públicas baseadas nos conteúdos publicados.
+
+A Sprint 2 deve implementar a automação inicial para publicar os próximos artigos sem aprovação manual por unidade, mantendo bloqueios automáticos de segurança, logs e notificações somente por exceção.
