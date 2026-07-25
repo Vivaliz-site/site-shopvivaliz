@@ -64,7 +64,7 @@ AddCharset UTF-8 .html .txt .php .json
     # Valida frete no servidor antes de criar o pedido
     RewriteRule ^api/orders/create\.php$ api/orders/create-validated.php [L]
 
-    # Case-insensitive routing para /admin (Linux diferencia maiúsculas)
+    # Case-insensitive routing para /admin (Linux diferencia maiusculas)
     # Redireciona /ADMIN, /Admin, /aDmIn etc. para /admin/ canonicamente
     RewriteCond %{REQUEST_URI} ^/[aA][dD][mM][iI][nN](?:/|$) [NC]
     RewriteCond %{REQUEST_URI} !^/admin(?:/|$) [NC]
@@ -85,7 +85,7 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
-    # Redirecionar URLs de produto antigas com ID numérico para o novo slug
+    # Redirecionar URLs de produto antigas com ID numerico para o novo slug
     RewriteRule ^produto/([a-z0-9][a-z0-9\-]*)-[0-9]+/?$ /produto/$1 [R=301,L]
 
     # Cart API endpoints (CRUD operations)
@@ -113,6 +113,7 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^api/products/?$ api/catalog/products.php [L,QSA]
     RewriteRule ^api/catalog/?$ api/catalog/products.php [L,QSA]
     RewriteRule ^api/knowledge/search/?$ api/knowledge-search.php [L,QSA]
+    RewriteRule ^api/liz/knowledge-preview/?$ api/liz-knowledge-preview.php [L,QSA]
 
     # Rotas principais da loja
     RewriteRule ^$ index.php [L]
