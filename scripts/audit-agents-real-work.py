@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Evidence-based audit for autonomous-agent routines.
 
-The audit scans the full repository, but only blocks active automation surfaces:
-GitHub Actions workflows that can actually run, and executable files referenced by
-those workflows. Legacy/unreferenced files are still reported for cleanup, without
-falsely blocking delivery solely because historical code remains tracked.
+The audit scans active automation surfaces and the scripts they invoke. Existing
+legacy findings from the base branch remain visible as cleanup debt, while any new
+critical/high-risk behavior introduced by the current branch blocks CI.
 """
 from __future__ import annotations
 
@@ -19,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REPORT_DIR = ROOT / "artifacts" / "agents-audit"
 REPORT_JSON = REPORT_DIR / "report.json"
 REPORT_MD = REPORT_DIR / "report.md"
+BASE_REF = "origin/main"
 
 EXECUTABLE_SUFFIXES = {".py", ".js", ".ts", ".php", ".sh", ".yml", ".yaml", ".json"}
 EXCLUDED_FILES = {"scripts/audit-agents-real-work.py"}
@@ -26,6 +26,7 @@ EXCLUDED_PREFIXES = (
     ".git/", "node_modules/", "vendor/", "artifacts/", "storage/", "logs/",
     "docs/", "release-notes/", "tests/", "test/", "playwright-report/",
 )
+
 SIMULATION_PATTERNS = [
     re.compile(r"\bsimular(?:cao|ção|\s+processamento|\s+execucao|\s+execução|\s+trabalho)?\b", re.I),
     re.compile(r"\bfake\s+(?:success|execution|result)\b", re.I),
@@ -44,12 +45,13 @@ EVIDENCE_PATTERNS = [
     re.compile(r"test_(?:report|result)|tests_passed", re.I),
 ]
 DANGEROUS_PATTERNS = [
-    ("broad_git_add", re.compile(r"git[\"',\s]+add[\"',\s]+(?:-A|\.)", re.I)),
-    ("direct_git_push", re.compile(r"git[\"',\s]+push\b", re.I)),
-    ("self_auto_merge", re.compile(r"gh\s+pr\s+merge.*--auto|enable_auto_merge|auto-merge", re.I)),
-    ("destructive_reset", re.compile(r"git\s+reset\s+--hard|push\s+--force|rm\s+-rf\s+/", re.I)),
+    ("broad_git_add", re.compile(r"(?m)^\s*git\s+add\s+(?:-A|\.)\s*$", re.I)),
+    ("protected_or_force_push", re.compile(r"(?m)^\s*git\s+push\b[^\n]*(?:--force(?:-with-lease)?|\s(?:main|master)(?:\s|$))", re.I)),
+    ("self_auto_merge", re.compile(r"(?m)^\s*(?:gh\s+pr\s+merge\b[^\n]*--auto|.*enable_auto_merge\s*\()", re.I)),
+    ("destructive_reset", re.compile(r"(?m)^\s*(?:git\s+reset\s+--hard\b|rm\s+-rf\s+/\s*$)", re.I)),
 ]
 PATH_REFERENCE = re.compile(r"(?<![A-Za-z0-9_.-])((?:scripts|\.ai|agents|claude/api/agent)/[A-Za-z0-9_./-]+\.(?:py|js|ts|php|sh))")
+
 
 @dataclass
 class Finding:
@@ -59,10 +61,16 @@ class Finding:
     message: str
     line: int | None = None
     active: bool = False
+    preexisting: bool = False
+    fingerprint: str = ""
+
+
+def run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(["git", *args], cwd=ROOT, check=check, capture_output=True)
 
 
 def tracked_files() -> list[Path]:
-    result = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True)
+    result = run_git("ls-files", "-z")
     files: list[Path] = []
     for raw in result.stdout.split(b"\0"):
         if not raw:
@@ -74,6 +82,25 @@ def tracked_files() -> list[Path]:
         if path.suffix.lower() in EXECUTABLE_SUFFIXES and path.is_file():
             files.append(path)
     return files
+
+
+def base_text(rel: str) -> str | None:
+    result = run_git("show", f"{BASE_REF}:{rel}", check=False)
+    if result.returncode != 0:
+        return None
+    return result.stdout.decode("utf-8", errors="replace")
+
+
+def executable_text(text: str) -> str:
+    """Remove prose-only comment lines while preserving line numbering."""
+    cleaned: list[str] = []
+    for line in text.splitlines(keepends=True):
+        stripped = line.lstrip()
+        if stripped.startswith("#") or stripped.startswith("//"):
+            cleaned.append("\n" if line.endswith("\n") else "")
+        else:
+            cleaned.append(line)
+    return "".join(cleaned)
 
 
 def line_for(text: str, offset: int) -> int:
@@ -104,9 +131,13 @@ def active_surfaces(files: list[Path]) -> set[str]:
     return active
 
 
-def audit_file(path: Path, active: bool) -> list[Finding]:
-    rel = path.relative_to(ROOT).as_posix()
-    text = path.read_text(encoding="utf-8", errors="replace")
+def fingerprint(rule: str, rel: str, match_text: str) -> str:
+    normalized = re.sub(r"\s+", " ", match_text.strip().lower())
+    return f"{rule}|{rel}|{normalized}"
+
+
+def audit_text(rel: str, original: str, active: bool) -> list[Finding]:
+    text = executable_text(original)
     findings: list[Finding] = []
     simulation_hits = [m for p in SIMULATION_PATTERNS for m in p.finditer(text)]
     completion_hits = [m for p in COMPLETION_PATTERNS for m in p.finditer(text)]
@@ -117,41 +148,68 @@ def audit_file(path: Path, active: bool) -> list[Finding]:
 
     if simulation_hits and completion_hits:
         first = min(simulation_hits + completion_hits, key=lambda m: m.start())
+        fp = fingerprint("simulated_completion", rel, first.group(0))
         findings.append(Finding(severity("critical"), "simulated_completion", rel,
-            "Rotina combina sinais de simulação com registro de conclusão/sucesso.", line_for(text, first.start()), active))
+            "Rotina combina sinais de simulação com registro de conclusão/sucesso.",
+            line_for(text, first.start()), active, False, fp))
 
     if completion_hits and not evidence_hits and ("agent" in rel.lower() or "task" in rel.lower()):
         first = min(completion_hits, key=lambda m: m.start())
+        fp = fingerprint("completion_without_evidence", rel, first.group(0))
         findings.append(Finding(severity("high"), "completion_without_evidence", rel,
-            "Rotina registra conclusão sem exigir commit, PR, testes ou artefato.", line_for(text, first.start()), active))
+            "Rotina registra conclusão sem exigir commit, PR, testes ou artefato.",
+            line_for(text, first.start()), active, False, fp))
 
     for rule, pattern in DANGEROUS_PATTERNS:
         for match in pattern.finditer(text):
             blocking = "critical" if rule in {"self_auto_merge", "destructive_reset"} else "high"
+            fp = fingerprint(rule, rel, match.group(0))
             findings.append(Finding(severity(blocking), rule, rel,
                 "Operação automática incompatível com revisão humana e evidência auditável.",
-                line_for(text, match.start()), active))
+                line_for(text, match.start()), active, False, fp))
     return findings
+
+
+def baseline_fingerprints(files: list[Path], active: set[str]) -> set[str]:
+    fingerprints: set[str] = set()
+    for path in files:
+        rel = path.relative_to(ROOT).as_posix()
+        text = base_text(rel)
+        if text is None:
+            continue
+        for finding in audit_text(rel, text, rel in active):
+            fingerprints.add(finding.fingerprint)
+    return fingerprints
 
 
 def main() -> int:
     files = tracked_files()
     active = active_surfaces(files)
+    baseline = baseline_fingerprints(files, active)
     findings: list[Finding] = []
+
     for path in files:
         rel = path.relative_to(ROOT).as_posix()
-        findings.extend(audit_file(path, rel in active))
+        current = audit_text(rel, path.read_text(encoding="utf-8", errors="replace"), rel in active)
+        for finding in current:
+            if finding.active and finding.severity in {"critical", "high"} and finding.fingerprint in baseline:
+                finding.preexisting = True
+                finding.severity = "medium"
+                finding.message += " Achado já existente na branch base; permanece como dívida de saneamento."
+            findings.append(finding)
 
     order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     findings.sort(key=lambda f: (order.get(f.severity, 9), f.path, f.line or 0))
     generated_at = datetime.now(timezone.utc).isoformat()
     payload = {
         "generated_at": generated_at,
+        "base_ref": BASE_REF,
         "files_scanned": len(files),
         "active_surfaces": sorted(active),
         "finding_count": len(findings),
-        "critical": sum(f.severity == "critical" for f in findings),
-        "high": sum(f.severity == "high" for f in findings),
+        "critical_new": sum(f.severity == "critical" for f in findings),
+        "high_new": sum(f.severity == "high" for f in findings),
+        "preexisting_debt": sum(f.preexisting for f in findings),
         "medium": sum(f.severity == "medium" for f in findings),
         "findings": [asdict(f) for f in findings],
     }
@@ -160,22 +218,26 @@ def main() -> int:
 
     lines = [
         "# Auditoria profunda de agentes", "", f"- Gerada em: `{generated_at}`",
-        f"- Arquivos analisados: **{len(files)}**", f"- Superfícies ativas: **{len(active)}**",
-        f"- Achados críticos ativos: **{payload['critical']}**",
-        f"- Achados altos ativos: **{payload['high']}**",
-        f"- Achados legados para saneamento: **{payload['medium']}**", "",
+        f"- Base comparada: `{BASE_REF}`", f"- Arquivos analisados: **{len(files)}**",
+        f"- Superfícies ativas: **{len(active)}**",
+        f"- Novos achados críticos: **{payload['critical_new']}**",
+        f"- Novos achados altos: **{payload['high_new']}**",
+        f"- Dívida preexistente reportada: **{payload['preexisting_debt']}**", "",
     ]
     if findings:
         lines += ["## Achados", ""]
         for finding in findings:
             location = f"{finding.path}:{finding.line}" if finding.line else finding.path
-            scope = "ATIVO" if finding.active else "LEGADO/NAO REFERENCIADO"
+            if finding.preexisting:
+                scope = "PREEXISTENTE NA BASE"
+            else:
+                scope = "ATIVO" if finding.active else "LEGADO/NAO REFERENCIADO"
             lines.append(f"- **{finding.severity.upper()} — {finding.rule} — {scope}** em `{location}`: {finding.message}")
     else:
         lines.append("Nenhum achado detectado.")
     REPORT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(json.dumps(payload, indent=2, ensure_ascii=False))
-    return 1 if payload["critical"] or payload["high"] else 0
+    return 1 if payload["critical_new"] or payload["high_new"] else 0
 
 
 if __name__ == "__main__":
