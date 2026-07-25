@@ -32,17 +32,21 @@ jobs:
         run: |
           CYCLES="${{ github.event.inputs.cycles || '3' }}"
           AGENT_KEY="${{ secrets.SHOPVIVALIZ_AGENT_KEY }}"
+          [ -z "$AGENT_KEY" ] && AGENT_KEY="${{ secrets.RUNTIME_AGENT_KEY }}"
           [ -z "$AGENT_KEY" ] && AGENT_KEY="${{ secrets.AGENT_KEY }}"
           [ -z "$AGENT_KEY" ] && AGENT_KEY="${{ secrets.WATCHDOG_AGENT_KEY }}"
           [ -z "$AGENT_KEY" ] && AGENT_KEY="${{ secrets.AUTONOMOUS_AGENT_KEY }}"
 
-          URL="${SHOPVIVALIZ_BASE_URL%/}/api/agent/autonomous-watchdog.php?run_loop=1&cycles=$CYCLES"
-          if [ -n "$AGENT_KEY" ]; then
-            URL="$URL&agent_key=$AGENT_KEY"
+          if [ -z "$AGENT_KEY" ]; then
+            echo "❌ Nenhuma agent key configurada!"
+            exit 1
           fi
+
+          URL="${SHOPVIVALIZ_BASE_URL%/}/api/agent/autonomous-watchdog.php?run_loop=1&cycles=$CYCLES&agent_key=$AGENT_KEY"
 
           echo "WATCHDOG_URL=$URL" >> "$GITHUB_ENV"
           echo "WATCHDOG_URL_DISPLAY=${SHOPVIVALIZ_BASE_URL%/}/api/agent/autonomous-watchdog.php?run_loop=1&cycles=$CYCLES&agent_key=***" >> "$GITHUB_ENV"
+          echo "✅ Agent key configurada e URL preparada"
 
       - name: Executar trio em lote
         shell: bash
