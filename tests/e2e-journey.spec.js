@@ -19,26 +19,20 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
   test('✅ Homepage carrega corretamente', async ({ page }) => {
     await page.goto(BASE_URL + '/');
 
-    // Verificar elementos críticos
-    // (.sv-navbar e não 'header': o único <header> podia ser o painel
-    // fechado da Liz, que fica com altura 0 — falso negativo)
     await expect(page.locator('.sv-navbar')).toBeVisible();
     await expect(page.locator('footer')).toBeVisible();
     await expect(page.locator('.hero-content h1')).toBeVisible();
 
-    // Verificar que não há erros críticos
     const errors = [];
     page.on('pageerror', err => errors.push(err));
 
     expect(errors).toHaveLength(0);
-
     console.log('✅ Homepage OK');
   });
 
   test('✅ Busca de produtos funciona', async ({ page }) => {
     await page.goto(BASE_URL + '/');
 
-    // Procurar campo de busca
     const searchInput = page.locator('.hero-search-form input[name="busca"]');
     await expect(searchInput).toBeVisible();
     await searchInput.fill('rodizio');
@@ -50,9 +44,6 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
   test('✅ Navegação de categorias funciona', async ({ page }) => {
     await page.goto(BASE_URL + '/');
 
-    // Clicar no link do catálogo no menu principal (determinístico).
-    // A asserção antiga (`not.toContain(BASE_URL + '/')`) era impossível de
-    // passar: toda URL do site contém o prefixo BASE_URL + '/'.
     const catalogLink = page.locator('.sv-navbar a[href="/catalogo"]').first();
     await expect(catalogLink).toBeVisible();
     await catalogLink.click();
@@ -65,7 +56,6 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
   test('✅ Produtos carregam corretamente', async ({ page }) => {
     await page.goto(BASE_URL + '/');
 
-    // Procurar link de produto
     const firstProduct = page.locator('#product-grid .product-card a.card-link').first();
     await expect(firstProduct).toBeVisible();
     await firstProduct.click();
@@ -75,13 +65,12 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
   });
 
   test('✅ Carrinho funciona', async ({ page }) => {
-    // Navegar direto: o clique no link do carrinho pode abrir o mini-cart
-    // drawer (sem mudar de URL), o que dava falso negativo no teste antigo.
     await page.goto(BASE_URL + '/carrinho');
     await page.waitForLoadState('domcontentloaded');
 
     expect(page.url()).toContain('/carrinho');
     await expect(page.locator('.sv-navbar')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /meu carrinho/i })).toBeVisible();
 
     console.log('✅ Carrinho OK');
   });
@@ -108,23 +97,18 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
     const footer = page.locator('footer');
     const footerText = await footer.textContent();
 
-    // Verificar dados obrigatórios
     const hasCNPJ = footerText.includes('49.903.300/0001-70') || footerText.includes('CNPJ');
     const hasPhone = footerText.includes('3799937') || footerText.includes('37 9993');
     const hasEmail = footerText.includes('atendimento@shopvivaliz');
 
     expect(hasCNPJ || hasPhone || hasEmail).toBeTruthy();
-
     console.log('✅ Footer com dados OK');
   });
 
   test('✅ Liz mascote carrega', async ({ page }) => {
     await page.goto(BASE_URL + '/');
 
-    // Procurar widget Liz pelo id do launcher (seletor amplo antigo casava
-    // com 2+ elementos e estourava strict mode do Playwright)
     const liz = page.locator('#sv-liz-launcher').first();
-
     await expect(liz).toBeVisible();
     await liz.click();
     await expect(page.locator('#sv-liz-panel')).toBeVisible();
@@ -142,47 +126,39 @@ test.describe('🛒 E2E Journey - Compra Completa', () => {
       }
     });
 
-    await page.goto(BASE_URL + '/');
-    await page.waitForLoadState('networkidle');
+    await page.goto(BASE_URL + '/', { waitUntil: 'domcontentloaded' });
 
-    // Clicar em alguns links
-    const links = page.locator('a').filter({ hasText: /^[a-zA-Z]/ });
-    const count = Math.min(await links.count(), 5); // Max 5 links
-
-    for (let i = 0; i < count; i++) {
-      const link = links.nth(i);
-      const href = await link.getAttribute('href');
-
-      if (href && !href.includes('javascript') && !href.includes('#')) {
+    const hrefs = await page.locator('a[href]').evaluateAll((anchors, origin) => {
+      const unique = new Set();
+      for (const anchor of anchors) {
+        const raw = anchor.getAttribute('href');
+        if (!raw || raw.startsWith('#') || raw.startsWith('javascript:')) continue;
         try {
-          await link.click({ timeout: 5000 });
-          await page.waitForLoadState('networkidle').catch(() => {});
-        } catch (e) {
-          // Ignore timeouts
-        }
+          const url = new URL(raw, origin);
+          if (url.origin === new URL(origin).origin) unique.add(url.pathname + url.search);
+        } catch (_) {}
+        if (unique.size >= 5) break;
       }
+      return Array.from(unique);
+    }, BASE_URL);
+
+    for (const href of hrefs) {
+      await page.goto(BASE_URL + href, { waitUntil: 'domcontentloaded' });
     }
 
     expect(errors).toHaveLength(0);
-
     console.log('✅ Sem erros HTTP 500');
   });
 
   test('✅ Performance: Página fica interativa em < 5s', async ({ page }) => {
-    // domcontentloaded (não networkidle): networkidle inclui analytics,
-    // imagens de terceiros e service worker, e o runner do GitHub (EUA)
-    // adiciona latência intercontinental — dava flake com limite de 3s.
     const startTime = Date.now();
-
     await page.goto(BASE_URL + '/', { waitUntil: 'domcontentloaded' });
 
     const loadTime = Date.now() - startTime;
-
     expect(loadTime).toBeLessThan(5000);
 
     console.log(`✅ Página interativa em ${loadTime}ms`);
   });
-
 });
 
 test.describe('🔐 Security Checks', () => {
@@ -199,7 +175,6 @@ test.describe('🔐 Security Checks', () => {
 
   test('✅ CSP headers presentes', async ({ page }) => {
     const response = await page.goto(BASE_URL + '/');
-
     const csp = response.headerValue('content-security-policy');
 
     if (csp) {
@@ -209,5 +184,4 @@ test.describe('🔐 Security Checks', () => {
       console.log('⚠️ CSP headers não encontrados');
     }
   });
-
 });

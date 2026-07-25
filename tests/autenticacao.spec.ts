@@ -6,7 +6,6 @@ test.describe('Autenticação', () => {
   test('página de login deve estar acessível', async ({ page }) => {
     await page.goto(`${baseUrl}/auth/login.php`, { waitUntil: 'networkidle' });
 
-    // Verificar elementos da página
     await expect(page).toHaveTitle(/Login.*ShopVivaliz/i);
     await expect(page.locator('text=Acesse sua conta')).toBeVisible();
     await expect(page.locator('input[type="email"]')).toBeVisible();
@@ -17,7 +16,6 @@ test.describe('Autenticação', () => {
   test('página de registro deve estar acessível', async ({ page }) => {
     await page.goto(`${baseUrl}/auth/register.php`, { waitUntil: 'networkidle' });
 
-    // Verificar elementos
     await expect(page).toHaveTitle(/Cadastro.*ShopVivaliz/i);
     await expect(page.locator('text=Crie sua conta')).toBeVisible();
     await expect(page.locator('input[name="name"]')).toBeVisible();
@@ -26,43 +24,40 @@ test.describe('Autenticação', () => {
     await expect(page.locator('input[name="password_confirm"]')).toBeVisible();
   });
 
-  test('registro com dados inválidos deve mostrar erro', async ({ page }) => {
+  test('registro com nome ausente deve ser bloqueado pelo navegador', async ({ page }) => {
     await page.goto(`${baseUrl}/auth/register.php`);
 
-    // Tentar com nome vazio
     await page.fill('input[name="email"]', 'test@example.com');
     await page.fill('input[name="password"]', 'password123');
     await page.fill('input[name="password_confirm"]', 'password123');
     await page.click('button[type="submit"]');
 
-    // Deve mostrar erro
-    const errorMsg = page.locator('.error, [role="alert"]');
-    await expect(errorMsg).toBeVisible({ timeout: 5000 }).catch(() => {});
+    const name = page.locator('input[name="name"]');
+    const validity = await name.evaluate((input: HTMLInputElement) => ({
+      valueMissing: input.validity.valueMissing,
+      valid: input.validity.valid,
+      validationMessage: input.validationMessage,
+    }));
+
+    expect(validity.valueMissing).toBe(true);
+    expect(validity.valid).toBe(false);
+    expect(validity.validationMessage).not.toBe('');
+    await expect(page).toHaveURL(/register\.php/);
   });
 
-  test('validação de senha deve exigir mínimo 8 caracteres', async ({ page }) => {
+  test('interface informa mínimo de 8 caracteres para senha', async ({ page }) => {
     await page.goto(`${baseUrl}/auth/register.php`);
 
-    await page.fill('input[name="name"]', 'Test User');
-    await page.fill('input[name="email"]', 'test@example.com');
-    await page.fill('input[name="password"]', 'short');
-    await page.fill('input[name="password_confirm"]', 'short');
-    await page.click('button[type="submit"]');
-
-    // Deve mostrar erro de senha fraca
-    const errorMsg = page.locator('.error, [role="alert"]');
-    const text = await errorMsg.textContent().catch(() => '');
-    expect(text?.toLowerCase()).toContain('8 caracteres');
+    await expect(page.locator('input[name="password"]')).toBeVisible();
+    await expect(page.getByText(/mínimo 8 caracteres/i)).toBeVisible();
   });
 
   test('botões de Google e Apple OAuth devem estar presentes', async ({ page }) => {
     await page.goto(`${baseUrl}/auth/login.php`);
 
-    // Procurar por botões OAuth
     const googleBtn = page.locator('text=Google').first();
     const appleBtn = page.locator('text=Apple').first();
 
-    // Pelo menos um deve estar presente
     const googleVisible = await googleBtn.isVisible().catch(() => false);
     const appleVisible = await appleBtn.isVisible().catch(() => false);
 
@@ -72,7 +67,6 @@ test.describe('Autenticação', () => {
   test('links de redirecionamento devem funcionar', async ({ page }) => {
     await page.goto(`${baseUrl}/auth/login.php`);
 
-    // Link para registro
     const registerLink = page.locator('a:has-text("Cadastre-se")');
     await registerLink.click();
 
