@@ -1,11 +1,8 @@
 {
   "metadata": {
-    "generated_at": "2026-07-25T20:50:00Z",
-    "status": "tasks_reset_and_ready",
-    "description": "Tarefas resetadas - Runtime executor criado e pronto",
-    "execution_started": "2026-07-25T20:50:00Z",
-    "agents_assigned": ["Claude", "Gemini", "GPT"],
-    "note": "runtime.py criado - agentes podem executar integração real"
+    "generated_at": "2026-07-12T03:00:00Z",
+    "status": "active_integration_tasks",
+    "description": "Ativar integrações Shopee, ML e Google Ads com credenciais do GitHub Secrets"
   },
   "tasks": [
     {
