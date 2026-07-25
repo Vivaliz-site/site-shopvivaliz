@@ -32,6 +32,7 @@ $totalArticles = count($allPublished);
     <meta name="description" content="Guias de compra, organização, manutenção e cuidados para escolher melhor produtos para casa, jardim e projetos.">
     <title>Central de Conhecimento | ShopVivaliz</title>
     <link rel="canonical" href="https://shopvivaliz.com.br/blog">
+    <link rel="alternate" type="application/rss+xml" title="Central de Conhecimento ShopVivaliz" href="https://shopvivaliz.com.br/blog/feed.xml">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Central de Conhecimento | ShopVivaliz">
     <meta property="og:description" content="Conteúdo prático para ajudar você a escolher, usar e conservar melhor seus produtos.">
@@ -111,6 +112,11 @@ $totalArticles = count($allPublished);
                         </li>
                     <?php endforeach; ?>
                 </ul>
+            </div>
+            <div class="knowledge-panel">
+                <h2>Acompanhe as novidades</h2>
+                <p>Receba os artigos publicados em seu leitor de notícias preferido.</p>
+                <a href="/blog/feed.xml" type="application/rss+xml">Assinar feed RSS</a>
             </div>
             <div class="knowledge-panel">
                 <h2>Precisa de ajuda?</h2>
