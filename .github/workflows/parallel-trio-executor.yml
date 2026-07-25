@@ -51,8 +51,6 @@ jobs:
 
       - name: Executar trio em lote
         shell: bash
-        env:
-          AGENT_KEY: ${{ secrets.SHOPVIVALIZ_AGENT_KEY || secrets.RUNTIME_AGENT_KEY || secrets.AGENT_KEY || secrets.WATCHDOG_AGENT_KEY || secrets.AUTONOMOUS_AGENT_KEY }}
         run: |
           mkdir -p reports
           echo "Chamando: $WATCHDOG_URL_DISPLAY"
