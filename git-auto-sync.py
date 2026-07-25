@@ -36,6 +36,8 @@ ALLOWED_DIRTY_PATHS = PRESERVE_PATHS | {
     # deploy so a stale or empty runtime cache cannot overwrite a newer seed.
     "api/catalog/fallback-products.json",
     "storage/products-cache-ativos.json",
+    # Runtime scripts (generated, not source)
+    "sync-cache-to-admin.php",
 }
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
