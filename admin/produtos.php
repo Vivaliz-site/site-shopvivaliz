@@ -54,6 +54,10 @@ try {
             border-radius: 8px;
             font-size: 1rem;
             background: #fff;
+            color: #333;
+        }
+        .admin-searchbar input::placeholder {
+            color: #999;
         }
         .admin-searchbar input:focus {
             outline: none;
