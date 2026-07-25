@@ -155,8 +155,7 @@
   fetch(`${API}?health=1`, { cache: 'no-store' })
     .then(response => response.json())
     .then(health => {
-      const hasProvider = health.providers && Object.values(health.providers).some(Boolean);
-      root.dataset.health = health.ok === true && health.endpoint === 'liz-intelligent' && hasProvider ? 'ok' : 'degraded';
+      root.dataset.health = health.ok === true && health.endpoint === 'liz-intelligent' ? 'ok' : 'degraded';
     })
     .catch(() => { root.dataset.health = 'offline'; });
 
