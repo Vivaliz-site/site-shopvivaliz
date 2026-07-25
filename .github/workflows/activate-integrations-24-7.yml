@@ -28,6 +28,10 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      SHOPVIVALIZ_AGENT_KEY: ${{ secrets.SHOPVIVALIZ_AGENT_KEY }}
+      RUNTIME_AGENT_KEY: ${{ secrets.RUNTIME_AGENT_KEY }}
+      WATCHDOG_AGENT_KEY: ${{ secrets.WATCHDOG_AGENT_KEY }}
+      AUTONOMOUS_AGENT_KEY: ${{ secrets.AUTONOMOUS_AGENT_KEY }}
 
     steps:
       - name: 📥 Checkout
