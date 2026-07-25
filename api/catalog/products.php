@@ -103,7 +103,6 @@ if ($q !== '') {
         $searchText = svcat_search_normalize(
             $p['sku'] . ' ' .
             $p['name'] . ' ' .
-            ($p['description'] ?? '') . ' ' .
             ($p['category'] ?? '') . ' ' .
             ($p['olist_product_id'] ?? '')
         );
