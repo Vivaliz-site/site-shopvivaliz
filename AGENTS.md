@@ -189,6 +189,88 @@ git merge --ff-only origin/main
 
 ---
 
-**Versão:** 1.0  
-**Data:** 2026-07-15  
-**Efetivo para:** Todos os agentes IA
+## 🏗️ NOVA ARQUITETURA: RELEASES IMUTÁVEIS (Ativo desde 2026-07-25)
+
+**Produção migrou de `git merge` vivo para releases imutáveis.**
+
+Estrutura pós-migração:
+```
+/home/ubuntu/shopvivaliz-deploy/
+├── repo/            (clone limpo, somente leitura)
+├── releases/        (releases imutáveis)
+└── current → releases/20260725-143500-2489d8d9/
+
+/var/lock/shopvivaliz-deploy.lock (flock, impede concorrência)
+```
+
+### O Que Mudou Para Agentes
+
+**ANTES (2026-07-24 e antes):**
+```bash
+git merge --ff-only origin/main  # ❌ Na árvore viva
+                                  # ❌ Bloqueia por .env/.cache modificados
+                                  # ❌ Sem rollback rápido
+```
+
+**DEPOIS (2026-07-25 e depois):**
+```bash
+/home/ubuntu/shopvivaliz-deploy/repo/scripts/deploy-production.sh
+# ✅ Cria nova release limpa
+# ✅ Separado de dados runtime
+# ✅ Rollback atômico
+# ✅ idempotente (roda 2x, mesmo resultado)
+```
+
+### Regras para Deploy (Novo)
+
+1. **NUNCA editar dentro:**
+   ```
+   /home/ubuntu/shopvivaliz-deploy/releases/<ativa>/
+   /home/ubuntu/shopvivaliz-deploy/current/
+   ```
+
+2. **Dados runtime vão em `/shared/`:**
+   ```
+   .env, uploads/, logs/, cache/, sessions/
+   ```
+
+3. **Deploy é pull-based:**
+   - VM faz `git fetch` a cada 2 min (cron)
+   - Detecta novo SHA
+   - Cria nova release
+   - Troca symlink atomicamente
+   - **Você não pusheia release**, você pusheia commits
+
+4. **Rollback é manual:**
+   ```bash
+   sudo /home/ubuntu/shopvivaliz-deploy/repo/scripts/rollback-production.sh
+   ```
+
+### Se Tiver Que SSH à VM
+
+```bash
+ssh -i "C:\Users\FRED\Downloads\ssh-key-2026-07-04.key" ubuntu@137.131.156.17
+
+# Monitorar deploy (a cada 2 min, cron roda)
+tail -f /var/log/shopvivaliz-deploy.log
+
+# Ver release ativa
+readlink -f /home/ubuntu/shopvivaliz-deploy/current
+
+# Ver releases disponíveis
+ls -la /home/ubuntu/shopvivaliz-deploy/releases/
+
+# Rollback manual
+sudo /home/ubuntu/shopvivaliz-deploy/repo/scripts/rollback-production.sh
+
+# Nunca faça:
+cd /home/ubuntu/shopvivaliz-deploy/current
+vi index.php  # ❌ NUNCA edite release ativa
+```
+
+---
+
+**Versão:** 1.1  
+**Data Última Atualização:** 2026-07-25  
+**Efetivo para:** Todos os agentes IA  
+**Status:** ✅ Produção — Arquitetura Imutável Ativa
