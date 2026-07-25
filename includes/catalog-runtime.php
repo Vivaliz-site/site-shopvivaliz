@@ -49,9 +49,9 @@ function svcr_filter_storefront_rows(array $rows): array
         if (!is_array($row) || svcr_is_preorder($row)) {
             return false;
         }
-        // Filtrar por status: 'active', 'A' (Tiny), ou sem status = padrão ativo
-        $status = strtoupper(trim((string)($row['status'] ?? 'active')));
-        if (!in_array($status, ['ACTIVE', 'A'], true)) {
+        // Filtrar por is_published: marcação local do site (padrão: true)
+        $isPublished = $row['is_published'] ?? true;
+        if ($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0') {
             return false;
         }
         return true;
