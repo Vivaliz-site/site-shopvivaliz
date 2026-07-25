@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+// Load agent keys configuration
+$agentKeysFile = dirname(__DIR__, 2) . '/config/agent-keys.php';
+if (is_file($agentKeysFile)) {
+    require_once $agentKeysFile;
+}
+
 // Bootstrap .env early so auth can resolve runtime secrets on Apache/FPM and CLI.
 (static function (): void {
     $envFile = dirname(__DIR__, 2) . '/.env';
