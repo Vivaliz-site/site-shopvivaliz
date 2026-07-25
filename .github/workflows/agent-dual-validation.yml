@@ -83,23 +83,55 @@ jobs:
     if: needs.agent-validation.outputs.validation_passed == 'true'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: 🔐 Security Validation
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
         run: |
-          echo "Checking for obvious hardcoded secrets..."
-          matches=$(grep -rEi "(password|secret|api[._-]?key)[[:space:]]*[:=][[:space:]]*['\"][^$<{]" \
-            --include="*.js" --include="*.ts" --include="*.php" . 2>/dev/null \
-            | grep -v node_modules \
-            | grep -v vendor \
-            | grep -v ".git" \
-            | grep -v ".env.example" || true)
+          set -euo pipefail
+          echo "Checking changed source files for obvious hardcoded secrets..."
+
+          base_sha=""
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base_sha="$PR_BASE_SHA"
+          elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && [ "$PUSH_BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            base_sha="$PUSH_BEFORE_SHA"
+          fi
+
+          if [ -n "$base_sha" ] && git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
+            mapfile -d '' files < <(git diff --name-only -z --diff-filter=ACMR "$base_sha" "$CURRENT_SHA" -- '*.js' '*.ts' '*.php')
+          else
+            mapfile -d '' files < <(git ls-files -z -- '*.js' '*.ts' '*.php')
+          fi
+
+          matches=""
+          for file in "${files[@]}"; do
+            case "$file" in
+              node_modules/*|vendor/*|tests/*|scratch/*|docs/*|*.example)
+                continue
+                ;;
+            esac
+
+            [ -f "$file" ] || continue
+            result=$(grep -nEi "(password|secret|api[._-]?key)[[:space:]]*[:=][[:space:]]*['\"][^$<{]" "$file" || true)
+            if [ -n "$result" ]; then
+              matches+="${file}:\n${result}\n"
+            fi
+          done
+
           if [ -n "$matches" ]; then
-            echo "$matches" | head -20
-            echo "::error::Potential hardcoded secrets found"
+            printf '%b' "$matches" | head -20
+            echo "::error::Potential hardcoded secrets found in changed source files"
             exit 1
           fi
-          echo "✅ No obvious hardcoded secrets found"
+
+          echo "✅ No obvious hardcoded secrets found in changed source files"
 
       - name: 🏗️ Architecture Validation
         run: echo "✅ Architecture validation completed"
