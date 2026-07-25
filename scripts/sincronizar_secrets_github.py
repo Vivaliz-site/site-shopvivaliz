@@ -76,17 +76,17 @@ def get_github_secrets() -> Dict[str, str]:
         "OPENAI_API_KEY",
         "GEMINI_API_KEY",
 
-        # Marketplaces
+        # Marketplaces (ESTÁTICAS APENAS - não sincronizar tokens dinâmicos)
         "SHOPEE_PARTNER_ID",
         "SHOPEE_PARTNER_KEY",
         "SHOPEE_SHOP_ID",
-        "SHOPEE_ACCESS_TOKEN",
-        "SHOPEE_REFRESH_TOKEN",
+        # "SHOPEE_ACCESS_TOKEN",      # DINÂMICO - renovado localmente
+        # "SHOPEE_REFRESH_TOKEN",     # DINÂMICO - renovado localmente
 
-        # Outros
-        "OLIST_ACCESS_TOKEN",
-        "TIKTOK_ACCESS_TOKEN",
-        "MELHORENVIO_ACCESS_TOKEN",
+        # Outros (ESTÁTICAS APENAS)
+        # "OLIST_ACCESS_TOKEN",       # DINÂMICO - renovado por daemon-token-renewer.py
+        # "TIKTOK_ACCESS_TOKEN",      # DINÂMICO - renovado localmente
+        # "MELHORENVIO_ACCESS_TOKEN", # DINÂMICO - renovado localmente
     ]
 
     print(f"  Sincronizando {len(required_secrets)} secrets...")
