@@ -33,7 +33,7 @@
       "title": "Sincronizar Pedidos do Shopee",
       "description": "Importar pedidos do Shopee para o sistema",
       "priority": "high",
-      "status": "in_progress",
+      "status": "pending",
       "assigned_to": ["claude", "gemini"],
       "requires_secrets": ["SHOPEE_SHOP_ID", "SHOPEE_ACCESS_TOKEN"],
       "estimated_hours": 2,
