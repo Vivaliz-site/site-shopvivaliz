@@ -1,4 +1,4 @@
-name: Real Specialist Agents 24x7
+name: All Documented Agents - Real Work
 
 on:
   schedule:
@@ -6,19 +6,21 @@ on:
   workflow_dispatch:
     inputs:
       agent:
-        description: Agente a executar
+        description: Agente a executar, ou all
         required: true
         default: all
-        type: choice
-        options: [all, designer, analytics, deploy, security]
+        type: string
   pull_request:
     paths:
+      - 'scripts/all-documented-agents.py'
       - 'scripts/real-specialist-agents.py'
+      - 'ai-system/orchestrator/**'
       - '.github/workflows/**'
       - '**/*.php'
       - '**/*.html'
       - '**/*.js'
       - '**/*.ts'
+      - '**/*.py'
 
 permissions:
   contents: read
@@ -27,74 +29,88 @@ env:
   PYTHONUNBUFFERED: '1'
 
 jobs:
-  evidence:
-    name: ${{ matrix.agent }} evidence
+  all-agents:
+    name: Real evidence for all documented agents
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        agent: [designer, analytics, deploy, security]
+    timeout-minutes: 30
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Select requested agent
-        id: selection
+      - name: Compile agent runtime
+        run: python3 -m py_compile scripts/all-documented-agents.py scripts/real-specialist-agents.py ai-system/orchestrator/runtime.py
+
+      - name: Execute every documented agent
+        id: execute
         shell: bash
         run: |
+          set +e
           requested='${{ github.event.inputs.agent || 'all' }}'
-          if [ "$requested" != 'all' ] && [ "$requested" != '${{ matrix.agent }}' ]; then
-            echo 'run=false' >> "$GITHUB_OUTPUT"
-          else
-            echo 'run=true' >> "$GITHUB_OUTPUT"
-          fi
+          python3 scripts/all-documented-agents.py "$requested"
+          rc=$?
+          echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
+          exit 0
 
-      - name: Execute real repository inspection
-        if: steps.selection.outputs.run == 'true'
-        run: python3 scripts/real-specialist-agents.py --agent '${{ matrix.agent }}' --fail-on high
-
-      - name: Verify evidence exists and is non-empty
-        if: always() && steps.selection.outputs.run == 'true'
+      - name: Verify immutable evidence
         shell: bash
         run: |
-          test -s reports/specialist-agents/latest.json
-          test -s reports/specialist-agents/latest.md
+          test -s reports/all-documented-agents/latest.json
+          test -s reports/all-documented-agents/latest.md
           python3 - <<'PY'
+          import hashlib
           import json
           from pathlib import Path
-          data = json.loads(Path('reports/specialist-agents/latest.json').read_text())
-          agent = '${{ matrix.agent }}'
+          path = Path('reports/all-documented-agents/latest.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
           assert data.get('commit')
-          assert agent in data.get('agents', {})
-          assert 'metrics' in data['agents'][agent]
-          assert 'findings' in data['agents'][agent]
-          print({'agent': agent, 'commit': data['commit'], 'findings': len(data['agents'][agent]['findings'])})
+          assert data.get('simulated') is False
+          assert data.get('agents')
+          for name, result in data['agents'].items():
+              assert result.get('status') == 'completed_with_evidence'
+              assert 'metrics' in result
+              assert 'findings' in result
+          print({'agents': len(data['agents']), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()})
           PY
 
-      - name: Upload immutable evidence
-        if: always() && steps.selection.outputs.run == 'true'
+      - name: Reject any simulation path
+        shell: bash
+        run: |
+          ! grep -Eini 'simular processamento|simula sucesso|fake success|mock success|por enquanto,? simula' \
+            scripts/all-documented-agents.py scripts/real-specialist-agents.py ai-system/orchestrator/runtime.py
+          ! grep -Eini 'git push|git add -A|auto-merge|continue-on-error: true' .github/workflows/real-specialist-agents.yml
+
+      - name: Upload evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: specialist-agent-${{ matrix.agent }}-${{ github.run_id }}
-          path: reports/specialist-agents/
+          name: all-documented-agents-${{ github.run_id }}
+          path: reports/all-documented-agents/
           if-no-files-found: error
           retention-days: 30
 
-  policy:
-    name: Agent safety policy
+      - name: Enforce findings
+        shell: bash
+        run: |
+          rc='${{ steps.execute.outputs.exit_code }}'
+          if [ "$rc" != '0' ]; then
+            echo "Agentes encontraram bloqueios altos ou criticos. Consulte o artifact."
+            exit "$rc"
+          fi
+
+  safety-policy:
+    name: Read-only and fail-closed policy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Prove workflow is read-only and evidence-based
+      - name: Prove workflow cannot write
         shell: bash
         run: |
           file=.github/workflows/real-specialist-agents.yml
           grep -q 'contents: read' "$file"
-          ! grep -Eqi 'git push|git add -A|auto-merge|continue-on-error: true' "$file"
-          grep -q 'upload-artifact@v4' "$file"
-          grep -q 'Verify evidence exists' "$file"
+          ! grep -Eqi 'contents: write|git push|git add -A|auto-merge|pull-requests: write' "$file"
+          grep -q 'Reject any simulation path' "$file"
+          grep -q 'Upload evidence' "$file"
