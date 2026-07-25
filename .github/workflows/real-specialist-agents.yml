@@ -1,0 +1,100 @@
+name: Real Specialist Agents 24x7
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: Agente a executar
+        required: true
+        default: all
+        type: choice
+        options: [all, designer, analytics, deploy, security]
+  pull_request:
+    paths:
+      - 'scripts/real-specialist-agents.py'
+      - '.github/workflows/**'
+      - '**/*.php'
+      - '**/*.html'
+      - '**/*.js'
+      - '**/*.ts'
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: '1'
+
+jobs:
+  evidence:
+    name: ${{ matrix.agent }} evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        agent: [designer, analytics, deploy, security]
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Select requested agent
+        id: selection
+        shell: bash
+        run: |
+          requested='${{ github.event.inputs.agent || 'all' }}'
+          if [ "$requested" != 'all' ] && [ "$requested" != '${{ matrix.agent }}' ]; then
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Execute real repository inspection
+        if: steps.selection.outputs.run == 'true'
+        run: python3 scripts/real-specialist-agents.py --agent '${{ matrix.agent }}' --fail-on high
+
+      - name: Verify evidence exists and is non-empty
+        if: always() && steps.selection.outputs.run == 'true'
+        shell: bash
+        run: |
+          test -s reports/specialist-agents/latest.json
+          test -s reports/specialist-agents/latest.md
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('reports/specialist-agents/latest.json').read_text())
+          agent = '${{ matrix.agent }}'
+          assert data.get('commit')
+          assert agent in data.get('agents', {})
+          assert 'metrics' in data['agents'][agent]
+          assert 'findings' in data['agents'][agent]
+          print({'agent': agent, 'commit': data['commit'], 'findings': len(data['agents'][agent]['findings'])})
+          PY
+
+      - name: Upload immutable evidence
+        if: always() && steps.selection.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: specialist-agent-${{ matrix.agent }}-${{ github.run_id }}
+          path: reports/specialist-agents/
+          if-no-files-found: error
+          retention-days: 30
+
+  policy:
+    name: Agent safety policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prove workflow is read-only and evidence-based
+        shell: bash
+        run: |
+          file=.github/workflows/real-specialist-agents.yml
+          grep -q 'contents: read' "$file"
+          ! grep -Eqi 'git push|git add -A|auto-merge|continue-on-error: true' "$file"
+          grep -q 'upload-artifact@v4' "$file"
+          grep -q 'Verify evidence exists' "$file"
