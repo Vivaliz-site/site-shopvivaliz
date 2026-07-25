@@ -88,9 +88,14 @@ $all_erp = array_map(static function (array $row): array {
         'images' => $images,
         'images_count' => (int)($row['images_count'] ?? 0),
         'category' => trim((string)($row['category'] ?? '')),
-        'status' => 'active',
+        'status' => (string)($row['status'] ?? 'active'),
     ];
 }, array_values(array_filter(svcr_products(), 'is_array')));
+
+// Filtrar apenas produtos com status 'active' (exibir para venda)
+$all_erp = array_filter($all_erp, function($p) {
+    return ($p['status'] ?? 'active') === 'active';
+});
 
 if ($q !== '') {
     $qNormalized = svcat_search_normalize($q);
