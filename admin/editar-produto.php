@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $catalog[$index]['price'] = (float)($_POST['price'] ?? 0);
         $catalog[$index]['stock'] = (int)($_POST['stock'] ?? 0);
         $catalog[$index]['category'] = trim((string)($_POST['category'] ?? $catalog[$index]['category'] ?? ''));
-        $catalog[$index]['status'] = isset($_POST['exibir_para_venda']) ? 'active' : 'inactive';
+        $catalog[$index]['status'] = isset($_POST['exibir_para_venda']) ? 'A' : 'S';
 
         $catalog[$index]['slug'] = trim((string)($_POST['slug'] ?? $catalog[$index]['slug'] ?? ''));
         $catalog[$index]['gtin'] = trim((string)($_POST['gtin'] ?? $catalog[$index]['gtin'] ?? ''));
