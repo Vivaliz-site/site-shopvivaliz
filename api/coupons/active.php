@@ -8,12 +8,35 @@ require_once __DIR__ . '/../../includes/pdo-database.php';
 
 $activeCoupons = [];
 
-// Cupons builtin
 $builtins = [
-    ['code' => 'PRIMEIRA10', 'type' => 'percent', 'value' => 10.0, 'label' => 'Primeira compra: 10% de desconto', 'active' => true],
-    ['code' => 'VIVALIZ10', 'type' => 'percent', 'value' => 10.0, 'label' => '10% de desconto', 'active' => true],
-    ['code' => 'BEMVINDO5', 'type' => 'fixed', 'value' => 5.0, 'label' => 'R$ 5,00 de desconto', 'active' => true],
-    ['code' => 'FRETEGRATIS', 'type' => 'shipping', 'value' => 0.0, 'label' => 'Frete Grátis', 'active' => true],
+    [
+        'code' => 'PRIMEIRA10',
+        'type' => 'percent',
+        'value' => 10.0,
+        'label' => 'Primeira compra: 10% de desconto',
+        'active' => true
+    ],
+    [
+        'code' => 'VIVALIZ10',
+        'type' => 'percent',
+        'value' => 10.0,
+        'label' => '10% de desconto',
+        'active' => true
+    ],
+    [
+        'code' => 'BEMVINDO5',
+        'type' => 'fixed',
+        'value' => 5.0,
+        'label' => 'R$ 5,00 de desconto',
+        'active' => true
+    ],
+    [
+        'code' => 'FRETEGRATIS',
+        'type' => 'shipping',
+        'value' => 0.0,
+        'label' => 'Frete Gratis',
+        'active' => true
+    ]
 ];
 
 foreach ($builtins as $coupon) {
