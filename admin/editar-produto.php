@@ -200,7 +200,7 @@ $produto = $index !== null ? $catalog[$index] : null;
                             </div>
                             <div>
                                 <label for="dim_height">Altura (cm)</label>
-                                <input type="number" step="0.01" min="0" id="dim_height" name="dim_height" value="<?= htmlspecialchars((string)($produto['dimensions']['height'] ?? 0)) ?>">
+                                <input type="number" step="0.01" min="0" id="dim_height" name="dim_height" value="<?= htmlspecialchars((string)(($produto['dimensions'] ?? [])['height'] ?? 0)) ?>">
                             </div>
                             <div>
                                 <label for="dim_length">Comprimento (cm)</label>
