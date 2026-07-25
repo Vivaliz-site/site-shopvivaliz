@@ -65,3 +65,4 @@ ai-system/config/orchestrator.json
 ai-system/memory/*.db
 ai-system/memory/*_status.json
 ai-system/
+sync-cache-to-admin.php
