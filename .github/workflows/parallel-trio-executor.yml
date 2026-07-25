@@ -46,10 +46,13 @@ jobs:
 
           echo "WATCHDOG_URL=$URL" >> "$GITHUB_ENV"
           echo "WATCHDOG_URL_DISPLAY=${SHOPVIVALIZ_BASE_URL%/}/api/agent/autonomous-watchdog.php?run_loop=1&cycles=$CYCLES&agent_key=***" >> "$GITHUB_ENV"
+          echo "AGENT_KEY=$AGENT_KEY" >> "$GITHUB_ENV"
           echo "✅ Agent key configurada e URL preparada"
 
       - name: Executar trio em lote
         shell: bash
+        env:
+          AGENT_KEY: ${{ secrets.SHOPVIVALIZ_AGENT_KEY || secrets.RUNTIME_AGENT_KEY || secrets.AGENT_KEY || secrets.WATCHDOG_AGENT_KEY || secrets.AUTONOMOUS_AGENT_KEY }}
         run: |
           mkdir -p reports
           echo "Chamando: $WATCHDOG_URL_DISPLAY"
