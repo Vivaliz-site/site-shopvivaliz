@@ -65,3 +65,61 @@ ai-system/config/orchestrator.json
 ai-system/memory/*.db
 ai-system/memory/*_status.json
 ai-system/
+
+# ============================================================================
+# ARQUITETURA DE RELEASES IMUTÁVEIS (2026-07-25)
+# ============================================================================
+# Pós-migração, /shopvivaliz-deploy/ é um clone local na VM.
+# Seus arquivos nunca devem entrar no Git:
+
+# Deploy infrastructure (local à VM)
+shopvivaliz-deploy/
+/home/ubuntu/shopvivaliz-deploy/
+
+# Builds locais e temporários
+dist/
+build/
+out/
+
+# Lock files temporários
+*.lock.tmp
+.deploy.lock
+
+# Logs de deploy (locais)
+deploy-*.log
+
+# Histórico de arquivo temp para rollback
+.rollback-history/
+
+# ============================================================================
+# CREDENTIALS E SECRETOS (Absolutamente Proibido)
+# ============================================================================
+.env.*.production
+.env.*.secret
+config/*secret*
+config/*credential*
+credentials/
+.credentials/
+secrets/
+.secrets/
+
+# ============================================================================
+# ARQUIVOS GERADOS (Nunca comitter)
+# ============================================================================
+# Estes são gerados/modificados em runtime via symlinks em /shared/
+
+# Gerados por app
+api/catalog/fallback-products.json
+storage/products-cache-ativos.json
+
+# Podem aparecer se não estão bem symlinked
+sync-cache-to-admin.php.bak
+*.tmp.php
+
+# ============================================================================
+# TESTES E VALIDAÇÃO (Temporários de sessão)
+# ============================================================================
+validacao-*.js
+diagnostico-*.js
+screenshots-validacao/
+test-*.log
