@@ -1,8 +1,10 @@
 {
   "metadata": {
-    "generated_at": "2026-07-12T03:00:00Z",
-    "status": "active_integration_tasks",
-    "description": "Ativar integrações Shopee, ML e Google Ads com credenciais do GitHub Secrets"
+    "generated_at": "2026-07-25T20:45:00Z",
+    "status": "tasks_in_execution",
+    "description": "Processando 6 tarefas de integração - Shopee, Mercado Livre, Google Ads",
+    "execution_started": "2026-07-25T20:45:00Z",
+    "agents_assigned": ["Claude", "Gemini", "GPT"]
   },
   "tasks": [
     {
