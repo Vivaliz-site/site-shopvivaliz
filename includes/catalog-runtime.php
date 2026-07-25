@@ -101,9 +101,9 @@ function svcr_products(): array
             continue;
         }
 
-        // Filtrar por status: 'active', 'A' (Tiny), ou sem status = padrão ativo
-        $status = strtoupper(trim((string)($item['status'] ?? 'A')));
-        if (!in_array($status, ['ACTIVE', 'A'], true)) {
+        // Filtrar por is_published: marcação local do site (padrão: true)
+        $isPublished = $item['is_published'] ?? true;
+        if ($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0') {
             continue;
         }
 
