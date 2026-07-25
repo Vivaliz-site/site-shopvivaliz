@@ -29,13 +29,17 @@ jobs:
     steps:
       - name: Preparar URL do watchdog
         shell: bash
+        env:
+          SHOPVIVALIZ_AGENT_KEY: ${{ secrets.SHOPVIVALIZ_AGENT_KEY }}
+          RUNTIME_AGENT_KEY: ${{ secrets.RUNTIME_AGENT_KEY }}
+          WATCHDOG_AGENT_KEY: ${{ secrets.WATCHDOG_AGENT_KEY }}
+          AUTONOMOUS_AGENT_KEY: ${{ secrets.AUTONOMOUS_AGENT_KEY }}
         run: |
           CYCLES="${{ github.event.inputs.cycles || '3' }}"
-          AGENT_KEY="${{ secrets.SHOPVIVALIZ_AGENT_KEY }}"
-          [ -z "$AGENT_KEY" ] && AGENT_KEY="${{ secrets.RUNTIME_AGENT_KEY }}"
-          [ -z "$AGENT_KEY" ] && AGENT_KEY="${{ secrets.AGENT_KEY }}"
-          [ -z "$AGENT_KEY" ] && AGENT_KEY="${{ secrets.WATCHDOG_AGENT_KEY }}"
-          [ -z "$AGENT_KEY" ] && AGENT_KEY="${{ secrets.AUTONOMOUS_AGENT_KEY }}"
+          AGENT_KEY="${SHOPVIVALIZ_AGENT_KEY}"
+          [ -z "$AGENT_KEY" ] && AGENT_KEY="${RUNTIME_AGENT_KEY}"
+          [ -z "$AGENT_KEY" ] && AGENT_KEY="${WATCHDOG_AGENT_KEY}"
+          [ -z "$AGENT_KEY" ] && AGENT_KEY="${AUTONOMOUS_AGENT_KEY}"
 
           if [ -z "$AGENT_KEY" ]; then
             echo "❌ Nenhuma agent key configurada!"
