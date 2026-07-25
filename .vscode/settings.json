@@ -145,7 +145,7 @@
   "intelephense.completion.fullyQualifyGlobalConstants": false,
   "intelephense.diagnostics.run": "onType",
   "phpstan.enabled": false,
-  "php.validate.executablePath": "php",
+  "php.validate.executablePath": "C:\\Users\\FRED\\AppData\\Local\\Microsoft\\WinGet\\Packages\\PHP.PHP.8.3_Microsoft.Winget.Source_8wekyb3d8bbwe\\php",
   "prettier.printWidth": 100,
   "prettier.semi": true,
   "prettier.singleQuote": false,
