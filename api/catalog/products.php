@@ -127,6 +127,10 @@ if (is_file($jsonPath)) {
     $all = json_decode((string)file_get_contents($jsonPath), true) ?: [];
     $catCount = [];
     foreach ($all as $row) {
+        // Filtrar apenas produtos com status 'active'
+        if (($row['status'] ?? 'active') !== 'active') {
+            continue;
+        }
         $cat = (string)($row['category'] ?? '');
         if ($cat !== '') $catCount[$cat] = ($catCount[$cat] ?? 0) + 1;
     }
