@@ -38,7 +38,12 @@ function sv_home_catalog_source_rows(): array
     if (is_file($jsonPath) && is_readable($jsonPath)) {
         $decoded = json_decode((string)file_get_contents($jsonPath), true);
         if (is_array($decoded) && $decoded !== []) {
-            return $decoded;
+            // Filtrar apenas produtos com status 'A' (ativo) ou 'active'
+            return array_filter($decoded, static function($item) {
+                if (!is_array($item)) return false;
+                $status = strtoupper(trim((string)($item['status'] ?? 'A')));
+                return in_array($status, ['A', 'ACTIVE'], true);
+            });
         }
     }
 
