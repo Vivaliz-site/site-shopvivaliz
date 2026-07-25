@@ -77,7 +77,7 @@
       "title": "Configurar Google Ads para Automação",
       "description": "Preparar stack de Google Ads com rastreamento de conversões",
       "priority": "medium",
-      "status": "in_progress",
+      "status": "pending",
       "assigned_to": ["claude"],
       "requires_secrets": [
         "GOOGLE_ADS_CUSTOMER_ID",
