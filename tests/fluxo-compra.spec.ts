@@ -1,4 +1,22 @@
-import { test, expect } from './fixtures';
+import { test, expect, type Page } from './fixtures';
+
+async function dismissCouponPopup(page: Page): Promise<void> {
+  const popup = page.locator('#popup-cupons-modal');
+  const visible = await popup.isVisible({ timeout: 1000 }).catch(() => false);
+  if (!visible) return;
+
+  const closeButton = popup.locator('button, [role="button"], .close, .popup-cupons-close').first();
+  if (await closeButton.isVisible({ timeout: 500 }).catch(() => false)) {
+    await closeButton.click();
+  } else {
+    await page.evaluate(() => {
+      const close = (window as typeof window & { sv_popup_cupons_close?: () => void }).sv_popup_cupons_close;
+      if (typeof close === 'function') close();
+    });
+  }
+
+  await expect(popup).toBeHidden({ timeout: 3000 });
+}
 
 test.describe('Fluxo de Compra', () => {
   const baseUrl = process.env.E2E_BASE_URL || 'https://shopvivaliz.com.br';
@@ -16,9 +34,6 @@ test.describe('Fluxo de Compra', () => {
     const temProduto = await produtoLink.isVisible({ timeout: 5000 }).catch(() => false);
 
     if (!temProduto) {
-      // Sem produtos sincronizados neste ambiente - isso e um estado valido,
-      // mas o site precisa dizer isso claramente ao usuario, nao mostrar
-      // pagina quebrada/vazia sem explicacao.
       await expect(page.locator('#catalog-status')).toBeVisible();
       test.skip(true, 'Catalogo vazio neste ambiente - sem produto para validar preco');
       return;
@@ -30,6 +45,7 @@ test.describe('Fluxo de Compra', () => {
 
   test('clique em produto deve abrir pagina de detalhes com preco', async ({ page }) => {
     await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
+    await dismissCouponPopup(page);
 
     const produtoLink = page.locator('#product-grid .product-card a.card-link').first();
     const temProduto = await produtoLink.isVisible({ timeout: 5000 }).catch(() => false);
@@ -42,6 +58,7 @@ test.describe('Fluxo de Compra', () => {
 
   test('botao de compra deve existir na pagina de produto', async ({ page }) => {
     await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
+    await dismissCouponPopup(page);
 
     const produtoLink = page.locator('#product-grid .product-card a.card-link').first();
     const temProduto = await produtoLink.isVisible({ timeout: 5000 }).catch(() => false);
@@ -58,9 +75,6 @@ test.describe('Fluxo de Compra', () => {
   });
 
   test('checkout nao deve gerar cobranca real ao ser acessado', async ({ page }) => {
-    // Este teste roda com o guardrail de tests/fixtures.ts ativo: qualquer
-    // chamada de rede para o Pagar.me durante este teste seria interceptada
-    // e simulada, nunca chegando ao Pagar.me de verdade.
     const response = await page.goto(`${baseUrl}/checkout`, { waitUntil: 'domcontentloaded' }).catch(() => null);
     expect(response).not.toBeNull();
     expect(response!.status()).toBeLessThan(500);

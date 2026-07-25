@@ -1,318 +1,151 @@
 #!/usr/bin/env python3
-"""
-Leitor de Requisições de Agentes - GitHub Issues Listener
+"""Monitor seguro de solicitações de agentes via GitHub Issues.
 
-Monitora issues com label 'agentes' e executa tarefas automaticamente.
-Funciona em qualquer estação (Windows, Ubuntu, etc).
-
-Uso:
-  python scripts/agentes-leitor.py                    # Rodar uma vez
-  python scripts/agentes-leitor.py --watch            # Modo contínuo
-  python scripts/agentes-leitor.py --poll 30          # Poll a cada 30s
+Este processo NÃO executa comandos descritos em issues e NÃO declara tarefas
+como concluídas. Ele apenas identifica solicitações abertas com a label
+``agentes``, valida requisitos mínimos e publica um único status de triagem.
 """
+
+from __future__ import annotations
 
 import os
 import sys
-import json
-import subprocess
-import time
-import argparse
-from datetime import datetime
-from pathlib import Path
+from datetime import datetime, timezone
+from typing import Any
 
-try:
-    import requests
-except ImportError:
-    print("❌ requests não instalado. Execute: pip install requests")
-    sys.exit(1)
-
-# ============================================================================
-# CONFIG
-# ============================================================================
+import requests
 
 REPO_OWNER = "Vivaliz-site"
 REPO_NAME = "site-shopvivaliz"
 GITHUB_API = "https://api.github.com"
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 AGENTES_LABEL = "agentes"
-ENVIRONMENT = os.getenv("AGENT_ENVIRONMENT", "unknown")  # Ex: "windows-local", "ubuntu-vm", etc
-
-LOGS_DIR = Path(__file__).parent.parent / "logs"
-LOGS_DIR.mkdir(exist_ok=True)
-
-LOG_FILE = LOGS_DIR / f"agentes-leitor-{datetime.now().strftime('%Y-%m-%d')}.log"
+TRIAGE_MARKER = "<!-- agentes-listener:triaged -->"
+ENVIRONMENT = os.getenv("AGENT_ENVIRONMENT", "github-actions")
 
 
-# ============================================================================
-# LOGGING
-# ============================================================================
-
-def log(message: str, level: str = "INFO"):
-    """Log com timestamp."""
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    msg = f"[{ts}] [{level}] {message}"
-
-    print(msg)
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(msg + "\n")
+def log(message: str) -> None:
+    print(f"[{datetime.now(timezone.utc).isoformat()}] {message}")
 
 
-def log_section(title: str):
-    """Log uma seção (com separador)."""
-    sep = "=" * 70
-    log(sep)
-    log(f"▶ {title}")
-    log(sep)
-
-
-# ============================================================================
-# GITHUB API
-# ============================================================================
-
-def get_issues_for_agent(status: str = "open") -> list:
-    """Buscar issues com label 'agentes' que estão abertas."""
+def headers() -> dict[str, str]:
     if not GITHUB_TOKEN:
-        log("❌ GITHUB_TOKEN não configurado", "ERROR")
-        return []
-
-    url = f"{GITHUB_API}/repos/{REPO_OWNER}/{REPO_NAME}/issues"
-
-    params = {
-        "labels": AGENTES_LABEL,
-        "state": status,
-        "per_page": 30,
+        raise RuntimeError("GITHUB_TOKEN não configurado")
+    return {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
     }
 
-    headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3+json",
-    }
 
-    try:
-        response = requests.get(url, params=params, headers=headers, timeout=10)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        log(f"❌ Erro ao buscar issues: {e}", "ERROR")
-        return []
+def api_get(path: str, **params: Any) -> Any:
+    response = requests.get(
+        f"{GITHUB_API}{path}",
+        headers=headers(),
+        params=params,
+        timeout=20,
+    )
+    response.raise_for_status()
+    return response.json()
 
 
-def comment_on_issue(issue_number: int, comment: str) -> bool:
-    """Adicionar comentário em uma issue."""
-    if not GITHUB_TOKEN:
-        log("❌ GITHUB_TOKEN não configurado", "ERROR")
-        return False
-
-    url = f"{GITHUB_API}/repos/{REPO_OWNER}/{REPO_NAME}/issues/{issue_number}/comments"
-
-    headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3+json",
-    }
-
-    data = {"body": comment}
-
-    try:
-        response = requests.post(url, json=data, headers=headers, timeout=10)
-        response.raise_for_status()
-        log(f"✅ Comentário adicionado à issue #{issue_number}")
-        return True
-    except Exception as e:
-        log(f"❌ Erro ao comentar: {e}", "ERROR")
-        return False
+def api_post(path: str, payload: dict[str, Any]) -> Any:
+    response = requests.post(
+        f"{GITHUB_API}{path}",
+        headers=headers(),
+        json=payload,
+        timeout=20,
+    )
+    response.raise_for_status()
+    return response.json()
 
 
-def add_label_to_issue(issue_number: int, label: str) -> bool:
-    """Adicionar label a uma issue."""
-    if not GITHUB_TOKEN:
-        return False
-
-    url = f"{GITHUB_API}/repos/{REPO_OWNER}/{REPO_NAME}/issues/{issue_number}/labels"
-
-    headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3+json",
-    }
-
-    data = {"labels": [label]}
-
-    try:
-        response = requests.post(url, json=data, headers=headers, timeout=10)
-        response.raise_for_status()
-        return True
-    except Exception as e:
-        log(f"⚠️ Erro ao adicionar label: {e}", "WARN")
-        return False
+def get_open_agent_issues() -> list[dict[str, Any]]:
+    items = api_get(
+        f"/repos/{REPO_OWNER}/{REPO_NAME}/issues",
+        labels=AGENTES_LABEL,
+        state="open",
+        per_page=100,
+    )
+    # O endpoint /issues também retorna pull requests; eles não são tarefas.
+    return [item for item in items if "pull_request" not in item]
 
 
-# ============================================================================
-# EXECUÇÃO
-# ============================================================================
-
-def execute_issue_steps(issue: dict) -> bool:
-    """
-    Executar os steps de uma issue.
-
-    Procura por:
-    - [ ] Step 1: ...
-    - [ ] Step 2: ...
-
-    E marca como concluído:
-    - [x] Step 1: ...
-    """
-    issue_number = issue["number"]
-    title = issue["title"]
-    body = issue["body"] or ""
-
-    log_section(f"EXECUTANDO ISSUE #{issue_number}: {title}")
-
-    # Simular execução (em produção, parsear steps e executar)
-    log(f"📍 Ambiente: {ENVIRONMENT}")
-    log(f"📝 Título: {title}")
-    log(f"📄 Descrição (primeiros 200 chars): {body[:200]}...")
-
-    log("\n✅ Passos de execução:")
-    log("  1. Monitorar issue")
-    log("  2. Ler steps do body")
-    log("  3. Executar comandos")
-    log("  4. Reportar resultado")
-    log("  5. Comentar status")
-
-    # Simular sucesso por enquanto
-    time.sleep(2)
-
-    log("\n✅ Issue processada com sucesso")
-    return True
+def already_triaged(issue_number: int) -> bool:
+    comments = api_get(
+        f"/repos/{REPO_OWNER}/{REPO_NAME}/issues/{issue_number}/comments",
+        per_page=100,
+    )
+    return any(TRIAGE_MARKER in (comment.get("body") or "") for comment in comments)
 
 
-def process_issues():
-    """Buscar e processar issues abertas."""
-    log_section("LEITOR DE AGENTES - VERIFICANDO ISSUES")
+def triage_message(issue: dict[str, Any]) -> str:
+    body = (issue.get("body") or "").strip()
+    has_acceptance = any(
+        token in body.lower()
+        for token in ("critério de aceite", "criterios de aceite", "aceite", "test plan")
+    )
+    has_scope = len(body) >= 80
 
-    log(f"🔍 Buscando issues com label '{AGENTES_LABEL}'...")
-    issues = get_issues_for_agent(status="open")
+    missing: list[str] = []
+    if not has_scope:
+        missing.append("descrição/escopo suficiente")
+    if not has_acceptance:
+        missing.append("critérios de aceite ou plano de teste")
 
-    if not issues:
-        log("✓ Nenhuma issue com label 'agentes' encontrada")
-        return 0
-
-    log(f"📌 Encontradas {len(issues)} issue(s)")
-
-    processed = 0
-    for issue in issues:
-        issue_number = issue["number"]
-        title = issue["title"]
-
-        log(f"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        log(f"Issue #{issue_number}: {title}")
-
-        # Comentar que começamos
-        comment_on_issue(
-            issue_number,
-            f"🚀 **[{ENVIRONMENT}]** Iniciando execução em {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+    if missing:
+        status = "Triagem pendente: " + ", ".join(missing) + "."
+    else:
+        status = (
+            "Triagem concluída. A solicitação está pronta para revisão humana ou "
+            "atribuição explícita a um executor autorizado."
         )
 
-        # Adicionar label de "em progresso"
-        add_label_to_issue(issue_number, "em-progresso")
-
-        # Executar
-        success = execute_issue_steps(issue)
-
-        # Comentar resultado
-        if success:
-            comment_on_issue(
-                issue_number,
-                f"✅ **[{ENVIRONMENT}]** Concluído com sucesso\n\n"
-                f"- Tempo: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} UTC\n"
-                f"- Ambiente: {ENVIRONMENT}\n"
-                f"- Logs: Verifique `logs/agentes-leitor-*.log`"
-            )
-            add_label_to_issue(issue_number, "concluido")
-        else:
-            comment_on_issue(
-                issue_number,
-                f"❌ **[{ENVIRONMENT}]** Falhou durante execução\n\n"
-                f"Verifique logs para detalhes."
-            )
-            add_label_to_issue(issue_number, "erro")
-
-        processed += 1
-
-    log(f"\n\n✅ Processadas {processed} issue(s)")
-    return processed
-
-
-# ============================================================================
-# MODO WATCH (CONTÍNUO)
-# ============================================================================
-
-def watch_mode(poll_interval: int = 30):
-    """Executar continuamente em intervalos."""
-    log_section(f"MODO WATCH - POLLING A CADA {poll_interval}s")
-
-    iteration = 0
-    while True:
-        iteration += 1
-        try:
-            log(f"\n[Ciclo {iteration}] {datetime.now().strftime('%H:%M:%S')}")
-            process_issues()
-
-            log(f"Proxima verificacao em {poll_interval}s...")
-            time.sleep(poll_interval)
-
-        except KeyboardInterrupt:
-            log("\n⏹️  Watch mode interrompido pelo usuário", "WARN")
-            break
-        except Exception as e:
-            log(f"❌ Erro no watch mode: {e}", "ERROR")
-            time.sleep(poll_interval)
-
-
-# ============================================================================
-# MAIN
-# ============================================================================
-
-def main():
-    global ENVIRONMENT
-
-    parser = argparse.ArgumentParser(
-        description="Leitor de Requisições de Agentes - GitHub Issues Listener"
-    )
-    parser.add_argument(
-        "--watch",
-        action="store_true",
-        help="Modo contínuo (polling)",
-    )
-    parser.add_argument(
-        "--poll",
-        type=int,
-        default=30,
-        help="Intervalo de polling em segundos (default: 30)",
-    )
-    parser.add_argument(
-        "--env",
-        default=ENVIRONMENT,
-        help="Nome do ambiente (ex: windows-local, ubuntu-vm)",
+    return (
+        f"{TRIAGE_MARKER}\n"
+        f"🤖 **Monitor de agentes — {ENVIRONMENT}**\n\n"
+        f"{status}\n\n"
+        "Este monitor não executa comandos, não altera código, não fecha issues e "
+        "não declara trabalho como concluído. Execução e merge exigem um fluxo "
+        "autorizado com evidências de testes."
     )
 
-    args = parser.parse_args()
 
-    ENVIRONMENT = args.env or ENVIRONMENT
+def process() -> int:
+    issues = get_open_agent_issues()
+    log(f"Issues abertas com label '{AGENTES_LABEL}': {len(issues)}")
 
-    log(f"🤖 AGENTES LEITOR - ShopVivaliz")
-    log(f"   Ambiente: {ENVIRONMENT}")
-    log(f"   Log: {LOG_FILE}")
-    log(f"   GitHub Token: {'✅ Configurado' if GITHUB_TOKEN else '❌ Não configurado'}")
+    triaged = 0
+    for issue in issues:
+        number = int(issue["number"])
+        title = issue.get("title", "")
+        if already_triaged(number):
+            log(f"#{number} já triada: {title}")
+            continue
 
-    if args.watch:
-        watch_mode(poll_interval=args.poll)
-    else:
-        process_issues()
+        api_post(
+            f"/repos/{REPO_OWNER}/{REPO_NAME}/issues/{number}/comments",
+            {"body": triage_message(issue)},
+        )
+        triaged += 1
+        log(f"#{number} triada: {title}")
+
+    log(f"Novas triagens publicadas: {triaged}")
+    return triaged
+
+
+def main() -> int:
+    try:
+        process()
+        return 0
+    except requests.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else "unknown"
+        log(f"Falha na API GitHub (HTTP {status}): {exc}")
+        return 1
+    except Exception as exc:
+        log(f"Falha fatal: {exc}")
+        return 1
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        log(f"❌ Erro fatal: {e}", "FATAL")
-        sys.exit(1)
+    sys.exit(main())

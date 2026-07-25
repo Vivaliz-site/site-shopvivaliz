@@ -1,92 +1,47 @@
-name: 🤖 Agent Dual Validation & Deploy
+name: 🤖 Agent Validation Gate
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches:
-      - main
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-validation-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   agent-validation:
-    name: 🔍 Agent Self-Validation
+    name: 🔍 Repository Validation
     runs-on: ubuntu-latest
-    outputs:
-      validation_passed: ${{ steps.validate.outputs.passed }}
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup
-        run: |
-          node --version
-          npm --version
-          python3 --version
-          php --version
-
-      - name: 🔍 Agent Runs Self-Validation
-        id: validate
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Running self-validation checks..."
-
-          echo "✓ Checking PHP syntax..."
-          php_failed=0
-          while IFS= read -r -d '' file; do
-            if ! php -l "$file"; then
-              php_failed=1
-            fi
-          done < <(find . -name "*.php" -type f ! -path "./vendor/*" ! -path "./.git/*" -print0)
-
-          if [ "$php_failed" -ne 0 ]; then
-            echo "passed=false" >> "$GITHUB_OUTPUT"
-            echo "::error::PHP syntax validation failed"
-            exit 1
-          fi
-
-          echo "✓ Scanning for hardcoded secrets..."
-          if grep -rEi "password|secret|api[._-]?key|token" --include="*.php" --include="*.js" --include="*.ts" . 2>/dev/null \
-            | grep -v ".env.example" \
-            | grep -v "node_modules" \
-            | grep -v ".git" \
-            | grep -v "docs/" \
-            | head -5 \
-            | grep -q .; then
-            echo "⚠️ Found potential secrets (manual review recommended)"
-          fi
-
-          echo "✓ Checking markdown files..."
-          find . -name "*.md" -type f -exec sh -c 'count=$(grep -cE "^```|^~~~" "$1" || true); if [ $((count % 2)) -ne 0 ]; then echo "Unclosed code block in $1"; exit 1; fi' _ {} \; 2>/dev/null || true
-
-          echo "passed=true" >> "$GITHUB_OUTPUT"
-          echo "✅ Self-validation passed"
-
-      - name: 📝 Create Validation Report
-        if: always()
-        run: |
-          cat > validation-report.md << EOF
-          # Agent Self-Validation Report
-
-          **Timestamp:** $(date -u)
-          **Branch:** ${{ github.ref }}
-          **Commit:** ${{ github.sha }}
-
-          ## Summary
-          PHP syntax and repository validation executed by GitHub Actions.
-          EOF
-          cat validation-report.md
-
-  peer-validation:
-    name: 👥 Peer Agent Review
-    needs: agent-validation
-    runs-on: ubuntu-latest
-    if: needs.agent-validation.outputs.validation_passed == 'true'
-    steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: 🔐 Security Validation
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          failed=0
+          while IFS= read -r -d '' file; do
+            if ! php -l "$file"; then
+              failed=1
+            fi
+          done < <(find . -name '*.php' -type f ! -path './vendor/*' ! -path './.git/*' -print0)
+          test "$failed" -eq 0
+
+      - name: Resolve changed files
+        id: changes
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -95,83 +50,98 @@ jobs:
           CURRENT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          echo "Checking changed source files for obvious hardcoded secrets..."
-
-          base_sha=""
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            base_sha="$PR_BASE_SHA"
-          elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && [ "$PUSH_BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
-            base_sha="$PUSH_BEFORE_SHA"
+          base=''
+          if [[ "$EVENT_NAME" == 'pull_request' ]]; then
+            base="$PR_BASE_SHA"
+          elif [[ "$EVENT_NAME" == 'push' && -n "$PUSH_BEFORE_SHA" && "$PUSH_BEFORE_SHA" != '0000000000000000000000000000000000000000' ]]; then
+            base="$PUSH_BEFORE_SHA"
           fi
 
-          if [ -n "$base_sha" ] && git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
-            mapfile -d '' files < <(git diff --name-only -z --diff-filter=ACMR "$base_sha" "$CURRENT_SHA" -- '*.js' '*.ts' '*.php')
+          if [[ -n "$base" ]] && git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            git diff --name-only --diff-filter=ACMR "$base" "$CURRENT_SHA" > changed-files.txt
           else
-            mapfile -d '' files < <(git ls-files -z -- '*.js' '*.ts' '*.php')
+            git ls-files > changed-files.txt
           fi
+          cat changed-files.txt
 
-          matches=""
-          for file in "${files[@]}"; do
+      - name: Block newly introduced credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          matches=''
+          while IFS= read -r file; do
+            [[ -f "$file" ]] || continue
             case "$file" in
-              node_modules/*|vendor/*|tests/*|scratch/*|docs/*|*.example)
+              node_modules/*|vendor/*|.git/*|tests/fixtures/*|*.lock|*.min.js|*.map|*.example)
                 continue
                 ;;
             esac
+            case "$file" in
+              *.php|*.js|*.ts|*.json|*.yml|*.yaml|*.md|*.txt|*.env)
+                ;;
+              *) continue ;;
+            esac
 
-            [ -f "$file" ] || continue
-            result=$(grep -nEi "(password|secret|api[._-]?key)[[:space:]]*[:=][[:space:]]*['\"][^$<{]" "$file" || true)
-            if [ -n "$result" ]; then
-              matches+="${file}:\n${result}\n"
+            result=$(grep -nE "(ACCESS_TOKEN|REFRESH_TOKEN|CLIENT_SECRET|API_KEY|PASSWORD|COMMAND_SERVER_TOKEN)[[:space:]]*[:=][[:space:]]*['\"]?[A-Za-z0-9_./+!:-]{12,}" "$file" || true)
+            if [[ -n "$result" ]]; then
+              matches+="$file:\n$result\n"
             fi
-          done
+          done < changed-files.txt
 
-          if [ -n "$matches" ]; then
-            printf '%b' "$matches" | head -20
-            echo "::error::Potential hardcoded secrets found in changed source files"
+          if [[ -n "$matches" ]]; then
+            printf '%b' "$matches" | head -50
+            echo '::error::Potential credential material introduced in changed files'
             exit 1
           fi
+          echo 'No direct credential assignments found in changed files.'
 
-          echo "✅ No obvious hardcoded secrets found in changed source files"
+      - name: Validate workflow safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          risky='git[[:space:]]+(reset[[:space:]]+--hard|push[[:space:]]+--force)|rm[[:space:]]+-rf[[:space:]]+/'
+          while IFS= read -r file; do
+            [[ "$file" == .github/workflows/*.yml || "$file" == .github/workflows/*.yaml ]] || continue
+            if grep -nE "$risky" "$file"; then
+              echo "::error file=$file::Destructive command requires explicit human review"
+              exit 1
+            fi
+          done < changed-files.txt
 
-      - name: 🏗️ Architecture Validation
-        run: echo "✅ Architecture validation completed"
+      - name: Markdown fence validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r file; do
+            [[ "$file" == *.md && -f "$file" ]] || continue
+            count=$(grep -cE '^```|^~~~' "$file" || true)
+            if (( count % 2 != 0 )); then
+              echo "::error file=$file::Unclosed Markdown code fence"
+              exit 1
+            fi
+          done < changed-files.txt
 
-  approval-and-deploy:
-    name: 🚀 Auto-Approval & Deploy
-    needs: [agent-validation, peer-validation]
+  policy-review:
+    name: 👥 Independent Policy Checks
+    needs: agent-validation
     runs-on: ubuntu-latest
-    if: needs.agent-validation.outputs.validation_passed == 'true' && needs.peer-validation.result == 'success'
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-
-      - name: ✅ Grant Auto-Approval
+      - name: Confirm policy boundary
         run: |
-          echo "Agent validation: passed"
-          echo "Peer validation: passed"
-
-      - name: 🔀 Enable Auto-Merge
-        if: github.event_name == 'pull_request'
-        run: gh pr merge ${{ github.event.pull_request.number }} --auto --squash || true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 🚀 Confirm production synchronization trigger
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          echo "✅ Changes merged to main"
-          echo "Production is synchronized by the Oracle VM git-auto-sync cron, as documented in .github/workflows/deploy.yml."
+          echo 'Validation passed.'
+          echo 'This workflow does not approve, merge, deploy, or execute issue instructions.'
+          echo 'Merge authorization remains a human or explicitly authorized external action.'
 
   validation-summary:
     name: 📊 Validation Summary
-    needs: [agent-validation, peer-validation, approval-and-deploy]
-    runs-on: ubuntu-latest
+    needs: [agent-validation, policy-review]
     if: always()
+    runs-on: ubuntu-latest
     steps:
-      - name: 📋 Print Summary
+      - name: Enforce successful result
         run: |
-          echo "Agent Self-Validation: ${{ needs.agent-validation.result }}"
-          echo "Peer Agent Review: ${{ needs.peer-validation.result }}"
-          echo "Approval & Deploy: ${{ needs.approval-and-deploy.result }}"
-          test "${{ needs.agent-validation.result }}" = "success"
-          test "${{ needs.peer-validation.result }}" = "success"
-          test "${{ needs.approval-and-deploy.result }}" = "success"
+          echo "Repository Validation: ${{ needs.agent-validation.result }}"
+          echo "Independent Policy Checks: ${{ needs.policy-review.result }}"
+          test "${{ needs.agent-validation.result }}" = success
+          test "${{ needs.policy-review.result }}" = success
