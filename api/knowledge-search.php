@@ -4,7 +4,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: public, max-age=300');
 
-require_once __DIR__ . '/../blog/content.php';
+require_once __DIR__ . '/../includes/blog-article-repository.php';
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if ($method !== 'GET') {
@@ -16,7 +16,7 @@ if ($method !== 'GET') {
 $query = trim((string)($_GET['q'] ?? ''));
 $category = trim((string)($_GET['categoria'] ?? ''));
 $limit = min(10, max(1, (int)($_GET['limit'] ?? 5)));
-$articles = sv_blog_search_articles($query, $category, $limit);
+$articles = BlogArticleRepository::fromApplicationDatabase()->published($query, $category, $limit);
 
 $items = array_map(static function (array $article): array {
     return [
