@@ -1,7 +1,15 @@
 (() => {
   const lizConfig = window.ShopVivalizLizConfig || {};
   const lizParams = new URLSearchParams(window.location.search || '');
-  const lizKnowledgeEnabled = lizConfig.knowledgeEnabled === true || lizParams.get('lizKnowledge') === '1';
+  const storageKey = 'shopvivaliz_liz_knowledge';
+  const storedKnowledge = (() => {
+    try {
+      return window.localStorage ? window.localStorage.getItem(storageKey) : null;
+    } catch (error) {
+      return null;
+    }
+  })();
+  const lizKnowledgeEnabled = lizConfig.knowledgeEnabled === true || lizParams.get('lizKnowledge') === '1' || storedKnowledge === '1';
   const API = lizKnowledgeEnabled && lizConfig.knowledgeApi ? lizConfig.knowledgeApi : (lizKnowledgeEnabled ? '/api/liz/intelligent-knowledge' : (lizConfig.baseApi || '/api/liz-intelligent.php'));
   const HEALTH_API = lizConfig.baseApi || '/api/liz-intelligent.php';
   const root = document.createElement('div');
@@ -52,6 +60,7 @@
 
   document.body.append(root);
   root.dataset.knowledge = lizKnowledgeEnabled ? 'enabled' : 'disabled';
+  root.dataset.knowledgeSource = lizParams.get('lizKnowledge') === '1' ? 'query' : (storedKnowledge === '1' ? 'localStorage' : (lizConfig.knowledgeEnabled === true ? 'config' : 'default'));
 
   const launcher = root.querySelector('#sv-liz-launcher');
   const panel = root.querySelector('#sv-liz-panel');
