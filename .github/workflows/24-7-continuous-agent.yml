@@ -27,6 +27,20 @@ jobs:
     timeout-minutes: 6
 
     steps:
+      - name: Preparar agent key
+        shell: bash
+        env:
+          SHOPVIVALIZ_AGENT_KEY: ${{ secrets.SHOPVIVALIZ_AGENT_KEY }}
+          RUNTIME_AGENT_KEY: ${{ secrets.RUNTIME_AGENT_KEY }}
+          WATCHDOG_AGENT_KEY: ${{ secrets.WATCHDOG_AGENT_KEY }}
+          AUTONOMOUS_AGENT_KEY: ${{ secrets.AUTONOMOUS_AGENT_KEY }}
+        run: |
+          AGENT_KEY="${SHOPVIVALIZ_AGENT_KEY}"
+          [ -z "$AGENT_KEY" ] && AGENT_KEY="${RUNTIME_AGENT_KEY}"
+          [ -z "$AGENT_KEY" ] && AGENT_KEY="${WATCHDOG_AGENT_KEY}"
+          [ -z "$AGENT_KEY" ] && AGENT_KEY="${AUTONOMOUS_AGENT_KEY}"
+          echo "AGENT_KEY=$AGENT_KEY" >> "$GITHUB_ENV"
+
       - name: Coletar relatorio autonomo
         shell: bash
         run: |
@@ -37,6 +51,7 @@ jobs:
             --retry-delay 5 \
             --retry-all-errors \
             -H "Accept: application/json" \
+            -H "X-ShopVivaliz-Agent-Key: $AGENT_KEY" \
             -o reports/continuous-agent-report.json \
             -w "%{http_code}" \
             "${SHOPVIVALIZ_BASE_URL%/}/api/agent/autonomous-report.php")
