@@ -5,6 +5,8 @@ if (session_status() === PHP_SESSION_NONE) {
     @session_start();
 }
 
+require_once dirname(__DIR__) . '/includes/site-settings.php';
+
 $svNavCurrent = $svNavCurrent ?? trim((string)parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH), '/');
 $svNavCurrent = preg_replace('#^index\.php$#', '', $svNavCurrent);
 
