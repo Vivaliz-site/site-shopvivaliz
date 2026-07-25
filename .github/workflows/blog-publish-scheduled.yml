@@ -1,0 +1,32 @@
+name: Blog - Publicar agendados
+
+on:
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: blog-publish-scheduled
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Publicar artigos cujo agendamento venceu
+        env:
+          BLOG_PUBLISH_TOKEN: ${{ secrets.BLOG_PUBLISH_TOKEN }}
+          BLOG_PUBLISH_URL: ${{ vars.BLOG_PUBLISH_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$BLOG_PUBLISH_TOKEN"
+          URL="${BLOG_PUBLISH_URL:-https://shopvivaliz.com.br/api/blog/publish-scheduled.php}"
+          RESPONSE="$(curl --fail-with-body --silent --show-error \
+            --retry 2 --retry-all-errors --max-time 30 \
+            -H "X-Blog-Publish-Token: $BLOG_PUBLISH_TOKEN" \
+            "$URL")"
+          echo "$RESPONSE" | python3 -c 'import json,sys; data=json.load(sys.stdin); assert data.get("ok") is True; print("Artigos publicados:", data.get("published", 0))'
