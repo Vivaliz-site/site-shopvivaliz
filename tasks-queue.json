@@ -15,7 +15,7 @@
       "title": "Sincronizar Catálogo com Shopee",
       "description": "Conectar produtos ao Shopee mantendo preços sincronizados",
       "priority": "high",
-      "status": "in_progress",
+      "status": "pending",
       "assigned_to": ["claude", "gemini"],
       "requires_secrets": [
         "SHOPEE_PARTNER_ID",
