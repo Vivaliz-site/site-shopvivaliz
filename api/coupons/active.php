@@ -63,8 +63,8 @@ try {
            AND (max_uses IS NULL OR max_uses = 0 OR used_count < max_uses)
          ORDER BY
            CASE discount_type
-             WHEN ''percent'' THEN 1
-             WHEN ''shipping'' THEN 2
+             WHEN "percent" THEN 1
+             WHEN "shipping" THEN 2
              ELSE 3
            END,
            discount_value DESC,
