@@ -46,7 +46,15 @@ function svcr_is_preorder(array $item): bool
 function svcr_filter_storefront_rows(array $rows): array
 {
     return array_values(array_filter($rows, static function ($row): bool {
-        return is_array($row) && !svcr_is_preorder($row);
+        if (!is_array($row) || svcr_is_preorder($row)) {
+            return false;
+        }
+        // Filtrar por is_published: marcação local do site (padrão: true)
+        $isPublished = $row['is_published'] ?? true;
+        if ($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0') {
+            return false;
+        }
+        return true;
     }));
 }
 
@@ -93,7 +101,13 @@ function svcr_products(): array
             continue;
         }
 
-        $situation = strtoupper(trim((string)($item['situacao'] ?? $item['status'] ?? 'A')));
+        // Filtrar por is_published: marcação local do site (padrão: true)
+        $isPublished = $item['is_published'] ?? true;
+        if ($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0') {
+            continue;
+        }
+
+        $situation = strtoupper(trim((string)($item['situacao'] ?? 'A')));
         if (!in_array($situation, ['A', 'ATIVO', 'ACTIVE'], true)) {
             continue;
         }

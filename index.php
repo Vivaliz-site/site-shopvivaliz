@@ -11,6 +11,7 @@ define('APP_NAME', 'ShopVivaliz');
 require_once __DIR__ . '/includes/product-price-enrich.php';
 require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/site-settings.php';
+require_once __DIR__ . '/includes/popup-cupons.php';
 $svFreeShipping = sv_free_shipping_config();
 
 function sv_home_esc(string $value): string
@@ -37,7 +38,12 @@ function sv_home_catalog_source_rows(): array
     if (is_file($jsonPath) && is_readable($jsonPath)) {
         $decoded = json_decode((string)file_get_contents($jsonPath), true);
         if (is_array($decoded) && $decoded !== []) {
-            return $decoded;
+            // Filtrar apenas produtos com status 'A' (ativo) ou 'active'
+            return array_filter($decoded, static function($item) {
+                if (!is_array($item)) return false;
+                $status = strtoupper(trim((string)($item['status'] ?? 'A')));
+                return in_array($status, ['A', 'ACTIVE'], true);
+            });
         }
     }
 
@@ -1058,5 +1064,8 @@ $svNavCurrent = '';
     <script src="/js/auto-image-carousel.js?v=20260719-2"></script>
     <!-- A/B Testing Framework for CRO -->
     <script src="/js/shopvivaliz-ab-testing.js?v=1.0.0"></script>
+
+    <!-- Popup de Cupons Promocionais -->
+    <?php echo sv_popup_cupons_html(); ?>
 </body>
 </html>

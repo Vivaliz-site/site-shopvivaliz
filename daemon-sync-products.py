@@ -72,6 +72,9 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
         },
         "imagem_principal_url": str(item.get("imagem_principal_url") or ""),
         "anexos": attachments,
+        "seo_title": str(item.get("seo_title") or ""),
+        "seo_description": str(item.get("seo_description") or ""),
+        "keywords": item.get("keywords", []) if isinstance(item.get("keywords"), list) else [],
         "_detail_synced_at": str(item.get("_detail_synced_at") or datetime.now(timezone.utc).isoformat()),
     }
 

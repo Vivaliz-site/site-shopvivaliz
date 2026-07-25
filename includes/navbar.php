@@ -5,6 +5,8 @@ if (session_status() === PHP_SESSION_NONE) {
     @session_start();
 }
 
+require_once dirname(__DIR__) . '/includes/site-settings.php';
+
 $svNavCurrent = $svNavCurrent ?? trim((string)parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH), '/');
 $svNavCurrent = preg_replace('#^index\.php$#', '', $svNavCurrent);
 
@@ -43,6 +45,7 @@ header.sv-navbar {
     padding: 12px 0;
 }
 header.sv-navbar .nav-inner {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -58,9 +61,7 @@ header.sv-navbar a {
     font-size: 14px;
     transition: color 0.2s ease;
 }
-header.sv-navbar a:hover {
-    color: #35c759 !important;
-}
+header.sv-navbar a:hover { color: #35c759 !important; }
 header.sv-navbar a.sv-nav-cta {
     background: #35c759 !important;
     color: #ffffff !important;
@@ -73,10 +74,28 @@ header.sv-navbar .navbar-menu {
     align-items: center;
     gap: 20px;
 }
+header.sv-navbar .brand-link { min-width: 0; }
 header.sv-navbar .brand-logo-img {
+    display: block;
     height: 42px;
     width: auto;
+    max-width: min(210px, 48vw);
     object-fit: contain;
+}
+header.sv-navbar .menu-toggle {
+    display: none;
+    width: 44px;
+    height: 44px;
+    border: 1px solid rgba(255,255,255,.35);
+    border-radius: 10px;
+    background: rgba(255,255,255,.12);
+    color: #fff;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    flex: 0 0 auto;
 }
 .sv-announcement-bar {
     background: linear-gradient(90deg, #07345d, #0b4f88, #07345d);
@@ -87,14 +106,75 @@ header.sv-navbar .brand-logo-img {
     font-weight: 700;
     letter-spacing: 0.03em;
     border-bottom: 1px solid rgba(255,255,255,0.15);
+    line-height: 1.35;
 }
 @media (max-width: 768px) {
-    header.sv-navbar .navbar-menu { gap: 12px; font-size: 13px; }
+    header.sv-navbar { padding: 8px 0; }
+    header.sv-navbar .nav-inner {
+        min-height: 54px;
+        flex-wrap: nowrap !important;
+        gap: 10px;
+        padding-inline: 12px;
+    }
+    header.sv-navbar .brand-logo-img { height: 36px; max-width: 58vw; }
+    header.sv-navbar .menu-toggle { display: inline-flex !important; margin-left: auto; }
+    header.sv-navbar .navbar-menu {
+        display: none !important;
+        position: absolute !important;
+        top: calc(100% + 8px) !important;
+        right: 10px !important;
+        left: auto !important;
+        width: min(320px, calc(100vw - 20px)) !important;
+        max-width: calc(100vw - 20px) !important;
+        max-height: min(68vh, 440px) !important;
+        min-height: 0 !important;
+        height: auto !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+        margin: 0 !important;
+        padding: 8px !important;
+        border: 1px solid #dbe5ef;
+        border-radius: 14px;
+        background: #ffffff !important;
+        box-shadow: 0 18px 45px rgba(15, 23, 42, .28);
+        flex-direction: column !important;
+        align-items: stretch !important;
+        justify-content: flex-start !important;
+        gap: 6px !important;
+        z-index: 9100;
+    }
+    header.sv-navbar .navbar-menu.active { display: flex !important; }
+    header.sv-navbar .navbar-menu a {
+        display: flex !important;
+        width: 100% !important;
+        min-height: 44px;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        color: #173b63 !important;
+        background: #f8fbff !important;
+        padding: 10px 12px !important;
+        border-radius: 9px !important;
+        font-size: 15px !important;
+        line-height: 1.25;
+    }
+    header.sv-navbar .navbar-menu a.sv-nav-cta {
+        color: #ffffff !important;
+        background: #35c759 !important;
+    }
+    header.sv-navbar .navbar-menu a[aria-current="page"] { background: #e8eef7 !important; }
+    .sv-announcement-bar { font-size: 11px; padding: 7px 10px; }
 }
 </style>
 
+<?php
+$svFreeShippingConfig = sv_free_shipping_config();
+?>
 <div class="sv-announcement-bar">
-    <span>🚚 FRETE GRÁTIS ACIMA DE R$ 199 | 🎁 5% OFF NA 1ª COMPRA COM O CUPOM <strong style="color: #35c759; background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px;">VOLTEI5</strong></span>
+    <?php if ($svFreeShippingConfig['enabled'] && $svFreeShippingConfig['threshold'] > 0): ?>
+        <span>🚚 FRETE GRÁTIS ACIMA DE R$ <?= number_format($svFreeShippingConfig['threshold'], 2, ',', '.') ?> | 🎁 5% OFF NA 1ª COMPRA COM O CUPOM <strong style="color: #35c759; background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px;">VOLTEI5</strong></span>
+    <?php else: ?>
+        <span>🎁 5% OFF NA 1ª COMPRA COM O CUPOM <strong style="color: #35c759; background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px;">VOLTEI5</strong></span>
+    <?php endif; ?>
 </div>
 
 <header class="navbar sv-navbar">
@@ -102,6 +182,7 @@ header.sv-navbar .brand-logo-img {
         <a href="/" class="brand-link" aria-label="Ir para a home da Vivaliz">
             <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" width="210" height="46" decoding="async" onerror="this.src='/images/logo-vivaliz-square.png'">
         </a>
+        <button type="button" class="menu-toggle" id="svMenuToggle" aria-controls="navMenu" aria-expanded="false" aria-label="Abrir menu">☰</button>
         <div class="navbar-menu" id="navMenu">
             <?php foreach ($svNavLinks as $link): ?>
                 <?php $isCurrent = in_array($svNavCurrent, $link['match'], true); ?>
@@ -118,3 +199,48 @@ header.sv-navbar .brand-logo-img {
         </div>
     </nav>
 </header>
+<script>
+(function () {
+    var toggle = document.getElementById('svMenuToggle');
+    var menu = document.getElementById('navMenu');
+    if (!toggle || !menu) return;
+
+    function closeMenu() {
+        menu.classList.remove('active');
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.setAttribute('aria-label', 'Abrir menu');
+        toggle.textContent = '☰';
+    }
+
+    closeMenu();
+
+    toggle.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        var open = !menu.classList.contains('active');
+        closeMenu();
+        if (open) {
+            menu.classList.add('active');
+            toggle.setAttribute('aria-expanded', 'true');
+            toggle.setAttribute('aria-label', 'Fechar menu');
+            toggle.textContent = '×';
+        }
+    });
+
+    menu.addEventListener('click', function (event) {
+        if (event.target.closest('a')) closeMenu();
+    });
+
+    document.addEventListener('click', function (event) {
+        if (menu.classList.contains('active') && !menu.contains(event.target) && !toggle.contains(event.target)) closeMenu();
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeMenu();
+    });
+
+    window.addEventListener('resize', function () {
+        if (window.innerWidth > 768) closeMenu();
+    });
+})();
+</script>

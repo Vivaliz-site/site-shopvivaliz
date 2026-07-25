@@ -1,0 +1,2 @@
+Forced workflow trigger requested on 2026-07-24 (America/Sao_Paulo).
+Purpose: re-run CI after fixing PHP lint false positive.

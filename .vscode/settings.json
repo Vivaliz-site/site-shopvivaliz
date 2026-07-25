@@ -35,7 +35,7 @@
   "files.autoSave": "afterDelay",
   "files.autoSaveDelay": 2000,
   "workbench.startupEditor": "none",
-  "workbench.colorTheme": "Ayu Dark",
+  "workbench.colorTheme": "Dark 2026",
   "workbench.iconTheme": "material-icon-theme",
   "workbench.editor.enablePreview": false,
   "workbench.editor.enablePreviewFromQuickOpen": false,
@@ -145,7 +145,7 @@
   "intelephense.completion.fullyQualifyGlobalConstants": false,
   "intelephense.diagnostics.run": "onType",
   "phpstan.enabled": false,
-  "php.validate.executablePath": "php",
+  "php.validate.executablePath": "C:\\Users\\FRED\\AppData\\Local\\Microsoft\\WinGet\\Packages\\PHP.PHP.8.3_Microsoft.Winget.Source_8wekyb3d8bbwe\\php",
   "prettier.printWidth": 100,
   "prettier.semi": true,
   "prettier.singleQuote": false,
@@ -153,21 +153,10 @@
   "prettier.arrowParens": "always",
   "prettier.tabWidth": 2,
   "eslint.enable": true,
-  "eslint.validate": [
-    "javascript",
-    "javascriptreact",
-    "typescript",
-    "typescriptreact"
-  ],
+  "eslint.validate": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
   "stylelint.enable": true,
-  "stylelint.validate": [
-    "css",
-    "postcss"
-  ],
-  "errorLens.enabledDiagnosticLevels": [
-    "warning",
-    "error"
-  ],
+  "stylelint.validate": ["css", "postcss"],
+  "errorLens.enabledDiagnosticLevels": ["warning", "error"],
   "errorLens.followCursorMovement": true,
   "errorLens.messageMaxChars": 100,
   "emmet.showAbbreviationSuggestions": true,

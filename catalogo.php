@@ -105,7 +105,6 @@ function sv_catalog_matches_query(array $row, string $query): bool
         (string)($row['sku'] ?? ''),
         (string)($row['name'] ?? ''),
         (string)($row['category'] ?? ''),
-        (string)($row['description'] ?? ''),
         (string)($row['slug'] ?? ''),
         (string)($row['olist_product_id'] ?? ''),
         (string)($row['id'] ?? ''),

@@ -15,10 +15,11 @@ function ep_load_catalog(string $path): array {
     return is_array($data) ? $data : [];
 }
 
-function ep_find_index(array $catalog, string $id): ?int {
-    foreach ($catalog as $i => $p) {
+function ep_find_index(array $catalog, string $id) {
+    foreach ($catalog as $key => $p) {
+        if (!is_array($p)) continue;
         $pid = (string)($p['olist_product_id'] ?? $p['id'] ?? '');
-        if ($pid === $id) return $i;
+        if ($pid === $id) return $key;
     }
     return null;
 }
@@ -36,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $catalog[$index]['price'] = (float)($_POST['price'] ?? 0);
         $catalog[$index]['stock'] = (int)($_POST['stock'] ?? 0);
         $catalog[$index]['category'] = trim((string)($_POST['category'] ?? $catalog[$index]['category'] ?? ''));
-        $catalog[$index]['status'] = isset($_POST['exibir_para_venda']) ? 'active' : 'inactive';
+        $catalog[$index]['is_published'] = isset($_POST['exibir_para_venda']) ? true : false;
 
         $catalog[$index]['slug'] = trim((string)($_POST['slug'] ?? $catalog[$index]['slug'] ?? ''));
         $catalog[$index]['gtin'] = trim((string)($_POST['gtin'] ?? $catalog[$index]['gtin'] ?? ''));
@@ -147,8 +148,8 @@ $produto = $index !== null ? $catalog[$index] : null;
                     <input type="number" id="stock" name="stock" min="0" value="<?= htmlspecialchars((string)($produto['stock'] ?? 0)) ?>" required>
 
                     <div class="checkbox-row">
-                        <input type="checkbox" id="exibir_para_venda" name="exibir_para_venda" <?= ($produto['status'] ?? 'active') === 'active' ? 'checked' : '' ?>>
-                        <label for="exibir_para_venda" style="margin: 0;">Exibir para venda</label>
+                        <input type="checkbox" id="exibir_para_venda" name="exibir_para_venda" <?= ($produto['is_published'] ?? true) ? 'checked' : '' ?>>
+                        <label for="exibir_para_venda" style="margin: 0;">Exibir para venda (marcação local do site)</label>
                     </div>
 
                     <fieldset>
@@ -196,25 +197,25 @@ $produto = $index !== null ? $catalog[$index] : null;
                         <div class="grid-3">
                             <div>
                                 <label for="dim_width">Largura (cm)</label>
-                                <input type="number" step="0.01" min="0" id="dim_width" name="dim_width" value="<?= htmlspecialchars((string)($produto['dimensions']['width'] ?? 0)) ?>">
+                                <input type="number" step="0.01" min="0" id="dim_width" name="dim_width" value="<?= htmlspecialchars((string)(($produto['dimensions'] ?? [])['width'] ?? 0)) ?>">
                             </div>
                             <div>
                                 <label for="dim_height">Altura (cm)</label>
-                                <input type="number" step="0.01" min="0" id="dim_height" name="dim_height" value="<?= htmlspecialchars((string)($produto['dimensions']['height'] ?? 0)) ?>">
+                                <input type="number" step="0.01" min="0" id="dim_height" name="dim_height" value="<?= htmlspecialchars((string)(($produto['dimensions'] ?? [])['height'] ?? 0)) ?>">
                             </div>
                             <div>
                                 <label for="dim_length">Comprimento (cm)</label>
-                                <input type="number" step="0.01" min="0" id="dim_length" name="dim_length" value="<?= htmlspecialchars((string)($produto['dimensions']['length'] ?? 0)) ?>">
+                                <input type="number" step="0.01" min="0" id="dim_length" name="dim_length" value="<?= htmlspecialchars((string)(($produto['dimensions'] ?? [])['length'] ?? 0)) ?>">
                             </div>
                         </div>
                         <div class="grid-2">
                             <div>
                                 <label for="dim_net_weight">Peso líquido (kg)</label>
-                                <input type="number" step="0.001" min="0" id="dim_net_weight" name="dim_net_weight" value="<?= htmlspecialchars((string)($produto['dimensions']['net_weight'] ?? 0)) ?>">
+                                <input type="number" step="0.001" min="0" id="dim_net_weight" name="dim_net_weight" value="<?= htmlspecialchars((string)(($produto['dimensions'] ?? [])['net_weight'] ?? 0)) ?>">
                             </div>
                             <div>
                                 <label for="dim_gross_weight">Peso bruto (kg)</label>
-                                <input type="number" step="0.001" min="0" id="dim_gross_weight" name="dim_gross_weight" value="<?= htmlspecialchars((string)($produto['dimensions']['gross_weight'] ?? 0)) ?>">
+                                <input type="number" step="0.001" min="0" id="dim_gross_weight" name="dim_gross_weight" value="<?= htmlspecialchars((string)(($produto['dimensions'] ?? [])['gross_weight'] ?? 0)) ?>">
                             </div>
                         </div>
                     </fieldset>
@@ -224,11 +225,11 @@ $produto = $index !== null ? $catalog[$index] : null;
                         <div class="grid-2">
                             <div>
                                 <label for="cost_price">Preço de custo (R$)</label>
-                                <input type="number" step="0.01" min="0" id="cost_price" name="cost_price" value="<?= htmlspecialchars((string)($produto['prices']['cost_price'] ?? 0)) ?>">
+                                <input type="number" step="0.01" min="0" id="cost_price" name="cost_price" value="<?= htmlspecialchars((string)(($produto['prices'] ?? [])['cost_price'] ?? 0)) ?>">
                             </div>
                             <div>
                                 <label for="promotional_price">Preço promocional (R$)</label>
-                                <input type="number" step="0.01" min="0" id="promotional_price" name="promotional_price" value="<?= htmlspecialchars((string)($produto['prices']['promotional_price'] ?? 0)) ?>">
+                                <input type="number" step="0.01" min="0" id="promotional_price" name="promotional_price" value="<?= htmlspecialchars((string)(($produto['prices'] ?? [])['promotional_price'] ?? 0)) ?>">
                             </div>
                         </div>
                     </fieldset>

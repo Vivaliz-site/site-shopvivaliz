@@ -145,6 +145,8 @@ function sv_account_ensure_schema(): void
         'expires_at' => 'ALTER TABLE coupons ADD COLUMN expires_at DATETIME NULL',
         'max_uses' => 'ALTER TABLE coupons ADD COLUMN max_uses INT NOT NULL DEFAULT 0',
         'used_count' => 'ALTER TABLE coupons ADD COLUMN used_count INT NOT NULL DEFAULT 0',
+        'display_in_popup' => 'ALTER TABLE coupons ADD COLUMN display_in_popup TINYINT(1) NOT NULL DEFAULT 0',
+        'display_in_navbar' => 'ALTER TABLE coupons ADD COLUMN display_in_navbar TINYINT(1) NOT NULL DEFAULT 0',
     ];
     foreach ($couponAlterations as $column => $sql) {
         if (!isset($couponColumns[$column])) {
