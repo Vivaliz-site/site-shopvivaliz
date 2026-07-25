@@ -1,6 +1,6 @@
 {
   "total": 1039,
-  "timestamp": "2026-07-25T11:05:20.498833",
+  "timestamp": "2026-07-25T13:12:43.085013",
   "itens": [
     {
       "id": 337702887,
@@ -4041,14 +4041,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-05 20:09:12",
-      "dataAlteracao": "2026-07-21 15:23:00",
+      "dataAlteracao": "2026-07-25 09:03:34",
       "unidade": "UN",
       "gtin": "7894162000274",
       "precos": {
-        "preco": 706.79,
+        "preco": 710.03,
         "precoPromocional": 0,
-        "precoCusto": 307.3,
-        "precoCustoMedio": 309.58
+        "precoCusto": 308.71,
+        "precoCustoMedio": 309.35
       },
       "estoque": {
         "localizacao": "A1"
@@ -4335,14 +4335,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-05 20:44:26",
-      "dataAlteracao": "2026-07-21 21:09:02",
+      "dataAlteracao": "2026-07-25 09:03:34",
       "unidade": "UN",
       "gtin": "7894162000298",
       "precos": {
-        "preco": 359.1,
+        "preco": 327.65,
         "precoPromocional": 0,
-        "precoCusto": 142.99,
-        "precoCustoMedio": 141.69
+        "precoCusto": 141.84,
+        "precoCustoMedio": 141.79
       },
       "estoque": {
         "localizacao": "A1"
@@ -16452,14 +16452,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-08 20:45:43",
-      "dataAlteracao": "2026-07-21 21:09:10",
+      "dataAlteracao": "2026-07-25 09:03:34",
       "unidade": "UN",
       "gtin": "7894162004685",
       "precos": {
-        "preco": 1413.04,
+        "preco": 1415.76,
         "precoPromocional": 0,
-        "precoCusto": 704.53,
-        "precoCustoMedio": 705.9
+        "precoCusto": 707.88,
+        "precoCustoMedio": 706.26
       },
       "estoque": {
         "localizacao": "A1"
@@ -19266,14 +19266,14 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-05-09 10:25:49",
-      "dataAlteracao": "2026-07-23 14:36:11",
+      "dataAlteracao": "2026-07-25 09:03:34",
       "unidade": "UN",
       "gtin": "7894162000205",
       "precos": {
-        "preco": 217.78,
+        "preco": 218.43,
         "precoPromocional": 0,
-        "precoCusto": 80.96,
-        "precoCustoMedio": 81.61
+        "precoCusto": 81.2,
+        "precoCustoMedio": 81.48
       },
       "estoque": {
         "localizacao": "A1"
