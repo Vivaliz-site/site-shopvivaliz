@@ -15,10 +15,11 @@ function ep_load_catalog(string $path): array {
     return is_array($data) ? $data : [];
 }
 
-function ep_find_index(array $catalog, string $id): ?int {
-    foreach ($catalog as $i => $p) {
+function ep_find_index(array $catalog, string $id) {
+    foreach ($catalog as $key => $p) {
+        if (!is_array($p)) continue;
         $pid = (string)($p['olist_product_id'] ?? $p['id'] ?? '');
-        if ($pid === $id) return $i;
+        if ($pid === $id) return $key;
     }
     return null;
 }
