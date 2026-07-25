@@ -67,11 +67,12 @@ header.sv-navbar a.sv-nav-cta {
     border-radius: 999px !important;
     font-weight: 800 !important;
 }
-header.sv-navbar .navbar-menu {
+header.sv-navbar #navMenu.sv-navbar-menu {
     display: flex;
     align-items: center;
     gap: 20px;
 }
+header.sv-navbar #navMenu.sv-navbar-menu[hidden] { display: none !important; }
 header.sv-navbar .brand-link { min-width: 0; }
 header.sv-navbar .brand-logo-img {
     display: block;
@@ -116,33 +117,39 @@ header.sv-navbar .menu-toggle {
     }
     header.sv-navbar .brand-logo-img { height: 36px; max-width: 58vw; }
     header.sv-navbar .menu-toggle { display: inline-flex !important; margin-left: auto; }
-    header.sv-navbar .navbar-menu {
+    header.sv-navbar #navMenu.sv-navbar-menu {
         display: none !important;
         position: absolute !important;
         top: calc(100% + 8px) !important;
         right: 10px !important;
+        bottom: auto !important;
         left: auto !important;
         width: min(320px, calc(100vw - 20px)) !important;
         max-width: calc(100vw - 20px) !important;
-        max-height: min(68vh, 440px) !important;
+        min-width: 0 !important;
+        max-height: min(68dvh, 440px) !important;
         min-height: 0 !important;
-        height: auto !important;
+        height: max-content !important;
+        overflow-x: hidden !important;
         overflow-y: auto !important;
         overscroll-behavior: contain;
         margin: 0 !important;
         padding: 8px !important;
-        border: 1px solid #dbe5ef;
-        border-radius: 14px;
+        border: 1px solid #dbe5ef !important;
+        border-radius: 14px !important;
         background: #ffffff !important;
-        box-shadow: 0 18px 45px rgba(15, 23, 42, .28);
+        box-shadow: 0 18px 45px rgba(15, 23, 42, .28) !important;
         flex-direction: column !important;
         align-items: stretch !important;
         justify-content: flex-start !important;
         gap: 6px !important;
-        z-index: 9100;
+        z-index: 9100 !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        transform: none !important;
     }
-    header.sv-navbar .navbar-menu.active { display: flex !important; }
-    header.sv-navbar .navbar-menu a {
+    header.sv-navbar #navMenu.sv-navbar-menu.is-open:not([hidden]) { display: flex !important; }
+    header.sv-navbar #navMenu.sv-navbar-menu a {
         display: flex !important;
         width: 100% !important;
         min-height: 44px;
@@ -154,12 +161,13 @@ header.sv-navbar .menu-toggle {
         border-radius: 9px !important;
         font-size: 15px !important;
         line-height: 1.25;
+        box-sizing: border-box !important;
     }
-    header.sv-navbar .navbar-menu a.sv-nav-cta {
+    header.sv-navbar #navMenu.sv-navbar-menu a.sv-nav-cta {
         color: #ffffff !important;
         background: #35c759 !important;
     }
-    header.sv-navbar .navbar-menu a[aria-current="page"] { background: #e8eef7 !important; }
+    header.sv-navbar #navMenu.sv-navbar-menu a[aria-current="page"] { background: #e8eef7 !important; }
     .sv-announcement-bar { font-size: 11px; padding: 7px 10px; }
 }
 </style>
@@ -174,7 +182,7 @@ header.sv-navbar .menu-toggle {
             <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" width="210" height="46" decoding="async" onerror="this.src='/images/logo-vivaliz-square.png'">
         </a>
         <button type="button" class="menu-toggle" id="svMenuToggle" aria-controls="navMenu" aria-expanded="false" aria-label="Abrir menu">☰</button>
-        <div class="navbar-menu" id="navMenu">
+        <div class="navbar-menu sv-navbar-menu" id="navMenu" hidden>
             <?php foreach ($svNavLinks as $link): ?>
                 <?php $isCurrent = in_array($svNavCurrent, $link['match'], true); ?>
                 <a href="<?= htmlspecialchars($link['href'], ENT_QUOTES, 'UTF-8') ?>"<?= $isCurrent ? ' aria-current="page"' : '' ?><?= $link['href'] === '/catalogo' ? ' class="sv-nav-cta"' : '' ?><?= $link['href'] === '/carrinho' ? ' id="nav-cart-link" class="nav-cart-link"' : '' ?>>
@@ -197,10 +205,19 @@ header.sv-navbar .menu-toggle {
     if (!toggle || !menu) return;
 
     function closeMenu() {
-        menu.classList.remove('active');
+        menu.classList.remove('active', 'is-open');
+        menu.hidden = true;
         toggle.setAttribute('aria-expanded', 'false');
         toggle.setAttribute('aria-label', 'Abrir menu');
         toggle.textContent = '☰';
+    }
+
+    function openMenu() {
+        menu.hidden = false;
+        menu.classList.add('is-open');
+        toggle.setAttribute('aria-expanded', 'true');
+        toggle.setAttribute('aria-label', 'Fechar menu');
+        toggle.textContent = '×';
     }
 
     closeMenu();
@@ -208,13 +225,10 @@ header.sv-navbar .menu-toggle {
     toggle.addEventListener('click', function (event) {
         event.preventDefault();
         event.stopPropagation();
-        var open = !menu.classList.contains('active');
-        closeMenu();
-        if (open) {
-            menu.classList.add('active');
-            toggle.setAttribute('aria-expanded', 'true');
-            toggle.setAttribute('aria-label', 'Fechar menu');
-            toggle.textContent = '×';
+        if (menu.hidden) {
+            openMenu();
+        } else {
+            closeMenu();
         }
     });
 
@@ -223,13 +237,14 @@ header.sv-navbar .menu-toggle {
     });
 
     document.addEventListener('click', function (event) {
-        if (menu.classList.contains('active') && !menu.contains(event.target) && !toggle.contains(event.target)) closeMenu();
+        if (!menu.hidden && !menu.contains(event.target) && !toggle.contains(event.target)) closeMenu();
     });
 
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') closeMenu();
     });
 
+    window.addEventListener('pageshow', closeMenu);
     window.addEventListener('resize', function () {
         if (window.innerWidth > 768) closeMenu();
     });
