@@ -114,6 +114,7 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^api/catalog/?$ api/catalog/products.php [L,QSA]
     RewriteRule ^api/knowledge/search/?$ api/knowledge-search.php [L,QSA]
     RewriteRule ^api/liz/knowledge-preview/?$ api/liz-knowledge-preview.php [L,QSA]
+    RewriteRule ^api/liz/intelligent-knowledge/?$ api/liz-intelligent-knowledge.php [L,QSA]
 
     # Rotas principais da loja
     RewriteRule ^$ index.php [L]
