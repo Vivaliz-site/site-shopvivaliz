@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "generated_at": "2026-07-25T20:25:00Z",
-    "status": "active",
-    "description": "Fila de tarefas autônomas para agentes Claude, Gemini e GPT"
+    "generated_at": "2026-07-12T03:00:00Z",
+    "status": "active_integration_tasks",
+    "description": "Ativar integrações Shopee, ML e Google Ads com credenciais do GitHub Secrets"
   },
   "tasks": [
     {
@@ -21,7 +21,7 @@
         "SHOPEE_REFRESH_TOKEN"
       ],
       "estimated_hours": 3,
-      "created_at": "2026-07-25T20:25:00Z"
+      "created_at": "2026-07-12T03:00:00Z"
     },
     {
       "task_id": "SHOPEE-002",
@@ -34,7 +34,7 @@
       "assigned_to": ["claude", "gemini"],
       "requires_secrets": ["SHOPEE_SHOP_ID", "SHOPEE_ACCESS_TOKEN"],
       "estimated_hours": 2,
-      "created_at": "2026-07-25T20:25:00Z"
+      "created_at": "2026-07-12T03:00:00Z"
     },
     {
       "task_id": "ML-001",
@@ -52,7 +52,7 @@
         "ML_SELLER_ID"
       ],
       "estimated_hours": 3,
-      "created_at": "2026-07-25T20:25:00Z"
+      "created_at": "2026-07-12T03:00:00Z"
     },
     {
       "task_id": "ML-002",
@@ -65,7 +65,7 @@
       "assigned_to": ["claude", "gemini"],
       "requires_secrets": ["ML_SELLER_ID", "ML_CLIENT_ID"],
       "estimated_hours": 2,
-      "created_at": "2026-07-25T20:25:00Z"
+      "created_at": "2026-07-12T03:00:00Z"
     },
     {
       "task_id": "GADS-001",
@@ -83,7 +83,7 @@
       ],
       "requires_human_approval": false,
       "estimated_hours": 4,
-      "created_at": "2026-07-25T20:25:00Z"
+      "created_at": "2026-07-12T03:00:00Z"
     },
     {
       "task_id": "AUDIT-001",
@@ -96,7 +96,7 @@
       "assigned_to": ["claude", "gemini"],
       "schedule": "*/30 * * * *",
       "estimated_hours": 0.5,
-      "created_at": "2026-07-25T20:25:00Z"
+      "created_at": "2026-07-12T03:00:00Z"
     }
   ]
 }
