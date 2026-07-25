@@ -1,4 +1,15 @@
 <?php
+$env_file = '.env';
+if (is_file($env_file)) {
+    foreach (file($env_file) as $line) {
+        $line = trim($line);
+        if ($line && !str_starts_with($line, '#') && str_contains($line, '=')) {
+            [$key, $value] = explode('=', $line, 2);
+            $value = trim($value, " \t\n\r\x0B\"'");
+            if (!defined($key)) define($key, $value);
+        }
+    }
+}
 require_once 'config/database.php';
 
 $cacheFile = 'storage/products-cache-ativos.json';
