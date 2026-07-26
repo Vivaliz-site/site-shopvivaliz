@@ -358,6 +358,15 @@ function sv_product_contact_url(string $sku, string $name): string
     ]);
 }
 
+function sv_money(float $value): string
+{
+    if ($value <= 0) {
+        return 'Consulte o valor';
+    }
+
+    return 'R$ ' . number_format($value, 2, ',', '.');
+}
+
 function sv_esc(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 
 /* ── resolução do produto ── */
