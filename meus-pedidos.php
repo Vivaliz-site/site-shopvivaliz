@@ -21,9 +21,21 @@ try {
     $db = Database::getInstance()->getConnection();
 
     // ✅ Fetch user orders
+    // Colunas corrigidas para bater com o schema real da tabela `orders`
+    // (includes/account-schema.php::sv_account_ensure_schema(), a mesma
+    // usada por api/orders/create-v2.php e api/webhook-mercadopago.php).
+    // Antes esta query pedia customer_name/customer_email/total/status,
+    // que NUNCA existiram nessa tabela (os nomes reais sao email/
+    // order_total/order_status) -- toda chamada aqui lancava erro do
+    // mysqli, capturado abaixo, fazendo "Meus Pedidos" mostrar sempre
+    // "Erro ao carregar pedidos" e a lista vazia para QUALQUER cliente
+    // logado, mesmo com pedidos reais no banco. Tambem passa a trazer os
+    // campos de nota fiscal (nf_numero/nf_pdf_url), que nunca eram
+    // buscados nem exibidos nesta pagina.
     $stmt = $db->prepare('
-        SELECT id, order_number, customer_name, customer_email, total, status,
-               payment_method, created_at
+        SELECT id, order_number, email, order_total, order_status,
+               payment_method, created_at, nf_numero, nf_pdf_url,
+               tracking_number, tracking_url
         FROM orders
         WHERE user_id = ?
         ORDER BY created_at DESC
@@ -90,16 +102,34 @@ try {
                         <th>Total</th>
                         <th>Pagamento</th>
                         <th>Status</th>
+                        <th>Rastreio</th>
+                        <th>Nota Fiscal</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ($orders as $order): ?>
                         <tr>
-                            <td><strong><?= htmlspecialchars($order['order_number']) ?></strong></td>
+                            <td><strong><?= htmlspecialchars($order['order_number'] ?? '') ?></strong></td>
                             <td><?= date('d/m/Y H:i', strtotime($order['created_at'])) ?></td>
-                            <td><strong style="color: #27ae60;">R$ <?= number_format($order['total'], 2, ',', '.') ?></strong></td>
+                            <td><strong style="color: #27ae60;">R$ <?= number_format((float)$order['order_total'], 2, ',', '.') ?></strong></td>
                             <td><?= htmlspecialchars(ucfirst($order['payment_method'] ?? 'N/A')) ?></td>
-                            <td><span class="status" style="background: #d4edda; color: #155724;"><?= htmlspecialchars(ucfirst($order['status'])) ?></span></td>
+                            <td><span class="status" style="background: #d4edda; color: #155724;"><?= htmlspecialchars(ucfirst($order['order_status'] ?? '')) ?></span></td>
+                            <td>
+                                <?php if (!empty($order['tracking_url'])): ?>
+                                    <a href="<?= htmlspecialchars($order['tracking_url']) ?>" target="_blank" rel="noopener">Rastrear</a>
+                                <?php elseif (!empty($order['tracking_number'])): ?>
+                                    <?= htmlspecialchars($order['tracking_number']) ?>
+                                <?php else: ?>
+                                    —
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php if (!empty($order['nf_pdf_url'])): ?>
+                                    <a href="<?= htmlspecialchars($order['nf_pdf_url']) ?>" target="_blank" rel="noopener">Baixar NF <?= htmlspecialchars($order['nf_numero'] ?? '') ?></a>
+                                <?php else: ?>
+                                    —
+                                <?php endif; ?>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
