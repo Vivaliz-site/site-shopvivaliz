@@ -286,6 +286,7 @@
   async function loadCatalog(query, category, page) {
     if (!grid || !status) return;
     activeCategory = String(category || '').trim();
+    syncPageState(query, activeCategory, activeSort, Number(page || 1), Number(page || 1) === 1);
     status.textContent = 'Preparando as melhores opções para você...';
 
     // A paginacao renderizada pelo PHP (ex: catalogo.php) fica redundante
