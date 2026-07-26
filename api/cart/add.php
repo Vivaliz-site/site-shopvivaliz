@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../includes/secure-session.php';
 require_once __DIR__ . '/../../includes/input-validator.php';
 require_once __DIR__ . '/../../includes/rate-limiter.php';
 require_once __DIR__ . '/../../includes/cors.php';
+require_once __DIR__ . '/../../includes/ml-event-tracker.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
@@ -129,6 +130,12 @@ try {
         $cartTotal += $itemTotal;
         $cartItems += $item['quantity'];
     }
+
+    svml_track_event('add_to_cart', (string)($product['id'] ?? $sku), [
+        'source' => 'cart_api',
+        'sku' => $sku,
+        'quantity' => $quantity,
+    ]);
 
     // ✅ Return success
     http_response_code(200);
