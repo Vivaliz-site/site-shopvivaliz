@@ -18,7 +18,7 @@ $phone = $company['phone'] ?? '(37) 99937-4112';
     <meta name="description" content="Finalidade do app OAuth ShopVivaliz Google Ads API para leitura de metricas e acompanhamento de campanhas proprias.">
     <title>ShopVivaliz Google Ads API App</title>
     <link rel="stylesheet" href="/css/style.css">
-    <link rel="icon" type="image/png" href="/images/logo-vivaliz-square.png">
+    <link rel="icon" type="image/png" href="/favicon.png">
     <style>
         .app-purpose { max-width: 960px; margin: 40px auto; padding: 40px 20px; color: #1f2937; line-height: 1.75; }
         .app-purpose h1 { font-size: 34px; margin-bottom: 14px; color: #123b73; }
