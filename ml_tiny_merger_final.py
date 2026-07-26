@@ -142,12 +142,16 @@ def process_ml_spreadsheet():
     wb_in = openpyxl.load_workbook(input_file, data_only=True)
     ws_in = wb_in.active
 
-    # Análise de colunas
+    # Análise de colunas - linha 1 tem os nomes técnicos
     header = []
     for col_idx in range(1, ws_in.max_column + 1):
         header.append(ws_in.cell(1, col_idx).value)
 
-    print(f"✅ Planilha carregada: {ws_in.max_row - 1} anúncios, {len(header)} colunas")
+    # Dados começam na linha 6 (linhas 2-5 são metadados do Mercado Livre)
+    data_start_row = 6
+    data_rows = ws_in.max_row - data_start_row + 1
+
+    print(f"✅ Planilha carregada: {data_rows} anúncios, {len(header)} colunas")
     print(f"\n📋 Colunas originais:")
     for idx, col in enumerate(header, 1):
         print(f"  [{idx:2d}] {col}")
