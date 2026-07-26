@@ -35,7 +35,19 @@ $result=svsh_post(me_api_base().'/api/v2/me/shipment/calculate',['from'=>['posta
     } elseif (!empty($result['body']['error']) && is_string($result['body']['error'])) {
         $message=trim($result['body']['error']);
     }
-    svsh_json(502,['ok'=>false,'error'=>'shipping_provider_unavailable','message'=>$message,'provider'=>'melhorenvio','status'=>$result['status']]);
+    $providerErrors = is_array($result['body']['errors'] ?? null) ? $result['body']['errors'] : [];
+    $status = $result['status'];
+    if ($status === 400 || $status === 422) {
+        svsh_json(422,[
+            'ok'=>false,
+            'error'=>'invalid_shipping_destination',
+            'message'=>$message,
+            'provider'=>'melhorenvio',
+            'status'=>$status,
+            'provider_errors'=>$providerErrors,
+        ]);
+    }
+    svsh_json(502,['ok'=>false,'error'=>'shipping_provider_unavailable','message'=>$message,'provider'=>'melhorenvio','status'=>$status]);
 }
 $options=[]; foreach($result['body'] as $option){ if(!is_array($option)||!empty($option['error']))continue; $price=(float)($option['price']??0); if($price<=0)continue; $options[]=['id'=>(string)($option['id']??''),'name'=>(string)($option['name']??$option['company']['name']??'Frete'),'company'=>(string)($option['company']['name']??''),'price'=>round($price,2),'delivery_time'=>max(0,(int)($option['delivery_time']??0))]; }
 usort($options,static fn(array $a,array $b):int=>$a['price']<=>$b['price']); $options=array_slice($options,0,6); if($options===[])svsh_json(404,['ok'=>false,'error'=>'no_shipping_options']);
