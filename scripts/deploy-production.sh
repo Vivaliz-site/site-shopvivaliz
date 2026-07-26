@@ -55,6 +55,24 @@ if ! git -C "$REPO_DIR" fetch --prune origin main; then
   exit 1
 fi
 
+# Bootstrap the deploy runner itself from the fetched immutable Git object.
+# Without this, fixes merged into main only affect the release contents while
+# cron continues executing an outdated script from the deploy clone.
+RUNNER_PATH="$REPO_DIR/scripts/deploy-production.sh"
+RUNNER_TMP="$(mktemp "$REPO_DIR/scripts/.deploy-production.XXXXXX")"
+if ! git -C "$REPO_DIR" show origin/main:scripts/deploy-production.sh > "$RUNNER_TMP"; then
+  rm -f -- "$RUNNER_TMP"
+  log "ERROR" "Não foi possível extrair o runner de origin/main"
+  exit 1
+fi
+chmod 0755 "$RUNNER_TMP"
+if ! cmp -s "$RUNNER_TMP" "$RUNNER_PATH"; then
+  log "INFO" "Atualizando runner de deploy a partir de origin/main..."
+  mv -f -- "$RUNNER_TMP" "$RUNNER_PATH"
+  exec "$RUNNER_PATH"
+fi
+rm -f -- "$RUNNER_TMP"
+
 # Get SHAs
 REMOTE_SHA=$(git -C "$REPO_DIR" rev-parse origin/main)
 log "INFO" "Remote SHA: $REMOTE_SHA"
