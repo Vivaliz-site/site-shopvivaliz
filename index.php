@@ -525,7 +525,7 @@ $svNavCurrent = '';
               "name": "Qual é o prazo de entrega?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "O prazo varia conforme a sua região: São Paulo (2-4 dias úteis), Sudeste (3-5 dias), Sul (4-6 dias), demais regiões (5-8 dias úteis)."
+                "text": "O prazo de entrega varia conforme a região e a transportadora disponível para o seu CEP. O prazo exato e o valor do frete são calculados no carrinho antes da finalização da compra."
               }
             },
             {
@@ -875,7 +875,7 @@ $svNavCurrent = '';
                         Qual é o prazo de entrega?
                         <span class="faq-icon">+</span>
                     </summary>
-                    <p class="faq-body">O prazo varia conforme a sua região: São Paulo (2-4 dias úteis), Sudeste (3-5 dias), Sul (4-6 dias), Nordeste (5-8 dias) e Norte/Centro-Oeste (7-10 dias). Calcule o frete exato no carrinho pelo seu CEP.</p>
+                    <p class="faq-body">O prazo de entrega varia conforme sua região e a transportadora disponível para o seu CEP. Para ver o prazo exato e o valor do frete, adicione o produto ao carrinho e informe seu CEP — a cotação é calculada em tempo real antes da finalização da compra.</p>
                 </details>
                 <details class="faq-item sv-reveal sv-reveal-delay-2">
                     <summary>
