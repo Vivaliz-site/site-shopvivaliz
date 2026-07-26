@@ -1,122 +1,132 @@
 #!/usr/bin/env python3
+"""Gerenciador seguro de rollback.
+
+Por padrao, apenas cria um plano e valida o commit alvo. Quando executado com
+``--apply``, cria uma branch isolada e usa ``git revert``. Nunca executa
+``reset --hard`` nem ``push --force`` e recusa operar diretamente em branches
+protegidas.
 """
-Rollback Manager - Reverter em caso de falha
-"""
-import subprocess
+from __future__ import annotations
+
+import argparse
 import json
+import re
+import subprocess
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
-from datetime import datetime
 
-class RollbackManager:
-    def __init__(self):
-        self.max_retries = 3
-        self.rollback_log = Path("logs/rollbacks.jsonl")
-        self.rollback_log.parent.mkdir(parents=True, exist_ok=True)
+ROOT = Path(__file__).resolve().parents[1]
+LOG_PATH = ROOT / "logs" / "rollbacks.jsonl"
+PROTECTED_BRANCHES = {"main", "master", "production", "prod"}
+COMMIT_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 
-    def check_task_success(self, task_id):
-        """Verificar se tarefa completou com sucesso"""
-        # Verificar se há novo commit após a tarefa
-        result = subprocess.run(
-            ["git", "log", "--oneline", "-1"],
-            capture_output=True,
-            text=True
-        )
 
-        return result.returncode == 0
+def run(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        check=check,
+        capture_output=True,
+        text=True,
+    )
 
-    def rollback_last_commit(self, task_id):
-        """Reverter último commit"""
-        print(f"⏮️  Fazendo rollback de {task_id}...")
 
-        try:
-            # Salvar hash do commit anterior
-            result = subprocess.run(
-                ["git", "rev-parse", "HEAD~1"],
-                capture_output=True,
-                text=True
-            )
-            previous_commit = result.stdout.strip()
+def current_branch() -> str:
+    return run("branch", "--show-current").stdout.strip()
 
-            # Reset para commit anterior
-            subprocess.run(
-                ["git", "reset", "--hard", previous_commit],
-                check=True
-            )
 
-            # Push força (cuidado!)
-            subprocess.run(
-                ["git", "push", "--force-with-lease"],
-                check=True
-            )
+def resolve_commit(value: str) -> str:
+    if not COMMIT_RE.fullmatch(value):
+        raise ValueError("commit deve conter somente hexadecimal Git")
+    resolved = run("rev-parse", "--verify", f"{value}^{{commit}}").stdout.strip()
+    if not resolved:
+        raise ValueError("commit nao encontrado")
+    return resolved
 
-            # Log do rollback
-            self._log_rollback(task_id, previous_commit, "success")
-            print(f" Rollback completado para {task_id}")
 
-            return True
-        except Exception as e:
-            print(f" Erro ao fazer rollback: {e}")
-            self._log_rollback(task_id, "", "failed")
-            return False
+def ensure_clean_tree() -> None:
+    if run("status", "--porcelain").stdout.strip():
+        raise RuntimeError("arvore de trabalho possui alteracoes; rollback cancelado")
 
-    def _log_rollback(self, task_id, commit_hash, status):
-        """Registrar rollback"""
-        log_entry = {
-            'timestamp': datetime.now().isoformat(),
-            'task_id': task_id,
-            'commit': commit_hash,
-            'status': status
+
+def commit_summary(commit: str) -> dict[str, object]:
+    subject = run("show", "-s", "--format=%s", commit).stdout.strip()
+    files = [line for line in run("diff-tree", "--no-commit-id", "--name-only", "-r", commit).stdout.splitlines() if line]
+    return {"commit": commit, "subject": subject, "files": files, "file_count": len(files)}
+
+
+def write_log(payload: dict[str, object]) -> None:
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with LOG_PATH.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def create_revert_branch(commit: str, task_id: str) -> dict[str, object]:
+    ensure_clean_tree()
+    branch = current_branch()
+    if branch in PROTECTED_BRANCHES:
+        raise RuntimeError(f"execucao direta em branch protegida '{branch}' e proibida")
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    safe_task = re.sub(r"[^A-Za-z0-9._-]+", "-", task_id).strip("-") or "rollback"
+    revert_branch = f"rollback/{safe_task}-{timestamp}"
+
+    run("switch", "-c", revert_branch)
+    result = run("revert", "--no-edit", commit, check=False)
+    if result.returncode != 0:
+        run("revert", "--abort", check=False)
+        raise RuntimeError(result.stderr.strip() or "git revert falhou")
+
+    new_commit = run("rev-parse", "HEAD").stdout.strip()
+    return {
+        "ok": True,
+        "mode": "applied-locally",
+        "branch": revert_branch,
+        "reverted_commit": commit,
+        "revert_commit": new_commit,
+        "next_step": "publique esta branch e abra um pull request apos os testes",
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Planejar ou criar rollback reversivel")
+    parser.add_argument("commit", help="SHA do commit que deve ser revertido")
+    parser.add_argument("--task-id", default="manual", help="identificador para auditoria")
+    parser.add_argument("--apply", action="store_true", help="cria branch local e executa git revert")
+    args = parser.parse_args()
+
+    try:
+        commit = resolve_commit(args.commit)
+        summary = commit_summary(commit)
+        payload: dict[str, object] = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "task_id": args.task_id,
+            "requested_by": "rollback-manager",
+            "summary": summary,
         }
+        if args.apply:
+            payload.update(create_revert_branch(commit, args.task_id))
+        else:
+            payload.update({
+                "ok": True,
+                "mode": "plan-only",
+                "message": "nenhuma alteracao foi aplicada; use --apply em branch nao protegida",
+            })
+        write_log(payload)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+    except (ValueError, RuntimeError, subprocess.CalledProcessError) as exc:
+        error = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "task_id": args.task_id,
+            "ok": False,
+            "error": str(exc),
+        }
+        write_log(error)
+        print(json.dumps(error, ensure_ascii=False), file=sys.stderr)
+        return 2
 
-        with open(self.rollback_log, 'a') as f:
-            f.write(json.dumps(log_entry) + "\n")
-
-    def retry_task(self, task_id, agents, attempt=1):
-        """Tentar tarefa com agente diferente"""
-        if attempt > self.max_retries:
-            print(f" {task_id} falhou {self.max_retries}x - ENVIANDO ALERT")
-            return False
-
-        print(f"\n🔄 Tentativa {attempt}/{self.max_retries} para {task_id}")
-
-        # Usar próximo agente disponível
-        next_agent = agents[attempt % len(agents)]
-        print(f"   Tentando com: {next_agent}")
-
-        # Simular execução (em produção, seria real)
-        # Se falhar, fazer rollback e retry
-
-        return True
-
-    def validate_commit(self, commit_hash):
-        """Validar se commit é seguro"""
-        print(f" Validando commit {commit_hash[:7]}...")
-
-        # Verificar mudanças
-        result = subprocess.run(
-            ["git", "diff", f"{commit_hash}~1..{commit_hash}", "--stat"],
-            capture_output=True,
-            text=True
-        )
-
-        changes = result.stdout
-        print(f"   Mudanças: {len(changes.splitlines())} arquivos")
-
-        # Verificar se não deletou muitos arquivos
-        if "deletions" in changes:
-            print("    Commit contém deleções")
-
-        return True
 
 if __name__ == "__main__":
-    manager = RollbackManager()
-
-    # Exemplo de uso
-    print("🛡️ Rollback Manager - Teste")
-    print("")
-    print("Funcionalidades:")
-    print("1. Detectar falhas em tarefas")
-    print("2. Fazer rollback automático")
-    print("3. Tentar novamente com agente diferente")
-    print("4. Retentar até 3x")
-    print("5. Enviar alert se todas falharem")
+    raise SystemExit(main())
