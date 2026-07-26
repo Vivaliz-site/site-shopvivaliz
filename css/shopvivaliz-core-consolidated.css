@@ -201,7 +201,7 @@ a:hover {
 
 .hero {
     background: linear-gradient(135deg, var(--brand-navy-dark) 0%, var(--brand-navy) 55%, #1a5fa8 100%);
-    padding: 72px 0 76px;
+    padding: 40px 0 44px;
     color: #fff;
     position: relative;
     overflow: hidden;
@@ -219,9 +219,9 @@ a:hover {
 }
 
 .hero h1 {
-    margin: 0 0 16px;
-    font-size: clamp(32px, 5vw, 60px);
-    line-height: 1.06;
+    margin: 0 0 10px;
+    font-size: clamp(26px, 3.6vw, 42px);
+    line-height: 1.12;
     letter-spacing: -0.02em;
     color: #fff;
 }
@@ -1139,7 +1139,7 @@ footer {
     }
 
     .hero {
-        padding: 52px 0 42px;
+        padding: 28px 0 24px;
     }
 
     .hero p {
