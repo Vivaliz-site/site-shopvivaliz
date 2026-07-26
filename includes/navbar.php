@@ -164,7 +164,26 @@ header.sv-navbar .menu-toggle {
     header.sv-navbar .navbar-menu a[aria-current="page"] { background: #e8eef7 !important; }
     .sv-announcement-bar { font-size: 11px; padding: 7px 10px; }
 }
+.sv-skip-link {
+    position: absolute !important;
+    top: -100px !important;
+    left: 20px !important;
+    background: #35c759 !important;
+    color: #ffffff !important;
+    padding: 10px 20px !important;
+    font-weight: 800 !important;
+    border-radius: 8px !important;
+    z-index: 99999 !important;
+    transition: top 0.2s ease !important;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2) !important;
+}
+.sv-skip-link:focus {
+    top: 15px !important;
+    outline: 3px solid #0b4f88 !important;
+}
 </style>
+
+<a href="#main-content" class="sv-skip-link">Ir para o conteúdo principal</a>
 
 <?php
 $svFreeShippingConfig = sv_free_shipping_config();

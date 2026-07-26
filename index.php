@@ -574,6 +574,8 @@ $svNavCurrent = '';
 <body>
     <?php include __DIR__ . '/includes/navbar.php'; ?>
 
+    <main id="main-content">
+
     <!-- Hero Section -->
     <section class="hero">
         <div class="container">
@@ -946,6 +948,8 @@ $svNavCurrent = '';
             </script>
         </div>
     </section>
+
+    </main>
 
     <!-- Footer -->
     <?php include __DIR__ . '/includes/footer.php'; ?>
