@@ -22,9 +22,9 @@ headers = {
     "Content-Type": "application/json"
 }
 
-print("\n╔════════════════════════════════════════════════════════════════════════════════╗")
-print("║  TRACE: Acompanhar um item ML ate os precos das tabelas                       ║")
-print("╚════════════════════════════════════════════════════════════════════════════════╝")
+print("\n" + "="*100)
+print("TRACE: Acompanhar um item ML ate os precos das tabelas")
+print("="*100)
 
 # ITEM TESTE
 ITEM_TESTE = "Assento Almofadado Thema Incepa/hawaii B"
