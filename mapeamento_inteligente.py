@@ -198,21 +198,22 @@ for in_row in range(6, min(6 + 89, ws_ml.max_row + 1)):
 
     # ESTRATEGIA 1: Buscar EXATO no mapeamento
     id_tiny = None
+    best_score = 0
 
-    if title_ml in mapping_ml_tiny:
-        id_tiny = mapping_ml_tiny[title_ml]['id']
-    else:
-        # ESTRATEGIA 2: Buscar por similaridade
-        title_lower = title_ml.lower()
-        best_match = -1
+    title_lower = title_ml.lower()
 
-        for titulo_map, dados in mapping_ml_tiny.items():
-            titulo_map_lower = titulo_map.lower()
-            score = SequenceMatcher(None, title_lower, titulo_map_lower).ratio()
+    # ESTRATEGIA 2: Buscar por similaridade (com threshold 0.6 ou maior)
+    for titulo_map, dados in mapping_ml_tiny.items():
+        titulo_map_lower = titulo_map.lower()
+        score = SequenceMatcher(None, title_lower, titulo_map_lower).ratio()
 
-            if score > 0.7 and len(titulo_map_lower) > best_match:
-                best_match = len(titulo_map_lower)
-                id_tiny = dados['id']
+        if score > best_score:
+            best_score = score
+            id_tiny = dados['id']
+
+    # Se score muito baixo (< 0.5), considerar como nao encontrado
+    if best_score < 0.5:
+        id_tiny = None
 
     # Obter dados do Tiny
     if id_tiny and id_tiny in produtos_tiny:
