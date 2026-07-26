@@ -480,8 +480,8 @@ $svNavCurrent = 'catalogo';
     <link rel="canonical" href="<?= sv_catalog_esc($canonicalUrl) ?>">
     <title><?= sv_catalog_esc($pageTitle) ?></title>
     <style>body { opacity: 1 !important; visibility: visible !important; }</style>
-    <link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=2026-07-24-v3">
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=2026-07-26-v4">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
     <script type="application/ld+json"><?= json_encode($structuredData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
