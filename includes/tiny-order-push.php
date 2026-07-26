@@ -969,11 +969,25 @@ function svtop_push_order_tiny(array $order): ?string
         'idContato'    => $contactId,
         'vendedor'     => ['id' => 369463749],
         'deposito'     => ['id' => 337683271],
-        'itens' => array_map(static fn(array $i) => [
-            'produto'       => ['id' => (int)$i['olist_product_id']],
-            'quantidade'    => $i['quantity'],
-            'valorUnitario' => $i['price'],
-        ], $items),
+        'itens' => array_map(static function (array $i): array {
+            $line = [
+                'produto'       => ['id' => (int)$i['olist_product_id']],
+                'quantidade'    => $i['quantity'],
+                'valorUnitario' => $i['price'],
+            ];
+            // Ecoa SKU/nome do item tal como veio do carrinho do site como
+            // 'infoAdicional' (campo documentado no schema oficial de POST
+            // /pedidos) -- antes esse dado existia no pedido local mas nunca
+            // era enviado ao Tiny, dificultando conferencia manual quando o
+            // produto.id resolvido nao bate com o esperado.
+            $sku = trim((string)($i['sku'] ?? ''));
+            $name = trim((string)($i['name'] ?? ''));
+            $info = trim(implode(' - ', array_filter([$sku !== '' ? "SKU {$sku}" : '', $name])));
+            if ($info !== '') {
+                $line['infoAdicional'] = $info;
+            }
+            return $line;
+        }, $items),
         'valorFrete' => (float)($order['shipping_total'] ?? 0),
         'observacoes' => $obs,
         'observacoesInternas' => svtop_tiny_build_observacoes_internas($order),
@@ -989,6 +1003,17 @@ function svtop_push_order_tiny(array $order): ?string
             'nomeDestinatario' => (string)($c['name'] ?? ''),
             'cpfCnpj'          => $docDigits,
             'tipoPessoa'       => strlen($docDigits) === 14 ? 'J' : 'F',
+        ],
+        // Campo documentado no schema oficial de POST /pedidos
+        // (consumidorFinal: {cpfCnpj, clienteConsumidorFinal}) mas nunca
+        // enviado -- todo cliente que compra direto no site e pessoa
+        // fisica/consumidor final (nao ha revenda B2B nesse fluxo), entao
+        // isso deveria estar marcado em 100% dos pedidos pushados daqui.
+        // Faltar esse campo pode levar a Tiny/NF-e a tratar o pedido com
+        // enquadramento fiscal incorreto (ex: como venda para revenda).
+        'consumidorFinal' => [
+            'cpfCnpj' => $docDigits,
+            'clienteConsumidorFinal' => true,
         ],
     ];
 
