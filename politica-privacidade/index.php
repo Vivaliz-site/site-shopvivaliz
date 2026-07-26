@@ -17,7 +17,7 @@ $email = $company['email'] ?? 'atendimento@shopvivaliz.com.br';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Política de Privacidade e Proteção de Dados da <?= htmlspecialchars($fantasyName) ?>: quais dados coletamos, para que usamos, com quem compartilhamos, por quanto tempo guardamos e como exercer seus direitos LGPD.">
     <meta name="robots" content="index, follow">
-    <link rel="canonical" href="https://dev.shopvivaliz.com.br/politica-privacidade/">
+    <link rel="canonical" href="https://shopvivaliz.com.br/politica-privacidade/">
     <title>Política de Privacidade e LGPD | <?= htmlspecialchars($fantasyName) ?></title>
     <link rel="stylesheet" href="/css/style.css">
     <style>

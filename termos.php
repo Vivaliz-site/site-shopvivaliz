@@ -17,7 +17,7 @@ $phone = $company['phone'] ?? '(37) 99937-4112';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Termos e Condições Gerais de Uso da <?= htmlspecialchars($fantasyName) ?>: cadastro, preços, pagamento, propriedade intelectual, cancelamento e foro. Leia antes de comprar.">
     <meta name="robots" content="index, follow">
-    <link rel="canonical" href="https://dev.shopvivaliz.com.br/termos">
+    <link rel="canonical" href="https://shopvivaliz.com.br/termos">
     <title>Termos e Condições | <?= htmlspecialchars($fantasyName) ?></title>
     <link rel="stylesheet" href="/css/style.css">
     <style>
