@@ -60,5 +60,5 @@ def analyze_excel(file_path):
         return False
 
 if __name__ == "__main__":
-    file_path = "/mnt/data/Anuncios-2026_07_26-09_32(1).xlsx"
+    file_path = r"C:\Users\user\Downloads\Anuncios-2026_07_26-09_32.xlsx"
     analyze_excel(file_path)
