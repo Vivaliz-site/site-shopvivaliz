@@ -115,6 +115,13 @@ else
   log "INFO" "Archive extraído para $NEW_RELEASE_PATH"
 fi
 
+# Grava o SHA completo implantado num arquivo marcador dentro do release.
+# Consumido por /api/health/version.php para reportar corretamente qual
+# commit está no ar (sem isso, o endpoint sempre retorna release_sha=null
+# porque nenhum dos outros metodos de deteccao — env var, nome do diretorio
+# de release, .git/HEAD — se aplica a este layout de deploy por releases).
+echo "$REMOTE_SHA" > "$NEW_RELEASE_PATH/.release-sha"
+
 # Create symlinks to shared
 log "INFO" "Criando symlinks para shared..."
 
