@@ -31,15 +31,27 @@ canvas {
 .nav-inner,
 .hero-carousel,
 .hero-carousel-track,
+.home-scroller,
 .home-scroller-track,
+.categories-track,
+.products-track,
 .products-grid,
 .catalog-grid,
 .product-detail,
 .checkout-layout,
 .form-row-2,
 .cart-layout,
-.footer-grid {
+.footer-grid,
+main,
+section,
+.section-heading,
+.home-products,
+.home-categories {
   min-width: 0;
+}
+
+iframe {
+  max-width: 100%;
 }
 
 .container {
