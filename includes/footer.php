@@ -78,17 +78,6 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
                     <strong style="display: block; color: #22324a; margin-bottom: 10px;">Pagamentos aceitos</strong>
                     <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
                         <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago" style="height: 28px; width: auto;">
-                        <span style="color: #d0d7e2;">|</span>
-                        <span style="display: inline-flex; align-items: center; gap: 6px; color: #17324f; font-weight: 700;">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#32BCAD"/><path d="M12 5l2.5 2.5-2.5 2.5-2.5-2.5L12 5zm0 9.5l2.5 2.5-2.5 2.5-2.5-2.5 2.5-2.5zM5 12l2.5-2.5L10 12l-2.5 2.5L5 12zm9 0l2.5-2.5L19 12l-2.5 2.5L14 12z" fill="#fff"/></svg>
-                            PIX
-                        </span>
-                        <span style="color: #17324f; font-weight: 700;">Visa</span>
-                        <span style="color: #17324f; font-weight: 700;">Mastercard</span>
-                        <span style="color: #17324f; font-weight: 700;">Boleto</span>
-                    </div>
-                    <div style="margin-top: 10px; color: #667085;">
-                        Os meios exibidos seguem o ecossistema oficial mapeado da ShopVivaliz.
                     </div>
                 </div>
             </div>
