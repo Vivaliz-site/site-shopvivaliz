@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once __DIR__ . '/config/bootstrap-env.php';
 
 $company = @include(__DIR__ . '/config/company-profile.php') ?: [];

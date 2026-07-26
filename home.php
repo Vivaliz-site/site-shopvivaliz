@@ -1,6 +1,13 @@
 <?php
 declare(strict_types=1);
 
+// Sessao precisa iniciar antes de qualquer output (mesma causa raiz do bug em
+// index.php/catalogo.php: session_start() tardio no navbar.php falha
+// silenciosamente apos headers enviados, usuario aparece deslogado).
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
