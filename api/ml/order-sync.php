@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/client.php';
+require_once dirname(__DIR__, 2) . '/includes/ml-event-tracker.php';
 
 function ml_order_dir(): string {
     $dir = ml_root() . '/storage/orders';
@@ -15,6 +16,44 @@ function ml_map_status(string $mlStatus): string {
         'cancelled' => 'cancelled',
         default => 'pending_confirmation',
     };
+}
+
+function ml_track_purchase_events(array &$record, string $orderNumber): void {
+    if (($record['source'] ?? '') !== 'mercado_livre') {
+        return;
+    }
+
+    $mlStatus = strtolower(trim((string)($record['ml_status'] ?? '')));
+    if (!in_array($mlStatus, ['paid', 'confirmed'], true)) {
+        return;
+    }
+
+    if (!empty($record['ml_purchase_tracked_at'])) {
+        return;
+    }
+
+    $trackedAny = false;
+    foreach (is_array($record['items'] ?? null) ? $record['items'] : [] as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $productId = (string)($item['olist_product_id'] ?? $item['sku'] ?? '');
+        if ($productId === '') {
+            continue;
+        }
+        if (svml_track_event('purchase', $productId, [
+            'source' => 'mercado_livre_order_sync',
+            'order_number' => $orderNumber,
+            'quantity' => (int)($item['quantity'] ?? 1),
+            'unit_price' => (float)($item['price'] ?? 0),
+        ])) {
+            $trackedAny = true;
+        }
+    }
+
+    if ($trackedAny) {
+        $record['ml_purchase_tracked_at'] = gmdate('c');
+    }
 }
 
 function ml_sync_order_from_webhook(string $resource): void {
@@ -43,6 +82,10 @@ function ml_sync_order_from_webhook(string $resource): void {
         $existing = json_decode((string)file_get_contents($path), true) ?: [];
         $existing['status'] = ml_map_status((string)($order['status'] ?? ''));
         $existing['ml_status'] = (string)($order['status'] ?? '');
+        if (!isset($existing['items']) || !is_array($existing['items']) || $existing['items'] === []) {
+            $existing['items'] = $items;
+        }
+        ml_track_purchase_events($existing, $orderNumber);
         file_put_contents($path, json_encode($existing, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
         return;
     }
@@ -67,5 +110,6 @@ function ml_sync_order_from_webhook(string $resource): void {
         'source' => 'mercado_livre',
     ];
 
+    ml_track_purchase_events($record, $orderNumber);
     file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
 }
