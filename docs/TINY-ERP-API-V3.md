@@ -180,14 +180,42 @@ Pedido pago via Mercado Pago no site (cartão de crédito, na prática) mapeia p
 
 ### GET /formas-envio (parcial, as relevantes pra Melhor Envio)
 
-| id | nome | tipo |
-|---|---|---|
-| 337683312 | Correios | 1 |
-| 337683314 | Transportadora | 2 |
-| 337683315 | Retirar pessoalmente | 6 |
-| 337692320 / 337724599 | Mercado Envios | 3 |
-| 337724753 | Correios via Melhor envio | 10 |
-| 337724757 | Jadlog via Melhor envio | 10 |
+⚠️ **Atualizado em 2026-07-26**: a conta tem MÚLTIPLOS registros com o mesmo
+`nome` (ex: "Jadlog via Melhor envio" aparece com pelo menos 3 IDs diferentes:
+`337724757`, `356829162`, `357119976`), diferenciados pelo campo `situacao`
+(`1` = ativo, `2` = inativo) e por terem ou não `gatewayLogistico` preenchido.
+**Sempre usar o registro com `situacao: 1` E `gatewayLogistico.nome: "Melhor
+envio"` preenchido** — é o único que retorna `formasFrete[]` (os IDs de
+`formaFrete`, ex: `.Package`/`.Com`) via `GET /formas-envio/{id}`. Os IDs
+antigos abaixo (`337724753`/`337724757`) estão **inativos** e não devem mais
+ser usados — mantidos aqui só para referência histórica. Confirmado ao vivo
+que `includes/tiny-order-push.php` já usa os IDs corretos e ativos.
+
+| id | nome | tipo | situação | uso |
+|---|---|---|---|---|
+| 337683312 | Correios | 1 | ativo | — |
+| 337683314 | Transportadora | 2 | ativo | — |
+| 337683315 | Retirar pessoalmente | 6 | ativo | — |
+| 337692320 / 337724599 | Mercado Envios | 3 | ativo/inativo | — |
+| 337724753 | Correios via Melhor envio | 10 | **inativo** | não usar |
+| 337724757 | Jadlog via Melhor envio | 10 | **inativo** | não usar |
+| 356829161–356829165 | Correios/Jadlog/JeT/Loggi/Total Express via Melhor envio | 10 | **inativo** | não usar |
+| **357119973** | Correios via Melhor envio | 10 | **ativo** | `formaEnvio` real (Correios) |
+| **357119976** | Jadlog via Melhor envio | 10 | **ativo** | `formaEnvio` real (Jadlog) — usado em `svtop_tiny_build_transportador_block()` |
+| **357119979** | JeT via Melhor envio | 10 | **ativo** | `formaEnvio` real (JeT) |
+| **357119982** | Loggi via Melhor envio | 10 | **ativo** | `formaEnvio` real (Loggi) |
+| **357119984** | Total Express via Melhor envio | 10 | **ativo** | `formaEnvio` real (Total Express) |
+
+`GET /formas-envio/357119976` retorna também `formasFrete[]` — os IDs reais de
+`formaFrete` (o "meio"/serviço específico dentro da transportadora):
+- `357119977` — `.Package` (código `3`)
+- `357119978` — `.Com` (código `4`)
+
+Confirmado com um pedido real (`SV20260726155645987`, teste E2E de compra,
+transportadora Jadlog / serviço `.Package`): o payload gerado usa
+`formaEnvio.id: 357119976` (Jadlog, a transportadora) e `formaFrete.id:
+357119977` (.Package, o serviço) — dois campos distintos, ambos por código
+numérico do Tiny, nunca por texto livre.
 
 ### GET /vendedores
 
