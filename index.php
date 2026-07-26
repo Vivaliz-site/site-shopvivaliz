@@ -596,6 +596,9 @@ $svNavCurrent = '';
                     <a href="/carrinho" class="btn btn-hero-secondary">
                         🛒 Meu Carrinho
                     </a>
+                    <a href="/blog/" class="btn btn-hero-secondary">
+                        📰 Ver blog
+                    </a>
                 </div>
             </div>
         </div>
