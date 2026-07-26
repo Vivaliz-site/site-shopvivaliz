@@ -69,24 +69,25 @@ def get_json(path: str, token: str, retries: int = 4) -> tuple[int, dict | list 
 
 
 def resolve_token() -> str:
-    static = os.getenv("TINY_ACCESS_TOKEN") or os.getenv("OLIST_ACCESS_TOKEN") or ""
-    if static:
-        return static
     client_id = os.getenv("TINY_CLIENT_ID") or os.getenv("OLIST_CLIENT_ID") or ""
     client_secret = os.getenv("TINY_CLIENT_SECRET") or os.getenv("OLIST_CLIENT_SECRET") or ""
     refresh = os.getenv("TINY_REFRESH_TOKEN") or os.getenv("OLIST_REFRESH_TOKEN") or ""
-    if not (client_id and client_secret and refresh):
-        raise RuntimeError("Tiny OAuth credentials missing")
-    data = post_form(TOKEN_URL, {
-        "grant_type": "refresh_token",
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "refresh_token": refresh,
-    })
-    token = data.get("access_token") or ""
-    if not token:
-        raise RuntimeError("Tiny OAuth refresh did not return access_token")
-    return token
+    if client_id and client_secret and refresh:
+        data = post_form(TOKEN_URL, {
+            "grant_type": "refresh_token",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh,
+        })
+        token = data.get("access_token") or ""
+        if not token:
+            raise RuntimeError("Tiny OAuth refresh did not return access_token")
+        return token
+
+    static = os.getenv("TINY_ACCESS_TOKEN") or os.getenv("OLIST_ACCESS_TOKEN") or ""
+    if static:
+        return static
+    raise RuntimeError("Tiny OAuth credentials missing")
 
 
 def load_catalog() -> dict[str, dict]:
