@@ -84,7 +84,7 @@ Após configurar os secrets:
 
 1. **Você abre o link de autorização:**
    ```
-   https://accounts.tiny.com.br/oauth/authorize?client_id=SEU_OLIST_CLIENT_ID_AQUI&redirect_uri=https%3a%2f%2fdev.shopvivaliz.com.br%2folist%2fcallback.php&response_type=code&scope=produtos:read
+   https://accounts.tiny.com.br/oauth/authorize?client_id=SEU_OLIST_CLIENT_ID_AQUI&redirect_uri=https%3a%2f%2fshopvivaliz.com.br%2folist%2fcallback.php&response_type=code&scope=produtos:read
    ```
 
 2. **Você autoriza e pega o CODE**

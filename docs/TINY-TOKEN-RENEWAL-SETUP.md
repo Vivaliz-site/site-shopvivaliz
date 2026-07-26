@@ -32,7 +32,7 @@
 Clique neste link (ou copie e cole no navegador):
 
 ```
-https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth?client_id=tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1784255157&redirect_uri=https%3A%2F%2Fdev.shopvivaliz.com.br%2Folist%2Fcallback.php&response_type=code&scope=openid+email+offline_access
+https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth?client_id=tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1784255157&redirect_uri=https%3A%2F%2Fshopvivaliz.com.br%2Folist%2Fcallback.php&response_type=code&scope=openid+email+offline_access
 ```
 
 **Importante:** Use HTTPS (o link começa com `https://`)
@@ -46,7 +46,7 @@ https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth?client_id=
 
 ### Passo 3: Callback Automático
 
-- Você será redirecionado para: `https://dev.shopvivaliz.com.br/olist/callback.php?code=...&state=...`
+- Você será redirecionado para: `https://shopvivaliz.com.br/olist/callback.php?code=...&state=...`
 - **Não feche a aba** — deixe carregar até o final
 - Você verá uma resposta JSON com:
   ```json
@@ -92,7 +92,7 @@ Após fazer o login acima, verificar:
 
 4. **Na home do site**:
    - Produtos aparecem com imagens? (não mais "Esgotado")
-   - URL: https://shopvivaliz.com.br/ ou https://dev.shopvivaliz.com.br/
+   - URL: https://shopvivaliz.com.br/
 
 ---
 
@@ -104,7 +104,7 @@ Após fazer o login acima, verificar:
 
 **Erro 2: "redirect_uri_mismatch"**
 - Redirect URI não confere
-- Verificar que está em: `https://dev.shopvivaliz.com.br/olist/callback.php`
+- Verificar que está em: `https://shopvivaliz.com.br/olist/callback.php`
 - NÃO: `https://shopvivaliz.com.br/...` ou `http://...`
 
 **Erro 3: Callback não funciona**
