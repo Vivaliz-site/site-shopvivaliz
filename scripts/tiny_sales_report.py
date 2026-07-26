@@ -19,11 +19,18 @@ from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
+
 
 ROOT = Path(__file__).resolve().parents[1]
 API_BASE = "https://api.tiny.com.br/public-api/v3"
 TOKEN_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
 OUT_DIR = ROOT / "storage" / "reports"
+LOCK_DIR = ROOT / "storage" / "locks"
+LOCK_PATH = LOCK_DIR / "tiny-sales-report.lock"
 
 
 def load_env() -> None:
@@ -36,6 +43,29 @@ def load_env() -> None:
             continue
         key, value = line.split("=", 1)
         os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+
+
+def acquire_single_run_lock():
+    LOCK_DIR.mkdir(parents=True, exist_ok=True)
+    handle = LOCK_PATH.open("a+", encoding="utf-8")
+    try:
+        if os.name == "nt":
+            handle.seek(0)
+            if handle.read(1) == "":
+                handle.seek(0)
+                handle.write("0")
+                handle.flush()
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (BlockingIOError, OSError):
+        print("ALREADY_RUNNING", file=sys.stderr)
+        raise SystemExit(2)
+    handle.seek(0)
+    handle.write(str(os.getpid()))
+    handle.truncate()
+    handle.flush()
+    return handle
 
 
 def post_form(url: str, fields: dict[str, str]) -> dict:
@@ -211,96 +241,121 @@ def extract_order_items(order: dict) -> list[dict]:
 
 def main() -> int:
     load_env()
-    days = int(os.getenv("TINY_SALES_REPORT_DAYS", "30"))
-    max_pages = int(os.getenv("TINY_SALES_REPORT_MAX_PAGES", "12"))
-    token = resolve_token()
-    catalog = load_catalog()
-    order_ids = iter_order_ids(token, days, max_pages)
-    if not order_ids:
-        print("NO_ORDERS_FOUND")
-        return 1
+    lock_handle = acquire_single_run_lock()
+    try:
+        days = int(os.getenv("TINY_SALES_REPORT_DAYS", "30"))
+        max_pages = int(os.getenv("TINY_SALES_REPORT_MAX_PAGES", "12"))
+        token = resolve_token()
+        catalog = load_catalog()
+        order_ids = iter_order_ids(token, days, max_pages)
+        if not order_ids and (os.getenv("TINY_CLIENT_ID") or os.getenv("OLIST_CLIENT_ID")):
+            token = resolve_token_with_refresh()
+            order_ids = iter_order_ids(token, days, max_pages)
+        if not order_ids:
+            print("NO_ORDERS_FOUND")
+            return 1
 
-    totals = defaultdict(lambda: {
-        "sku": "",
-        "product_id": "",
-        "name": "",
-        "quantity": 0.0,
-        "revenue": 0.0,
-        "estimated_cost": 0.0,
-        "stock": 0.0,
-        "orders": 0,
+        totals = defaultdict(lambda: {
+            "sku": "",
+            "product_id": "",
+            "name": "",
+            "quantity": 0.0,
+            "revenue": 0.0,
+            "estimated_cost": 0.0,
+            "stock": 0.0,
+            "orders": 0,
+        })
+
+        fetched = 0
+        for oid in order_ids:
+            status, data, raw = get_json("/pedidos/" + urllib.parse.quote(oid), token)
+            if status != 200 or not isinstance(data, dict):
+                print(f"WARN order {oid} HTTP {status}: {raw[:160]}", file=sys.stderr)
+                continue
+            order = data.get("pedido") if isinstance(data.get("pedido"), dict) else data
+            for item in extract_order_items(order):
+                key = item["product_id"] or item["sku"].upper() or item["name"]
+                row = totals[key]
+                row["sku"] = item["sku"] or row["sku"]
+                row["product_id"] = item["product_id"] or row["product_id"]
+                row["name"] = item["name"] or row["name"]
+                row["quantity"] += item["quantity"]
+                row["revenue"] += item["quantity"] * item["unit_price"]
+                row["orders"] += 1
+
+                catalog_row = {}
+                if item["product_id"]:
+                    catalog_row = catalog["by_id"].get(item["product_id"], {})
+                if not catalog_row and item["sku"]:
+                    catalog_row = catalog["by_sku"].get(item["sku"].upper(), {})
+                unit_cost = product_cost(catalog_row) if catalog_row else 0.0
+                row["estimated_cost"] += unit_cost * item["quantity"]
+                row["stock"] = max(float(row["stock"]), product_stock(catalog_row) if catalog_row else 0.0)
+            fetched += 1
+            if fetched % 40 == 0:
+                print(f"fetched_orders={fetched}/{len(order_ids)}", file=sys.stderr)
+            time.sleep(0.12)
+
+        rows = []
+        for row in totals.values():
+            revenue = float(row["revenue"])
+            estimated_cost = float(row["estimated_cost"])
+            gross_profit = revenue - estimated_cost if estimated_cost > 0 else 0.0
+            margin_percent = (gross_profit / revenue * 100) if revenue > 0 and estimated_cost > 0 else 0.0
+            row["gross_profit"] = round(gross_profit, 2)
+            row["margin_percent"] = round(margin_percent, 2)
+            row["revenue"] = round(revenue, 2)
+            row["estimated_cost"] = round(estimated_cost, 2)
+            row["quantity"] = round(float(row["quantity"]), 2)
+            row["stock"] = round(float(row["stock"]), 2)
+            rows.append(row)
+
+        rows.sort(key=lambda r: (r["quantity"], r["revenue"]), reverse=True)
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        csv_path = OUT_DIR / f"tiny-sales-ranking-{stamp}.csv"
+        json_path = OUT_DIR / f"tiny-sales-ranking-{stamp}.json"
+        fields = ["sku", "product_id", "name", "quantity", "orders", "revenue", "estimated_cost", "gross_profit", "margin_percent", "stock"]
+        with csv_path.open("w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(rows)
+        json_path.write_text(json.dumps({
+            "ok": True,
+            "days": days,
+            "orders_found": len(order_ids),
+            "orders_fetched": fetched,
+            "rows": rows,
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        print("REPORT_READY")
+        print("csv=" + str(csv_path))
+        print("json=" + str(json_path))
+        print("orders_found=" + str(len(order_ids)))
+        print("orders_fetched=" + str(fetched))
+        print("top10=" + json.dumps(rows[:10], ensure_ascii=False))
+        return 0
+    finally:
+        lock_handle.close()
+
+
+def resolve_token_with_refresh() -> str:
+    client_id = os.getenv("TINY_CLIENT_ID") or os.getenv("OLIST_CLIENT_ID") or ""
+    client_secret = os.getenv("TINY_CLIENT_SECRET") or os.getenv("OLIST_CLIENT_SECRET") or ""
+    refresh = os.getenv("TINY_REFRESH_TOKEN") or os.getenv("OLIST_REFRESH_TOKEN") or ""
+    if not (client_id and client_secret and refresh):
+        return resolve_token()
+    data = post_form(TOKEN_URL, {
+        "grant_type": "refresh_token",
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "refresh_token": refresh,
     })
-
-    fetched = 0
-    for oid in order_ids:
-        status, data, raw = get_json("/pedidos/" + urllib.parse.quote(oid), token)
-        if status != 200 or not isinstance(data, dict):
-            print(f"WARN order {oid} HTTP {status}: {raw[:160]}", file=sys.stderr)
-            continue
-        order = data.get("pedido") if isinstance(data.get("pedido"), dict) else data
-        for item in extract_order_items(order):
-            key = item["product_id"] or item["sku"].upper() or item["name"]
-            row = totals[key]
-            row["sku"] = item["sku"] or row["sku"]
-            row["product_id"] = item["product_id"] or row["product_id"]
-            row["name"] = item["name"] or row["name"]
-            row["quantity"] += item["quantity"]
-            row["revenue"] += item["quantity"] * item["unit_price"]
-            row["orders"] += 1
-
-            catalog_row = {}
-            if item["product_id"]:
-                catalog_row = catalog["by_id"].get(item["product_id"], {})
-            if not catalog_row and item["sku"]:
-                catalog_row = catalog["by_sku"].get(item["sku"].upper(), {})
-            unit_cost = product_cost(catalog_row) if catalog_row else 0.0
-            row["estimated_cost"] += unit_cost * item["quantity"]
-            row["stock"] = max(float(row["stock"]), product_stock(catalog_row) if catalog_row else 0.0)
-        fetched += 1
-        if fetched % 40 == 0:
-            print(f"fetched_orders={fetched}/{len(order_ids)}", file=sys.stderr)
-        time.sleep(0.12)
-
-    rows = []
-    for row in totals.values():
-        revenue = float(row["revenue"])
-        estimated_cost = float(row["estimated_cost"])
-        gross_profit = revenue - estimated_cost if estimated_cost > 0 else 0.0
-        margin_percent = (gross_profit / revenue * 100) if revenue > 0 and estimated_cost > 0 else 0.0
-        row["gross_profit"] = round(gross_profit, 2)
-        row["margin_percent"] = round(margin_percent, 2)
-        row["revenue"] = round(revenue, 2)
-        row["estimated_cost"] = round(estimated_cost, 2)
-        row["quantity"] = round(float(row["quantity"]), 2)
-        row["stock"] = round(float(row["stock"]), 2)
-        rows.append(row)
-
-    rows.sort(key=lambda r: (r["quantity"], r["revenue"]), reverse=True)
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = time.strftime("%Y%m%d-%H%M%S")
-    csv_path = OUT_DIR / f"tiny-sales-ranking-{stamp}.csv"
-    json_path = OUT_DIR / f"tiny-sales-ranking-{stamp}.json"
-    fields = ["sku", "product_id", "name", "quantity", "orders", "revenue", "estimated_cost", "gross_profit", "margin_percent", "stock"]
-    with csv_path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(rows)
-    json_path.write_text(json.dumps({
-        "ok": True,
-        "days": days,
-        "orders_found": len(order_ids),
-        "orders_fetched": fetched,
-        "rows": rows,
-        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    }, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    print("REPORT_READY")
-    print("csv=" + str(csv_path))
-    print("json=" + str(json_path))
-    print("orders_found=" + str(len(order_ids)))
-    print("orders_fetched=" + str(fetched))
-    print("top10=" + json.dumps(rows[:10], ensure_ascii=False))
-    return 0
+    token = data.get("access_token") or ""
+    if not token:
+        raise RuntimeError("Tiny OAuth refresh did not return access_token")
+    return token
 
 
 if __name__ == "__main__":
