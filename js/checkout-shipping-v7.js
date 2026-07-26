@@ -4,6 +4,11 @@
   function quote(){try{return JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote')||'null');}catch(e){return null;}}
   function cart(){try{return JSON.parse(localStorage.getItem('shopvivaliz_cart')||'[]');}catch(e){return[];}}
   function digits(value){return String(value||'').replace(/\D/g,'');}
+  function shippingErrorMessage(data){
+    if(!data||typeof data!=='object')return'Não foi possível calcular o frete para este CEP.';
+    if(data.error==='invalid_shipping_destination'||data.error==='invalid_cep')return'CEP inválido. Confira os 8 números e tente novamente.';
+    return data.message||'Não foi possível calcular o frete para este CEP.';
+  }
   function ensureHidden(name,value){var input=form.querySelector('input[name="'+name+'"]');if(!input){input=document.createElement('input');input.type='hidden';input.name=name;form.appendChild(input);}input.value=value==null?'':String(value);}
   function syncQuoteObject(q){
     if(!q)return false;
@@ -27,7 +32,7 @@
       .then(function(result){
         if(!result.ok||!result.data.ok){
           localStorage.removeItem('shopvivaliz_shipping_quote');
-          if(statusEl){statusEl.hidden=false;statusEl.textContent=result.data.message||'Não foi possível calcular o frete para este CEP.';}
+          if(statusEl){statusEl.hidden=false;statusEl.textContent=shippingErrorMessage(result.data);}
           return false;
         }
         var options=result.data.shipping_options||[];
