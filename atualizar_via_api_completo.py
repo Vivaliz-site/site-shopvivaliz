@@ -140,7 +140,7 @@ for idx, atua in enumerate(atualizacoes_pendentes, 1):
     try:
         resp = requests.put(url, headers=headers, json=payload, timeout=20)
 
-        if resp.status_code in [200, 201]:
+        if resp.status_code in [200, 201, 204]:  # 204 = No Content (sucesso)
             atualizacoes_ok.append(atua)
 
             if len(atualizacoes_ok) % 10 == 0:
