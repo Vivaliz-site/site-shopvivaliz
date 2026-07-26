@@ -81,7 +81,7 @@ print(f"    Identificados {len(atualizacoes_pendentes)} produtos com vermelho")
 if atualizacoes_pendentes:
     print(f"\n    Primeiros 3 exemplos:")
     for atua in atualizacoes_pendentes[:3]:
-        print(f"      ID {atua['id_tiny']:10d}: ML R$ {atua['preco_ml']:7.2f} → Novo R$ {atua['novo_preco']:7.2f}")
+        print(f"      ID {atua['id_tiny']:10d}: ML R$ {atua['preco_ml']:7.2f} -> Novo R$ {atua['novo_preco']:7.2f}")
 
 # 2. CARREGAR DADOS DOS PRODUTOS VIA API
 print("\n[2] Carregando dados dos produtos via API...")
