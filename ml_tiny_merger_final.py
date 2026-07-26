@@ -348,7 +348,7 @@ def process_ml_spreadsheet():
     ws_out.freeze_panes = "A2"
 
     # Filtros
-    ws_out.auto_filter.ref = f"A1:{get_column_letter(len(header) + len(new_columns))}{ws_in.max_row}"
+    ws_out.auto_filter.ref = f"A1:{get_column_letter(len(header) + len(new_columns))}{data_rows + 1}"
 
     # Ajustar largura das colunas
     for col in range(1, len(header) + len(new_columns) + 1):
