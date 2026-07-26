@@ -84,8 +84,17 @@ try {
 
     $stmt->bind_param('s', $sku);
     $stmt->execute();
-    $result = $stmt->get_result();
-    $product = $result->fetch_assoc();
+    $stmt->bind_result($productId, $productSku, $productName, $productPrice, $productStock);
+    $product = $stmt->fetch()
+        ? [
+            'id' => $productId,
+            'sku' => $productSku,
+            'name' => $productName,
+            'price' => $productPrice,
+            'stock' => $productStock,
+        ]
+        : null;
+    $stmt->close();
 
     if (!$product) {
         http_response_code(404);
@@ -162,7 +171,7 @@ try {
         ]
     ]);
 
-} catch (Exception $e) {
+} catch (Throwable $e) {
     error_log('[API Cart] Error: ' . $e->getMessage());
     http_response_code(500);
     echo json_encode(['error' => 'Server error']);
