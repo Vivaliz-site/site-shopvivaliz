@@ -2,11 +2,22 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 body {
   min-width: 0;
   overflow-x: clip;
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+.hero-carousel-section,
+.hero-carousel,
+.hero-carousel-track {
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 img,
