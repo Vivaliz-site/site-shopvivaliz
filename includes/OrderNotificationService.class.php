@@ -336,8 +336,13 @@ class OrderNotificationService
             }
         }
         $carrier = htmlspecialchars((string)($data['shipping_label'] ?? 'Correios'));
-        $trackingCode = htmlspecialchars((string)($data['tracking_number'] ?? $data['tracking_code'] ?? 'Em breve'));
-        $trackingUrl = 'https://www.melhorenvio.com.br/rastreamento/' . urlencode($trackingCode);
+        $trackingCode = htmlspecialchars((string)($data['tracking_number'] ?? $data['tracking_code'] ?? ''));
+        if ($trackingCode === '' || strtolower($trackingCode) === 'em breve') {
+            $trackingCode = 'Em breve';
+            $trackingUrl = '#';
+        } else {
+            $trackingUrl = 'https://www.melhorenvio.com.br/rastreamento/' . urlencode($trackingCode);
+        }
         $estimatedDelivery = htmlspecialchars((string)($data['estimated_delivery'] ?? 'Não informada'));
         $invoiceUrl = htmlspecialchars((string)($data['invoice_url'] ?? '#'));
         $refundAmount = number_format((float)($data['refund_amount'] ?? $data['total'] ?? 0), 2, ',', '.');
