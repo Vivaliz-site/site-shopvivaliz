@@ -235,8 +235,8 @@ def process_ml_spreadsheet():
             ws_out.cell(out_row_idx, col_idx, value)
 
         # Extrair identificadores
-        product_number = ws_in.cell(row_idx, product_number_col_idx).value if product_number_col_idx else None
-        price_ml = ws_in.cell(row_idx, price_col_idx).value if price_col_idx else None
+        product_number = ws_in.cell(in_row_idx, product_number_col_idx).value if product_number_col_idx else None
+        price_ml = ws_in.cell(in_row_idx, price_col_idx).value if price_col_idx else None
 
         stats["total"] += 1
 
