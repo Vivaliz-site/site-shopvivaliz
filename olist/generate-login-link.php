@@ -40,7 +40,7 @@ echo "1. Copie o link acima\n";
 echo "2. Cole no navegador\n";
 echo "3. Faça login com sua conta Olist ERP\n";
 echo "4. Clique 'Autorizar'\n";
-echo "5. Será redirecionado para: $redirectUri?code=XXXXX\n";
+echo "5. Será redirecionado para: $redirectUri?code=CODIGO\n";
 echo "6. O callback.php capturará o código e salvará os tokens\n\n";
 
 // JSON para fácil cópia
