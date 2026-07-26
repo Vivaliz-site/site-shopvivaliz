@@ -3,6 +3,8 @@
  * Configuração de Banco de Dados - ShopVivaliz
  */
 
+require_once __DIR__ . '/constants.php';
+
 // Singleton Database Connection
 class Database {
     private static $instance = null;
