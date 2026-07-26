@@ -2,13 +2,11 @@
 
 declare(strict_types=1);
 
-// Load agent keys configuration
 $agentKeysFile = dirname(__DIR__, 2) . '/config/agent-keys.php';
 if (is_file($agentKeysFile)) {
     require_once $agentKeysFile;
 }
 
-// Bootstrap .env early so auth can resolve runtime secrets on Apache/FPM and CLI.
 (static function (): void {
     $envFile = dirname(__DIR__, 2) . '/.env';
     if (!is_file($envFile)) {
@@ -48,7 +46,7 @@ function svaw_header(string $name): string
 
 function svaw_expected_key(): string
 {
-    foreach (['SHOPVIVALIZ_AGENT_KEY', 'AGENT_KEY', 'WATCHDOG_AGENT_KEY', 'AUTONOMOUS_AGENT_KEY', 'CRON_SECRET', 'APP_KEY', 'SHOPVIVALIZ_APP_KEY'] as $name) {
+    foreach (['SHOPVIVALIZ_AGENT_KEY', 'AGENT_KEY', 'WATCHDOG_AGENT_KEY', 'AUTONOMOUS_AGENT_KEY'] as $name) {
         $value = getenv($name);
         if (is_string($value) && trim($value) !== '') {
             return trim($value);
@@ -57,8 +55,7 @@ function svaw_expected_key(): string
             return trim((string)$_SERVER[$name]);
         }
     }
-    // Fallback hardcoded key for autonomous workflows
-    return 'RV5yJAphQHufjlfm12qaQKsrqld5fHRKeVB1lHFym-k';
+    return '';
 }
 
 function svaw_provided_key(): string
@@ -66,10 +63,6 @@ function svaw_provided_key(): string
     foreach ([
         svaw_header('X-ShopVivaliz-Agent-Key'),
         svaw_header('X-Agent-Key'),
-        trim((string)($_GET['agent_key'] ?? '')),
-        trim((string)($_POST['agent_key'] ?? '')),
-        trim((string)($_GET['secret'] ?? '')),
-        trim((string)($_POST['secret'] ?? '')),
     ] as $candidate) {
         if ($candidate !== '') {
             return $candidate;
@@ -80,21 +73,12 @@ function svaw_provided_key(): string
 
 function svaw_is_local_request(): bool
 {
-    if (PHP_SAPI === 'cli-server') {
+    if (PHP_SAPI === 'cli') {
         return true;
     }
 
     $remote = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
-    $host = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
-    $serverName = trim((string)($_SERVER['SERVER_NAME'] ?? ''));
-
-    return str_contains($remote, '127.0.0.1')
-        || str_contains($remote, '::1')
-        || $remote === 'localhost'
-        || str_contains($host, '127.0.0.1')
-        || str_contains($host, 'localhost')
-        || str_contains($serverName, '127.0.0.1')
-        || str_contains($serverName, 'localhost');
+    return in_array($remote, ['127.0.0.1', '::1'], true);
 }
 
 function svaw_pdo(): ?PDO
@@ -127,9 +111,11 @@ if ($expectedKey === '' && !svaw_is_local_request()) {
     svaw_reply(503, ['ok' => false, 'agent' => 'autonomous_watchdog', 'error' => 'agent_key_not_configured']);
 }
 
-$providedKey = svaw_provided_key();
-if ($expectedKey !== '' && ($providedKey === '' || !hash_equals($expectedKey, $providedKey))) {
-    svaw_reply(401, ['ok' => false, 'agent' => 'autonomous_watchdog', 'error' => 'unauthorized']);
+if (!svaw_is_local_request()) {
+    $providedKey = svaw_provided_key();
+    if ($providedKey === '' || !hash_equals($expectedKey, $providedKey)) {
+        svaw_reply(401, ['ok' => false, 'agent' => 'autonomous_watchdog', 'error' => 'unauthorized']);
+    }
 }
 
 $root = dirname(__DIR__, 2);
@@ -138,7 +124,6 @@ if (is_file($constants)) require_once $constants;
 require_once $root . '/includes/pdo-database.php';
 require_once $root . '/agents/v9.2.84/app/AutonomousWatchdogAgent.php';
 
-// Adapter consumed by the resident agents. It intentionally returns only PDO.
 if (!function_exists('sv_pdo')) {
     function sv_pdo(): ?PDO { return svaw_pdo(); }
 }
@@ -147,10 +132,10 @@ $body = file_get_contents('php://input');
 $input = json_decode(is_string($body) ? $body : '', true);
 if (!is_array($input)) $input = [];
 $options = [
-    'run_loop' => (bool)($input['run_loop'] ?? $_POST['run_loop'] ?? $_GET['run_loop'] ?? true),
-    'cycles' => max(1, min(10, (int)($input['cycles'] ?? $_POST['cycles'] ?? $_GET['cycles'] ?? 1))),
-    'chunk_size' => max(1, min(25, (int)($input['chunk_size'] ?? $_POST['chunk_size'] ?? $_GET['chunk_size'] ?? 10))),
-    'image_limit' => max(1, min(500, (int)($input['image_limit'] ?? $_POST['image_limit'] ?? $_GET['image_limit'] ?? 100))),
+    'run_loop' => (bool)($input['run_loop'] ?? true),
+    'cycles' => max(1, min(10, (int)($input['cycles'] ?? 1))),
+    'chunk_size' => max(1, min(25, (int)($input['chunk_size'] ?? 10))),
+    'image_limit' => max(1, min(500, (int)($input['image_limit'] ?? 100))),
 ];
 
 try {
