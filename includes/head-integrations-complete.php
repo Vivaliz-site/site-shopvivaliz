@@ -60,10 +60,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   />
 </noscript>
 
-<!-- ============================================================================
-     GOOGLE SITE VERIFICATION
-     ============================================================================ -->
-<meta name="google-site-verification" content="YOUR_GOOGLE_SITE_VERIFICATION_CODE" />
+<?php
+$siteVerification = getenv('GOOGLE_SITE_VERIFICATION') ?: '';
+if ($siteVerification !== '' && $siteVerification !== 'YOUR_GOOGLE_SITE_VERIFICATION_CODE'): ?>
+<meta name="google-site-verification" content="<?php echo htmlspecialchars($siteVerification, ENT_QUOTES, 'UTF-8'); ?>" />
+<?php endif; ?>
 
 <!-- ============================================================================
      ENHANCED E-COMMERCE TRACKING (GA4)
@@ -207,10 +208,11 @@ dataLayer.push({
 });
 </script>
 
-<!-- ============================================================================
-     OPTIMIZE (Optional - Google Optimize for A/B Testing)
-     ============================================================================ -->
-<script src="https://www.googleoptimize.com/optimize.js?id=OPT-XXXXXXX"></script>
+<?php
+$optimizeId = getenv('GOOGLE_OPTIMIZE_ID') ?: '';
+if ($optimizeId !== '' && $optimizeId !== 'OPT-XXXXXXX'): ?>
+<script src="https://www.googleoptimize.com/optimize.js?id=<?php echo htmlspecialchars($optimizeId, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<?php endif; ?>
 
 <!-- ============================================================================
      DEBUG MODE (Development Only)
