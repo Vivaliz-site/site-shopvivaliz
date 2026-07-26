@@ -55,6 +55,24 @@ function ml_create_pkce(): array {
 }
 
 function ml_token_path(): string {
+    $envPath = ml_env('ML_TOKEN_FILE');
+    if ($envPath !== '') {
+        $dir = dirname($envPath);
+        if (!is_dir($dir)) @mkdir($dir, 0750, true);
+        return $envPath;
+    }
+
+    $candidates = [
+        ml_root() . '/storage/private/ml-tokens.json',
+        ml_root() . '/data/tokens.json',
+    ];
+
+    foreach ($candidates as $path) {
+        if (is_file($path)) {
+            return $path;
+        }
+    }
+
     $dir = ml_root() . '/storage/private';
     if (!is_dir($dir)) @mkdir($dir, 0750, true);
     return $dir . '/ml-tokens.json';
