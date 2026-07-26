@@ -1,15 +1,16 @@
 # ShopVivaliz - Sistema Integrado de Automação
 
-> Última atualização: 2026-07-09 (revisado para bater com o estado real do repo — ver CHANGELOG.md)  
+> Última atualização: 2026-07-26 (consolidação: 99→10 workflows, 31→2 scripts, agentes unificados)  
 > Responsável: fredmourao-ai + Claude Code Autonomous  
-> Status: ✅ Produção - deploy real via VM Oracle (não FTP, ver abaixo)  
-> Repositório real: **https://github.com/Vivaliz-site/site-shopvivaliz** (não `fredmourao-ai/site-shopvivaliz`)
+> Status: ✅ Produção — deploy real via VM Oracle (não FTP)  
+> Repositório real: **https://github.com/Vivaliz-site/site-shopvivaliz**
 
-> ⚠️ **LEIA `KNOWN_ISSUES.md` E `docs/MEMORIA-AGENTES.md` ANTES DE COMEÇAR.** 
-> - `KNOWN_ISSUES.md`: Problemas recorrentes (ex: pasta `/includes/` bloqueada) que voltam múltiplas vezes
-> - `docs/MEMORIA-AGENTES.md`: Múltiplos agentes autônomos (Claude, GPT, Gemini) trabalham em sessões isoladas
-> 
-> Esses arquivos são o **único lugar centralizado** onde erros não-óbvios ficam registrados, pra ninguém redescobrir o mesmo bug. Ao final da sua sessão, **ADICIONE UMA ENTRADA** se aprendeu algo recorrente.
+> 🔴 **LEIA ANTES DE COMEÇAR:**
+> - **`docs/AGENTS.md`** ← ⭐ NOVO: Memória centralizada de todos os agentes + regras obrigatórias
+> - **`KNOWN_ISSUES.md`**: Problemas recorrentes e em investigação
+> - **`CHANGELOG.md`**: Histórico de bugs corrigidos e mudanças
+>
+> `docs/AGENTS.md` é o **único lugar centralizado** onde erros não-óbvios são registrados. **Leia antes de começar. Adicione uma entrada ao terminar se aprendeu algo.**
 
 ---
 
@@ -45,12 +46,13 @@ ShopVivaliz é um **e-commerce de alto rendimento** com automação de:
 `workflow_dispatch` manual, não em push. O comentário no próprio `deploy.yml` confirma: "a producao
 real e a VM Oracle... nao o HostGator".
 
-⚠️ **Risco conhecido:** o repositório tem **59 workflows** em `.github/workflows/` (não 4), muitos
-com nomes sobrepostos (`autonomous-cycle.yml`, `autonomous-orchestrator.yml`,
-`autonomous-proactive.yml`, `ci-autonomo-continuo.yml`, etc.) — sinal de que múltiplos agentes
-diferentes já criaram automações redundantes sem consolidar. Isso já causou bugs reais em produção
-(ver `CHANGELOG.md`: CSS wildcard quebrando a home, footer com dados inventados). Antes de criar um
-novo workflow, verifique se um já não faz a mesma coisa.
+✅ **Consolidação concluída (2026-07-26):** Workflows reduzidos de 99 → 10 (90% de redução).
+- **Mantidos:** `shopvivaliz-qa.yml`, `deploy.yml`, `ai-autonomous-executor.yml`, `olist-sync.yml`, 
+  `sync-products-auto.yml`, `git-auto-sync-validate.yml`, `hourly-summary.yml`, 
+  `auto-validation-and-fix.yml`, `incident-response-automation.yml`, `master-production-pipeline.yml`
+- **Removidos:** 89 workflows redundantes / low-priority / duplicate names
+
+Scripts também consolidados: 31 → 2 mestres (`olist-sync-master.py`, `git-auto-sync-master.py`)
 
 ---
 
