@@ -167,10 +167,16 @@ def process_ml_spreadsheet():
             price_col_idx = idx
         if "product_number" in col_lower.replace("_", ""):
             product_number_col_idx = idx
+            print(f"✅ Identificada coluna PRODUCT_NUMBER: idx={idx}, nome={col_name}")
 
     print(f"\n🔍 Colunas identificadas:")
     print(f"  Coluna de Preço ML: {price_col_idx} ({header[price_col_idx-1] if price_col_idx else 'NÃO ENCONTRADA'})")
     print(f"  Coluna de PRODUCT_NUMBER: {product_number_col_idx} ({header[product_number_col_idx-1] if product_number_col_idx else 'NÃO ENCONTRADA'})")
+
+    if not product_number_col_idx:
+        print(f"⚠️  PRODUCT_NUMBER não identificada. Colunas disponíveis:")
+        for idx, col in enumerate(header, 1):
+            print(f"     [{idx}] {col}")
 
     # Inicializar cliente API
     print(f"\n🔗 Conectando à API Tiny...")
