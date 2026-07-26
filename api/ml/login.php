@@ -14,7 +14,7 @@ if (!$clientId || !$redirectUri) {
 $state = ml_base64url(random_bytes(32));
 
 $secure = str_starts_with(ml_env('BASE_URL', 'ML_REDIRECT_URI'), 'https://');
-$opts   = ['httponly' => true, 'secure' => $secure, 'samesite' => 'Lax', 'path' => '/', 'max-age' => 600];
+$opts   = ['httponly' => true, 'secure' => $secure, 'samesite' => 'Lax', 'path' => '/', 'expires' => time() + 600];
 
 setcookie('ml_pkce_verifier', $verifier, $opts);
 setcookie('ml_oauth_state',   $state,    $opts);
