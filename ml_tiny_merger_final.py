@@ -254,7 +254,7 @@ def process_ml_spreadsheet():
         if not tiny_product and "sku" in str(header).lower():
             for idx, col_name in enumerate(header, 1):
                 if "sku" in str(col_name).lower() and idx != product_number_col_idx:
-                    sku = ws_in.cell(row_idx, idx).value
+                    sku = ws_in.cell(in_row_idx, idx).value
                     if sku:
                         tiny_product = client.find_product_by_sku(str(sku).strip())
                         if tiny_product:
@@ -269,50 +269,50 @@ def process_ml_spreadsheet():
             stats["localized"] += 1
 
             # ID produto Tiny
-            ws_out.cell(row_idx, out_col, tiny_product.get("id"))
+            ws_out.cell(out_row_idx, out_col, tiny_product.get("id"))
             out_col += 1
 
             # SKU Tiny
-            ws_out.cell(row_idx, out_col, tiny_product.get("sku"))
+            ws_out.cell(out_row_idx, out_col, tiny_product.get("sku"))
             out_col += 1
 
             # Descrição Tiny
-            ws_out.cell(row_idx, out_col, tiny_product.get("descricao"))
+            ws_out.cell(out_row_idx, out_col, tiny_product.get("descricao"))
             out_col += 1
 
             # Preço ML original
-            ws_out.cell(row_idx, out_col, price_ml)
+            ws_out.cell(out_row_idx, out_col, price_ml)
             out_col += 1
 
             # Preço cadastro Tiny
             precos = tiny_product.get("precos", {})
             preco_cadastro = precos.get("preco")
-            ws_out.cell(row_idx, out_col, preco_cadastro)
+            ws_out.cell(out_row_idx, out_col, preco_cadastro)
             if preco_cadastro:
                 stats["prices_found"] += 1
             out_col += 1
 
             # Tabelas de preços (vazias - endpoint não localizado)
             for _ in range(4):
-                ws_out.cell(row_idx, out_col, None)
+                ws_out.cell(out_row_idx, out_col, None)
                 out_col += 1
 
             # Status
-            ws_out.cell(row_idx, out_col, "LOCALIZADO")
+            ws_out.cell(out_row_idx, out_col, "LOCALIZADO")
             out_col += 1
 
             # Critério
-            ws_out.cell(row_idx, out_col, search_criterion)
+            ws_out.cell(out_row_idx, out_col, search_criterion)
             out_col += 1
 
             # Observação
             obs = ""
             if preco_cadastro is None:
                 obs += "Sem preço cadastrado no Tiny. "
-            ws_out.cell(row_idx, out_col, obs.strip())
+            ws_out.cell(out_row_idx, out_col, obs.strip())
 
-            if row_idx % 10 == 0:
-                print(f"  ✓ Linha {row_idx}: {tiny_product.get('descricao', 'Sem descrição')[:40]}...")
+            if out_row_idx % 10 == 0:
+                print(f"  ✓ Linha {out_row_idx}: {tiny_product.get('descricao', 'Sem descrição')[:40]}...")
 
         else:
             stats["not_localized"] += 1
@@ -321,25 +321,25 @@ def process_ml_spreadsheet():
             out_col += 3  # Pular ID, SKU, Descrição
 
             # Preço ML original
-            ws_out.cell(row_idx, out_col, price_ml)
+            ws_out.cell(out_row_idx, out_col, price_ml)
             out_col += 1
 
             # Preço cadastro e tabelas (vazias)
             for _ in range(5):
-                ws_out.cell(row_idx, out_col, None)
+                ws_out.cell(out_row_idx, out_col, None)
                 out_col += 1
 
             # Status
-            ws_out.cell(row_idx, out_col, "NÃO LOCALIZADO")
+            ws_out.cell(out_row_idx, out_col, "NÃO LOCALIZADO")
             out_col += 1
 
             # Critério
-            ws_out.cell(row_idx, out_col, "Produto não encontrado no Tiny")
+            ws_out.cell(out_row_idx, out_col, "Produto não encontrado no Tiny")
             out_col += 1
 
             # Observação
-            id_value = product_number or f"Linha {row_idx}"
-            ws_out.cell(row_idx, out_col, f"Verificar identificação: {id_value}")
+            id_value = product_number or f"Linha {out_row_idx}"
+            ws_out.cell(out_row_idx, out_col, f"Verificar identificação: {id_value}")
 
     # Formatação final
     print(f"\n✨ Formatando planilha...")
