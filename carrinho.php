@@ -11,9 +11,10 @@ header('Content-Type: text/html; charset=UTF-8');
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Carrinho | Vivaliz</title>
-    <link rel="icon" href="/images/favicon.svg" type="image/svg+xml">
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
-    <link rel="apple-touch-icon" href="/favicon.ico">
+    <link rel="icon" href="/images/favicon.svg?v=2" type="image/svg+xml">
+    <link rel="icon" href="/favicon.png?v=2" type="image/png">
+    <link rel="alternate icon" href="/favicon.ico?v=2" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/favicon.png?v=2">
     <meta name="msapplication-TileColor" content="#173B63">
     <meta name="theme-color" content="#173B63">
     <link rel="stylesheet" href="/css/style.css">

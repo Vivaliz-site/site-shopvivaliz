@@ -165,7 +165,7 @@ $metrics = ['itens'=>'Seleção organizada','imagens'=>'Imagens reais','operacao
 <title>Vivaliz | Loja online</title>
 <link rel="stylesheet" href="/css/responsive.css">
 <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
-<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="icon" type="image/png" href="/favicon.png?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
