@@ -987,7 +987,7 @@ if ($notFound) {
     })();
     </script>
 
-    <script src="/js/product-conversion-v5.js?v=2026-07-26-v2"></script>
+    <script src="/js/product-conversion-v5.js?v=2026-07-26-v3"></script>
     <script src="/js/cro-interactions.js"></script>
     <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
     <script src="/js/auto-image-carousel.js?v=20260719-2"></script>
