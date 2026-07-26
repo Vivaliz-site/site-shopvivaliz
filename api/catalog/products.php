@@ -25,6 +25,16 @@ function svcat_search_normalize(string $value): string
 }
 
 function svcat_root(): string { return dirname(__DIR__, 2); }
+function svcat_ml_scores(): array
+{
+    $path = svcat_root() . '/storage/ml/product-scores.json';
+    if (!is_file($path)) {
+        return [];
+    }
+    $payload = json_decode((string)file_get_contents($path), true);
+    $scores = $payload['scores'] ?? null;
+    return is_array($scores) ? $scores : [];
+}
 function svcat_json(int $status, array $payload): never
 {
     http_response_code($status);
@@ -41,6 +51,7 @@ require_once svcat_root() . '/includes/catalog-runtime.php';
 
 $limit = min(200, max(1, (int)($_GET['limit'] ?? 48)));
 $q = trim((string)($_GET['q'] ?? ''));
+$mlScores = svcat_ml_scores();
 
 $runtimeRows = array_values(array_filter(svcr_products(), 'is_array'));
 $allProducts = array_map(static function (array $row): array {
@@ -58,10 +69,27 @@ $allProducts = array_map(static function (array $row): array {
         'images_count' => (int)($row['images_count'] ?? count($images)),
         'category' => trim((string)($row['category'] ?? $row['categoria'] ?? '')),
         'status' => (string)($row['status'] ?? 'active'),
+        'ml_score' => null,
     ];
 }, $runtimeRows);
 
 $allProducts = array_values(array_filter($allProducts, static fn(array $p): bool => svcat_is_active($p['status'] ?? null)));
+
+foreach ($allProducts as &$product) {
+    $candidates = array_values(array_unique(array_filter([
+        trim((string)($product['sku'] ?? '')),
+        trim((string)($product['id'] ?? '')),
+        trim((string)($product['olist_product_id'] ?? '')),
+    ], static fn(string $value): bool => $value !== '')));
+
+    foreach ($candidates as $candidate) {
+        if (array_key_exists($candidate, $mlScores)) {
+            $product['ml_score'] = (float)$mlScores[$candidate];
+            break;
+        }
+    }
+}
+unset($product);
 
 if ($q !== '') {
     $needle = svcat_search_normalize($q);
@@ -76,6 +104,22 @@ $category = trim((string)($_GET['categoria'] ?? $_GET['category'] ?? ''));
 if ($category !== '') {
     $allProducts = array_values(array_filter($allProducts, static fn(array $p): bool => strcasecmp((string)($p['category'] ?? ''), $category) === 0));
 }
+
+usort($allProducts, static function (array $a, array $b): int {
+    $scoreA = (float)($a['ml_score'] ?? -INF);
+    $scoreB = (float)($b['ml_score'] ?? -INF);
+    if ($scoreA !== $scoreB) {
+        return $scoreB <=> $scoreA;
+    }
+
+    $stockA = (int)($a['stock'] ?? 0);
+    $stockB = (int)($b['stock'] ?? 0);
+    if ($stockA !== $stockB) {
+        return $stockB <=> $stockA;
+    }
+
+    return strcasecmp((string)($a['name'] ?? ''), (string)($b['name'] ?? ''));
+});
 
 $products = array_slice($allProducts, 0, $limit);
 $categories = [];
