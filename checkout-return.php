@@ -53,6 +53,7 @@ if ($orderNumber !== '') {
     <title><?= htmlspecialchars($title) ?> | Vivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/checkout.css">
+    <script src="/js/ml-events.js?v=1" defer></script>
     <?php if ($approved && $orderNumber !== ''): ?>
     <script>
       window.ShopVivalizPurchaseContext = <?= json_encode([
@@ -115,5 +116,14 @@ if ($orderNumber !== '') {
         </div>
     </section>
 </main>
+<?php if ($approved && $orderItems !== []): ?>
+<script>
+window.addEventListener('load', () => {
+  for (const item of <?= json_encode($orderItems, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>) {
+    window.dispatchEvent(new CustomEvent('shopvivaliz:purchase', {detail: {product_id: item.sku}}));
+  }
+});
+</script>
+<?php endif; ?>
 </body>
 </html>
