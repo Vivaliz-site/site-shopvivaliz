@@ -69,6 +69,10 @@ def get_json(path: str, token: str, retries: int = 4) -> tuple[int, dict | list 
 
 
 def resolve_token() -> str:
+    static = os.getenv("TINY_ACCESS_TOKEN") or os.getenv("OLIST_ACCESS_TOKEN") or ""
+    if static:
+        return static
+
     client_id = os.getenv("TINY_CLIENT_ID") or os.getenv("OLIST_CLIENT_ID") or ""
     client_secret = os.getenv("TINY_CLIENT_SECRET") or os.getenv("OLIST_CLIENT_SECRET") or ""
     refresh = os.getenv("TINY_REFRESH_TOKEN") or os.getenv("OLIST_REFRESH_TOKEN") or ""
@@ -84,9 +88,6 @@ def resolve_token() -> str:
             raise RuntimeError("Tiny OAuth refresh did not return access_token")
         return token
 
-    static = os.getenv("TINY_ACCESS_TOKEN") or os.getenv("OLIST_ACCESS_TOKEN") or ""
-    if static:
-        return static
     raise RuntimeError("Tiny OAuth credentials missing")
 
 
@@ -216,6 +217,9 @@ def main() -> int:
     token = resolve_token()
     catalog = load_catalog()
     order_ids = iter_order_ids(token, days, max_pages)
+    if not order_ids and (os.getenv("TINY_CLIENT_ID") or os.getenv("OLIST_CLIENT_ID")):
+        token = resolve_token_with_refresh()
+        order_ids = iter_order_ids(token, days, max_pages)
     if not order_ids:
         print("NO_ORDERS_FOUND")
         return 1
@@ -301,6 +305,24 @@ def main() -> int:
     print("orders_fetched=" + str(fetched))
     print("top10=" + json.dumps(rows[:10], ensure_ascii=False))
     return 0
+
+
+def resolve_token_with_refresh() -> str:
+    client_id = os.getenv("TINY_CLIENT_ID") or os.getenv("OLIST_CLIENT_ID") or ""
+    client_secret = os.getenv("TINY_CLIENT_SECRET") or os.getenv("OLIST_CLIENT_SECRET") or ""
+    refresh = os.getenv("TINY_REFRESH_TOKEN") or os.getenv("OLIST_REFRESH_TOKEN") or ""
+    if not (client_id and client_secret and refresh):
+        return resolve_token()
+    data = post_form(TOKEN_URL, {
+        "grant_type": "refresh_token",
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "refresh_token": refresh,
+    })
+    token = data.get("access_token") or ""
+    if not token:
+        raise RuntimeError("Tiny OAuth refresh did not return access_token")
+    return token
 
 
 if __name__ == "__main__":
