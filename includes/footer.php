@@ -52,6 +52,7 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
                 <strong>Institucional</strong>
                 <a href="/sobre">Quem somos</a>
                 <a href="/catalogo">Produtos</a>
+                <a href="/blog/">Blog</a>
                 <a href="/gamificacao.php">Gamificacao</a>
             </div>
 
@@ -133,6 +134,7 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
                 <strong>Institucional</strong>
                 <a href="/sobre">Quem somos</a>
                 <a href="/catalogo">Produtos</a>
+                <a href="/blog/">Blog</a>
                 <a href="/gamificacao.php">Gamificacao</a>
             </div>
 
