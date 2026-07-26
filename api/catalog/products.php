@@ -24,6 +24,12 @@ function svcat_search_normalize(string $value): string
     return function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
 }
 
+function svcat_ml_key_normalize(string $value): string
+{
+    $value = svcat_search_normalize($value);
+    return preg_replace('/[^A-Z0-9]+/', '', $value) ?? '';
+}
+
 function svcat_root(): string { return dirname(__DIR__, 2); }
 function svcat_ml_scores(): array
 {
@@ -33,7 +39,23 @@ function svcat_ml_scores(): array
     }
     $payload = json_decode((string)file_get_contents($path), true);
     $scores = $payload['scores'] ?? null;
-    return is_array($scores) ? $scores : [];
+    if (!is_array($scores)) {
+        return [];
+    }
+
+    $expanded = [];
+    foreach ($scores as $key => $score) {
+        $rawKey = trim((string)$key);
+        if ($rawKey === '') {
+            continue;
+        }
+        $expanded[$rawKey] = (float)$score;
+        $normalized = svcat_ml_key_normalize($rawKey);
+        if ($normalized !== '') {
+            $expanded[$normalized] = (float)$score;
+        }
+    }
+    return $expanded;
 }
 function svcat_json(int $status, array $payload): never
 {
@@ -85,6 +107,11 @@ foreach ($allProducts as &$product) {
     foreach ($candidates as $candidate) {
         if (array_key_exists($candidate, $mlScores)) {
             $product['ml_score'] = (float)$mlScores[$candidate];
+            break;
+        }
+        $normalized = svcat_ml_key_normalize($candidate);
+        if ($normalized !== '' && array_key_exists($normalized, $mlScores)) {
+            $product['ml_score'] = (float)$mlScores[$normalized];
             break;
         }
     }
