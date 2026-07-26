@@ -50,7 +50,7 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meus Pedidos - Vivaliz</title>
-    <link rel="stylesheet" href="/css/shopvivaliz-core-consolidated.css?v=2026-07-19">
+    <link rel="stylesheet" href="/css/shopvivaliz-core-consolidated.css?v=2026-07-26-1">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }

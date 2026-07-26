@@ -483,7 +483,7 @@ $svNavCurrent = 'catalogo';
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=2026-07-26-v4">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
-    <link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
+    <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
     <script type="application/ld+json"><?= json_encode($structuredData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
     <script type="application/ld+json"><?= json_encode($websiteSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
     <script type="application/ld+json"><?= json_encode($faqSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
