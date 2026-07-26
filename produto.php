@@ -839,6 +839,9 @@ if ($notFound) {
             if (ex) ex.quantity = (ex.quantity || 1) + 1;
             else items.push(Object.assign({}, p, { quantity: 1 }));
             localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+            window.dispatchEvent(new CustomEvent('shopvivaliz:add_to_cart', {
+                detail: { product_id: String(p.olist_product_id || p.sku || '') }
+            }));
             return items;
         }
 
