@@ -217,7 +217,7 @@ def process_ml_spreadsheet():
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     # Processamento de linhas
-    print(f"\n🔍 Processando {ws_in.max_row - 1} anúncios...")
+    print(f"\n🔍 Processando {data_rows} anúncios...")
 
     stats = {
         "total": 0,
@@ -228,7 +228,7 @@ def process_ml_spreadsheet():
         "prices_found": 0,
     }
 
-    for row_idx in range(2, ws_in.max_row + 1):
+    for row_idx in range(data_start_row, ws_in.max_row + 1):
         # Copiar linhas originais
         for col_idx in range(1, len(header) + 1):
             value = ws_in.cell(row_idx, col_idx).value
