@@ -1,0 +1,172 @@
+name: Rotate ShopVivaliz Agent Key
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rotate-agent-key.yml'
+  schedule:
+    - cron: '17 3 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rotate-shopvivaliz-agent-key
+  cancel-in-progress: false
+
+jobs:
+  rotate:
+    name: Rotate agent key transactionally
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+      REPO_DIR: /home/ubuntu/site-shopvivaliz
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        env:
+          SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+          ADMIN_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for pair in SSH_KEY KNOWN_HOSTS ADMIN_TOKEN; do
+            if [[ -z "${!pair:-}" ]]; then
+              echo "::error::Required secret is missing: ${pair}"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Configure verified SSH
+        shell: bash
+        env:
+          SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Generate and mask replacement key
+        id: generate
+        shell: bash
+        run: |
+          set -euo pipefail
+          new_key="$(openssl rand -base64 48 | tr -d '\n' | tr '+/' '-_')"
+          echo "::add-mask::$new_key"
+          printf 'new_key=%s\n' "$new_key" >> "$GITHUB_OUTPUT"
+
+      - name: Read current server key for rollback
+        id: current
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_key="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa \
+            "${VM_USER}@${VM_HOST}" \
+            "cd '${REPO_DIR}' && awk -F= '/^SHOPVIVALIZ_AGENT_KEY=/{print substr(\$0,index(\$0,\"=\")+1); exit}' .env" || true)"
+          if [[ -z "$current_key" ]]; then
+            echo "::error::Current SHOPVIVALIZ_AGENT_KEY was not found on the server"
+            exit 1
+          fi
+          echo "::add-mask::$current_key"
+          printf 'current_key=%s\n' "$current_key" >> "$GITHUB_OUTPUT"
+
+      - name: Update repository secret
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
+          NEW_KEY: ${{ steps.generate.outputs.new_key }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$NEW_KEY" | gh secret set SHOPVIVALIZ_AGENT_KEY --repo "$GITHUB_REPOSITORY"
+
+      - name: Update server environment atomically
+        id: server_update
+        shell: bash
+        env:
+          NEW_KEY: ${{ steps.generate.outputs.new_key }}
+        run: |
+          set -euo pipefail
+          encoded="$(printf '%s' "$NEW_KEY" | base64 -w0)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa \
+            "${VM_USER}@${VM_HOST}" \
+            "cd '${REPO_DIR}' && NEW_KEY_B64='${encoded}' php -r '
+              \$path = ".env";
+              \$key = base64_decode(getenv("NEW_KEY_B64"), true);
+              if (!is_string(\$key) || \$key === "") { fwrite(STDERR, "invalid key\\n"); exit(2); }
+              \$data = is_file(\$path) ? file_get_contents(\$path) : "";
+              \$backup = \$path . ".rotation-backup-" . gmdate("Ymd-His");
+              if (is_file(\$path) && !copy(\$path, \$backup)) { fwrite(STDERR, "backup failed\\n"); exit(3); }
+              \$line = "SHOPVIVALIZ_AGENT_KEY=" . \$key;
+              if (preg_match("/^SHOPVIVALIZ_AGENT_KEY=.*$/m", \$data)) {
+                \$data = preg_replace("/^SHOPVIVALIZ_AGENT_KEY=.*$/m", \$line, \$data, 1);
+              } else {
+                \$data = rtrim(\$data) . "\\n" . \$line . "\\n";
+              }
+              \$tmp = \$path . ".tmp";
+              if (file_put_contents(\$tmp, \$data, LOCK_EX) === false || !rename(\$tmp, \$path)) {
+                fwrite(STDERR, "atomic write failed\\n"); exit(4);
+              }
+              chmod(\$path, 0600);
+            '"
+
+      - name: Verify watchdog authentication
+        shell: bash
+        env:
+          NEW_KEY: ${{ steps.generate.outputs.new_key }}
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error --output /tmp/watchdog.json \
+            --write-out '%{http_code}' --max-time 20 \
+            -H "X-ShopVivaliz-Agent-Key: ${NEW_KEY}" \
+            -H 'Content-Type: application/json' \
+            --data '{"run_loop":false,"cycles":1}' \
+            https://shopvivaliz.com.br/api/agent/autonomous-watchdog.php)"
+          if [[ "$status" != "202" && "$status" != "200" ]]; then
+            cat /tmp/watchdog.json || true
+            echo "::error::Watchdog verification failed with HTTP ${status}"
+            exit 1
+          fi
+
+      - name: Roll back both sides on failure
+        if: failure() && steps.current.outputs.current_key != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
+          OLD_KEY: ${{ steps.current.outputs.current_key }}
+        run: |
+          set +e
+          echo "::add-mask::$OLD_KEY"
+          printf '%s' "$OLD_KEY" | gh secret set SHOPVIVALIZ_AGENT_KEY --repo "$GITHUB_REPOSITORY"
+          encoded="$(printf '%s' "$OLD_KEY" | base64 -w0)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa \
+            "${VM_USER}@${VM_HOST}" \
+            "cd '${REPO_DIR}' && OLD_KEY_B64='${encoded}' php -r '
+              \$path = ".env";
+              \$key = base64_decode(getenv("OLD_KEY_B64"), true);
+              \$data = is_file(\$path) ? file_get_contents(\$path) : "";
+              \$line = "SHOPVIVALIZ_AGENT_KEY=" . \$key;
+              if (preg_match("/^SHOPVIVALIZ_AGENT_KEY=.*$/m", \$data)) {
+                \$data = preg_replace("/^SHOPVIVALIZ_AGENT_KEY=.*$/m", \$line, \$data, 1);
+              } else {
+                \$data = rtrim(\$data) . "\\n" . \$line . "\\n";
+              }
+              file_put_contents(\$path, \$data, LOCK_EX);
+              chmod(\$path, 0600);
+            '"
+          exit 1
+
+      - name: Rotation summary
+        shell: bash
+        run: |
+          echo 'Agent key rotated successfully on GitHub Actions and the Oracle VM.'
+          echo 'The key value was masked and was not written to artifacts or logs.'
