@@ -5,7 +5,13 @@
   const form = document.querySelector('.catalog-search');
   const input = document.getElementById('catalog-search');
   const params = new URLSearchParams(window.location.search);
+  const tools = document.querySelector('.catalog-tools');
+  const filterNav = tools ? tools.querySelector('.category-filters') : null;
   const initialCategory = String(params.get('categoria') || params.get('category') || '').trim();
+  const initialSort = String(params.get('ordem') || params.get('sort') || 'relevance').trim() || 'relevance';
+  let activeCategory = initialCategory;
+  let activeSort = initialSort;
+  let searchTimer;
 
   function esc(value) {
     return String(value || '').replace(/[&<>"']/g, function (char) {
@@ -31,6 +37,83 @@
     if (term) return `Resultados para “${term}”`;
     if (activeCategory) return `Confira as opções em ${activeCategory}`;
     return 'Escolha seus produtos e compre com segurança';
+  }
+
+  function buildCatalogUrl(query, category, sort, page) {
+    const next = new URLSearchParams();
+    const term = String(query || '').trim();
+    const currentCategory = String(category || '').trim();
+    const currentSort = String(sort || 'relevance').trim() || 'relevance';
+    const currentPage = Number(page || 1);
+    if (term) next.set('q', term);
+    if (currentCategory) next.set('categoria', currentCategory);
+    if (currentSort && currentSort !== 'relevance') next.set('ordem', currentSort);
+    if (currentPage > 1) next.set('page', String(currentPage));
+    const search = next.toString();
+    return '/catalogo' + (search ? '?' + search : '');
+  }
+
+  function syncPageState(query, category, sort, page, replace) {
+    const url = buildCatalogUrl(query, category, sort, page);
+    const titleParts = ['Catálogo | Vivaliz'];
+    if (query) titleParts.unshift('Busca: ' + query);
+    if (category) titleParts.unshift(category);
+    document.title = titleParts.join(' • ');
+    window.history[replace ? 'replaceState' : 'pushState'](
+      { q: query, categoria: category, ordem: sort, page: page || 1 },
+      '',
+      url
+    );
+  }
+
+  function setActiveFilter(category) {
+    if (!filterNav) return;
+    filterNav.querySelectorAll('.cat-filter').forEach(function (link) {
+      const linkCategory = String(link.getAttribute('data-category') || '').trim();
+      const active = linkCategory === String(category || '').trim();
+      link.classList.toggle('active', active);
+      if (active) {
+        try {
+          link.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        } catch (error) {}
+      }
+    });
+  }
+
+  function sortProducts(products, sort) {
+    const items = Array.isArray(products) ? products.slice() : [];
+    if (sort === 'price-asc') {
+      items.sort(function (a, b) { return Number(a.price || 0) - Number(b.price || 0); });
+    } else if (sort === 'price-desc') {
+      items.sort(function (a, b) { return Number(b.price || 0) - Number(a.price || 0); });
+    } else if (sort === 'name') {
+      items.sort(function (a, b) {
+        return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR');
+      });
+    }
+    return items;
+  }
+
+  function ensureToolbar() {
+    if (!tools) return null;
+    let toolbar = tools.querySelector('.sv-catalog-toolbar');
+    if (!toolbar) {
+      toolbar = document.createElement('div');
+      toolbar.className = 'sv-catalog-toolbar';
+      toolbar.innerHTML = '<div class="sv-catalog-toolbar-left"></div><label class="sv-sort-wrap"><span>Ordenar por</span><select aria-label="Ordenar produtos"><option value="relevance">Relevância</option><option value="price-asc">Menor preço</option><option value="price-desc">Maior preço</option><option value="name">Nome A–Z</option></select></label>';
+      tools.insertBefore(toolbar, tools.firstChild);
+      const select = toolbar.querySelector('select');
+      if (select) {
+        select.addEventListener('change', function () {
+          activeSort = this.value || 'relevance';
+          renderGridPage(1);
+          syncPageState(input ? input.value.trim() : '', activeCategory, activeSort, 1, false);
+        });
+      }
+    }
+    const select = toolbar.querySelector('select');
+    if (select) select.value = activeSort;
+    return toolbar;
   }
 
   function readCart() {
@@ -176,12 +259,15 @@
   }
 
   function renderGridPage(page) {
-    const totalPages = Math.max(1, Math.ceil(gridProducts.length / GRID_PAGE_SIZE));
+    const sortedProducts = sortProducts(gridProducts, activeSort);
+    const totalPages = Math.max(1, Math.ceil(sortedProducts.length / GRID_PAGE_SIZE));
     gridPage = Math.max(1, Math.min(totalPages, page));
     const start = (gridPage - 1) * GRID_PAGE_SIZE;
-    const pageItems = gridProducts.slice(start, start + GRID_PAGE_SIZE);
+    const pageItems = sortedProducts.slice(start, start + GRID_PAGE_SIZE);
     grid.innerHTML = pageItems.map(card).join('');
     bindBuyButtons(grid);
+    setActiveFilter(activeCategory);
+    syncPageState(input ? input.value.trim() : '', activeCategory, activeSort, gridPage, gridPage === 1);
 
     const pager = gridPagerEl();
     if (pager) {
@@ -197,9 +283,9 @@
     }
   }
 
-  async function loadCatalog(query, category) {
+  async function loadCatalog(query, category, page) {
     if (!grid || !status) return;
-    const activeCategory = String(category || '').trim();
+    activeCategory = String(category || '').trim();
     status.textContent = 'Preparando as melhores opções para você...';
 
     // A paginacao renderizada pelo PHP (ex: catalogo.php) fica redundante
@@ -242,7 +328,7 @@
       status.textContent = customerStatus(query, activeCategory);
       setCount(products.length);
       gridProducts = products;
-      renderGridPage(1);
+      renderGridPage(Number(page || 1));
     } catch (error) {
       status.textContent = 'Não conseguimos exibir os produtos agora. Tente novamente em instantes.';
       grid.innerHTML = '';
@@ -252,6 +338,7 @@
 
   updateCartBadge(readCart());
   bindBuyButtons(document);
+  ensureToolbar();
 
   if (!catalogPage || !grid || !status) return;
 
@@ -260,22 +347,41 @@
   if (form) {
     form.addEventListener('submit', function (event) {
       event.preventDefault();
-      loadCatalog(input ? input.value.trim() : '', initialCategory);
+      loadCatalog(input ? input.value.trim() : '', activeCategory, 1);
+    });
+  }
+
+  if (filterNav) {
+    filterNav.querySelectorAll('.cat-filter').forEach(function (link) {
+      link.dataset.category = String(link.dataset.category || link.getAttribute('data-category') || '').trim();
+      link.addEventListener('click', function (event) {
+        event.preventDefault();
+        activeCategory = String(link.dataset.category || '').trim();
+        loadCatalog(input ? input.value.trim() : '', activeCategory, 1);
+      });
     });
   }
 
   if (input) {
-    let searchTimer;
     input.addEventListener('input', function () {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(function () {
         if (window.AutoDev && typeof window.AutoDev.track === 'function' && input.value.trim().length >= 2) {
           window.AutoDev.track('search', { query: input.value.trim(), path: window.location.pathname });
         }
-        loadCatalog(input.value.trim(), initialCategory);
+        loadCatalog(input.value.trim(), activeCategory);
       }, 250);
     });
   }
 
-  loadCatalog(input ? input.value.trim() : '', initialCategory);
+  window.addEventListener('popstate', function () {
+    const nextParams = new URLSearchParams(window.location.search);
+    activeCategory = String(nextParams.get('categoria') || nextParams.get('category') || '').trim();
+    activeSort = String(nextParams.get('ordem') || nextParams.get('sort') || 'relevance').trim() || 'relevance';
+    if (input) input.value = String(nextParams.get('q') || '').trim();
+    ensureToolbar();
+    loadCatalog(input ? input.value.trim() : '', activeCategory, Number(nextParams.get('page') || 1));
+  });
+
+  loadCatalog(input ? input.value.trim() : '', initialCategory, Number(params.get('page') || 1));
 })();

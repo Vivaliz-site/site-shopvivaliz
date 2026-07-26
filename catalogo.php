@@ -510,9 +510,10 @@ $svNavCurrent = 'catalogo';
 
         <section class="container catalog-tools">
             <div class="category-filters" role="navigation" aria-label="Filtrar por categoria">
-                <a class="cat-filter<?= $category === '' ? ' active' : '' ?>" href="/catalogo">Todos</a>
+                <a class="cat-filter<?= $category === '' ? ' active' : '' ?>" data-category="" href="/catalogo">Todos</a>
                 <?php foreach ($categories as $cat => $count): ?>
                     <a class="cat-filter<?= $category === $cat ? ' active' : '' ?>"
+                       data-category="<?= sv_catalog_esc($cat) ?>"
                        href="/catalogo?categoria=<?= rawurlencode($cat) ?><?= $query !== '' ? '&q=' . rawurlencode($query) : '' ?>">
                         <?= sv_catalog_esc($cat) ?> <span class="cat-count"><?= $count ?></span>
                     </a>
