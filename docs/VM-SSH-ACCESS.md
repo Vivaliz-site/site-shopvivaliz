@@ -31,10 +31,46 @@ para onde a nova privada foi salva.
 ## Onde a chave privada está salva
 
 - **Caminho local (máquina do Fred, Windows):** `C:\Users\FRED\Downloads\shopvivaliz_vm_agent`
-- **Não existe cópia da privada neste repositório, em nenhum branch, em nenhum commit.**
-- Se um agente futuro rodando em outra sessão/máquina precisar desse acesso,
-  ele **não** vai encontrar a chave aqui — precisa ser gerada uma nova
-  (seguindo o mesmo processo abaixo) e ter sua pública adicionada pelo Fred.
+- **GitHub Actions Secret:** `SHOPVIVALIZ_VM_SSH_KEY`, no repositório
+  `Vivaliz-site/site-shopvivaliz` (configurado em 2026-07-26 via
+  `gh secret set`, com autorização explícita do dono do negócio).
+- **Não existe e NUNCA deve existir cópia da privada em texto puro em nenhum
+  arquivo commitado do repositório, em nenhum branch, em nenhum commit.**
+  Subir uma chave privada SSH como arquivo do repo (mesmo em repo privado) é
+  o mesmo tipo de vazamento de credencial que já aconteceu antes neste
+  projeto (Client Secret do Tiny/Olist) — a diferença é que aqui a
+  credencial vazada seria acesso root-equivalente à VM de produção. Isso foi
+  pedido explicitamente numa sessão anterior e recusado por esse motivo; o
+  Secret do GitHub Actions foi a alternativa acordada com o dono do negócio.
+
+### Como usar o Secret (dentro de um GitHub Actions workflow)
+
+O Secret só pode ser lido de dentro de um workflow do GitHub Actions (nunca
+copiado para um arquivo do repo). Exemplo de uso num step:
+
+```yaml
+- name: Configurar chave SSH da VM
+  run: |
+    mkdir -p ~/.ssh
+    echo "${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}" > ~/.ssh/shopvivaliz_vm_agent
+    chmod 600 ~/.ssh/shopvivaliz_vm_agent
+    ssh -o StrictHostKeyChecking=no -i ~/.ssh/shopvivaliz_vm_agent ubuntu@137.131.156.17 "comando aqui"
+```
+
+O arquivo criado em `~/.ssh/` existe só dentro do runner efêmero do Actions
+(descartado ao fim do job) — nunca é commitado nem persiste.
+
+### Se um agente estiver rodando FORA do GitHub Actions (ex: nesta sessão de chat/Cowork)
+
+Esse tipo de sessão não tem acesso nativo aos Secrets do GitHub Actions (eles
+só são injetados dentro de workflows). Nesse caso, o caminho é:
+1. Usar a cópia local em `C:\Users\FRED\Downloads\shopvivaliz_vm_agent`, se a
+   sessão tiver acesso à máquina do Fred (ex: via um MCP de terminal local); ou
+2. Pedir ao Fred para colar o conteúdo da chave temporariamente na conversa
+   (sem persistir em arquivo do repo); ou
+3. Delegar a ação que precisa da VM para um workflow do GitHub Actions
+   (opção mais segura — o agente aciona o workflow via `gh workflow run`, e é
+   o workflow que usa o Secret, não a sessão do agente diretamente).
 
 ## Como usar (a partir de uma sessão com acesso à máquina do Fred, ex: via Desktop Commander/terminal local)
 
