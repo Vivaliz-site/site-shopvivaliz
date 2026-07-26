@@ -57,46 +57,41 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       - name: Generate and mask replacement key
-        id: generate
         shell: bash
         run: |
           set -euo pipefail
-          new_key="$(openssl rand -base64 48 | tr -d '\n' | tr '+/' '-_')"
-          echo "::add-mask::$new_key"
-          printf 'new_key=%s\n' "$new_key" >> "$GITHUB_OUTPUT"
+          umask 077
+          openssl rand -base64 48 | tr -d '\n' | tr '+/' '-_' > /tmp/new_agent_key
+          echo "::add-mask::$(cat /tmp/new_agent_key)"
 
       - name: Read current server key for rollback
-        id: current
         shell: bash
         run: |
           set -euo pipefail
-          current_key="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa \
+          umask 077
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa \
             "${VM_USER}@${VM_HOST}" \
-            "cd '${REPO_DIR}' && awk -F= '/^SHOPVIVALIZ_AGENT_KEY=/{print substr(\$0,index(\$0,\"=\")+1); exit}' .env" || true)"
-          if [[ -z "$current_key" ]]; then
+            "cd '${REPO_DIR}' && awk -F= '/^SHOPVIVALIZ_AGENT_KEY=/{print substr(\$0,index(\$0,\"=\")+1); exit}' .env" \
+            > /tmp/current_agent_key
+          if [[ ! -s /tmp/current_agent_key ]]; then
             echo "::error::Current SHOPVIVALIZ_AGENT_KEY was not found on the server"
             exit 1
           fi
-          echo "::add-mask::$current_key"
-          printf 'current_key=%s\n' "$current_key" >> "$GITHUB_OUTPUT"
+          echo "::add-mask::$(cat /tmp/current_agent_key)"
 
       - name: Update repository secret
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
-          NEW_KEY: ${{ steps.generate.outputs.new_key }}
         run: |
           set -euo pipefail
-          printf '%s' "$NEW_KEY" | gh secret set SHOPVIVALIZ_AGENT_KEY --repo "$GITHUB_REPOSITORY"
+          gh secret set SHOPVIVALIZ_AGENT_KEY --repo "$GITHUB_REPOSITORY" < /tmp/new_agent_key
 
       - name: Update server environment atomically
-        id: server_update
         shell: bash
-        env:
-          NEW_KEY: ${{ steps.generate.outputs.new_key }}
         run: |
           set -euo pipefail
-          encoded="$(printf '%s' "$NEW_KEY" | base64 -w0)"
+          encoded="$(base64 -w0 < /tmp/new_agent_key)"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa \
             "${VM_USER}@${VM_HOST}" \
             "cd '${REPO_DIR}' && NEW_KEY_B64='${encoded}' php -r '
@@ -121,13 +116,12 @@ jobs:
 
       - name: Verify watchdog authentication
         shell: bash
-        env:
-          NEW_KEY: ${{ steps.generate.outputs.new_key }}
         run: |
           set -euo pipefail
+          new_key="$(cat /tmp/new_agent_key)"
           status="$(curl --silent --show-error --output /tmp/watchdog.json \
             --write-out '%{http_code}' --max-time 20 \
-            -H "X-ShopVivaliz-Agent-Key: ${NEW_KEY}" \
+            -H "X-ShopVivaliz-Agent-Key: ${new_key}" \
             -H 'Content-Type: application/json' \
             --data '{"run_loop":false,"cycles":1}' \
             https://shopvivaliz.com.br/api/agent/autonomous-watchdog.php)"
@@ -138,16 +132,20 @@ jobs:
           fi
 
       - name: Roll back both sides on failure
-        if: failure() && steps.current.outputs.current_key != ''
+        if: failure()
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
-          OLD_KEY: ${{ steps.current.outputs.current_key }}
         run: |
           set +e
-          echo "::add-mask::$OLD_KEY"
-          printf '%s' "$OLD_KEY" | gh secret set SHOPVIVALIZ_AGENT_KEY --repo "$GITHUB_REPOSITORY"
-          encoded="$(printf '%s' "$OLD_KEY" | base64 -w0)"
+          if [[ ! -s /tmp/current_agent_key ]]; then
+            echo 'No previous key was captured; rollback is not applicable.'
+            exit 1
+          fi
+          old_key="$(cat /tmp/current_agent_key)"
+          echo "::add-mask::$old_key"
+          gh secret set SHOPVIVALIZ_AGENT_KEY --repo "$GITHUB_REPOSITORY" < /tmp/current_agent_key
+          encoded="$(base64 -w0 < /tmp/current_agent_key)"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa \
             "${VM_USER}@${VM_HOST}" \
             "cd '${REPO_DIR}' && OLD_KEY_B64='${encoded}' php -r '
@@ -164,6 +162,12 @@ jobs:
               chmod(\$path, 0600);
             '"
           exit 1
+
+      - name: Remove temporary key files
+        if: always()
+        shell: bash
+        run: |
+          shred -u /tmp/new_agent_key /tmp/current_agent_key 2>/dev/null || rm -f /tmp/new_agent_key /tmp/current_agent_key
 
       - name: Rotation summary
         shell: bash
