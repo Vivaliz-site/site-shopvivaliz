@@ -573,6 +573,7 @@ if ($notFound) {
     <title><?= sv_esc($seoTitle) ?> | Vivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/premium-theme.css?v=2026-07-11">
+    <link rel="stylesheet" href="/css/product-conversion-v5.css?v=2026-07-26-v2">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -849,7 +850,7 @@ if ($notFound) {
         if (buyNowButton) {
             buyNowButton.addEventListener('click', function () {
                 addToCart(product);
-                if(window.openMiniCart){window.openMiniCart();}else{window.location.href='/carrinho';}
+                window.location.href='/carrinho';
             });
         }
 
@@ -858,7 +859,7 @@ if ($notFound) {
                 try {
                     var p = JSON.parse(decodeURIComponent(this.dataset.product));
                     addToCart(p);
-                    if(window.openMiniCart){window.openMiniCart();}else{window.location.href='/carrinho';}
+                    window.location.href='/carrinho';
                 } catch(e) {}
             });
         });
@@ -977,6 +978,7 @@ if ($notFound) {
     })();
     </script>
 
+    <script src="/js/product-conversion-v5.js?v=2026-07-26-v2"></script>
     <script src="/js/cro-interactions.js"></script>
     <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
     <script src="/js/auto-image-carousel.js?v=20260719-2"></script>

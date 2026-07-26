@@ -238,7 +238,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         <div class="trust-badges">
             <div class="trust-item">🔒 Compra 100% segura</div>
             <div class="trust-item">🚚 Envio para todo Brasil</div>
-            <div class="trust-item">↩️ 30 dias para troca</div>
+            <div class="trust-item">↩️ 7 dias corridos para troca/devolução</div>
         </div>
     </aside>
 </main>

@@ -119,7 +119,7 @@ header('Content-Type: text/html; charset=UTF-8');
             <div style="margin-top:20px;display:grid;gap:6px">
                 <div style="font-size:12px;color:var(--muted);font-weight:600">🔒 Compra segura</div>
                 <div style="font-size:12px;color:var(--muted);font-weight:600">🚚 Envio para todo Brasil</div>
-                <div style="font-size:12px;color:var(--muted);font-weight:600">↩️ 30 dias para troca</div>
+                <div style="font-size:12px;color:var(--muted);font-weight:600">↩️ 7 dias corridos para troca/devolução</div>
             </div>
         </aside>
     </div>
