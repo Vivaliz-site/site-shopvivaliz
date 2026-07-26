@@ -46,6 +46,13 @@ if (!is_array($data)) {
     exit;
 }
 
+foreach ($data as $key => $value) {
+    if (!is_string($key) || array_key_exists($key, $_POST)) {
+        continue;
+    }
+    $_POST[$key] = $value;
+}
+
 // ✅ Validate input
 $v = validator();
 $sku = $v->requireString('sku', 1, 80, 'SKU');
