@@ -533,7 +533,7 @@ $svNavCurrent = '';
               "name": "Como funciona a política de devolução?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Você tem até 7 dias úteis após o recebimento para solicitar troca ou devolução. Em caso de defeito do produto, a devolução é gratuita."
+                "text": "Você tem até 7 dias corridos após o recebimento para solicitar troca ou devolução. Em caso de defeito do produto, a devolução é gratuita."
               }
             },
             {
@@ -885,7 +885,7 @@ $svNavCurrent = '';
                         Como funciona a política de devolução?
                         <span class="faq-icon">+</span>
                     </summary>
-                    <p class="faq-body">Você tem até 7 dias úteis após o recebimento para solicitar troca ou devolução. Em caso de defeito de fabricação, o frete de retorno é por nossa conta. O reembolso é processado em até 10 dias úteis após a confirmação do retorno.</p>
+                    <p class="faq-body">Você tem até 7 dias corridos após o recebimento para solicitar troca ou devolução. Em caso de defeito de fabricação, o frete de retorno é por nossa conta. O reembolso é processado em até 10 dias úteis após a confirmação do retorno.</p>
                 </details>
                 <details class="faq-item sv-reveal sv-reveal-delay-3">
                     <summary>
