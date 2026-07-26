@@ -228,11 +228,11 @@ def process_ml_spreadsheet():
         "prices_found": 0,
     }
 
-    for row_idx in range(data_start_row, ws_in.max_row + 1):
+    for out_row_idx, in_row_idx in enumerate(range(data_start_row, ws_in.max_row + 1), 2):
         # Copiar linhas originais
         for col_idx in range(1, len(header) + 1):
-            value = ws_in.cell(row_idx, col_idx).value
-            ws_out.cell(row_idx, col_idx, value)
+            value = ws_in.cell(in_row_idx, col_idx).value
+            ws_out.cell(out_row_idx, col_idx, value)
 
         # Extrair identificadores
         product_number = ws_in.cell(row_idx, product_number_col_idx).value if product_number_col_idx else None
