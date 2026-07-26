@@ -80,20 +80,6 @@
     });
   }
 
-  function sortProducts(products, sort) {
-    const items = Array.isArray(products) ? products.slice() : [];
-    if (sort === 'price-asc') {
-      items.sort(function (a, b) { return Number(a.price || 0) - Number(b.price || 0); });
-    } else if (sort === 'price-desc') {
-      items.sort(function (a, b) { return Number(b.price || 0) - Number(a.price || 0); });
-    } else if (sort === 'name') {
-      items.sort(function (a, b) {
-        return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR');
-      });
-    }
-    return items;
-  }
-
   function ensureToolbar() {
     if (!tools) return null;
     let toolbar = tools.querySelector('.sv-catalog-toolbar');
@@ -106,8 +92,7 @@
       if (select) {
         select.addEventListener('change', function () {
           activeSort = this.value || 'relevance';
-          renderGridPage(1);
-          syncPageState(input ? input.value.trim() : '', activeCategory, activeSort, 1, false);
+          loadCatalog(input ? input.value.trim() : '', activeCategory, 1);
         });
       }
     }
@@ -240,11 +225,11 @@
 
   // Paginacao client-side para qualquer grid que use este script -- antes,
   // este loadCatalog() buscava ate 200 produtos e jogava tudo de uma vez no
-  // grid via JS, o que inclusive sobrescrevia a paginacao server-side de
-  // 20/pagina do /catalogo publico assim que a pagina carregava.
+  // grid via JS. Agora a paginação e a ordenação principais são servidas pela API.
   const GRID_PAGE_SIZE = 20;
   let gridPage = 1;
-  let gridProducts = [];
+  let gridTotalPages = 1;
+  let gridTotalProducts = 0;
 
   function gridPagerEl() {
     if (!grid) return null;
@@ -259,13 +244,7 @@
   }
 
   function renderGridPage(page) {
-    const sortedProducts = sortProducts(gridProducts, activeSort);
-    const totalPages = Math.max(1, Math.ceil(sortedProducts.length / GRID_PAGE_SIZE));
-    gridPage = Math.max(1, Math.min(totalPages, page));
-    const start = (gridPage - 1) * GRID_PAGE_SIZE;
-    const pageItems = sortedProducts.slice(start, start + GRID_PAGE_SIZE);
-    grid.innerHTML = pageItems.map(card).join('');
-    bindBuyButtons(grid);
+    gridPage = Math.max(1, Math.min(gridTotalPages, page));
     setActiveFilter(activeCategory);
     syncPageState(input ? input.value.trim() : '', activeCategory, activeSort, gridPage, gridPage === 1);
 
@@ -273,13 +252,13 @@
     if (pager) {
       pager.innerHTML = `
         <button class="btn btn-secondary" type="button" id="grid-pager-prev" ${gridPage <= 1 ? 'disabled' : ''}>&laquo; Anterior</button>
-        <span class="muted">Página ${gridPage} de ${totalPages}</span>
-        <button class="btn btn-secondary" type="button" id="grid-pager-next" ${gridPage >= totalPages ? 'disabled' : ''}>Próxima &raquo;</button>
+        <span class="muted">Página ${gridPage} de ${gridTotalPages}</span>
+        <button class="btn btn-secondary" type="button" id="grid-pager-next" ${gridPage >= gridTotalPages ? 'disabled' : ''}>Próxima &raquo;</button>
       `;
       const prevBtn = document.getElementById('grid-pager-prev');
       const nextBtn = document.getElementById('grid-pager-next');
-      if (prevBtn) prevBtn.addEventListener('click', function () { renderGridPage(gridPage - 1); window.scrollTo({ top: grid.offsetTop - 80, behavior: 'smooth' }); });
-      if (nextBtn) nextBtn.addEventListener('click', function () { renderGridPage(gridPage + 1); window.scrollTo({ top: grid.offsetTop - 80, behavior: 'smooth' }); });
+      if (prevBtn) prevBtn.addEventListener('click', function () { loadCatalog(input ? input.value.trim() : '', activeCategory, gridPage - 1); window.scrollTo({ top: grid.offsetTop - 80, behavior: 'smooth' }); });
+      if (nextBtn) nextBtn.addEventListener('click', function () { loadCatalog(input ? input.value.trim() : '', activeCategory, gridPage + 1); window.scrollTo({ top: grid.offsetTop - 80, behavior: 'smooth' }); });
     }
   }
 
@@ -308,7 +287,9 @@
         </div>
       </div>
     `.repeat(6);
-    const url = '/api/catalog/products.php?limit=200'
+    const url = '/api/catalog/products.php?limit=' + GRID_PAGE_SIZE
+      + '&page=' + encodeURIComponent(String(Number(page || 1)))
+      + '&ordem=' + encodeURIComponent(activeSort)
       + (query ? '&q=' + encodeURIComponent(query) : '')
       + (activeCategory ? '&category=' + encodeURIComponent(activeCategory) : '');
     try {
@@ -324,16 +305,23 @@
         const pager = document.getElementById('catalog-grid-pager');
         if (pager) pager.innerHTML = '';
         setCount(0);
+        gridTotalPages = 1;
+        gridTotalProducts = 0;
         return;
       }
       status.textContent = customerStatus(query, activeCategory);
-      setCount(products.length);
-      gridProducts = products;
+      setCount(Number(data.total || products.length));
+      gridTotalProducts = Number(data.total || products.length);
+      gridTotalPages = Math.max(1, Number(data.total_pages || 1));
+      grid.innerHTML = products.map(card).join('');
+      bindBuyButtons(grid);
       renderGridPage(Number(page || 1));
     } catch (error) {
       status.textContent = 'Não conseguimos exibir os produtos agora. Tente novamente em instantes.';
       grid.innerHTML = '';
       setCount(0);
+      gridTotalPages = 1;
+      gridTotalProducts = 0;
     }
   }
 

@@ -72,7 +72,9 @@ function svcat_is_active(mixed $status): bool
 require_once svcat_root() . '/includes/catalog-runtime.php';
 
 $limit = min(200, max(1, (int)($_GET['limit'] ?? 48)));
+$page = max(1, (int)($_GET['page'] ?? 1));
 $q = trim((string)($_GET['q'] ?? ''));
+$sort = trim((string)($_GET['ordem'] ?? $_GET['sort'] ?? 'relevance'));
 $mlScores = svcat_ml_scores();
 
 $runtimeRows = array_values(array_filter(svcr_products(), 'is_array'));
@@ -132,11 +134,24 @@ if ($category !== '') {
     $allProducts = array_values(array_filter($allProducts, static fn(array $p): bool => strcasecmp((string)($p['category'] ?? ''), $category) === 0));
 }
 
-usort($allProducts, static function (array $a, array $b): int {
-    $scoreA = (float)($a['ml_score'] ?? -INF);
-    $scoreB = (float)($b['ml_score'] ?? -INF);
-    if ($scoreA !== $scoreB) {
-        return $scoreB <=> $scoreA;
+usort($allProducts, static function (array $a, array $b) use ($sort): int {
+    if ($sort === 'price-asc' || $sort === 'price-desc') {
+        $priceA = (float)($a['price'] ?? 0);
+        $priceB = (float)($b['price'] ?? 0);
+        if ($priceA !== $priceB) {
+            return $sort === 'price-asc' ? ($priceA <=> $priceB) : ($priceB <=> $priceA);
+        }
+    } elseif ($sort === 'name') {
+        $nameCmp = strcasecmp((string)($a['name'] ?? ''), (string)($b['name'] ?? ''));
+        if ($nameCmp !== 0) {
+            return $nameCmp;
+        }
+    } else {
+        $scoreA = (float)($a['ml_score'] ?? -INF);
+        $scoreB = (float)($b['ml_score'] ?? -INF);
+        if ($scoreA !== $scoreB) {
+            return $scoreB <=> $scoreA;
+        }
     }
 
     $stockA = (int)($a['stock'] ?? 0);
@@ -148,7 +163,11 @@ usort($allProducts, static function (array $a, array $b): int {
     return strcasecmp((string)($a['name'] ?? ''), (string)($b['name'] ?? ''));
 });
 
-$products = array_slice($allProducts, 0, $limit);
+$total = count($allProducts);
+$totalPages = max(1, (int)ceil($total / max(1, $limit)));
+$page = min($page, $totalPages);
+$offset = ($page - 1) * $limit;
+$products = array_slice($allProducts, $offset, $limit);
 $categories = [];
 foreach ($allProducts as $row) {
     $cat = trim((string)($row['category'] ?? ''));
@@ -160,7 +179,11 @@ svcat_json(200, [
     'ok' => true,
     'source' => 'catalog_runtime',
     'count' => count($products),
-    'total' => count($allProducts),
+    'total' => $total,
+    'page' => $page,
+    'limit' => $limit,
+    'total_pages' => $totalPages,
+    'sort' => $sort !== '' ? $sort : 'relevance',
     'products' => $products,
     'categories' => $categories,
 ]);
