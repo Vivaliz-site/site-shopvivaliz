@@ -132,9 +132,10 @@
       + '&produto=' + encodeURIComponent(payload.name);
     const images = Array.isArray(product.images) ? product.images.slice(0, 10).filter(Boolean) : [image];
     const imagesJson = encodeURIComponent(JSON.stringify(images));
+    const productIdAttr = product.olist_product_id || sku;
     return `
-      <article class="product-card">
-        <a class="product-image" href="${esc(productUrl)}" data-images="${imagesJson}">
+      <article class="product-card" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">
+        <a class="product-image" href="${esc(productUrl)}" data-images="${imagesJson}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">
           <img src="${esc(image)}" alt="${esc(product.name)}" loading="lazy" onerror="this.src='/images/logo-vivaliz-square.png'">
         </a>
         <div class="product-info">
@@ -142,10 +143,10 @@
           <h2>${esc(product.name)}</h2>
           <div class="product-price">${esc(money(product.price))}</div>
           <div class="card-actions">
-            <a class="btn btn-secondary card-link" href="${esc(productUrl)}">Ver detalhes</a>
+            <a class="btn btn-secondary card-link" href="${esc(productUrl)}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">Ver detalhes</a>
             ${hasPrice
-              ? `<button class="buy-button" type="button" data-product="${encoded}">Comprar agora</button>`
-              : `<a class="btn btn-primary card-link" href="${esc(contactUrl)}">Falar com vendas</a>`}
+              ? `<button class="buy-button" type="button" data-product="${encoded}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}" data-add-to-cart="1">Comprar agora</button>`
+              : `<a class="btn btn-primary card-link" href="${esc(contactUrl)}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">Falar com vendas</a>`}
           </div>
         </div>
       </article>`;

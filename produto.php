@@ -619,9 +619,9 @@ if ($notFound) {
             </div>
         </section>
         <?php else: ?>
-        <div class="product-detail">
+        <div class="product-detail" data-sku="<?= sv_esc($sku) ?>" data-product-id="<?= sv_esc($olistId !== '' ? $olistId : $sku) ?>">
             <div style="display:flex; flex-direction:column; gap:12px; max-width: 100%;">
-                <div class="product-detail-image skeleton hover-zoom-container" id="product-zoom-box">
+                <div class="product-detail-image skeleton hover-zoom-container" id="product-zoom-box" data-sku="<?= sv_esc($sku) ?>" data-product-id="<?= sv_esc($olistId !== '' ? $olistId : $sku) ?>">
                     <img id="main-product-image" src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" onerror="this.src='<?= sv_product_default_image() ?>'" loading="eager" fetchpriority="high">
                 </div>
                 <!-- Interactive Product Gallery Thumbnails -->
@@ -679,7 +679,7 @@ if ($notFound) {
                 </div>
                 <div class="produto-actions">
                     <?php if ($priceRaw > 0 && $stockRaw > 0): ?>
-                        <button class="btn btn-primary btn-large btn-cta btn-premium main-buy-button" type="button" id="buy-now" style="width: 100%; font-size: 1.2rem;">
+                        <button class="btn btn-primary btn-large btn-cta btn-premium main-buy-button" type="button" id="buy-now" data-sku="<?= sv_esc($sku) ?>" data-product-id="<?= sv_esc($olistId !== '' ? $olistId : $sku) ?>" data-add-to-cart="1" style="width: 100%; font-size: 1.2rem;">
                             🛒 COMPRAR AGORA
                         </button>
                         <div class="trust-badges-container" style="display: flex; justify-content: space-between; margin-top: 15px; gap: 10px; flex-wrap: wrap;">
@@ -777,7 +777,7 @@ if ($notFound) {
             <div style="margin-left: auto; text-align: right; min-width: 180px;">
                 <div style="font-size: 12px; color: #66788d;">Valor dos 2 itens:</div>
                 <div style="font-size: 22px; font-weight: 900; color: #07345d;">R$ <?= number_format($priceRaw + (float)$comboItem['price'], 2, ',', '.') ?></div>
-                <a href="<?= sv_esc(sv_product_url($comboItem)) ?>" class="btn buy-button" style="display: inline-flex; margin-top: 6px; padding: 8px 16px; font-size: 13px; font-weight: 800; background: linear-gradient(135deg, #0b4f88, #35c759); color: #fff; border-radius: 10px; text-decoration: none;">Adicionar Combo</a>
+                <a href="<?= sv_esc(sv_product_url($comboItem)) ?>" class="btn buy-button" data-sku="<?= sv_esc((string)$comboItem['sku']) ?>" data-product-id="<?= sv_esc((string)($comboItem['olist_product_id'] ?: $comboItem['sku'])) ?>" style="display: inline-flex; margin-top: 6px; padding: 8px 16px; font-size: 13px; font-weight: 800; background: linear-gradient(135deg, #0b4f88, #35c759); color: #fff; border-radius: 10px; text-decoration: none;">Adicionar Combo</a>
             </div>
         </div>
     </section>
@@ -792,8 +792,8 @@ if ($notFound) {
                 $rHasPrice = (float)$rp['price'] > 0 && $rStock > 0;
                 $rPayload = rawurlencode(json_encode(['sku' => $rp['sku'], 'name' => $rp['name'], 'image_url' => $rp['image_url'], 'price' => $rp['price'], 'olist_product_id' => $rp['olist_product_id'], 'stock' => $rStock], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             ?>
-            <article class="product-card<?= $rStock <= 0 ? ' is-out-of-stock' : '' ?>">
-                <a class="product-image" href="<?= sv_esc($rUrl) ?>">
+            <article class="product-card<?= $rStock <= 0 ? ' is-out-of-stock' : '' ?>" data-sku="<?= sv_esc((string)$rp['sku']) ?>" data-product-id="<?= sv_esc((string)($rp['olist_product_id'] ?: $rp['sku'])) ?>">
+                <a class="product-image" href="<?= sv_esc($rUrl) ?>" data-sku="<?= sv_esc((string)$rp['sku']) ?>" data-product-id="<?= sv_esc((string)($rp['olist_product_id'] ?: $rp['sku'])) ?>">
                     <img src="<?= sv_esc($rp['image_url']) ?>" alt="<?= sv_esc($rp['name']) ?>" loading="lazy" onerror="this.src='<?= sv_product_default_image() ?>'">
                     <?php if ($rStock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                 </a>
@@ -804,13 +804,13 @@ if ($notFound) {
                     <h3><?= sv_esc($rp['name']) ?></h3>
                     <div class="product-price"><?= sv_esc($rp['price'] > 0 ? 'R$ ' . number_format($rp['price'], 2, ',', '.') : 'Consulte o valor') ?></div>
                     <div class="card-actions">
-                        <a class="btn btn-secondary card-link" href="<?= sv_esc($rUrl) ?>">Ver detalhes</a>
+                        <a class="btn btn-secondary card-link" href="<?= sv_esc($rUrl) ?>" data-sku="<?= sv_esc((string)$rp['sku']) ?>" data-product-id="<?= sv_esc((string)($rp['olist_product_id'] ?: $rp['sku'])) ?>">Ver detalhes</a>
                         <?php if ($rHasPrice): ?>
-                            <button class="buy-button" type="button" data-product="<?= sv_esc($rPayload) ?>">Comprar</button>
+                            <button class="buy-button" type="button" data-product="<?= sv_esc($rPayload) ?>" data-sku="<?= sv_esc((string)$rp['sku']) ?>" data-product-id="<?= sv_esc((string)($rp['olist_product_id'] ?: $rp['sku'])) ?>" data-add-to-cart="1">Comprar</button>
                         <?php elseif ($rStock <= 0): ?>
                             <button class="btn btn-disabled card-link" type="button" disabled>Esgotado</button>
                         <?php else: ?>
-                            <a class="btn btn-primary card-link" href="<?= sv_esc($rContactUrl) ?>">Falar com vendas</a>
+                            <a class="btn btn-primary card-link" href="<?= sv_esc($rContactUrl) ?>" data-sku="<?= sv_esc((string)$rp['sku']) ?>" data-product-id="<?= sv_esc((string)($rp['olist_product_id'] ?: $rp['sku'])) ?>">Falar com vendas</a>
                         <?php endif; ?>
                     </div>
                 </div>
