@@ -1,6 +1,15 @@
 <?php
 declare(strict_types=1);
 
+// Precisa iniciar a sessao antes de qualquer output: esta pagina tem HTML
+// suficiente antes do include do navbar (JSON-LD, meta tags) para estourar o
+// buffer de saida do PHP, o que envia os headers cedo e faz o session_start()
+// tardio do navbar.php falhar silenciosamente (usuario aparece deslogado mesmo
+// apos login). Mesma causa raiz ja corrigida em catalogo.php.
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once __DIR__ . '/config/bootstrap-env.php';
 
 // Configuração Dinâmica de Ambiente
@@ -576,8 +585,8 @@ $svNavCurrent = '';
                 <p class="eyebrow hero-kicker">
                     🛍️ Loja oficial Vivaliz
                 </p>
-                <h1>Rodízios, ferragens e utilidades <span class="gradient-word">para sua casa</span></h1>
-                <p>Catálogo organizado, entrega rápida pra todo o Brasil e atendimento de verdade antes e depois da compra.</p>
+                <h1>Tudo pra sua casa, <span class="gradient-word">com entrega rápida</span></h1>
+                <p>Rodízios, ferragens e utilidades com os melhores preços. Compre com segurança e receba em todo o Brasil.</p>
 
                 <!-- Premium E-Commerce Search Bar -->
                 <div class="hero-search-container">
