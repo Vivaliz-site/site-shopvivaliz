@@ -16,7 +16,7 @@ headers = {
     'Content-Type': 'application/json'
 }
 
-print('\n🔍 TESTE: Verificar dados das tabelas\n')
+print('\n[TESTE] Verificar dados das tabelas\n')
 
 test_ids = [337703360, 337764380, 337764276]
 table_ids = {'PDV': 982, 'Shopee': 989, 'Amazon': 991, 'TikTok': 990}
