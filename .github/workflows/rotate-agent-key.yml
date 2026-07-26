@@ -73,10 +73,7 @@ jobs:
             "${VM_USER}@${VM_HOST}" \
             "cd '${REPO_DIR}' && awk -F= '/^SHOPVIVALIZ_AGENT_KEY=/{print substr(\$0,index(\$0,\"=\")+1); exit}' .env" \
             > /tmp/current_agent_key
-          if [[ ! -s /tmp/current_agent_key ]]; then
-            echo "::error::Current SHOPVIVALIZ_AGENT_KEY was not found on the server"
-            exit 1
-          fi
+          test -s /tmp/current_agent_key
           echo "::add-mask::$(cat /tmp/current_agent_key)"
 
       - name: Update repository secret
@@ -91,25 +88,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          encoded="$(base64 -w0 < /tmp/new_agent_key)"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa \
+          cat /tmp/new_agent_key | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa \
             "${VM_USER}@${VM_HOST}" \
-            "cd '${REPO_DIR}' && NEW_KEY_B64='${encoded}' php -r '
-              \$path = ".env";
-              \$key = base64_decode(getenv("NEW_KEY_B64"), true);
-              if (!is_string(\$key) || \$key === "") { fwrite(STDERR, "invalid key\\n"); exit(2); }
-              \$data = is_file(\$path) ? file_get_contents(\$path) : "";
-              \$backup = \$path . ".rotation-backup-" . gmdate("Ymd-His");
-              if (is_file(\$path) && !copy(\$path, \$backup)) { fwrite(STDERR, "backup failed\\n"); exit(3); }
-              \$line = "SHOPVIVALIZ_AGENT_KEY=" . \$key;
-              if (preg_match("/^SHOPVIVALIZ_AGENT_KEY=.*$/m", \$data)) {
-                \$data = preg_replace("/^SHOPVIVALIZ_AGENT_KEY=.*$/m", \$line, \$data, 1);
+            "cd '${REPO_DIR}' && php -r '
+              \$path = \".env\";
+              \$key = trim((string) stream_get_contents(STDIN));
+              if (\$key === \"\") { fwrite(STDERR, \"invalid key\\n\"); exit(2); }
+              \$data = is_file(\$path) ? file_get_contents(\$path) : \"\";
+              \$backup = \$path . \".rotation-backup-\" . gmdate(\"Ymd-His\");
+              if (is_file(\$path) && !copy(\$path, \$backup)) { fwrite(STDERR, \"backup failed\\n\"); exit(3); }
+              \$line = \"SHOPVIVALIZ_AGENT_KEY=\" . \$key;
+              if (preg_match(\"/^SHOPVIVALIZ_AGENT_KEY=.*$/m\", \$data)) {
+                \$data = preg_replace(\"/^SHOPVIVALIZ_AGENT_KEY=.*$/m\", \$line, \$data, 1);
               } else {
-                \$data = rtrim(\$data) . "\\n" . \$line . "\\n";
+                \$data = rtrim(\$data) . \"\\n\" . \$line . \"\\n\";
               }
-              \$tmp = \$path . ".tmp";
+              \$tmp = \$path . \".tmp\";
               if (file_put_contents(\$tmp, \$data, LOCK_EX) === false || !rename(\$tmp, \$path)) {
-                fwrite(STDERR, "atomic write failed\\n"); exit(4);
+                fwrite(STDERR, \"atomic write failed\\n\"); exit(4);
               }
               chmod(\$path, 0600);
             '"
@@ -142,21 +138,20 @@ jobs:
             echo 'No previous key was captured; rollback is not applicable.'
             exit 1
           fi
-          old_key="$(cat /tmp/current_agent_key)"
-          echo "::add-mask::$old_key"
+          echo "::add-mask::$(cat /tmp/current_agent_key)"
           gh secret set SHOPVIVALIZ_AGENT_KEY --repo "$GITHUB_REPOSITORY" < /tmp/current_agent_key
-          encoded="$(base64 -w0 < /tmp/current_agent_key)"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa \
+          cat /tmp/current_agent_key | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa \
             "${VM_USER}@${VM_HOST}" \
-            "cd '${REPO_DIR}' && OLD_KEY_B64='${encoded}' php -r '
-              \$path = ".env";
-              \$key = base64_decode(getenv("OLD_KEY_B64"), true);
-              \$data = is_file(\$path) ? file_get_contents(\$path) : "";
-              \$line = "SHOPVIVALIZ_AGENT_KEY=" . \$key;
-              if (preg_match("/^SHOPVIVALIZ_AGENT_KEY=.*$/m", \$data)) {
-                \$data = preg_replace("/^SHOPVIVALIZ_AGENT_KEY=.*$/m", \$line, \$data, 1);
+            "cd '${REPO_DIR}' && php -r '
+              \$path = \".env\";
+              \$key = trim((string) stream_get_contents(STDIN));
+              if (\$key === \"\") { exit(2); }
+              \$data = is_file(\$path) ? file_get_contents(\$path) : \"\";
+              \$line = \"SHOPVIVALIZ_AGENT_KEY=\" . \$key;
+              if (preg_match(\"/^SHOPVIVALIZ_AGENT_KEY=.*$/m\", \$data)) {
+                \$data = preg_replace(\"/^SHOPVIVALIZ_AGENT_KEY=.*$/m\", \$line, \$data, 1);
               } else {
-                \$data = rtrim(\$data) . "\\n" . \$line . "\\n";
+                \$data = rtrim(\$data) . \"\\n\" . \$line . \"\\n\";
               }
               file_put_contents(\$path, \$data, LOCK_EX);
               chmod(\$path, 0600);
@@ -173,4 +168,4 @@ jobs:
         shell: bash
         run: |
           echo 'Agent key rotated successfully on GitHub Actions and the Oracle VM.'
-          echo 'The key value was masked and was not written to artifacts or logs.'
+          echo 'The key value was masked and was not written to artifacts, outputs, logs, or process arguments.'
