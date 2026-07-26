@@ -27,9 +27,9 @@
       "created_at": "2026-07-12T03:00:00Z",
       "last_result": {
         "success": false,
-        "timestamp": "2026-07-26T09:05:34.688233Z"
+        "timestamp": "2026-07-26T10:51:58.353514Z"
       },
-      "completed_at": "2026-07-26T09:05:34.688267Z"
+      "completed_at": "2026-07-26T10:51:58.353554Z"
     },
     {
       "task_id": "SHOPEE-002",
@@ -51,9 +51,9 @@
       "created_at": "2026-07-12T03:00:00Z",
       "last_result": {
         "success": false,
-        "timestamp": "2026-07-26T09:05:34.688520Z"
+        "timestamp": "2026-07-26T10:51:58.353789Z"
       },
-      "completed_at": "2026-07-26T09:05:34.688529Z"
+      "completed_at": "2026-07-26T10:51:58.353796Z"
     },
     {
       "task_id": "ML-001",
@@ -77,9 +77,9 @@
       "created_at": "2026-07-12T03:00:00Z",
       "last_result": {
         "success": false,
-        "timestamp": "2026-07-26T09:05:34.688729Z"
+        "timestamp": "2026-07-26T10:51:58.353999Z"
       },
-      "completed_at": "2026-07-26T09:05:34.688736Z"
+      "completed_at": "2026-07-26T10:51:58.354005Z"
     },
     {
       "task_id": "ML-002",
@@ -101,9 +101,9 @@
       "created_at": "2026-07-12T03:00:00Z",
       "last_result": {
         "success": false,
-        "timestamp": "2026-07-26T09:05:34.688932Z"
+        "timestamp": "2026-07-26T10:51:58.354170Z"
       },
-      "completed_at": "2026-07-26T09:05:34.688938Z"
+      "completed_at": "2026-07-26T10:51:58.354175Z"
     },
     {
       "task_id": "GADS-001",
@@ -126,9 +126,9 @@
       "created_at": "2026-07-12T03:00:00Z",
       "last_result": {
         "success": false,
-        "timestamp": "2026-07-26T09:05:34.689080Z"
+        "timestamp": "2026-07-26T10:51:58.354346Z"
       },
-      "completed_at": "2026-07-26T09:05:34.689084Z"
+      "completed_at": "2026-07-26T10:51:58.354350Z"
     },
     {
       "task_id": "AUDIT-001",
