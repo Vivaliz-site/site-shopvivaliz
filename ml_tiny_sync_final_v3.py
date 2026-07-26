@@ -43,7 +43,7 @@ headers = {
     "Content-Type": "application/json"
 }
 
-url = "https://api.tiny.com.br/public-api/v3/produtos?limit=1000&offset=0"
+url = "https://api.tiny.com.br/public-api/v3/produtos?limit=100&offset=0"
 
 try:
     resp = requests.get(url, headers=headers, timeout=30)
