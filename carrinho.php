@@ -119,7 +119,7 @@ header('Content-Type: text/html; charset=UTF-8');
             <div style="margin-top:20px;display:grid;gap:6px">
                 <div style="font-size:12px;color:var(--muted);font-weight:600">🔒 Compra segura</div>
                 <div style="font-size:12px;color:var(--muted);font-weight:600">🚚 Envio para todo Brasil</div>
-                <div style="font-size:12px;color:var(--muted);font-weight:600">↩️ 30 dias para troca</div>
+                <div style="font-size:12px;color:var(--muted);font-weight:600">↩️ 7 dias corridos para troca/devolução</div>
             </div>
         </aside>
     </div>
@@ -250,7 +250,7 @@ header('Content-Type: text/html; charset=UTF-8');
 })();
 </script>
 <script src="/js/cro-interactions.js"></script>
-<script src="/js/cart-shipping-v7.js"></script>
+<script src="/js/cart-shipping-v7.js?v=2026-07-26-v2"></script>
 <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
 </body>
 </html>

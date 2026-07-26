@@ -13,6 +13,7 @@ header('Content-Type: text/html; charset=UTF-8');
 
 require_once __DIR__ . '/includes/product-price-enrich.php';
 require_once __DIR__ . '/includes/catalog-runtime.php';
+require_once __DIR__ . '/includes/ml-ranking.php';
 
 function sv_catalog_root(): string
 {
@@ -153,7 +154,7 @@ function sv_catalog_load(): array
 
 function sv_catalog_products(int $limit, string $query, string $category = '', int $offset = 0): array
 {
-    $decoded = sv_catalog_load();
+    $decoded = sv_ml_rank_products(sv_catalog_load());
     if ($decoded === []) {
         return [];
     }
@@ -479,8 +480,8 @@ $svNavCurrent = 'catalogo';
     <link rel="canonical" href="<?= sv_catalog_esc($canonicalUrl) ?>">
     <title><?= sv_catalog_esc($pageTitle) ?></title>
     <style>body { opacity: 1 !important; visibility: visible !important; }</style>
-    <link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=2026-07-24-v3">
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=2026-07-26-v4">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
     <script type="application/ld+json"><?= json_encode($structuredData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
@@ -509,9 +510,10 @@ $svNavCurrent = 'catalogo';
 
         <section class="container catalog-tools">
             <div class="category-filters" role="navigation" aria-label="Filtrar por categoria">
-                <a class="cat-filter<?= $category === '' ? ' active' : '' ?>" href="/catalogo">Todos</a>
+                <a class="cat-filter<?= $category === '' ? ' active' : '' ?>" data-category="" href="/catalogo">Todos</a>
                 <?php foreach ($categories as $cat => $count): ?>
                     <a class="cat-filter<?= $category === $cat ? ' active' : '' ?>"
+                       data-category="<?= sv_catalog_esc($cat) ?>"
                        href="/catalogo?categoria=<?= rawurlencode($cat) ?><?= $query !== '' ? '&q=' . rawurlencode($query) : '' ?>">
                         <?= sv_catalog_esc($cat) ?> <span class="cat-count"><?= $count ?></span>
                     </a>

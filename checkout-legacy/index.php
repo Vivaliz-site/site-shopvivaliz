@@ -675,13 +675,17 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
 
         const cepInput = document.getElementById('cep');
         if (cepInput) {
+            cepInput.addEventListener('input', function () {
+                const digits = this.value.replace(/\D/g, '').slice(0, 8);
+                this.value = digits.length > 5 ? digits.slice(0, 5) + '-' + digits.slice(5) : digits;
+            });
             cepInput.addEventListener('blur', function () {
                 const cep = this.value.replace(/\D/g, '');
                 if (cep.length !== 8) return;
-                fetch('https://viacep.com.br/ws/' + cep + '/json/')
+                fetch('/api/viacep-proxy.php?cep=' + encodeURIComponent(cep), { cache: 'no-store' })
                     .then(function (r) { return r.json(); })
                     .then(function (d) {
-                        if (d.erro) return;
+                        if (!d || d.erro) return;
                         const enderecoField = document.getElementById('endereco');
                         const bairroField = document.getElementById('bairro');
                         const cidadeField = document.getElementById('cidade');

@@ -99,15 +99,20 @@ require __DIR__ . '/../includes/account-chrome-top.php';
     var cepInput = document.getElementById('sv-cep-input');
     var cepStatus = document.getElementById('sv-cep-status');
 
+    cepInput.addEventListener('input', function () {
+        var digits = cepInput.value.replace(/\D/g, '').slice(0, 8);
+        cepInput.value = digits.length > 5 ? digits.slice(0, 5) + '-' + digits.slice(5) : digits;
+    });
+
     cepInput.addEventListener('blur', function () {
         var cep = cepInput.value.replace(/\D/g, '');
         if (cep.length !== 8) return;
         cepStatus.textContent = 'Buscando endereço...';
-        fetch('https://viacep.com.br/ws/' + cep + '/json/')
+        fetch('/api/viacep-proxy.php?cep=' + encodeURIComponent(cep), { cache: 'no-store' })
             .then(function (r) { return r.json(); })
             .then(function (data) {
-                if (data.erro) {
-                    cepStatus.textContent = 'CEP não encontrado.';
+                if (!data || data.erro) {
+                    cepStatus.textContent = (data && data.mensagem) ? data.mensagem : 'CEP não encontrado.';
                     return;
                 }
                 document.getElementById('sv-street-input').value = data.logradouro || '';

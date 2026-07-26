@@ -15,7 +15,9 @@ $phone = $company['phone'] ?? '(37) 99937-4112';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Termos e Condições Gerais de Uso do site ShopVivaliz.">
+    <meta name="description" content="Termos e Condições Gerais de Uso da <?= htmlspecialchars($fantasyName) ?>: cadastro, preços, pagamento, propriedade intelectual, cancelamento e foro. Leia antes de comprar.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://shopvivaliz.com.br/termos">
     <title>Termos e Condições | <?= htmlspecialchars($fantasyName) ?></title>
     <link rel="stylesheet" href="/css/style.css">
     <style>
@@ -63,9 +65,22 @@ $phone = $company['phone'] ?? '(37) 99937-4112';
 
         <h2>4. Propriedade Intelectual</h2>
         <p>Todo o conteúdo do site (marcas, logotipos, textos, fotografias de produtos, layouts e códigos) é de propriedade exclusiva da <strong><?= htmlspecialchars($legalName) ?></strong>, protegido pelas leis brasileiras de propriedade industrial e direitos autorais.</p>
+
+        <h2>5. Cancelamento, Trocas e Devoluções</h2>
+        <p>Pedidos podem ser cancelados antes do envio mediante contato com nosso atendimento. Após o recebimento, o cliente tem direito de arrependimento de 7 dias corridos (Art. 49 do CDC) e demais condições de troca e devolução detalhadas na nossa <a href="/politica-devolucoes">Política de Trocas e Devoluções</a>.</p>
+
+        <h2>6. Privacidade e Proteção de Dados (LGPD)</h2>
+        <p>O tratamento dos dados pessoais informados durante o cadastro, navegação e compra segue as regras descritas na nossa <a href="/politica-privacidade/">Política de Privacidade e Proteção de Dados</a>, elaborada em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018).</p>
+
+        <h2>7. Legislação Aplicável e Foro</h2>
+        <p>Estes Termos são regidos pelas leis da República Federativa do Brasil, em especial o Código de Defesa do Consumidor (Lei nº 8.078/1990) e o Marco Civil da Internet (Lei nº 12.965/2014). Fica eleito o foro do domicílio do consumidor para dirimir eventuais controvérsias, salvo disposição legal em contrário.</p>
+
+        <h2>8. Alterações destes Termos</h2>
+        <p>Estes Termos podem ser atualizados periodicamente para refletir mudanças legais, operacionais ou de negócio. A versão vigente é sempre a publicada nesta página, com a data da última atualização indicada abaixo.</p>
+        <p><em>Última atualização: 25 de julho de 2026.</em></p>
     </div>
 </div>
 
-<?php include __DIR__ . '/../includes/footer.php'; ?>
+<?php include __DIR__ . '/includes/footer.php'; ?>
 </body>
 </html>

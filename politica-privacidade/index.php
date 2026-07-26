@@ -15,8 +15,10 @@ $email = $company['email'] ?? 'atendimento@shopvivaliz.com.br';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Política de Privacidade oficial da ShopVivaliz. Saiba como protegemos seus dados pessoais de acordo com a LGPD.">
-    <title>Política de Privacidade | <?= htmlspecialchars($fantasyName) ?></title>
+    <meta name="description" content="Política de Privacidade e Proteção de Dados da <?= htmlspecialchars($fantasyName) ?>: quais dados coletamos, para que usamos, com quem compartilhamos, por quanto tempo guardamos e como exercer seus direitos LGPD.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://shopvivaliz.com.br/politica-privacidade/">
+    <title>Política de Privacidade e LGPD | <?= htmlspecialchars($fantasyName) ?></title>
     <link rel="stylesheet" href="/css/style.css">
     <style>
         .legal-container { max-width: 900px; margin: 40px auto; padding: 0 20px; font-family: Inter, system-ui, sans-serif; color: #1e293b; line-height: 1.8; }
@@ -44,8 +46,8 @@ $email = $company['email'] ?? 'atendimento@shopvivaliz.com.br';
         <div class="legal-box">
             <strong>Razão Social:</strong> <?= htmlspecialchars($legalName) ?><br>
             <strong>CNPJ:</strong> <?= htmlspecialchars($cnpj) ?><br>
-            <strong>E-mail de Contato do DPO:</strong> <?= htmlspecialchars($email) ?><br>
-            <strong>Última atualização:</strong> 20 de Julho de 2026
+            <strong>Canal de Privacidade (Encarregado/DPO):</strong> <?= htmlspecialchars($email) ?><br>
+            <strong>Última atualização:</strong> 25 de julho de 2026
         </div>
 
         <h2>1. Introdução e Compromisso</h2>
@@ -77,14 +79,44 @@ $email = $company['email'] ?? 'atendimento@shopvivaliz.com.br';
             <li><strong>Plataformas ERP e Fiscais:</strong> Para emissão de documentos fiscais obrigatórios por lei.</li>
         </ul>
 
-        <h2>5. Direitos do Titular (Seus Direitos LGPD)</h2>
-        <p>Como titular dos dados, você tem o direito de solicitar a qualquer momento:</p>
+        <h2>5. Base Legal para o Tratamento</h2>
+        <p>Tratamos seus dados pessoais com fundamento nas seguintes hipóteses legais previstas no Art. 7º da LGPD, conforme a finalidade:</p>
+        <ul>
+            <li><strong>Execução de contrato:</strong> dados necessários para processar, faturar e entregar seu pedido.</li>
+            <li><strong>Cumprimento de obrigação legal ou regulatória:</strong> emissão de nota fiscal e retenção de dados fiscais/contábeis pelo prazo exigido em lei.</li>
+            <li><strong>Legítimo interesse:</strong> prevenção a fraudes, segurança da navegação e melhoria da experiência de compra.</li>
+            <li><strong>Consentimento:</strong> quando aplicável, para comunicações de marketing e uso de cookies não essenciais (você pode retirar o consentimento a qualquer momento).</li>
+        </ul>
+
+        <h2>6. Direitos do Titular (Seus Direitos LGPD)</h2>
+        <p>Nos termos do Art. 18 da LGPD, como titular dos dados você tem o direito de solicitar a qualquer momento:</p>
         <ul>
             <li>Confirmação da existência de tratamento e acesso aos seus dados.</li>
             <li>Correção de dados incompletos, inexatos ou desatualizados.</li>
-            <li>Exclusão ou anonimização de dados desnecessários, salvo aqueles exigidos por obrigações fiscais e legais.</li>
+            <li>Anonimização, bloqueio ou eliminação de dados desnecessários, excessivos ou tratados em desconformidade com a lei.</li>
+            <li>Portabilidade dos dados a outro fornecedor de serviço ou produto, mediante requisição expressa.</li>
+            <li>Eliminação dos dados pessoais tratados com o seu consentimento, salvo hipóteses legais de retenção (ex.: obrigações fiscais).</li>
+            <li>Informação sobre as entidades públicas e privadas com as quais compartilhamos seus dados.</li>
+            <li>Informação sobre a possibilidade de não fornecer consentimento e sobre as consequências dessa recusa.</li>
+            <li>Revogação do consentimento, quando o tratamento tiver essa base legal.</li>
+            <li>Oposição a tratamento realizado com base em hipótese legal diversa do consentimento, em caso de descumprimento da LGPD.</li>
         </ul>
-        <p>Para exercer seus direitos, entre em contato direto com nossa equipe pelo e-mail <strong><?= htmlspecialchars($email) ?></strong>.</p>
+        <p>Para exercer qualquer um desses direitos, entre em contato com nosso canal de privacidade pelo e-mail <strong><?= htmlspecialchars($email) ?></strong>. Sua solicitação será respondida em até 15 dias úteis, podendo ser prorrogado uma vez mediante justificativa.</p>
+
+        <h2>7. Prazo de Retenção dos Dados</h2>
+        <p>Mantemos seus dados pessoais pelo tempo necessário para cumprir as finalidades descritas nesta Política, incluindo o cumprimento de obrigações legais, fiscais e contábeis (em regra, 5 anos após a última transação, conforme legislação fiscal e o Código de Defesa do Consumidor), ou até que você solicite a eliminação de dados tratados apenas com base em consentimento.</p>
+
+        <h2>8. Cookies e Tecnologias de Rastreamento</h2>
+        <p>Utilizamos cookies próprios e de terceiros para: (i) cookies essenciais, necessários ao funcionamento do carrinho, login e checkout; (ii) cookies de desempenho, para medir navegação e identificar melhorias; e (iii) cookies de personalização/marketing, quando aplicável. Você pode gerenciar ou desabilitar cookies não essenciais diretamente nas configurações do seu navegador; a desativação de cookies essenciais pode afetar o funcionamento do site.</p>
+
+        <h2>9. Segurança da Informação</h2>
+        <p>Adotamos medidas técnicas e administrativas aptas a proteger os dados pessoais de acessos não autorizados e de situações acidentais ou ilícitas de destruição, perda, alteração, comunicação ou difusão, incluindo criptografia no processamento de pagamentos e controle de acesso restrito às informações armazenadas.</p>
+
+        <h2>10. Alterações desta Política</h2>
+        <p>Esta Política pode ser atualizada periodicamente para refletir mudanças legais, técnicas ou operacionais. Recomendamos a revisão periódica desta página; a data da última atualização está indicada no início deste documento.</p>
+
+        <h2>11. Outras Políticas</h2>
+        <p>Esta Política de Privacidade complementa os nossos <a href="/termos">Termos e Condições Gerais de Uso</a>, a <a href="/politica-devolucoes">Política de Trocas e Devoluções</a> e a <a href="/politica-entrega">Política de Frete e Entrega</a>.</p>
     </div>
 </div>
 

@@ -27,9 +27,9 @@
       "created_at": "2026-07-12T03:00:00Z",
       "last_result": {
         "success": false,
-        "timestamp": "2026-07-25T21:07:02.334945Z"
+        "timestamp": "2026-07-26T10:51:58.353514Z"
       },
-      "completed_at": "2026-07-25T21:07:02.334985Z"
+      "completed_at": "2026-07-26T10:51:58.353554Z"
     },
     {
       "task_id": "SHOPEE-002",
@@ -51,9 +51,9 @@
       "created_at": "2026-07-12T03:00:00Z",
       "last_result": {
         "success": false,
-        "timestamp": "2026-07-25T21:07:02.335198Z"
+        "timestamp": "2026-07-26T10:51:58.353789Z"
       },
-      "completed_at": "2026-07-25T21:07:02.335203Z"
+      "completed_at": "2026-07-26T10:51:58.353796Z"
     },
     {
       "task_id": "ML-001",
@@ -77,9 +77,9 @@
       "created_at": "2026-07-12T03:00:00Z",
       "last_result": {
         "success": false,
-        "timestamp": "2026-07-25T21:07:02.335355Z"
+        "timestamp": "2026-07-26T10:51:58.353999Z"
       },
-      "completed_at": "2026-07-25T21:07:02.335359Z"
+      "completed_at": "2026-07-26T10:51:58.354005Z"
     },
     {
       "task_id": "ML-002",
@@ -101,9 +101,9 @@
       "created_at": "2026-07-12T03:00:00Z",
       "last_result": {
         "success": false,
-        "timestamp": "2026-07-25T21:07:02.335476Z"
+        "timestamp": "2026-07-26T10:51:58.354170Z"
       },
-      "completed_at": "2026-07-25T21:07:02.335480Z"
+      "completed_at": "2026-07-26T10:51:58.354175Z"
     },
     {
       "task_id": "GADS-001",
@@ -126,9 +126,9 @@
       "created_at": "2026-07-12T03:00:00Z",
       "last_result": {
         "success": false,
-        "timestamp": "2026-07-25T21:07:02.335542Z"
+        "timestamp": "2026-07-26T10:51:58.354346Z"
       },
-      "completed_at": "2026-07-25T21:07:02.335544Z"
+      "completed_at": "2026-07-26T10:51:58.354350Z"
     },
     {
       "task_id": "AUDIT-001",
@@ -147,9 +147,9 @@
       "created_at": "2026-07-12T03:00:00Z",
       "last_result": {
         "success": true,
-        "timestamp": "2026-07-25T21:07:02.335606Z"
+        "timestamp": "2026-07-26T09:05:34.689181Z"
       },
-      "completed_at": "2026-07-25T21:07:02.335608Z"
+      "completed_at": "2026-07-26T09:05:34.689184Z"
     }
   ]
 }

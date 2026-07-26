@@ -51,7 +51,8 @@ function svsap_load_json_array(string $path): array
 
 function svsap_stock_map(): array
 {
-    $products = svsap_load_json_array(svsap_root() . '/api/catalog/fallback-products.json');
+    require_once svsap_root() . '/includes/catalog-runtime.php';
+    $products = svcr_products();
     $map = [];
     foreach ($products as $product) {
         if (!is_array($product)) {

@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../includes/secure-session.php';
 require_once __DIR__ . '/../../includes/input-validator.php';
 require_once __DIR__ . '/../../includes/rate-limiter.php';
 require_once __DIR__ . '/../../includes/cors.php';
+require_once __DIR__ . '/../../includes/ml-event-tracker.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
@@ -45,6 +46,13 @@ if (!is_array($data)) {
     exit;
 }
 
+foreach ($data as $key => $value) {
+    if (!is_string($key) || array_key_exists($key, $_POST)) {
+        continue;
+    }
+    $_POST[$key] = $value;
+}
+
 // ✅ Validate input
 $v = validator();
 $sku = $v->requireString('sku', 1, 80, 'SKU');
@@ -76,8 +84,17 @@ try {
 
     $stmt->bind_param('s', $sku);
     $stmt->execute();
-    $result = $stmt->get_result();
-    $product = $result->fetch_assoc();
+    $stmt->bind_result($productId, $productSku, $productName, $productPrice, $productStock);
+    $product = $stmt->fetch()
+        ? [
+            'id' => $productId,
+            'sku' => $productSku,
+            'name' => $productName,
+            'price' => $productPrice,
+            'stock' => $productStock,
+        ]
+        : null;
+    $stmt->close();
 
     if (!$product) {
         http_response_code(404);
@@ -130,6 +147,12 @@ try {
         $cartItems += $item['quantity'];
     }
 
+    svml_track_event('add_to_cart', (string)($product['id'] ?? $sku), [
+        'source' => 'cart_api',
+        'sku' => $sku,
+        'quantity' => $quantity,
+    ]);
+
     // ✅ Return success
     http_response_code(200);
     echo json_encode([
@@ -148,7 +171,7 @@ try {
         ]
     ]);
 
-} catch (Exception $e) {
+} catch (Throwable $e) {
     error_log('[API Cart] Error: ' . $e->getMessage());
     http_response_code(500);
     echo json_encode(['error' => 'Server error']);

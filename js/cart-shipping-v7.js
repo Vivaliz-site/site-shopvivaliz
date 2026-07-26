@@ -11,6 +11,11 @@
   function save(quote){localStorage.setItem('shopvivaliz_shipping_quote',JSON.stringify(quote));}
   function loadQuote(){try{return JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote')||'null');}catch(e){return null;}}
   function makeQuote(option,cep){return{cep:cep,total:Number(option.price)||0,option:option,label:(option.company?option.company+' - ':'')+(option.name||'Frete'),quote_id:option.quote_id||'',expires_at:Number(option.expires_at)||0,provider:'melhorenvio'};}
+  function shippingErrorMessage(data){
+    if(!data||typeof data!=='object')return'Não foi possível calcular o frete agora.';
+    if(data.error==='invalid_shipping_destination'||data.error==='invalid_cep')return'CEP inválido. Confira os 8 números e tente novamente.';
+    return data.message||'Não foi possível calcular o frete agora.';
+  }
   function escHtml(str){var d=document.createElement('div');d.textContent=String(str||'');return d.innerHTML;}
   function renderOptions(options,cep){
     if(!status)return;
@@ -75,7 +80,7 @@
       .then(function(response){return response.json().then(function(data){return{ok:response.ok,data:data};});})
       .then(function(result){
         button.disabled=false;button.textContent='Calcular';
-        if(!result.ok||!result.data.ok){localStorage.removeItem('shopvivaliz_shipping_quote');if(frete)frete.textContent='Indisponível';if(status)status.textContent=result.data.message||'Não foi possível calcular o frete agora.';return;}
+        if(!result.ok||!result.data.ok){localStorage.removeItem('shopvivaliz_shipping_quote');if(frete)frete.textContent='Indisponível';if(status)status.textContent=shippingErrorMessage(result.data);return;}
         var options=result.data.shipping_options||[];
         var selected=result.data.selected_option||options[0];
         var quote=makeQuote(selected,cep);

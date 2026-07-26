@@ -238,7 +238,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         <div class="trust-badges">
             <div class="trust-item">🔒 Compra 100% segura</div>
             <div class="trust-item">🚚 Envio para todo Brasil</div>
-            <div class="trust-item">↩️ 30 dias para troca</div>
+            <div class="trust-item">↩️ 7 dias corridos para troca/devolução</div>
         </div>
     </aside>
 </main>
@@ -431,22 +431,27 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     /* CEP auto-fill via ViaCEP */
     var cepInput = document.getElementById('cep-input');
     function fetchAddress(cep) {
-        fetch('https://viacep.com.br/ws/' + cep + '/json/')
+        var statusEl = document.getElementById('checkout-shipping-status');
+        fetch('/api/viacep-proxy.php?cep=' + encodeURIComponent(cep), { cache: 'no-store' })
             .then(function(r){ return r.json(); })
             .then(function(d){
-                if (d.erro) return;
-                var addr = document.getElementById('address-input');
-                if (addr) {
-                    if (d.logradouro) addr.value = d.logradouro;
-                    var neighborhood = document.getElementById('neighborhood-input');
-                    var city = document.getElementById('city-input');
-                    var state = document.getElementById('state-input');
-                    if (neighborhood && d.bairro) neighborhood.value = d.bairro;
-                    if (city && d.localidade) city.value = d.localidade;
-                    if (state && d.uf) state.value = d.uf;
-                    var number = document.getElementById('street-number-input');
-                    if (number) number.focus();
+                if (!d || d.erro) {
+                    if (statusEl && d && d.mensagem) {
+                        statusEl.hidden = false;
+                        statusEl.textContent = d.mensagem;
+                    }
+                    return;
                 }
+                var addr = document.getElementById('address-input');
+                var neighborhood = document.getElementById('neighborhood-input');
+                var city = document.getElementById('city-input');
+                var state = document.getElementById('state-input');
+                if (addr && d.logradouro) addr.value = d.logradouro;
+                if (neighborhood && d.bairro) neighborhood.value = d.bairro;
+                if (city && d.localidade) city.value = d.localidade;
+                if (state && d.uf) state.value = d.uf;
+                var number = document.getElementById('street-number-input');
+                if (number) number.focus();
             }).catch(function(){});
     }
     /* Cotacao de frete automatica: antes, o checkout so lia a cotacao ja

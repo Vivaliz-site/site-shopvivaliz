@@ -10,6 +10,7 @@ define('BASE_URL', $scheme . '://' . $host);
 define('APP_NAME', 'ShopVivaliz');
 require_once __DIR__ . '/includes/product-price-enrich.php';
 require_once __DIR__ . '/includes/catalog-runtime.php';
+require_once __DIR__ . '/includes/ml-ranking.php';
 require_once __DIR__ . '/includes/site-settings.php';
 require_once __DIR__ . '/includes/popup-cupons.php';
 $svFreeShipping = sv_free_shipping_config();
@@ -209,6 +210,7 @@ function sv_home_featured_products(int $limit = 8): array
             'slug' => trim((string)($row['slug'] ?? '')),
             'sales_score' => (float)($rank['score'] ?? 0),
             'sales_position' => (int)($rank['position'] ?? 999999),
+            'ml_score' => sv_ml_score($row),
         ];
     }
 
@@ -218,6 +220,13 @@ function sv_home_featured_products(int $limit = 8): array
         $bPurchasable = ((float)($b['price'] ?? 0) > 0 && (int)($b['stock'] ?? 0) > 0) ? 1 : 0;
         if ($aPurchasable !== $bPurchasable) {
             return $bPurchasable <=> $aPurchasable;
+        }
+
+        $aMl = $a['ml_score'] ?? null;
+        $bMl = $b['ml_score'] ?? null;
+        if ($aMl !== null || $bMl !== null) {
+            $mlCompare = (float)($bMl ?? -1) <=> (float)($aMl ?? -1);
+            if ($mlCompare !== 0) return $mlCompare;
         }
 
         $scoreCompare = (float)($b['sales_score'] ?? 0) <=> (float)($a['sales_score'] ?? 0);
@@ -516,7 +525,7 @@ $svNavCurrent = '';
               "name": "Qual é o prazo de entrega?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "O prazo varia conforme a sua região: São Paulo (2-4 dias úteis), Sudeste (3-5 dias), Sul (4-6 dias), demais regiões (5-8 dias úteis)."
+                "text": "O prazo de entrega varia conforme a região e a transportadora disponível para o seu CEP. O prazo exato e o valor do frete são calculados no carrinho antes da finalização da compra."
               }
             },
             {
@@ -524,7 +533,7 @@ $svNavCurrent = '';
               "name": "Como funciona a política de devolução?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Você tem até 7 dias úteis após o recebimento para solicitar troca ou devolução. Em caso de defeito do produto, a devolução é gratuita."
+                "text": "Você tem até 7 dias corridos após o recebimento para solicitar troca ou devolução. Em caso de defeito do produto, a devolução é gratuita."
               }
             },
             {
@@ -586,6 +595,9 @@ $svNavCurrent = '';
                     </a>
                     <a href="/carrinho" class="btn btn-hero-secondary">
                         🛒 Meu Carrinho
+                    </a>
+                    <a href="/blog/" class="btn btn-hero-secondary">
+                        📰 Ver blog
                     </a>
                 </div>
             </div>
@@ -866,14 +878,14 @@ $svNavCurrent = '';
                         Qual é o prazo de entrega?
                         <span class="faq-icon">+</span>
                     </summary>
-                    <p class="faq-body">O prazo varia conforme a sua região: São Paulo (2-4 dias úteis), Sudeste (3-5 dias), Sul (4-6 dias), Nordeste (5-8 dias) e Norte/Centro-Oeste (7-10 dias). Calcule o frete exato no carrinho pelo seu CEP.</p>
+                    <p class="faq-body">O prazo de entrega varia conforme sua região e a transportadora disponível para o seu CEP. Para ver o prazo exato e o valor do frete, adicione o produto ao carrinho e informe seu CEP — a cotação é calculada em tempo real antes da finalização da compra.</p>
                 </details>
                 <details class="faq-item sv-reveal sv-reveal-delay-2">
                     <summary>
                         Como funciona a política de devolução?
                         <span class="faq-icon">+</span>
                     </summary>
-                    <p class="faq-body">Você tem até 7 dias úteis após o recebimento para solicitar troca ou devolução. Em caso de defeito de fabricação, o frete de retorno é por nossa conta. O reembolso é processado em até 10 dias úteis após a confirmação do retorno.</p>
+                    <p class="faq-body">Você tem até 7 dias corridos após o recebimento para solicitar troca ou devolução. Em caso de defeito de fabricação, o frete de retorno é por nossa conta. O reembolso é processado em até 10 dias úteis após a confirmação do retorno.</p>
                 </details>
                 <details class="faq-item sv-reveal sv-reveal-delay-3">
                     <summary>

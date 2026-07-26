@@ -4,9 +4,10 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
+$isCli = PHP_SAPI === 'cli';
 $expected = (string)(getenv('BLOG_PUBLISH_TOKEN') ?: '');
 $received = (string)($_SERVER['HTTP_X_BLOG_PUBLISH_TOKEN'] ?? '');
-if ($expected === '' || $received === '' || !hash_equals($expected, $received)) {
+if (!$isCli && ($expected === '' || $received === '' || !hash_equals($expected, $received))) {
     http_response_code(401);
     echo json_encode(['ok' => false, 'error' => 'unauthorized']);
     exit;

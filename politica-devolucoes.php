@@ -14,6 +14,8 @@ $phone = $company['phone'] ?? '(37) 99937-4112';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Política oficial de Trocas e Devoluções da ShopVivaliz. Saiba como solicitar sua troca em até 7 dias sem burocracia.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://shopvivaliz.com.br/politica-devolucoes">
     <title>Política de Trocas e Devoluções | <?= htmlspecialchars($fantasyName) ?></title>
     <link rel="stylesheet" href="/css/style.css">
     <style>
@@ -71,6 +73,9 @@ $phone = $company['phone'] ?? '(37) 99937-4112';
             <li><strong>Pagamentos via Cartão de Crédito:</strong> Estorno solicitado imediatamente junto à administradora do cartão (o crédito poderá ser visualizado em até 2 faturas subsequentes, conforme regras da emissora).</li>
             <li><strong>Pagamentos via Boleto Bancário:</strong> Depósito/transferência em conta corrente de titularidade do comprador.</li>
         </ul>
+
+        <h2>5. Outras Políticas</h2>
+        <p>Consulte também os nossos <a href="/termos">Termos e Condições</a>, a <a href="/politica-privacidade/">Política de Privacidade (LGPD)</a> e a <a href="/politica-entrega">Política de Frete e Entrega</a>.</p>
     </div>
 </div>
 

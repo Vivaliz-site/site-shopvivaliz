@@ -10,6 +10,15 @@ set_time_limit(30);
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
 
+function svrt_lock_path(): string
+{
+    $dir = __DIR__ . '/../../storage/locks';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0775, true);
+    }
+    return $dir . '/olist-refresh.lock';
+}
+
 function svrt_out(string $status, string $message, array $extra = [], int $exitCode = 0): never
 {
     $payload = array_merge([
@@ -25,6 +34,15 @@ function svrt_out(string $status, string $message, array $extra = [], int $exitC
 
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) . PHP_EOL;
     exit($exitCode);
+}
+
+function svrt_fail_with_lock($lockHandle, string $status, string $message, array $extra = [], int $exitCode = 0): never
+{
+    if (is_resource($lockHandle)) {
+        flock($lockHandle, LOCK_UN);
+        fclose($lockHandle);
+    }
+    svrt_out($status, $message, $extra, $exitCode);
 }
 
 $envFile = __DIR__ . '/../../.env';
@@ -48,8 +66,13 @@ $clientId = getenv('OLIST_CLIENT_ID') ?: getenv('TINY_CLIENT_ID') ?: getenv('CLI
 $clientSecret = getenv('OLIST_CLIENT_SECRET') ?: getenv('TINY_CLIENT_SECRET') ?: getenv('CLIENT_SECRET_OLIST');
 $refreshToken = getenv('OLIST_REFRESH_TOKEN') ?: getenv('TINY_REFRESH_TOKEN');
 
+$lockHandle = fopen(svrt_lock_path(), 'c+');
+if ($lockHandle === false || !flock($lockHandle, LOCK_EX)) {
+    svrt_out('error', 'Unable to acquire Olist refresh lock', [], 6);
+}
+
 if (!$clientId || !$clientSecret || !$refreshToken) {
-    svrt_out('error', 'Missing Olist credentials in .env', [
+    svrt_fail_with_lock($lockHandle, 'error', 'Missing Olist credentials in .env', [
         'has_client_id' => $clientId !== false && $clientId !== '',
         'has_client_secret' => $clientSecret !== false && $clientSecret !== '',
         'has_refresh_token' => $refreshToken !== false && $refreshToken !== '',
@@ -76,7 +99,7 @@ $curlError = curl_error($ch);
 curl_close($ch);
 
 if ($response === false) {
-    svrt_out('error', 'Token refresh request failed at cURL layer', [
+    svrt_fail_with_lock($lockHandle, 'error', 'Token refresh request failed at cURL layer', [
         'http_code' => $httpCode,
         'curl_error' => $curlError,
     ], 3);
@@ -86,7 +109,7 @@ if ($httpCode !== 200) {
     $decoded = json_decode((string)$response, true);
     $oauthError = is_array($decoded) ? (string)($decoded['error'] ?? '') : '';
     $oauthDescription = is_array($decoded) ? (string)($decoded['error_description'] ?? '') : '';
-    svrt_out('error', 'Token refresh failed', [
+    svrt_fail_with_lock($lockHandle, 'error', 'Token refresh failed', [
         'http_code' => $httpCode,
         'oauth_error' => $oauthError,
         'oauth_error_description' => $oauthDescription,
@@ -97,7 +120,7 @@ if ($httpCode !== 200) {
 
 $data = json_decode((string)$response, true);
 if (!is_array($data) || empty($data['access_token'])) {
-    svrt_out('error', 'OAuth endpoint returned 200 without access_token', [
+    svrt_fail_with_lock($lockHandle, 'error', 'OAuth endpoint returned 200 without access_token', [
         'http_code' => $httpCode,
         'response_excerpt' => substr((string)$response, 0, 300),
     ], 4);
@@ -127,6 +150,9 @@ foreach ($replacements as $key => $value) {
 }
 
 file_put_contents($envFile, $envContent);
+
+flock($lockHandle, LOCK_UN);
+fclose($lockHandle);
 
 svrt_out('ok', 'Tokens refreshed and saved', [
     'http_code' => $httpCode,

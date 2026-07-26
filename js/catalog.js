@@ -5,7 +5,13 @@
   const form = document.querySelector('.catalog-search');
   const input = document.getElementById('catalog-search');
   const params = new URLSearchParams(window.location.search);
+  const tools = document.querySelector('.catalog-tools');
+  const filterNav = tools ? tools.querySelector('.category-filters') : null;
   const initialCategory = String(params.get('categoria') || params.get('category') || '').trim();
+  const initialSort = String(params.get('ordem') || params.get('sort') || 'relevance').trim() || 'relevance';
+  let activeCategory = initialCategory;
+  let activeSort = initialSort;
+  let searchTimer;
 
   function esc(value) {
     return String(value || '').replace(/[&<>"']/g, function (char) {
@@ -31,6 +37,68 @@
     if (term) return `Resultados para “${term}”`;
     if (activeCategory) return `Confira as opções em ${activeCategory}`;
     return 'Escolha seus produtos e compre com segurança';
+  }
+
+  function buildCatalogUrl(query, category, sort, page) {
+    const next = new URLSearchParams();
+    const term = String(query || '').trim();
+    const currentCategory = String(category || '').trim();
+    const currentSort = String(sort || 'relevance').trim() || 'relevance';
+    const currentPage = Number(page || 1);
+    if (term) next.set('q', term);
+    if (currentCategory) next.set('categoria', currentCategory);
+    if (currentSort && currentSort !== 'relevance') next.set('ordem', currentSort);
+    if (currentPage > 1) next.set('page', String(currentPage));
+    const search = next.toString();
+    return '/catalogo' + (search ? '?' + search : '');
+  }
+
+  function syncPageState(query, category, sort, page, replace) {
+    const url = buildCatalogUrl(query, category, sort, page);
+    const titleParts = ['Catálogo | Vivaliz'];
+    if (query) titleParts.unshift('Busca: ' + query);
+    if (category) titleParts.unshift(category);
+    document.title = titleParts.join(' • ');
+    window.history[replace ? 'replaceState' : 'pushState'](
+      { q: query, categoria: category, ordem: sort, page: page || 1 },
+      '',
+      url
+    );
+  }
+
+  function setActiveFilter(category) {
+    if (!filterNav) return;
+    filterNav.querySelectorAll('.cat-filter').forEach(function (link) {
+      const linkCategory = String(link.getAttribute('data-category') || '').trim();
+      const active = linkCategory === String(category || '').trim();
+      link.classList.toggle('active', active);
+      if (active) {
+        try {
+          link.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        } catch (error) {}
+      }
+    });
+  }
+
+  function ensureToolbar() {
+    if (!tools) return null;
+    let toolbar = tools.querySelector('.sv-catalog-toolbar');
+    if (!toolbar) {
+      toolbar = document.createElement('div');
+      toolbar.className = 'sv-catalog-toolbar';
+      toolbar.innerHTML = '<div class="sv-catalog-toolbar-left"></div><label class="sv-sort-wrap"><span>Ordenar por</span><select aria-label="Ordenar produtos"><option value="relevance">Relevância</option><option value="price-asc">Menor preço</option><option value="price-desc">Maior preço</option><option value="name">Nome A–Z</option></select></label>';
+      tools.insertBefore(toolbar, tools.firstChild);
+      const select = toolbar.querySelector('select');
+      if (select) {
+        select.addEventListener('change', function () {
+          activeSort = this.value || 'relevance';
+          loadCatalog(input ? input.value.trim() : '', activeCategory, 1);
+        });
+      }
+    }
+    const select = toolbar.querySelector('select');
+    if (select) select.value = activeSort;
+    return toolbar;
   }
 
   function readCart() {
@@ -62,6 +130,9 @@
     if (existing) existing.quantity = Number(existing.quantity || 1) + 1;
     else items.push(Object.assign({}, product, { quantity: 1 }));
     localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+    window.dispatchEvent(new CustomEvent('shopvivaliz:add_to_cart', {
+      detail: { product_id: String(product.olist_product_id || product.sku || '') }
+    }));
     updateCartBadge(items);
   }
 
@@ -132,9 +203,10 @@
       + '&produto=' + encodeURIComponent(payload.name);
     const images = Array.isArray(product.images) ? product.images.slice(0, 10).filter(Boolean) : [image];
     const imagesJson = encodeURIComponent(JSON.stringify(images));
+    const productIdAttr = product.olist_product_id || sku;
     return `
-      <article class="product-card">
-        <a class="product-image" href="${esc(productUrl)}" data-images="${imagesJson}">
+      <article class="product-card" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">
+        <a class="product-image" href="${esc(productUrl)}" data-images="${imagesJson}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">
           <img src="${esc(image)}" alt="${esc(product.name)}" loading="lazy" onerror="this.src='/images/logo-vivaliz-square.png'">
         </a>
         <div class="product-info">
@@ -142,10 +214,10 @@
           <h2>${esc(product.name)}</h2>
           <div class="product-price">${esc(money(product.price))}</div>
           <div class="card-actions">
-            <a class="btn btn-secondary card-link" href="${esc(productUrl)}">Ver detalhes</a>
+            <a class="btn btn-secondary card-link" href="${esc(productUrl)}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">Ver detalhes</a>
             ${hasPrice
-              ? `<button class="buy-button" type="button" data-product="${encoded}">Comprar agora</button>`
-              : `<a class="btn btn-primary card-link" href="${esc(contactUrl)}">Falar com vendas</a>`}
+              ? `<button class="buy-button" type="button" data-product="${encoded}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}" data-add-to-cart="1">Comprar agora</button>`
+              : `<a class="btn btn-primary card-link" href="${esc(contactUrl)}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">Falar com vendas</a>`}
           </div>
         </div>
       </article>`;
@@ -153,11 +225,11 @@
 
   // Paginacao client-side para qualquer grid que use este script -- antes,
   // este loadCatalog() buscava ate 200 produtos e jogava tudo de uma vez no
-  // grid via JS, o que inclusive sobrescrevia a paginacao server-side de
-  // 20/pagina do /catalogo publico assim que a pagina carregava.
+  // grid via JS. Agora a paginação e a ordenação principais são servidas pela API.
   const GRID_PAGE_SIZE = 20;
   let gridPage = 1;
-  let gridProducts = [];
+  let gridTotalPages = 1;
+  let gridTotalProducts = 0;
 
   function gridPagerEl() {
     if (!grid) return null;
@@ -172,30 +244,28 @@
   }
 
   function renderGridPage(page) {
-    const totalPages = Math.max(1, Math.ceil(gridProducts.length / GRID_PAGE_SIZE));
-    gridPage = Math.max(1, Math.min(totalPages, page));
-    const start = (gridPage - 1) * GRID_PAGE_SIZE;
-    const pageItems = gridProducts.slice(start, start + GRID_PAGE_SIZE);
-    grid.innerHTML = pageItems.map(card).join('');
-    bindBuyButtons(grid);
+    gridPage = Math.max(1, Math.min(gridTotalPages, page));
+    setActiveFilter(activeCategory);
+    syncPageState(input ? input.value.trim() : '', activeCategory, activeSort, gridPage, gridPage === 1);
 
     const pager = gridPagerEl();
     if (pager) {
       pager.innerHTML = `
         <button class="btn btn-secondary" type="button" id="grid-pager-prev" ${gridPage <= 1 ? 'disabled' : ''}>&laquo; Anterior</button>
-        <span class="muted">Página ${gridPage} de ${totalPages}</span>
-        <button class="btn btn-secondary" type="button" id="grid-pager-next" ${gridPage >= totalPages ? 'disabled' : ''}>Próxima &raquo;</button>
+        <span class="muted">Página ${gridPage} de ${gridTotalPages}</span>
+        <button class="btn btn-secondary" type="button" id="grid-pager-next" ${gridPage >= gridTotalPages ? 'disabled' : ''}>Próxima &raquo;</button>
       `;
       const prevBtn = document.getElementById('grid-pager-prev');
       const nextBtn = document.getElementById('grid-pager-next');
-      if (prevBtn) prevBtn.addEventListener('click', function () { renderGridPage(gridPage - 1); window.scrollTo({ top: grid.offsetTop - 80, behavior: 'smooth' }); });
-      if (nextBtn) nextBtn.addEventListener('click', function () { renderGridPage(gridPage + 1); window.scrollTo({ top: grid.offsetTop - 80, behavior: 'smooth' }); });
+      if (prevBtn) prevBtn.addEventListener('click', function () { loadCatalog(input ? input.value.trim() : '', activeCategory, gridPage - 1); window.scrollTo({ top: grid.offsetTop - 80, behavior: 'smooth' }); });
+      if (nextBtn) nextBtn.addEventListener('click', function () { loadCatalog(input ? input.value.trim() : '', activeCategory, gridPage + 1); window.scrollTo({ top: grid.offsetTop - 80, behavior: 'smooth' }); });
     }
   }
 
-  async function loadCatalog(query, category) {
+  async function loadCatalog(query, category, page) {
     if (!grid || !status) return;
-    const activeCategory = String(category || '').trim();
+    activeCategory = String(category || '').trim();
+    syncPageState(query, activeCategory, activeSort, Number(page || 1), Number(page || 1) === 1);
     status.textContent = 'Preparando as melhores opções para você...';
 
     // A paginacao renderizada pelo PHP (ex: catalogo.php) fica redundante
@@ -217,7 +287,9 @@
         </div>
       </div>
     `.repeat(6);
-    const url = '/api/catalog/products.php?limit=200'
+    const url = '/api/catalog/products.php?limit=' + GRID_PAGE_SIZE
+      + '&page=' + encodeURIComponent(String(Number(page || 1)))
+      + '&ordem=' + encodeURIComponent(activeSort)
       + (query ? '&q=' + encodeURIComponent(query) : '')
       + (activeCategory ? '&category=' + encodeURIComponent(activeCategory) : '');
     try {
@@ -233,21 +305,29 @@
         const pager = document.getElementById('catalog-grid-pager');
         if (pager) pager.innerHTML = '';
         setCount(0);
+        gridTotalPages = 1;
+        gridTotalProducts = 0;
         return;
       }
       status.textContent = customerStatus(query, activeCategory);
-      setCount(products.length);
-      gridProducts = products;
-      renderGridPage(1);
+      setCount(Number(data.total || products.length));
+      gridTotalProducts = Number(data.total || products.length);
+      gridTotalPages = Math.max(1, Number(data.total_pages || 1));
+      grid.innerHTML = products.map(card).join('');
+      bindBuyButtons(grid);
+      renderGridPage(Number(page || 1));
     } catch (error) {
       status.textContent = 'Não conseguimos exibir os produtos agora. Tente novamente em instantes.';
       grid.innerHTML = '';
       setCount(0);
+      gridTotalPages = 1;
+      gridTotalProducts = 0;
     }
   }
 
   updateCartBadge(readCart());
   bindBuyButtons(document);
+  ensureToolbar();
 
   if (!catalogPage || !grid || !status) return;
 
@@ -256,22 +336,41 @@
   if (form) {
     form.addEventListener('submit', function (event) {
       event.preventDefault();
-      loadCatalog(input ? input.value.trim() : '', initialCategory);
+      loadCatalog(input ? input.value.trim() : '', activeCategory, 1);
+    });
+  }
+
+  if (filterNav) {
+    filterNav.querySelectorAll('.cat-filter').forEach(function (link) {
+      link.dataset.category = String(link.dataset.category || link.getAttribute('data-category') || '').trim();
+      link.addEventListener('click', function (event) {
+        event.preventDefault();
+        activeCategory = String(link.dataset.category || '').trim();
+        loadCatalog(input ? input.value.trim() : '', activeCategory, 1);
+      });
     });
   }
 
   if (input) {
-    let searchTimer;
     input.addEventListener('input', function () {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(function () {
         if (window.AutoDev && typeof window.AutoDev.track === 'function' && input.value.trim().length >= 2) {
           window.AutoDev.track('search', { query: input.value.trim(), path: window.location.pathname });
         }
-        loadCatalog(input.value.trim(), initialCategory);
+        loadCatalog(input.value.trim(), activeCategory);
       }, 250);
     });
   }
 
-  loadCatalog(input ? input.value.trim() : '', initialCategory);
+  window.addEventListener('popstate', function () {
+    const nextParams = new URLSearchParams(window.location.search);
+    activeCategory = String(nextParams.get('categoria') || nextParams.get('category') || '').trim();
+    activeSort = String(nextParams.get('ordem') || nextParams.get('sort') || 'relevance').trim() || 'relevance';
+    if (input) input.value = String(nextParams.get('q') || '').trim();
+    ensureToolbar();
+    loadCatalog(input ? input.value.trim() : '', activeCategory, Number(nextParams.get('page') || 1));
+  });
+
+  loadCatalog(input ? input.value.trim() : '', initialCategory, Number(params.get('page') || 1));
 })();

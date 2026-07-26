@@ -14,6 +14,8 @@ $phone = $company['phone'] ?? '(37) 99937-4112';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Política oficial de Envio, Frete Grátis e Prazos de Entrega da ShopVivaliz para todo o Brasil.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://shopvivaliz.com.br/politica-entrega">
     <title>Política de Frete e Entrega | <?= htmlspecialchars($fantasyName) ?></title>
     <link rel="stylesheet" href="/css/style.css">
     <style>
@@ -66,6 +68,9 @@ $phone = $company['phone'] ?? '(37) 99937-4112';
             <li>💬 WhatsApp: <strong><?= htmlspecialchars($phone) ?></strong></li>
             <li>✉️ E-mail: <strong><?= htmlspecialchars($email) ?></strong></li>
         </ul>
+
+        <h2>6. Outras Políticas</h2>
+        <p>Consulte também os nossos <a href="/termos">Termos e Condições</a>, a <a href="/politica-privacidade/">Política de Privacidade (LGPD)</a> e a <a href="/politica-devolucoes">Política de Trocas e Devoluções</a>.</p>
     </div>
 </div>
 
