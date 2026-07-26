@@ -18,7 +18,7 @@ log() {
   local level="$1"
   shift
   local msg="$*"
-  echo "[$(date -u +'%Y-%m-%d %H:%M:%S UTC')] [$level] $msg" | tee -a "$LOG_FILE"
+  printf '[%s] [%s] %s\n' "$(date -u +'%Y-%m-%d %H:%M:%S UTC')" "$level" "$msg" >> "$LOG_FILE"
 }
 
 # Cleanup on exit
@@ -113,17 +113,41 @@ for symlink in "${SYMLINKS[@]}"; do
   target_path="$NEW_RELEASE_PATH/$symlink"
   shared_path="$SHARED_DIR/$symlink"
 
-  # Remove if exists (could be file or directory)
-  if [ -L "$target_path" ] || [ -f "$target_path" ]; then
-    rm -f "$target_path"
-  elif [ -d "$target_path" ]; then
-    rmdir "$target_path" 2>/dev/null || true
+  if [ "$symlink" = ".env" ]; then
+    if [ ! -f "$shared_path" ]; then
+      log "ERROR" "Configuração compartilhada ausente: $shared_path"
+      rm -rf -- "$NEW_RELEASE_PATH"
+      exit 1
+    fi
+  else
+    mkdir -p "$shared_path"
+  fi
+
+  # The archive contains runtime placeholders. They must be removed entirely,
+  # otherwise ln creates a nested link and the release starts writing locally.
+  if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+    rm -rf -- "$target_path"
   fi
 
   # Create symlink
   ln -sf "../../shared/$symlink" "$target_path"
+  if [ ! -L "$target_path" ] || [ "$(readlink -f "$target_path")" != "$shared_path" ]; then
+    log "ERROR" "Symlink inválido: $symlink"
+    rm -rf -- "$NEW_RELEASE_PATH"
+    exit 1
+  fi
   log "INFO" "Symlink criado: $symlink"
 done
+
+# Apply idempotent data migrations before making the release visible.
+if [ -f "$NEW_RELEASE_PATH/scripts/migrate-blog-articles.php" ]; then
+  log "INFO" "Aplicando migração editorial idempotente..."
+  if ! php "$NEW_RELEASE_PATH/scripts/migrate-blog-articles.php" >> "$LOG_FILE" 2>&1; then
+    log "ERROR" "Migração editorial falhou"
+    rm -rf -- "$NEW_RELEASE_PATH"
+    exit 1
+  fi
+fi
 
 # Validate PHP
 if [ -f "$NEW_RELEASE_PATH/index.php" ]; then
@@ -215,7 +239,18 @@ if [ "$RELEASE_COUNT" -gt "$RETENTION_COUNT" ]; then
   ls -1t "$RELEASES_DIR"/ | tail -n "$DELETE_COUNT" | while read -r old_release; do
     if [ "$old_release" != "$NEW_RELEASE" ] && [ "$old_release" != "$ACTIVE_RELEASE" ]; then
       log "INFO" "Removendo: $old_release"
-      rm -rf "$RELEASES_DIR/$old_release"
+      old_path="$RELEASES_DIR/$old_release"
+      case "$old_path" in
+        "$RELEASES_DIR"/*)
+          if ! sudo rm -rf -- "$old_path"; then
+            log "WARN" "Não foi possível remover release antiga: $old_release"
+          fi
+          ;;
+        *)
+          log "ERROR" "Caminho de limpeza recusado: $old_path"
+          exit 1
+          ;;
+      esac
     fi
   done
 fi

@@ -31,12 +31,12 @@ function sv_popup_cupons_html(): string {
       <div class="popup-cupons-loading">Carregando cupons...</div>
     </div>
 
-    <footer class="popup-cupons-footer">
+    <div class="popup-cupons-footer">
       <label class="popup-cupons-checkbox">
         <input type="checkbox" id="popup-cupons-dont-show" onchange="sv_popup_cupons_save_preference()">
         <span>Não mostrar novamente hoje</span>
       </label>
-    </footer>
+    </div>
   </section>
 </div>
 
