@@ -10,6 +10,7 @@ define('BASE_URL', $scheme . '://' . $host);
 define('APP_NAME', 'ShopVivaliz');
 require_once __DIR__ . '/includes/product-price-enrich.php';
 require_once __DIR__ . '/includes/catalog-runtime.php';
+require_once __DIR__ . '/includes/ml-ranking.php';
 require_once __DIR__ . '/includes/site-settings.php';
 require_once __DIR__ . '/includes/popup-cupons.php';
 $svFreeShipping = sv_free_shipping_config();
@@ -209,6 +210,7 @@ function sv_home_featured_products(int $limit = 8): array
             'slug' => trim((string)($row['slug'] ?? '')),
             'sales_score' => (float)($rank['score'] ?? 0),
             'sales_position' => (int)($rank['position'] ?? 999999),
+            'ml_score' => sv_ml_score($row),
         ];
     }
 
@@ -218,6 +220,13 @@ function sv_home_featured_products(int $limit = 8): array
         $bPurchasable = ((float)($b['price'] ?? 0) > 0 && (int)($b['stock'] ?? 0) > 0) ? 1 : 0;
         if ($aPurchasable !== $bPurchasable) {
             return $bPurchasable <=> $aPurchasable;
+        }
+
+        $aMl = $a['ml_score'] ?? null;
+        $bMl = $b['ml_score'] ?? null;
+        if ($aMl !== null || $bMl !== null) {
+            $mlCompare = (float)($bMl ?? -1) <=> (float)($aMl ?? -1);
+            if ($mlCompare !== 0) return $mlCompare;
         }
 
         $scoreCompare = (float)($b['sales_score'] ?? 0) <=> (float)($a['sales_score'] ?? 0);

@@ -13,6 +13,7 @@ header('Content-Type: text/html; charset=UTF-8');
 
 require_once __DIR__ . '/includes/product-price-enrich.php';
 require_once __DIR__ . '/includes/catalog-runtime.php';
+require_once __DIR__ . '/includes/ml-ranking.php';
 
 function sv_catalog_root(): string
 {
@@ -153,7 +154,7 @@ function sv_catalog_load(): array
 
 function sv_catalog_products(int $limit, string $query, string $category = '', int $offset = 0): array
 {
-    $decoded = sv_catalog_load();
+    $decoded = sv_ml_rank_products(sv_catalog_load());
     if ($decoded === []) {
         return [];
     }
