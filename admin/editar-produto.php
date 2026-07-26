@@ -12,7 +12,19 @@ $success = '';
 function ep_load_catalog(string $path): array {
     if (!is_file($path)) return [];
     $data = json_decode((string)file_get_contents($path), true);
-    return is_array($data) ? $data : [];
+    if (!is_array($data)) return [];
+    return array_values($data);
+}
+
+function ep_product_images(array $product): array {
+    $images = [];
+    $primary = trim((string)($product['image_url'] ?? ''));
+    if ($primary !== '') $images[] = $primary;
+    foreach ((array)($product['images'] ?? []) as $image) {
+        $url = trim((string)$image);
+        if ($url !== '') $images[] = $url;
+    }
+    return array_values(array_unique($images));
 }
 
 function ep_find_index(array $catalog, string $id) {
@@ -110,6 +122,12 @@ $produto = $index !== null ? $catalog[$index] : null;
         .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 1rem; }
         .readonly-box { background: #f8f8fb; border-radius: 6px; padding: 0.75rem 1rem; font-size: 0.9rem; color: #555; margin-bottom: 1rem; }
         .readonly-box ul { margin: 0.25rem 0 0 1.25rem; padding: 0; }
+        .product-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+        .product-image-card { border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; overflow: hidden; }
+        .product-image-card img { display: block; width: 100%; height: 140px; object-fit: contain; background: #f8fafc; }
+        .product-image-card .meta { padding: 0.75rem; font-size: 0.85rem; color: #4b5563; }
+        .product-image-card .meta a { color: #2563eb; text-decoration: none; word-break: break-all; }
+        .image-empty { padding: 1rem; border: 1px dashed #d1d5db; border-radius: 8px; color: #6b7280; background: #f9fafb; margin-bottom: 1rem; }
     </style>
     <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
 </head>
@@ -131,9 +149,29 @@ $produto = $index !== null ? $catalog[$index] : null;
                 <p>Produto não encontrado. <a href="/admin/produtos.php">Voltar para a lista</a>.</p>
             <?php else: ?>
                 <h1 style="margin-bottom: 1.5rem;">Editar: <?= htmlspecialchars((string)($produto['sku'] ?? '')) ?></h1>
+                <?php $productImages = ep_product_images((array)$produto); ?>
                 <form method="post">
                     <input type="hidden" name="id" value="<?= htmlspecialchars($id) ?>">
                     <?= sv_csrf_input('admin-editar-produto') ?>
+
+                    <fieldset>
+                        <legend>Imagens do produto</legend>
+                        <?php if ($productImages === []): ?>
+                            <div class="image-empty">Este produto não trouxe imagens para o catálogo local.</div>
+                        <?php else: ?>
+                            <div class="product-images">
+                                <?php foreach ($productImages as $idx => $imageUrl): ?>
+                                    <div class="product-image-card">
+                                        <img src="<?= htmlspecialchars($imageUrl) ?>" alt="Imagem <?= $idx + 1 ?>" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.product-image-card').classList.add('image-failed'); this.alt='Imagem indisponível';">
+                                        <div class="meta">
+                                            <div><strong><?= $idx === 0 ? 'Principal' : 'Galeria ' . ($idx + 1) ?></strong></div>
+                                            <a href="<?= htmlspecialchars($imageUrl) ?>" target="_blank" rel="noopener noreferrer">Abrir imagem</a>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </fieldset>
 
                     <label for="name">Nome</label>
                     <input type="text" id="name" name="name" value="<?= htmlspecialchars((string)($produto['name'] ?? '')) ?>" required>
