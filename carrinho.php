@@ -250,7 +250,7 @@ header('Content-Type: text/html; charset=UTF-8');
 })();
 </script>
 <script src="/js/cro-interactions.js"></script>
-<script src="/js/cart-shipping-v7.js"></script>
+<script src="/js/cart-shipping-v7.js?v=2026-07-26-v2"></script>
 <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
 </body>
 </html>
