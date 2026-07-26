@@ -26,9 +26,15 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg> WhatsApp
                         </a>
                     <?php endif; ?>
-                    <a href="https://instagram.com/shopvivaliz" target="_blank" rel="noopener" title="Instagram" style="color: #E1306C; text-decoration: none; font-weight: 700;">Instagram</a>
-                    <a href="https://tiktok.com/@shopvivaliz" target="_blank" rel="noopener" title="TikTok" style="color: #000; text-decoration: none; font-weight: 700;">TikTok</a>
-                    <a href="https://youtube.com/@shopvivaliz" target="_blank" rel="noopener" title="YouTube" style="color: #FF0000; text-decoration: none; font-weight: 700;">YouTube</a>
+                    <a href="https://instagram.com/shopvivaliz" target="_blank" rel="noopener" title="Instagram" aria-label="Instagram" style="color: #E1306C; text-decoration: none; display: inline-flex; align-items: center;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                    </a>
+                    <a href="https://tiktok.com/@shopvivaliz" target="_blank" rel="noopener" title="TikTok" aria-label="TikTok" style="color: #000; text-decoration: none; display: inline-flex; align-items: center;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16.6 5.82s.51.5 0 0A4.278 4.278 0 0 1 15.54 3h-3.09v12.4a2.592 2.592 0 0 1-2.59 2.5c-1.42 0-2.6-1.16-2.6-2.6 0-1.72 1.66-3.01 3.37-2.48V9.66c-3.45-.46-6.47 2.22-6.47 5.64 0 3.33 2.76 5.7 5.69 5.7 3.14 0 5.69-2.55 5.69-5.7V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3s-1.88.09-3.24-1.48z"/></svg>
+                    </a>
+                    <a href="https://youtube.com/@shopvivaliz" target="_blank" rel="noopener" title="YouTube" aria-label="YouTube" style="color: #FF0000; text-decoration: none; display: inline-flex; align-items: center;">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                    </a>
                 </div>
             </div>
 
@@ -67,17 +73,17 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
                             <span style="color: #667085;">Compra protegida com conexao criptografada e ambiente monitorado.</span>
                         </div>
                     </div>
-                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                        <span style="display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #f3f7fb; color: #284b7a; font-weight: 700;">Certificacao SSL</span>
+                    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+                        <img src="/images/selo-ssl-seguro.webp" alt="Certificação SSL - Secure SSL Encryption" style="height: 40px; width: auto;">
                         <span style="display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #f3f7fb; color: #284b7a; font-weight: 700;">Checkout protegido</span>
                         <span style="display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #f3f7fb; color: #284b7a; font-weight: 700;">Dados protegidos</span>
                     </div>
                 </div>
 
-                <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px;">
+                <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: center;">
                     <strong style="display: block; color: #22324a; margin-bottom: 10px;">Pagamentos aceitos</strong>
                     <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
-                        <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago" style="height: 28px; width: auto;">
+                        <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago" style="height: 48px; width: auto;">
                     </div>
                 </div>
             </div>
