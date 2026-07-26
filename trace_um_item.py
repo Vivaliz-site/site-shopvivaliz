@@ -129,6 +129,6 @@ for tabela_nome, tabela_id in TABELAS.items():
     except Exception as e:
         print(f"    {tabela_nome:15s}: Erro - {str(e)[:40]}")
 
-print(f"\n{'='*100}")
+print(f"\n" + "="*100)
 print(f"TRACE CONCLUIDO!")
-print(f"{'='*100}")
+print("="*100)
