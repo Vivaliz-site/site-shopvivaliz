@@ -19,5 +19,6 @@
     if (!id) return;
     send(event.target.closest('button,[data-add-to-cart]') ? 'add_to_cart' : 'click', id);
   }, {capture: true});
+  window.addEventListener('shopvivaliz:add_to_cart', (event) => send('add_to_cart', String(event.detail?.product_id || '')));
   window.addEventListener('shopvivaliz:purchase', (event) => send('purchase', String(event.detail?.product_id || '')));
 })();
