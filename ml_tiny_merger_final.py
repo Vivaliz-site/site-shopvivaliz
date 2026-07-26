@@ -163,11 +163,12 @@ def process_ml_spreadsheet():
 
     for idx, col_name in enumerate(header, 1):
         col_lower = str(col_name).lower() if col_name else ""
+        col_clean = col_lower.replace("_", "").replace("-", "")
+
         if "price" in col_lower and price_col_idx is None:
             price_col_idx = idx
-        if "product_number" in col_lower.replace("_", ""):
+        if "productnumber" in col_clean or col_lower == "product_number":
             product_number_col_idx = idx
-            print(f"✅ Identificada coluna PRODUCT_NUMBER: idx={idx}, nome={col_name}")
 
     print(f"\n🔍 Colunas identificadas:")
     print(f"  Coluna de Preço ML: {price_col_idx} ({header[price_col_idx-1] if price_col_idx else 'NÃO ENCONTRADA'})")
