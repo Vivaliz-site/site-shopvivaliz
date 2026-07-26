@@ -35,7 +35,7 @@ foreach (explode("\n", $envContent) as $line) {
 }
 
 $clientId = $env['OLIST_CLIENT_ID'] ?? $env['TINY_CLIENT_ID'] ?? '';
-$redirectUri = $env['URL_REDIRCT_OLIST'] ?? 'https://dev.shopvivaliz.com.br/olist/callback.php';
+$redirectUri = $env['URL_REDIRCT_OLIST'] ?? 'https://shopvivaliz.com.br/olist/callback.php';
 
 if (!$clientId) {
     http_response_code(500);
