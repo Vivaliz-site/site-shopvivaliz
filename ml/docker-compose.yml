@@ -29,6 +29,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ../storage/ml:/app/storage/ml
     ports:
       - "127.0.0.1:8091:8091"
     healthcheck:
