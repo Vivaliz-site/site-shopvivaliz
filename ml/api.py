@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Literal
 
 import psycopg
@@ -9,6 +11,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 app = FastAPI(title="ShopVivaliz ML", docs_url=None, redoc_url=None)
+STORAGE_DIR = Path("/app/storage/ml")
 
 
 class Event(BaseModel):
@@ -35,6 +38,53 @@ def health() -> dict:
         return {"ok": True, "events": count, "time": datetime.utcnow().isoformat() + "Z"}
     except Exception as exc:
         raise HTTPException(status_code=503, detail=type(exc).__name__) from exc
+
+
+@app.get("/status")
+def status() -> dict:
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM events")
+        total_events = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(DISTINCT product_id) FROM events")
+        products_with_events = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM metrics")
+        products_scored = int(cur.fetchone()[0])
+
+    payload: dict[str, Any] = {
+        "ok": True,
+        "checked_at": datetime.utcnow().isoformat() + "Z",
+        "events": {
+            "total": total_events,
+            "products_with_events": products_with_events,
+        },
+        "metrics": {
+            "products_scored": products_scored,
+        },
+    }
+
+    training_path = STORAGE_DIR / "training-status.json"
+    scores_path = STORAGE_DIR / "product-scores.json"
+
+    if training_path.is_file():
+        payload["training"] = json.loads(training_path.read_text(encoding="utf-8"))
+    else:
+        payload["training"] = {"status": "missing"}
+
+    if scores_path.is_file():
+        scores = json.loads(scores_path.read_text(encoding="utf-8"))
+        payload["scores"] = {
+            "generated_at": scores.get("generated_at"),
+            "model_version": scores.get("model_version"),
+            "products_scored": len(scores.get("scores", {}) or {}),
+        }
+    else:
+        payload["scores"] = {
+            "generated_at": None,
+            "model_version": None,
+            "products_scored": 0,
+        }
+
+    return payload
 
 
 @app.post("/event", status_code=202)

@@ -32,36 +32,14 @@ function ml_status_json(string $url, int $timeout = 3): array
     return ['ok' => $code >= 200 && $code < 300, 'http_code' => $code, 'data' => $decoded];
 }
 
-function ml_status_file(string $path): array
-{
-    if (!is_file($path)) {
-        return ['ok' => false, 'error' => 'not_found'];
-    }
-
-    $body = file_get_contents($path);
-    $decoded = is_string($body) ? json_decode($body, true) : null;
-    if (!is_array($decoded)) {
-        return ['ok' => false, 'error' => 'invalid_json'];
-    }
-
-    return ['ok' => true, 'data' => $decoded];
-}
-
 $health = ml_status_json('http://127.0.0.1:8091/health');
-$training = ml_status_file(dirname(__DIR__, 2) . '/storage/ml/training-status.json');
-$scores = ml_status_file(dirname(__DIR__, 2) . '/storage/ml/product-scores.json');
+$status = ml_status_json('http://127.0.0.1:8091/status');
 
 $response = [
-    'ok' => ($health['ok'] ?? false) || ($training['ok'] ?? false),
+    'ok' => ($health['ok'] ?? false) || ($status['ok'] ?? false),
     'checked_at' => gmdate('c'),
     'api' => $health,
-    'training' => $training,
-    'scores' => [
-        'ok' => $scores['ok'] ?? false,
-        'generated_at' => $scores['data']['generated_at'] ?? null,
-        'model_version' => $scores['data']['model_version'] ?? null,
-        'products_scored' => isset($scores['data']['scores']) && is_array($scores['data']['scores']) ? count($scores['data']['scores']) : 0,
-    ],
+    'status' => $status,
 ];
 
 if (!($response['ok'])) {
