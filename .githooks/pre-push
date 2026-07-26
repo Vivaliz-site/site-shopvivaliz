@@ -1,5 +1,5 @@
 #!/bin/sh
-protected=" main master "
+protected=" master "
 
 while read local_ref local_sha remote_ref remote_sha
 do

@@ -74,7 +74,7 @@ Após configurar:
 ```
 Alteração no ERP Olist
     ↓
-Webhook dispara para dev.shopvivaliz.com.br
+Webhook dispara para shopvivaliz.com.br
     ↓
 webhook-receiver.php processa
     ↓

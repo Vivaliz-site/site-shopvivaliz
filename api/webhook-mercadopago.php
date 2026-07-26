@@ -10,6 +10,7 @@ header('X-Content-Type-Options: nosniff');
 require_once dirname(__DIR__) . '/includes/mercadopago-gateway.php';
 require_once dirname(__DIR__) . '/includes/tiny-order-push.php';
 require_once dirname(__DIR__) . '/api/emails/send-order-notification.php';
+require_once dirname(__DIR__) . '/includes/ml-event-tracker.php';
 
 function svmp_webhook_response(int $status, string $result): never
 {
@@ -308,6 +309,21 @@ try {
 
     // Enviar email de confirmação em background (se pagamento foi aprovado)
     if ($localStatus === 'payment_approved') {
+        foreach (is_array($order['items'] ?? null) ? $order['items'] : [] as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $productId = (string)($item['olist_product_id'] ?? $item['sku'] ?? '');
+            if ($productId === '') {
+                continue;
+            }
+            svml_track_event('purchase', $productId, [
+                'source' => 'mercadopago_webhook',
+                'order_number' => $externalReference,
+                'payment_id' => (string)($order['mercadopago']['payment_id'] ?? ''),
+            ]);
+        }
+
         $postProcCmd = 'php ' . escapeshellarg(__DIR__ . '/webhook-post-processor.php') . ' ' .
                        escapeshellarg($externalReference) . ' ' .
                        escapeshellarg($path);

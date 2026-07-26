@@ -2,7 +2,7 @@
 declare(strict_types=1);
 header('Content-Type: application/xml; charset=UTF-8');
 require_once __DIR__ . '/includes/catalog-runtime.php';
-require_once __DIR__ . '/blog/content.php';
+require_once __DIR__ . '/includes/blog-article-repository.php';
 
 $official = __DIR__ . '/config/official-site.php';
 $officialData = is_file($official) ? (@include $official) : [];
@@ -11,8 +11,9 @@ $base = is_array($officialData) && trim((string)($officialData['base_url'] ?? ''
     : 'https://shopvivaliz.com.br';
 $catalog = __DIR__ . '/storage/products-cache-ativos.json';
 $catalogMTime = is_file($catalog) ? (int)@filemtime($catalog) : time();
-$today   = date('Y-m-d', $catalogMTime > 0 ? $catalogMTime : time());
+$today = date('Y-m-d', $catalogMTime > 0 ? $catalogMTime : time());
 $products = svcr_products();
+$blogRepository = BlogArticleRepository::fromApplicationDatabase();
 
 function sx(string $s): string { return htmlspecialchars($s, ENT_XML1, 'UTF-8'); }
 
@@ -20,16 +21,16 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . PHP_EOL;
 echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">' . PHP_EOL;
 
 $pages = [
-    ['loc' => '/',          'priority' => '1.0', 'freq' => 'daily'],
-    ['loc' => '/catalogo/',  'priority' => '0.9', 'freq' => 'daily'],
-    ['loc' => '/sobre/',     'priority' => '0.5', 'freq' => 'monthly'],
-    ['loc' => '/contato/',   'priority' => '0.5', 'freq' => 'monthly'],
-    ['loc' => '/faq/',       'priority' => '0.5', 'freq' => 'monthly'],
+    ['loc' => '/', 'priority' => '1.0', 'freq' => 'daily'],
+    ['loc' => '/catalogo/', 'priority' => '0.9', 'freq' => 'daily'],
+    ['loc' => '/sobre/', 'priority' => '0.5', 'freq' => 'monthly'],
+    ['loc' => '/contato/', 'priority' => '0.5', 'freq' => 'monthly'],
+    ['loc' => '/faq/', 'priority' => '0.5', 'freq' => 'monthly'],
     ['loc' => '/termos', 'priority' => '0.3', 'freq' => 'yearly'],
     ['loc' => '/politica-privacidade/', 'priority' => '0.3', 'freq' => 'yearly'],
     ['loc' => '/politica-devolucoes', 'priority' => '0.3', 'freq' => 'yearly'],
     ['loc' => '/politica-entrega', 'priority' => '0.3', 'freq' => 'yearly'],
-    ['loc' => '/blog/',      'priority' => '0.7', 'freq' => 'weekly'],
+    ['loc' => '/blog/', 'priority' => '0.7', 'freq' => 'weekly'],
 ];
 
 foreach ($pages as $p) {
@@ -41,14 +42,14 @@ foreach ($pages as $p) {
     echo "  </url>\n";
 }
 
-foreach (sv_blog_articles() as $article) {
+foreach ($blogRepository->published('', '', 200) as $article) {
     $slug = trim((string)($article['slug'] ?? ''));
     if ($slug === '') continue;
     $lastmod = trim((string)($article['updated_at'] ?? $article['published_at'] ?? $today));
     $image = trim((string)($article['image'] ?? ''));
     echo "  <url>\n";
     echo '    <loc>' . sx($base . '/blog/' . rawurlencode($slug)) . "</loc>\n";
-    echo '    <lastmod>' . sx($lastmod) . "</lastmod>\n";
+    echo '    <lastmod>' . sx($lastmod !== '' ? $lastmod : $today) . "</lastmod>\n";
     echo "    <changefreq>monthly</changefreq>\n";
     echo "    <priority>0.7</priority>\n";
     if ($image !== '') {
@@ -92,12 +93,10 @@ foreach ($products as $product) {
     echo "    <lastmod>{$today}</lastmod>\n";
     echo "    <changefreq>weekly</changefreq>\n";
     echo "    <priority>0.8</priority>\n";
-    if ($image !== '') {
-        echo "    <image:image>\n";
-        echo '      <image:loc>' . sx($image) . "</image:loc>\n";
-        echo '      <image:title>' . sx(trim((string)($product['name'] ?? ''))) . "</image:title>\n";
-        echo "    </image:image>\n";
-    }
+    echo "    <image:image>\n";
+    echo '      <image:loc>' . sx($image) . "</image:loc>\n";
+    echo '      <image:title>' . sx(trim((string)($product['name'] ?? ''))) . "</image:title>\n";
+    echo "    </image:image>\n";
     echo "  </url>\n";
 }
 

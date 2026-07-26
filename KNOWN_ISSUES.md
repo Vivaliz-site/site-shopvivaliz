@@ -82,6 +82,61 @@ Ao adicionar novo arquivo em `/includes/` que precisa ser público:
 
 ---
 
+## 🔴 CRÍTICO: Pipeline de otimização/sincronização Shopee 100% inoperante — OAuth2 do Tiny quebrado há 3+ semanas
+
+**Última atualização:** 2026-07-25
+
+### Problema
+Os três workflows que dependem do client OAuth2 do Tiny ERP (`fetch-shopee-listings.yml` a
+cada 6h, `optimize-shopee-listings.yml` diário 03h UTC, e o refresh usado por
+`sync-shopee-6h.yml`) estão falhando em praticamente todo ciclo desde pelo menos 2026-07-03,
+sempre com o mesmo erro:
+
+```
+Falha OAuth2 refresh: Invalid client or Invalid client credentials
+Autenticação Tiny falhou (401).
+```
+
+Nenhum produto está sendo otimizado (título/descrição/atributos/ordem de imagens) há 3+
+semanas. Confirmado ainda ativo em 2026-07-25 13:01 UTC (`listings/shopee-listings-20260725-130116.json`,
+`status: partial`, `total_products: 0`), minutos antes desta entrada.
+
+### Causa
+Credencial OAuth2 do Tiny (`TINY_CLIENT_ID` / `TINY_CLIENT_SECRET` / `TINY_REFRESH_TOKEN` nos
+GitHub Secrets) expirou ou foi revogada no painel da Tiny. Não é um bug de código — o refresh
+token em si está inválido, então nenhum agente autônomo consegue corrigir isso sozinho.
+
+### Solução (requer ação manual humana)
+1. Acessar `accounts.tiny.com.br` → app/client OAuth2 usado pela integração.
+2. Regenerar o client (novo `client_id`/`client_secret`) e gerar um novo `refresh_token`.
+3. Atualizar os secrets no GitHub: `Settings > Secrets and variables > Actions` →
+   `TINY_CLIENT_ID`, `TINY_CLIENT_SECRET`, `TINY_REFRESH_TOKEN` (e `TINY_ACCESS_TOKEN` se usado
+   como fallback estático).
+4. Disparar `fetch-shopee-listings.yml` via `workflow_dispatch` para confirmar que
+   `total_products > 0` antes de considerar resolvido.
+
+### Por que isso importa
+Qualquer outro processo que dependa do mesmo client OAuth2 do Tiny (ex:
+`daemon-shopee-token-renewer.py`, sync de pedidos) provavelmente também está falhando
+silenciosamente. Os workflows continuam rodando "no schedule" a cada 6h só gravando
+relatórios de erro em `listings/*.json` sem que isso pare ou alerte visivelmente — daí esta
+entrada, pra não ficar só em relatórios JSON dispersos.
+
+### Histórico de descoberta
+- **2026-07-19:** Sessão autônoma identificou que o agendamento "Otimização Shopee 6h" não
+  tem credenciais no ambiente sandbox e que a automação real roda via GitHub Actions
+  (`docs/MEMORIA-AGENTES.md`).
+- **2026-07-25 07:10 UTC:** Auditoria dos `listings/optimization-report-*.json` confirmou que
+  o pipeline real (com secrets de verdade) está 100% inoperante desde 2026-07-03 por essa
+  falha OAuth2 (`docs/MEMORIA-AGENTES.md`).
+- **2026-07-25 13:xx UTC (esta entrada):** Confirmado que a falha persiste em execução real
+  minutos antes desta sessão; entrada criada aqui (que faltava) porque o problema não estava
+  em nenhum lugar centralizado além do `MEMORIA-AGENTES.md`.
+
+**Ver também:** `docs/MEMORIA-AGENTES.md` (entradas 2026-07-19 e 2026-07-25), `docs/TINY-ERP-API-V3.md`
+
+---
+
 **Última pessoa a corrigir:** Claude (AI Assistant)  
 **Data:** 2026-07-19 15:46 UTC  
 **Commit:** 8b9adb83

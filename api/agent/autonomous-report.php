@@ -40,6 +40,14 @@ function svar_file_age(string $rel): ?int {
     return is_file($path) ? (int)(time() - filemtime($path)) : null;
 }
 
+function svar_latest_json(string $pattern): array {
+    $files = glob(svar_root() . '/' . ltrim($pattern, '/')) ?: [];
+    if ($files === []) return [];
+    usort($files, static fn(string $a, string $b): int => filemtime($b) <=> filemtime($a));
+    $data = json_decode((string)file_get_contents($files[0]), true);
+    return is_array($data) ? ['data' => $data, 'path' => $files[0], 'age' => time() - filemtime($files[0])] : [];
+}
+
 function svar_env_present(string $key): bool {
     $value = getenv($key);
     return is_string($value) && trim($value) !== '';
@@ -54,6 +62,10 @@ function svar_any_env_present(array $keys): bool {
 
 $catalog    = svar_json('api/catalog/fallback-products.json');
 $ranking    = svar_json('autodev/data/product_ranking.json');
+$salesRanking = svar_latest_json('storage/reports/tiny-sales-ranking-*.json');
+if (empty($ranking) && !empty($salesRanking['data'])) {
+    $ranking = $salesRanking['data'];
+}
 $demand     = svar_json('autodev/data/demand_forecast.json');
 $roiReport  = svar_json('logs/roi-engine-report.json');
 $triSync    = svar_json('logs/tri-environment-sync.json');
@@ -105,8 +117,8 @@ echo json_encode([
     'ranking' => [
         'available'   => !empty($ranking),
         'generated_at'=> $ranking['generated_at'] ?? null,
-        'count'       => count($ranking['order'] ?? []),
-        'file_age_s'  => svar_file_age('autodev/data/product_ranking.json'),
+        'count'       => count($ranking['order'] ?? $ranking['rows'] ?? []),
+        'file_age_s'  => $salesRanking['age'] ?? svar_file_age('autodev/data/product_ranking.json'),
     ],
     'demand' => [
         'available'   => !empty($demand),

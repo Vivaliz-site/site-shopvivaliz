@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/content.php';
+require_once __DIR__ . '/../includes/blog-article-repository.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -10,9 +11,18 @@ if (session_status() === PHP_SESSION_NONE) {
 header('Content-Type: text/html; charset=UTF-8');
 $query = trim((string)($_GET['q'] ?? ''));
 $categoryFilter = trim((string)($_GET['categoria'] ?? ''));
-$articles = sv_blog_search_articles($query, $categoryFilter, 30);
-$categories = sv_blog_categories();
-$totalArticles = count(sv_blog_articles());
+$repository = BlogArticleRepository::fromApplicationDatabase();
+$allPublished = $repository->published('', '', 200);
+$articles = $repository->published($query, $categoryFilter, 30);
+$categories = [];
+foreach ($allPublished as $publishedArticle) {
+    $category = trim((string)($publishedArticle['category'] ?? ''));
+    if ($category !== '') {
+        $categories[$category] = ($categories[$category] ?? 0) + 1;
+    }
+}
+ksort($categories, SORT_NATURAL | SORT_FLAG_CASE);
+$totalArticles = count($allPublished);
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -22,6 +32,7 @@ $totalArticles = count(sv_blog_articles());
     <meta name="description" content="Guias de compra, organização, manutenção e cuidados para escolher melhor produtos para casa, jardim e projetos.">
     <title>Central de Conhecimento | ShopVivaliz</title>
     <link rel="canonical" href="https://shopvivaliz.com.br/blog">
+    <link rel="alternate" type="application/rss+xml" title="Central de Conhecimento ShopVivaliz" href="https://shopvivaliz.com.br/blog/feed.xml">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Central de Conhecimento | ShopVivaliz">
     <meta property="og:description" content="Conteúdo prático para ajudar você a escolher, usar e conservar melhor seus produtos.">
@@ -101,6 +112,11 @@ $totalArticles = count(sv_blog_articles());
                         </li>
                     <?php endforeach; ?>
                 </ul>
+            </div>
+            <div class="knowledge-panel">
+                <h2>Acompanhe as novidades</h2>
+                <p>Receba os artigos publicados em seu leitor de notícias preferido.</p>
+                <a href="/blog/feed.xml" type="application/rss+xml">Assinar feed RSS</a>
             </div>
             <div class="knowledge-panel">
                 <h2>Precisa de ajuda?</h2>

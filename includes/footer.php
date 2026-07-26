@@ -52,6 +52,7 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
                 <strong>Institucional</strong>
                 <a href="/sobre">Quem somos</a>
                 <a href="/catalogo">Produtos</a>
+                <a href="/blog/">Blog</a>
                 <a href="/gamificacao.php">Gamificacao</a>
             </div>
 
@@ -133,6 +134,7 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
                 <strong>Institucional</strong>
                 <a href="/sobre">Quem somos</a>
                 <a href="/catalogo">Produtos</a>
+                <a href="/blog/">Blog</a>
                 <a href="/gamificacao.php">Gamificacao</a>
             </div>
 
@@ -213,6 +215,7 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
         </div>
     </div>
 </footer>
+<script src="/js/ml-events.js?v=1" defer></script>
 
 <!-- Floating WhatsApp Button (Left Side) -->
 <a href="https://wa.me/5537999374112?text=Ola!%20Vim%20pelo%20site%20da%20ShopVivaliz%20e%20gostaria%20de%20falar%20com%20a%20equipe." 
@@ -243,6 +246,5 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
     Carrinho
   </a>
 </nav>
-
 
 

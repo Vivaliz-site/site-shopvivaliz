@@ -2,40 +2,11 @@
 declare(strict_types=1);
 
 /**
- * Cupons de desconto reais, validados no servidor contra a tabela `coupons`
- * (ja existia no banco, usada por minha-conta/cupons.php -- mas estava
- * vazia e a query de la usava nomes de coluna errados, entao a pagina
- * "Meus Cupons" nunca mostrava nada e nenhum cupom podia ser resgatado de
- * verdade em lugar nenhum do site). `discount_type` aceita: percent, fixed,
- * shipping (frete gratis).
+ * Validação server-side de cupons da tabela `coupons`.
+ * `discount_type` aceita: percent, fixed, shipping.
  */
 
 require_once __DIR__ . '/pdo-database.php';
-
-function svcp_builtin_coupons(string $code): ?array
-{
-    $builtins = [
-        'PRIMEIRA10' => ['type' => 'percent', 'value' => 10.0, 'label' => 'Primeira compra: 10% de desconto'],
-        'VIVALIZ10' => ['type' => 'percent', 'value' => 10.0, 'label' => 'Primeira compra: 10% de desconto'],
-        'BEMVINDO5' => ['type' => 'fixed', 'value' => 5.0, 'label' => 'Desconto R$ 5,00'],
-        'VOLTEI5' => ['type' => 'percent', 'value' => 5.0, 'label' => 'Desconto 5%'],
-        'FRETEGRATIS' => ['type' => 'shipping', 'value' => 0.0, 'label' => 'Frete Grátis'],
-    ];
-
-    if (!isset($builtins[$code])) {
-        return null;
-    }
-
-    return [
-        'ok' => true,
-        'code' => $code,
-        'percent' => $builtins[$code]['type'] === 'percent' ? $builtins[$code]['value'] : 0.0,
-        'amount' => $builtins[$code]['type'] === 'fixed' ? $builtins[$code]['value'] : 0.0,
-        'label' => $builtins[$code]['label'],
-        'type' => $builtins[$code]['type'],
-        'error' => '',
-    ];
-}
 
 /**
  * @return array{ok: bool, code: string, percent: float, amount: float, label: string, type: string, error: string}
@@ -55,36 +26,47 @@ function svcp_validate(string $rawCode, float $itemsSubtotal): array
         $stmt = $pdo->prepare(
             'SELECT code, description, discount_type, discount_value, min_order_value, starts_at, ends_at, expires_at, max_uses, used_count, is_active
              FROM coupons
-             WHERE code = :code AND is_active = 1
+             WHERE code = :code
              LIMIT 1'
         );
         $stmt->execute([':code' => $code]);
         $row = $stmt->fetch();
     } catch (Throwable $e) {
         error_log('[coupons] lookup failed: ' . $e->getMessage());
-        $row = null;
+        return ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_lookup_failed'];
     }
 
     if (!is_array($row)) {
-        return svcp_builtin_coupons($code) ?? ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_invalid'];
+        return ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_invalid'];
+    }
+
+    if ((int)($row['is_active'] ?? 0) !== 1) {
+        return ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_inactive'];
     }
 
     $startsAt = trim((string)($row['starts_at'] ?? ''));
     $endsAt = trim((string)($row['ends_at'] ?? ''));
     $expiresAt = trim((string)($row['expires_at'] ?? ''));
     $now = time();
+
     if ($startsAt !== '' && strtotime($startsAt) > $now) {
-        return svcp_builtin_coupons($code) ?? ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_not_started'];
+        return ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_not_started'];
     }
+
     $effectiveExpiry = $expiresAt !== '' ? $expiresAt : $endsAt;
     if ($effectiveExpiry !== '' && strtotime($effectiveExpiry) < $now) {
-        return svcp_builtin_coupons($code) ?? ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_expired'];
+        return ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_expired'];
     }
 
     $maxUses = (int)($row['max_uses'] ?? 0);
     $usedCount = (int)($row['used_count'] ?? 0);
     if ($maxUses > 0 && $usedCount >= $maxUses) {
-        return svcp_builtin_coupons($code) ?? ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_exhausted'];
+        return ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_exhausted'];
+    }
+
+    $minOrderValue = (float)($row['min_order_value'] ?? 0);
+    if ($minOrderValue > 0 && $itemsSubtotal < $minOrderValue) {
+        return ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => '', 'error' => 'coupon_min_order'];
     }
 
     $type = (string)($row['discount_type'] ?? 'percent');
@@ -99,9 +81,6 @@ function svcp_validate(string $rawCode, float $itemsSubtotal): array
     } elseif ($type === 'fixed') {
         $amount = round(min($value, $itemsSubtotal), 2);
     } elseif ($type === 'shipping') {
-        // Desconto de frete e resolvido no checkout (nao aqui, que so trata
-        // desconto sobre o valor dos itens) -- devolve ok com amount=0 pra
-        // sinalizar "cupom valido, tipo frete" sem quebrar o fluxo atual.
         $amount = 0.0;
     } else {
         return ['ok' => false, 'code' => $code, 'percent' => 0.0, 'amount' => 0.0, 'label' => '', 'type' => $type, 'error' => 'coupon_unsupported_type'];
