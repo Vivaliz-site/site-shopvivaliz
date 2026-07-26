@@ -17,13 +17,23 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 from dotenv import load_dotenv
 
-# Carregar .env
-env_file = Path("/home/ubuntu/site-shopvivaliz/.env")
-if env_file.exists():
-    load_dotenv(env_file)
-    print(f"✅ Variáveis de ambiente carregadas de {env_file}")
-else:
-    print(f"⚠️  Arquivo .env não encontrado em {env_file}")
+# Carregar .env - tentar local primeiro, depois remoto
+env_files = [
+    Path(r"C:\site-shopvivaliz\.env.local"),
+    Path(r"C:\site-shopvivaliz\.env"),
+    Path("/home/ubuntu/site-shopvivaliz/.env"),
+]
+
+env_file = None
+for f in env_files:
+    if f.exists():
+        load_dotenv(f)
+        env_file = f
+        print(f"✅ Variáveis de ambiente carregadas de {f}")
+        break
+
+if not env_file:
+    print(f"⚠️  Arquivo .env não encontrado. Tentando variáveis de ambiente do sistema...")
 
 class TinyAPIClient:
     """Cliente para API Tiny/Olist com retry e rate limiting"""
