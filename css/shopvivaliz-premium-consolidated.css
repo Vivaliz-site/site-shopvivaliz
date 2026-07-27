@@ -1092,11 +1092,14 @@ footer .footer-legal div[style] { color: rgba(255,255,255,0.4) !important; }
     font-weight: 800;
     margin: 0 0 8px;
     letter-spacing: -0.02em;
+    color: #f8fafc !important;
+    -webkit-text-fill-color: #f8fafc !important;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.22);
 }
 
 .newsletter-info p {
     font-size: 14px;
-    color: #94a3b8;
+    color: #cbd5e1;
     line-height: 1.5;
     margin: 0;
 }
@@ -1121,7 +1124,7 @@ footer .footer-legal div[style] { color: rgba(255,255,255,0.4) !important; }
 }
 
 .newsletter-form input::placeholder {
-    color: #64748b;
+    color: #94a3b8;
 }
 
 .newsletter-form input:focus {
