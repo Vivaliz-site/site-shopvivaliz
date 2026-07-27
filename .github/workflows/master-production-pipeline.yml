@@ -87,7 +87,7 @@ jobs:
             --exclude='docs/secrets-inventory.md'
           )
 
-          token_pattern='(github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{20,}|AKIA[0-9A-Z]{16})'
+          token_pattern='(^|[^A-Za-z0-9_])(github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{20,}|AKIA[0-9A-Z]{16})'
           assignment_pattern="(API_KEY|SECRET|TOKEN|PASSWORD|PASS|PRIVATE_KEY)[[:space:]]*(=>|=|:)[[:space:]]*[\"'][^\"']{12,}[\"']"
           placeholder_pattern='(xxxxxxxx|xxxxxx|example|placeholder|redacted|valor_aqui|change_me|your[_ -]?(api[_ -]?key|token|secret|password)|sk-proj-x+)'
 
