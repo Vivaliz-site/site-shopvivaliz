@@ -539,7 +539,15 @@ function svmp_preference_payload(array $order): array
                     'street_number' => $streetNumber,
                     'street_name' => $streetName,
                     'neighborhood' => (string)($customer['neighborhood'] ?? ''),
-                ]
+                ],
+                'receivers_address' => [
+                    'zip_code' => $zipCode,
+                    'state_name' => $stateName,
+                    'city_name' => $cityName,
+                    'street_number' => $streetNumber,
+                    'street_name' => $streetName,
+                    'neighborhood' => (string)($customer['neighborhood'] ?? ''),
+                ],
             ]
         ]
     ];

@@ -604,8 +604,16 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
 
 <?php if (!$pedidoCriado): ?>
 <script src="https://www.mercadopago.com/v2/security.js" view="checkout" output="deviceId"></script>
+<script src="https://sdk.mercadopago.com/js/v2"></script>
 <script>
     (function () {
+        try {
+            if (window.MercadoPago && <?= json_encode(svmp_env('MERCADOPAGO_PUBLIC_KEY')) ?>) {
+                new MercadoPago(<?= json_encode(svmp_env('MERCADOPAGO_PUBLIC_KEY')) ?>, { locale: 'pt-BR' });
+            }
+        } catch (mpInitError) {
+            console.error('MercadoPago SDK init failed', mpInitError);
+        }
         const content = document.getElementById('checkout-content');
         const emptyState = document.getElementById('checkout-empty');
         const summary = document.getElementById('checkout-summary');
