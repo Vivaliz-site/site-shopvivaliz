@@ -83,7 +83,7 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
                 <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: center;">
                     <strong style="display: block; color: #22324a; margin-bottom: 10px;">Pagamentos aceitos</strong>
                     <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
-                        <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago" style="height: 48px; width: auto;">
+                        <img src="/images/mercado-pago-logo.jpg" alt="Mercado Pago" style="height: 52px; width: auto; border-radius: 4px;">
                     </div>
                 </div>
             </div>
