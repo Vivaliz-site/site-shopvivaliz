@@ -141,7 +141,22 @@ header('Content-Type: text/html; charset=UTF-8');
 // Legacy shipping handler removed - now using cart-shipping-v7.js
 (function () {
     function getCart() {
+        if (window.ShopVivalizCart && typeof window.ShopVivalizCart.get === 'function') {
+            return window.ShopVivalizCart.get();
+        }
         try { return JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'); } catch(e) { return []; }
+    }
+    function saveCart(items) {
+        if (window.ShopVivalizCart && typeof window.ShopVivalizCart.set === 'function') {
+            window.ShopVivalizCart.set(items);
+            return;
+        }
+        localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+        localStorage.setItem('shopvivaliz_cart_updated_at', String(Date.now()));
+        window.dispatchEvent(new CustomEvent('shopvivaliz:cart-updated', { detail: { items: items } }));
+    }
+    function clearShippingQuote() {
+        localStorage.removeItem('shopvivaliz_shipping_quote');
     }
     function fmtMoney(v) {
         if (!v || isNaN(v)) return 'Consulte o valor';
@@ -233,6 +248,7 @@ header('Content-Type: text/html; charset=UTF-8');
     }
 
     render();
+    window.addEventListener('shopvivaliz:cart-updated', render);
 
     // Update total based on shipping quote if already calculated
     function updateTotalFromQuote() {
@@ -250,8 +266,8 @@ header('Content-Type: text/html; charset=UTF-8');
     updateTotalFromQuote();
 })();
 </script>
-<script src="/js/cro-interactions.js"></script>
+<script src="/js/cart-persistence-v23.js" defer></script>
+<script src="/js/cro-interactions.js" defer></script>
 <script src="/js/cart-shipping-v7.js?v=2026-07-26-v2"></script>
-<script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
 </body>
 </html>
