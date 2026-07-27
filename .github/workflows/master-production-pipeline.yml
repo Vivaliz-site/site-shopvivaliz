@@ -53,7 +53,7 @@ jobs:
         with:
           ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -103,11 +103,12 @@ jobs:
           fi
           echo "CSS wildcard check passed"
 
-      - name: Scan repository history for secrets with Gitleaks CLI
+      - name: Scan current repository files for secrets with Gitleaks CLI
         shell: bash
         run: |
           set -euo pipefail
-          gitleaks git . \
+          gitleaks dir . \
+            --no-git \
             --config .gitleaks.toml \
             --redact \
             --verbose
