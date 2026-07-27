@@ -244,6 +244,17 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     </aside>
 </main>
 
+<footer>
+    <div class="container">
+        <div class="footer-cols">
+            <div><strong>Vivaliz</strong><p>Qualidade e entrega rápida para todo o Brasil.</p></div>
+            <div><strong>Navegação</strong><a href="/catalogo">Produtos</a><a href="/sobre">Sobre</a><a href="/contato">Contato</a></div>
+            <div><strong>Atendimento</strong><a href="/contato">Fale conosco</a><a href="/faq">Dúvidas frequentes</a><a href="/politica-privacidade">Privacidade</a></div>
+        </div>
+        <p class="footer-copy">&copy; 2026 Vivaliz. Todos os direitos reservados.</p>
+    </div>
+</footer>
+
 <!-- MODAL PIX -->
 <div id="pix-modal" class="modal-overlay" hidden>
     <div class="modal-box">
