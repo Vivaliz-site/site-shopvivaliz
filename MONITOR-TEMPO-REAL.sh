@@ -30,9 +30,16 @@ EMAIL_COUNT=0
 OLIST_COUNT=0
 ERRORS_COUNT=0
 
+# Globs sem correspondencia resultam em arrays vazios.
+shopt -s nullglob
+
 # Loop de monitoramento
 while true; do
   clear
+
+  # Atualizar listas de logs a cada ciclo.
+  email_logs=(logs/email-*.log)
+  all_logs=(logs/*.log)
 
   # Header
   echo -e "${BLUE}════════════════════════════════════════════${NC}"
@@ -42,7 +49,7 @@ while true; do
 
   # 1. Verificar site online
   echo -e "${YELLOW}1️⃣  SITE:${NC}"
-  if curl -s -I https://shopvivaliz.com.br/ | grep -q "200\|301"; then
+  if curl -s -I https://shopvivaliz.com.br/ | grep -qE '200|301'; then
     echo -e "   ${GREEN}✅ Online${NC}"
   else
     echo -e "   ${RED}❌ Offline${NC}"
@@ -51,11 +58,13 @@ while true; do
 
   # 2. Último email
   echo -e "${YELLOW}2️⃣  EMAIL:${NC}"
-  if [ -f logs/email-*.log ]; then
-    EMAIL_TIME=$(tail -1 logs/email-*.log 2>/dev/null | head -c 19)
-    if [ ! -z "$EMAIL_TIME" ]; then
+  if (( ${#email_logs[@]} > 0 )); then
+    EMAIL_TIME=$(tail -n 1 "${email_logs[@]}" 2>/dev/null | tail -n 1 | head -c 19)
+    if [[ -n "$EMAIL_TIME" ]]; then
       echo -e "   ${GREEN}✅ Último: $EMAIL_TIME${NC}"
       EMAIL_COUNT=$((EMAIL_COUNT + 1))
+    else
+      echo -e "   ${YELLOW}⏳ Aguardando email...${NC}"
     fi
   else
     echo -e "   ${YELLOW}⏳ Aguardando email...${NC}"
@@ -64,9 +73,9 @@ while true; do
 
   # 3. Sincronização Olist
   echo -e "${YELLOW}3️⃣  OLIST SYNC:${NC}"
-  if [ -f logs/olist-sync.log ]; then
-    OLIST_TIME=$(tail -1 logs/olist-sync.log 2>/dev/null | head -c 19)
-    if [ ! -z "$OLIST_TIME" ]; then
+  if [[ -f logs/olist-sync.log ]]; then
+    OLIST_TIME=$(tail -n 1 logs/olist-sync.log 2>/dev/null | head -c 19)
+    if [[ -n "$OLIST_TIME" ]]; then
       echo -e "   ${GREEN}✅ Último sync: $OLIST_TIME${NC}"
       OLIST_COUNT=$((OLIST_COUNT + 1))
     fi
@@ -75,8 +84,12 @@ while true; do
 
   # 4. Erros nos logs
   echo -e "${YELLOW}4️⃣  ERROS:${NC}"
-  ERROR_COUNT=$(grep -i "error\|fail" logs/*.log 2>/dev/null | wc -l)
-  if [ $ERROR_COUNT -eq 0 ]; then
+  if (( ${#all_logs[@]} > 0 )); then
+    ERROR_COUNT=$(grep -Eic 'error|fail' "${all_logs[@]}" 2>/dev/null || true)
+  else
+    ERROR_COUNT=0
+  fi
+  if [[ "$ERROR_COUNT" -eq 0 ]]; then
     echo -e "   ${GREEN}✅ Nenhum erro${NC}"
   else
     echo -e "   ${RED}❌ $ERROR_COUNT erros encontrados${NC}"
@@ -86,8 +99,8 @@ while true; do
 
   # 5. Git sync
   echo -e "${YELLOW}5️⃣  DAEMON SYNC:${NC}"
-  LAST_COMMIT=$(git log -1 --format="%h - %ai" 2>/dev/null)
-  if [ ! -z "$LAST_COMMIT" ]; then
+  LAST_COMMIT=$(git log -1 --format='%h - %ai' 2>/dev/null)
+  if [[ -n "$LAST_COMMIT" ]]; then
     echo -e "   ${GREEN}✅ $LAST_COMMIT${NC}"
   fi
   echo ""
@@ -103,10 +116,18 @@ while true; do
   # 7. Últimas linhas de log (status)
   echo -e "${YELLOW}📋 ÚLTIMOS EVENTOS:${NC}"
   echo "   (Email)"
-  tail -1 logs/email-*.log 2>/dev/null | tail -c 80 || echo "   (aguardando...)"
+  if (( ${#email_logs[@]} > 0 )); then
+    tail -n 1 "${email_logs[@]}" 2>/dev/null | tail -n 1 | tail -c 80
+  else
+    echo "   (aguardando...)"
+  fi
   echo ""
   echo "   (Olist)"
-  tail -1 logs/olist-sync.log 2>/dev/null | tail -c 80 || echo "   (aguardando...)"
+  if [[ -f logs/olist-sync.log ]]; then
+    tail -n 1 logs/olist-sync.log 2>/dev/null | tail -c 80
+  else
+    echo "   (aguardando...)"
+  fi
   echo ""
 
   # 8. Instruções
