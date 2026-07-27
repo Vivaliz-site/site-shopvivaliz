@@ -60,12 +60,12 @@
 
 ## 🔴 Crítico: Problemas Não Resolvidos
 
-### Shopee/Tiny OAuth2 — PARADO HÁ 3+ SEMANAS
-**Status:** Requer ação manual (regenerar client OAuth2 na Tiny)
-**Arquivos:** `.github/workflows/{fetch,optimize}-shopee-listings.yml`, `.github/workflows/sync-shopee-6h.yml`
-**O problema:** Credencial `TINY_*` do GitHub Secrets expirou/revogada. Todos os ciclos de otimização (6h) retornam `"Falha OAuth2: Invalid client or Invalid client credentials"`; pipeline roda vazio.
-**O que precisa:** Usuário vai a `accounts.tiny.com.br` → regenera client OAuth2 → atualiza `TINY_CLIENT_ID` e `TINY_CLIENT_SECRET` em GitHub Secrets
-**Enquanto isso não for feito:** Qualquer agente que tentar otimizar Shopee via `optimize-shopee-listings.yml` vai falhar silenciosamente.
+### Shopee/Tiny OAuth2 — PARADO HÁ 3+ SEMANAS + workflows removidos (2026-07-27)
+**Status:** Requer ação manual (regenerar client OAuth2 na Tiny) **e** recriar workflows
+**Arquivos:** `.github/workflows/{fetch,optimize}-shopee-listings.yml` — **não existem mais no repo**, aparentemente removidos como colateral da consolidação "99→10 workflows" de 2026-07-26 (`CLAUDE.md`); nenhum workflow ativo restante referencia Shopee. Os agentes (`agents/v9.2.85/app/ShopeeListings*Agent.php`) continuam no repo, só falta o workflow que os chama.
+**O problema:** (1) Credencial `TINY_*` do GitHub Secrets expirou/revogada — todo ciclo retornava `"Falha OAuth2: Invalid client or Invalid client credentials"`. (2) Desde ~2026-07-26, os dois workflows nem existem mais, então nem o erro acima roda: nenhum artefato novo em `listings/` desde `20260726-080756`/`20260726-060921`.
+**O que precisa:** (1) Usuário vai a `accounts.tiny.com.br` → regenera client OAuth2 → atualiza `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`/`TINY_REFRESH_TOKEN` em GitHub Secrets. (2) Recriar `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` com trigger `schedule` (ver `docs/HISTORICO-AGENTES-SHOPEE.md` seção 9.10 para detalhes e formato esperado dos relatórios).
+**Enquanto isso não for feito:** o pipeline de otimização Shopee não roda de forma alguma, nem para gerar erro — não há mais workflow que dispare.
 
 ---
 

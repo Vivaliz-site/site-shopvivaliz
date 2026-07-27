@@ -206,6 +206,7 @@ Base URL da API: `https://api.tiny.com.br/public-api/v3`
 | 2026-07-24 (~07h UTC) | `main` (rotina agendada, sem branch dedicada) | 12º ciclo documentado (gap de ciclos 07-16 a 07-23 não documentado nesta tabela, mas coberto por relatórios commitados — ver seção 9.9). Achado principal: ~1h antes deste ciclo, outra sessão de agente (commits `1cb092a`/`5fce107`/`e3305a9`, 2026-07-24T04:45–04:50Z) criou um fluxo OAuth2 authorization-code novo para o Tiny (`api/olist/login.php`/`callback.php`) e rotacionou o `TINY_CLIENT_SECRET` — mas só em `.env` local/VM, aguardando o usuário clicar num link de login (ver `docs/TINY-TOKEN-RENEWAL-SETUP.md`). Confirmado via `mcp__github__actions_list` que tanto o run de `fetch-shopee-listings.yml` das 01:47:28Z (antes do fix) quanto o de `optimize-shopee-listings.yml` das 05:52:56Z (depois do fix) continuam falhando com o mesmo erro `"Invalid client or Invalid client credentials"` — ou seja, o novo Client Secret ainda não está refletido nos GitHub Secrets que esses dois workflows usam (`TINY_CLIENT_SECRET`/`TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN` em Settings→Secrets), só no `.env`. Mesmo que o usuário complete o login, o pipeline via GitHub Actions provavelmente continua quebrado até alguém atualizar os GitHub Secrets também. Nenhuma otimização aplicada — sem credencial neste ambiente de sessão e sem dado real de catálogo. Notificação push enviada: fato novo e acionável, com prazo (fix parcial de horas atrás, ainda incompleto para o caminho GitHub Actions). |
 | 2026-07-24 (~19h UTC) | `main` (rotina agendada, sem branch dedicada) | 13º ciclo. Bloqueador idêntico ao ciclo 12, sem nenhum fato novo: `listings/shopee-listings-20260724-131741.json` (run `fetch-shopee-listings.yml` de 13:17:41Z, ~6h depois do fix parcial de OAuth) segue com `status: partial`, `total_products: 0`, mesmo erro `"Falha ao renovar token: Invalid client or Invalid client credentials"`. `git log --since` a partir do commit do ciclo 12 (`1bf158d`, 07:11:32Z) não mostra nenhum commit tocando `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`/GitHub Secrets — só trabalho não relacionado (CSS mobile, favicon, style guide). Ou seja: o usuário ainda não atualizou os GitHub Secrets (ou não completou o login OAuth) desde a notificação do ciclo 12. Nenhuma otimização aplicada — sem credencial e sem dado real de catálogo (último catálogo real segue sendo `20260709-011652`, 1058 produtos, ~15 dias). Nenhuma notificação push enviada: mesma recomendação já comunicada há ~12h (atualizar `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`/`TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN` nos GitHub Secrets), sem fato novo que justifique repetir o alerta. |
 | 2026-07-25 (~01h UTC) | `main` (rotina agendada, sem branch dedicada) | 14º ciclo. Estado idêntico ao ciclo 13, sem nenhum fato novo: run mais recente de `fetch-shopee-listings.yml` continua sendo o de 2026-07-24T19:12:16Z (`listings/shopee-listings-20260724-191235.json`, `status: partial`, `total_products: 0`, mesmo erro `"Falha ao renovar token: Invalid client or Invalid client credentials"`); nenhum run novo do workflow desde então. `git log` desde `c8d0185` (commit do ciclo 13) não mostra nenhuma alteração em `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`/workflows do pipeline Shopee/`docs/TINY-TOKEN-RENEWAL-SETUP.md` — só commits de sincronização automática (`auto: sincronizar ...`) sem relação com o bloqueador. Nenhuma credencial `TINY_*`/`OLIST_*`/`SHOPEE_*` neste ambiente de sessão. Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada — sem credencial e sem dado real de catálogo (último catálogo real segue sendo `20260709-011652`, 1058 produtos, ~16 dias). Nenhuma notificação push enviada: mesma recomendação já comunicada nos ciclos 12/13 (atualizar `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`/`TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN` nos GitHub Secrets, ou completar o login OAuth em `docs/TINY-TOKEN-RENEWAL-SETUP.md`), sem fato novo que justifique repetir o alerta. |
+| 2026-07-27 (~22h UTC) | `main` (rotina agendada, sem branch dedicada) | 15º ciclo. Fato novo e estrutural desde o ciclo 14: `.github/workflows/fetch-shopee-listings.yml` e `.github/workflows/optimize-shopee-listings.yml` **não existem mais** no repo (`git log` não encontra nenhum commit tocando esses paths dentro do histórico acessível nesta sessão — clone raso — e `git show HEAD:<path>` falha para ambos). Nenhum workflow ativo em `.github/workflows/` (13 arquivos restantes, conferidos via `ls`) faz qualquer referência a "shopee"; a lógica de `ShopeeListingsExtractorAgent`/`ShopeeListingsOptimizationAgent` não foi absorvida por nenhum dos workflows consolidados (`master-production-pipeline.yml`, `ai-autonomous-executor.yml`, `sync-products-auto.yml` etc. — nenhum menciona Shopee). Isso é consistente com a consolidação "99→10 workflows" registrada em `CLAUDE.md` (`Última atualização: 2026-07-26`) e com o relatório `AUDIT_DEEP_CONSOLIDATED_2026-07-26.md` (que não cita Shopee em nenhum lugar — indício de remoção não-intencional/colateral, não uma decisão deliberada sobre o pipeline Shopee especificamente). O último artefato real do pipeline é `listings/shopee-listings-20260726-080756.json` (2026-07-26T08:07:56Z, `status: partial`, `total_products: 0`, mesmo erro de sempre `"Invalid client or Invalid client credentials"` / `401`) e `listings/optimization-report-20260726-060921.json` (mesmo erro) — ambos de **antes** da consolidação; nenhum arquivo novo em `listings/` desde então, confirmando que o schedule realmente parou de disparar (não é só uma corrida de commit como em ciclos anteriores). Bloqueador primário (credencial OAuth2 Tiny — `docs/AGENTS.md` seção "Crítico", `KNOWN_ISSUES.md`) segue idêntico e sem renovação, agora 3+ semanas. Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada — sem credencial e sem workflow ativo para gerar dado real. **Notificação push enviada neste ciclo:** fato novo e acionável que muda a recomendação — antes bastava renovar `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`/`TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN`; agora, mesmo depois de renovar, o pipeline não volta a rodar sozinho porque os dois workflows dedicados foram removidos do repo — é preciso recriá-los (ou decidir conscientemente não restaurar esta automação) além de renovar a credencial. `docs/AGENTS.md` e `KNOWN_ISSUES.md` atualizados nesta sessão para refletir isso. |
 
 ---
 
@@ -214,7 +215,8 @@ Base URL da API: `https://api.tiny.com.br/public-api/v3`
 - [x] Configurar `TINY_ACCESS_TOKEN` ou `TINY_CLIENT_ID`+`SECRET`+`REFRESH_TOKEN` nos GitHub Secrets (feito — mas token está **expirado/inválido** desde ~2026-06-30, ver seção 9).
 - [x] Configurar `ANTHROPIC_API_KEY` nos GitHub Secrets para ativar otimização com IA (issue #29) — presente nos secrets.
 - [x] Executar `fetch-shopee-listings.yml` para validar conectividade com a API Tiny — falhando com 401 desde 2026-07-01.
-- [ ] **Renovar `TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN` no ERP e nos GitHub Secrets** — bloqueador atual, ver seção 9.
+- [ ] **Renovar `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`/`TINY_REFRESH_TOKEN` no ERP e nos GitHub Secrets** — bloqueador atual, ver seção 9.
+- [ ] **Recriar `.github/workflows/fetch-shopee-listings.yml` e `optimize-shopee-listings.yml`** — removidos do repo na consolidação 99→10 workflows de 2026-07-26 (ver seção 9.10); sem isso o pipeline não roda mesmo com a credencial renovada.
 - [ ] Executar `optimize-shopee-listings.yml` em modo manual para revisar o primeiro relatório real (o único disponível hoje tem `total_products: 0`).
 - [ ] Criar agente de reposição de imagens (após ter URLs das imagens oficiais do ERP).
 - [ ] Revisar o commit `b925f9d` (converteu falha 401 em `::warning::`) e considerar um alerta ativo (issue automática, notificação) em vez de silenciar — CI verde não deve significar "sincronizado".
@@ -544,3 +546,44 @@ existe um fix de renovação de token pronto e esperando só o clique do usuári
 concreto de o usuário completar o login, ver "sucesso" na tela do callback, e assumir que o
 pipeline Shopee/GitHub Actions voltou a funcionar quando na verdade ele depende de um secret
 diferente (GitHub Secrets) que esse fluxo não atualiza.
+
+### 9.10 Atualização — ciclo de 2026-07-27 (~22h UTC), 15º ciclo — workflows dedicados removidos do repo
+
+Achado novo e estrutural: `.github/workflows/fetch-shopee-listings.yml` e
+`.github/workflows/optimize-shopee-listings.yml` não existem mais neste repositório. `ls
+.github/workflows/` lista 13 arquivos, nenhum com "shopee" no nome; `grep -l -i shopee
+.github/workflows/*.yml` não retorna nenhum arquivo; nenhum dos workflows consolidados
+restantes (`master-production-pipeline.yml`, `ai-autonomous-executor.yml`,
+`sync-products-auto.yml`, `olist-sync.yml`) referencia Shopee ou os agentes
+`ShopeeListingsExtractorAgent`/`ShopeeListingsOptimizationAgent` — a lógica não foi absorvida
+em nenhum outro pipeline, foi simplesmente removida.
+
+Contexto: `CLAUDE.md` (`Última atualização: 2026-07-26`) documenta uma consolidação
+"99→10 workflows" no mesmo período. O relatório `AUDIT_DEEP_CONSOLIDATED_2026-07-26.md`
+(commitado nesse mesmo dia) não cita Shopee em nenhum lugar — sugerindo que a remoção foi
+colateral (os dois workflows Shopee estavam entre os "89 removidos" por critério genérico de
+redundância/baixa prioridade, sem uma decisão específica documentada sobre o pipeline Shopee).
+O clone raso desta sessão não alcança o commit exato da remoção (só 71 commits recentes
+visíveis, `git log` para esses dois paths retorna vazio mesmo com `--all`), então a autoria e
+o commit exato não puderam ser confirmados — só o estado final (arquivos ausentes) e a data
+aproximada (consolidação de 2026-07-26, entre o último artefato real do pipeline em
+`20260726-080756`/`20260726-060921` e agora).
+
+Efeito prático: mesmo que o bloqueador primário (credencial OAuth2 Tiny, seções 9-9.9) seja
+resolvido pelo usuário, o pipeline **não volta a rodar sozinho** — os dois workflows
+precisam ser recriados (restaurar o conteúdo anterior via histórico completo do GitHub, ou
+reescrever do zero a partir de `agents/v9.2.85/app/ShopeeListingsExtractorAgent.php` e
+`ShopeeListingsOptimizationAgent.php`, que continuam presentes no repo) e o trigger `schedule`
+precisa ser reativado. Isso é a mesma classe de bloqueador secundário já vista no ciclo 6
+(seção 9.5, commit `71bb308`), mas desta vez os arquivos foram apagados, não só pausados —
+recriar exige mais trabalho que só reverter um `on: workflow_dispatch` para `on: schedule`.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada neste ciclo — sem
+credencial válida e agora também sem workflow ativo para gerar qualquer dado real. Nenhum
+dado de CTR/conversão/venda foi inventado. `docs/AGENTS.md` (seção "Crítico") e
+`KNOWN_ISSUES.md` (entrada "Pipeline de otimização/sincronização Shopee") atualizados nesta
+sessão para refletir que os workflows foram removidos, não apenas que a credencial expirou.
+
+**Notificação push enviada neste ciclo:** fato novo que muda a ação recomendada ao usuário —
+não basta mais renovar a credencial Tiny; é preciso também recriar os dois workflows
+dedicados (ou decidir conscientemente abandonar esta automação específica).
