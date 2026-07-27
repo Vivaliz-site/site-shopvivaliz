@@ -56,7 +56,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          "$(go env GOPATH)/bin/actionlint" -color
+          "$(go env GOPATH)/bin/actionlint" \
+            -color \
+            -shellcheck="shellcheck --severity=error"
 
       - name: Validate YAML syntax
         shell: bash
