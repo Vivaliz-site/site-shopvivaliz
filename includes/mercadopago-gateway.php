@@ -453,8 +453,22 @@ function svmp_boleto_payload(array $order): array
         'transactions' => [
             'payments' => [[
                 'amount' => svmp_money($total),
-                'payment_method' => ['id' => 'boleto', 'type' => 'ticket'],
+                'payment_method' => [
+                    'id' => 'boleto',
+                    'type' => 'ticket',
+                    'statement_descriptor' => $statementDescriptor !== '' ? $statementDescriptor : 'SHOPVIVALIZ',
+                ],
             ]],
+        ],
+        'shipment' => [
+            'address' => [
+                'zip_code' => $zipCode,
+                'state' => $stateUf !== '' ? $stateUf : $stateName,
+                'city' => $cityName,
+                'street_number' => $streetNumber,
+                'street_name' => $streetName,
+                'neighborhood' => (string)($customer['neighborhood'] ?? ''),
+            ],
         ],
     ];
 }
