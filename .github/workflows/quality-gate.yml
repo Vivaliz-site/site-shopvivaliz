@@ -1,0 +1,120 @@
+name: Quality Gate
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workflow-and-source-validation:
+    name: Validate workflows and source
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install free validators
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes shellcheck yamllint
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Validate GitHub Actions with actionlint
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$(go env GOPATH)/bin/actionlint" -color
+
+      - name: Validate YAML syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/yamllint.yml <<'YAML_CONFIG'
+          extends: default
+          rules:
+            document-start: disable
+            line-length: disable
+            truthy:
+              allowed-values: ['true', 'false', 'on']
+            comments:
+              min-spaces-from-content: 1
+          YAML_CONFIG
+          yamllint -c /tmp/yamllint.yml .github/workflows
+
+      - name: Validate shell scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' scripts < <(find . \
+            -path './.git' -prune -o \
+            -path './vendor' -prune -o \
+            -path './node_modules' -prune -o \
+            -type f \( -name '*.sh' -o -name '*.bash' \) -print0)
+          if (( ${#scripts[@]} == 0 )); then
+            echo 'No standalone shell scripts found.'
+            exit 0
+          fi
+          shellcheck --severity=error "${scripts[@]}"
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Validate PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=0
+          while IFS= read -r -d '' file; do
+            found=1
+            php -l "$file" >/dev/null || {
+              echo "::error file=$file::PHP lint failed"
+              exit 1
+            }
+          done < <(find . \
+            -path './vendor' -prune -o \
+            -path './node_modules' -prune -o \
+            -name '*.php' -print0)
+          if [[ "$found" -eq 0 ]]; then
+            echo 'No PHP files found.'
+          fi
+          echo 'PHP syntax OK'
+
+      - name: Audit Composer dependencies when available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f composer.lock ]]; then
+            composer audit --locked --no-interaction
+          else
+            echo 'composer.lock not found; Composer audit skipped.'
+          fi
+
+      - name: Scan repository for secrets with Gitleaks
+        uses: gitleaks/gitleaks-action@v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_COMMENTS: 'false'
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'
+          GITLEAKS_ENABLE_SUMMARY: 'true'
