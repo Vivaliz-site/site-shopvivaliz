@@ -19,6 +19,11 @@ function svcr_slug(string $name, string $sku = ''): string
     return $text !== '' ? $text : '';
 }
 
+function svcr_lower(string $value): string
+{
+    return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+}
+
 /**
  * ShopVivaliz não opera com pré-venda. Qualquer marcação equivalente vinda
  * da Tiny/Olist, cache legado ou fallback remove o item da vitrine.
@@ -43,14 +48,51 @@ function svcr_is_preorder(array $item): bool
     return in_array($availability, ['preorder', 'pre-order', 'pre_venda', 'pre-venda', 'made_to_order', 'sob_encomenda', 'sob encomenda'], true);
 }
 
+/**
+ * Materia-prima, insumos internos e itens tecnicos nao comercializados nao
+ * podem aparecer no site, APIs publicas nem feeds externos.
+ */
+function svcr_is_excluded_product(array $item): bool
+{
+    $sku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
+    if ($sku === 'Parafuso5x16') {
+        return true;
+    }
+
+    foreach ([
+        'exclude_from_site',
+        'exclude_from_catalog',
+        'exclude_from_feeds',
+        'non_sellable',
+        'raw_material',
+        'materia_prima',
+        'materiaPrima',
+    ] as $field) {
+        $value = $item[$field] ?? null;
+        if ($value === true || $value === 1 || $value === '1') {
+            return true;
+        }
+        if (is_string($value) && in_array(svcr_lower(trim($value)), ['true', 'yes', 'sim', 'raw_material', 'materia_prima', 'matéria-prima', 'non_sellable'], true)) {
+            return true;
+        }
+    }
+
+    $name = svcr_lower(trim((string)($item['name'] ?? $item['nome'] ?? $item['descricao'] ?? '')));
+    $category = svcr_lower(trim((string)($item['category'] ?? $item['categoria']['nome'] ?? $item['categoria'] ?? '')));
+    $keywords = ['matéria-prima', 'materia-prima', 'materia prima', 'raw material', 'insumo interno'];
+    foreach ($keywords as $keyword) {
+        if (($name !== '' && str_contains($name, $keyword)) || ($category !== '' && str_contains($category, $keyword))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function svcr_filter_storefront_rows(array $rows): array
 {
     return array_values(array_filter($rows, static function ($row): bool {
-        if (!is_array($row) || svcr_is_preorder($row)) {
-            return false;
-        }
-        $sku = trim((string)($row['sku'] ?? $row['codigo'] ?? $row['code'] ?? ''));
-        if ($sku === 'Parafuso5x16') {
+        if (!is_array($row) || svcr_is_preorder($row) || svcr_is_excluded_product($row)) {
             return false;
         }
         // Filtrar por is_published: marcação local do site (padrão: true)
@@ -101,7 +143,7 @@ function svcr_products(): array
 
     $products = [];
     foreach ($items as $item) {
-        if (!is_array($item) || svcr_is_preorder($item)) {
+        if (!is_array($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) {
             continue;
         }
 
@@ -134,7 +176,7 @@ function svcr_products(): array
             ? $item['dimensoes']
             : (is_array($item['dimensions'] ?? null) ? $item['dimensions'] : []);
         $sku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
-        if ($sku === '' || $sku === 'Parafuso5x16') {
+        if ($sku === '') {
             continue;
         }
 
