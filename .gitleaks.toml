@@ -24,6 +24,8 @@ paths = [
     "claude/",
     "SECRETS-TEMP-COLE-AQUI.txt",
     "scripts/submit-indexnow.php",
+    ''^.*\.md$'',
+    ''^.*\.txt$'',
 ]
 
 regexes = [
