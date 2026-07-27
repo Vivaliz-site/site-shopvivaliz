@@ -61,6 +61,10 @@ storage/products-cache-ativos.json
 .agent-heartbeats/
 .git-sync.lock
 .git-auto-sync.log
+artifacts/
+scratch/compress_favicon.py
+scratch/embed_favicon_base64.py
+scratch/update_favicons_html.py
 ai-system/config/orchestrator.json
 ai-system/memory/*.db
 ai-system/memory/*_status.json
