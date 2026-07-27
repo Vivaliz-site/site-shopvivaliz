@@ -1,28 +1,23 @@
 #!/bin/bash
 # Monitor Olist token renewal in real-time
 
-echo "╔════════════════════════════════════════════════════════════╗"
-echo "║          OLIST TOKEN RENEWAL MONITOR                      ║"
-echo "║          (Verificando a cada 30 segundos)                 ║"
-echo "╚════════════════════════════════════════════════════════════╝"
-echo ""
+set -u
 
-# Função para verificar token em .env
+shopt -s nullglob
+
 check_token() {
     if [ -f .env ]; then
         TOKEN=$(grep "^OLIST_REFRESH_TOKEN=" .env | cut -d= -f2)
-        if [ ! -z "$TOKEN" ]; then
-            # Extrair exp do JWT (payload é a segunda parte)
+        if [ -n "$TOKEN" ]; then
             PAYLOAD=$(echo "$TOKEN" | cut -d. -f2)
-            # Adicionar padding se necessário
             PADDED="${PAYLOAD}=="
             EXP=$(echo "$PADDED" | base64 -d 2>/dev/null | grep -o '"exp":[0-9]*' | cut -d: -f2)
 
-            if [ ! -z "$EXP" ]; then
+            if [ -n "$EXP" ]; then
                 NOW=$(date +%s)
                 EXPIRES_IN=$((EXP - NOW))
 
-                if [ $EXPIRES_IN -gt 0 ]; then
+                if [ "$EXPIRES_IN" -gt 0 ]; then
                     HOURS=$((EXPIRES_IN / 3600))
                     echo "✅ Token VÁLIDO"
                     echo "   Expira em: $HOURS horas ($EXP)"
@@ -34,35 +29,34 @@ check_token() {
     fi
 }
 
-# Função para checar logs
 check_logs() {
     echo ""
     echo "Últimas execuções do workflow:"
     if [ -f logs/olist-live-sync-response.json ]; then
-        echo "  $(tail -1 logs/olist-live-sync-response.json | head -c 100)"
+        printf '  %s\n' "$(tail -n 1 logs/olist-live-sync-response.json | head -c 100)"
     fi
 
     if [ -f logs/olist-sync.log ]; then
         echo "  Últimas linhas do olist-sync.log:"
-        tail -3 logs/olist-sync.log | sed 's/^/    /'
+        tail -n 3 logs/olist-sync.log | sed 's/^/    /'
     fi
 }
 
-# Função para checar email
 check_email() {
+    local email_logs=(logs/email-*.log)
+
     echo ""
     echo "Status Email SMTP:"
-    if grep -q "SMTP_HOST=smtp.gmail.com" .env; then
+    if grep -q "SMTP_HOST=smtp.gmail.com" .env 2>/dev/null; then
         echo "  ✅ Gmail configurado (shopvivaliz@gmail.com)"
     fi
 
-    if [ -f logs/email-*.log ]; then
+    if (( ${#email_logs[@]} > 0 )); then
         echo "  Últimas tentativas:"
-        tail -2 logs/email-*.log | sed 's/^/    /'
+        tail -n 2 "${email_logs[@]}" | sed 's/^/    /'
     fi
 }
 
-# Loop de monitoramento
 COUNTER=0
 while true; do
     COUNTER=$((COUNTER + 1))
