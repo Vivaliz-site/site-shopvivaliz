@@ -9,6 +9,7 @@ description = "Paths e padroes que nao sao segredos reais"
 paths = [
     "node_modules",
     "vendor",
+    "dist/",
     "docs/",
     ".gitleaks.toml",
     ".gitleaksignore",
