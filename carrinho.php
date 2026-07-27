@@ -162,6 +162,51 @@ header('Content-Type: text/html; charset=UTF-8');
         if (!v || isNaN(v)) return 'Consulte o valor';
         return 'R$ ' + parseFloat(v).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     }
+    function initFreeShippingVisual() {
+        var bars = document.querySelectorAll('.free-shipping-progress-bar');
+        var texts = document.querySelectorAll('.free-shipping-text');
+        var wrappers = Array.from(bars).map(function (bar) {
+            return bar.closest('.free-shipping-progress-wrapper, .free-shipping-rewards, .gamification-rewards-container') || bar;
+        });
+        if (!bars.length) return;
+
+        texts.forEach(function (t) { t.textContent = ''; });
+        wrappers.forEach(function (w) { w.style.display = 'none'; });
+
+        fetch('/api/settings/free-shipping.php')
+            .then(function (r) { return r.json(); })
+            .then(function (cfg) {
+                if (!cfg || !cfg.enabled || !(cfg.threshold > 0)) return;
+                var limit = Number(cfg.threshold) || 0;
+                if (!(limit > 0)) return;
+
+                wrappers.forEach(function (w) { w.style.display = ''; });
+                window.updateFreeShippingVisual = function () {
+                    var subtotalEl = document.getElementById('cart-subtotal');
+                    if (!subtotalEl) return;
+                    var totalStr = (subtotalEl.textContent || '').replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
+                    var currentTotal = parseFloat(totalStr) || 0;
+                    var percentage = (currentTotal / limit) * 100;
+                    if (percentage > 100) percentage = 100;
+
+                    bars.forEach(function (bar) {
+                        bar.style.width = percentage + '%';
+                        bar.classList.toggle('bg-success', currentTotal >= limit);
+                    });
+
+                    texts.forEach(function (text) {
+                        if (currentTotal >= limit) {
+                            text.innerHTML = '🎉 Parabéns! Você ganhou <strong>Frete Grátis</strong>!';
+                        } else {
+                            var remaining = (limit - currentTotal).toFixed(2).replace('.', ',');
+                            text.innerHTML = 'Faltam apenas <strong>R$ ' + remaining + '</strong> para você ganhar <strong>Frete Grátis!</strong>';
+                        }
+                    });
+                };
+                window.updateFreeShippingVisual();
+            })
+            .catch(function () {});
+    }
 
     function render() {
         var items = getCart();
@@ -248,6 +293,7 @@ header('Content-Type: text/html; charset=UTF-8');
     }
 
     render();
+    initFreeShippingVisual();
     window.addEventListener('shopvivaliz:cart-updated', render);
 
     // Update total based on shipping quote if already calculated
@@ -267,7 +313,6 @@ header('Content-Type: text/html; charset=UTF-8');
 })();
 </script>
 <script src="/js/cart-persistence-v23.js" defer></script>
-<script src="/js/cro-interactions.js" defer></script>
 <script src="/js/cart-shipping-v7.js?v=2026-07-26-v2"></script>
 </body>
 </html>
