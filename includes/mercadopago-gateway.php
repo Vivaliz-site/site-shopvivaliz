@@ -527,15 +527,18 @@ function svmp_preference_payload(array $order): array
                 'last_purchase' => $lastPurchase !== '' ? $lastPurchase : null,
                 'authentication_type' => 'email',
                 'is_first_purchase_online' => $isFirstPurchaseOnline,
+                'phone' => $phone,
+                'customer_id' => $customerId !== '' ? $customerId : null,
             ],
             'shipments' => [
                 'express_shipments' => $isPriorityShipping,
-                'receivers_address' => [
+                'receiver_address' => [
                     'zip_code' => $zipCode,
                     'state_name' => $stateName,
                     'city_name' => $cityName,
                     'street_number' => $streetNumber,
                     'street_name' => $streetName,
+                    'neighborhood' => (string)($customer['neighborhood'] ?? ''),
                 ]
             ]
         ]
@@ -549,6 +552,9 @@ function svmp_preference_payload(array $order): array
     }
     if ($payload['additional_info']['payer']['last_purchase'] === null) {
         unset($payload['additional_info']['payer']['last_purchase']);
+    }
+    if ($payload['additional_info']['payer']['customer_id'] === null) {
+        unset($payload['additional_info']['payer']['customer_id']);
     }
 
     return $payload;

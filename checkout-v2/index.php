@@ -938,6 +938,7 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 company_trade_name: formData.get('nome_fantasia') || '',
                 device_id: window.deviceId || window.MP_DEVICE_SESSION_ID || '',
                 customer_registration_date: new Date().toISOString(),
+                customer_id: window.shopvivalizCustomerId || '',
                 notes: '',
                 payment_method: formData.get('payment_method') || 'pix',
                 items: items,
