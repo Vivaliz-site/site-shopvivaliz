@@ -100,6 +100,58 @@ function svmp_validate_cpf(string $cpf): bool
     return true;
 }
 
+function svmp_validate_cnpj(string $cnpj): bool
+{
+    $digits = preg_replace('/\D+/', '', $cnpj) ?? '';
+    if (strlen($digits) !== 14 || preg_match('/^(\d)\1{13}$/', $digits) === 1) {
+        return false;
+    }
+
+    $length = 12;
+    $numbers = substr($digits, 0, $length);
+    $sum = 0;
+    $pos = $length - 7;
+    for ($i = $length; $i >= 1; $i--) {
+        $sum += (int)$numbers[$length - $i] * $pos--;
+        if ($pos < 2) {
+            $pos = 9;
+        }
+    }
+    $result = $sum % 11 < 2 ? 0 : 11 - ($sum % 11);
+    if ($result !== (int)$digits[12]) {
+        return false;
+    }
+
+    $length = 13;
+    $numbers = substr($digits, 0, $length);
+    $sum = 0;
+    $pos = $length - 7;
+    for ($i = $length; $i >= 1; $i--) {
+        $sum += (int)$numbers[$length - $i] * $pos--;
+        if ($pos < 2) {
+            $pos = 9;
+        }
+    }
+    $result = $sum % 11 < 2 ? 0 : 11 - ($sum % 11);
+    return $result === (int)$digits[13];
+}
+
+/** @return array{type:string,number:string}|null */
+function svmp_identification_data(string $value): ?array
+{
+    $digits = preg_replace('/\D+/', '', $value) ?? '';
+    if ($digits === '') {
+        return null;
+    }
+    if (strlen($digits) === 11 && svmp_validate_cpf($digits)) {
+        return ['type' => 'CPF', 'number' => $digits];
+    }
+    if (strlen($digits) === 14 && svmp_validate_cnpj($digits)) {
+        return ['type' => 'CNPJ', 'number' => $digits];
+    }
+    return null;
+}
+
 /** @return array{0:string,1:string} */
 function svmp_split_name(string $fullName): array
 {
@@ -112,6 +164,34 @@ function svmp_split_name(string $fullName): array
 function svmp_money(float $amount): string
 {
     return number_format(round($amount, 2), 2, '.', '');
+}
+
+/** @return array{area_code:string,number:string} */
+function svmp_phone_parts(string $phone): array
+{
+    $digits = preg_replace('/\D+/', '', $phone) ?? '';
+    if (strlen($digits) >= 11) {
+        return [
+            'area_code' => substr($digits, 0, 2),
+            'number' => substr($digits, 2),
+        ];
+    }
+    if (strlen($digits) >= 10) {
+        return [
+            'area_code' => substr($digits, 0, 2),
+            'number' => substr($digits, 2),
+        ];
+    }
+    if ($digits !== '') {
+        return [
+            'area_code' => '37',
+            'number' => $digits,
+        ];
+    }
+    return [
+        'area_code' => '37',
+        'number' => '000000000',
+    ];
 }
 
 function svmp_truncate(string $value, int $length): string
@@ -391,32 +471,46 @@ function svmp_preference_payload(array $order): array
     [$firstName, $lastName] = svmp_split_name((string)($customer['name'] ?? ''));
     $baseUrl = svmp_base_url();
     $orderNumber = (string)($order['order_number'] ?? '');
-    $cpf = preg_replace('/\D+/', '', (string)($customer['cpf'] ?? '')) ?? '';
+    $document = preg_replace('/\D+/', '', (string)($customer['cpf'] ?? '')) ?? '';
+    $identification = svmp_identification_data($document);
     $stateUf = strtoupper((string)($customer['state'] ?? ''));
     $stateName = svmp_state_name($stateUf);
+    $statementDescriptor = strtoupper(svmp_truncate((string)($order['statement_descriptor'] ?? 'SHOPVIVALIZ'), 13));
+    $registrationDate = (string)($customer['registration_date'] ?? $order['customer_registration_date'] ?? $order['created_at'] ?? date('c'));
+    $lastPurchase = (string)($customer['last_purchase'] ?? $order['last_purchase'] ?? '');
+    $customerId = trim((string)($customer['customer_id'] ?? $order['customer_id'] ?? ''));
+    $isFirstPurchaseOnline = array_key_exists('is_first_purchase_online', $customer)
+        ? (bool)$customer['is_first_purchase_online']
+        : (bool)($order['is_first_purchase_online'] ?? true);
+    $phone = svmp_phone_parts((string)($customer['phone'] ?? ''));
+    $streetName = (string)($customer['street_name'] ?? $customer['address'] ?? '');
+    $streetNumber = (string)($customer['street_number'] ?? 'SN');
+    $zipCode = preg_replace('/\D+/', '', (string)($customer['cep'] ?? '')) ?? '';
+    $cityName = (string)($customer['city'] ?? '');
+    $isPriorityShipping = (bool)($order['priority_shipping'] ?? $order['express_shipping'] ?? false);
 
     $payload = [
         'items' => $items,
         'payer' => [
+            'first_name' => $firstName,
+            'last_name' => $lastName,
             'name' => $firstName,
             'surname' => $lastName,
             'email' => (string)($customer['email'] ?? ''),
-            'phone' => [
-                'area_code' => strlen($customer['phone'] ?? '') >= 10 ? substr(preg_replace('/\D+/', '', $customer['phone']), 0, 2) : '37',
-                'number' => strlen($customer['phone'] ?? '') >= 10 ? substr(preg_replace('/\D+/', '', $customer['phone']), 2) : preg_replace('/\D+/', '', $customer['phone'] ?? ''),
-            ],
-            'identification' => $cpf !== '' ? ['type' => 'CPF', 'number' => $cpf] : null,
+            'phone' => $phone,
+            'identification' => $identification,
+            'customer_id' => $customerId !== '' ? $customerId : null,
             'address' => [
-                'street_name' => (string)($customer['street_name'] ?? $customer['address'] ?? ''),
-                'street_number' => (string)($customer['street_number'] ?? 'SN'),
-                'zip_code' => preg_replace('/\D+/', '', (string)($customer['cep'] ?? '')),
+                'street_name' => $streetName,
+                'street_number' => $streetNumber,
+                'zip_code' => $zipCode,
                 'neighborhood' => (string)($customer['neighborhood'] ?? ''),
-                'state' => $stateName,
-                'city' => (string)($customer['city'] ?? ''),
+                'state' => $stateUf !== '' ? $stateUf : $stateName,
+                'city' => $cityName,
             ],
         ],
         'external_reference' => $orderNumber,
-        'statement_descriptor' => 'SHOPVIVALIZ',
+        'statement_descriptor' => $statementDescriptor !== '' ? $statementDescriptor : 'SHOPVIVALIZ',
         'back_urls' => [
             'success' => $baseUrl . '/checkout/retorno?result=success',
             'pending' => $baseUrl . '/checkout/retorno?result=pending',
@@ -427,18 +521,21 @@ function svmp_preference_payload(array $order): array
         'metadata' => ['shopvivaliz_order' => $orderNumber],
         'additional_info' => [
             'payer' => [
-                'registration_date' => $order['created_at'] ?? date('c'),
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'registration_date' => $registrationDate,
+                'last_purchase' => $lastPurchase !== '' ? $lastPurchase : null,
                 'authentication_type' => 'email',
-                'is_first_purchase_online' => true,
+                'is_first_purchase_online' => $isFirstPurchaseOnline,
             ],
             'shipments' => [
-                'express_shipments' => false,
+                'express_shipments' => $isPriorityShipping,
                 'receivers_address' => [
-                    'zip_code' => preg_replace('/\D+/', '', (string)($customer['cep'] ?? '')),
+                    'zip_code' => $zipCode,
                     'state_name' => $stateName,
-                    'city_name' => (string)($customer['city'] ?? ''),
-                    'street_number' => (string)($customer['street_number'] ?? 'SN'),
-                    'street_name' => (string)($customer['street_name'] ?? $customer['address'] ?? ''),
+                    'city_name' => $cityName,
+                    'street_number' => $streetNumber,
+                    'street_name' => $streetName,
                 ]
             ]
         ]
@@ -446,6 +543,12 @@ function svmp_preference_payload(array $order): array
 
     if ($payload['payer']['identification'] === null) {
         unset($payload['payer']['identification']);
+    }
+    if ($payload['payer']['customer_id'] === null) {
+        unset($payload['payer']['customer_id']);
+    }
+    if ($payload['additional_info']['payer']['last_purchase'] === null) {
+        unset($payload['additional_info']['payer']['last_purchase']);
     }
 
     return $payload;
@@ -467,7 +570,7 @@ function svmp_api_request(string $method, string $path, string $accessToken, ?ar
         $headers[] = 'X-Idempotency-Key: ' . $idempotencyKey;
     }
     if ($deviceId !== '') {
-        $headers[] = 'X-Melidata-Session: ' . $deviceId;
+        $headers[] = 'X-meli-session-id: ' . $deviceId;
     }
 
     $encodedPayload = $payload !== null
