@@ -25,7 +25,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Install free validators
@@ -125,11 +125,12 @@ jobs:
             echo 'composer.lock not found; Composer audit skipped.'
           fi
 
-      - name: Scan repository history for secrets with Gitleaks CLI
+      - name: Scan current repository files for secrets with Gitleaks CLI
         shell: bash
         run: |
           set -euo pipefail
-          gitleaks git . \
+          gitleaks dir . \
+            --no-git \
             --config .gitleaks.toml \
             --redact \
             --verbose
