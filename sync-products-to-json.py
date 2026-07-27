@@ -131,7 +131,11 @@ while True:
     except urllib.error.HTTPError as e:
         if e.code == 401 and not refreshed:
             print("[!] Access token expirado; tentando renovar via refresh token...")
-            token = refresh_access_token()
+            try:
+                token = refresh_access_token()
+            except Exception as refresh_exc:
+                print(f"[!] Falha ao renovar token: {refresh_exc}")
+                token = ""
             refreshed = True
             if token:
                 continue
