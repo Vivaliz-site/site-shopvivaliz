@@ -313,6 +313,8 @@ function sv_home_category_icon(string $category): string
         'construção' => '/public/assets/category-images/cat-ferragens.jpg',
         'construcao' => '/public/assets/category-images/cat-ferragens.jpg',
         'pet' => '/public/assets/category-images/cat-jardim.jpg',
+        'vaso' => '/public/assets/category-images/cat-jardim.jpg',
+        'roda' => '/public/assets/category-images/cat-rodizios.jpg',
     ];
     foreach ($map as $needle => $img_url) {
         if (stripos($category, $needle) !== false) {
@@ -347,10 +349,16 @@ function sv_home_top_categories(int $limit = 8): array
     if (!empty($counts)) {
         arsort($counts);
         foreach ($counts as $category => $count) {
+            $localIcon = sv_home_category_icon($category);
+            // Priorizar a imagem local curada. Se for a genérica do unsplash e houver imagem do produto, usa a do produto.
+            $icon = (str_contains($localIcon, 'unsplash.com') && isset($categoryImages[$category]))
+                ? $categoryImages[$category]
+                : $localIcon;
+
             $result[] = [
                 'name' => $category,
                 'count' => $count,
-                'icon' => $categoryImages[$category] ?? sv_home_category_icon($category),
+                'icon' => $icon,
                 'href' => '/catalogo?categoria=' . rawurlencode($category),
             ];
             if (count($result) >= $limit) break;
