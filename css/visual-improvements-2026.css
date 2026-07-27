@@ -299,6 +299,45 @@ footer a:hover {
     will-change: transform, box-shadow;
 }
 
+/* ============================================
+   BARRA DE CONFIANÇA - MICRO-INTERAÇÕES
+   ============================================ */
+
+.trust-bar-item {
+    transition: background 0.3s ease, transform 0.3s ease;
+}
+
+.trust-bar-item:hover {
+    transform: translateY(-2px);
+}
+
+.trust-bar-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: #eef6ff;
+    color: #0b4f88;
+    transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.trust-bar-item:hover .trust-bar-icon {
+    background: linear-gradient(135deg, #0b4f88 0%, #1e7ac9 100%);
+    color: #ffffff;
+    transform: scale(1.1) rotate(6deg);
+    box-shadow: 0 8px 20px rgba(11, 79, 136, 0.25);
+}
+
+.trust-bar-text strong {
+    transition: color 0.3s ease;
+}
+
+.trust-bar-item:hover .trust-bar-text strong {
+    color: #0b4f88;
+}
+
 @media (prefers-reduced-motion: reduce) {
     * {
         animation-duration: 0.01ms !important;
