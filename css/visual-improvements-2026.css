@@ -290,6 +290,33 @@ footer a:hover {
 }
 
 /* ============================================
+   ELEMENTOS DE DEPOIMENTO E RIBBONS
+   ============================================ */
+
+@keyframes ribbonPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.04); }
+}
+
+.product-card-ribbon {
+    animation: ribbonPulse 2.5s infinite ease-in-out;
+}
+
+.testimonial-card {
+    background: rgba(255, 255, 255, 0.7) !important;
+    backdrop-filter: blur(12px) saturate(1.2);
+    -webkit-backdrop-filter: blur(12px) saturate(1.2);
+    border: 1px solid rgba(255, 255, 255, 0.6) !important;
+    box-shadow: 0 8px 32px rgba(13, 52, 88, 0.05) !important;
+}
+
+[data-theme="dark"] .testimonial-card {
+    background: rgba(30, 41, 59, 0.7) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* ============================================
    PERFORMANCE
    ============================================ */
 
