@@ -338,7 +338,7 @@ class OrderNotificationService
         $carrier = htmlspecialchars((string)($data['shipping_label'] ?? 'Correios'));
         $trackingCode = htmlspecialchars((string)($data['tracking_number'] ?? $data['tracking_code'] ?? ''));
         if ($trackingCode === '' || strtolower($trackingCode) === 'em breve') {
-            $trackingCode = 'Em breve';
+            $trackingCode = 'Código de rastreio será enviado em instantes.';
             $trackingUrl = '#';
         } else {
             $trackingUrl = 'https://www.melhorenvio.com.br/rastreamento/' . urlencode($trackingCode);

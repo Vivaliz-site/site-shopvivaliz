@@ -50,7 +50,7 @@ function svem_build_email_content(array $order, string $event, string $customerN
     $phone = isset($order['customer']['phone']) ? $order['customer']['phone'] : '';
     $whatsapp = getenv('LOJA_WHATSAPP') ?: '551140415850';
     $whatsappLink = "https://wa.me/" . preg_replace('/\D/', '', $whatsapp);
-    $trackingCode = isset($order['tracking_code']) ? $order['tracking_code'] : 'Será enviado em breve';
+    $trackingCode = isset($order['tracking_code']) ? $order['tracking_code'] : 'Código de rastreio será enviado em instantes.';
     $address = isset($order['customer']['address']) ? $order['customer']['address'] : '';
     $neighborhood = isset($order['customer']['neighborhood']) ? $order['customer']['neighborhood'] : '';
     $city = isset($order['customer']['city']) ? $order['customer']['city'] : '';
