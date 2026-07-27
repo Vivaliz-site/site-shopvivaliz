@@ -4,7 +4,7 @@
 set -Eeuo pipefail
 
 log() {
-  echo "[$(date -u +'%Y-%m-%d %H:%M:%S UTC')] $@"
+  printf '[%s] %s\n' "$(date -u +'%Y-%m-%d %H:%M:%S UTC')" "$*"
 }
 
 log "=== Health Check iniciado ==="
@@ -23,7 +23,7 @@ else
   log "✗ HTTP local falhou"
 fi
 
-# Check 2: HTTPS publicov
+# Check 2: HTTPS público
 log "Check 2: HTTPS público..."
 ((CHECKS++))
 if curl -s -f https://shopvivaliz.com.br > /dev/null 2>&1; then
@@ -56,7 +56,7 @@ fi
 # Resultado
 log "=== Resultado: $PASSED/$CHECKS checks passaram ==="
 
-if [ $PASSED -eq $CHECKS ]; then
+if [ "$PASSED" -eq "$CHECKS" ]; then
   exit 0
 else
   exit 1
