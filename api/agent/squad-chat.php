@@ -7,6 +7,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
+require_once dirname(__DIR__, 2) . '/config/agent-keys.php';
 
 header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
@@ -29,6 +30,48 @@ if (!is_array($payload)) {
 function squad_root(): string
 {
     return dirname(__DIR__, 2);
+}
+
+function squad_request_header(string $name): string
+{
+    $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+    $value = $_SERVER[$serverKey] ?? '';
+    return is_string($value) ? trim($value) : '';
+}
+
+function squad_authorize_operations(): bool
+{
+    $expected = getenv('SHOPVIVALIZ_AGENT_KEY');
+    if (!is_string($expected) || trim($expected) === '') {
+        http_response_code(503);
+        echo json_encode([
+            'status' => 'error',
+            'endpoint' => 'squad-chat',
+            'message' => 'Canal operacional indisponivel.',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return false;
+    }
+
+    $provided = squad_request_header('X-ShopVivaliz-Agent-Key');
+    if ($provided === '') {
+        $authorization = squad_request_header('Authorization');
+        if (preg_match('/^Bearer\s+(.+)$/i', $authorization, $matches)) {
+            $provided = trim($matches[1]);
+        }
+    }
+
+    if ($provided === '' || !hash_equals(trim($expected), $provided)) {
+        http_response_code(401);
+        header('WWW-Authenticate: Bearer realm="ShopVivaliz Operations"');
+        echo json_encode([
+            'status' => 'error',
+            'endpoint' => 'squad-chat',
+            'message' => 'Nao autorizado.',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return false;
+    }
+
+    return true;
 }
 
 function squad_read_jsonl(string $path, int $limit = 100): array
@@ -66,7 +109,7 @@ function squad_operations_mode(array $payload): bool
     if (isset($_GET['mode']) && strtolower((string) $_GET['mode']) === 'operations') {
         return true;
     }
-    return isset($payload['agent_id']) || isset($payload['mode']) && strtolower((string) $payload['mode']) === 'operations';
+    return isset($payload['agent_id']) || (isset($payload['mode']) && strtolower((string) $payload['mode']) === 'operations');
 }
 
 function squad_send_intervention(array $payload): array
@@ -77,12 +120,20 @@ function squad_send_intervention(array $payload): array
         http_response_code(422);
         return ['status' => 'error', 'message' => 'agent_id e message sao obrigatorios para intervencao operacional.'];
     }
+    if (!preg_match('/^[a-z0-9._-]{1,80}$/', $agentId)) {
+        http_response_code(422);
+        return ['status' => 'error', 'message' => 'agent_id invalido.'];
+    }
+    if (strlen($message) > 4000) {
+        http_response_code(413);
+        return ['status' => 'error', 'message' => 'Mensagem operacional excede o limite permitido.'];
+    }
 
     $entry = [
         'id' => bin2hex(random_bytes(8)),
         'agent_id' => $agentId,
         'message' => $message,
-        'source' => trim((string) ($payload['source'] ?? 'squad-chat')),
+        'source' => 'squad-chat',
         'created_at' => date('c'),
         'status' => 'queued',
         'kind' => 'human-intervention',
@@ -124,12 +175,21 @@ if (($_GET['health'] ?? '') === '1') {
 }
 
 if (squad_operations_mode($payload)) {
+    if (!squad_authorize_operations()) {
+        exit;
+    }
+
     if ($method === 'POST') {
         echo json_encode(squad_send_intervention($payload), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         exit;
     }
 
     $agentId = strtolower(trim((string) ($_GET['agent_id'] ?? '')));
+    if ($agentId !== '' && !preg_match('/^[a-z0-9._-]{1,80}$/', $agentId)) {
+        http_response_code(422);
+        echo json_encode(['status' => 'error', 'message' => 'agent_id invalido.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     echo json_encode([
         'status' => 'ok',
         'endpoint' => 'squad-chat',
@@ -230,13 +290,13 @@ function processLizChat(string $message, string $context): string
 
     $model = getenv('SQUAD_GEMINI_MODEL') ?: 'gemini-1.5-flash';
     $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . $geminiKey;
-    $payload = [
+    $requestPayload = [
         'system_instruction' => ['parts' => [['text' => $systemPrompt]]],
         'contents' => $contents,
         'generationConfig' => ['maxOutputTokens' => 500, 'temperature' => 0.5],
     ];
 
-    $chat = callGeminiAPI($url, $payload);
+    $chat = callGeminiAPI($url, $requestPayload);
     $answer = trim($chat['candidates'][0]['content']['parts'][0]['text'] ?? '');
     if ($answer === '') {
         if (preg_match('/(troca|devolucao|devolver|reembolso)/i', $normMsg)) {
