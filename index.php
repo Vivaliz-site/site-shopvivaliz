@@ -429,6 +429,40 @@ $svNavCurrent = '';
     <link rel="stylesheet" href="/css/shopvivaliz-webp-optimization.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
+    <style>
+      .hero-cta .btn,
+      .hero-cta .btn:visited {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 48px;
+        font-weight: 800;
+        text-decoration: none;
+      }
+      .hero-cta .btn-hero-primary,
+      .hero-cta .btn-hero-primary:visited {
+        background: #ffffff !important;
+        color: #0b4f88 !important;
+        border: 1px solid rgba(11,79,136,.16) !important;
+      }
+      .hero-cta .btn-hero-secondary,
+      .hero-cta .btn-hero-secondary:visited {
+        background: rgba(255,255,255,.14) !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(255,255,255,.34) !important;
+      }
+      .hero-cta .btn-hero-primary:hover,
+      .hero-cta .btn-hero-secondary:hover {
+        filter: brightness(1.04);
+      }
+      .section-heading .btn.btn-secondary,
+      .section-heading .btn.btn-secondary:visited {
+        background: #edf4fb !important;
+        color: #173b63 !important;
+        border: 1px solid rgba(23,59,99,.14) !important;
+      }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">

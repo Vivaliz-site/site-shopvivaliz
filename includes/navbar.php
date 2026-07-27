@@ -62,6 +62,15 @@ header.sv-navbar a {
     transition: color 0.2s ease;
 }
 header.sv-navbar a:hover { color: #35c759 !important; }
+header.sv-navbar .navbar-menu > a[aria-current="page"] {
+    color: #ffffff !important;
+    background: rgba(255,255,255,.16) !important;
+    padding: 8px 12px !important;
+    border-radius: 999px !important;
+}
+header.sv-navbar .navbar-menu > a#nav-cart-link {
+    color: #ffffff !important;
+}
 header.sv-navbar a.sv-nav-cta {
     background: #35c759 !important;
     color: #ffffff !important;
@@ -162,6 +171,10 @@ header.sv-navbar .menu-toggle {
         background: #35c759 !important;
     }
     header.sv-navbar .navbar-menu a[aria-current="page"] { background: #e8eef7 !important; }
+    header.sv-navbar .navbar-menu a#nav-cart-link,
+    header.sv-navbar .navbar-menu a[aria-current="page"] {
+        color: #173b63 !important;
+    }
     .sv-announcement-bar { font-size: 11px; padding: 7px 10px; }
 }
 .sv-skip-link {

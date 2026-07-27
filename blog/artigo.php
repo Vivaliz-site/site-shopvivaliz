@@ -124,6 +124,36 @@ if (count($related) < 3) {
             <?php endforeach; ?>
         </div>
         <aside class="article-cta"><h2>Encontre produtos para o seu projeto</h2><p>Explore o catálogo da ShopVivaliz e compare as opções disponíveis para a sua necessidade.</p><a href="<?= sv_blog_escape((string)$article['related_products_url']) ?>">Ver produtos relacionados</a></aside>
+        <section class="article-comments" aria-labelledby="comments-title">
+            <div class="article-comments-head">
+                <h2 id="comments-title">Perguntas e comentários</h2>
+                <p>Ficou com dúvida sobre este conteúdo ou quer pedir recomendação de produto? Envie sua mensagem e seguimos pelo canal mais rápido.</p>
+            </div>
+            <form class="article-comments-form" action="https://formsubmit.co/shopvivaliz@gmail.com" method="post">
+                <input type="hidden" name="_subject" value="Pergunta do blog ShopVivaliz">
+                <input type="hidden" name="_captcha" value="false">
+                <input type="hidden" name="_template" value="table">
+                <input type="hidden" name="artigo" value="<?= sv_blog_escape((string)$article['title']) ?>">
+                <div class="article-comments-grid">
+                    <label>
+                        <span>Seu nome</span>
+                        <input type="text" name="nome" autocomplete="name" placeholder="Como podemos te chamar?" required>
+                    </label>
+                    <label>
+                        <span>Seu e-mail</span>
+                        <input type="email" name="email" autocomplete="email" placeholder="voce@exemplo.com" required>
+                    </label>
+                </div>
+                <label>
+                    <span>Sua pergunta ou comentário</span>
+                    <textarea name="mensagem" rows="5" placeholder="Escreva sua dúvida, comentário ou o que você quer encontrar no site." required></textarea>
+                </label>
+                <div class="article-comments-actions">
+                    <button type="submit">Enviar mensagem</button>
+                    <a href="/contato">Abrir atendimento completo</a>
+                </div>
+            </form>
+        </section>
         <?php if ($faqItems !== []): ?><section class="article-faq" aria-labelledby="faq-title"><h2 id="faq-title">Perguntas frequentes</h2><?php foreach ($faqItems as $faq): ?><details><summary><?= sv_blog_escape((string)$faq['question']) ?></summary><p><?= sv_blog_escape((string)$faq['answer']) ?></p></details><?php endforeach; ?></section><?php endif; ?>
         <?php if ($related !== []): ?><section class="article-related" aria-labelledby="related-title"><h2 id="related-title">Continue aprendendo</h2><div class="knowledge-grid"><?php foreach ($related as $item): ?><article class="knowledge-card"><div class="knowledge-card-body"><span class="knowledge-chip"><?= sv_blog_escape((string)$item['category']) ?></span><h3><a href="/blog/<?= rawurlencode((string)$item['slug']) ?>"><?= sv_blog_escape((string)$item['title']) ?></a></h3><p><?= sv_blog_escape((string)$item['excerpt']) ?></p><div class="knowledge-meta"><span><?= (int)$item['reading_time'] ?> min</span></div></div></article><?php endforeach; ?></div></section><?php endif; ?>
     </article>
