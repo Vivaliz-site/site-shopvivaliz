@@ -711,6 +711,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 document.getElementById('boleto-line-group').hidden = !boleto.digitable_line;
                 document.getElementById('boleto-open-link').href = boleto.ticket_url;
                 document.getElementById('boleto-modal').hidden = false;
+                triggerGooglePurchaseEvent(order.order_number, total, items);
                 triggerGoogleAdsConversion(order.order_number, total);
             } else if (method === 'mercado_pago') {
                 btn.textContent = 'Abrindo Mercado Pago…';
@@ -727,11 +728,13 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                     document.getElementById('pix-amount-display').textContent = total > 0 ? totalFmt : 'Confirmar com a loja';
                     document.getElementById('wpp-confirm-link').href = wppLink;
                     document.getElementById('pix-modal').hidden = false;
+                    triggerGooglePurchaseEvent(order.order_number, total, items);
                     triggerGoogleAdsConversion(order.order_number, total);
                 } else {
                     document.getElementById('order-number-msg').textContent = 'Pedido ' + order.order_number;
                     document.getElementById('success-wpp-link').href = wppLink;
                     document.getElementById('success-modal').hidden = false;
+                    triggerGooglePurchaseEvent(order.order_number, total, items);
                     triggerGoogleAdsConversion(order.order_number, total);
                 }
             }
@@ -886,6 +889,47 @@ function triggerGoogleAdsConversion(orderNumber, totalValue) {
             });
         }
     }
+}
+
+function triggerGooglePurchaseEvent(orderNumber, totalValue, items) {
+    if (!orderNumber) return;
+    try {
+        var dedupeKey = 'sv_purchase_tracked_' + String(orderNumber);
+        if (window.sessionStorage && sessionStorage.getItem(dedupeKey) === '1') {
+            return;
+        }
+        var payloadItems = Array.isArray(items) ? items.map(function(item) {
+            return {
+                item_id: String(item && (item.sku || item.olist_product_id || item.item_id) || ''),
+                item_name: String(item && (item.name || item.item_name) || 'Produto Vivaliz'),
+                item_brand: 'Vivaliz',
+                price: Math.max(0, Number(item && item.price || 0)),
+                quantity: Math.max(1, parseInt(item && item.quantity || 1, 10) || 1)
+            };
+        }).filter(function(item) {
+            return item.item_id || item.item_name;
+        }) : [];
+
+        if (window.ShopVivalizGoogleEvents && typeof window.ShopVivalizGoogleEvents.push === 'function') {
+            window.ShopVivalizGoogleEvents.push('purchase', {
+                transaction_id: String(orderNumber),
+                currency: 'BRL',
+                value: Math.max(0, Number(totalValue || 0)),
+                items: payloadItems
+            });
+        } else if (typeof window.gtag === 'function') {
+            window.gtag('event', 'purchase', {
+                transaction_id: String(orderNumber),
+                currency: 'BRL',
+                value: Math.max(0, Number(totalValue || 0)),
+                items: payloadItems
+            });
+        }
+
+        if (window.sessionStorage) {
+            sessionStorage.setItem(dedupeKey, '1');
+        }
+    } catch (error) {}
 }
 </script>
 </body>
