@@ -323,7 +323,19 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
 
     /* Carrinho */
     function getCart() {
+        if (window.ShopVivalizCart && typeof window.ShopVivalizCart.get === 'function') {
+            return window.ShopVivalizCart.get();
+        }
         try { return JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'); } catch(e) { return []; }
+    }
+    function saveCart(items) {
+        if (window.ShopVivalizCart && typeof window.ShopVivalizCart.set === 'function') {
+            window.ShopVivalizCart.set(items);
+            return;
+        }
+        localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+        localStorage.setItem('shopvivaliz_cart_updated_at', String(Date.now()));
+        window.dispatchEvent(new CustomEvent('shopvivaliz:cart-updated', { detail: { items: items } }));
     }
     function getShippingQuote() {
         try { return JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null'); } catch(e) { return null; }
@@ -370,7 +382,14 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
         });
     })();
-    function clearCart() { localStorage.removeItem('shopvivaliz_cart'); }
+    function clearCart() {
+        if (window.ShopVivalizCart && typeof window.ShopVivalizCart.clear === 'function') {
+            window.ShopVivalizCart.clear();
+            return;
+        }
+        localStorage.removeItem('shopvivaliz_cart');
+        window.dispatchEvent(new CustomEvent('shopvivaliz:cart-updated', { detail: { items: [] } }));
+    }
     function clearShippingQuote() { localStorage.removeItem('shopvivaliz_shipping_quote'); }
     function fmtMoney(v) {
         if (!v || isNaN(v)) return 'Consulte o valor';
@@ -410,7 +429,13 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                     + '<img src="' + (it.image_url || '/images/logo-vivaliz-square-v2.png') + '" alt="" onerror="this.src=\'/images/logo-vivaliz-square-v2.png\'">'
                     + '<div class="summary-item-info">'
                     + '<strong>' + (it.name || it.sku) + '</strong>'
-                    + '<span>Qtd: ' + (it.quantity || 1) + ' &nbsp;|&nbsp; ' + (price > 0 ? fmtMoney(sub) : 'Consultar') + '</span>'
+                    + '<div class="cart-item-controls" style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">'
+                    + '<button type="button" class="qty-btn" data-idx="' + items.indexOf(it) + '" data-delta="-1" style="width:28px;height:28px;border-radius:6px;border:1.5px solid #dbe5ef;background:#fff;font-size:16px;font-weight:700;cursor:pointer;color:#173b63;display:inline-flex;align-items:center;justify-content:center">−</button>'
+                    + '<span class="qty-val" style="font-weight:800;font-size:14px;min-width:20px;text-align:center">' + (it.quantity || 1) + '</span>'
+                    + '<button type="button" class="qty-btn" data-idx="' + items.indexOf(it) + '" data-delta="1" style="width:28px;height:28px;border-radius:6px;border:1.5px solid #dbe5ef;background:#fff;font-size:16px;font-weight:700;cursor:pointer;color:#173b63;display:inline-flex;align-items:center;justify-content:center">+</button>'
+                    + '<button type="button" class="btn-remove" data-remove="' + items.indexOf(it) + '" style="background:none;border:none;cursor:pointer;color:#b42318;font-size:13px;font-weight:700;padding:0;margin-left:4px">Remover</button>'
+                    + '</div>'
+                    + '<span>' + (price > 0 ? fmtMoney(sub) : 'Consultar') + '</span>'
                     + '</div></div>';
             });
         }
@@ -427,6 +452,31 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         }
         if (totEl) totEl.textContent = hasPrice ? fmtMoney(total - discountTotal + shippingTotal) : 'Consultar';
         if (badge) badge.textContent = items.reduce(function(a,i){ return a+(i.quantity||1); }, 0);
+
+        el.querySelectorAll('.qty-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var items2 = getCart();
+                var idx2 = parseInt(btn.getAttribute('data-idx'), 10);
+                var delta = parseInt(btn.getAttribute('data-delta'), 10);
+                if (!items2[idx2]) return;
+                items2[idx2].quantity = Math.max(1, (items2[idx2].quantity || 1) + delta);
+                saveCart(items2);
+                clearShippingQuote();
+                renderCart();
+            });
+        });
+
+        el.querySelectorAll('.btn-remove').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var items2 = getCart();
+                var idx2 = parseInt(btn.getAttribute('data-remove'), 10);
+                if (isNaN(idx2) || !items2[idx2]) return;
+                items2.splice(idx2, 1);
+                saveCart(items2);
+                clearShippingQuote();
+                renderCart();
+            });
+        });
     }
 
     /* CEP auto-fill via ViaCEP */
