@@ -183,7 +183,7 @@ header('Content-Type: text/html; charset=UTF-8');
             total += sub;
             if (price > 0) hasPrice = true;
             html += '<div class="cart-item">'
-                + '<img src="' + (it.image_url || '/images/logo-vivaliz-square.png') + '" alt="" onerror="this.src=\'/images/logo-vivaliz-square.png\'">'
+                + '<img src="' + (it.image_url || '/images/logo-vivaliz-square-v2.png') + '" alt="" onerror="this.src=\'/images/logo-vivaliz-square-v2.png\'">'
                 + '<div class="cart-item-info">'
                 + '<strong>' + (it.name || it.sku) + '</strong>'
                 + '<span>SKU: ' + it.sku + '</span>'

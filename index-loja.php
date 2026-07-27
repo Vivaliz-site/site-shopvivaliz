@@ -545,7 +545,7 @@ $categoryLinks = [
                         <?php $tags = home_product_tags($product['name']); ?>
                         <article class="product-card">
                             <div class="product-image">
-                                <img src="<?php echo htmlspecialchars($product['image_url'], ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?>" loading="lazy" onerror="this.src='/images/logo-vivaliz-square.png'">
+                                <img src="<?php echo htmlspecialchars($product['image_url'], ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?>" loading="lazy" onerror="this.src='/images/logo-vivaliz-square-v2.png'">
                             </div>
                             <div class="product-body">
                                 <div class="product-tag-row">

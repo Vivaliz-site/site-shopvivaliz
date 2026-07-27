@@ -199,7 +199,7 @@ $svFreeShippingConfig = sv_free_shipping_config();
 <header class="navbar sv-navbar">
     <nav class="container nav-inner" aria-label="Navegação principal">
         <a href="/" class="brand-link" aria-label="Ir para a home da Vivaliz">
-            <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" width="210" height="46" decoding="async" onerror="this.src='/images/logo-vivaliz-square.png'">
+            <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" width="210" height="46" decoding="async" onerror="this.src='/images/logo-vivaliz-square-v2.png'">
         </a>
         <button type="button" class="menu-toggle" id="svMenuToggle" aria-controls="navMenu" aria-expanded="false" aria-label="Abrir menu">☰</button>
         <div class="navbar-menu" id="navMenu">

@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 $svSeoTitle = $svSeoTitle ?? 'ShopVivaliz';
 $svSeoDescription = $svSeoDescription ?? 'Produtos selecionados com compra segura e atendimento próximo.';
-$svSeoImage = $svSeoImage ?? '/images/logo-vivaliz-square.png';
+$svSeoImage = $svSeoImage ?? '/images/logo-vivaliz-square-v2.png';
 $svSeoUrl = $svSeoUrl ?? (isset($_SERVER['REQUEST_URI']) ? (string)$_SERVER['REQUEST_URI'] : '/');
 $svSeoCanonical = 'https://shopvivaliz.com.br' . ($svSeoUrl === '' ? '/' : $svSeoUrl);
 ?>

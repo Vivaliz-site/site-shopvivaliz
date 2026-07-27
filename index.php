@@ -36,7 +36,7 @@ function sv_home_lower(string $value): string
 
 function sv_home_default_image(): string
 {
-    return '/images/logo-vivaliz-square.png';
+    return '/images/logo-vivaliz-square-v2.png';
 }
 
 function sv_home_catalog_source_rows(): array
@@ -396,14 +396,14 @@ $svNavCurrent = '';
     <meta http-equiv="Expires" content="0">
     <meta property="og:title" content="Vivaliz | Loja Online">
     <meta property="og:description" content="Produtos de qualidade. Compre online com entrega rápida.">
-    <meta property="og:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square.png">
+    <meta property="og:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://shopvivaliz.com.br/">
     <meta property="og:site_name" content="ShopVivaliz">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Vivaliz | Loja Online">
     <meta name="twitter:description" content="Produtos de qualidade. Compre online com entrega rápida.">
-    <meta name="twitter:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square.png">
+    <meta name="twitter:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png">
     <link rel="canonical" href="https://shopvivaliz.com.br/">
     <link rel="icon" href="/images/favicon.svg?v=2" type="image/svg+xml">
     <link rel="icon" href="/favicon.png?v=2" type="image/png">
@@ -445,7 +445,7 @@ $svNavCurrent = '';
           "@type": "Store",
           "name": "Vivaliz",
           "url": "https://shopvivaliz.com.br",
-          "image": "https://shopvivaliz.com.br/images/logo-vivaliz-square.png",
+          "image": "https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png",
           "telephone": "+55-37-99937-4112",
           "priceRange": "$$",
           "address": {

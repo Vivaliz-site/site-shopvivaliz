@@ -9,7 +9,7 @@ require_once __DIR__ . '/includes/product-seo.php';
 /* ── helpers ── */
 function sv_product_default_image(): string
 {
-    return '/images/logo-vivaliz-square.png';
+    return '/images/logo-vivaliz-square-v2.png';
 }
 
 function sv_lower(string $value): string

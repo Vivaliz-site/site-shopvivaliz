@@ -12,7 +12,7 @@ header('Content-Type: text/html; charset=UTF-8');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vivaliz - Carrinho</title>
     <link rel="stylesheet" href="/css/responsive.css">
-    <link rel="icon" type="image/png" href="/images/logo-vivaliz-square.png">
+    <link rel="icon" type="image/png" href="/images/logo-vivaliz-square-v2.png">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root { --navy:#173B63; --green:#2DBB57; --ink:#102033; --line:#DBE5EF; }
@@ -158,9 +158,9 @@ header('Content-Type: text/html; charset=UTF-8');
             : '';
         root.innerHTML = '<div class="cart-layout"><section class="cart-panel"><table class="cart-table"><thead><tr><th>Produto</th><th>Preço</th><th>Qtd</th><th>Subtotal</th><th></th></tr></thead><tbody>' +
             items.map(function (item, idx) {
-                const img = item.image_url || item.image || '/images/logo-vivaliz-square.png';
+                const img = item.image_url || item.image || '/images/logo-vivaliz-square-v2.png';
                 const qty = Math.max(1, Number(item.quantity || 1));
-                return '<tr><td data-label="Produto"><div class="item-line"><img class="item-thumb" src="' + img + '" alt="' + (item.name || 'Produto') + '" onerror="this.src=\'/images/logo-vivaliz-square.png\'"><div><div class="item-title">' + (item.name || 'Produto Vivaliz') + '</div><div class="item-sku">' + (item.sku || '') + '</div></div></div></td><td data-label="Preço">' + money(item.price) + '</td><td data-label="Qtd"><input class="qty-input" type="number" min="1" value="' + qty + '" data-index="' + idx + '" data-role="quantity"></td><td data-label="Subtotal">' + money(Number(item.price || 0) * qty) + '</td><td><button class="remove-btn" data-index="' + idx + '" data-role="remove">✕</button></td></tr>';
+                return '<tr><td data-label="Produto"><div class="item-line"><img class="item-thumb" src="' + img + '" alt="' + (item.name || 'Produto') + '" onerror="this.src=\'/images/logo-vivaliz-square-v2.png\'"><div><div class="item-title">' + (item.name || 'Produto Vivaliz') + '</div><div class="item-sku">' + (item.sku || '') + '</div></div></div></td><td data-label="Preço">' + money(item.price) + '</td><td data-label="Qtd"><input class="qty-input" type="number" min="1" value="' + qty + '" data-index="' + idx + '" data-role="quantity"></td><td data-label="Subtotal">' + money(Number(item.price || 0) * qty) + '</td><td><button class="remove-btn" data-index="' + idx + '" data-role="remove">✕</button></td></tr>';
             }).join('') +
             '</tbody></table></section><aside class="summary-panel"><h2>Resumo</h2><div class="summary-row"><span>Itens</span><strong>' + items.reduce(function (s, i) { return s + Number(i.quantity || 1); }, 0) + '</strong></div><div class="summary-row"><span>Subtotal</span><strong>' + money(subtotal) + '</strong></div><div class="summary-row"><span>Frete</span><strong>' + (shippingTotal > 0 ? money(shippingTotal) : 'A calcular') + '</strong></div><div class="summary-row summary-total"><span>Total</span><span>' + money(subtotal + shippingTotal) + '</span></div><div class="shipping-box"><label for="shipping-cep">Calcular frete</label><div class="shipping-inline"><input class="shipping-input" id="shipping-cep" type="text" inputmode="numeric" maxlength="9" placeholder="Digite o CEP" value="' + formatCep(shippingQuote && shippingQuote.cep || '') + '"><button class="ghost-btn" type="button" id="shipping-calc">Calcular</button></div><div class="shipping-status" id="shipping-status">' + (shippingLabel ? 'Opcao atual: ' + shippingLabel : (shippingFeedback || 'Informe o CEP para calcular o frete.')) + '</div></div><div class="summary-actions"><a class="primary-btn" href="/checkout">Ir para o checkout</a><a class="ghost-btn" href="/catalogo">Continuar comprando</a></div></aside></div>';
 

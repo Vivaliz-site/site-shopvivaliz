@@ -228,7 +228,7 @@ function sv_catalog_esc(string $value): string
 
 function sv_catalog_default_image(): string
 {
-    return '/images/logo-vivaliz-square.png';
+    return '/images/logo-vivaliz-square-v2.png';
 }
 
 function sv_catalog_money(float $value): string

@@ -9,13 +9,13 @@
   "description": "Loja online ShopVivaliz",
   "icons": [
     {
-      "src": "/images/logo-vivaliz-square.png",
+      "src": "/images/logo-vivaliz-square-v2.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/images/logo-vivaliz-square.png",
+      "src": "/images/logo-vivaliz-square-v2.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

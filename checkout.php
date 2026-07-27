@@ -407,7 +407,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 total += sub;
                 if (price > 0) hasPrice = true;
                 html += '<div class="summary-item">'
-                    + '<img src="' + (it.image_url || '/images/logo-vivaliz-square.png') + '" alt="" onerror="this.src=\'/images/logo-vivaliz-square.png\'">'
+                    + '<img src="' + (it.image_url || '/images/logo-vivaliz-square-v2.png') + '" alt="" onerror="this.src=\'/images/logo-vivaliz-square-v2.png\'">'
                     + '<div class="summary-item-info">'
                     + '<strong>' + (it.name || it.sku) + '</strong>'
                     + '<span>Qtd: ' + (it.quantity || 1) + ' &nbsp;|&nbsp; ' + (price > 0 ? fmtMoney(sub) : 'Consultar') + '</span>'
