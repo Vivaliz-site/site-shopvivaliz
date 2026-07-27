@@ -35,6 +35,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes shellcheck yamllint
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          go install github.com/gitleaks/gitleaks/v8@v8.30.1
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Validate GitHub Actions with actionlint
@@ -110,11 +111,11 @@ jobs:
             echo 'composer.lock not found; Composer audit skipped.'
           fi
 
-      - name: Scan repository for secrets with Gitleaks
-        uses: gitleaks/gitleaks-action@v2.3.9
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_CONFIG: .gitleaks.toml
-          GITLEAKS_ENABLE_COMMENTS: 'false'
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'
-          GITLEAKS_ENABLE_SUMMARY: 'true'
+      - name: Scan repository history for secrets with Gitleaks CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$(go env GOPATH)/bin/gitleaks" git . \
+            --config .gitleaks.toml \
+            --redact \
+            --verbose
