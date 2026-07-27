@@ -21,6 +21,9 @@ paths = [
     "INSTRUCOES-DEPLOY-AUTONOMO.txt",
     "scripts/setup-auto-deploy.py",
     "scripts/setup-auto-deploy.ps1",
+    "claude/",
+    "SECRETS-TEMP-COLE-AQUI.txt",
+    "scripts/submit-indexnow.php",
 ]
 
 regexes = [
