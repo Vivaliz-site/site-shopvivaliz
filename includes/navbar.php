@@ -83,12 +83,22 @@ header.sv-navbar .navbar-menu {
     align-items: center;
     gap: 20px;
 }
-header.sv-navbar .brand-link { min-width: 0; }
+header.sv-navbar .brand-link {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 18px;
+    border-radius: 22px;
+    background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(244,248,252,.98));
+    border: 1px solid rgba(11,79,136,.16);
+    box-shadow: 0 10px 26px rgba(7,52,93,.16), inset 0 1px 0 rgba(255,255,255,.85);
+}
 header.sv-navbar .brand-logo-img {
     display: block;
-    height: 42px;
+    height: 54px;
     width: auto;
-    max-width: min(210px, 48vw);
+    max-width: min(260px, 52vw);
     object-fit: contain;
 }
 header.sv-navbar .menu-toggle {
@@ -125,7 +135,11 @@ header.sv-navbar .menu-toggle {
         gap: 10px;
         padding-inline: 12px;
     }
-    header.sv-navbar .brand-logo-img { height: 36px; max-width: 58vw; }
+    header.sv-navbar .brand-link {
+        padding: 8px 14px;
+        border-radius: 18px;
+    }
+    header.sv-navbar .brand-logo-img { height: 42px; max-width: 58vw; }
     header.sv-navbar .menu-toggle { display: inline-flex !important; margin-left: auto; }
     header.sv-navbar .navbar-menu {
         display: none !important;
