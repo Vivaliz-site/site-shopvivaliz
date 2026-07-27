@@ -49,6 +49,10 @@ function svcr_filter_storefront_rows(array $rows): array
         if (!is_array($row) || svcr_is_preorder($row)) {
             return false;
         }
+        $sku = trim((string)($row['sku'] ?? $row['codigo'] ?? $row['code'] ?? ''));
+        if ($sku === 'Parafuso5x16') {
+            return false;
+        }
         // Filtrar por is_published: marcação local do site (padrão: true)
         $isPublished = $row['is_published'] ?? true;
         if ($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0') {
@@ -130,7 +134,7 @@ function svcr_products(): array
             ? $item['dimensoes']
             : (is_array($item['dimensions'] ?? null) ? $item['dimensions'] : []);
         $sku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
-        if ($sku === '') {
+        if ($sku === '' || $sku === 'Parafuso5x16') {
             continue;
         }
 
