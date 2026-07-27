@@ -130,7 +130,6 @@ jobs:
         run: |
           set -euo pipefail
           gitleaks dir . \
-            --no-git \
             --config .gitleaks.toml \
             --redact \
             --verbose
