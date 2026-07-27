@@ -1,10 +1,17 @@
 name: Master Production Pipeline 24/7
 
-# Pipeline de producao com aprovacao manual.
+# Pipeline de producao automatico apos Quality Gate aprovado.
 # Fluxo: validar o commit -> implantar o SHA exato -> monitorar producao.
-# Nao existe rollback automatico, push force ou deploy disparado por push.
+# O acionamento manual com confirmacao DEPLOY permanece disponivel para emergencia.
 
 on:
+  workflow_run:
+    workflows:
+      - Quality Gate
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       confirmation:
@@ -19,13 +26,20 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
 jobs:
   validate:
     name: Validate Commit
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Require explicit confirmation
+      - name: Require explicit confirmation for manual deployment
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -34,9 +48,10 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout exact commit
+      - name: Checkout exact validated commit
         uses: actions/checkout@v7
         with:
+          ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false
           fetch-depth: 0
 
@@ -98,9 +113,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "Validated commit: ${{ github.sha }}"
+          echo "Validated commit: $DEPLOY_SHA"
           git rev-parse HEAD
-          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
 
   deploy:
     name: Deploy Exact Commit to Oracle VM
@@ -109,9 +124,10 @@ jobs:
     timeout-minutes: 8
     environment: production
     steps:
-      - name: Checkout exact commit
+      - name: Checkout exact validated commit
         uses: actions/checkout@v7
         with:
+          ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false
           fetch-depth: 1
 
@@ -140,7 +156,7 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
             ubuntu@137.131.156.17 \
-            'bash -s' -- "${{ github.sha }}" <<'REMOTE_SCRIPT'
+            'bash -s' -- "$DEPLOY_SHA" <<'REMOTE_SCRIPT'
           set -euo pipefail
           expected_sha="$1"
           repo='/home/ubuntu/site-shopvivaliz'
@@ -162,7 +178,7 @@ jobs:
           git fetch --no-tags origin "$expected_sha"
           git cat-file -e "${expected_sha}^{commit}"
 
-          # Move apenas para o SHA explicitamente validado pelo workflow manual.
+          # Move apenas para o SHA exato aprovado pelo Quality Gate ou confirmado manualmente.
           git reset --hard "$expected_sha"
 
           deployed_sha="$(git rev-parse HEAD)"
@@ -178,21 +194,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > "deployment-log-${{ github.sha }}.txt" <<EOF
+          cat > "deployment-log-${DEPLOY_SHA}.txt" <<EOF
           DEPLOYMENT COMPLETED
-          Commit: ${{ github.sha }}
+          Commit: ${DEPLOY_SHA}
           Actor: ${{ github.actor }}
           Repository: ${{ github.repository }}
           Workflow run: ${{ github.run_id }}
+          Trigger: ${{ github.event_name }}
           EOF
-          cat "deployment-log-${{ github.sha }}.txt"
+          cat "deployment-log-${DEPLOY_SHA}.txt"
 
       - name: Upload deployment evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: deployment-log-${{ github.sha }}
-          path: deployment-log-${{ github.sha }}.txt
+          name: deployment-log-${{ env.DEPLOY_SHA }}
+          path: deployment-log-${{ env.DEPLOY_SHA }}.txt
           retention-days: 30
 
   monitor:
