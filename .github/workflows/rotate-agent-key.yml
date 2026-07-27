@@ -1,10 +1,6 @@
 name: Rotate ShopVivaliz Agent Key
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/rotate-agent-key.yml'
   schedule:
     - cron: '17 3 1 * *'
   workflow_dispatch:
