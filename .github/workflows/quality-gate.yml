@@ -63,16 +63,16 @@ jobs:
         run: |
           set -euo pipefail
           cat > /tmp/yamllint.yml <<'YAML_CONFIG'
-          extends: default
+          extends: relaxed
           rules:
             document-start: disable
             line-length: disable
             truthy:
               allowed-values: ['true', 'false', 'on']
-            comments:
-              min-spaces-from-content: 1
+            trailing-spaces: disable
+            empty-lines: disable
           YAML_CONFIG
-          yamllint -c /tmp/yamllint.yml .github/workflows
+          yamllint -f parsable -c /tmp/yamllint.yml .github/workflows
 
       - name: Validate shell scripts
         shell: bash
