@@ -68,9 +68,18 @@ def refresh_access_token() -> str:
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=30) as response:
-        payload = json.loads(response.read())
-    return str(payload.get("access_token") or "").strip()
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            payload = json.loads(response.read())
+        return str(payload.get("access_token") or "").strip()
+    except urllib.error.HTTPError as e:
+        print(f"[!] Erro no refresh: {e.code} {e.reason}")
+        try:
+            print("[!] Corpo da resposta de erro:", e.read().decode("utf-8"))
+        except Exception:
+            pass
+        raise e
+
 
 # Buscar todos os produtos
 all_products = []
