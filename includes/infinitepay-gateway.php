@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/config/bootstrap-env.php';
+require_once dirname(__DIR__) . '/includes/product-price-enrich.php';
 
 final class SvInfinitePayApiException extends RuntimeException
 {
@@ -221,4 +222,3 @@ function svip_create_link(array $order): array
         'raw' => $response,
     ];
 }
-
