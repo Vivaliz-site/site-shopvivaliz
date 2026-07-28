@@ -84,8 +84,8 @@ $payload = [
         'payments' => [[
             'amount' => svmp_money(99.90),
             'payment_method' => [
-                'id' => 'pix',
-                'type' => 'bank_transfer',
+                'id' => 'boleto',
+                'type' => 'ticket',
                 'statement_descriptor' => $statementDescriptor,
             ],
         ]],

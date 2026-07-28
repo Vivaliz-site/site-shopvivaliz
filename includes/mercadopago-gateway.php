@@ -429,7 +429,21 @@ function svmp_boleto_payload(array $order): array
         }
     }
 
-    return [
+    $baseUrl = svmp_base_url();
+    $stateUf = strtoupper((string)($customer['state'] ?? ''));
+    $stateName = svmp_state_name($stateUf);
+    $statementDescriptor = strtoupper(svmp_truncate((string)($order['statement_descriptor'] ?? 'SHOPVIVALIZ'), 13));
+    $registrationDate = (string)($customer['registration_date'] ?? $order['customer_registration_date'] ?? $order['created_at'] ?? date('c'));
+    $lastPurchase = (string)($customer['last_purchase'] ?? $order['last_purchase'] ?? '');
+    $customerId = trim((string)($customer['customer_id'] ?? $order['customer_id'] ?? ''));
+    $phone = svmp_phone_parts((string)($customer['phone'] ?? ''));
+    $streetName = (string)($customer['street_name'] ?? $customer['address'] ?? '');
+    $streetNumber = (string)($customer['street_number'] ?? 'SN');
+    $zipCode = preg_replace('/\D+/', '', (string)($customer['cep'] ?? '')) ?? '';
+    $cityName = (string)($customer['city'] ?? '');
+    $isPriorityShipping = (bool)($order['priority_shipping'] ?? $order['express_shipping'] ?? false);
+
+    $payload = [
         'type' => 'online',
         'external_reference' => (string)($order['order_number'] ?? ''),
         'processing_mode' => 'automatic',
@@ -460,6 +474,39 @@ function svmp_boleto_payload(array $order): array
                 ],
             ]],
         ],
+        'notification_url' => $baseUrl . '/api/webhook-mercadopago.php?source_news=webhooks',
+        'statement_descriptor' => $statementDescriptor !== '' ? $statementDescriptor : 'SHOPVIVALIZ',
+        'additional_info' => [
+            'payer' => [
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'registration_date' => $registrationDate,
+                'last_purchase' => $lastPurchase !== '' ? $lastPurchase : null,
+                'authentication_type' => 'email',
+                'is_first_purchase_online' => (bool)($order['is_first_purchase_online'] ?? true),
+                'phone' => $phone,
+                'customer_id' => $customerId !== '' ? $customerId : null,
+            ],
+            'shipments' => [
+                'express_shipments' => $isPriorityShipping,
+                'receiver_address' => [
+                    'zip_code' => $zipCode,
+                    'state_name' => $stateName,
+                    'city_name' => $cityName,
+                    'street_number' => $streetNumber,
+                    'street_name' => $streetName,
+                    'neighborhood' => (string)($customer['neighborhood'] ?? ''),
+                ],
+                'receivers_address' => [
+                    'zip_code' => $zipCode,
+                    'state_name' => $stateName,
+                    'city_name' => $cityName,
+                    'street_number' => $streetNumber,
+                    'street_name' => $streetName,
+                    'neighborhood' => (string)($customer['neighborhood'] ?? ''),
+                ],
+            ],
+        ],
         'shipment' => [
             'address' => [
                 'zip_code' => $zipCode,
@@ -471,6 +518,15 @@ function svmp_boleto_payload(array $order): array
             ],
         ],
     ];
+
+    if ($payload['additional_info']['payer']['last_purchase'] === null) {
+        unset($payload['additional_info']['payer']['last_purchase']);
+    }
+    if ($payload['additional_info']['payer']['customer_id'] === null) {
+        unset($payload['additional_info']['payer']['customer_id']);
+    }
+
+    return $payload;
 }
 
 /** @return array<string,mixed> */
