@@ -36,6 +36,13 @@
   .banner-subtitle { color: #fff !important; text-shadow: 0 1px 8px rgba(0,0,0,.65) !important; }
   .hero-carousel-arrow { width: 34px !important; height: 34px !important; font-size: 20px !important; }
 
+  /* Mantém um único acesso ao catálogo no hero e remove repetições. */
+  .hero-carousel-section .banner-cta-container,
+  .home-categories .section-heading > .btn,
+  section.home-products:not(.home-categories) .section-heading > .btn {
+    display: none !important;
+  }
+
   /* Seções: elimina espaço morto e reduz cabeçalhos. */
   .home-categories, .home-products { padding: 18px 0 !important; min-height: 0 !important; }
   .home-categories + .home-products { padding-top: 12px !important; }
