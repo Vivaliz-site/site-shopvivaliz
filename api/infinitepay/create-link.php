@@ -7,6 +7,7 @@ header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
 require_once dirname(__DIR__, 2) . '/includes/infinitepay-gateway.php';
+require_once dirname(__DIR__, 2) . '/includes/mercadopago-gateway.php';
 require_once dirname(__DIR__) . '/emails/send-order-notification.php';
 
 function svip_link_response(int $status, array $payload): never
@@ -108,4 +109,3 @@ try {
     flock($handle, LOCK_UN);
     fclose($handle);
 }
-
