@@ -1088,6 +1088,50 @@ $svNavCurrent = '';
             });
         });
     })();
+
+    (function () {
+        function decodePayload(rawValue) {
+            var raw = String(rawValue || '{}');
+            var decoder = (typeof window.decodeURIComponent === 'function')
+                ? window.decodeURIComponent.bind(window)
+                : function (value) { return value; };
+            return JSON.parse(decoder(raw));
+        }
+
+        function readCart() {
+            try {
+                var items = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
+                return Array.isArray(items) ? items : [];
+            } catch (error) {
+                return [];
+            }
+        }
+
+        function writeCart(items) {
+            localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+            localStorage.setItem('shopvivaliz_cart_updated_at', String(Date.now()));
+            window.dispatchEvent(new CustomEvent('shopvivaliz:cart-updated', { detail: { items: items } }));
+        }
+
+        document.querySelectorAll('.buy-button[data-product]').forEach(function (button) {
+            if (button.dataset.homeBound === '1') return;
+            button.dataset.homeBound = '1';
+            button.addEventListener('click', function (event) {
+                event.preventDefault();
+                try {
+                    var product = decodePayload(button.getAttribute('data-product'));
+                    var items = readCart();
+                    var existing = items.find(function (item) { return item.sku === product.sku; });
+                    if (existing) existing.quantity = Number(existing.quantity || 1) + 1;
+                    else items.push(Object.assign({}, product, { quantity: 1 }));
+                    writeCart(items);
+                } catch (error) {
+                    return;
+                }
+                window.location.href = '/carrinho';
+            }, true);
+        });
+    })();
     </script>
     <script src="/js/auto-image-carousel.js?v=20260719-2"></script>
     <!-- A/B Testing Framework for CRO -->
