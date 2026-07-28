@@ -402,6 +402,15 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         window.dispatchEvent(new CustomEvent('shopvivaliz:cart-updated', { detail: { items: [] } }));
     }
     function clearShippingQuote() { localStorage.removeItem('shopvivaliz_shipping_quote'); }
+    function shippingLabelFromQuote(q) {
+        if (!q || typeof q !== 'object') return '';
+        if (q.label && String(q.label).trim() !== '') return String(q.label).trim();
+        var option = q.option && typeof q.option === 'object' ? q.option : {};
+        var company = option.company ? String(option.company).trim() : '';
+        var name = option.name ? String(option.name).trim() : '';
+        var joined = [company, name].filter(Boolean).join(' - ');
+        return joined || 'Frete';
+    }
     function fmtMoney(v) {
         if (!v || isNaN(v)) return 'Consulte o valor';
         return 'R$ ' + parseFloat(v).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
@@ -725,7 +734,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             var q = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
             if (q) {
                 payload.shipping_total = Number(q.total) || 0;
-                payload.shipping_label = q.label || '';
+                payload.shipping_label = shippingLabelFromQuote(q);
                 payload.shipping_service = q.option && q.option.id ? q.option.id : '';
                 payload.shipping_cep = q.cep || payload.cep || '';
                 payload.shipping_quote_id = q.quote_id || '';
@@ -831,7 +840,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             var q = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
             if (q) {
                 payload['shipping_total'] = Number(q.total) || 0;
-                payload['shipping_label'] = q.label || '';
+                payload['shipping_label'] = shippingLabelFromQuote(q);
                 payload['shipping_service'] = q.option && q.option.id ? q.option.id : '';
                 payload['shipping_cep'] = q.cep || payload['cep'] || '';
                 payload['shipping_quote_id'] = q.quote_id || '';

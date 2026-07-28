@@ -29,9 +29,11 @@
       image.decoding='async';
       image.width=320;
       image.height=220;
-      image.addEventListener('load',function(){card.classList.add('has-real-image');});
+      image.addEventListener('load',function(){
+        wrapper.replaceChildren(image);
+        card.classList.add('has-real-image');
+      });
       image.addEventListener('error',function(){});
-      wrapper.replaceChildren(image);
       card.dataset.categoryImageSku=String(row.sku||'');
       card.dataset.categoryImageProduct=String(row.product_name||'');
     });

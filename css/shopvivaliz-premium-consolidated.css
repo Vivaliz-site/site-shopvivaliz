@@ -822,12 +822,25 @@ footer .footer-legal {
     padding: 28px 0 !important;
     margin: 0 !important;
     font-size: 11px !important;
-    color: rgba(255,255,255,0.4) !important;
+    color: rgba(255,255,255,0.76) !important;
 }
-footer .footer-legal strong { color: rgba(255,255,255,0.6) !important; }
-footer .footer-legal a { color: rgba(255,255,255,0.4) !important; }
-footer .footer-legal a:hover { color: rgba(255,255,255,0.8) !important; }
-footer .footer-legal div[style] { color: rgba(255,255,255,0.4) !important; }
+footer .footer-legal strong { color: #ffffff !important; }
+footer .footer-legal a { color: rgba(255,255,255,0.92) !important; }
+footer .footer-legal a:hover { color: #7dd3fc !important; }
+footer .footer-legal div[style] { color: rgba(255,255,255,0.76) !important; }
+
+.newsletter-card .newsletter-info h2,
+.home-newsletter .newsletter-info h2,
+.newsletter-card h2 {
+    color: #f8fafc !important;
+    -webkit-text-fill-color: #f8fafc !important;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.18);
+}
+
+.newsletter-card .newsletter-info p,
+.home-newsletter .newsletter-info p {
+    color: #cbd5e1 !important;
+}
 
 /* ======================================================================
    7. SCROLL REVEAL — aparição suave dos elementos ao rolar
