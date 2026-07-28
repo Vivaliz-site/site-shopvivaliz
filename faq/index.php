@@ -1,62 +1,15 @@
 <?php
 declare(strict_types=1);
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-header('Content-Type: text/html; charset=UTF-8');
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
 ?>
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Perguntas frequentes sobre pedidos, pagamento, frete e atendimento da ShopVivaliz.">
-    <title>FAQ | ShopVivaliz</title>
-    <link rel="stylesheet" href="/css/responsive.css">
-</head>
-<body>
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="description" content="Dúvidas frequentes sobre pedidos, pagamento, entrega, troca e atendimento da ShopVivaliz."><title>Dúvidas frequentes | ShopVivaliz</title><link rel="stylesheet" href="/css/responsive.css"><link rel="stylesheet" href="/css/footer-pages.css?v=20260728-1"></head><body>
 <?php $svNavCurrent = 'faq'; include __DIR__ . '/../includes/navbar.php'; ?>
-<main class="brand-page">
-    <section class="brand-hero">
-        <div class="container">
-            <div class="brand-hero-card">
-                <span class="brand-eyebrow">FAQ</span>
-                <h1>Dúvidas frequentes</h1>
-                <p>Encontre informações sobre pedidos, pagamentos, entregas, trocas e atendimento.</p>
-            </div>
-        </div>
-    </section>
-    <div class="container">
-        <section class="brand-section">
-            <div class="brand-grid">
-                <article class="brand-card">
-                    <h2>Como acompanho meu pedido?</h2>
-                    <p>Após a confirmação do pagamento, você recebe atualizações de status (preparação, envio e entrega) pelo e-mail e telefone cadastrados na compra. Também é possível consultar o andamento diretamente em "Minha Conta &gt; Meus Pedidos".</p>
-                </article>
-                <article class="brand-card">
-                    <h2>Como funciona o frete?</h2>
-                    <p>O prazo e o valor são calculados no carrinho a partir do seu CEP e são exibidos antes da finalização da compra. Enviamos para todo o Brasil.</p>
-                </article>
-                <article class="brand-card">
-                    <h2>Quais formas de pagamento vocês aceitam?</h2>
-                    <p>Aceitamos Pix, boleto bancário e cartão de crédito via Mercado Pago, com processamento seguro e criptografado.</p>
-                </article>
-                <article class="brand-card">
-                    <h2>Como faço para trocar ou devolver um produto?</h2>
-                    <p>Você tem até 7 dias corridos após o recebimento para solicitar troca ou devolução. Confira as condições completas na <a href="/politica-devolucoes.php">Política de Trocas e Devoluções</a>.</p>
-                </article>
-                <article class="brand-card">
-                    <h2>O site é seguro para comprar?</h2>
-                    <p>Sim. Todas as compras são processadas em ambiente com conexão criptografada (SSL) e checkout protegido via Mercado Pago.</p>
-                </article>
-                <article class="brand-card">
-                    <h2>Posso pedir atendimento antes da compra?</h2>
-                    <p>Sim. Em caso de dúvidas sobre compatibilidade, estoque ou prazo, use a página de <a href="/contato">contato</a> para falar com a equipe pelo WhatsApp ou e-mail.</p>
-                </article>
-            </div>
-        </section>
-    </div>
-</main>
-<?php include __DIR__ . '/../includes/footer.php'; ?>
-</body>
-</html>
+<main class="brand-page"><section class="brand-hero"><div class="container"><div class="brand-hero-card"><span class="brand-eyebrow">Ajuda</span><h1>Dúvidas frequentes</h1><p>Informações claras sobre compra, pagamento, entrega, troca e atendimento.</p></div></div></section>
+<div class="container"><section class="brand-section"><div class="faq-list">
+<details><summary>Como acompanho meu pedido?</summary><p>Consulte a área “Minha Conta &gt; Meus Pedidos”. Quando houver rastreamento disponível, o código ou link também poderá ser enviado pelos canais cadastrados.</p></details>
+<details><summary>Como o frete é calculado?</summary><p>O valor e o prazo são calculados no carrinho conforme o CEP, os produtos e as transportadoras disponíveis. Não há campanha permanente de frete grátis.</p></details>
+<details><summary>Quais formas de pagamento estão disponíveis?</summary><p>As opções válidas, incluindo eventual parcelamento, são exibidas no checkout no momento da compra.</p></details>
+<details><summary>Como solicitar troca ou devolução?</summary><p>Entre em contato informando o número do pedido e o motivo. Consulte também a <a href="/politica-devolucoes">Política de Trocas e Devoluções</a>.</p></details>
+<details><summary>O site é seguro?</summary><p>O site utiliza conexão HTTPS e os pagamentos são processados por prestadores especializados. Nunca envie senha ou código de confirmação por mensagem.</p></details>
+<details><summary>Posso tirar dúvidas antes de comprar?</summary><p>Sim. Use a página de <a href="/contato">contato</a> para falar com a equipe sobre compatibilidade, estoque, entrega ou pedido.</p></details>
+</div></section></div></main><?php include __DIR__ . '/../includes/footer.php'; ?></body></html>
