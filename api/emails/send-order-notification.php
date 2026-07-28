@@ -58,12 +58,13 @@ function svem_build_email_content(array $order, string $event, string $customerN
     $cep = isset($order['customer']['cep']) ? $order['customer']['cep'] : '';
     $paymentMethod = strtolower((string)($order['payment_method'] ?? ''));
     $mercadoPago = is_array($order['mercadopago'] ?? null) ? $order['mercadopago'] : [];
+    $infinitePay = is_array($order['infinitepay'] ?? null) ? $order['infinitepay'] : [];
     $boleto = is_array($mercadoPago['boleto'] ?? null) ? $mercadoPago['boleto'] : [];
     $preference = is_array($mercadoPago['preference'] ?? null) ? $mercadoPago['preference'] : [];
     $ticketUrl = trim((string)($boleto['ticket_url'] ?? ''));
     $digitableLine = trim((string)($boleto['digitable_line'] ?? ''));
     $barcodeContent = trim((string)($boleto['barcode_content'] ?? ''));
-    $checkoutUrl = trim((string)($preference['checkout_url'] ?? ''));
+    $checkoutUrl = trim((string)($preference['checkout_url'] ?? $infinitePay['checkout_url'] ?? ''));
     $pixKey = trim((string)(getenv('LOJA_PIX_KEY') ?: getenv('PIX_KEY') ?: ''));
 
     $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -112,10 +113,14 @@ function svem_build_email_content(array $order, string $event, string $customerN
             </div>
         ";
     } elseif ($event === 'payment_link_generated' && $checkoutUrl !== '') {
+        $gatewayTitle = $paymentMethod === 'infinitepay' ? 'Pague com InfinitePay' : 'Pague com Mercado Pago';
+        $gatewayText = $paymentMethod === 'infinitepay'
+            ? 'Use o checkout seguro para pagar com Pix ou cartão em até 6x sem juros.'
+            : 'Use o checkout seguro para escolher Pix, boleto ou cartão.';
         $paymentActionHtml = "
             <div style='background:#e8f5e9; border:1px solid #a5d6a7; padding:16px; border-radius:6px; margin:20px 0;'>
-                <h3 style='margin:0 0 10px; color:#1b5e20;'>Pague com Mercado Pago</h3>
-                <p>Use o checkout seguro para escolher Pix, boleto ou cartão.</p>
+                <h3 style='margin:0 0 10px; color:#1b5e20;'>$gatewayTitle</h3>
+                <p>$gatewayText</p>
                 <p style='margin:16px 0 0;'><a href='" . $escape($checkoutUrl) . "' style='display:inline-block; background:#00A650; color:#fff; padding:12px 18px; border-radius:6px; text-decoration:none; font-weight:bold;'>Pagar agora</a></p>
             </div>
         ";
@@ -171,7 +176,9 @@ function svem_build_email_content(array $order, string $event, string $customerN
             <p>O link de pagamento do seu pedido está disponível.</p>
             <p>Número do pedido: <strong>$orderNumber</strong><br>
             Valor: <strong>R\$ $total</strong></p>
-            <p>Escolha Pix, boleto ou cartão no checkout seguro do Mercado Pago.</p>
+            <p>" . ($paymentMethod === 'infinitepay'
+                ? 'Finalize com Pix ou cartão no checkout seguro da InfinitePay.'
+                : 'Escolha Pix, boleto ou cartão no checkout seguro do Mercado Pago.') . "</p>
         ",
     ];
 

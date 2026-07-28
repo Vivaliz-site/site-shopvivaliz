@@ -41,7 +41,7 @@ function svop_order_dir(): string
 function svop_payment_method(string $value): string
 {
     $normalized = strtolower(trim($value));
-    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia', 'mercado_pago', 'pagarme'];
+    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia', 'mercado_pago', 'pagarme', 'infinitepay'];
     return in_array($normalized, $allowed, true) ? $normalized : 'pix';
 }
 
@@ -53,6 +53,7 @@ function svop_payment_label(string $method): string
         'transferencia' => 'Transferencia bancaria',
         'mercado_pago' => 'Mercado Pago',
         'pagarme' => 'Pagar.me',
+        'infinitepay' => 'InfinitePay',
         default => 'PIX',
     };
 }
@@ -65,6 +66,7 @@ function svop_payment_instructions(string $method): string
         'transferencia' => 'Dados bancarios serao enviados pela equipe apos confirmacao do frete.',
         'mercado_pago' => 'Pagamento processado no ambiente seguro do Mercado Pago.',
         'pagarme' => 'Link de pagamento do Pagar.me sera enviado apos confirmacao do frete.',
+        'infinitepay' => 'Voce sera redirecionado para o checkout seguro da InfinitePay.',
         default => 'Pagamento via PIX com confirmacao apos validacao do pedido.',
     };
 }
@@ -251,7 +253,7 @@ try {
 }
 
 $orderNumber = 'SV' . date('YmdHis') . random_int(100, 999);
-$paymentSessionToken = in_array($paymentMethod, ['boleto', 'mercado_pago'], true)
+$paymentSessionToken = in_array($paymentMethod, ['boleto', 'mercado_pago', 'infinitepay'], true)
     ? bin2hex(random_bytes(32))
     : '';
 $record = [

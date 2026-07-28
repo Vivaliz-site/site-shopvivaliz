@@ -178,12 +178,19 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                     <span class="payment-opt-box">
                         <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago - PIX, Cartão e Boleto" style="max-height:60px; margin-bottom:8px; width: auto;">
                         <strong>Mercado Pago</strong>
-                        <small>Cartão, PIX e boleto em checkout seguro</small>
+                        <small>PIX, boleto e cartão em até 2x sem juros</small>
+                    </span>
+                </label>
+                <label class="payment-opt">
+                    <input type="radio" name="payment_method" value="infinitepay" required>
+                    <span class="payment-opt-box">
+                        <strong>InfinitePay</strong>
+                        <small>PIX e cartão em até 6x sem juros</small>
                     </span>
                 </label>
             </div>
             <div class="payment-options-note">
-                Pagamento processado com segurança pelo Mercado Pago: cartão, PIX ou boleto, sem cadastro extra.
+                Mercado Pago aceita PIX, boleto e cartão em até 2x sem juros. InfinitePay aceita PIX e cartão em até 6x sem juros.
             </div>
 
             <label class="form-group">
@@ -753,7 +760,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             var order = pending && pending.key === key && pending.order_number && pending.payment_session_token
                 ? pending
                 : await postJson('/api/orders/create.php', payload);
-            if ((method === 'boleto' || method === 'mercado_pago') && !order.payment_session_token) {
+            if ((method === 'boleto' || method === 'mercado_pago' || method === 'infinitepay') && !order.payment_session_token) {
                 throw new Error('Sessão segura de pagamento não foi criada.');
             }
             if (order.payment_session_token) {
@@ -791,6 +798,15 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 });
                 clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon();
                 window.location.assign(preference.checkout_url);
+                return;
+            } else if (method === 'infinitepay') {
+                btn.textContent = 'Abrindo InfinitePay…';
+                var link = await postJson('/api/infinitepay/create-link.php', {
+                    order_number: order.order_number,
+                    payment_session_token: order.payment_session_token
+                });
+                clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon();
+                window.location.assign(link.checkout_url);
                 return;
             } else {
                 clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon(); renderCart();

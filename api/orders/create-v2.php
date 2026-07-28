@@ -158,7 +158,7 @@ function svo_payment_method(string $value): string
     // pedido pago via Mercado Pago era silenciosamente rebaixado para 'pix'
     // no backend, quebrando o fluxo real de pagamento (create-preference.php
     // nunca era chamado corretamente).
-    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia', 'mercado_pago'];
+    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia', 'mercado_pago', 'infinitepay'];
     return in_array($normalized, $allowed, true) ? $normalized : 'pix';
 }
 
@@ -169,6 +169,7 @@ function svo_payment_label(string $method): string
         'whatsapp' => 'WhatsApp',
         'transferencia' => 'Transferencia bancaria',
         'mercado_pago' => 'Mercado Pago',
+        'infinitepay' => 'InfinitePay',
         default => 'PIX',
     };
 }
@@ -180,6 +181,7 @@ function svo_payment_instructions(string $method): string
         'whatsapp' => 'Pagamento e frete serao alinhados pelo atendimento no WhatsApp.',
         'transferencia' => 'Dados bancarios serao enviados pela equipe apos confirmacao do frete.',
         'mercado_pago' => 'Voce sera redirecionado para o checkout seguro do Mercado Pago.',
+        'infinitepay' => 'Voce sera redirecionado para o checkout seguro da InfinitePay.',
         default => 'Pagamento via PIX com confirmacao apos validacao do pedido.',
     };
 }
