@@ -17,7 +17,7 @@ function load_custom_css(): void
     if ($pageName === 'index') {
         echo "    <link rel=\"stylesheet\" href=\"/css/home-mobile-compact.css?v=2026-07-28-3\">\n";
         echo "    <link rel=\"stylesheet\" href=\"/css/home-mobile-final.css?v=2026-07-28-1\">\n";
-        echo "    <script src=\"/js/home-mobile-layout.js?v=2026-07-28-1\" defer></script>\n";
+        echo "    <script src=\"/js/home-mobile-layout.js?v=2026-07-28-2\" defer></script>\n";
     }
 
     // CSS opcional criado pelo admin continua sendo lido do storage compartilhado.
