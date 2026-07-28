@@ -136,13 +136,21 @@
     updateCartBadge(items);
   }
 
+  function decodeProductPayload(rawValue) {
+    const raw = String(rawValue || '{}');
+    const decoder = (typeof window !== 'undefined' && typeof window.decodeURIComponent === 'function')
+      ? window.decodeURIComponent.bind(window)
+      : function (value) { return value; };
+    return JSON.parse(decoder(raw));
+  }
+
   function bindBuyButtons(scope) {
     (scope || document).querySelectorAll('[data-product]').forEach(function (button) {
       if (button.dataset.bound === '1') return;
       button.dataset.bound = '1';
       button.addEventListener('click', function () {
         try {
-          const product = JSON.parse(decodeURIComponent(button.getAttribute('data-product') || '{}'));
+          const product = decodeProductPayload(button.getAttribute('data-product'));
           fetch('/api/catalog/signal.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
