@@ -8,11 +8,11 @@ $cnpj = $company['cnpj'] ?? '49.903.300/0001-70';
 $email = $company['email'] ?? 'atendimento@shopvivaliz.com.br';
 ?>
 <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Política de privacidade e proteção de dados da ShopVivaliz."><link rel="canonical" href="https://shopvivaliz.com.br/politica-privacidade/"><title>Política de Privacidade | <?= htmlspecialchars($fantasyName) ?></title>
-<link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/footer-pages.css?v=20260728-1"></head><body>
+<meta name="description" content="Política de Privacidade e Proteção de Dados (LGPD) da ShopVivaliz."><link rel="canonical" href="https://shopvivaliz.com.br/politica-privacidade/"><title>Privacidade e LGPD | <?= htmlspecialchars($fantasyName) ?></title>
+<link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/footer-pages.css?v=20260728-2"></head><body>
 <?php $svNavCurrent = 'privacidade'; include __DIR__ . '/../includes/navbar.php'; ?>
-<main class="legal-container"><header class="legal-header"><h1>Política de Privacidade</h1><p>Como coletamos, utilizamos, compartilhamos e protegemos dados pessoais.</p></header><section class="legal-body">
-<div class="legal-box"><strong><?= htmlspecialchars($legalName) ?></strong><br>CNPJ: <?= htmlspecialchars($cnpj) ?><br>Canal para assuntos de privacidade: <?= htmlspecialchars($email) ?></div>
+<main class="legal-container"><header class="legal-header"><h1>Política de Privacidade e Proteção de Dados (LGPD)</h1><p>Como coletamos, utilizamos, compartilhamos e protegemos dados pessoais.</p></header><section class="legal-body">
+<div class="legal-box"><strong><?= htmlspecialchars($legalName) ?></strong><br>CNPJ: <?= htmlspecialchars($cnpj) ?><br>Canal para assuntos de privacidade e LGPD: <?= htmlspecialchars($email) ?></div>
 <h2>1. Dados que podem ser tratados</h2><p>Podemos tratar dados de identificação, contato, endereço, pedido, faturamento, atendimento, navegação e informações técnicas necessárias ao funcionamento e à segurança do site.</p>
 <h2>2. Finalidades</h2><ul><li>Processar cadastro, compra, pagamento, faturamento e entrega.</li><li>Atender solicitações e informar o andamento de pedidos.</li><li>Prevenir fraude, abuso e incidentes de segurança.</li><li>Cumprir obrigações legais, fiscais, contábeis e regulatórias.</li><li>Medir e melhorar o funcionamento do site, respeitando as configurações aplicáveis de cookies.</li></ul>
 <h2>3. Pagamentos</h2><p>Os pagamentos são processados por prestadores especializados. A <?= htmlspecialchars($fantasyName) ?> não precisa armazenar o número completo do cartão para concluir a compra.</p>
