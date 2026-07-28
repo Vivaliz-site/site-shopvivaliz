@@ -1,0 +1,55 @@
+name: Blog Publish Scheduled
+
+on:
+  schedule:
+    # GitHub Actions agenda em UTC. Executa a cada 15 minutos para publicar
+    # artigos assim que o scheduled_at vencer.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: blog-publish-scheduled
+  cancel-in-progress: false
+
+jobs:
+  publish-scheduled:
+    name: Publicar posts agendados
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Chamar publicador do blog
+        env:
+          BLOG_PUBLISH_URL: ${{ secrets.BLOG_PUBLISH_URL }}
+          BLOG_PUBLISH_TOKEN: ${{ secrets.BLOG_PUBLISH_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          url="${BLOG_PUBLISH_URL:-https://shopvivaliz.com.br/api/blog/publish-scheduled.php}"
+
+          if [ -z "${BLOG_PUBLISH_TOKEN:-}" ]; then
+            echo "BLOG_PUBLISH_TOKEN ausente. Configure o secret para ativar publicacao automatica." >&2
+            exit 1
+          fi
+
+          response_file="$(mktemp)"
+          status="$(curl -sS -o "$response_file" -w '%{http_code}' \
+            -X POST \
+            -H "X-Blog-Publish-Token: ${BLOG_PUBLISH_TOKEN}" \
+            -H 'Accept: application/json' \
+            "$url")"
+
+          cat "$response_file"
+          echo
+
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "Falha ao publicar posts agendados: HTTP $status" >&2
+            exit 1
+          fi
+
+          if ! grep -q '"ok"[[:space:]]*:[[:space:]]*true' "$response_file"; then
+            echo "Resposta inesperada do publicador do blog" >&2
+            exit 1
+          fi
