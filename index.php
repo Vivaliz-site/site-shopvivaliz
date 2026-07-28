@@ -423,12 +423,12 @@ $svNavCurrent = '';
     <title>Vivaliz | Loja Online</title>
 
     <!-- Consolidated stylesheets for better performance -->
-    <link rel="stylesheet" href="/css/shopvivaliz-core-consolidated.css?v=2026-07-26-1">
-    <link rel="stylesheet" href="/css/shopvivaliz-premium-consolidated.css?v=2026-07-26-1">
-    <link rel="stylesheet" href="/css/shopvivaliz-inline-to-classes.css?v=2026-07-26-1">
+    <link rel="stylesheet" href="/css/shopvivaliz-core-consolidated.css?v=2026-07-27-2">
+    <link rel="stylesheet" href="/css/shopvivaliz-premium-consolidated.css?v=2026-07-27-2">
+    <link rel="stylesheet" href="/css/shopvivaliz-inline-to-classes.css?v=2026-07-27-2">
     <link rel="stylesheet" href="/css/shopvivaliz-webp-optimization.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
-    <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
+    <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-27-2">
     <style>
       .hero-cta .btn,
       .hero-cta .btn:visited {
