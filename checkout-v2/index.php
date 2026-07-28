@@ -505,8 +505,19 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                         </div>
                         <div class="form-grid">
                             <div class="field">
-                                <label for="cpf">CPF</label>
-                                <input type="text" id="cpf" name="cpf" inputmode="numeric" maxlength="14" required>
+                                <label for="cpf" id="document-label">CPF ou CNPJ</label>
+                                <input type="text" id="cpf" name="cpf" inputmode="numeric" maxlength="18" required>
+                                <small class="muted" id="document-hint">Pessoa física: valide CPF. Pessoa jurídica: ao digitar o CNPJ, os dados da empresa podem ser preenchidos automaticamente.</small>
+                            </div>
+                        </div>
+                        <div class="form-grid company-fields" id="company-fields" hidden>
+                            <div class="field">
+                                <label for="razao_social">Razão social</label>
+                                <input type="text" id="razao_social" name="razao_social" autocomplete="organization">
+                            </div>
+                            <div class="field">
+                                <label for="nome_fantasia">Nome fantasia</label>
+                                <input type="text" id="nome_fantasia" name="nome_fantasia" autocomplete="organization-title">
                             </div>
                         </div>
                     </section>
@@ -592,8 +603,17 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
 </main>
 
 <?php if (!$pedidoCriado): ?>
+<script src="https://www.mercadopago.com/v2/security.js" view="checkout" output="deviceId"></script>
+<script src="https://sdk.mercadopago.com/js/v2"></script>
 <script>
     (function () {
+        try {
+            if (window.MercadoPago && <?= json_encode(svmp_env('MERCADOPAGO_PUBLIC_KEY')) ?>) {
+                new MercadoPago(<?= json_encode(svmp_env('MERCADOPAGO_PUBLIC_KEY')) ?>, { locale: 'pt-BR' });
+            }
+        } catch (mpInitError) {
+            console.error('MercadoPago SDK init failed', mpInitError);
+        }
         const content = document.getElementById('checkout-content');
         const emptyState = document.getElementById('checkout-empty');
         const summary = document.getElementById('checkout-summary');
@@ -605,6 +625,18 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
         const form = document.getElementById('checkout-form');
         const statusNode = document.getElementById('checkout-status');
         const submitNode = document.getElementById('checkout-submit');
+        const documentInput = document.getElementById('cpf');
+        const documentLabel = document.getElementById('document-label');
+        const companyFields = document.getElementById('company-fields');
+        const companyNameField = document.getElementById('razao_social');
+        const tradeNameField = document.getElementById('nome_fantasia');
+        const cepInput = document.getElementById('cep');
+        const addressField = document.getElementById('endereco');
+        const numberField = document.getElementById('numero');
+        const neighborhoodField = document.getElementById('bairro');
+        const cityField = document.getElementById('cidade');
+        const stateField = document.getElementById('estado');
+        const customerNameField = document.getElementById('nome');
         const pixKey = <?php echo json_encode($pixKey, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
         const pixName = <?php echo json_encode($pixName, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
         const whatsapp = <?php echo json_encode($whatsapp, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
@@ -686,6 +718,102 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
             statusNode.className = 'status-message' + (type ? ' ' + type : '');
         }
 
+        function digitsOnly(value) {
+            return String(value || '').replace(/\D/g, '');
+        }
+
+        function formatCpfCnpj(value) {
+            const digits = digitsOnly(value).slice(0, 14);
+            if (digits.length <= 11) {
+                return digits
+                    .replace(/^(\d{3})(\d)/, '$1.$2')
+                    .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+                    .replace(/\.(\d{3})(\d)/, '.$1-$2');
+            }
+            return digits
+                .replace(/^(\d{2})(\d)/, '$1.$2')
+                .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+                .replace(/\.(\d{3})(\d)/, '.$1/$2')
+                .replace(/(\d{4})(\d)/, '$1-$2');
+        }
+
+        function isValidCPF(value) {
+            const cpf = digitsOnly(value);
+            if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+            let sum = 0;
+            for (let i = 0; i < 9; i += 1) sum += Number(cpf.charAt(i)) * (10 - i);
+            let digit = (sum * 10) % 11;
+            if (digit === 10) digit = 0;
+            if (digit !== Number(cpf.charAt(9))) return false;
+            sum = 0;
+            for (let i = 0; i < 10; i += 1) sum += Number(cpf.charAt(i)) * (11 - i);
+            digit = (sum * 10) % 11;
+            if (digit === 10) digit = 0;
+            return digit === Number(cpf.charAt(10));
+        }
+
+        function setDocumentMode() {
+            const digits = digitsOnly(documentInput && documentInput.value);
+            const isCompany = digits.length > 11;
+            if (documentLabel) {
+                documentLabel.textContent = isCompany ? 'CNPJ' : 'CPF';
+            }
+            if (companyFields) {
+                companyFields.hidden = !isCompany;
+            }
+            if (!isCompany) {
+                if (companyNameField) companyNameField.value = '';
+                if (tradeNameField) tradeNameField.value = '';
+            }
+        }
+
+        function fillAddressFromCep(data) {
+            if (!data || data.erro) return;
+            if (addressField && !addressField.value) addressField.value = data.logradouro || '';
+            if (neighborhoodField && !neighborhoodField.value) neighborhoodField.value = data.bairro || '';
+            if (cityField && !cityField.value) cityField.value = data.localidade || '';
+            if (stateField && !stateField.value) stateField.value = (data.uf || '').toUpperCase();
+        }
+
+        function fetchCep(cep) {
+            return fetch('/api/viacep-proxy.php?cep=' + encodeURIComponent(cep), { cache: 'no-store' })
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    fillAddressFromCep(data);
+                    return data;
+                });
+        }
+
+        function fillCompanyData(data) {
+            if (!data || data.erro) return;
+            if (companyNameField && !companyNameField.value) companyNameField.value = data.razao_social || '';
+            if (tradeNameField && !tradeNameField.value) tradeNameField.value = data.nome_fantasia || data.razao_social || '';
+            if (customerNameField && !customerNameField.value) customerNameField.value = data.nome_fantasia || data.razao_social || '';
+            if (cepInput && !digitsOnly(cepInput.value) && data.cep) {
+                cepInput.value = String(data.cep).replace(/^(\d{5})(\d{3})$/, '$1-$2');
+            }
+            if (addressField && !addressField.value) addressField.value = data.logradouro || '';
+            if (numberField && !numberField.value) numberField.value = data.numero || '';
+            if (neighborhoodField && !neighborhoodField.value) neighborhoodField.value = data.bairro || '';
+            if (cityField && !cityField.value) cityField.value = data.municipio || '';
+            if (stateField && !stateField.value) stateField.value = (data.uf || '').toUpperCase();
+            if (data.cep) {
+                fetchCep(digitsOnly(data.cep)).catch(function () {});
+            }
+        }
+
+        function fetchCnpj(cnpj) {
+            return fetch('/api/cnpj-proxy.php?cnpj=' + encodeURIComponent(cnpj), { cache: 'no-store' })
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    if (data && !data.erro) {
+                        fillCompanyData(data);
+                        return;
+                    }
+                    throw new Error((data && data.mensagem) || 'CNPJ não encontrado');
+                });
+        }
+
         function buildWhatsappLink(orderNumber, totalLabel, paymentMethod) {
             const number = String(whatsapp || '').replace(/\D/g, '');
             if (!number) return '/contato';
@@ -731,6 +859,49 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 + '</section>';
         }
 
+        if (documentInput) {
+            documentInput.addEventListener('input', function () {
+                this.value = formatCpfCnpj(this.value);
+                this.setCustomValidity('');
+                setDocumentMode();
+            });
+            documentInput.addEventListener('blur', function () {
+                const digits = digitsOnly(this.value);
+                if (digits.length === 0) return;
+                if (digits.length === 11) {
+                    if (!isValidCPF(digits)) {
+                        this.setCustomValidity('CPF inválido.');
+                        this.reportValidity();
+                        return;
+                    }
+                    this.setCustomValidity('');
+                    return;
+                }
+                if (digits.length === 14) {
+                    this.setCustomValidity('');
+                    fetchCnpj(digits).catch(function () {
+                        setStatus('Não foi possível recuperar os dados deste CNPJ automaticamente.', 'err');
+                    });
+                    return;
+                }
+                this.setCustomValidity('Informe um CPF ou CNPJ válido.');
+                this.reportValidity();
+            });
+            setDocumentMode();
+        }
+
+        if (cepInput) {
+            cepInput.addEventListener('input', function () {
+                const digits = this.value.replace(/\D/g, '').slice(0, 8);
+                this.value = digits.length > 5 ? digits.slice(0, 5) + '-' + digits.slice(5) : digits;
+            });
+            cepInput.addEventListener('blur', function () {
+                const cep = this.value.replace(/\D/g, '');
+                if (cep.length !== 8) return;
+                fetchCep(cep).catch(function () {});
+            });
+        }
+
         form.addEventListener('submit', function (event) {
             event.preventDefault();
 
@@ -744,6 +915,19 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
             setStatus('', '');
 
             const formData = new FormData(form);
+            const documentDigits = digitsOnly(formData.get('cpf') || '');
+            if (documentDigits.length === 11 && !isValidCPF(documentDigits)) {
+                submitNode.disabled = false;
+                submitNode.textContent = 'Confirmar pedido';
+                setStatus('CPF inválido. Revise o documento antes de continuar.', 'err');
+                return;
+            }
+            if (documentDigits.length !== 11 && documentDigits.length !== 14) {
+                submitNode.disabled = false;
+                submitNode.textContent = 'Confirmar pedido';
+                setStatus('Informe um CPF ou CNPJ válido.', 'err');
+                return;
+            }
             const payload = {
                 customer_name: formData.get('nome') || '',
                 customer_email: formData.get('email') || '',
@@ -756,7 +940,13 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
                 neighborhood: formData.get('bairro') || '',
                 city: formData.get('cidade') || '',
                 state: formData.get('estado') || '',
-                cpf: formData.get('cpf') || '',
+                cpf: documentDigits,
+                document_type: documentDigits.length === 14 ? 'cnpj' : 'cpf',
+                company_legal_name: formData.get('razao_social') || '',
+                company_trade_name: formData.get('nome_fantasia') || '',
+                device_id: window.deviceId || window.MP_DEVICE_SESSION_ID || '',
+                customer_registration_date: new Date().toISOString(),
+                customer_id: window.shopvivalizCustomerId || '',
                 notes: '',
                 payment_method: formData.get('payment_method') || 'pix',
                 items: items,

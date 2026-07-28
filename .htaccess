@@ -42,18 +42,24 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteEngine On
 
     # Canonical host migration: apex/no-www is the production domain.
-    # Redirect only browser/SEO traffic from legacy hosts, without changing
-    # POST webhook/callback semantics.
+    # O storefront legado em www exibe placeholders de pre-venda e textos
+    # antigos. Todo trafego de navegacao deve usar a aplicacao atual no apex.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteCond %{HTTP_HOST} ^(?:www\.shopvivaliz\.com\.br|dev\.shopvivaliz\.com\.br)$ [NC]
     RewriteRule ^ https://shopvivaliz.com.br%{REQUEST_URI} [R=301,L,NE]
+
+    # URLs publicas da vitrine legada/VNDA. As categorias passam a usar o
+    # catalogo canonico e as URLs plurais de produto passam para /produto/.
+    RewriteRule ^ferramentas/?$ /catalogo?categoria=Ferramentas [R=301,L,NE]
+    RewriteRule ^arte-papelaria-e-armarinho/?$ /catalogo?categoria=Arte%2C%20Papelaria%20e%20Armarinho [R=301,L,NE]
+    RewriteRule ^produtos/([^/]+)/?$ /produto/$1 [R=301,L,NE]
 
     # Nunca expor arquivos internos de configuracao e operacao
     RewriteRule ^config/ - [F,L]
     RewriteRule ^storage/ - [F,L]
     RewriteRule ^(?:criar-pagamento-teste-real|criar-pagamento-producao|gerar-payment-id-agora|fazer-pagamento-real-agora|simular-pagamento-real)\.php$ - [F,L,NC]
     RewriteRule ^logs/ - [F,L]
-    RewriteRule ^(?:\.git|\.env(?:\.|$)|\.claude|\.codex|\.github|\.githooks|\.vscode|\.tmp_shopvivaliz|__pycache__|scripts|tests|test-results|deploy|docs|reports|scratch|automation|automations|autodev|core|dashboards|imports|kong|listings|medusa|migrations|planilhas|public_html|release-notes|tools|utils|CheckoutPageOptimizer)(?:/|$) - [F,L,NC]
+    RewriteRule ^(?:\.git|\.env(?:\.|$)|\.claude|\.codex|\.github|\.githooks|\.vscode|\.tmp_shopvivaliz|__pycache__|scripts|tests|test-results|deploy|docs|reports|scratch|automation|automations|autodev|core|dashboards|imports|kong|listings|medusa|migrations|planilhas|public_html|release-notes|tools|utils|CheckoutPageOptimizer|installer)(?:/|$) - [F,L,NC]
     RewriteRule ^(?:debug|test|teste|check|gen-token)(?:[-_.][^/]*)?$ - [F,L,NC]
     RewriteRule ^(?:setup-webhooks|update-fallback-prices)\.php$ - [F,L,NC]
     RewriteRule ^sync(?:[-a-z0-9]*)?\.php$ - [F,L,NC]
@@ -131,6 +137,7 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^blog/?$ blog/index.php [L]
     RewriteRule ^blog/([a-z0-9][a-z0-9-]*)/?$ blog/artigo.php?slug=$1 [L,QSA]
     RewriteRule ^google-ads-api-app/?$ google-ads-api-app.php [L]
+    RewriteRule ^feed-google-merchant\.xml$ google-merchant-feed.php [L]
     RewriteRule ^termos/?$ termos.php [L]
     RewriteRule ^p/termos/?$ termos.php [L]
     RewriteRule ^p/politica-privacidade/?$ politica-privacidade/index.php [L]

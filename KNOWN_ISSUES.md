@@ -82,14 +82,24 @@ Ao adicionar novo arquivo em `/includes/` que precisa ser público:
 
 ---
 
-## 🔴 CRÍTICO: Pipeline de otimização/sincronização Shopee 100% inoperante — OAuth2 do Tiny quebrado há 3+ semanas
+## 🔴 CRÍTICO: Pipeline de otimização/sincronização Shopee 100% inoperante — OAuth2 do Tiny quebrado há 3+ semanas, e desde 2026-07-27 os workflows nem existem mais
 
-**Última atualização:** 2026-07-25
+**Última atualização:** 2026-07-27
 
-### Problema
+### Atualização 2026-07-27
+`fetch-shopee-listings.yml` e `optimize-shopee-listings.yml` **não existem mais** em
+`.github/workflows/` — removidos, aparentemente como colateral da consolidação "99→10
+workflows" registrada em `CLAUDE.md` (2026-07-26); nenhum workflow ativo restante
+referencia Shopee. Nenhum artefato novo em `listings/` desde `20260726-080756`/
+`20260726-060921` (ambos ainda com o erro OAuth2 abaixo, de antes da remoção). Ou seja, além
+de renovar a credencial (problema original abaixo), agora também é preciso **recriar os dois
+workflows** para o pipeline voltar a rodar. Detalhes: `docs/HISTORICO-AGENTES-SHOPEE.md`
+seção 9.10.
+
+### Problema original (até 2026-07-26)
 Os três workflows que dependem do client OAuth2 do Tiny ERP (`fetch-shopee-listings.yml` a
 cada 6h, `optimize-shopee-listings.yml` diário 03h UTC, e o refresh usado por
-`sync-shopee-6h.yml`) estão falhando em praticamente todo ciclo desde pelo menos 2026-07-03,
+`sync-shopee-6h.yml`) estavam falhando em praticamente todo ciclo desde pelo menos 2026-07-03,
 sempre com o mesmo erro:
 
 ```

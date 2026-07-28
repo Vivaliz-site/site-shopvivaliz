@@ -1,6 +1,15 @@
 <?php
 declare(strict_types=1);
 
+// Precisa iniciar a sessao antes de qualquer output: esta pagina tem HTML
+// suficiente antes do include do navbar (JSON-LD, meta tags) para estourar o
+// buffer de saida do PHP, o que envia os headers cedo e faz o session_start()
+// tardio do navbar.php falhar silenciosamente (usuario aparece deslogado mesmo
+// apos login). Mesma causa raiz ja corrigida em catalogo.php.
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once __DIR__ . '/config/bootstrap-env.php';
 
 // Configuração Dinâmica de Ambiente
@@ -27,7 +36,64 @@ function sv_home_lower(string $value): string
 
 function sv_home_default_image(): string
 {
-    return '/images/logo-vivaliz-square.png';
+    return '/images/logo-vivaliz-square-v2.png';
+}
+
+function sv_home_pick_best_image(array $row): string
+{
+    $candidates = [];
+    foreach ([
+        $row['image_url'] ?? '',
+        $row['image'] ?? '',
+        $row['imagem_principal_url'] ?? '',
+        $row['primary_image_url'] ?? '',
+    ] as $candidate) {
+        $candidate = trim((string)$candidate);
+        if ($candidate !== '') {
+            $candidates[] = $candidate;
+        }
+    }
+    foreach (['images', 'imagens', 'gallery', 'galeria'] as $field) {
+        if (!is_array($row[$field] ?? null)) continue;
+        foreach ($row[$field] as $candidate) {
+            $candidate = trim((string)$candidate);
+            if ($candidate !== '') {
+                $candidates[] = $candidate;
+            }
+        }
+    }
+
+    $candidates = array_values(array_unique($candidates));
+    if ($candidates === []) {
+        return '';
+    }
+
+    $score = static function (string $url): int {
+        $u = strtolower($url);
+        $bad = 0;
+        foreach (['thumb', 'thumbnail', 'small', 'mini', 'preview', 'placeholder', 'default'] as $needle) {
+            if (str_contains($u, $needle)) {
+                $bad += 10;
+            }
+        }
+        if (preg_match('/[?&](w|width|h|height)=([0-9]+)/', $u, $m)) {
+            $size = (int)$m[2];
+            $bad += $size > 0 && $size < 600 ? 8 : 0;
+        }
+        if (preg_match('/(?:_|-)(\d{2,3})x(\d{2,3})(?:[._-]|$)/', $u, $m)) {
+            $bad += ((int)$m[1] < 600 || (int)$m[2] < 600) ? 8 : 0;
+        }
+        if (preg_match('/(?:_|-)(\d{3,4})(?:[._-]|$)/', $u, $m)) {
+            $bad += ((int)$m[1] < 700) ? 4 : 0;
+        }
+        if (str_contains($u, 'cloudinary') || str_contains($u, 'imgix') || str_contains($u, 'cdn')) {
+            $bad -= 2;
+        }
+        return $bad;
+    };
+
+    usort($candidates, static fn(string $a, string $b): int => $score($a) <=> $score($b));
+    return $candidates[0] ?? '';
 }
 
 function sv_home_catalog_source_rows(): array
@@ -188,7 +254,7 @@ function sv_home_featured_products(int $limit = 8): array
             continue;
         }
 
-        $image = trim((string)($row['image_url'] ?? $row['image'] ?? ''));
+        $image = sv_home_pick_best_image($row);
         if ($image === '') {
             continue;
         }
@@ -304,6 +370,8 @@ function sv_home_category_icon(string $category): string
         'construção' => '/public/assets/category-images/cat-ferragens.jpg',
         'construcao' => '/public/assets/category-images/cat-ferragens.jpg',
         'pet' => '/public/assets/category-images/cat-jardim.jpg',
+        'vaso' => '/public/assets/category-images/cat-jardim.jpg',
+        'roda' => '/public/assets/category-images/cat-rodizios.jpg',
     ];
     foreach ($map as $needle => $img_url) {
         if (stripos($category, $needle) !== false) {
@@ -327,7 +395,7 @@ function sv_home_top_categories(int $limit = 8): array
         }
         $counts[$category] = ($counts[$category] ?? 0) + 1;
         if (!isset($categoryImages[$category])) {
-            $image = trim((string)($row['image_url'] ?? ''));
+            $image = sv_home_pick_best_image($row);
             if ($image !== '') {
                 $categoryImages[$category] = $image;
             }
@@ -338,10 +406,18 @@ function sv_home_top_categories(int $limit = 8): array
     if (!empty($counts)) {
         arsort($counts);
         foreach ($counts as $category => $count) {
+            $localIcon = sv_home_category_icon($category);
+            // Priorizar sempre a foto real do produto (Tiny/Olist) quando existir. O icone
+            // local curado (cat-*.jpg) e generico por tipo (ex: caixa cai em organizacao,
+            // vaso cai em jardim) e pode nao bater com a categoria real.
+            $icon = (isset($categoryImages[$category]) && $categoryImages[$category] !== '')
+                ? $categoryImages[$category]
+                : $localIcon;
+
             $result[] = [
                 'name' => $category,
                 'count' => $count,
-                'icon' => $categoryImages[$category] ?? sv_home_category_icon($category),
+                'icon' => $icon,
                 'href' => '/catalogo?categoria=' . rawurlencode($category),
             ];
             if (count($result) >= $limit) break;
@@ -387,30 +463,65 @@ $svNavCurrent = '';
     <meta http-equiv="Expires" content="0">
     <meta property="og:title" content="Vivaliz | Loja Online">
     <meta property="og:description" content="Produtos de qualidade. Compre online com entrega rápida.">
-    <meta property="og:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square.png">
+    <meta property="og:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://shopvivaliz.com.br/">
     <meta property="og:site_name" content="ShopVivaliz">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Vivaliz | Loja Online">
     <meta name="twitter:description" content="Produtos de qualidade. Compre online com entrega rápida.">
-    <meta name="twitter:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square.png">
+    <meta name="twitter:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png">
     <link rel="canonical" href="https://shopvivaliz.com.br/">
-    <link rel="icon" href="/images/favicon.svg" type="image/svg+xml">
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
-    <link rel="apple-touch-icon" href="/favicon.ico">
+    <link rel="icon" href="/images/favicon.svg?v=2026-07-27" type="image/svg+xml">
+    <link rel="icon" href="/favicon.png?v=2026-07-27" type="image/png">
+    <link rel="alternate icon" href="/favicon.ico?v=2026-07-27" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/favicon.png?v=2026-07-27">
     <meta name="msapplication-TileColor" content="#173B63">
     <meta name="theme-color" content="#173B63">
 
     <title>Vivaliz | Loja Online</title>
 
     <!-- Consolidated stylesheets for better performance -->
-    <link rel="stylesheet" href="/css/shopvivaliz-core-consolidated.css?v=2026-07-19">
-    <link rel="stylesheet" href="/css/shopvivaliz-premium-consolidated.css?v=2026-07-19">
-    <link rel="stylesheet" href="/css/shopvivaliz-inline-to-classes.css?v=2026-07-19">
+    <link rel="stylesheet" href="/css/shopvivaliz-core-consolidated.css?v=2026-07-27-2">
+    <link rel="stylesheet" href="/css/shopvivaliz-premium-consolidated.css?v=2026-07-27-2">
+    <link rel="stylesheet" href="/css/shopvivaliz-inline-to-classes.css?v=2026-07-27-2">
     <link rel="stylesheet" href="/css/shopvivaliz-webp-optimization.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
-    <link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
+    <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-27-2">
+    <style>
+      .hero-cta .btn,
+      .hero-cta .btn:visited {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 48px;
+        font-weight: 800;
+        text-decoration: none;
+      }
+      .hero-cta .btn-hero-primary,
+      .hero-cta .btn-hero-primary:visited {
+        background: #ffffff !important;
+        color: #0b4f88 !important;
+        border: 1px solid rgba(11,79,136,.16) !important;
+      }
+      .hero-cta .btn-hero-secondary,
+      .hero-cta .btn-hero-secondary:visited {
+        background: rgba(255,255,255,.14) !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(255,255,255,.34) !important;
+      }
+      .hero-cta .btn-hero-primary:hover,
+      .hero-cta .btn-hero-secondary:hover {
+        filter: brightness(1.04);
+      }
+      .section-heading .btn.btn-secondary,
+      .section-heading .btn.btn-secondary:visited {
+        background: #edf4fb !important;
+        color: #173b63 !important;
+        border: 1px solid rgba(23,59,99,.14) !important;
+      }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -435,7 +546,7 @@ $svNavCurrent = '';
           "@type": "Store",
           "name": "Vivaliz",
           "url": "https://shopvivaliz.com.br",
-          "image": "https://shopvivaliz.com.br/images/logo-vivaliz-square.png",
+          "image": "https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png",
           "telephone": "+55-37-99937-4112",
           "priceRange": "$$",
           "address": {
@@ -564,6 +675,8 @@ $svNavCurrent = '';
 <body>
     <?php include __DIR__ . '/includes/navbar.php'; ?>
 
+    <main id="main-content">
+
     <!-- Hero Section -->
     <section class="hero">
         <div class="container">
@@ -576,8 +689,8 @@ $svNavCurrent = '';
                 <p class="eyebrow hero-kicker">
                     🛍️ Loja oficial Vivaliz
                 </p>
-                <h1>Rodízios, ferragens e utilidades <span class="gradient-word">para sua casa</span></h1>
-                <p>Catálogo organizado, entrega rápida pra todo o Brasil e atendimento de verdade antes e depois da compra.</p>
+                <h1>Tudo pra sua casa, <span class="gradient-word">com entrega rápida</span></h1>
+                <p>Rodízios, ferragens e utilidades com os melhores preços. Compre com segurança e receba em todo o Brasil.</p>
 
                 <!-- Premium E-Commerce Search Bar -->
                 <div class="hero-search-container">
@@ -894,8 +1007,9 @@ $svNavCurrent = '';
                     </summary>
                     <div class="faq-body">
                         <p>Aceitamos PIX (com aprovação imediata), cartão de crédito em até 6x e boleto bancário. Todas as transações são protegidas com criptografia SSL.</p>
-                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e9f0;">
-                            <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago - Formas de Pagamento" style="max-width: 100%; height: auto; max-width: 300px;">
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e9f0; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                            <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago - Formas de Pagamento" style="max-width: 100%; height: auto; width: 180px; border-radius: 10px;">
+                            <img src="/images/infinitepay-logo.svg" alt="InfinitePay - Formas de Pagamento" style="max-width: 100%; height: auto; width: 180px; border-radius: 10px;">
                         </div>
                     </div>
                 </details>
@@ -936,6 +1050,8 @@ $svNavCurrent = '';
             </script>
         </div>
     </section>
+
+    </main>
 
     <!-- Footer -->
     <?php include __DIR__ . '/includes/footer.php'; ?>
@@ -1018,7 +1134,7 @@ $svNavCurrent = '';
         });
     })();
 
-    // Premium Micro-interactions: Apple-style Glow & Animated Cart Button
+    // Premium Micro-interactions: Apple-style Glow
     (function() {
         // Spotlight Effect
         var cards = document.querySelectorAll('.product-card');
@@ -1031,45 +1147,49 @@ $svNavCurrent = '';
                 card.style.setProperty('--mouse-y', y + 'px');
             });
         });
+    })();
 
-        // Add to Cart Micro-interaction
-        document.querySelectorAll('.buy-button[data-product]').forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                var originalText = btn.innerHTML;
-                
-                // Add success state
-                btn.classList.add('btn-success');
-                btn.innerHTML = '✔ Adicionado!';
-                
-                // Fetch product payload & add to cart visually
+    (function () {
+        function decodePayload(rawValue) {
+            var raw = String(rawValue || '{}');
+            var decoder = (typeof window.decodeURIComponent === 'function')
+                ? window.decodeURIComponent.bind(window)
+                : function (value) { return value; };
+            return JSON.parse(decoder(raw));
+        }
+
+        function readCart() {
+            try {
+                var items = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
+                return Array.isArray(items) ? items : [];
+            } catch (error) {
+                return [];
+            }
+        }
+
+        function writeCart(items) {
+            localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+            localStorage.setItem('shopvivaliz_cart_updated_at', String(Date.now()));
+            window.dispatchEvent(new CustomEvent('shopvivaliz:cart-updated', { detail: { items: items } }));
+        }
+
+        document.querySelectorAll('.buy-button[data-product]').forEach(function (button) {
+            if (button.dataset.homeBound === '1') return;
+            button.dataset.homeBound = '1';
+            button.addEventListener('click', function (event) {
+                event.preventDefault();
                 try {
-                    var p = JSON.parse(decodeURIComponent(btn.dataset.product));
-                    var items = JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
-                    var ex = items.find(function(i){ return i.sku === p.sku; });
-                    if (ex) ex.quantity = (ex.quantity || 1) + 1;
-                    else items.push(Object.assign({}, p, { quantity: 1 }));
-                    localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
-                    
-                    // Update cart badge dynamically without refresh
-                    var badge = document.getElementById('nav-cart-count');
-                    if (badge) {
-                        var totalCount = items.reduce(function(a, i){ return a + (i.quantity || 1); }, 0);
-                        badge.textContent = totalCount;
-                        // Little pop animation on badge
-                        badge.style.transform = 'scale(1.4)';
-                        setTimeout(function() { badge.style.transform = 'scale(1)'; }, 200);
-                    }
-                } catch(err) {}
-
-                // Revert button and redirect after delay
-                setTimeout(function() {
-                    btn.classList.remove('btn-success');
-                    btn.innerHTML = originalText;
-                    if(window.openMiniCart) window.openMiniCart();
-                    else window.location.href = '/carrinho';
-                }, 750);
-            });
+                    var product = decodePayload(button.getAttribute('data-product'));
+                    var items = readCart();
+                    var existing = items.find(function (item) { return item.sku === product.sku; });
+                    if (existing) existing.quantity = Number(existing.quantity || 1) + 1;
+                    else items.push(Object.assign({}, product, { quantity: 1 }));
+                    writeCart(items);
+                } catch (error) {
+                    return;
+                }
+                window.location.href = '/carrinho';
+            }, true);
         });
     })();
     </script>

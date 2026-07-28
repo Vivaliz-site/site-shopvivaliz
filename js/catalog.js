@@ -136,13 +136,21 @@
     updateCartBadge(items);
   }
 
+  function decodeProductPayload(rawValue) {
+    const raw = String(rawValue || '{}');
+    const decoder = (typeof window !== 'undefined' && typeof window.decodeURIComponent === 'function')
+      ? window.decodeURIComponent.bind(window)
+      : function (value) { return value; };
+    return JSON.parse(decoder(raw));
+  }
+
   function bindBuyButtons(scope) {
     (scope || document).querySelectorAll('[data-product]').forEach(function (button) {
       if (button.dataset.bound === '1') return;
       button.dataset.bound = '1';
       button.addEventListener('click', function () {
         try {
-          const product = JSON.parse(decodeURIComponent(button.getAttribute('data-product') || '{}'));
+          const product = decodeProductPayload(button.getAttribute('data-product'));
           fetch('/api/catalog/signal.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -179,7 +187,7 @@
   }
 
   function card(product) {
-    const image = product.image_url || '/images/logo-vivaliz-square.png';
+    const image = product.image_url || '/images/logo-vivaliz-square-v2.png';
     const sku = product.sku || product.olist_product_id || 'sem-sku';
     const category = String(product.category || '').trim();
     const slug = String(product.slug || '').trim() || (product.name && sku ? slugify(product.name, sku) : '');
@@ -207,7 +215,7 @@
     return `
       <article class="product-card" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">
         <a class="product-image" href="${esc(productUrl)}" data-images="${imagesJson}" data-sku="${esc(sku)}" data-product-id="${esc(productIdAttr)}">
-          <img src="${esc(image)}" alt="${esc(product.name)}" loading="lazy" onerror="this.src='/images/logo-vivaliz-square.png'">
+          <img src="${esc(image)}" alt="${esc(product.name)}" loading="lazy" onerror="this.src='/images/logo-vivaliz-square-v2.png'">
         </a>
         <div class="product-info">
           ${category ? `<div class="product-category">${esc(category)}</div>` : ''}

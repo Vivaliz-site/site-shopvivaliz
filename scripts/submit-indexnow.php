@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
 
-$key = '036e6d865ffc4525b743d6dd53c3cb4a';
+// Chave publica de verificacao do IndexNow; precisa corresponder ao arquivo publico no dominio.
+$key = '036e6d865ffc4525b743d6dd53c3cb4a'; // gitleaks:allow
 $host = 'shopvivaliz.com.br';
 $keyLocation = 'https://shopvivaliz.com.br/' . $key . '.txt';
 $sitemapUrl = 'https://shopvivaliz.com.br/sitemap.xml';

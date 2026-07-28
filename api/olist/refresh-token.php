@@ -130,10 +130,15 @@ $newAccess = (string)$data['access_token'];
 $newRefresh = (string)($data['refresh_token'] ?? $refreshToken);
 $envContent = is_file($envFile) ? (string)file_get_contents($envFile) : '';
 $replacements = [
+    // Fonte canonica atual.
     'OLIST_ACCESS_TOKEN' => $newAccess,
     'OLIST_REFRESH_TOKEN' => $newRefresh,
+
+    // Espelhos legados mantidos para evitar falsos alertas de token expirado
+    // enquanto ainda houver scripts antigos lendo esses nomes.
     'TINY_ACCESS_TOKEN' => $newAccess,
     'TINY_REFRESH_TOKEN' => $newRefresh,
+    'TOKEN_API_OLIST' => $newAccess,
 ];
 
 foreach ($replacements as $key => $value) {
@@ -157,5 +162,6 @@ fclose($lockHandle);
 svrt_out('ok', 'Tokens refreshed and saved', [
     'http_code' => $httpCode,
     'refresh_rotated' => isset($data['refresh_token']) && $data['refresh_token'] !== '',
+    'mirrored_legacy_tokens' => ['TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN', 'TOKEN_API_OLIST'],
     'access_token_preview' => substr($newAccess, 0, 10) . '...',
 ]);

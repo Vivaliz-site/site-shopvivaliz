@@ -115,17 +115,31 @@ else
   log "INFO" "Archive extraído para $NEW_RELEASE_PATH"
 fi
 
+# Grava o SHA completo implantado num arquivo marcador dentro do release.
+# Consumido por /api/health/version.php para reportar corretamente qual
+# commit está no ar (sem isso, o endpoint sempre retorna release_sha=null
+# porque nenhum dos outros metodos de deteccao — env var, nome do diretorio
+# de release, .git/HEAD — se aplica a este layout de deploy por releases).
+echo "$REMOTE_SHA" > "$NEW_RELEASE_PATH/.release-sha"
+
 # Create symlinks to shared
 log "INFO" "Criando symlinks para shared..."
 
 declare -a SYMLINKS=(
   ".env"
-  "uploads"
   "logs"
   "cache"
   "sessions"
   "storage"
 )
+# Nota (2026-07-26, achado em auditoria): "uploads" foi removido desta lista
+# de proposito. O codigo da app define UPLOADS_PATH = STORAGE_PATH . '/uploads'
+# (ver config/constants.php), ou seja, uploads mora DENTRO de storage/, nao
+# como pasta irma. Ter os dois symlinks ("uploads" e "storage") criava um
+# uploads/ vazio/errado no nivel current/ que a app nunca lia, enquanto
+# current/storage/uploads/ (o caminho real usado) ficava sem existir em
+# shared/ - causando uploads_writable=false em /health.php em producao.
+# Os dados ja foram migrados manualmente para shared/storage/uploads/.
 
 for symlink in "${SYMLINKS[@]}"; do
   target_path="$NEW_RELEASE_PATH/$symlink"

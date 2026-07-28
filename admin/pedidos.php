@@ -41,9 +41,26 @@ $ordersDir = dirname(__DIR__) . '/storage/orders';
 $files = is_dir($ordersDir) ? glob($ordersDir . '/*.json') : [];
 rsort($files);
 
+// =====================================================================
+// ADMIN DO E-COMMERCE
+// Exibe exclusivamente pedidos originados pelo checkout do site.
+// Pedidos importados de marketplaces permanecem sincronizados,
+// porém não são exibidos nesta tela.
+// =====================================================================
+// O Tiny ERP e a fonte unica de verdade pra estoque/faturamento/expedicao/NF.
+// Esta tela e so visualizacao -- nao altera gravacao, webhooks nem sync.
+// Pedidos sem 'source' (arquivos legados, criados antes desse campo existir)
+// sao tratados como pedido do site por compatibilidade, nunca escondidos.
+$svAdminAllowedOrderSources = ['site_checkout', 'checkout_site_api', 'site_checkout_validated'];
+
 foreach (array_slice($files, 0, 100) as $file) {
     $data = json_decode((string)@file_get_contents($file), true);
     if (!is_array($data)) {
+        continue;
+    }
+
+    $svOrderSource = strtolower(trim((string)($data['source'] ?? '')));
+    if ($svOrderSource !== '' && !in_array($svOrderSource, $svAdminAllowedOrderSources, true)) {
         continue;
     }
 

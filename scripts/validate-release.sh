@@ -9,7 +9,7 @@ readonly LOG_FILE="/tmp/validate-release-$$.log"
 log() {
   local level="$1"
   shift
-  echo "[$(date -u +'%Y-%m-%d %H:%M:%S UTC')] [$level] $@" | tee -a "$LOG_FILE"
+  printf '[%s] [%s] %s\n' "$(date -u +'%Y-%m-%d %H:%M:%S UTC')" "$level" "$*" | tee -a "$LOG_FILE"
 }
 
 log "INFO" "=== Validando release: $RELEASE_PATH ==="
@@ -24,7 +24,7 @@ find "$RELEASE_PATH" -type f -name "*.php" | while read -r file; do
   fi
 done
 
-if [ $ERRORS -gt 0 ]; then
+if [ "$ERRORS" -gt 0 ]; then
   log "FATAL" "Encontrados $ERRORS erros PHP"
   exit 1
 fi
@@ -58,8 +58,8 @@ log "INFO" "✓ Permissões OK"
 
 # Check symlinks to shared
 log "INFO" "Verificando symlinks para shared..."
-SYMLINKS=".env uploads logs cache sessions storage"
-for symlink in $SYMLINKS; do
+SYMLINKS=(.env uploads logs cache sessions storage)
+for symlink in "${SYMLINKS[@]}"; do
   if [ -L "$RELEASE_PATH/$symlink" ]; then
     log "INFO" "✓ Symlink encontrado: $symlink"
   else

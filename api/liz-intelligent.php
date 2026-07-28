@@ -220,7 +220,7 @@ liz_check_rate_limit();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 // 2. Health check público minimizado para não expor variáveis internas ou segredos
-if ($method === 'GET' && ($_GET['health'] ?? '') === '1') {
+if (($method === 'GET' || $method === 'HEAD') && ($_GET['health'] ?? '') === '1') {
     liz_json_response(200, [
         'ok' => true,
         'endpoint' => 'liz-intelligent',

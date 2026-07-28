@@ -41,7 +41,7 @@ jobs:
 
           if echo "$CHANGED" | grep -qE "$RISK_PATTERN"; then
             if ! echo "$CHANGED" | grep -q "^docs/MEMORIA-AGENTES.md$"; then
-              MATCHED=$(echo "$CHANGED" | grep -E "$RISK_PATTERN" | sed 's/^/- `/;s/$/`/')
+              MATCHED=$(echo "$CHANGED" | grep -E "$RISK_PATTERN" | sed "s/^/- \`/;s/$/\`/")
               {
                 echo "🧠 **Lembrete de memória compartilhada**"
                 echo ""

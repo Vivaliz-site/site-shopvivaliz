@@ -41,7 +41,7 @@ function svop_order_dir(): string
 function svop_payment_method(string $value): string
 {
     $normalized = strtolower(trim($value));
-    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia', 'mercado_pago', 'pagarme'];
+    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia', 'mercado_pago', 'pagarme', 'infinitepay'];
     return in_array($normalized, $allowed, true) ? $normalized : 'pix';
 }
 
@@ -53,6 +53,7 @@ function svop_payment_label(string $method): string
         'transferencia' => 'Transferencia bancaria',
         'mercado_pago' => 'Mercado Pago',
         'pagarme' => 'Pagar.me',
+        'infinitepay' => 'InfinitePay',
         default => 'PIX',
     };
 }
@@ -65,6 +66,7 @@ function svop_payment_instructions(string $method): string
         'transferencia' => 'Dados bancarios serao enviados pela equipe apos confirmacao do frete.',
         'mercado_pago' => 'Pagamento processado no ambiente seguro do Mercado Pago.',
         'pagarme' => 'Link de pagamento do Pagar.me sera enviado apos confirmacao do frete.',
+        'infinitepay' => 'Voce sera redirecionado para o checkout seguro da InfinitePay.',
         default => 'Pagamento via PIX com confirmacao apos validacao do pedido.',
     };
 }
@@ -152,19 +154,35 @@ $phone = trim((string)($body['customer_phone'] ?? ''));
 $cep = preg_replace('/\D+/', '', (string)($body['cep'] ?? ''));
 $address = trim((string)($body['address'] ?? ''));
 $cpf = preg_replace('/\D+/', '', (string)($body['cpf'] ?? ''));
+$documentType = strtolower(trim((string)($body['document_type'] ?? '')));
+$companyLegalName = trim((string)($body['company_legal_name'] ?? ''));
+$companyTradeName = trim((string)($body['company_trade_name'] ?? ''));
+$customerRegistrationDate = trim((string)($body['customer_registration_date'] ?? ''));
+$customerId = trim((string)($body['customer_id'] ?? ''));
 $streetName = trim((string)($body['street_name'] ?? $address));
-$streetNumber = trim((string)($body['street_number'] ?? ''));
-$neighborhood = trim((string)($body['neighborhood'] ?? ''));
-$city = trim((string)($body['city'] ?? ''));
-$state = strtoupper(trim((string)($body['state'] ?? '')));
+$streetNumber = trim((string)($body['street_number'] ?? $body['numero'] ?? ''));
+$complement = trim((string)($body['complement'] ?? $body['complemento'] ?? ''));
+$neighborhood = trim((string)($body['neighborhood'] ?? $body['bairro'] ?? ''));
+$city = trim((string)($body['city'] ?? $body['cidade'] ?? ''));
+$state = strtoupper(trim((string)($body['state'] ?? $body['estado'] ?? $body['uf'] ?? '')));
 $notes = trim((string)($body['notes'] ?? ''));
 $paymentMethod = svop_payment_method((string)($body['payment_method'] ?? 'pix'));
 $deviceId = trim((string)($body['device_id'] ?? ''));
 
-if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($streetNumber) > 30 || strlen($neighborhood) > 120 || strlen($city) > 120 || strlen($state) > 2 || strlen($notes) > 1000 || strlen($deviceId) > 255) {
+if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($streetName) > 300 || strlen($streetNumber) > 30 || strlen($complement) > 120 || strlen($neighborhood) > 120 || strlen($city) > 120 || strlen($state) > 2 || strlen($notes) > 1000 || strlen($deviceId) > 255 || strlen($cpf) > 14 || strlen($companyLegalName) > 180 || strlen($companyTradeName) > 180 || strlen($customerRegistrationDate) > 60 || strlen($customerId) > 120) {
     svoi_release($idempotencyKey);
     svop_json(422, ['ok' => false, 'error' => 'field_too_long']);
 }
+
+$validDocument = false;
+if ($documentType === 'cnpj' || strlen($cpf) === 14) {
+    $validDocument = svmp_validate_cnpj($cpf);
+    $documentType = 'cnpj';
+} else {
+    $validDocument = svmp_validate_cpf($cpf);
+    $documentType = 'cpf';
+}
+
 if (
     $name === ''
     || !filter_var($email, FILTER_VALIDATE_EMAIL)
@@ -176,13 +194,13 @@ if (
     || $neighborhood === ''
     || $city === ''
     || strlen($state) !== 2
-    || !svmp_validate_cpf($cpf)
+    || !$validDocument
 ) {
     svoi_release($idempotencyKey);
     svop_json(422, [
         'ok' => false,
         'error' => 'customer_fields_invalid',
-        'message' => 'Preencha CPF e endereco completo para finalizar o pedido.',
+        'message' => 'Preencha CPF/CNPJ e endereco completo para finalizar o pedido.',
     ]);
 }
 
@@ -215,8 +233,27 @@ $coupon = is_array($body['coupon'] ?? null) ? $body['coupon'] : null;
 $couponCode = $coupon !== null ? (string)($coupon['code'] ?? '') : '';
 $couponDiscount = $coupon !== null ? round(min((float)($coupon['amount'] ?? 0), $itemsTotal), 2) : 0.0;
 
+$isFirstPurchaseOnline = true;
+$lastPurchase = '';
+try {
+    require_once dirname(__DIR__, 2) . '/includes/pdo-database.php';
+    require_once dirname(__DIR__, 2) . '/includes/account-schema.php';
+    sv_account_ensure_schema();
+
+    $pdo = sv_pdo();
+    $previousOrderStmt = $pdo->prepare(
+        'SELECT created_at FROM orders WHERE email = :email ORDER BY created_at DESC LIMIT 1'
+    );
+    $previousOrderStmt->execute([':email' => $email]);
+    $previousOrderCreatedAt = $previousOrderStmt->fetchColumn() ?: null;
+    $isFirstPurchaseOnline = empty($previousOrderCreatedAt);
+    $lastPurchase = !$isFirstPurchaseOnline && is_string($previousOrderCreatedAt) ? $previousOrderCreatedAt : '';
+} catch (Throwable $e) {
+    error_log('[OrderValidated] Previous order lookup failed: ' . $e->getMessage());
+}
+
 $orderNumber = 'SV' . date('YmdHis') . random_int(100, 999);
-$paymentSessionToken = in_array($paymentMethod, ['boleto', 'mercado_pago'], true)
+$paymentSessionToken = in_array($paymentMethod, ['boleto', 'mercado_pago', 'infinitepay'], true)
     ? bin2hex(random_bytes(32))
     : '';
 $record = [
@@ -230,8 +267,16 @@ $record = [
         'cep' => $cep,
         'address' => $address,
         'cpf' => $cpf,
+        'document_type' => $documentType,
+        'legal_name' => $companyLegalName,
+        'trade_name' => $companyTradeName,
+        'registration_date' => $customerRegistrationDate !== '' ? $customerRegistrationDate : date('c'),
+        'last_purchase' => $lastPurchase,
+        'is_first_purchase_online' => $isFirstPurchaseOnline,
+        'customer_id' => $customerId,
         'street_name' => $streetName,
         'street_number' => $streetNumber,
+        'complement' => $complement,
         'neighborhood' => $neighborhood,
         'city' => $city,
         'state' => $state,
@@ -247,6 +292,7 @@ $record = [
     'total' => round($itemsTotal - $couponDiscount + $shippingTotal, 2),
     'payment_method' => $paymentMethod,
     'payment_label' => svop_payment_label($paymentMethod),
+    'statement_descriptor' => 'SHOPVIVALIZ',
     'notes' => $notes,
     'created_at' => date('c'),
     'source' => 'site_checkout_validated',

@@ -1,25 +1,28 @@
 <?php
-// Agent Keys Configuration
-// This file is loaded by autonomous-watchdog.php to provide agent keys
+declare(strict_types=1);
 
+/**
+ * Agent key compatibility loader.
+ *
+ * Secrets must be supplied by the runtime environment. This file intentionally
+ * contains no fallback value and never copies a secret into logs or responses.
+ */
 if (!function_exists('ensure_agent_keys_configured')) {
     function ensure_agent_keys_configured(): void
     {
-        $keys = [
-            'SHOPVIVALIZ_AGENT_KEY' => 'RV5yJAphQHufjlfm12qaQKsrqld5fHRKeVB1lHFym-k',
-            'RUNTIME_AGENT_KEY' => 'RV5yJAphQHufjlfm12qaQKsrqld5fHRKeVB1lHFym-k',
-            'WATCHDOG_AGENT_KEY' => 'RV5yJAphQHufjlfm12qaQKsrqld5fHRKeVB1lHFym-k',
-            'AUTONOMOUS_AGENT_KEY' => 'RV5yJAphQHufjlfm12qaQKsrqld5fHRKeVB1lHFym-k',
-        ];
+        $canonical = getenv('SHOPVIVALIZ_AGENT_KEY');
+        if (!is_string($canonical) || trim($canonical) === '') {
+            return;
+        }
 
-        foreach ($keys as $key => $value) {
-            if (!getenv($key) && !isset($_SERVER[$key])) {
-                putenv($key . '=' . $value);
-                $_SERVER[$key] = $value;
+        $canonical = trim($canonical);
+        foreach (['RUNTIME_AGENT_KEY', 'WATCHDOG_AGENT_KEY', 'AUTONOMOUS_AGENT_KEY'] as $alias) {
+            if (getenv($alias) === false && !isset($_SERVER[$alias])) {
+                putenv($alias . '=' . $canonical);
+                $_SERVER[$alias] = $canonical;
             }
         }
     }
 }
 
-// Auto-configure on load
 ensure_agent_keys_configured();

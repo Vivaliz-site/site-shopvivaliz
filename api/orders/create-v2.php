@@ -158,7 +158,7 @@ function svo_payment_method(string $value): string
     // pedido pago via Mercado Pago era silenciosamente rebaixado para 'pix'
     // no backend, quebrando o fluxo real de pagamento (create-preference.php
     // nunca era chamado corretamente).
-    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia', 'mercado_pago'];
+    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia', 'mercado_pago', 'infinitepay'];
     return in_array($normalized, $allowed, true) ? $normalized : 'pix';
 }
 
@@ -169,6 +169,7 @@ function svo_payment_label(string $method): string
         'whatsapp' => 'WhatsApp',
         'transferencia' => 'Transferencia bancaria',
         'mercado_pago' => 'Mercado Pago',
+        'infinitepay' => 'InfinitePay',
         default => 'PIX',
     };
 }
@@ -180,6 +181,7 @@ function svo_payment_instructions(string $method): string
         'whatsapp' => 'Pagamento e frete serao alinhados pelo atendimento no WhatsApp.',
         'transferencia' => 'Dados bancarios serao enviados pela equipe apos confirmacao do frete.',
         'mercado_pago' => 'Voce sera redirecionado para o checkout seguro do Mercado Pago.',
+        'infinitepay' => 'Voce sera redirecionado para o checkout seguro da InfinitePay.',
         default => 'Pagamento via PIX com confirmacao apos validacao do pedido.',
     };
 }
@@ -204,6 +206,42 @@ function svo_validate_cpf(string $cpf): bool
         }
     }
     return true;
+}
+
+function svo_validate_cnpj(string $cnpj): bool
+{
+    $digits = preg_replace('/\D+/', '', $cnpj) ?? '';
+    if (strlen($digits) !== 14 || preg_match('/^(\d)\1{13}$/', $digits) === 1) {
+        return false;
+    }
+
+    $length = 12;
+    $numbers = substr($digits, 0, $length);
+    $sum = 0;
+    $pos = $length - 7;
+    for ($i = $length; $i >= 1; $i--) {
+        $sum += (int)$numbers[$length - $i] * $pos--;
+        if ($pos < 2) {
+            $pos = 9;
+        }
+    }
+    $result = $sum % 11 < 2 ? 0 : 11 - ($sum % 11);
+    if ($result !== (int)$digits[12]) {
+        return false;
+    }
+
+    $length = 13;
+    $numbers = substr($digits, 0, $length);
+    $sum = 0;
+    $pos = $length - 7;
+    for ($i = $length; $i >= 1; $i--) {
+        $sum += (int)$numbers[$length - $i] * $pos--;
+        if ($pos < 2) {
+            $pos = 9;
+        }
+    }
+    $result = $sum % 11 < 2 ? 0 : 11 - ($sum % 11);
+    return $result === (int)$digits[13];
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
@@ -231,6 +269,12 @@ $neighborhood = trim((string)($body['neighborhood'] ?? $body['bairro'] ?? ''));
 $city = trim((string)($body['city'] ?? ''));
 $state = strtoupper(trim((string)($body['state'] ?? $body['estado'] ?? '')));
 $cpf = preg_replace('/\D+/', '', (string)($body['cpf'] ?? ''));
+$documentType = strtolower(trim((string)($body['document_type'] ?? '')));
+$companyLegalName = trim((string)($body['company_legal_name'] ?? ''));
+$companyTradeName = trim((string)($body['company_trade_name'] ?? ''));
+$deviceId = trim((string)($body['device_id'] ?? ''));
+$customerRegistrationDate = trim((string)($body['customer_registration_date'] ?? ''));
+$customerId = trim((string)($body['customer_id'] ?? ''));
 $notes = trim((string)($body['notes'] ?? ''));
 $paymentMethod = svo_payment_method((string)($body['payment_method'] ?? 'pix'));
 $shippingTotal = max(0.0, (float)($body['shipping_total'] ?? 0));
@@ -239,8 +283,17 @@ $shippingService = trim((string)($body['shipping_service'] ?? ''));
 $shippingCep = preg_replace('/\D+/', '', (string)($body['shipping_cep'] ?? $cep));
 $items = is_array($body['items'] ?? null) ? $body['items'] : [];
 
-if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($streetName) > 300 || strlen($streetNumber) > 30 || strlen($complement) > 120 || strlen($neighborhood) > 120 || strlen($city) > 120 || strlen($state) > 2 || strlen($notes) > 1000 || strlen($cpf) > 14) {
+if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($streetName) > 300 || strlen($streetNumber) > 30 || strlen($complement) > 120 || strlen($neighborhood) > 120 || strlen($city) > 120 || strlen($state) > 2 || strlen($notes) > 1000 || strlen($cpf) > 14 || strlen($companyLegalName) > 180 || strlen($companyTradeName) > 180 || strlen($deviceId) > 255 || strlen($customerRegistrationDate) > 60 || strlen($customerId) > 120) {
     svo_json(422, ['ok' => false, 'error' => 'field_too_long']);
+}
+
+$validDocument = false;
+if ($documentType === 'cnpj' || strlen($cpf) === 14) {
+    $validDocument = svo_validate_cnpj($cpf);
+    $documentType = 'cnpj';
+} else {
+    $validDocument = svo_validate_cpf($cpf);
+    $documentType = 'cpf';
 }
 
 if (
@@ -253,13 +306,13 @@ if (
     || $neighborhood === ''
     || $city === ''
     || strlen($state) !== 2
-    || !svo_validate_cpf($cpf)
+    || !$validDocument
     || !$items
 ) {
     svo_json(422, [
         'ok' => false,
         'error' => 'customer_fields_invalid',
-        'message' => 'Preencha CPF e endereco completo para faturamento.',
+        'message' => 'Preencha CPF/CNPJ e endereco completo para faturamento.',
     ]);
 }
 
@@ -333,6 +386,25 @@ if ($shippingLabel !== '' || $shippingTotal > 0) {
 
 $grandTotal = $itemsTotal + $shippingTotal;
 
+$isFirstPurchaseOnline = true;
+$lastPurchase = '';
+try {
+    require_once dirname(__DIR__, 2) . '/includes/pdo-database.php';
+    require_once dirname(__DIR__, 2) . '/includes/account-schema.php';
+    sv_account_ensure_schema();
+
+    $pdo = sv_pdo();
+    $previousOrderStmt = $pdo->prepare(
+        'SELECT created_at FROM orders WHERE email = :email ORDER BY created_at DESC LIMIT 1'
+    );
+    $previousOrderStmt->execute([':email' => $email]);
+    $previousOrderCreatedAt = $previousOrderStmt->fetchColumn() ?: null;
+    $isFirstPurchaseOnline = empty($previousOrderCreatedAt);
+    $lastPurchase = !$isFirstPurchaseOnline && is_string($previousOrderCreatedAt) ? $previousOrderCreatedAt : '';
+} catch (Throwable $e) {
+    error_log('[OrderCreate] Previous order lookup failed: ' . $e->getMessage());
+}
+
 $orderNumber = 'SV' . date('YmdHis') . random_int(100, 999);
 // Token de sessao de pagamento: o frontend (checkout.php) espera receber isso
 // na resposta para poder chamar create-preference.php/create-boleto.php
@@ -350,6 +422,13 @@ $record = [
         'cep' => $cep,
         'address' => $address,
         'cpf' => $cpf,
+        'document_type' => $documentType,
+        'legal_name' => $companyLegalName,
+        'trade_name' => $companyTradeName,
+        'registration_date' => $customerRegistrationDate !== '' ? $customerRegistrationDate : date('c'),
+        'last_purchase' => $lastPurchase,
+        'is_first_purchase_online' => $isFirstPurchaseOnline,
+        'customer_id' => $customerId,
         'street_name' => $streetName,
         'street_number' => $streetNumber,
         'complement' => $complement,
@@ -357,6 +436,7 @@ $record = [
         'city' => $city,
         'state' => $state,
     ],
+    'device_id' => $deviceId,
     'items' => $cleanItems,
     'items_total' => round($itemsTotal, 2),
     'shipping_total' => round($shippingTotal, 2),
@@ -366,6 +446,7 @@ $record = [
     'total' => round($grandTotal, 2),
     'payment_method' => $paymentMethod,
     'payment_label' => svo_payment_label($paymentMethod),
+    'statement_descriptor' => 'SHOPVIVALIZ',
     'notes' => implode("\n", $notesParts),
     'created_at' => date('c'),
     'source' => 'site_checkout',
@@ -416,7 +497,6 @@ try {
     }
     $sessionUserId = isset($_SESSION['user_id']) && is_numeric($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null;
 
-    $pdo = sv_pdo();
     $stmt = $pdo->prepare(
         'INSERT INTO orders (user_id, order_number, olist_order_id, email, order_total, order_status, payment_method, items_json, created_at)
          VALUES (:user_id, :order_number, :olist_order_id, :email, :total, :status, :payment_method, :items_json, NOW())'

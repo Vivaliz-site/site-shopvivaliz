@@ -76,8 +76,8 @@ uasort($clientes, static function (array $a, array $b): int {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clientes - Admin</title>
-    <link rel="icon" type="image/png" href="/images/logo-vivaliz-square.png">
-    <link rel="apple-touch-icon" href="/images/logo-vivaliz-square.png">
+    <link rel="icon" type="image/png" href="/images/logo-vivaliz-square-v2.png">
+    <link rel="apple-touch-icon" href="/images/logo-vivaliz-square-v2.png">
     <link rel="stylesheet" href="/css/style.css">
     <style>
         body{background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto}.navbar{background:#1a1a2e;padding:1rem;color:#fff}.container{max-width:1200px;margin:0 auto;padding:2rem}.page-title{font-size:2rem;margin-bottom:2rem;color:#333}.clients-table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)}.clients-table th{background:#f8f9fa;padding:1rem;text-align:left;font-weight:600;border-bottom:2px solid #dee2e6}.clients-table td{padding:1rem;border-bottom:1px solid #dee2e6}.clients-table tr:hover{background:#f8f9fa}.empty-state{text-align:center;padding:3rem;color:#666}.admin-searchbar{display:flex;gap:.75rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap}.admin-searchbar input{flex:1 1 320px;padding:.85rem 1rem;border:1px solid #d1d5db;border-radius:8px;font-size:1rem;background:#fff}.admin-searchbar input:focus{outline:none;border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.12)}.admin-search-meta{color:#6b7280;font-size:.95rem;white-space:nowrap}.client-origin{font-size:.75rem;color:#6b7280;margin-top:.2rem}

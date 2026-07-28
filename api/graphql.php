@@ -5,9 +5,9 @@ header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
-header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Vary: Origin');
 
 function gql_root(): string
 {
@@ -47,22 +47,91 @@ function gql_header(string $name): string
     return trim((string)$value);
 }
 
+function gql_configure_cors(): void
+{
+    $origin = gql_header('HTTP_ORIGIN');
+    if ($origin === '') {
+        return;
+    }
+
+    $allowedOrigins = [
+        'https://shopvivaliz.com.br',
+        'https://www.shopvivaliz.com.br',
+    ];
+
+    $configuredOrigin = trim((string)(getenv('GRAPHQL_ALLOWED_ORIGIN') ?: ''));
+    if ($configuredOrigin !== '') {
+        $allowedOrigins[] = rtrim($configuredOrigin, '/');
+    }
+
+    if (in_array(rtrim($origin, '/'), $allowedOrigins, true)) {
+        header('Access-Control-Allow-Origin: ' . $origin);
+    }
+}
+
+function gql_start_secure_session(): void
+{
+    require_once gql_root() . '/includes/secure-session.php';
+}
+
+function gql_is_admin(): bool
+{
+    gql_start_secure_session();
+
+    if (empty($_SESSION['user_id'])) {
+        return false;
+    }
+
+    if (!empty($_SESSION['is_admin'])) {
+        return true;
+    }
+
+    $databasePath = gql_root() . '/config/database.php';
+    if (!is_file($databasePath)) {
+        return false;
+    }
+
+    require_once $databasePath;
+
+    try {
+        $db = Database::getInstance()->getConnection();
+        $stmt = $db->prepare('SELECT is_admin FROM users WHERE id = ? LIMIT 1');
+        $userId = (int)$_SESSION['user_id'];
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $_SESSION['is_admin'] = !empty($row['is_admin']) ? 1 : 0;
+    } catch (Throwable $e) {
+        error_log('[graphql-auth] ' . $e->getMessage());
+        $_SESSION['is_admin'] = 0;
+    }
+
+    return !empty($_SESSION['is_admin']);
+}
+
 function gql_client_ip(): string
 {
-    foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'] as $key) {
-        $raw = gql_header($key);
-        if ($raw === '') {
-            continue;
-        }
-        if ($key === 'HTTP_X_FORWARDED_FOR' && str_contains($raw, ',')) {
-            $parts = array_map('trim', explode(',', $raw));
-            $raw = $parts[0] ?? '';
-        }
-        if (filter_var($raw, FILTER_VALIDATE_IP)) {
-            return $raw;
+    $remote = gql_header('REMOTE_ADDR');
+    $trustedProxy = filter_var($remote, FILTER_VALIDATE_IP) !== false
+        && (str_starts_with($remote, '127.') || $remote === '::1');
+
+    if ($trustedProxy) {
+        foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR'] as $key) {
+            $raw = gql_header($key);
+            if ($raw === '') {
+                continue;
+            }
+            if ($key === 'HTTP_X_FORWARDED_FOR' && str_contains($raw, ',')) {
+                $parts = array_map('trim', explode(',', $raw));
+                $raw = $parts[0] ?? '';
+            }
+            if (filter_var($raw, FILTER_VALIDATE_IP)) {
+                return $raw;
+            }
         }
     }
-    return 'unknown';
+
+    return filter_var($remote, FILTER_VALIDATE_IP) ? $remote : 'unknown';
 }
 
 function gql_rate_limit(): void
@@ -325,8 +394,12 @@ function gql_stats(): array
     ];
 }
 
+gql_env_load();
+gql_configure_cors();
+
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
     header('Allow: GET, POST, OPTIONS');
+    http_response_code(204);
     exit;
 }
 
@@ -390,6 +463,14 @@ foreach ($fields as $field) {
             }
             break;
         case 'stats':
+            if (!gql_is_admin()) {
+                $errors[] = [
+                    'message' => 'Autenticação administrativa obrigatória.',
+                    'path' => ['stats'],
+                    'extensions' => ['code' => 'UNAUTHORIZED'],
+                ];
+                break;
+            }
             $data['stats'] = gql_stats();
             break;
         case 'health':
@@ -410,7 +491,7 @@ foreach ($fields as $field) {
 }
 
 $response = [
-    'ok' => true,
+    'ok' => !$errors,
     'data' => $data,
     'meta' => [
         'service' => 'shopvivaliz-graphql',

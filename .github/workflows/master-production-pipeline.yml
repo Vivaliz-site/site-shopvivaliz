@@ -1,457 +1,330 @@
 name: Master Production Pipeline 24/7
 
-# Este é o workflow MASTER que orquestra todo o deployment seguro.
-# Único entrada: push para main (automaticamente ou manualmente).
-# Estágios: validate (lint + wildcard block) → test real → deploy → monitor.
-# Rollback automático se algum estágio falhar.
+# Pipeline de producao automatico apos Quality Gate aprovado.
+# Fluxo: validar o commit -> implantar o SHA exato -> monitorar producao.
+# O acionamento manual com confirmacao DEPLOY permanece disponivel para emergencia.
 
 on:
-  # DESATIVADO 2026-07-10 (incidente): o gatilho automatico "push: [main]"
-  # foi a causa de DOIS resets destrutivos em main hoje (2795+ arquivos
-  # apagados cada vez) - o estagio de rollback disparava sozinho quando o
-  # estagio de teste falhava. So workflow_dispatch (manual) ate isso ser
-  # investigado a fundo e o rollback provado seguro.
+  workflow_run:
+    workflows:
+      - Quality Gate
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
     inputs:
-      force_deploy:
-        description: 'Forçar deploy mesmo que testes falhem (CUIDADO)'
-        required: false
-        default: 'false'
+      confirmation:
+        description: 'Digite DEPLOY para confirmar a implantacao manual'
+        required: true
+        type: string
 
 concurrency:
   group: production-deploy
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  pull-requests: write
-  actions: write
-  checks: write
-  statuses: write
+  contents: read
+
+env:
+  DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
-  # ============ ESTÁGIO 1: VALIDATE ============
-  # Lint + segurança de código. Se falhar, para tudo.
   validate:
-    name: Validate (Lint + Security)
+    name: Validate Commit
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    outputs:
-      commit_sha: ${{ github.sha }}
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - name: Require explicit confirmation for manual deployment
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.confirmation }}" != "DEPLOY" ]]; then
+            echo "::error::Confirmacao invalida. Digite DEPLOY para continuar."
+            exit 1
+          fi
+
+      - name: Checkout exact validated commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          persist-credentials: false
+          fetch-depth: 1
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
 
-      - name: PHP Lint
+      - name: Install verified Gitleaks CLI
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
+          version='8.30.1'
+          archive="gitleaks_${version}_linux_x64.tar.gz"
+          expected_sha='551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
+          curl --fail --location --silent --show-error \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${version}/${archive}" \
+            --output "/tmp/${archive}"
+          echo "${expected_sha}  /tmp/${archive}" | sha256sum --check --strict
+          tar -xzf "/tmp/${archive}" -C /tmp gitleaks
+          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: PHP syntax validation
+        shell: bash
+        run: |
+          set -euo pipefail
           found=0
           while IFS= read -r -d '' file; do
             found=1
-            echo "::group::php -l $file"
-            if ! php -l "$file"; then
+            php -l "$file" >/dev/null || {
               echo "::error file=$file::PHP lint failed"
               exit 1
-            fi
-            echo "::endgroup::"
+            }
           done < <(find . -path './vendor' -prune -o -name '*.php' -print0)
-          if [ "$found" -eq 0 ]; then
+          if [[ "$found" -eq 0 ]]; then
             echo "No PHP files found."
           fi
-          echo "✓ PHP syntax OK"
+          echo "PHP syntax OK"
 
-      - name: Block CSS Wildcard Layout Selectors
+      - name: Block dangerous CSS wildcard selectors
+        shell: bash
         run: |
-          # Proteção contra bug conhecido: [class*="hero"] casa com hero-carousel, hero-slide, etc.
-          # Wildcard em componentes pequenos OK; em layout-estrutural, nunca.
-          PADRAO='\[class\s*\*=\s*"(hero|banner|section|page|layout|container)'
-          if grep -rEn "$PADRAO" --include='*.css' . 2>/dev/null; then
-            echo "❌ ERRO: CSS wildcard estrutural encontrado (causa bugs de cascata)"
+          set -euo pipefail
+          pattern="\\[class[[:space:]]*\\*=[[:space:]]*[\"'](hero|banner|section|page|layout|container)"
+          if grep -rEn "$pattern" --include='*.css' --exclude-dir=vendor .; then
+            echo "::error::Structural CSS wildcard selector detected"
             exit 1
           fi
-          echo "✓ CSS wildcard check passed"
+          echo "CSS wildcard check passed"
 
-      - name: No Fake Data in Tracked Files
+      - name: Scan current repository files for secrets with Gitleaks CLI
+        shell: bash
         run: |
-          # Bloqueia commits com telefones/e-mails fake (regex comum)
-          # Detecta padrões como 5511999999999, fake@example.com, localhost URLs em produção
-          FAKE_PHONE='55\s*(11|21|31|85|9)\s*999(9{4,}|0{4,})'
-          FAKE_EMAIL='(test|fake|dummy|lorem)@'
+          set -euo pipefail
+          gitleaks dir . \
+            --config .gitleaks.toml \
+            --redact \
+            --verbose
 
-          changed_files="$(git diff HEAD~1 HEAD --name-only 2>/dev/null | grep -v '^\.github/workflows/master-production-pipeline\.yml$' || true)"
-          if [ -n "$changed_files" ] && printf '%s\n' "$changed_files" | xargs -r grep -E "$FAKE_PHONE|$FAKE_EMAIL" 2>/dev/null; then
-            echo "❌ ERRO: dados fake detectados (telefone/email dummy)"
+      - name: Reject destructive deployment commands in workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow='.github/workflows/master-production-pipeline.yml'
+          forbidden='git[[:space:]]+push[[:space:]].*--force|git[[:space:]]+clean[[:space:]]+-[a-z]*f|git[[:space:]]+reset[[:space:]]+--hard[[:space:]]+(HEAD~|origin/)'
+          if grep -En "$forbidden" "$workflow"; then
+            echo "::error::Forbidden destructive deployment command found"
             exit 1
           fi
-          echo "✓ No fake contact data"
+          echo "Destructive command check passed"
 
-      - name: Check for Required Secrets
+      - name: Record validated commit
+        shell: bash
         run: |
-          # Valida que secrets não vazaram para código-fonte
-          SECRET_ASSIGN='(ANTHROPIC_API_KEY|OPENAI_API_KEY|GEMINI_API_KEY|FTP_PASSWORD)[[:space:]]*(=>|=|:)[[:space:]]*["'"'"'][^"'"'"']{6,}["'"'"']'
-          if grep -rE "$SECRET_ASSIGN" --include='*.php' --include='*.js' --include='*.yml' . 2>/dev/null \
-            | grep -v '\.github/workflows'; then
-            echo "❌ ERRO: secrets encontrados no código-fonte"
-            exit 1
-          fi
-          echo "✓ No secrets in source code"
+          set -euo pipefail
+          echo "Validated commit: $DEPLOY_SHA"
+          git rev-parse HEAD
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
 
-  # ============ ESTÁGIO 2: TEST REAL ============
-  # Testes contra site ao vivo. Se falhar, não deploy.
-  test:
-    name: Test Real (Smoke + Regression)
+  deploy:
+    name: Deploy Exact Commit to Oracle VM
     runs-on: ubuntu-latest
     needs: validate
-    timeout-minutes: 5
+    timeout-minutes: 8
+    environment: production
     steps:
-      - uses: actions/checkout@v7
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
+      - name: Checkout exact validated commit
+        uses: actions/checkout@v7
         with:
-          python-version: '3.11'
+          ref: ${{ env.DEPLOY_SHA }}
+          persist-credentials: false
+          fetch-depth: 1
 
-      - name: Smoke Test - Home Page Structure
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
-          python3 << 'EOF'
-          import urllib.request
-          import re
-
-          try:
-              response = urllib.request.urlopen('https://shopvivaliz.com.br/', timeout=10)
-              html = response.read().decode('utf-8')
-          except Exception as e:
-              print(f"❌ ERRO: não conseguiu acessar site: {e}")
-              exit(1)
-
-          # Checks críticos de estrutura
-          checks = [
-              ('footer-cols' in html, "Footer structure"),
-              (re.search(r'<section\b[^>]*class=["\'][^"\']*\bhero\b', html, re.I) is not None, "Hero section"),
-              ('<title>' in html and len(html) > 5000, "Page HTML"),
-          ]
-
-          failed = []
-          for check, name in checks:
-              if check:
-                  print(f"✓ {name}")
-              else:
-                  print(f"❌ {name}")
-                  failed.append(name)
-
-          if failed:
-              exit(1)
-          EOF
-
-      - name: Regression Test - No Duplicate Gradients
-        run: |
-          python3 << 'EOF'
-          import urllib.request
-          import re
-
-          response = urllib.request.urlopen('https://shopvivaliz.com.br/')
-          html = response.read().decode('utf-8')
-
-          def classes(tag):
-              match = re.search(r'class=["\']([^"\']*)["\']', tag, re.I)
-              return set(match.group(1).split()) if match else set()
-
-          # Há uma hero principal e um carrossel separado. Cada slide pode ter
-          # seu próprio overlay em gradiente; isso não é duplicação de layout.
-          section_tags = re.findall(r'<section\b[^>]*>', html, re.I)
-          primary_heroes = [tag for tag in section_tags if 'hero' in classes(tag)]
-          slide_tags = re.findall(r'<(?:article|div)\b[^>]*>', html, re.I)
-          hero_slides = [tag for tag in slide_tags if 'hero-slide' in classes(tag)]
-          gradient_overlays = [
-              tag for tag in slide_tags
-              if 'hero-overlay' in classes(tag) and 'linear-gradient' in tag.lower()
-          ]
-
-          if len(primary_heroes) != 1:
-              print(f"❌ ERRO: {len(primary_heroes)} seções .hero principais (esperado 1)")
-              exit(1)
-
-          if len(gradient_overlays) > len(hero_slides):
-              print(
-                  f"❌ ERRO: {len(gradient_overlays)} overlays para "
-                  f"{len(hero_slides)} slides"
-              )
-              exit(1)
-
-          print(
-              f"✓ Hero structure OK: 1 principal, "
-              f"{len(hero_slides)} slides, {len(gradient_overlays)} overlays"
-          )
-          EOF
-
-      - name: Regression Test - Footer Data Real
-        run: |
-          python3 << 'EOF'
-          import urllib.request
-          import re
-
-          response = urllib.request.urlopen('https://shopvivaliz.com.br/')
-          html = response.read().decode('utf-8')
-
-          # Verifica se footer tem dados reais (não números inventados)
-          # Real WhatsApp: 5537999374112 (conforme .env LOJA_WHATSAPP)
-          # Fake patterns: 5511999999999, facebook.com/shopvivaliz (não existe)
-
-          fake_whatsapp = '5511999999999'
-          fake_redes = ['facebook.com/shopvivaliz', 'instagram.com/shopvivaliz']
-
-          failed = []
-          if fake_whatsapp in html:
-              print(f"❌ Encontrado WhatsApp fake {fake_whatsapp} no footer")
-              failed.append("WhatsApp fake")
-
-          for fake in fake_redes:
-              if fake in html:
-                  print(f"❌ Encontrado rede social fake {fake} no footer")
-                  failed.append(f"Rede social fake: {fake}")
-
-          if failed:
-              exit(1)
-
-          # Verifica presença de dados real
-          if '5537999374112' in html:
-              print("✓ WhatsApp real encontrado")
-          else:
-              print("⚠ WhatsApp real não encontrado em footer (pode estar OK se header é dinâmico)")
-
-          print("✓ Footer data integrity OK")
-          EOF
-
-      - name: Performance Check - Page Load
-        run: |
-          # Baseline pré-deploy: resposta HTTP válida em até 5 segundos.
-          result=$(curl --fail --location --silent --show-error --output /dev/null \
-            --connect-timeout 5 --max-time 10 \
-            --write-out '%{http_code} %{time_total}' \
-            https://shopvivaliz.com.br/)
-          read -r status elapsed <<< "$result"
-          echo "HTTP $status em ${elapsed}s"
-          python3 - "$elapsed" <<'PY'
-          import sys
-          elapsed = float(sys.argv[1])
-          if elapsed >= 5:
-              raise SystemExit(f"Página excedeu o limite de 5s: {elapsed:.3f}s")
-          PY
-
-  # ============ ESTÁGIO 3: DEPLOY ============
-  # Deploy imediato para Oracle VM via SSH após testes passarem
-  deploy:
-    name: Deploy (Sync Oracle VM Immediately)
-    runs-on: ubuntu-latest
-    needs: [validate, test]
-    if: success()
-    timeout-minutes: 3
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          echo "${{ secrets.ORACLE_VM_SSH_KEY }}" > ~/.ssh/id_rsa
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY" || { echo "::error::ORACLE_VM_SSH_KEY is missing"; exit 1; }
+          test -n "$ORACLE_VM_KNOWN_HOSTS" || { echo "::error::ORACLE_VM_KNOWN_HOSTS is missing"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          # Desabilita host key checking para não bloquear
-          echo "StrictHostKeyChecking no" >> ~/.ssh/config
-          echo "UserKnownHostsFile=/dev/null" >> ~/.ssh/config
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
-      - name: Sync Oracle VM (backup + canonical reset)
+      - name: Deploy with reversible server backup
+        shell: bash
         run: |
-          ssh -i ~/.ssh/id_rsa ubuntu@137.131.156.17 << 'SSH_EOF'
-          cd /home/ubuntu/site-shopvivaliz
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'bash -s' -- "$DEPLOY_SHA" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          expected_sha="$1"
+          repo='/home/ubuntu/site-shopvivaliz'
+          cd "$repo"
 
-          dirty_before="$(git status --porcelain)"
-          if [ -n "$dirty_before" ]; then
-            backup_name="predeploy-$(date -u +%Y%m%d-%H%M%S)-${{ github.sha }}"
-            echo "Alteracoes remotas detectadas; criando backup reversivel: $backup_name"
+          git rev-parse --is-inside-work-tree >/dev/null
+          git remote get-url origin >/dev/null
+
+          backup_name="predeploy-$(date -u +%Y%m%d-%H%M%S)-${expected_sha}"
+          current_sha="$(git rev-parse HEAD)"
+          git branch "server-backup/${backup_name}" "$current_sha"
+
+          if [[ -n "$(git status --porcelain)" ]]; then
             git stash push --include-untracked --message "$backup_name"
-            stash_sha="$(git rev-parse stash@{0} 2>/dev/null || true)"
-            if [ -z "$stash_sha" ]; then
-              echo "ERRO: nao foi possivel confirmar o stash de backup"
-              exit 4
-            fi
-            git branch "server-backup/$backup_name" "$stash_sha"
-            echo "Backup preservado em server-backup/$backup_name ($stash_sha)"
+            stash_sha="$(git rev-parse stash@{0})"
+            git branch "server-backup/${backup_name}-worktree" "$stash_sha"
           fi
 
-          # O backup acima torna seguro substituir somente os arquivos rastreados.
-          # Arquivos ignorados de runtime (uploads, sessoes e configuracoes locais)
-          # permanecem intactos; o commit publicado fica identico ao aprovado.
-          git fetch --no-tags origin main
-          git cat-file -e "${{ github.sha }}^{commit}"
-          git reset --hard "${{ github.sha }}"
-          exit_code=$?
+          git fetch --no-tags origin "$expected_sha"
+          git cat-file -e "${expected_sha}^{commit}"
 
-          if [ "$exit_code" -eq 0 ] && ! git diff --quiet --ignore-submodules --; then
-            echo "ERRO: arquivos rastreados foram alterados durante a sincronizacao"
-            exit_code=1
-          fi
+          # Move apenas para o SHA exato aprovado pelo Quality Gate ou confirmado manualmente.
+          git reset --hard "$expected_sha"
 
-          deployed_commit=$(git rev-parse HEAD 2>/dev/null || true)
-          if [ "$exit_code" -eq 0 ] && [ "$deployed_commit" != "${{ github.sha }}" ]; then
-            echo "ERRO: commit publicado ($deployed_commit) difere do esperado (${{ github.sha }})"
-            exit_code=1
-          fi
+          deployed_sha="$(git rev-parse HEAD)"
+          test "$deployed_sha" = "$expected_sha"
+          git diff --quiet --ignore-submodules --
 
-          echo "=========================================="
-          echo "Deploy Status"
-          echo "=========================================="
-          echo "Commit esperado: ${{ github.sha }}"
-          echo "Commit publicado: $deployed_commit"
-          echo "Deployed at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "Sync exit code: $exit_code"
-          echo "=========================================="
+          echo "Previous commit: $current_sha"
+          echo "Deployed commit: $deployed_sha"
+          echo "Backup branch: server-backup/${backup_name}"
+          REMOTE_SCRIPT
 
-          exit $exit_code
-          SSH_EOF
-
-      - name: Log Deployment Success
-        if: success()
+      - name: Write deployment evidence
+        shell: bash
         run: |
-          cat > deployment-log-${{ github.sha }}.txt << 'EOF'
-          ========================================
-          ✅ DEPLOYMENT SUCCESSFUL
-          ========================================
-          Commit: ${{ github.sha }}
-          Author: ${{ github.actor }}
-          Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-          Validation: ✅ PASSED
-          Tests: ✅ PASSED
-          Deploy: ✅ SYNCED TO ORACLE VM
-
-          Site is now live at: https://shopvivaliz.com.br/
-          ========================================
+          set -euo pipefail
+          cat > "deployment-log-${DEPLOY_SHA}.txt" <<EOF
+          DEPLOYMENT COMPLETED
+          Commit: ${DEPLOY_SHA}
+          Actor: ${{ github.actor }}
+          Repository: ${{ github.repository }}
+          Workflow run: ${{ github.run_id }}
+          Trigger: ${{ github.event_name }}
           EOF
-          cat deployment-log-${{ github.sha }}.txt
+          cat "deployment-log-${DEPLOY_SHA}.txt"
 
-      - name: Upload Deployment Log as Artifact
+      - name: Upload deployment evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: deployment-log-${{ github.sha }}
-          path: deployment-log-${{ github.sha }}.txt
+          name: deployment-log-${{ env.DEPLOY_SHA }}
+          path: deployment-log-${{ env.DEPLOY_SHA }}.txt
           retention-days: 30
 
-  # ============ ESTÁGIO 4: ROLLBACK (se test falhar) ============
-  rollback:
-    name: Rollback (if Tests Failed)
-    runs-on: ubuntu-latest
-    needs: [validate, test]
-    if: failure() && github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Alert Only (rollback automatico desativado apos incidente)
-        run: |
-          echo "::warning::Testes falharam apos push em main. Rollback automatico"
-          echo "::warning::foi DESATIVADO em 2026-07-10 porque essa mesma automacao"
-          echo "::warning::apagou 2795+ arquivos de main duas vezes no mesmo dia."
-          echo "::warning::Revise manualmente o commit ${{ github.sha }} e decida"
-          echo "::warning::se um revert e necessario (git revert HEAD --no-edit,"
-          echo "::warning::nunca reset --hard nem push --force)."
-
-          cat > rollback-alert.txt << 'EOF'
-          ⚠️  ROLLBACK EXECUTADO
-          Commit anterior teve testes falhados. Revertendo.
-          Verifique os logs acima para entender o que quebrou.
-          EOF
-          cat rollback-alert.txt
-
-  # ============ ESTÁGIO 4: MONITOR ============
-  # Verifica que site está saudável após deploy imediato
   monitor:
-    name: Monitor Health Check
+    name: Post-deploy Monitoring
     runs-on: ubuntu-latest
     needs: deploy
-    if: success()
-    timeout-minutes: 2
+    timeout-minutes: 5
     steps:
-      - name: Wait for Site to Stabilize (10 sec)
+      - name: Wait for application stabilization
         run: sleep 10
 
-      - name: Health Check - API Endpoints
+      - name: Check public endpoints
+        shell: bash
         run: |
-          # Verifica endpoints críticos (máx 5 retries)
+          set -euo pipefail
           endpoints=(
-            "https://shopvivaliz.com.br/"
-            "https://shopvivaliz.com.br/carrinho"
-            "https://shopvivaliz.com.br/checkout"
-            "https://shopvivaliz.com.br/api/catalog/products.php?limit=1"
-            "https://shopvivaliz.com.br/api/catalog/price-health.php"
-            "https://shopvivaliz.com.br/api/catalog/image-health.php"
-            "https://shopvivaliz.com.br/api/catalog/stock-health.php"
-            "https://shopvivaliz.com.br/api/orders/health.php"
-            "https://shopvivaliz.com.br/installer/self-test.php"
+            'https://shopvivaliz.com.br/'
+            'https://shopvivaliz.com.br/carrinho'
+            'https://shopvivaliz.com.br/checkout'
+            'https://shopvivaliz.com.br/api/catalog/products.php?limit=1'
+            'https://shopvivaliz.com.br/api/catalog/price-health.php'
+            'https://shopvivaliz.com.br/api/catalog/image-health.php'
+            'https://shopvivaliz.com.br/api/catalog/stock-health.php'
+            'https://shopvivaliz.com.br/api/orders/health.php'
           )
 
           for url in "${endpoints[@]}"; do
-            status=$(curl --location --silent --output /dev/null --max-time 10 \
-              --write-out '%{http_code}' "$url" || echo "000")
-            if [[ "$status" == "200" ]] || [[ "$status" == "302" ]]; then
-              echo "✓ $url ($status)"
-            else
-              echo "❌ $url ($status)"
+            status='000'
+            for attempt in 1 2 3; do
+              status="$(curl --location --silent --output /dev/null --max-time 10 --write-out '%{http_code}' "$url" || true)"
+              [[ "$status" == '200' || "$status" == '302' ]] && break
+              sleep 5
+            done
+            if [[ "$status" != '200' && "$status" != '302' ]]; then
+              echo "::error::Endpoint unhealthy: $url returned $status"
               exit 1
             fi
+            echo "OK $url ($status)"
           done
 
-      - name: Security perimeter regression check
+      - name: Check private paths remain blocked
+        shell: bash
         run: |
           set -euo pipefail
           private_paths=(
-            "/.git/config"
-            "/.env.local"
-            "/storage/products-cache-ativos.json"
-            "/tasks-queue.json"
-            "/scripts/"
-            "/tests/"
-            "/debug-products.php"
-            "/discover-db.php"
-            "/find-db-host.php"
-            "/fix-database.php"
-            "/full-sync.php"
-            "/gen-token.php"
-            "/shop-catalog-export.php"
-            "/sync-now.php"
-            "/olist/token-refresh.php"
-            "/api/catalog/test-normalize.php"
+            '/.git/config'
+            '/.env.local'
+            '/storage/products-cache-ativos.json'
+            '/tasks-queue.json'
+            '/scripts/'
+            '/tests/'
+            '/installer/self-test.php'
+            '/debug-products.php'
+            '/discover-db.php'
+            '/find-db-host.php'
+            '/fix-database.php'
+            '/full-sync.php'
+            '/gen-token.php'
+            '/shop-catalog-export.php'
+            '/sync-now.php'
+            '/olist/token-refresh.php'
+            '/api/catalog/test-normalize.php'
           )
+
           for path in "${private_paths[@]}"; do
-            status=$(curl --silent --output /dev/null --max-time 10 \
-              --write-out '%{http_code}' "https://shopvivaliz.com.br${path}" || echo "000")
-            if [[ "$status" != "403" ]]; then
-              echo "::error::private path exposed: ${path} returned ${status}"
+            status="$(curl --silent --output /dev/null --max-time 10 --write-out '%{http_code}' "https://shopvivaliz.com.br${path}" || true)"
+            if [[ "$status" != '403' && "$status" != '404' ]]; then
+              echo "::error::Private path exposed: ${path} returned ${status}"
               exit 1
             fi
-            echo "✓ private ${path} (403)"
+            echo "Blocked ${path} ($status)"
           done
 
-          headers=$(curl --silent --show-error --head --max-time 10 \
-            https://shopvivaliz.com.br/ | tr -d '\r' | tr '[:upper:]' '[:lower:]')
+      - name: Check required security headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(curl --silent --show-error --head --max-time 10 https://shopvivaliz.com.br/ | tr -d '\r' | tr '[:upper:]' '[:lower:]')"
           for required in strict-transport-security x-content-type-options content-security-policy; do
             if ! grep -q "^${required}:" <<< "$headers"; then
-              echo "::error::required security header missing: ${required}"
+              echo "::error::Required security header missing: ${required}"
               exit 1
             fi
-            echo "✓ header ${required}"
+            echo "Header present: ${required}"
           done
 
-      - name: Summary
-        if: always()
+  deployment_failure_notice:
+    name: Deployment Failure Notice
+    runs-on: ubuntu-latest
+    needs: [validate, deploy, monitor]
+    if: failure()
+    permissions:
+      contents: read
+    steps:
+      - name: Report without automatic rollback
+        shell: bash
         run: |
-          echo "========================================="
-          echo "Pipeline Summary"
-          echo "========================================="
-          echo "Validation: ✓"
-          echo "Tests: ✓"
-          echo "Deploy: ✓ commit confirmado na Oracle VM"
-          echo "Monitor: ✓"
-          echo "========================================="
+          cat <<EOF
+          DEPLOYMENT OR MONITORING FAILED
+          No automatic rollback was executed.
+          Review workflow run ${{ github.run_id }} and use the server-backup branch
+          created during deployment if a manual, reviewed recovery is required.
+          EOF

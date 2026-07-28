@@ -1,24 +1,36 @@
 #!/bin/bash
+set -euo pipefail
 
-# Script para configurar chaves de agente no servidor
-# Executar: bash scripts/setup-agent-keys.sh
+# Configure the runtime agent key without committing or printing it.
+# Usage: SHOPVIVALIZ_AGENT_KEY='...' bash scripts/setup-agent-keys.sh
 
-AGENT_KEY="${1:-RV5yJAphQHufjlfm12qaQKsrqld5fHRKeVB1lHFym-k}"
-ENV_FILE=".env"
+ENV_FILE="${ENV_FILE:-.env}"
+AGENT_KEY="${SHOPVIVALIZ_AGENT_KEY:-${1:-}}"
 
 if [ ! -f "$ENV_FILE" ]; then
-    echo "❌ Arquivo .env não encontrado!"
+    echo "Arquivo .env nao encontrado" >&2
     exit 1
 fi
 
-# Verificar se já tem as chaves
-if grep -q "SHOPVIVALIZ_AGENT_KEY" "$ENV_FILE"; then
-    echo "✅ Chaves de agente já configuradas no .env"
-else
-    echo "" >> "$ENV_FILE"
-    echo "SHOPVIVALIZ_AGENT_KEY=$AGENT_KEY" >> "$ENV_FILE"
-    echo "RUNTIME_AGENT_KEY=$AGENT_KEY" >> "$ENV_FILE"
-    echo "WATCHDOG_AGENT_KEY=$AGENT_KEY" >> "$ENV_FILE"
-    echo "AUTONOMOUS_AGENT_KEY=$AGENT_KEY" >> "$ENV_FILE"
-    echo "✅ Chaves de agente adicionadas ao .env"
+if [ -z "$AGENT_KEY" ] || [ "${#AGENT_KEY}" -lt 32 ]; then
+    echo "Forneca SHOPVIVALIZ_AGENT_KEY com pelo menos 32 caracteres" >&2
+    exit 1
 fi
+
+umask 077
+tmp_file="$(mktemp)"
+trap 'rm -f "$tmp_file"' EXIT
+
+grep -vE '^(SHOPVIVALIZ_AGENT_KEY|RUNTIME_AGENT_KEY|WATCHDOG_AGENT_KEY|AUTONOMOUS_AGENT_KEY)=' "$ENV_FILE" > "$tmp_file" || true
+{
+    printf '\nSHOPVIVALIZ_AGENT_KEY=%s\n' "$AGENT_KEY"
+    printf 'RUNTIME_AGENT_KEY=%s\n' "$AGENT_KEY"
+    printf 'WATCHDOG_AGENT_KEY=%s\n' "$AGENT_KEY"
+    printf 'AUTONOMOUS_AGENT_KEY=%s\n' "$AGENT_KEY"
+} >> "$tmp_file"
+
+mv "$tmp_file" "$ENV_FILE"
+chmod 600 "$ENV_FILE"
+trap - EXIT
+
+echo "Chaves de agente atualizadas com seguranca"

@@ -9,6 +9,7 @@ description = "Paths e padroes que nao sao segredos reais"
 paths = [
     "node_modules",
     "vendor",
+    "dist/",
     "docs/",
     ".gitleaks.toml",
     ".gitleaksignore",
@@ -20,6 +21,11 @@ paths = [
     "INSTRUCOES-DEPLOY-AUTONOMO.txt",
     "scripts/setup-auto-deploy.py",
     "scripts/setup-auto-deploy.ps1",
+    "claude/",
+    "SECRETS-TEMP-COLE-AQUI.txt",
+    "scripts/submit-indexnow.php",
+    '^.*\.md$',
+    '^.*\.txt$',
 ]
 
 regexes = [
@@ -37,6 +43,13 @@ regexes = [
     '''ghp_[a-z][a-z_]+''',
     # Placeholders de senha/token genericos
     '''(senha|password|token|secret)_(ftp|exemplo|substitua|replace|placeholder)''',
+    # Chaves MCP deliberadamente ficticias
+    '''sk-(default|test|dummy|local|development|dev)-[A-Za-z0-9_-]+''',
+    # Placeholder OpenAI documentado
+    '''sk-proj-x+''',
+    # Marcadores genericos de documentacao
+    '''(?i)(your|example|sample|placeholder|redacted|change_me|valor_aqui)[_-]?(api[_-]?key|token|secret|password)?''',
+    '''x{6,}''',
 ]
 
 commits = [

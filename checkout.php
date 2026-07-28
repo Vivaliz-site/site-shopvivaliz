@@ -32,14 +32,15 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Finalizar Pedido | Vivaliz</title>
-    <link rel="icon" href="/images/favicon.svg" type="image/svg+xml">
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
-    <link rel="apple-touch-icon" href="/favicon.ico">
+    <link rel="icon" href="/images/favicon.svg?v=2026-07-27" type="image/svg+xml">
+    <link rel="icon" href="/favicon.png?v=2026-07-27" type="image/png">
+    <link rel="alternate icon" href="/favicon.ico?v=2" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/favicon.png?v=2">
     <meta name="msapplication-TileColor" content="#173B63">
     <meta name="theme-color" content="#173B63">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/checkout.css">
-    <link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
+    <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
     <?php require_once __DIR__ . '/includes/load-custom-css.php'; ?>
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
     <!-- Mercado Pago SDK V2 + Device ID para fraude -->
@@ -177,12 +178,19 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                     <span class="payment-opt-box">
                         <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago - PIX, Cartão e Boleto" style="max-height:60px; margin-bottom:8px; width: auto;">
                         <strong>Mercado Pago</strong>
-                        <small>Cartão, PIX e boleto em checkout seguro</small>
+                        <small>PIX, boleto e cartão em até 2x sem juros</small>
+                    </span>
+                </label>
+                <label class="payment-opt">
+                    <input type="radio" name="payment_method" value="infinitepay" required>
+                    <span class="payment-opt-box">
+                        <strong>InfinitePay</strong>
+                        <small>PIX e cartão em até 6x sem juros</small>
                     </span>
                 </label>
             </div>
             <div class="payment-options-note">
-                Pagamento processado com segurança pelo Mercado Pago: cartão, PIX ou boleto, sem cadastro extra.
+                Mercado Pago aceita PIX, boleto e cartão em até 2x sem juros. InfinitePay aceita PIX e cartão em até 6x sem juros.
             </div>
 
             <label class="form-group">
@@ -242,6 +250,17 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         </div>
     </aside>
 </main>
+
+<footer>
+    <div class="container">
+        <div class="footer-cols">
+            <div><strong>Vivaliz</strong><p>Qualidade e entrega rápida para todo o Brasil.</p></div>
+            <div><strong>Navegação</strong><a href="/catalogo">Produtos</a><a href="/sobre">Sobre</a><a href="/contato">Contato</a></div>
+            <div><strong>Atendimento</strong><a href="/contato">Fale conosco</a><a href="/faq">Dúvidas frequentes</a><a href="/politica-privacidade">Privacidade</a></div>
+        </div>
+        <p class="footer-copy">&copy; 2026 Vivaliz. Todos os direitos reservados.</p>
+    </div>
+</footer>
 
 <!-- MODAL PIX -->
 <div id="pix-modal" class="modal-overlay" hidden>
@@ -322,7 +341,19 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
 
     /* Carrinho */
     function getCart() {
+        if (window.ShopVivalizCart && typeof window.ShopVivalizCart.get === 'function') {
+            return window.ShopVivalizCart.get();
+        }
         try { return JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]'); } catch(e) { return []; }
+    }
+    function saveCart(items) {
+        if (window.ShopVivalizCart && typeof window.ShopVivalizCart.set === 'function') {
+            window.ShopVivalizCart.set(items);
+            return;
+        }
+        localStorage.setItem('shopvivaliz_cart', JSON.stringify(items));
+        localStorage.setItem('shopvivaliz_cart_updated_at', String(Date.now()));
+        window.dispatchEvent(new CustomEvent('shopvivaliz:cart-updated', { detail: { items: items } }));
     }
     function getShippingQuote() {
         try { return JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null'); } catch(e) { return null; }
@@ -369,8 +400,24 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
         });
     })();
-    function clearCart() { localStorage.removeItem('shopvivaliz_cart'); }
+    function clearCart() {
+        if (window.ShopVivalizCart && typeof window.ShopVivalizCart.clear === 'function') {
+            window.ShopVivalizCart.clear();
+            return;
+        }
+        localStorage.removeItem('shopvivaliz_cart');
+        window.dispatchEvent(new CustomEvent('shopvivaliz:cart-updated', { detail: { items: [] } }));
+    }
     function clearShippingQuote() { localStorage.removeItem('shopvivaliz_shipping_quote'); }
+    function shippingLabelFromQuote(q) {
+        if (!q || typeof q !== 'object') return '';
+        if (q.label && String(q.label).trim() !== '') return String(q.label).trim();
+        var option = q.option && typeof q.option === 'object' ? q.option : {};
+        var company = option.company ? String(option.company).trim() : '';
+        var name = option.name ? String(option.name).trim() : '';
+        var joined = [company, name].filter(Boolean).join(' - ');
+        return joined || 'Frete';
+    }
     function fmtMoney(v) {
         if (!v || isNaN(v)) return 'Consulte o valor';
         return 'R$ ' + parseFloat(v).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
@@ -406,10 +453,16 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 total += sub;
                 if (price > 0) hasPrice = true;
                 html += '<div class="summary-item">'
-                    + '<img src="' + (it.image_url || '/images/logo-vivaliz-square.png') + '" alt="" onerror="this.src=\'/images/logo-vivaliz-square.png\'">'
+                    + '<img src="' + (it.image_url || '/images/logo-vivaliz-square-v2.png') + '" alt="" onerror="this.src=\'/images/logo-vivaliz-square-v2.png\'">'
                     + '<div class="summary-item-info">'
                     + '<strong>' + (it.name || it.sku) + '</strong>'
-                    + '<span>Qtd: ' + (it.quantity || 1) + ' &nbsp;|&nbsp; ' + (price > 0 ? fmtMoney(sub) : 'Consultar') + '</span>'
+                    + '<div class="cart-item-controls" style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">'
+                    + '<button type="button" class="qty-btn" data-idx="' + items.indexOf(it) + '" data-delta="-1" style="width:28px;height:28px;border-radius:6px;border:1.5px solid #dbe5ef;background:#fff;font-size:16px;font-weight:700;cursor:pointer;color:#173b63;display:inline-flex;align-items:center;justify-content:center">−</button>'
+                    + '<span class="qty-val" style="font-weight:800;font-size:14px;min-width:20px;text-align:center">' + (it.quantity || 1) + '</span>'
+                    + '<button type="button" class="qty-btn" data-idx="' + items.indexOf(it) + '" data-delta="1" style="width:28px;height:28px;border-radius:6px;border:1.5px solid #dbe5ef;background:#fff;font-size:16px;font-weight:700;cursor:pointer;color:#173b63;display:inline-flex;align-items:center;justify-content:center">+</button>'
+                    + '<button type="button" class="btn-remove" data-remove="' + items.indexOf(it) + '" style="background:none;border:none;cursor:pointer;color:#b42318;font-size:13px;font-weight:700;padding:0;margin-left:4px">Remover</button>'
+                    + '</div>'
+                    + '<span>' + (price > 0 ? fmtMoney(sub) : 'Consultar') + '</span>'
                     + '</div></div>';
             });
         }
@@ -426,6 +479,31 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         }
         if (totEl) totEl.textContent = hasPrice ? fmtMoney(total - discountTotal + shippingTotal) : 'Consultar';
         if (badge) badge.textContent = items.reduce(function(a,i){ return a+(i.quantity||1); }, 0);
+
+        el.querySelectorAll('.qty-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var items2 = getCart();
+                var idx2 = parseInt(btn.getAttribute('data-idx'), 10);
+                var delta = parseInt(btn.getAttribute('data-delta'), 10);
+                if (!items2[idx2]) return;
+                items2[idx2].quantity = Math.max(1, (items2[idx2].quantity || 1) + delta);
+                saveCart(items2);
+                clearShippingQuote();
+                renderCart();
+            });
+        });
+
+        el.querySelectorAll('.btn-remove').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var items2 = getCart();
+                var idx2 = parseInt(btn.getAttribute('data-remove'), 10);
+                if (isNaN(idx2) || !items2[idx2]) return;
+                items2.splice(idx2, 1);
+                saveCart(items2);
+                clearShippingQuote();
+                renderCart();
+            });
+        });
     }
 
     /* CEP auto-fill via ViaCEP */
@@ -663,7 +741,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             var q = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
             if (q) {
                 payload.shipping_total = Number(q.total) || 0;
-                payload.shipping_label = q.label || '';
+                payload.shipping_label = shippingLabelFromQuote(q);
                 payload.shipping_service = q.option && q.option.id ? q.option.id : '';
                 payload.shipping_cep = q.cep || payload.cep || '';
                 payload.shipping_quote_id = q.quote_id || '';
@@ -682,7 +760,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             var order = pending && pending.key === key && pending.order_number && pending.payment_session_token
                 ? pending
                 : await postJson('/api/orders/create.php', payload);
-            if ((method === 'boleto' || method === 'mercado_pago') && !order.payment_session_token) {
+            if ((method === 'boleto' || method === 'mercado_pago' || method === 'infinitepay') && !order.payment_session_token) {
                 throw new Error('Sessão segura de pagamento não foi criada.');
             }
             if (order.payment_session_token) {
@@ -710,6 +788,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 document.getElementById('boleto-line-group').hidden = !boleto.digitable_line;
                 document.getElementById('boleto-open-link').href = boleto.ticket_url;
                 document.getElementById('boleto-modal').hidden = false;
+                triggerGooglePurchaseEvent(order.order_number, total, items);
                 triggerGoogleAdsConversion(order.order_number, total);
             } else if (method === 'mercado_pago') {
                 btn.textContent = 'Abrindo Mercado Pago…';
@@ -720,17 +799,28 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon();
                 window.location.assign(preference.checkout_url);
                 return;
+            } else if (method === 'infinitepay') {
+                btn.textContent = 'Abrindo InfinitePay…';
+                var link = await postJson('/api/infinitepay/create-link.php', {
+                    order_number: order.order_number,
+                    payment_session_token: order.payment_session_token
+                });
+                clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon();
+                window.location.assign(link.checkout_url);
+                return;
             } else {
                 clearPendingPayment(); clearCart(); clearShippingQuote(); clearCoupon(); renderCart();
                 if (method === 'pix') {
                     document.getElementById('pix-amount-display').textContent = total > 0 ? totalFmt : 'Confirmar com a loja';
                     document.getElementById('wpp-confirm-link').href = wppLink;
                     document.getElementById('pix-modal').hidden = false;
+                    triggerGooglePurchaseEvent(order.order_number, total, items);
                     triggerGoogleAdsConversion(order.order_number, total);
                 } else {
                     document.getElementById('order-number-msg').textContent = 'Pedido ' + order.order_number;
                     document.getElementById('success-wpp-link').href = wppLink;
                     document.getElementById('success-modal').hidden = false;
+                    triggerGooglePurchaseEvent(order.order_number, total, items);
                     triggerGoogleAdsConversion(order.order_number, total);
                 }
             }
@@ -766,7 +856,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             var q = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
             if (q) {
                 payload['shipping_total'] = Number(q.total) || 0;
-                payload['shipping_label'] = q.label || '';
+                payload['shipping_label'] = shippingLabelFromQuote(q);
                 payload['shipping_service'] = q.option && q.option.id ? q.option.id : '';
                 payload['shipping_cep'] = q.cep || payload['cep'] || '';
                 payload['shipping_quote_id'] = q.quote_id || '';
@@ -885,6 +975,47 @@ function triggerGoogleAdsConversion(orderNumber, totalValue) {
             });
         }
     }
+}
+
+function triggerGooglePurchaseEvent(orderNumber, totalValue, items) {
+    if (!orderNumber) return;
+    try {
+        var dedupeKey = 'sv_purchase_tracked_' + String(orderNumber);
+        if (window.sessionStorage && sessionStorage.getItem(dedupeKey) === '1') {
+            return;
+        }
+        var payloadItems = Array.isArray(items) ? items.map(function(item) {
+            return {
+                item_id: String(item && (item.sku || item.olist_product_id || item.item_id) || ''),
+                item_name: String(item && (item.name || item.item_name) || 'Produto Vivaliz'),
+                item_brand: 'Vivaliz',
+                price: Math.max(0, Number(item && item.price || 0)),
+                quantity: Math.max(1, parseInt(item && item.quantity || 1, 10) || 1)
+            };
+        }).filter(function(item) {
+            return item.item_id || item.item_name;
+        }) : [];
+
+        if (window.ShopVivalizGoogleEvents && typeof window.ShopVivalizGoogleEvents.push === 'function') {
+            window.ShopVivalizGoogleEvents.push('purchase', {
+                transaction_id: String(orderNumber),
+                currency: 'BRL',
+                value: Math.max(0, Number(totalValue || 0)),
+                items: payloadItems
+            });
+        } else if (typeof window.gtag === 'function') {
+            window.gtag('event', 'purchase', {
+                transaction_id: String(orderNumber),
+                currency: 'BRL',
+                value: Math.max(0, Number(totalValue || 0)),
+                items: payloadItems
+            });
+        }
+
+        if (window.sessionStorage) {
+            sessionStorage.setItem(dedupeKey, '1');
+        }
+    } catch (error) {}
 }
 </script>
 </body>

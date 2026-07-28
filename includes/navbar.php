@@ -62,6 +62,15 @@ header.sv-navbar a {
     transition: color 0.2s ease;
 }
 header.sv-navbar a:hover { color: #35c759 !important; }
+header.sv-navbar .navbar-menu > a[aria-current="page"] {
+    color: #ffffff !important;
+    background: rgba(255,255,255,.16) !important;
+    padding: 8px 12px !important;
+    border-radius: 999px !important;
+}
+header.sv-navbar .navbar-menu > a#nav-cart-link {
+    color: #ffffff !important;
+}
 header.sv-navbar a.sv-nav-cta {
     background: #35c759 !important;
     color: #ffffff !important;
@@ -74,12 +83,22 @@ header.sv-navbar .navbar-menu {
     align-items: center;
     gap: 20px;
 }
-header.sv-navbar .brand-link { min-width: 0; }
+header.sv-navbar .brand-link {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 18px;
+    border-radius: 22px;
+    background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(244,248,252,.98));
+    border: 1px solid rgba(11,79,136,.16);
+    box-shadow: 0 10px 26px rgba(7,52,93,.16), inset 0 1px 0 rgba(255,255,255,.85);
+}
 header.sv-navbar .brand-logo-img {
     display: block;
-    height: 42px;
+    height: 54px;
     width: auto;
-    max-width: min(210px, 48vw);
+    max-width: min(260px, 52vw);
     object-fit: contain;
 }
 header.sv-navbar .menu-toggle {
@@ -116,7 +135,11 @@ header.sv-navbar .menu-toggle {
         gap: 10px;
         padding-inline: 12px;
     }
-    header.sv-navbar .brand-logo-img { height: 36px; max-width: 58vw; }
+    header.sv-navbar .brand-link {
+        padding: 8px 14px;
+        border-radius: 18px;
+    }
+    header.sv-navbar .brand-logo-img { height: 42px; max-width: 58vw; }
     header.sv-navbar .menu-toggle { display: inline-flex !important; margin-left: auto; }
     header.sv-navbar .navbar-menu {
         display: none !important;
@@ -162,9 +185,32 @@ header.sv-navbar .menu-toggle {
         background: #35c759 !important;
     }
     header.sv-navbar .navbar-menu a[aria-current="page"] { background: #e8eef7 !important; }
+    header.sv-navbar .navbar-menu a#nav-cart-link,
+    header.sv-navbar .navbar-menu a[aria-current="page"] {
+        color: #173b63 !important;
+    }
     .sv-announcement-bar { font-size: 11px; padding: 7px 10px; }
 }
+.sv-skip-link {
+    position: absolute !important;
+    top: -100px !important;
+    left: 20px !important;
+    background: #35c759 !important;
+    color: #ffffff !important;
+    padding: 10px 20px !important;
+    font-weight: 800 !important;
+    border-radius: 8px !important;
+    z-index: 99999 !important;
+    transition: top 0.2s ease !important;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2) !important;
+}
+.sv-skip-link:focus {
+    top: 15px !important;
+    outline: 3px solid #0b4f88 !important;
+}
 </style>
+
+<a href="#main-content" class="sv-skip-link">Ir para o conteúdo principal</a>
 
 <?php
 $svFreeShippingConfig = sv_free_shipping_config();
@@ -180,7 +226,7 @@ $svFreeShippingConfig = sv_free_shipping_config();
 <header class="navbar sv-navbar">
     <nav class="container nav-inner" aria-label="Navegação principal">
         <a href="/" class="brand-link" aria-label="Ir para a home da Vivaliz">
-            <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" width="210" height="46" decoding="async" onerror="this.src='/images/logo-vivaliz-square.png'">
+            <img src="/images/logo-vivaliz.png" alt="Vivaliz" class="brand-logo-img" width="210" height="46" decoding="async" onerror="this.src='/images/logo-vivaliz-square-v2.png'">
         </a>
         <button type="button" class="menu-toggle" id="svMenuToggle" aria-controls="navMenu" aria-expanded="false" aria-label="Abrir menu">☰</button>
         <div class="navbar-menu" id="navMenu">

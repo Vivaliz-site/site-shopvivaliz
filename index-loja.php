@@ -1,6 +1,13 @@
 <?php
 declare(strict_types=1);
 
+// Sessao precisa iniciar antes de qualquer output (mesma causa raiz do bug em
+// index.php/catalogo.php: session_start() tardio no navbar.php falha
+// silenciosamente apos headers enviados, usuario aparece deslogado).
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
@@ -111,7 +118,7 @@ $categoryLinks = [
     <meta name="theme-color" content="#173B63">
     <title>Vivaliz | Loja online</title>
     <link rel="stylesheet" href="/css/responsive.css">
-    <link rel="icon" type="image/png" href="/images/logo-vivaliz-square.png">
+    <link rel="icon" type="image/png" href="/favicon.png?v=2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -538,7 +545,7 @@ $categoryLinks = [
                         <?php $tags = home_product_tags($product['name']); ?>
                         <article class="product-card">
                             <div class="product-image">
-                                <img src="<?php echo htmlspecialchars($product['image_url'], ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?>" loading="lazy" onerror="this.src='/images/logo-vivaliz-square.png'">
+                                <img src="<?php echo htmlspecialchars($product['image_url'], ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?>" loading="lazy" onerror="this.src='/images/logo-vivaliz-square-v2.png'">
                             </div>
                             <div class="product-body">
                                 <div class="product-tag-row">

@@ -41,6 +41,21 @@
       return 'Boa noite';
     }
 
+    function normalizeCatalogQuestion(text) {
+      const replacements = [
+        [/\brod[ií]zios\b/giu, 'rodízio'],
+        [/\bpuxadores\b/giu, 'puxador'],
+        [/\bdobradiças\b/giu, 'dobradiça'],
+        [/\bcorrediças\b/giu, 'corrediça'],
+        [/\bfechaduras\b/giu, 'fechadura'],
+      ];
+      return replacements.reduce((value, [pattern, replacement]) => value.replace(pattern, replacement), text);
+    }
+
+    function cleanAssistantText(text) {
+      return text.replace(/\*\*/g, '').trim();
+    }
+
     const greeting = localGreeting();
 
     root.innerHTML = `
@@ -134,7 +149,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            message: text,
+            message: normalizeCatalogQuestion(text),
             history,
             context: 'site-shopvivaliz',
             clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -148,14 +163,14 @@
 
         if (!response.ok || data.ok === false) {
           const backendMessage = data.error || data.answer || data.message;
-          if (backendMessage) waiting.textContent = backendMessage;
+          if (backendMessage) waiting.textContent = cleanAssistantText(String(backendMessage));
           else if (response.status === 429) waiting.textContent = 'Recebemos muitas mensagens agora. Aguarde alguns instantes e tente novamente.';
           else if (response.status === 503) waiting.textContent = 'A Liz está temporariamente indisponível. Tente novamente em alguns instantes ou fale conosco pelo WhatsApp (37) 99937-4112.';
           else waiting.textContent = 'Não foi possível concluir sua solicitação agora. Tente novamente.';
           return;
         }
 
-        const answer = String(data.answer || data.reply || data.message || data.response || '').trim();
+        const answer = cleanAssistantText(String(data.answer || data.reply || data.message || data.response || ''));
         if (!answer) {
           waiting.textContent = 'Não recebi uma resposta completa. Tente novamente ou fale conosco pelo WhatsApp (37) 99937-4112.';
           return;

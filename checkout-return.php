@@ -11,13 +11,15 @@ header('X-Content-Type-Options: nosniff');
 
 $result = strtolower(trim((string)($_GET['result'] ?? $_GET['status'] ?? 'pending')));
 $result = in_array($result, ['success', 'approved', 'pending', 'failure', 'rejected'], true) ? $result : 'pending';
-$orderNumber = trim((string)($_GET['external_reference'] ?? ''));
+$gateway = strtolower(trim((string)($_GET['gateway'] ?? 'mercado_pago')));
+$orderNumber = trim((string)($_GET['order_nsu'] ?? $_GET['external_reference'] ?? ''));
 $orderNumber = preg_match('/^SV\d{17}$/', $orderNumber) === 1 ? $orderNumber : '';
 $approved = in_array($result, ['success', 'approved'], true);
 $failed = in_array($result, ['failure', 'rejected'], true);
 $title = $approved ? 'Pagamento recebido' : ($failed ? 'Pagamento não concluído' : 'Pagamento pendente');
+$gatewayLabel = $gateway === 'infinitepay' ? 'InfinitePay' : 'Mercado Pago';
 $message = $approved
-    ? 'O Mercado Pago recebeu o pagamento. A confirmação final do pedido será atualizada pelo webhook seguro.'
+    ? 'O ' . $gatewayLabel . ' recebeu o pagamento. A confirmação final do pedido será atualizada pelo webhook seguro.'
     : ($failed
         ? 'O pagamento não foi concluído. Você pode voltar ao checkout e tentar novamente.'
         : 'O meio de pagamento foi gerado e aguarda conclusão ou compensação.');

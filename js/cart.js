@@ -72,7 +72,7 @@
     itemsEl.innerHTML = items.map(function (item, index) {
       return `
         <div class="cart-item">
-          <img src="${esc(item.image_url || '/images/logo-vivaliz-square.png')}" alt="${esc(item.name)}" onerror="this.src='/images/logo-vivaliz-square.png'">
+          <img src="${esc(item.image_url || '/images/logo-vivaliz-square-v2.png')}" alt="${esc(item.name)}" onerror="this.src='/images/logo-vivaliz-square-v2.png'">
           <div>
             <strong>${esc(item.name)}</strong>
             <span>${esc(item.sku)} · ${money(item.price)}</span>

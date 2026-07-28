@@ -9,7 +9,7 @@ require_once __DIR__ . '/includes/product-seo.php';
 /* ── helpers ── */
 function sv_product_default_image(): string
 {
-    return '/images/logo-vivaliz-square.png';
+    return '/images/logo-vivaliz-square-v2.png';
 }
 
 function sv_lower(string $value): string
@@ -554,9 +554,10 @@ if ($notFound) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#173B63">
-    <link rel="icon" href="/images/favicon.svg" type="image/svg+xml">
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
-    <link rel="apple-touch-icon" href="/favicon.ico">
+    <link rel="icon" href="/images/favicon.svg?v=2026-07-27" type="image/svg+xml">
+    <link rel="icon" href="/favicon.png?v=2026-07-27" type="image/png">
+    <link rel="alternate icon" href="/favicon.ico?v=2" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/favicon.png?v=2">
     <meta name="msapplication-TileColor" content="#173B63">
     <meta name="theme-color" content="#173B63">
     <meta name="description" content="<?= sv_esc($seoDescription) ?>">
@@ -584,7 +585,7 @@ if ($notFound) {
     <link rel="stylesheet" href="/css/premium-theme.css?v=2026-07-11">
     <link rel="stylesheet" href="/css/product-conversion-v5.css?v=2026-07-26-v2">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
-    <link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
+    <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">

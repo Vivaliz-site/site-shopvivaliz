@@ -228,7 +228,7 @@ function sv_catalog_esc(string $value): string
 
 function sv_catalog_default_image(): string
 {
-    return '/images/logo-vivaliz-square.png';
+    return '/images/logo-vivaliz-square-v2.png';
 }
 
 function sv_catalog_money(float $value): string
@@ -472,9 +472,10 @@ $svNavCurrent = 'catalogo';
     <meta property="og:type" content="website">
     <meta property="og:url" content="<?= sv_catalog_esc($canonicalUrl) ?>">
     <meta property="og:site_name" content="Vivaliz">
-    <link rel="icon" href="/images/favicon.svg" type="image/svg+xml">
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
-    <link rel="apple-touch-icon" href="/favicon.ico">
+    <link rel="icon" href="/images/favicon.svg?v=2026-07-27" type="image/svg+xml">
+    <link rel="icon" href="/favicon.png?v=2026-07-27" type="image/png">
+    <link rel="alternate icon" href="/favicon.ico?v=2" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/favicon.png?v=2">
     <meta name="msapplication-TileColor" content="#173B63">
     <meta name="theme-color" content="#173B63">
     <link rel="canonical" href="<?= sv_catalog_esc($canonicalUrl) ?>">
@@ -483,7 +484,7 @@ $svNavCurrent = 'catalogo';
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=2026-07-26-v4">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
-    <link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
+    <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
     <script type="application/ld+json"><?= json_encode($structuredData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
     <script type="application/ld+json"><?= json_encode($websiteSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
     <script type="application/ld+json"><?= json_encode($faqSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>

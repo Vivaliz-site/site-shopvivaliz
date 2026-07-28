@@ -1,10 +1,15 @@
 <?php
 declare(strict_types=1);
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once __DIR__ . '/content.php';
 require_once __DIR__ . '/../includes/blog-article-repository.php';
 
 $slug = trim((string)($_GET['slug'] ?? ''));
+$commentStatus = trim((string)($_GET['comentario'] ?? ''));
 $repository = BlogArticleRepository::fromApplicationDatabase();
 $article = $repository->findPublishedBySlug($slug);
 
@@ -120,6 +125,41 @@ if (count($related) < 3) {
             <?php endforeach; ?>
         </div>
         <aside class="article-cta"><h2>Encontre produtos para o seu projeto</h2><p>Explore o catálogo da ShopVivaliz e compare as opções disponíveis para a sua necessidade.</p><a href="<?= sv_blog_escape((string)$article['related_products_url']) ?>">Ver produtos relacionados</a></aside>
+        <section class="article-comments" aria-labelledby="comments-title">
+            <div class="article-comments-head">
+                <h2 id="comments-title">Perguntas e comentários</h2>
+                <p>Ficou com dúvida sobre este conteúdo ou quer pedir recomendação de produto? Envie sua mensagem e seguimos pelo canal mais rápido.</p>
+            </div>
+            <?php if ($commentStatus === 'ok'): ?>
+                <p class="article-comments-alert article-comments-alert--ok">Mensagem enviada com sucesso. Obrigado pelo contato!</p>
+            <?php elseif ($commentStatus === 'erro'): ?>
+                <p class="article-comments-alert article-comments-alert--error">Não foi possível enviar agora. Tente novamente ou use o atendimento completo.</p>
+            <?php endif; ?>
+            <form class="article-comments-form" action="/api/blog/comment.php" method="post">
+                <input type="hidden" name="artigo" value="<?= sv_blog_escape((string)$article['title']) ?>">
+                <input type="hidden" name="slug" value="<?= sv_blog_escape((string)$article['slug']) ?>">
+                <input type="hidden" name="url" value="<?= sv_blog_escape($canonical) ?>">
+                <input type="text" name="website" value="" autocomplete="off" tabindex="-1" style="position:absolute;left:-9999px;height:1px;width:1px;opacity:0" aria-hidden="true">
+                <div class="article-comments-grid">
+                    <label>
+                        <span>Seu nome</span>
+                        <input type="text" name="nome" autocomplete="name" placeholder="Como podemos te chamar?" required>
+                    </label>
+                    <label>
+                        <span>Seu e-mail</span>
+                        <input type="email" name="email" autocomplete="email" placeholder="voce@exemplo.com" required>
+                    </label>
+                </div>
+                <label>
+                    <span>Sua pergunta ou comentário</span>
+                    <textarea name="mensagem" rows="5" placeholder="Escreva sua dúvida, comentário ou o que você quer encontrar no site." required></textarea>
+                </label>
+                <div class="article-comments-actions">
+                    <button type="submit">Enviar mensagem</button>
+                    <a href="/contato">Abrir atendimento completo</a>
+                </div>
+            </form>
+        </section>
         <?php if ($faqItems !== []): ?><section class="article-faq" aria-labelledby="faq-title"><h2 id="faq-title">Perguntas frequentes</h2><?php foreach ($faqItems as $faq): ?><details><summary><?= sv_blog_escape((string)$faq['question']) ?></summary><p><?= sv_blog_escape((string)$faq['answer']) ?></p></details><?php endforeach; ?></section><?php endif; ?>
         <?php if ($related !== []): ?><section class="article-related" aria-labelledby="related-title"><h2 id="related-title">Continue aprendendo</h2><div class="knowledge-grid"><?php foreach ($related as $item): ?><article class="knowledge-card"><div class="knowledge-card-body"><span class="knowledge-chip"><?= sv_blog_escape((string)$item['category']) ?></span><h3><a href="/blog/<?= rawurlencode((string)$item['slug']) ?>"><?= sv_blog_escape((string)$item['title']) ?></a></h3><p><?= sv_blog_escape((string)$item['excerpt']) ?></p><div class="knowledge-meta"><span><?= (int)$item['reading_time'] ?> min</span></div></div></article><?php endforeach; ?></div></section><?php endif; ?>
     </article>

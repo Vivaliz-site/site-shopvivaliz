@@ -55,7 +55,11 @@
 
   function parseProductPayload(button) {
     try {
-      return JSON.parse(decodeURIComponent(button.getAttribute('data-product') || '{}'));
+      var raw = String(button.getAttribute('data-product') || '{}');
+      var decoder = (typeof window !== 'undefined' && typeof window.decodeURIComponent === 'function')
+        ? window.decodeURIComponent.bind(window)
+        : function (value) { return value; };
+      return JSON.parse(decoder(raw));
     } catch (error) {
       return null;
     }

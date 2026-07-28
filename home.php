@@ -1,6 +1,13 @@
 <?php
 declare(strict_types=1);
 
+// Sessao precisa iniciar antes de qualquer output (mesma causa raiz do bug em
+// index.php/catalogo.php: session_start() tardio no navbar.php falha
+// silenciosamente apos headers enviados, usuario aparece deslogado).
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
@@ -35,7 +42,7 @@ function home_products(int $limit = 8): array
         $products[] = [
             'sku' => $sku,
             'name' => $name,
-            'image_url' => $image !== '' ? $image : '/images/logo-vivaliz-square.png',
+            'image_url' => $image !== '' ? $image : '/images/logo-vivaliz-square-v2.png',
             'images' => array_slice(array_filter($images), 0, 10),
             'price' => (float)($row['price'] ?? 0),
             'stock' => (int)($row['stock'] ?? 0),
@@ -114,7 +121,7 @@ function home_category_image(array $products, array $terms): string
         $image = trim((string)($product['image_url'] ?? ''));
         if ($image !== '') return $image;
     }
-    return '/images/logo-vivaliz-square.png';
+    return '/images/logo-vivaliz-square-v2.png';
 }
 
 function home_product_tags(string $name): array
@@ -157,8 +164,8 @@ $metrics = ['itens'=>'Seleção organizada','imagens'=>'Imagens reais','operacao
 <meta name="theme-color" content="#173B63">
 <title>Vivaliz | Loja online</title>
 <link rel="stylesheet" href="/css/responsive.css">
-<link rel="stylesheet" href="/css/zoom-responsive.css?v=20260719-1">
-<link rel="icon" type="image/png" href="/images/logo-vivaliz-square.png">
+<link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
+<link rel="icon" type="image/png" href="/favicon.png?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -187,8 +194,8 @@ html,body{font-family:'Manrope','Segoe UI',sans-serif;background:#F5F8FB;color:v
 <article class="hero-card"><div><strong>Loja oficial Vivaliz</strong><div class="hero-copy"><h1>Produtos para casa, ferragens e utilidades.</h1><p>Explore uma vitrine com imagens reais, categorias objetivas e acesso rápido aos produtos mais buscados.</p></div><div class="hero-actions"><a class="hero-btn" href="/catalogo">Ver catálogo</a><a class="hero-btn-alt" href="/contato">Falar com a Vivaliz</a></div></div><div class="hero-metrics"><?php foreach($metrics as $label=>$text): ?><div class="metric-box"><strong><?=htmlspecialchars($text,ENT_QUOTES,'UTF-8')?></strong><div><?=htmlspecialchars(ucfirst($label),ENT_QUOTES,'UTF-8')?></div></div><?php endforeach; ?></div></article>
 <aside class="hero-side"><article class="mini-banner"><strong>Categorias em destaque</strong><h2>Rodízios, ferragens e utilidades para casa.</h2><p>Imagens reais do catálogo e acesso direto aos produtos.</p><a href="/catalogo?q=rodizio">Explorar rodízios</a></article><article class="mini-banner"><strong>Compra assistida</strong><h2>Atendimento rápido antes e depois da compra.</h2><p>Conte com a equipe para compatibilidade, prazo e quantidade.</p><a href="/contato">Falar com a equipe</a></article></aside>
 </div></div></section>
-<section class="section-shell"><div class="container"><div class="section-head"><div><h2>Categorias em foco</h2><p>Atalhos com imagens reais dos produtos da loja.</p></div><a href="/catalogo">Abrir todo o catálogo</a></div><div class="categories-grid"><?php foreach($categoryLinks as $category): ?><a class="category-card" href="/catalogo?q=<?=urlencode($category['query'])?>"><div class="category-image"><img src="<?=htmlspecialchars($category['image'],ENT_QUOTES,'UTF-8')?>" alt="<?=htmlspecialchars($category['title'],ENT_QUOTES,'UTF-8')?>" loading="lazy" onerror="this.src='/images/logo-vivaliz-square.png'"></div><div class="category-body"><h3><?=htmlspecialchars($category['title'],ENT_QUOTES,'UTF-8')?></h3><p><?=htmlspecialchars($category['note'],ENT_QUOTES,'UTF-8')?></p></div></a><?php endforeach; ?></div></div></section>
-<section class="section-shell"><div class="container"><div class="section-head"><div><h2>Produtos em destaque</h2><p>Seleção carregada diretamente da origem canônica do catálogo.</p></div><a href="/catalogo">Ver todos</a></div><?php if($featuredProducts): ?><div class="products-grid"><?php foreach($featuredProducts as $product): $tags=home_product_tags($product['name']); $cardImages = array_values(array_unique(array_filter(array_merge([$product['image_url']], is_array($product['images'] ?? null) ? $product['images'] : [])))); $imagesJson = json_encode(array_slice($cardImages, 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?><article class="product-card"><div class="product-image" data-images="<?=htmlspecialchars($imagesJson, ENT_QUOTES, 'UTF-8')?>"><img src="<?=htmlspecialchars($product['image_url'],ENT_QUOTES,'UTF-8')?>" alt="<?=htmlspecialchars($product['name'],ENT_QUOTES,'UTF-8')?>" loading="lazy" onerror="this.src='/images/logo-vivaliz-square.png'"></div><div class="product-body"><?php foreach(array_slice($tags?:['Catálogo'],0,2) as $tag): ?><span class="product-tag"><?=htmlspecialchars($tag,ENT_QUOTES,'UTF-8')?></span><?php endforeach; ?><div class="product-title"><?=htmlspecialchars($product['name'],ENT_QUOTES,'UTF-8')?></div><div class="product-meta"><span><?=htmlspecialchars($product['sku'],ENT_QUOTES,'UTF-8')?></span><a class="product-link" href="/catalogo?q=<?=urlencode($product['sku'])?>">Ver item</a></div></div></article><?php endforeach; ?></div><?php else: ?><div class="empty-products">Nenhum produto disponível no catálogo neste momento.</div><?php endif; ?></div></section>
+<section class="section-shell"><div class="container"><div class="section-head"><div><h2>Categorias em foco</h2><p>Atalhos com imagens reais dos produtos da loja.</p></div><a href="/catalogo">Abrir todo o catálogo</a></div><div class="categories-grid"><?php foreach($categoryLinks as $category): ?><a class="category-card" href="/catalogo?q=<?=urlencode($category['query'])?>"><div class="category-image"><img src="<?=htmlspecialchars($category['image'],ENT_QUOTES,'UTF-8')?>" alt="<?=htmlspecialchars($category['title'],ENT_QUOTES,'UTF-8')?>" loading="lazy" onerror="this.src='/images/logo-vivaliz-square-v2.png'"></div><div class="category-body"><h3><?=htmlspecialchars($category['title'],ENT_QUOTES,'UTF-8')?></h3><p><?=htmlspecialchars($category['note'],ENT_QUOTES,'UTF-8')?></p></div></a><?php endforeach; ?></div></div></section>
+<section class="section-shell"><div class="container"><div class="section-head"><div><h2>Produtos em destaque</h2><p>Seleção carregada diretamente da origem canônica do catálogo.</p></div><a href="/catalogo">Ver todos</a></div><?php if($featuredProducts): ?><div class="products-grid"><?php foreach($featuredProducts as $product): $tags=home_product_tags($product['name']); $cardImages = array_values(array_unique(array_filter(array_merge([$product['image_url']], is_array($product['images'] ?? null) ? $product['images'] : [])))); $imagesJson = json_encode(array_slice($cardImages, 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?><article class="product-card"><div class="product-image" data-images="<?=htmlspecialchars($imagesJson, ENT_QUOTES, 'UTF-8')?>"><img src="<?=htmlspecialchars($product['image_url'],ENT_QUOTES,'UTF-8')?>" alt="<?=htmlspecialchars($product['name'],ENT_QUOTES,'UTF-8')?>" loading="lazy" onerror="this.src='/images/logo-vivaliz-square-v2.png'"></div><div class="product-body"><?php foreach(array_slice($tags?:['Catálogo'],0,2) as $tag): ?><span class="product-tag"><?=htmlspecialchars($tag,ENT_QUOTES,'UTF-8')?></span><?php endforeach; ?><div class="product-title"><?=htmlspecialchars($product['name'],ENT_QUOTES,'UTF-8')?></div><div class="product-meta"><span><?=htmlspecialchars($product['sku'],ENT_QUOTES,'UTF-8')?></span><a class="product-link" href="/catalogo?q=<?=urlencode($product['sku'])?>">Ver item</a></div></div></article><?php endforeach; ?></div><?php else: ?><div class="empty-products">Nenhum produto disponível no catálogo neste momento.</div><?php endif; ?></div></section>
 </main>
 <footer><div class="container footer-grid"><div><img src="/images/logo-vivaliz.png" alt="Vivaliz" style="height:42px;width:auto;margin-bottom:12px" onerror="this.src='/images/logo.svg'"><p>Vitrine digital da Vivaliz.</p></div><div><h3>Navegação</h3><p><a href="/catalogo">Catálogo</a></p><p><a href="/sobre">Sobre</a></p><p><a href="/contato">Contato</a></p></div><div><h3>Operação</h3><p><a href="/carrinho">Carrinho</a></p><p><a href="/faq">Perguntas frequentes</a></p><p><a href="/politica-privacidade">Privacidade</a></p></div></div></footer>
 <script src="/js/auto-image-carousel.js?v=20260719-2"></script>
