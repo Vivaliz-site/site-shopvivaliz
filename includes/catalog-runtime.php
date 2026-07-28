@@ -25,6 +25,96 @@ function svcr_lower(string $value): string
 }
 
 /**
+ * Normaliza preços vindos da Tiny/Olist, banco ou JSON legado.
+ * Aceita números e strings em formatos pt-BR/en-US, mas nunca transforma
+ * valor vazio, inválido, zero ou negativo em produto comercializável.
+ */
+function svcr_parse_price(mixed $value): float
+{
+    if ($value === null || $value === '' || is_bool($value)) {
+        return 0.0;
+    }
+
+    if (is_int($value) || is_float($value)) {
+        $price = (float)$value;
+        return is_finite($price) && $price > 0 ? $price : 0.0;
+    }
+
+    if (!is_string($value)) {
+        return 0.0;
+    }
+
+    $normalized = trim($value);
+    if ($normalized === '') {
+        return 0.0;
+    }
+
+    $normalized = str_ireplace(['R$', 'BRL', "\xc2\xa0", ' '], '', $normalized);
+    $normalized = preg_replace('/[^0-9,\.\-]/', '', $normalized) ?? '';
+    if ($normalized === '' || $normalized === '-') {
+        return 0.0;
+    }
+
+    $lastComma = strrpos($normalized, ',');
+    $lastDot = strrpos($normalized, '.');
+
+    if ($lastComma !== false && $lastDot !== false) {
+        if ($lastComma > $lastDot) {
+            $normalized = str_replace('.', '', $normalized);
+            $normalized = str_replace(',', '.', $normalized);
+        } else {
+            $normalized = str_replace(',', '', $normalized);
+        }
+    } elseif ($lastComma !== false) {
+        $normalized = str_replace('.', '', $normalized);
+        $normalized = str_replace(',', '.', $normalized);
+    } elseif (substr_count($normalized, '.') > 1) {
+        $parts = explode('.', $normalized);
+        $decimal = array_pop($parts);
+        $normalized = implode('', $parts) . '.' . $decimal;
+    }
+
+    if (!is_numeric($normalized)) {
+        return 0.0;
+    }
+
+    $price = (float)$normalized;
+    return is_finite($price) && $price > 0 ? $price : 0.0;
+}
+
+function svcr_item_price(array $item): float
+{
+    $prices = is_array($item['precos'] ?? null)
+        ? $item['precos']
+        : (is_array($item['prices'] ?? null) ? $item['prices'] : []);
+
+    $regular = svcr_parse_price(
+        $prices['preco']
+        ?? $prices['preco_venda']
+        ?? $prices['price']
+        ?? $prices['sale_price']
+        ?? $item['preco']
+        ?? $item['price']
+        ?? null
+    );
+
+    $promotional = svcr_parse_price(
+        $prices['precoPromocional']
+        ?? $prices['preco_promocional']
+        ?? $prices['promotional_price']
+        ?? $item['preco_promocional']
+        ?? $item['promotional_price']
+        ?? null
+    );
+
+    if ($promotional > 0 && ($regular <= 0 || $promotional < $regular)) {
+        return $promotional;
+    }
+
+    return $regular;
+}
+
+/**
  * ShopVivaliz não opera com pré-venda. Qualquer marcação equivalente vinda
  * da Tiny/Olist, cache legado ou fallback remove o item da vitrine.
  */
@@ -95,6 +185,10 @@ function svcr_filter_storefront_rows(array $rows): array
         if (!is_array($row) || svcr_is_preorder($row) || svcr_is_excluded_product($row)) {
             return false;
         }
+        // Produto sem preço válido não entra na vitrine e nunca recebe CTA ativo.
+        if (svcr_item_price($row) <= 0) {
+            return false;
+        }
         // Filtrar por is_published: marcação local do site (padrão: true)
         $isPublished = $row['is_published'] ?? true;
         if ($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0') {
@@ -153,7 +247,7 @@ function svcr_products(): array
             continue;
         }
 
-        $situation = strtoupper(trim((string)($item['situacao'] ?? 'A')));
+        $situation = strtoupper(trim((string)($item['situacao'] ?? 'A'));
         if (!in_array($situation, ['A', 'ATIVO', 'ACTIVE'], true)) {
             continue;
         }
@@ -165,9 +259,6 @@ function svcr_products(): array
             $image = $imagesList[0] ?? '';
         }
 
-        $prices = is_array($item['precos'] ?? null)
-            ? $item['precos']
-            : (is_array($item['prices'] ?? null) ? $item['prices'] : []);
         $stockInfo = is_array($item['estoque'] ?? null)
             ? $item['estoque']
             : (is_array($item['stock_detail'] ?? null) ? $item['stock_detail'] : []);
@@ -181,25 +272,9 @@ function svcr_products(): array
         }
 
         $name = trim((string)($item['descricao'] ?? $item['nome'] ?? $item['name'] ?? $sku));
-        $price = (float)(
-            $prices['preco']
-            ?? $prices['preco_venda']
-            ?? $prices['price']
-            ?? $prices['sale_price']
-            ?? $item['preco']
-            ?? $item['price']
-            ?? 0
-        );
-        $promotionalPrice = (float)(
-            $prices['precoPromocional']
-            ?? $prices['preco_promocional']
-            ?? $prices['promotional_price']
-            ?? $item['preco_promocional']
-            ?? $item['promotional_price']
-            ?? 0
-        );
-        if ($promotionalPrice > 0 && ($price <= 0 || $promotionalPrice < $price)) {
-            $price = $promotionalPrice;
+        $price = svcr_item_price($item);
+        if ($price <= 0) {
+            continue;
         }
 
         $products[] = [
@@ -209,7 +284,7 @@ function svcr_products(): array
             'name' => $name,
             'slug' => svcr_slug($name, $sku),
             'description' => trim((string)($item['descricaoComplementar'] ?? $item['descricao_complementar'] ?? $item['description'] ?? $item['descricao'] ?? '')),
-            'price' => max(0, $price),
+            'price' => $price,
             'stock' => max(0, (int)($item['estoque_disponivel'] ?? $stockInfo['quantidade'] ?? $stockInfo['stock'] ?? $item['stock'] ?? 0)),
             'image_url' => $image,
             'images' => $imagesList,
