@@ -1,72 +1,160 @@
 <?php
 declare(strict_types=1);
-header('Content-Type: application/json; charset=UTF-8');
 
-// Load runtime secrets
+header_remove('X-Powered-By');
+header('Content-Type: application/json; charset=UTF-8');
+header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+
 $runtimeSecretsFile = __DIR__ . '/../config/runtime-secrets.php';
 if (is_file($runtimeSecretsFile)) {
     $secrets = require $runtimeSecretsFile;
     if (is_array($secrets)) {
         foreach ($secrets as $k => $v) {
-            if (!getenv($k)) putenv($k . '=' . (string)$v);
+            if (!getenv($k)) {
+                putenv($k . '=' . (string)$v);
+            }
         }
     }
 }
 
 require_once __DIR__ . '/../includes/mercadopago-gateway.php';
 
+function svmp_test_order_response(int $status, array $payload): never
+{
+    http_response_code($status);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 $accessToken = svmp_env('MERCADOPAGO_ACCESS_TOKEN');
 $publicKey = svmp_env('MERCADOPAGO_PUBLIC_KEY');
+$baseUrl = svmp_base_url();
 
-if (!$accessToken || !$publicKey) {
-    http_response_code(400);
-    echo json_encode(['ok' => false, 'error' => 'Missing Mercado Pago credentials']);
-    exit;
+if ($accessToken === '' || $publicKey === '') {
+    svmp_test_order_response(503, ['ok' => false, 'error' => 'mercadopago_unconfigured']);
 }
 
-// Create test order
-$testOrder = [
-    'title' => 'Teste ShopVivaliz',
-    'description' => 'Pedido de teste para validação de integração',
-    'quantity' => 1,
-    'unit_price' => 99.90,
-    'currency_id' => 'BRL',
+$externalReference = 'MP-QUALITY-' . gmdate('YmdHis') . '-' . bin2hex(random_bytes(4));
+$statementDescriptor = 'SHOPVIVALIZ';
+$deviceId = 'quality-test-' . gmdate('YmdHis');
+$registrationDate = date(DATE_ATOM, strtotime('-30 days'));
+$lastPurchase = date('Y-m-d H:i:s', strtotime('-2 days'));
+
+$payload = [
+    'type' => 'online',
+    'processing_mode' => 'automatic',
+    'external_reference' => $externalReference,
+    'total_amount' => svmp_money(99.90),
+    'description' => 'Pedido de teste de qualidade ShopVivaliz',
+    'payer' => [
+        'first_name' => 'Frederico',
+        'last_name' => 'Mourao',
+        'email' => 'shopvivaliz@gmail.com',
+        'phone' => [
+            'area_code' => '31',
+            'number' => '999999999',
+        ],
+        'identification' => [
+            'type' => 'CPF',
+            'number' => '12345678909',
+        ],
+        'address' => [
+            'street_name' => 'Rua Teste de Qualidade',
+            'street_number' => '123',
+            'zip_code' => '35500025',
+            'neighborhood' => 'Centro',
+            'city' => 'Divinopolis',
+            'state' => 'MG',
+        ],
+    ],
+    'items' => [
+        [
+            'id' => 'QUALITY-CHECKOUT-TEST',
+            'title' => 'Chave Teste Qualidade MP',
+            'description' => 'Produto de teste para medir qualidade da integração',
+            'quantity' => 1,
+            'currency_id' => 'BRL',
+            'unit_price' => 99.90,
+            'category_id' => 'others',
+            'external_code' => 'quality-checkout-test',
+        ],
+    ],
+    'transactions' => [
+        'payments' => [[
+            'amount' => svmp_money(99.90),
+            'payment_method' => [
+                'id' => 'pix',
+                'type' => 'bank_transfer',
+                'statement_descriptor' => $statementDescriptor,
+            ],
+        ]],
+    ],
+    'notification_url' => $baseUrl . '/api/webhook-mercadopago.php?source_news=webhooks',
+    'statement_descriptor' => $statementDescriptor,
+    'additional_info' => [
+        'payer' => [
+            'first_name' => 'Frederico',
+            'last_name' => 'Mourao',
+            'registration_date' => $registrationDate,
+            'last_purchase' => $lastPurchase,
+            'authentication_type' => 'email',
+            'is_first_purchase_online' => false,
+            'phone' => [
+                'area_code' => '31',
+                'number' => '999999999',
+            ],
+            'customer_id' => 'quality-test-frederico-mourao',
+        ],
+        'shipments' => [
+            'express_shipments' => false,
+            'receiver_address' => [
+                'zip_code' => '35500025',
+                'state_name' => 'Minas Gerais',
+                'city_name' => 'Divinopolis',
+                'street_name' => 'Rua Teste de Qualidade',
+                'street_number' => '123',
+                'neighborhood' => 'Centro',
+            ],
+            'receivers_address' => [
+                'zip_code' => '35500025',
+                'state_name' => 'Minas Gerais',
+                'city_name' => 'Divinopolis',
+                'street_name' => 'Rua Teste de Qualidade',
+                'street_number' => '123',
+                'neighborhood' => 'Centro',
+            ],
+        ],
+    ],
 ];
 
-$ch = curl_init('https://api.mercadopago.com/checkout/orders');
-curl_setopt_array($ch, [
-    CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $accessToken, 'Content-Type: application/json'],
-    CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => json_encode($testOrder),
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_TIMEOUT => 10,
-]);
+try {
+    $response = svmp_api_request(
+        'POST',
+        '/v1/orders',
+        $accessToken,
+        $payload,
+        'quality-' . bin2hex(random_bytes(8)),
+        $deviceId
+    );
 
-$response = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
+    $orderId = (string)($response['id'] ?? '');
+    if ($orderId === '') {
+        svmp_test_order_response(502, ['ok' => false, 'error' => 'invalid_order_response', 'response' => $response]);
+    }
 
-if ($httpCode !== 201) {
-    http_response_code(400);
-    echo json_encode(['ok' => false, 'error' => 'Failed to create order', 'http' => $httpCode, 'response' => $response]);
-    exit;
+    svmp_test_order_response(201, [
+        'ok' => true,
+        'order_id' => $orderId,
+        'external_reference' => $externalReference,
+        'public_key' => $publicKey,
+        'device_id' => $deviceId,
+        'notification_url' => $payload['notification_url'],
+        'statement_descriptor' => $statementDescriptor,
+        'timestamp' => time(),
+    ]);
+} catch (SvMercadoPagoApiException $e) {
+    svmp_test_order_response($e->httpStatus, ['ok' => false, 'error' => $e->publicCode]);
+} catch (Throwable $e) {
+    svmp_test_order_response(500, ['ok' => false, 'error' => 'internal_error']);
 }
-
-$data = json_decode($response, true);
-
-if (!isset($data['id'])) {
-    http_response_code(400);
-    echo json_encode(['ok' => false, 'error' => 'Invalid response format', 'data' => $data]);
-    exit;
-}
-
-// Return success with Order ID
-echo json_encode([
-    'ok' => true,
-    'order_id' => $data['id'],
-    'public_key' => $publicKey,
-    'checkout_url' => $data['url'] ?? null,
-    'amount' => 99.90,
-    'currency' => 'BRL',
-    'timestamp' => time(),
-]);
