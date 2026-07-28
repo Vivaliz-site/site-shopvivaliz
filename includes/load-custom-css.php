@@ -13,9 +13,11 @@ function load_custom_css(): void
     // compartilhado em produção e substitui o conteúdo versionado da release.
     $pageName = basename($_SERVER['PHP_SELF'], '.php');
 
-    // CSS funcional da home deve viver em /css, que faz parte da release.
+    // CSS e JS funcionais da home devem viver fora de storage, como parte da release.
     if ($pageName === 'index') {
-        echo "    <link rel=\"stylesheet\" href=\"/css/home-mobile-compact.css?v=2026-07-28-2\">\n";
+        echo "    <link rel=\"stylesheet\" href=\"/css/home-mobile-compact.css?v=2026-07-28-3\">\n";
+        echo "    <link rel=\"stylesheet\" href=\"/css/home-mobile-final.css?v=2026-07-28-1\">\n";
+        echo "    <script src=\"/js/home-mobile-layout.js?v=2026-07-28-1\" defer></script>\n";
     }
 
     // CSS opcional criado pelo admin continua sendo lido do storage compartilhado.
