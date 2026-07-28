@@ -1,3 +1,8 @@
+/* Recursos administrativos não devem aparecer na loja pública. */
+.footer-cols a[href="/gamificacao.php"] {
+  display: none !important;
+}
+
 /* Acabamento final da home mobile: mais densidade, melhor hierarquia e foco em compra. */
 @media (max-width: 768px) {
   /* Header mais baixo sem comprometer toque. */
