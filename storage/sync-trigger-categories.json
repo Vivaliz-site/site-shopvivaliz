@@ -1,0 +1,8 @@
+{
+  "target": "VM Oracle 137.131.156.17",
+  "files": [
+    "public/assets/category-images/*"
+  ],
+  "timestamp": "2026-07-28 10:46:51",
+  "action": "force_pull_categories"
+}
