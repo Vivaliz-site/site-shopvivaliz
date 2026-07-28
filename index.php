@@ -39,6 +39,63 @@ function sv_home_default_image(): string
     return '/images/logo-vivaliz-square-v2.png';
 }
 
+function sv_home_pick_best_image(array $row): string
+{
+    $candidates = [];
+    foreach ([
+        $row['image_url'] ?? '',
+        $row['image'] ?? '',
+        $row['imagem_principal_url'] ?? '',
+        $row['primary_image_url'] ?? '',
+    ] as $candidate) {
+        $candidate = trim((string)$candidate);
+        if ($candidate !== '') {
+            $candidates[] = $candidate;
+        }
+    }
+    foreach (['images', 'imagens', 'gallery', 'galeria'] as $field) {
+        if (!is_array($row[$field] ?? null)) continue;
+        foreach ($row[$field] as $candidate) {
+            $candidate = trim((string)$candidate);
+            if ($candidate !== '') {
+                $candidates[] = $candidate;
+            }
+        }
+    }
+
+    $candidates = array_values(array_unique($candidates));
+    if ($candidates === []) {
+        return '';
+    }
+
+    $score = static function (string $url): int {
+        $u = strtolower($url);
+        $bad = 0;
+        foreach (['thumb', 'thumbnail', 'small', 'mini', 'preview', 'placeholder', 'default'] as $needle) {
+            if (str_contains($u, $needle)) {
+                $bad += 10;
+            }
+        }
+        if (preg_match('/[?&](w|width|h|height)=([0-9]+)/', $u, $m)) {
+            $size = (int)$m[2];
+            $bad += $size > 0 && $size < 600 ? 8 : 0;
+        }
+        if (preg_match('/(?:_|-)(\d{2,3})x(\d{2,3})(?:[._-]|$)/', $u, $m)) {
+            $bad += ((int)$m[1] < 600 || (int)$m[2] < 600) ? 8 : 0;
+        }
+        if (preg_match('/(?:_|-)(\d{3,4})(?:[._-]|$)/', $u, $m)) {
+            $bad += ((int)$m[1] < 700) ? 4 : 0;
+        }
+        if (str_contains($u, 'cloudinary') || str_contains($u, 'imgix') || str_contains($u, 'cdn')) {
+            $bad -= 2;
+        }
+        return $bad;
+    };
+
+    usort($candidates, static fn(string $a, string $b): int => $score($a) <=> $score($b));
+    return $candidates[0] ?? '';
+}
+
 function sv_home_catalog_source_rows(): array
 {
     $runtime = svcr_products();
@@ -197,7 +254,7 @@ function sv_home_featured_products(int $limit = 8): array
             continue;
         }
 
-        $image = trim((string)($row['image_url'] ?? $row['image'] ?? ''));
+        $image = sv_home_pick_best_image($row);
         if ($image === '') {
             continue;
         }
@@ -338,7 +395,7 @@ function sv_home_top_categories(int $limit = 8): array
         }
         $counts[$category] = ($counts[$category] ?? 0) + 1;
         if (!isset($categoryImages[$category])) {
-            $image = trim((string)($row['image_url'] ?? ''));
+            $image = sv_home_pick_best_image($row);
             if ($image !== '') {
                 $categoryImages[$category] = $image;
             }
