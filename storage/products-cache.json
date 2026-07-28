@@ -1,6 +1,6 @@
 {
-  "total": 1039,
-  "timestamp": "2026-07-28T03:34:12.573899",
+  "total": 1037,
+  "timestamp": "2026-07-28T14:36:10.791342",
   "itens": [
     {
       "id": 337702887,
@@ -5574,11 +5574,11 @@
       "tipo": "S",
       "situacao": "A",
       "dataCriacao": "2026-04-07 14:03:12",
-      "dataAlteracao": "2026-07-21 21:08:52",
+      "dataAlteracao": "2026-07-28 09:47:35",
       "unidade": "UN",
       "gtin": "7899887503062",
       "precos": {
-        "preco": 128.99,
+        "preco": 129,
         "precoPromocional": 0,
         "precoCusto": 44,
         "precoCustoMedio": 44
@@ -13189,48 +13189,6 @@
         "localizacao": ""
       },
       "tipoVariacao": "P"
-    },
-    {
-      "id": 351002533,
-      "sku": "JFQFCQ6N",
-      "descricao": "Cachepot Floreira Planta Flat Vaso 67 (17l) 22x66cm Japi - Cimento Queimado - Lisa",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-04-26 11:19:28",
-      "dataAlteracao": "2026-04-26 11:31:16",
-      "unidade": "UN",
-      "gtin": "",
-      "precos": {
-        "preco": 0,
-        "precoPromocional": 0,
-        "precoCusto": 0,
-        "precoCustoMedio": 0
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "V"
-    },
-    {
-      "id": 351002541,
-      "sku": "JFQFAC67N",
-      "descricao": "Cachepot Floreira Planta Flat Vaso 67 (17l) 22x66cm Japi - aço corten - Lisa",
-      "tipo": "S",
-      "situacao": "E",
-      "dataCriacao": "2026-04-26 11:19:29",
-      "dataAlteracao": "2026-04-26 11:31:16",
-      "unidade": "UN",
-      "gtin": "",
-      "precos": {
-        "preco": 0,
-        "precoPromocional": 0,
-        "precoCusto": 0,
-        "precoCustoMedio": 0
-      },
-      "estoque": {
-        "localizacao": ""
-      },
-      "tipoVariacao": "V"
     },
     {
       "id": 351041822,
