@@ -1,9 +1,6 @@
 <?php
 declare(strict_types=1);
 
-/**
- * Generate URL-friendly slug from product name/SKU
- */
 function svcr_slug(string $name, string $sku = ''): string
 {
     $text = $name !== '' ? $name : $sku;
@@ -13,10 +10,8 @@ function svcr_slug(string $name, string $sku = ''): string
 
     $text = mb_strtolower($text, 'UTF-8');
     $text = preg_replace('/[^\p{L}\p{N}\s\-]/u', '', $text);
-    $text = preg_replace('/[\s\-]+/', '-', trim($text));
-    $text = trim($text, '-');
-
-    return $text !== '' ? $text : '';
+    $text = preg_replace('/[\s\-]+/', '-', trim((string)$text));
+    return trim((string)$text, '-');
 }
 
 function svcr_lower(string $value): string
@@ -25,8 +20,62 @@ function svcr_lower(string $value): string
 }
 
 /**
- * ShopVivaliz não opera com pré-venda. Qualquer marcação equivalente vinda
- * da Tiny/Olist, cache legado ou fallback remove o item da vitrine.
+ * Normaliza valores monetários vindos da API, cache ou banco.
+ * Retorna null para qualquer valor vazio, inválido, zero ou negativo.
+ */
+function shopvivaliz_price_value(mixed $price): ?float
+{
+    if ($price === null || $price === '' || is_bool($price) || is_array($price) || is_object($price)) {
+        return null;
+    }
+
+    if (is_string($price)) {
+        $normalized = trim($price);
+        $normalized = str_ireplace('R$', '', $normalized);
+        $normalized = preg_replace('/\s+/', '', $normalized);
+
+        if ($normalized === '' || !preg_match('/\d/', $normalized)) {
+            return null;
+        }
+
+        if (str_contains($normalized, ',')) {
+            $normalized = str_replace('.', '', $normalized);
+            $normalized = str_replace(',', '.', $normalized);
+        }
+
+        if (!is_numeric($normalized)) {
+            return null;
+        }
+
+        $price = (float)$normalized;
+    }
+
+    if (!is_numeric($price)) {
+        return null;
+    }
+
+    $value = (float)$price;
+    return is_finite($value) && $value > 0 ? $value : null;
+}
+
+function shopvivaliz_format_price(mixed $price): ?string
+{
+    $value = shopvivaliz_price_value($price);
+    return $value === null ? null : 'R$ ' . number_format($value, 2, ',', '.');
+}
+
+function shopvivaliz_discount_value(mixed $discount): int
+{
+    if ($discount === null || $discount === '' || !is_numeric($discount)) {
+        return 0;
+    }
+
+    $value = (float)$discount;
+    return is_finite($value) && $value > 0 ? (int)floor($value) : 0;
+}
+
+/**
+ * A loja não comercializa itens marcados como encomenda antecipada.
  */
 function svcr_is_preorder(array $item): bool
 {
@@ -48,10 +97,6 @@ function svcr_is_preorder(array $item): bool
     return in_array($availability, ['preorder', 'pre-order', 'pre_venda', 'pre-venda', 'made_to_order', 'sob_encomenda', 'sob encomenda'], true);
 }
 
-/**
- * Materia-prima, insumos internos e itens tecnicos nao comercializados nao
- * podem aparecer no site, APIs publicas nem feeds externos.
- */
 function svcr_is_excluded_product(array $item): bool
 {
     $sku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
@@ -59,15 +104,7 @@ function svcr_is_excluded_product(array $item): bool
         return true;
     }
 
-    foreach ([
-        'exclude_from_site',
-        'exclude_from_catalog',
-        'exclude_from_feeds',
-        'non_sellable',
-        'raw_material',
-        'materia_prima',
-        'materiaPrima',
-    ] as $field) {
+    foreach (['exclude_from_site', 'exclude_from_catalog', 'exclude_from_feeds', 'non_sellable', 'raw_material', 'materia_prima', 'materiaPrima'] as $field) {
         $value = $item[$field] ?? null;
         if ($value === true || $value === 1 || $value === '1') {
             return true;
@@ -79,8 +116,7 @@ function svcr_is_excluded_product(array $item): bool
 
     $name = svcr_lower(trim((string)($item['name'] ?? $item['nome'] ?? $item['descricao'] ?? '')));
     $category = svcr_lower(trim((string)($item['category'] ?? $item['categoria']['nome'] ?? $item['categoria'] ?? '')));
-    $keywords = ['matéria-prima', 'materia-prima', 'materia prima', 'raw material', 'insumo interno'];
-    foreach ($keywords as $keyword) {
+    foreach (['matéria-prima', 'materia-prima', 'materia prima', 'raw material', 'insumo interno'] as $keyword) {
         if (($name !== '' && str_contains($name, $keyword)) || ($category !== '' && str_contains($category, $keyword))) {
             return true;
         }
@@ -95,20 +131,20 @@ function svcr_filter_storefront_rows(array $rows): array
         if (!is_array($row) || svcr_is_preorder($row) || svcr_is_excluded_product($row)) {
             return false;
         }
-        // Filtrar por is_published: marcação local do site (padrão: true)
+
         $isPublished = $row['is_published'] ?? true;
         if ($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0') {
             return false;
         }
-        return true;
+
+        $prices = is_array($row['precos'] ?? null) ? $row['precos'] : (is_array($row['prices'] ?? null) ? $row['prices'] : []);
+        $price = $prices['preco'] ?? $prices['preco_venda'] ?? $prices['price'] ?? $prices['sale_price'] ?? $row['preco'] ?? $row['price'] ?? null;
+        $promotional = $prices['precoPromocional'] ?? $prices['preco_promocional'] ?? $prices['promotional_price'] ?? $row['preco_promocional'] ?? $row['promotional_price'] ?? null;
+
+        return shopvivaliz_price_value($promotional) !== null || shopvivaliz_price_value($price) !== null;
     }));
 }
 
-/**
- * Canonical read-only catalog source for storefront, checkout and health APIs.
- * The live Olist/Tiny cache is authoritative. The curated JSON is used only
- * when the live cache is missing, unreadable or empty.
- */
 function svcr_products(): array
 {
     $root = dirname(__DIR__);
@@ -129,7 +165,6 @@ function svcr_products(): array
                 break;
             }
         }
-
         if ($items === [] && array_is_list($payload)) {
             $items = $payload;
         }
@@ -147,7 +182,6 @@ function svcr_products(): array
             continue;
         }
 
-        // Filtrar por is_published: marcação local do site (padrão: true)
         $isPublished = $item['is_published'] ?? true;
         if ($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0') {
             continue;
@@ -158,50 +192,30 @@ function svcr_products(): array
             continue;
         }
 
-        $imagesList = svcr_collect_image_urls($item);
+        $prices = is_array($item['precos'] ?? null) ? $item['precos'] : (is_array($item['prices'] ?? null) ? $item['prices'] : []);
+        $regularPrice = shopvivaliz_price_value($prices['preco'] ?? $prices['preco_venda'] ?? $prices['price'] ?? $prices['sale_price'] ?? $item['preco'] ?? $item['price'] ?? null);
+        $promotionalPrice = shopvivaliz_price_value($prices['precoPromocional'] ?? $prices['preco_promocional'] ?? $prices['promotional_price'] ?? $item['preco_promocional'] ?? $item['promotional_price'] ?? null);
+        $price = $promotionalPrice !== null && ($regularPrice === null || $promotionalPrice < $regularPrice) ? $promotionalPrice : $regularPrice;
 
+        if ($price === null) {
+            continue;
+        }
+
+        $imagesList = svcr_collect_image_urls($item);
         $image = trim((string)($item['imagem_principal_url'] ?? $item['primary_image_url'] ?? $item['image_url'] ?? $item['imagem'] ?? ''));
         if ($image === '') {
             $image = $imagesList[0] ?? '';
         }
 
-        $prices = is_array($item['precos'] ?? null)
-            ? $item['precos']
-            : (is_array($item['prices'] ?? null) ? $item['prices'] : []);
-        $stockInfo = is_array($item['estoque'] ?? null)
-            ? $item['estoque']
-            : (is_array($item['stock_detail'] ?? null) ? $item['stock_detail'] : []);
+        $stockInfo = is_array($item['estoque'] ?? null) ? $item['estoque'] : (is_array($item['stock_detail'] ?? null) ? $item['stock_detail'] : []);
         $category = is_array($item['categoria'] ?? null) ? $item['categoria'] : [];
-        $dimensions = is_array($item['dimensoes'] ?? null)
-            ? $item['dimensoes']
-            : (is_array($item['dimensions'] ?? null) ? $item['dimensions'] : []);
+        $dimensions = is_array($item['dimensoes'] ?? null) ? $item['dimensoes'] : (is_array($item['dimensions'] ?? null) ? $item['dimensions'] : []);
         $sku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
         if ($sku === '') {
             continue;
         }
 
         $name = trim((string)($item['descricao'] ?? $item['nome'] ?? $item['name'] ?? $sku));
-        $price = (float)(
-            $prices['preco']
-            ?? $prices['preco_venda']
-            ?? $prices['price']
-            ?? $prices['sale_price']
-            ?? $item['preco']
-            ?? $item['price']
-            ?? 0
-        );
-        $promotionalPrice = (float)(
-            $prices['precoPromocional']
-            ?? $prices['preco_promocional']
-            ?? $prices['promotional_price']
-            ?? $item['preco_promocional']
-            ?? $item['promotional_price']
-            ?? 0
-        );
-        if ($promotionalPrice > 0 && ($price <= 0 || $promotionalPrice < $price)) {
-            $price = $promotionalPrice;
-        }
-
         $products[] = [
             'id' => (string)($item['id'] ?? $sku),
             'sku' => $sku,
@@ -209,7 +223,7 @@ function svcr_products(): array
             'name' => $name,
             'slug' => svcr_slug($name, $sku),
             'description' => trim((string)($item['descricaoComplementar'] ?? $item['descricao_complementar'] ?? $item['description'] ?? $item['descricao'] ?? '')),
-            'price' => max(0, $price),
+            'price' => $price,
             'stock' => max(0, (int)($item['estoque_disponivel'] ?? $stockInfo['quantidade'] ?? $stockInfo['stock'] ?? $item['stock'] ?? 0)),
             'image_url' => $image,
             'images' => $imagesList,
@@ -235,17 +249,6 @@ function svcr_products(): array
 function svcr_collect_image_urls(array $item): array
 {
     $images = [];
-    $fields = [
-        'images',
-        'imagens',
-        'gallery',
-        'galeria',
-        'fotos',
-        'photos',
-        'attachments',
-        'anexos',
-    ];
-
     $push = static function (string $candidate) use (&$images): void {
         $candidate = trim($candidate);
         if ($candidate !== '' && preg_match('~^https?://~i', $candidate) && !in_array($candidate, $images, true)) {
@@ -253,27 +256,23 @@ function svcr_collect_image_urls(array $item): array
         }
     };
 
-    foreach ($fields as $field) {
+    foreach (['images', 'imagens', 'gallery', 'galeria', 'fotos', 'photos', 'attachments', 'anexos'] as $field) {
         $value = $item[$field] ?? null;
         if (is_string($value)) {
             $push($value);
             continue;
         }
-
         if (!is_array($value)) {
             continue;
         }
-
         foreach ($value as $entry) {
             if (is_string($entry)) {
                 $push($entry);
                 continue;
             }
-
             if (!is_array($entry)) {
                 continue;
             }
-
             foreach (['url', 'link', 'src', 'image', 'imagem', 'image_url'] as $key) {
                 $candidate = trim((string)($entry[$key] ?? ''));
                 if ($candidate !== '') {
