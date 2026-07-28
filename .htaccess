@@ -42,11 +42,17 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteEngine On
 
     # Canonical host migration: apex/no-www is the production domain.
-    # Redirect only browser/SEO traffic from legacy hosts, without changing
-    # POST webhook/callback semantics.
+    # O storefront legado em www exibe placeholders de pre-venda e textos
+    # antigos. Todo trafego de navegacao deve usar a aplicacao atual no apex.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteCond %{HTTP_HOST} ^(?:www\.shopvivaliz\.com\.br|dev\.shopvivaliz\.com\.br)$ [NC]
     RewriteRule ^ https://shopvivaliz.com.br%{REQUEST_URI} [R=301,L,NE]
+
+    # URLs publicas da vitrine legada/VNDA. As categorias passam a usar o
+    # catalogo canonico e as URLs plurais de produto passam para /produto/.
+    RewriteRule ^ferramentas/?$ /catalogo?categoria=Ferramentas [R=301,L,NE]
+    RewriteRule ^arte-papelaria-e-armarinho/?$ /catalogo?categoria=Arte%2C%20Papelaria%20e%20Armarinho [R=301,L,NE]
+    RewriteRule ^produtos/([^/]+)/?$ /produto/$1 [R=301,L,NE]
 
     # Nunca expor arquivos internos de configuracao e operacao
     RewriteRule ^config/ - [F,L]
