@@ -10,11 +10,6 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Desabilitar cache agressivo para debug
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: 0');
-
 require_once __DIR__ . '/config/bootstrap-env.php';
 
 // Configuração Dinâmica de Ambiente
@@ -412,9 +407,9 @@ function sv_home_top_categories(int $limit = 8): array
         arsort($counts);
         foreach ($counts as $category => $count) {
             $localIcon = sv_home_category_icon($category);
-            // Priorizar sempre a foto real do produto (Tiny/Olist) quando existir. O ícone
-            // local curado (cat-*.jpg) é genérico por tipo (ex: "caixa" cai em organização,
-            // "vaso" cai em jardim) e pode não bater com a categoria real — ver docs/AGENTS.md.
+            // Priorizar sempre a foto real do produto (Tiny/Olist) quando existir. O icone
+            // local curado (cat-*.jpg) e generico por tipo (ex: caixa cai em organizacao,
+            // vaso cai em jardim) e pode nao bater com a categoria real.
             $icon = (isset($categoryImages[$category]) && $categoryImages[$category] !== '')
                 ? $categoryImages[$category]
                 : $localIcon;
@@ -847,11 +842,6 @@ $svNavCurrent = '';
                     <div class="home-scroller-track products-track" id="product-grid">
                         <?php foreach ($featuredProducts as $product): ?>
                             <?php
-                            // ShopVivaliz nao opera com pre-venda/"consulte o valor": produto
-                            // sem preco real valido nao aparece na home. Ver docs/AGENTS.md.
-                            if ((float)($product['price'] ?? 0) <= 0) {
-                                continue;
-                            }
                             $image      = $product['image_url'] !== '' ? $product['image_url'] : sv_home_default_image();
                             $pSlug      = $product['slug'] ?? '';
                             $productUrl = $pSlug !== '' ? '/produto/' . $pSlug : sv_home_product_url($product);
@@ -898,7 +888,7 @@ $svNavCurrent = '';
                                     <div class="card-actions">
                                         <a class="btn btn-secondary card-link" href="<?= sv_home_esc($productUrl) ?>">Ver detalhes</a>
                                         <?php if ($hasPrice): ?>
-                                            <button class="buy-button btn btn-primary card-link" type="button" data-product="<?= sv_home_esc($payload) ?>" title="Comprar">Comprar</button>
+                                            <button class="buy-button" type="button" data-product="<?= sv_home_esc($payload) ?>">Comprar agora</button>
                                         <?php elseif ($stock <= 0): ?>
                                             <button class="btn btn-disabled card-link" type="button" disabled>Esgotado</button>
                                         <?php else: ?>
