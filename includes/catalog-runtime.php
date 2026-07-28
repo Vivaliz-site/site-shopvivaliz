@@ -5,7 +5,7 @@ function svcr_slug(string $name, string $sku = ''): string
 {
     $text = $name !== '' ? $name : $sku;
     if ($text === '') return '';
-    $text = mb_strtolower($text, 'UTF-8');
+    $text = function_exists('mb_strtolower') ? mb_strtolower($text, 'UTF-8') : strtolower($text);
     $text = preg_replace('/[^\p{L}\p{N}\s\-]/u', '', $text);
     $text = preg_replace('/[\s\-]+/', '-', trim((string)$text));
     return trim((string)$text, '-');
@@ -59,9 +59,58 @@ function svcr_item_price(array $item): float
     $prices = is_array($item['precos'] ?? null)
         ? $item['precos']
         : (is_array($item['prices'] ?? null) ? $item['prices'] : []);
-    $regular = svcr_parse_price($prices['preco'] ?? $prices['preco_venda'] ?? $prices['price'] ?? $prices['sale_price'] ?? $item['preco'] ?? $item['price'] ?? null);
-    $promotional = svcr_parse_price($prices['precoPromocional'] ?? $prices['preco_promocional'] ?? $prices['promotional_price'] ?? $item['preco_promocional'] ?? $item['promotional_price'] ?? null);
-    return $promotional > 0 && ($regular <= 0 || $promotional < $regular) ? $promotional : $regular;
+
+    $regular = svcr_parse_price(
+        $prices['preco']
+        ?? $prices['preco_venda']
+        ?? $prices['price']
+        ?? $prices['sale_price']
+        ?? $item['preco']
+        ?? $item['price']
+        ?? null
+    );
+    $promotional = svcr_parse_price(
+        $prices['precoPromocional']
+        ?? $prices['preco_promocional']
+        ?? $prices['promotional_price']
+        ?? $item['preco_promocional']
+        ?? $item['promotional_price']
+        ?? null
+    );
+
+    return $promotional > 0 && ($regular <= 0 || $promotional < $regular)
+        ? $promotional
+        : $regular;
+}
+
+function svcr_clean_description(string $description): string
+{
+    $description = trim($description);
+    if ($description === '') return '';
+
+    $description = str_ireplace(
+        [
+            'Comprar Pronto!',
+            'Comprar pronto!',
+            'Incluindo Características adicionales:',
+            'Incluindo características adicionales:',
+            'Características adicionales:',
+            'Caracteristicas adicionales:',
+        ],
+        [
+            '',
+            '',
+            'Características:',
+            'Características:',
+            'Características:',
+            'Características:',
+        ],
+        $description
+    );
+
+    $description = preg_replace('/(?:\s*Não acumulável com algumas promoções\.?\s*){2,}/iu', ' Não acumulável com outras promoções. ', $description) ?? $description;
+    $description = preg_replace('/\s{2,}/u', ' ', $description) ?? $description;
+    return trim($description);
 }
 
 function svcr_is_preorder(array $item): bool
@@ -69,24 +118,34 @@ function svcr_is_preorder(array $item): bool
     $stockInfo = is_array($item['estoque'] ?? null)
         ? $item['estoque']
         : (is_array($item['stock_detail'] ?? null) ? $item['stock_detail'] : []);
+
     foreach (['preorder', 'pre_order', 'pre_venda', 'preVenda', 'made_to_order', 'sob_encomenda'] as $field) {
         $value = $item[$field] ?? $stockInfo[$field] ?? null;
         if ($value === true || $value === 1 || $value === '1') return true;
-        if (is_string($value) && in_array(strtolower(trim($value)), ['true', 'yes', 'sim', 'preorder', 'pre-order', 'pre-venda', 'sob encomenda'], true)) return true;
+        if (is_string($value) && in_array(svcr_lower(trim($value)), ['true', 'yes', 'sim', 'preorder', 'pre-order', 'pre-venda', 'pre venda', 'sob encomenda'], true)) return true;
     }
-    $availability = strtolower(trim((string)($item['availability'] ?? $item['disponibilidade'] ?? $item['sale_status'] ?? '')));
-    return in_array($availability, ['preorder', 'pre-order', 'pre_venda', 'pre-venda', 'made_to_order', 'sob_encomenda', 'sob encomenda'], true);
+
+    foreach (['availability', 'disponibilidade', 'sale_status', 'status_venda', 'situacao_venda', 'price_label', 'preco_label'] as $field) {
+        $value = svcr_lower(trim((string)($item[$field] ?? $stockInfo[$field] ?? '')));
+        if ($value !== '' && preg_match('/\b(pre[\s_-]?venda|pre[\s_-]?order|sob[\s_-]?encomenda|made[\s_-]?to[\s_-]?order)\b/u', $value)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function svcr_is_excluded_product(array $item): bool
 {
     $sku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
     if ($sku === 'Parafuso5x16') return true;
+
     foreach (['exclude_from_site', 'exclude_from_catalog', 'exclude_from_feeds', 'non_sellable', 'raw_material', 'materia_prima', 'materiaPrima'] as $field) {
         $value = $item[$field] ?? null;
         if ($value === true || $value === 1 || $value === '1') return true;
         if (is_string($value) && in_array(svcr_lower(trim($value)), ['true', 'yes', 'sim', 'raw_material', 'materia_prima', 'matéria-prima', 'non_sellable'], true)) return true;
     }
+
     $name = svcr_lower(trim((string)($item['name'] ?? $item['nome'] ?? $item['descricao'] ?? '')));
     $categoryValue = $item['categoria'] ?? '';
     $category = is_array($categoryValue) ? (string)($categoryValue['nome'] ?? '') : (string)$categoryValue;
@@ -112,6 +171,7 @@ function svcr_products(): array
     $cache = $root . '/storage/products-cache-ativos.json';
     $payload = is_file($cache) ? json_decode((string)file_get_contents($cache), true) : [];
     $items = [];
+
     if (is_array($payload)) {
         foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
             if (isset($payload[$key]) && is_array($payload[$key])) {
@@ -124,6 +184,7 @@ function svcr_products(): array
         }
         if ($items === [] && array_is_list($payload)) $items = $payload;
     }
+
     if ($items === []) {
         $fallback = $root . '/api/catalog/fallback-products.json';
         $rows = is_file($fallback) ? json_decode((string)file_get_contents($fallback), true) : [];
@@ -133,19 +194,23 @@ function svcr_products(): array
     $products = [];
     foreach ($items as $item) {
         if (!is_array($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
+
         $isPublished = $item['is_published'] ?? true;
         if ($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0') continue;
+
         $situation = strtoupper(trim((string)($item['situacao'] ?? 'A')));
         if (!in_array($situation, ['A', 'ATIVO', 'ACTIVE'], true)) continue;
 
         $imagesList = svcr_collect_image_urls($item);
         $image = trim((string)($item['imagem_principal_url'] ?? $item['primary_image_url'] ?? $item['image_url'] ?? $item['imagem'] ?? ''));
         if ($image === '') $image = $imagesList[0] ?? '';
+
         $stockInfo = is_array($item['estoque'] ?? null) ? $item['estoque'] : (is_array($item['stock_detail'] ?? null) ? $item['stock_detail'] : []);
         $category = is_array($item['categoria'] ?? null) ? $item['categoria'] : [];
         $dimensions = is_array($item['dimensoes'] ?? null) ? $item['dimensoes'] : (is_array($item['dimensions'] ?? null) ? $item['dimensions'] : []);
         $sku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
         if ($sku === '') continue;
+
         $name = trim((string)($item['descricao'] ?? $item['nome'] ?? $item['name'] ?? $sku));
         $price = svcr_item_price($item);
         if ($price <= 0) continue;
@@ -156,7 +221,7 @@ function svcr_products(): array
             'olist_product_id' => (string)($item['id'] ?? $item['olist_product_id'] ?? ''),
             'name' => $name,
             'slug' => svcr_slug($name, $sku),
-            'description' => trim((string)($item['descricaoComplementar'] ?? $item['descricao_complementar'] ?? $item['description'] ?? $item['descricao'] ?? '')),
+            'description' => svcr_clean_description((string)($item['descricaoComplementar'] ?? $item['descricao_complementar'] ?? $item['description'] ?? $item['descricao'] ?? '')),
             'price' => $price,
             'stock' => max(0, (int)($item['estoque_disponivel'] ?? $stockInfo['quantidade'] ?? $stockInfo['stock'] ?? $item['stock'] ?? 0)),
             'image_url' => $image,
@@ -170,6 +235,7 @@ function svcr_products(): array
             'status' => 'active',
         ];
     }
+
     if ($products !== []) return $products;
     $fallback = $root . '/api/catalog/fallback-products.json';
     $rows = is_file($fallback) ? json_decode((string)file_get_contents($fallback), true) : [];
@@ -183,6 +249,7 @@ function svcr_collect_image_urls(array $item): array
         $candidate = trim($candidate);
         if ($candidate !== '' && preg_match('~^https?://~i', $candidate) && !in_array($candidate, $images, true)) $images[] = $candidate;
     };
+
     foreach (['images', 'imagens', 'gallery', 'galeria', 'fotos', 'photos', 'attachments', 'anexos'] as $field) {
         $value = $item[$field] ?? null;
         if (is_string($value)) {
@@ -202,11 +269,13 @@ function svcr_collect_image_urls(array $item): array
             }
         }
     }
+
     for ($i = 1; $i <= 12; $i++) {
         foreach (["imagem{$i}", "image{$i}", "foto{$i}", "photo{$i}"] as $key) {
             $candidate = trim((string)($item[$key] ?? ''));
             if ($candidate !== '') $push($candidate);
         }
     }
+
     return array_slice($images, 0, 12);
 }
