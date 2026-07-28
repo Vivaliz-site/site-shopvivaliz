@@ -7,6 +7,8 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/content.php';
 require_once __DIR__ . '/../includes/blog-article-repository.php';
+require_once __DIR__ . '/../includes/blog-comment-repository.php';
+require_once __DIR__ . '/../includes/csrf.php';
 
 $slug = trim((string)($_GET['slug'] ?? ''));
 $commentStatus = trim((string)($_GET['comentario'] ?? ''));
@@ -17,6 +19,13 @@ if ($article === null) {
     http_response_code(404);
     require __DIR__ . '/../404.php';
     exit;
+}
+
+$comments = [];
+try {
+    $comments = BlogCommentRepository::fromApplicationDatabase()->publishedForArticle((string)$article['slug'], 50);
+} catch (Throwable $commentError) {
+    error_log('Falha ao carregar comentários do blog: ' . $commentError->getMessage());
 }
 
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -37,6 +46,11 @@ $schema = [
     'author' => ['@type' => 'Organization', 'name' => $article['author']],
     'publisher' => ['@type' => 'Organization', 'name' => 'ShopVivaliz', 'url' => $origin],
     'mainEntityOfPage' => ['@type' => 'WebPage', '@id' => $canonical],
+    'interactionStatistic' => [
+        '@type' => 'InteractionCounter',
+        'interactionType' => 'https://schema.org/CommentAction',
+        'userInteractionCount' => count($comments),
+    ],
 ];
 
 $breadcrumbSchema = [
@@ -97,7 +111,10 @@ if (count($related) < 3) {
     <meta property="og:locale" content="pt_BR">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="stylesheet" href="/css/responsive.css">
-    <link rel="stylesheet" href="/public/assets/blog/blog.css">
+    <link rel="stylesheet" href="/public/assets/blog/blog.css?v=2026-07-28-comments-1">
+    <style>
+        .article-comments-list{display:grid;gap:18px;margin:24px 0}.article-comment{border:1px solid #e5e7eb;border-radius:14px;padding:18px;background:#fff}.article-comment-head{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}.article-comment-name{font-weight:800}.article-comment-date{font-size:13px;color:#6b7280}.article-comment-message{margin:12px 0 0;white-space:pre-wrap}.article-comment-replies{display:grid;gap:12px;margin:16px 0 0 18px}.article-comment-reply{border-left:4px solid #173B63;background:#f5f8fc;border-radius:0 12px 12px 0;padding:14px}.article-comment-reply--liz{border-left-color:#059669}.article-comment-reply-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.article-comment-badge{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;background:#dcfce7;color:#166534;border-radius:999px;padding:3px 8px}.article-comments-empty{color:#6b7280;padding:14px 0}.article-comments-note{font-size:13px;color:#6b7280}.article-comments-form button[disabled]{opacity:.65;cursor:wait}
+    </style>
     <script type="application/ld+json"><?= json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?></script>
     <script type="application/ld+json"><?= json_encode($breadcrumbSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?></script>
     <?php if ($faqSchema !== null): ?><script type="application/ld+json"><?= json_encode($faqSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?></script><?php endif; ?>
@@ -125,17 +142,53 @@ if (count($related) < 3) {
             <?php endforeach; ?>
         </div>
         <aside class="article-cta"><h2>Encontre produtos para o seu projeto</h2><p>Explore o catálogo da ShopVivaliz e compare as opções disponíveis para a sua necessidade.</p><a href="<?= sv_blog_escape((string)$article['related_products_url']) ?>">Ver produtos relacionados</a></aside>
-        <section class="article-comments" aria-labelledby="comments-title">
+        <section class="article-comments" id="comentarios" aria-labelledby="comments-title">
             <div class="article-comments-head">
                 <h2 id="comments-title">Perguntas e comentários</h2>
-                <p>Ficou com dúvida sobre este conteúdo ou quer pedir recomendação de produto? Envie sua mensagem e seguimos pelo canal mais rápido.</p>
+                <p>Ficou com dúvida sobre este conteúdo ou quer pedir recomendação de produto? Envie sua mensagem. Comentários válidos aparecem aqui e a Liz responde publicamente.</p>
             </div>
             <?php if ($commentStatus === 'ok'): ?>
-                <p class="article-comments-alert article-comments-alert--ok">Mensagem enviada com sucesso. Obrigado pelo contato!</p>
+                <p class="article-comments-alert article-comments-alert--ok" role="status">Comentário publicado com sucesso.</p>
+            <?php elseif ($commentStatus === 'moderacao'): ?>
+                <p class="article-comments-alert article-comments-alert--ok" role="status">Comentário recebido e enviado para moderação.</p>
+            <?php elseif ($commentStatus === 'limite'): ?>
+                <p class="article-comments-alert article-comments-alert--error" role="alert">Muitas tentativas em pouco tempo. Aguarde alguns minutos.</p>
             <?php elseif ($commentStatus === 'erro'): ?>
-                <p class="article-comments-alert article-comments-alert--error">Não foi possível enviar agora. Tente novamente ou use o atendimento completo.</p>
+                <p class="article-comments-alert article-comments-alert--error" role="alert">Não foi possível enviar agora. Revise os campos ou tente novamente.</p>
             <?php endif; ?>
-            <form class="article-comments-form" action="/api/blog/comment.php" method="post">
+
+            <div class="article-comments-list" aria-live="polite">
+                <?php if ($comments === []): ?>
+                    <p class="article-comments-empty">Ainda não há comentários publicados. Seja a primeira pessoa a participar.</p>
+                <?php else: ?>
+                    <?php foreach ($comments as $comment): ?>
+                        <article class="article-comment">
+                            <div class="article-comment-head">
+                                <span class="article-comment-name"><?= sv_blog_escape((string)$comment['name']) ?></span>
+                                <time class="article-comment-date" datetime="<?= sv_blog_escape((string)($comment['published_at'] ?: $comment['created_at'])) ?>"><?= sv_blog_escape(sv_blog_date((string)($comment['published_at'] ?: $comment['created_at']))) ?></time>
+                            </div>
+                            <p class="article-comment-message"><?= nl2br(sv_blog_escape((string)$comment['message'])) ?></p>
+                            <?php if (!empty($comment['replies'])): ?>
+                                <div class="article-comment-replies">
+                                    <?php foreach ($comment['replies'] as $reply): ?>
+                                        <div class="article-comment-reply <?= ($reply['author_type'] ?? '') === 'liz' ? 'article-comment-reply--liz' : '' ?>">
+                                            <div class="article-comment-reply-head">
+                                                <strong><?= sv_blog_escape((string)$reply['author_name']) ?></strong>
+                                                <?php if (($reply['author_type'] ?? '') === 'liz'): ?><span class="article-comment-badge">Assistente virtual</span><?php endif; ?>
+                                            </div>
+                                            <p><?= nl2br(sv_blog_escape((string)$reply['message'])) ?></p>
+                                            <?php if (!empty($reply['ai_generated'])): ?><p class="article-comments-note">Resposta gerada por inteligência artificial e sujeita a revisão.</p><?php endif; ?>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </article>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+            <form class="article-comments-form" action="/api/blog/comment.php" method="post" id="blog-comment-form">
+                <?= sv_csrf_input('blog-comment-' . (string)$article['slug']) ?>
                 <input type="hidden" name="artigo" value="<?= sv_blog_escape((string)$article['title']) ?>">
                 <input type="hidden" name="slug" value="<?= sv_blog_escape((string)$article['slug']) ?>">
                 <input type="hidden" name="url" value="<?= sv_blog_escape($canonical) ?>">
@@ -143,27 +196,31 @@ if (count($related) < 3) {
                 <div class="article-comments-grid">
                     <label>
                         <span>Seu nome</span>
-                        <input type="text" name="nome" autocomplete="name" placeholder="Como podemos te chamar?" required>
+                        <input type="text" name="nome" autocomplete="name" maxlength="120" placeholder="Como podemos te chamar?" required>
                     </label>
                     <label>
                         <span>Seu e-mail</span>
-                        <input type="email" name="email" autocomplete="email" placeholder="voce@exemplo.com" required>
+                        <input type="email" name="email" autocomplete="email" maxlength="254" placeholder="voce@exemplo.com" required>
                     </label>
                 </div>
                 <label>
                     <span>Sua pergunta ou comentário</span>
-                    <textarea name="mensagem" rows="5" placeholder="Escreva sua dúvida, comentário ou o que você quer encontrar no site." required></textarea>
+                    <textarea name="mensagem" rows="5" minlength="3" maxlength="2000" placeholder="Escreva sua dúvida, comentário ou o que você quer encontrar no site." required></textarea>
                 </label>
+                <p class="article-comments-note">Seu e-mail não será exibido publicamente. Evite inserir dados pessoais, número de pedido, documentos ou informações bancárias no comentário.</p>
                 <div class="article-comments-actions">
-                    <button type="submit">Enviar mensagem</button>
+                    <button type="submit">Enviar comentário</button>
                     <a href="/contato">Abrir atendimento completo</a>
                 </div>
             </form>
         </section>
         <?php if ($faqItems !== []): ?><section class="article-faq" aria-labelledby="faq-title"><h2 id="faq-title">Perguntas frequentes</h2><?php foreach ($faqItems as $faq): ?><details><summary><?= sv_blog_escape((string)$faq['question']) ?></summary><p><?= sv_blog_escape((string)$faq['answer']) ?></p></details><?php endforeach; ?></section><?php endif; ?>
-        <?php if ($related !== []): ?><section class="article-related" aria-labelledby="related-title"><h2 id="related-title">Continue aprendendo</h2><div class="knowledge-grid"><?php foreach ($related as $item): ?><article class="knowledge-card"><div class="knowledge-card-body"><span class="knowledge-chip"><?= sv_blog_escape((string)$item['category']) ?></span><h3><a href="/blog/<?= rawurlencode((string)$item['slug']) ?>"><?= sv_blog_escape((string)$item['title']) ?></a></h3><p><?= sv_blog_escape((string)$item['excerpt']) ?></p><div class="knowledge-meta"><span><?= (int)$item['reading_time'] ?> min</span></div></div></article><?php endforeach; ?></div></section><?php endif; ?>
+        <?php if ($related !== []): ?><section class="article-related" aria-labelledby="related-title"><h2>Continue aprendendo</h2><div class="knowledge-grid"><?php foreach ($related as $item): ?><article class="knowledge-card"><div class="knowledge-card-body"><span class="knowledge-chip"><?= sv_blog_escape((string)$item['category']) ?></span><h3><a href="/blog/<?= rawurlencode((string)$item['slug']) ?>"><?= sv_blog_escape((string)$item['title']) ?></a></h3><p><?= sv_blog_escape((string)$item['excerpt']) ?></p><div class="knowledge-meta"><span><?= (int)$item['reading_time'] ?> min</span></div></div></article><?php endforeach; ?></div></section><?php endif; ?>
     </article>
 </main>
+<script>
+(function(){var form=document.getElementById('blog-comment-form');if(!form)return;form.addEventListener('submit',function(){var button=form.querySelector('button[type="submit"]');if(button){button.disabled=true;button.textContent='Enviando...';}});})();
+</script>
 <?php include __DIR__ . '/../includes/footer.php'; ?>
 </body>
 </html>
