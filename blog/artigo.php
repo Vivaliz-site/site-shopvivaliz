@@ -9,6 +9,7 @@ require_once __DIR__ . '/content.php';
 require_once __DIR__ . '/../includes/blog-article-repository.php';
 
 $slug = trim((string)($_GET['slug'] ?? ''));
+$commentStatus = trim((string)($_GET['comentario'] ?? ''));
 $repository = BlogArticleRepository::fromApplicationDatabase();
 $article = $repository->findPublishedBySlug($slug);
 
@@ -129,11 +130,16 @@ if (count($related) < 3) {
                 <h2 id="comments-title">Perguntas e comentários</h2>
                 <p>Ficou com dúvida sobre este conteúdo ou quer pedir recomendação de produto? Envie sua mensagem e seguimos pelo canal mais rápido.</p>
             </div>
-            <form class="article-comments-form" action="https://formsubmit.co/shopvivaliz@gmail.com" method="post">
-                <input type="hidden" name="_subject" value="Pergunta do blog ShopVivaliz">
-                <input type="hidden" name="_captcha" value="false">
-                <input type="hidden" name="_template" value="table">
+            <?php if ($commentStatus === 'ok'): ?>
+                <p class="article-comments-alert article-comments-alert--ok">Mensagem enviada com sucesso. Obrigado pelo contato!</p>
+            <?php elseif ($commentStatus === 'erro'): ?>
+                <p class="article-comments-alert article-comments-alert--error">Não foi possível enviar agora. Tente novamente ou use o atendimento completo.</p>
+            <?php endif; ?>
+            <form class="article-comments-form" action="/api/blog/comment.php" method="post">
                 <input type="hidden" name="artigo" value="<?= sv_blog_escape((string)$article['title']) ?>">
+                <input type="hidden" name="slug" value="<?= sv_blog_escape((string)$article['slug']) ?>">
+                <input type="hidden" name="url" value="<?= sv_blog_escape($canonical) ?>">
+                <input type="text" name="website" value="" autocomplete="off" tabindex="-1" style="position:absolute;left:-9999px;height:1px;width:1px;opacity:0" aria-hidden="true">
                 <div class="article-comments-grid">
                     <label>
                         <span>Seu nome</span>
