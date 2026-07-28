@@ -948,8 +948,9 @@ $svNavCurrent = '';
                     </summary>
                     <div class="faq-body">
                         <p>Aceitamos PIX (com aprovação imediata), cartão de crédito em até 6x e boleto bancário. Todas as transações são protegidas com criptografia SSL.</p>
-                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e9f0;">
-                            <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago - Formas de Pagamento" style="max-width: 100%; height: auto; max-width: 300px;">
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e9f0; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                            <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago - Formas de Pagamento" style="max-width: 100%; height: auto; width: 180px; border-radius: 10px;">
+                            <img src="/images/infinitepay-logo.svg" alt="InfinitePay - Formas de Pagamento" style="max-width: 100%; height: auto; width: 180px; border-radius: 10px;">
                         </div>
                     </div>
                 </details>
