@@ -8,6 +8,17 @@
   const categories = document.querySelector('.home-categories');
   const products = Array.from(document.querySelectorAll('section.home-products'))
     .find((section) => !section.classList.contains('home-categories'));
+  const hero = document.querySelector('.hero-content');
+  const kicker = hero?.querySelector('.hero-kicker, .eyebrow');
+  const heroDescription = hero?.querySelector(':scope > p:not(.eyebrow)');
+
+  if (kicker) {
+    kicker.remove();
+  }
+
+  if (heroDescription) {
+    heroDescription.textContent = 'Ferragens, utilidades e soluções para sua casa, com compra segura e entrega em todo o Brasil.';
+  }
 
   if (!main || !banner || !trust || !categories || !products) return;
 
