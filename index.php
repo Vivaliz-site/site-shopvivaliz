@@ -888,7 +888,7 @@ $svNavCurrent = '';
                                     <div class="card-actions">
                                         <a class="btn btn-secondary card-link" href="<?= sv_home_esc($productUrl) ?>">Ver detalhes</a>
                                         <?php if ($hasPrice): ?>
-                                            <button class="buy-button" type="button" data-product="<?= sv_home_esc($payload) ?>">Comprar agora</button>
+                                            <button class="buy-button" type="button" data-product="<?= sv_home_esc($payload) ?>" title="Comprar agora">Comprar</button>
                                         <?php elseif ($stock <= 0): ?>
                                             <button class="btn btn-disabled card-link" type="button" disabled>Esgotado</button>
                                         <?php else: ?>
