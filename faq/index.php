@@ -21,8 +21,8 @@ header('Content-Type: text/html; charset=UTF-8');
         <div class="container">
             <div class="brand-hero-card">
                 <span class="brand-eyebrow">FAQ</span>
-                <h1>Respostas objetivas para compra, frete e atendimento.</h1>
-                <p>O conteúdo abaixo foi reorganizado para leitura mais rápida, principalmente no mobile.</p>
+                <h1>Dúvidas frequentes</h1>
+                <p>Encontre informações sobre pedidos, pagamentos, entregas, trocas e atendimento.</p>
             </div>
         </div>
     </section>
