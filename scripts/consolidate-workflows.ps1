@@ -64,7 +64,6 @@ $workflows_to_pause = @(
     "diag-tiny-api.yml",
     "deploy-olist-proxy.yml",
     "deploy-squad-chat.yml",
-    "medusa-eha-next-step-30min.yml",
     "auditoria-vazamento-30min.yml"
 )
 
