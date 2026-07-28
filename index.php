@@ -407,8 +407,10 @@ function sv_home_top_categories(int $limit = 8): array
         arsort($counts);
         foreach ($counts as $category => $count) {
             $localIcon = sv_home_category_icon($category);
-            // Priorizar a imagem local curada. Se for a genérica do unsplash e houver imagem do produto, usa a do produto.
-            $icon = (str_contains($localIcon, 'unsplash.com') && isset($categoryImages[$category]))
+            // Priorizar sempre a foto real do produto (Tiny/Olist) quando existir. O icone
+            // local curado (cat-*.jpg) e generico por tipo (ex: caixa cai em organizacao,
+            // vaso cai em jardim) e pode nao bater com a categoria real.
+            $icon = (isset($categoryImages[$category]) && $categoryImages[$category] !== '')
                 ? $categoryImages[$category]
                 : $localIcon;
 
