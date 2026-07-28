@@ -133,7 +133,7 @@ $socialLinks = [
                     <strong style="display: block; color: #22324a; margin-bottom: 8px;">Pagamentos aceitos</strong>
                     <div style="display: flex; align-items: center; justify-content: center; gap: 16px; height: 100%; flex: 1; flex-wrap: wrap;">
                         <img src="/images/mercado-pago-logo.jpg" alt="Mercado Pago" style="max-width: 160px; width: 100%; height: auto; max-height: 90px; object-fit: contain; border-radius: 4px;">
-                        <img src="/images/infinitepay-logo.png" alt="InfinitePay" style="max-width: 160px; width: 100%; height: auto; max-height: 90px; object-fit: contain; border-radius: 4px;">
+                        <img src="/images/infinitepay-logo.svg" alt="InfinitePay" style="max-width: 160px; width: 100%; height: auto; max-height: 90px; object-fit: contain; border-radius: 4px;">
                     </div>
                 </div>
             </div>
