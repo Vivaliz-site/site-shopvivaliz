@@ -587,3 +587,27 @@ sessão para refletir que os workflows foram removidos, não apenas que a creden
 **Notificação push enviada neste ciclo:** fato novo que muda a ação recomendada ao usuário —
 não basta mais renovar a credencial Tiny; é preciso também recriar os dois workflows
 dedicados (ou decidir conscientemente abandonar esta automação específica).
+
+### 9.11 Atualização — ciclo de 2026-07-28 (~13h UTC), 16º ciclo
+
+Estado idêntico ao ciclo 15, sem nenhum fato novo: `.github/workflows/fetch-shopee-listings.yml`
+e `optimize-shopee-listings.yml` continuam ausentes do repo (`ls .github/workflows/ | grep -i
+shopee` vazio); nenhum arquivo novo em `listings/` desde `shopee-listings-20260726-080756.json`
+(mesmo `status: partial`, `total_products: 0`, erro `"Falha ao renovar token: Invalid client or
+Invalid client credentials"`). `git log --since` a partir do ciclo 15 (commit `ff3de4b` e os ~26
+commits anteriores, todos de 2026-07-27/28) não toca `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`,
+`docs/TINY-TOKEN-RENEWAL-SETUP.md` nem `.github/workflows/*shopee*` — só trabalho não
+relacionado (blog, InfinitePay, catálogo/pré-venda, admin). Nenhum secret `TINY_*`/`OLIST_*`/
+`SHOPEE_*` neste ambiente de sessão (confirmado via `printenv | grep -iE 'shopee|tiny|olist'`,
+mascarado — só ruído de proxy/Java, nenhum secret real). Achado estrutural das seções 9.7/9.8
+permanece sem mudança: não existe integração com a API de analytics do Shopee Open Platform
+(CTR, conversão, vendas por SKU) em nenhum workflow ou script deste repositório — as instruções
+desta rotina (calcular CTR, testar preço, reordenar imagem por engagement) seguem tecnicamente
+inexequíveis mesmo com o catálogo Tiny funcionando.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada — sem credencial válida,
+sem workflow ativo e sem fonte de dados de performance real. Nenhum dado de CTR/conversão/venda
+foi inventado. Nenhuma notificação push enviada neste ciclo: mesma recomendação já comunicada no
+ciclo 15 (renovar `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`/`TINY_ACCESS_TOKEN`/`TINY_REFRESH_TOKEN`
+nos GitHub Secrets **e** recriar os dois workflows dedicados), sem fato novo que justifique
+repetir o alerta.
