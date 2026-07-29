@@ -75,13 +75,6 @@
         <div class="sv-msgs" aria-live="polite" aria-relevant="additions text">
           <div class="sv-msg sv-bot">${greeting}! Eu sou a Liz, assistente virtual da ShopVivaliz. Posso ajudar a encontrar produtos, acompanhar uma compra ou esclarecer dúvidas.</div>
         </div>
-        <div class="sv-quick" aria-label="Atalhos de atendimento">
-          <button type="button" data-message="Quero encontrar um produto">Encontrar produto</button>
-          <button type="button" data-message="Como funciona a compra segura?">Compra segura</button>
-          <button type="button" data-message="Quero informações sobre entrega">Entrega</button>
-          <button type="button" data-message="Quais ofertas estão confirmadas?">Ofertas</button>
-          <button type="button" data-message="Quero falar com um atendente humano">Falar com atendente</button>
-        </div>
         <form class="sv-form">
           <label for="sv-liz-input" class="sv-sr-only">Digite sua pergunta</label>
           <input id="sv-liz-input" placeholder="Digite sua pergunta" autocomplete="off" maxlength="4000">
@@ -100,7 +93,6 @@
     const msgs = root.querySelector('.sv-msgs');
     const input = root.querySelector('input');
     const submitButton = root.querySelector('.sv-form button[type="submit"]');
-    const quickButtons = Array.from(root.querySelectorAll('.sv-quick button'));
     const conversation = [];
     let requestInFlight = false;
 
@@ -115,7 +107,6 @@
       requestInFlight = busy;
       input.disabled = busy;
       submitButton.disabled = busy;
-      quickButtons.forEach(button => { button.disabled = busy; });
       root.dataset.loading = busy ? 'true' : 'false';
     }
 
@@ -194,10 +185,6 @@
       if (!text || requestInFlight) return;
       input.value = '';
       ask(text);
-    });
-
-    quickButtons.forEach(button => {
-      button.addEventListener('click', () => ask(button.dataset.message || button.textContent.trim()));
     });
 
     fetch(`${HEALTH_API}?health=1`, { cache: 'no-store' })
