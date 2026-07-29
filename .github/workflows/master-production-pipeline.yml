@@ -193,7 +193,35 @@ jobs:
             fi
           fi
 
-          flock -n /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha"
+          current_release="$(basename "$(readlink -f "$current_link")")"
+          deployed_sha="$(cat "$current_link/.release-sha")"
+          if [[ "$deployed_sha" == "$expected_sha" ]]; then
+            echo "Expected commit already active. Nothing to do."
+            echo "Previous release: $previous_release"
+            echo "Previous commit: $previous_sha"
+            echo "Current release: $current_release"
+            echo "Deployed commit: $deployed_sha"
+            exit 0
+          fi
+
+          if ! flock -n /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha"; then
+            echo "Deploy lock busy. Waiting for concurrent deployment to finish..."
+            for attempt in 1 2 3 4 5 6; do
+              sleep 10
+              deployed_sha="$(cat "$current_link/.release-sha" 2>/dev/null || true)"
+              current_release="$(basename "$(readlink -f "$current_link")")"
+              if [[ "$deployed_sha" == "$expected_sha" ]]; then
+                echo "Expected commit became active during wait."
+                echo "Previous release: $previous_release"
+                echo "Previous commit: $previous_sha"
+                echo "Current release: $current_release"
+                echo "Deployed commit: $deployed_sha"
+                exit 0
+              fi
+            done
+            echo "Deployment lock remained busy and expected commit never became active." >&2
+            exit 1
+          fi
 
           current_release="$(basename "$(readlink -f "$current_link")")"
           deployed_sha="$(cat "$current_link/.release-sha")"
