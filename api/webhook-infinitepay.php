@@ -72,8 +72,38 @@ function svip_webhook_status(array $payload): string
     return 'pending';
 }
 
+/**
+ * Le o segredo compartilhado enviado pela InfinitePay.
+ * Aceita header (X-Webhook-Token / Authorization: Bearer) ou query string (?token=),
+ * porque o painel da InfinitePay so permite configurar a URL de callback.
+ */
+function svip_webhook_provided_token(): string
+{
+    $header = trim((string)($_SERVER['HTTP_X_WEBHOOK_TOKEN'] ?? ''));
+    if ($header !== '') {
+        return $header;
+    }
+    $auth = trim((string)($_SERVER['HTTP_AUTHORIZATION'] ?? ''));
+    if (stripos($auth, 'Bearer ') === 0) {
+        return trim(substr($auth, 7));
+    }
+    return trim((string)($_GET['token'] ?? ''));
+}
+
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     svip_webhook_response(405, 'method_not_allowed');
+}
+
+// Sem esta verificacao qualquer um que descubra um numero de pedido poderia
+// marca-lo como pago, disparando o push para o Tiny e o e-mail de confirmacao.
+$webhookSecret = svip_env('INFINITEPAY_WEBHOOK_SECRET');
+if ($webhookSecret === '') {
+    error_log('[InfinitePay] webhook rejected: INFINITEPAY_WEBHOOK_SECRET nao configurado');
+    svip_webhook_response(503, 'webhook_secret_not_configured');
+}
+if (!hash_equals($webhookSecret, svip_webhook_provided_token())) {
+    error_log('[InfinitePay] webhook rejected: invalid token from ' . ($_SERVER['REMOTE_ADDR'] ?? '?'));
+    svip_webhook_response(401, 'invalid_token');
 }
 
 $raw = (string)file_get_contents('php://input');

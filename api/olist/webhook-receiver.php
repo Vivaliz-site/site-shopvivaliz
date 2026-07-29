@@ -25,6 +25,31 @@ function log_event($message) {
 // Log inicial
 log_event("Webhook recebido: event={$event} method=" . $_SERVER['REQUEST_METHOD']);
 
+/**
+ * Segredo compartilhado. Sem ele, qualquer um poderia disparar sincronizacoes
+ * de preco/estoque/produto neste endpoint. Aceita header ou query string porque
+ * o painel da Olist/Tiny so permite configurar a URL de callback.
+ */
+$olistWebhookSecret = trim((string)(getenv('OLIST_WEBHOOK_SECRET') ?: ($_ENV['OLIST_WEBHOOK_SECRET'] ?? '')));
+$providedToken = trim((string)($_SERVER['HTTP_X_WEBHOOK_TOKEN'] ?? ''));
+if ($providedToken === '') {
+    $auth = trim((string)($_SERVER['HTTP_AUTHORIZATION'] ?? ''));
+    $providedToken = stripos($auth, 'Bearer ') === 0 ? trim(substr($auth, 7)) : trim((string)($_GET['token'] ?? ''));
+}
+
+if ($olistWebhookSecret === '') {
+    http_response_code(503);
+    log_event('ERRO: OLIST_WEBHOOK_SECRET nao configurado - webhook rejeitado');
+    echo json_encode(['error' => 'webhook_secret_not_configured']);
+    exit;
+}
+if (!hash_equals($olistWebhookSecret, $providedToken)) {
+    http_response_code(401);
+    log_event('ERRO: token invalido de ' . ($_SERVER['REMOTE_ADDR'] ?? '?'));
+    echo json_encode(['error' => 'invalid_token']);
+    exit;
+}
+
 if (!$event) {
     http_response_code(400);
     log_event("ERRO: Parametro 'event' nao fornecido");
