@@ -4,6 +4,8 @@
 
 O módulo editorial mantém o blog disponível com fallback estático e usa MySQL quando a tabela `blog_articles` estiver pronta. Apenas artigos com `status = published` e data de publicação válida aparecem no site, sitemap, busca de conhecimento e contexto da Liz.
 
+O agendador `api/blog/publish-scheduled.php` também mantém a fila futura abastecida automaticamente antes de publicar. O padrão operacional é `3 artigos por semana`, com `9` publicações futuras mantidas na fila, ajustáveis por `BLOG_AUTOMATION_QUEUE_DEPTH`.
+
 ## Pré-requisitos
 
 - backup recente do banco;
