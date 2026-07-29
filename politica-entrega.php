@@ -18,7 +18,6 @@ $phone = $company['phone'] ?? '(37) 99937-4112';
 <main class="legal-container">
 <header class="legal-header"><h1>Política de Entrega</h1><p>Veja como o frete é calculado, como acompanhar o pedido e quais cuidados tomar no recebimento.</p></header>
 <section class="legal-body">
-<div class="legal-box"><strong>Não há campanha permanente de frete grátis.</strong><br>O valor e o prazo disponíveis para o seu endereço são calculados no carrinho, antes do pagamento.</div>
 <h2>1. Cálculo do frete e prazo</h2><p>Informe o CEP no carrinho para consultar as modalidades disponíveis, seus valores e as estimativas de entrega. As opções podem variar conforme o produto, o destino e a transportadora disponível.</p>
 <h2>2. Preparação e despacho</h2><p>Após a confirmação do pagamento, o pedido entra em separação e preparação. A estimativa apresentada no checkout considera o processamento do pedido e o transporte. Não prometemos despacho em prazo fixo quando ele não estiver informado no próprio pedido.</p>
 <h2>3. Rastreamento</h2><p>Quando a transportadora disponibilizar o rastreio, o código ou link será enviado pelos canais cadastrados e poderá aparecer na área de pedidos. Algumas modalidades atualizam o rastreamento em etapas.</p>
