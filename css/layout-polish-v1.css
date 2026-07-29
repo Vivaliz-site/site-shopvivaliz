@@ -234,3 +234,82 @@
         bottom: 80px !important;   /* acima da nav fixa mobile (~64px + folga) */
     }
 }
+
+/* ---------------------------------------------------------------------------
+   7. HERO — CENTRALIZAÇÃO E RESPONSIVIDADE
+   O .hero-content tinha max-width (800–920px) mas margin: 0, ficando
+   colado à esquerda dentro do .container. O hero também não centralizava
+   o texto e os CTAs em mobile.
+   ------------------------------------------------------------------------- */
+
+/* Container do hero usa flex para centralizar o .hero-content */
+.hero .container {
+    display: flex;
+    justify-content: center;
+}
+
+/* hero-content: centraliza horizontalmente com auto margins e alinha texto */
+.hero-content {
+    margin: 0 auto;
+    text-align: center;
+    width: 100%;
+}
+
+/* CTAs centralizados */
+.hero-cta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+}
+
+/* Search bar centralizada dentro do hero-content */
+.hero-search-container {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Mobile: hero ocupa largura total, padding adequado, fontes menores */
+@media (max-width: 768px) {
+    .hero {
+        padding: 20px 0 24px;
+    }
+
+    .hero-content {
+        max-width: 100%;
+        padding: 0 4px;
+    }
+
+    .hero h1 {
+        font-size: clamp(20px, 5.5vw, 28px);
+        width: 100%;
+    }
+
+    .hero p {
+        font-size: 14px;
+        max-width: 100%;
+    }
+
+    .hero-cta {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .hero-cta .btn {
+        width: 100%;
+        justify-content: center;
+        text-align: center;
+    }
+}
+
+/* Telas pequenas extras (< 400px) */
+@media (max-width: 400px) {
+    .hero h1 {
+        font-size: 20px;
+    }
+
+    .hero p {
+        font-size: 13px;
+    }
+}
