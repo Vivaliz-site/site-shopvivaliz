@@ -2,7 +2,12 @@
 /**
  * Remove produtos que foram deletados da Olist
  * Sincroniza apenas com produtos que existem na Olist/Tiny
+ *
+ * Reescreve fallback-products.json. Estava alcancavel por HTTP sem
+ * autenticacao — um POST sem parametro nenhum ja executava a limpeza.
  */
+require_once __DIR__ . '/../../config/require-agent-key.php';
+sv_require_agent_key();
 
 set_time_limit(300);
 error_reporting(E_ALL);
