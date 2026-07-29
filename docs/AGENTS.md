@@ -125,6 +125,12 @@
 **Por quê importa:** o alias antigo do WSL para `bash` e a chave `shopvivaliz_vm_agent` causavam falso negativo. Sem um alvo persistente (`/home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref`), o cron voltava para `main` e desfazia deploy manual por SHA/branch.
 **Ver também:** `AGENTS.md`, `docs/VM-SSH-ACCESS.md`
 
+### 2026-07-29 — Worktree e editores padronizados
+**Sistema/arquivo:** worktree local, atalhos Windows, `AGENTS.md`, `.vscode/`
+**O que descobri:** o checkout operacional que deve ser usado pelos agentes locais é `C:\site-shopvivaliz-prod-liz`, validado no branch `agent/liz-widget-prod` com SHA `19328ac2` em 2026-07-29. Os atalhos `ShopVivaliz - VS Code`, `ShopVivaliz - Antigravity` e `ShopVivaliz - Antigravity IDE` foram criados no desktop e o Start Menu dos três editores foi ajustado para abrir o mesmo worktree.
+**Por quê importa:** havia risco real de abrir o editor em `C:\site-shopvivaliz` ou em um diretório genérico e editar o checkout errado. A padronização reduz drift entre VS Code, Antigravity e Antigravity IDE e facilita validação de branch antes de deploy.
+**Ver também:** `AGENTS.md`, `site-shopvivaliz.code-workspace`, `.vscode/settings.json`
+
 ---
 
 ## 🤖 Agentes Autônomos Ativos

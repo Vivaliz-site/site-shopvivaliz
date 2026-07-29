@@ -283,6 +283,53 @@ Regras:
 
 4. Se a release ativa voltar para `main` após alguns minutos, isso é FALHA operacional do alvo persistente ou do runner antigo, não sucesso de deploy.
 
+### Editores Padronizados (Windows)
+
+Para reduzir drift entre sessões e evitar edição no checkout errado, os editores locais devem abrir sempre o mesmo worktree operacional:
+
+```text
+Worktree padrão: C:\site-shopvivaliz-prod-liz
+Branch validado: agent/liz-widget-prod
+SHA validado em 2026-07-29: 19328ac2
+```
+
+Regras:
+
+1. Antes de editar ou publicar, confirmar:
+   ```bash
+   git -C C:\site-shopvivaliz-prod-liz branch --show-current
+   git -C C:\site-shopvivaliz-prod-liz rev-parse --show-toplevel
+   ```
+
+2. Não assumir que `C:\site-shopvivaliz` é o checkout ativo. Ele pode existir em paralelo e conter estado diferente.
+
+3. Atalhos padronizados criados em 2026-07-29:
+   ```text
+   C:\Users\FRED\Desktop\ShopVivaliz - VS Code.lnk
+   C:\Users\FRED\Desktop\ShopVivaliz - Antigravity.lnk
+   C:\Users\FRED\Desktop\ShopVivaliz - Antigravity IDE.lnk
+   ```
+   Todos apontam para `C:\site-shopvivaliz-prod-liz`.
+
+4. Start Menu também foi padronizado para abrir o mesmo worktree em:
+   - `Visual Studio Code`
+   - `Antigravity`
+   - `Antigravity IDE`
+
+5. Preferência operacional atual de agentes:
+   - VS Code: `Roo`, `Claude`, `GPT/Codex`
+   - Antigravity: usado para fluxo com `Gemini`
+   - Antigravity IDE: manter alinhado ao mesmo worktree e mesmas regras de terminal/comandos
+
+6. O terminal dos editores deve conseguir resolver:
+   ```powershell
+   sv help
+   docker-check
+   docker-up
+   docker-down
+   ```
+   Se isso falhar, a sessão não está corretamente alinhada ao ambiente operacional local.
+
 ### Se Tiver Que SSH à VM
 
 ```bash
