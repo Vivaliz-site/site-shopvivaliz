@@ -633,3 +633,22 @@ foi inventado. Nenhuma notificação push enviada neste ciclo: mesma recomendaç
 ciclos 15/16 (renovar `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`/`TINY_ACCESS_TOKEN`/
 `TINY_REFRESH_TOKEN` nos GitHub Secrets **e** recriar os dois workflows dedicados), sem fato novo
 que justifique repetir o alerta.
+
+### 9.13 Atualização — ciclo de 2026-07-29 (~19h UTC), 18º ciclo
+
+Estado idêntico ao ciclo 17, sem nenhum fato novo: `ls .github/workflows/ | grep -i shopee`
+segue vazio; nenhum arquivo novo em `listings/` desde `shopee-listings-20260726-080756.json`/
+`optimization-report-20260726-060921.json`. `git log` desde o commit do ciclo 17 (`d102467`) até
+`9ab2d6c` (HEAD atual) — 6 commits de 2026-07-29 — não toca `TINY_CLIENT_ID`, `TINY_CLIENT_SECRET`,
+`docs/TINY-TOKEN-RENEWAL-SETUP.md` nem `.github/workflows/*shopee*`; é trabalho não relacionado
+(footer/mobile/Liz/popup). Nenhum secret `TINY_*`/`OLIST_*`/`SHOPEE_*` neste ambiente de sessão
+(`printenv | grep -iE 'shopee|tiny|olist'` vazio). Achado estrutural das seções 9.7/9.8 permanece
+sem mudança: nenhuma integração com a API de analytics do Shopee Open Platform (CTR, conversão,
+vendas por SKU) existe em nenhum workflow ou script deste repositório.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada — sem credencial válida,
+sem workflow ativo e sem fonte de dados de performance real. Nenhum dado de CTR/conversão/venda
+foi inventado. Nenhuma notificação push enviada neste ciclo: mesma recomendação já comunicada nos
+ciclos 15/16/17 (renovar `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`/`TINY_ACCESS_TOKEN`/
+`TINY_REFRESH_TOKEN` nos GitHub Secrets **e** recriar os dois workflows dedicados), sem fato novo
+que justifique repetir o alerta.
