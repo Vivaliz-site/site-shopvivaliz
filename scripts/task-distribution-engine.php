@@ -5,7 +5,8 @@
  */
 
 class TaskDistributionEngine {
-    private $queueFile = '/home/ubuntu/site-shopvivaliz/tasks-queue.json';
+    private $queueFile = '/home/ubuntu/shopvivaliz-deploy/shared/tasks-queue.json';
+    private $runtimeDir = '/home/ubuntu/shopvivaliz-deploy/shared/agent-runtime';
     private $agentCapacities = [
         'claude' => ['max_concurrent' => 3, 'specialties' => ['code_review', 'refactor', 'security']],
         'gemini' => ['max_concurrent' => 4, 'specialties' => ['sync', 'import', 'api_calls']],
@@ -14,6 +15,9 @@ class TaskDistributionEngine {
     private $agentLoads = [];
 
     public function __construct() {
+        if (!is_dir($this->runtimeDir)) {
+            mkdir($this->runtimeDir, 0775, true);
+        }
         $this->loadAgentStatus();
     }
 
@@ -136,8 +140,10 @@ class TaskDistributionEngine {
         $this->agentLoads[$agent] = ($this->agentLoads[$agent] ?? 0) + 1;
 
         // Salvar em file específico do agente
-        $agentFile = ".agent-queue-{$agent}.json";
-        $agentQueue = json_decode(file_get_contents($agentFile) ?: '[]', true);
+        $agentFile = $this->runtimeDir . "/.agent-queue-{$agent}.json";
+        $agentQueue = is_file($agentFile)
+            ? json_decode(file_get_contents($agentFile) ?: '[]', true)
+            : [];
         $agentQueue[] = $task;
 
         file_put_contents($agentFile, json_encode($agentQueue, JSON_PRETTY_PRINT));
@@ -146,10 +152,12 @@ class TaskDistributionEngine {
     private function loadAgentStatus() {
         // Carregar status dos agentes (quantas tasks estão processando)
         foreach (array_keys($this->agentCapacities) as $agent) {
-            $file = ".agent-queue-{$agent}.json";
+            $file = $this->runtimeDir . "/.agent-queue-{$agent}.json";
             if (file_exists($file)) {
                 $queue = json_decode(file_get_contents($file), true);
                 $this->agentLoads[$agent] = count(array_filter($queue, fn($t) => $t['status'] === 'pending'));
+            } else {
+                $this->agentLoads[$agent] = 0;
             }
         }
 
@@ -173,7 +181,10 @@ class TaskDistributionEngine {
             'total_pending' => array_sum($this->agentLoads),
         ];
 
-        file_put_contents('.task-distribution.json', json_encode($distribution, JSON_PRETTY_PRINT));
+        file_put_contents(
+            $this->runtimeDir . '/.task-distribution.json',
+            json_encode($distribution, JSON_PRETTY_PRINT)
+        );
     }
 }
 

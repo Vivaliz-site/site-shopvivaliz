@@ -13,8 +13,8 @@ class LLMLogAnalyzer {
     private $openaiModel = '';
     private $logDirs = [
         '/var/log/',
-        '/home/ubuntu/site-shopvivaliz/logs/',
-        '/home/ubuntu/site-shopvivaliz/.github/logs/',
+        '/home/ubuntu/shopvivaliz-deploy/shared/logs/',
+        '/home/ubuntu/shopvivaliz-deploy/repo/.github/logs/',
     ];
     private $errorThreshold = 3; // Alertar se 3+ erros similares
 
@@ -287,9 +287,9 @@ class LLMLogAnalyzer {
                    "Severity: {$analysis['severity']}\n" .
                    "File: {$patch['file_path']}";
 
-        shell_exec("cd /home/ubuntu/site-shopvivaliz && git add {$patch['file_path']} 2>/dev/null");
-        shell_exec("cd /home/ubuntu/site-shopvivaliz && git commit -m '{$message}' 2>/dev/null");
-        shell_exec("cd /home/ubuntu/site-shopvivaliz && git push origin main 2>/dev/null");
+        shell_exec("cd /home/ubuntu/shopvivaliz-deploy/repo && git add {$patch['file_path']} 2>/dev/null");
+        shell_exec("cd /home/ubuntu/shopvivaliz-deploy/repo && git commit -m '{$message}' 2>/dev/null");
+        shell_exec("cd /home/ubuntu/shopvivaliz-deploy/repo && git push origin main 2>/dev/null");
 
         echo "✅ Patch aplicado e commitado: {$patch['file_path']}\n";
     }

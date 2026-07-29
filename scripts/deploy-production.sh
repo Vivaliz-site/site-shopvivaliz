@@ -48,10 +48,17 @@ fi
 
 log "INFO" "=== Deploy iniciado ==="
 
+# Target ref or SHA
+TARGET_REF="${1:-origin/main}"
+FETCH_SOURCE="$TARGET_REF"
+if [[ "$TARGET_REF" == "origin/main" || "$TARGET_REF" == "main" ]]; then
+  FETCH_SOURCE="main"
+fi
+
 # Fetch
-log "INFO" "Fazendo fetch de origin/main..."
-if ! git -C "$REPO_DIR" fetch --prune origin main; then
-  log "ERROR" "git fetch falhou"
+log "INFO" "Fazendo fetch de origin para $FETCH_SOURCE..."
+if ! git -C "$REPO_DIR" fetch --prune --no-tags origin "$FETCH_SOURCE"; then
+  log "ERROR" "git fetch falhou para $FETCH_SOURCE"
   exit 1
 fi
 
@@ -60,22 +67,22 @@ fi
 # cron continues executing an outdated script from the deploy clone.
 RUNNER_PATH="$REPO_DIR/scripts/deploy-production.sh"
 RUNNER_TMP="$(mktemp "$REPO_DIR/scripts/.deploy-production.XXXXXX")"
-if ! git -C "$REPO_DIR" show origin/main:scripts/deploy-production.sh > "$RUNNER_TMP"; then
+if ! git -C "$REPO_DIR" show FETCH_HEAD:scripts/deploy-production.sh > "$RUNNER_TMP"; then
   rm -f -- "$RUNNER_TMP"
-  log "ERROR" "Não foi possível extrair o runner de origin/main"
+  log "ERROR" "Não foi possível extrair o runner de FETCH_HEAD"
   exit 1
 fi
 chmod 0755 "$RUNNER_TMP"
 if ! cmp -s "$RUNNER_TMP" "$RUNNER_PATH"; then
-  log "INFO" "Atualizando runner de deploy a partir de origin/main..."
+  log "INFO" "Atualizando runner de deploy a partir de FETCH_HEAD..."
   mv -f -- "$RUNNER_TMP" "$RUNNER_PATH"
-  exec "$RUNNER_PATH"
+  exec "$RUNNER_PATH" "$TARGET_REF"
 fi
 rm -f -- "$RUNNER_TMP"
 
 # Get SHAs
-REMOTE_SHA=$(git -C "$REPO_DIR" rev-parse origin/main)
-log "INFO" "Remote SHA: $REMOTE_SHA"
+REMOTE_SHA=$(git -C "$REPO_DIR" rev-parse FETCH_HEAD)
+log "INFO" "Target SHA: $REMOTE_SHA"
 
 # Get active SHA
 if [ -L "$CURRENT_LINK" ] && [ -e "$CURRENT_LINK" ]; then
@@ -106,7 +113,7 @@ else
   mkdir -p "$NEW_RELEASE_PATH"
 
   # Archive from git
-  if ! (cd "$REPO_DIR" && git archive origin/main) | tar -xf - -C "$NEW_RELEASE_PATH"; then
+  if ! (cd "$REPO_DIR" && git archive "$REMOTE_SHA") | tar -xf - -C "$NEW_RELEASE_PATH"; then
     log "ERROR" "git archive falhou"
     rm -rf "$NEW_RELEASE_PATH"
     exit 1
@@ -131,6 +138,7 @@ declare -a SYMLINKS=(
   "cache"
   "sessions"
   "storage"
+  "tasks-queue.json"
 )
 # Nota (2026-07-26, achado em auditoria): "uploads" foi removido desta lista
 # de proposito. O codigo da app define UPLOADS_PATH = STORAGE_PATH . '/uploads'
@@ -150,6 +158,10 @@ for symlink in "${SYMLINKS[@]}"; do
       log "ERROR" "Configuração compartilhada ausente: $shared_path"
       rm -rf -- "$NEW_RELEASE_PATH"
       exit 1
+    fi
+  elif [ "$symlink" = "tasks-queue.json" ]; then
+    if [ ! -f "$shared_path" ]; then
+      printf '{\n  "version": "1.1",\n  "queue": []\n}\n' > "$shared_path"
     fi
   else
     mkdir -p "$shared_path"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR="${SHOPVIVALIZ_PROJECT_DIR:-/home/ubuntu/site-shopvivaliz}"
+PROJECT_DIR="${SHOPVIVALIZ_PROJECT_DIR:-/home/ubuntu/shopvivaliz-deploy/current}"
 SERVICE_NAME="shopvivaliz-agent.service"
 SERVICE_SOURCE="$PROJECT_DIR/deploy/systemd/$SERVICE_NAME"
 SERVICE_TARGET="/etc/systemd/system/$SERVICE_NAME"

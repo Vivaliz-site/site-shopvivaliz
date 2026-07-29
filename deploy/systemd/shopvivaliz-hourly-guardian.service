@@ -7,6 +7,6 @@ Wants=network-online.target
 Type=oneshot
 User=ubuntu
 Group=ubuntu
-WorkingDirectory=/home/ubuntu/site-shopvivaliz
-ExecStart=/usr/bin/python3 /home/ubuntu/site-shopvivaliz/scripts/autonomous-hourly-guardian.py
+WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current
+ExecStart=/usr/bin/python3 /home/ubuntu/shopvivaliz-deploy/current/scripts/autonomous-hourly-guardian.py
 

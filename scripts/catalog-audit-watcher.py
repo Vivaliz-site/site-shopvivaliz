@@ -13,7 +13,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path("/home/ubuntu/site-shopvivaliz")
+ROOT = Path("/home/ubuntu/shopvivaliz-deploy/current")
 CATALOG_PATH = ROOT / "api" / "catalog" / "fallback-products.json"
 AUDIT_LOG = ROOT / "logs" / "catalog-audit.log"
 POLL_SECONDS = 5

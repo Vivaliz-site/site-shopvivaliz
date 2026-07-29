@@ -4,7 +4,7 @@
 
 set -e
 
-REPO_DIR="/home/ubuntu/site-shopvivaliz"
+REPO_DIR="/home/ubuntu/shopvivaliz-deploy/current"
 LOG_FILE="/var/log/shopvivaliz/email-setup-$(date +%Y%m%d-%H%M%S).log"
 
 echo "🔧 CONFIGURANDO SISTEMA DE EMAILS"

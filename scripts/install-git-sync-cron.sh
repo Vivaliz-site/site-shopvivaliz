@@ -1,10 +1,10 @@
 #!/bin/bash
 # Instalar git-auto-sync como cron job na VM Oracle
-# Executar: bash /home/ubuntu/site-shopvivaliz/scripts/install-git-sync-cron.sh
+# Executar: bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/install-git-sync-cron.sh
 
 set -e
 
-REPO_DIR="/home/ubuntu/site-shopvivaliz"
+REPO_DIR="/home/ubuntu/shopvivaliz-deploy/repo"
 SCRIPT_PATH="$REPO_DIR/scripts/git-auto-sync.py"
 LOG_DIR="/var/log/shopvivaliz"
 CRON_JOB="*/30 * * * * /usr/bin/python3 $SCRIPT_PATH >> $LOG_DIR/cron.log 2>&1"
