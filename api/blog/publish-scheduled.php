@@ -21,9 +21,15 @@ if (!$repository->isDatabaseAvailable()) {
     exit;
 }
 
+$queueDepth = (int)(getenv('BLOG_AUTOMATION_QUEUE_DEPTH') ?: 9);
+$queue = $repository->ensureAutonomousQueue($queueDepth);
 $count = $repository->publishDue();
 echo json_encode([
     'ok' => true,
+    'queued' => $queue['queued'] ?? 0,
+    'scheduled_future' => $queue['future'] ?? 0,
+    'queue_target' => $queue['target'] ?? $queueDepth,
+    'queue_errors' => $queue['errors'] ?? [],
     'published' => $count,
     'executed_at' => gmdate('c'),
 ], JSON_UNESCAPED_SLASHES);
