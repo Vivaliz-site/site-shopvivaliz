@@ -3,6 +3,24 @@
 function esc(v){return String(v||'').replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[c]})}
 function initials(name){return String(name||'Cliente').trim().split(/\s+/).slice(0,2).map(function(p){return p.charAt(0).toUpperCase()}).join('')||'C'}
 function stars(n){n=Math.max(1,Math.min(5,Number(n)||5));return '★'.repeat(n)+'☆'.repeat(5-n)}
+function syncBottomUiOffset(){
+ var root=document.documentElement;if(!root)return;
+ if(window.innerWidth>820){root.style.setProperty('--sv-bottom-ui-offset','0px');return}
+ var selectors=['.sv-mobile-nav-bar','.sv-mobile-bottom-nav','.sv-checkout-mobile-total','.sv-mobile-buybar'];
+ var maxOffset=0;
+ selectors.forEach(function(selector){
+  document.querySelectorAll(selector).forEach(function(node){
+   if(!(node instanceof HTMLElement))return;
+   var style=window.getComputedStyle(node);
+   if(style.display==='none'||style.visibility==='hidden'||style.position!=='fixed')return;
+   var rect=node.getBoundingClientRect();
+   if(rect.width<=0||rect.height<=0)return;
+   var overlapZone=Math.max(0,window.innerHeight-rect.top);
+   maxOffset=Math.max(maxOffset,Math.ceil(overlapZone+12));
+  });
+ });
+ root.style.setProperty('--sv-bottom-ui-offset',maxOffset>0?maxOffset+'px':'0px');
+}
 function installTestimonials(){
  var section=document.querySelector('.home-testimonials'); if(!section)return;
  var grid=section.querySelector('.testimonials-grid'); if(!grid)return;
@@ -26,4 +44,9 @@ function installSupport(){
 }
 function init(){installTestimonials();installSupport()}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',syncBottomUiOffset);else syncBottomUiOffset();
+window.addEventListener('resize',syncBottomUiOffset,{passive:true});
+window.addEventListener('orientationchange',syncBottomUiOffset,{passive:true});
+window.addEventListener('load',syncBottomUiOffset,{once:true});
+new MutationObserver(function(){syncBottomUiOffset()}).observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});
 })();

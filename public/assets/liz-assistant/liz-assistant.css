@@ -16,7 +16,7 @@
 #sv-liz-launcher {
   position: fixed;
   right: 24px;
-  bottom: 24px;
+  bottom: calc(24px + var(--sv-bottom-ui-offset, 0px) + env(safe-area-inset-bottom));
   width: 76px;
   height: 76px;
   border: 0;
@@ -340,7 +340,7 @@
 @media (max-width: 600px) {
   #sv-liz-launcher {
     right: 16px;
-    bottom: 16px;
+    bottom: calc(16px + var(--sv-bottom-ui-offset, 0px) + env(safe-area-inset-bottom));
     width: 66px;
     height: 66px;
   }
@@ -385,7 +385,7 @@
 #sv-liz-bubble {
   position: fixed;
   right: 110px;
-  bottom: 34px;
+  bottom: calc(34px + var(--sv-bottom-ui-offset, 0px) + env(safe-area-inset-bottom));
   background: #fff;
   border: 1.5px solid var(--sv-slate-border);
   padding: 12px 18px;
@@ -423,11 +423,31 @@
 @media (max-width: 600px) {
   #sv-liz-bubble {
     right: 92px;
-    bottom: 24px;
+    bottom: calc(24px + var(--sv-bottom-ui-offset, 0px) + env(safe-area-inset-bottom));
     max-width: 200px;
     font-size: 12px;
     padding: 10px 14px;
   }
+}
+
+body:has(.sv-mobile-nav-bar) #sv-liz-launcher,
+body:has(.sv-mobile-bottom-nav) #sv-liz-launcher {
+  bottom: calc(96px + env(safe-area-inset-bottom)) !important;
+}
+
+body:has(.sv-checkout-mobile-total) #sv-liz-launcher,
+body:has(.sv-mobile-buybar) #sv-liz-launcher {
+  bottom: calc(122px + env(safe-area-inset-bottom)) !important;
+}
+
+body:has(.sv-mobile-nav-bar) #sv-liz-bubble,
+body:has(.sv-mobile-bottom-nav) #sv-liz-bubble {
+  bottom: calc(106px + env(safe-area-inset-bottom)) !important;
+}
+
+body:has(.sv-checkout-mobile-total) #sv-liz-bubble,
+body:has(.sv-mobile-buybar) #sv-liz-bubble {
+  bottom: calc(132px + env(safe-area-inset-bottom)) !important;
 }
 
 /* Keep the dialog as tall as the browser's visible viewport. */
