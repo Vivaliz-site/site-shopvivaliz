@@ -1,7 +1,7 @@
 # Histórico de Agentes Shopee — ShopVivaliz
 
 **Repositório:** `fredmourao-ai/site-shopvivaliz`  
-**Última atualização:** 2026-07-25  
+**Última atualização:** 2026-07-29  
 **Branch de origem:** `claude/guth-portfolio-access-81jjq2`
 
 > Documento de consulta para agentes. Descreve o que foi implementado, como usar, quais secrets são necessários e quais limitações existem.
@@ -633,3 +633,22 @@ foi inventado. Nenhuma notificação push enviada neste ciclo: mesma recomendaç
 ciclos 15/16 (renovar `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`/`TINY_ACCESS_TOKEN`/
 `TINY_REFRESH_TOKEN` nos GitHub Secrets **e** recriar os dois workflows dedicados), sem fato novo
 que justifique repetir o alerta.
+
+### 9.13 Atualização — ciclo de 2026-07-29 (~13:09 UTC deste run), 18º ciclo
+
+Estado idêntico ao ciclo 17 (registrado ~10:40 UTC hoje, portanto há menos de 3h): `ls
+.github/workflows/ | grep -i shopee` segue vazio; nenhum arquivo novo em `listings/` desde
+`shopee-listings-20260726-080756.json` (mesmo `status: partial`, `total_products: 0`, erro
+`"Falha ao renovar token: Invalid client or Invalid client credentials"`). `git log` do commit
+do ciclo 17 (`d102467`) até o HEAD atual (`bb2eeea`) mostra só 3 commits, todos de ajustes
+mobile/footer/popup não relacionados — nenhum toca `TINY_CLIENT_ID`, `TINY_CLIENT_SECRET`,
+`docs/TINY-TOKEN-RENEWAL-SETUP.md` nem `.github/workflows/*shopee*`. Nenhum secret
+`TINY_*`/`OLIST_*`/`SHOPEE_*` neste ambiente de sessão (`printenv | grep -iE
+'shopee|tiny|olist'` vazio). Achado estrutural das seções 9.7/9.8 permanece sem mudança:
+nenhuma integração com a API de analytics do Shopee Open Platform (CTR, conversão, vendas por
+SKU) existe em nenhum workflow ou script deste repositório.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada — sem credencial válida,
+sem workflow ativo e sem fonte de dados de performance real. Nenhum dado de CTR/conversão/venda
+foi inventado. Nenhuma notificação push enviada neste ciclo: mesma recomendação já comunicada
+nos ciclos 15/16/17, sem fato novo que justifique repetir o alerta.
