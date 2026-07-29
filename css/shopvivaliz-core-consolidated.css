@@ -201,7 +201,8 @@ a:hover {
 
 .hero {
     background: linear-gradient(135deg, var(--brand-navy-dark) 0%, var(--brand-navy) 55%, #1a5fa8 100%);
-    padding: 40px 0 44px;
+    margin-top: 0;
+    padding: 16px 0 28px;
     color: #fff;
     position: relative;
     overflow: hidden;
@@ -215,13 +216,15 @@ a:hover {
 .hero-content { position: relative; }
 
 .hero-content {
-    max-width: 760px;
+    max-width: 920px;
 }
 
 .hero h1 {
     margin: 0 0 10px;
-    font-size: clamp(26px, 3.6vw, 42px);
-    line-height: 1.12;
+    width: min(100%, 720px);
+    max-width: none;
+    font-size: clamp(24px, 3.2vw, 38px);
+    line-height: 1.04;
     letter-spacing: -0.02em;
     color: #fff;
 }
@@ -237,9 +240,9 @@ a:hover {
 
 .hero p {
     color: rgba(255,255,255,0.82);
-    font-size: var(--text-lg);
-    line-height: 1.6;
-    max-width: 560px;
+    font-size: 17px;
+    line-height: 1.45;
+    max-width: 760px;
 }
 
 .muted {
