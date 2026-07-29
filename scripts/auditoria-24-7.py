@@ -20,9 +20,10 @@ from email.mime.multipart import MIMEMultipart
 
 # ============ CONFIGURAÇÃO ============
 BASE_URL = "https://shopvivaliz.com.br"
-MONITOR_LOG = "/home/ubuntu/site-shopvivaliz/logs/auditoria-24-7.log"
-ALERTS_LOG = "/home/ubuntu/site-shopvivaliz/logs/alertas-24-7.log"
-REPORT_DIR = "/home/ubuntu/site-shopvivaliz/logs/reports"
+CURRENT_ROOT = "/home/ubuntu/shopvivaliz-deploy/current"
+MONITOR_LOG = f"{CURRENT_ROOT}/logs/auditoria-24-7.log"
+ALERTS_LOG = f"{CURRENT_ROOT}/logs/alertas-24-7.log"
+REPORT_DIR = f"{CURRENT_ROOT}/logs/reports"
 CACHE_FILE = "/tmp/shopvivaliz-audit-cache.json"
 
 # Email para alertas

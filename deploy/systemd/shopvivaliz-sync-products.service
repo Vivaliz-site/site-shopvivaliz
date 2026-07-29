@@ -7,9 +7,9 @@ Wants=network-online.target shopvivaliz-token-renewer.service
 Type=simple
 User=ubuntu
 Group=www-data
-WorkingDirectory=/home/ubuntu/site-shopvivaliz
+WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/usr/bin/python3 /home/ubuntu/site-shopvivaliz/daemon-sync-products.py --interval 300 --workers 4
+ExecStart=/usr/bin/python3 /home/ubuntu/shopvivaliz-deploy/current/daemon-sync-products.py --interval 300 --workers 4
 Restart=always
 RestartSec=30
 TimeoutStopSec=30

@@ -5,7 +5,8 @@
 # Roda a cada 5 minutos via cron
 ###########################################################################
 
-LOGDIR="/home/ubuntu/site-shopvivaliz/logs"
+CURRENT_ROOT="${CURRENT_ROOT:-/home/ubuntu/shopvivaliz-deploy/current}"
+LOGDIR="$CURRENT_ROOT/logs"
 HEALTHLOG="$LOGDIR/daemon-health.log"
 mkdir -p "$LOGDIR"
 
@@ -35,7 +36,7 @@ check_daemon() {
 
 check_token_renewal() {
     # Check if token was renewed in last 3 hours
-    local token_file="/home/ubuntu/site-shopvivaliz/.env"
+    local token_file="$CURRENT_ROOT/.env"
     local now=$(date +%s)
     local mtime=$(stat -c %Y "$token_file" 2>/dev/null || echo 0)
     local age=$((now - mtime))
@@ -53,7 +54,7 @@ check_token_renewal() {
 
 check_cache_freshness() {
     # Check if products cache is fresh
-    local cache_file="/home/ubuntu/site-shopvivaliz/storage/products-cache-ativos.json"
+    local cache_file="$CURRENT_ROOT/storage/products-cache-ativos.json"
     local now=$(date +%s)
     local mtime=$(stat -c %Y "$cache_file" 2>/dev/null || echo 0)
     local age=$((now - mtime))

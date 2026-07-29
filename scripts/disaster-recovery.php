@@ -5,7 +5,7 @@
  */
 
 class DisasterRecovery {
-    private $backupDir = '/home/ubuntu/site-shopvivaliz/.backups';
+    private $backupDir = '/home/ubuntu/shopvivaliz-deploy/shared/.backups';
     private $retention = 30; // dias
     private $s3Bucket = ''; // Será preenchido via env
     private $dbHost = 'localhost';
@@ -70,9 +70,9 @@ class DisasterRecovery {
 
         $timestamp = date('Y-m-d_H-i-s');
         $backupFile = "{$this->backupDir}/git-{$timestamp}.tar.gz";
-        $gitDir = '/home/ubuntu/site-shopvivaliz/.git';
+        $gitDir = '/home/ubuntu/shopvivaliz-deploy/repo/.git';
 
-        $command = "tar -czf {$backupFile} -C /home/ubuntu/site-shopvivaliz .git";
+        $command = "tar -czf {$backupFile} -C /home/ubuntu/shopvivaliz-deploy/repo .git";
         shell_exec($command);
 
         if (file_exists($backupFile) && filesize($backupFile) > 1000) {
@@ -91,9 +91,9 @@ class DisasterRecovery {
         $backupFile = "{$this->backupDir}/files-{$timestamp}.tar.gz";
 
         $criticalPaths = [
-            '/home/ubuntu/site-shopvivaliz/config/',
-            '/home/ubuntu/site-shopvivaliz/includes/',
-            '/home/ubuntu/site-shopvivaliz/public/assets/',
+            '/home/ubuntu/shopvivaliz-deploy/current/config/',
+            '/home/ubuntu/shopvivaliz-deploy/current/includes/',
+            '/home/ubuntu/shopvivaliz-deploy/current/public/assets/',
         ];
 
         $pathsStr = implode(' ', $criticalPaths);

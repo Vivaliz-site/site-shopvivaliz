@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Configuração
-REPO_DIR = "/home/ubuntu/site-shopvivaliz"
+REPO_DIR = "/home/ubuntu/shopvivaliz-deploy/repo"
 BRANCH = "main"
 LOG_DIR = "/var/log/shopvivaliz"
 LOG_FILE = f"{LOG_DIR}/git-auto-sync-{datetime.now().strftime('%Y%m%d')}.log"

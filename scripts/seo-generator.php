@@ -67,7 +67,7 @@ class SEOGenerator {
         $xml .= "</urlset>\n";
 
         file_put_contents(
-            '/home/ubuntu/site-shopvivaliz/public/sitemap.xml',
+            '/home/ubuntu/shopvivaliz-deploy/repo/public/sitemap.xml',
             $xml
         );
 
@@ -139,7 +139,7 @@ Crawl-delay: 1
 Allow: /
 EOT;
 
-        file_put_contents('/home/ubuntu/site-shopvivaliz/public/robots.txt', $robots);
+        file_put_contents('/home/ubuntu/shopvivaliz-deploy/repo/public/robots.txt', $robots);
         echo "✅ robots.txt criado\n";
     }
 
@@ -176,7 +176,7 @@ EOT;
         ];
 
         $schemaJSON = json_encode($schema, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        file_put_contents('/home/ubuntu/site-shopvivaliz/public/schema-org.json', $schemaJSON);
+        file_put_contents('/home/ubuntu/shopvivaliz-deploy/repo/public/schema-org.json', $schemaJSON);
 
         echo "✅ Schema.org criado\n";
     }
@@ -198,7 +198,7 @@ EOT;
         ];
 
         file_put_contents(
-            '/home/ubuntu/site-shopvivaliz/config/meta-tags.php',
+            '/home/ubuntu/shopvivaliz-deploy/repo/config/meta-tags.php',
             '<?php return ' . var_export($metatags, true) . ';'
         );
 

@@ -12,7 +12,7 @@ unit_target="/etc/systemd/system/shopvivaliz-sync-products.service"
 token_unit_source="${repo_dir}/deploy/systemd/shopvivaliz-token-renewer.service"
 token_unit_target="/etc/systemd/system/shopvivaliz-token-renewer.service"
 
-if [[ ${repo_dir} != "/home/ubuntu/site-shopvivaliz" ]]; then
+if [[ ${repo_dir} != /home/ubuntu/shopvivaliz-deploy/* ]]; then
   echo "Diretório de produção inesperado: ${repo_dir}" >&2
   exit 2
 fi

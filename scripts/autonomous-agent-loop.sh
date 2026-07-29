@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-PROJECT_DIR="${SHOPVIVALIZ_PROJECT_DIR:-/home/ubuntu/site-shopvivaliz}"
+PROJECT_DIR="${SHOPVIVALIZ_PROJECT_DIR:-/home/ubuntu/shopvivaliz-deploy/current}"
 LOG_FILE="${SHOPVIVALIZ_AGENT_LOG:-$PROJECT_DIR/logs/autonomous-agent.log}"
 EXECUTION_LOG_FILE="${SHOPVIVALIZ_AGENT_EXECUTION_LOG:-$PROJECT_DIR/logs/execution/autonomous-cycle.log}"
 INTERVAL_SECONDS="${SHOPVIVALIZ_AGENT_INTERVAL_SECONDS:-60}"

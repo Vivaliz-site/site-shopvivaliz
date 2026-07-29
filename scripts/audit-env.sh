@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="/home/ubuntu/site-shopvivaliz"
+ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/current}"
 
 echo "== ShopVivaliz Oracle Environment Audit =="
 date -Is

@@ -5,8 +5,8 @@
  */
 
 class PerformanceOptimizer {
-    private $assetDir = '/home/ubuntu/site-shopvivaliz/public/assets';
-    private $cacheDir = '/home/ubuntu/site-shopvivaliz/.cache';
+    private $assetDir = '/home/ubuntu/shopvivaliz-deploy/repo/public/assets';
+    private $cacheDir = '/home/ubuntu/shopvivaliz-deploy/repo/.cache';
 
     public function __construct() {
         if (!is_dir($this->cacheDir)) {
@@ -148,7 +148,7 @@ class PerformanceOptimizer {
 </IfModule>
 ';
 
-        file_put_contents('/home/ubuntu/site-shopvivaliz/.htaccess', $htaccess);
+        file_put_contents('/home/ubuntu/shopvivaliz-deploy/repo/.htaccess', $htaccess);
         echo "✅ .htaccess atualizado\n";
 
         return true;
@@ -180,7 +180,7 @@ header { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 button { background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; }
 ';
 
-        $criticalFile = '/home/ubuntu/site-shopvivaliz/public/assets/critical.css';
+        $criticalFile = '/home/ubuntu/shopvivaliz-deploy/repo/public/assets/critical.css';
         file_put_contents($criticalFile, $criticalCSS);
 
         echo "✅ Critical CSS extraído (inlinado na <head>)\n";
