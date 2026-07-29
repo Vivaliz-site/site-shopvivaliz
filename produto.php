@@ -588,6 +588,8 @@ if ($notFound) {
     <link rel="stylesheet" href="/css/product-conversion-v5.css?v=2026-07-26-v2">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
+    <!-- Polimento de layout: precisa vir por ultimo para vencer na cascata. -->
+    <link rel="stylesheet" href="/css/layout-polish-v1.css?v=2026-07-29-1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">

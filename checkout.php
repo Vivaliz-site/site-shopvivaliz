@@ -41,6 +41,8 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/checkout.css">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
+    <!-- Polimento de layout: precisa vir por ultimo para vencer na cascata. -->
+    <link rel="stylesheet" href="/css/layout-polish-v1.css?v=2026-07-29-1">
     <?php require_once __DIR__ . '/includes/load-custom-css.php'; ?>
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
     <!-- Mercado Pago SDK V2 + Device ID para fraude -->

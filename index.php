@@ -496,6 +496,8 @@ $svNavCurrent = '';
     <link rel="stylesheet" href="/css/shopvivaliz-webp-optimization.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-27-2">
+    <!-- Polimento de layout: precisa vir por ultimo para vencer na cascata. -->
+    <link rel="stylesheet" href="/css/layout-polish-v1.css?v=2026-07-29-1">
     <style>
       .hero-cta .btn,
       .hero-cta .btn:visited {

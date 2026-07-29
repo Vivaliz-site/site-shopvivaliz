@@ -20,6 +20,8 @@ header('Content-Type: text/html; charset=UTF-8');
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/shipping-v7.css">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
+    <!-- Polimento de layout: precisa vir por ultimo para vencer na cascata. -->
+    <link rel="stylesheet" href="/css/layout-polish-v1.css?v=2026-07-29-1">
     <style>
         .cart-page { padding: 36px 0 64px; }
         .cart-layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; }
