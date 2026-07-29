@@ -73,6 +73,12 @@ $socialLinks = [
 ];
 ?>
 <style>
+footer::before {
+    left: auto !important;
+    right: 0 !important;
+    transform: none !important;
+}
+
 @media (max-width: 768px) {
     body:has(.sv-mobile-nav-bar),
     body:has(.sv-mobile-bottom-nav) {
