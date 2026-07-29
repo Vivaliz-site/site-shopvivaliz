@@ -872,16 +872,8 @@ $svNavCurrent = '';
                                 'stock'            => $stock,
                             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-                            // Premium E-commerce data enrichment
-                            $skuSeed = crc32($product['sku']);
-                            $rating = 4.7 + ($skuSeed % 4) * 0.1;
-                            $reviewsCount = 12 + ($skuSeed % 40);
-                            $isBestSeller = ($skuSeed % 3) === 0;
                             ?>
                             <article class="product-card<?= $stock <= 0 ? ' is-out-of-stock' : '' ?>" data-sku="<?= sv_home_esc($product['sku']) ?>">
-                                <?php if ($isBestSeller && $stock > 0): ?>
-                                    <span class="product-card-ribbon">Mais Vendido</span>
-                                <?php endif; ?>
                                 <?php $cardImages = array_values(array_unique(array_filter(array_merge([$image], is_array($product['images'] ?? null) ? $product['images'] : [])))); ?>
                                 <a class="product-image" href="<?= sv_home_esc($productUrl) ?>" data-images="<?= sv_home_esc(json_encode(array_slice($cardImages, 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
                                     <img src="<?= sv_home_esc($image) ?>" alt="<?= sv_home_esc($product['name']) ?>" width="400" height="400" loading="lazy" decoding="async" onerror="this.src='<?= sv_home_default_image() ?>'">
@@ -893,12 +885,6 @@ $svNavCurrent = '';
                                     <?php endif; ?>
                                     <h2><?= sv_home_esc($product['name']) ?></h2>
                                     
-                                    <div class="product-rating">
-                                        <span class="stars">★</span>
-                                        <strong><?= number_format($rating, 1, '.', '') ?></strong>
-                                        <span class="reviews-count">(<?= $reviewsCount ?>)</span>
-                                    </div>
-
                                     <div class="product-price"><?= sv_home_esc(sv_home_money((float)$product['price'])) ?></div>
                                     <div class="card-actions">
                                         <a class="btn btn-secondary card-link" href="<?= sv_home_esc($productUrl) ?>">Ver detalhes</a>
@@ -934,7 +920,7 @@ $svNavCurrent = '';
                     <div class="testimonial-stars"><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span></div>
                     <p>"Comprei rodízios em gel para o meu armário e a qualidade é fantástica! O deslizamento é suave e silencioso. Entrega muito rápida."</p>
                     <div class="testimonial-author">
-                        <img class="testimonial-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&q=80" loading="lazy" decoding="async" alt="Ana Paula">
+                        <span class="testimonial-avatar testimonial-avatar-initials" aria-hidden="true">AP</span>
                         <div>
                             <strong>Ana Paula M.</strong>
                             <span>São Paulo - SP</span>
@@ -945,7 +931,7 @@ $svNavCurrent = '';
                     <div class="testimonial-stars"><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span></div>
                     <p>"Excelente atendimento! O suporte tirou minhas dúvidas sobre a compatibilidade do engate rápido para mangueira. Indico a todos!"</p>
                     <div class="testimonial-author">
-                        <img class="testimonial-avatar" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&q=80" loading="lazy" decoding="async" alt="Marcos Silva">
+                        <span class="testimonial-avatar testimonial-avatar-initials" aria-hidden="true">MS</span>
                         <div>
                             <strong>Marcos Silva T.</strong>
                             <span>Curitiba - PR</span>
@@ -956,7 +942,7 @@ $svNavCurrent = '';
                     <div class="testimonial-stars"><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span></div>
                     <p>"As caixas organizadoras superaram minhas expectativas. Super resistentes e bonitas. Site fácil de comprar pelo celular e seguro."</p>
                     <div class="testimonial-author">
-                        <img class="testimonial-avatar" src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&h=100&fit=crop&q=80" loading="lazy" decoding="async" alt="Julia Costa">
+                        <span class="testimonial-avatar testimonial-avatar-initials" aria-hidden="true">JC</span>
                         <div>
                             <strong>Julia Costa F.</strong>
                             <span>Belo Horizonte - MG</span>
