@@ -170,3 +170,7 @@ $socialLinks = [
         </div>
     </div>
 </footer>
+
+<!-- Liz virtual assistant: the script creates both the launcher and dialog. -->
+<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=20260728">
+<script src="/public/assets/liz-assistant/liz-assistant.js?v=20260728" defer></script>
