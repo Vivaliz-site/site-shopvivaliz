@@ -20,7 +20,7 @@ jobs:
     env:
       VM_HOST: 137.131.156.17
       VM_USER: ubuntu
-      REPO_DIR: /home/ubuntu/site-shopvivaliz
+      REPO_DIR: /home/ubuntu/shopvivaliz-deploy/shared
     steps:
       - name: Validate required secrets
         shell: bash
