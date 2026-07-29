@@ -494,7 +494,7 @@ $svNavCurrent = '';
     <link rel="stylesheet" href="/css/shopvivaliz-premium-consolidated.css?v=2026-07-27-2">
     <link rel="stylesheet" href="/css/shopvivaliz-inline-to-classes.css?v=2026-07-27-2">
     <link rel="stylesheet" href="/css/shopvivaliz-webp-optimization.css?v=2026-07-19">
-    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
+    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-29-2">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-27-2">
     <!-- Polimento de layout: precisa vir por ultimo para vencer na cascata. -->
     <link rel="stylesheet" href="/css/layout-polish-v1.css?v=2026-07-29-1">
@@ -1089,7 +1089,7 @@ $svNavCurrent = '';
     })();
     </script>
     <script src="/js/catalog.js"></script>
-    <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
+    <script src="/js/first-purchase-popup-v1.js?v=2026-07-29-2" defer></script>
     <script>
     (function () {
         var root = document.getElementById('hero-carousel');
