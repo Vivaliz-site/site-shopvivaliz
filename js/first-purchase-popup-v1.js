@@ -11,6 +11,8 @@
     if (path.indexOf('/checkout') === 0 || path.indexOf('/admin') === 0) return;
     if (document.querySelector('.sv-first-coupon')) return;
 
+    var compactMode = window.matchMedia('(max-width: 820px)').matches && path.indexOf('/produto/') === 0;
+
     try {
         if (Number(localStorage.getItem(dismissedKey) || '0') > now) return;
         if (localStorage.getItem(usedKey) === code) return;
@@ -49,7 +51,7 @@
 
     function openPopup() {
         var popup = document.createElement('section');
-        popup.className = 'sv-first-coupon';
+        popup.className = 'sv-first-coupon' + (compactMode ? ' sv-first-coupon--compact' : '');
         popup.setAttribute('role', 'dialog');
         popup.setAttribute('aria-modal', 'false');
         popup.setAttribute('aria-label', 'Cupom de primeira compra');

@@ -13,6 +13,13 @@ $state = $company['state'] ?? 'MG';
 $zipcode = $company['zipcode'] ?? '35501-236';
 $socialMedia = is_array($company['social_media'] ?? null) ? $company['social_media'] : [];
 $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
+$publicWhatsappUrl = $whatsapp !== ''
+    ? 'https://wa.me/' . $whatsapp . '?text=' . rawurlencode('Olá! Vim pelo site da ShopVivaliz e gostaria de atendimento.')
+    : '/contato';
+$publicExperienceCss = dirname(__DIR__) . '/css/public-experience-v1.css';
+$publicExperienceJs = dirname(__DIR__) . '/js/public-experience-v1.js';
+$publicExperienceCssVersion = is_file($publicExperienceCss) ? (string)filemtime($publicExperienceCss) : '1';
+$publicExperienceJsVersion = is_file($publicExperienceJs) ? (string)filemtime($publicExperienceJs) : '1';
 
 $socialLinks = [
     'facebook' => [
@@ -79,6 +86,58 @@ $socialLinks = [
     .footer-legal {
         padding-bottom: calc(20px + env(safe-area-inset-bottom)) !important;
     }
+
+    .footer-legal {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding-left: 16px !important;
+        padding-right: 16px !important;
+        border-radius: 18px 18px 0 0;
+        overflow: hidden;
+    }
+
+    .footer-legal-panels {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+        max-width: none !important;
+    }
+
+    .footer-legal-card {
+        min-height: 0 !important;
+        padding: 16px !important;
+    }
+
+    .footer-legal-meta {
+        grid-template-columns: 1fr !important;
+        gap: 16px !important;
+    }
+
+    .footer-legal-column {
+        min-width: 0;
+    }
+
+    .footer-legal-column,
+    .footer-legal-column div,
+    .footer-legal-column a {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .footer-cols {
+        grid-template-columns: 1fr !important;
+        gap: 24px !important;
+        text-align: center !important;
+    }
+
+    .footer-cols > div {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .footer-cols a {
+        justify-content: center;
+    }
 }
 </style>
 <footer>
@@ -126,8 +185,8 @@ $socialLinks = [
         </div>
 
         <div class="footer-legal" style="border-top: 2px solid #d7e0ea; margin-top: 30px; padding-top: 20px; background: #f8fbff; margin-left: -20px; margin-right: -20px; margin-bottom: -20px; padding-left: 20px; padding-right: 20px; padding-bottom: 20px; font-size: 12px; color: #44556c; line-height: 1.8;">
-            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 18px; margin-bottom: 22px;">
-                <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px;">
+            <div class="footer-legal-panels" style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 18px; margin-bottom: 22px;">
+                <div class="footer-legal-card" style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px;">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
                         <span style="display: inline-flex; width: 34px; height: 34px; border-radius: 999px; align-items: center; justify-content: center; background: #e8f5ee; color: #157347;" aria-hidden="true">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#157347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
@@ -144,7 +203,7 @@ $socialLinks = [
                     </div>
                 </div>
 
-                <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: space-between; min-height: 110px;">
+                <div class="footer-legal-card" style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: space-between; min-height: 110px;">
                     <strong style="display: block; color: #22324a; margin-bottom: 8px;">Pagamentos aceitos</strong>
                     <div style="display: flex; align-items: center; justify-content: center; gap: 16px; height: 100%; flex: 1; flex-wrap: wrap;">
                         <img src="/images/mercado-pago-logo.jpg" alt="Mercado Pago" style="max-width: 160px; width: 100%; height: auto; max-height: 90px; object-fit: contain; border-radius: 4px;">
@@ -153,8 +212,8 @@ $socialLinks = [
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 30px; margin-bottom: 20px;">
-                <div>
+            <div class="footer-legal-meta" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 30px; margin-bottom: 20px;">
+                <div class="footer-legal-column">
                     <strong style="display: block; color: #333; margin-bottom: 8px;">IDENTIFICACAO</strong>
                     <div style="line-height: 1.6;">
                         <div><strong>Razao Social:</strong> <?= htmlspecialchars($legalName) ?></div>
@@ -163,7 +222,7 @@ $socialLinks = [
                     </div>
                 </div>
 
-                <div>
+                <div class="footer-legal-column">
                     <strong style="display: block; color: #333; margin-bottom: 8px;">ENDERECO</strong>
                     <div style="line-height: 1.6;">
                         <div><?= htmlspecialchars($address) ?></div>
@@ -173,7 +232,7 @@ $socialLinks = [
                     </div>
                 </div>
 
-                <div>
+                <div class="footer-legal-column">
                     <strong style="display: block; color: #333; margin-bottom: 8px;">CONTATOS</strong>
                     <div style="line-height: 1.6;">
                         <div><strong>E-mail:</strong> <a href="mailto:<?= htmlspecialchars($email) ?>"><?= htmlspecialchars($email) ?></a></div>
@@ -185,6 +244,14 @@ $socialLinks = [
         </div>
     </div>
 </footer>
+
+<?php if (empty($GLOBALS['sv_public_config_included'])): ?>
+<script>window.ShopVivalizPublicConfig=window.ShopVivalizPublicConfig||<?= json_encode(['whatsappUrl' => $publicWhatsappUrl], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;</script>
+<?php endif; ?>
+<?php if (empty($GLOBALS['sv_public_experience_included'])): ?>
+<link rel="stylesheet" href="/css/public-experience-v1.css?v=<?= htmlspecialchars($publicExperienceCssVersion, ENT_QUOTES, 'UTF-8') ?>">
+<script src="/js/public-experience-v1.js?v=<?= htmlspecialchars($publicExperienceJsVersion, ENT_QUOTES, 'UTF-8') ?>" defer></script>
+<?php endif; ?>
 
 <!-- Liz virtual assistant: the script creates both the launcher and dialog. -->
 <link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=20260729-1">
