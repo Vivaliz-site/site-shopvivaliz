@@ -14,6 +14,7 @@ $sections = [
         ['📋', 'Pedidos', '/admin/pedidos.php', 'Consultar e administrar pedidos.'],
         ['👥', 'Clientes', '/admin/clientes.php', 'Consultar a base de clientes.'],
         ['🎟️', 'Cupons', '/admin/cupons.php', 'Cadastrar e administrar cupons.'],
+        ['🎮', 'Gamificação', '/gamificacao.php', 'Acompanhar pontos, níveis e recompensas da loja.'],
         ['🏢', 'Perfil da empresa e redes sociais', '/admin/company-profile.php', 'Dados institucionais e links das redes sociais.'],
         ['⚙️', 'Configurações gerais', '/admin/settings.php', 'Configurações gerais da loja.'],
     ],
