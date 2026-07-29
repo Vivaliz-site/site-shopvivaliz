@@ -61,7 +61,7 @@ def main():
     if len(sys.argv) > 1:
         env_path = sys.argv[1]
     else:
-        env_path = "/home/ubuntu/site-shopvivaliz/.env"
+        env_path = "/home/ubuntu/shopvivaliz-deploy/shared/.env"
         if not os.path.exists(env_path):
             env_path = os.path.expanduser("~/.shopvivaliz.env")
 

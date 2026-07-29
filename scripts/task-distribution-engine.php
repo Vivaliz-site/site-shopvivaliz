@@ -5,7 +5,7 @@
  */
 
 class TaskDistributionEngine {
-    private $queueFile = '/home/ubuntu/site-shopvivaliz/tasks-queue.json';
+    private $queueFile = '/home/ubuntu/shopvivaliz-deploy/current/tasks-queue.json';
     private $agentCapacities = [
         'claude' => ['max_concurrent' => 3, 'specialties' => ['code_review', 'refactor', 'security']],
         'gemini' => ['max_concurrent' => 4, 'specialties' => ['sync', 'import', 'api_calls']],

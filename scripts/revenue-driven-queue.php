@@ -6,7 +6,7 @@
  */
 
 class RevenueDrivenQueue {
-    private $queueFile = '/home/ubuntu/site-shopvivaliz/tasks-queue.json';
+    private $queueFile = '/home/ubuntu/shopvivaliz-deploy/current/tasks-queue.json';
     private $analyticsFile = './.analytics-metrics.json';
     private $conversionThreshold = 0.05; // Alerta se cair 5%+
 

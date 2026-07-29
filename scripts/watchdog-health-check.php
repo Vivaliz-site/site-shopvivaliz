@@ -7,7 +7,8 @@
 
 class WatchdogHealthCheck {
     private $baseUrl = 'https://shopvivaliz.com.br';
-    private $gitPath = '/home/ubuntu/site-shopvivaliz';
+    private $gitPath = '/home/ubuntu/shopvivaliz-deploy/repo';
+    private $currentPath = '/home/ubuntu/shopvivaliz-deploy/current';
     private $alertWebhook = ''; // Será preenchido via env
     private $maxRetries = 3;
     private $logFile = '/var/log/watchdog-health.log';
@@ -37,7 +38,7 @@ class WatchdogHealthCheck {
             $this->recordHealthStatus('HEALTHY', $checks);
             return true;
         } else {
-            $this->log('❌ FALHA detectada. Iniciando Auto-Rollback...');
+            $this->log('❌ FALHA detectada. Auto-rollback Git foi desativado no modelo de releases imutáveis.');
             $this->triggerAutoRollback($checks);
             return false;
         }
@@ -125,9 +126,9 @@ class WatchdogHealthCheck {
         $this->log('🔍 Verificando arquivos críticos...');
 
         $files = [
-            '/home/ubuntu/site-shopvivaliz/index.php',
-            '/home/ubuntu/site-shopvivaliz/config/bootstrap-env.php',
-            '/home/ubuntu/site-shopvivaliz/includes/footer.php',
+            '/home/ubuntu/shopvivaliz-deploy/current/index.php',
+            '/home/ubuntu/shopvivaliz-deploy/current/config/bootstrap-env.php',
+            '/home/ubuntu/shopvivaliz-deploy/current/includes/footer.php',
         ];
 
         $passed = 0;
@@ -144,34 +145,23 @@ class WatchdogHealthCheck {
     }
 
     private function triggerAutoRollback($checks) {
-        $this->log('🔄 ACIONANDO AUTO-ROLLBACK...');
-
-        // 1. Pegar commit anterior
-        $lastCommit = shell_exec("cd {$this->gitPath} && git log --oneline -1");
-        $prevCommit = shell_exec("cd {$this->gitPath} && git log --oneline -2 | tail -1");
-
-        $this->log("Commit atual: " . trim($lastCommit));
-        $this->log("Revertendo para: " . trim($prevCommit));
-
-        // 2. Fazer revert
-        $revertResult = shell_exec("cd {$this->gitPath} && git revert HEAD --no-edit 2>&1");
-        $this->log("Resultado do revert:\n" . $revertResult);
-
-        // 3. Push para GitHub
-        $pushResult = shell_exec("cd {$this->gitPath} && git push origin main 2>&1");
-        $this->log("Push resultado:\n" . $pushResult);
-
-        // 4. Notificar admin
+        $this->log('🚨 FALHA detectada. Rollback automático por Git está desativado; revisão manual necessária.');
+        $activeRelease = trim((string) shell_exec("readlink -f {$this->currentPath}"));
+        $activeSha = is_file($this->currentPath . '/.release-sha')
+            ? trim((string) file_get_contents($this->currentPath . '/.release-sha'))
+            : '';
         $this->sendAlert(
-            '🚨 AUTO-ROLLBACK EXECUTADO',
+            '🚨 FALHA DE SAÚDE EM PRODUÇÃO',
             "Problema detectado no deploy.\n\n" .
             "❌ Checks falharam: " . json_encode($checks) . "\n\n" .
-            "✅ Auto-rollback acionado com sucesso.\n" .
-            "Versão anterior restaurada.\n\n" .
+            "⚠️ Rollback automático via Git foi desativado no modelo de releases imutáveis.\n" .
+            "Release ativa: {$activeRelease}\n" .
+            "SHA ativo: {$activeSha}\n" .
+            "Acione rollback manual revisado se necessário.\n\n" .
             "Verifique o painel admin em: {$this->baseUrl}/admin/"
         );
 
-        $this->recordHealthStatus('ROLLED_BACK', $checks);
+        $this->recordHealthStatus('MANUAL_REVIEW_REQUIRED', $checks);
     }
 
     private function curlGet($url) {

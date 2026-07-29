@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR="${SHOPVIVALIZ_PROJECT_DIR:-/home/ubuntu/site-shopvivaliz}"
+PROJECT_DIR="${SHOPVIVALIZ_PROJECT_DIR:-/home/ubuntu/shopvivaliz-deploy/current}"
 PHP_BIN="${PHP_BIN:-php}"
 CRON_FILE="/etc/cron.d/shopvivaliz-blog-publish"
 LOG_DIR="$PROJECT_DIR/logs"

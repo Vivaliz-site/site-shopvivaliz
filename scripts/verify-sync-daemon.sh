@@ -80,7 +80,7 @@ chmod 600 ~/.ssh/ssh-key-2026-07-04.key
 # Verificar SHA na VM
 echo "Verificando SHA na VM..." | tee -a "$LOG_FILE"
 ACTUAL_SHA=$(ssh -i ~/.ssh/ssh-key-2026-07-04.key ubuntu@137.131.156.17 \
-    "cd /home/ubuntu/site-shopvivaliz && git rev-parse HEAD" 2>&1) || {
+    "cd /home/ubuntu/shopvivaliz-deploy/repo && git rev-parse HEAD" 2>&1) || {
     echo "❌ ERRO: Não consegui conectar à VM via SSH" | tee -a "$LOG_FILE"
     exit 1
 }

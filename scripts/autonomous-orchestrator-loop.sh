@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-PROJECT_DIR="/home/ubuntu/site-shopvivaliz"
+PROJECT_DIR="${SHOPVIVALIZ_PROJECT_DIR:-/home/ubuntu/shopvivaliz-deploy/current}"
 LOG_DIR="${PROJECT_DIR}/logs"
 PID_FILE="${LOG_DIR}/.orchestrator.pid"
 
