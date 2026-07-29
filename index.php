@@ -326,11 +326,11 @@ function sv_home_banners(): array
 {
     return [
         [
-            'alt' => 'Banner Vivaliz com 10% de desconto na primeira compra',
+            'alt' => 'Banner Vivaliz com 5% de desconto na primeira compra',
             'image' => '/public/assets/home-banners/banner-primeira-compra.jpg',
             'tag' => 'OFERTA EXCLUSIVA',
             'title' => 'Tudo o que você precisa.',
-            'subtitle' => 'Ganhe 10% de desconto na sua primeira compra com o cupom VIVALIZ10.',
+            'subtitle' => 'Ganhe 5% de desconto na sua primeira compra com o cupom VOLTEI5.',
             'primary' => ['label' => 'Aproveitar Desconto', 'href' => '/catalogo'],
             'secondary' => ['label' => 'Falar com vendas', 'href' => '/contato'],
         ],

@@ -218,3 +218,19 @@
         transform: none;
     }
 }
+
+/* ---------------------------------------------------------------------------
+   6. WIDGETS FLUTUANTES (WhatsApp, chat) NAO COBREM CONTEUDO
+   O botao do WhatsApp cobre a primeira categoria do catalogo e o primeiro
+   card de produto na home. Empurra-lo um pouco para cima e garantir que o
+   conteudo abaixo dele tenha padding suficiente para continuar clicavel.
+   ------------------------------------------------------------------------- */
+/* Em mobile a barra de navegacao fixa ocupa ~64px na parte de baixo.
+   O dock do WhatsApp (public-experience-v1.css) fica a bottom:16px, que
+   e atras da nav e ainda cobre o primeiro card de categoria no catalogo.
+   Subir o dock para ficar acima da nav. */
+@media (max-width: 768px) {
+    .sv-support-dock {
+        bottom: 80px !important;   /* acima da nav fixa mobile (~64px + folga) */
+    }
+}
