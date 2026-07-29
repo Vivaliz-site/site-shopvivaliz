@@ -1,0 +1,11 @@
+[Unit]
+Description=Run ShopVivaliz Safe Repository Sync
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=shopvivaliz-sync-safe.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

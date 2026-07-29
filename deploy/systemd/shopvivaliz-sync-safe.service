@@ -1,0 +1,15 @@
+[Unit]
+Description=ShopVivaliz Safe Repository Sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/repo
+ExecStart=/bin/bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/safe-repo-sync.sh
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
