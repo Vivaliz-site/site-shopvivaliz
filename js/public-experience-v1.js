@@ -72,10 +72,20 @@ function updateSupportVisibility(){
  var hiddenAtTop=body.classList.contains('sv-page-product')&&window.innerWidth<=820&&window.scrollY<360;
  body.classList.toggle('sv-product-top',hiddenAtTop);
 }
+function updateFooterVisibility(){
+ var body=document.body;
+ if(!body)return;
+ var footer=document.querySelector('footer');
+ if(!footer){body.classList.remove('sv-footer-visible');return}
+ var rect=footer.getBoundingClientRect();
+ var footerVisible=rect.top<window.innerHeight-72;
+ body.classList.toggle('sv-footer-visible',footerVisible);
+}
 function runResponsivePass(){
  installMobileNav();
  syncBottomUiOffset();
  updateSupportVisibility();
+ updateFooterVisibility();
 }
 function init(){
  installTestimonials();
@@ -85,7 +95,7 @@ function init(){
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 window.addEventListener('resize',runResponsivePass,{passive:true});
 window.addEventListener('orientationchange',runResponsivePass,{passive:true});
-window.addEventListener('scroll',updateSupportVisibility,{passive:true});
+window.addEventListener('scroll',function(){updateSupportVisibility();updateFooterVisibility()},{passive:true});
 window.addEventListener('load',runResponsivePass,{once:true});
 new MutationObserver(function(){runResponsivePass()}).observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});
 })();
