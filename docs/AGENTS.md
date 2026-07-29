@@ -119,6 +119,12 @@
 - ✓ Todos os scripts consolidados em 2 mestres: `olist-sync-master.py`, `git-auto-sync-master.py`
 - ✓ GitHub Actions reduzido de 99 para 10 workflows críticos
 
+### 2026-07-29 — ShopVivaliz Mobile Agent Bridge validada na VM
+**Sistema/arquivo:** VM Oracle, `/home/ubuntu/site-shopvivaliz/agent-bridge/`, `docs/AGENTS.md`
+**O que descobri:** as ações `run_readonly_audit`, `read_file` e `create_issue` foram validadas com processamento real via `inbox`, geração de `outbox` e issue GitHub criada a partir da VM.
+**Por quê importa:** isso confirma acesso controlado do GPT à VM por fila JSON, sem shell irrestrito e sem operar direto na `main`.
+**Ver também:** `agent-bridge/README.md`, `AGENTS.md`
+
 ---
 
 ## 🤖 Agentes Autônomos Ativos
