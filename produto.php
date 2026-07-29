@@ -392,7 +392,9 @@ $stockRaw   = (int)($resolved['stock'] ?? 0);
 $brandName  = sv_product_infer_brand($resolved);
 $gtin       = sv_product_gtin($resolved);
 $availability = sv_product_availability($stockRaw);
-$priceLabel = $priceRaw > 0 ? 'R$ ' . number_format($priceRaw, 2, ',', '.') : 'Consulte o valor';
+// ShopVivaliz nao opera com pre-venda: preco invalido/zero significa produto
+// indisponivel pra compra, nao "a consultar". Ver docs/AGENTS.md.
+$priceLabel = $priceRaw > 0 ? 'R$ ' . number_format($priceRaw, 2, ',', '.') : 'Produto indisponível';
 $contactUrl = sv_product_contact_url($sku, $name);
 $baseUrl = sv_official_base_url();
 $canonicalUrl = $baseUrl . ($rawSlug !== '' ? '/produto/' . $rawSlug : '/produto?sku=' . rawurlencode($sku));
@@ -718,7 +720,7 @@ if ($notFound) {
                             <div id="alert-msg" style="margin-top: 10px; font-size: 0.9em; display: none;"></div>
                         </div>
                     <?php else: ?>
-                        <a class="btn btn-primary" href="<?= sv_esc($contactUrl) ?>">Falar com vendas</a>
+                        <button class="btn btn-disabled" type="button" disabled style="width: 100%;">Produto indisponível</button>
                     <?php endif; ?>
                     <a class="btn btn-secondary" href="/catalogo<?= $category !== '' ? '?categoria=' . rawurlencode($category) : '' ?>">← Voltar ao catálogo</a>
                 </div>
@@ -797,6 +799,11 @@ if ($notFound) {
         <h2 class="related-title">Você também pode gostar</h2>
         <div class="product-grid related-grid">
             <?php foreach ($related as $rp):
+                // ShopVivaliz nao vende sem preco real: produto sem preco valido
+                // nao aparece na vitrine de relacionados (nao ha "consulte o valor").
+                if ((float)($rp['price'] ?? 0) <= 0) {
+                    continue;
+                }
                 $rUrl = sv_product_url($rp);
                 $rContactUrl = sv_product_contact_url((string)$rp['sku'], (string)$rp['name']);
                 $rStock = (int)($rp['stock'] ?? 0);

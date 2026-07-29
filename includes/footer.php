@@ -66,6 +66,7 @@ $socialLinks = [
 ];
 ?>
 <footer>
+    <!-- Cache buster: <?= time() ?> -->
     <div class="container">
         <div class="footer-cols">
             <div>
@@ -110,30 +111,43 @@ $socialLinks = [
         </div>
 
         <div class="footer-legal" style="border-top: 2px solid #d7e0ea; margin-top: 30px; padding-top: 20px; background: #f8fbff; margin-left: -20px; margin-right: -20px; margin-bottom: -20px; padding-left: 20px; padding-right: 20px; padding-bottom: 20px; font-size: 12px; color: #44556c; line-height: 1.8;">
-            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 18px; margin-bottom: 22px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 22px;">
                 <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px;">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
                         <span style="display: inline-flex; width: 34px; height: 34px; border-radius: 999px; align-items: center; justify-content: center; background: #e8f5ee; color: #157347;" aria-hidden="true">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#157347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
                         </span>
                         <div>
-                            <strong style="display: block; color: #22324a;">Site seguro</strong>
-                            <span style="color: #667085;">Compra protegida com conexao criptografada e ambiente monitorado.</span>
+                            <strong style="display: block; color: #22324a;">🔒 Compra Segura</strong>
+                            <span style="color: #667085;">Dados protegidos com criptografia SSL. Checkout seguro.</span>
                         </div>
                     </div>
                     <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
                         <img src="/images/selo-ssl-seguro.webp" alt="Certificação SSL - Secure SSL Encryption" style="height: 40px; width: auto;">
-                        <span style="display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #f3f7fb; color: #284b7a; font-weight: 700;">Checkout protegido</span>
-                        <span style="display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #f3f7fb; color: #284b7a; font-weight: 700;">Dados protegidos</span>
                     </div>
                 </div>
 
+<<<<<<< HEAD
+                <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px;">
+                    <strong style="display: block; color: #22324a; margin-bottom: 12px;">💳 Formas de Pagamento</strong>
+                    <div style="display: flex; align-items: center; justify-content: flex-start; gap: 16px;">
+                        <div style="text-align: center;">
+                            <img src="/images/mercado-pago-logo.jpg" alt="Mercado Pago" style="height: 40px; width: auto; object-fit: contain; margin-bottom: 4px;">
+                            <span style="display: block; font-size: 11px; color: #667085;">Até 2x</span>
+                        </div>
+                        <div style="text-align: center;">
+                            <img src="/images/infinitepay-logo.png" alt="InfinitePay" style="height: 40px; width: auto; object-fit: contain; margin-bottom: 4px;">
+                            <span style="display: block; font-size: 11px; color: #667085;">Até 6x</span>
+                        </div>
+=======
                 <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: space-between; min-height: 110px;">
                     <strong style="display: block; color: #22324a; margin-bottom: 8px;">Pagamentos aceitos</strong>
                     <div style="display: flex; align-items: center; justify-content: center; gap: 16px; height: 100%; flex: 1; flex-wrap: wrap;">
                         <img src="/images/mercado-pago-logo.jpg" alt="Mercado Pago" style="max-width: 160px; width: 100%; height: auto; max-height: 90px; object-fit: contain; border-radius: 4px;">
                         <img src="/images/infinitepay-logo.svg" alt="InfinitePay" style="max-width: 160px; width: 100%; height: auto; max-height: 90px; object-fit: contain; border-radius: 4px;">
+>>>>>>> 4453fee651d31043e741b7a6d7e5e2a6f684114b
                     </div>
+                    <p style="font-size: 11px; color: #667085; margin-top: 8px; margin-bottom: 0;">PIX, boleto, cartão e crediário sem juros</p>
                 </div>
             </div>
 
@@ -166,10 +180,95 @@ $socialLinks = [
                     </div>
                 </div>
             </div>
+<<<<<<< HEAD
+
+            <div style="text-align: center; color: #8a9aaa; font-size: 12px; border-top: 1px solid #d7e0ea; padding-top: 15px;">
+                <p style="margin: 0;">
+                    &copy; <?= date('Y') ?> <?= htmlspecialchars($fantasyName) ?>. Todos os direitos reservados. | Desenvolvido com ❤️
+                </p>
+            </div>
+=======
+>>>>>>> 4453fee651d31043e741b7a6d7e5e2a6f684114b
         </div>
     </div>
 </footer>
 
+<<<<<<< HEAD
+<!-- Floating WhatsApp Button (Left Side) -->
+<a href="https://wa.me/5537999374112?text=Ola!%20Vim%20pelo%20site%20da%20ShopVivaliz%20e%20gostaria%20de%20falar%20com%20a%20equipe." 
+   class="sv-whatsapp-float" 
+   target="_blank" 
+   rel="noopener" 
+   aria-label="Atendimento via WhatsApp"
+   style="position: fixed; left: 24px; bottom: 24px; z-index: 99990; display: inline-flex; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: 50%; background: #25D366; color: #fff; box-shadow: 0 10px 30px rgba(37,211,102,0.4); text-decoration: none; transition: transform 0.2s ease;">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="#ffffff"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
+</a>
+
+<!-- Floating Liz Virtual Assistant Widget (Right Side) -->
+<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=2.2.0">
+<script src="/public/assets/liz-assistant/liz-assistant.js?v=2.3.1" defer></script>
+
+<!-- Mobile App-Like Navigation -->
+<style>
+.sv-mobile-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+    z-index: 99995;
+    justify-content: space-around;
+    padding: 8px 12px;
+    padding-bottom: env(safe-area-inset-bottom, 8px);
+}
+.sv-mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #64748b;
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 500;
+    gap: 4px;
+    flex: 1;
+}
+.sv-mobile-nav-item.active {
+    color: #0b4f88;
+}
+.sv-mobile-nav-icon {
+    width: 24px !important;
+    height: 24px !important;
+    fill: currentColor;
+    display: inline-block;
+}
+@media (max-width: 768px) {
+    .sv-mobile-nav {
+        display: flex !important;
+    }
+    body {
+        padding-bottom: 74px !important;
+    }
+}
+</style>
+<nav class="sv-mobile-nav">
+  <a href="/" class="sv-mobile-nav-item <?= empty($svNavCurrent) || $svNavCurrent === "home" ? "active" : "" ?>">
+    <svg class="sv-mobile-nav-icon" width="24" height="24" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+    Início
+  </a>
+  <a href="/catalogo" class="sv-mobile-nav-item <?= $svNavCurrent === "catalogo" ? "active" : "" ?>">
+    <svg class="sv-mobile-nav-icon" width="24" height="24" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+    Busca
+  </a>
+  <a href="/carrinho" class="sv-mobile-nav-item <?= $svNavCurrent === "carrinho" ? "active" : "" ?>">
+    <svg class="sv-mobile-nav-icon" width="24" height="24" viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
+    Carrinho
+  </a>
+</nav>
+=======
 <!-- Liz virtual assistant: the script creates both the launcher and dialog. -->
 <link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=2.2.0">
 <script src="/public/assets/liz-assistant/liz-assistant.js?v=2.3.1" defer></script>
+>>>>>>> 4453fee651d31043e741b7a6d7e5e2a6f684114b

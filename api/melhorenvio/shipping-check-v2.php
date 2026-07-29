@@ -29,6 +29,21 @@ foreach($items as $item){ if(!is_array($item))continue; $sku=trim((string)($item
 $token=me_current_access_token()?:svsh_env('MELHORENVIO_ACCESS_TOKEN','SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN','MELHORENVIO_API_KEY'); if($token==='')svsh_json(503,['ok'=>false,'error'=>'missing_access_token','message'=>'Frete temporariamente indisponível.']);
 $from=preg_replace('/\D+/','',svsh_env('MELHORENVIO_FROM_POSTAL_CODE','SHOPVIVALIZ_FROM_POSTAL_CODE'))?:'35501236';
 $result=svsh_post(me_api_base().'/api/v2/me/shipment/calculate',['from'=>['postal_code'=>$from],'to'=>['postal_code'=>$cep],'products'=>$products,'options'=>['receipt'=>false,'own_hand'=>false,'collect'=>false]],$token); if(!$result['ok']){
+    $isLocal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true) || str_contains($_SERVER['HTTP_HOST'] ?? '', '127.0.0.1') || str_contains($_SERVER['HTTP_HOST'] ?? '', 'localhost');
+    if ($isLocal) {
+        $options = [
+            ['id' => '1', 'name' => 'PAC (Mock Local)', 'company' => 'Correios', 'price' => 12.50, 'delivery_time' => 5],
+            ['id' => '2', 'name' => 'Sedex (Mock Local)', 'company' => 'Correios', 'price' => 22.10, 'delivery_time' => 2]
+        ];
+        $expiresAt = time() + 1800;
+        foreach ($options as &$option) {
+            $option['quote_id'] = svsh_quote_id($cep, $fingerprintItems, $option, $expiresAt);
+            $option['expires_at'] = $expiresAt;
+        }
+        unset($option);
+        $selected = $options[0];
+        svsh_json(200, ['ok' => true, 'provider' => 'melhorenvio_mock', 'cep' => $cep, 'shipping_options' => $options, 'shipping_total' => $selected['price'], 'selected_option' => $selected, 'quote_id' => $selected['quote_id'], 'expires_at' => $expiresAt]);
+    }
     $message='Frete temporariamente indisponível.';
     if (!empty($result['body']['message']) && is_string($result['body']['message'])) {
         $message=trim($result['body']['message']);

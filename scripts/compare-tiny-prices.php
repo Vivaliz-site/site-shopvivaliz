@@ -234,4 +234,7 @@ if ($failOnDiff && $hasDivergence) {
     exit(1);
 }
 exit(0);
+<<<<<<< HEAD
+=======
 
+>>>>>>> 4453fee651d31043e741b7a6d7e5e2a6f684114b
