@@ -14,7 +14,8 @@
 | IP da VM | `137.131.156.17` |
 | Usuário | `ubuntu` |
 | Domínio servido | `dev.shopvivaliz.com.br` (produção real, ver `CLAUDE.md`) |
-| Diretório do app na VM | `/home/ubuntu/site-shopvivaliz` (cron `git-auto-sync.py` roda aqui a cada intervalo curto, ver `scripts/deploy-production.sh`/`CLAUDE.md`) |
+| Diretório ativo da app na VM | `/home/ubuntu/shopvivaliz-deploy/current` |
+| Clone canônico usado pelo deploy | `/home/ubuntu/shopvivaliz-deploy/repo` |
 | Chave usada pelo agente | `claude-agent@shopvivaliz-vm-access` (par gerado em 2026-07-26) |
 
 ## Chave pública (adicionada ao `~/.ssh/authorized_keys` do usuário `ubuntu` na VM)
@@ -30,7 +31,8 @@ para onde a nova privada foi salva.
 
 ## Onde a chave privada está salva
 
-- **Caminho local (máquina do Fred, Windows):** `C:\Users\FRED\Downloads\shopvivaliz_vm_agent`
+- **Caminho local histórico:** `C:\Users\FRED\Downloads\shopvivaliz_vm_agent`
+- **Chave funcional confirmada nesta máquina em 2026-07-29:** `C:\Users\FRED\Downloads\ssh-key-2026-07-04.key`
 - **GitHub Actions Secret:** `SHOPVIVALIZ_VM_SSH_KEY`, no repositório
   `Vivaliz-site/site-shopvivaliz` (configurado em 2026-07-26 via
   `gh secret set`, com autorização explícita do dono do negócio).
@@ -75,13 +77,30 @@ só são injetados dentro de workflows). Nesse caso, o caminho é:
 ## Como usar (a partir de uma sessão com acesso à máquina do Fred, ex: via Desktop Commander/terminal local)
 
 ```powershell
-ssh -i C:\Users\FRED\Downloads\shopvivaliz_vm_agent -o StrictHostKeyChecking=no ubuntu@137.131.156.17 "comando aqui"
+ssh -i C:\Users\FRED\Downloads\ssh-key-2026-07-04.key -o StrictHostKeyChecking=no ubuntu@137.131.156.17 "comando aqui"
 ```
 
-Para forçar um deploy imediato sem esperar o cron (ver também `CLAUDE.md`):
+Toolkit local preferencial quando disponível no terminal:
 
 ```powershell
-ssh -i C:\Users\FRED\Downloads\shopvivaliz_vm_agent ubuntu@137.131.156.17 "cd /home/ubuntu/site-shopvivaliz && python3 git-auto-sync.py"
+sv-vm-status
+sv-vm-ssh hostname
+sv-deploy-head -DryRun
+sv-deploy-sha <sha> -DryRun
+sv-blog-status
+sv-blog-publish
+```
+
+Para forçar um deploy imediato sem esperar o cron:
+
+```powershell
+sv-deploy-head
+```
+
+Para fixar produção em um branch/SHA específico e impedir retorno automático para `main`, o alvo persistente fica em:
+
+```text
+/home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref
 ```
 
 ## Histórico / troubleshooting já mapeado

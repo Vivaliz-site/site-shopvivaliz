@@ -119,6 +119,12 @@
 - ✓ Todos os scripts consolidados em 2 mestres: `olist-sync-master.py`, `git-auto-sync-master.py`
 - ✓ GitHub Actions reduzido de 99 para 10 workflows críticos
 
+### 2026-07-29 — Toolkit local e alvo persistente de deploy
+**Sistema/arquivo:** produção Oracle, `scripts/deploy-production.sh`, wrappers locais em `C:\Users\FRED\.local\bin`
+**O que descobri:** os atalhos operacionais válidos são `docker-check`, `docker-up`, `docker-down`, `sv-vm-ssh`, `sv-vm-status`, `sv-deploy-head`, `sv-deploy-sha`, `sv-blog-status` e `sv-blog-publish`. A chave funcional da VM nesta máquina é `C:\Users\FRED\Downloads\ssh-key-2026-07-04.key`.
+**Por quê importa:** o alias antigo do WSL para `bash` e a chave `shopvivaliz_vm_agent` causavam falso negativo. Sem um alvo persistente (`/home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref`), o cron voltava para `main` e desfazia deploy manual por SHA/branch.
+**Ver também:** `AGENTS.md`, `docs/VM-SSH-ACCESS.md`
+
 ---
 
 ## 🤖 Agentes Autônomos Ativos
