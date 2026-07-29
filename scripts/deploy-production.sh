@@ -138,6 +138,7 @@ declare -a SYMLINKS=(
   "cache"
   "sessions"
   "storage"
+  "tasks-queue.json"
 )
 # Nota (2026-07-26, achado em auditoria): "uploads" foi removido desta lista
 # de proposito. O codigo da app define UPLOADS_PATH = STORAGE_PATH . '/uploads'
@@ -157,6 +158,10 @@ for symlink in "${SYMLINKS[@]}"; do
       log "ERROR" "Configuração compartilhada ausente: $shared_path"
       rm -rf -- "$NEW_RELEASE_PATH"
       exit 1
+    fi
+  elif [ "$symlink" = "tasks-queue.json" ]; then
+    if [ ! -f "$shared_path" ]; then
+      printf '{\n  "version": "1.1",\n  "queue": []\n}\n' > "$shared_path"
     fi
   else
     mkdir -p "$shared_path"
