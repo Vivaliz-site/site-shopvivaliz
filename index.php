@@ -482,7 +482,7 @@ $svNavCurrent = '';
     <title>Vivaliz | Loja Online</title>
 
     <!-- Consolidated stylesheets for better performance -->
-    <link rel="stylesheet" href="/css/shopvivaliz-core-consolidated.css?v=2026-07-28-1">
+    <link rel="stylesheet" href="/css/shopvivaliz-core-consolidated.css?v=2026-07-29-1">
     <link rel="stylesheet" href="/css/shopvivaliz-premium-consolidated.css?v=2026-07-27-2">
     <link rel="stylesheet" href="/css/shopvivaliz-inline-to-classes.css?v=2026-07-27-2">
     <link rel="stylesheet" href="/css/shopvivaliz-webp-optimization.css?v=2026-07-19">
