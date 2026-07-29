@@ -162,6 +162,25 @@ header('Content-Type: text/html; charset=UTF-8');
         if (!v || isNaN(v)) return 'Consulte o valor';
         return 'R$ ' + parseFloat(v).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     }
+    // Os itens do carrinho vem do localStorage e sao injetados via innerHTML.
+    // Sem escape, um nome de produto vindo do ERP com HTML executaria script (XSS).
+    function svEscHtml(value) {
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+    // Bloqueia esquemas perigosos (javascript:, data:) em src de imagem.
+    function svSafeImageUrl(url) {
+        var fallback = '/images/logo-vivaliz-square-v2.png';
+        if (!url) return fallback;
+        var clean = String(url).trim();
+        if (!/^(https?:\/\/|\/)/i.test(clean)) return fallback;
+        return svEscHtml(clean);
+    }
     function initFreeShippingVisual() {
         var bars = document.querySelectorAll('.free-shipping-progress-bar');
         var texts = document.querySelectorAll('.free-shipping-text');
@@ -242,11 +261,14 @@ header('Content-Type: text/html; charset=UTF-8');
             var sub = price * (it.quantity || 1);
             total += sub;
             if (price > 0) hasPrice = true;
+            var itName = svEscHtml(it.name || it.sku);
+            var itSku = svEscHtml(it.sku);
+            var itImg = svSafeImageUrl(it.image_url);
             html += '<div class="cart-item">'
-                + '<img src="' + (it.image_url || '/images/logo-vivaliz-square-v2.png') + '" alt="" onerror="this.src=\'/images/logo-vivaliz-square-v2.png\'">'
+                + '<img src="' + itImg + '" alt="' + itName + '" width="80" height="80" loading="lazy" decoding="async" onerror="this.src=\'/images/logo-vivaliz-square-v2.png\'">'
                 + '<div class="cart-item-info">'
-                + '<strong>' + (it.name || it.sku) + '</strong>'
-                + '<span>SKU: ' + it.sku + '</span>'
+                + '<strong>' + itName + '</strong>'
+                + '<span>SKU: ' + itSku + '</span>'
                 + '<div class="cart-item-controls">'
                 + '<button class="qty-btn" data-idx="' + idx + '" data-delta="-1">−</button>'
                 + '<span class="qty-val">' + (it.quantity || 1) + '</span>'

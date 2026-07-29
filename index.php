@@ -10,10 +10,11 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Desabilitar cache agressivo para debug
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: 0');
+// Cache: 'no-cache' obriga revalidacao a cada request (conteudo nunca fica stale),
+// mas permite resposta 304 quando nada mudou — ao contrario de 'no-store', que
+// forcava o download completo do HTML em toda visita. Precos e estoque continuam
+// sempre atualizados; o ganho e apenas de banda/latencia em visitas repetidas.
+header('Cache-Control: no-cache, must-revalidate');
 
 require_once __DIR__ . '/config/bootstrap-env.php';
 
@@ -463,15 +464,17 @@ $svNavCurrent = '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Vivaliz - Loja online com produtos de qualidade. Rodízios, ferragens, utilidades e muito mais. Compre com segurança.">
     <meta name="theme-color" content="#173B63">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
     <meta property="og:title" content="Vivaliz | Loja Online">
     <meta property="og:description" content="Produtos de qualidade. Compre online com entrega rápida.">
     <meta property="og:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://shopvivaliz.com.br/">
     <meta property="og:site_name" content="ShopVivaliz">
+    <meta property="og:image:alt" content="ShopVivaliz - Loja online">
+    <meta property="og:locale" content="pt_BR">
+    <link rel="preconnect" href="https://images.unsplash.com" crossorigin>
+    <link rel="dns-prefetch" href="https://images.unsplash.com">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Vivaliz | Loja Online">
     <meta name="twitter:description" content="Produtos de qualidade. Compre online com entrega rápida.">
@@ -770,7 +773,7 @@ $svNavCurrent = '';
                 <div class="hero-carousel-track">
                     <?php foreach ($heroBanners as $index => $banner): ?>
                         <article class="hero-slide hero-image-slide<?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>" style="position:relative;">
-                            <img src="<?= sv_home_esc($banner['image']) ?>" alt="<?= sv_home_esc($banner['alt']) ?>" class="hero-banner-image" loading="<?= $index === 0 ? 'eager' : 'lazy' ?>" style="width:100%;height:100%;object-fit:cover;">
+                            <img src="<?= sv_home_esc($banner['image']) ?>" alt="<?= sv_home_esc($banner['alt']) ?>" class="hero-banner-image" width="1200" height="480" loading="<?= $index === 0 ? 'eager' : 'lazy' ?>" <?= $index === 0 ? 'fetchpriority="high"' : '' ?> decoding="async" style="width:100%;height:100%;object-fit:cover;">
                             <div class="hero-overlay banner-overlay">
                                 <?php if (!empty($banner['tag'])): ?>
                                     <span class="banner-tag color-accent-green"><?= sv_home_esc($banner['tag']) ?></span>
@@ -818,7 +821,7 @@ $svNavCurrent = '';
                         <?php foreach ($homeCategories as $category): ?>
                             <a class="category-slide" href="<?= sv_home_esc($category['href']) ?>">
                                 <div class="category-slide-image-wrapper">
-                                    <img src="<?= sv_home_esc($category['icon']) ?>" alt="<?= sv_home_esc($category['name']) ?>" class="category-slide-img" loading="lazy">
+                                    <img src="<?= sv_home_esc($category['icon']) ?>" alt="<?= sv_home_esc($category['name']) ?>" class="category-slide-img" width="240" height="240" loading="lazy" decoding="async">
                                 </div>
                                 <strong><?= sv_home_esc($category['name']) ?></strong>
                                 <span class="category-slide-count"><?= (int)$category['count'] ?> itens</span>
@@ -879,7 +882,7 @@ $svNavCurrent = '';
                                 <?php endif; ?>
                                 <?php $cardImages = array_values(array_unique(array_filter(array_merge([$image], is_array($product['images'] ?? null) ? $product['images'] : [])))); ?>
                                 <a class="product-image" href="<?= sv_home_esc($productUrl) ?>" data-images="<?= sv_home_esc(json_encode(array_slice($cardImages, 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
-                                    <img src="<?= sv_home_esc($image) ?>" alt="<?= sv_home_esc($product['name']) ?>" loading="lazy" onerror="this.src='<?= sv_home_default_image() ?>'">
+                                    <img src="<?= sv_home_esc($image) ?>" alt="<?= sv_home_esc($product['name']) ?>" width="400" height="400" loading="lazy" decoding="async" onerror="this.src='<?= sv_home_default_image() ?>'">
                                     <?php if ($stock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                                 </a>
                                 <div class="product-info">

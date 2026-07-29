@@ -472,6 +472,13 @@ $svNavCurrent = 'catalogo';
     <meta property="og:type" content="website">
     <meta property="og:url" content="<?= sv_catalog_esc($canonicalUrl) ?>">
     <meta property="og:site_name" content="Vivaliz">
+    <meta property="og:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png">
+    <meta property="og:image:alt" content="ShopVivaliz - Catálogo de produtos">
+    <meta property="og:locale" content="pt_BR">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="<?= sv_catalog_esc($pageTitle) ?>">
+    <meta name="twitter:description" content="<?= sv_catalog_esc($metaDescription) ?>">
+    <meta name="twitter:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png">
     <link rel="icon" href="/images/favicon.svg?v=2026-07-27" type="image/svg+xml">
     <link rel="icon" href="/favicon.png?v=2026-07-27" type="image/png">
     <link rel="alternate icon" href="/favicon.ico?v=2" type="image/x-icon">
@@ -562,7 +569,7 @@ $svNavCurrent = 'catalogo';
                 <article class="product-card<?= $stock <= 0 ? ' is-out-of-stock' : '' ?>">
                     <?php $cardImages = array_values(array_unique(array_filter(array_merge([$image], is_array($product['images'] ?? null) ? $product['images'] : [])))); ?>
                     <a class="product-image" href="<?= sv_catalog_esc($productUrl) ?>" data-images="<?= sv_catalog_esc(json_encode(array_slice($cardImages, 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
-                        <img src="<?= sv_catalog_esc($image) ?>" alt="<?= sv_catalog_esc($product['name']) ?>" loading="lazy" onerror="this.src='<?= sv_catalog_default_image() ?>'">
+                        <img src="<?= sv_catalog_esc($image) ?>" alt="<?= sv_catalog_esc($product['name']) ?>" width="400" height="400" loading="lazy" decoding="async" onerror="this.src='<?= sv_catalog_default_image() ?>'">
                         <?php if ($stock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                     </a>
                     <div class="product-info">

@@ -422,6 +422,25 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         if (!v || isNaN(v)) return 'Consulte o valor';
         return 'R$ ' + parseFloat(v).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     }
+    // Os itens do carrinho vem do localStorage e sao injetados via innerHTML.
+    // Sem escape, um nome de produto vindo do ERP com HTML executaria script (XSS).
+    function svEscHtml(value) {
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+    // Bloqueia esquemas perigosos (javascript:, data:) em src de imagem.
+    function svSafeImageUrl(url) {
+        var fallback = '/images/logo-vivaliz-square-v2.png';
+        if (!url) return fallback;
+        var clean = String(url).trim();
+        if (!/^(https?:\/\/|\/)/i.test(clean)) return fallback;
+        return svEscHtml(clean);
+    }
 
     /* Renderizar itens do carrinho */
     function renderCart() {
@@ -452,10 +471,11 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 var sub = price * (it.quantity || 1);
                 total += sub;
                 if (price > 0) hasPrice = true;
+                var itName = svEscHtml(it.name || it.sku);
                 html += '<div class="summary-item">'
-                    + '<img src="' + (it.image_url || '/images/logo-vivaliz-square-v2.png') + '" alt="" onerror="this.src=\'/images/logo-vivaliz-square-v2.png\'">'
+                    + '<img src="' + svSafeImageUrl(it.image_url) + '" alt="' + itName + '" width="64" height="64" loading="lazy" decoding="async" onerror="this.src=\'/images/logo-vivaliz-square-v2.png\'">'
                     + '<div class="summary-item-info">'
-                    + '<strong>' + (it.name || it.sku) + '</strong>'
+                    + '<strong>' + itName + '</strong>'
                     + '<div class="cart-item-controls" style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">'
                     + '<button type="button" class="qty-btn" data-idx="' + items.indexOf(it) + '" data-delta="-1" style="width:28px;height:28px;border-radius:6px;border:1.5px solid #dbe5ef;background:#fff;font-size:16px;font-weight:700;cursor:pointer;color:#173b63;display:inline-flex;align-items:center;justify-content:center">−</button>'
                     + '<span class="qty-val" style="font-weight:800;font-size:14px;min-width:20px;text-align:center">' + (it.quantity || 1) + '</span>'
