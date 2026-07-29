@@ -7,7 +7,7 @@ if [[ ${EUID} -ne 0 ]]; then
 fi
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ ${repo_dir} != "/home/ubuntu/site-shopvivaliz" ]]; then
+if [[ ${repo_dir} != /home/ubuntu/shopvivaliz-deploy/* ]]; then
   echo "Diretório de produção inesperado: ${repo_dir}" >&2
   exit 2
 fi

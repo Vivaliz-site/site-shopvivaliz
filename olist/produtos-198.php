@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // Auto-generated: 198 Olist products
 $GLOBALS['produtos_olist'] = json_decode(<<<'JSON'
 [

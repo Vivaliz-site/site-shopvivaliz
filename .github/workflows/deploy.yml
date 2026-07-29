@@ -299,7 +299,6 @@ jobs:
             .vscode/**
             .venv/**
             claude/**
-            medusa/**
             node_modules/**
             vendor/**
             reports/**

@@ -6,8 +6,9 @@
  */
 
 class RevenueDrivenQueue {
-    private $queueFile = '/home/ubuntu/site-shopvivaliz/tasks-queue.json';
-    private $analyticsFile = './.analytics-metrics.json';
+    private $queueFile = '/home/ubuntu/shopvivaliz-deploy/shared/tasks-queue.json';
+    private $analyticsFile = '/home/ubuntu/shopvivaliz-deploy/shared/.analytics-metrics.json';
+    private $alertsLog = '/home/ubuntu/shopvivaliz-deploy/shared/logs/revenue-alerts.log';
     private $conversionThreshold = 0.05; // Alerta se cair 5%+
 
     public function __construct() {}
@@ -212,7 +213,7 @@ class RevenueDrivenQueue {
 
         // Enviar para logs
         file_put_contents(
-            '.revenue-alerts.log',
+            $this->alertsLog,
             "[" . date('Y-m-d H:i:s') . "] $title: $message\n",
             FILE_APPEND
         );

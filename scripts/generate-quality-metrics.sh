@@ -4,7 +4,7 @@
 
 set -e
 
-REPO_DIR="/home/ubuntu/site-shopvivaliz"
+REPO_DIR="/home/ubuntu/shopvivaliz-deploy/current"
 LOG_FILE="/var/log/shopvivaliz/quality-metrics-$(date +%Y%m%d-%H%M%S).log"
 
 echo "========================================" >> "$LOG_FILE"

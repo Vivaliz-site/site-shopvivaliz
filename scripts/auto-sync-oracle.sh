@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${ROOT:-/home/ubuntu/site-shopvivaliz}"
+ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/repo}"
 BASE="${BASE:-main}"
 LOG_DIR="$ROOT/logs"
 mkdir -p "$LOG_DIR"

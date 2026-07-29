@@ -4,14 +4,15 @@
 echo "📋 Instalando Auditoria 24/7 em Cron..."
 
 # Criar diretórios de logs
-mkdir -p /home/ubuntu/site-shopvivaliz/logs/reports
+ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/current}"
+mkdir -p "$ROOT/logs/reports"
 
 # Tornar script executável
-chmod +x /home/ubuntu/site-shopvivaliz/scripts/auditoria-24-7.py
+chmod +x "$ROOT/scripts/auditoria-24-7.py"
 
 # Adicionar cron job (executar a cada 30 minutos)
 # Verificar se já existe antes de adicionar
-CRON_JOB="*/30 * * * * cd /home/ubuntu/site-shopvivaliz && python3 scripts/auditoria-24-7.py >> logs/auditoria-cron.log 2>&1"
+CRON_JOB="*/30 * * * * cd $ROOT && python3 scripts/auditoria-24-7.py >> logs/auditoria-cron.log 2>&1"
 
 if ! crontab -l 2>/dev/null | grep -q "auditoria-24-7.py"; then
     echo "$CRON_JOB" | crontab -
@@ -28,5 +29,5 @@ crontab -l | grep auditoria-24-7
 echo ""
 echo "✅ Auditoria 24/7 instalada com sucesso!"
 echo ""
-echo "📝 Logs em: /home/ubuntu/site-shopvivaliz/logs/auditoria-24-7.log"
-echo "📊 Relatórios em: /home/ubuntu/site-shopvivaliz/logs/reports/"
+echo "📝 Logs em: $ROOT/logs/auditoria-24-7.log"
+echo "📊 Relatórios em: $ROOT/logs/reports/"

@@ -174,35 +174,63 @@ jobs:
             'bash -s' -- "$DEPLOY_SHA" <<'REMOTE_SCRIPT'
           set -euo pipefail
           expected_sha="$1"
-          repo='/home/ubuntu/site-shopvivaliz'
-          cd "$repo"
+          repo='/home/ubuntu/shopvivaliz-deploy/repo'
+          current_link='/home/ubuntu/shopvivaliz-deploy/current'
+          deploy_script="$repo/scripts/deploy-production.sh"
 
-          git rev-parse --is-inside-work-tree >/dev/null
-          git remote get-url origin >/dev/null
+          test -x "$deploy_script"
+          git -C "$repo" rev-parse --is-inside-work-tree >/dev/null
+          git -C "$repo" remote get-url origin >/dev/null
+          git -C "$repo" fetch --no-tags origin "$expected_sha"
+          git -C "$repo" cat-file -e "${expected_sha}^{commit}"
 
-          backup_name="predeploy-$(date -u +%Y%m%d-%H%M%S)-${expected_sha}"
-          current_sha="$(git rev-parse HEAD)"
-          git branch "server-backup/${backup_name}" "$current_sha"
-
-          if [[ -n "$(git status --porcelain)" ]]; then
-            git stash push --include-untracked --message "$backup_name"
-            stash_sha="$(git rev-parse stash@{0})"
-            git branch "server-backup/${backup_name}-worktree" "$stash_sha"
+          previous_release=''
+          previous_sha=''
+          if [[ -L "$current_link" && -e "$current_link" ]]; then
+            previous_release="$(basename "$(readlink -f "$current_link")")"
+            if [[ -f "$current_link/.release-sha" ]]; then
+              previous_sha="$(cat "$current_link/.release-sha")"
+            fi
           fi
 
-          git fetch --no-tags origin "$expected_sha"
-          git cat-file -e "${expected_sha}^{commit}"
+          current_release="$(basename "$(readlink -f "$current_link")")"
+          deployed_sha="$(cat "$current_link/.release-sha")"
+          if [[ "$deployed_sha" == "$expected_sha" ]]; then
+            echo "Expected commit already active. Nothing to do."
+            echo "Previous release: $previous_release"
+            echo "Previous commit: $previous_sha"
+            echo "Current release: $current_release"
+            echo "Deployed commit: $deployed_sha"
+            exit 0
+          fi
 
-          # Move apenas para o SHA exato aprovado pelo Quality Gate ou confirmado manualmente.
-          git reset --hard "$expected_sha"
+          if ! flock -n /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha"; then
+            echo "Deploy lock busy. Waiting for concurrent deployment to finish..."
+            for attempt in 1 2 3 4 5 6; do
+              sleep 10
+              deployed_sha="$(cat "$current_link/.release-sha" 2>/dev/null || true)"
+              current_release="$(basename "$(readlink -f "$current_link")")"
+              if [[ "$deployed_sha" == "$expected_sha" ]]; then
+                echo "Expected commit became active during wait."
+                echo "Previous release: $previous_release"
+                echo "Previous commit: $previous_sha"
+                echo "Current release: $current_release"
+                echo "Deployed commit: $deployed_sha"
+                exit 0
+              fi
+            done
+            echo "Deployment lock remained busy and expected commit never became active." >&2
+            exit 1
+          fi
 
-          deployed_sha="$(git rev-parse HEAD)"
+          current_release="$(basename "$(readlink -f "$current_link")")"
+          deployed_sha="$(cat "$current_link/.release-sha")"
           test "$deployed_sha" = "$expected_sha"
-          git diff --quiet --ignore-submodules --
 
-          echo "Previous commit: $current_sha"
+          echo "Previous release: $previous_release"
+          echo "Previous commit: $previous_sha"
+          echo "Current release: $current_release"
           echo "Deployed commit: $deployed_sha"
-          echo "Backup branch: server-backup/${backup_name}"
           REMOTE_SCRIPT
 
       - name: Write deployment evidence

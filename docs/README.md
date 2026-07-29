@@ -12,10 +12,6 @@ confira se algo já não cobre o mesmo tema — este índice existe para reduzir
   si; nenhum foi confirmado como a versão "oficial". Consolidação real (ler os 7, unificar em um
   só) ainda não foi feita — ficou fora do escopo desta passada por risco de perder conteúdo sem
   revisão cuidadosa linha a linha. Se for mexer nesse tema, leia todos antes de confiar em um só.
-- **`medusa-migracao-roadmap.md`, `medusa-eha-alinhamento.md`, `medusa-proximo-passo.md`** —
-  documentam uma proposta de migração para MedusaJS como backend. Conforme decisão do usuário em
-  sessão anterior, essa linha foi **deprioritizada** em favor da integração nativa com o ERP
-  Tiny/Olist. Tratar como histórico, não como plano ativo, a menos que o usuário reabra o tema.
 - **`olist-tiny-erp-api-knowledge.md`** (v1) foi removido nesta limpeza — conteúdo já superado por
   `olist-tiny-erp-api-knowledge-v2.md`, mesma data (2026-06-27), mesmo escopo.
 

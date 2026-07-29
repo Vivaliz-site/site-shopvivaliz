@@ -1,9 +1,80 @@
 <?php
 /**
- * Menu Completo de Admin - Todas as rotinas em um só lugar
+ * Central completa de rotinas administrativas.
+ * Regra do projeto: toda tela administrativa navegavel deve possuir acesso aqui.
  */
 declare(strict_types=1);
 require_once __DIR__ . '/../includes/admin-guard.php';
+
+$sections = [
+    'Gestão da loja' => [
+        ['📊', 'Dashboard principal', '/admin/', 'Visão geral e atalhos principais.'],
+        ['📦', 'Produtos', '/admin/produtos.php', 'Gerenciar o catálogo de produtos.'],
+        ['✏️', 'Editar produto', '/admin/editar-produto.php', 'Tela auxiliar para edição de produto.'],
+        ['📋', 'Pedidos', '/admin/pedidos.php', 'Consultar e administrar pedidos.'],
+        ['👥', 'Clientes', '/admin/clientes.php', 'Consultar a base de clientes.'],
+        ['🎟️', 'Cupons', '/admin/cupons.php', 'Cadastrar e administrar cupons.'],
+        ['🎮', 'Gamificação', '/gamificacao.php', 'Acompanhar pontos, níveis e recompensas da loja.'],
+        ['🏢', 'Perfil da empresa e redes sociais', '/admin/company-profile.php', 'Dados institucionais e links das redes sociais.'],
+        ['⚙️', 'Configurações gerais', '/admin/settings.php', 'Configurações gerais da loja.'],
+    ],
+    'Conteúdo e aparência' => [
+        ['📝', 'Blog', '/admin/blog.php', 'Criar, editar e publicar artigos.'],
+        ['👁️', 'Prévia do blog', '/admin/blog-preview.php', 'Visualizar a apresentação do blog.'],
+        ['🎨', 'Editor visual', '/admin/visual-editor.php', 'Editar elementos visuais do site.'],
+        ['🖌️', 'Editor CSS', '/admin/css-editor.php', 'Personalizar estilos do site.'],
+    ],
+    'Frete e pagamentos' => [
+        ['🚚', 'Configurações de frete', '/admin/configuracoes-frete.php', 'Configurar regras e provedores de frete.'],
+        ['📦', 'Frete grátis', '/admin/settings-frete.php', 'Administrar condições de frete grátis.'],
+        ['💳', 'Mercado Pago Sandbox', '/admin/mercadopago-sandbox.php', 'Testar a integração de pagamentos em sandbox.'],
+    ],
+    'Integrações e marketplaces' => [
+        ['🔗', 'Integrações', '/admin/integrations.php', 'Configurar integrações externas.'],
+        ['🛒', 'Mercado Livre', '/admin/mercadolivre.php', 'Administrar a integração com Mercado Livre.'],
+        ['🔄', 'Sincronizar Olist para produtos', '/admin/sync-olist-para-products.php', 'Importar e atualizar produtos da Olist.'],
+        ['🖼️', 'Auditoria de imagens Olist', '/admin/olist-images-audit.php', 'Verificar imagens e inconsistências.'],
+        ['🧰', 'Reparar catálogo Olist', '/admin/reparar-catalogo-olist.php', 'Corrigir inconsistências do catálogo.'],
+        ['🗂️', 'Sincronizar arquivos críticos', '/admin/sync-critical-files.php', 'Sincronizar arquivos críticos do projeto.'],
+        ['🧪', 'Teste de webhook', '/admin/webhook-test.php', 'Testar recebimento e processamento de webhooks.'],
+    ],
+    'Automação e inteligência artificial' => [
+        ['🤖', 'Automação IA multicanal', '/admin/automacao-ia-multicanal/', 'Central de automações multicanal.'],
+        ['📈', 'Dashboard da automação IA', '/admin/automacao-ia-multicanal/pages/dashboard.php', 'Indicadores do módulo de automação.'],
+        ['⚡', 'Automações', '/admin/automacao-ia-multicanal/pages/automacoes.php', 'Criar e administrar automações.'],
+        ['🧠', 'Orchestrator', '/admin/orchestrator.php', 'Orquestrar agentes e fluxos.'],
+        ['💬', 'Squad Chat', '/admin/squad-chat.php', 'Conversar com o conjunto de agentes.'],
+        ['🩺', 'Monitor do sistema de IA', '/admin/ai-system-monitor.php', 'Acompanhar saúde e uso dos serviços de IA.'],
+    ],
+    'Monitoramento e auditoria' => [
+        ['📡', 'Monitor principal', '/admin/monitor/', 'Painel central de saúde do sistema.'],
+        ['📊', 'Monitor completo', '/admin/monitor-completo.php', 'Métricas e verificações detalhadas.'],
+        ['🤖', 'Monitor de agentes', '/admin/agents-monitor.php', 'Status dos agentes autônomos.'],
+        ['🛰️', 'Monitor de agentes alternativo', '/admin/monitor_agentes.php', 'Painel alternativo de monitoramento dos agentes.'],
+        ['📋', 'Auditoria', '/admin/audit-dashboard.php', 'Auditar rotinas e operações administrativas.'],
+        ['⏱️', 'SLA', '/admin/sla-dashboard.php', 'Acompanhar indicadores de disponibilidade e prazo.'],
+    ],
+    'Diagnóstico, manutenção e desenvolvimento' => [
+        ['🩻', 'Diagnóstico do banco', '/admin/diagnostico-banco.php', 'Analisar estrutura e conectividade do banco.'],
+        ['🧪', 'Teste do banco', '/admin/teste-banco.php', 'Executar teste de conexão com o banco.'],
+        ['⬇️', 'Forçar Git pull', '/admin/force-git-pull.php', 'Ação de manutenção: atualizar código no servidor.'],
+        ['🗃️', 'Admin legado', '/admin/admin-back.php', 'Acessar rotinas e painéis antigos.'],
+        ['🧭', 'Menu dashboard legado', '/admin/menu-dashboard.php', 'Navegação administrativa alternativa.'],
+        ['📚', 'Menu completo', '/admin/menu-completo.php', 'Esta central de todas as funções administrativas.'],
+        ['🏠', 'Dashboard alternativo', '/admin/dashboard.php', 'Versão alternativa do dashboard administrativo.'],
+    ],
+    'Loja pública e APIs' => [
+        ['🏪', 'Abrir loja', '/', 'Visualizar a página inicial pública.'],
+        ['🛍️', 'Abrir catálogo', '/catalogo.php', 'Visualizar o catálogo público.'],
+        ['🛒', 'Abrir carrinho', '/carrinho', 'Testar o carrinho de compras.'],
+        ['💰', 'Abrir checkout', '/checkout', 'Testar o fluxo de checkout.'],
+        ['❤️', 'Health da API', '/api/health.php', 'Consultar o estado da API em JSON.'],
+        ['📦', 'Produtos em JSON', '/api/catalog/products.php?limit=200', 'Consultar a API do catálogo.'],
+        ['🛒', 'Produtos Mercado Livre em JSON', '/api/ml/products', 'Consultar produtos do Mercado Livre.'],
+    ],
+];
+
+$total = array_sum(array_map('count', $sections));
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -11,237 +82,58 @@ require_once __DIR__ . '/../includes/admin-guard.php';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Menu Admin Completo - ShopVivaliz</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #f0f2f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto; }
-        .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-        .navbar-content { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
-        .navbar-title { font-size: 1.5rem; font-weight: bold; }
-        .logout-btn { background: rgba(255,255,255,0.2); border: 2px solid white; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; cursor: pointer; }
-        .container { max-width: 1400px; margin: 2rem auto; padding: 0 1rem; }
-        .page-title { font-size: 2.5rem; margin-bottom: 0.5rem; color: #333; }
-        .subtitle { color: #666; margin-bottom: 2rem; }
-        .section { background: white; border-radius: 12px; margin-bottom: 2rem; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .section-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1.5rem; font-size: 1.2rem; font-weight: bold; }
-        .section-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; padding: 1.5rem; }
-        .menu-item { display: block; padding: 1.5rem; background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 8px; text-decoration: none; color: #333; transition: all 0.3s; }
-        .menu-item:hover { background: white; border-color: #667eea; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2); transform: translateY(-2px); }
-        .menu-item-title { font-weight: 600; font-size: 1rem; margin-bottom: 0.5rem; }
-        .menu-item-desc { font-size: 0.85rem; color: #666; }
-        .badge { display: inline-block; background: #667eea; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; margin-top: 0.5rem; }
-    </style>
     <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
+    <style>
+        *{box-sizing:border-box} body{margin:0;background:#f3f4f6;color:#1f2937;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+        .topbar{background:#111827;color:#fff;padding:16px 20px;position:sticky;top:0;z-index:10;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+        .topbar-inner{max-width:1500px;margin:auto;display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+        .topbar a{color:#fff;text-decoration:none}.top-actions{display:flex;gap:10px;flex-wrap:wrap}.top-actions a{padding:9px 12px;border-radius:8px;background:rgba(255,255,255,.12)}
+        .container{max-width:1500px;margin:28px auto;padding:0 18px}.intro{display:flex;justify-content:space-between;gap:20px;align-items:end;flex-wrap:wrap;margin-bottom:24px}
+        h1{margin:0 0 6px}.muted{color:#6b7280;margin:0}.search{width:min(440px,100%);padding:12px 14px;border:1px solid #d1d5db;border-radius:10px;font-size:16px}
+        .section{background:#fff;border:1px solid #e5e7eb;border-radius:14px;margin-bottom:22px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+        .section h2{margin:0;padding:16px 20px;background:#eef2ff;border-bottom:1px solid #e5e7eb;font-size:18px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:14px;padding:18px}
+        .card{display:block;text-decoration:none;color:inherit;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:16px;min-height:120px;transition:.2s}
+        .card:hover{transform:translateY(-2px);border-color:#4f46e5;box-shadow:0 8px 20px rgba(79,70,229,.12)}.icon{font-size:25px}.title{font-weight:700;margin:8px 0 5px}.desc{font-size:14px;color:#6b7280;line-height:1.4}
+        .danger{border-left:4px solid #dc2626}.footer{text-align:center;color:#6b7280;padding:20px}.hidden{display:none!important}
+    </style>
     <?php require_once __DIR__ . '/../includes/load-custom-css.php'; ?>
 </head>
 <body>
-    <div class="navbar">
-        <div class="navbar-content">
-            <div class="navbar-title">🛍️ ShopVivaliz Admin - Menu Completo</div>
-            <a href="/auth/logout.php" class="logout-btn">🚪 Sair</a>
-        </div>
-    </div>
-
-    <div class="container">
-        <h1 class="page-title">Painel Administrativo</h1>
-        <p class="subtitle">Acesse todas as rotinas operacionais do sistema</p>
-
-        <!-- LOJA PÚBLICA -->
-        <div class="section">
-            <div class="section-header">🏪 Loja Pública</div>
-            <div class="section-grid">
-                <a href="/" class="menu-item">
-                    <div class="menu-item-title">Home</div>
-                    <div class="menu-item-desc">Página inicial da loja</div>
-                </a>
-                <a href="/catalogo.php" class="menu-item">
-                    <div class="menu-item-title">Catálogo</div>
-                    <div class="menu-item-desc">Visualizar produtos</div>
-                </a>
-                <a href="/checkout" class="menu-item">
-                    <div class="menu-item-title">Checkout</div>
-                    <div class="menu-item-desc">Testar fluxo de compra</div>
-                </a>
-                <a href="/carrinho" class="menu-item">
-                    <div class="menu-item-title">Carrinho</div>
-                    <div class="menu-item-desc">Verificar carrinho</div>
-                </a>
+<header class="topbar"><div class="topbar-inner"><strong>🛍️ ShopVivaliz — Administração</strong><nav class="top-actions"><a href="/admin/">Dashboard</a><a href="/">Loja</a><a href="/auth/logout.php">Sair</a></nav></div></header>
+<main class="container">
+    <div class="intro"><div><h1>Todas as funções administrativas</h1><p class="muted"><?= $total ?> acessos organizados por área.</p></div><input class="search" id="menu-search" type="search" placeholder="Buscar função administrativa..." autocomplete="off"></div>
+    <?php foreach ($sections as $sectionTitle => $items): ?>
+        <section class="section" data-section>
+            <h2><?= htmlspecialchars($sectionTitle, ENT_QUOTES, 'UTF-8') ?></h2>
+            <div class="grid">
+                <?php foreach ($items as [$icon, $title, $url, $description]): ?>
+                    <?php $danger = in_array($url, ['/admin/force-git-pull.php', '/admin/sync-critical-files.php', '/admin/reparar-catalogo-olist.php'], true); ?>
+                    <a class="card<?= $danger ? ' danger' : '' ?>" href="<?= htmlspecialchars($url, ENT_QUOTES, 'UTF-8') ?>" data-item data-search="<?= htmlspecialchars(mb_strtolower($sectionTitle . ' ' . $title . ' ' . $description), ENT_QUOTES, 'UTF-8') ?>">
+                        <div class="icon"><?= $icon ?></div><div class="title"><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></div><div class="desc"><?= htmlspecialchars($description, ENT_QUOTES, 'UTF-8') ?></div>
+                    </a>
+                <?php endforeach; ?>
             </div>
-        </div>
-
-        <!-- GESTÃO OPERACIONAL -->
-        <div class="section">
-            <div class="section-header">📊 Gestão Operacional</div>
-            <div class="section-grid">
-                <a href="/admin/produtos.php" class="menu-item">
-                    <div class="menu-item-title">Produtos</div>
-                    <div class="menu-item-desc">Criar, editar, deletar produtos</div>
-                </a>
-                <a href="/admin/pedidos.php" class="menu-item">
-                    <div class="menu-item-title">Pedidos</div>
-                    <div class="menu-item-desc">Gerenciar pedidos do sistema</div>
-                </a>
-                <a href="/admin/clientes.php" class="menu-item">
-                    <div class="menu-item-title">Clientes</div>
-                    <div class="menu-item-desc">Base de clientes</div>
-                </a>
-                <a href="/admin/cupons.php" class="menu-item">
-                    <div class="menu-item-title">Cupons</div>
-                    <div class="menu-item-desc">Cadastrar e gerenciar cupons</div>
-                </a>
-                <a href="/admin/company-profile.php" class="menu-item">
-                    <div class="menu-item-title">Perfil Empresa</div>
-                    <div class="menu-item-desc">Dados da empresa</div>
-                </a>
-            </div>
-        </div>
-
-        <!-- INTEGRAÇÕES -->
-        <div class="section">
-            <div class="section-header">🔗 Integrações ERP</div>
-            <div class="section-grid">
-                <a href="/olist/sync-products.php" class="menu-item">
-                    <div class="menu-item-title">Sync Olist</div>
-                    <div class="menu-item-desc">Sincronizar produtos Olist/Tiny</div>
-                </a>
-                <a href="/admin/sync-olist-para-products.php" class="menu-item">
-                    <div class="menu-item-title">Sync Avançado</div>
-                    <div class="menu-item-desc">Migração de dados Olist</div>
-                </a>
-                <a href="/admin/olist-images-audit.php" class="menu-item">
-                    <div class="menu-item-title">Auditoria Imagens</div>
-                    <div class="menu-item-desc">Verificar imagens do Olist</div>
-                </a>
-                <a href="/admin/reparar-catalogo-olist.php" class="menu-item">
-                    <div class="menu-item-title">Reparar Catálogo</div>
-                    <div class="menu-item-desc">Corrigir inconsistências</div>
-                </a>
-                <a href="/admin/integrations.php" class="menu-item">
-                    <div class="menu-item-title">Config Integrações</div>
-                    <div class="menu-item-desc">Configurar conexões ERP</div>
-                </a>
-            </div>
-        </div>
-
-        <!-- MARKETPLACE -->
-        <div class="section">
-            <div class="section-header">📱 Marketplaces</div>
-            <div class="section-grid">
-                <a href="/admin/mercadolivre.php" class="menu-item">
-                    <div class="menu-item-title">Mercado Livre</div>
-                    <div class="menu-item-desc">Gerenciar integração ML</div>
-                </a>
-            </div>
-        </div>
-
-        <!-- MONITORAMENTO -->
-        <div class="section">
-            <div class="section-header">📊 Monitoramento & Análise</div>
-            <div class="section-grid">
-                <a href="/admin/monitor/" class="menu-item">
-                    <div class="menu-item-title">Monitor Principal</div>
-                    <div class="menu-item-desc">Dashboard de saúde do site</div>
-                </a>
-                <a href="/admin/monitor-completo.php" class="menu-item">
-                    <div class="menu-item-title">Monitor Completo</div>
-                    <div class="menu-item-desc">Análise detalhada de métricas</div>
-                </a>
-                <a href="/admin/audit-dashboard.php" class="menu-item">
-                    <div class="menu-item-title">Audit Dashboard</div>
-                    <div class="menu-item-desc">Auditoria de operações</div>
-                </a>
-                <a href="/admin/sla-dashboard.php" class="menu-item">
-                    <div class="menu-item-title">SLA Dashboard</div>
-                    <div class="menu-item-desc">Indicadores de performance</div>
-                </a>
-                <a href="/admin/agents-monitor.php" class="menu-item">
-                    <div class="menu-item-title">Monitor Agentes</div>
-                    <div class="menu-item-desc">Status de agentes autônomos</div>
-                </a>
-            </div>
-        </div>
-
-        <!-- AUTOMAÇÃO -->
-        <div class="section">
-            <div class="section-header">🤖 Automação & IA</div>
-            <div class="section-grid">
-                <a href="/admin/automacao-ia-multicanal/" class="menu-item">
-                    <div class="menu-item-title">Automação IA</div>
-                    <div class="menu-item-desc">Gerenciar automações multicanal</div>
-                </a>
-                <a href="/admin/orchestrator.php" class="menu-item">
-                    <div class="menu-item-title">Orchestrator</div>
-                    <div class="menu-item-desc">Orquestração de workflows</div>
-                </a>
-                <a href="/admin/squad-chat.php" class="menu-item">
-                    <div class="menu-item-title">Squad Chat</div>
-                    <div class="menu-item-desc">Chat com agentes IA</div>
-                </a>
-            </div>
-        </div>
-
-        <!-- DIAGNÓSTICO & MANUTENÇÃO -->
-        <div class="section">
-            <div class="section-header">🔧 Diagnóstico & Manutenção</div>
-            <div class="section-grid">
-                <a href="/admin/diagnostico-banco.php" class="menu-item">
-                    <div class="menu-item-title">Diag Banco Dados</div>
-                    <div class="menu-item-desc">Verificar banco de dados</div>
-                </a>
-                <a href="/admin/teste-banco.php" class="menu-item">
-                    <div class="menu-item-title">Teste Banco</div>
-                    <div class="menu-item-desc">Testar conexão BD</div>
-                </a>
-                <a href="/api/health.php" class="menu-item">
-                    <div class="menu-item-title">Health Check</div>
-                    <div class="menu-item-desc">Status da API</div>
-                    <span class="badge">JSON</span>
-                </a>
-                <a href="/admin/force-git-pull.php" class="menu-item">
-                    <div class="menu-item-title">Force Git Pull</div>
-                    <div class="menu-item-desc">Forçar sincronização</div>
-                </a>
-            </div>
-        </div>
-
-        <!-- FERRAMENTAS AVANÇADAS -->
-        <div class="section">
-            <div class="section-header">⚡ Ferramentas Avançadas</div>
-            <div class="section-grid">
-                <a href="/admin/css-editor.php" class="menu-item">
-                    <div class="menu-item-title">✏️ Editor CSS</div>
-                    <div class="menu-item-desc">Customizar CSS de todas as páginas</div>
-                </a>
-                <a href="/admin/visual-editor.php" class="menu-item">
-                    <div class="menu-item-title">Visual Editor</div>
-                    <div class="menu-item-desc">Editar conteúdo visual</div>
-                </a>
-                <a href="/api/catalog/products.php?limit=200" class="menu-item">
-                    <div class="menu-item-title">Produtos JSON</div>
-                    <div class="menu-item-desc">Ver API de produtos</div>
-                    <span class="badge">JSON</span>
-                </a>
-                <a href="/api/ml/products" class="menu-item">
-                    <div class="menu-item-title">ML Produtos JSON</div>
-                    <div class="menu-item-desc">Produtos Mercado Livre</div>
-                    <span class="badge">JSON</span>
-                </a>
-            </div>
-        </div>
-
-        <!-- LEGADO -->
-        <div class="section">
-            <div class="section-header">🗂️ Legado & Compatibilidade</div>
-            <div class="section-grid">
-                <a href="/admin/admin-back.php" class="menu-item">
-                    <div class="menu-item-title">Admin Back</div>
-                    <div class="menu-item-desc">Painéis antigos, manutenção e scripts legados</div>
-                </a>
-            </div>
-        </div>
-
-        <div style="text-align: center; padding: 2rem; color: #666;">
-            <p>✅ Total: <strong>32 rotinas</strong> disponíveis</p>
-        </div>
-    </div>
+        </section>
+    <?php endforeach; ?>
+    <div class="footer">Central administrativa atualizada — <?= $total ?> botões disponíveis.</div>
+</main>
+<script>
+(() => {
+    const input = document.getElementById('menu-search');
+    const normalize = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    input.addEventListener('input', () => {
+        const query = normalize(input.value);
+        document.querySelectorAll('[data-section]').forEach(section => {
+            let visible = 0;
+            section.querySelectorAll('[data-item]').forEach(item => {
+                const match = !query || normalize(item.dataset.search || '').includes(query);
+                item.classList.toggle('hidden', !match);
+                if (match) visible++;
+            });
+            section.classList.toggle('hidden', visible === 0);
+        });
+    });
+})();
+</script>
 </body>
 </html>
