@@ -15,6 +15,7 @@ $socialMedia = is_array($company['social_media'] ?? null) ? $company['social_med
 $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
 ?>
 <footer>
+    <!-- Cache buster: <?= time() ?> -->
     <div class="container">
         <div class="footer-cols">
             <div>
@@ -51,7 +52,6 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
                 <a href="/sobre">Quem somos</a>
                 <a href="/catalogo">Produtos</a>
                 <a href="/blog/">Blog</a>
-                <a href="/gamificacao.php">Gamificacao</a>
             </div>
 
             <div>
@@ -62,29 +62,35 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
         </div>
 
         <div class="footer-legal" style="border-top: 2px solid #d7e0ea; margin-top: 30px; padding-top: 20px; background: #f8fbff; margin-left: -20px; margin-right: -20px; margin-bottom: -20px; padding-left: 20px; padding-right: 20px; padding-bottom: 20px; font-size: 12px; color: #44556c; line-height: 1.8;">
-            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 18px; margin-bottom: 22px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 22px;">
                 <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px;">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
                         <span style="display: inline-flex; width: 34px; height: 34px; border-radius: 999px; align-items: center; justify-content: center; background: #e8f5ee; color: #157347;" aria-hidden="true">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#157347" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
                         </span>
                         <div>
-                            <strong style="display: block; color: #22324a;">Site seguro</strong>
-                            <span style="color: #667085;">Compra protegida com conexao criptografada e ambiente monitorado.</span>
+                            <strong style="display: block; color: #22324a;">🔒 Compra Segura</strong>
+                            <span style="color: #667085;">Dados protegidos com criptografia SSL. Checkout seguro.</span>
                         </div>
                     </div>
                     <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
                         <img src="/images/selo-ssl-seguro.webp" alt="Certificação SSL - Secure SSL Encryption" style="height: 40px; width: auto;">
-                        <span style="display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #f3f7fb; color: #284b7a; font-weight: 700;">Checkout protegido</span>
-                        <span style="display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #f3f7fb; color: #284b7a; font-weight: 700;">Dados protegidos</span>
                     </div>
                 </div>
 
-                <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: space-between; min-height: 110px;">
-                    <strong style="display: block; color: #22324a; margin-bottom: 8px;">Pagamentos aceitos</strong>
-                    <div style="display: flex; align-items: center; justify-content: center; height: 100%; flex: 1;">
-                        <img src="/images/mercado-pago-logo.jpg" alt="Mercado Pago" style="width: 100%; max-width: 340px; height: auto; max-height: 90px; object-fit: contain; border-radius: 4px;">
+                <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px;">
+                    <strong style="display: block; color: #22324a; margin-bottom: 12px;">💳 Formas de Pagamento</strong>
+                    <div style="display: flex; align-items: center; justify-content: flex-start; gap: 16px;">
+                        <div style="text-align: center;">
+                            <img src="/images/mercado-pago-logo.jpg" alt="Mercado Pago" style="height: 40px; width: auto; object-fit: contain; margin-bottom: 4px;">
+                            <span style="display: block; font-size: 11px; color: #667085;">Até 2x</span>
+                        </div>
+                        <div style="text-align: center;">
+                            <img src="/images/infinitepay-logo.png" alt="InfinitePay" style="height: 40px; width: auto; object-fit: contain; margin-bottom: 4px;">
+                            <span style="display: block; font-size: 11px; color: #667085;">Até 6x</span>
+                        </div>
                     </div>
+                    <p style="font-size: 11px; color: #667085; margin-top: 8px; margin-bottom: 0;">PIX, boleto, cartão e crediário sem juros</p>
                 </div>
             </div>
 
@@ -118,10 +124,9 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
                 </div>
             </div>
 
-            <div style="text-align: center; color: #44556c; font-size: 12px; border-top: 1px solid #d7e0ea; padding-top: 15px;">
+            <div style="text-align: center; color: #8a9aaa; font-size: 12px; border-top: 1px solid #d7e0ea; padding-top: 15px;">
                 <p style="margin: 0;">
-                    &copy; <?= date('Y') ?> <?= htmlspecialchars($fantasyName) ?>. Todos os direitos reservados. |
-                    Desenvolvido por <a href="https://shopvivaliz.com.br" style="color: #173B63; font-weight: 700; text-decoration: none;">ShopVivaliz</a>
+                    &copy; <?= date('Y') ?> <?= htmlspecialchars($fantasyName) ?>. Todos os direitos reservados. | Desenvolvido com ❤️
                 </p>
             </div>
         </div>
@@ -140,8 +145,8 @@ $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
 </a>
 
 <!-- Floating Liz Virtual Assistant Widget (Right Side) -->
-<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=2.0.0">
-<script src="/public/assets/liz-assistant/liz-assistant.js?v=2.2.3" defer></script>
+<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=2.2.0">
+<script src="/public/assets/liz-assistant/liz-assistant.js?v=2.3.1" defer></script>
 
 <!-- Mobile App-Like Navigation -->
 <style>

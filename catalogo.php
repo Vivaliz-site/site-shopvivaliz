@@ -540,6 +540,11 @@ $svNavCurrent = 'catalogo';
         <section class="container product-grid" id="product-grid" aria-live="polite">
             <?php foreach ($products as $product): ?>
                 <?php
+                // ShopVivaliz nao opera com pre-venda/"consulte o valor": produto
+                // sem preco real valido nao aparece na vitrine. Ver docs/AGENTS.md.
+                if ((float)($product['price'] ?? 0) <= 0) {
+                    continue;
+                }
                 $image      = $product['image_url'] !== '' ? $product['image_url'] : sv_catalog_default_image();
                 $productUrl = sv_catalog_product_href($product);
                 $contactUrl = sv_catalog_contact_url($product);
