@@ -73,17 +73,42 @@ function svip_webhook_status(array $payload): string
 }
 
 /**
+ * Le um header de request de forma confiavel.
+ *
+ * Apache/PHP-FPM sem CGIPassAuth nao repassa Authorization (e as vezes outros
+ * headers customizados) para $_SERVER — comportamento ja confirmado ao vivo
+ * neste servidor em api/webhooks/order-status-update.php, onde a ausencia
+ * deste fallback fazia o endpoint rejeitar TODA chamada real com 401.
+ */
+function svip_request_header(string $name): string
+{
+    $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+    $value = trim((string)($_SERVER[$serverKey] ?? ''));
+    if ($value !== '') {
+        return $value;
+    }
+    if (function_exists('getallheaders')) {
+        foreach (getallheaders() as $headerName => $headerValue) {
+            if (strcasecmp($headerName, $name) === 0) {
+                return trim((string)$headerValue);
+            }
+        }
+    }
+    return '';
+}
+
+/**
  * Le o segredo compartilhado enviado pela InfinitePay.
  * Aceita header (X-Webhook-Token / Authorization: Bearer) ou query string (?token=),
  * porque o painel da InfinitePay so permite configurar a URL de callback.
  */
 function svip_webhook_provided_token(): string
 {
-    $header = trim((string)($_SERVER['HTTP_X_WEBHOOK_TOKEN'] ?? ''));
+    $header = svip_request_header('X-Webhook-Token');
     if ($header !== '') {
         return $header;
     }
-    $auth = trim((string)($_SERVER['HTTP_AUTHORIZATION'] ?? ''));
+    $auth = svip_request_header('Authorization');
     if (stripos($auth, 'Bearer ') === 0) {
         return trim(substr($auth, 7));
     }
