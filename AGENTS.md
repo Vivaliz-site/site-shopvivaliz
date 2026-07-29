@@ -330,6 +330,60 @@ Regras:
    ```
    Se isso falhar, a sessão não está corretamente alinhada ao ambiente operacional local.
 
+### ShopVivaliz Mobile Agent Bridge
+
+Fluxo oficial para dar acesso controlado da VM ao GPT mobile, sem shell irrestrito:
+
+```text
+VM path: /home/ubuntu/site-shopvivaliz/agent-bridge/inbox/
+Service: shopvivaliz-agent-bridge.service
+Repo alvo: /home/ubuntu/site-shopvivaliz
+```
+
+Regras:
+
+1. A bridge aceita apenas 4 acoes JSON:
+   - `create_issue`
+   - `apply_patch_pr`
+   - `read_file`
+   - `run_readonly_audit`
+
+2. A bridge nunca deve:
+   - commitar direto em `main`
+   - fazer `auto-merge`
+   - aceitar secrets no patch
+   - operar fora dos prefixes permitidos do repositorio
+
+3. Fluxo esperado para GPT mobile:
+   - gerar um `.json`
+   - colocar o arquivo em `/home/ubuntu/site-shopvivaliz/agent-bridge/inbox/`
+   - aguardar o watcher do service
+   - ler o resultado em `/home/ubuntu/site-shopvivaliz/agent-bridge/outbox/`
+
+4. Estados de processamento:
+   - tarefa concluida: `*.json.done`
+   - tarefa recusada/erro: `*.json.failed`
+   - resultado estruturado: `outbox/*.result.json`
+
+5. Verificacao operacional na VM:
+   ```bash
+   sudo systemctl status shopvivaliz-agent-bridge.service --no-pager -l
+   ls -la /home/ubuntu/site-shopvivaliz/agent-bridge/inbox/
+   ls -la /home/ubuntu/site-shopvivaliz/agent-bridge/outbox/
+   cat /home/ubuntu/site-shopvivaliz/agent-bridge/config.json
+   ```
+
+6. Prompt operacional resumido para o ChatGPT mobile:
+   ```text
+   Gerar uma tarefa JSON para o ShopVivaliz Mobile Agent Bridge.
+   Ação: create_issue ou apply_patch_pr ou read_file ou run_readonly_audit.
+   Repositório: Vivaliz-site/site-shopvivaliz.
+   Regras: nunca main direto, nunca auto-merge, nunca secrets, sempre evidência.
+   Objetivo: <descrever objetivo>.
+   ```
+
+7. O service roda em loop e observa a `inbox` a cada 30 segundos.
+
 ### Se Tiver Que SSH à VM
 
 ```bash

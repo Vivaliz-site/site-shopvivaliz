@@ -1,0 +1,54 @@
+{
+  "repo_full_name": "Vivaliz-site/site-shopvivaliz",
+  "repo_path": "/home/ubuntu/site-shopvivaliz",
+  "default_base_branch": "main",
+  "branch_prefix": "agent/",
+  "inbox_dir": "agent-bridge/inbox",
+  "outbox_dir": "agent-bridge/outbox",
+  "log_dir": "agent-bridge/logs",
+  "dry_run_default": false,
+  "max_patch_bytes": 200000,
+  "allowed_file_prefixes": [
+    "scripts/",
+    "tests/",
+    "docs/",
+    ".github/workflows/",
+    "includes/",
+    "api/",
+    "admin/"
+  ],
+  "blocked_file_patterns": [
+    ".env",
+    "*.pem",
+    "*.key",
+    "*secret*",
+    "*token*",
+    "SECRETS*",
+    "login_config.json"
+  ],
+  "blocked_commands": [
+    "git reset --hard",
+    "git clean",
+    "rm -rf",
+    "sudo rm",
+    "git push origin main",
+    "gh pr merge"
+  ],
+  "validations": [
+    "git diff --check",
+    "find scripts includes api admin -name '*.php' -print0 2>/dev/null | xargs -0 -r -n1 php -l"
+  ],
+  "github_labels": [
+    "agent-task",
+    "mobile-bridge",
+    "needs-review"
+  ],
+  "gmail": {
+    "enabled": false,
+    "mode": "disabled",
+    "imap_host": "imap.gmail.com",
+    "imap_port": 993,
+    "from_allowlist": [],
+    "subject_prefix": "SHOPVIVALIZ_AGENT"
+  }
+}

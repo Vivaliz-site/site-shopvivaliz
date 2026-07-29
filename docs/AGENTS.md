@@ -131,6 +131,12 @@
 **Por quê importa:** havia risco real de abrir o editor em `C:\site-shopvivaliz` ou em um diretório genérico e editar o checkout errado. A padronização reduz drift entre VS Code, Antigravity e Antigravity IDE e facilita validação de branch antes de deploy.
 **Ver também:** `AGENTS.md`, `site-shopvivaliz.code-workspace`, `.vscode/settings.json`
 
+### 2026-07-29 — ShopVivaliz Mobile Agent Bridge
+**Sistema/arquivo:** VM Oracle, `/home/ubuntu/site-shopvivaliz/agent-bridge/`, `AGENTS.md`
+**O que descobri:** a bridge correta para uso do GPT mobile observa `/home/ubuntu/site-shopvivaliz/agent-bridge/inbox/` e expoe apenas `create_issue`, `apply_patch_pr`, `read_file` e `run_readonly_audit`. O service associado e `shopvivaliz-agent-bridge.service`.
+**Por quê importa:** isso entrega acesso controlado da VM ao GPT mobile por fila JSON, sem shell irrestrito e sem permitir commit direto em `main` ou merge automatico.
+**Ver também:** `AGENTS.md`, `agent-bridge/README.md`, `deploy/systemd/shopvivaliz-agent-bridge.service`
+
 ---
 
 ## 🤖 Agentes Autônomos Ativos
