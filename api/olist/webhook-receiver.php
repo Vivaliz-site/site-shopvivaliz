@@ -6,6 +6,11 @@
  */
 declare(strict_types=1);
 
+// Este arquivo nao carregava nenhum bootstrap, entao getenv() retornava vazio
+// para tudo — o que fazia a checagem de token responder 503 sempre.
+// Mesmo bootstrap usado por api/webhooks/order-status-update.php.
+require_once __DIR__ . '/../../config/bootstrap-env.php';
+
 header('Content-Type: application/json; charset=UTF-8');
 
 $log_dir = __DIR__ . '/../../logs';
