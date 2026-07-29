@@ -4,11 +4,19 @@ declare(strict_types=1);
 /**
  * Forca renovacao de token Olist/Tiny com saida estruturada para uso
  * manual, em CI e em automacoes de observabilidade.
+ *
+ * Escreve credenciais em disco e estava exposto por HTTP sem autenticacao:
+ * qualquer um podia forcar a rotacao do token da integracao com o ERP.
  */
+require_once __DIR__ . '/../../config/require-agent-key.php';
+sv_require_agent_key();
 
 set_time_limit(30);
 error_reporting(E_ALL);
-ini_set('display_errors', '1');
+// display_errors=1 vazava o caminho absoluto do servidor no corpo da resposta
+// (visto ao vivo: "Warning: file_put_contents(/home/ubuntu/shopvivaliz-deploy/...").
+// Erros continuam indo para o log; so nao vao mais para o cliente.
+ini_set('display_errors', '0');
 
 function svrt_lock_path(): string
 {
