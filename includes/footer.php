@@ -127,7 +127,6 @@ $socialLinks = [
                     </div>
                 </div>
 
-<<<<<<< HEAD
                 <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px;">
                     <strong style="display: block; color: #22324a; margin-bottom: 12px;">💳 Formas de Pagamento</strong>
                     <div style="display: flex; align-items: center; justify-content: flex-start; gap: 16px;">
@@ -139,13 +138,6 @@ $socialLinks = [
                             <img src="/images/infinitepay-logo.png" alt="InfinitePay" style="height: 40px; width: auto; object-fit: contain; margin-bottom: 4px;">
                             <span style="display: block; font-size: 11px; color: #667085;">Até 6x</span>
                         </div>
-=======
-                <div style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: space-between; min-height: 110px;">
-                    <strong style="display: block; color: #22324a; margin-bottom: 8px;">Pagamentos aceitos</strong>
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 16px; height: 100%; flex: 1; flex-wrap: wrap;">
-                        <img src="/images/mercado-pago-logo.jpg" alt="Mercado Pago" style="max-width: 160px; width: 100%; height: auto; max-height: 90px; object-fit: contain; border-radius: 4px;">
-                        <img src="/images/infinitepay-logo.svg" alt="InfinitePay" style="max-width: 160px; width: 100%; height: auto; max-height: 90px; object-fit: contain; border-radius: 4px;">
->>>>>>> 4453fee651d31043e741b7a6d7e5e2a6f684114b
                     </div>
                     <p style="font-size: 11px; color: #667085; margin-top: 8px; margin-bottom: 0;">PIX, boleto, cartão e crediário sem juros</p>
                 </div>
@@ -180,20 +172,16 @@ $socialLinks = [
                     </div>
                 </div>
             </div>
-<<<<<<< HEAD
 
             <div style="text-align: center; color: #8a9aaa; font-size: 12px; border-top: 1px solid #d7e0ea; padding-top: 15px;">
                 <p style="margin: 0;">
                     &copy; <?= date('Y') ?> <?= htmlspecialchars($fantasyName) ?>. Todos os direitos reservados. | Desenvolvido com ❤️
                 </p>
             </div>
-=======
->>>>>>> 4453fee651d31043e741b7a6d7e5e2a6f684114b
         </div>
     </div>
 </footer>
 
-<<<<<<< HEAD
 <!-- Floating WhatsApp Button (Left Side) -->
 <a href="https://wa.me/5537999374112?text=Ola!%20Vim%20pelo%20site%20da%20ShopVivaliz%20e%20gostaria%20de%20falar%20com%20a%20equipe." 
    class="sv-whatsapp-float" 
@@ -267,8 +255,4 @@ $socialLinks = [
     Carrinho
   </a>
 </nav>
-=======
-<!-- Liz virtual assistant: the script creates both the launcher and dialog. -->
-<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=2.2.0">
-<script src="/public/assets/liz-assistant/liz-assistant.js?v=2.3.1" defer></script>
->>>>>>> 4453fee651d31043e741b7a6d7e5e2a6f684114b
+
