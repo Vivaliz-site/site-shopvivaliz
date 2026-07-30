@@ -1,20 +1,24 @@
 {
-  "version": 1,
+  "version": 2,
   "updated_at": "2026-07-30",
   "rules": {
     "new_routines_must_update_manifest": true,
     "legacy_paths_require_wrapper_or_stub": true,
     "secrets_must_use_canonical_names": true,
-    "production_changes_require_evidence": true
+    "production_changes_require_evidence": true,
+    "root_operational_documents_are_forbidden": true
   },
   "canonical_directories": [
     "scripts/ai",
     "scripts/maintenance",
     "scripts/marketplace/shopee",
     "scripts/marketplace/olist",
+    "scripts/dev/legacy-reporting",
+    "scripts/dev/legacy-data-tools",
     "docs/knowledge",
     "docs/operations",
     "docs/audits",
+    "archive/2026/artifacts",
     "tests/unit",
     "tests/integration",
     "tests/smoke",
@@ -38,6 +42,7 @@
     "scripts/version-manager.py": "scripts/ai/version-manager.py",
     "scripts/slack-notifier.py": "scripts/ai/slack-notifier.py",
     "scripts/generate-report.py": "scripts/ai/generate-report.py",
+    "ai_collaboration.py": "scripts/ai/ai_collaboration.py",
     "scripts/deploy-diagnostic.py": "scripts/maintenance/deploy-diagnostic.py",
     "scripts/quality-assurance.py": "scripts/maintenance/quality-assurance.py",
     "scripts/vulnerability-scanner.py": "scripts/maintenance/vulnerability-scanner.py",
@@ -59,7 +64,31 @@
     "scripts/monitor-olist-renewal.sh": "scripts/marketplace/olist/monitor-olist-renewal.sh",
     "scripts/olist-oauth-playwright.js": "scripts/marketplace/olist/olist-oauth-playwright.js",
     "scripts/olist-sync-complete.ps1": "scripts/marketplace/olist/olist-sync-complete.ps1",
-    "scripts/sync-olist-imagens-api.ps1": "scripts/marketplace/olist/sync-olist-imagens-api.ps1"
+    "scripts/sync-olist-imagens-api.ps1": "scripts/marketplace/olist/sync-olist-imagens-api.ps1",
+    "gerar_relatorio_final_correto.py": "scripts/dev/legacy-reporting/gerar_relatorio_final_correto.py",
+    "preencher_precos_relatorio.py": "scripts/dev/legacy-reporting/preencher_precos_relatorio.py",
+    "gerar_relatorio_final_completo.py": "scripts/dev/legacy-reporting/gerar_relatorio_final_completo.py",
+    "gerar_relatorio_final_dados_reais.py": "scripts/dev/legacy-reporting/gerar_relatorio_final_dados_reais.py",
+    "gerar_relatorio_completo_37_colunas.py": "scripts/dev/legacy-reporting/gerar_relatorio_completo_37_colunas.py",
+    "gerar_relatorio_com_colunas_corretas.py": "scripts/dev/legacy-reporting/gerar_relatorio_com_colunas_corretas.py",
+    "relatorio_final_consolidado.py": "scripts/dev/legacy-reporting/relatorio_final_consolidado.py",
+    "relatorio_final_otimizado.py": "scripts/dev/legacy-reporting/relatorio_final_otimizado.py",
+    "gerar_relatorio_final_v2.py": "scripts/dev/legacy-reporting/gerar_relatorio_final_v2.py",
+    "relatorio_6_precos_completo.py": "scripts/dev/legacy-reporting/relatorio_6_precos_completo.py",
+    "gerar_relatorio_final_6_precos.py": "scripts/dev/legacy-reporting/gerar_relatorio_final_6_precos.py",
+    "relatorio_final_com_6_precos.py": "scripts/dev/legacy-reporting/relatorio_final_com_6_precos.py",
+    "relatorio_final_sem_rate_limit.py": "scripts/dev/legacy-reporting/relatorio_final_sem_rate_limit.py",
+    "checar_skus.py": "scripts/dev/legacy-data-tools/checar_skus.py",
+    "resumo_final.py": "scripts/dev/legacy-data-tools/resumo_final.py",
+    "diagnosticar_problema.py": "scripts/dev/legacy-data-tools/diagnosticar_problema.py",
+    "formatar_arquivo_novo.py": "scripts/dev/legacy-data-tools/formatar_arquivo_novo.py",
+    "preencher_precos_final.py": "scripts/dev/legacy-data-tools/preencher_precos_final.py",
+    "corrigir_precos_tabelas.py": "scripts/dev/legacy-data-tools/corrigir_precos_tabelas.py",
+    "formatar_precos_menores.py": "scripts/dev/legacy-data-tools/formatar_precos_menores.py",
+    "encontrar_match_correto.py": "scripts/dev/legacy-data-tools/encontrar_match_correto.py",
+    "atualizar_e_validar_tiny.py": "scripts/dev/legacy-data-tools/atualizar_e_validar_tiny.py",
+    "atualizar_precos_tabelas.py": "scripts/dev/legacy-data-tools/atualizar_precos_tabelas.py",
+    "reprocessar_ids_falhados.py": "scripts/dev/legacy-data-tools/reprocessar_ids_falhados.py"
   },
   "document_migrations": {
     "AGENTS-ACCESS-INDEX.md": "docs/operations/agents/agent-access-index-legacy.md",
@@ -106,7 +135,26 @@
     "SUMARIO-FINAL-OLIST-SYNC.md": "docs/audits/legacy-reports/olist-sync-final-summary-legacy.md",
     "OLIST-IMAGES-IMPORT-PLAN.md": "docs/operations/olist/images-import-plan-legacy.md",
     "docs/olist-tiny-erp-api-knowledge.md": "docs/operations/olist/api-knowledge-v1-legacy.md",
-    "docs/olist-tiny-erp-api-knowledge-v2.md": "docs/operations/olist/api-knowledge-v2-legacy.md"
+    "docs/olist-tiny-erp-api-knowledge-v2.md": "docs/operations/olist/api-knowledge-v2-legacy.md",
+    "MONITOR_SETUP.md": "docs/operations/monitor/setup-legacy.md",
+    "INVESTIGACAO-SISTEMAS-PARALELOS.md": "docs/audits/legacy-reports/parallel-systems-investigation-2026-07-12.md",
+    "AGENTS-BROADCAST-2026-07-26.md": "docs/operations/agents/broadcast-2026-07-26.md",
+    "RELATORIO-TAREFAS-AGENTES.md": "docs/audits/legacy-reports/agent-tasks-report-2026-07-12.md",
+    "INVESTIGACAO-AUDIT-COMPLETA-V2.md": "docs/audits/legacy-reports/full-systems-audit-v2-2026-07-12.md",
+    "ATIVAR_CAMPANHA_10X_AGORA.md": "docs/operations/ads/activate-campaign-10x-legacy.md",
+    "AUTOMACAO_GOOGLE_ADS_STATUS.txt": "docs/audits/legacy-reports/google-ads-automation-status-2026-07-19.txt",
+    "RESUMO-FINAL-AUDITORIA-2026-07-12.txt": "docs/audits/legacy-reports/operational-audit-summary-2026-07-12.txt",
+    "INDICE-DOCUMENTACAO-AUDITORIA.md": "docs/audits/legacy-reports/operational-audit-index-2026-07-12.md",
+    "RELATORIO_AUTOMACAO_CAMPANHA_GOOGLE_ADS.md": "docs/audits/legacy-reports/google-ads-automation-report-2026-07-19.md",
+    "RELATORIO_EXECUTIVO.md": "docs/audits/legacy-reports/executive-price-sync-2026-07-26.md",
+    "RELATORIO_EXECUTIVO_FINAL.md": "docs/audits/legacy-reports/executive-final-2026-07-19.md",
+    "RELATORIO-EXECUCOES-2026-07-24.md": "docs/audits/legacy-reports/executions-2026-07-24.md",
+    "RELATORIO-FINAL-AUDITORIA-2026-07-12.md": "docs/audits/legacy-reports/final-audit-2026-07-12.md",
+    "RELATORIO-EXECUTIVO-FINAL-2026-07-15.md": "docs/audits/legacy-reports/executive-final-2026-07-15.md",
+    "RELATORIO-VALIDACAO-FINAL-2026-07-24.md": "docs/audits/legacy-reports/final-validation-2026-07-24.md",
+    "continuous-report.md": "docs/audits/legacy-reports/continuous-report-2026-06-28.md",
+    "ai_collaboration_report_ecommerce.md": "docs/audits/legacy-reports/ai-collaboration-ecommerce-legacy.md",
+    "INDICE_DOCUMENTACAO_PIPELINE.md": "docs/audits/legacy-reports/pipeline-documentation-index-legacy.md"
   },
   "test_migrations": {
     "tests/test_example.py": "tests/unit/test_example.py",
@@ -118,5 +166,8 @@
     ".github/workflows/olist-sync.yml": ".github/workflows-archive/paused/olist-sync.yml",
     ".github/workflows/git-auto-sync-validate.yml": ".github/workflows-archive/paused/git-auto-sync-validate.yml",
     ".github/workflows/auto-validation-and-fix.yml": ".github/workflows-archive/paused/auto-validation-and-fix.yml"
+  },
+  "removed_malformed_artifacts": {
+    "C:Usersusersite-shopvivalizlogsRELATORIO-PIPELINE-SHOPEE.md": "archive/2026/artifacts/legacy-shopee-pipeline-report.md"
   }
 }
