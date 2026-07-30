@@ -6,6 +6,12 @@
 - Confirmar o comportamento no código, workflow, log ou resposta real quando a documentação não for suficiente.
 - Nunca assumir uma resposta sem evidência.
 - Informar claramente quando a evidência estiver incompleta, ambígua ou desatualizada.
+- Antes de criar, alterar ou remover scripts, workflows, integrações, secrets, rotinas agendadas ou módulos relevantes, consultar `docs/knowledge/repository-index.md` e `docs/knowledge/secrets-and-integrations-map.md`.
+- Sempre que uma nova rotina, workflow, script operacional, integração, secret canônico ou alias de compatibilidade for criado, atualizar no mesmo PR/commit:
+  - `docs/knowledge/repository-index.md`
+  - `docs/knowledge/secrets-and-integrations-map.md`, quando envolver credenciais ou integrações
+  - `docs/knowledge/README.md`, se for novo documento principal
+- Nenhuma rotina nova deve ficar “solta”: ela precisa ter dono funcional, gatilho, entrada, saída, arquivos relacionados e forma de validação registrados no índice.
 
 ## Diagnóstico
 
@@ -31,6 +37,8 @@ O campo `configured` indica configuração detectada, mas não prova que a crede
 - Nunca hardcodar, registrar ou exibir senhas, tokens, chaves de API ou dados bancários.
 - Não contornar políticas de segurança do navegador, CORS, autenticação ou controles de acesso.
 - Não executar deleções destrutivas em FTP ou banco sem autorização explícita e backup.
+- Preferir um nome canônico por integração e manter aliases antigos apenas no centralizador de secrets, com documentação de compatibilidade e plano de remoção.
+- Não criar novo secret sem verificar se já existe nome canônico ou alias equivalente em `docs/knowledge/secrets-and-integrations-map.md`.
 
 ## Catálogo e integrações
 
