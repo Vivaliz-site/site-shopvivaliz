@@ -5,6 +5,8 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 ## Documentos principais
 
 - [`project.md`](project.md) — visão geral, objetivo e módulos do sistema.
+- [`repository-index.md`](repository-index.md) — índice operacional do repositório, rotinas, workflows, scripts e regra obrigatória de registro de novas rotinas.
+- [`secrets-and-integrations-map.md`](secrets-and-integrations-map.md) — nomes canônicos de secrets, aliases legados e mapa de integrações.
 - [`squad-chat.md`](squad-chat.md) — contrato, health check e providers do Squad Chat.
 - [`troubleshooting.md`](troubleshooting.md) — diagnóstico de erros HTTP, rede, integrações e deploy.
 - [`deploy.md`](deploy.md) — fluxo de publicação, curl, CI e checklist.
@@ -29,11 +31,13 @@ Outros documentos existentes na pasta podem registrar versões, dispositivos, de
 ## Ordem recomendada para diagnóstico
 
 1. Identifique o sintoma e o erro real.
-2. Consulte `troubleshooting.md`.
-3. Valide o módulo correspondente no código.
-4. Use `testing.md` para reproduzir.
-5. Consulte `deploy.md` quando houver diferença entre repositório e produção.
-6. Consulte `official-site.md` quando a dúvida envolver conteúdo institucional, termos, categorias ou meios de pagamento.
-7. Registre lacunas na documentação ao encontrar comportamento novo.
+2. Consulte `repository-index.md` para localizar rotinas, workflows e scripts envolvidos.
+3. Consulte `secrets-and-integrations-map.md` quando houver credenciais, marketplace, ERP, email, deploy ou API externa.
+4. Consulte `troubleshooting.md`.
+5. Valide o módulo correspondente no código.
+6. Use `testing.md` para reproduzir.
+7. Consulte `deploy.md` quando houver diferença entre repositório e produção.
+8. Consulte `official-site.md` quando a dúvida envolver conteúdo institucional, termos, categorias ou meios de pagamento.
+9. Registre lacunas na documentação ao encontrar comportamento novo.
 
 A documentação não substitui evidência do código, logs, banco, workflow ou resposta do servidor.
