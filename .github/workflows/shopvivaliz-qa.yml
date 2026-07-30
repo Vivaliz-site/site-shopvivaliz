@@ -117,16 +117,46 @@ jobs:
   live-smoke-test:
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
+    timeout-minutes: 8
     steps:
-      - name: Verificar footer e ausencia de bug visual conhecido na home
+      - name: Aguardar deploy e validar home em producao
+        shell: bash
         run: |
-          html=$(curl -sL https://shopvivaliz.com.br/)
-          if ! echo "$html" | grep -q 'footer-cols'; then
-            echo "ERRO: footer nao encontrado na home ao vivo."
-            exit 1
-          fi
-          if echo "$html" | grep -q 'class="hero-slide is-active"[^>]*style="[^"]*linear-gradient'; then
-            echo "ERRO: possivel regressao do bug de gradiente duplicado no hero."
-            exit 1
-          fi
-          echo "OK: home ao vivo passou no smoke test."
+          set -euo pipefail
+
+          url='https://shopvivaliz.com.br/'
+          max_attempts=12
+          wait_seconds=30
+
+          for attempt in $(seq 1 "$max_attempts"); do
+            echo "Tentativa ${attempt}/${max_attempts}: validando ${url}"
+
+            http_code=$(curl \
+              --location \
+              --silent \
+              --show-error \
+              --connect-timeout 10 \
+              --max-time 25 \
+              --output /tmp/shopvivaliz-home.html \
+              --write-out '%{http_code}' \
+              "${url}?qa_commit=${GITHUB_SHA}" || true)
+
+            if [[ "$http_code" != '200' ]]; then
+              echo "::warning::Home respondeu HTTP ${http_code:-sem-resposta}; aguardando deploy/estabilizacao."
+            elif ! grep -q 'footer-cols' /tmp/shopvivaliz-home.html; then
+              echo "::warning::Footer ainda nao encontrado na versao ao vivo; o deploy pode estar em andamento."
+            elif grep -qE 'class="hero-slide is-active"[^>]*style="[^"]*linear-gradient' /tmp/shopvivaliz-home.html; then
+              echo "::error::Possivel regressao do bug de gradiente duplicado no hero."
+              exit 1
+            else
+              echo "OK: home ao vivo passou no smoke test."
+              exit 0
+            fi
+
+            if [[ "$attempt" -lt "$max_attempts" ]]; then
+              sleep "$wait_seconds"
+            fi
+          done
+
+          echo "::error::A producao nao apresentou a versao esperada apos $((max_attempts * wait_seconds / 60)) minutos. Verifique o deploy e a disponibilidade da home."
+          exit 1
