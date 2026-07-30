@@ -21,6 +21,7 @@ TEXT_SUFFIXES = {".py", ".php", ".js", ".ts", ".tsx", ".jsx", ".sh", ".ps1", ".y
 AUTOMATION_PREFIXES = (".github/workflows/", "scripts/", ".ai/", "agents/", "config/")
 AUDIT_WORDS = ("audit", "auditoria", "health", "incident", "agent", "agente", "governance", "hygiene")
 EVIDENCE_WORDS = ("artifact", "evidence", "commit_sha", "pull_request", "pr_url", "test_report", "run_id", "read-back", "readback")
+SELF_PATH = "scripts/maintenance/audit_automation_changes.py"
 
 LINE_RULES: tuple[tuple[str, str, re.Pattern[str], str], ...] = (
     ("critical", "auto_merge", re.compile(r"(?:gh\s+pr\s+merge\b[^\n]*--auto|enable_auto_merge\s*\(|auto-merge\s*:\s*true)", re.I), "Auto-merge was introduced."),
@@ -125,15 +126,17 @@ def scan_file(base: str, head: str, status: str, path: str) -> list[Finding]:
     if not additions:
         return findings
 
+    if path == SELF_PATH:
+        return findings
+
     added_text = "\n".join(text for _, text in additions)
     added_lower = added_text.lower()
 
-    if path != "scripts/maintenance/audit_automation_changes.py":
-        for line_no, text in additions:
-            for pattern in SECRET_PATTERNS:
-                if pattern.search(text):
-                    findings.append(Finding("critical", "credential_exposed", path, line_no, "A credential-like value was introduced in tracked text.", redact(text)))
-                    break
+    for line_no, text in additions:
+        for pattern in SECRET_PATTERNS:
+            if pattern.search(text):
+                findings.append(Finding("critical", "credential_exposed", path, line_no, "A credential-like value was introduced in tracked text.", redact(text)))
+                break
 
     if is_automation_path(path):
         for line_no, text in additions:
