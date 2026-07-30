@@ -8,10 +8,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = ROOT / "config" / "repository-structure-manifest.json"
 
-PYTHON_WRAPPER_MARKER = "runpy.run_path"
-SHELL_WRAPPER_MARKER = "exec"
-JS_WRAPPER_MARKER = "require("
-POWERSHELL_WRAPPER_MARKER = "Join-Path"
+PYTHON_WRAPPER_MARKERS = ("runpy.run_path", "exec(compile(")
+SHELL_WRAPPER_MARKERS = ("exec",)
+JS_WRAPPER_MARKERS = ("require(",)
+POWERSHELL_WRAPPER_MARKERS = ("Join-Path",)
 DOC_STUB_MARKERS = (
     "migrado",
     "migrada",
@@ -27,17 +27,17 @@ def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
-def wrapper_marker(path: Path) -> str:
+def wrapper_markers(path: Path) -> tuple[str, ...]:
     suffix = path.suffix.lower()
     if suffix == ".py":
-        return PYTHON_WRAPPER_MARKER
+        return PYTHON_WRAPPER_MARKERS
     if suffix == ".sh":
-        return SHELL_WRAPPER_MARKER
+        return SHELL_WRAPPER_MARKERS
     if suffix == ".js":
-        return JS_WRAPPER_MARKER
+        return JS_WRAPPER_MARKERS
     if suffix == ".ps1":
-        return POWERSHELL_WRAPPER_MARKER
-    return ""
+        return POWERSHELL_WRAPPER_MARKERS
+    return ()
 
 
 def main() -> int:
@@ -61,10 +61,10 @@ def main() -> int:
         if not legacy_path.is_file():
             errors.append(f"legacy wrapper missing: {legacy}")
             continue
-        marker = wrapper_marker(legacy_path)
+        markers = wrapper_markers(legacy_path)
         legacy_text = read_text(legacy_path)
-        if marker and marker not in legacy_text:
-            errors.append(f"legacy wrapper marker missing in {legacy}: {marker}")
+        if markers and not any(marker in legacy_text for marker in markers):
+            errors.append(f"legacy wrapper marker missing in {legacy}; expected one of {markers}")
         if canonical_path.name not in legacy_text:
             errors.append(f"legacy wrapper does not reference canonical filename: {legacy} -> {canonical}")
 
@@ -92,11 +92,18 @@ def main() -> int:
         if not (ROOT / archived).is_file():
             errors.append(f"archived workflow missing: {archived}")
 
+    for removed, archived in manifest.get("removed_malformed_artifacts", {}).items():
+        if (ROOT / removed).exists():
+            errors.append(f"archived artifact still exists at old path: {removed}")
+        if not (ROOT / archived).is_file():
+            errors.append(f"archived artifact missing: {archived}")
+
     print("# Structure manifest validation")
     print(f"Script migrations: {len(manifest.get('script_migrations', {}))}")
     print(f"Document migrations: {len(manifest.get('document_migrations', {}))}")
     print(f"Test migrations: {len(manifest.get('test_migrations', {}))}")
     print(f"Archived workflows: {len(manifest.get('archived_workflows', {}))}")
+    print(f"Archived artifacts: {len(manifest.get('removed_malformed_artifacts', {}))}")
     print(f"Errors: {len(errors)}")
 
     for error in errors:
