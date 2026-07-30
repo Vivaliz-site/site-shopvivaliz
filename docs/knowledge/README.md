@@ -1,57 +1,53 @@
 # Knowledge Base do ShopVivaliz
 
-Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
+Esta pasta é a referência operacional obrigatória para agentes e desenvolvedores.
 
 ## Documentos principais
 
-- [`project.md`](project.md) — visão geral, objetivo e módulos do sistema.
-- [`repository-index.md`](repository-index.md) — índice operacional do repositório, rotinas, workflows, scripts e regra obrigatória de registro de novas rotinas.
-- [`routines-registry.md`](routines-registry.md) — registro obrigatório de rotinas, workflows, scripts operacionais e validações.
-- [`ownership-map.md`](ownership-map.md) — donos funcionais por área e caminhos principais.
-- [`structure-policy.md`](structure-policy.md) — política de estrutura alvo e regra para mover arquivos existentes.
-- [`secrets-and-integrations-map.md`](secrets-and-integrations-map.md) — nomes canônicos de secrets, aliases legados e mapa de integrações.
-- [`squad-chat.md`](squad-chat.md) — contrato, health check e providers do Squad Chat.
-- [`troubleshooting.md`](troubleshooting.md) — diagnóstico de erros HTTP, rede, integrações e deploy.
-- [`deploy.md`](deploy.md) — fluxo de publicação, curl, CI e checklist.
-- [`agent-rules.md`](agent-rules.md) — regras obrigatórias para agentes.
-- [`updater.md`](updater.md) — atualizações cumulativas, migrations e reparos automáticos.
-- [`data-integrity.md`](data-integrity.md) — integridade de catálogo, imagens, pedidos e banco.
-- [`testing.md`](testing.md) — testes mínimos, fluxo de compra e pós-deploy.
-- [`image-policy.md`](image-policy.md) — política sem placeholders e imagens reais por categoria.
-- [`product-images.md`](product-images.md) — critérios de imagens válidas por produto.
-- [`pricing-integrity.md`](pricing-integrity.md) — integridade de preços comerciais.
-- [`stock-integrity.md`](stock-integrity.md) — disponibilidade e bloqueio de itens esgotados.
-- [`cart-integrity.md`](cart-integrity.md) — validação server-side do carrinho.
-- [`order-integrity.md`](order-integrity.md) — validação autoritativa de itens, preço, estoque e frete.
-- [`order-request-security.md`](order-request-security.md) — contexto único, idempotência, rate limit e prevenção de pedidos duplicados.
-- [`order-processing.md`](order-processing.md) — locks atômicos, limpeza automática e proxy confiável.
-- [`order-context.md`](order-context.md) — leitura única do corpo e processamento somente após validação.
-- [`official-site.md`](official-site.md) — uso do domínio oficial como fonte institucional e comercial.
-- [`legal-source-map.md`](legal-source-map.md) — correspondência entre páginas oficiais e arquivos legais locais.
+- [`repository-index.md`](repository-index.md) — estrutura canônica e componentes principais.
+- [`routines-registry.md`](routines-registry.md) — rotinas, gatilhos, entradas, saídas, riscos e validações.
+- [`ownership-map.md`](ownership-map.md) — donos funcionais por área.
+- [`structure-policy.md`](structure-policy.md) — regras de criação, migração, wrappers, stubs e workflows.
+- [`secrets-and-integrations-map.md`](secrets-and-integrations-map.md) — nomes canônicos de secrets e integrações.
+- [`agent-rules.md`](agent-rules.md) — regras obrigatórias de execução e evidência.
+- [`testing.md`](testing.md) — testes mínimos e validação.
+- [`deploy.md`](deploy.md) — publicação e pós-deploy.
+- [`troubleshooting.md`](troubleshooting.md) — diagnóstico operacional.
+- [`data-integrity.md`](data-integrity.md) — integridade de catálogo e banco.
+- [`pricing-integrity.md`](pricing-integrity.md), [`stock-integrity.md`](stock-integrity.md), [`cart-integrity.md`](cart-integrity.md), [`order-integrity.md`](order-integrity.md) — regras comerciais críticas.
 
-Auditorias e backlogs ficam em `docs/audits/`, especialmente [`../audits/repository-cleanup-backlog.md`](../audits/repository-cleanup-backlog.md).
+## Fontes complementares obrigatórias
 
-## Ordem recomendada para diagnóstico
+- `config/repository-structure-manifest.json` — mapa máquina-legível de todas as migrações.
+- `docs/operations/legacy-root-docs-index.md` — política e histórico da migração documental.
+- `docs/audits/repository-cleanup-backlog.md` — estado dos lotes e bloqueios.
+- `docs/audits/security/credential-exposure-2026-07-30.md` — incidente de credencial Olist e ações exigidas.
 
-1. Identifique o sintoma e o erro real.
-2. Consulte `repository-index.md` para localizar rotinas, workflows e scripts envolvidos.
-3. Consulte `routines-registry.md` para confirmar gatilho, entrada, saída, risco e validação.
-4. Consulte `ownership-map.md` para identificar dono funcional.
-5. Consulte `structure-policy.md` antes de mover, arquivar ou criar arquivo novo.
-6. Consulte `secrets-and-integrations-map.md` quando houver credenciais, marketplace, ERP, email, deploy ou API externa.
-7. Consulte `troubleshooting.md`.
-8. Valide o módulo correspondente no código.
-9. Use `testing.md` para reproduzir.
-10. Consulte `deploy.md` quando houver diferença entre repositório e produção.
-11. Consulte `official-site.md` quando a dúvida envolver conteúdo institucional, termos, categorias ou meios de pagamento.
-12. Registre lacunas na documentação ao encontrar comportamento novo.
+## Ordem recomendada
 
-## Migração estrutural em andamento
+1. Identificar o sintoma ou objetivo.
+2. Consultar `repository-index.md`.
+3. Confirmar a rotina em `routines-registry.md`.
+4. Confirmar ownership em `ownership-map.md`.
+5. Consultar `structure-policy.md` antes de criar ou mover arquivos.
+6. Consultar o mapa de secrets quando houver integração externa.
+7. Verificar o manifesto antes de usar caminho legado.
+8. Executar testes/CI e coletar evidência.
+9. Atualizar a documentação e o manifesto no mesmo PR.
 
-A primeira migração física aplicada foi a organização dos scripts Shopee:
+## Estado da reorganização
 
-- implementação canônica: `scripts/marketplace/shopee/`;
-- wrappers legados: `scripts/shopee_production_seo_apply.py` e `scripts/shopee_full_catalog_optimizer.py`;
-- workflow atualizado: `.github/workflows/shopee-production-seo.yml`.
+Foram criadas áreas canônicas para:
 
-A documentação não substitui evidência do código, logs, banco, workflow ou resposta do servidor.
+- Shopee e Olist em `scripts/marketplace/`;
+- agentes em `scripts/ai/`;
+- manutenção em `scripts/maintenance/`;
+- ferramentas históricas em `scripts/dev/`;
+- testes em `tests/unit/` e `tests/integration/`;
+- workflows pausados em `.github/workflows-archive/paused/`;
+- documentos operacionais em `docs/operations/`;
+- relatórios e incidentes em `docs/audits/`.
+
+Caminhos antigos permanecem somente como wrappers ou stubs quando necessário. A lista completa está no manifesto.
+
+Documentação não substitui evidência de código, testes, logs, artifacts, banco ou resposta da API/servidor.
