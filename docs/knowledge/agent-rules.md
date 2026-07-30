@@ -1,67 +1,85 @@
 # Regras para Agentes
 
-## Fonte de conhecimento
+## Fontes obrigatórias antes de alterar o repositório
 
-- Sempre usar `/docs/knowledge/` como base inicial para diagnóstico e operação.
-- Confirmar o comportamento no código, workflow, log ou resposta real quando a documentação não for suficiente.
-- Nunca assumir uma resposta sem evidência.
-- Informar claramente quando a evidência estiver incompleta, ambígua ou desatualizada.
-- Antes de criar, alterar, mover ou remover scripts, workflows, integrações, secrets, rotinas agendadas ou módulos relevantes, consultar `docs/knowledge/repository-index.md`, `docs/knowledge/routines-registry.md`, `docs/knowledge/ownership-map.md`, `docs/knowledge/structure-policy.md` e `docs/knowledge/secrets-and-integrations-map.md`.
-- Sempre que uma nova rotina, workflow, script operacional, integração, secret canônico ou alias de compatibilidade for criado, atualizar no mesmo PR/commit:
-  - `docs/knowledge/repository-index.md`
-  - `docs/knowledge/routines-registry.md`
-  - `docs/knowledge/ownership-map.md`, quando envolver dono funcional ou caminho novo
-  - `docs/knowledge/structure-policy.md`, quando envolver pasta nova, migração física ou arquivamento
-  - `docs/knowledge/secrets-and-integrations-map.md`, quando envolver credenciais ou integrações
-  - `docs/knowledge/README.md`, se for novo documento principal
-  - `docs/audits/repository-cleanup-backlog.md`, quando resolver ou criar item de limpeza
-- Nenhuma rotina nova deve ficar “solta”: ela precisa ter dono funcional, gatilho, entrada, saída, arquivos relacionados e forma de validação registrados no índice.
-- Ao reorganizar arquivo existente, manter wrapper temporário quando houver risco de quebra, atualizar workflow/testes e registrar a migração no backlog.
+1. `docs/knowledge/repository-index.md`
+2. `docs/knowledge/routines-registry.md`
+3. `docs/knowledge/ownership-map.md`
+4. `docs/knowledge/secrets-and-integrations-map.md`
+5. `docs/knowledge/structure-policy.md`
+6. `config/repository-structure-manifest.json`
+7. `docs/audits/repository-cleanup-backlog.md`
 
-## Diagnóstico
+## Estrutura
 
-- Identificar o erro antes de sugerir a solução.
-- Registrar método HTTP, URL, status, corpo da resposta e etapa do fluxo afetada.
-- Não tratar 404, 405, 500, CORS e DNS como o mesmo problema.
-- Não declarar que produção, deploy, banco, preço, imagem ou integração estão corretos sem teste verificável.
+- Criar código apenas em caminhos canônicos.
+- Não adicionar lógica em wrappers legados.
+- Não adicionar conteúdo em stubs da raiz.
+- Toda migração de caminho atualiza o manifesto.
+- Novo marketplace deve usar `scripts/marketplace/<canal>/`.
+- Agentes e automação IA devem usar `scripts/ai/`.
+- Auditoria, segurança e diagnóstico devem usar `scripts/maintenance/`.
+- Experimentos e ferramentas locais devem usar `scripts/dev/`.
+- Testes devem ser classificados em `unit`, `integration` ou `smoke`.
 
-## Validação do Squad Chat
+## Rotinas
 
-Considerar o health válido somente quando todos os requisitos forem atendidos:
+Toda rotina nova ou alterada deve ser registrada no mesmo PR com:
 
-- `ok=true`
-- `endpoint=squad-chat`
-- campo `providers` presente
+- arquivo canônico;
+- dono funcional;
+- gatilho;
+- entradas e secrets;
+- saídas/artefatos;
+- risco;
+- validação objetiva.
 
-O campo `configured` indica configuração detectada, mas não prova que a credencial foi aceita pelo provider.
+## Secrets
 
-## Credenciais e segurança
+- Nunca registrar token, senha, cookie, chave, JWT ou payload autenticado.
+- Nunca pedir ao usuário para colar secret no chat.
+- Usar apenas nomes canônicos do mapa.
+- Aliases legados ficam exclusivamente no centralizador.
+- Exposição encontrada deve ser removida da árvore atual, registrada e rotacionada externamente.
+- Não afirmar que o histórico Git foi limpo sem procedimento e prova específicos.
 
-- Sempre usar variáveis de ambiente ou GitHub Secrets.
-- GitHub Secrets são write-only; nunca tentar recuperá-los em texto.
-- Nunca hardcodar, registrar ou exibir senhas, tokens, chaves de API ou dados bancários.
-- Não contornar políticas de segurança do navegador, CORS, autenticação ou controles de acesso.
-- Não executar deleções destrutivas em FTP ou banco sem autorização explícita e backup.
-- Preferir um nome canônico por integração e manter aliases antigos apenas no centralizador de secrets, com documentação de compatibilidade e plano de remoção.
-- Não criar novo secret sem verificar se já existe nome canônico ou alias equivalente em `docs/knowledge/secrets-and-integrations-map.md`.
+## Evidência
 
-## Catálogo e integrações
+Uma tarefa só pode ser marcada como concluída quando houver evidência correspondente:
 
-- Não inventar preço, estoque, frete, imagem ou disponibilidade.
-- Não alterar campos comerciais em automações de anúncios sem evidência da fonte oficial.
-- Ignorar ou sinalizar produtos sem estoque conforme a regra do canal.
-- Vincular imagens por identificador confiável, preferencialmente SKU ou ID da origem.
-- Distinguir falha de interface de falha de sincronização ou ausência de dados.
+- commit/PR identificável;
+- diff compatível com o objetivo;
+- teste/check/log/artifact;
+- leitura posterior quando houver API externa;
+- resultado real, nunca simulação apresentada como execução.
 
-## Atualizações
+Mensagens autorreferidas, arquivos existentes ou `success: true` sem efeito verificável não são prova.
 
-- Produzir atualizações cumulativas para permitir pular versões intermediárias.
-- Incluir automaticamente SQLs, migrations e reparos de vínculo necessários.
-- Tornar migrations idempotentes e registrar as que foram executadas ou ignoradas.
-- Executar preflight, backup, cópia, migrations, reparos e testes na mesma atualização.
-- Não exigir abertura manual de links para concluir a instalação.
-- Fazer merge apenas quando as alterações estiverem consistentes e validadas.
+## Produção
 
-## Autonomia
+Rotina que altera produção exige, conforme aplicável:
 
-Tomar decisões autônomas dentro do escopo autorizado, mas interromper ações destrutivas, irreversíveis ou sem evidência suficiente. Autonomia não substitui validação.
+- confirmação explícita;
+- limite ou canário inicial;
+- backup;
+- validação de invariantes;
+- rollback;
+- read-back;
+- artifact/log sem secrets.
+
+## Documentação
+
+- Novos documentos operacionais não entram na raiz.
+- Runbooks: `docs/operations/`.
+- Auditorias/incidentes: `docs/audits/`.
+- Memória permanente: `docs/knowledge/`.
+- Relatórios recorrentes: artifacts ou diretório de relatórios aprovado.
+
+## CI obrigatório
+
+Não aprovar conclusão estrutural enquanto falharem:
+
+- `scripts/maintenance/validate_structure_manifest.py`;
+- `scripts/audit_repository.py`;
+- testes unitários/integrados aplicáveis;
+- workflows de qualidade do PR.
