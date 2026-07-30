@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "updated_at": "2026-07-30",
   "rules": {
     "new_routines_must_update_manifest": true,
@@ -330,7 +330,13 @@
     "scripts/verify_secrets.py": "scripts/dev/legacy-scripts/verify_secrets.py",
     "scripts/shopvivaliz_auth.py": "scripts/maintenance/auth/shopvivaliz_auth.py",
     "scripts/shopvivaliz_auth_fixed.py": "scripts/maintenance/auth/shopvivaliz_auth.py",
-    "scripts/tiny_sales_report.py": "scripts/marketplace/olist/legacy/tiny_sales_report.py"
+    "scripts/tiny_sales_report.py": "scripts/marketplace/olist/legacy/tiny_sales_report.py",
+    "scripts/deploy-paralelo.sh": "scripts/production/legacy/deploy-paralelo.sh",
+    "scripts/auto-sync-oracle.sh": "scripts/production/legacy/auto-sync-oracle.sh",
+    "scripts/fix-zero-price-products.php": "scripts/production/legacy/fix-zero-price-products.php",
+    "scripts/migrate-old-domain-configs.ps1": "scripts/production/legacy/migrate-old-domain-configs.ps1",
+    "scripts/sincronizar_secrets_github.sh": "scripts/maintenance/legacy/sincronizar_secrets_github.sh",
+    "scripts/marketplace/olist/repair-olist-images.py": "scripts/marketplace/olist/legacy/repair-olist-images.py"
   },
   "document_migrations": {
     "AGENTS-ACCESS-INDEX.md": "docs/operations/agents/agent-access-index-legacy.md",
