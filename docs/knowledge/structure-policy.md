@@ -42,6 +42,7 @@ archive/              Codigo legado arquivado com motivo e prazo
 5. Novo documento principal deve ser ligado em `docs/knowledge/README.md`.
 6. Arquivo experimental deve ficar em `archive/` ou `scripts/dev/`, nunca misturado com producao.
 7. Logs, backups, dumps, relatórios privados e arquivos `.env` reais nao devem ser versionados.
+8. Documento operacional novo nao deve ser criado na raiz, exceto `README.md`, `START_HERE.md`, `CHANGELOG.md`, `SECURITY.md`, `CONTRIBUTING.md` ou `LICENSE`.
 
 ## Regras para mover arquivos existentes
 
@@ -50,7 +51,16 @@ Mover arquivo existente exige:
 - identificar todos os imports, includes, chamadas CLI e workflow references;
 - atualizar documentacao e testes;
 - manter wrapper temporario quando houver risco de quebra;
-- registrar o item no backlog de limpeza com status `migrar`, `arquivar` ou `concluido-com-wrapper`.
+- registrar o item no backlog de limpeza com status `migrar`, `arquivar`, `mapeado-globalmente` ou `concluido-com-wrapper`.
+
+## Scanner estrutural global
+
+O arquivo `scripts/maintenance/restructure_repository.py` deve ser usado para varrer 100% do checkout e gerar:
+
+- `docs/audits/repository-wide-structure-report.md`
+- `docs/audits/repository-wide-structure-report.json`
+
+Ele classifica documentos soltos na raiz, scripts soltos, artifacts temporarios, patches legados e candidatos a `archive/`.
 
 ## Migracoes fisicas aplicadas
 
@@ -58,6 +68,8 @@ Mover arquivo existente exige:
 |---|---|---|---|---|
 | 2026-07-30 | Shopee | `scripts/shopee_production_seo_apply.py` | `scripts/marketplace/shopee/production_seo_apply.py` | Implementacao movida, wrapper legado mantido |
 | 2026-07-30 | Shopee | `scripts/shopee_full_catalog_optimizer.py` | `scripts/marketplace/shopee/full_catalog_optimizer.py` | Implementacao movida, wrapper legado mantido |
+| 2026-07-30 | Repo inteiro | documentos operacionais soltos na raiz | `docs/operations/legacy-root-docs-index.md` | Mapeamento global criado; movimentacao fisica futura exige stubs |
+| 2026-07-30 | Repo inteiro | auditoria parcial manual | `scripts/maintenance/restructure_repository.py` | Scanner global criado e ligado ao CI |
 
 ## Arquivamento
 
@@ -77,4 +89,5 @@ Nao fazer merge quando:
 - secret novo nao aparece no mapa;
 - arquivo de producao altera dados sem backup/read-back;
 - alias legado e usado fora do centralizador sem justificativa;
-- `.env`, token, chave privada, dump ou log sensivel foi versionado.
+- `.env`, token, chave privada, dump ou log sensivel foi versionado;
+- documento operacional novo foi criado na raiz sem justificativa e sem entrada no indice.
