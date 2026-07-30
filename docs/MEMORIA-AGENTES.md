@@ -40,6 +40,12 @@
 
 ## Entradas
 
+### 2026-07-30 — Ciclo 6h de otimização Shopee: ainda parado, sexta reconfirmação seguida (não notifiquei)
+**Sistema/arquivo:** mesmo problema das entradas de 07-25/07-26/07-27/07-29/07-30 abaixo — `.github/workflows/{fetch,optimize}-shopee-listings.yml`, credencial `TINY_*`
+**O que descobri:** mais um disparo do ciclo 6h, mesma checagem rápida (não reinvestiguei do zero): (1) `env | grep -iE "TINY_|OLIST_|SHOPEE_|ANTHROPIC_API_KEY"` continua vazio; (2) `.github/workflows/` continua sem `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml`; (3) artefato mais recente em `listings/` (por `sort`, não `ls -t`) continua `shopee-listings-20260726-080756.json`, mesmo erro `"Falha ao renovar token: Invalid client or Invalid client credentials"` e `total_products: 0` — nenhum artefato novo desde a última reconfirmação. Nenhum dado de CTR/conversão fabricado, nenhum título/descrição/imagem/preço de produto editado. Não enviei notificação — estado idêntico ao já reportado; critério de novo aviso continua sendo (a) workflows recriados ou (b) artefato novo com erro diferente de "Invalid client or Invalid client credentials".
+**Por quê importa:** evita a rotina de 6h gastar um ciclo inteiro reinvestigando um bloqueio já documentado e que só o usuário pode resolver (regenerar OAuth2 em `accounts.tiny.com.br`).
+**Ver também:** `KNOWN_ISSUES.md` (seção Shopee/Tiny OAuth2), entradas de 2026-07-25/07-26/07-27/07-29/07-30 abaixo
+
 ### 2026-07-30 — Ciclo 6h de otimização Shopee: ainda parado, quinta reconfirmação seguida (não notifiquei)
 **Sistema/arquivo:** mesmo problema das entradas de 07-25/07-26/07-27/07-29/07-30 abaixo — `.github/workflows/{fetch,optimize}-shopee-listings.yml`, credencial `TINY_*`
 **O que descobri:** novo disparo do ciclo 6h, mesmo sandbox, mesma checagem rápida (não reinvestiguei do zero): (1) `env | grep -iE "TINY_|OLIST_|SHOPEE_|ANTHROPIC_API_KEY"` continua vazio; (2) `.github/workflows/` continua sem `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml`; (3) artefato mais recente em `listings/` (ordenado por nome) continua `shopee-listings-20260726-080756.json`/`optimization-report-20260726-060921.json` — nenhum novo desde a última reconfirmação. Nenhum dado de CTR/conversão fabricado, nenhum título/descrição/imagem/preço de produto editado. Não enviei notificação — estado idêntico ao já reportado ao usuário; critério de novo aviso continua sendo (a) workflows recriados ou (b) artefato novo com erro diferente de "Invalid client or Invalid client credentials".
