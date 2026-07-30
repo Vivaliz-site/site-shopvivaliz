@@ -1,0 +1,49 @@
+name: Repository Hygiene
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/**'
+      - 'config/**'
+      - 'docs/knowledge/**'
+      - 'docs/audits/**'
+      - '.env*'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/**'
+      - 'config/**'
+      - 'docs/knowledge/**'
+      - 'docs/audits/**'
+      - '.env*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: Audit repository hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Compile governance scripts
+        run: |
+          python -m py_compile scripts/audit_repository.py config/secrets.py
+
+      - name: Run repository hygiene audit
+        run: |
+          python scripts/audit_repository.py
+
+      - name: Strict alias audit on protected branches
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          python scripts/audit_repository.py --strict-aliases
