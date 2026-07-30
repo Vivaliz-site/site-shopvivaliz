@@ -103,11 +103,38 @@
         }, 80);
     }
 
+    // Antes: abria sempre em 1800ms, mesmo com o usuario ainda parado no
+    // hero -- o popup fixo (bottom-right) cobria boa parte do banner
+    // principal e do texto promocional nele (confirmado visualmente).
+    // Agora: abre no primeiro scroll (usuario ja saiu do hero) ou depois de
+    // um tempo maximo de fallback, o que vier primeiro, pra nao aparecer
+    // sempre em cima do hero em quem ainda nao rolou a pagina.
+    function scheduleOpen() {
+        var opened = false;
+        var minDelay = 1200;
+        var maxDelay = 6000;
+        var startedAt = Date.now();
+
+        function tryOpen() {
+            if (opened) return;
+            opened = true;
+            window.removeEventListener('scroll', onScroll);
+            clearTimeout(fallbackTimer);
+            openPopup();
+        }
+
+        function onScroll() {
+            if (Date.now() - startedAt < minDelay) return;
+            if (window.scrollY > 300) tryOpen();
+        }
+
+        var fallbackTimer = setTimeout(tryOpen, maxDelay);
+        window.addEventListener('scroll', onScroll, { passive: true });
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function () {
-            setTimeout(openPopup, 1800);
-        });
+        document.addEventListener('DOMContentLoaded', scheduleOpen);
     } else {
-        setTimeout(openPopup, 1800);
+        scheduleOpen();
     }
 })();
