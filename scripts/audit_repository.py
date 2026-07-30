@@ -66,6 +66,20 @@ REQUIRED_DOCS_FOR_ROUTINES = [
     Path("docs/knowledge/repository-index.md"),
     Path("docs/knowledge/routines-registry.md"),
     Path("docs/knowledge/secrets-and-integrations-map.md"),
+    Path("docs/knowledge/structure-policy.md"),
+    Path("docs/knowledge/ownership-map.md"),
+    Path("docs/audits/repository-cleanup-backlog.md"),
+]
+
+CANONICAL_SHOPEE_FILES = [
+    Path("scripts/marketplace/shopee/production_seo_apply.py"),
+    Path("scripts/marketplace/shopee/full_catalog_optimizer.py"),
+    Path("scripts/marketplace/shopee/README.md"),
+]
+
+LEGACY_SHOPEE_WRAPPERS = [
+    Path("scripts/shopee_production_seo_apply.py"),
+    Path("scripts/shopee_full_catalog_optimizer.py"),
 ]
 
 IGNORE_DIRS = {
@@ -161,6 +175,28 @@ def audit_required_docs(files: list[Path]) -> tuple[list[str], list[str]]:
     return errors, warnings
 
 
+def audit_migrated_shopee_structure(files: list[Path]) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    for path in CANONICAL_SHOPEE_FILES:
+        if not (ROOT / path).exists():
+            errors.append(f"Canonical Shopee file missing after migration: {path.as_posix()}")
+    for path in LEGACY_SHOPEE_WRAPPERS:
+        wrapper = ROOT / path
+        if not wrapper.exists():
+            warnings.append(f"Legacy Shopee wrapper missing: {path.as_posix()}")
+            continue
+        text = read_text(wrapper)
+        if "runpy.run_path" not in text or "marketplace" not in text:
+            errors.append(f"Legacy Shopee file is not a compatibility wrapper: {path.as_posix()}")
+    workflow = ROOT / ".github/workflows/shopee-production-seo.yml"
+    if workflow.exists():
+        text = read_text(workflow)
+        if "scripts/marketplace/shopee/production_seo_apply.py" not in text:
+            errors.append("Shopee production workflow still does not call canonical marketplace executor")
+    return errors, warnings
+
+
 def audit_production_guards(files: list[Path]) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -191,6 +227,7 @@ def main() -> int:
         audit_secret_values,
         lambda f: audit_legacy_aliases(f, args.strict_aliases),
         audit_required_docs,
+        audit_migrated_shopee_structure,
         audit_production_guards,
     ):
         audit_errors, audit_warnings = audit(files)
