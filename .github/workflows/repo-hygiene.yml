@@ -55,6 +55,9 @@ jobs:
       - name: Generate repository-wide structure report
         run: python scripts/maintenance/restructure_repository.py --write-report
 
+      - name: Validate structure manifest
+        run: python scripts/maintenance/validate_structure_manifest.py
+
       - name: Run repository hygiene audit
         run: python scripts/audit_repository.py
 
