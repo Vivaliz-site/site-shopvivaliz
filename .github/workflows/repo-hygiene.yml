@@ -33,7 +33,7 @@ jobs:
   hygiene:
     name: Audit repository hygiene
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
@@ -43,7 +43,7 @@ jobs:
 
       - name: Compile canonical Python areas
         run: |
-          python -m compileall -q scripts/ai scripts/maintenance scripts/marketplace config
+          python -m compileall -q scripts/ai scripts/maintenance scripts/marketplace scripts/dev config
           python -m py_compile scripts/audit_repository.py scripts/shopee_full_catalog_optimizer.py scripts/shopee_production_seo_apply.py
 
       - name: Run unit tests
@@ -58,10 +58,10 @@ jobs:
       - name: Validate structure manifest
         run: python scripts/maintenance/validate_structure_manifest.py
 
-      - name: Run repository hygiene audit
-        run: python scripts/audit_repository.py
+      - name: Enforce canonical secret aliases
+        run: python scripts/audit_repository.py --strict-aliases
 
-      - name: Strict alias and root-doc audit on protected branches
+      - name: Enforce root document policy on main
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: python scripts/audit_repository.py --strict-aliases --strict-root-docs
 
@@ -73,4 +73,6 @@ jobs:
           path: |
             docs/audits/repository-wide-structure-report.md
             docs/audits/repository-wide-structure-report.json
+            docs/audits/repository-restructure-blocked.json
+            docs/audits/secret-alias-canonicalization-report.json
           if-no-files-found: warn
