@@ -1,3 +1,5 @@
-Deploy trigger
-Updated at: 2026-06-26T17:41:00Z
-Purpose: run validation workflow.
+# Documento migrado
+
+Destino canônico: [`docs/audits/legacy-reports/deploy-trigger.txt`](docs/audits/legacy-reports/deploy-trigger.txt).
+
+Este arquivo permanece somente como ponte. Não adicionar conteúdo novo aqui.

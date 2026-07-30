@@ -1,1 +1,5 @@
-178406789799013684
+# Documento migrado
+
+Destino canônico: [`docs/audits/legacy-reports/PAYMENT-ID-PRONTO-COLAR.txt`](docs/audits/legacy-reports/PAYMENT-ID-PRONTO-COLAR.txt).
+
+Este arquivo permanece somente como ponte. Não adicionar conteúdo novo aqui.

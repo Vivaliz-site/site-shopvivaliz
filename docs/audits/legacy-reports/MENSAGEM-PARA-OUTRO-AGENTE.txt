@@ -1,0 +1,123 @@
+═══════════════════════════════════════════════════════════════════════════════
+⚠️  MENSAGEM CRÍTICA - LEIA ANTES DE ALTERAR QUALQUER COISA DE FTP OU DEPLOY
+═══════════════════════════════════════════════════════════════════════════════
+
+Oi,
+
+No dia 2026-07-08, você (ou seu processo) fez 3 mudanças que deixaram o site
+OFFLINE por 6+ horas. Agora documentei tudo para evitar repetir.
+
+LEIA ISTO PRIMEIRO (1-2 minutos):
+📄 CHECKLIST-RAPIDO-SECRETS-FTP.md
+   → Está no repositório, raiz do projeto
+   → Tem os 3 erros principais
+   → Tem valores CORRETOS para copy-paste
+
+SE TIVER DÚVIDAS, LEIA ISTO (5-10 minutos):
+📄 DOCUMENTO-CRITICO-2026-07-08-REPASSE.md
+   → Explicação COMPLETA de cada erro
+   → Por que deu errado
+   → Como evitar no futuro
+   → Procedimento seguro
+
+═══════════════════════════════════════════════════════════════════════════════
+OS 3 ERROS QUE DEIXARAM O SITE OFFLINE
+═══════════════════════════════════════════════════════════════════════════════
+
+ERRO #1 - FTP_PORT
+───────────────────
+❌ ERRADO:  FTP_PORT = 2121
+✅ CORRETO: FTP_PORT = 21
+
+Por quê? Porta 2121 é FTPS, mas deploy usa FTP puro (porta 21).
+
+
+ERRO #2 - FTP_REMOTE_DIR
+────────────────────────
+❌ ERRADO:  FTP_REMOTE_DIR = /home1/shop506/public_html/dev
+✅ CORRETO: FTP_REMOTE_DIR = /public_html/dev/
+
+Por quê? HostGator usa /public_html/ padrão. Nunca use /home1/shop506/...
+
+
+ERRO #3 - DEPLOY.YML LINHA 192
+───────────────────────────────
+❌ ERRADO:  path.write_text("\\n".join(...))
+✅ CORRETO: path.write_text("\n".join(...))
+
+Por quê? "\n" é newline real (1 byte), "\\n" são 2 caracteres (barra+n).
+Se errado, arquivo PHP fica quebrado → Parse error → HTTP 500.
+
+═══════════════════════════════════════════════════════════════════════════════
+VALORES CORRETOS (PARA COPIAR E COLAR)
+═══════════════════════════════════════════════════════════════════════════════
+
+FTP_SERVER = ftp.shopvivaliz.com.br
+FTP_USERNAME = dev5@dev.shopvivaliz.com.br
+FTP_PORT = 21
+FTP_REMOTE_DIR = /public_html/dev/
+FTP_PASSWORD = [pedir ao Frederico]
+
+═══════════════════════════════════════════════════════════════════════════════
+PROCEDIMENTO SEGURO ANTES DE ALTERAR QUALQUER COISA
+═══════════════════════════════════════════════════════════════════════════════
+
+1. LER documentos acima (OBRIGATÓRIO)
+
+2. NUNCA alterar em main - usar branch separada:
+   git checkout -b fix/nome-da-mudanca
+
+3. FAZER CHANGES e COMMIT em branch:
+   git add .
+   git commit -m "fix: descrição"
+
+4. CRIAR PULL REQUEST (não fazer push direto para main):
+   git push origin fix/nome-da-mudanca
+   → Abrir PR no GitHub
+
+5. PEDIR REVIEW antes de mergear:
+   → Atribuir ao Frederico
+   → Esperar aprovação
+
+6. MERGEAR após aprovação
+
+═══════════════════════════════════════════════════════════════════════════════
+COMANDOS PARA VERIFICAR
+═══════════════════════════════════════════════════════════════════════════════
+
+Ver secrets FTP:
+  gh secret list | grep FTP_
+
+Ver linha 192 do deploy (deve ter "\n" não "\\n"):
+  sed -n '192p' .github/workflows/deploy.yml
+
+═══════════════════════════════════════════════════════════════════════════════
+SE COMETER ERRO
+═══════════════════════════════════════════════════════════════════════════════
+
+1. NÃO fazer push --force
+2. Fazer revert:
+   git revert HEAD
+   git push origin [sua-branch]
+3. COMUNICAR Frederico imediatamente
+
+═══════════════════════════════════════════════════════════════════════════════
+CONTATO
+═══════════════════════════════════════════════════════════════════════════════
+
+Dúvidas? Leia os documentos completos:
+- CHECKLIST-RAPIDO-SECRETS-FTP.md (1 página, rápido)
+- DOCUMENTO-CRITICO-2026-07-08-REPASSE.md (completo)
+- INSTRUCOES-PARA-AGENTES.md
+
+Contato: Frederico (@fredmourao-ai)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+TL;DR:
+✅ FTP_PORT = 21 (não 2121)
+✅ FTP_REMOTE_DIR = /public_html/dev/ (não /home1/shop506/...)
+✅ deploy.yml linha 192 = "\n" (não "\\n")
+✅ Sempre fazer em branch separada + PR + review
+
+═══════════════════════════════════════════════════════════════════════════════

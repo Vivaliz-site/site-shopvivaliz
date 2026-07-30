@@ -1,3 +1,5 @@
-Teste de deploy automatico
-Data: 2026-07-03
-Acionado via ChatGPT/GitHub connector.
+# Documento migrado
+
+Destino canônico: [`docs/audits/legacy-reports/deploy-test.txt`](docs/audits/legacy-reports/deploy-test.txt).
+
+Este arquivo permanece somente como ponte. Não adicionar conteúdo novo aqui.

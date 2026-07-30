@@ -1,0 +1,55 @@
+════════════════════════════════════════════════════════════════════
+✅ CRIANDO PAYMENT REAL - INSTRUÇÕES
+════════════════════════════════════════════════════════════════════
+
+PASSO 1: Conectar ao servidor via SSH
+────────────────────────────────────────────────────────────────────
+ssh -i sua_chave_privada.pem ubuntu@137.131.156.17
+
+PASSO 2: Entrar no diretório do projeto
+────────────────────────────────────────────────────────────────────
+cd /home/ubuntu/site-shopvivaliz
+
+PASSO 3: Criar o Payment REAL
+────────────────────────────────────────────────────────────────────
+php << 'PHPEND'
+<?php
+require_once 'vendor/autoload.php';
+use MercadoPago\MercadoPagoConfig;
+use MercadoPago\Client\Payment\PaymentClient;
+
+// Carregar .env
+$env = parse_ini_file('.env');
+$token = $env['MERCADOPAGO_ACCESS_TOKEN'];
+
+MercadoPagoConfig::setAccessToken($token);
+$client = new PaymentClient();
+
+$payment = $client->create([
+    "transaction_amount" => 76.00,
+    "description" => "Rodízio 75mm - REAL",
+    "payment_method_id" => "pix",
+    "payer" => [
+        "email" => "teste@shopvivaliz.com.br",
+        "identification" => ["type" => "CPF", "number" => "12345678901"]
+    ]
+]);
+
+echo "\n✅ PAYMENT ID: " . $payment->id . "\n";
+echo "   STATUS: " . $payment->status . "\n\n";
+?>
+PHPEND
+
+PASSO 4: Copiar o PAYMENT ID retornado
+────────────────────────────────────────────────────────────────────
+Você vai receber algo como: 12345678901234567890
+
+PASSO 5: Usar no Mercado Pago
+────────────────────────────────────────────────────────────────────
+1. Acesse: https://www.mercadopago.com.br/developers/
+2. Suas integrações → ShopVivaliz
+3. Testar a integração
+4. Cole o PAYMENT ID
+5. Avaliar qualidade ✓
+
+════════════════════════════════════════════════════════════════════

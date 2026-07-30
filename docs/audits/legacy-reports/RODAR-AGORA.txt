@@ -1,0 +1,128 @@
+╔═════════════════════════════════════════════════════════════════════════════╗
+║                                                                             ║
+║              🎯 COMO RODAR AGORA - 3 PASSOS SIMPLES 🎯                    ║
+║                                                                             ║
+║                  ShopVivaliz Hybrid AI System v1.0.0                       ║
+║                          PRODUCTION READY                                  ║
+║                                                                             ║
+╚═════════════════════════════════════════════════════════════════════════════╝
+
+📌 TL;DR - Execute estes 3 passos:
+
+PASSO 1: Abra PowerShell COMO ADMINISTRADOR
+───────────────────────────────────────────────────────────────────────────────
+1. Clique em [Windows]
+2. Digite: PowerShell
+3. Clique direito → "Executar como administrador"
+
+
+PASSO 2: Execute o script de setup
+───────────────────────────────────────────────────────────────────────────────
+cd C:\site-shopvivaliz
+.\SETUP-COMPLETE.ps1
+
+Aguarde ~15 minutos. O script vai:
+  ✓ Instalar Docker Desktop
+  ✓ Instalar Ollama
+  ✓ Baixar modelo Mistral 7B (4.1 GB)
+  ✓ Testar tudo automaticamente
+
+
+PASSO 3: Em novo terminal, rode o servidor Ollama
+───────────────────────────────────────────────────────────────────────────────
+Abra NOVO PowerShell (não precisa admin):
+
+ollama serve
+
+Mantenha este terminal ABERTO enquanto trabalhar.
+
+
+PRONTO! 🎉 Seu sistema está operacional!
+───────────────────────────────────────────────────────────────────────────────
+
+Para ver o dashboard em tempo real:
+  → Abra OUTRO PowerShell e execute: .\RUN-DASHBOARD.ps1
+  → Navegue para: http://127.0.0.1:8000
+
+
+═════════════════════════════════════════════════════════════════════════════════
+
+🤖 O SISTEMA AUTOMATICAMENTE:
+
+  • Processa fila de tarefas a cada 10 minutos
+  • Roteia tarefas simples → Ollama (GRÁTIS)
+  • Escala tarefas complexas → GPT/Claude (sob orçamento)
+  • Mantém histórico em vector memory
+  • Controla gastos com limites automáticos
+  • Envia relatórios via GitHub Actions
+
+
+💡 EXEMPLOS DE TAREFAS:
+
+  Simples (Ollama, GRÁTIS):
+    → Procurar arquivo no repo
+    → Listar funções PHP
+    → Gerar relatorio de lint
+    → Encontrar código duplicado
+
+  Complexas (GPT, PAGO):
+    → Refatorar arquitetura
+    → Debugar problema complicado
+    → Analisar segurança
+    → Desenhar nova feature
+
+
+💰 PROTEÇÃO DE ORÇAMENTO:
+
+  Limite diário:  $10.00
+  Limite semanal: $50.00
+  Limite mensal:  $200.00
+
+  ✓ Sistema bloqueia automaticamente se atingir limite
+  ✓ Fallback automático para Ollama (grátis)
+  ✓ Alertas em 80% do uso
+
+
+🔗 ONDE ENCONTRAR TUDO:
+
+  Script de setup:       .\SETUP-COMPLETE.ps1
+  Dashboard:             .\RUN-DASHBOARD.ps1
+  Orquestrador contínuo: .\RUN-ORCHESTRATOR.ps1
+  Documentação técnica:  .\AI-SYSTEM-IMPLEMENTATION.md
+  Guia completo:         .\EXECUCAO-COMPLETA.md
+  Logs:                  .\logs\ai-orchestrator.log
+
+
+❓ DÚVIDAS?
+
+  Ver START-HERE.md (seção troubleshooting)
+  Ver EXECUCAO-COMPLETA.md (instruções detalhadas)
+  Checar logs: type .\logs\ai-orchestrator.log
+
+
+═════════════════════════════════════════════════════════════════════════════════
+
+✨ VOCÊ AGORA TEM ✨
+
+  ✓ IA local (Ollama) - GRÁTIS, OFFLINE
+  ✓ IA em nuvem (GPT/Claude) - PAGO, SOB DEMANDA
+  ✓ Orquestração inteligente - AUTOMÁTICA
+  ✓ Proteção de custos - ATIVA
+  ✓ Dashboard web - MONITORAMENTO EM TEMPO REAL
+  ✓ Vector memory - APRENDIZADO CONTÍNUO
+  ✓ Automação 24/7 - SEM INTERVENÇÃO
+
+
+═════════════════════════════════════════════════════════════════════════════════
+
+🚀 COMECE AGORA!
+
+Abra PowerShell COMO ADMIN e execute:
+
+    cd C:\site-shopvivaliz
+    .\SETUP-COMPLETE.ps1
+
+
+═════════════════════════════════════════════════════════════════════════════════
+
+Versão: 1.0.0 | Data: 2026-07-16 | Status: ✅ PRODUCTION READY

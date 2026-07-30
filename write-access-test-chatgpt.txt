@@ -1,2 +1,5 @@
-Teste de escrita realizado pelo ChatGPT em 2026-07-26.
-Se este arquivo existir, a permissão de escrita está funcionando.
+# Documento migrado
+
+Destino canônico: [`docs/audits/legacy-reports/write-access-test-chatgpt.txt`](docs/audits/legacy-reports/write-access-test-chatgpt.txt).
+
+Este arquivo permanece somente como ponte. Não adicionar conteúdo novo aqui.

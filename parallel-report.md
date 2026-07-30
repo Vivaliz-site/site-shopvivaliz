@@ -1,10 +1,5 @@
-# Relatrio de Execuo Paralela
+# Documento migrado
 
-**Data:** Mon Jun 29 12:50:14 UTC 2026
-**Modo:** 3 Agentes em Paralelo
-**Status:** Completo
+Destino canônico: [`docs/audits/legacy-reports/parallel-report.md`](docs/audits/legacy-reports/parallel-report.md).
 
-## Agentes Acionados
--  Gemini: Arquitetura
--  Claude: Implementao
--  ChatGPT: Validao
+Este arquivo permanece somente como ponte. Não adicionar conteúdo novo aqui.

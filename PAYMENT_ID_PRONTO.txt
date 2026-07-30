@@ -1,1 +1,5 @@
-1725377234567890123
+# Documento migrado
+
+Destino canônico: [`docs/audits/legacy-reports/PAYMENT_ID_PRONTO.txt`](docs/audits/legacy-reports/PAYMENT_ID_PRONTO.txt).
+
+Este arquivo permanece somente como ponte. Não adicionar conteúdo novo aqui.

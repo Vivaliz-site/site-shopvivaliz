@@ -1,1 +1,5 @@
-Teste realizado em 2026-07-15 13:45:35
+# Documento migrado
+
+Destino canônico: [`docs/audits/legacy-reports/TESTE-SYNC-1784133935.txt`](docs/audits/legacy-reports/TESTE-SYNC-1784133935.txt).
+
+Este arquivo permanece somente como ponte. Não adicionar conteúdo novo aqui.

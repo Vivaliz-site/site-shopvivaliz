@@ -1,4 +1,5 @@
-SYNC TEST - 2026-07-09 11:55:00
-Testando se git-auto-sync está funcionando corretamente no servidor FTP.
-Se você conseguir ler este arquivo, o sync ESTÁ funcionando.
-Timestamp: <?php echo date('Y-m-d H:i:s'); ?>
+# Documento migrado
+
+Destino canônico: [`docs/audits/legacy-reports/SYNC-TEST.txt`](docs/audits/legacy-reports/SYNC-TEST.txt).
+
+Este arquivo permanece somente como ponte. Não adicionar conteúdo novo aqui.

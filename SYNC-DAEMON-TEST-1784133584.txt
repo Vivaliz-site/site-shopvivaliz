@@ -1,1 +1,5 @@
-Teste de sync daemon - qua, 15 de jul de 2026 13:39:44
+# Documento migrado
+
+Destino canônico: [`docs/audits/legacy-reports/SYNC-DAEMON-TEST-1784133584.txt`](docs/audits/legacy-reports/SYNC-DAEMON-TEST-1784133584.txt).
+
+Este arquivo permanece somente como ponte. Não adicionar conteúdo novo aqui.

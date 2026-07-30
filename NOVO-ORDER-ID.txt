@@ -1,1 +1,5 @@
-ORD9531A4F2812EF2E003C5623
+# Documento migrado
+
+Destino canônico: [`docs/audits/legacy-reports/NOVO-ORDER-ID.txt`](docs/audits/legacy-reports/NOVO-ORDER-ID.txt).
+
+Este arquivo permanece somente como ponte. Não adicionar conteúdo novo aqui.

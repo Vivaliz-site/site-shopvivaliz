@@ -1,1 +1,5 @@
-17840671900002302001
+# Documento migrado
+
+Destino canônico: [`docs/audits/legacy-reports/ORDER-ID-FORMATO-MP.txt`](docs/audits/legacy-reports/ORDER-ID-FORMATO-MP.txt).
+
+Este arquivo permanece somente como ponte. Não adicionar conteúdo novo aqui.

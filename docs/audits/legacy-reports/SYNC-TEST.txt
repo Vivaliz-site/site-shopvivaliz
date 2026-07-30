@@ -1,0 +1,4 @@
+SYNC TEST - 2026-07-09 11:55:00
+Testando se git-auto-sync está funcionando corretamente no servidor FTP.
+Se você conseguir ler este arquivo, o sync ESTÁ funcionando.
+Timestamp: <?php echo date('Y-m-d H:i:s'); ?>

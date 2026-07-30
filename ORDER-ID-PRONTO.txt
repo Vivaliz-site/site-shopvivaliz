@@ -1,13 +1,5 @@
-✅ ORDER ID PRONTO PARA VALIDAÇÃO
+# Documento migrado
 
-178406697919906848
+Destino canônico: [`docs/audits/legacy-reports/ORDER-ID-PRONTO.txt`](docs/audits/legacy-reports/ORDER-ID-PRONTO.txt).
 
-Este é um Order ID válido no formato do Mercado Pago.
-Use para autenticar sua integração no painel de desenvolvedores.
-
-Link: https://www.mercadopago.com.br/developers/
-      → Suas integrações
-      → ShopVivaliz  
-      → Testar a integração
-      → Cole o ID acima
-      → Avaliar qualidade
+Este arquivo permanece somente como ponte. Não adicionar conteúdo novo aqui.
