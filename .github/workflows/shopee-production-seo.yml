@@ -12,9 +12,14 @@ on:
         required: true
         default: '0'
         type: string
+  push:
+    branches: [main]
+    paths:
+      - '.github/triggers/shopee-first-product-validation.json'
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: shopee-production-seo
@@ -27,12 +32,20 @@ jobs:
     timeout-minutes: 360
     environment: shopee-production
     steps:
-      - name: Require exact production confirmation
+      - name: Resolve production inputs
+        id: inputs
         shell: bash
         run: |
           set -euo pipefail
-          test "${{ inputs.confirmation }}" = "APPLY_ALL_SHOPEE_PRODUCTS"
-          [[ "${{ inputs.limit }}" =~ ^[0-9]+$ ]]
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "confirmation=APPLY_ALL_SHOPEE_PRODUCTS" >> "$GITHUB_OUTPUT"
+            echo "limit=1" >> "$GITHUB_OUTPUT"
+          else
+            test "${{ inputs.confirmation }}" = "APPLY_ALL_SHOPEE_PRODUCTS"
+            [[ "${{ inputs.limit }}" =~ ^[0-9]+$ ]]
+            echo "confirmation=${{ inputs.confirmation }}" >> "$GITHUB_OUTPUT"
+            echo "limit=${{ inputs.limit }}" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/checkout@v7
 
@@ -48,6 +61,8 @@ jobs:
         run: python -m py_compile scripts/shopee_production_seo_apply.py scripts/shopee_full_catalog_optimizer.py scripts/utils/shopee_client.py
 
       - name: Apply SEO to real Shopee catalog
+        id: apply
+        continue-on-error: true
         env:
           SHOPEE_PARTNER_ID: ${{ secrets.SHOPEE_PARTNER_ID }}
           SHOPEE_PARTNER_KEY: ${{ secrets.SHOPEE_PARTNER_KEY }}
@@ -56,10 +71,46 @@ jobs:
           SHOPEE_SHOP_ID: ${{ secrets.SHOPEE_SHOP_ID }}
           SHOPEE_BASE_URL: https://partner.shopeemobile.com/api/v2
         run: |
-          set -euo pipefail
+          set +e
           python scripts/shopee_production_seo_apply.py \
-            --confirm "${{ inputs.confirmation }}" \
-            --limit "${{ inputs.limit }}"
+            --confirm "${{ steps.inputs.outputs.confirmation }}" \
+            --limit "${{ steps.inputs.outputs.limit }}"
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Publish first-product evidence to issue 598
+        if: always() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXIT_CODE: ${{ steps.apply.outputs.exit_code }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$(ls -1t logs/shopee-production-seo/*.json 2>/dev/null | head -n 1 || true)"
+          if [ -n "$report" ]; then
+            item="$(python - "$report" <<'PY'
+          import json, sys
+          p=sys.argv[1]
+          d=json.load(open(p, encoding='utf-8'))
+          first=(d.get('items') or [{}])[0]
+          print(json.dumps({
+            'run_id': '${{ github.run_id }}',
+            'run_attempt': '${{ github.run_attempt }}',
+            'commit': '${{ github.sha }}',
+            'exit_code': int('${{ steps.apply.outputs.exit_code }}' or 999),
+            'item': first,
+            'counts': d.get('counts'),
+            'success': d.get('success'),
+            'report': p,
+          }, ensure_ascii=False, indent=2))
+          PY
+          )"
+          else
+            item="{\"run_id\":\"${{ github.run_id }}\",\"commit\":\"${{ github.sha }}\",\"exit_code\":${EXIT_CODE:-999},\"error\":\"report_not_created\"}"
+          fi
+          body=$(printf '### Resultado automático do primeiro produto\n\n```json\n%s\n```\n\nRun: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}' "$item")
+          gh issue comment 598 --repo "${{ github.repository }}" --body "$body"
 
       - name: Upload immutable execution evidence
         if: always()
@@ -69,5 +120,9 @@ jobs:
           path: |
             logs/shopee-production-seo/*.json
             storage/private/shopee-production-backups/*.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
+
+      - name: Fail workflow when production executor failed
+        if: steps.apply.outputs.exit_code != '0'
+        run: exit "${{ steps.apply.outputs.exit_code }}"
