@@ -46,13 +46,13 @@ Olist e Tiny fazem parte do mesmo ecossistema empresarial, mas podem expor APIs,
 
 ### Aliases legados aceitos temporariamente
 
-| Alias legado | Mapear para |
-|---|---|
-| `TOKEN_API_OLIST` | `OLIST_ACCESS_TOKEN` ou `OLIST_API_KEY`, conforme uso do script legado |
-| `CLIENT_ID_API_OLIST` | `OLIST_CLIENT_ID` |
-| `CLIENT_SECRET_OLIST` | `OLIST_CLIENT_SECRET` |
-| `URL_REDIRCT_OLIST` | `OLIST_REDIRECT_URI` |
-| `URL_TINY_OLIST` | `OLIST_API_BASE_URL` ou endpoint específico do script |
+| Alias legado | Mapear para | Status |
+|---|---|---|
+| `TOKEN_API_OLIST` | `OLIST_ACCESS_TOKEN` ou `OLIST_API_KEY`, conforme uso do script legado | centralizado em `config/secrets.py` |
+| `CLIENT_ID_API_OLIST` | `OLIST_CLIENT_ID` | centralizado em `config/secrets.py` |
+| `CLIENT_SECRET_OLIST` | `OLIST_CLIENT_SECRET` | centralizado em `config/secrets.py` |
+| `URL_REDIRCT_OLIST` | `OLIST_REDIRECT_URI` | centralizado em `config/secrets.py` |
+| `URL_TINY_OLIST` | `OLIST_API_BASE_URL` ou endpoint específico do script | centralizado em `config/secrets.py` |
 
 ### Secrets canônicos Tiny
 
@@ -75,6 +75,12 @@ Olist e Tiny fazem parte do mesmo ecossistema empresarial, mas podem expor APIs,
 | `SHOPEE_REFRESH_TOKEN` | Refresh token | Usado para renovação automática |
 | `SHOPEE_TOKEN_REFRESH_INTERVAL_SECONDS` | Intervalo preventivo | Padrão 7200 segundos, 2 horas |
 | `SHOPEE_API_BASE_URL` ou `SHOPEE_BASE_URL` | Endpoint | Padronizar novos fluxos em `SHOPEE_API_BASE_URL`; `SHOPEE_BASE_URL` é aceito por compatibilidade |
+
+### Estrutura canônica Shopee
+
+- Implementações de marketplace Shopee: `scripts/marketplace/shopee/`.
+- Cliente compartilhado Shopee: `scripts/utils/shopee_client.py`.
+- Wrappers legados temporários: `scripts/shopee_production_seo_apply.py` e `scripts/shopee_full_catalog_optimizer.py`.
 
 Ambiente de teste:
 
