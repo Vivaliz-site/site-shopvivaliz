@@ -92,6 +92,7 @@ def smart_validate(before: dict[str, Any], after: dict[str, Any]) -> list[str]:
 
 
 def process_images(client: ShopeeClient, item: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+    """Generate, validate and upload images. This function is apply-only."""
     current = image_ids(item)
     generated = generate_for_product(item)
     validation = validate_batch(generated)
@@ -108,14 +109,58 @@ def process_images(client: ShopeeClient, item: dict[str, Any]) -> tuple[list[str
     }
 
 
+def restore_product(client: ShopeeClient, before: dict[str, Any]) -> None:
+    client.update_product(
+        int(before["item_id"]),
+        title=str(before.get("item_name") or ""),
+        description=str(before.get("description") or ""),
+        image_ids=image_ids(before),
+    )
+
+
+def apply_product_update(
+    client: ShopeeClient,
+    before: dict[str, Any],
+    *,
+    title: str,
+    description: str,
+    images: list[str],
+) -> None:
+    """Apply one update and automatically restore the original listing on failure."""
+    item_id = int(before["item_id"])
+    try:
+        client.update_product(item_id, title=title, description=description, image_ids=images)
+        verified = client.get_product_details([item_id])[0]
+        if verified.get("price_info") != before.get("price_info"):
+            raise RuntimeError("price invariant violated")
+        if verified.get("stock_info_v2") != before.get("stock_info_v2"):
+            raise RuntimeError("stock invariant violated")
+    except Exception as update_error:
+        try:
+            restore_product(client, before)
+            restored = client.get_product_details([item_id])[0]
+            if (
+                restored.get("item_name") != before.get("item_name")
+                or restored.get("description") != before.get("description")
+                or image_ids(restored) != image_ids(before)
+            ):
+                raise RuntimeError("rollback verification failed")
+        except Exception as rollback_error:
+            raise RuntimeError(
+                f"Update failed for {item_id}; rollback also failed: {rollback_error}"
+            ) from update_error
+        raise RuntimeError(f"Update failed for {item_id}; rollback completed") from update_error
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--apply", action="store_true")
-    parser.add_argument("--dry-run", action="store_true")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--apply", action="store_true")
+    mode.add_argument("--dry-run", action="store_true")
     parser.add_argument("--skip-images", action="store_true")
     parser.add_argument("--limit", type=int, default=0)
     args = parser.parse_args()
-    apply = bool(args.apply and not args.dry_run)
+    apply = bool(args.apply)
 
     client = ShopeeClient()
     listed = list(client.iter_all_products())
@@ -137,8 +182,11 @@ def main() -> int:
         title = build_title(item)
         description = build_description(item, title)
         images = image_ids(item)
-        image_report: dict[str, Any] = {"skipped": True}
-        if not args.skip_images:
+        image_report: dict[str, Any] = {
+            "skipped": True,
+            "reason": "disabled_by_flag" if args.skip_images else "dry_run_no_external_mutation",
+        }
+        if apply and not args.skip_images:
             images, image_report = process_images(client, item)
         candidate = deepcopy(item)
         candidate["item_name"] = title
@@ -154,10 +202,13 @@ def main() -> int:
             "updated": False,
         }
         if apply and not validation_errors:
-            client.update_product(int(item["item_id"]), title=title, description=description, image_ids=images)
-            verified = client.get_product_details([int(item["item_id"])])[0]
-            if verified.get("price_info") != before.get("price_info") or verified.get("stock_info_v2") != before.get("stock_info_v2"):
-                raise RuntimeError(f"Price/stock invariant violated for {item['item_id']}")
+            apply_product_update(
+                client,
+                before,
+                title=title,
+                description=description,
+                images=images,
+            )
             entry["updated"] = True
         report["items"].append(entry)
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
