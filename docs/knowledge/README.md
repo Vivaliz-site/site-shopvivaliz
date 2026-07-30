@@ -6,10 +6,10 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 
 - [`project.md`](project.md) — visão geral, objetivo e módulos do sistema.
 - [`repository-index.md`](repository-index.md) — índice operacional do repositório, rotinas, workflows, scripts e regra obrigatória de registro de novas rotinas.
-- [`routines-registry.md`](routines-registry.md) — registro obrigatório de rotinas, workflows, scripts operacionais, gatilhos, entradas, saídas, risco e validação.
+- [`routines-registry.md`](routines-registry.md) — registro obrigatório de rotinas, workflows, scripts operacionais e validações.
+- [`ownership-map.md`](ownership-map.md) — donos funcionais por área e caminhos principais.
+- [`structure-policy.md`](structure-policy.md) — política de estrutura alvo e regra para mover arquivos existentes.
 - [`secrets-and-integrations-map.md`](secrets-and-integrations-map.md) — nomes canônicos de secrets, aliases legados e mapa de integrações.
-- [`ownership-map.md`](ownership-map.md) — donos funcionais por área, caminho e regra de mudança.
-- [`structure-policy.md`](structure-policy.md) — estrutura alvo, regras de criação, arquivamento e bloqueios.
 - [`squad-chat.md`](squad-chat.md) — contrato, health check e providers do Squad Chat.
 - [`troubleshooting.md`](troubleshooting.md) — diagnóstico de erros HTTP, rede, integrações e deploy.
 - [`deploy.md`](deploy.md) — fluxo de publicação, curl, CI e checklist.
@@ -29,20 +29,16 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 - [`official-site.md`](official-site.md) — uso do domínio oficial como fonte institucional e comercial.
 - [`legal-source-map.md`](legal-source-map.md) — correspondência entre páginas oficiais e arquivos legais locais.
 
-## Auditorias e limpeza
-
-- [`../audits/repository-cleanup-backlog.md`](../audits/repository-cleanup-backlog.md) — backlog controlado de limpeza estrutural, duplicidades e itens sem dono.
-
-Outros documentos existentes na pasta podem registrar versões, dispositivos, decisões históricas e referências específicas.
+Auditorias e backlogs ficam em `docs/audits/`, especialmente [`../audits/repository-cleanup-backlog.md`](../audits/repository-cleanup-backlog.md).
 
 ## Ordem recomendada para diagnóstico
 
 1. Identifique o sintoma e o erro real.
 2. Consulte `repository-index.md` para localizar rotinas, workflows e scripts envolvidos.
-3. Consulte `routines-registry.md` quando houver script, workflow, cron, trigger, job ou automação.
-4. Consulte `secrets-and-integrations-map.md` quando houver credenciais, marketplace, ERP, email, deploy ou API externa.
-5. Consulte `ownership-map.md` para descobrir a área dona.
-6. Consulte `structure-policy.md` antes de criar, mover, arquivar ou remover arquivos.
+3. Consulte `routines-registry.md` para confirmar gatilho, entrada, saída, risco e validação.
+4. Consulte `ownership-map.md` para identificar dono funcional.
+5. Consulte `structure-policy.md` antes de mover, arquivar ou criar arquivo novo.
+6. Consulte `secrets-and-integrations-map.md` quando houver credenciais, marketplace, ERP, email, deploy ou API externa.
 7. Consulte `troubleshooting.md`.
 8. Valide o módulo correspondente no código.
 9. Use `testing.md` para reproduzir.
@@ -50,15 +46,12 @@ Outros documentos existentes na pasta podem registrar versões, dispositivos, de
 11. Consulte `official-site.md` quando a dúvida envolver conteúdo institucional, termos, categorias ou meios de pagamento.
 12. Registre lacunas na documentação ao encontrar comportamento novo.
 
-## Regra de atualização obrigatória
+## Migração estrutural em andamento
 
-Toda nova rotina, workflow, script operacional, integração, secret canônico, alias de compatibilidade ou mudança estrutural deve atualizar, no mesmo PR/commit, os documentos correspondentes:
+A primeira migração física aplicada foi a organização dos scripts Shopee:
 
-- `repository-index.md`
-- `routines-registry.md`
-- `secrets-and-integrations-map.md`, quando envolver credenciais ou integrações
-- `ownership-map.md`, quando envolver área dona nova ou alterada
-- `structure-policy.md`, quando alterar padrão estrutural
-- `../audits/repository-cleanup-backlog.md`, quando identificar sujeira, legado ou risco
+- implementação canônica: `scripts/marketplace/shopee/`;
+- wrappers legados: `scripts/shopee_production_seo_apply.py` e `scripts/shopee_full_catalog_optimizer.py`;
+- workflow atualizado: `.github/workflows/shopee-production-seo.yml`.
 
 A documentação não substitui evidência do código, logs, banco, workflow ou resposta do servidor.
