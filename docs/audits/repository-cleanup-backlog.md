@@ -12,6 +12,7 @@ Este backlog controla limpeza estrutural sem delecoes arriscadas.
 - `bloqueado`: depende de acesso, credencial, decisao externa ou teste.
 - `concluido-com-wrapper`: implementacao movida e caminho antigo mantido temporariamente.
 - `mapeado-globalmente`: item coberto por scanner/indice global, aguardando lote fisico seguro.
+- `migrado-com-stub`: conteudo movido e arquivo antigo substituido por ponte.
 
 ## Prioridades
 
@@ -30,7 +31,7 @@ Este backlog controla limpeza estrutural sem delecoes arriscadas.
 | CLEAN-004 | P1 | Scripts | Scripts de producao espalhados | concluido-com-wrapper | Shopee SEO e otimizador movidos para `scripts/marketplace/shopee/`; wrappers legados mantidos | Workflow e testes apontam para caminho canonico; CI compila caminho novo e wrappers |
 | CLEAN-005 | P1 | Shopee | Fluxos de SEO e triggers temporarios | manter | Manter apenas com issue/evidencia; remover triggers temporarios depois da validacao | Run com primeiro produto validado ou decisao de rollback |
 | CLEAN-006 | P1 | Config | `config/secrets.py` com aliases legados | manter | Centralizar aliases e proibir novos usos fora do centralizador | `python -m py_compile config/secrets.py` e audit sem erros bloqueantes |
-| CLEAN-007 | P2 | Docs | Documentos dispersos sem indice | mapeado-globalmente | `docs/operations/legacy-root-docs-index.md` criado; scanner global identifica candidatos | `restructure_repository.py --write-report` gera relatorio de 100% da arvore |
+| CLEAN-007 | P2 | Docs | Documentos dispersos sem indice | migrado-com-stub | Lote inicial movido para `docs/operations/**`; indice global continua controlando pendentes | Stubs criados na raiz e destinos registrados |
 | CLEAN-008 | P2 | Logs/backups | Logs e backups versionados indevidos | mapeado-globalmente | Scanner global classifica artifacts temporarios e relatorios | Relatorio em `docs/audits/repository-wide-structure-report.md/json` |
 | CLEAN-009 | P2 | Archive | Codigo experimental misturado | mapeado-globalmente | Scanner global classifica candidatos a `archive/` ou `scripts/dev/` | Nao mover sem confirmar imports/workflows |
 | CLEAN-010 | P2 | Testes | Testes sem separacao unit/integration/smoke | migrar | Criar estrutura alvo e mover gradualmente | CI executando caminho correto |
@@ -39,12 +40,16 @@ Este backlog controla limpeza estrutural sem delecoes arriscadas.
 
 ## Migrações executadas neste PR
 
-| Data | ID | Antes | Depois | Wrapper | Evidencia |
+| Data | ID | Antes | Depois | Wrapper/Stub | Evidencia |
 |---|---|---|---|---|---|
-| 2026-07-30 | CLEAN-004 | `scripts/shopee_production_seo_apply.py` | `scripts/marketplace/shopee/production_seo_apply.py` | Sim | `.github/workflows/shopee-production-seo.yml` atualizado para caminho novo |
-| 2026-07-30 | CLEAN-004 | `scripts/shopee_full_catalog_optimizer.py` | `scripts/marketplace/shopee/full_catalog_optimizer.py` | Sim | `repo-hygiene.yml` compila caminho novo e wrapper |
+| 2026-07-30 | CLEAN-004 | `scripts/shopee_production_seo_apply.py` | `scripts/marketplace/shopee/production_seo_apply.py` | wrapper | `.github/workflows/shopee-production-seo.yml` atualizado para caminho novo |
+| 2026-07-30 | CLEAN-004 | `scripts/shopee_full_catalog_optimizer.py` | `scripts/marketplace/shopee/full_catalog_optimizer.py` | wrapper | `repo-hygiene.yml` compila caminho novo e wrapper |
 | 2026-07-30 | CLEAN-007/CLEAN-012 | documentos operacionais soltos na raiz | `docs/operations/legacy-root-docs-index.md` | N/A | Indice global criado com destinos alvo por documento |
 | 2026-07-30 | CLEAN-012 | auditoria manual parcial | `scripts/maintenance/restructure_repository.py` | N/A | Scanner global criado para varrer 100% do checkout no CI |
+| 2026-07-30 | CLEAN-007 | `AUTONOMOUS_TRIO_GUIDE.md` | `docs/operations/agents/autonomous-trio-guide.md` | stub | Arquivo raiz aponta para destino canonico |
+| 2026-07-30 | CLEAN-007 | `SINCRONIZACAO-OLIST-STATUS.md` | `docs/operations/olist/sync-status.md` | stub | Arquivo raiz aponta para destino canonico |
+| 2026-07-30 | CLEAN-007 | `CHECKLIST-RAPIDO-SECRETS-FTP.md` | `docs/operations/deploy/ftp-secrets-checklist.md` | stub | Arquivo raiz aponta para destino canonico |
+| 2026-07-30 | CLEAN-007 | `PIPELINE-SHOPEE-STATUS.txt` | `docs/operations/shopee/pipeline-status-legacy.md` | stub | Arquivo raiz aponta para destino canonico |
 
 ## Protocolo de limpeza
 
@@ -59,3 +64,4 @@ Este backlog controla limpeza estrutural sem delecoes arriscadas.
 - 2026-07-30: backlog criado durante auditoria estrutural inicial do repositorio.
 - 2026-07-30: primeira migracao fisica aplicada para scripts Shopee, mantendo wrappers legados.
 - 2026-07-30: scanner global e indice de documentos legados da raiz adicionados para cobrir o repositorio inteiro.
+- 2026-07-30: lote inicial de documentos raiz migrado para `docs/operations/**` com stubs de compatibilidade.
