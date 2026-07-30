@@ -19,7 +19,7 @@ header('Content-Type: text/html; charset=UTF-8');
     <meta name="theme-color" content="#173B63">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/shipping-v7.css">
-    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-29-2">
+    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-30-1">
     <!-- Polimento de layout: precisa vir por ultimo para vencer na cascata. -->
     <link rel="stylesheet" href="/css/layout-polish-v1.css?v=2026-07-29-1">
     <style>

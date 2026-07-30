@@ -586,7 +586,7 @@ if ($notFound) {
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/premium-theme.css?v=2026-07-11">
     <link rel="stylesheet" href="/css/product-conversion-v5.css?v=2026-07-26-v2">
-    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-29-2">
+    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-30-1">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
     <!-- Polimento de layout: precisa vir por ultimo para vencer na cascata. -->
     <link rel="stylesheet" href="/css/layout-polish-v1.css?v=2026-07-29-1">
@@ -999,7 +999,7 @@ if ($notFound) {
 
     <script src="/js/product-conversion-v5.js?v=2026-07-26-v3"></script>
     <script src="/js/cro-interactions.js"></script>
-    <script src="/js/first-purchase-popup-v1.js?v=2026-07-29-2" defer></script>
+    <script src="/js/first-purchase-popup-v1.js?v=2026-07-30-1" defer></script>
     <script src="/js/auto-image-carousel.js?v=20260719-2"></script>
     <?php include __DIR__ . '/includes/footer.php'; ?>
 </body>
