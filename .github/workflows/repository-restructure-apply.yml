@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: write
 
 concurrency:
   group: repository-restructure-apply
@@ -61,14 +63,52 @@ jobs:
             git push origin HEAD:audit/repo-structure-secrets-index
           fi
 
-      - name: Apply canonical secret names
+      - name: Execute canonical secret-name migration
+        id: aliases
+        shell: bash
         run: |
-          python scripts/maintenance/canonicalize_secret_aliases.py --apply
+          set +e
+          python scripts/maintenance/canonicalize_secret_aliases.py --apply > alias-output.log 2>&1
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Commit canonical aliases when executor succeeded
+        if: steps.aliases.outputs.exit_code == '0'
+        run: |
           git add -A
           if ! git diff --cached --quiet; then
             git commit -m "refactor(repo): replace legacy secret aliases with canonical names"
             git push origin HEAD:audit/repo-structure-secrets-index
           fi
+
+      - name: Publish alias migration diagnostic to PR
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALIAS_EXIT_CODE: ${{ steps.aliases.outputs.exit_code }}
+        run: |
+          python - <<'PY' > alias-comment.md
+          import os
+          from pathlib import Path
+
+          output = Path("alias-output.log").read_text(encoding="utf-8", errors="replace") if Path("alias-output.log").exists() else "executor output not created"
+          tail = "\n".join(output.splitlines()[-30:])
+          print("### Diagnóstico da migração de aliases canônicos")
+          print()
+          print(f"- run_id: `{os.environ.get('GITHUB_RUN_ID', '')}`")
+          print(f"- commit inicial: `{os.environ.get('GITHUB_SHA', '')}`")
+          print(f"- exit_code: `{os.environ.get('ALIAS_EXIT_CODE', 'missing')}`")
+          print()
+          print("```text")
+          print(tail)
+          print("```")
+          PY
+          gh pr comment 599 --body-file alias-comment.md
+
+      - name: Stop when alias executor failed
+        if: steps.aliases.outputs.exit_code != '0'
+        run: exit 1
 
       - name: Reconcile manual final migrations
         run: python scripts/maintenance/reconcile_structure_manifest.py
@@ -106,4 +146,5 @@ jobs:
             docs/audits/repository-restructure-blocked.json
             docs/audits/secret-alias-canonicalization-report.json
             config/repository-structure-manifest.json
+            alias-output.log
           if-no-files-found: warn
