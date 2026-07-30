@@ -205,7 +205,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             </button>
             <div class="checkout-support-inline">
                 <strong>Atendimento ágil:</strong>
-                <a href="https://wa.me/<?= htmlspecialchars($whatsapp) ?>?text=<?= rawurlencode('Olá! Preciso de ajuda para finalizar meu pedido na Vivaliz.') ?>" target="_blank" rel="noreferrer">
+                <a href="https://wa.me/<?= htmlspecialchars($whatsapp) ?>?text=<?= rawurlencode('Olá! Preciso de ajuda para finalizar meu pedido na Vivaliz.') ?>" target="_blank" rel="noopener noreferrer">
                     fale no WhatsApp antes de concluir
                 </a>
             </div>
@@ -278,7 +278,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         <p class="pix-amount">Valor: <strong id="pix-amount-display">—</strong></p>
         <p class="muted" style="font-size:13px">Após o pagamento, você receberá a confirmação por e-mail ou WhatsApp.</p>
         <div class="modal-actions">
-            <a id="wpp-confirm-link" href="#" target="_blank" class="btn btn-wpp">
+            <a id="wpp-confirm-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-wpp">
                 💬 Confirmar pelo WhatsApp
             </a>
             <button onclick="document.getElementById('pix-modal').hidden=true" class="btn btn-secondary">
@@ -314,7 +314,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         <p id="order-number-msg" style="font-weight:700;color:#0f8f62;font-size:18px"></p>
         <p>Nossa equipe comercial já seguirá com a confirmação de frete e pagamento.</p>
         <div class="modal-actions">
-            <a id="success-wpp-link" href="#" target="_blank" class="btn btn-wpp">
+            <a id="success-wpp-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-wpp">
                 💬 Falar no WhatsApp
             </a>
             <a href="/catalogo" class="btn btn-secondary">Continuar comprando</a>
