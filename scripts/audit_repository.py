@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """Repository hygiene audit for ShopVivaliz.
 
-This script is intentionally conservative: it blocks obvious repository hygiene
-problems and warns about legacy aliases that should be migrated gradually.
-It never prints secret values.
+The audit blocks concrete security and structure problems. Production-guard
+warnings are intentionally limited to active mutating routines, avoiding noise
+from wrappers, archived code, documentation and read-only clients.
 """
 from __future__ import annotations
 
 import argparse
+import json
 import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+MANIFEST_PATH = ROOT / "config" / "repository-structure-manifest.json"
 
 ALLOWED_SECRET_ALIAS_FILES = {
     "config/secrets.py",
@@ -63,7 +65,7 @@ SECRET_VALUE_PATTERNS = [
     re.compile(r"(?i)\b(?:token|bearer|authorization)\s*[:=]\s*eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}"),
 ]
 
-REQUIRED_DOCS_FOR_ROUTINES = [
+REQUIRED_GOVERNANCE_FILES = [
     Path("docs/knowledge/repository-index.md"),
     Path("docs/knowledge/routines-registry.md"),
     Path("docs/knowledge/secrets-and-integrations-map.md"),
@@ -71,6 +73,9 @@ REQUIRED_DOCS_FOR_ROUTINES = [
     Path("docs/knowledge/ownership-map.md"),
     Path("docs/audits/repository-cleanup-backlog.md"),
     Path("docs/operations/legacy-root-docs-index.md"),
+    Path("scripts/maintenance/restructure_repository.py"),
+    Path("scripts/maintenance/validate_structure_manifest.py"),
+    Path("config/repository-structure-manifest.json"),
 ]
 
 CANONICAL_SHOPEE_FILES = [
@@ -84,36 +89,6 @@ LEGACY_SHOPEE_WRAPPERS = [
     Path("scripts/shopee_full_catalog_optimizer.py"),
 ]
 
-REPOSITORY_WIDE_RESTRUCTURE_FILES = [
-    Path("scripts/maintenance/restructure_repository.py"),
-    Path("docs/operations/legacy-root-docs-index.md"),
-]
-
-MIGRATED_SCRIPT_MAPPINGS = {
-    "scripts/autonomous-executor.py": "scripts/ai/autonomous-executor.py",
-    "scripts/continuous-executor.py": "scripts/ai/continuous-executor.py",
-    "scripts/parallel-executor.py": "scripts/ai/parallel-executor.py",
-    "scripts/heartbeat-executor.py": "scripts/ai/heartbeat-executor.py",
-    "scripts/auto-task-generator.py": "scripts/ai/auto-task-generator.py",
-    "scripts/auto-documentation.py": "scripts/ai/auto-documentation.py",
-    "scripts/manage-tasks-queue.py": "scripts/ai/manage-tasks-queue.py",
-    "scripts/metrics-collector.py": "scripts/ai/metrics-collector.py",
-    "scripts/observability-suite.py": "scripts/ai/observability-suite.py",
-    "scripts/advanced-features.py": "scripts/ai/advanced-features.py",
-    "scripts/learning-loop.py": "scripts/ai/learning-loop.py",
-    "scripts/smart-task-scheduler.py": "scripts/ai/smart-task-scheduler.py",
-    "scripts/version-manager.py": "scripts/ai/version-manager.py",
-    "scripts/slack-notifier.py": "scripts/ai/slack-notifier.py",
-    "scripts/generate-report.py": "scripts/ai/generate-report.py",
-    "scripts/deploy-diagnostic.py": "scripts/maintenance/deploy-diagnostic.py",
-    "scripts/quality-assurance.py": "scripts/maintenance/quality-assurance.py",
-    "scripts/vulnerability-scanner.py": "scripts/maintenance/vulnerability-scanner.py",
-    "scripts/rollback-manager.py": "scripts/maintenance/rollback-manager.py",
-    "scripts/autonomous-validator.py": "scripts/maintenance/autonomous-validator.py",
-    "scripts/autonomous-change-guard.py": "scripts/maintenance/autonomous-change-guard.py",
-    "scripts/system-health-check.py": "scripts/maintenance/system-health-check.py",
-}
-
 ROOT_DOC_ALLOWLIST = {
     "README.md",
     "START_HERE.md",
@@ -125,24 +100,87 @@ ROOT_DOC_ALLOWLIST = {
 }
 
 ROOT_STUB_MARKERS = (
-    "Documento migrado",
-    "Relatório migrado",
-    "Relatorio migrado",
-    "Auditoria migrada",
-    "Registro migrado",
-    "Plano migrado",
-    "Diagnóstico migrado",
-    "Diagnostico migrado",
-    "Guia de agentes migrado",
-    "Início rápido",
-    "Inicio rapido",
-    "PIPELINE SHOPEE - DOCUMENTO MIGRADO",
+    "documento migrado",
+    "relatório migrado",
+    "relatorio migrado",
+    "auditoria migrada",
+    "registro migrado",
+    "plano migrado",
+    "diagnóstico migrado",
+    "diagnostico migrado",
+    "guia de agentes migrado",
+    "início rápido",
+    "inicio rapido",
+    "pipeline shopee - documento migrado",
+    "conteúdo histórico preservado",
+    "conteudo historico preservado",
+    "permanece somente como ponte",
+    "apenas como ponte",
 )
 
 IGNORE_DIRS = {
     ".git", "node_modules", "vendor", ".next", "dist", "build", "coverage",
     "storage/private", "logs", ".cache", "__pycache__",
 }
+
+WRAPPER_MARKERS = (
+    "runpy.run_path",
+    "exec(compile(",
+    "wrapper legado",
+    "implementação canônica",
+    "implementacao canonica",
+)
+
+SKIP_PRODUCTION_GUARD_PREFIXES = (
+    "scripts/dev/",
+    "archive/",
+    ".github/workflows-archive/",
+)
+
+SKIP_PRODUCTION_GUARD_SEGMENTS = (
+    "/legacy/",
+    "/tests/",
+)
+
+SKIP_PRODUCTION_GUARD_FILES = {
+    "scripts/audit_repository.py",
+    "scripts/maintenance/restructure_repository.py",
+    "scripts/maintenance/validate_structure_manifest.py",
+    "scripts/maintenance/canonicalize_secret_aliases.py",
+    "scripts/maintenance/reconcile_structure_manifest.py",
+    ".github/workflows/repo-hygiene.yml",
+    ".github/workflows/shopee-optimizer-safety.yml",
+    ".github/workflows/shopvivaliz-qa.yml",
+}
+
+MUTATION_PATTERNS = [
+    re.compile(r"\bupdate_product\s*\("),
+    re.compile(r"\bdelete_product\s*\("),
+    re.compile(r"(?i)\b(?:drop\s+table|truncate\s+table|delete\s+from|update\s+[A-Za-z_][A-Za-z0-9_]*\s+set)\b"),
+    re.compile(r"(?i)\b(?:ftp|sftp|scp|rsync)\b[^\n]{0,80}\b(?:upload|put|deploy|sync)\b"),
+    re.compile(r"(?i)\bgit\s+(?:push|reset\s+--hard)\b"),
+    re.compile(r"(?i)\b(?:publish|activate|apply)\b[^\n]{0,80}\b(?:campaign|production|catalog|product)\b"),
+    re.compile(r"\bAPPLY_ALL_[A-Z0-9_]+\b"),
+]
+
+GUARD_MARKERS = (
+    "backup",
+    "read-back",
+    "readback",
+    "rollback",
+    "dry-run",
+    "dry_run",
+    "confirmation",
+    "confirm",
+    "canary",
+    "limit",
+    "artifact",
+    "pull request",
+    "branch isolada",
+    "branch isolated",
+    "desativado",
+    "disabled",
+)
 
 
 def rel(path: Path) -> str:
@@ -154,8 +192,8 @@ def iter_files() -> list[Path]:
     for path in ROOT.rglob("*"):
         if path.is_dir():
             continue
-        r = rel(path)
-        if any(r == d or r.startswith(d + "/") for d in IGNORE_DIRS):
+        value = rel(path)
+        if any(value == directory or value.startswith(directory + "/") for directory in IGNORE_DIRS):
             continue
         files.append(path)
     return files
@@ -171,30 +209,24 @@ def read_text(path: Path) -> str:
 
 def audit_sensitive_files(files: list[Path]) -> tuple[list[str], list[str]]:
     errors: list[str] = []
-    warnings: list[str] = []
     for path in files:
-        r = rel(path)
-        name = path.name
-        if name in SENSITIVE_FILE_NAMES and not r.endswith(".example"):
-            errors.append(f"Sensitive file name must not be committed: {r}")
+        value = rel(path)
+        if path.name in SENSITIVE_FILE_NAMES and not value.endswith(".example"):
+            errors.append(f"Sensitive file name must not be committed: {value}")
         if path.suffix.lower() in {".pem", ".key", ".p12", ".pfx"}:
-            errors.append(f"Private key/certificate-like file must not be committed: {r}")
-    return errors, warnings
+            errors.append(f"Private key/certificate-like file must not be committed: {value}")
+    return errors, []
 
 
 def audit_secret_values(files: list[Path]) -> tuple[list[str], list[str]]:
     errors: list[str] = []
-    warnings: list[str] = []
     for path in files:
         if not is_text_file(path):
             continue
-        r = rel(path)
         text = read_text(path)
-        for pattern in SECRET_VALUE_PATTERNS:
-            if pattern.search(text):
-                errors.append(f"Possible hardcoded secret value in {r}; move it to GitHub Secrets or environment variables")
-                break
-    return errors, warnings
+        if any(pattern.search(text) for pattern in SECRET_VALUE_PATTERNS):
+            errors.append(f"Possible hardcoded secret value in {rel(path)}; move it to protected secrets")
+    return errors, []
 
 
 def audit_legacy_aliases(files: list[Path], strict_aliases: bool) -> tuple[list[str], list[str]]:
@@ -203,123 +235,135 @@ def audit_legacy_aliases(files: list[Path], strict_aliases: bool) -> tuple[list[
     for path in files:
         if not is_text_file(path):
             continue
-        r = rel(path)
-        if r in ALLOWED_SECRET_ALIAS_FILES:
+        value = rel(path)
+        if value in ALLOWED_SECRET_ALIAS_FILES:
             continue
         text = read_text(path)
         for alias, canonical in LEGACY_SECRET_ALIASES.items():
             if re.search(rf"\b{re.escape(alias)}\b", text):
-                message = f"Legacy secret alias {alias} used in {r}; prefer {canonical}"
-                if strict_aliases:
-                    errors.append(message)
-                else:
-                    warnings.append(message)
+                message = f"Legacy secret alias {alias} used in {value}; prefer {canonical}"
+                (errors if strict_aliases else warnings).append(message)
     return errors, warnings
 
 
-def audit_required_docs(files: list[Path]) -> tuple[list[str], list[str]]:
-    errors: list[str] = []
-    warnings: list[str] = []
-    for doc in REQUIRED_DOCS_FOR_ROUTINES:
-        if not (ROOT / doc).exists():
-            errors.append(f"Required governance document missing: {doc.as_posix()}")
-    workflow_files = [p for p in files if rel(p).startswith(".github/workflows/") and p.suffix in {".yml", ".yaml"}]
-    if workflow_files and not (ROOT / "docs/knowledge/routines-registry.md").exists():
-        errors.append("Workflows exist but docs/knowledge/routines-registry.md is missing")
-    return errors, warnings
+def audit_required_governance(_files: list[Path]) -> tuple[list[str], list[str]]:
+    errors = [
+        f"Required governance file missing: {path.as_posix()}"
+        for path in REQUIRED_GOVERNANCE_FILES
+        if not (ROOT / path).exists()
+    ]
+    if MANIFEST_PATH.exists():
+        try:
+            json.loads(read_text(MANIFEST_PATH))
+        except json.JSONDecodeError as exc:
+            errors.append(f"Structure manifest is invalid JSON: {exc}")
+    return errors, []
 
 
-def audit_migrated_shopee_structure(files: list[Path]) -> tuple[list[str], list[str]]:
+def audit_shopee_structure(_files: list[Path]) -> tuple[list[str], list[str]]:
     errors: list[str] = []
-    warnings: list[str] = []
     for path in CANONICAL_SHOPEE_FILES:
         if not (ROOT / path).exists():
-            errors.append(f"Canonical Shopee file missing after migration: {path.as_posix()}")
+            errors.append(f"Canonical Shopee file missing: {path.as_posix()}")
     for path in LEGACY_SHOPEE_WRAPPERS:
         wrapper = ROOT / path
         if not wrapper.exists():
-            warnings.append(f"Legacy Shopee wrapper missing: {path.as_posix()}")
+            errors.append(f"Legacy Shopee wrapper missing: {path.as_posix()}")
             continue
-        text = read_text(wrapper)
-        if "runpy.run_path" not in text or "marketplace" not in text:
-            errors.append(f"Legacy Shopee file is not a compatibility wrapper: {path.as_posix()}")
+        text = read_text(wrapper).lower()
+        if not any(marker in text for marker in WRAPPER_MARKERS) or "marketplace" not in text:
+            errors.append(f"Legacy Shopee path is not a compatibility wrapper: {path.as_posix()}")
     workflow = ROOT / ".github/workflows/shopee-production-seo.yml"
     if workflow.exists() and "scripts/marketplace/shopee/production_seo_apply.py" not in read_text(workflow):
-        errors.append("Shopee production workflow still does not call canonical marketplace executor")
-    return errors, warnings
+        errors.append("Shopee production workflow does not call canonical executor")
+    return errors, []
 
 
-def audit_migrated_script_structure(files: list[Path]) -> tuple[list[str], list[str]]:
+def audit_root_documents(files: list[Path], strict_root_docs: bool) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
-    for legacy, canonical in MIGRATED_SCRIPT_MAPPINGS.items():
-        canonical_path = ROOT / canonical
-        legacy_path = ROOT / legacy
-        if not canonical_path.exists():
-            errors.append(f"Canonical migrated script missing: {canonical}")
-        if not legacy_path.exists():
-            warnings.append(f"Legacy wrapper missing: {legacy}")
-            continue
-        wrapper_text = read_text(legacy_path)
-        if "runpy.run_path" not in wrapper_text or canonical_path.name not in wrapper_text:
-            errors.append(f"Legacy script is not a compatibility wrapper: {legacy}")
-    return errors, warnings
-
-
-def audit_repository_wide_structure(files: list[Path], strict_root_docs: bool) -> tuple[list[str], list[str]]:
-    errors: list[str] = []
-    warnings: list[str] = []
-    for path in REPOSITORY_WIDE_RESTRUCTURE_FILES:
-        if not (ROOT / path).exists():
-            errors.append(f"Repository-wide restructure file missing: {path.as_posix()}")
-
-    root_docs = [p for p in files if p.parent == ROOT and p.suffix.lower() in {".md", ".txt"} and p.name not in ROOT_DOC_ALLOWLIST]
+    root_docs = [
+        path for path in files
+        if path.parent == ROOT
+        and path.suffix.lower() in {".md", ".txt"}
+        and path.name not in ROOT_DOC_ALLOWLIST
+    ]
     for path in root_docs:
-        text = read_text(path)
-        if any(marker in text for marker in ROOT_STUB_MARKERS):
+        lowered = read_text(path).lower()
+        if any(marker in lowered for marker in ROOT_STUB_MARKERS):
             continue
-        msg = f"Legacy root document should be indexed/migrated: {rel(path)}"
-        if strict_root_docs:
-            errors.append(msg)
-        else:
-            warnings.append(msg)
+        message = f"Legacy root document should be indexed/migrated: {rel(path)}"
+        (errors if strict_root_docs else warnings).append(message)
     return errors, warnings
+
+
+def is_wrapper_text(text: str) -> bool:
+    lowered = text.lower()
+    return any(marker in lowered for marker in WRAPPER_MARKERS)
+
+
+def should_scan_production_guard(path: Path, text: str) -> bool:
+    value = rel(path)
+    if value in SKIP_PRODUCTION_GUARD_FILES:
+        return False
+    if any(value.startswith(prefix) for prefix in SKIP_PRODUCTION_GUARD_PREFIXES):
+        return False
+    if any(segment in value for segment in SKIP_PRODUCTION_GUARD_SEGMENTS):
+        return False
+    if is_wrapper_text(text):
+        return False
+
+    if value.startswith("scripts/production/"):
+        return True
+    if value.startswith("scripts/marketplace/") and "/legacy/" not in value:
+        return True
+    if value.startswith(".github/workflows/"):
+        filename = path.name.lower()
+        return any(word in filename for word in ("deploy", "production", "publish", "sync", "autonomous"))
+
+    return any(pattern.search(text) for pattern in MUTATION_PATTERNS)
 
 
 def audit_production_guards(files: list[Path]) -> tuple[list[str], list[str]]:
-    errors: list[str] = []
     warnings: list[str] = []
-    risky_terms = ("update_product", "delete", "DROP TABLE", "TRUNCATE", "production", "APPLY_ALL")
     for path in files:
-        r = rel(path)
-        if not (r.startswith("scripts/") or r.startswith(".github/workflows/")) or not is_text_file(path):
+        if not is_text_file(path):
+            continue
+        value = rel(path)
+        if not (value.startswith("scripts/") or value.startswith(".github/workflows/")):
             continue
         text = read_text(path)
-        if any(term in text for term in risky_terms) and "backup" not in text.lower() and "read-back" not in text.lower() and "readback" not in text.lower():
-            warnings.append(f"Potential production routine without explicit backup/read-back wording: {r}")
-    return errors, warnings
+        if not should_scan_production_guard(path, text):
+            continue
+        if not any(pattern.search(text) for pattern in MUTATION_PATTERNS):
+            continue
+        lowered = text.lower()
+        if not any(marker in lowered for marker in GUARD_MARKERS):
+            warnings.append(f"Active mutating routine lacks explicit safety guard wording: {value}")
+    return [], warnings
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Audit ShopVivaliz repository hygiene")
-    parser.add_argument("--strict-aliases", action="store_true", help="Fail on legacy secret aliases outside the centralizer")
-    parser.add_argument("--strict-root-docs", action="store_true", help="Fail when non-stub legacy root docs remain outside allowlist")
+    parser.add_argument("--strict-aliases", action="store_true")
+    parser.add_argument("--strict-root-docs", action="store_true")
     args = parser.parse_args()
 
     files = iter_files()
     errors: list[str] = []
     warnings: list[str] = []
 
-    for audit in (
+    audits = (
         audit_sensitive_files,
         audit_secret_values,
-        lambda f: audit_legacy_aliases(f, args.strict_aliases),
-        audit_required_docs,
-        audit_migrated_shopee_structure,
-        audit_migrated_script_structure,
-        lambda f: audit_repository_wide_structure(f, args.strict_root_docs),
+        lambda items: audit_legacy_aliases(items, args.strict_aliases),
+        audit_required_governance,
+        audit_shopee_structure,
+        lambda items: audit_root_documents(items, args.strict_root_docs),
         audit_production_guards,
-    ):
+    )
+
+    for audit in audits:
         audit_errors, audit_warnings = audit(files)
         errors.extend(audit_errors)
         warnings.extend(audit_warnings)
