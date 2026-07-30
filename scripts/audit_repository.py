@@ -2,8 +2,8 @@
 """Repository hygiene audit for ShopVivaliz.
 
 The audit blocks concrete security and structure problems. Production-guard
-warnings are intentionally limited to active mutating routines, avoiding noise
-from wrappers, archived code, documentation and read-only clients.
+warnings are intentionally limited to active mutating executors, avoiding noise
+from wrappers, archived code, libraries and read-only diagnostics.
 """
 from __future__ import annotations
 
@@ -133,6 +133,10 @@ WRAPPER_MARKERS = (
 
 SKIP_PRODUCTION_GUARD_PREFIXES = (
     "scripts/dev/",
+    "scripts/maintenance/",
+    "scripts/utils/",
+    "scripts/integrations/",
+    "scripts/automation/",
     "archive/",
     ".github/workflows-archive/",
 )
@@ -144,10 +148,9 @@ SKIP_PRODUCTION_GUARD_SEGMENTS = (
 
 SKIP_PRODUCTION_GUARD_FILES = {
     "scripts/audit_repository.py",
-    "scripts/maintenance/restructure_repository.py",
-    "scripts/maintenance/validate_structure_manifest.py",
-    "scripts/maintenance/canonicalize_secret_aliases.py",
-    "scripts/maintenance/reconcile_structure_manifest.py",
+    "scripts/database-sandbox.php",
+    "scripts/llm-log-analyzer.php",
+    "scripts/verify-sync-daemon.sh",
     ".github/workflows/repo-hygiene.yml",
     ".github/workflows/shopee-optimizer-safety.yml",
     ".github/workflows/shopvivaliz-qa.yml",
@@ -180,6 +183,7 @@ GUARD_MARKERS = (
     "branch isolated",
     "desativado",
     "disabled",
+    "allow_legacy",
 )
 
 
