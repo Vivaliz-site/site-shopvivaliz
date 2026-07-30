@@ -32,7 +32,7 @@ class FakeClient:
 
 
 def load_module():
-    optimizer = types.ModuleType("shopee_full_catalog_optimizer")
+    optimizer = types.ModuleType("full_catalog_optimizer")
     optimizer.build_title = lambda item: item["item_name"] + " Otimizado"
     optimizer.build_description = lambda item, title: title + "\nDescricao SEO completa e suficientemente longa."
     optimizer.image_ids = lambda item: list((item.get("image") or {}).get("image_id_list") or [])
@@ -40,12 +40,18 @@ def load_module():
     client_module = types.ModuleType("utils.shopee_client")
     client_module.ShopeeClient = FakeClient
     modules = {
-        "shopee_full_catalog_optimizer": optimizer,
+        "full_catalog_optimizer": optimizer,
         "utils": types.ModuleType("utils"),
         "utils.shopee_client": client_module,
     }
     with patch.dict(sys.modules, modules):
-        path = Path(__file__).resolve().parents[1] / "scripts" / "shopee_production_seo_apply.py"
+        path = (
+            Path(__file__).resolve().parents[1]
+            / "scripts"
+            / "marketplace"
+            / "shopee"
+            / "production_seo_apply.py"
+        )
         spec = importlib.util.spec_from_file_location("shopee_production_under_test", path)
         module = importlib.util.module_from_spec(spec)
         assert spec and spec.loader
