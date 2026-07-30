@@ -64,7 +64,7 @@ class AutomationChangeAuditTests(unittest.TestCase):
         self.assertEqual(findings, [])
 
     def test_redacts_secret_excerpt(self):
-        secret = "ghp_123456789012345678901234567890"
+        secret = "ghp_" + ("1" * 30)
         findings = self.scan("config/runtime.yml", [(3, f"token: {secret}")])
         credential = next(item for item in findings if item.rule == "credential_exposed")
         self.assertNotIn(secret, credential.excerpt)
