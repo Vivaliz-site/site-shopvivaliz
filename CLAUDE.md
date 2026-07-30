@@ -17,9 +17,9 @@
 ## 📊 Visão Geral do Sistema
 
 ShopVivaliz é um **e-commerce de alto rendimento** com automação de:
-- **Deploy:** VM Oracle Cloud (`dev.shopvivaliz.com.br`, IP `137.131.156.17`) roda um cron
-  (`git-auto-sync.py`, `*/30 * * * *`) que faz `git fetch` + `reset --hard` na `main` — é essa VM
-  que serve o site diretamente, não FTP/HostGator.
+- **Deploy:** VM Oracle Cloud (IP `137.131.156.17`) tem **dois diretórios de produção com papéis
+  diferentes** — ver `### 🏗️ Arquitetura Real de Deploy` abaixo antes de mexer em qualquer coisa
+  na VM, principalmente `.env`. Não é FTP/HostGator.
 - **Validação:** QA lint dispara em push/PR (`shopvivaliz-qa.yml`)
 - **Execução de Tarefas:** Fila autônoma (`tasks-queue.json`), múltiplos workflows agendados
 - **Agentes IA:** múltiplos agentes autônomos (Claude Code, e outros) commitam direto no repo —
@@ -27,20 +27,39 @@ ShopVivaliz é um **e-commerce de alto rendimento** com automação de:
 
 ### 🏗️ Arquitetura Real de Deploy
 
+**Atualizado em 2026-07-30 após auditoria — a versão anterior deste documento (cron
+`git-auto-sync.py` a cada 30min servindo o site direto) estava desatualizada. A VM tem
+DOIS diretórios ativos com papéis distintos:**
+
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                  GitHub (Fonte de Verdade)                  │
-│  main branch — sem branch protection forte observada         │
-└────────────────────┬────────────────────────────────────────┘
-                     │  cron pull a cada 30min (git-auto-sync.py)
-                     ▼
-           ┌─────────────────────┐
-           │  VM Oracle Cloud     │
-           │  137.131.156.17      │
-           │  dev.shopvivaliz.*   │  ← serve o site diretamente
-           │  (Apache + PHP)      │     (nao ha FTP/HostGator ativo)
-           └─────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                  GitHub (Fonte de Verdade) — branch main         │
+└────────────────────┬───────────────────────┬────────────────────┘
+                     │                       │
+   fetch a cada 2min │                       │ cron do daemon (30min/olist/etc)
+                     ▼                       ▼
+   /home/ubuntu/shopvivaliz-deploy/    /home/ubuntu/site-shopvivaliz/
+   ├─ repo/          (clone git)       (checkout git separado)
+   ├─ releases/<ts>-<sha>/  (imutável)  usado por:
+   ├─ current -> releases/.../         - systemd: shopvivaliz-24x7,
+   ├─ shared/.env  (ENV REAL)            agent-bridge, auto-sync,
+   │                                     catalog-audit, mcp, orchestrator,
+   │  Apache DocumentRoot aponta         shopee-token-renewer, sync
+   │  para "current" -> SERVE O SITE   - crontab: olist refresh-token (3h),
+   │                                     google-token-renewer (1h),
+   │                                     indexnow-submit (diário),
+   │                                     daemon-sync-products (6h)
+   └─ deploy-production.sh roda a
+      cada 2min via cron, auto-
+      atualiza a si mesmo a partir
+      do FETCH_HEAD antes de aplicar
 ```
+
+**Regra prática:** o site público (`shopvivaliz.com.br`) e qualquer `.env` que afete requisições
+HTTP (tokens de webhook, SMTP, etc.) vivem em `shopvivaliz-deploy/shared/.env`. Editar
+`site-shopvivaliz/.env` não afeta o site — só afeta os daemons/serviços de fundo que rodam
+daquele checkout. Confirme sempre com `grep DocumentRoot /etc/apache2/sites-enabled/*` antes de
+assumir qual diretório está em jogo.
 
 **FTP/HostGator (`deploy.yml`, `auto-ftp-deploy.yml`) está desativado** — só roda via
 `workflow_dispatch` manual, não em push. O comentário no próprio `deploy.yml` confirma: "a producao
@@ -167,7 +186,7 @@ Todos configurados em `Settings > Secrets and variables > Actions`:
 
 ### 3️⃣ `deploy.yml` / `auto-ftp-deploy.yml` - Deploy FTP HostGator
 - **Status:** ❌ **DESATIVADO** (só `workflow_dispatch` manual). A produção real roda na VM Oracle
-  via cron `git-auto-sync.py`, não FTP. Mantido no repo só para caso o HostGator volte a ser usado.
+  via `deploy-production.sh`, não FTP. Mantido no repo só para caso o HostGator volte a ser usado.
 
 ### 4️⃣ `ai-autonomous-executor.yml` - Executor de Tarefas
 - **Triggers:** Schedule a cada 30 min
@@ -175,10 +194,15 @@ Todos configurados em `Settings > Secrets and variables > Actions`:
 - **Status:** ✅ **ATIVO**
 
 ### Deploy real (fora do GitHub Actions)
-- Cron na VM Oracle (`/home/ubuntu/site-shopvivaliz/git-auto-sync.py`, `*/30 * * * *`): faz
-  `git fetch` + `reset --hard origin/main`. É isso que efetivamente coloca código em produção.
-- Para forçar deploy imediato sem esperar o cron: `ssh -i <chave> ubuntu@137.131.156.17
-  "cd /home/ubuntu/site-shopvivaliz && python3 git-auto-sync.py"`
+- Cron na VM Oracle (`/usr/local/lib/shopvivaliz/deploy-production.sh`, `*/2 * * * *`): faz fetch
+  de `origin/main`, monta um release imutável em `shopvivaliz-deploy/releases/<timestamp>-<sha>/`
+  e troca o symlink `current` — é isso que efetivamente coloca código em produção (ver diagrama em
+  `### 🏗️ Arquitetura Real de Deploy` no topo deste arquivo).
+- Para forçar deploy imediato sem esperar o cron:
+  `ssh -i "C:\Users\FRED\Downloads\ssh-key-2026-07-04.key" ubuntu@137.131.156.17
+  "sudo /usr/local/lib/shopvivaliz/deploy-production.sh"`
+- Chave SSH funcional confirmada em 2026-07-30: `C:\Users\FRED\Downloads\ssh-key-2026-07-04.key`
+  (ver `docs/AGENTS.md` entrada 2026-07-29 "Toolkit local e alvo persistente de deploy").
 
 ---
 

@@ -58,6 +58,24 @@
 
 ---
 
+### 2026-07-30 — Bug recorrente: endpoint le getenv() sem carregar .env primeiro
+**Sistema/arquivo:** `api/blog/publish-scheduled.php`, `api/melhorenvio/webhook.php`,
+`.github/workflows/autonomous-safe-operations.yml` (job `health-watch`)
+**O que descobri:** três lugares diferentes liam `getenv('ALGUM_TOKEN')` (ou chamavam `gh issue`)
+sem nunca ter carregado o `.env`/`checkout` antes — resultado e' falha silenciosa 100% das vezes,
+sem nenhum sinal de que o problema e' configuração ausente e não bug de lógica. Confirmado ao
+vivo: blog falhou em 15/15 execuções nas últimas 24h+ (token sempre lido como vazio);
+`health-watch` detecta 403 real em produção mas nunca conseguiu abrir issue de alerta (`gh issue
+list` retornava zero issues, apesar de falhas reais e repetidas).
+**Por quê importa:** o padrão correto e' sempre `require_once __DIR__ . '/../../config/bootstrap-env.php';`
+antes de qualquer `getenv()` que valide token/secret (ver `order-status-update.php` como exemplo
+correto já existente). Ao criar um novo endpoint com auth via `getenv()`, checar isso primeiro —
+sem o require, o endpoint "funciona" nos testes locais (onde a env já está no processo) mas falha
+sempre em produção via Apache/PHP-FPM puro.
+**Ver também:** PR #587, seção `### 🏗️ Arquitetura Real de Deploy` no `CLAUDE.md`
+
+---
+
 ## 🔴 Crítico: Problemas Não Resolvidos
 
 ### Shopee/Tiny OAuth2 — PARADO HÁ 3+ SEMANAS + workflows removidos (2026-07-27)
@@ -112,11 +130,21 @@
 - ✓ Fonte de verdade: `storage/products-cache-ativos.json` (Olist/Tiny) → fallback: `api/catalog/fallback-products.json`
 
 ### Deploy
-**Última atualização:** 2026-07-26
+**Última atualização:** 2026-07-30 (corrige entrada de 2026-07-26, que estava desatualizada)
 
-- ✓ **Produção real:** VM Oracle cron a cada 30min (`git fetch` + `reset --hard origin/main`)
+- ✗ **Não é** cron `git-auto-sync.py` a cada 30min como versões antigas deste doc diziam
+- ✓ **Produção real:** `/usr/local/lib/shopvivaliz/deploy-production.sh` via cron a cada **2min**,
+  monta release imutável em `/home/ubuntu/shopvivaliz-deploy/releases/<ts>-<sha>/` e troca o
+  symlink `current`. Apache `DocumentRoot` aponta para `current` — confirmar sempre com
+  `grep DocumentRoot /etc/apache2/sites-enabled/*` antes de assumir qual diretório serve o site
+- ✓ **`.env` real de produção:** `/home/ubuntu/shopvivaliz-deploy/shared/.env` (symlinkado em
+  cada release) — **não** `/home/ubuntu/site-shopvivaliz/.env`
+- ⚠️ **Dois diretórios ativos, papéis diferentes** — `shopvivaliz-deploy/` serve o site;
+  `site-shopvivaliz/` roda daemons/systemd (`shopvivaliz-24x7`, `agent-bridge`, `auto-sync`,
+  `orchestrator`, `mcp`, etc.) e crons de sync (Olist, Google Ads, IndexNow). Editar `.env` no
+  lugar errado não tem efeito nenhum no que você está tentando corrigir — ver `CLAUDE.md` seção
+  `### 🏗️ Arquitetura Real de Deploy` pro diagrama completo
 - ✗ **FTP/HostGator desativado** — só via `workflow_dispatch` manual
-- ✓ Todos os scripts consolidados em 2 mestres: `olist-sync-master.py`, `git-auto-sync-master.py`
 - ✓ GitHub Actions reduzido de 99 para 10 workflows críticos
 
 ### 2026-07-29 — Toolkit local e alvo persistente de deploy
