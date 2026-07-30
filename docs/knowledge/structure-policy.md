@@ -16,6 +16,7 @@ scripts/
   production/         Rotinas que alteram producao
   maintenance/        Diagnostico, limpeza, reparos e auditorias
   marketplace/        Shopee, Olist, ML, Amazon, TikTok e outros canais
+    shopee/           Rotinas canonicas Shopee
   ai/                 Agentes, automacoes e rotinas IA
   dev/                Ferramentas locais e apoio ao desenvolvimento
 docs/
@@ -35,7 +36,7 @@ archive/              Codigo legado arquivado com motivo e prazo
 ## Regras de criacao
 
 1. Novo script que altera producao deve ficar em `scripts/production/` ou ter `production` no nome e registro em `routines-registry.md`.
-2. Novo script de marketplace deve ficar em `scripts/marketplace/` ou ser registrado como legado no indice.
+2. Novo script de marketplace deve ficar em `scripts/marketplace/<canal>/` ou ser registrado como legado no indice.
 3. Novo workflow deve ter entrada em `routines-registry.md`.
 4. Nova integracao ou secret deve atualizar `secrets-and-integrations-map.md`.
 5. Novo documento principal deve ser ligado em `docs/knowledge/README.md`.
@@ -49,7 +50,14 @@ Mover arquivo existente exige:
 - identificar todos os imports, includes, chamadas CLI e workflow references;
 - atualizar documentacao e testes;
 - manter wrapper temporario quando houver risco de quebra;
-- registrar o item no backlog de limpeza com status `migrar` ou `arquivar`.
+- registrar o item no backlog de limpeza com status `migrar`, `arquivar` ou `concluido-com-wrapper`.
+
+## Migracoes fisicas aplicadas
+
+| Data | Area | Antes | Depois | Regra aplicada |
+|---|---|---|---|---|
+| 2026-07-30 | Shopee | `scripts/shopee_production_seo_apply.py` | `scripts/marketplace/shopee/production_seo_apply.py` | Implementacao movida, wrapper legado mantido |
+| 2026-07-30 | Shopee | `scripts/shopee_full_catalog_optimizer.py` | `scripts/marketplace/shopee/full_catalog_optimizer.py` | Implementacao movida, wrapper legado mantido |
 
 ## Arquivamento
 
