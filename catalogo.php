@@ -490,7 +490,7 @@ $svNavCurrent = 'catalogo';
     <style>body { opacity: 1 !important; visibility: visible !important; }</style>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=2026-07-26-v4">
-    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-29-2">
+    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-30-1">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
     <!-- Polimento de layout: precisa vir por ultimo para vencer na cascata. -->
     <link rel="stylesheet" href="/css/layout-polish-v1.css?v=2026-07-29-1">
@@ -620,7 +620,7 @@ $svNavCurrent = 'catalogo';
     <script src="/autodev/client.js"></script>
     <script src="/js/catalog.js?v=<?= filemtime(__DIR__ . '/js/catalog.js') ?: '1' ?>"></script>
     <script src="/js/catalog-conversion-v4.js?v=<?= filemtime(__DIR__ . '/js/catalog-conversion-v4.js') ?: '1' ?>"></script>
-    <script src="/js/first-purchase-popup-v1.js?v=2026-07-29-2" defer></script>
+    <script src="/js/first-purchase-popup-v1.js?v=2026-07-30-1" defer></script>
     <script>
     (function(){
         try {
