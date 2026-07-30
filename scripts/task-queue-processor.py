@@ -1,23 +1,8 @@
 #!/usr/bin/env python3
-"""Deprecated synthetic task queue processor.
-
-The former implementation invented default tasks and marked them assigned
-without creating a real execution record, branch, commit, or review request.
-It is intentionally disabled.
-"""
-
-import sys
-
-
-def main() -> int:
-    print(
-        "ERROR: scripts/task-queue-processor.py is disabled. Tasks must originate "
-        "from an auditable source such as a GitHub issue and may only advance "
-        "after verifiable execution evidence exists.",
-        file=sys.stderr,
-    )
-    return 2
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+"""Wrapper legado gerado pela reorganização estrutural."""
+from pathlib import Path
+_TARGET = (Path(__file__).resolve().parent / 'ai/legacy/task-queue-processor.py').resolve()
+_LEGACY_FILE = str(Path(__file__).resolve())
+_GLOBALS = globals()
+_GLOBALS['__file__'] = _LEGACY_FILE
+exec(compile(_TARGET.read_text(encoding='utf-8'), _LEGACY_FILE, 'exec'), _GLOBALS)

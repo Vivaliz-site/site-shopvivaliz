@@ -1,22 +1,8 @@
 #!/usr/bin/env python3
-"""Deprecated force-completion utility.
-
-The former script changed pending tasks to completed without executing or
-validating them. It is intentionally disabled to preserve queue integrity.
-"""
-
-import sys
-
-
-def main() -> int:
-    print(
-        "ERROR: scripts/force-execution.py is disabled. A task may only be "
-        "completed after verifiable execution evidence exists (commit, tests, "
-        "artifacts, and review).",
-        file=sys.stderr,
-    )
-    return 2
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+"""Wrapper legado gerado pela reorganização estrutural."""
+from pathlib import Path
+_TARGET = (Path(__file__).resolve().parent / 'dev/legacy-scripts/force-execution.py').resolve()
+_LEGACY_FILE = str(Path(__file__).resolve())
+_GLOBALS = globals()
+_GLOBALS['__file__'] = _LEGACY_FILE
+exec(compile(_TARGET.read_text(encoding='utf-8'), _LEGACY_FILE, 'exec'), _GLOBALS)

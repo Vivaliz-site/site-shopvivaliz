@@ -1,23 +1,8 @@
 #!/usr/bin/env python3
-"""
-Compatibilidade para importar o cliente MCP a partir de scripts/mcp-client.py.
-"""
-
-from __future__ import annotations
-
-import importlib.util
+"""Wrapper legado gerado pela reorganização estrutural."""
 from pathlib import Path
-
-
-_MODULE_PATH = Path(__file__).with_name("mcp-client.py")
-_SPEC = importlib.util.spec_from_file_location("scripts.mcp_client_legacy", _MODULE_PATH)
-if _SPEC is None or _SPEC.loader is None:
-    raise ImportError(f"Unable to load MCP client from {_MODULE_PATH}")
-
-_MODULE = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(_MODULE)
-
-MCPClient = _MODULE.MCPClient
-MCPCloudManager = _MODULE.MCPCloudManager
-
-__all__ = ["MCPClient", "MCPCloudManager"]
+_TARGET = (Path(__file__).resolve().parent / 'dev/legacy-scripts/mcp_client.py').resolve()
+_LEGACY_FILE = str(Path(__file__).resolve())
+_GLOBALS = globals()
+_GLOBALS['__file__'] = _LEGACY_FILE
+exec(compile(_TARGET.read_text(encoding='utf-8'), _LEGACY_FILE, 'exec'), _GLOBALS)

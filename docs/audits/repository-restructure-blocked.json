@@ -1,3 +1,19 @@
 {
-  "blocked": []
+  "blocked": [
+    {
+      "source": "scripts/shopvivaliz_auth.py",
+      "action": "blocked_sensitive",
+      "category": "python"
+    },
+    {
+      "source": "scripts/shopvivaliz_auth_fixed.py",
+      "action": "blocked_sensitive",
+      "category": "python"
+    },
+    {
+      "source": "scripts/tiny_sales_report.py",
+      "action": "blocked_sensitive",
+      "category": "python"
+    }
+  ]
 }
