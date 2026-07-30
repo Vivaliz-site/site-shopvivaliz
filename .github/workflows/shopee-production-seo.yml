@@ -12,6 +12,10 @@ on:
         required: true
         default: '0'
         type: string
+  push:
+    branches: [main]
+    paths:
+      - '.github/triggers/shopee-production-seo-20260730T1829Z.json'
 
 permissions:
   contents: read
@@ -29,10 +33,13 @@ jobs:
     steps:
       - name: Require exact production confirmation
         shell: bash
+        env:
+          CONFIRMATION: ${{ github.event_name == 'workflow_dispatch' && inputs.confirmation || 'APPLY_ALL_SHOPEE_PRODUCTS' }}
+          LIMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.limit || '0' }}
         run: |
           set -euo pipefail
-          test "${{ inputs.confirmation }}" = "APPLY_ALL_SHOPEE_PRODUCTS"
-          [[ "${{ inputs.limit }}" =~ ^[0-9]+$ ]]
+          test "$CONFIRMATION" = "APPLY_ALL_SHOPEE_PRODUCTS"
+          [[ "$LIMIT" =~ ^[0-9]+$ ]]
 
       - uses: actions/checkout@v7
 
@@ -55,11 +62,13 @@ jobs:
           SHOPEE_REFRESH_TOKEN: ${{ secrets.SHOPEE_REFRESH_TOKEN }}
           SHOPEE_SHOP_ID: ${{ secrets.SHOPEE_SHOP_ID }}
           SHOPEE_BASE_URL: https://partner.shopeemobile.com/api/v2
+          CONFIRMATION: ${{ github.event_name == 'workflow_dispatch' && inputs.confirmation || 'APPLY_ALL_SHOPEE_PRODUCTS' }}
+          LIMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.limit || '0' }}
         run: |
           set -euo pipefail
           python scripts/shopee_production_seo_apply.py \
-            --confirm "${{ inputs.confirmation }}" \
-            --limit "${{ inputs.limit }}"
+            --confirm "$CONFIRMATION" \
+            --limit "$LIMIT"
 
       - name: Upload immutable execution evidence
         if: always()
