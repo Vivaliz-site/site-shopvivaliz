@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "updated_at": "2026-07-30",
+  "source_pr": 599,
+  "archive_branch": "archive/pr-599-reorg-2026-07-30",
+  "active_branch": "chore/repo-governance-safe",
+  "rules": {
+    "max_changed_files_per_batch": 100,
+    "require_green_checks": true,
+    "require_artifact": true,
+    "allow_auto_merge": false,
+    "allow_workflow_push": false,
+    "allow_broad_git_add": false,
+    "allow_destructive_cleanup": false
+  },
+  "phases": [
+    {"id": 1, "name": "governance", "status": "in_progress"},
+    {"id": 2, "name": "active_workflows", "status": "pending"},
+    {"id": 3, "name": "agents_and_queues", "status": "pending"},
+    {"id": 4, "name": "scripts_by_domain", "status": "pending"},
+    {"id": 5, "name": "documentation_and_history", "status": "pending"},
+    {"id": 6, "name": "secrets_and_history_rewrite", "status": "pending_security_action"}
+  ]
+}
