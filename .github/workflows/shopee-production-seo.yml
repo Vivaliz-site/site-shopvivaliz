@@ -72,16 +72,25 @@ jobs:
         run: |
           set +e
           missing=()
-          for name in SHOPEE_PARTNER_ID SHOPEE_PARTNER_KEY SHOPEE_ACCESS_TOKEN SHOPEE_SHOP_ID; do
+          for name in SHOPEE_PARTNER_ID SHOPEE_PARTNER_KEY SHOPEE_SHOP_ID; do
             if [ -z "${!name:-}" ]; then missing+=("$name"); fi
           done
+          if [ -z "${SHOPEE_ACCESS_TOKEN:-}" ] && [ -z "${SHOPEE_REFRESH_TOKEN:-}" ]; then
+            missing+=("SHOPEE_ACCESS_TOKEN_OR_REFRESH_TOKEN")
+          fi
           if [ ${#missing[@]} -gt 0 ]; then
             printf 'missing_secrets=%s\n' "$(IFS=,; echo "${missing[*]}")" >> "$GITHUB_OUTPUT"
             printf 'ERROR: missing required Shopee secrets: %s\n' "$(IFS=,; echo "${missing[*]}")" | tee executor-output.log
             echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'auth_mode=none' >> "$GITHUB_OUTPUT"
           else
             echo 'missing_secrets=' >> "$GITHUB_OUTPUT"
             echo 'ready=true' >> "$GITHUB_OUTPUT"
+            if [ -n "${SHOPEE_ACCESS_TOKEN:-}" ]; then
+              echo 'auth_mode=access_token' >> "$GITHUB_OUTPUT"
+            else
+              echo 'auth_mode=refresh_token_auto' >> "$GITHUB_OUTPUT"
+            fi
           fi
           exit 0
 
@@ -112,6 +121,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EXIT_CODE: ${{ steps.apply.outputs.exit_code }}
           READY: ${{ steps.secrets.outputs.ready }}
+          AUTH_MODE: ${{ steps.secrets.outputs.auth_mode }}
           MISSING_SECRETS: ${{ steps.secrets.outputs.missing_secrets }}
         shell: bash
         run: |
@@ -127,6 +137,7 @@ jobs:
             'run_id': '${{ github.run_id }}',
             'run_attempt': '${{ github.run_attempt }}',
             'commit': '${{ github.sha }}',
+            'auth_mode': '${{ steps.secrets.outputs.auth_mode }}',
             'exit_code': int('${{ steps.apply.outputs.exit_code }}' or 999),
             'item': first,
             'counts': d.get('counts'),
@@ -136,9 +147,9 @@ jobs:
           PY
           )"
           else
-            item="$(python - "$EXIT_CODE" "$READY" "$MISSING_SECRETS" executor-output.log <<'PY'
+            item="$(python - "$EXIT_CODE" "$READY" "$AUTH_MODE" "$MISSING_SECRETS" executor-output.log <<'PY'
           import json, pathlib, sys
-          exit_code, ready, missing, log_path = sys.argv[1:]
+          exit_code, ready, auth_mode, missing, log_path = sys.argv[1:]
           tail = ''
           p = pathlib.Path(log_path)
           if p.exists():
@@ -147,6 +158,7 @@ jobs:
             'run_id': '${{ github.run_id }}',
             'run_attempt': '${{ github.run_attempt }}',
             'commit': '${{ github.sha }}',
+            'auth_mode': auth_mode,
             'exit_code': int(exit_code or 999),
             'error': 'report_not_created',
             'ready': ready,
