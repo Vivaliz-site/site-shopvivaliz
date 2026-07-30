@@ -1,5 +1,5 @@
 {
-  "requested_at": "2026-07-30T23:45:00Z",
+  "requested_at": "2026-07-30T23:58:00Z",
   "branch": "audit/repo-structure-secrets-index",
   "categories": [
     "root-docs",
@@ -7,7 +7,9 @@
     "root-python",
     "scripts-python"
   ],
-  "mode": "safe-batch",
+  "mode": "final-reconciliation",
   "preserve_compatibility": true,
-  "sanitize_sensitive_documents": true
+  "sanitize_sensitive_documents": true,
+  "expected_candidates": 0,
+  "expected_blocked": 0
 }
