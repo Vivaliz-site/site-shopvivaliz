@@ -36,10 +36,7 @@ jobs:
 
       - name: Apply root documents and temporary artifacts
         run: |
-          python scripts/maintenance/restructure_repository.py \
-            --apply \
-            --categories root-docs,temp-artifacts \
-            --write-report
+          python scripts/maintenance/restructure_repository.py --apply --categories root-docs,temp-artifacts --write-report
           git add -A
           if ! git diff --cached --quiet; then
             git commit -m "chore(repo): migrate remaining root documents safely"
@@ -48,10 +45,7 @@ jobs:
 
       - name: Apply Python utilities from repository root
         run: |
-          python scripts/maintenance/restructure_repository.py \
-            --apply \
-            --categories root-python \
-            --write-report
+          python scripts/maintenance/restructure_repository.py --apply --categories root-python --write-report
           git add -A
           if ! git diff --cached --quiet; then
             git commit -m "refactor(repo): migrate remaining root Python utilities"
@@ -60,15 +54,18 @@ jobs:
 
       - name: Apply Python scripts from scripts root
         run: |
-          python scripts/maintenance/restructure_repository.py \
-            --apply \
-            --categories scripts-python \
-            --write-report
+          python scripts/maintenance/restructure_repository.py --apply --categories scripts-python --write-report
           git add -A
           if ! git diff --cached --quiet; then
             git commit -m "refactor(repo): classify remaining scripts root Python files"
             git push origin HEAD:audit/repo-structure-secrets-index
           fi
+
+      - name: Reconcile manual final migrations
+        run: python scripts/maintenance/reconcile_structure_manifest.py
+
+      - name: Generate final report
+        run: python scripts/maintenance/restructure_repository.py --write-report
 
       - name: Validate final structure
         run: |
@@ -79,13 +76,12 @@ jobs:
       - name: Commit final reports
         if: always()
         run: |
-          python scripts/maintenance/restructure_repository.py --write-report || true
           git add docs/audits/repository-wide-structure-report.md \
                   docs/audits/repository-wide-structure-report.json \
                   docs/audits/repository-restructure-blocked.json \
                   config/repository-structure-manifest.json || true
           if ! git diff --cached --quiet; then
-            git commit -m "docs(repo): record final restructure reports"
+            git commit -m "docs(repo): record reconciled restructure reports"
             git push origin HEAD:audit/repo-structure-secrets-index
           fi
 
