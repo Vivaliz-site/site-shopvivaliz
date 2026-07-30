@@ -652,3 +652,22 @@ foi inventado. Nenhuma notificação push enviada neste ciclo: mesma recomendaç
 ciclos 15/16/17 (renovar `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`/`TINY_ACCESS_TOKEN`/
 `TINY_REFRESH_TOKEN` nos GitHub Secrets **e** recriar os dois workflows dedicados), sem fato novo
 que justifique repetir o alerta.
+
+### 9.14 Atualização — ciclo de 2026-07-30 (~13h UTC), 19º ciclo
+
+Estado idêntico ao ciclo 18, sem nenhum fato novo: `ls .github/workflows/ | grep -i shopee`
+segue vazio (14 workflows no diretório, nenhum Shopee); nenhum arquivo novo em `listings/` desde
+`shopee-listings-20260726-080756.json`/`optimization-report-20260726-060921.json` (mesmo
+`status: partial`/`error`, `total_products: 0`, erro `"Falha ao renovar token: Invalid client or
+Invalid client credentials"`). `git log` desde o commit do ciclo anterior deste mesmo dia
+(`6b41b2f`, 07:10 UTC) até `c7f7cb3` (HEAD atual) só tem um commit auto-sync tocando
+`storage/codex-bridge/state.json` — nada relacionado a Tiny/Shopee/workflows. Nenhum secret
+`TINY_*`/`OLIST_*`/`SHOPEE_*`/`ANTHROPIC_API_KEY` neste ambiente de sessão (`printenv | grep -iE
+'shopee|tiny|olist|anthropic'` sem nenhum match real). Achado estrutural das seções 9.7/9.8
+permanece sem mudança: nenhuma integração com a API de analytics do Shopee Open Platform (CTR,
+conversão, vendas por SKU) existe em nenhum workflow ou script deste repositório.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada — sem credencial válida,
+sem workflow ativo e sem fonte de dados de performance real. Nenhum dado de CTR/conversão/venda
+foi inventado. Nenhuma notificação push enviada neste ciclo: mesmo estado já comunicado nos
+ciclos 15-18, sem fato novo que justifique repetir o alerta.
