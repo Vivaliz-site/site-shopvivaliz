@@ -1,0 +1,102 @@
+name: Repository Restructure Apply
+
+on:
+  push:
+    branches:
+      - audit/repo-structure-secrets-index
+    paths:
+      - '.github/triggers/repository-restructure.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repository-restructure-apply
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: audit/repo-structure-secrets-index
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Apply root documents and temporary artifacts
+        run: |
+          python scripts/maintenance/restructure_repository.py \
+            --apply \
+            --categories root-docs,temp-artifacts \
+            --write-report
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(repo): migrate remaining root documents safely"
+            git push origin HEAD:audit/repo-structure-secrets-index
+          fi
+
+      - name: Apply Python utilities from repository root
+        run: |
+          python scripts/maintenance/restructure_repository.py \
+            --apply \
+            --categories root-python \
+            --write-report
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "refactor(repo): migrate remaining root Python utilities"
+            git push origin HEAD:audit/repo-structure-secrets-index
+          fi
+
+      - name: Apply Python scripts from scripts root
+        run: |
+          python scripts/maintenance/restructure_repository.py \
+            --apply \
+            --categories scripts-python \
+            --write-report
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "refactor(repo): classify remaining scripts root Python files"
+            git push origin HEAD:audit/repo-structure-secrets-index
+          fi
+
+      - name: Validate final structure
+        run: |
+          python -m compileall -q scripts/ai scripts/maintenance scripts/marketplace scripts/dev config
+          python scripts/maintenance/validate_structure_manifest.py
+          python scripts/audit_repository.py
+
+      - name: Commit final reports
+        if: always()
+        run: |
+          python scripts/maintenance/restructure_repository.py --write-report || true
+          git add docs/audits/repository-wide-structure-report.md \
+                  docs/audits/repository-wide-structure-report.json \
+                  docs/audits/repository-restructure-blocked.json \
+                  config/repository-structure-manifest.json || true
+          if ! git diff --cached --quiet; then
+            git commit -m "docs(repo): record final restructure reports"
+            git push origin HEAD:audit/repo-structure-secrets-index
+          fi
+
+      - name: Upload restructure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-restructure-${{ github.run_id }}
+          path: |
+            docs/audits/repository-wide-structure-report.md
+            docs/audits/repository-wide-structure-report.json
+            docs/audits/repository-restructure-blocked.json
+            config/repository-structure-manifest.json
+          if-no-files-found: warn
