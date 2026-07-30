@@ -36,115 +36,86 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Apply root documents and temporary artifacts
-        run: |
-          python scripts/maintenance/restructure_repository.py --apply --categories root-docs,temp-artifacts --write-report
-          git add -A
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(repo): migrate remaining root documents safely"
-            git push origin HEAD:audit/repo-structure-secrets-index
-          fi
-
-      - name: Apply Python utilities from repository root
-        run: |
-          python scripts/maintenance/restructure_repository.py --apply --categories root-python --write-report
-          git add -A
-          if ! git diff --cached --quiet; then
-            git commit -m "refactor(repo): migrate remaining root Python utilities"
-            git push origin HEAD:audit/repo-structure-secrets-index
-          fi
-
-      - name: Apply Python scripts from scripts root
-        run: |
-          python scripts/maintenance/restructure_repository.py --apply --categories scripts-python --write-report
-          git add -A
-          if ! git diff --cached --quiet; then
-            git commit -m "refactor(repo): classify remaining scripts root Python files"
-            git push origin HEAD:audit/repo-structure-secrets-index
-          fi
-
-      - name: Execute canonical secret-name migration
-        id: aliases
+      - name: Apply validate and publish canonical names
+        id: transaction
         shell: bash
         run: |
           set +e
-          python scripts/maintenance/canonicalize_secret_aliases.py --apply > alias-output.log 2>&1
+          {
+            echo "[1/8] apply replacements"
+            python scripts/maintenance/canonicalize_secret_aliases.py --apply
+
+            echo "[2/8] validate changed JSON"
+            while IFS= read -r file; do
+              [ -z "$file" ] || python -m json.tool "$file" >/dev/null
+            done < <(git diff --name-only --diff-filter=ACM | grep -E '\.json$' || true)
+
+            echo "[3/8] validate changed PHP"
+            while IFS= read -r file; do
+              [ -z "$file" ] || php -l "$file"
+            done < <(git diff --name-only --diff-filter=ACM | grep -E '\.php$' || true)
+
+            echo "[4/8] compile canonical Python"
+            python -m compileall -q scripts/ai scripts/maintenance scripts/marketplace scripts/dev config
+
+            echo "[5/8] run unit tests"
+            python -m unittest discover -s tests/unit -p 'test_*.py' -v
+
+            echo "[6/8] run integration tests"
+            python -m unittest discover -s tests/integration -p 'test_*.py' -v
+
+            echo "[7/8] enforce strict aliases"
+            python scripts/audit_repository.py --strict-aliases
+
+            echo "[8/8] commit and push"
+            git add -A
+            if git diff --cached --quiet; then
+              echo "No canonicalization changes remained."
+            else
+              git commit -m "refactor(repo): replace legacy secret aliases with canonical names"
+              git fetch origin audit/repo-structure-secrets-index
+              git rebase origin/audit/repo-structure-secrets-index
+              git push origin HEAD:audit/repo-structure-secrets-index
+            fi
+          } > alias-transaction.log 2>&1
           code=$?
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Commit canonical aliases when executor succeeded
-        if: steps.aliases.outputs.exit_code == '0'
-        run: |
-          git add -A
-          if ! git diff --cached --quiet; then
-            git commit -m "refactor(repo): replace legacy secret aliases with canonical names"
-            git push origin HEAD:audit/repo-structure-secrets-index
-          fi
-
-      - name: Publish alias migration diagnostic to PR
+      - name: Publish transaction diagnostic to PR
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-          ALIAS_EXIT_CODE: ${{ steps.aliases.outputs.exit_code }}
+          TRANSACTION_EXIT_CODE: ${{ steps.transaction.outputs.exit_code }}
         run: |
-          python - <<'PY' > alias-comment.md
+          python - <<'PY' > transaction-comment.md
           import os
           from pathlib import Path
 
-          output = Path("alias-output.log").read_text(encoding="utf-8", errors="replace") if Path("alias-output.log").exists() else "executor output not created"
-          tail = "\n".join(output.splitlines()[-30:])
-          print("### Diagnóstico da migração de aliases canônicos")
+          output = Path("alias-transaction.log").read_text(encoding="utf-8", errors="replace") if Path("alias-transaction.log").exists() else "transaction log not created"
+          tail = "\n".join(output.splitlines()[-60:])
+          print("### Transação final de aliases canônicos")
           print()
           print(f"- run_id: `{os.environ.get('GITHUB_RUN_ID', '')}`")
           print(f"- commit inicial: `{os.environ.get('GITHUB_SHA', '')}`")
-          print(f"- exit_code: `{os.environ.get('ALIAS_EXIT_CODE', 'missing')}`")
+          print(f"- exit_code: `{os.environ.get('TRANSACTION_EXIT_CODE', 'missing')}`")
           print()
           print("```text")
           print(tail)
           print("```")
           PY
-          gh pr comment 599 --body-file alias-comment.md
+          gh pr comment 599 --body-file transaction-comment.md
 
-      - name: Stop when alias executor failed
-        if: steps.aliases.outputs.exit_code != '0'
+      - name: Fail when transaction failed
+        if: steps.transaction.outputs.exit_code != '0'
         run: exit 1
 
-      - name: Reconcile manual final migrations
-        run: python scripts/maintenance/reconcile_structure_manifest.py
-
-      - name: Generate final report
-        run: python scripts/maintenance/restructure_repository.py --write-report
-
-      - name: Validate final structure and aliases
-        run: |
-          python -m compileall -q scripts/ai scripts/maintenance scripts/marketplace scripts/dev config
-          python scripts/maintenance/validate_structure_manifest.py
-          python scripts/audit_repository.py --strict-aliases
-
-      - name: Commit final reports
-        if: always()
-        run: |
-          git add docs/audits/repository-wide-structure-report.md \
-                  docs/audits/repository-wide-structure-report.json \
-                  docs/audits/repository-restructure-blocked.json \
-                  docs/audits/secret-alias-canonicalization-report.json \
-                  config/repository-structure-manifest.json || true
-          if ! git diff --cached --quiet; then
-            git commit -m "docs(repo): record final restructure and alias reports"
-            git push origin HEAD:audit/repo-structure-secrets-index
-          fi
-
-      - name: Upload restructure evidence
+      - name: Upload canonicalization evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: repository-restructure-${{ github.run_id }}
+          name: canonical-alias-transaction-${{ github.run_id }}
           path: |
-            docs/audits/repository-wide-structure-report.md
-            docs/audits/repository-wide-structure-report.json
-            docs/audits/repository-restructure-blocked.json
             docs/audits/secret-alias-canonicalization-report.json
-            config/repository-structure-manifest.json
-            alias-output.log
+            alias-transaction.log
           if-no-files-found: warn
