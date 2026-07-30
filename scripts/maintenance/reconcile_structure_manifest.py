@@ -13,6 +13,12 @@ FINAL_SCRIPT_MIGRATIONS = {
     "scripts/shopvivaliz_auth.py": "scripts/maintenance/auth/shopvivaliz_auth.py",
     "scripts/shopvivaliz_auth_fixed.py": "scripts/maintenance/auth/shopvivaliz_auth.py",
     "scripts/tiny_sales_report.py": "scripts/marketplace/olist/legacy/tiny_sales_report.py",
+    "scripts/deploy-paralelo.sh": "scripts/production/legacy/deploy-paralelo.sh",
+    "scripts/auto-sync-oracle.sh": "scripts/production/legacy/auto-sync-oracle.sh",
+    "scripts/fix-zero-price-products.php": "scripts/production/legacy/fix-zero-price-products.php",
+    "scripts/migrate-old-domain-configs.ps1": "scripts/production/legacy/migrate-old-domain-configs.ps1",
+    "scripts/sincronizar_secrets_github.sh": "scripts/maintenance/legacy/sincronizar_secrets_github.sh",
+    "scripts/marketplace/olist/repair-olist-images.py": "scripts/marketplace/olist/legacy/repair-olist-images.py",
 }
 
 FINAL_ARCHIVES = {
@@ -25,7 +31,7 @@ def main() -> int:
     data = json.loads(MANIFEST.read_text(encoding="utf-8"))
     data.setdefault("script_migrations", {}).update(FINAL_SCRIPT_MIGRATIONS)
     data.setdefault("removed_malformed_artifacts", {}).update(FINAL_ARCHIVES)
-    data["version"] = max(int(data.get("version", 1)), 4)
+    data["version"] = max(int(data.get("version", 1)), 5)
     MANIFEST.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     blocked = {"blocked": []}
