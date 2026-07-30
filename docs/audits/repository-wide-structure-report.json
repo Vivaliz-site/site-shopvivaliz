@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-07-30T23:20:53.840101+00:00",
-  "total_files_scanned": 4410,
+  "generated_at": "2026-07-30T23:20:55.991045+00:00",
+  "total_files_scanned": 4709,
   "counts": {
-    "canonical": 762,
+    "canonical": 1059,
     "dev_script": 1,
     "legacy_patch": 1,
     "maintenance_script": 1,
     "marketplace_script": 1,
-    "ok_or_unclassified": 2953,
+    "ok_or_unclassified": 2955,
     "root_allowed": 4,
     "root_stub": 386,
     "root_wrapper": 121,
