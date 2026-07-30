@@ -3,6 +3,8 @@
 
 The operation is lexical and idempotent. Legacy identifiers are assembled at
 runtime so this migration utility itself remains compatible with strict audits.
+Workflow files are intentionally excluded because GitHub Actions tokens cannot
+publish workflow changes; those files are updated through the GitHub connector.
 """
 from __future__ import annotations
 
@@ -47,6 +49,7 @@ SKIP_FILES = {
 IGNORE_PREFIXES = (
     ".git/", "node_modules/", "vendor/", ".next/", "dist/", "build/",
     "coverage/", "storage/private/", "logs/", ".cache/", "__pycache__/",
+    ".github/workflows/", ".github/workflows-archive/",
 )
 
 TEXT_SUFFIXES = {
