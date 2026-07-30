@@ -1,14 +1,14 @@
 # Relatório de Estrutura do Repositório Inteiro
 
-Gerado em: `2026-07-30T23:24:36.755396+00:00`
-Arquivos varridos: `4414`
+Gerado em: `2026-07-30T23:37:56.190908+00:00`
+Arquivos varridos: `4419`
 
 ## Contagem por categoria
 
 | Categoria | Quantidade |
 |---|---:|
-| `canonical` | 767 |
-| `ok_or_unclassified` | 2953 |
+| `canonical` | 770 |
+| `ok_or_unclassified` | 2955 |
 | `root_allowed` | 4 |
 | `root_stub` | 386 |
 | `root_wrapper` | 121 |
