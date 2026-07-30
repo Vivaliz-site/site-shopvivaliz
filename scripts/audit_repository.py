@@ -69,6 +69,7 @@ REQUIRED_DOCS_FOR_ROUTINES = [
     Path("docs/knowledge/structure-policy.md"),
     Path("docs/knowledge/ownership-map.md"),
     Path("docs/audits/repository-cleanup-backlog.md"),
+    Path("docs/operations/legacy-root-docs-index.md"),
 ]
 
 CANONICAL_SHOPEE_FILES = [
@@ -81,6 +82,21 @@ LEGACY_SHOPEE_WRAPPERS = [
     Path("scripts/shopee_production_seo_apply.py"),
     Path("scripts/shopee_full_catalog_optimizer.py"),
 ]
+
+REPOSITORY_WIDE_RESTRUCTURE_FILES = [
+    Path("scripts/maintenance/restructure_repository.py"),
+    Path("docs/operations/legacy-root-docs-index.md"),
+]
+
+ROOT_DOC_ALLOWLIST = {
+    "README.md",
+    "START_HERE.md",
+    "START-HERE.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+}
 
 IGNORE_DIRS = {
     ".git", "node_modules", "vendor", ".next", "dist", "build", "coverage",
@@ -197,6 +213,23 @@ def audit_migrated_shopee_structure(files: list[Path]) -> tuple[list[str], list[
     return errors, warnings
 
 
+def audit_repository_wide_structure(files: list[Path], strict_root_docs: bool) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    for path in REPOSITORY_WIDE_RESTRUCTURE_FILES:
+        if not (ROOT / path).exists():
+            errors.append(f"Repository-wide restructure file missing: {path.as_posix()}")
+
+    root_docs = [p for p in files if p.parent == ROOT and p.suffix.lower() in {".md", ".txt"} and p.name not in ROOT_DOC_ALLOWLIST]
+    for path in root_docs:
+        msg = f"Legacy root document should be indexed/migrated: {rel(path)}"
+        if strict_root_docs:
+            errors.append(msg)
+        else:
+            warnings.append(msg)
+    return errors, warnings
+
+
 def audit_production_guards(files: list[Path]) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -216,6 +249,7 @@ def audit_production_guards(files: list[Path]) -> tuple[list[str], list[str]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Audit ShopVivaliz repository hygiene")
     parser.add_argument("--strict-aliases", action="store_true", help="Fail on legacy secret aliases outside the centralizer")
+    parser.add_argument("--strict-root-docs", action="store_true", help="Fail when legacy root docs remain outside allowlist")
     args = parser.parse_args()
 
     files = iter_files()
@@ -228,6 +262,7 @@ def main() -> int:
         lambda f: audit_legacy_aliases(f, args.strict_aliases),
         audit_required_docs,
         audit_migrated_shopee_structure,
+        lambda f: audit_repository_wide_structure(f, args.strict_root_docs),
         audit_production_guards,
     ):
         audit_errors, audit_warnings = audit(files)
