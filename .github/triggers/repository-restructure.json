@@ -1,0 +1,13 @@
+{
+  "requested_at": "2026-07-30T23:45:00Z",
+  "branch": "audit/repo-structure-secrets-index",
+  "categories": [
+    "root-docs",
+    "temp-artifacts",
+    "root-python",
+    "scripts-python"
+  ],
+  "mode": "safe-batch",
+  "preserve_compatibility": true,
+  "sanitize_sensitive_documents": true
+}
