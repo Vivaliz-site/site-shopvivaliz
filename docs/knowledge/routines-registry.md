@@ -1,44 +1,46 @@
 # Registro de Rotinas Operacionais
 
-Este documento e obrigatorio para agentes e desenvolvedores. Toda rotina nova criada no repositorio deve ser registrada aqui no mesmo PR/commit.
+Toda rotina executável deve ser registrada aqui no mesmo PR em que for criada ou alterada.
 
-## Regra obrigatoria
+## Campos obrigatórios
 
-Ao criar ou alterar uma rotina, script, workflow, cron, job, automacao, sincronizacao ou tarefa de IA, preencha uma linha nesta tabela e atualize o indice do repositorio quando necessario.
+Nome, arquivo canônico, dono funcional, gatilho, entradas, saídas, risco e validação.
 
-Nenhuma rotina operacional deve ficar solta, sem dono funcional, gatilho, entrada, saida e validacao.
+## Rotinas canônicas
 
-## Campos padrao
+| Nome | Arquivo canônico | Dono | Gatilho | Entradas | Saídas | Risco | Validação |
+|---|---|---|---|---|---|---|---|
+| Repository Hygiene | `.github/workflows/repo-hygiene.yml` | Governança | PR, push, manual | Checkout do repo | Testes, auditoria, relatório e artifact | baixo | Todos os steps verdes |
+| Scanner estrutural global | `scripts/maintenance/restructure_repository.py` | Governança | CI ou CLI | Árvore do repo | Relatório Markdown/JSON | baixo | Relatório gerado sem falha |
+| Validador do manifesto | `scripts/maintenance/validate_structure_manifest.py` | Governança | CI ou CLI | Manifesto e árvore | Lista de inconsistências | baixo | Exit code 0 |
+| Auditor de higiene | `scripts/audit_repository.py` | Segurança/Governança | CI ou CLI | Arquivos versionados | Erros e avisos sem valores de secrets | baixo | Exit code 0 |
+| Shopee SEO Production Apply | `.github/workflows/shopee-production-seo.yml` + `scripts/marketplace/shopee/production_seo_apply.py` | Marketplace Shopee | Manual ou trigger controlado | Secrets Shopee, confirmação e limite | Backup, relatório, artifact e read-back | produção | `updated_verified` ou `verified_unchanged`; preço/estoque invariáveis |
+| Shopee Full Catalog Optimizer | `scripts/marketplace/shopee/full_catalog_optimizer.py` | Marketplace Shopee | CLI/importação controlada | Catálogo e secrets Shopee | Candidatos, backup e relatório | médio/produção | Dry-run, teste de invariantes e rollback |
+| Shopee Safety Gate | `.github/workflows/shopee-optimizer-safety.yml` | QA/Marketplace | PR, push, manual | Código e testes Shopee | Check de segurança | baixo | Testes de integração verdes |
+| Olist Sync Master | `scripts/marketplace/olist/olist-sync-master.py` | Olist ERP | CLI/workflow que o invoque | `OLIST_*`, parâmetros de sync | Cache/log/alterações controladas | produção | Contagem, resposta API e read-back |
+| Olist OAuth/Login tools | `scripts/marketplace/olist/olist-oauth-login.py` e ferramentas relacionadas | Olist ERP | CLI manual | `OLIST_*` e navegador quando aplicável | Tokens em ambiente seguro e status | alto | Autenticação sem imprimir secrets |
+| Olist Images tools | `scripts/marketplace/olist/repair-olist-images.py`, `export-olist-images-csv.py`, `download-olist-images-v2.py` | Olist/Imagens | CLI | Cache/API Olist | Imagens, CSV e relatório | médio | Contagem e arquivos de saída |
+| AI Autonomous Executor | `scripts/ai/autonomous-executor.py` | Agentes IA | Workflow/CLI | Fila, providers e política | Commits/relatórios somente com evidência | alto | Diff, testes e origem auditável |
+| AI Collaboration | `scripts/ai/ai_collaboration.py` | Agentes IA | CLI/importação | Prompt/tarefa e APIs configuradas | Resultado colaborativo | médio | Resposta real dos providers ou erro explícito |
+| Task Queue Manager | `scripts/ai/manage-tasks-queue.py` | Agentes IA | CLI | Argumentos e fila | Fila atualizada | médio | Diff e validação JSON |
+| Observabilidade IA | `scripts/ai/metrics-collector.py`, `observability-suite.py`, `generate-report.py` | Agentes IA | CLI/workflow | Logs e execuções | Métricas/relatórios | baixo | Artifact ou relatório gerado |
+| Deploy Diagnostic | `scripts/maintenance/deploy-diagnostic.py` | Infraestrutura | CLI | Configuração/deploy | Diagnóstico | baixo | Comandos e endpoints verificados |
+| Quality Assurance | `scripts/maintenance/quality-assurance.py` | QA | CLI/workflow | Código | Resultado de validação | baixo | Exit code e logs |
+| Vulnerability Scanner | `scripts/maintenance/vulnerability-scanner.py` | Segurança | CLI/workflow | Código/dependências | Relatório | médio | Sem exposição de credenciais |
+| Rollback Manager | `scripts/maintenance/rollback-manager.py` | Infraestrutura | CLI com confirmação | Commit alvo | Plano ou branch de revert | alto | Branch isolada, diff e testes |
+| System Health Check | `scripts/maintenance/system-health-check.py` | Operações | CLI/workflow | Estado real | Relatório baseado em evidência | baixo | Não aceitar mensagens autorreferidas como prova |
 
-| Campo | Obrigatorio | Descricao |
-|---|---:|---|
-| Nome | Sim | Nome curto da rotina |
-| Arquivo principal | Sim | Caminho do script, workflow ou endpoint |
-| Dono funcional | Sim | Area responsavel: catalogo, deploy, marketplace, IA, pedidos, email, etc. |
-| Gatilho | Sim | Manual, push, schedule, webhook, CLI, cron, API |
-| Entrada | Sim | Secrets, parametros, arquivos, payloads ou banco |
-| Saida | Sim | Arquivos, logs, artefatos, comentarios, banco, API externa |
-| Risco | Sim | baixo, medio, alto, producao |
-| Validacao | Sim | Como provar que executou corretamente |
-| Observacoes | Nao | Dependencias, rollback, limitacoes |
+## Rotinas legadas
 
-## Rotinas registradas
+- Caminhos antigos listados no manifesto são wrappers, não implementações.
+- `scripts/dev/legacy-reporting/` e `scripts/dev/legacy-data-tools/` são ferramentas históricas, não rotinas automáticas de produção.
+- Workflows em `.github/workflows-archive/paused/` estão desativados e não devem ser reativados sem novo registro e validação.
 
-| Nome | Arquivo principal | Dono funcional | Gatilho | Entrada | Saida | Risco | Validacao | Observacoes |
-|---|---|---|---|---|---|---|---|---|
-| Shopee SEO Production Apply | `.github/workflows/shopee-production-seo.yml` + `scripts/marketplace/shopee/production_seo_apply.py` | Marketplace Shopee | Manual `workflow_dispatch` ou trigger controlado | `SHOPEE_PARTNER_ID`, `SHOPEE_PARTNER_KEY`, `SHOPEE_SHOP_ID`, `SHOPEE_REFRESH_TOKEN`, `SHOPEE_ACCESS_TOKEN` opcional, limite, confirmacao | Relatorio JSON, backup JSON, artefato GitHub Actions, comentario na issue de validacao | producao | Status `updated_verified` ou `verified_unchanged` com leitura posterior da Shopee | Nao altera preco/estoque; exige backup e read-back; caminho antigo e wrapper |
-| Shopee Full Catalog Optimizer | `scripts/marketplace/shopee/full_catalog_optimizer.py` | Marketplace Shopee | CLI manual ou importado pelo executor de producao | Catálogo Shopee e secrets Shopee | Relatorio JSON e backup | medio/producao quando `--apply` | Backup, relatorio e invariantes de preco/estoque | Caminho antigo `scripts/shopee_full_catalog_optimizer.py` e wrapper |
-| Shopee First Product Validation Trigger | `.github/triggers/shopee-first-product-validation.json` | Marketplace Shopee | Push controlado no arquivo trigger | JSON de solicitacao com `limit=1` | Run do workflow Shopee e comentario em issue | producao | Comentario automatico com `run_id`, `commit`, status e evidencia | Usado para validar primeiro produto antes de lote total |
-| AI Autonomous Executor | `.github/workflows/ai-autonomous-executor.yml` + `scripts/autonomous-executor.py` | Agentes IA | Schedule horario ou manual | `tasks-queue.json`, secrets de IA | Commits, relatórios e execucoes em Actions | medio | Logs do workflow, diff gerado e testes | Deve consultar este registro antes de criar novas rotinas |
-| Task Queue Manager | `scripts/manage-tasks-queue.py` | Agentes IA | CLI manual | argumentos CLI e `tasks-queue.json` | fila atualizada | baixo | Saida CLI e diff do arquivo de fila | Usar para controlar backlog dos agentes |
-| Deploy legado | `.github/workflows/deploy.yml` | Deploy/site | Push ou manual | FTP secrets canonicos | Arquivos publicados no hosting | producao | Curl/site apos deploy e log do workflow | Preferir `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`, `FTP_PORT`, `FTP_REMOTE_DIR` |
-| Repo Hygiene | `.github/workflows/repo-hygiene.yml` + `scripts/audit_repository.py` | Governanca de repositorio | Pull request e push em branches principais | Arvore do repositorio | Relatorio de higiene no log do CI | baixo | Workflow verde e relatorio sem erros bloqueantes | Compila scripts migrados, wrappers legados e scanner global |
-| Repository Wide Restructure Scanner | `scripts/maintenance/restructure_repository.py` | Governanca de repositorio | CLI ou workflow `Repository Hygiene` | Checkout completo do repositorio | `docs/audits/repository-wide-structure-report.md` e `.json` | baixo | Relatorio gerado com contagem e candidatos de migracao | Cobre o repo inteiro; nao move arquivos automaticamente |
+## Regra para novas rotinas
 
-## Como registrar nova rotina
-
-1. Adicione uma linha em `Rotinas registradas`.
-2. Atualize `docs/knowledge/repository-index.md` se criar pasta, modulo, script importante ou workflow novo.
-3. Atualize `docs/knowledge/secrets-and-integrations-map.md` se criar secret, alias ou integracao.
-4. Inclua validacao real no PR.
-5. Nao faca merge se a rotina alterar producao sem backup, confirmacao e evidencia.
+1. Criar no diretório canônico.
+2. Registrar nesta tabela.
+3. Atualizar `config/repository-structure-manifest.json` se houver caminho novo ou legado.
+4. Atualizar mapa de secrets quando aplicável.
+5. Definir teste/evidência.
+6. Para produção: backup, confirmação, rollback/read-back e artifact.
