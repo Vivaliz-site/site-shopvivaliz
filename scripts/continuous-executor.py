@@ -1,22 +1,9 @@
 #!/usr/bin/env python3
-"""Deprecated continuous executor.
-
-The previous implementation simulated work, marked tasks complete, and pushed
-commits without independent validation. It is intentionally disabled.
-"""
-
-import sys
-
-
-def main() -> int:
-    print(
-        "ERROR: scripts/continuous-executor.py is disabled. Continuous agent "
-        "work must create auditable branches, commits, test artifacts, and pull "
-        "requests; queue state alone is not proof of completion.",
-        file=sys.stderr,
-    )
-    return 2
-
-
+"""Wrapper legado; implementação canônica em scripts/ai/continuous-executor.py."""
+from pathlib import Path
+import runpy
+_TARGET = Path(__file__).resolve().parent / "ai" / "continuous-executor.py"
 if __name__ == "__main__":
-    raise SystemExit(main())
+    runpy.run_path(str(_TARGET), run_name="__main__")
+else:
+    globals().update(runpy.run_path(str(_TARGET), run_name=__name__))
