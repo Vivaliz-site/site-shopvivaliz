@@ -33,6 +33,7 @@ Este backlog controla limpeza estrutural sem delecoes arriscadas.
 | CLEAN-008 | P2 | Logs/backups | Logs e backups versionados indevidos | bloqueado | Listar arquivos grandes/sensiveis e mover para storage privado ou artifacts | Confirmar que nao sao necessarios em producao |
 | CLEAN-009 | P2 | Archive | Codigo experimental misturado | migrar | Mover para `archive/` ou `scripts/dev/` | Nenhum workflow/import depende do caminho antigo |
 | CLEAN-010 | P2 | Testes | Testes sem separacao unit/integration/smoke | migrar | Criar estrutura alvo e mover gradualmente | CI executando caminho correto |
+| CLEAN-011 | P2 | Shopee | Remover wrappers legados Shopee | remover depois de validacao | Apos validar que workflows, docs, scripts locais e CI usam apenas caminho canonico, remover wrappers | Busca sem usos dos caminhos legados e CI verde |
 
 ## Migrações executadas neste PR
 
