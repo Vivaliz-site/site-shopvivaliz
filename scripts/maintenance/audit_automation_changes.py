@@ -17,11 +17,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REPORT_DIR = ROOT / "artifacts" / "repository-governance"
-TEXT_SUFFIXES = {".py", ".php", ".js", ".ts", ".tsx", ".jsx", ".sh", ".ps1", ".yml", ".yaml", ".json", ".md", ".txt"}
+SELF_PATH = "scripts/maintenance/audit_automation_changes.py"
+TEXT_SUFFIXES = {
+    ".py", ".php", ".js", ".ts", ".tsx", ".jsx", ".sh", ".ps1",
+    ".yml", ".yaml", ".json", ".md", ".txt",
+}
 AUTOMATION_PREFIXES = (".github/workflows/", "scripts/", ".ai/", "agents/", "config/")
 AUDIT_WORDS = ("audit", "auditoria", "health", "incident", "agent", "agente", "governance", "hygiene")
 EVIDENCE_WORDS = ("artifact", "evidence", "commit_sha", "pull_request", "pr_url", "test_report", "run_id", "read-back", "readback")
-SELF_PATH = "scripts/maintenance/audit_automation_changes.py"
 
 LINE_RULES: tuple[tuple[str, str, re.Pattern[str], str], ...] = (
     ("critical", "auto_merge", re.compile(r"(?:gh\s+pr\s+merge\b[^\n]*--auto|enable_auto_merge\s*\(|auto-merge\s*:\s*true)", re.I), "Auto-merge was introduced."),
@@ -44,6 +47,16 @@ SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 HUNK = re.compile(r"^@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,(\d+))?\s+@@")
+COMPLETION_PATTERN = re.compile(
+    r"(?:status|state)[^\n:=]{0,32}[:=]\s*['\"]?(?:completed|concluido|concluído|success)"
+    r"|completed_with_evidence|success\s*:\s*true",
+    re.I,
+)
+QUEUE_PATTERN = re.compile(r"(?:task|queue|fila|last_result|completed_at)", re.I)
+SIMULATION_PATTERN = re.compile(
+    r"\b(?:simulate|simulated|simulation|simular|simulacao|simulação|fake success|mock success)\b",
+    re.I,
+)
 
 
 @dataclass(frozen=True)
@@ -68,11 +81,8 @@ def changed_files(base: str, head: str) -> list[tuple[str, str]]:
     entries: list[tuple[str, str]] = []
     for raw in result.stdout.splitlines():
         parts = raw.split("\t")
-        if not parts:
-            continue
-        status = parts[0][0]
-        path = parts[-1]
-        entries.append((status, path))
+        if parts:
+            entries.append((parts[0][0], parts[-1]))
     return entries
 
 
@@ -92,15 +102,9 @@ def added_lines(base: str, head: str, path: str) -> list[tuple[int, str]]:
             current_line += 1
         elif line.startswith("-") and not line.startswith("---"):
             continue
-        elif line.startswith("\\"):
-            continue
-        else:
+        elif not line.startswith("\\"):
             current_line += 1
     return additions
-
-
-def is_automation_path(path: str) -> bool:
-    return path.startswith(AUTOMATION_PREFIXES)
 
 
 def redact(text: str) -> str:
@@ -110,63 +114,62 @@ def redact(text: str) -> str:
     return value[:240]
 
 
+def line_for_match(additions: list[tuple[int, str]], match: re.Match[str]) -> int | None:
+    needle = match.group(0).lower()
+    return next((number for number, text in additions if needle in text.lower()), None)
+
+
 def scan_file(base: str, head: str, status: str, path: str) -> list[Finding]:
     findings: list[Finding] = []
     lower_path = path.lower()
 
     if status == "D" and path == ".github/workflows/agents-hourly-deep-audit.yml":
-        findings.append(Finding("critical", "hourly_audit_removed", path, None, "The hourly deep agent audit workflow was removed.", "deleted"))
-        return findings
+        return [Finding("critical", "hourly_audit_removed", path, None, "The hourly deep agent audit workflow was removed.", "deleted")]
 
     suffix = Path(path).suffix.lower()
     if suffix not in TEXT_SUFFIXES and Path(path).name not in {"Dockerfile", "Makefile"}:
         return findings
 
     additions = added_lines(base, head, path)
-    if not additions:
-        return findings
-
-    if path == SELF_PATH:
+    if not additions or path == SELF_PATH:
         return findings
 
     added_text = "\n".join(text for _, text in additions)
     added_lower = added_text.lower()
 
     for line_no, text in additions:
-        for pattern in SECRET_PATTERNS:
-            if pattern.search(text):
-                findings.append(Finding("critical", "credential_exposed", path, line_no, "A credential-like value was introduced in tracked text.", redact(text)))
-                break
+        if any(pattern.search(text) for pattern in SECRET_PATTERNS):
+            findings.append(Finding("critical", "credential_exposed", path, line_no, "A credential-like value was introduced in tracked text.", redact(text)))
 
-    if is_automation_path(path):
-        for line_no, text in additions:
-            for severity, rule, pattern, message in LINE_RULES:
-                if not pattern.search(text):
-                    continue
-                if rule == "workflow_push" and "ALLOW_SCOPED_PUSH" in added_text and not re.search(r"\b(?:main|master)\b|--force", text, re.I):
-                    continue
-                if rule in {"fail_open", "ignored_failure"} and not any(word in lower_path or word in added_lower for word in AUDIT_WORDS):
-                    continue
-                findings.append(Finding(severity, rule, path, line_no, message, redact(text)))
+    if not path.startswith(AUTOMATION_PREFIXES):
+        return findings
 
-        simulation = re.search(r"\b(?:simulate|simulated|simulation|simular|simulacao|simulação|fake success|mock success)\b", added_text, re.I)
-        completion = re.search(r"(?:status|state)[\"']?\s*[:=]\s*[\"']?(?:completed|concluido|concluído|success)|completed_with_evidence|success\s*:\s*true", added_text, re.I)
-        evidence = any(word in added_lower for word in EVIDENCE_WORDS)
-        queue_change = re.search(r"(?:task|queue|fila|last_result|completed_at)", added_text, re.I)
+    for line_no, text in additions:
+        for severity, rule, pattern, message in LINE_RULES:
+            if not pattern.search(text):
+                continue
+            if rule == "workflow_push" and "ALLOW_SCOPED_PUSH" in added_text and not re.search(r"\b(?:main|master)\b|--force", text, re.I):
+                continue
+            if rule in {"fail_open", "ignored_failure"} and not any(word in lower_path or word in added_lower for word in AUDIT_WORDS):
+                continue
+            findings.append(Finding(severity, rule, path, line_no, message, redact(text)))
 
-        if simulation and completion:
-            line_no = next((number for number, text in additions if simulation.group(0).lower() in text.lower()), None)
-            findings.append(Finding("critical", "simulated_completion", path, line_no, "Simulation and successful completion were introduced in the same automation.", redact(simulation.group(0))))
-        if completion and queue_change and not evidence:
-            line_no = next((number for number, text in additions if completion.group(0).lower() in text.lower()), None)
-            findings.append(Finding("high", "queue_completion_without_evidence", path, line_no, "Queue/task completion was introduced without verifiable evidence fields.", redact(completion.group(0))))
+    simulation = SIMULATION_PATTERN.search(added_text)
+    completion = COMPLETION_PATTERN.search(added_text)
+    evidence = any(word in added_lower for word in EVIDENCE_WORDS)
+    queue_change = QUEUE_PATTERN.search(added_text)
 
-        if lower_path.startswith(".github/workflows/"):
-            write_permission = re.search(r"(?:contents|issues|pull-requests|actions)\s*:\s*write", added_text, re.I)
-            automatic_trigger = re.search(r"^\s{0,4}(?:push|schedule|workflow_run|issues)\s*:", added_text, re.I | re.M)
-            mutation = re.search(r"(?:git\s+push|gh\s+pr\s+merge|gh\s+issue\s+(?:edit|close)|curl\b[^\n]*-(?:X|d)\s*(?:POST|PUT|PATCH|DELETE))", added_text, re.I)
-            if write_permission and automatic_trigger and mutation:
-                findings.append(Finding("critical", "automatic_write_workflow", path, None, "An automatically triggered workflow combines write permissions with mutation commands.", "write permissions + automatic trigger + mutation"))
+    if simulation and completion:
+        findings.append(Finding("critical", "simulated_completion", path, line_for_match(additions, simulation), "Simulation and successful completion were introduced in the same automation.", redact(simulation.group(0))))
+    if completion and queue_change and not evidence:
+        findings.append(Finding("high", "queue_completion_without_evidence", path, line_for_match(additions, completion), "Queue/task completion was introduced without verifiable evidence fields.", redact(completion.group(0))))
+
+    if lower_path.startswith(".github/workflows/"):
+        write_permission = re.search(r"(?:contents|issues|pull-requests|actions)\s*:\s*write", added_text, re.I)
+        automatic_trigger = re.search(r"^\s{0,4}(?:push|schedule|workflow_run|issues)\s*:", added_text, re.I | re.M)
+        mutation = re.search(r"(?:git\s+push|gh\s+pr\s+merge|gh\s+issue\s+(?:edit|close)|curl\b[^\n]*-(?:X|d)\s*(?:POST|PUT|PATCH|DELETE))", added_text, re.I)
+        if write_permission and automatic_trigger and mutation:
+            findings.append(Finding("critical", "automatic_write_workflow", path, None, "An automatically triggered workflow combines write permissions with mutation commands.", "write permissions + automatic trigger + mutation"))
 
     return findings
 
@@ -200,10 +203,7 @@ def main() -> int:
     args = parser.parse_args()
 
     entries = changed_files(args.base, args.head)
-    findings: list[Finding] = []
-    for status, path in entries:
-        findings.extend(scan_file(args.base, args.head, status, path))
-
+    findings = [finding for status, path in entries for finding in scan_file(args.base, args.head, status, path)]
     severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     findings.sort(key=lambda item: (severity_order.get(item.severity, 9), item.path, item.line or 0, item.rule))
     payload = {
