@@ -95,6 +95,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v7
+
       - name: Check public health endpoints
         id: health
         shell: bash
@@ -132,11 +134,11 @@ jobs:
           set -euo pipefail
           title='[AUTO] Falha de saude detectada em producao'
           body="$(printf 'Monitor autonomo encontrou %s falha(s).\n\n```text\n%s\n```\n\nExecucao: %s' '${{ steps.health.outputs.failures }}' "$(cat health-report.txt)" '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}')"
-          issue="$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
+          issue="$(gh issue list --repo "${{ github.repository }}" --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
           if [[ -n "$issue" ]]; then
-            gh issue comment "$issue" --body "$body"
+            gh issue comment "$issue" --repo "${{ github.repository }}" --body "$body"
           else
-            gh issue create --title "$title" --body "$body"
+            gh issue create --repo "${{ github.repository }}" --title "$title" --body "$body"
           fi
           exit 1
 

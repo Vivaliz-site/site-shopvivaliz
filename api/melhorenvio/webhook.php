@@ -6,6 +6,10 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
+// Mesmo bug ja corrigido em api/blog/publish-scheduled.php: sem este require,
+// getenv('MELHORENVIO_WEBHOOK_SECRET') nunca via o valor do .env, e a
+// validacao de assinatura HMAC abaixo falhava sempre (secret vazio).
+require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
 require_once dirname(__DIR__, 2) . '/includes/melhorenvio-oauth.php';
 require_once dirname(__DIR__, 2) . '/includes/mercadopago-gateway.php';
 

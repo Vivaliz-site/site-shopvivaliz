@@ -309,6 +309,12 @@ try {
 
     // Enviar email de confirmação em background (se pagamento foi aprovado)
     if ($localStatus === 'payment_approved') {
+        try {
+            svem_notify_admin_payment_received($order);
+        } catch (Throwable $e) {
+            error_log('[MercadoPago] admin notify failed: order=' . $externalReference . ' ' . $e->getMessage());
+        }
+
         foreach (is_array($order['items'] ?? null) ? $order['items'] : [] as $item) {
             if (!is_array($item)) {
                 continue;

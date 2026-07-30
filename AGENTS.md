@@ -240,11 +240,95 @@ git merge --ff-only origin/main  # ❌ Na árvore viva
    - Cria nova release
    - Troca symlink atomicamente
    - **Você não pusheia release**, você pusheia commits
+   - Se existir `/home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref`, o cron passa a perseguir esse branch/SHA em vez de `origin/main`
 
 4. **Rollback é manual:**
    ```bash
    sudo /home/ubuntu/shopvivaliz-deploy/repo/scripts/rollback-production.sh
    ```
+
+### Toolkit Local Obrigatório (Windows)
+
+Os seguintes atalhos locais ficam em `C:\Users\FRED\.local\bin` e devem ser preferidos por agentes quando a sessão tiver acesso ao terminal local:
+
+```powershell
+docker-check
+docker-up
+docker-down
+sv-vm-ssh hostname
+sv-vm-status
+sv-deploy-head -DryRun
+sv-deploy-sha <sha> -DryRun
+sv-blog-status
+sv-blog-publish
+```
+
+Regras:
+
+1. A chave SSH operacional atual da VM é:
+   ```text
+   C:\Users\FRED\Downloads\ssh-key-2026-07-04.key
+   ```
+
+2. `sv-deploy-head` e `sv-deploy-sha` atualizam o alvo persistente de produção em:
+   ```text
+   /home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref
+   ```
+   Isso impede que o cron volte automaticamente para `main` enquanto um branch/SHA específico estiver fixado.
+
+3. Antes de afirmar que produção ficou publicada, registrar no mínimo:
+   - `sv-vm-status`
+   - `sv-blog-status` se a alteração tocar blog/Liz/conteúdo
+   - HTTP 200 ou artefato real do endpoint afetado
+
+4. Se a release ativa voltar para `main` após alguns minutos, isso é FALHA operacional do alvo persistente ou do runner antigo, não sucesso de deploy.
+
+### Editores Padronizados (Windows)
+
+Para reduzir drift entre sessões e evitar edição no checkout errado, os editores locais devem abrir sempre o mesmo worktree operacional:
+
+```text
+Worktree padrão: C:\site-shopvivaliz-prod-liz
+Branch validado: agent/liz-widget-prod
+SHA validado em 2026-07-29: 19328ac2
+```
+
+Regras:
+
+1. Antes de editar ou publicar, confirmar:
+   ```bash
+   git -C C:\site-shopvivaliz-prod-liz branch --show-current
+   git -C C:\site-shopvivaliz-prod-liz rev-parse --show-toplevel
+   ```
+
+2. Não assumir que `C:\site-shopvivaliz` é o checkout ativo. Ele pode existir em paralelo e conter estado diferente.
+
+3. Atalhos padronizados criados em 2026-07-29:
+   ```text
+   C:\Users\FRED\Desktop\ShopVivaliz - VS Code.lnk
+   C:\Users\FRED\Desktop\ShopVivaliz - Antigravity.lnk
+   C:\Users\FRED\Desktop\ShopVivaliz - Antigravity IDE.lnk
+   ```
+   Todos apontam para `C:\site-shopvivaliz-prod-liz`.
+
+4. Start Menu também foi padronizado para abrir o mesmo worktree em:
+   - `Visual Studio Code`
+   - `Antigravity`
+   - `Antigravity IDE`
+
+5. Preferência operacional atual de agentes:
+   - VS Code: `Roo`, `Claude`, `GPT/Codex`
+   - Antigravity: usado para fluxo com `Gemini`
+   - Antigravity IDE: manter alinhado ao mesmo worktree e mesmas regras de terminal/comandos
+
+6. O terminal dos editores deve conseguir resolver:
+   ```powershell
+   sv help
+   docker-check
+   docker-up
+   docker-down
+   ```
+   Se isso falhar, a sessão não está corretamente alinhada ao ambiente operacional local.
 
 ### ShopVivaliz Mobile Agent Bridge
 
@@ -299,6 +383,7 @@ Regras:
    ```
 
 7. O service roda em loop e observa a `inbox` a cada 30 segundos.
+
 ### Se Tiver Que SSH à VM
 
 ```bash
@@ -309,6 +394,9 @@ tail -f /var/log/shopvivaliz-deploy.log
 
 # Ver release ativa
 readlink -f /home/ubuntu/shopvivaliz-deploy/current
+
+# Ver alvo persistente do cron
+cat /home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref 2>/dev/null || echo "origin/main"
 
 # Ver releases disponíveis
 ls -la /home/ubuntu/shopvivaliz-deploy/releases/

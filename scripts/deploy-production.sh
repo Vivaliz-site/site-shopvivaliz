@@ -9,6 +9,7 @@ readonly REPO_DIR="/home/ubuntu/shopvivaliz-deploy/repo"
 readonly RELEASES_DIR="/home/ubuntu/shopvivaliz-deploy/releases"
 readonly SHARED_DIR="/home/ubuntu/shopvivaliz-deploy/shared"
 readonly CURRENT_LINK="/home/ubuntu/shopvivaliz-deploy/current"
+readonly TARGET_FILE="/home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref"
 readonly LOCK_FILE="/var/lock/shopvivaliz-deploy.lock"
 readonly LOG_FILE="/home/ubuntu/shopvivaliz-deploy/logs/deploy.log"
 readonly RETENTION_COUNT=5
@@ -48,12 +49,20 @@ fi
 
 log "INFO" "=== Deploy iniciado ==="
 
-# Target ref or SHA
-TARGET_REF="${1:-origin/main}"
+# Target ref or SHA. If cron does not pass an explicit ref, allow a shared
+# runtime file to pin production to a specific branch or commit until changed.
+TARGET_REF="${1:-}"
+if [ -z "$TARGET_REF" ] && [ -f "$TARGET_FILE" ]; then
+  TARGET_REF="$(tr -d '\r' < "$TARGET_FILE" | head -n 1 | xargs)"
+fi
+if [ -z "$TARGET_REF" ]; then
+  TARGET_REF="origin/main"
+fi
 FETCH_SOURCE="$TARGET_REF"
 if [[ "$TARGET_REF" == "origin/main" || "$TARGET_REF" == "main" ]]; then
   FETCH_SOURCE="main"
 fi
+log "INFO" "Target ref solicitado: $TARGET_REF"
 
 # Fetch
 log "INFO" "Fazendo fetch de origin para $FETCH_SOURCE..."

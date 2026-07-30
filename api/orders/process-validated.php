@@ -354,6 +354,9 @@ svop_append_log($record);
 try {
     $emailSent = svem_send_order_email($record, 'order_created');
     $record['confirmation_email_sent'] = $emailSent;
+
+    // Notificar atendimento sobre novo pedido
+    svem_notify_admin_order_created($record);
 } catch (Throwable $e) {
     error_log('[OrderValidated] Email send error: ' . $e->getMessage());
     $record['confirmation_email_sent'] = false;
