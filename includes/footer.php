@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/site-settings.php';
 $company = @include(dirname(__DIR__) . '/config/company-profile.php') ?: [];
 $legalName = $company['legal_name'] ?? 'SHOPVIVALIZ LTDA';
 $fantasyName = $company['fantasy_name'] ?? 'Shopvivaliz';
@@ -12,6 +13,16 @@ $city = $company['city'] ?? 'Divinopolis';
 $state = $company['state'] ?? 'MG';
 $zipcode = $company['zipcode'] ?? '35501-236';
 $socialMedia = is_array($company['social_media'] ?? null) ? $company['social_media'] : [];
+// admin/settings.php grava instagram/facebook/tiktok/youtube/whatsapp na tabela
+// site_settings (persistente, sobrevive a deploy), nao no arquivo estatico
+// config/company-profile.php lido acima -- sem isso, o admin salvava com
+// sucesso mas o footer nunca via o valor. DB tem prioridade quando preenchido.
+foreach (['instagram', 'facebook', 'tiktok', 'youtube', 'whatsapp'] as $sv_social_key) {
+    $sv_social_db_value = trim((string)(sv_setting_get('social_' . $sv_social_key, '') ?? ''));
+    if ($sv_social_db_value !== '') {
+        $socialMedia[$sv_social_key] = $sv_social_db_value;
+    }
+}
 $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
 $publicWhatsappUrl = $whatsapp !== ''
     ? 'https://wa.me/' . $whatsapp . '?text=' . rawurlencode('Olá! Vim pelo site da ShopVivaliz e gostaria de atendimento.')
