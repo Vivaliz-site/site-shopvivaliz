@@ -1,33 +1,29 @@
 # Mapa de Ownership Funcional
 
-Este documento define donos funcionais por area do repositorio. O objetivo e evitar arquivos sem responsavel, rotinas duplicadas e integracoes sem governanca.
+Todo arquivo operacional deve pertencer a uma área. Arquivo sem dono deve ser registrado no backlog antes de ser alterado.
 
-## Regra
-
-Todo novo modulo, script, workflow, endpoint ou documento operacional deve ter uma area dona. Quando houver duvida, registrar primeiro como `Governanca de repositorio` e abrir item no backlog de limpeza.
-
-## Areas
-
-| Area | Escopo | Caminhos principais | Regras de mudanca |
+| Área | Caminhos canônicos | Responsabilidade | Regra de mudança |
 |---|---|---|---|
-| Site PHP legado | Storefront atual, paginas publicas, carrinho, checkout, includes e templates | `app/`, `api/`, `includes/`, raiz PHP quando existir | Validar no navegador/curl; nao alterar preco ou estoque sem fonte oficial |
-| Marketplace Shopee | Cliente API, SEO, catalogo Shopee, tokens e relatorios | `scripts/marketplace/shopee/`, wrappers `scripts/*shopee*`, `.github/workflows/*shopee*` | Exigir backup, limit, confirmacao, read-back e artifact |
-| Olist ERP/Marketplace | Integracao Olist, OAuth, catalogo, pedidos e imagens ligados a Olist | `scripts/*olist*`, docs de integracao, secrets `OLIST_*` | `OLIST_*` e canonico; aliases antigos apenas em `config/secrets.py` |
-| Tiny nativo | API Tiny quando usada diretamente fora da camada Olist | `scripts/*tiny*`, secrets `TINY_*` | Nao reutilizar `TINY_*` para Olist; documentar endpoint e token separado |
-| Mercado Livre | Integracao ML, seller, callbacks e catalogo | arquivos com `ml`, `mercado`, `meli` | Separar tokens ML de Olist/Tiny/Shopee |
-| Amazon | SP-API, LWA, catalogo, imagens | arquivos com `amazon`, `sp_api` | Separar LWA, AWS e seller/account identifiers |
-| TikTok Shop | Autenticacao, catalogo e sync TikTok | arquivos com `tiktok` | Usar secrets canonicos `TIKTOK_*` |
-| Deploy e infraestrutura | GitHub Actions, FTP, SSH, VM, Apache, SSL, rollback | `.github/workflows/`, deploy scripts, docs de deploy | Todo deploy precisa log, rollback ou plano de reversao |
-| Banco de dados | SQL, migrations, integridade, reparos | `database/`, `migrations/`, scripts SQL | Migrations idempotentes; backup antes de alteracao destrutiva |
-| Emails e notificacoes | SMTP, relatorios, alertas, agentes email | arquivos com `email`, `smtp`, `mail` | Usar `SMTP_*` como canonico; nao expor credenciais |
-| Imagens e midia | Geracao, validacao, upload e politicas de imagem | `scripts/ia/images/`, docs de imagem | Nao usar placeholder/fake; validar origem e vinculacao |
-| Agentes IA | Trio IA, filas, memoria operacional, regras | `ai_collaboration.py`, `agents/`, `tasks-queue.json`, `docs/knowledge/` | Atualizar memoria dos agentes e registro de rotinas |
-| Governanca de repositorio | Indices, limpeza, auditorias, CI de higiene e reestruturação global | `docs/knowledge/repository-index.md`, `docs/audits/`, `docs/operations/legacy-root-docs-index.md`, `scripts/audit_repository.py`, `scripts/maintenance/restructure_repository.py` | Bloquear novas sujeiras via CI; scanner global cobre 100% do checkout |
+| Site PHP | raiz PHP, `app/`, `api/`, `includes/` | Storefront, checkout, catálogo e endpoints | Validar sintaxe, HTTP e regra de negócio |
+| Marketplace Shopee | `scripts/marketplace/shopee/`, workflows Shopee | Catálogo, SEO, imagens, tokens e evidência | Backup, confirmação, invariantes e read-back |
+| Olist ERP | `scripts/marketplace/olist/`, `docs/operations/olist/` | OAuth, catálogo, pedidos, imagens e sync | `OLIST_*` canônico; nunca documentar token |
+| Tiny nativo | fluxos explicitamente Tiny | API Tiny separada | `TINY_*` somente com endpoint/credencial próprios |
+| Agentes IA | `scripts/ai/`, docs de agentes | Execução, fila, colaboração e observabilidade | Proibir simulação apresentada como execução real |
+| Governança | `scripts/audit_repository.py`, `scripts/maintenance/restructure_repository.py`, manifesto e knowledge | Estrutura, higiene, índice e políticas | Toda mudança estrutural atualiza manifesto e documentos |
+| Manutenção/QA | `scripts/maintenance/`, testes e CI | Diagnóstico, segurança, rollback e validação | Não alterar produção sem plano e evidência |
+| Ferramentas legadas | `scripts/dev/legacy-*` | Utilitários históricos e locais | Não tratar como produção; revisar antes de executar |
+| Workflows ativos | `.github/workflows/` | Automação GitHub Actions | Registrar gatilho, permissões, secrets e validação |
+| Workflows arquivados | `.github/workflows-archive/paused/` | Histórico pausado | Não reativar sem PR específico |
+| Deploy/Infra | deploy workflows, Apache/FTP/VM docs | Publicação, disponibilidade e reversão | Teste pós-deploy e rollback obrigatório |
+| Segurança/Secrets | `config/secrets.py`, mapa de secrets, auditor | Nomes canônicos e prevenção de vazamento | Nunca armazenar valores; rotacionar exposição |
+| Testes | `tests/unit/`, `tests/integration/`, `tests/smoke/` | Evidência automatizada | Teste acompanha caminho canônico |
+| Documentação operacional | `docs/operations/` | Runbooks vigentes e históricos operacionais | Nada novo na raiz |
+| Auditorias | `docs/audits/` | Relatórios, incidentes e backlog | Relatórios históricos não provam estado atual |
+| Arquivo | `archive/<ano>/` | Artefatos substituídos/malformados | Registrar origem e substituto |
 
-## Processo para arquivos sem dono
+## Resolução de dúvida
 
-1. Registrar no `docs/audits/repository-cleanup-backlog.md`.
-2. Classificar como `manter`, `migrar`, `renomear`, `arquivar`, `remover depois de validacao`, `mapeado-globalmente`, `concluido-com-wrapper` ou `bloqueado`.
-3. Atribuir uma area dona antes de alterar logica.
-4. Nao deletar arquivo sem confirmar uso em workflow, script, include, endpoint, deploy e documentacao.
-5. Quando a duvida envolver estrutura global, rodar `python scripts/maintenance/restructure_repository.py --write-report`.
+1. Consultar `config/repository-structure-manifest.json`.
+2. Consultar `docs/knowledge/repository-index.md`.
+3. Se ainda sem dono, classificar como Governança e abrir item no backlog.
+4. Não deletar nem mover sem verificar workflows, imports, endpoints e documentação.
