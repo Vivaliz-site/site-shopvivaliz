@@ -1,11 +1,8 @@
-import glob
-
-for path in glob.glob('css/*.css'):
-    with open(path, 'r', encoding='utf-8') as f:
-        c = f.read()
-    c2 = c.replace('content: "Vivaliz"', 'content: ""').replace('content:"Vivaliz"', 'content:""')
-    c2 = c2.replace('body { opacity: 0;', 'body { opacity: 1;').replace('body{opacity:0;', 'body{opacity:1;')
-    if c != c2:
-        print(f"Updated {path}")
-        with open(path, 'w', encoding='utf-8') as f:
-            f.write(c2)
+#!/usr/bin/env python3
+"""Wrapper legado gerado pela reorganização estrutural."""
+from pathlib import Path
+_TARGET = (Path(__file__).resolve().parent / 'scripts/dev/legacy-root-tools/clean-all-css.py').resolve()
+_LEGACY_FILE = str(Path(__file__).resolve())
+_GLOBALS = globals()
+_GLOBALS['__file__'] = _LEGACY_FILE
+exec(compile(_TARGET.read_text(encoding='utf-8'), _LEGACY_FILE, 'exec'), _GLOBALS)

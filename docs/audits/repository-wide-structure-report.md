@@ -1,14 +1,14 @@
 # Relatório de Estrutura do Repositório Inteiro
 
-Gerado em: `2026-07-30T23:20:47.902773+00:00`
-Arquivos varridos: `4169`
+Gerado em: `2026-07-30T23:20:51.660211+00:00`
+Arquivos varridos: `4267`
 
 ## Contagem por categoria
 
 | Categoria | Quantidade |
 |---|---:|
 | `agent_script` | 19 |
-| `canonical` | 521 |
+| `canonical` | 619 |
 | `dev_script` | 83 |
 | `legacy_patch` | 1 |
 | `maintenance_script` | 15 |
@@ -16,86 +16,15 @@ Arquivos varridos: `4169`
 | `ok_or_unclassified` | 2953 |
 | `production_script` | 10 |
 | `root_allowed` | 4 |
-| `root_python` | 96 |
 | `root_stub` | 386 |
-| `root_wrapper` | 25 |
+| `root_wrapper` | 121 |
 | `scripts_wrapper` | 37 |
 
 ## Candidatos restantes
 
 | Arquivo | Categoria | Destino sugerido | Motivo |
 |---|---|---|---|
-| `analisar_exemplo.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `analisar_exemplo_v2.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `analyze_excel.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `analyze_ml_excel.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `atualizar_precos_base_final.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `atualizar_precos_com_acrescimo.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `atualizar_tabelas_corretas.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `atualizar_via_api_completo.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `audit-all-pages-full.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `auditoria_ml.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `auto-configure-all-15-secrets.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `automate-purchase.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `check_api.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `clean-all-css.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `compra-final.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `compra-simples.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `copy-secrets-from-file.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `daemon-google-token-renewer.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `daemon-shopee-token-renewer.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `daemon-sync-products.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `daemon-token-renewer.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `dashboard_simple.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `debug_headers_anuncios.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `debug_mapeamento.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `debug_product_search.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `debug_tabelas_preco.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `diagnostico_completo_final.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `export-and-copy-secrets.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `extrair_anuncios_correto.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `extrair_com_xlrd.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `extrair_dados_anuncios_e_gerar_final.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `extrair_precos_com_mapeamento_ml.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `extrair_precos_por_descricao.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `extrair_precos_por_palavras_chave.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `extrair_precos_tabelas_correto.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `extrair_tabelas_completo.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `gen-token-local.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `gerar_com_match_por_titulo.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `gerar_planilha_anuncios_que_sofrem_alteracao.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `gerar_planilha_corrigida_final.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `gerar_planilha_final_correto.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `gerar_planilha_importacao_tiny.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `gerar_planilha_integracao_correta.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `gerar_planilha_match_por_sku.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `gerar_planilha_multiplos_anuncios.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `git-auto-sync.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `investigar_api_tiny.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `ler_estrutura_exemplo.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `mapeamento_final_correto.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `mapeamento_inteligente.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `mapeamento_por_ean.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `mapeamento_por_sku_direto.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `mcp-server-agents.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `mcp-server-real.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `mcp-server-universal.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `ml_tiny_final_sync.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `ml_tiny_merger_final.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `ml_tiny_price_merger.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `ml_tiny_price_sync.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `ml_tiny_price_sync_v2.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `ml_tiny_sync_FINAL_CORRIGIDO.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `ml_tiny_sync_final_v3.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `oauth-auto-exec-v2.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `oauth-auto-exec.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `oauth-playwright-auto.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `playwright-compra.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `playwright-final.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `preencher_precos_novo_arquivo.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `pw-ultra.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
 | `release-notes/patches/cleanup-historico-credenciais-only.patch` | `legacy_patch` | `archive/2026/release-patches/` | legacy patch |
-| `retry_failed_updates.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
 | `scripts/ab-test-manager.py` | `dev_script` | `scripts/dev/legacy-scripts/` | unclassified Python script at scripts root |
 | `scripts/ab_test_images.py` | `dev_script` | `scripts/dev/legacy-scripts/` | unclassified Python script at scripts root |
 | `scripts/add-secrets.py` | `dev_script` | `scripts/dev/legacy-scripts/` | unclassified Python script at scripts root |
@@ -242,32 +171,6 @@ Arquivos varridos: `4169`
 | `scripts/validate_20_products.py` | `dev_script` | `scripts/dev/legacy-scripts/` | unclassified Python script at scripts root |
 | `scripts/verify_marketplace_upload.py` | `dev_script` | `scripts/dev/legacy-scripts/` | unclassified Python script at scripts root |
 | `scripts/verify_secrets.py` | `dev_script` | `scripts/dev/legacy-scripts/` | unclassified Python script at scripts root |
-| `setup_github_secrets.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `shopvivaliz-mcp-server.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `sincronizar_secrets.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `sync-now.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `sync-products-to-json.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `test-all-pages-and-buttons.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `test-compra-real.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `test-direct-click.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `test-homepage-visual.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `test-liz-chat.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `test-order-id.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `test-playwright-e2e.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `test-real-checkout-boleto.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `test-real-purchase.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `test-token-refresh.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `test_api_pt.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `test_load.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `test_price_tables.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `test_tiny_api.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `test_update_price.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `testar_mapeamento.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `testar_precos_tabelas.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `trace_um_item.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `validar_endpoint_listas_precos.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `ver_produtos_tiny.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
-| `verificar_secrets_nomes.py` | `root_python` | `scripts/dev/legacy-root-tools/` | Python utility in repository root |
 
 ## Regra
 

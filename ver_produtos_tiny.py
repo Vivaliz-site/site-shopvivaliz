@@ -1,26 +1,8 @@
-import os
-import requests
+#!/usr/bin/env python3
+"""Wrapper legado gerado pela reorganização estrutural."""
 from pathlib import Path
-from dotenv import load_dotenv
-
-for f in [Path(r"C:\site-shopvivaliz\.env.local"), Path(r"C:\site-shopvivaliz\.env")]:
-    if f.exists():
-        load_dotenv(f)
-        break
-
-token = os.getenv("OLIST_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
-
-headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-
-url = "https://api.tiny.com.br/public-api/v3/produtos?limit=100&offset=0"
-resp = requests.get(url, headers=headers, timeout=30)
-
-print("Primeiros 15 produtos do Tiny:")
-print("-"*120)
-
-for prod in resp.json().get("itens", [])[:15]:
-    id_p = prod.get("id")
-    sku = prod.get("sku") or "N/A"
-    desc = prod.get("descricao")[:70] if prod.get("descricao") else "N/A"
-
-    print(f"ID {id_p:10d} | SKU {str(sku):15s} | {desc}")
+_TARGET = (Path(__file__).resolve().parent / 'scripts/dev/legacy-root-tools/ver_produtos_tiny.py').resolve()
+_LEGACY_FILE = str(Path(__file__).resolve())
+_GLOBALS = globals()
+_GLOBALS['__file__'] = _LEGACY_FILE
+exec(compile(_TARGET.read_text(encoding='utf-8'), _LEGACY_FILE, 'exec'), _GLOBALS)

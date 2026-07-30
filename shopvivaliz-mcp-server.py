@@ -1,28 +1,8 @@
 #!/usr/bin/env python3
-import json, sys, logging
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-def main():
-    logger.info("MCP Server ShopVivaliz started")
-    print(json.dumps({"ready": True}))
-    sys.stdout.flush()
-    
-    try:
-        while True:
-            line = sys.stdin.readline()
-            if not line:
-                break
-            try:
-                req = json.loads(line)
-                resp = {"status": "running", "project": "ShopVivaliz", "version": "2.0"}
-                print(json.dumps(resp))
-                sys.stdout.flush()
-            except json.JSONDecodeError:
-                pass
-    except Exception as e:
-        logger.error(f"Error: {e}")
-
-if __name__ == "__main__":
-    main()
+"""Wrapper legado gerado pela reorganização estrutural."""
+from pathlib import Path
+_TARGET = (Path(__file__).resolve().parent / 'scripts/dev/legacy-root-tools/shopvivaliz-mcp-server.py').resolve()
+_LEGACY_FILE = str(Path(__file__).resolve())
+_GLOBALS = globals()
+_GLOBALS['__file__'] = _LEGACY_FILE
+exec(compile(_TARGET.read_text(encoding='utf-8'), _LEGACY_FILE, 'exec'), _GLOBALS)

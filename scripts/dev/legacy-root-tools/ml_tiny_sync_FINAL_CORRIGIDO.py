@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+"""
+VERSÃO FINAL CORRIGIDA: Sincronização ML → Tiny
+COM FIX: Inclui descricao + sku obrigatoriamente
+"""
+import os
+import sys
+import time
+from pathlib import Path
+from datetime import datetime
+from difflib import SequenceMatcher
+
+import requests
+import openpyxl
+from openpyxl.styles import Font, PatternFill
+from dotenv import load_dotenv
+
+# CARREGAR ENV
+for f in [Path(r"C:\site-shopvivaliz\.env.local"), Path(r"C:\site-shopvivaliz\.env")]:
+    if f.exists():
+        load_dotenv(f)
+        break
+
+print("\n╔════════════════════════════════════════════════════════════════╗")
+print("║  SINCRONIZAÇÃO ML → TINY (FINAL CORRIGIDO)                   ║")
+print("║  " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "                              ║")
+print("╚════════════════════════════════════════════════════════════════╝")
+
+# GET TOKEN
+token = os.getenv("OLIST_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
+if not token:
+    print("❌ Token não configurado")
+    sys.exit(1)
+
+print(f"\n✅ Token carregado")
+
+# CARREGAR PRODUTOS
+print("\n📥 Carregando produtos do Tiny...")
+
+headers = {
+    "Authorization": f"Bearer {token}",
+    "Content-Type": "application/json"
+}
+
+url = "https://api.tiny.com.br/public-api/v3/produtos?limit=100&offset=0"
+
+try:
+    resp = requests.get(url, headers=headers, timeout=30)
+    print(f"   Status: {resp.status_code}")
+
+    if resp.status_code == 200:
+        data = resp.json()
+        products = data.get("itens", [])
+        print(f"   ✅ Carregados: {len(products)} produtos")
+    else:
+        print(f"   ❌ Erro: {resp.status_code}")
+        sys.exit(1)
+
+except Exception as e:
+    print(f"   ❌ Erro: {e}")
+    sys.exit(1)
+
+if not products:
+    print("❌ Nenhum produto carregado!")
+    sys.exit(1)
+
+# ABRIR PLANILHA ML
+print("\n📂 Abrindo planilha ML...")
+
+input_file = Path(r"C:\Users\user\Downloads\Anuncios-2026_07_26-09_32(1).xlsx")
+wb = openpyxl.load_workbook(input_file, data_only=True)
+ws = wb.active
+
+# Encontrar colunas
+title_col = price_col = None
+for col_idx in range(1, ws.max_column + 1):
+    val = ws.cell(1, col_idx).value
+    if val == "TITLE":
+        title_col = col_idx
+    elif val == "PRICE":
+        price_col = col_idx
+
+print(f"   ✅ Colunas: Título={title_col}, Preço={price_col}")
+
+# CRIAR SAÍDA
+wb_out = openpyxl.Workbook()
+ws_out = wb_out.active
+
+cols = ["Linha", "Título ML", "Preço ML", "ID Tiny", "Desc Tiny", "Preço Tiny", "Diferença", "Novo Preço", "Status"]
+for i, col in enumerate(cols, 1):
+    ws_out.cell(1, i, col)
+
+# Estilo
+for col in range(1, len(cols) + 1):
+    cell = ws_out.cell(1, col)
+    cell.fill = PatternFill(start_color="00AA00", end_color="00AA00", fill_type="solid")
+    cell.font = Font(bold=True, color="FFFFFF")
+
+# PROCESSAR
+print(f"\n🔍 Processando anúncios e ATUALIZANDO preços...")
+
+stats = {"total": 0, "found": 0, "cheaper": 0, "updated": 0, "failed": 0}
+out_row = 2
+
+for in_row in range(6, min(6 + 89, ws.max_row + 1)):
+    title_ml = ws.cell(in_row, title_col).value
+    price_ml = ws.cell(in_row, price_col).value
+
+    if not title_ml or not price_ml:
+        continue
+
+    title_ml = str(title_ml).strip()
+    price_ml = float(price_ml)
+
+    if price_ml <= 0:
+        continue
+
+    stats["total"] += 1
+
+    # Buscar produto
+    title_lower = title_ml.lower()
+    best_prod = None
+    best_score = 0.4
+
+    for prod in products:
+        desc = prod.get("descricao", "").lower()
+        score = SequenceMatcher(None, title_lower, desc).ratio()
+
+        if score > best_score:
+            best_prod = prod
+            best_score = score
+
+    if not best_prod:
+        if stats["total"] % 20 == 0:
+            print(f"  [{in_row}] Não encontrado")
+        continue
+
+    stats["found"] += 1
+
+    pid = best_prod.get("id")
+    desc = best_prod.get("descricao", "")
+    sku = best_prod.get("sku", "")
+    price_tiny = best_prod.get("precos", {}).get("preco", 0)
+
+    # Verificar mais barato
+    if price_tiny > 0 and price_tiny < price_ml:
+        stats["cheaper"] += 1
+
+        new_price = price_ml + 0.01
+        diff = price_ml - price_tiny
+
+        # ATUALIZAR COM OS CAMPOS OBRIGATÓRIOS
+        update_url = f"https://api.tiny.com.br/public-api/v3/produtos/{pid}"
+        update_payload = {
+            "descricao": desc,  # OBRIGATÓRIO
+            "sku": sku,         # OBRIGATÓRIO
+            "precos": {
+                "preco": float(new_price)
+            }
+        }
+
+        try:
+            update_resp = requests.put(
+                update_url,
+                headers=headers,
+                json=update_payload,
+                timeout=20
+            )
+            ok = update_resp.status_code in [200, 204]
+
+            if ok:
+                stats["updated"] += 1
+                status = "✅ ATUALIZADO"
+            else:
+                stats["failed"] += 1
+                status = f"❌ HTTP {update_resp.status_code}"
+                print(f"  Erro: {update_resp.text[:100]}")
+
+        except Exception as e:
+            stats["failed"] += 1
+            status = f"❌ ERRO: {str(e)[:30]}"
+
+        # Registrar
+        ws_out.cell(out_row, 1, in_row)
+        ws_out.cell(out_row, 2, title_ml[:35])
+        ws_out.cell(out_row, 3, price_ml)
+        ws_out.cell(out_row, 4, pid)
+        ws_out.cell(out_row, 5, desc[:40])
+        ws_out.cell(out_row, 6, price_tiny)
+        ws_out.cell(out_row, 7, diff)
+        ws_out.cell(out_row, 8, new_price)
+        ws_out.cell(out_row, 9, status)
+
+        print(f"  ⚠️  [{in_row}] {title_ml[:35]}")
+        print(f"      ML R$ {price_ml:.2f} > Tiny R$ {price_tiny:.2f} → R$ {new_price:.2f} {status}")
+
+        out_row += 1
+    else:
+        if stats["total"] % 20 == 0:
+            print(f"  [{in_row}] OK (preço correto)")
+
+    time.sleep(0.3)
+
+# SALVAR
+output = Path(r"C:\Users\user\Downloads\Precos_Atualizados_Tiny.xlsx")
+print(f"\n💾 Salvando: {output.name}")
+wb_out.save(output)
+wb.close()
+
+# RELATÓRIO
+print(f"\n{'='*80}")
+print(f"✅ SINCRONIZAÇÃO CONCLUÍDA")
+print(f"{'='*80}")
+print(f"\n📊 RESULTADOS:")
+print(f"  Anúncios processados: {stats['total']}")
+print(f"  Encontrados no Tiny: {stats['found']}")
+print(f"  Mais baratos no Tiny: {stats['cheaper']} ⚠️")
+print(f"  ✅ ATUALIZADOS COM SUCESSO: {stats['updated']}")
+print(f"  ❌ Falhas na atualização: {stats['failed']}")
+print(f"\n📁 Arquivo: {output}")
+print(f"✅ Pronto!")
