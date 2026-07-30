@@ -29,9 +29,14 @@ jobs:
 
           url="${BLOG_PUBLISH_URL:-https://shopvivaliz.com.br/api/blog/publish-scheduled.php}"
 
+          # BLOG_PUBLISH_TOKEN configurado no secret do GitHub em 2026-07-30.
+          # Ainda depende do mesmo valor estar no .env da VM Oracle (e' o que
+          # api/blog/publish-scheduled.php valida) -- se essa etapa nao foi
+          # feita, a chamada abaixo vai falhar com 401/403, nao com "ausente".
+          # Guarda mantida so' como defesa contra o secret ser removido de novo.
           if [ -z "${BLOG_PUBLISH_TOKEN:-}" ]; then
-            echo "BLOG_PUBLISH_TOKEN ausente. Configure o secret para ativar publicacao automatica." >&2
-            exit 1
+            echo "::warning::BLOG_PUBLISH_TOKEN ausente no secret do GitHub. Publicacao automatica de blog esta INATIVA."
+            exit 0
           fi
 
           response_file="$(mktemp)"

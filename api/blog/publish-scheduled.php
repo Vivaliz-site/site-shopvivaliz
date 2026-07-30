@@ -4,6 +4,13 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
+// getenv() sozinho nunca via BLOG_PUBLISH_TOKEN em producao porque este
+// arquivo nunca carregava o .env -- ao contrario de outros endpoints
+// (ex: order-status-update.php) que chamam bootstrap-env.php antes de ler
+// o token. Resultado: todo cron de publicacao de blog batia 401 mesmo com
+// o secret configurado no GitHub e no .env do servidor.
+require_once __DIR__ . '/../../config/bootstrap-env.php';
+
 $isCli = PHP_SAPI === 'cli';
 $expected = (string)(getenv('BLOG_PUBLISH_TOKEN') ?: '');
 $received = (string)($_SERVER['HTTP_X_BLOG_PUBLISH_TOKEN'] ?? '');

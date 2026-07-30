@@ -265,3 +265,132 @@ function svem_build_email_content(array $order, string $event, string $customerN
 
     return [$subject, $html];
 }
+
+/**
+ * Notifica atendimento sobre novo pedido
+ */
+function svem_notify_admin_order_created(array $order): bool
+{
+    $adminEmail = trim((string)(getenv('ADMIN_EMAIL') ?: getenv('ATENDIMENTO_EMAIL') ?: 'atendimento@shopvivaliz.com.br'));
+    if (empty($adminEmail) || !filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+        error_log("[AdminNotify] Email de atendimento inválido: $adminEmail");
+        return false;
+    }
+
+    $customerEmail = $order['customer']['email'] ?? '';
+    $customerName = $order['customer']['name'] ?? 'Cliente';
+    $orderNumber = $order['order_number'] ?? 'N/A';
+    $total = number_format($order['total'] ?? 0, 2, ',', '.');
+    $paymentMethod = $order['payment_method'] ?? 'Não informado';
+    $phone = $order['customer']['phone'] ?? '';
+    $address = ($order['customer']['address'] ?? '') . ', ' . ($order['customer']['city'] ?? '');
+
+    $subject = "🔔 NOVO PEDIDO: #{$orderNumber} - R\$ {$total}";
+
+    $html = "
+    <!DOCTYPE html>
+    <html lang='pt-BR'>
+    <head>
+        <meta charset='UTF-8'>
+        <title>$subject</title>
+    </head>
+    <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+        <div style='background: #dc3545; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;'>
+            <h2 style='margin: 0;'>🔔 NOVO PEDIDO RECEBIDO</h2>
+        </div>
+
+        <div style='background: white; padding: 20px; border: 1px solid #ddd;'>
+            <h3 style='color: #dc3545;'>Detalhes do Pedido</h3>
+
+            <p><strong>Número:</strong> <span style='background: #fff3cd; padding: 5px 10px; border-radius: 4px; font-weight: bold;'>{$orderNumber}</span></p>
+            <p><strong>Cliente:</strong> {$customerName}</p>
+            <p><strong>Email:</strong> <a href='mailto:{$customerEmail}'>{$customerEmail}</a></p>
+            <p><strong>Telefone:</strong> {$phone}</p>
+            <p><strong>Endereço:</strong> {$address}</p>
+
+            <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'>
+
+            <h3 style='color: #28a745;'>Pagamento</h3>
+            <p><strong>Método:</strong> {$paymentMethod}</p>
+            <p><strong>Valor Total:</strong> <span style='font-size: 18px; color: #28a745; font-weight: bold;'>R\$ {$total}</span></p>
+            <p><strong>Status:</strong> <span style='background: #ffc107; padding: 5px 8px; border-radius: 4px;'>⏳ AGUARDANDO PAGAMENTO</span></p>
+
+            <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'>
+
+            <h3>Próximos Passos</h3>
+            <ol>
+                <li>Aguardar confirmação de pagamento</li>
+                <li>Preparar itens para envio</li>
+                <li>Gerar código de rastreio</li>
+                <li>Notificar cliente</li>
+            </ol>
+
+            <div style='background: #e7f3ff; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0;'>
+                <p><strong>⚡ Link Rápido:</strong><br>
+                <a href='https://shopvivaliz.com.br/admin/pedidos.php?action=view&id={$orderNumber}'
+                   style='background: #2196F3; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block;'>
+                   Ver Pedido no Admin
+                </a></p>
+            </div>
+        </div>
+
+        <div style='background: #f8f9fa; padding: 15px; text-align: center; font-size: 12px; color: #666;'>
+            <p>🤖 Notificação automática do ShopVivaliz</p>
+        </div>
+    </body>
+    </html>
+    ";
+
+    require_once dirname(__DIR__, 2) . '/scripts/mailer.php';
+    $success = send_email($adminEmail, $subject, $html);
+
+    if ($success) {
+        error_log("[AdminNotify] ✅ Email enviado para atendimento (pedido: {$orderNumber})");
+    } else {
+        error_log("[AdminNotify] ❌ Falha ao notificar atendimento sobre pedido {$orderNumber}");
+    }
+
+    return $success;
+}
+
+/**
+ * Notifica atendimento sobre pagamento confirmado
+ */
+function svem_notify_admin_payment_received(array $order): bool
+{
+    $adminEmail = trim((string)(getenv('ADMIN_EMAIL') ?: getenv('ATENDIMENTO_EMAIL') ?: 'atendimento@shopvivaliz.com.br'));
+    if (empty($adminEmail) || !filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+        return false;
+    }
+
+    $orderNumber = $order['order_number'] ?? 'N/A';
+    $total = number_format($order['total'] ?? 0, 2, ',', '.');
+    $customerName = $order['customer']['name'] ?? 'Cliente';
+
+    $subject = "💚 PAGAMENTO CONFIRMADO: #{$orderNumber} - R\$ {$total}";
+
+    $html = "
+    <!DOCTYPE html>
+    <html lang='pt-BR'>
+    <head>
+        <meta charset='UTF-8'>
+        <title>$subject</title>
+    </head>
+    <body style='font-family: Arial, sans-serif; line-height: 1.6;'>
+        <div style='background: #28a745; color: white; padding: 20px; text-align: center;'>
+            <h2 style='margin: 0;'>💚 PAGAMENTO CONFIRMADO</h2>
+        </div>
+        <div style='background: white; padding: 20px; border: 1px solid #ddd;'>
+            <p>O pagamento do pedido foi confirmado!</p>
+            <p><strong>Pedido:</strong> #{$orderNumber}</p>
+            <p><strong>Cliente:</strong> {$customerName}</p>
+            <p><strong>Valor:</strong> R\$ {$total}</p>
+            <p style='margin-top: 20px;'><strong>⚡ Ação necessária:</strong> Preparar itens para envio</p>
+        </div>
+    </body>
+    </html>
+    ";
+
+    require_once dirname(__DIR__, 2) . '/scripts/mailer.php';
+    return send_email($adminEmail, $subject, $html);
+}
