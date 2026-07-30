@@ -1,0 +1,140 @@
+name: Fix PR 590 email safety
+
+on:
+  push:
+    branches:
+      - agent/liz-widget-prod
+    paths:
+      - .github/workflows/fix-pr-590-email-safety.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/liz-widget-prod
+          fetch-depth: 0
+
+      - name: Patch admin notification email safety
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('api/emails/send-order-notification.php')
+          text = path.read_text(encoding='utf-8')
+
+          old = """    $customerEmail = $order['customer']['email'] ?? '';
+    $customerName = $order['customer']['name'] ?? 'Cliente';
+    $orderNumber = $order['order_number'] ?? 'N/A';
+    $total = number_format($order['total'] ?? 0, 2, ',', '.');
+    $paymentMethod = $order['payment_method'] ?? 'Não informado';
+    $phone = $order['customer']['phone'] ?? '';
+    $address = ($order['customer']['address'] ?? '') . ', ' . ($order['customer']['city'] ?? '');
+
+    $subject = "🔔 NOVO PEDIDO: #{$orderNumber} - R\\$ {$total}";
+"""
+          new = """    $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+    $customerEmail = trim((string)($order['customer']['email'] ?? ''));
+    $customerName = (string)($order['customer']['name'] ?? 'Cliente');
+    $orderNumber = (string)($order['order_number'] ?? 'N/A');
+    $total = number_format((float)($order['total'] ?? 0), 2, ',', '.');
+    $paymentMethod = (string)($order['payment_method'] ?? 'Não informado');
+    $phone = (string)($order['customer']['phone'] ?? '');
+    $address = trim((string)($order['customer']['address'] ?? '') . ', ' . (string)($order['customer']['city'] ?? ''), ' ,');
+
+    $customerEmailSafe = $escape($customerEmail);
+    $customerNameSafe = $escape($customerName);
+    $orderNumberSafe = $escape($orderNumber);
+    $paymentMethodSafe = $escape($paymentMethod);
+    $phoneSafe = $escape($phone);
+    $addressSafe = $escape($address);
+    $subject = "🔔 NOVO PEDIDO: #{$orderNumber} - R\\$ {$total}";
+    $subjectSafe = $escape($subject);
+
+    $orderId = $order['id'] ?? $order['order_id'] ?? null;
+    $adminLinkHtml = '';
+    if (is_scalar($orderId) && trim((string)$orderId) !== '') {
+        $adminUrl = 'https://shopvivaliz.com.br/admin/pedidos.php?action=view&id=' . rawurlencode((string)$orderId);
+        $adminLinkHtml = "<div style='background: #e7f3ff; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0;'>
+            <p><strong>⚡ Link Rápido:</strong><br>
+            <a href='" . $escape($adminUrl) . "' style='background: #2196F3; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block;'>Ver Pedido no Admin</a></p>
+        </div>";
+    }
+"""
+          if old not in text:
+              raise SystemExit('Bloco principal não encontrado; abortando sem alterar arquivo.')
+          text = text.replace(old, new, 1)
+
+          replacements = {
+              '<title>$subject</title>': '<title>$subjectSafe</title>',
+              '{$orderNumber}</span>': '{$orderNumberSafe}</span>',
+              '{$customerName}</p>': '{$customerNameSafe}</p>',
+              "mailto:{$customerEmail}'>{$customerEmail}</a>": "mailto:{$customerEmailSafe}'>{$customerEmailSafe}</a>",
+              '{$phone}</p>': '{$phoneSafe}</p>',
+              '{$address}</p>': '{$addressSafe}</p>',
+              '{$paymentMethod}</p>': '{$paymentMethodSafe}</p>',
+          }
+          for before, after in replacements.items():
+              if before not in text:
+                  raise SystemExit(f'Trecho não encontrado: {before}')
+              text = text.replace(before, after, 1)
+
+          old_link = """            <div style='background: #e7f3ff; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0;'>
+                <p><strong>⚡ Link Rápido:</strong><br>
+                <a href='https://shopvivaliz.com.br/admin/pedidos.php?action=view&id={$orderNumber}'
+                   style='background: #2196F3; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block;'>
+                   Ver Pedido no Admin
+                </a></p>
+            </div>
+"""
+          if old_link not in text:
+              raise SystemExit('Bloco de link antigo não encontrado.')
+          text = text.replace(old_link, '            $adminLinkHtml\n', 1)
+
+          old_payment = """    $orderNumber = $order['order_number'] ?? 'N/A';
+    $total = number_format($order['total'] ?? 0, 2, ',', '.');
+    $customerName = $order['customer']['name'] ?? 'Cliente';
+
+    $subject = "💚 PAGAMENTO CONFIRMADO: #{$orderNumber} - R\\$ {$total}";
+"""
+          new_payment = """    $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $orderNumber = (string)($order['order_number'] ?? 'N/A');
+    $total = number_format((float)($order['total'] ?? 0), 2, ',', '.');
+    $customerName = (string)($order['customer']['name'] ?? 'Cliente');
+    $orderNumberSafe = $escape($orderNumber);
+    $customerNameSafe = $escape($customerName);
+
+    $subject = "💚 PAGAMENTO CONFIRMADO: #{$orderNumber} - R\\$ {$total}";
+    $subjectSafe = $escape($subject);
+"""
+          if old_payment not in text:
+              raise SystemExit('Bloco de pagamento não encontrado.')
+          text = text.replace(old_payment, new_payment, 1)
+
+          marker = 'function svem_notify_admin_payment_received(array $order): bool'
+          head, tail = text.split(marker, 1)
+          tail = tail.replace('<title>$subject</title>', '<title>$subjectSafe</title>', 1)
+          tail = tail.replace('#{$orderNumber}</p>', '#{$orderNumberSafe}</p>', 1)
+          tail = tail.replace('{$customerName}</p>', '{$customerNameSafe}</p>', 1)
+          text = head + marker + tail
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          php -l api/emails/send-order-notification.php
+
+      - name: Commit fix and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "shopvivaliz-fix-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/fix-pr-590-email-safety.yml
+          git add api/emails/send-order-notification.php
+          git commit -m "fix: proteger notificacoes administrativas por email"
+          git push origin HEAD:agent/liz-widget-prod
