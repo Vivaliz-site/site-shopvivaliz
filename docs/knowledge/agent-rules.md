@@ -6,12 +6,17 @@
 - Confirmar o comportamento no código, workflow, log ou resposta real quando a documentação não for suficiente.
 - Nunca assumir uma resposta sem evidência.
 - Informar claramente quando a evidência estiver incompleta, ambígua ou desatualizada.
-- Antes de criar, alterar ou remover scripts, workflows, integrações, secrets, rotinas agendadas ou módulos relevantes, consultar `docs/knowledge/repository-index.md` e `docs/knowledge/secrets-and-integrations-map.md`.
+- Antes de criar, alterar, mover ou remover scripts, workflows, integrações, secrets, rotinas agendadas ou módulos relevantes, consultar `docs/knowledge/repository-index.md`, `docs/knowledge/routines-registry.md`, `docs/knowledge/ownership-map.md`, `docs/knowledge/structure-policy.md` e `docs/knowledge/secrets-and-integrations-map.md`.
 - Sempre que uma nova rotina, workflow, script operacional, integração, secret canônico ou alias de compatibilidade for criado, atualizar no mesmo PR/commit:
   - `docs/knowledge/repository-index.md`
+  - `docs/knowledge/routines-registry.md`
+  - `docs/knowledge/ownership-map.md`, quando envolver dono funcional ou caminho novo
+  - `docs/knowledge/structure-policy.md`, quando envolver pasta nova, migração física ou arquivamento
   - `docs/knowledge/secrets-and-integrations-map.md`, quando envolver credenciais ou integrações
   - `docs/knowledge/README.md`, se for novo documento principal
+  - `docs/audits/repository-cleanup-backlog.md`, quando resolver ou criar item de limpeza
 - Nenhuma rotina nova deve ficar “solta”: ela precisa ter dono funcional, gatilho, entrada, saída, arquivos relacionados e forma de validação registrados no índice.
+- Ao reorganizar arquivo existente, manter wrapper temporário quando houver risco de quebra, atualizar workflow/testes e registrar a migração no backlog.
 
 ## Diagnóstico
 
