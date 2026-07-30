@@ -1,8 +1,9 @@
 {
-  "requested_at": "2026-07-30T18:36:00Z",
+  "requested_at": "2026-07-30T18:40:00Z",
   "mode": "production",
   "simulation": false,
   "limit": 1,
   "issue": 598,
-  "confirmation": "APPLY_ALL_SHOPEE_PRODUCTS"
+  "confirmation": "APPLY_ALL_SHOPEE_PRODUCTS",
+  "retry_reason": "dependency_and_error_capture_fixed"
 }
