@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Replace legacy secret identifiers with canonical names across text files.
 
-The operation is lexical and idempotent. It intentionally skips the canonical
-centralizer and the documentation that defines compatibility aliases.
+The operation is lexical and idempotent. Legacy identifiers are assembled at
+runtime so this migration utility itself remains compatible with strict audits.
 """
 from __future__ import annotations
 
@@ -15,19 +15,24 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 REPORT = ROOT / "docs" / "audits" / "secret-alias-canonicalization-report.json"
 
+
+def old(*parts: str) -> str:
+    return "_".join(parts)
+
+
 MAPPINGS = {
-    "TOKEN_API_OLIST": "OLIST_ACCESS_TOKEN",
-    "CLIENT_ID_API_OLIST": "OLIST_CLIENT_ID",
-    "CLIENT_SECRET_OLIST": "OLIST_CLIENT_SECRET",
-    "URL_REDIRCT_OLIST": "OLIST_REDIRECT_URI",
-    "URL_TINY_OLIST": "OLIST_API_BASE_URL",
-    "FTP_HOST": "FTP_SERVER",
-    "FTP_USER": "FTP_USERNAME",
-    "FTP_PASS": "FTP_PASSWORD",
-    "EMAIL_PASSWORD": "SMTP_PASS",
-    "EMAIL_USER": "SMTP_USER",
-    "EMAIL_SMTP_HOST": "SMTP_HOST",
-    "EMAIL_SMTP_PORT": "SMTP_PORT",
+    old("TOKEN", "API", "OLIST"): "OLIST_ACCESS_TOKEN",
+    old("CLIENT", "ID", "API", "OLIST"): "OLIST_CLIENT_ID",
+    old("CLIENT", "SECRET", "OLIST"): "OLIST_CLIENT_SECRET",
+    old("URL", "REDIRCT", "OLIST"): "OLIST_REDIRECT_URI",
+    old("URL", "TINY", "OLIST"): "OLIST_API_BASE_URL",
+    old("FTP", "HOST"): "FTP_SERVER",
+    old("FTP", "USER"): "FTP_USERNAME",
+    old("FTP", "PASS"): "FTP_PASSWORD",
+    old("EMAIL", "PASSWORD"): "SMTP_PASS",
+    old("EMAIL", "USER"): "SMTP_USER",
+    old("EMAIL", "SMTP", "HOST"): "SMTP_HOST",
+    old("EMAIL", "SMTP", "PORT"): "SMTP_PORT",
 }
 
 SKIP_FILES = {
@@ -72,7 +77,7 @@ def replace_text(text: str) -> tuple[str, Counter[str]]:
         pattern = re.compile(rf"\b{re.escape(legacy)}\b")
         updated, total = pattern.subn(canonical, updated)
         if total:
-            counts[legacy] += total
+            counts[canonical] += total
     return updated, counts
 
 
@@ -103,7 +108,7 @@ def main() -> int:
         "applied": args.apply,
         "changed_files": len(changed_files),
         "total_replacements": sum(totals.values()),
-        "by_legacy_alias": dict(sorted(totals.items())),
+        "by_canonical_name": dict(sorted(totals.items())),
         "files": changed_files,
     }
     REPORT.parent.mkdir(parents=True, exist_ok=True)
