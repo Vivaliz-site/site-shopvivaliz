@@ -1,26 +1,19 @@
-name: Repository Restructure Apply
+name: Repository Restructure Validate
 
 on:
-  push:
-    branches:
-      - audit/repo-structure-secrets-index
-    paths:
-      - '.github/triggers/repository-restructure.json'
   workflow_dispatch:
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
 
 concurrency:
-  group: repository-restructure-apply
+  group: repository-restructure-validate
   cancel-in-progress: false
 
 jobs:
-  apply:
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
@@ -31,88 +24,55 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Apply validate and publish non-workflow canonical names
-        id: transaction
+      - name: Apply canonicalization in isolated checkout
         shell: bash
         run: |
-          set +e
-          {
-            echo "[1/7] apply replacements outside workflow directories"
-            python scripts/maintenance/canonicalize_secret_aliases.py --apply
+          set -euo pipefail
+          python scripts/maintenance/canonicalize_secret_aliases.py --apply 2>&1 | tee alias-transaction.log
 
-            echo "[2/7] validate changed JSON"
-            while IFS= read -r file; do
-              [ -z "$file" ] || python -m json.tool "$file" >/dev/null
-            done < <(git diff --name-only --diff-filter=ACM | grep -E '\.json$' || true)
-
-            echo "[3/7] validate changed PHP"
-            while IFS= read -r file; do
-              [ -z "$file" ] || php -l "$file"
-            done < <(git diff --name-only --diff-filter=ACM | grep -E '\.php$' || true)
-
-            echo "[4/7] compile canonical Python"
-            python -m compileall -q scripts/ai scripts/maintenance scripts/marketplace scripts/dev config
-
-            echo "[5/7] run unit tests"
-            python -m unittest discover -s tests/unit -p 'test_*.py' -v
-
-            echo "[6/7] run integration tests"
-            python -m unittest discover -s tests/integration -p 'test_*.py' -v
-
-            echo "[7/7] commit and push"
-            git add -A
-            if git diff --cached --quiet; then
-              echo "No non-workflow canonicalization changes remained."
-            else
-              git commit -m "refactor(repo): replace non-workflow legacy secret aliases"
-              git fetch origin audit/repo-structure-secrets-index
-              git rebase origin/audit/repo-structure-secrets-index
-              git push origin HEAD:audit/repo-structure-secrets-index
-            fi
-          } > alias-transaction.log 2>&1
-          code=$?
-          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
-          exit 0
-
-      - name: Publish transaction diagnostic to PR
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TRANSACTION_EXIT_CODE: ${{ steps.transaction.outputs.exit_code }}
+      - name: Validate changed JSON
+        shell: bash
         run: |
-          python - <<'PY' > transaction-comment.md
-          import os
-          from pathlib import Path
+          set -euo pipefail
+          while IFS= read -r file; do
+            [ -z "$file" ] || python -m json.tool "$file" >/dev/null
+          done < <(git diff --name-only --diff-filter=ACM | grep -E '\.json$' || true)
 
-          output = Path("alias-transaction.log").read_text(encoding="utf-8", errors="replace") if Path("alias-transaction.log").exists() else "transaction log not created"
-          tail = "\n".join(output.splitlines()[-60:])
-          print("### Transação de aliases fora dos workflows")
-          print()
-          print(f"- run_id: `{os.environ.get('GITHUB_RUN_ID', '')}`")
-          print(f"- commit inicial: `{os.environ.get('GITHUB_SHA', '')}`")
-          print(f"- exit_code: `{os.environ.get('TRANSACTION_EXIT_CODE', 'missing')}`")
-          print()
-          print("```text")
-          print(tail)
-          print("```")
-          PY
-          gh pr comment 599 --body-file transaction-comment.md
+      - name: Validate changed PHP
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r file; do
+            [ -z "$file" ] || php -l "$file"
+          done < <(git diff --name-only --diff-filter=ACM | grep -E '\.php$' || true)
 
-      - name: Fail when transaction failed
-        if: steps.transaction.outputs.exit_code != '0'
-        run: exit 1
+      - name: Compile canonical Python
+        run: python -m compileall -q scripts/ai scripts/maintenance scripts/marketplace scripts/dev config
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests/unit -p 'test_*.py' -v
+
+      - name: Run integration tests
+        run: python -m unittest discover -s tests/integration -p 'test_*.py' -v
+
+      - name: Generate reviewable patch and manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --binary > repository-restructure.patch
+          git diff --name-status > repository-restructure-files.txt
+          git status --short > repository-restructure-status.txt
+          test -f docs/audits/secret-alias-canonicalization-report.json
 
       - name: Upload canonicalization evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: canonical-alias-transaction-${{ github.run_id }}
+          name: canonical-alias-validation-${{ github.run_id }}
           path: |
             docs/audits/secret-alias-canonicalization-report.json
             alias-transaction.log
-          if-no-files-found: warn
+            repository-restructure.patch
+            repository-restructure-files.txt
+            repository-restructure-status.txt
+          if-no-files-found: error
