@@ -1,14 +1,7 @@
 {
-  "requested_at": "2026-07-31T00:03:00Z",
+  "requested_at": "2026-07-31T00:07:00Z",
   "branch": "audit/repo-structure-secrets-index",
-  "categories": [
-    "root-docs",
-    "temp-artifacts",
-    "root-python",
-    "scripts-python",
-    "secret-aliases"
-  ],
-  "mode": "observable-final-alias-canonicalization",
+  "mode": "atomic-alias-transaction",
   "preserve_compatibility": true,
   "sanitize_sensitive_documents": true,
   "expected_candidates": 0,
