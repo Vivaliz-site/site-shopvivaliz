@@ -1,0 +1,59 @@
+name: Agents Hourly Deep Audit
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/**'
+      - '.ai/**'
+      - 'agents/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agents-hourly-deep-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audit agents with evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Prepare previous-main baseline for scheduled runs
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          previous="$(git rev-parse HEAD^)"
+          git cat-file -e "${previous}^{commit}"
+          git update-ref refs/remotes/origin/main "$previous"
+
+      - name: Compile deep auditor
+        run: python -m py_compile scripts/audit-agents-real-work.py
+
+      - name: Run deep agent audit
+        run: python scripts/audit-agents-real-work.py
+
+      - name: Verify audit evidence
+        if: always()
+        run: |
+          test -s artifacts/agents-audit/report.json
+          test -s artifacts/agents-audit/report.md
+
+      - name: Upload agent audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agents-deep-audit-${{ github.run_id }}
+          path: artifacts/agents-audit/
+          if-no-files-found: error
+          retention-days: 90
