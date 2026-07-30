@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "updated_at": "2026-07-30",
   "rules": {
     "new_routines_must_update_manifest": true,
@@ -327,7 +327,10 @@
     "scripts/validate-security.py": "scripts/dev/legacy-scripts/validate-security.py",
     "scripts/validate_20_products.py": "scripts/dev/legacy-scripts/validate_20_products.py",
     "scripts/verify_marketplace_upload.py": "scripts/dev/legacy-scripts/verify_marketplace_upload.py",
-    "scripts/verify_secrets.py": "scripts/dev/legacy-scripts/verify_secrets.py"
+    "scripts/verify_secrets.py": "scripts/dev/legacy-scripts/verify_secrets.py",
+    "scripts/shopvivaliz_auth.py": "scripts/maintenance/auth/shopvivaliz_auth.py",
+    "scripts/shopvivaliz_auth_fixed.py": "scripts/maintenance/auth/shopvivaliz_auth.py",
+    "scripts/tiny_sales_report.py": "scripts/marketplace/olist/legacy/tiny_sales_report.py"
   },
   "document_migrations": {
     "AGENTS-ACCESS-INDEX.md": "docs/operations/agents/agent-access-index-legacy.md",
@@ -738,6 +741,7 @@
     ".sync-test.txt": "archive/2026/tmp-artifacts/sync-test.txt",
     "036e6d865ffc4525b743d6dd53c3cb4a.txt": "archive/2026/tmp-artifacts/036e6d865ffc4525b743d6dd53c3cb4a.txt",
     "tmp-gh-email-artifact/email-activity-report.txt": "archive/2026/tmp-artifacts/email-activity-report.txt",
-    "tmp-gh-email-artifact/email-config-check.json": "archive/2026/tmp-artifacts/email-config-check.json"
+    "tmp-gh-email-artifact/email-config-check.json": "archive/2026/tmp-artifacts/email-config-check.json",
+    "release-notes/patches/cleanup-historico-credenciais-only.patch": "archive/2026/release-patches/cleanup-historico-credenciais-only.patch"
   }
 }
