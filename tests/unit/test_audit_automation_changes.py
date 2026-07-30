@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -9,6 +10,7 @@ MODULE_PATH = Path(__file__).resolve().parents[2] / "scripts" / "maintenance" / 
 SPEC = importlib.util.spec_from_file_location("audit_automation_changes", MODULE_PATH)
 assert SPEC and SPEC.loader
 AUDIT = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = AUDIT
 SPEC.loader.exec_module(AUDIT)
 
 
