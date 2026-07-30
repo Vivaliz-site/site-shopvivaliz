@@ -1,67 +1,64 @@
-# Backlog de Limpeza do Repositorio
+# Backlog de Limpeza do Repositório
 
-Este backlog controla limpeza estrutural sem delecoes arriscadas.
+Este backlog registra o que foi concluído e o que ainda depende de validação externa ou remoção futura de compatibilidade.
 
-## Status permitidos
+## Status
 
-- `manter`: arquivo/rotina valido e documentado.
-- `migrar`: precisa mover, renomear ou padronizar.
-- `renomear`: nome atual confunde ou duplica conceito.
-- `arquivar`: legado deve ir para `archive/` com justificativa.
-- `remover depois de validacao`: pode ser removido apos confirmar ausencia de uso.
-- `bloqueado`: depende de acesso, credencial, decisao externa ou teste.
-- `concluido-com-wrapper`: implementacao movida e caminho antigo mantido temporariamente.
-- `mapeado-globalmente`: item coberto por scanner/indice global, aguardando lote fisico seguro.
-- `migrado-com-stub`: conteudo movido e arquivo antigo substituido por ponte.
+- `concluído`: implementação e documentação aplicadas.
+- `concluído-com-wrapper`: destino canônico criado e caminho antigo encaminha.
+- `concluído-com-stub`: documento movido e origem virou ponte.
+- `bloqueado-externo`: depende de credencial, provedor ou decisão externa.
+- `aguarda-ci`: implementação pronta, aguardando checks.
+- `remover-depois`: compatibilidade temporária ainda necessária.
 
-## Prioridades
+## Estado dos lotes
 
-- P0: risco de seguranca, token, producao ou deploy.
-- P1: duplicidade que causa erro operacional.
-- P2: organizacao/documentacao.
-- P3: melhoria futura.
+| ID | Área | Estado | Resultado | Evidência/condição |
+|---|---|---|---|---|
+| CLEAN-001 | Olist/Tiny secrets | concluído | `OLIST_*` canônico; `TINY_*` apenas API Tiny nativa | mapa de secrets + `config/secrets.py` |
+| CLEAN-002 | Hardcoded secrets | bloqueado-externo | token Olist removido da árvore atual; auditor reforçado | rotação no provedor ainda obrigatória; histórico Git não limpo |
+| CLEAN-003 | Workflows | concluído | quatro workflows pausados removidos da pasta ativa e arquivados | `.github/workflows-archive/paused/` |
+| CLEAN-004 | Shopee scripts | concluído-com-wrapper | implementações em `scripts/marketplace/shopee/` | workflow/testes usam caminhos canônicos |
+| CLEAN-005 | Shopee produção | bloqueado-externo | estrutura de execução/evidência pronta | validação do primeiro produto depende de credencial Shopee válida |
+| CLEAN-006 | Centralização de configuração | concluído | aliases concentrados em `config/secrets.py` | compilação e auditoria CI |
+| CLEAN-007 | Documentos da raiz | concluído-com-stub | documentos operacionais/relatórios migrados em lotes | manifesto + stubs |
+| CLEAN-008 | Logs/artifacts | concluído parcial | arquivo malformado de relatório Shopee arquivado | scanner deve confirmar outros candidatos |
+| CLEAN-009 | Código experimental | concluído parcial | ferramentas históricas movidas para `scripts/dev/` | wrappers mantidos |
+| CLEAN-010 | Testes | concluído | testes existentes separados em `unit` e `integration` | workflows atualizados |
+| CLEAN-011 | Wrappers legados | remover-depois | wrappers preservam compatibilidade | remover somente após busca sem usos e CI verde |
+| CLEAN-012 | Scanner global | concluído | scanner e relatório estrutural adicionados ao CI | artifact `repository-structure-*` |
+| CLEAN-013 | Manifesto estrutural | concluído | origem/destino registrados em JSON | `validate_structure_manifest.py` |
+| CLEAN-014 | Scripts IA | concluído-com-wrapper | implementações em `scripts/ai/` | manifesto e wrappers |
+| CLEAN-015 | Scripts manutenção | concluído-com-wrapper | implementações em `scripts/maintenance/` | manifesto e wrappers |
+| CLEAN-016 | Scripts Olist | concluído-com-wrapper | implementações em `scripts/marketplace/olist/` | manifesto e wrappers multilíngues |
+| CLEAN-017 | Ferramentas raiz | concluído-com-wrapper | relatórios e dados em `scripts/dev/legacy-*` | manifesto e wrappers |
+| CLEAN-018 | CI final | aguarda-ci | compileall, testes, scanner, manifesto e auditor configurados | todos os checks do PR precisam concluir verdes |
 
-## Itens iniciais
+## Incidente de credencial
 
-| ID | Prioridade | Area | Item | Status | Acao proposta | Validacao antes de concluir |
-|---|---|---|---|---|---|---|
-| CLEAN-001 | P0 | Secrets | Aliases Olist/Tiny duplicados | migrar | Usar `OLIST_*` como canonico para Olist e `TINY_*` apenas para Tiny nativo | Buscar usos de `TOKEN_API_OLIST`, `CLIENT_ID_API_OLIST`, `CLIENT_SECRET_OLIST`, `URL_REDIRCT_OLIST`, `URL_TINY_OLIST` |
-| CLEAN-002 | P0 | Secrets | Access tokens hardcoded ou `.env` real | bloqueado | Criar CI de higiene e varrer repository tree | Workflow `repo-hygiene.yml` verde; nenhuma chave real encontrada |
-| CLEAN-003 | P1 | Workflows | Workflows sem registro operacional | migrar | Registrar todos em `routines-registry.md` | Todos os arquivos em `.github/workflows/` possuem linha no registro ou justificativa |
-| CLEAN-004 | P1 | Scripts | Scripts de producao espalhados | concluido-com-wrapper | Shopee SEO e otimizador movidos para `scripts/marketplace/shopee/`; wrappers legados mantidos | Workflow e testes apontam para caminho canonico; CI compila caminho novo e wrappers |
-| CLEAN-005 | P1 | Shopee | Fluxos de SEO e triggers temporarios | manter | Manter apenas com issue/evidencia; remover triggers temporarios depois da validacao | Run com primeiro produto validado ou decisao de rollback |
-| CLEAN-006 | P1 | Config | `config/secrets.py` com aliases legados | manter | Centralizar aliases e proibir novos usos fora do centralizador | `python -m py_compile config/secrets.py` e audit sem erros bloqueantes |
-| CLEAN-007 | P2 | Docs | Documentos dispersos sem indice | migrado-com-stub | Lote inicial movido para `docs/operations/**`; indice global continua controlando pendentes | Stubs criados na raiz e destinos registrados |
-| CLEAN-008 | P2 | Logs/backups | Logs e backups versionados indevidos | mapeado-globalmente | Scanner global classifica artifacts temporarios e relatorios | Relatorio em `docs/audits/repository-wide-structure-report.md/json` |
-| CLEAN-009 | P2 | Archive | Codigo experimental misturado | mapeado-globalmente | Scanner global classifica candidatos a `archive/` ou `scripts/dev/` | Nao mover sem confirmar imports/workflows |
-| CLEAN-010 | P2 | Testes | Testes sem separacao unit/integration/smoke | migrar | Criar estrutura alvo e mover gradualmente | CI executando caminho correto |
-| CLEAN-011 | P2 | Shopee | Remover wrappers legados Shopee | remover depois de validacao | Apos validar que workflows, docs, scripts locais e CI usam apenas caminho canonico, remover wrappers | Busca sem usos dos caminhos legados e CI verde |
-| CLEAN-012 | P1 | Repo inteiro | Scanner estrutural global | manter | `scripts/maintenance/restructure_repository.py` varre 100% do checkout e gera relatorio | CI executa scanner no workflow `Repository Hygiene` |
+Foi encontrado um token em texto puro em documentação Olist. A versão corrente foi sanitizada e o incidente está em `docs/audits/security/credential-exposure-2026-07-30.md`.
 
-## Migrações executadas neste PR
+Pendências obrigatórias fora do repositório:
 
-| Data | ID | Antes | Depois | Wrapper/Stub | Evidencia |
-|---|---|---|---|---|---|
-| 2026-07-30 | CLEAN-004 | `scripts/shopee_production_seo_apply.py` | `scripts/marketplace/shopee/production_seo_apply.py` | wrapper | `.github/workflows/shopee-production-seo.yml` atualizado para caminho novo |
-| 2026-07-30 | CLEAN-004 | `scripts/shopee_full_catalog_optimizer.py` | `scripts/marketplace/shopee/full_catalog_optimizer.py` | wrapper | `repo-hygiene.yml` compila caminho novo e wrapper |
-| 2026-07-30 | CLEAN-007/CLEAN-012 | documentos operacionais soltos na raiz | `docs/operations/legacy-root-docs-index.md` | N/A | Indice global criado com destinos alvo por documento |
-| 2026-07-30 | CLEAN-012 | auditoria manual parcial | `scripts/maintenance/restructure_repository.py` | N/A | Scanner global criado para varrer 100% do checkout no CI |
-| 2026-07-30 | CLEAN-007 | `AUTONOMOUS_TRIO_GUIDE.md` | `docs/operations/agents/autonomous-trio-guide.md` | stub | Arquivo raiz aponta para destino canonico |
-| 2026-07-30 | CLEAN-007 | `SINCRONIZACAO-OLIST-STATUS.md` | `docs/operations/olist/sync-status.md` | stub | Arquivo raiz aponta para destino canonico |
-| 2026-07-30 | CLEAN-007 | `CHECKLIST-RAPIDO-SECRETS-FTP.md` | `docs/operations/deploy/ftp-secrets-checklist.md` | stub | Arquivo raiz aponta para destino canonico |
-| 2026-07-30 | CLEAN-007 | `PIPELINE-SHOPEE-STATUS.txt` | `docs/operations/shopee/pipeline-status-legacy.md` | stub | Arquivo raiz aponta para destino canonico |
+1. rotacionar a credencial no provedor;
+2. cadastrar o novo valor somente em secret protegido;
+3. avaliar limpeza coordenada do histórico Git após a rotação.
 
-## Protocolo de limpeza
+## Compatibilidade a remover futuramente
 
-1. Nao apagar em massa.
-2. Para cada item, localizar uso em codigo, workflows, docs e deploy.
-3. Preferir migracao com alias/wrapper temporario.
-4. Registrar conclusao com commit, PR e evidencia.
-5. Atualizar `repository-index.md`, `routines-registry.md` e `secrets-and-integrations-map.md` quando aplicavel.
+- wrappers dos scripts listados em `config/repository-structure-manifest.json`;
+- stubs documentais da raiz;
+- aliases legados de secrets;
+- arquivo trigger Shopee quando o fluxo manual deixar de ser necessário.
 
-## Historico
+A remoção só pode ocorrer com busca sem referências, atualização do manifesto e CI verde.
 
-- 2026-07-30: backlog criado durante auditoria estrutural inicial do repositorio.
-- 2026-07-30: primeira migracao fisica aplicada para scripts Shopee, mantendo wrappers legados.
-- 2026-07-30: scanner global e indice de documentos legados da raiz adicionados para cobrir o repositorio inteiro.
-- 2026-07-30: lote inicial de documentos raiz migrado para `docs/operations/**` com stubs de compatibilidade.
+## Histórico
+
+- 2026-07-30: governança, índice, mapa de secrets, scanner e CI criados.
+- 2026-07-30: Shopee, IA, manutenção e Olist migrados para caminhos canônicos.
+- 2026-07-30: testes reorganizados.
+- 2026-07-30: workflows pausados arquivados.
+- 2026-07-30: documentos e relatórios da raiz migrados com stubs.
+- 2026-07-30: ferramentas históricas da raiz movidas para `scripts/dev/`.
+- 2026-07-30: exposição de credencial Olist removida da árvore atual e registrada.
