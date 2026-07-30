@@ -11,7 +11,7 @@ Todo novo modulo, script, workflow, endpoint ou documento operacional deve ter u
 | Area | Escopo | Caminhos principais | Regras de mudanca |
 |---|---|---|---|
 | Site PHP legado | Storefront atual, paginas publicas, carrinho, checkout, includes e templates | `app/`, `api/`, `includes/`, raiz PHP quando existir | Validar no navegador/curl; nao alterar preco ou estoque sem fonte oficial |
-| Marketplace Shopee | Cliente API, SEO, catalogo Shopee, tokens e relatorios | `scripts/marketplace/shopee/`, `scripts/utils/shopee_client.py`, `.github/workflows/*shopee*`; wrappers legados `scripts/shopee_*.py` | Exigir backup, limit, confirmacao, read-back e artifact |
+| Marketplace Shopee | Cliente API, SEO, catalogo Shopee, tokens e relatorios | `scripts/marketplace/shopee/`, wrappers `scripts/*shopee*`, `.github/workflows/*shopee*` | Exigir backup, limit, confirmacao, read-back e artifact |
 | Olist ERP/Marketplace | Integracao Olist, OAuth, catalogo, pedidos e imagens ligados a Olist | `scripts/*olist*`, docs de integracao, secrets `OLIST_*` | `OLIST_*` e canonico; aliases antigos apenas em `config/secrets.py` |
 | Tiny nativo | API Tiny quando usada diretamente fora da camada Olist | `scripts/*tiny*`, secrets `TINY_*` | Nao reutilizar `TINY_*` para Olist; documentar endpoint e token separado |
 | Mercado Livre | Integracao ML, seller, callbacks e catalogo | arquivos com `ml`, `mercado`, `meli` | Separar tokens ML de Olist/Tiny/Shopee |
@@ -22,18 +22,12 @@ Todo novo modulo, script, workflow, endpoint ou documento operacional deve ter u
 | Emails e notificacoes | SMTP, relatorios, alertas, agentes email | arquivos com `email`, `smtp`, `mail` | Usar `SMTP_*` como canonico; nao expor credenciais |
 | Imagens e midia | Geracao, validacao, upload e politicas de imagem | `scripts/ia/images/`, docs de imagem | Nao usar placeholder/fake; validar origem e vinculacao |
 | Agentes IA | Trio IA, filas, memoria operacional, regras | `ai_collaboration.py`, `agents/`, `tasks-queue.json`, `docs/knowledge/` | Atualizar memoria dos agentes e registro de rotinas |
-| Governanca de repositorio | Indices, limpeza, auditorias, CI de higiene | `docs/knowledge/repository-index.md`, `docs/audits/`, `scripts/audit_repository.py` | Bloquear novas sujeiras via CI |
-
-## Migrações de ownership já aplicadas
-
-| Data | Area | Caminhos reorganizados | Dono funcional | Compatibilidade |
-|---|---|---|---|---|
-| 2026-07-30 | Shopee | `scripts/shopee_production_seo_apply.py` -> `scripts/marketplace/shopee/production_seo_apply.py` | Marketplace Shopee | Wrapper legado mantido |
-| 2026-07-30 | Shopee | `scripts/shopee_full_catalog_optimizer.py` -> `scripts/marketplace/shopee/full_catalog_optimizer.py` | Marketplace Shopee | Wrapper legado mantido |
+| Governanca de repositorio | Indices, limpeza, auditorias, CI de higiene e reestruturação global | `docs/knowledge/repository-index.md`, `docs/audits/`, `docs/operations/legacy-root-docs-index.md`, `scripts/audit_repository.py`, `scripts/maintenance/restructure_repository.py` | Bloquear novas sujeiras via CI; scanner global cobre 100% do checkout |
 
 ## Processo para arquivos sem dono
 
 1. Registrar no `docs/audits/repository-cleanup-backlog.md`.
-2. Classificar como `manter`, `migrar`, `renomear`, `arquivar`, `remover depois de validacao` ou `bloqueado`.
+2. Classificar como `manter`, `migrar`, `renomear`, `arquivar`, `remover depois de validacao`, `mapeado-globalmente`, `concluido-com-wrapper` ou `bloqueado`.
 3. Atribuir uma area dona antes de alterar logica.
 4. Nao deletar arquivo sem confirmar uso em workflow, script, include, endpoint, deploy e documentacao.
+5. Quando a duvida envolver estrutura global, rodar `python scripts/maintenance/restructure_repository.py --write-report`.
