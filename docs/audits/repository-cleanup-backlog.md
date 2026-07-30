@@ -10,6 +10,7 @@ Este backlog controla limpeza estrutural sem delecoes arriscadas.
 - `arquivar`: legado deve ir para `archive/` com justificativa.
 - `remover depois de validacao`: pode ser removido apos confirmar ausencia de uso.
 - `bloqueado`: depende de acesso, credencial, decisao externa ou teste.
+- `concluido-com-wrapper`: implementacao movida e caminho antigo mantido temporariamente.
 
 ## Prioridades
 
@@ -25,13 +26,20 @@ Este backlog controla limpeza estrutural sem delecoes arriscadas.
 | CLEAN-001 | P0 | Secrets | Aliases Olist/Tiny duplicados | migrar | Usar `OLIST_*` como canonico para Olist e `TINY_*` apenas para Tiny nativo | Buscar usos de `TOKEN_API_OLIST`, `CLIENT_ID_API_OLIST`, `CLIENT_SECRET_OLIST`, `URL_REDIRCT_OLIST`, `URL_TINY_OLIST` |
 | CLEAN-002 | P0 | Secrets | Access tokens hardcoded ou `.env` real | bloqueado | Criar CI de higiene e varrer repository tree | Workflow `repo-hygiene.yml` verde; nenhuma chave real encontrada |
 | CLEAN-003 | P1 | Workflows | Workflows sem registro operacional | migrar | Registrar todos em `routines-registry.md` | Todos os arquivos em `.github/workflows/` possuem linha no registro ou justificativa |
-| CLEAN-004 | P1 | Scripts | Scripts de producao espalhados | migrar | Mover gradualmente para `scripts/production/` ou documentar legado | Imports/workflows atualizados e testes OK |
+| CLEAN-004 | P1 | Scripts | Scripts de producao espalhados | concluido-com-wrapper | Shopee SEO e otimizador movidos para `scripts/marketplace/shopee/`; wrappers legados mantidos | Workflow e testes apontam para caminho canonico; CI compila caminho novo e wrappers |
 | CLEAN-005 | P1 | Shopee | Fluxos de SEO e triggers temporarios | manter | Manter apenas com issue/evidencia; remover triggers temporarios depois da validacao | Run com primeiro produto validado ou decisao de rollback |
 | CLEAN-006 | P1 | Config | `config/secrets.py` com aliases legados | manter | Centralizar aliases e proibir novos usos fora do centralizador | `python -m py_compile config/secrets.py` e audit sem erros bloqueantes |
 | CLEAN-007 | P2 | Docs | Documentos dispersos sem indice | migrar | Ligar documentos principais no `docs/knowledge/README.md` | Links principais revisados |
 | CLEAN-008 | P2 | Logs/backups | Logs e backups versionados indevidos | bloqueado | Listar arquivos grandes/sensiveis e mover para storage privado ou artifacts | Confirmar que nao sao necessarios em producao |
 | CLEAN-009 | P2 | Archive | Codigo experimental misturado | migrar | Mover para `archive/` ou `scripts/dev/` | Nenhum workflow/import depende do caminho antigo |
 | CLEAN-010 | P2 | Testes | Testes sem separacao unit/integration/smoke | migrar | Criar estrutura alvo e mover gradualmente | CI executando caminho correto |
+
+## Migrações executadas neste PR
+
+| Data | ID | Antes | Depois | Wrapper | Evidencia |
+|---|---|---|---|---|---|
+| 2026-07-30 | CLEAN-004 | `scripts/shopee_production_seo_apply.py` | `scripts/marketplace/shopee/production_seo_apply.py` | Sim | `.github/workflows/shopee-production-seo.yml` atualizado para caminho novo |
+| 2026-07-30 | CLEAN-004 | `scripts/shopee_full_catalog_optimizer.py` | `scripts/marketplace/shopee/full_catalog_optimizer.py` | Sim | `repo-hygiene.yml` compila caminho novo e wrapper |
 
 ## Protocolo de limpeza
 
@@ -44,3 +52,4 @@ Este backlog controla limpeza estrutural sem delecoes arriscadas.
 ## Historico
 
 - 2026-07-30: backlog criado durante auditoria estrutural inicial do repositorio.
+- 2026-07-30: primeira migracao fisica aplicada para scripts Shopee, mantendo wrappers legados.
