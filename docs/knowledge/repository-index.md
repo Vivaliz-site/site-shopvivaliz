@@ -1,91 +1,83 @@
 # Índice Operacional do Repositório ShopVivaliz
 
-Este documento é a fonte de verdade para entender a estrutura do repositório, localizar rotinas e evitar scripts soltos.
+Este documento é a entrada humana principal para entender a estrutura. O mapa máquina-legível completo está em `config/repository-structure-manifest.json`.
 
-## Regra obrigatória para agentes e desenvolvedores
+## Regra obrigatória
 
-Sempre que uma nova rotina, workflow, script, integração, job agendado, endpoint, migration ou módulo operacional for criado, este documento deve ser atualizado no mesmo PR/commit.
+Toda criação, remoção, migração ou renomeação de rotina, script, workflow, integração, endpoint, teste ou documento operacional deve atualizar no mesmo PR:
 
-A entrada nova deve informar:
+- este índice;
+- `docs/knowledge/routines-registry.md`, quando houver execução;
+- `docs/knowledge/secrets-and-integrations-map.md`, quando houver integração ou secret;
+- `config/repository-structure-manifest.json`, quando houver mudança de caminho;
+- `docs/audits/repository-cleanup-backlog.md`, quando houver dívida ou limpeza.
 
-- caminho do arquivo ou diretório;
-- dono funcional;
-- gatilho de execução;
-- entradas obrigatórias;
-- saídas/artefatos gerados;
-- secrets ou integrações usadas;
-- forma mínima de validação;
-- riscos conhecidos.
+## Estrutura canônica
 
-Nenhuma rotina nova deve ser criada sem registro aqui.
+| Área | Caminho | Função |
+|---|---|---|
+| Site e APIs | raiz PHP, `app/`, `api/`, `includes/` | Storefront, endpoints e integrações web existentes |
+| Configuração | `config/` | Configuração compartilhada, secrets canônicos e manifesto estrutural |
+| Agentes IA | `scripts/ai/` | Executores, fila, colaboração, observabilidade e relatórios IA |
+| Manutenção | `scripts/maintenance/` | Auditoria, diagnóstico, segurança, rollback, health check e governança |
+| Shopee | `scripts/marketplace/shopee/` | Cliente de aplicação SEO e otimização do catálogo Shopee |
+| Olist/Tiny ERP | `scripts/marketplace/olist/` | Autenticação, sync, imagens, catálogo e monitoramento Olist |
+| Desenvolvimento legado | `scripts/dev/legacy-reporting/`, `scripts/dev/legacy-data-tools/` | Ferramentas históricas não canônicas de produção |
+| Testes unitários | `tests/unit/` | Testes isolados e rápidos |
+| Testes de integração | `tests/integration/` | Integrações e fluxos controlados |
+| Smoke tests | `tests/smoke/` | Verificações pós-deploy/produção |
+| Workflows ativos | `.github/workflows/` | Actions ativas |
+| Workflows pausados | `.github/workflows-archive/paused/` | Histórico não carregado pelo GitHub Actions |
+| Conhecimento | `docs/knowledge/` | Regras, ownership, rotinas e secrets |
+| Operações | `docs/operations/` | Runbooks e guias operacionais |
+| Auditorias | `docs/audits/` | Evidências, incidentes, relatórios e backlog |
+| Arquivo | `archive/<ano>/` | Artefatos substituídos ou malformados preservados |
 
-## Visão de alto nível
+## Componentes de governança
 
-| Área | Caminho | Função | Observação |
-|---|---|---|---|
-| Storefront PHP legado | raiz, `api/`, includes e páginas PHP | Site público, APIs e integrações atuais | Ainda é parte do ambiente produtivo |
-| Automações | `.github/workflows/` | CI, deploy, agentes, marketplace e validações | Todo workflow novo deve ser registrado aqui |
-| Scripts operacionais | `scripts/` | Sincronização, marketplaces, agentes, auditorias e utilitários | Scripts com credenciais devem usar `config/secrets.py` ou secrets de Actions |
-| Scripts Marketplace | `scripts/marketplace/` | Canais externos organizados por subpasta | Shopee já migrado para `scripts/marketplace/shopee/` |
-| Scripts de manutenção | `scripts/maintenance/` | Diagnóstico, auditoria e reestruturação | Inclui scanner global do repositório |
-| Configuração | `config/` | Secrets, constantes e configuração compartilhada | `config/secrets.py` é o centralizador Python |
-| Documentação operacional | `docs/knowledge/` | Memória dos agentes e regras de operação | Deve ser consultada antes de mudanças relevantes |
-| Operações | `docs/operations/` | Runbooks e documentos legados operacionais consolidados | Documentos soltos da raiz devem migrar para cá ou para audits |
-| Auditorias | `docs/audits/` | Backlogs, relatórios e varreduras estruturais | Scanner global grava relatórios aqui |
-| Medusa/Next em transição | `claude/medusa/` | Backend headless e storefront alvo | Ainda não substituir produção sem checklist próprio |
-| Logs/relatórios | `logs/`, `storage/private/` | Evidências temporárias e backups gerados | Não commitar valores sensíveis reais |
-
-## Workflows conhecidos
-
-| Workflow | Caminho | Gatilho | Saída esperada | Validação mínima |
-|---|---|---|---|---|
-| Repository Hygiene | `.github/workflows/repo-hygiene.yml` | PR, push e manual | Auditoria de higiene + relatório estrutural global | Compilar governança, rodar scanner e audit sem erro bloqueante |
-| Shopee SEO Production Apply | `.github/workflows/shopee-production-seo.yml` | Manual ou trigger controlado | Relatório JSON, backup e comentário na issue de validação | Deve provar `item_id`, status, leitura posterior e invariantes de preço/estoque |
-| Trio IA Autônomo | `.github/workflows/ai-autonomous-executor.yml` | Manual/pausado | Workflow consolidado em watchdog | Não reativar sem verificar duplicidade |
-| Trio IA Ecommerce | `.github/workflows/ai-trio-ecommerce.yml` | Manual | Implementação de tarefa específica | PR/commit com evidência |
-| Deploy | `.github/workflows/deploy.yml` ou pipeline equivalente | Push/manual | Publicação em hospedagem/VM | Teste HTTP real pós-deploy |
-| QA/Testes | workflows de CI | Push/PR | Checks de sintaxe e testes | Status verde no GitHub Actions |
-
-## Scripts operacionais conhecidos
-
-| Script | Função | Entradas | Saídas | Observação |
-|---|---|---|---|---|
-| `scripts/maintenance/restructure_repository.py` | Varre 100% do checkout e classifica arquivos fora da estrutura alvo | Árvore local do repo | `docs/audits/repository-wide-structure-report.md/json` | Não move arquivos automaticamente |
-| `scripts/audit_repository.py` | Auditoria de higiene, secrets, aliases e estrutura | Árvore local do repo | Log CI e exit code | Bloqueia regressões estruturais |
-| `scripts/marketplace/shopee/production_seo_apply.py` | Aplica SEO real no catálogo Shopee com backup e leitura posterior | `--confirm`, `--limit`, secrets Shopee | JSON em `logs/shopee-production-seo/`, backup em `storage/private/shopee-production-backups/` | Nunca altera preço ou estoque; caminho antigo é wrapper |
-| `scripts/marketplace/shopee/full_catalog_optimizer.py` | Geração de títulos/descrições e apoio ao SEO | Catálogo Shopee | Relatórios e candidatos de otimização | Caminho antigo é wrapper |
-| `scripts/utils/shopee_client.py` | Cliente Shopee Partner API v2 | Secrets Shopee | Chamadas API assinadas | Renova token automaticamente na inicialização, a cada 2h e quando expirar |
-| `scripts/manage-tasks-queue.py` | Gerencia fila de tarefas do Trio IA | CLI e `tasks-queue.json` | Alteração da fila | Registrar mudanças de formato da fila aqui |
-| `scripts/autonomous-executor.py` | Executor de tarefas autônomas | Fila e secrets dos provedores | Commits/relatórios | Deve respeitar regras de agentes |
+| Componente | Caminho | Validação |
+|---|---|---|
+| Auditor de higiene | `scripts/audit_repository.py` | Detecta secrets, aliases, estrutura, wrappers e stubs |
+| Scanner global | `scripts/maintenance/restructure_repository.py` | Varre o checkout inteiro e gera relatório estrutural |
+| Validador do manifesto | `scripts/maintenance/validate_structure_manifest.py` | Confirma destinos, wrappers, stubs, testes e workflows arquivados |
+| Manifesto estrutural | `config/repository-structure-manifest.json` | Fonte de verdade máquina-legível das migrações |
+| CI de higiene | `.github/workflows/repo-hygiene.yml` | Compila áreas canônicas, executa testes, scanner e validadores |
 
 ## Integrações principais
 
-| Integração | Uso | Documento de secrets |
+| Integração | Caminho principal | Nomes de secrets |
 |---|---|---|
-| Shopee | Catálogo, SEO, imagens e atualização de produtos | `docs/knowledge/secrets-and-integrations-map.md` |
-| Olist/Tiny | ERP, catálogo e sincronizações | `docs/knowledge/secrets-and-integrations-map.md` |
-| Mercado Livre | Marketplace | `docs/knowledge/secrets-and-integrations-map.md` |
-| Amazon SP-API | Marketplace | `docs/knowledge/secrets-and-integrations-map.md` |
-| TikTok Shop | Marketplace | `docs/knowledge/secrets-and-integrations-map.md` |
-| Melhor Envio | Frete/logística | `docs/knowledge/secrets-and-integrations-map.md` |
-| SMTP/Titan | Relatórios e notificações | `docs/knowledge/secrets-and-integrations-map.md` |
+| Shopee | `scripts/marketplace/shopee/` | `SHOPEE_*` |
+| Olist ERP | `scripts/marketplace/olist/` | `OLIST_*` |
+| Tiny nativo | somente fluxo que chama API Tiny separada | `TINY_*` |
+| Mercado Livre | APIs/scripts ML existentes | `ML_*` |
+| Amazon SP-API | APIs/scripts Amazon existentes | `AMAZON_*` |
+| TikTok Shop | APIs/scripts TikTok existentes | `TIKTOK_*` |
+| Deploy FTP | `.github/workflows/deploy.yml` | `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`, `FTP_PORT`, `FTP_REMOTE_DIR` |
+| Email | notificações existentes | `SMTP_*`, `EMAIL_FROM`, `EMAIL_TO` |
 
-## Dívidas técnicas registradas
+## Compatibilidade legada
 
-| Item | Risco | Direção de limpeza |
-|---|---|---|
-| Aliases duplicados de secrets | Configuração inconsistente entre workflows, scripts e `.env` | Manter um nome canônico por integração e aliases apenas no centralizador |
-| Olist/Tiny com nomes paralelos | Tokens equivalentes podem ser cadastrados com nomes diferentes | Padronizar como `OLIST_*` para marketplace/ERP principal e `TINY_*` apenas quando endpoint Tiny nativo exigir |
-| Scripts sem registro | Dificulta auditoria e manutenção | Todo script novo deve ser registrado neste índice |
-| Workflows de trigger temporário | Podem ficar ativos sem necessidade | Documentar trigger, remover quando não for mais usado ou marcar como temporário |
-| Documentos operacionais na raiz | Dificulta localização e causa duplicidade | Migrar para `docs/operations/` ou `docs/audits/` usando índice legado |
+Os caminhos antigos de scripts permanecem temporariamente como wrappers. Documentos antigos da raiz permanecem como stubs. Não inserir lógica ou documentação nova nesses caminhos.
 
-## Checklist antes de criar rotina nova
+A lista completa de origem e destino está em `config/repository-structure-manifest.json`.
 
-1. Verificar se já existe script/workflow semelhante.
-2. Verificar se já existe secret canônico para a integração.
-3. Usar nomes canônicos do mapa de secrets.
-4. Registrar a rotina neste índice.
-5. Registrar ou atualizar integração em `secrets-and-integrations-map.md`.
-6. Adicionar validação objetiva: teste, log, artefato, comentário em issue ou leitura posterior.
-7. Não fazer merge se a documentação operacional ficar desatualizada.
+## Estado da reorganização
+
+- scripts Shopee, Olist, IA e manutenção: migrados para áreas canônicas;
+- ferramentas históricas da raiz: migradas para `scripts/dev/` com wrappers;
+- testes existentes: separados em `unit` e `integration`;
+- workflows confirmados como pausados: removidos da pasta ativa e arquivados;
+- documentos operacionais e relatórios da raiz: migrados em lotes com stubs;
+- arquivo com nome de caminho Windows corrompido: preservado em `archive/2026/artifacts/` e removido da raiz;
+- credencial Olist encontrada em documento: removida da árvore atual, incidente registrado e rotação externa exigida.
+
+## Antes de criar algo novo
+
+1. Procure rotina equivalente.
+2. Escolha o diretório canônico.
+3. Use secrets canônicos.
+4. Registre ownership, gatilho, entrada, saída, risco e validação.
+5. Atualize o manifesto.
+6. Adicione teste ou evidência objetiva.
+7. Não marque como concluído sem CI/log/read-back aplicável.
