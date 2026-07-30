@@ -35,9 +35,15 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Compile governance scripts
+      - name: Compile governance and migrated scripts
         run: |
-          python -m py_compile scripts/audit_repository.py config/secrets.py
+          python -m py_compile \
+            scripts/audit_repository.py \
+            config/secrets.py \
+            scripts/marketplace/shopee/full_catalog_optimizer.py \
+            scripts/marketplace/shopee/production_seo_apply.py \
+            scripts/shopee_full_catalog_optimizer.py \
+            scripts/shopee_production_seo_apply.py
 
       - name: Run repository hygiene audit
         run: |
