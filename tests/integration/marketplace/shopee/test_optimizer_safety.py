@@ -8,6 +8,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 
+def repository_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "scripts").is_dir() and (parent / ".github").is_dir():
+            return parent
+    raise RuntimeError("repository root not found")
+
+
 class FakeClient:
     def __init__(self):
         self.upload_calls = []
@@ -33,14 +40,7 @@ class FakeClient:
         return "uploaded-image"
 
     def update_product(self, item_id, *, title, description, image_ids):
-        self.update_calls.append(
-            {
-                "item_id": item_id,
-                "title": title,
-                "description": description,
-                "image_ids": list(image_ids),
-            }
-        )
+        self.update_calls.append({"item_id": item_id, "title": title, "description": description, "image_ids": list(image_ids)})
         self.item["item_name"] = title
         self.item["description"] = description
         self.item["image"] = {"image_id_list": list(image_ids)}
@@ -53,7 +53,6 @@ def load_optimizer():
     generator_module.generate_for_product = lambda _item: {"main": Path("generated.png")}
     validator_module = types.ModuleType("ia.images.image_validator")
     validator_module.validate_batch = lambda generated: {key: (True, "ok") for key in generated}
-
     modules = {
         "utils": types.ModuleType("utils"),
         "utils.shopee_client": shopee_module,
@@ -63,7 +62,7 @@ def load_optimizer():
         "ia.images.image_validator": validator_module,
     }
     with patch.dict(sys.modules, modules):
-        path = Path(__file__).resolve().parents[1] / "scripts" / "shopee_full_catalog_optimizer.py"
+        path = repository_root() / "scripts" / "marketplace" / "shopee" / "full_catalog_optimizer.py"
         spec = importlib.util.spec_from_file_location("shopee_optimizer_under_test", path)
         module = importlib.util.module_from_spec(spec)
         assert spec and spec.loader
@@ -84,7 +83,6 @@ class ShopeeOptimizerSafetyTest(unittest.TestCase):
                 patch.object(sys, "argv", ["optimizer", "--dry-run"]),
             ):
                 self.assertEqual(optimizer.main(), 0)
-
         self.assertEqual(client.upload_calls, [])
         self.assertEqual(client.update_calls, [])
 
@@ -112,7 +110,6 @@ class ShopeeOptimizerSafetyTest(unittest.TestCase):
                 description="Descricao otimizada suficientemente longa para validacao.",
                 images=["new-image"],
             )
-
         self.assertEqual(len(client.update_calls), 2)
         self.assertEqual(client.item["item_name"], before["item_name"])
         self.assertEqual(client.item["description"], before["description"])

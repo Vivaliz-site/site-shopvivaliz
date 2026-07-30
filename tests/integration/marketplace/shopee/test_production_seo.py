@@ -7,6 +7,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 
+def repository_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "scripts").is_dir() and (parent / ".github").is_dir():
+            return parent
+    raise RuntimeError("repository root not found")
+
+
 class FakeClient:
     def __init__(self):
         self.update_calls = []
@@ -45,13 +52,7 @@ def load_module():
         "utils.shopee_client": client_module,
     }
     with patch.dict(sys.modules, modules):
-        path = (
-            Path(__file__).resolve().parents[1]
-            / "scripts"
-            / "marketplace"
-            / "shopee"
-            / "production_seo_apply.py"
-        )
+        path = repository_root() / "scripts" / "marketplace" / "shopee" / "production_seo_apply.py"
         spec = importlib.util.spec_from_file_location("shopee_production_under_test", path)
         module = importlib.util.module_from_spec(spec)
         assert spec and spec.loader

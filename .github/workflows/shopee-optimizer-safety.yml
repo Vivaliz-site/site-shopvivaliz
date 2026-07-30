@@ -3,19 +3,19 @@ name: Shopee Optimizer Safety
 on:
   pull_request:
     paths:
+      - 'scripts/marketplace/shopee/**'
       - 'scripts/shopee_full_catalog_optimizer.py'
       - 'scripts/shopee_production_seo_apply.py'
-      - 'tests/test_shopee_optimizer_safety.py'
-      - 'tests/test_shopee_production_seo.py'
+      - 'tests/integration/marketplace/shopee/**'
       - '.github/workflows/shopee-optimizer-safety.yml'
       - '.github/workflows/shopee-production-seo.yml'
   push:
     branches: [main]
     paths:
+      - 'scripts/marketplace/shopee/**'
       - 'scripts/shopee_full_catalog_optimizer.py'
       - 'scripts/shopee_production_seo_apply.py'
-      - 'tests/test_shopee_optimizer_safety.py'
-      - 'tests/test_shopee_production_seo.py'
+      - 'tests/integration/marketplace/shopee/**'
       - '.github/workflows/shopee-optimizer-safety.yml'
       - '.github/workflows/shopee-production-seo.yml'
   workflow_dispatch:
@@ -33,6 +33,6 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compile optimizers
-        run: python -m py_compile scripts/shopee_full_catalog_optimizer.py scripts/shopee_production_seo_apply.py scripts/utils/shopee_client.py
+        run: python -m py_compile scripts/marketplace/shopee/full_catalog_optimizer.py scripts/marketplace/shopee/production_seo_apply.py scripts/shopee_full_catalog_optimizer.py scripts/shopee_production_seo_apply.py scripts/utils/shopee_client.py
       - name: Run safety tests
-        run: python -m unittest -v tests/test_shopee_optimizer_safety.py tests/test_shopee_production_seo.py
+        run: python -m unittest -v tests/integration/marketplace/shopee/test_optimizer_safety.py tests/integration/marketplace/shopee/test_production_seo.py
