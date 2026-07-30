@@ -56,13 +56,13 @@ Você pode usar sua conta pessoal ou criar uma conta específica para o sistema.
 2. Clique em **New repository secret**
 3. Crie 2 secrets:
 
-#### Secret 1: EMAIL_USER
-- **Name:** `EMAIL_USER`
+#### Secret 1: SMTP_USER
+- **Name:** `SMTP_USER`
 - **Value:** Seu email Gmail (ex: `fredmourao@gmail.com`)
 - Clique **Add secret**
 
-#### Secret 2: EMAIL_PASSWORD
-- **Name:** `EMAIL_PASSWORD`
+#### Secret 2: SMTP_PASS
+- **Name:** `SMTP_PASS`
 - **Value:** A senha de app gerada no passo 2 (16 caracteres, sem espaços)
 - Clique **Add secret**
 
@@ -152,7 +152,7 @@ Histórico de tarefas que já foram executadas.
 
 1. **Verifique os secrets:**
    - Settings → Secrets and variables → Actions
-   - Confirme que `EMAIL_USER` e `EMAIL_PASSWORD` estão configurados
+   - Confirme que `SMTP_USER` e `SMTP_PASS` estão configurados
 
 2. **Verifique os logs:**
    - Actions → Últimas execuções
@@ -225,8 +225,8 @@ Se precisar pausar o sistema:
 
 - [ ] Abrir https://shopvivaliz.com.br/admin/monitor/
 - [ ] Gerar senha de app Google
-- [ ] Adicionar `EMAIL_USER` secret
-- [ ] Adicionar `EMAIL_PASSWORD` secret
+- [ ] Adicionar `SMTP_USER` secret
+- [ ] Adicionar `SMTP_PASS` secret
 - [ ] Testar workflow manualmente
 - [ ] Receber email de teste
 - [ ] Explorar chat de comandos

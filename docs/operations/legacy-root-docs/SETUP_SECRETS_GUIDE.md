@@ -75,7 +75,7 @@ OLIST_CLIENT_SECRET
 ├─ Formato: String criptografada
 └─ Prioridade: ⭐⭐⭐ ALTA
 
-TOKEN_API_OLIST
+OLIST_ACCESS_TOKEN
 ├─ Descrição: Token API da Olist
 ├─ Como obter: Dashboard Olist > API
 ├─ Formato: Token único
@@ -114,22 +114,22 @@ EMAIL_TO
 ├─ Exemplo: admin@shopvivaliz.com.br
 └─ Prioridade: ⭐⭐ MÉDIA
 
-EMAIL_SMTP_HOST
+SMTP_HOST
 ├─ Descrição: Host SMTP
 ├─ Exemplo: smtp.gmail.com
 └─ Prioridade: ⭐⭐ MÉDIA
 
-EMAIL_SMTP_PORT
+SMTP_PORT
 ├─ Descrição: Porta SMTP
 ├─ Default: 587
 └─ Prioridade: ⭐ BAIXA
 
-EMAIL_USER
+SMTP_USER
 ├─ Descrição: Usuário SMTP
 ├─ Exemplo: seu-email@gmail.com
 └─ Prioridade: ⭐⭐ MÉDIA
 
-EMAIL_PASSWORD
+SMTP_PASS
 ├─ Descrição: Senha SMTP
 ├─ Nota: Use app password para Gmail
 └─ Prioridade: ⭐⭐ MÉDIA
@@ -227,9 +227,9 @@ python scripts/setup_secrets.py
 ### Importante (para notificações)
 - [ ] EMAIL_FROM
 - [ ] EMAIL_TO
-- [ ] EMAIL_SMTP_HOST
-- [ ] EMAIL_USER
-- [ ] EMAIL_PASSWORD
+- [ ] SMTP_HOST
+- [ ] SMTP_USER
+- [ ] SMTP_PASS
 
 ### Opcional (para marketplaces extras)
 - [ ] SHOPEE_PARTNER_ID

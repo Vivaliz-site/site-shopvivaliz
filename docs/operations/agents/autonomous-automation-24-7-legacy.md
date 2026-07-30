@@ -96,7 +96,7 @@ Todos os 25+ secrets devem estar configurados em:
 - `OPENAI_API_KEY` - Gerar imagens
 - `SHOPEE_ACCESS_TOKEN` - Atualizar Shopee
 - `TIKTOK_ACCESS_TOKEN` - Atualizar TikTok
-- `FTP_HOST`, `FTP_USER`, `FTP_PASS` - Upload
+- `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD` - Upload
 - `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` - Email
 - `EMAIL_TO` - Receber relatórios
 - `SLACK_WEBHOOK` - Notificações Slack

@@ -12,24 +12,24 @@ https://github.com/fredmourao-ai/site-shopvivaliz/settings/secrets/actions
 NAME                      UPDATED_AT
 ─────────────────────────────────────────────────────
 OPENAI_API_KEY            2024-06-29
-FTP_HOST                  2024-06-29
-FTP_USER                  2024-06-29
-FTP_PASS                  2024-06-29
+FTP_SERVER                  2024-06-29
+FTP_USERNAME                  2024-06-29
+FTP_PASSWORD                  2024-06-29
 SHOPEE_ID                 2024-06-29
 SHOPEE_KEY                2024-06-29
 TIKTOK_ID                 2024-06-29
 TIKTOK_SECRET             2024-06-29
 EMAIL_FROM                2024-06-29
 EMAIL_TO                  2024-06-29
-EMAIL_USER                2024-06-29
+SMTP_USER                2024-06-29
 EMAIL_PASS                2024-06-29
-EMAIL_SMTP_HOST           2024-06-29
-EMAIL_SMTP_PORT           2024-06-29
+SMTP_HOST           2024-06-29
+SMTP_PORT           2024-06-29
 ```
 
 ## Passo 3: Copie TODOS os nomes exatos (coluna NAME)
 
-Exemplo: Se você vê `FTP_HOST` na tabela, copie `FTP_HOST` (não `FTP_SERVER`)
+Exemplo: Se você vê `FTP_SERVER` na tabela, copie `FTP_SERVER` (não `FTP_SERVER`)
 
 ## Passo 4: Três opções
 
@@ -69,10 +69,10 @@ TIKTOK_CLIENT_ID
 TIKTOK_CLIENT_SECRET
 EMAIL_FROM
 EMAIL_TO
-EMAIL_USER
-EMAIL_PASSWORD
-EMAIL_SMTP_HOST
-EMAIL_SMTP_PORT
+SMTP_USER
+SMTP_PASS
+SMTP_HOST
+SMTP_PORT
 ```
 
 Apenas responda: "Sim, todos estão iguais" e faço git push!

@@ -96,9 +96,9 @@ define('MELHORENVIO_ENABLED', true);
 
 // FTP Deploy
 define('FTP_ENABLED', true);
-define('FTP_HOST', getenv('FTP_SERVER') ?: '');
-define('FTP_USER', getenv('FTP_USERNAME') ?: '');
-define('FTP_PASS', getenv('FTP_PASSWORD') ?: '');
+define('FTP_SERVER', getenv('FTP_SERVER') ?: '');
+define('FTP_USERNAME', getenv('FTP_USERNAME') ?: '');
+define('FTP_PASSWORD', getenv('FTP_PASSWORD') ?: '');
 define('FTP_PORT', getenv('FTP_PORT') ?: 21);
 define('FTP_DIR', getenv('FTP_REMOTE_DIR') ?: '/');
 

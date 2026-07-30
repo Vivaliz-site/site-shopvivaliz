@@ -84,25 +84,25 @@ def test_ai_prompts():
 
 def test_upload_config():
     """8. UPLOAD - Check FTP configuration"""
-    ftp_vars = ['FTP_HOST', 'FTP_USER', 'FTP_PASS']
+    ftp_vars = ['FTP_SERVER', 'FTP_USERNAME', 'FTP_PASSWORD']
     missing = [v for v in ftp_vars if not os.environ.get(v)]
 
     if missing:
         logger.warning(f"⚠️  FTP vars missing: {', '.join(missing)}")
-        logger.info("💡 Set: FTP_HOST, FTP_USER, FTP_PASS for upload step")
+        logger.info("💡 Set: FTP_SERVER, FTP_USERNAME, FTP_PASSWORD for upload step")
         return True  # Not critical for testing
 
-    logger.info(f"✅ FTP Host: {os.environ.get('FTP_HOST', 'NOT SET')[:20]}...")
+    logger.info(f"✅ FTP Host: {os.environ.get('FTP_SERVER', 'NOT SET')[:20]}...")
     return True
 
 def test_email_config():
     """9. PUBLICAÇÃO - Check email configuration"""
-    email_vars = ['EMAIL_FROM', 'EMAIL_TO', 'EMAIL_SMTP_HOST']
+    email_vars = ['EMAIL_FROM', 'EMAIL_TO', 'SMTP_HOST']
     missing = [v for v in email_vars if not os.environ.get(v)]
 
     if missing:
         logger.warning(f"⚠️  Email vars missing: {', '.join(missing)}")
-        logger.info("💡 Set: EMAIL_FROM, EMAIL_TO, EMAIL_SMTP_HOST for email step")
+        logger.info("💡 Set: EMAIL_FROM, EMAIL_TO, SMTP_HOST for email step")
         return True  # Not critical for testing
 
     logger.info(f"✅ Email From: {os.environ.get('EMAIL_FROM', 'NOT SET')}")

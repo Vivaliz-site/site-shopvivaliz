@@ -69,7 +69,7 @@
 - Validar quais scripts Olist ainda estão ativos.
 - Migrar scripts Python Olist para `scripts/marketplace/olist/`.
 - Migrar endpoints PHP Olist apenas depois de confirmar dependências públicas.
-- Remover aliases `TOKEN_API_OLIST`, `CLIENT_ID_API_OLIST`, `CLIENT_SECRET_OLIST`, `URL_REDIRCT_OLIST`, `URL_TINY_OLIST` fora do centralizador.
+- Remover aliases `OLIST_ACCESS_TOKEN`, `OLIST_CLIENT_ID`, `OLIST_CLIENT_SECRET`, `OLIST_REDIRECT_URI`, `OLIST_API_BASE_URL` fora do centralizador.
 
 ---
 

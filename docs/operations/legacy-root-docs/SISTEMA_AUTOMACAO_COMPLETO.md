@@ -267,7 +267,7 @@ FTP_PASSWORD=senha
 # Email
 EMAIL_FROM=noreply@shopvivaliz.com.br
 EMAIL_TO=admin@shopvivaliz.com.br
-EMAIL_SMTP_HOST=smtp.gmail.com
+SMTP_HOST=smtp.gmail.com
 ```
 
 ---

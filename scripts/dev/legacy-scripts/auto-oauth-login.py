@@ -36,8 +36,8 @@ CLIENT_SECRET = os.getenv('OLIST_CLIENT_SECRET', 'SEU_OLIST_CLIENT_SECRET_AQUI')
 REDIRECT_URI = 'https://shopvivaliz.com.br/olist/oauth-callback-simple.php'
 
 # Credenciais Olist
-OLIST_EMAIL = os.getenv('OLIST_EMAIL') or os.getenv('OLIST_USER') or os.getenv('EMAIL_USER') or ''
-OLIST_PASSWORD = os.getenv('OLIST_PASSWORD') or os.getenv('EMAIL_PASSWORD') or ''
+OLIST_EMAIL = os.getenv('OLIST_EMAIL') or os.getenv('OLIST_USER') or os.getenv('SMTP_USER') or ''
+OLIST_PASSWORD = os.getenv('OLIST_PASSWORD') or os.getenv('SMTP_PASS') or ''
 
 # Caminhos
 PROJECT_ROOT = Path(__file__).parent.parent

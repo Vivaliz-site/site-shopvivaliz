@@ -85,7 +85,7 @@ Pipeline de e-commerce automatizado com **11 etapas** foi **100% IMPLEMENTADO, T
 ### 8️⃣ UPLOAD - Via FTP
 - **Status:** ⏭️ SKIPPED (Configuração Pendente)
 - **Arquivo:** `scripts/upload_images.py`
-- **Requer:** `FTP_HOST`, `FTP_USER`, `FTP_PASS`
+- **Requer:** `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`
 - **Output:** Upload via FTP para `/public_html/dev/uploads/olist`
 - **URLs:** Geração automática de URLs públicas
 
@@ -180,17 +180,17 @@ export TIKTOK_CLIENT_ID=xxxxx
 export TIKTOK_CLIENT_SECRET=xxxxx
 
 # FTP Upload
-export FTP_HOST=ftp.shopvivaliz.com.br
-export FTP_USER=usuario
-export FTP_PASS=senha123
+export FTP_SERVER=ftp.shopvivaliz.com.br
+export FTP_USERNAME=usuario
+export FTP_PASSWORD=senha123
 
 # Email Notificação
 export EMAIL_FROM=noreply@shopvivaliz.com.br
 export EMAIL_TO=admin@shopvivaliz.com.br
-export EMAIL_SMTP_HOST=smtp.gmail.com
-export EMAIL_SMTP_PORT=587
-export EMAIL_USER=seu-email@gmail.com
-export EMAIL_PASSWORD=app-password
+export SMTP_HOST=smtp.gmail.com
+export SMTP_PORT=587
+export SMTP_USER=seu-email@gmail.com
+export SMTP_PASS=app-password
 ```
 
 ### Implementações Futuras

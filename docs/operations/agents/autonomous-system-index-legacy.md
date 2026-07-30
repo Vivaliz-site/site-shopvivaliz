@@ -147,9 +147,9 @@ MINUTO 60: Health-Check (GitHub)
 ## 🔐 Segurança
 
 ### GitHub Secrets (Criptografadas)
-- `FTP_HOST` - Host FTP
-- `FTP_USER` - Usuário FTP
-- `FTP_PASS` - Senha FTP
+- `FTP_SERVER` - Host FTP
+- `FTP_USERNAME` - Usuário FTP
+- `FTP_PASSWORD` - Senha FTP
 
 ### Permissões
 - Scripts Python: 755 (executable)

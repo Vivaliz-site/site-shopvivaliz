@@ -18,9 +18,9 @@ gh secret set GOOGLE_API_KEY --body "${GOOGLE_API_KEY:-}" 2>/dev/null || echo "�
 echo "📝 Adicionando credenciais Olist..."
 gh secret set OLIST_CLIENT_ID --body "${OLIST_CLIENT_ID:-}" 2>/dev/null || echo "⚠️  OLIST_CLIENT_ID - não definida"
 gh secret set OLIST_CLIENT_SECRET --body "${OLIST_CLIENT_SECRET:-}" 2>/dev/null || echo "⚠️  OLIST_CLIENT_SECRET - não definida"
-gh secret set TOKEN_API_OLIST --body "${TOKEN_API_OLIST:-}" 2>/dev/null || echo "⚠️  TOKEN_API_OLIST - não definida"
-gh secret set CLIENT_ID_API_OLIST --body "${CLIENT_ID_API_OLIST:-}" 2>/dev/null || echo "⚠️  CLIENT_ID_API_OLIST - não definida"
-gh secret set CLIENT_SECRET_OLIST --body "${CLIENT_SECRET_OLIST:-}" 2>/dev/null || echo "⚠️  CLIENT_SECRET_OLIST - não definida"
+gh secret set OLIST_ACCESS_TOKEN --body "${OLIST_ACCESS_TOKEN:-}" 2>/dev/null || echo "⚠️  OLIST_ACCESS_TOKEN - não definida"
+gh secret set OLIST_CLIENT_ID --body "${OLIST_CLIENT_ID:-}" 2>/dev/null || echo "⚠️  OLIST_CLIENT_ID - não definida"
+gh secret set OLIST_CLIENT_SECRET --body "${OLIST_CLIENT_SECRET:-}" 2>/dev/null || echo "⚠️  OLIST_CLIENT_SECRET - não definida"
 
 # Credenciais FTP
 echo "📝 Adicionando credenciais FTP..."
@@ -34,10 +34,10 @@ gh secret set FTP_REMOTE_DIR --body "${FTP_REMOTE_DIR:-/public_html}" 2>/dev/nul
 echo "📝 Adicionando credenciais Email..."
 gh secret set EMAIL_FROM --body "${EMAIL_FROM:-}" 2>/dev/null || echo "⚠️  EMAIL_FROM - não definida"
 gh secret set EMAIL_TO --body "${EMAIL_TO:-}" 2>/dev/null || echo "⚠️  EMAIL_TO - não definida"
-gh secret set EMAIL_SMTP_HOST --body "${EMAIL_SMTP_HOST:-}" 2>/dev/null || echo "⚠️  EMAIL_SMTP_HOST - não definida"
-gh secret set EMAIL_SMTP_PORT --body "${EMAIL_SMTP_PORT:-587}" 2>/dev/null || echo "⚠️  EMAIL_SMTP_PORT - usando default 587"
-gh secret set EMAIL_USER --body "${EMAIL_USER:-}" 2>/dev/null || echo "⚠️  EMAIL_USER - não definida"
-gh secret set EMAIL_PASSWORD --body "${EMAIL_PASSWORD:-}" 2>/dev/null || echo "⚠️  EMAIL_PASSWORD - não definida"
+gh secret set SMTP_HOST --body "${SMTP_HOST:-}" 2>/dev/null || echo "⚠️  SMTP_HOST - não definida"
+gh secret set SMTP_PORT --body "${SMTP_PORT:-587}" 2>/dev/null || echo "⚠️  SMTP_PORT - usando default 587"
+gh secret set SMTP_USER --body "${SMTP_USER:-}" 2>/dev/null || echo "⚠️  SMTP_USER - não definida"
+gh secret set SMTP_PASS --body "${SMTP_PASS:-}" 2>/dev/null || echo "⚠️  SMTP_PASS - não definida"
 
 # Credenciais Database
 echo "📝 Adicionando credenciais Database..."
@@ -56,7 +56,7 @@ gh secret set TIKTOK_CLIENT_SECRET --body "${TIKTOK_CLIENT_SECRET:-}" 2>/dev/nul
 echo "📝 Adicionando credenciais Tiny..."
 gh secret set TINY_CLIENT_ID --body "${TINY_CLIENT_ID:-}" 2>/dev/null || echo "⚠️  TINY_CLIENT_ID - não definida"
 gh secret set TINY_CLIENT_SECRET --body "${TINY_CLIENT_SECRET:-}" 2>/dev/null || echo "⚠️  TINY_CLIENT_SECRET - não definida"
-gh secret set URL_TINY_OLIST --body "${URL_TINY_OLIST:-}" 2>/dev/null || echo "⚠️  URL_TINY_OLIST - não definida"
+gh secret set OLIST_API_BASE_URL --body "${OLIST_API_BASE_URL:-}" 2>/dev/null || echo "⚠️  OLIST_API_BASE_URL - não definida"
 
 # Tokens e IDs Adicionais
 echo "📝 Adicionando tokens adicionais..."

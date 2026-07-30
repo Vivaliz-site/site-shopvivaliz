@@ -12,9 +12,9 @@ from pathlib import Path
 
 class DashboardUpdater:
     def __init__(self):
-        self.ftp_host = os.getenv('FTP_HOST') or os.getenv('FTP_SERVER') or ''
-        self.ftp_user = os.getenv('FTP_USER') or os.getenv('FTP_USERNAME') or ''
-        self.ftp_pass = os.getenv('FTP_PASS') or os.getenv('FTP_PASSWORD') or ''
+        self.ftp_host = os.getenv('FTP_SERVER') or os.getenv('FTP_SERVER') or ''
+        self.ftp_user = os.getenv('FTP_USERNAME') or os.getenv('FTP_USERNAME') or ''
+        self.ftp_pass = os.getenv('FTP_PASSWORD') or os.getenv('FTP_PASSWORD') or ''
         self.ftp_port = int(os.getenv('FTP_PORT') or 21)
         self.ftp_remote_dir = os.getenv('FTP_REMOTE_DIR') or '/public_html'
 
@@ -56,7 +56,7 @@ class DashboardUpdater:
         """Envia os arquivos gerados via FTP real. Retorna False honestamente
         se faltar credencial ou a conexao/upload falhar."""
         if not (self.ftp_host and self.ftp_user and self.ftp_pass):
-            print("[ERRO] FTP nao configurado (faltam FTP_HOST/FTP_SERVER, FTP_USER/FTP_USERNAME, FTP_PASS/FTP_PASSWORD)")
+            print("[ERRO] FTP nao configurado (faltam FTP_SERVER/FTP_SERVER, FTP_USERNAME/FTP_USERNAME, FTP_PASSWORD/FTP_PASSWORD)")
             return False
 
         remote_dir = self.ftp_remote_dir.rstrip('/') + '/admin'

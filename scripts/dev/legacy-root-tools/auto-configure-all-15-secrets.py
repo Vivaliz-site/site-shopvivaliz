@@ -35,10 +35,10 @@ SECRETS = {
     # Email - ALTERE COM SUAS CREDENCIAIS
     "EMAIL_FROM": os.getenv("EMAIL_FROM", "noreply@shopvivaliz.com.br"),
     "EMAIL_TO": os.getenv("EMAIL_TO", "fredmourao@gmail.com"),
-    "EMAIL_SMTP_HOST": os.getenv("EMAIL_SMTP_HOST", "smtp.gmail.com"),
-    "EMAIL_SMTP_PORT": os.getenv("EMAIL_SMTP_PORT", "587"),
-    "EMAIL_USER": os.getenv("EMAIL_USER", "seu-email@gmail.com"),
-    "EMAIL_PASSWORD": os.getenv("EMAIL_PASSWORD", "app-password-aqui"),
+    "SMTP_HOST": os.getenv("SMTP_HOST", "smtp.gmail.com"),
+    "SMTP_PORT": os.getenv("SMTP_PORT", "587"),
+    "SMTP_USER": os.getenv("SMTP_USER", "seu-email@gmail.com"),
+    "SMTP_PASS": os.getenv("SMTP_PASS", "app-password-aqui"),
 }
 
 print("""

@@ -82,22 +82,22 @@ SECRETS_CONFIG = {
         "default": "fredmourao@gmail.com",
         "category": "📧 Email"
     },
-    "EMAIL_SMTP_HOST": {
+    "SMTP_HOST": {
         "description": "Host SMTP",
         "default": "smtp.gmail.com",
         "category": "📧 Email"
     },
-    "EMAIL_SMTP_PORT": {
+    "SMTP_PORT": {
         "description": "Porta SMTP",
         "default": "587",
         "category": "📧 Email"
     },
-    "EMAIL_USER": {
+    "SMTP_USER": {
         "description": "Usuário SMTP",
         "default": "seu-email@gmail.com",
         "category": "📧 Email"
     },
-    "EMAIL_PASSWORD": {
+    "SMTP_PASS": {
         "description": "Senha SMTP (use app password para Gmail)",
         "default": "app-password",
         "category": "📧 Email"

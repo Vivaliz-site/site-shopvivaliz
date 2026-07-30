@@ -50,7 +50,7 @@ Todos os workflows do GitHub Actions foram auditados, corrigidos e documentados 
 **Depois:**
 ```yaml
 ✅ Job separado de validação de secrets
-✅ Fallbacks para: FTP_HOST, FTP_USER, FTP_PASS, FTP_TARGET_DIR, FTP_PATH
+✅ Fallbacks para: FTP_SERVER, FTP_USERNAME, FTP_PASSWORD, FTP_TARGET_DIR, FTP_PATH
 ✅ Teste de conectividade FTP (curl com timeout)
 ✅ Retry logic com delays
 ✅ Exclusão de diretórios desnecessários
@@ -130,9 +130,9 @@ Todos os workflows do GitHub Actions foram auditados, corrigidos e documentados 
 ### Obrigatórios (Deploy)
 
 ```
-FTP_SERVER           (ou fallback: FTP_HOST)
-FTP_USERNAME         (ou fallback: FTP_USER)
-FTP_PASSWORD         (ou fallback: FTP_PASS)
+FTP_SERVER           (ou fallback: FTP_SERVER)
+FTP_USERNAME         (ou fallback: FTP_USERNAME)
+FTP_PASSWORD         (ou fallback: FTP_PASSWORD)
 FTP_PORT             (opcional, padrão: 21)
 FTP_REMOTE_DIR       (ou fallbacks: FTP_TARGET_DIR, FTP_PATH)
 ```

@@ -19,7 +19,7 @@ class EmailSender
         $from = getenv('EMAIL_FROM') ?: 'shopvivaliz@gmail.com';
         $smtpHost = getenv('SMTP_HOST') ?: self::SMTP_HOST;
         $smtpPort = (int)(getenv('SMTP_PORT') ?: self::SMTP_PORT);
-        $smtpUser = getenv('SMTP_USER') ?: getenv('EMAIL_USER');
+        $smtpUser = getenv('SMTP_USER') ?: getenv('SMTP_USER');
         $smtpPass = getenv('SMTP_PASS') ?: getenv('EMAIL_PASS');
 
         // Validate credentials

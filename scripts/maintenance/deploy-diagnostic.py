@@ -73,13 +73,13 @@ class DeployDiagnostic:
             'ANTHROPIC_API_KEY',
             'OPENAI_API_KEY',
             'GEMINI_API_KEY',
-            'EMAIL_USER',
-            'EMAIL_PASSWORD'
+            'SMTP_USER',
+            'SMTP_PASS'
         ]
 
         missing = [s for s in required_secrets if not os.getenv(s)]
         if os.getenv('SMTP_USER') and os.getenv('SMTP_PASS'):
-            missing = [s for s in missing if s not in ('EMAIL_USER', 'EMAIL_PASSWORD')]
+            missing = [s for s in missing if s not in ('SMTP_USER', 'SMTP_PASS')]
 
         if missing:
             print(f"   Secrets faltando: {', '.join(missing)}")

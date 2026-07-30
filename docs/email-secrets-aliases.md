@@ -6,7 +6,7 @@ Do not put real passwords in tracked PHP, Python, shell, Markdown, or `.env.exam
 Canonical accepted groups:
 
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`
-- `EMAIL_SMTP_HOST`, `EMAIL_SMTP_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`
 - `MAIL_HOST`, `MAIL_PORT`, `MAIL_USER`, `MAIL_PASS`
 
 Required recipients:

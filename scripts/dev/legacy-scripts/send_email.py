@@ -76,10 +76,10 @@ def send_email(msg: EmailMessage, host: str, port: int, user: str, password: str
 
 def main(argv=None) -> int:
     try:
-        smtp_host = get_env_variable('SMTP_HOST', ['EMAIL_SMTP_HOST', 'MAIL_HOST'])
-        smtp_port = int(get_env_variable('SMTP_PORT', ['EMAIL_SMTP_PORT', 'MAIL_PORT']))
-        smtp_user = get_env_variable('SMTP_USER', ['EMAIL_USER', 'MAIL_USER'])
-        smtp_pass = get_env_variable('SMTP_PASS', ['EMAIL_PASSWORD', 'MAIL_PASS'])
+        smtp_host = get_env_variable('SMTP_HOST', ['SMTP_HOST', 'MAIL_HOST'])
+        smtp_port = int(get_env_variable('SMTP_PORT', ['SMTP_PORT', 'MAIL_PORT']))
+        smtp_user = get_env_variable('SMTP_USER', ['SMTP_USER', 'MAIL_USER'])
+        smtp_pass = get_env_variable('SMTP_PASS', ['SMTP_PASS', 'MAIL_PASS'])
         email_from = get_env_variable('EMAIL_FROM')
         email_to = get_env_variable('EMAIL_TO')
     except EnvironmentError as exc:

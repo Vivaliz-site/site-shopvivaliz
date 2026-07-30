@@ -347,10 +347,10 @@ FTP_REMOTE_DIR=/public_html              # Diretório remoto
 ```bash
 EMAIL_FROM=noreply@shopvivaliz.com.br   # Email remetente
 EMAIL_TO=admin@shopvivaliz.com.br       # Email destino
-EMAIL_SMTP_HOST=smtp.gmail.com          # Host SMTP
-EMAIL_SMTP_PORT=587                      # Porta SMTP
-EMAIL_USER=seu-email@gmail.com          # Usuário
-EMAIL_PASSWORD=app-password              # App password (Gmail)
+SMTP_HOST=smtp.gmail.com          # Host SMTP
+SMTP_PORT=587                      # Porta SMTP
+SMTP_USER=seu-email@gmail.com          # Usuário
+SMTP_PASS=app-password              # App password (Gmail)
 ```
 
 ### Banco de Dados (Opcional)

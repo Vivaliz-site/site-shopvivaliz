@@ -5,14 +5,14 @@ import os
 
 load_dotenv()
 
-FTP_HOST = os.getenv("FTP_HOST")
-FTP_USER = os.getenv("FTP_USER")
-FTP_PASS = os.getenv("FTP_PASS")
+FTP_SERVER = os.getenv("FTP_SERVER")
+FTP_USERNAME = os.getenv("FTP_USERNAME")
+FTP_PASSWORD = os.getenv("FTP_PASSWORD")
 BASE_URL = os.getenv("BASE_URL")
 
 def upload_lote(imagens):
-    ftp = ftplib.FTP(FTP_HOST)
-    ftp.login(FTP_USER, FTP_PASS)
+    ftp = ftplib.FTP(FTP_SERVER)
+    ftp.login(FTP_USERNAME, FTP_PASSWORD)
 
     urls = []
 

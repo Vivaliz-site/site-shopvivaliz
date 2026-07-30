@@ -16,8 +16,8 @@ TOKENS_DIR = PROJECT_ROOT / '.tokens'
 CONFIG_FILE = TOKENS_DIR / 'olist-config.json'
 LOG_FILE = PROJECT_ROOT / 'logs' / 'olist-direct-login.log'
 
-OLIST_EMAIL = os.getenv('OLIST_EMAIL') or os.getenv('OLIST_USER') or os.getenv('EMAIL_USER') or ''
-OLIST_PASSWORD = os.getenv('OLIST_PASSWORD') or os.getenv('EMAIL_PASSWORD') or ''
+OLIST_EMAIL = os.getenv('OLIST_EMAIL') or os.getenv('OLIST_USER') or os.getenv('SMTP_USER') or ''
+OLIST_PASSWORD = os.getenv('OLIST_PASSWORD') or os.getenv('SMTP_PASS') or ''
 CLIENT_ID = os.getenv('OLIST_CLIENT_ID', 'SEU_OLIST_CLIENT_ID_AQUI')
 CLIENT_SECRET = os.getenv('OLIST_CLIENT_SECRET', 'SEU_OLIST_CLIENT_SECRET_AQUI')
 

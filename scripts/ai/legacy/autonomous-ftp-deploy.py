@@ -28,9 +28,9 @@ print("AUTO-DEPLOY FTP v1.0 - Deploy automático ao detectar push")
 print("="*70)
 
 # Load FTP config from secrets/env
-FTP_HOST = os.getenv('FTP_HOST', 'ftp.shopvivaliz.com.br')
-FTP_USER = os.getenv('FTP_USER', '')
-FTP_PASS = os.getenv('FTP_PASS', '')
+FTP_SERVER = os.getenv('FTP_SERVER', 'ftp.shopvivaliz.com.br')
+FTP_USERNAME = os.getenv('FTP_USERNAME', '')
+FTP_PASSWORD = os.getenv('FTP_PASSWORD', '')
 FTP_REMOTE_PATH = os.getenv('FTP_REMOTE_PATH', '/public_html/')
 FTP_PORT = int(os.getenv('FTP_PORT', '21'))
 
@@ -156,14 +156,14 @@ def deploy_to_ftp(files):
         return False, 0
 
     # Check credentials
-    if not FTP_HOST or not FTP_USER or not FTP_PASS:
+    if not FTP_SERVER or not FTP_USERNAME or not FTP_PASSWORD:
         logger.error("FTP credentials not configured")
-        logger.error("Set FTP_HOST, FTP_USER, FTP_PASS environment variables")
+        logger.error("Set FTP_SERVER, FTP_USERNAME, FTP_PASSWORD environment variables")
         return False, 0
 
     try:
-        logger.info(f"Connecting to FTP: {FTP_HOST}...")
-        ftp = ftplib.FTP(FTP_HOST, FTP_USER, FTP_PASS, timeout=30)
+        logger.info(f"Connecting to FTP: {FTP_SERVER}...")
+        ftp = ftplib.FTP(FTP_SERVER, FTP_USERNAME, FTP_PASSWORD, timeout=30)
         logger.info("Connected to FTP")
 
         # Change to remote directory
@@ -213,7 +213,7 @@ def test_ftp_connection():
     """Test FTP connection"""
     try:
         logger.info("Testing FTP connection...")
-        ftp = ftplib.FTP(FTP_HOST, FTP_USER, FTP_PASS, timeout=10)
+        ftp = ftplib.FTP(FTP_SERVER, FTP_USERNAME, FTP_PASSWORD, timeout=10)
         logger.info(f"FTP connected: {ftp.getwelcome()}")
         ftp.quit()
         return True

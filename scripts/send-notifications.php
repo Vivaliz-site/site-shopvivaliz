@@ -12,7 +12,7 @@ class TriaNotifier {
 
     public function __construct() {
         $this->emailTo = getenv('EMAIL_TO') ?: getenv('NOTIFY_EMAIL_TO') ?: '';
-        $this->emailFrom = getenv('EMAIL_FROM') ?: getenv('SMTP_USER') ?: getenv('EMAIL_USER') ?: getenv('MAIL_USER') ?: 'trio-ia@shopvivaliz.com.br';
+        $this->emailFrom = getenv('EMAIL_FROM') ?: getenv('SMTP_USER') ?: getenv('SMTP_USER') ?: getenv('MAIL_USER') ?: 'trio-ia@shopvivaliz.com.br';
         $this->logFile = __DIR__ . '/../logs/notifications.log';
         @mkdir(dirname($this->logFile), 0755, true);
     }

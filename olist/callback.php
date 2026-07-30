@@ -52,7 +52,7 @@ if (!$code) {
 // PASSO 2: Trocar código por token
 // ============================================================
 
-$redirectUri = getenv('OLIST_REDIRECT_URI') ?: getenv('URL_REDIRCT_OLIST') ?: getenv('TINY_REDIRECT_URI') ?: 'https://shopvivaliz.com.br/olist/callback.php';
+$redirectUri = getenv('OLIST_REDIRECT_URI') ?: getenv('OLIST_REDIRECT_URI') ?: getenv('TINY_REDIRECT_URI') ?: 'https://shopvivaliz.com.br/olist/callback.php';
 $tokenUrl = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
 
 $postData = http_build_query([

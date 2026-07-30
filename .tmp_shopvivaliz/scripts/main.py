@@ -18,9 +18,9 @@ load_dotenv()
 CSV_PATH = sys.argv[1] if len(sys.argv) > 1 else "produtos_2026-06-30-09-52-33.csv"
 OUTPUT_PATH = sys.argv[2] if len(sys.argv) > 2 else "planilhas/produtos_otimizados.csv"
 
-FTP_HOST = os.getenv("FTP_HOST")
-FTP_USER = os.getenv("FTP_USER")
-FTP_PASS = os.getenv("FTP_PASS")
+FTP_SERVER = os.getenv("FTP_SERVER")
+FTP_USERNAME = os.getenv("FTP_USERNAME")
+FTP_PASSWORD = os.getenv("FTP_PASSWORD")
 BASE_URL = os.getenv("BASE_URL")
 
 # =========================
@@ -139,11 +139,11 @@ def gerar_seo(nome, categoria="", marca="", descricao_base=""):
 # FTP UPLOAD
 # =========================
 def upload_imagens(imagens):
-    if not (FTP_HOST and FTP_USER and FTP_PASS and BASE_URL):
+    if not (FTP_SERVER and FTP_USERNAME and FTP_PASSWORD and BASE_URL):
         return [f"arquivo_local://{os.path.basename(img)}" for img in imagens]
 
-    ftp = ftplib.FTP(FTP_HOST)
-    ftp.login(FTP_USER, FTP_PASS)
+    ftp = ftplib.FTP(FTP_SERVER)
+    ftp.login(FTP_USERNAME, FTP_PASSWORD)
 
     urls = []
 

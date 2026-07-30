@@ -12,7 +12,7 @@ Todas as alterações foram feitas de forma **segura**, sem expor credenciais, s
 **Antes:** Validação básica, sem fallbacks, sem testes de conexão  
 **Depois:** 
 - ✅ Job separado de validação de secrets
-- ✅ Fallbacks para aliases de secrets (FTP_HOST, FTP_USER, FTP_PASS, etc)
+- ✅ Fallbacks para aliases de secrets (FTP_SERVER, FTP_USERNAME, FTP_PASSWORD, etc)
 - ✅ Teste de conectividade FTP antes de fazer upload
 - ✅ Retry logic com delays
 - ✅ Exclusão de diretórios desnecessários no upload
@@ -21,9 +21,9 @@ Todas as alterações foram feitas de forma **segura**, sem expor credenciais, s
 
 **Secrets esperados:**
 ```
-FTP_SERVER (ou FTP_HOST)
-FTP_USERNAME (ou FTP_USER)
-FTP_PASSWORD (ou FTP_PASS)
+FTP_SERVER (ou FTP_SERVER)
+FTP_USERNAME (ou FTP_USERNAME)
+FTP_PASSWORD (ou FTP_PASSWORD)
 FTP_PORT
 FTP_REMOTE_DIR (ou FTP_TARGET_DIR / FTP_PATH)
 ```
@@ -171,7 +171,7 @@ Trigger: Push na main (ou manual)
 │
 ├─ Job 1: validate-secrets
 │  ├─ Valida FTP_SERVER, FTP_USERNAME, FTP_PASSWORD, FTP_PORT, FTP_REMOTE_DIR
-│  └─ Aceita fallbacks (FTP_HOST, FTP_USER, FTP_PASS, FTP_TARGET_DIR, FTP_PATH)
+│  └─ Aceita fallbacks (FTP_SERVER, FTP_USERNAME, FTP_PASSWORD, FTP_TARGET_DIR, FTP_PATH)
 │
 └─ Job 2: web-deploy (só executa se Job 1 passar)
    ├─ Prepara variáveis com fallbacks
@@ -258,9 +258,9 @@ SHOPVIVALIZ_AGENT_KEY
 ```
 
 **Aliases detectados:**
-- `FTP_SERVER` pode usar `FTP_HOST`
-- `FTP_USERNAME` pode usar `FTP_USER`
-- `FTP_PASSWORD` pode usar `FTP_PASS`
+- `FTP_SERVER` pode usar `FTP_SERVER`
+- `FTP_USERNAME` pode usar `FTP_USERNAME`
+- `FTP_PASSWORD` pode usar `FTP_PASSWORD`
 - `FTP_REMOTE_DIR` pode usar `FTP_TARGET_DIR` ou `FTP_PATH`
 - `SHOPVIVALIZ_AGENT_KEY` pode usar `AGENT_KEY`, `WATCHDOG_AGENT_KEY` ou `AUTONOMOUS_AGENT_KEY`
 

@@ -126,9 +126,9 @@
         "enabled": true,
         "interval_minutes": 15,
         "trigger": "on-change",
-        "host_env_var": "FTP_HOST",
-        "user_env_var": "FTP_USER",
-        "pass_env_var": "FTP_PASS",
+        "host_env_var": "FTP_SERVER",
+        "user_env_var": "FTP_USERNAME",
+        "pass_env_var": "FTP_PASSWORD",
         "port": 21,
         "remote_path": "/public_html/",
         "retry_count": 3,
@@ -219,9 +219,9 @@
   },
   "required_environment_variables": {
     "ftp": [
-      "FTP_HOST",
-      "FTP_USER",
-      "FTP_PASS",
+      "FTP_SERVER",
+      "FTP_USERNAME",
+      "FTP_PASSWORD",
       "FTP_PORT",
       "FTP_REMOTE_PATH"
     ],
@@ -234,9 +234,9 @@
     ]
   },
   "required_github_secrets": [
-    "FTP_HOST",
-    "FTP_USER",
-    "FTP_PASS",
+    "FTP_SERVER",
+    "FTP_USERNAME",
+    "FTP_PASSWORD",
     "PERSONAL_ACCESS_TOKEN"
   ],
   "logging": {

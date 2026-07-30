@@ -49,9 +49,9 @@ Os secrets são credenciais sensíveis armazenadas de forma segura no GitHub. S�
 
 | Secret | Descrição | Valor |
 |--------|-----------|-------|
-| `FTP_HOST` | Host FTP | De host |
-| `FTP_USER` | Usuário FTP | De host |
-| `FTP_PASS` | Senha FTP | De host |
+| `FTP_SERVER` | Host FTP | De host |
+| `FTP_USERNAME` | Usuário FTP | De host |
+| `FTP_PASSWORD` | Senha FTP | De host |
 | `FTP_PATH` | Caminho FTP | /public_html |
 
 ### Database

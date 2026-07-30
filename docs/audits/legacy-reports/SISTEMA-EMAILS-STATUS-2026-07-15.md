@@ -58,8 +58,8 @@ EMAIL_FROM=noreply@shopvivaliz.com.br
 ✅ SMTP_PASS
 ✅ EMAIL_FROM
 ✅ EMAIL_TO
-✅ EMAIL_USER
-✅ EMAIL_PASSWORD
+✅ SMTP_USER
+✅ SMTP_PASS
 (+ mais 9 secrets relacionados)
 ```
 

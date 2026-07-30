@@ -272,29 +272,29 @@ def smtp_candidates() -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     ports = [
         env("SMTP_PORT"),
-        env("EMAIL_SMTP_PORT"),
+        env("SMTP_PORT"),
         env("MAIL_PORT"),
         "465",
     ]
     candidate_rows = [
         {
             "label": "smtp_primary",
-            "host": first_non_empty(env("SMTP_HOST"), env("EMAIL_SMTP_HOST"), env("MAIL_HOST")),
+            "host": first_non_empty(env("SMTP_HOST"), env("SMTP_HOST"), env("MAIL_HOST")),
             "port": first_non_empty(*ports),
             "user": env("SMTP_USER"),
             "password": env("SMTP_PASS"),
         },
         {
             "label": "email_alias",
-            "host": first_non_empty(env("EMAIL_SMTP_HOST"), env("SMTP_HOST"), env("MAIL_HOST")),
-            "port": first_non_empty(env("EMAIL_SMTP_PORT"), env("SMTP_PORT"), env("MAIL_PORT"), "465"),
-            "user": env("EMAIL_USER"),
-            "password": env("EMAIL_PASSWORD"),
+            "host": first_non_empty(env("SMTP_HOST"), env("SMTP_HOST"), env("MAIL_HOST")),
+            "port": first_non_empty(env("SMTP_PORT"), env("SMTP_PORT"), env("MAIL_PORT"), "465"),
+            "user": env("SMTP_USER"),
+            "password": env("SMTP_PASS"),
         },
         {
             "label": "mail_alias",
-            "host": first_non_empty(env("MAIL_HOST"), env("SMTP_HOST"), env("EMAIL_SMTP_HOST")),
-            "port": first_non_empty(env("MAIL_PORT"), env("SMTP_PORT"), env("EMAIL_SMTP_PORT"), "465"),
+            "host": first_non_empty(env("MAIL_HOST"), env("SMTP_HOST"), env("SMTP_HOST")),
+            "port": first_non_empty(env("MAIL_PORT"), env("SMTP_PORT"), env("SMTP_PORT"), "465"),
             "user": env("MAIL_USER"),
             "password": env("MAIL_PASS"),
         },

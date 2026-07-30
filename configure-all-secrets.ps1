@@ -44,10 +44,10 @@ $secrets = @{
     # Email
     "EMAIL_FROM" = "noreply@shopvivaliz.com.br"
     "EMAIL_TO" = "fredmourao@gmail.com"
-    "EMAIL_SMTP_HOST" = "smtp.gmail.com"
-    "EMAIL_SMTP_PORT" = "587"
-    "EMAIL_USER" = ""  # seu-email@gmail.com
-    "EMAIL_PASSWORD" = ""  # app-password
+    "SMTP_HOST" = "smtp.gmail.com"
+    "SMTP_PORT" = "587"
+    "SMTP_USER" = ""  # seu-email@gmail.com
+    "SMTP_PASS" = ""  # app-password
 
     # GitHub
     "GH_REPO_TOKEN" = ""  # ghp_...
@@ -99,15 +99,15 @@ Write-Host "   Sua senha FTP"
 $ftp_pass = Read-Host "   Valor"
 if ($ftp_pass) { $secrets["FTP_PASSWORD"] = $ftp_pass }
 
-Write-Host "`n9️⃣  EMAIL_USER (Gmail)"
+Write-Host "`n9️⃣  SMTP_USER (Gmail)"
 Write-Host "   Exemplo: seu-email@gmail.com"
 $email_user = Read-Host "   Valor"
-if ($email_user) { $secrets["EMAIL_USER"] = $email_user }
+if ($email_user) { $secrets["SMTP_USER"] = $email_user }
 
-Write-Host "`n🔟 EMAIL_PASSWORD (Gmail App Password)"
+Write-Host "`n🔟 SMTP_PASS (Gmail App Password)"
 Write-Host "   Obter em: https://myaccount.google.com/app-passwords"
 $email_pass = Read-Host "   Valor"
-if ($email_pass) { $secrets["EMAIL_PASSWORD"] = $email_pass }
+if ($email_pass) { $secrets["SMTP_PASS"] = $email_pass }
 
 Write-Host "`n1️⃣1️⃣ PAGARME_SECRET_KEY"
 Write-Host "   Obter em: Dashboard Pagarme → Configurações → Chaves de API"

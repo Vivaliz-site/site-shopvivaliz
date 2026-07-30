@@ -86,9 +86,9 @@ $salesShippingKeys = ['MELHORENVIO_ACCESS_TOKEN', 'MELHORENVIO_API_KEY', 'MELHOR
 $salesPaymentKeys = ['PAGARME_SECRET_KEY', 'PAGARME_API_KEY', 'PAGARME_PUBLIC_KEY'];
 $salesMarketplaceKeys = ['SHOPEE_PARTNER_ID', 'SHOPEE_PARTNER_KEY', 'SHOPEE_SHOP_ID', 'SHOPEE_REFRESH_TOKEN', 'ML_CLIENT_ID', 'ML_CLIENT_SECRET', 'ML_REDIRECT_URI'];
 $salesMissingKeys = array_values(array_filter(array_merge($salesCoreKeys, $salesShippingKeys, $salesPaymentKeys, $salesMarketplaceKeys), fn($key) => !svar_env_present($key)));
-$emailConfigured = svar_any_env_present(['SMTP_HOST', 'EMAIL_SMTP_HOST', 'MAIL_HOST'])
-    && svar_any_env_present(['SMTP_USER', 'EMAIL_USER', 'MAIL_USER'])
-    && svar_any_env_present(['SMTP_PASS', 'EMAIL_PASSWORD', 'MAIL_PASS'])
+$emailConfigured = svar_any_env_present(['SMTP_HOST', 'SMTP_HOST', 'MAIL_HOST'])
+    && svar_any_env_present(['SMTP_USER', 'SMTP_USER', 'MAIL_USER'])
+    && svar_any_env_present(['SMTP_PASS', 'SMTP_PASS', 'MAIL_PASS'])
     && svar_env_present('EMAIL_TO');
 
 $totalProducts = count($catalog);

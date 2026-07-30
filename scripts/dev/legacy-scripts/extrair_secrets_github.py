@@ -59,7 +59,7 @@ def extract_from_workflows():
     # Procurar em scripts Python
     for script_file in Path("scripts").glob("*.py"):
         content = script_file.read_text()
-        if "FTP_HOST" in content or "SMTP_HOST" in content:
+        if "FTP_SERVER" in content or "SMTP_HOST" in content:
             print(f"✓ Script encontrado: {script_file.name}")
 
     return secrets_found

@@ -70,8 +70,8 @@ if (is_file($envFile)) {
     }
 }
 
-$clientId = getenv('OLIST_CLIENT_ID') ?: getenv('TINY_CLIENT_ID') ?: getenv('CLIENT_ID_API_OLIST');
-$clientSecret = getenv('OLIST_CLIENT_SECRET') ?: getenv('TINY_CLIENT_SECRET') ?: getenv('CLIENT_SECRET_OLIST');
+$clientId = getenv('OLIST_CLIENT_ID') ?: getenv('TINY_CLIENT_ID') ?: getenv('OLIST_CLIENT_ID');
+$clientSecret = getenv('OLIST_CLIENT_SECRET') ?: getenv('TINY_CLIENT_SECRET') ?: getenv('OLIST_CLIENT_SECRET');
 $refreshToken = getenv('OLIST_REFRESH_TOKEN') ?: getenv('TINY_REFRESH_TOKEN');
 
 $lockHandle = fopen(svrt_lock_path(), 'c+');
@@ -146,7 +146,7 @@ $replacements = [
     // enquanto ainda houver scripts antigos lendo esses nomes.
     'TINY_ACCESS_TOKEN' => $newAccess,
     'TINY_REFRESH_TOKEN' => $newRefresh,
-    'TOKEN_API_OLIST' => $newAccess,
+    'OLIST_ACCESS_TOKEN' => $newAccess,
 ];
 
 foreach ($replacements as $key => $value) {
@@ -170,6 +170,6 @@ fclose($lockHandle);
 svrt_out('ok', 'Tokens refreshed and saved', [
     'http_code' => $httpCode,
     'refresh_rotated' => isset($data['refresh_token']) && $data['refresh_token'] !== '',
-    'mirrored_legacy_tokens' => ['TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN', 'TOKEN_API_OLIST'],
+    'mirrored_legacy_tokens' => ['TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN', 'OLIST_ACCESS_TOKEN'],
     'access_token_preview' => substr($newAccess, 0, 10) . '...',
 ]);

@@ -16,13 +16,13 @@ from email.mime.text import MIMEText
 
 # Configurações
 DB_PATH = Path(__file__).parent.parent / "data" / "shopvivaliz.db"
-SMTP_HOST = os.getenv("SMTP_HOST") or os.getenv("EMAIL_SMTP_HOST") or os.getenv("MAIL_HOST") or "localhost"
+SMTP_HOST = os.getenv("SMTP_HOST") or os.getenv("SMTP_HOST") or os.getenv("MAIL_HOST") or "localhost"
 try:
-    SMTP_PORT = int(os.getenv("SMTP_PORT") or os.getenv("EMAIL_SMTP_PORT") or os.getenv("MAIL_PORT") or "587")
+    SMTP_PORT = int(os.getenv("SMTP_PORT") or os.getenv("SMTP_PORT") or os.getenv("MAIL_PORT") or "587")
 except ValueError:
     SMTP_PORT = 587
-SMTP_USER = os.getenv("SMTP_USER") or os.getenv("EMAIL_USER") or os.getenv("MAIL_USER") or ""
-SMTP_PASS = os.getenv("SMTP_PASS") or os.getenv("EMAIL_PASSWORD") or os.getenv("MAIL_PASS") or ""
+SMTP_USER = os.getenv("SMTP_USER") or os.getenv("SMTP_USER") or os.getenv("MAIL_USER") or ""
+SMTP_PASS = os.getenv("SMTP_PASS") or os.getenv("SMTP_PASS") or os.getenv("MAIL_PASS") or ""
 EMAIL_FROM = os.getenv("EMAIL_FROM") or SMTP_USER or "noreply@shopvivaliz.com.br"
 
 # Template HTML do email

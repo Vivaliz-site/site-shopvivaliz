@@ -23,8 +23,8 @@ if (file_exists($env_file)) {
 
 $host = getenv('SMTP_HOST') ?: getenv('MAIL_HOST') ?: '';
 $port = getenv('SMTP_PORT') ?: getenv('MAIL_PORT') ?: '465';
-$user = getenv('SMTP_USER') ?: getenv('EMAIL_USER') ?: getenv('MAIL_USER') ?: '';
-$pass = getenv('SMTP_PASS') ?: getenv('EMAIL_PASSWORD') ?: getenv('MAIL_PASS') ?: '';
+$user = getenv('SMTP_USER') ?: getenv('SMTP_USER') ?: getenv('MAIL_USER') ?: '';
+$pass = getenv('SMTP_PASS') ?: getenv('SMTP_PASS') ?: getenv('MAIL_PASS') ?: '';
 $from = getenv('EMAIL_FROM') ?: $user;
 $to   = getenv('EMAIL_TO') ?: 'fredmourao@gmail.com';
 

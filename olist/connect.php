@@ -23,9 +23,9 @@ function svi_connect_load_env(string $path): void
 
 svi_connect_load_env(dirname(__DIR__) . '/.env');
 
-$clientId = getenv('OLIST_CLIENT_ID') ?: getenv('TINY_CLIENT_ID') ?: getenv('CLIENT_ID_API_OLIST') ?: '';
+$clientId = getenv('OLIST_CLIENT_ID') ?: getenv('TINY_CLIENT_ID') ?: getenv('OLIST_CLIENT_ID') ?: '';
 $redirectUri = getenv('OLIST_REDIRECT_URI')
-    ?: getenv('URL_REDIRCT_OLIST')
+    ?: getenv('OLIST_REDIRECT_URI')
     ?: getenv('TINY_REDIRECT_URI')
     ?: 'https://shopvivaliz.com.br/olist/callback.php';
 

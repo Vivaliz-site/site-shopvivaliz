@@ -13,9 +13,9 @@ from datetime import datetime
 
 class ReportSender:
     def __init__(self):
-        self.smtp_host = os.getenv('SMTP_HOST') or os.getenv('EMAIL_SMTP_HOST') or os.getenv('MAIL_HOST') or ''
-        self.smtp_user = os.getenv('SMTP_USER') or os.getenv('EMAIL_USER') or os.getenv('MAIL_USER') or ''
-        self.smtp_pass = os.getenv('SMTP_PASS') or os.getenv('EMAIL_PASSWORD') or os.getenv('MAIL_PASS') or ''
+        self.smtp_host = os.getenv('SMTP_HOST') or os.getenv('SMTP_HOST') or os.getenv('MAIL_HOST') or ''
+        self.smtp_user = os.getenv('SMTP_USER') or os.getenv('SMTP_USER') or os.getenv('MAIL_USER') or ''
+        self.smtp_pass = os.getenv('SMTP_PASS') or os.getenv('SMTP_PASS') or os.getenv('MAIL_PASS') or ''
         self.email_to = os.getenv('EMAIL_TO', '')
 
     def send_daily_report(self):

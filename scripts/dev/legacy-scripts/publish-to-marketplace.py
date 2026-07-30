@@ -108,7 +108,7 @@ def http_api(method: str, url: str, token: str, body: Optional[dict] = None, par
 # ---------------------------------------------------------------------------
 
 def resolve_token() -> str:
-    for name in ("OLIST_ACCESS_TOKEN", "TINY_ACCESS_TOKEN", "ERP_API_TOKEN", "TOKEN_API_OLIST", "OLIST_API_TOKEN", "TINY_API_TOKEN"):
+    for name in ("OLIST_ACCESS_TOKEN", "TINY_ACCESS_TOKEN", "ERP_API_TOKEN", "OLIST_ACCESS_TOKEN", "OLIST_API_TOKEN", "TINY_API_TOKEN"):
         val = os.getenv(name, "").strip()
         if val:
             log(f"Token: usando {name}")

@@ -17,8 +17,8 @@ OLIST_TOKEN_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-conn
 CLIENT_ID = os.getenv("OLIST_CLIENT_ID") or os.getenv("TINY_CLIENT_ID") or ""
 CLIENT_SECRET = os.getenv("OLIST_CLIENT_SECRET") or os.getenv("TINY_CLIENT_SECRET") or ""
 
-EMAIL = os.getenv("OLIST_EMAIL") or os.getenv("OLIST_USER") or os.getenv("EMAIL_USER") or ""
-SENHA = os.getenv("OLIST_PASSWORD") or os.getenv("EMAIL_PASSWORD") or ""
+EMAIL = os.getenv("OLIST_EMAIL") or os.getenv("OLIST_USER") or os.getenv("SMTP_USER") or ""
+SENHA = os.getenv("OLIST_PASSWORD") or os.getenv("SMTP_PASS") or ""
 
 print("\n" + "="*70)
 print("OLIST LOGIN - OBTER AUTHORIZATION CODE E SINCRONIZAR")

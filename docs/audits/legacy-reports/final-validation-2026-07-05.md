@@ -30,7 +30,7 @@ Status: **✅ 100% APROVADO PARA PUSH**
 
 **Secrets encontrados no código (SEGURO):**
 - Linha 80: `${{ secrets.FTP_SERVER }}` ✅ Referência segura (não o valor)
-- Linha 81: `${{ secrets.FTP_HOST }}` ✅ Fallback seguro
+- Linha 81: `${{ secrets.FTP_SERVER }}` ✅ Fallback seguro
 - Linha 87: `${{ secrets.FTP_USERNAME }}` ✅ Referência segura
 - Linha 95: `${{ secrets.FTP_PASSWORD }}` ✅ Referência segura
 - Linha 109: `${{ secrets.FTP_PATH }}` ✅ Fallback seguro
@@ -149,14 +149,14 @@ web-deploy:
 
 **Verificação de cada secret:**
 ```bash
-# Validar FTP_SERVER (aliases: FTP_HOST)
-validate_secret "${{ secrets.FTP_SERVER }}" "${{ secrets.FTP_HOST }}" "" "FTP_SERVER"
+# Validar FTP_SERVER (aliases: FTP_SERVER)
+validate_secret "${{ secrets.FTP_SERVER }}" "${{ secrets.FTP_SERVER }}" "" "FTP_SERVER"
 
-# Validar FTP_USERNAME (aliases: FTP_USER)
-validate_secret "${{ secrets.FTP_USERNAME }}" "${{ secrets.FTP_USER }}" "" "FTP_USERNAME"
+# Validar FTP_USERNAME (aliases: FTP_USERNAME)
+validate_secret "${{ secrets.FTP_USERNAME }}" "${{ secrets.FTP_USERNAME }}" "" "FTP_USERNAME"
 
-# Validar FTP_PASSWORD (aliases: FTP_PASS)
-validate_secret "${{ secrets.FTP_PASSWORD }}" "${{ secrets.FTP_PASS }}" "" "FTP_PASSWORD"
+# Validar FTP_PASSWORD (aliases: FTP_PASSWORD)
+validate_secret "${{ secrets.FTP_PASSWORD }}" "${{ secrets.FTP_PASSWORD }}" "" "FTP_PASSWORD"
 
 # Validar FTP_REMOTE_DIR (aliases: FTP_TARGET_DIR, FTP_PATH)
 validate_secret "${{ secrets.FTP_REMOTE_DIR }}" "${{ secrets.FTP_TARGET_DIR }}" "${{ secrets.FTP_PATH }}" "FTP_REMOTE_DIR"

@@ -11,7 +11,7 @@ Uso:
 Variáveis de ambiente necessárias (ou em .env.local):
     OLIST_CLIENT_ID      ou  TINY_CLIENT_ID
     OLIST_CLIENT_SECRET  ou  TINY_CLIENT_SECRET
-    URL_REDIRCT_OLIST            (opcional — URL de redirect registrada no app Tiny)
+    OLIST_REDIRECT_URI            (opcional — URL de redirect registrada no app Tiny)
 """
 
 import http.server
@@ -52,9 +52,9 @@ def load_env_local():
 
 
 def get_credentials():
-    client_id     = os.getenv("OLIST_CLIENT_ID") or os.getenv("TINY_CLIENT_ID") or os.getenv("CLIENT_ID_API_OLIST")
-    client_secret = os.getenv("OLIST_CLIENT_SECRET") or os.getenv("TINY_CLIENT_SECRET") or os.getenv("CLIENT_SECRET_OLIST")
-    redirect_uri  = os.getenv("URL_REDIRCT_OLIST") or REDIRECT_URI
+    client_id     = os.getenv("OLIST_CLIENT_ID") or os.getenv("TINY_CLIENT_ID") or os.getenv("OLIST_CLIENT_ID")
+    client_secret = os.getenv("OLIST_CLIENT_SECRET") or os.getenv("TINY_CLIENT_SECRET") or os.getenv("OLIST_CLIENT_SECRET")
+    redirect_uri  = os.getenv("OLIST_REDIRECT_URI") or REDIRECT_URI
 
     if not client_id:
         client_id = input("OLIST_CLIENT_ID (client_id do app Tiny): ").strip()

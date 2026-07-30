@@ -259,16 +259,16 @@ git push origin main
 Já está com suporte a nomes alternativos! ✅
 
 ```python
-host = get_env_variable('FTP_HOST', ['FTP_SERVER'])
-user = get_env_variable('FTP_USER', ['FTP_USERNAME'])
-password = get_env_variable('FTP_PASS', ['FTP_PASSWORD'])
+host = get_env_variable('FTP_SERVER', ['FTP_SERVER'])
+user = get_env_variable('FTP_USERNAME', ['FTP_USERNAME'])
+password = get_env_variable('FTP_PASSWORD', ['FTP_PASSWORD'])
 ```
 
 **Isso significa:**
-- Se existir `FTP_HOST` → usa
+- Se existir `FTP_SERVER` → usa
 - Senão, se existir `FTP_SERVER` → usa
-- Mesma coisa para `FTP_USER` vs `FTP_USERNAME`
-- Mesma coisa para `FTP_PASS` vs `FTP_PASSWORD`
+- Mesma coisa para `FTP_USERNAME` vs `FTP_USERNAME`
+- Mesma coisa para `FTP_PASSWORD` vs `FTP_PASSWORD`
 
 ✅ **Já está sincronizado automaticamente!**
 

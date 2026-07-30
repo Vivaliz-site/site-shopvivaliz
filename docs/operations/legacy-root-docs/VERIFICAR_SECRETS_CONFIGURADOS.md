@@ -21,7 +21,7 @@
    FTP_PASSWORD            2026-06-29
    FTP_SERVER              2026-06-29
    FTP_USERNAME            2026-06-29
-   EMAIL_PASSWORD          2026-06-29
+   SMTP_PASS          2026-06-29
    OPENAI_API_KEY          2026-06-29
    SHOPEE_PARTNER_ID       2026-06-29
    SHOPEE_PARTNER_KEY      2026-06-29
@@ -40,13 +40,13 @@
 
 ```
 ✅ Esperado:  FTP_SERVER
-❓ Possível:  FTP_HOST, FTP_ADDRESS, FTPHOST
+❓ Possível:  FTP_SERVER, FTP_ADDRESS, FTPHOST
 
 ✅ Esperado:  FTP_USERNAME
-❓ Possível:  FTP_USER, FTP_ACCOUNT
+❓ Possível:  FTP_USERNAME, FTP_ACCOUNT
 
 ✅ Esperado:  FTP_PASSWORD
-❓ Possível:  FTP_PASS, FTP_PWD
+❓ Possível:  FTP_PASSWORD, FTP_PWD
 
 ✅ Esperado:  FTP_PORT
 ❓ Possível:  FTPPORT, FTP_PORT_NUMBER
@@ -78,10 +78,10 @@
 ✅ Esperado:  EMAIL_FROM
 ❓ Possível:  SENDER_EMAIL, EMAIL_SENDER
 
-✅ Esperado:  EMAIL_USER
+✅ Esperado:  SMTP_USER
 ❓ Possível:  SMTP_USER, EMAIL_ACCOUNT
 
-✅ Esperado:  EMAIL_PASSWORD
+✅ Esperado:  SMTP_PASS
 ❓ Possível:  EMAIL_PASS, SMTP_PASSWORD
 ```
 
@@ -115,10 +115,10 @@ IA:
 EMAIL:
   [ ] Nome real: _________________ (esperado: EMAIL_FROM)
   [ ] Nome real: _________________ (esperado: EMAIL_TO)
-  [ ] Nome real: _________________ (esperado: EMAIL_USER)
-  [ ] Nome real: _________________ (esperado: EMAIL_PASSWORD)
-  [ ] Nome real: _________________ (esperado: EMAIL_SMTP_HOST)
-  [ ] Nome real: _________________ (esperado: EMAIL_SMTP_PORT)
+  [ ] Nome real: _________________ (esperado: SMTP_USER)
+  [ ] Nome real: _________________ (esperado: SMTP_PASS)
+  [ ] Nome real: _________________ (esperado: SMTP_HOST)
+  [ ] Nome real: _________________ (esperado: SMTP_PORT)
 ```
 
 ---
@@ -135,8 +135,8 @@ Arquivo: `scripts/integrations/ftp_uploader.py`
 # ANTES:
 self.ftp_host = os.getenv('FTP_SERVER', '')
 
-# DEPOIS (se secret é FTP_HOST):
-self.ftp_host = os.getenv('FTP_HOST', '')
+# DEPOIS (se secret é FTP_SERVER):
+self.ftp_host = os.getenv('FTP_SERVER', '')
 ```
 
 **Fazer isso em TODOS os arquivos que usam secrets:**
@@ -169,7 +169,7 @@ def get_secret(name, alternatives=None):
     return None
 
 # Usar em vez de os.getenv:
-FTP_SERVER = get_secret('FTP_SERVER', ['FTP_HOST', 'FTP_ADDRESS'])
+FTP_SERVER = get_secret('FTP_SERVER', ['FTP_SERVER', 'FTP_ADDRESS'])
 SHOPEE_ID = get_secret('SHOPEE_PARTNER_ID', ['SHOPEE_ID', 'SHOPEE_SHOP_ID'])
 ```
 
@@ -231,7 +231,7 @@ Se encontrar isso no GitHub:
 NAME                    UPDATED_AT
 ───────────────────────────────────
 FTPHOST                 2026-06-29  ← FTP_SERVER
-FTP_USER                2026-06-29  ← FTP_USERNAME
+FTP_USERNAME                2026-06-29  ← FTP_USERNAME
 FTP_PWD                 2026-06-29  ← FTP_PASSWORD
 SHOPEE_ID               2026-06-29  ← SHOPEE_PARTNER_ID
 SHOPEE_SECRET           2026-06-29  ← SHOPEE_PARTNER_KEY
@@ -243,7 +243,7 @@ OPENAI_KEY              2026-06-29  ← OPENAI_API_KEY
 ```python
 # scripts/integrations/ftp_uploader.py
 self.ftp_host = os.getenv('FTPHOST')      # ← Corrigido
-self.ftp_user = os.getenv('FTP_USER')     # ← Corrigido
+self.ftp_user = os.getenv('FTP_USERNAME')     # ← Corrigido
 self.ftp_pass = os.getenv('FTP_PWD')      # ← Corrigido
 
 # scripts/integrations/shopee_api.py

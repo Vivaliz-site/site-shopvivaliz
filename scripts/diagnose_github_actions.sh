@@ -469,9 +469,9 @@ fi
 
 echo "PRÓXIMOS PASSOS:"
 echo "  1. Verifique os Secrets obrigatórios no GitHub:"
-echo "     • FTP_SERVER (ou FTP_HOST como fallback)"
-echo "     • FTP_USERNAME (ou FTP_USER como fallback)"
-echo "     • FTP_PASSWORD (ou FTP_PASS como fallback)"
+echo "     • FTP_SERVER (ou FTP_SERVER como fallback)"
+echo "     • FTP_USERNAME (ou FTP_USERNAME como fallback)"
+echo "     • FTP_PASSWORD (ou FTP_PASSWORD como fallback)"
 echo "     • FTP_PORT"
 echo "     • FTP_REMOTE_DIR (ou FTP_TARGET_DIR/FTP_PATH como fallback)"
 echo "     • SHOPVIVALIZ_AGENT_KEY (ou AGENT_KEY/WATCHDOG_AGENT_KEY/AUTONOMOUS_AGENT_KEY como fallback)"

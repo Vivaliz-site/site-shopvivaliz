@@ -71,13 +71,13 @@ function get_mailer_config(): array
     sv_mailer_load_env();
 
     return [
-        'from_email' => getenv('EMAIL_FROM') ?: getenv('SMTP_USER') ?: getenv('EMAIL_USER') ?: getenv('MAIL_USER') ?: 'agentes@shopvivaliz.com.br',
+        'from_email' => getenv('EMAIL_FROM') ?: getenv('SMTP_USER') ?: getenv('SMTP_USER') ?: getenv('MAIL_USER') ?: 'agentes@shopvivaliz.com.br',
         'from_name' => 'ShopVivaliz',
-        'smtp_host' => getenv('SMTP_HOST') ?: getenv('EMAIL_SMTP_HOST') ?: getenv('MAIL_HOST') ?: 'smtp.titan.email',
-        'smtp_port' => (int)(getenv('SMTP_PORT') ?: getenv('EMAIL_SMTP_PORT') ?: getenv('MAIL_PORT') ?: 465),
-        'smtp_user' => getenv('SMTP_USER') ?: getenv('EMAIL_USER') ?: getenv('MAIL_USER') ?: 'agentes@shopvivaliz.com.br',
-        'smtp_pass' => getenv('SMTP_PASS') ?: getenv('EMAIL_PASSWORD') ?: getenv('MAIL_PASS') ?: '',
-        'smtp_secure' => ((int)(getenv('SMTP_PORT') ?: getenv('EMAIL_SMTP_PORT') ?: getenv('MAIL_PORT') ?: 465) === 465) ? 'ssl' : 'tls',
+        'smtp_host' => getenv('SMTP_HOST') ?: getenv('SMTP_HOST') ?: getenv('MAIL_HOST') ?: 'smtp.titan.email',
+        'smtp_port' => (int)(getenv('SMTP_PORT') ?: getenv('SMTP_PORT') ?: getenv('MAIL_PORT') ?: 465),
+        'smtp_user' => getenv('SMTP_USER') ?: getenv('SMTP_USER') ?: getenv('MAIL_USER') ?: 'agentes@shopvivaliz.com.br',
+        'smtp_pass' => getenv('SMTP_PASS') ?: getenv('SMTP_PASS') ?: getenv('MAIL_PASS') ?: '',
+        'smtp_secure' => ((int)(getenv('SMTP_PORT') ?: getenv('SMTP_PORT') ?: getenv('MAIL_PORT') ?: 465) === 465) ? 'ssl' : 'tls',
     ];
 }
 

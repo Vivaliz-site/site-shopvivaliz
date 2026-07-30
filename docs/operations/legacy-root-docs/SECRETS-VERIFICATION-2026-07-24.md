@@ -50,8 +50,8 @@ DB_PASSWORD=shopvivaliz123
 |--------|--------|-------|
 | EMAIL_FROM | ✅ Presente | shopvivaliz@gmail.com |
 | EMAIL_TO | ✅ Presente | fredmourao@gmail.com,atendimento@shopvivaliz.com.br |
-| **EMAIL_USER** | ❌ **FALTANDO** | Alias para MAIL_USER |
-| **EMAIL_PASSWORD** | ❌ **FALTANDO** | Alias para MAIL_PASS |
+| **SMTP_USER** | ❌ **FALTANDO** | Alias para MAIL_USER |
+| **SMTP_PASS** | ❌ **FALTANDO** | Alias para MAIL_PASS |
 | MAIL_HOST | ✅ Presente | smtp.gmail.com |
 | MAIL_PORT | ✅ Presente | 587 |
 | MAIL_USER | ✅ Presente | shopvivaliz@gmail.com |
@@ -59,8 +59,8 @@ DB_PASSWORD=shopvivaliz123
 
 **Ação:** Adicionar (opcional - são aliases):
 ```bash
-EMAIL_USER=shopvivaliz@gmail.com
-EMAIL_PASSWORD=ukts yplc vtij jjpx
+SMTP_USER=shopvivaliz@gmail.com
+SMTP_PASS=ukts yplc vtij jjpx
 ```
 
 ### 3️⃣ APIs IA (1 faltando)
@@ -120,7 +120,7 @@ BASE_URL=https://dev.shopvivaliz.com.br
 - ✅ TINY_CLIENT_ID (indireto via Olist)
 - ✅ TINY_CLIENT_SECRET (indireto via Olist)
 - ✅ TINY_REDIRECT_URI (indireto)
-- ✅ URL_TINY_OLIST
+- ✅ OLIST_API_BASE_URL
 
 **Categoria: Olist ERP**
 - ✅ OLIST_ACCESS_TOKEN
@@ -130,7 +130,7 @@ BASE_URL=https://dev.shopvivaliz.com.br
 - ✅ OLIST_INTEGRADOR_ID
 - ✅ OLIST_INTEGRADOR_TOKEN
 - ✅ OLIST_WEBHOOK_TOKEN
-- ✅ URL_REDIRCT_OLIST (typo: REDIRCT em vez de REDIRECT)
+- ✅ OLIST_REDIRECT_URI (typo: REDIRCT em vez de REDIRECT)
 
 **Categoria: Mercado Pago**
 - ✅ MERCADOPAGO_ACCESS_TOKEN
@@ -190,8 +190,8 @@ DB_DATABASE=shopvivaliz
 DB_PASSWORD=shopvivaliz123
 
 # Aliases de email
-EMAIL_USER=shopvivaliz@gmail.com
-EMAIL_PASSWORD=ukts yplc vtij jjpx
+SMTP_USER=shopvivaliz@gmail.com
+SMTP_PASS=ukts yplc vtij jjpx
 ```
 
 ---
@@ -251,7 +251,7 @@ Críticos: ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
 
 **OPCIONAIS (esta semana):**
 - Adicionar aliases DB_DATABASE e DB_PASSWORD
-- Adicionar aliases EMAIL_USER e EMAIL_PASSWORD
+- Adicionar aliases SMTP_USER e SMTP_PASS
 - Adicionar ADMIN_EMAIL, WHATSAPP_NUMBER, PIX keys (se usar)
 
 ---

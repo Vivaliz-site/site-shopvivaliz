@@ -55,7 +55,7 @@ FTP_PORT
 FTP_REMOTE_DIR
 ```
 
-Aliases legados como `FTP_HOST`, `FTP_USER`, `FTP_PASS` e `FTP_REMOTE_PATH` só devem existir no centralizador `config/secrets.py`.
+Aliases legados como `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD` e `FTP_REMOTE_PATH` só devem existir no centralizador `config/secrets.py`.
 
 ---
 

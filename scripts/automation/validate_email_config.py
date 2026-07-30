@@ -33,12 +33,12 @@ def first_env(*names: str) -> tuple[str, str]:
 
 def inspect_config() -> dict:
     load_env_files([".env", ".env.local"])
-    host_name, host = first_env("SMTP_HOST", "EMAIL_SMTP_HOST", "MAIL_HOST")
-    port_name, port = first_env("SMTP_PORT", "EMAIL_SMTP_PORT", "MAIL_PORT")
-    user_name, user = first_env("SMTP_USER", "EMAIL_USER", "MAIL_USER")
-    pass_name, password = first_env("SMTP_PASS", "EMAIL_PASSWORD", "MAIL_PASS")
+    host_name, host = first_env("SMTP_HOST", "SMTP_HOST", "MAIL_HOST")
+    port_name, port = first_env("SMTP_PORT", "SMTP_PORT", "MAIL_PORT")
+    user_name, user = first_env("SMTP_USER", "SMTP_USER", "MAIL_USER")
+    pass_name, password = first_env("SMTP_PASS", "SMTP_PASS", "MAIL_PASS")
     to_name, recipients = first_env("EMAIL_TO")
-    from_name, sender = first_env("EMAIL_FROM", "SMTP_USER", "EMAIL_USER", "MAIL_USER")
+    from_name, sender = first_env("EMAIL_FROM", "SMTP_USER", "SMTP_USER", "MAIL_USER")
 
     recipient_list = [item.strip() for item in recipients.split(",") if item.strip()]
     recipients_valid = bool(recipient_list) and all("@" in item and "." in item for item in recipient_list)

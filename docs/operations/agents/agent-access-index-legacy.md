@@ -252,8 +252,8 @@ FTP_USERNAME            - Usuário FTP
 FTP_PASSWORD            - Senha FTP
 FTP_PORT                - Porta FTP
 FTP_REMOTE_DIR          - Diretório remoto
-EMAIL_USER              - Email para notificações
-EMAIL_PASSWORD          - Senha email
+SMTP_USER              - Email para notificações
+SMTP_PASS          - Senha email
 SQUAD_TOKEN             - Token da Squad (opcional)
 ```
 

@@ -24,9 +24,9 @@ Clique **"New repository secret"** e adicione:
 
 | Secret | Valor | Obrigatório |
 |--------|-------|------------|
-| `FTP_HOST` | `ftp.shopvivaliz.com.br` | ✅ SIM |
-| `FTP_USER` | Seu usuário FTP | ✅ SIM |
-| `FTP_PASS` | Sua senha FTP | ✅ SIM |
+| `FTP_SERVER` | `ftp.shopvivaliz.com.br` | ✅ SIM |
+| `FTP_USERNAME` | Seu usuário FTP | ✅ SIM |
+| `FTP_PASSWORD` | Sua senha FTP | ✅ SIM |
 | `PERSONAL_ACCESS_TOKEN` | Token GitHub (se precisar) | ⚠️ OPCIONAL |
 
 **Como gerar PERSONAL_ACCESS_TOKEN:**
@@ -293,7 +293,7 @@ Get-EventLog -LogName System | Where-Object { $_.Source -eq 'TaskScheduler' } | 
 
 **Solução:**
 1. Verificar secrets: `Settings → Secrets → Actions`
-2. Conferir se FTP_HOST, FTP_USER, FTP_PASS estão corretos
+2. Conferir se FTP_SERVER, FTP_USERNAME, FTP_PASSWORD estão corretos
 3. Ver logs em: `Actions → workflow name → latest run`
 
 ### Se sincronização local não funciona

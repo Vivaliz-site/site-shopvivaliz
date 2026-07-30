@@ -62,10 +62,10 @@ def get_github_secrets() -> Dict[str, str]:
         "FTP_REMOTE_DIR",
 
         # Email
-        "EMAIL_SMTP_HOST",
-        "EMAIL_SMTP_PORT",
-        "EMAIL_USER",
-        "EMAIL_PASSWORD",
+        "SMTP_HOST",
+        "SMTP_PORT",
+        "SMTP_USER",
+        "SMTP_PASS",
         "MAIL_USER",
         "MAIL_PASS",
         "MAIL_HOST",
@@ -134,10 +134,10 @@ MAIL_USER=
 MAIL_PASS=
 
 # Email (aliases)
-EMAIL_SMTP_HOST=
-EMAIL_SMTP_PORT=
-EMAIL_USER=
-EMAIL_PASSWORD=
+SMTP_HOST=
+SMTP_PORT=
+SMTP_USER=
+SMTP_PASS=
 
 # APIs de IA - Sincronizadas do GitHub Secrets
 ANTHROPIC_API_KEY=

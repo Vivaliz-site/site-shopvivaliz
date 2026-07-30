@@ -22,31 +22,31 @@ SECRETS_TO_ADD = {
     'OLIST_CLIENT_SECRET': 'Secret Cliente Olist',
     'OLIST_ACCESS_TOKEN': 'Token de acesso Olist',
     'OLIST_REFRESH_TOKEN': 'Refresh token Olist',
-    'TOKEN_API_OLIST': 'Token API Olist',
-    'CLIENT_ID_API_OLIST': 'ID API Olist',
-    'CLIENT_SECRET_OLIST': 'Secret API Olist',
+    'OLIST_ACCESS_TOKEN': 'Token API Olist',
+    'OLIST_CLIENT_ID': 'ID API Olist',
+    'OLIST_CLIENT_SECRET': 'Secret API Olist',
     'OLIST_REDIRECT_URI': 'Redirect Olist',
 
     # FTP
     'FTP_SERVER': 'Servidor FTP',
-    'FTP_HOST': 'Servidor FTP (alias)',
+    'FTP_SERVER': 'Servidor FTP (alias)',
     'FTP_USERNAME': 'Usuário FTP',
-    'FTP_USER': 'Usuário FTP (alias)',
+    'FTP_USERNAME': 'Usuário FTP (alias)',
     'FTP_PASSWORD': 'Senha FTP',
-    'FTP_PASS': 'Senha FTP (alias)',
+    'FTP_PASSWORD': 'Senha FTP (alias)',
     'FTP_PORT': '21 (porta FTP)',
     'FTP_REMOTE_DIR': '/public_html (diretório remoto)',
 
     # Email
     'EMAIL_FROM': 'Email remetente',
     'EMAIL_TO': 'Email destinatário',
-    'EMAIL_SMTP_HOST': 'Host SMTP',
+    'SMTP_HOST': 'Host SMTP',
     'SMTP_HOST': 'Host SMTP (alias)',
-    'EMAIL_SMTP_PORT': '587 (porta SMTP)',
+    'SMTP_PORT': '587 (porta SMTP)',
     'SMTP_PORT': '587 (porta SMTP alias)',
-    'EMAIL_USER': 'Usuário SMTP',
+    'SMTP_USER': 'Usuário SMTP',
     'SMTP_USER': 'Usuário SMTP (alias)',
-    'EMAIL_PASSWORD': 'Senha SMTP',
+    'SMTP_PASS': 'Senha SMTP',
     'SMTP_PASS': 'Senha SMTP (alias)',
 
     # Database
@@ -67,10 +67,10 @@ SECRETS_TO_ADD = {
     # Tiny
     'TINY_CLIENT_ID': 'ID Cliente Tiny',
     'TINY_CLIENT_SECRET': 'Secret Cliente Tiny',
-    'URL_TINY_OLIST': 'URL Tiny/Olist',
+    'OLIST_API_BASE_URL': 'URL Tiny/Olist',
     'TINY_REDIRECT_URI': 'Redirect Tiny',
     'URL_REDIRECT_OLIST': 'URL Redirect Olist',
-    'URL_REDIRCT_OLIST': 'URL Redirect Olist (legacy alias)',
+    'OLIST_REDIRECT_URI': 'URL Redirect Olist (legacy alias)',
 
     # Tokens
     'GH_REPO_TOKEN': 'Token GitHub',

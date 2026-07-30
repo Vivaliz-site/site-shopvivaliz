@@ -17,9 +17,9 @@ Este documento explica como configurar, diagnosticar e solucionar problemas com 
 
 | Secret | Tipo | Descrição | Fallbacks |
 |--------|------|-----------|-----------|
-| `FTP_SERVER` | obrigatório | Host/IP do servidor FTP | `FTP_HOST` |
-| `FTP_USERNAME` | obrigatório | Usuário FTP | `FTP_USER` |
-| `FTP_PASSWORD` | obrigatório | Senha FTP | `FTP_PASS` |
+| `FTP_SERVER` | obrigatório | Host/IP do servidor FTP | `FTP_SERVER` |
+| `FTP_USERNAME` | obrigatório | Usuário FTP | `FTP_USERNAME` |
+| `FTP_PASSWORD` | obrigatório | Senha FTP | `FTP_PASSWORD` |
 | `FTP_PORT` | opcional | Porta FTP (padrão: 21) | nenhum |
 | `FTP_REMOTE_DIR` | obrigatório | Diretório remoto no servidor | `FTP_TARGET_DIR`, `FTP_PATH` |
 
@@ -60,13 +60,13 @@ Os workflows suportam **aliases** para compatibilidade com configurações antig
 
 ```
 FTP_SERVER        ← primário
-  └─ FTP_HOST     ← fallback
+  └─ FTP_SERVER     ← fallback
 
 FTP_USERNAME      ← primário
-  └─ FTP_USER     ← fallback
+  └─ FTP_USERNAME     ← fallback
 
 FTP_PASSWORD      ← primário
-  └─ FTP_PASS     ← fallback
+  └─ FTP_PASSWORD     ← fallback
 
 FTP_REMOTE_DIR    ← primário
   ├─ FTP_TARGET_DIR ← fallback

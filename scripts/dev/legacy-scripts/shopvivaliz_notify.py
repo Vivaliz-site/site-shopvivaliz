@@ -117,10 +117,10 @@ class Notificator:
     def _send_email(self, subject: str, body: str):
         """Enviar email."""
         try:
-            smtp_host = os.getenv("EMAIL_SMTP_HOST", "smtp.gmail.com")
-            smtp_port = int(os.getenv("EMAIL_SMTP_PORT", "587"))
+            smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+            smtp_port = int(os.getenv("SMTP_PORT", "587"))
             email_from = os.getenv("EMAIL_FROM")
-            email_password = os.getenv("EMAIL_PASSWORD")
+            email_password = os.getenv("SMTP_PASS")
             email_to = os.getenv("EMAIL_TO", email_from)
 
             msg = EmailMessage()

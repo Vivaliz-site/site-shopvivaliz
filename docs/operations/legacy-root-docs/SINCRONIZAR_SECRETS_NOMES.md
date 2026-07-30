@@ -19,7 +19,7 @@ Você verá uma lista como:
 NAME                      UPDATED_AT
 ─────────────────────────────────────
 OPENAI_API_KEY           2026-06-29
-FTP_HOST                 2026-06-29  ← PODE SER FTP_HOST em vez de FTP_SERVER
+FTP_SERVER                 2026-06-29  ← PODE SER FTP_SERVER em vez de FTP_SERVER
 SHOPEE_ID                2026-06-29  ← PODE SER SHOPEE_ID em vez de SHOPEE_PARTNER_ID
 ```
 
@@ -32,9 +32,9 @@ Exemplo de nomes que podem estar diferentes:
 ```
 ESPERADO              →  REAL (no GitHub)
 ────────────────────────────────────────
-FTP_SERVER            →  FTP_HOST
-FTP_USERNAME          →  FTP_USER
-FTP_PASSWORD          →  FTP_PASS
+FTP_SERVER            →  FTP_SERVER
+FTP_USERNAME          →  FTP_USERNAME
+FTP_PASSWORD          →  FTP_PASSWORD
 SHOPEE_PARTNER_ID     →  SHOPEE_ID
 SHOPEE_PARTNER_KEY    →  SHOPEE_KEY
 TIKTOK_CLIENT_ID      →  TIKTOK_ID
@@ -79,9 +79,9 @@ self.api_key = (
 **JÁ CORRIGIDO** - Suporta múltiplos nomes:
 
 ```python
-host = get_env_variable('FTP_HOST', ['FTP_SERVER'])
-user = get_env_variable('FTP_USER', ['FTP_USERNAME'])
-password = get_env_variable('FTP_PASS', ['FTP_PASSWORD'])
+host = get_env_variable('FTP_SERVER', ['FTP_SERVER'])
+user = get_env_variable('FTP_USERNAME', ['FTP_USERNAME'])
+password = get_env_variable('FTP_PASSWORD', ['FTP_PASSWORD'])
 ```
 
 #### Arquivo: `scripts/integrations/shopee_api.py`
@@ -112,9 +112,9 @@ import os
 # Mapa de nomes possíveis para cada secret
 SECRETS = {
     'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY') or os.getenv('OPENAI_KEY'),
-    'FTP_SERVER': os.getenv('FTP_SERVER') or os.getenv('FTP_HOST'),
-    'FTP_USERNAME': os.getenv('FTP_USERNAME') or os.getenv('FTP_USER'),
-    'FTP_PASSWORD': os.getenv('FTP_PASSWORD') or os.getenv('FTP_PASS'),
+    'FTP_SERVER': os.getenv('FTP_SERVER') or os.getenv('FTP_SERVER'),
+    'FTP_USERNAME': os.getenv('FTP_USERNAME') or os.getenv('FTP_USERNAME'),
+    'FTP_PASSWORD': os.getenv('FTP_PASSWORD') or os.getenv('FTP_PASSWORD'),
     'SHOPEE_ID': os.getenv('SHOPEE_PARTNER_ID') or os.getenv('SHOPEE_ID'),
     'SHOPEE_KEY': os.getenv('SHOPEE_PARTNER_KEY') or os.getenv('SHOPEE_KEY'),
     'TIKTOK_ID': os.getenv('TIKTOK_CLIENT_ID') or os.getenv('TIKTOK_ID'),
@@ -155,19 +155,19 @@ ftp_server = get_secret('FTP_SERVER')
 
 ### 2. Comparar com Esperado
 - [ ] OPENAI_API_KEY (ou OPENAI_KEY?)
-- [ ] FTP_SERVER (ou FTP_HOST?)
-- [ ] FTP_USERNAME (ou FTP_USER?)
-- [ ] FTP_PASSWORD (ou FTP_PASS?)
+- [ ] FTP_SERVER (ou FTP_SERVER?)
+- [ ] FTP_USERNAME (ou FTP_USERNAME?)
+- [ ] FTP_PASSWORD (ou FTP_PASSWORD?)
 - [ ] SHOPEE_PARTNER_ID (ou SHOPEE_ID?)
 - [ ] SHOPEE_PARTNER_KEY (ou SHOPEE_KEY?)
 - [ ] TIKTOK_CLIENT_ID (ou TIKTOK_ID?)
 - [ ] TIKTOK_CLIENT_SECRET (ou TIKTOK_SECRET?)
 - [ ] EMAIL_FROM
 - [ ] EMAIL_TO
-- [ ] EMAIL_USER
-- [ ] EMAIL_PASSWORD
-- [ ] EMAIL_SMTP_HOST
-- [ ] EMAIL_SMTP_PORT
+- [ ] SMTP_USER
+- [ ] SMTP_PASS
+- [ ] SMTP_HOST
+- [ ] SMTP_PORT
 
 ### 3. Se Nomes Diferentes
 - [ ] Opção 1: Adicionar suporte a aliases no código
@@ -188,9 +188,9 @@ Se os nomes são:
 ```
 NO GITHUB              →  NO CÓDIGO (esperado)
 ──────────────────────────────────────────────
-FTP_HOST              →  FTP_SERVER
-FTP_USER              →  FTP_USERNAME
-FTP_PASS              →  FTP_PASSWORD
+FTP_SERVER              →  FTP_SERVER
+FTP_USERNAME              →  FTP_USERNAME
+FTP_PASSWORD              →  FTP_PASSWORD
 SHOPEE_ID             →  SHOPEE_PARTNER_ID
 OPENAI_KEY            →  OPENAI_API_KEY
 ```
@@ -201,12 +201,12 @@ Arquivo: `scripts/upload_images.py`
 
 ```python
 # ANTES:
-host = get_env_variable('FTP_HOST', ['FTP_SERVER'])
-user = get_env_variable('FTP_USER', ['FTP_USERNAME'])
-password = get_env_variable('FTP_PASS', ['FTP_PASSWORD'])
+host = get_env_variable('FTP_SERVER', ['FTP_SERVER'])
+user = get_env_variable('FTP_USERNAME', ['FTP_USERNAME'])
+password = get_env_variable('FTP_PASSWORD', ['FTP_PASSWORD'])
 
 # JÁ ESTÁ CERTO! ✅
-# Ele tenta FTP_HOST primeiro, depois FTP_SERVER
+# Ele tenta FTP_SERVER primeiro, depois FTP_SERVER
 ```
 
 Arquivo: `scripts/ia/image_generator.py`

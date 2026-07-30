@@ -9,9 +9,9 @@ from pathlib import Path
 
 class FTPUploader:
     def __init__(self):
-        self.ftp_host = os.getenv('FTP_HOST', '')
-        self.ftp_user = os.getenv('FTP_USER', '')
-        self.ftp_pass = os.getenv('FTP_PASS', '')
+        self.ftp_host = os.getenv('FTP_SERVER', '')
+        self.ftp_user = os.getenv('FTP_USERNAME', '')
+        self.ftp_pass = os.getenv('FTP_PASSWORD', '')
         self.ftp_path = '/public_html/storage/ia_images/'
 
     def upload_images(self, local_path):
@@ -19,7 +19,7 @@ class FTPUploader:
 
         NOTA: o deploy FTP/HostGator esta desativado em producao (ver
         CLAUDE.md) -- a producao real roda via cron na VM Oracle. Este
-        metodo so faz sentido se FTP_HOST/FTP_USER estiverem configurados
+        metodo so faz sentido se FTP_SERVER/FTP_USERNAME estiverem configurados
         explicitamente para um uso pontual/manual.
         """
         print("\n[FTP] Iniciando upload de imagens")
@@ -34,7 +34,7 @@ class FTPUploader:
         failed_files = []
 
         if not self.ftp_host or not self.ftp_user:
-            print("[ERRO] FTP_HOST/FTP_USER nao configurados -- nenhum upload foi feito.")
+            print("[ERRO] FTP_SERVER/FTP_USERNAME nao configurados -- nenhum upload foi feito.")
             print("Este script nao envia nada sem credenciais reais (nao ha simulacao de sucesso).")
             return False
 

@@ -71,9 +71,9 @@ def upload_file(ftp: ftplib.FTP, local_file: Path, remote_path: str) -> None:
 
 def main(argv=None) -> int:
     try:
-        host = get_env_variable('FTP_HOST', ['FTP_SERVER'])
-        user = get_env_variable('FTP_USER', ['FTP_USERNAME'])
-        password = get_env_variable('FTP_PASS', ['FTP_PASSWORD'])
+        host = get_env_variable('FTP_SERVER', ['FTP_SERVER'])
+        user = get_env_variable('FTP_USERNAME', ['FTP_USERNAME'])
+        password = get_env_variable('FTP_PASSWORD', ['FTP_PASSWORD'])
     except EnvironmentError as exc:
         logger.error(exc)
         return 1

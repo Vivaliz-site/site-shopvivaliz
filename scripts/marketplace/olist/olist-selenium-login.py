@@ -39,8 +39,8 @@ BASE_URL = "https://shopvivaliz.com.br"
 OLIST_AUTH_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth"
 
 CLIENT_ID = os.getenv("OLIST_CLIENT_ID") or os.getenv("TINY_CLIENT_ID") or ""
-EMAIL = os.getenv("OLIST_EMAIL") or os.getenv("OLIST_USER") or os.getenv("EMAIL_USER") or ""
-SENHA = os.getenv("OLIST_PASSWORD") or os.getenv("EMAIL_PASSWORD") or ""
+EMAIL = os.getenv("OLIST_EMAIL") or os.getenv("OLIST_USER") or os.getenv("SMTP_USER") or ""
+SENHA = os.getenv("OLIST_PASSWORD") or os.getenv("SMTP_PASS") or ""
 
 print("\n" + "="*70)
 print("OLIST LOGIN COM SELENIUM")

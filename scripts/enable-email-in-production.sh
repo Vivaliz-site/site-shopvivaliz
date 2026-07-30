@@ -48,7 +48,7 @@ fi
 # 4. Testar envio de email de teste
 echo ""
 echo "4️⃣  Testando envio de email..."
-TEST_EMAIL=$(grep "^ADMIN_EMAIL\|^EMAIL_TO\|^EMAIL_USER" "$REPO_DIR/config/runtime-secrets.php" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d "'\"" || echo "admin@shopvivaliz.com.br")
+TEST_EMAIL=$(grep "^ADMIN_EMAIL\|^EMAIL_TO\|^SMTP_USER" "$REPO_DIR/config/runtime-secrets.php" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d "'\"" || echo "admin@shopvivaliz.com.br")
 
 $PHP_BIN "$REPO_DIR/api/send-order-confirmation-email.php" \
   "TEST-EMAIL-$(date +%s)" \

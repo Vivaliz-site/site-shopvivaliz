@@ -10,8 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / ".tmp_olist_env_sync"
 TARGET = ROOT / ".env"
 ALLOWED = {
-    "URL_REDIRCT_OLIST",
-    "URL_TINY_OLIST",
+    "OLIST_REDIRECT_URI",
+    "OLIST_API_BASE_URL",
     "OLIST_INTEGRADOR_ID",
     "OLIST_CLIENT_ID",
     "OLIST_CLIENT_SECRET",

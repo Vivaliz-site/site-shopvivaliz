@@ -45,10 +45,10 @@ Nao registrar valores reais aqui.
   - `EMAIL_FROM`
   - `EMAIL_TO`
 - Aliases aceitos:
-  - `EMAIL_SMTP_HOST`
-  - `EMAIL_SMTP_PORT`
-  - `EMAIL_USER`
-  - `EMAIL_PASSWORD`
+  - `SMTP_HOST`
+  - `SMTP_PORT`
+  - `SMTP_USER`
+  - `SMTP_PASS`
   - `MAIL_HOST`
   - `MAIL_PORT`
   - `MAIL_USER`
@@ -70,9 +70,9 @@ Nao registrar valores reais aqui.
   - `FTP_PORT`
   - `FTP_REMOTE_DIR`
 - Aliases aceitos:
-  - `FTP_HOST` -> `FTP_SERVER`
-  - `FTP_USER` -> `FTP_USERNAME`
-  - `FTP_PASS` -> `FTP_PASSWORD`
+  - `FTP_SERVER` -> `FTP_SERVER`
+  - `FTP_USERNAME` -> `FTP_USERNAME`
+  - `FTP_PASSWORD` -> `FTP_PASSWORD`
   - `FTP_REMOTE_PATH` aparece em config antiga
 - Uso:
   - workflow FTP legado, upload de imagens, scripts auxiliares
@@ -126,11 +126,11 @@ Nao registrar valores reais aqui.
   - `OLIST_ACCESS_TOKEN`
   - `OLIST_REFRESH_TOKEN`
 - Legados / compatibilidade:
-  - `TOKEN_API_OLIST`
-  - `CLIENT_ID_API_OLIST`
-  - `CLIENT_SECRET_OLIST`
-  - `URL_REDIRCT_OLIST`
-  - `URL_TINY_OLIST`
+  - `OLIST_ACCESS_TOKEN`
+  - `OLIST_CLIENT_ID`
+  - `OLIST_CLIENT_SECRET`
+  - `OLIST_REDIRECT_URI`
+  - `OLIST_API_BASE_URL`
 - Tiny paralelos usados por scripts:
   - `TINY_CLIENT_ID`
   - `TINY_CLIENT_SECRET`

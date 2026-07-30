@@ -22,9 +22,9 @@ REQUIRED_SECRETS = {
     'Olist': [
         'OLIST_CLIENT_ID',
         'OLIST_CLIENT_SECRET',
-        'TOKEN_API_OLIST',
-        'CLIENT_ID_API_OLIST',
-        'CLIENT_SECRET_OLIST',
+        'OLIST_ACCESS_TOKEN',
+        'OLIST_CLIENT_ID',
+        'OLIST_CLIENT_SECRET',
         'OLIST_ACCESS_TOKEN',
         'OLIST_REFRESH_TOKEN',
     ],
@@ -36,9 +36,9 @@ REQUIRED_SECRETS = {
     'Email': [
         'EMAIL_FROM',
         'EMAIL_TO',
-        'EMAIL_SMTP_HOST',
-        'EMAIL_USER',
-        'EMAIL_PASSWORD',
+        'SMTP_HOST',
+        'SMTP_USER',
+        'SMTP_PASS',
     ],
     'Database': [
         'DB_HOST',

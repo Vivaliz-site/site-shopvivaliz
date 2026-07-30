@@ -9,7 +9,7 @@ Sistema **100% autônomo e 24/7** já está implementado e pronto para ativar.
 ```bash
 # PASSO 1: Adicionar Secrets no GitHub (3 min)
 # GitHub → Settings → Secrets → Actions
-# Adicionar: FTP_HOST, FTP_USER, FTP_PASS
+# Adicionar: FTP_SERVER, FTP_USERNAME, FTP_PASSWORD
 
 # PASSO 2: PowerShell (Admin) - Criar Task Scheduler (5 min)
 .\scripts\schedule-auto-sync.ps1
@@ -36,9 +36,9 @@ python scripts/health-check.py
 
 | Nome | Valor |
 |------|-------|
-| `FTP_HOST` | `ftp.shopvivaliz.com.br` |
-| `FTP_USER` | Seu usuário FTP |
-| `FTP_PASS` | Sua senha FTP |
+| `FTP_SERVER` | `ftp.shopvivaliz.com.br` |
+| `FTP_USERNAME` | Seu usuário FTP |
+| `FTP_PASSWORD` | Sua senha FTP |
 
 ### PASSO 2: Windows Task Scheduler Setup
 
@@ -170,7 +170,7 @@ Get-EventLog -LogName System | Where-Object { $_.Source -eq 'TaskScheduler' } | 
 ### GitHub Actions falha
 
 1. Verificar Secrets: https://github.com/fredmourao-ai/site-shopvivaliz/settings/secrets/actions
-2. Verificar se FTP_HOST, FTP_USER, FTP_PASS estão corretos
+2. Verificar se FTP_SERVER, FTP_USERNAME, FTP_PASSWORD estão corretos
 3. Ver logs: https://github.com/fredmourao-ai/site-shopvivaliz/actions
 
 ### FTP deploy não funciona

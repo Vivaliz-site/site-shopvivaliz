@@ -33,9 +33,9 @@ declare -A secrets_config=(
     ["FTP_PORT"]="📤 FTP Port|padrão|21"
     ["EMAIL_FROM"]="📧 Email From|padrão|noreply@shopvivaliz.com.br"
     ["EMAIL_TO"]="📧 Email To|padrão|fredmourao@gmail.com"
-    ["EMAIL_SMTP_HOST"]="📧 Email SMTP Host|padrão|smtp.gmail.com"
-    ["EMAIL_SMTP_PORT"]="📧 Email SMTP Port|padrão|587"
-    ["EMAIL_USER"]="📧 Email User|https://myaccount.google.com/app-passwords|seu-email@gmail.com"
+    ["SMTP_HOST"]="📧 Email SMTP Host|padrão|smtp.gmail.com"
+    ["SMTP_PORT"]="📧 Email SMTP Port|padrão|587"
+    ["SMTP_USER"]="📧 Email User|https://myaccount.google.com/app-passwords|seu-email@gmail.com"
 )
 
 echo "════════════════════════════════════════════════════════════════════"

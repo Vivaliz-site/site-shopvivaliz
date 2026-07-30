@@ -201,9 +201,9 @@ Status: 3 uploaded, 0 failed
 
 **FTP Config via Environment:**
 ```
-FTP_HOST       = ftp.shopvivaliz.com.br
-FTP_USER       = (GitHub Secret)
-FTP_PASS       = (GitHub Secret)
+FTP_SERVER       = ftp.shopvivaliz.com.br
+FTP_USERNAME       = (GitHub Secret)
+FTP_PASSWORD       = (GitHub Secret)
 FTP_PORT       = 21
 FTP_REMOTE_PATH = /public_html/
 ```
@@ -340,9 +340,9 @@ logs/merge-conflicts.json
 
 ### GitHub Secrets (Criptografadas)
 ```
-FTP_HOST        - Host FTP
-FTP_USER        - Usuário FTP
-FTP_PASS        - Senha FTP
+FTP_SERVER        - Host FTP
+FTP_USERNAME        - Usuário FTP
+FTP_PASSWORD        - Senha FTP
 PERSONAL_ACCESS_TOKEN - Token Git (opcional)
 ```
 
