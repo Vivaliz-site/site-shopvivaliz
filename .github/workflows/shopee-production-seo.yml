@@ -136,26 +136,28 @@ jobs:
           PY
           )"
           else
-            tail_text="$(tail -n 40 executor-output.log 2>/dev/null || true)"
-            item="$(python - <<'PY'
-          import json, os
+            item="$(python - "$EXIT_CODE" "$READY" "$MISSING_SECRETS" executor-output.log <<'PY'
+          import json, pathlib, sys
+          exit_code, ready, missing, log_path = sys.argv[1:]
+          tail = ''
+          p = pathlib.Path(log_path)
+          if p.exists():
+              tail = '\n'.join(p.read_text(encoding='utf-8', errors='replace').splitlines()[-40:])
           print(json.dumps({
             'run_id': '${{ github.run_id }}',
             'run_attempt': '${{ github.run_attempt }}',
             'commit': '${{ github.sha }}',
-            'exit_code': int(os.environ.get('EXIT_CODE') or 999),
+            'exit_code': int(exit_code or 999),
             'error': 'report_not_created',
-            'ready': os.environ.get('READY'),
-            'missing_secrets': [x for x in os.environ.get('MISSING_SECRETS','').split(',') if x],
-            'executor_tail': os.environ.get('TAIL_TEXT','')[-5000:],
+            'ready': ready,
+            'missing_secrets': [x for x in missing.split(',') if x],
+            'executor_tail': tail[-5000:],
           }, ensure_ascii=False, indent=2))
           PY
           )"
           fi
           body=$(printf '### Resultado automático do primeiro produto\n\n```json\n%s\n```\n\nRun: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}' "$item")
           gh issue comment 598 --repo "${{ github.repository }}" --body "$body"
-        env:
-          TAIL_TEXT: ${{ env.TAIL_TEXT }}
 
       - name: Upload immutable execution evidence
         if: always()
