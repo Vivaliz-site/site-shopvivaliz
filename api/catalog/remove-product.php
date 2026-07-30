@@ -2,7 +2,15 @@
 /**
  * Remove um produto específico do catálogo
  * Usage: php remove-product.php <olist_product_id ou sku>
+ *
+ * Script de CLI, mas fica dentro de api/ e portanto era alcancavel por HTTP:
+ * qualquer pessoa podia remover produtos do catalogo.
+ *
+ * Bloqueado a CLI porque depende de $argv/$argc — por HTTP nunca funcionou de
+ * verdade, so expunha a operacao. Nao ha o que ganhar mantendo a rota web.
  */
+require_once __DIR__ . '/../../config/require-agent-key.php';
+sv_require_cli();
 
 if ($argc < 2) {
     die("Usage: php remove-product.php <olist_product_id ou sku>\n");

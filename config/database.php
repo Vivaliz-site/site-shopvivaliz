@@ -13,13 +13,11 @@ class Database {
     private function __construct() {
         try {
             // Usar configurações de constants.php
-            $this->connection = new mysqli(
-                DB_HOST,
-                DB_USER,
-                DB_PASS,
-                DB_NAME,
-                DB_PORT
-            );
+            $this->connection = mysqli_init();
+            $this->connection->options(MYSQLI_OPT_CONNECT_TIMEOUT, 2);
+            if (!$this->connection->real_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME, (int)DB_PORT)) {
+                throw new Exception($this->connection->connect_error ?: 'Connection failed');
+            }
 
             // Verificar conexão
             if ($this->connection->connect_error) {

@@ -141,7 +141,16 @@ table {
   max-width: 100%;
 }
 
-@media (max-width: 980px), (min-resolution: 1.5dppx) {
+/* A condicao (min-resolution: 1.5dppx) foi removida daqui.
+   A virgula em media query e OU, entao qualquer tela HiDPI — todo monitor
+   4K/Retina em desktop — recebia o tratamento de viewport estreito, mesmo
+   com 2000px de largura disponivel.
+   Pior: o zoom do navegador altera o devicePixelRatio, entao ao passar de
+   ~150% a regra ligava de repente e ao diminuir o zoom desligava, fazendo o
+   layout saltar sem relacao com o espaco real.
+   Nao ha perda de cobertura: zoom ja reduz a largura do viewport em CSS
+   pixels, e telas densas de celular sao todas <= 980px. */
+@media (max-width: 980px) {
   .hero-carousel-track {
     min-height: clamp(220px, 44vw, 420px);
   }

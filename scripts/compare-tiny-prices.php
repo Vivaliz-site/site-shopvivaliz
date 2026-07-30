@@ -234,4 +234,3 @@ if ($failOnDiff && $hasDivergence) {
     exit(1);
 }
 exit(0);
-

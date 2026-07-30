@@ -472,6 +472,13 @@ $svNavCurrent = 'catalogo';
     <meta property="og:type" content="website">
     <meta property="og:url" content="<?= sv_catalog_esc($canonicalUrl) ?>">
     <meta property="og:site_name" content="Vivaliz">
+    <meta property="og:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png">
+    <meta property="og:image:alt" content="ShopVivaliz - Catálogo de produtos">
+    <meta property="og:locale" content="pt_BR">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="<?= sv_catalog_esc($pageTitle) ?>">
+    <meta name="twitter:description" content="<?= sv_catalog_esc($metaDescription) ?>">
+    <meta name="twitter:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png">
     <link rel="icon" href="/images/favicon.svg?v=2026-07-27" type="image/svg+xml">
     <link rel="icon" href="/favicon.png?v=2026-07-27" type="image/png">
     <link rel="alternate icon" href="/favicon.ico?v=2" type="image/x-icon">
@@ -483,8 +490,10 @@ $svNavCurrent = 'catalogo';
     <style>body { opacity: 1 !important; visibility: visible !important; }</style>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/catalog-conversion-v4.css?v=2026-07-26-v4">
-    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
+    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-29-2">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
+    <!-- Polimento de layout: precisa vir por ultimo para vencer na cascata. -->
+    <link rel="stylesheet" href="/css/layout-polish-v1.css?v=2026-07-29-1">
     <script type="application/ld+json"><?= json_encode($structuredData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
     <script type="application/ld+json"><?= json_encode($websiteSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
     <script type="application/ld+json"><?= json_encode($faqSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
@@ -540,6 +549,11 @@ $svNavCurrent = 'catalogo';
         <section class="container product-grid" id="product-grid" aria-live="polite">
             <?php foreach ($products as $product): ?>
                 <?php
+                // ShopVivaliz nao opera com pre-venda/"consulte o valor": produto
+                // sem preco real valido nao aparece na vitrine. Ver docs/AGENTS.md.
+                if ((float)($product['price'] ?? 0) <= 0) {
+                    continue;
+                }
                 $image      = $product['image_url'] !== '' ? $product['image_url'] : sv_catalog_default_image();
                 $productUrl = sv_catalog_product_href($product);
                 $contactUrl = sv_catalog_contact_url($product);
@@ -557,7 +571,7 @@ $svNavCurrent = 'catalogo';
                 <article class="product-card<?= $stock <= 0 ? ' is-out-of-stock' : '' ?>">
                     <?php $cardImages = array_values(array_unique(array_filter(array_merge([$image], is_array($product['images'] ?? null) ? $product['images'] : [])))); ?>
                     <a class="product-image" href="<?= sv_catalog_esc($productUrl) ?>" data-images="<?= sv_catalog_esc(json_encode(array_slice($cardImages, 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
-                        <img src="<?= sv_catalog_esc($image) ?>" alt="<?= sv_catalog_esc($product['name']) ?>" loading="lazy" onerror="this.src='<?= sv_catalog_default_image() ?>'">
+                        <img src="<?= sv_catalog_esc($image) ?>" alt="<?= sv_catalog_esc($product['name']) ?>" width="400" height="400" loading="lazy" decoding="async" onerror="this.src='<?= sv_catalog_default_image() ?>'">
                         <?php if ($stock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                     </a>
                     <div class="product-info">
@@ -605,7 +619,8 @@ $svNavCurrent = 'catalogo';
 
     <script src="/autodev/client.js"></script>
     <script src="/js/catalog.js?v=<?= filemtime(__DIR__ . '/js/catalog.js') ?: '1' ?>"></script>
-    <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
+    <script src="/js/catalog-conversion-v4.js?v=<?= filemtime(__DIR__ . '/js/catalog-conversion-v4.js') ?: '1' ?>"></script>
+    <script src="/js/first-purchase-popup-v1.js?v=2026-07-29-2" defer></script>
     <script>
     (function(){
         try {

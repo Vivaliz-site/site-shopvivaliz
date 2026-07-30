@@ -1,11 +1,11 @@
 .sv-first-coupon {
     position: fixed;
     right: 20px;
-    bottom: 22px;
+    bottom: calc(22px + var(--sv-bottom-ui-offset, 0px) + env(safe-area-inset-bottom));
     z-index: 100050;
-    width: min(390px, calc(100vw - 28px));
+    width: min(340px, calc(100vw - 32px));
     border: 1px solid rgba(6, 95, 70, 0.18);
-    border-radius: 28px;
+    border-radius: 24px;
     background:
         radial-gradient(circle at 12% 8%, rgba(16, 185, 129, 0.28), transparent 34%),
         radial-gradient(circle at 90% 0%, rgba(14, 165, 233, 0.18), transparent 32%),
@@ -59,7 +59,7 @@
 .sv-first-coupon__body {
     position: relative;
     z-index: 1;
-    padding: 28px;
+    padding: 22px;
 }
 
 .sv-first-coupon__eyebrow {
@@ -79,9 +79,9 @@
 
 .sv-first-coupon h2 {
     margin: 0;
-    max-width: 300px;
+    max-width: 280px;
     color: #fff;
-    font-size: clamp(28px, 5vw, 42px);
+    font-size: clamp(24px, 4.2vw, 34px);
     line-height: 0.96;
     letter-spacing: -0.055em;
 }
@@ -91,11 +91,11 @@
 }
 
 .sv-first-coupon p {
-    margin: 13px 0 18px;
-    max-width: 310px;
+    margin: 11px 0 14px;
+    max-width: 290px;
     color: rgba(241, 245, 249, 0.82);
-    font-size: 14px;
-    line-height: 1.55;
+    font-size: 13px;
+    line-height: 1.48;
 }
 
 .sv-first-coupon__code {
@@ -112,7 +112,7 @@
 
 .sv-first-coupon__code span {
     color: #bbf7d0;
-    font-size: 22px;
+    font-size: 19px;
     font-weight: 950;
     letter-spacing: 0.08em;
 }
@@ -137,7 +137,7 @@
 
 .sv-first-coupon__primary,
 .sv-first-coupon__secondary {
-    min-height: 46px;
+    min-height: 42px;
     border-radius: 999px;
     text-decoration: none;
     display: inline-flex;
@@ -169,19 +169,76 @@
 @media (max-width: 720px) {
     .sv-first-coupon {
         right: 12px;
-        left: 12px;
-        bottom: 82px;
-        width: auto;
-        border-radius: 24px;
+        left: auto;
+        bottom: calc(12px + var(--sv-bottom-ui-offset, 0px) + env(safe-area-inset-bottom));
+        width: min(308px, calc(100vw - 24px));
+        border-radius: 22px;
     }
 
     .sv-first-coupon__body {
-        padding: 24px 20px 20px;
+        padding: 18px 18px 16px;
+    }
+
+    .sv-first-coupon h2 {
+        max-width: none;
+        font-size: clamp(22px, 6vw, 28px);
+    }
+
+    .sv-first-coupon p {
+        margin-bottom: 12px;
+    }
+
+    .sv-first-coupon__code {
+        margin-bottom: 12px;
+        padding: 10px 12px;
+    }
+
+    .sv-first-coupon__code span {
+        font-size: 18px;
+    }
+
+    .sv-first-coupon__copy {
+        padding: 8px 12px;
     }
 
     .sv-first-coupon__actions {
         grid-template-columns: 1fr;
     }
+}
+
+.sv-first-coupon--compact {
+    width: min(300px, calc(100vw - 24px));
+}
+
+.sv-first-coupon--compact .sv-first-coupon__body {
+    padding: 16px;
+}
+
+.sv-first-coupon--compact .sv-first-coupon__eyebrow,
+.sv-first-coupon--compact .sv-first-coupon p,
+.sv-first-coupon--compact .sv-first-coupon__secondary,
+.sv-first-coupon--compact .sv-first-coupon__status {
+    display: none;
+}
+
+.sv-first-coupon--compact h2 {
+    max-width: none;
+    font-size: 22px;
+    line-height: 1.02;
+    margin-bottom: 10px;
+}
+
+.sv-first-coupon--compact .sv-first-coupon__code {
+    margin-bottom: 10px;
+    padding: 10px 12px;
+}
+
+.sv-first-coupon--compact .sv-first-coupon__code span {
+    font-size: 17px;
+}
+
+.sv-first-coupon--compact .sv-first-coupon__actions {
+    grid-template-columns: 1fr;
 }
 
 @media (prefers-reduced-motion: reduce) {

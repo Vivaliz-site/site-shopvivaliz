@@ -44,6 +44,25 @@ function svip_handle(): string
     return svip_env('INFINITEPAY_HANDLE') !== '' ? svip_env('INFINITEPAY_HANDLE') : 'frederico-castro-ap4';
 }
 
+/**
+ * URL do webhook ja com o segredo compartilhado embutido.
+ *
+ * A InfinitePay recebe esta URL no momento da criacao do link de pagamento e a
+ * chama de volta quando o status muda. Como o payload nao vem assinado, o token
+ * na query string e o unico fator que prova que a chamada veio do gateway —
+ * sem ele qualquer um poderia marcar um pedido como pago.
+ */
+function svip_webhook_url(string $baseUrl): string
+{
+    $url = $baseUrl . '/api/webhook-infinitepay.php';
+    $secret = svip_env('INFINITEPAY_WEBHOOK_SECRET');
+    if ($secret === '') {
+        error_log('[InfinitePay] INFINITEPAY_WEBHOOK_SECRET nao configurado: o webhook sera rejeitado com 503.');
+        return $url;
+    }
+    return $url . '?token=' . rawurlencode($secret);
+}
+
 function svip_money_to_cents(float $amount): int
 {
     return (int)round(max(0, $amount) * 100);
@@ -110,7 +129,7 @@ function svip_link_payload(array $order): array
         'items' => $items,
         'order_nsu' => $orderNumber,
         'redirect_url' => $baseUrl . '/checkout-return.php?gateway=infinitepay&result=approved',
-        'webhook_url' => $baseUrl . '/api/webhook-infinitepay.php',
+        'webhook_url' => svip_webhook_url($baseUrl),
         'customer' => [
             'name' => (string)($customer['name'] ?? ''),
             'email' => (string)($customer['email'] ?? ''),

@@ -392,7 +392,9 @@ $stockRaw   = (int)($resolved['stock'] ?? 0);
 $brandName  = sv_product_infer_brand($resolved);
 $gtin       = sv_product_gtin($resolved);
 $availability = sv_product_availability($stockRaw);
-$priceLabel = $priceRaw > 0 ? 'R$ ' . number_format($priceRaw, 2, ',', '.') : 'Consulte o valor';
+// ShopVivaliz nao opera com pre-venda: preco invalido/zero significa produto
+// indisponivel pra compra, nao "a consultar". Ver docs/AGENTS.md.
+$priceLabel = $priceRaw > 0 ? 'R$ ' . number_format($priceRaw, 2, ',', '.') : 'Produto indisponível';
 $contactUrl = sv_product_contact_url($sku, $name);
 $baseUrl = sv_official_base_url();
 $canonicalUrl = $baseUrl . ($rawSlug !== '' ? '/produto/' . $rawSlug : '/produto?sku=' . rawurlencode($sku));
@@ -584,8 +586,10 @@ if ($notFound) {
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/premium-theme.css?v=2026-07-11">
     <link rel="stylesheet" href="/css/product-conversion-v5.css?v=2026-07-26-v2">
-    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-19">
+    <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-29-2">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
+    <!-- Polimento de layout: precisa vir por ultimo para vencer na cascata. -->
+    <link rel="stylesheet" href="/css/layout-polish-v1.css?v=2026-07-29-1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -633,14 +637,14 @@ if ($notFound) {
         <div class="product-detail" data-sku="<?= sv_esc($sku) ?>" data-product-id="<?= sv_esc($olistId !== '' ? $olistId : $sku) ?>">
             <div style="display:flex; flex-direction:column; gap:12px; max-width: 100%;">
                 <div class="product-detail-image skeleton hover-zoom-container" id="product-zoom-box" data-sku="<?= sv_esc($sku) ?>" data-product-id="<?= sv_esc($olistId !== '' ? $olistId : $sku) ?>">
-                    <img id="main-product-image" src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" onerror="this.src='<?= sv_product_default_image() ?>'" loading="eager" fetchpriority="high">
+                    <img id="main-product-image" src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" width="600" height="600" onerror="this.src='<?= sv_product_default_image() ?>'" loading="eager" fetchpriority="high" decoding="async">
                 </div>
                 <!-- Interactive Product Gallery Thumbnails -->
                 <div class="product-gallery-thumbnails" style="display:flex; gap:10px; justify-content:center; margin-bottom:12px; flex-wrap:wrap;">
                     <?php foreach ($galleryImages as $galleryIndex => $galleryUrl): ?>
                     <button type="button" class="thumb-btn<?= $galleryIndex === 0 ? ' active' : '' ?>" data-src="<?= sv_esc($galleryUrl) ?>" aria-label="Ver imagem <?= $galleryIndex + 1 ?>"
                             style="width:54px; height:54px; border:<?= $galleryIndex === 0 ? '2px solid #0b4f88' : '1px solid #e2e8f0' ?>; border-radius:8px; overflow:hidden; cursor:pointer; padding:0; background:#fff; transition: border-color 0.2s;">
-                        <img src="<?= sv_esc($galleryUrl) ?>" alt="<?= sv_esc('Imagem adicional de ' . $name) ?>" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='<?= sv_product_default_image() ?>'">
+                        <img src="<?= sv_esc($galleryUrl) ?>" alt="<?= sv_esc('Imagem adicional de ' . $name) ?>" width="54" height="54" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='<?= sv_product_default_image() ?>'">
                     </button>
                     <?php endforeach; ?>
                 </div>
@@ -718,7 +722,7 @@ if ($notFound) {
                             <div id="alert-msg" style="margin-top: 10px; font-size: 0.9em; display: none;"></div>
                         </div>
                     <?php else: ?>
-                        <a class="btn btn-primary" href="<?= sv_esc($contactUrl) ?>">Falar com vendas</a>
+                        <button class="btn btn-disabled" type="button" disabled style="width: 100%;">Produto indisponível</button>
                     <?php endif; ?>
                     <a class="btn btn-secondary" href="/catalogo<?= $category !== '' ? '?categoria=' . rawurlencode($category) : '' ?>">← Voltar ao catálogo</a>
                 </div>
@@ -797,6 +801,11 @@ if ($notFound) {
         <h2 class="related-title">Você também pode gostar</h2>
         <div class="product-grid related-grid">
             <?php foreach ($related as $rp):
+                // ShopVivaliz nao vende sem preco real: produto sem preco valido
+                // nao aparece na vitrine de relacionados (nao ha "consulte o valor").
+                if ((float)($rp['price'] ?? 0) <= 0) {
+                    continue;
+                }
                 $rUrl = sv_product_url($rp);
                 $rContactUrl = sv_product_contact_url((string)$rp['sku'], (string)$rp['name']);
                 $rStock = (int)($rp['stock'] ?? 0);
@@ -805,7 +814,7 @@ if ($notFound) {
             ?>
             <article class="product-card<?= $rStock <= 0 ? ' is-out-of-stock' : '' ?>" data-sku="<?= sv_esc((string)$rp['sku']) ?>" data-product-id="<?= sv_esc((string)($rp['olist_product_id'] ?: $rp['sku'])) ?>">
                 <a class="product-image" href="<?= sv_esc($rUrl) ?>" data-sku="<?= sv_esc((string)$rp['sku']) ?>" data-product-id="<?= sv_esc((string)($rp['olist_product_id'] ?: $rp['sku'])) ?>">
-                    <img src="<?= sv_esc($rp['image_url']) ?>" alt="<?= sv_esc($rp['name']) ?>" loading="lazy" onerror="this.src='<?= sv_product_default_image() ?>'">
+                    <img src="<?= sv_esc($rp['image_url']) ?>" alt="<?= sv_esc($rp['name']) ?>" width="400" height="400" loading="lazy" decoding="async" onerror="this.src='<?= sv_product_default_image() ?>'">
                     <?php if ($rStock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                 </a>
                 <div class="product-info">
@@ -990,7 +999,7 @@ if ($notFound) {
 
     <script src="/js/product-conversion-v5.js?v=2026-07-26-v3"></script>
     <script src="/js/cro-interactions.js"></script>
-    <script src="/js/first-purchase-popup-v1.js?v=2026-07-19" defer></script>
+    <script src="/js/first-purchase-popup-v1.js?v=2026-07-29-2" defer></script>
     <script src="/js/auto-image-carousel.js?v=20260719-2"></script>
     <?php include __DIR__ . '/includes/footer.php'; ?>
 </body>

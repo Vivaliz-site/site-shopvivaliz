@@ -6,6 +6,11 @@
  */
 declare(strict_types=1);
 
+// Este arquivo nao carregava nenhum bootstrap, entao getenv() retornava vazio
+// para tudo — o que fazia a checagem de token responder 503 sempre.
+// Mesmo bootstrap usado por api/webhooks/order-status-update.php.
+require_once __DIR__ . '/../../config/bootstrap-env.php';
+
 header('Content-Type: application/json; charset=UTF-8');
 
 $log_dir = __DIR__ . '/../../logs';
@@ -24,6 +29,59 @@ function log_event($message) {
 
 // Log inicial
 log_event("Webhook recebido: event={$event} method=" . $_SERVER['REQUEST_METHOD']);
+
+/**
+ * Le um header de request de forma confiavel.
+ *
+ * Apache/PHP-FPM sem CGIPassAuth nao repassa Authorization para $_SERVER —
+ * comportamento ja confirmado ao vivo neste servidor em
+ * api/webhooks/order-status-update.php, onde a falta deste fallback fazia o
+ * endpoint rejeitar TODA chamada real da Tiny com 401.
+ */
+function olist_request_header(string $name): string
+{
+    $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+    $value = trim((string)($_SERVER[$serverKey] ?? ''));
+    if ($value !== '') {
+        return $value;
+    }
+    if (function_exists('getallheaders')) {
+        foreach (getallheaders() as $headerName => $headerValue) {
+            if (strcasecmp($headerName, $name) === 0) {
+                return trim((string)$headerValue);
+            }
+        }
+    }
+    return '';
+}
+
+/**
+ * Segredo compartilhado. Sem ele, qualquer um poderia disparar sincronizacoes
+ * de preco/estoque/produto neste endpoint.
+ *
+ * Reusa OLIST_WEBHOOK_TOKEN, que ja esta provisionado no servidor e e o mesmo
+ * nome usado por api/webhooks/order-status-update.php — assim nao ha um segundo
+ * segredo para gerenciar. ERP_WEBHOOK_TOKEN e mantido como alias pelo mesmo motivo.
+ */
+$olistWebhookSecret = trim((string)(getenv('OLIST_WEBHOOK_TOKEN') ?: getenv('ERP_WEBHOOK_TOKEN') ?: ($_ENV['OLIST_WEBHOOK_TOKEN'] ?? '')));
+$providedToken = olist_request_header('X-Webhook-Token');
+if ($providedToken === '') {
+    $auth = olist_request_header('Authorization');
+    $providedToken = stripos($auth, 'Bearer ') === 0 ? trim(substr($auth, 7)) : trim((string)($_GET['token'] ?? ''));
+}
+
+if ($olistWebhookSecret === '') {
+    http_response_code(503);
+    log_event('ERRO: OLIST_WEBHOOK_TOKEN nao configurado - webhook rejeitado');
+    echo json_encode(['error' => 'webhook_secret_not_configured']);
+    exit;
+}
+if (!hash_equals($olistWebhookSecret, $providedToken)) {
+    http_response_code(401);
+    log_event('ERRO: token invalido de ' . ($_SERVER['REMOTE_ADDR'] ?? '?'));
+    echo json_encode(['error' => 'invalid_token']);
+    exit;
+}
 
 if (!$event) {
     http_response_code(400);
