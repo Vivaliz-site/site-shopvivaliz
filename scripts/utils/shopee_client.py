@@ -21,6 +21,7 @@ from tenacity import (
 
 DEFAULT_BASE_URL = "https://partner.shopeemobile.com/api/v2"
 SANDBOX_BASE_URL = "https://openplatform.sandbox.test-stable.shopee.sg/api/v2"
+TOKEN_REFRESH_INTERVAL_SECONDS = int(os.environ.get("SHOPEE_TOKEN_REFRESH_INTERVAL_SECONDS", "7200"))
 
 
 def _is_retryable(exc: Exception) -> bool:
@@ -46,11 +47,13 @@ class ShopeeClient:
         self.shop_id = int(shop_id)
         self.base_url = self._resolve_base_url()
         self._session = requests.Session()
+        self._last_refresh_attempt_monotonic = 0.0
+        self._last_refresh_success_monotonic = 0.0
 
         if not self.access_token and not self.refresh_token:
             raise RuntimeError("Configure SHOPEE_ACCESS_TOKEN ou SHOPEE_REFRESH_TOKEN")
 
-        # Renova automaticamente na inicialização sempre que houver refresh token.
+        # Renova na inicialização. Se não houver access token, a renovação é obrigatória.
         if self.refresh_token:
             self._refresh_access_token(required=not bool(self.access_token))
 
@@ -105,12 +108,22 @@ class ShopeeClient:
             "sign": self._sign(path, ts),
         }
 
+    def _refresh_if_due(self) -> None:
+        """Renova preventivamente a cada 2 horas, sem esperar o token expirar."""
+        if not self.refresh_token:
+            return
+        now = time.monotonic()
+        elapsed = now - self._last_refresh_attempt_monotonic
+        if self._last_refresh_attempt_monotonic == 0.0 or elapsed >= TOKEN_REFRESH_INTERVAL_SECONDS:
+            self._refresh_access_token(required=not bool(self.access_token))
+
     def _refresh_access_token(self, *, required: bool = False) -> None:
         if not self.refresh_token:
             if required:
                 raise RuntimeError("SHOPEE_REFRESH_TOKEN não configurado")
             return
 
+        self._last_refresh_attempt_monotonic = time.monotonic()
         path = "/auth/access_token/get"
         timestamp = int(time.time())
         params = {
@@ -137,6 +150,7 @@ class ShopeeClient:
             self.access_token = new_access_token
             if new_refresh_token:
                 self.refresh_token = new_refresh_token
+            self._last_refresh_success_monotonic = time.monotonic()
         except Exception as exc:
             if required:
                 raise RuntimeError(f"Falha ao renovar token Shopee: {exc}") from exc
@@ -152,6 +166,7 @@ class ShopeeClient:
         files: dict | None = None,
         timeout: int = 30,
     ) -> requests.Response:
+        self._refresh_if_due()
         params = {**self._base_params(path), **(extra_params or {})}
         headers = {"Content-Type": "application/json"} if files is None else None
         resp = self._session.request(
