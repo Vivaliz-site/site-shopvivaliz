@@ -1,6 +1,6 @@
 # Relatório de Estrutura do Repositório Inteiro
 
-Gerado em: `2026-07-30T23:39:31.206396+00:00`
+Gerado em: `2026-07-30T23:39:34.460023+00:00`
 Arquivos varridos: `4419`
 
 ## Contagem por categoria
