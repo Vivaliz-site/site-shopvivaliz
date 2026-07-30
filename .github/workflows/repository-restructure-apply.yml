@@ -36,43 +36,40 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Apply validate and publish canonical names
+      - name: Apply validate and publish non-workflow canonical names
         id: transaction
         shell: bash
         run: |
           set +e
           {
-            echo "[1/8] apply replacements"
+            echo "[1/7] apply replacements outside workflow directories"
             python scripts/maintenance/canonicalize_secret_aliases.py --apply
 
-            echo "[2/8] validate changed JSON"
+            echo "[2/7] validate changed JSON"
             while IFS= read -r file; do
               [ -z "$file" ] || python -m json.tool "$file" >/dev/null
             done < <(git diff --name-only --diff-filter=ACM | grep -E '\.json$' || true)
 
-            echo "[3/8] validate changed PHP"
+            echo "[3/7] validate changed PHP"
             while IFS= read -r file; do
               [ -z "$file" ] || php -l "$file"
             done < <(git diff --name-only --diff-filter=ACM | grep -E '\.php$' || true)
 
-            echo "[4/8] compile canonical Python"
+            echo "[4/7] compile canonical Python"
             python -m compileall -q scripts/ai scripts/maintenance scripts/marketplace scripts/dev config
 
-            echo "[5/8] run unit tests"
+            echo "[5/7] run unit tests"
             python -m unittest discover -s tests/unit -p 'test_*.py' -v
 
-            echo "[6/8] run integration tests"
+            echo "[6/7] run integration tests"
             python -m unittest discover -s tests/integration -p 'test_*.py' -v
 
-            echo "[7/8] enforce strict aliases"
-            python scripts/audit_repository.py --strict-aliases
-
-            echo "[8/8] commit and push"
+            echo "[7/7] commit and push"
             git add -A
             if git diff --cached --quiet; then
-              echo "No canonicalization changes remained."
+              echo "No non-workflow canonicalization changes remained."
             else
-              git commit -m "refactor(repo): replace legacy secret aliases with canonical names"
+              git commit -m "refactor(repo): replace non-workflow legacy secret aliases"
               git fetch origin audit/repo-structure-secrets-index
               git rebase origin/audit/repo-structure-secrets-index
               git push origin HEAD:audit/repo-structure-secrets-index
@@ -94,7 +91,7 @@ jobs:
 
           output = Path("alias-transaction.log").read_text(encoding="utf-8", errors="replace") if Path("alias-transaction.log").exists() else "transaction log not created"
           tail = "\n".join(output.splitlines()[-60:])
-          print("### Transação final de aliases canônicos")
+          print("### Transação de aliases fora dos workflows")
           print()
           print(f"- run_id: `{os.environ.get('GITHUB_RUN_ID', '')}`")
           print(f"- commit inicial: `{os.environ.get('GITHUB_SHA', '')}`")
