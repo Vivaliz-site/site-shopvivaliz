@@ -7,6 +7,7 @@ on:
       - '.github/workflows/**'
       - 'config/**'
       - 'docs/knowledge/**'
+      - 'docs/operations/**'
       - 'docs/audits/**'
       - '.env*'
   push:
@@ -16,6 +17,7 @@ on:
       - '.github/workflows/**'
       - 'config/**'
       - 'docs/knowledge/**'
+      - 'docs/operations/**'
       - 'docs/audits/**'
       - '.env*'
   workflow_dispatch:
@@ -39,17 +41,22 @@ jobs:
         run: |
           python -m py_compile \
             scripts/audit_repository.py \
+            scripts/maintenance/restructure_repository.py \
             config/secrets.py \
             scripts/marketplace/shopee/full_catalog_optimizer.py \
             scripts/marketplace/shopee/production_seo_apply.py \
             scripts/shopee_full_catalog_optimizer.py \
             scripts/shopee_production_seo_apply.py
 
+      - name: Generate repository-wide structure report
+        run: |
+          python scripts/maintenance/restructure_repository.py --write-report
+
       - name: Run repository hygiene audit
         run: |
           python scripts/audit_repository.py
 
-      - name: Strict alias audit on protected branches
+      - name: Strict alias and root-doc audit on protected branches
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          python scripts/audit_repository.py --strict-aliases
+          python scripts/audit_repository.py --strict-aliases --strict-root-docs
