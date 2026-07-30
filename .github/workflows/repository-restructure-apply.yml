@@ -18,7 +18,7 @@ concurrency:
 jobs:
   apply:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
         with:
@@ -61,17 +61,26 @@ jobs:
             git push origin HEAD:audit/repo-structure-secrets-index
           fi
 
+      - name: Apply canonical secret names
+        run: |
+          python scripts/maintenance/canonicalize_secret_aliases.py --apply
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "refactor(repo): replace legacy secret aliases with canonical names"
+            git push origin HEAD:audit/repo-structure-secrets-index
+          fi
+
       - name: Reconcile manual final migrations
         run: python scripts/maintenance/reconcile_structure_manifest.py
 
       - name: Generate final report
         run: python scripts/maintenance/restructure_repository.py --write-report
 
-      - name: Validate final structure
+      - name: Validate final structure and aliases
         run: |
           python -m compileall -q scripts/ai scripts/maintenance scripts/marketplace scripts/dev config
           python scripts/maintenance/validate_structure_manifest.py
-          python scripts/audit_repository.py
+          python scripts/audit_repository.py --strict-aliases
 
       - name: Commit final reports
         if: always()
@@ -79,9 +88,10 @@ jobs:
           git add docs/audits/repository-wide-structure-report.md \
                   docs/audits/repository-wide-structure-report.json \
                   docs/audits/repository-restructure-blocked.json \
+                  docs/audits/secret-alias-canonicalization-report.json \
                   config/repository-structure-manifest.json || true
           if ! git diff --cached --quiet; then
-            git commit -m "docs(repo): record reconciled restructure reports"
+            git commit -m "docs(repo): record final restructure and alias reports"
             git push origin HEAD:audit/repo-structure-secrets-index
           fi
 
@@ -94,5 +104,6 @@ jobs:
             docs/audits/repository-wide-structure-report.md
             docs/audits/repository-wide-structure-report.json
             docs/audits/repository-restructure-blocked.json
+            docs/audits/secret-alias-canonicalization-report.json
             config/repository-structure-manifest.json
           if-no-files-found: warn
