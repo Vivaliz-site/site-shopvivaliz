@@ -1,42 +1,13 @@
 {
-  "generated_at": "2026-07-30T23:20:55.991045+00:00",
-  "total_files_scanned": 4709,
+  "generated_at": "2026-07-30T23:24:29.371681+00:00",
+  "total_files_scanned": 4414,
   "counts": {
-    "canonical": 1059,
-    "dev_script": 1,
-    "legacy_patch": 1,
-    "maintenance_script": 1,
-    "marketplace_script": 1,
-    "ok_or_unclassified": 2955,
+    "canonical": 767,
+    "ok_or_unclassified": 2953,
     "root_allowed": 4,
     "root_stub": 386,
     "root_wrapper": 121,
-    "scripts_wrapper": 180
+    "scripts_wrapper": 183
   },
-  "migration_candidates": [
-    {
-      "path": "release-notes/patches/cleanup-historico-credenciais-only.patch",
-      "category": "legacy_patch",
-      "target": "archive/2026/release-patches/",
-      "reason": "legacy patch"
-    },
-    {
-      "path": "scripts/shopvivaliz_auth.py",
-      "category": "dev_script",
-      "target": "scripts/dev/legacy-scripts/",
-      "reason": "unclassified Python script at scripts root"
-    },
-    {
-      "path": "scripts/shopvivaliz_auth_fixed.py",
-      "category": "maintenance_script",
-      "target": "scripts/maintenance/legacy/",
-      "reason": "maintenance script at scripts root"
-    },
-    {
-      "path": "scripts/tiny_sales_report.py",
-      "category": "marketplace_script",
-      "target": "scripts/marketplace/olist/legacy/",
-      "reason": "marketplace script at scripts root"
-    }
-  ]
+  "migration_candidates": []
 }
