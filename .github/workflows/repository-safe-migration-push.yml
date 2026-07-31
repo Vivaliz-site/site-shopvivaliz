@@ -1,0 +1,85 @@
+name: Repository Safe Migration Push
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - master
+    paths:
+      - '.github/migrations/current-plan.json'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repository-safe-migration-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Validate branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_NAME}" == 'main' || "${GITHUB_REF_NAME}" == 'master' ]]; then
+            echo '::error::Protected branches are forbidden.'
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Preflight plan
+        run: python scripts/maintenance/apply_migration_plan.py --plan .github/migrations/current-plan.json
+
+      - name: Run migration runner tests
+        run: python -m unittest -v tests/unit/test_apply_migration_plan.py
+
+      - name: Apply plan
+        run: python scripts/maintenance/apply_migration_plan.py --plan .github/migrations/current-plan.json --apply
+
+      - name: Validate applied plan
+        run: python scripts/maintenance/apply_migration_plan.py --plan .github/migrations/current-plan.json --check-applied
+
+      - name: Compile migrated Python files
+        run: |
+          python - <<'PY'
+          import json
+          import py_compile
+          from pathlib import Path
+
+          plan = json.loads(Path('.github/migrations/current-plan.json').read_text(encoding='utf-8'))
+          for item in plan['migrations']:
+              if item['kind'] != 'python':
+                  continue
+              py_compile.compile(item['source'], doraise=True)
+              py_compile.compile(item['target'], doraise=True)
+          PY
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'refactor(repo): aplicar plano seguro de migração'
+          git push origin HEAD:${GITHUB_REF_NAME}
+
+      - name: Upload migration report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-safe-migration-${{ github.run_id }}
+          path: docs/audits/repository-safe-migration-report.json
+          if-no-files-found: warn
+          retention-days: 30
