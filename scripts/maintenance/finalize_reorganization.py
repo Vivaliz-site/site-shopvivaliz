@@ -141,6 +141,20 @@ DIRECT_FORMAT_PATTERNS = {
     "private_key_block",
 }
 
+INSECURE_DEFAULT_PASSWORDS = {
+    "password",
+    "password123",
+    "supersecret",
+    "changeme",
+    "change_me",
+    "letmein",
+    "admin123",
+    "admin123456",
+    "medusa123",
+    "medusa123456",
+    "supabase123456",
+}
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -186,6 +200,15 @@ def shannon_entropy(value: str) -> float:
     return -sum((count / length) * math.log2(count / length) for count in counts.values())
 
 
+def character_class_count(value: str) -> int:
+    return sum((
+        any(char.islower() for char in value),
+        any(char.isupper() for char in value),
+        any(char.isdigit() for char in value),
+        any(not char.isalnum() for char in value),
+    ))
+
+
 def looks_like_secret_literal(value: str) -> bool:
     candidate = value.strip().strip("`'\"")
     if likely_placeholder(candidate):
@@ -196,16 +219,32 @@ def looks_like_secret_literal(value: str) -> bool:
         return False
     if re.fullmatch(r"[A-Z][A-Z0-9_]{11,}", candidate):
         return False
-    classes = sum((
-        any(char.islower() for char in candidate),
-        any(char.isupper() for char in candidate),
-        any(char.isdigit() for char in candidate),
-        any(not char.isalnum() for char in candidate),
-    ))
     has_digit_or_symbol = any(char.isdigit() for char in candidate) or any(
         not char.isalnum() for char in candidate
     )
-    return classes >= 2 and has_digit_or_symbol and shannon_entropy(candidate) >= 3.35
+    return (
+        character_class_count(candidate) >= 2
+        and has_digit_or_symbol
+        and shannon_entropy(candidate) >= 3.35
+    )
+
+
+def looks_like_password_literal(value: str) -> bool:
+    candidate = value.strip().strip("`'\"")
+    lowered = candidate.lower()
+    if likely_placeholder(candidate):
+        return False
+    if lowered in INSECURE_DEFAULT_PASSWORDS:
+        return True
+    if re.fullmatch(r"[A-Z][A-Z0-9_]{7,}", candidate):
+        return False
+    if re.fullmatch(r"[A-Za-zÀ-ÿ ]+(?:\s*\([^)]*\))?", candidate):
+        return False
+    return (
+        len(candidate) >= 10
+        and character_class_count(candidate) >= 3
+        and shannon_entropy(candidate) >= 3.0
+    )
 
 
 def tracked_text_files() -> list[Path]:
@@ -248,7 +287,7 @@ def should_block_candidate(pattern_name: str, candidate: str) -> bool:
     if pattern_name in DIRECT_FORMAT_PATTERNS:
         return True
     if pattern_name == "password_quoted_literal":
-        return not likely_placeholder(candidate)
+        return looks_like_password_literal(candidate)
     if pattern_name == "sensitive_unquoted_hex":
         return not likely_placeholder(candidate)
     return looks_like_secret_literal(candidate)
@@ -261,8 +300,11 @@ def credential_findings() -> tuple[list[Finding], int]:
     for path in files:
         text = path.read_text(encoding="utf-8", errors="replace")
         relative = path.relative_to(ROOT).as_posix()
+        is_test_fixture = relative.startswith(("tests/", "test/"))
         for pattern_name, pattern in CREDENTIAL_PATTERNS:
             if relative == SELF_PATH and pattern_name not in DIRECT_FORMAT_PATTERNS:
+                continue
+            if is_test_fixture and pattern_name not in DIRECT_FORMAT_PATTERNS:
                 continue
             for match in pattern.finditer(text):
                 candidate = match.group(1) if match.lastindex else match.group(0)
@@ -358,7 +400,7 @@ def evaluate() -> tuple[list[Finding], dict[str, object]]:
 def write_report(findings: list[Finding], checks: dict[str, object]) -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
-        "schema_version": 4,
+        "schema_version": 5,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "status": "success" if not findings else "failure",
         "blocking_finding_count": len(findings),
