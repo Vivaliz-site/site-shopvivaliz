@@ -23,7 +23,7 @@ function load_custom_css(): void
     // Quarta rodada de polimento visual. O arquivo é restrito às páginas onde
     // foram medidos conflitos na primeira dobra ou estados vazios excessivos.
     if (in_array($pageName, ['index', 'carrinho', 'checkout'], true)) {
-        echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v4.css?v=2026-07-31-1\">\n";
+        echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v4.css?v=2026-07-31-2\">\n";
         echo "    <script src=\"/js/visual-polish-v4.js?v=2026-07-31-1\" defer></script>\n";
     }
 
