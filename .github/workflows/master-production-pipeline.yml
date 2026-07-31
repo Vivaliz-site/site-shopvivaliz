@@ -260,6 +260,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: deploy
     timeout-minutes: 6
+    permissions:
+      contents: write
     steps:
       - name: Configure verified SSH host
         shell: bash
@@ -286,13 +288,64 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
             ubuntu@137.131.156.17 \
-            'bash -s' -- "$DEPLOY_SHA" <<'REMOTE_SCRIPT'
+            'bash -s' -- "$DEPLOY_SHA" > >(tee smoke-results.txt) 2>&1 <<'REMOTE_SCRIPT'
           set -euo pipefail
           expected_sha="$1"
           smoke_script='/home/ubuntu/shopvivaliz-deploy/current/scripts/production-smoke-test.sh'
           test -r "$smoke_script"
           bash "$smoke_script" "$expected_sha"
           REMOTE_SCRIPT
+
+      - name: Publish immutable deployment evidence branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVIDENCE_BRANCH: deployment-evidence
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/deployment-evidence.json
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          results = [
+              line.strip()
+              for line in Path('smoke-results.txt').read_text(encoding='utf-8').splitlines()
+              if line.startswith('OK ')
+          ]
+          evidence = {
+              'status': 'PRODUCTION_UPDATED',
+              'sha': os.environ['DEPLOY_SHA'],
+              'workflow_run_id': os.environ['GITHUB_RUN_ID'],
+              'workflow_run_url': f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+              'jobs': {
+                  'validate': 'success',
+                  'deploy': 'success',
+                  'smoke_test': 'success',
+              },
+              'results': results,
+              'verified_at': datetime.now(timezone.utc).isoformat(),
+          }
+          print(json.dumps(evidence, ensure_ascii=False, indent=2))
+          PY
+
+          cat /tmp/deployment-evidence.json
+          content="$(base64 -w0 /tmp/deployment-evidence.json)"
+          path='deployment/latest.json'
+          existing_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EVIDENCE_BRANCH}" --jq '.sha' 2>/dev/null || true)"
+          if [[ -n "$existing_sha" ]]; then
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${path}" \
+              -f message="evidence: production ${DEPLOY_SHA}" \
+              -f content="$content" \
+              -f branch="$EVIDENCE_BRANCH" \
+              -f sha="$existing_sha" >/dev/null
+          else
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${path}" \
+              -f message="evidence: production ${DEPLOY_SHA}" \
+              -f content="$content" \
+              -f branch="$EVIDENCE_BRANCH" >/dev/null
+          fi
 
   deployment_failure_notice:
     name: Deployment Failure Notice
