@@ -20,6 +20,13 @@ function load_custom_css(): void
         echo "    <script src=\"/js/home-mobile-layout.js?v=2026-07-28-2\" defer></script>\n";
     }
 
+    // Quarta rodada de polimento visual. O arquivo é restrito às páginas onde
+    // foram medidos conflitos na primeira dobra ou estados vazios excessivos.
+    if (in_array($pageName, ['index', 'carrinho', 'checkout'], true)) {
+        echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v4.css?v=2026-07-31-1\">\n";
+        echo "    <script src=\"/js/visual-polish-v4.js?v=2026-07-31-1\" defer></script>\n";
+    }
+
     // CSS opcional criado pelo admin continua sendo lido do storage compartilhado.
     $cssDir = $root . '/storage/css-custom';
     if (!is_dir($cssDir)) {
