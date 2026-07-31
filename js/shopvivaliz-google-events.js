@@ -42,15 +42,34 @@
     }
   }
 
-  function trackCartEvent(eventName) {
-    var items = readCart().map(itemFromProduct).filter(function (item) {
+  function pushOnce(key, eventName, params) {
+    var storageKey = 'sv_ga_once_' + key;
+    try {
+      if (sessionStorage.getItem(storageKey) === '1') return;
+      sessionStorage.setItem(storageKey, '1');
+    } catch (error) {}
+    push(eventName, params);
+  }
+
+  function cartItems() {
+    return readCart().map(itemFromProduct).filter(function (item) {
       return item.item_id || item.item_name;
     });
-    push(eventName, {
+  }
+
+  function cartPayload() {
+    var items = cartItems();
+    return {
       currency: 'BRL',
       value: itemsValue(items),
       items: items
-    });
+    };
+  }
+
+  function trackCartEvent(eventName, onceKey) {
+    var payload = cartPayload();
+    if (onceKey) pushOnce(onceKey, eventName, payload);
+    else push(eventName, payload);
   }
 
   function parseProductPayload(button) {
@@ -63,6 +82,15 @@
     } catch (error) {
       return null;
     }
+  }
+
+  function leadChannel(element) {
+    if (!element) return '';
+    var href = String(element.getAttribute('href') || '').toLowerCase();
+    if (href.indexOf('wa.me/') !== -1 || href.indexOf('whatsapp') !== -1) return 'whatsapp';
+    if (href.indexOf('mailto:') === 0) return 'email';
+    if (href.indexOf('tel:') === 0) return 'telefone';
+    return '';
   }
 
   function bindClicks() {
@@ -92,19 +120,40 @@
 
       var checkout = event.target && event.target.closest ? event.target.closest('#btn-checkout,.btn-checkout') : null;
       if (checkout) {
-        trackCartEvent('begin_checkout');
+        trackCartEvent('begin_checkout', 'begin_checkout_cart');
+      }
+
+      var contactLink = event.target && event.target.closest
+        ? event.target.closest('a[href*="wa.me"],a[href*="whatsapp"],a[href^="mailto:"],a[href^="tel:"]')
+        : null;
+      var channel = leadChannel(contactLink);
+      if (channel) {
+        push('generate_lead', {
+          lead_source: 'site',
+          lead_channel: channel,
+          page_location_path: window.location.pathname
+        });
       }
     }, true);
   }
 
-  function bindSearches() {
+  function bindForms() {
     document.addEventListener('submit', function (event) {
-      var form = event.target && event.target.matches && event.target.matches('.catalog-search') ? event.target : null;
-      if (!form) return;
-      var input = form.querySelector('input[type="search"], input[name="q"], input[name="busca"]');
-      var term = input ? String(input.value || '').trim() : '';
-      if (term !== '') {
-        push('search', { search_term: term });
+      var form = event.target;
+      if (!form || !form.matches) return;
+
+      if (form.matches('.catalog-search')) {
+        var input = form.querySelector('input[type="search"], input[name="q"], input[name="busca"]');
+        var term = input ? String(input.value || '').trim() : '';
+        if (term !== '') push('search', { search_term: term });
+      }
+
+      if (form.matches('#contact-form,.contact-form,form[action*="contato"],form[action*="contact"]')) {
+        push('generate_lead', {
+          lead_source: 'site',
+          lead_channel: 'formulario',
+          page_location_path: window.location.pathname
+        });
       }
     }, true);
   }
@@ -114,7 +163,7 @@
     var product = window.ShopVivalizProductContext || null;
     if (product) {
       var item = itemFromProduct(product);
-      push('view_item', {
+      pushOnce('view_item_' + item.item_id, 'view_item', {
         currency: 'BRL',
         value: number(item.price),
         items: [item]
@@ -127,30 +176,19 @@
         .filter(Boolean)
         .map(itemFromProduct);
       if (listItems.length) {
-        push('view_item_list', {
+        pushOnce('view_item_list_' + path, 'view_item_list', {
           item_list_name: 'Catalogo Vivaliz',
           items: listItems
         });
       }
     }
 
-    if (path === '/carrinho') {
-      trackCartEvent('view_cart');
-    }
+    if (path === '/carrinho') trackCartEvent('view_cart', 'view_cart');
+    if (path === '/checkout') trackCartEvent('begin_checkout', 'begin_checkout_cart');
 
-    if (path === '/checkout') {
-      trackCartEvent('begin_checkout');
-    }
-
-    var purchase = window.ShopVivalizPurchaseContext || null;
-    if (purchase && purchase.transaction_id) {
-      push('purchase', {
-        transaction_id: String(purchase.transaction_id),
-        currency: 'BRL',
-        value: number(purchase.value),
-        items: Array.isArray(purchase.items) ? purchase.items.map(itemFromProduct) : []
-      });
-    }
+    // Revenue is deliberately not emitted from browser state. The canonical
+    // purchase event is sent server-side only after the payment webhook marks
+    // the order approved, preventing boleto/order creation from inflating ROAS.
   }
 
   window.ShopVivalizGoogleEvents = {
@@ -162,12 +200,12 @@
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
       bindClicks();
-      bindSearches();
+      bindForms();
       trackPageContext();
     });
   } else {
     bindClicks();
-    bindSearches();
+    bindForms();
     trackPageContext();
   }
 })();
