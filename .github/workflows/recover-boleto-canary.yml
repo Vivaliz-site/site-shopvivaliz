@@ -132,12 +132,13 @@ jobs:
           }
           trap cleanup EXIT
 
-          set +e
-          sudo -u www-data -- env SHOPVIVALIZ_RECOVERY_ORDER="$target_order" \
+          if sudo -u www-data -- env SHOPVIVALIZ_RECOVERY_ORDER="$target_order" \
             php "$current/scripts/recover-boleto-canary.php" \
-            > "$raw_output" 2> "$stderr_log"
-          script_rc=$?
-          set -e
+            > "$raw_output" 2> "$stderr_log"; then
+            script_rc=0
+          else
+            script_rc=$?
+          fi
 
           sudo python3 - "$target_order" "$log_excerpt" <<'PY'
           import glob
