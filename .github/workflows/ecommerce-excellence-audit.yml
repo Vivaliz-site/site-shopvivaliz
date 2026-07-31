@@ -100,13 +100,43 @@ jobs:
     name: Validate real production from Oracle
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@v6
         with:
           persist-credentials: false
           fetch-depth: 1
+
+      - name: Wait for exact SHA production evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 36); do
+            if gh api \
+              -H 'Accept: application/vnd.github.raw+json' \
+              "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence" \
+              > /tmp/deployment-latest.json 2>/tmp/deployment-error.txt; then
+              if python3 - "$EXPECTED_SHA" /tmp/deployment-latest.json <<'PY'
+          import json, sys
+          expected = sys.argv[1].lower()
+          data = json.load(open(sys.argv[2], encoding='utf-8'))
+          assert str(data.get('sha', '')).lower() == expected
+          assert data.get('status') == 'PRODUCTION_UPDATED'
+          assert all((data.get('jobs') or {}).get(name) == 'success' for name in ('validate', 'deploy', 'smoke_test'))
+          PY
+              then
+                ready=1
+                break
+              fi
+            fi
+            sleep 20
+          done
+          test "$ready" = '1'
 
       - name: Configure verified SSH host
         shell: bash
@@ -158,7 +188,7 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
             ubuntu@137.131.156.17 \
-            'php /tmp/google-commerce-config-audit.php > /tmp/google-commerce-config.json'
+            'SHOPVIVALIZ_ROOT=/home/ubuntu/shopvivaliz-deploy/current php /tmp/google-commerce-config-audit.php > /tmp/google-commerce-config.json'
 
       - name: Download redacted live evidence
         if: always()
