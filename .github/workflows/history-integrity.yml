@@ -1,0 +1,53 @@
+name: History Integrity
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '43 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: history-integrity-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-history:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout complete repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate sanitized history
+        run: python scripts/maintenance/validate_sanitized_history.py
+
+      - name: Verify evidence files
+        if: always()
+        run: |
+          set -euo pipefail
+          test -s artifacts/history-integrity/report.json
+          test -s artifacts/history-integrity/report.md
+
+      - name: Upload history evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: history-integrity-${{ github.run_id }}
+          path: artifacts/history-integrity/
+          if-no-files-found: error
+          retention-days: 90
