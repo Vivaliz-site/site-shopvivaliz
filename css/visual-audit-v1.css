@@ -33,6 +33,10 @@ body {
 
 /* Em notebooks e janelas menores, os selos não devem dominar a dobra. */
 @media (min-width: 821px) and (max-width: 1150px) {
+    .hero-carousel-section {
+        margin-top: 0 !important;
+    }
+
     .trust-bar-item {
         gap: 8px !important;
         padding: 12px 10px !important;
