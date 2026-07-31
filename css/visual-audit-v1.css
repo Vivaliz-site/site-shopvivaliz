@@ -50,8 +50,7 @@ body {
     }
 
     .trust-bar-text span {
-        font-size: 11px !important;
-        line-height: 1.25 !important;
+        display: none !important;
     }
 }
 
