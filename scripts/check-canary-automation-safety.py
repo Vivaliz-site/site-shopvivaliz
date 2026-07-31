@@ -117,6 +117,14 @@ def main() -> int:
             findings,
             path=RECOVERY_WORKFLOW,
             text=text,
+            rule="shell_fail_fast_disabled",
+            pattern=r"^\s*set\s+\+e\s*$",
+            message="Production reconciliation cannot disable shell fail-fast behavior.",
+        )
+        add_matches(
+            findings,
+            path=RECOVERY_WORKFLOW,
+            text=text,
             rule="prior_evidence_deletion",
             pattern=r"rm\s+-f\s+['\"]?\$(?:marker|legacy_marker|evidence)['\"]?",
             message="Prior or immutable evidence must never be deleted before reconciliation.",
