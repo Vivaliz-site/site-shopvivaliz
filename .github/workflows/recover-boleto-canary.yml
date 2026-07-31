@@ -107,20 +107,35 @@ jobs:
           test "$(cat "$current/.release-sha")" = "$expected_sha"
 
           if [[ -f "$marker" ]]; then
-            python3 - "$marker" <<'PY'
+            marker_action="$(python3 - "$marker" <<'PY'
           import json, sys
           data = json.load(open(sys.argv[1], encoding='utf-8'))
           if data.get('ok') is True:
-              print(json.dumps(data, ensure_ascii=False, indent=2))
-              raise SystemExit(0)
-          print('A previous recovery attempt failed; refusing an automatic provider retry.', file=sys.stderr)
-          raise SystemExit(1)
+              print('complete')
+          elif data.get('error') == 'recovery_order_lock_unavailable':
+              print('retry_permission_only')
+          else:
+              print('refuse')
           PY
-            exit $?
+          )"
+            case "$marker_action" in
+              complete)
+                cat "$marker"
+                exit 0
+                ;;
+              retry_permission_only)
+                rm -f "$marker"
+                ;;
+              *)
+                echo 'A previous recovery attempt reached an unknown state; refusing a provider retry.' >&2
+                exit 1
+                ;;
+            esac
           fi
 
           output_file="/tmp/boleto-recovery-${target_order}.json"
-          if ! SHOPVIVALIZ_RECOVERY_ORDER="$target_order" php "$current/scripts/recover-boleto-canary.php" > "$output_file"; then
+          if ! sudo -u www-data -- env SHOPVIVALIZ_RECOVERY_ORDER="$target_order" \
+            php "$current/scripts/recover-boleto-canary.php" > "$output_file"; then
             cp "$output_file" "$marker"
             chmod 600 "$marker"
             cat "$output_file"
