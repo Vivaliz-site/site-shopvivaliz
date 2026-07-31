@@ -1,0 +1,127 @@
+name: Ecommerce Excellence Audit
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: '37 6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ecommerce-excellence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-audit:
+    name: Validate all tracked project files
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: Run full tracked-file audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ecommerce-excellence-audit.py \
+            --mode static \
+            --output artifacts/ecommerce-static.json \
+            --fail-on blocker
+
+      - name: Upload static audit evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ecommerce-static-audit-${{ github.sha }}
+          path: |
+            artifacts/ecommerce-static.json
+            artifacts/ecommerce-static.md
+          retention-days: 30
+
+  live-production-audit:
+    name: Validate real production from Oracle
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Copy auditor without copying credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            scripts/ecommerce-excellence-audit.py \
+            ubuntu@137.131.156.17:/tmp/shopvivaliz-ecommerce-audit.py
+
+      - name: Run live SEO sitemap feed and security audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'python3 /tmp/shopvivaliz-ecommerce-audit.py --mode live --base-url https://shopvivaliz.com.br --output /tmp/ecommerce-live.json --fail-on blocker'
+          scp \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17:/tmp/ecommerce-live.json artifacts/ecommerce-live.json
+          scp \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17:/tmp/ecommerce-live.md artifacts/ecommerce-live.md
+
+      - name: Upload live production evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ecommerce-live-audit-${{ github.sha }}
+          path: |
+            artifacts/ecommerce-live.json
+            artifacts/ecommerce-live.md
+          if-no-files-found: error
+          retention-days: 30
