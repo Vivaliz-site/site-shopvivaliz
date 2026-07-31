@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
+
 header('Content-Type: application/xml; charset=UTF-8');
+header('Cache-Control: public, max-age=900, stale-while-revalidate=3600');
+header('X-Robots-Tag: noindex, follow');
+
 require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/blog-article-repository.php';
 
@@ -15,89 +19,140 @@ $today = date('Y-m-d', $catalogMTime > 0 ? $catalogMTime : time());
 $products = svcr_products();
 $blogRepository = BlogArticleRepository::fromApplicationDatabase();
 
-function sx(string $s): string { return htmlspecialchars($s, ENT_XML1, 'UTF-8'); }
+function sx(string $value): string
+{
+    return htmlspecialchars($value, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+}
+
+function sitemap_date(mixed $value, string $fallback): string
+{
+    if (is_int($value) || (is_string($value) && ctype_digit($value))) {
+        $timestamp = (int)$value;
+    } else {
+        $timestamp = strtotime(trim((string)$value));
+    }
+    return $timestamp && $timestamp > 0 ? gmdate('Y-m-d', $timestamp) : $fallback;
+}
+
+function sitemap_absolute_image(string $base, string $image): string
+{
+    $image = trim($image);
+    if ($image === '') return '';
+    if (str_starts_with($image, 'https://') || str_starts_with($image, 'http://')) return $image;
+    return $base . '/' . ltrim($image, '/');
+}
+
+/** @var array<string, true> $emitted */
+$emitted = [];
+
+function sitemap_emit(
+    string $loc,
+    string $lastmod,
+    string $changefreq,
+    string $priority,
+    string $image = '',
+    string $imageTitle = ''
+): void {
+    global $emitted;
+    if (isset($emitted[$loc])) return;
+    $emitted[$loc] = true;
+
+    echo "  <url>\n";
+    echo '    <loc>' . sx($loc) . "</loc>\n";
+    echo '    <lastmod>' . sx($lastmod) . "</lastmod>\n";
+    echo '    <changefreq>' . sx($changefreq) . "</changefreq>\n";
+    echo '    <priority>' . sx($priority) . "</priority>\n";
+    if ($image !== '') {
+        echo "    <image:image>\n";
+        echo '      <image:loc>' . sx($image) . "</image:loc>\n";
+        if ($imageTitle !== '') {
+            echo '      <image:title>' . sx($imageTitle) . "</image:title>\n";
+        }
+        echo "    </image:image>\n";
+    }
+    echo "  </url>\n";
+}
 
 echo '<?xml version="1.0" encoding="UTF-8"?>' . PHP_EOL;
 echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">' . PHP_EOL;
 
 $pages = [
     ['loc' => '/', 'priority' => '1.0', 'freq' => 'daily'],
-    ['loc' => '/catalogo/', 'priority' => '0.9', 'freq' => 'daily'],
-    ['loc' => '/sobre/', 'priority' => '0.5', 'freq' => 'monthly'],
-    ['loc' => '/contato/', 'priority' => '0.5', 'freq' => 'monthly'],
-    ['loc' => '/faq/', 'priority' => '0.5', 'freq' => 'monthly'],
+    ['loc' => '/catalogo', 'priority' => '0.9', 'freq' => 'daily'],
+    ['loc' => '/sobre', 'priority' => '0.5', 'freq' => 'monthly'],
+    ['loc' => '/contato', 'priority' => '0.5', 'freq' => 'monthly'],
+    ['loc' => '/faq', 'priority' => '0.5', 'freq' => 'monthly'],
     ['loc' => '/termos', 'priority' => '0.3', 'freq' => 'yearly'],
-    ['loc' => '/politica-privacidade/', 'priority' => '0.3', 'freq' => 'yearly'],
+    ['loc' => '/politica-privacidade', 'priority' => '0.3', 'freq' => 'yearly'],
     ['loc' => '/politica-devolucoes', 'priority' => '0.3', 'freq' => 'yearly'],
     ['loc' => '/politica-entrega', 'priority' => '0.3', 'freq' => 'yearly'],
-    ['loc' => '/blog/', 'priority' => '0.7', 'freq' => 'weekly'],
+    ['loc' => '/blog', 'priority' => '0.7', 'freq' => 'weekly'],
 ];
 
-foreach ($pages as $p) {
-    echo "  <url>\n";
-    echo '    <loc>' . sx($base . $p['loc']) . "</loc>\n";
-    echo "    <lastmod>{$today}</lastmod>\n";
-    echo '    <changefreq>' . $p['freq'] . "</changefreq>\n";
-    echo '    <priority>' . $p['priority'] . "</priority>\n";
-    echo "  </url>\n";
+foreach ($pages as $page) {
+    sitemap_emit(
+        $base . $page['loc'],
+        $today,
+        (string)$page['freq'],
+        (string)$page['priority']
+    );
 }
 
-foreach ($blogRepository->published('', '', 200) as $article) {
+foreach ($blogRepository->published('', '', 500) as $article) {
     $slug = trim((string)($article['slug'] ?? ''));
     if ($slug === '') continue;
-    $lastmod = trim((string)($article['updated_at'] ?? $article['published_at'] ?? $today));
-    $image = trim((string)($article['image'] ?? ''));
-    echo "  <url>\n";
-    echo '    <loc>' . sx($base . '/blog/' . rawurlencode($slug)) . "</loc>\n";
-    echo '    <lastmod>' . sx($lastmod !== '' ? $lastmod : $today) . "</lastmod>\n";
-    echo "    <changefreq>monthly</changefreq>\n";
-    echo "    <priority>0.7</priority>\n";
-    if ($image !== '') {
-        $absoluteImage = str_starts_with($image, 'http') ? $image : $base . '/' . ltrim($image, '/');
-        echo "    <image:image>\n";
-        echo '      <image:loc>' . sx($absoluteImage) . "</image:loc>\n";
-        echo '      <image:title>' . sx((string)($article['title'] ?? '')) . "</image:title>\n";
-        echo "    </image:image>\n";
-    }
-    echo "  </url>\n";
+    $lastmod = sitemap_date($article['updated_at'] ?? $article['published_at'] ?? '', $today);
+    $image = sitemap_absolute_image($base, (string)($article['image'] ?? ''));
+    sitemap_emit(
+        $base . '/blog/' . rawurlencode($slug),
+        $lastmod,
+        'monthly',
+        '0.7',
+        $image,
+        trim((string)($article['title'] ?? ''))
+    );
 }
 
 $categories = [];
 foreach ($products as $product) {
     if (!is_array($product)) continue;
     $category = trim((string)($product['category'] ?? ''));
-    if ($category === '') continue;
-    $categories[$category] = true;
+    if ($category !== '') $categories[$category] = true;
 }
-
-ksort($categories);
+ksort($categories, SORT_NATURAL | SORT_FLAG_CASE);
 
 foreach (array_keys($categories) as $category) {
-    echo "  <url>\n";
-    echo '    <loc>' . sx($base . '/catalogo/?categoria=' . rawurlencode($category)) . "</loc>\n";
-    echo "    <lastmod>{$today}</lastmod>\n";
-    echo "    <changefreq>weekly</changefreq>\n";
-    echo "    <priority>0.7</priority>\n";
-    echo "  </url>\n";
+    sitemap_emit(
+        $base . '/catalogo?categoria=' . rawurlencode($category),
+        $today,
+        'weekly',
+        '0.7'
+    );
 }
 
 foreach ($products as $product) {
     if (!is_array($product)) continue;
     $slug = trim((string)($product['slug'] ?? ''));
-    if ($slug === '') continue;
-    $image = trim((string)($product['image_url'] ?? ''));
+    $name = trim((string)($product['name'] ?? ''));
+    $image = sitemap_absolute_image($base, (string)($product['image_url'] ?? ''));
     $price = (float)($product['price'] ?? 0);
-    if ($price <= 0 || $image === '') continue;
-    echo "  <url>\n";
-    echo '    <loc>' . sx("{$base}/produto/{$slug}") . "</loc>\n";
-    echo "    <lastmod>{$today}</lastmod>\n";
-    echo "    <changefreq>weekly</changefreq>\n";
-    echo "    <priority>0.8</priority>\n";
-    echo "    <image:image>\n";
-    echo '      <image:loc>' . sx($image) . "</image:loc>\n";
-    echo '      <image:title>' . sx(trim((string)($product['name'] ?? ''))) . "</image:title>\n";
-    echo "    </image:image>\n";
-    echo "  </url>\n";
+    if ($slug === '' || $name === '' || $price <= 0 || $image === '') continue;
+
+    $lastmod = sitemap_date(
+        $product['updated_at']
+            ?? $product['modified_at']
+            ?? $product['last_update']
+            ?? $catalogMTime,
+        $today
+    );
+    sitemap_emit(
+        $base . '/produto/' . rawurlencode($slug),
+        $lastmod,
+        'weekly',
+        '0.8',
+        $image,
+        $name
+    );
 }
 
 echo '</urlset>' . PHP_EOL;
