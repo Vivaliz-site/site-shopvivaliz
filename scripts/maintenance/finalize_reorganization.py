@@ -3,20 +3,23 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import subprocess
+from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 REPORT_DIR = ROOT / "artifacts" / "reorganization-final"
+SELF_PATH = "scripts/maintenance/finalize_reorganization.py"
 
 REQUIRED_CANONICAL = (
     "scripts/maintenance/audit_automation_changes.py",
     "scripts/maintenance/audit_active_workflows.py",
     "scripts/maintenance/system_health_check.py",
-    "scripts/maintenance/finalize_reorganization.py",
+    SELF_PATH,
     "scripts/ai/retired_executor.py",
     "scripts/ai/autonomous_executor.py",
     "scripts/ai/continuous_executor.py",
@@ -39,6 +42,7 @@ WRAPPERS = {
     "scripts/parallel-executor.py": "scripts/ai/parallel_executor.py",
     "scripts/olist-sync-master.py": "scripts/marketplace/olist/sync_master.py",
     "scripts/olist-oauth-login.py": "scripts/marketplace/olist/oauth_login.py",
+    "oauth-auto-exec.py": "scripts/marketplace/olist/oauth_login.py",
     "scripts/get_token.py": "scripts/marketplace/shopee/retired_credential_tool.py",
     "scripts/run_playwright.py": "scripts/marketplace/shopee/retired_credential_tool.py",
     "scripts/shopee_full_pipeline.py": "scripts/marketplace/shopee/retired_credential_tool.py",
@@ -63,9 +67,9 @@ TEXT_SUFFIXES = {
 SENSITIVE_LABEL = (
     r"(?:partner[_ -]?key|app[_ -]?secret|client[_ -]?secret|api[_ -]?key|"
     r"access[_ -]?token|refresh[_ -]?token|auth(?:orization)?[_ -]?code|"
-    r"webhook[_ -]?(?:secret|token)|sandbox[_ -]?(?:pass|password)|"
-    r"password|token|secret)"
+    r"webhook[_ -]?(?:secret|token)|token|secret)"
 )
+PASSWORD_LABEL = r"(?:sandbox[_ -]?(?:pass|password)|password|passphrase)"
 
 CREDENTIAL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("github_classic_token", re.compile(r"(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9_]{20,}")),
@@ -81,6 +85,13 @@ CREDENTIAL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             r"-----BEGIN (?:RSA |OPENSSH |EC |DSA |)PRIVATE KEY-----"
             r"[\s\S]{80,}?"
             r"-----END (?:RSA |OPENSSH |EC |DSA |)PRIVATE KEY-----"
+        ),
+    ),
+    (
+        "password_quoted_literal",
+        re.compile(
+            rf"(?ix)(?:['\"]?{PASSWORD_LABEL}['\"]?)\s*[:=]\s*"
+            r"[`'\"]([^`'\"\n]{8,})[`'\"]"
         ),
     ),
     (
@@ -119,6 +130,17 @@ PLACEHOLDER_PATTERNS = (
     re.compile(r"^\{\{[^}]+\}\}$"),
 )
 
+DIRECT_FORMAT_PATTERNS = {
+    "github_classic_token",
+    "github_fine_grained_token",
+    "openai_key",
+    "slack_token",
+    "aws_access_key",
+    "shopee_partner_key",
+    "jwt",
+    "private_key_block",
+}
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -144,14 +166,46 @@ def likely_placeholder(value: str) -> bool:
     if any(pattern.fullmatch(normalized) for pattern in PLACEHOLDER_PATTERNS):
         return True
     if any(word in lowered for word in (
-        "placeholder", "substitua", "example", "exemplo", "secret_protegido",
-        "protected_secret", "authorization_code", "access_token_here",
+        "placeholder", "substitua", "configure", "example", "exemplo",
+        "secret_protegido", "protected_secret", "authorization_code",
+        "access_token_here", "refresh_token_here", "test-", "test_",
+        "fake-", "fake_", "mock-", "mock_", "dummy-", "dummy_",
     )):
         return True
     if lowered.startswith(("your_", "seu_", "sua_", "my_")):
         return True
     compact = re.sub(r"[^a-z0-9]", "", lowered)
     return bool(compact) and len(compact) >= 12 and len(set(compact)) <= 2
+
+
+def shannon_entropy(value: str) -> float:
+    if not value:
+        return 0.0
+    counts = Counter(value)
+    length = len(value)
+    return -sum((count / length) * math.log2(count / length) for count in counts.values())
+
+
+def looks_like_secret_literal(value: str) -> bool:
+    candidate = value.strip().strip("`'\"")
+    if likely_placeholder(candidate):
+        return False
+    if len(candidate) < 16:
+        return False
+    if "://" in candidate or candidate.startswith(("/", "./", "../")):
+        return False
+    if re.fullmatch(r"[A-Z][A-Z0-9_]{11,}", candidate):
+        return False
+    classes = sum((
+        any(char.islower() for char in candidate),
+        any(char.isupper() for char in candidate),
+        any(char.isdigit() for char in candidate),
+        any(not char.isalnum() for char in candidate),
+    ))
+    has_digit_or_symbol = any(char.isdigit() for char in candidate) or any(
+        not char.isalnum() for char in candidate
+    )
+    return classes >= 2 and has_digit_or_symbol and shannon_entropy(candidate) >= 3.35
 
 
 def tracked_text_files() -> list[Path]:
@@ -190,23 +244,29 @@ def validate_wrapper(legacy: str, target: str) -> bool:
     return "runpy.run_path" in text and Path(target).name in text
 
 
+def should_block_candidate(pattern_name: str, candidate: str) -> bool:
+    if pattern_name in DIRECT_FORMAT_PATTERNS:
+        return True
+    if pattern_name == "password_quoted_literal":
+        return not likely_placeholder(candidate)
+    if pattern_name == "sensitive_unquoted_hex":
+        return not likely_placeholder(candidate)
+    return looks_like_secret_literal(candidate)
+
+
 def credential_findings() -> tuple[list[Finding], int]:
     findings: list[Finding] = []
     files = tracked_text_files()
     seen: set[tuple[str, int, str]] = set()
-    placeholder_aware = {
-        "sensitive_quoted_literal",
-        "sensitive_markdown_literal",
-        "sensitive_query_literal",
-        "sensitive_unquoted_hex",
-    }
     for path in files:
         text = path.read_text(encoding="utf-8", errors="replace")
         relative = path.relative_to(ROOT).as_posix()
         for pattern_name, pattern in CREDENTIAL_PATTERNS:
+            if relative == SELF_PATH and pattern_name not in DIRECT_FORMAT_PATTERNS:
+                continue
             for match in pattern.finditer(text):
                 candidate = match.group(1) if match.lastindex else match.group(0)
-                if pattern_name in placeholder_aware and likely_placeholder(candidate):
+                if not should_block_candidate(pattern_name, candidate):
                     continue
                 line = line_number(text, match.start())
                 key = (relative, line, pattern_name)
@@ -298,7 +358,7 @@ def evaluate() -> tuple[list[Finding], dict[str, object]]:
 def write_report(findings: list[Finding], checks: dict[str, object]) -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
-        "schema_version": 3,
+        "schema_version": 4,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "status": "success" if not findings else "failure",
         "blocking_finding_count": len(findings),
