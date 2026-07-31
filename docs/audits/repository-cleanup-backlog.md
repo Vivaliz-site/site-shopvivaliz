@@ -53,11 +53,13 @@ A movimentação física de documentos históricos permanece trabalho não bloqu
 
 Árvore atual:
 
-- [x] valores Olist, Mercado Pago, Shopee, TikTok e Tiny removidos dos arquivos rastreados;
+- [x] valores Olist, Mercado Pago, Shopee, TikTok, Tiny e Melhor Envio removidos dos arquivos rastreados;
+- [x] arquivo `storage/private/melhorenvio-tokens.json` removido;
+- [x] qualquer arquivo rastreado em `storage/private/` passa a ser bloqueante;
 - [x] query strings com token removidas;
 - [x] scripts que continham credenciais aposentados;
 - [x] exemplos token-shaped substituídos por placeholders explícitos;
-- [x] scanner cobre formatos conhecidos, assignments sensíveis e blocos PEM completos;
+- [x] scanner cobre formatos conhecidos, JWTs, literais sensíveis e blocos PEM completos;
 - [x] scanner registra somente arquivo, linha e classe do padrão.
 
 Ações externas ainda obrigatórias e não verificáveis pelo repositório:
@@ -67,6 +69,7 @@ Ações externas ainda obrigatórias e não verificáveis pelo repositório:
 - [ ] revogar e rotacionar parceiro, sandbox e tokens Shopee;
 - [ ] revogar e rotacionar aplicação TikTok;
 - [ ] revogar e rotacionar token de webhook Tiny;
+- [ ] revogar e rotacionar access token e refresh token Melhor Envio;
 - [ ] armazenar substitutos somente em stores protegidos;
 - [ ] validar integrações por execução real e read-back;
 - [ ] planejar limpeza coordenada do histórico depois das revogações;
