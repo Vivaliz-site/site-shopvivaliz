@@ -1,0 +1,61 @@
+name: Materialize sales impact phase 2
+
+on:
+  push:
+    branches:
+      - feat/sales-impact-phase-2-2026-07-31
+    paths:
+      - .github/workflows/materialize-sales-impact.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-sales-impact-phase-2
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/sales-impact-phase-2-2026-07-31
+          fetch-depth: 0
+
+      - name: Materialize and verify implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .sales-impact-payload/part-*.b64 > /tmp/sales-impact.b64
+          echo "6a017fc97775f481c5b2699d5d2f715f77fd43280a5116623666d6637623736a  /tmp/sales-impact.b64" | sha256sum -c -
+          base64 --decode /tmp/sales-impact.b64 > /tmp/svphase2.tar.gz
+          echo "e203bb9bdedcfc7d9e30b99d3f8b03136b632deda610f1898b54d8e32fd55d6c  /tmp/svphase2.tar.gz" | sha256sum -c -
+          tar -tzf /tmp/svphase2.tar.gz | sed 's#^\./##' | grep -v '^$' > /tmp/sales-impact-files.txt
+          tar -xzf /tmp/svphase2.tar.gz -C .
+          rm -rf .sales-impact-payload
+          rm -f checkout.php.bak
+          rm -f .github/workflows/materialize-sales-impact.yml
+
+          while IFS= read -r file; do
+            [ -f "$file" ] || continue
+            case "$file" in
+              *.php) php -l "$file" ;;
+              *.js) node --check "$file" ;;
+            esac
+          done < /tmp/sales-impact-files.txt
+
+          php scripts/sales-impact-self-test.php
+          php scripts/public-architecture-audit.php .
+          php scripts/google-ads-scale-gate.php
+
+      - name: Commit materialized implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: implementar fase 2 de crescimento e conversao"
+          git push origin HEAD:feat/sales-impact-phase-2-2026-07-31
