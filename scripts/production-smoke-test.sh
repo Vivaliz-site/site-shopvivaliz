@@ -9,13 +9,22 @@ trap 'rm -rf "$tmpdir"' EXIT
 
 repo='/home/ubuntu/shopvivaliz-deploy/repo'
 shared='/home/ubuntu/shopvivaliz-deploy/shared'
+current_root='/home/ubuntu/shopvivaliz-deploy/current'
 script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 sync_script="$script_root/scripts/auto-sync-oracle.sh"
+installer="$script_root/scripts/install-auto-sync-oracle.sh"
 sync_status="$shared/logs/tri-environment-sync.json"
 
-test -d "$repo/.git"
-test -x "$sync_script"
-ROOT="$repo" SHARED_ROOT="$shared" "$sync_script"
+echo "INFO validating Oracle repository sync for $expected_sha"
+if [ ! -d "$repo/.git" ]; then
+  echo "FAIL Oracle repository is missing: $repo" >&2
+  exit 1
+fi
+if [ ! -r "$sync_script" ]; then
+  echo "FAIL Oracle sync script is unreadable: $sync_script" >&2
+  exit 1
+fi
+ROOT="$repo" SHARED_ROOT="$shared" /usr/bin/bash "$sync_script"
 
 repo_sha="$(git -C "$repo" rev-parse HEAD)"
 remote_sha="$(git -C "$repo" rev-parse origin/main)"
@@ -53,6 +62,17 @@ if local_after != expected or remote != expected:
     )
 PY
 echo "OK Oracle repository sync: $repo_sha"
+
+if [ ! -r "$installer" ]; then
+  echo "FAIL Oracle sync installer is unreadable: $installer" >&2
+  exit 1
+fi
+ROOT="$repo" SHARED_ROOT="$shared" CURRENT_ROOT="$current_root" \
+  /usr/bin/bash "$installer"
+crontab -l > "$tmpdir/crontab.txt"
+grep -F "/usr/bin/bash $current_root/scripts/auto-sync-oracle.sh" \
+  "$tmpdir/crontab.txt" >/dev/null
+echo "OK Oracle repository sync cron installed"
 
 check_http() {
   local label="$1"
