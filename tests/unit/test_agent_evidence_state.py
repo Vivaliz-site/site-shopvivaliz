@@ -117,6 +117,7 @@ class RetiredExecutorTests(unittest.TestCase):
     def test_retired_executors_fail_closed(self):
         paths = [
             "scripts/autonomous-executor.py",
+            "scripts/continuous-executor.py",
             "scripts/parallel-executor.py",
             "scripts/olist-sync-master.py",
             "scripts/git-auto-sync-master.py",
