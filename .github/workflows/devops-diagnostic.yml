@@ -1,0 +1,91 @@
+name: DevOps Diagnostic
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    name: Inspect main workflow runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query workflow runs and jobs for target production SHA
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: f219c7aba1ccefe67f31820dac5d72c7d601d1fe
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.parse
+          import urllib.request
+
+          token = os.environ['GH_TOKEN']
+          target = os.environ['TARGET_SHA']
+          repository = os.environ['REPOSITORY']
+          headers = {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': f'Bearer {token}',
+              'X-GitHub-Api-Version': '2022-11-28',
+              'User-Agent': 'shopvivaliz-devops-diagnostic',
+          }
+
+          def get_json(url):
+              request = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+
+          runs = []
+          for attempt in range(12):
+              query = urllib.parse.urlencode({'head_sha': target, 'per_page': 100})
+              payload = get_json(f'https://api.github.com/repos/{repository}/actions/runs?{query}')
+              runs = payload.get('workflow_runs', [])
+              names = {run.get('name') for run in runs}
+              if 'Quality Gate' in names and 'Master Production Pipeline 24/7' in names:
+                  break
+              print(f'WAIT attempt={attempt + 1} runs={len(runs)} names={sorted(name for name in names if name)}')
+              time.sleep(15)
+
+          evidence = []
+          for run in sorted(runs, key=lambda item: item.get('created_at', '')):
+              run_data = {
+                  'id': run.get('id'),
+                  'name': run.get('name'),
+                  'event': run.get('event'),
+                  'status': run.get('status'),
+                  'conclusion': run.get('conclusion'),
+                  'run_number': run.get('run_number'),
+                  'run_attempt': run.get('run_attempt'),
+                  'head_sha': run.get('head_sha'),
+                  'created_at': run.get('created_at'),
+                  'updated_at': run.get('updated_at'),
+                  'html_url': run.get('html_url'),
+                  'jobs': [],
+              }
+              jobs_payload = get_json(f"https://api.github.com/repos/{repository}/actions/runs/{run['id']}/jobs?filter=latest&per_page=100")
+              for job in jobs_payload.get('jobs', []):
+                  run_data['jobs'].append({
+                      'id': job.get('id'),
+                      'name': job.get('name'),
+                      'status': job.get('status'),
+                      'conclusion': job.get('conclusion'),
+                      'started_at': job.get('started_at'),
+                      'completed_at': job.get('completed_at'),
+                      'html_url': job.get('html_url'),
+                  })
+              evidence.append(run_data)
+
+          print('DEVOPS_RUN_EVIDENCE_BEGIN')
+          print(json.dumps(evidence, ensure_ascii=False, indent=2))
+          print('DEVOPS_RUN_EVIDENCE_END')
+          PY
