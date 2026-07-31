@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/repo}"
 SHARED_ROOT="${SHARED_ROOT:-/home/ubuntu/shopvivaliz-deploy/shared}"
 PYTHON_BIN="${PYTHON_BIN:-/usr/bin/python3}"
-RUNNER_PATH="$ROOT/git-auto-sync.py"
+RUNNER_PATH="${SYNC_RUNNER_PATH:-$ROOT/git-auto-sync.py}"
 REPO_STATUS="$ROOT/logs/tri-environment-sync.json"
 SHARED_LOG_DIR="$SHARED_ROOT/logs"
 SHARED_STATUS="$SHARED_LOG_DIR/tri-environment-sync.json"
@@ -30,7 +30,7 @@ mkdir -p "$ROOT/logs" "$SHARED_LOG_DIR"
 cd "$ROOT"
 
 set +e
-"$PYTHON_BIN" "$RUNNER_PATH" >"$TMP_OUTPUT" 2>&1
+SHOPVIVALIZ_REPO_DIR="$ROOT" "$PYTHON_BIN" "$RUNNER_PATH" >"$TMP_OUTPUT" 2>&1
 exit_code=$?
 set -e
 
