@@ -1,4 +1,4 @@
-name: Incident Detection (monitor only)
+name: Incident Detection
 
 on:
   schedule:
@@ -16,7 +16,7 @@ jobs:
   detect:
     runs-on: ubuntu-latest
     name: Detect and report incidents
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - name: Checkout without persisted credentials
@@ -29,29 +29,49 @@ jobs:
         with:
           php-version: '8.2'
 
+      - name: Initialize incident evidence
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/incidents
+          printf 'run_id=%s\nsha=%s\nevent=%s\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" \
+            > artifacts/incidents/context.txt
+
       - name: Run monitor-only incident detector
         id: incident
-        continue-on-error: true
         env:
           INCIDENT_MODE: monitor
           HEALTHCHECK_URL: https://shopvivaliz.com.br/api/health
+        shell: bash
         run: |
-          set +e
-          php scripts/incident-response.php
-          status=$?
+          set -euo pipefail
+          if php scripts/incident-response.php > artifacts/incidents/detector.log 2>&1; then
+            status=0
+          else
+            status=$?
+          fi
+          cat artifacts/incidents/detector.log
           echo "response_status=$status" >> "$GITHUB_OUTPUT"
-          exit 0
+          echo "response_status=$status" >> artifacts/incidents/context.txt
 
       - name: Notify on detected incident
         if: steps.incident.outputs.response_status != '0'
         uses: 8398a7/action-slack@v3
         with:
           status: failure
-          text: 'Incidente potencial detectado. Nenhuma ação destrutiva foi executada; revisão humana necessária.'
+          text: 'Incidente potencial detectado. Nenhuma ação destrutiva foi executada; revisão necessária.'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-        continue-on-error: true
 
-      - name: Report healthy status
-        if: steps.incident.outputs.response_status == '0'
-        run: echo "Nenhum incidente detectado."
+      - name: Upload incident evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: incident-detection-${{ github.run_id }}
+          path: artifacts/incidents/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Fail when detector reported an incident
+        if: steps.incident.outputs.response_status != '0'
+        run: exit "${{ steps.incident.outputs.response_status }}"
