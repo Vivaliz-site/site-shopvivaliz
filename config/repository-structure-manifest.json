@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "script_migrations": {
+    "scripts/autonomous-executor.py": "scripts/ai/autonomous-executor.py",
+    "scripts/continuous-executor.py": "scripts/ai/continuous-executor.py",
+    "scripts/parallel-executor.py": "scripts/ai/parallel-executor.py",
+    "scripts/heartbeat-executor.py": "scripts/ai/heartbeat-executor.py",
+    "scripts/auto-task-generator.py": "scripts/ai/auto-task-generator.py"
+  }
+}

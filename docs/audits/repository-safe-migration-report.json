@@ -1,0 +1,35 @@
+{
+  "status": "applied",
+  "migrations": [
+    {
+      "source": "scripts/autonomous-executor.py",
+      "target": "scripts/ai/autonomous-executor.py",
+      "kind": "python",
+      "compatibility": true
+    },
+    {
+      "source": "scripts/continuous-executor.py",
+      "target": "scripts/ai/continuous-executor.py",
+      "kind": "python",
+      "compatibility": true
+    },
+    {
+      "source": "scripts/parallel-executor.py",
+      "target": "scripts/ai/parallel-executor.py",
+      "kind": "python",
+      "compatibility": true
+    },
+    {
+      "source": "scripts/heartbeat-executor.py",
+      "target": "scripts/ai/heartbeat-executor.py",
+      "kind": "python",
+      "compatibility": true
+    },
+    {
+      "source": "scripts/auto-task-generator.py",
+      "target": "scripts/ai/auto-task-generator.py",
+      "kind": "python",
+      "compatibility": true
+    }
+  ]
+}
