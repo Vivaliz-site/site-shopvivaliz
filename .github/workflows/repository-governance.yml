@@ -79,13 +79,23 @@ jobs:
             scripts/ai/autonomous_executor.py \
             scripts/ai/continuous_executor.py \
             scripts/ai/parallel_executor.py \
+            scripts/marketplace/olist/sync_master.py \
+            scripts/marketplace/olist/oauth_login.py \
+            scripts/marketplace/shopee/retired_credential_tool.py \
             scripts/autonomous-executor.py \
             scripts/continuous-executor.py \
             scripts/parallel-executor.py \
             scripts/olist-sync-master.py \
             scripts/olist-oauth-login.py \
-            scripts/marketplace/olist/sync_master.py \
-            scripts/marketplace/olist/oauth_login.py
+            scripts/get_token.py \
+            scripts/run_playwright.py \
+            scripts/shopee_full_pipeline.py \
+            scripts/test_final.py \
+            scripts/test_shopee_simple.py \
+            scripts/test_shopee_api.py \
+            claude/api/shopee-integration/scripts/run_playwright.py \
+            claude/api/shopee-integration/scripts/test_final.py \
+            claude/api/shopee-integration/scripts/test_shopee_api.py
 
       - name: Run governance unit tests
         run: |
@@ -94,6 +104,7 @@ jobs:
             tests.unit.test_audit_active_workflows \
             tests.unit.test_agent_evidence_state \
             tests.unit.test_olist_entrypoints_safe \
+            tests.unit.test_shopee_legacy_credentials_safe \
             -v
 
       - name: Validate canonical queue and agent health
