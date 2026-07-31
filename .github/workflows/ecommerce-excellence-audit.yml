@@ -100,7 +100,7 @@ jobs:
     name: Validate real production from Oracle
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@v6
@@ -123,7 +123,7 @@ jobs:
           printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Copy auditor without copying credentials
+      - name: Copy auditors without copying credentials
         shell: bash
         run: |
           set -euo pipefail
@@ -133,7 +133,8 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
             scripts/ecommerce-excellence-audit.py \
-            ubuntu@137.131.156.17:/tmp/shopvivaliz-ecommerce-audit.py
+            scripts/google-commerce-config-audit.php \
+            ubuntu@137.131.156.17:/tmp/
 
       - name: Run live SEO sitemap feed and security audit
         shell: bash
@@ -145,7 +146,25 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
             ubuntu@137.131.156.17 \
-            'python3 /tmp/shopvivaliz-ecommerce-audit.py --mode live --base-url https://shopvivaliz.com.br --output /tmp/ecommerce-live.json --fail-on blocker'
+            'python3 /tmp/ecommerce-excellence-audit.py --mode live --base-url https://shopvivaliz.com.br --output /tmp/ecommerce-live.json --fail-on blocker'
+
+      - name: Validate Google commerce and runtime integration presence
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'php /tmp/google-commerce-config-audit.php > /tmp/google-commerce-config.json'
+
+      - name: Download redacted live evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
           mkdir -p artifacts
           scp \
             -o BatchMode=yes \
@@ -159,6 +178,12 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
             ubuntu@137.131.156.17:/tmp/ecommerce-live.md artifacts/ecommerce-live.md
+          scp \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17:/tmp/google-commerce-config.json artifacts/google-commerce-config.json
 
       - name: Upload live production evidence
         if: always()
@@ -168,5 +193,6 @@ jobs:
           path: |
             artifacts/ecommerce-live.json
             artifacts/ecommerce-live.md
+            artifacts/google-commerce-config.json
           if-no-files-found: error
           retention-days: 30
