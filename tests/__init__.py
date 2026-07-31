@@ -1,0 +1,1 @@
+"""ShopVivaliz test package."""

@@ -9,6 +9,8 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 - [`troubleshooting.md`](troubleshooting.md) — diagnóstico de erros HTTP, rede, integrações e deploy.
 - [`deploy.md`](deploy.md) — fluxo de publicação, curl, CI e checklist.
 - [`agent-rules.md`](agent-rules.md) — regras obrigatórias para agentes.
+- [`repository-index.md`](repository-index.md) — índice canônico de aplicação, automações e áreas alvo.
+- [`structure-policy.md`](structure-policy.md) — política de reorganização por lotes e critérios de conclusão.
 - [`updater.md`](updater.md) — atualizações cumulativas, migrations e reparos automáticos.
 - [`data-integrity.md`](data-integrity.md) — integridade de catálogo, imagens, pedidos e banco.
 - [`testing.md`](testing.md) — testes mínimos, fluxo de compra e pós-deploy.
@@ -23,6 +25,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 - [`order-context.md`](order-context.md) — leitura única do corpo e processamento somente após validação.
 - [`official-site.md`](official-site.md) — uso do domínio oficial como fonte institucional e comercial.
 - [`legal-source-map.md`](legal-source-map.md) — correspondência entre páginas oficiais e arquivos legais locais.
+- [`../audits/repository-cleanup-backlog.md`](../audits/repository-cleanup-backlog.md) — fases e pendências da reorganização.
 
 Outros documentos existentes na pasta podem registrar versões, dispositivos, decisões históricas e referências específicas.
 
@@ -34,6 +37,7 @@ Outros documentos existentes na pasta podem registrar versões, dispositivos, de
 4. Use `testing.md` para reproduzir.
 5. Consulte `deploy.md` quando houver diferença entre repositório e produção.
 6. Consulte `official-site.md` quando a dúvida envolver conteúdo institucional, termos, categorias ou meios de pagamento.
-7. Registre lacunas na documentação ao encontrar comportamento novo.
+7. Consulte `repository-index.md` e `structure-policy.md` antes de mover arquivos ou alterar automações.
+8. Registre lacunas na documentação ao encontrar comportamento novo.
 
 A documentação não substitui evidência do código, logs, banco, workflow ou resposta do servidor.

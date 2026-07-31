@@ -1,0 +1,90 @@
+name: Repository Governance
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-governance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Audit new automation changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Initialize diagnostic evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/repository-governance
+          {
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "event=${GITHUB_EVENT_NAME}"
+            echo "sha=${GITHUB_SHA}"
+            echo "ref=${GITHUB_REF}"
+          } > artifacts/repository-governance/run-context.txt
+
+      - name: Resolve comparison base
+        id: base
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_BASE_SHA" ]; then
+            base="$PR_BASE_SHA"
+          elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && ! printf '%s' "$PUSH_BEFORE_SHA" | grep -Eq '^0+$'; then
+            base="$PUSH_BEFORE_SHA"
+          else
+            base="$(git rev-parse HEAD^)"
+          fi
+          git cat-file -e "${base}^{commit}"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> artifacts/repository-governance/run-context.txt
+
+      - name: Compile governance auditor
+        run: python -m py_compile scripts/maintenance/audit_automation_changes.py
+
+      - name: Run governance unit tests
+        run: python -m unittest tests.unit.test_audit_automation_changes -v
+
+      - name: Audit changed automation surfaces
+        if: always()
+        run: |
+          python scripts/maintenance/audit_automation_changes.py \
+            --base "${{ steps.base.outputs.base }}" \
+            --head "${{ github.sha }}"
+
+      - name: Verify evidence files
+        if: always()
+        run: |
+          test -s artifacts/repository-governance/run-context.txt
+          test -s artifacts/repository-governance/report.json
+          test -s artifacts/repository-governance/report.md
+
+      - name: Upload governance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-governance-${{ github.run_id }}
+          path: artifacts/repository-governance/
+          if-no-files-found: error
+          retention-days: 90
