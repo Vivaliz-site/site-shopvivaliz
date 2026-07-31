@@ -113,7 +113,9 @@ jobs:
           if data.get('ok') is True:
               print('complete')
           elif data.get('error') == 'recovery_order_lock_unavailable':
-              print('retry_permission_only')
+              print('retry_pre_provider')
+          elif data.get('error') == 'gateway_rejected_request':
+              print('retry_changed_schema_v3')
           else:
               print('refuse')
           PY
@@ -123,7 +125,7 @@ jobs:
                 cat "$marker"
                 exit 0
                 ;;
-              retry_permission_only)
+              retry_pre_provider|retry_changed_schema_v3)
                 rm -f "$marker"
                 ;;
               *)
@@ -163,6 +165,7 @@ jobs:
           data['admin_email_success_log_count'] = int(admin_count)
           data['boleto_success_log_count'] = int(boleto_count)
           data['email_logs_verified'] = int(customer_count) >= 2 and int(admin_count) >= 1
+          data['provider_schema'] = 'orders-v3-minimal'
           print(json.dumps(data, ensure_ascii=False, indent=2))
           PY
           chmod 600 "$marker"

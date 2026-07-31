@@ -49,11 +49,10 @@ try {
         throw new RuntimeException('recovery_payment_method_mismatch');
     }
 
-    // Mark operational safety before any provider call.
     $order['test_order'] = true;
     $order['do_not_fulfill'] = true;
     $order['recovery_started_at'] = date(DATE_ATOM);
-    $order['recovery_schema'] = 'boleto_orders_v2';
+    $order['recovery_schema'] = 'boleto_orders_v3_minimal';
 
     $persist = static function () use ($handle, &$order): void {
         $encoded = json_encode(
@@ -88,7 +87,7 @@ try {
         $order['status'] = 'payment_pending';
         $order['mercadopago'] = is_array($order['mercadopago'] ?? null) ? $order['mercadopago'] : [];
         $order['mercadopago']['provider'] = 'orders_api';
-        $order['mercadopago']['schema'] = 'boleto_orders_v2';
+        $order['mercadopago']['schema'] = 'boleto_orders_v3_minimal';
         $order['mercadopago']['order_id'] = $boleto['order_id'];
         $order['mercadopago']['payment_id'] = $boleto['payment_id'];
         $order['mercadopago']['status'] = $boleto['status'];
@@ -127,7 +126,7 @@ try {
         'boleto_email_sent' => $emailSent,
         'tiny_not_imported_while_unpaid' => $tinyOrderId === '' && $tinyPush === '',
         'do_not_fulfill' => (bool)($order['do_not_fulfill'] ?? false),
-        'schema' => 'boleto_orders_v2',
+        'schema' => 'boleto_orders_v3_minimal',
     ];
 
     foreach (['boleto_created', 'digitable_line_present', 'boleto_email_sent', 'tiny_not_imported_while_unpaid', 'do_not_fulfill'] as $assertion) {
@@ -138,7 +137,7 @@ try {
         }
     }
 
-    error_log('[BoletoRecovery] order=' . $orderNumber . ' ok=yes schema=v2 tiny_imported=no');
+    error_log('[BoletoRecovery] order=' . $orderNumber . ' ok=yes schema=v3-minimal tiny_imported=no');
     recovery_output($result, 0);
 } catch (Throwable $exception) {
     error_log('[BoletoRecovery] order=' . $orderNumber . ' ok=no type=' . get_class($exception));

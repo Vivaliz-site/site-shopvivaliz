@@ -105,7 +105,7 @@ try {
     $order['status'] = 'payment_pending';
     $order['mercadopago'] = is_array($order['mercadopago'] ?? null) ? $order['mercadopago'] : [];
     $order['mercadopago']['provider'] = 'orders_api';
-    $order['mercadopago']['schema'] = 'boleto_orders_v2';
+    $order['mercadopago']['schema'] = 'boleto_orders_v3_minimal';
     $order['mercadopago']['order_id'] = $boleto['order_id'];
     $order['mercadopago']['payment_id'] = $boleto['payment_id'];
     $order['mercadopago']['status'] = $boleto['status'];
@@ -124,7 +124,7 @@ try {
     $order['mercadopago']['boleto']['email_sent_at'] = date(DATE_ATOM);
     svmp_boleto_persist_order($handle, $order, $orderNumber);
 
-    error_log('[MercadoPago] boleto created: order=' . $orderNumber . ' mp_order=' . $boleto['order_id'] . ' status=' . $boleto['status'] . ' schema=v2');
+    error_log('[MercadoPago] boleto created: order=' . $orderNumber . ' mp_order=' . $boleto['order_id'] . ' status=' . $boleto['status'] . ' schema=v3-minimal');
     svmp_boleto_response(201, [
         'ok' => true,
         'reused' => false,
@@ -135,10 +135,10 @@ try {
         'email_sent' => $emailSent,
     ]);
 } catch (SvMercadoPagoApiException $e) {
-    error_log('[MercadoPago] boleto API failure: order=' . $orderNumber . ' code=' . $e->publicCode . ' schema=v2');
+    error_log('[MercadoPago] boleto API failure: order=' . $orderNumber . ' code=' . $e->publicCode . ' schema=v3-minimal');
     svmp_boleto_response($e->httpStatus, ['ok' => false, 'error' => $e->publicCode]);
 } catch (Throwable $e) {
-    error_log('[MercadoPago] boleto internal failure: order=' . $orderNumber . ' type=' . get_class($e) . ' schema=v2');
+    error_log('[MercadoPago] boleto internal failure: order=' . $orderNumber . ' type=' . get_class($e) . ' schema=v3-minimal');
     svmp_boleto_response(500, ['ok' => false, 'error' => 'internal_error']);
 } finally {
     flock($handle, LOCK_UN);
