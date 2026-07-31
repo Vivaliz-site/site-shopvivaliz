@@ -37,7 +37,8 @@ jobs:
             artifacts/repository-governance \
             artifacts/workflow-policy \
             artifacts/system-health \
-            artifacts/reorganization-final
+            artifacts/reorganization-final \
+            artifacts/secret-references
           {
             echo "run_id=${GITHUB_RUN_ID}"
             echo "event=${GITHUB_EVENT_NAME}"
@@ -71,6 +72,7 @@ jobs:
             git-auto-sync.py \
             scripts/maintenance/audit_automation_changes.py \
             scripts/maintenance/audit_active_workflows.py \
+            scripts/maintenance/audit_secret_references.py \
             scripts/maintenance/system_health_check.py \
             scripts/maintenance/finalize_reorganization.py \
             scripts/all-documented-agents.py \
@@ -124,6 +126,10 @@ jobs:
         if: always()
         run: python scripts/maintenance/audit_active_workflows.py
 
+      - name: Audit token and secret references
+        if: always()
+        run: python scripts/maintenance/audit_secret_references.py
+
       - name: Verify final reorganization contract
         if: always()
         run: python scripts/maintenance/finalize_reorganization.py
@@ -136,6 +142,8 @@ jobs:
           test -s artifacts/repository-governance/report.md
           test -s artifacts/workflow-policy/report.json
           test -s artifacts/workflow-policy/report.md
+          test -s artifacts/secret-references/report.json
+          test -s artifacts/secret-references/report.md
           test -s artifacts/system-health/report.json
           test -s artifacts/reorganization-final/report.json
           test -s artifacts/reorganization-final/report.md
@@ -148,6 +156,7 @@ jobs:
           path: |
             artifacts/repository-governance/
             artifacts/workflow-policy/
+            artifacts/secret-references/
             artifacts/system-health/
             artifacts/reorganization-final/
             artifacts/disabled-executors/
