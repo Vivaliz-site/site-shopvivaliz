@@ -100,13 +100,13 @@ class DocumentedAgentStateTests(unittest.TestCase):
     def test_external_agent_is_blocked_without_credentials(self):
         spec = AGENTS.AgentSpec("external", (r"provider",), required_env=("MISSING_PROVIDER_TOKEN",), external=True)
         with patch.dict(AGENTS.os.environ, {}, clear=True):
-            result = AGENTS.evaluate_agent(spec, [(Path("provider.py"), "provider integration")], "a" * 40)
+            result = AGENTS.evaluate_agent(spec, [(AGENTS.ROOT / "provider.py", "provider integration")], "a" * 40)
         self.assertEqual(result.status, "blocked")
         self.assertFalse(result.external_operation_performed)
 
     def test_local_readiness_can_complete_with_evidence(self):
         spec = AGENTS.AgentSpec("local", (r"validator",))
-        result = AGENTS.evaluate_agent(spec, [(Path("validator.py"), "validator")], "b" * 40)
+        result = AGENTS.evaluate_agent(spec, [(AGENTS.ROOT / "validator.py", "validator")], "b" * 40)
         self.assertEqual(result.status, "completed_verified")
         self.assertEqual(result.scope, "readiness_audit")
         self.assertEqual(result.evidence["commit_sha"], "b" * 40)
