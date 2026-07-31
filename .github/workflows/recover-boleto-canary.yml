@@ -170,7 +170,7 @@ jobs:
           with open(output, 'w', encoding='utf-8') as handle:
               handle.write('\n'.join(matches[-100:]) + ('\n' if matches else ''))
           PY
-          cat "$script_log" >> "$log_excerpt"
+          sudo tee -a "$log_excerpt" < "$script_log" >/dev/null
           cat "$script_log" >&2
           rm -f "$script_log"
 
