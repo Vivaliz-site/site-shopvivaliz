@@ -10,16 +10,11 @@ on:
       limit:
         description: 'Quantidade máxima de produtos; 0 processa todos'
         required: true
-        default: '0'
+        default: '1'
         type: string
-  push:
-    branches: [main]
-    paths:
-      - '.github/triggers/shopee-first-product-validation.json'
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
   group: shopee-production-seo
@@ -32,27 +27,34 @@ jobs:
     timeout-minutes: 360
     environment: shopee-production
     steps:
-      - name: Resolve production inputs
-        id: inputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "confirmation=APPLY_ALL_SHOPEE_PRODUCTS" >> "$GITHUB_OUTPUT"
-            echo "limit=1" >> "$GITHUB_OUTPUT"
-          else
-            test "${{ inputs.confirmation }}" = "APPLY_ALL_SHOPEE_PRODUCTS"
-            [[ "${{ inputs.limit }}" =~ ^[0-9]+$ ]]
-            echo "confirmation=${{ inputs.confirmation }}" >> "$GITHUB_OUTPUT"
-            echo "limit=${{ inputs.limit }}" >> "$GITHUB_OUTPUT"
-          fi
-
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: pip
+
+      - name: Initialize immutable execution evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/shopee-production
+          printf 'run_id=%s\nrun_attempt=%s\nsha=%s\nevent=%s\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" \
+            > artifacts/shopee-production/context.txt
+
+      - name: Validate production inputs
+        shell: bash
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          PRODUCT_LIMIT: ${{ inputs.limit }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = 'APPLY_ALL_SHOPEE_PRODUCTS'
+          [[ "$PRODUCT_LIMIT" =~ ^[0-9]+$ ]]
+          printf 'limit=%s\nconfirmation_valid=true\n' "$PRODUCT_LIMIT" >> artifacts/shopee-production/context.txt
 
       - name: Install runtime dependencies
         run: python -m pip install --disable-pip-version-check requests tenacity openai
@@ -61,7 +63,6 @@ jobs:
         run: python -m py_compile scripts/shopee_production_seo_apply.py scripts/shopee_full_catalog_optimizer.py scripts/utils/shopee_client.py
 
       - name: Validate required Shopee secrets
-        id: secrets
         env:
           SHOPEE_PARTNER_ID: ${{ secrets.SHOPEE_PARTNER_ID }}
           SHOPEE_PARTNER_KEY: ${{ secrets.SHOPEE_PARTNER_KEY }}
@@ -70,34 +71,29 @@ jobs:
           SHOPEE_SHOP_ID: ${{ secrets.SHOPEE_SHOP_ID }}
         shell: bash
         run: |
-          set +e
-          missing=()
-          for name in SHOPEE_PARTNER_ID SHOPEE_PARTNER_KEY SHOPEE_SHOP_ID; do
-            if [ -z "${!name:-}" ]; then missing+=("$name"); fi
-          done
-          if [ -z "${SHOPEE_ACCESS_TOKEN:-}" ] && [ -z "${SHOPEE_REFRESH_TOKEN:-}" ]; then
-            missing+=("SHOPEE_ACCESS_TOKEN_OR_REFRESH_TOKEN")
-          fi
-          if [ ${#missing[@]} -gt 0 ]; then
-            printf 'missing_secrets=%s\n' "$(IFS=,; echo "${missing[*]}")" >> "$GITHUB_OUTPUT"
-            printf 'ERROR: missing required Shopee secrets: %s\n' "$(IFS=,; echo "${missing[*]}")" | tee executor-output.log
-            echo 'ready=false' >> "$GITHUB_OUTPUT"
-            echo 'auth_mode=none' >> "$GITHUB_OUTPUT"
-          else
-            echo 'missing_secrets=' >> "$GITHUB_OUTPUT"
-            echo 'ready=true' >> "$GITHUB_OUTPUT"
-            if [ -n "${SHOPEE_ACCESS_TOKEN:-}" ]; then
-              echo 'auth_mode=access_token' >> "$GITHUB_OUTPUT"
-            else
-              echo 'auth_mode=refresh_token_auto' >> "$GITHUB_OUTPUT"
-            fi
-          fi
-          exit 0
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          required = ('SHOPEE_PARTNER_ID', 'SHOPEE_PARTNER_KEY', 'SHOPEE_SHOP_ID')
+          missing = [name for name in required if not os.environ.get(name)]
+          access = bool(os.environ.get('SHOPEE_ACCESS_TOKEN'))
+          refresh = bool(os.environ.get('SHOPEE_REFRESH_TOKEN'))
+          if not access and not refresh:
+              missing.append('SHOPEE_ACCESS_TOKEN_OR_REFRESH_TOKEN')
+
+          context = Path('artifacts/shopee-production/context.txt')
+          auth_mode = 'access_token' if access else ('refresh_token_auto' if refresh else 'none')
+          with context.open('a', encoding='utf-8') as handle:
+              handle.write(f'auth_mode={auth_mode}\n')
+              handle.write('missing_secrets=' + ','.join(missing) + '\n')
+
+          if missing:
+              raise SystemExit('Missing required Shopee secrets: ' + ', '.join(missing))
+          PY
 
       - name: Apply SEO to real Shopee catalog
-        id: apply
-        continue-on-error: true
-        if: steps.secrets.outputs.ready == 'true'
         env:
           SHOPEE_PARTNER_ID: ${{ secrets.SHOPEE_PARTNER_ID }}
           SHOPEE_PARTNER_KEY: ${{ secrets.SHOPEE_PARTNER_KEY }}
@@ -105,86 +101,52 @@ jobs:
           SHOPEE_REFRESH_TOKEN: ${{ secrets.SHOPEE_REFRESH_TOKEN }}
           SHOPEE_SHOP_ID: ${{ secrets.SHOPEE_SHOP_ID }}
           SHOPEE_BASE_URL: https://partner.shopeemobile.com/api/v2
-        shell: bash
-        run: |
-          set +e
-          python scripts/shopee_production_seo_apply.py \
-            --confirm "${{ steps.inputs.outputs.confirmation }}" \
-            --limit "${{ steps.inputs.outputs.limit }}" 2>&1 | tee executor-output.log
-          code=${PIPESTATUS[0]}
-          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
-          exit 0
-
-      - name: Publish first-product evidence to issue 598
-        if: always() && github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EXIT_CODE: ${{ steps.apply.outputs.exit_code }}
-          READY: ${{ steps.secrets.outputs.ready }}
-          AUTH_MODE: ${{ steps.secrets.outputs.auth_mode }}
-          MISSING_SECRETS: ${{ steps.secrets.outputs.missing_secrets }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          PRODUCT_LIMIT: ${{ inputs.limit }}
         shell: bash
         run: |
           set -euo pipefail
-          report="$(ls -1t logs/shopee-production-seo/*.json 2>/dev/null | head -n 1 || true)"
-          if [ -n "$report" ]; then
-            item="$(python - "$report" <<'PY'
-          import json, sys
-          p=sys.argv[1]
-          d=json.load(open(p, encoding='utf-8'))
-          first=(d.get('items') or [{}])[0]
-          print(json.dumps({
-            'run_id': '${{ github.run_id }}',
-            'run_attempt': '${{ github.run_attempt }}',
-            'commit': '${{ github.sha }}',
-            'auth_mode': '${{ steps.secrets.outputs.auth_mode }}',
-            'exit_code': int('${{ steps.apply.outputs.exit_code }}' or 999),
-            'item': first,
-            'counts': d.get('counts'),
-            'success': d.get('success'),
-            'report': p,
-          }, ensure_ascii=False, indent=2))
+          python scripts/shopee_production_seo_apply.py \
+            --confirm "$CONFIRMATION" \
+            --limit "$PRODUCT_LIMIT" 2>&1 | tee artifacts/shopee-production/executor-output.log
+
+      - name: Verify report and backup evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          report_candidates = sorted(Path('logs/shopee-production-seo').glob('*.json'), key=lambda p: p.stat().st_mtime)
+          backup_candidates = sorted(Path('storage/private/shopee-production-backups').glob('*.json'), key=lambda p: p.stat().st_mtime)
+          if not report_candidates:
+              raise SystemExit('Production report was not created')
+          if not backup_candidates:
+              raise SystemExit('Production backup was not created')
+
+          report = report_candidates[-1]
+          backup = backup_candidates[-1]
+          report_payload = json.loads(report.read_text(encoding='utf-8'))
+          json.loads(backup.read_text(encoding='utf-8'))
+          if report_payload.get('success') is not True:
+              raise SystemExit('Production report did not confirm success=true')
+
+          destination = Path('artifacts/shopee-production')
+          shutil.copy2(report, destination / 'execution-report.json')
+          shutil.copy2(backup, destination / 'pre-change-backup.json')
+          with (destination / 'context.txt').open('a', encoding='utf-8') as handle:
+              handle.write(f'report_source={report.as_posix()}\n')
+              handle.write(f'backup_source={backup.as_posix()}\n')
+              handle.write('evidence_verified=true\n')
           PY
-          )"
-          else
-            item="$(python - "$EXIT_CODE" "$READY" "$AUTH_MODE" "$MISSING_SECRETS" executor-output.log <<'PY'
-          import json, pathlib, sys
-          exit_code, ready, auth_mode, missing, log_path = sys.argv[1:]
-          tail = ''
-          p = pathlib.Path(log_path)
-          if p.exists():
-              tail = '\n'.join(p.read_text(encoding='utf-8', errors='replace').splitlines()[-40:])
-          print(json.dumps({
-            'run_id': '${{ github.run_id }}',
-            'run_attempt': '${{ github.run_attempt }}',
-            'commit': '${{ github.sha }}',
-            'auth_mode': auth_mode,
-            'exit_code': int(exit_code or 999),
-            'error': 'report_not_created',
-            'ready': ready,
-            'missing_secrets': [x for x in missing.split(',') if x],
-            'executor_tail': tail[-5000:],
-          }, ensure_ascii=False, indent=2))
-          PY
-          )"
-          fi
-          body=$(printf '### Resultado automático do primeiro produto\n\n```json\n%s\n```\n\nRun: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}' "$item")
-          gh issue comment 598 --repo "${{ github.repository }}" --body "$body"
 
       - name: Upload immutable execution evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: shopee-production-seo-evidence-${{ github.run_id }}
-          path: |
-            logs/shopee-production-seo/*.json
-            storage/private/shopee-production-backups/*.json
-            executor-output.log
-          if-no-files-found: warn
-          retention-days: 30
-
-      - name: Fail workflow when production executor failed
-        if: steps.secrets.outputs.ready != 'true' || steps.apply.outputs.exit_code != '0'
-        run: |
-          if [ "${{ steps.secrets.outputs.ready }}" != "true" ]; then exit 10; fi
-          exit "${{ steps.apply.outputs.exit_code }}"
+          path: artifacts/shopee-production/
+          if-no-files-found: error
+          retention-days: 90

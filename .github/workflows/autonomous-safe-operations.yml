@@ -1,4 +1,4 @@
-name: Autonomous Safe Operations
+name: Autonomous Read-Only Operations
 
 on:
   schedule:
@@ -7,25 +7,23 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: autonomous-safe-operations
+  group: autonomous-read-only-operations
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+  contents: read
   actions: read
 
 jobs:
-  catalog-sync:
+  catalog-snapshot:
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 */2 * * *'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
-          persist-credentials: true
-          fetch-depth: 0
+          persist-credentials: false
+          fetch-depth: 1
 
       - uses: actions/setup-python@v6
         with:
@@ -35,7 +33,6 @@ jobs:
         env:
           OLIST_ACCESS_TOKEN: ${{ secrets.OLIST_ACCESS_TOKEN }}
           TINY_ACCESS_TOKEN: ${{ secrets.TINY_ACCESS_TOKEN }}
-          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
           OLIST_CLIENT_ID: ${{ secrets.OLIST_CLIENT_ID }}
           OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
           OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
@@ -44,51 +41,32 @@ jobs:
           TINY_REFRESH_TOKEN: ${{ secrets.TINY_REFRESH_TOKEN }}
         run: |
           set -euo pipefail
+          mkdir -p artifacts/catalog-snapshot
           python sync-products-to-json.py
           test -s storage/products-cache.json
           python -m json.tool storage/products-cache.json >/dev/null
+          cp storage/products-cache.json artifacts/catalog-snapshot/products-cache.json
+          printf 'run_id=%s\nsha=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" > artifacts/catalog-snapshot/context.txt
 
-      - name: Validate change scope
+      - name: Verify checkout was not used for repository publication
         run: |
           set -euo pipefail
           changed="$(git status --short)"
           printf '%s\n' "$changed"
-          unexpected="$(printf '%s\n' "$changed" | awk '{print $2}' | grep -v '^storage/products-cache.json$' || true)"
+          unexpected="$(printf '%s\n' "$changed" | awk '$2 != "storage/products-cache.json" {print $2}')"
           if [[ -n "$unexpected" ]]; then
             echo "::error::Unexpected files changed: $unexpected"
             exit 1
           fi
 
-      - name: Publish or update autonomous PR
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          branch='automation/catalog-sync'
-          git config user.email 'automation@shopvivaliz.com.br'
-          git config user.name 'ShopVivaliz Automation'
-
-          if git diff --quiet -- storage/products-cache.json; then
-            echo 'Catalog unchanged.'
-            exit 0
-          fi
-
-          git fetch origin "$branch" || true
-          git switch -C "$branch"
-          git add storage/products-cache.json
-          git commit -m "auto: atualizar snapshot do catalogo"
-          git push --force-with-lease origin "$branch"
-
-          existing="$(gh pr list --head "$branch" --base main --state open --json number --jq '.[0].number // empty')"
-          if [[ -z "$existing" ]]; then
-            gh pr create \
-              --base main \
-              --head "$branch" \
-              --title 'auto: atualizar catalogo ERP' \
-              --body 'Atualizacao automatica e isolada do snapshot do catalogo. O workflow limita alteracoes a storage/products-cache.json e nao publica diretamente em main.'
-          else
-            echo "PR #$existing updated."
-          fi
+      - name: Upload catalog snapshot evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: catalog-snapshot-${{ github.run_id }}
+          path: artifacts/catalog-snapshot/
+          if-no-files-found: error
+          retention-days: 14
 
   health-watch:
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '7 * * * *'
@@ -96,14 +74,16 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Check public health endpoints
         id: health
         shell: bash
         run: |
-          set +e
+          set -euo pipefail
+          mkdir -p artifacts/health-watch
           failures=0
-          report=''
           endpoints=(
             'https://shopvivaliz.com.br/'
             'https://shopvivaliz.com.br/api/catalog/products.php?limit=1'
@@ -112,49 +92,41 @@ jobs:
             'https://shopvivaliz.com.br/api/catalog/stock-health.php'
             'https://shopvivaliz.com.br/api/orders/health.php'
           )
-          # UA de navegador real: curl padrao e sinal comum de bot-scoring do
-          # Cloudflare e ja gerou 403 transitorio aqui contra endpoints
-          # publicos saudaveis (ver AGENTS.md / incidente 2026-07-30).
           ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
-
+          : > artifacts/health-watch/report.txt
           for url in "${endpoints[@]}"; do
             status='000'
             for attempt in 1 2 3; do
-              status="$(curl --location --silent --output /dev/null --connect-timeout 5 --max-time 12 --user-agent "$ua" --write-out '%{http_code}' "$url" || echo 000)"
-              [[ "$status" == '200' || "$status" == '302' ]] && break
+              if response="$(curl --location --silent --output /dev/null --connect-timeout 5 --max-time 12 --user-agent "$ua" --write-out '%{http_code}' "$url")"; then
+                status="$response"
+              else
+                status='000'
+              fi
+              if [[ "$status" == '200' || "$status" == '302' ]]; then
+                break
+              fi
               if [[ "$status" == '403' ]]; then
                 echo "::warning::$url respondeu 403 na tentativa $attempt/3 (possivel bloqueio de WAF/Cloudflare)" >&2
               fi
               sleep $((attempt * 5))
             done
-            report+="$url -> $status\n"
-            [[ "$status" == '200' || "$status" == '302' ]] || failures=$((failures + 1))
+            printf '%s -> %s\n' "$url" "$status" | tee -a artifacts/health-watch/report.txt
+            if [[ "$status" != '200' && "$status" != '302' ]]; then
+              failures=$((failures + 1))
+            fi
           done
-          printf '%b' "$report" | tee health-report.txt
+          printf 'run_id=%s\nsha=%s\nfailures=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" "$failures" > artifacts/health-watch/context.txt
           echo "failures=$failures" >> "$GITHUB_OUTPUT"
-
-      - name: Open or update incident issue
-        if: steps.health.outputs.failures != '0'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          title='[AUTO] Falha de saude detectada em producao'
-          body="$(printf 'Monitor autonomo encontrou %s falha(s).\n\n```text\n%s\n```\n\nExecucao: %s' '${{ steps.health.outputs.failures }}' "$(cat health-report.txt)" '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}')"
-          issue="$(gh issue list --repo "${{ github.repository }}" --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
-          if [[ -n "$issue" ]]; then
-            gh issue comment "$issue" --repo "${{ github.repository }}" --body "$body"
-          else
-            gh issue create --repo "${{ github.repository }}" --title "$title" --body "$body"
-          fi
-          exit 1
 
       - name: Upload health evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: autonomous-health-${{ github.run_id }}
-          path: health-report.txt
-          if-no-files-found: warn
+          path: artifacts/health-watch/
+          if-no-files-found: error
           retention-days: 14
+
+      - name: Fail when public health checks failed
+        if: steps.health.outputs.failures != '0'
+        run: exit 1
