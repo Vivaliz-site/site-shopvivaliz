@@ -43,6 +43,11 @@ function load_custom_css(): void
     $root = dirname(__DIR__);
     $pageName = sv_current_page_name();
 
+    if ($pageName === 'produto') {
+        require_once __DIR__ . '/product-review-integrity.php';
+        sv_enable_product_review_integrity_guard();
+    }
+
     // CSS e JS funcionais da home devem viver fora de storage, como parte da release.
     if ($pageName === 'index') {
         echo "    <link rel=\"stylesheet\" href=\"/css/home-mobile-compact.css?v=2026-07-28-3\">\n";
