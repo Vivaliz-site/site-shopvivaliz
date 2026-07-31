@@ -68,6 +68,7 @@ jobs:
       - name: Compile governance and canonical entrypoints
         run: |
           python -m py_compile \
+            git-auto-sync.py \
             scripts/maintenance/audit_automation_changes.py \
             scripts/maintenance/audit_active_workflows.py \
             scripts/maintenance/system_health_check.py \
@@ -104,6 +105,7 @@ jobs:
             tests.unit.test_audit_automation_changes \
             tests.unit.test_audit_active_workflows \
             tests.unit.test_agent_evidence_state \
+            tests.unit.test_git_auto_sync \
             tests.unit.test_olist_entrypoints_safe \
             tests.unit.test_shopee_legacy_credentials_safe \
             -v
