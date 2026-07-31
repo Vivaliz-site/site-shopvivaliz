@@ -1,0 +1,42 @@
+# INSTRUÇÃO DE AGENTE FULL-STACK: AUDITORIA, CORREÇÃO E MELHORIA DE E-COMMERCE
+
+[DIRETRIZ DE ECONOMIA DE TOKENS]: Execute os testes em modo otimizado. Priorize ler a lógica dos arquivos locais antes de abrir o browser, evitando capturas de tela desnecessárias para estender o limite do plano.
+
+Você está operando no modo AUTOPILOT TOTAL com Claude 3.7 Sonnet (Raciocínio Estendido). Sua missão é escanear 100% deste repositório local e testar o ambiente '://shopvivaliz.com.br' usando o navegador, aplicando correções, melhorias visuais (UX/UI) e otimizações operacionais sem pedir permissão a cada passo.
+
+## 1. HISTÓRICO E CORREÇÕES CRÍTICAS JÁ MAPEADAS
+*   **Nome do Projeto:** fredmourao-ai/site-shopvivaliz
+*   **Correção do Google Login:** O arquivo 'login-simple.php' no servidor está divergente do GitHub (a versão compilada no servidor desabilitou o botão). O arquivo 'google-mock-login.php' retornou erro 404 porque não subiu no deploy. Corrija a lógica local, force a sincronização/criação do mock no servidor e garanta que o botão de Login com Google funcione em desenvolvimento apontando para o mock.
+*   **Integração ERP:** Identifique por que os pedidos aprovados não estão sendo transmitidos ou computados nas filas de integração do ERP (Bling/Tiny). Inspecione e corrigi o script de webhook ou API correspondente.
+*   **Ambiente Isolado:** Impeça que links, formulários ou CTAs do ambiente DEV redirecionem o usuário de volta para o site de produção.
+
+## 2. VARREDURA CEGA E LIMPEZA DE CONTEÚDO
+*   **Mapeamento Total:** Varra todas as rotas do site (Categorias, Busca, Checkout, Painel Admin, Termos e Páginas Institucionais). Elimine links quebrados (404/500).
+*   **Dados Reais:** Acesse o site de produção 'shopvivaliz.com.br' via browser, extraia as políticas e textos institucionais legítimos da marca e substitua todos os textos genéricos ("Lorem Ipsum") ou placeholders do ambiente DEV por essas informações reais.
+*   **Ajuste de Frete:** Remova textos estáticos incorretos (como "Frete Grátis acima de R$150"). Substitua o espaço da topbar por uma chamada dinâmica que puxe se há cupons ativos cadastrados no Painel Admin.
+
+## 3. IMPLEMENTAÇÃO DA NOVA ÁREA DO CLIENTE ("MINHA CONTA")
+Desenvolva de ponta a ponta a estrutura SQL, o backend em PHP (PDO seguro contra SQL injection) e o frontend (HTML/CSS responsivo mobile-first) da nova área do usuário:
+*   **Dashboard Geral:** Boas-vindas personalizadas e resumo do último pedido realizado.
+*   **Meus Pedidos:** Listagem histórica com status em tempo real alimentado e atualizado via webhooks do ERP.
+*   **Pós-Venda Avançado:** Botão de rastreio direto da transportadora, botões funcionais de download de PDF e XML da Nota Fiscal (NF-e), botão de 'Comprar Novamente' (recompra rápida clonando itens para o carrinho via AJAX) e botão de cancelamento autônomo caso o pedido ainda não tenha sido faturado/separado.
+*   **Dados e Endereços:** Atualização de perfil segura (criptografia password_hash). Suporte a múltiplos endereços com preenchimento automático integrado via API do ViaCEP (sem dar refresh na página).
+*   **Meus Cupons:** Aba listando códigos promocionais ativos cadastrados no admin e elegíveis para o cliente.
+
+## 4. DESIGN (UX/UI), PERFORMANCE E SEGURANÇA
+*   **Melhorias Visuais:** Melhore o espaçamento, contraste e tamanho de botões de conversão ("Comprar Agora", "Finalizar Compra"). Adicione loaders/spinners visuais de "Carregando..." em ações assíncronas (calcular CEP, aplicar cupons, checkout) para evitar cliques duplos do usuário.
+*   **Busca Inteligente:** Ajuste a busca da loja para ignorar erros leves de digitação (Ex: buscar "rodizio" sem acento deve trazer os produtos da categoria).
+*   **Privacidade, Rastreamento e Abandono:** Certifique-se de que nenhuma senha ou dado sensível seja gravado em texto limpo nos logs do servidor. Verifique se as tags do Meta Pixel e Google Analytics (GA4) estão injetadas sem erros no console do navegador. Salve o e-mail/telefone do checkout via AJAX para permitir recuperação de carrinho abandonado.
+
+## 5. FLUXO DE EXECUÇÃO EM LOOP
+Use meus dados reais já registrados em histórico para rodar a simulação completa de ponta a ponta no navegador:
+*   Nome: Frederico de Castro Mourão
+*   CPF: 013669956-19
+*   CEP: 35500-006 | Rua São Paulo, 1078, Divinópolis - MG
+*   Telefone: 37 999374112
+*   Email: fredmourao@gmail.com
+*   Senha base: Vivaliz27062021-
+
+Execute o ciclo em loop. Altere o código diretamente na raiz do repositório, limpe o cache do sistema e use o navegador para testar novamente. Só encerre a tarefa quando 100% das páginas estiverem corrigidas, visualmente impecáveis em desktop/mobile, rápidas e sem erros nos logs de console ou do PHP.
+
+Inicie a varredura e apresente o plano de ação inicial.

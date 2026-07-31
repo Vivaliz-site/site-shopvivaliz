@@ -1,0 +1,339 @@
+<?php
+/**
+ * Squad Chat API - canal duplo:
+ * - Liz: atendimento da loja
+ * - Operations: intervencao humana real sobre agentes autonomos
+ */
+declare(strict_types=1);
+
+require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
+require_once dirname(__DIR__, 2) . '/config/agent-keys.php';
+
+header_remove('X-Powered-By');
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
+
+$method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+if (!in_array($method, ['GET', 'POST'], true)) {
+    http_response_code(405);
+    header('Allow: GET, POST');
+    echo json_encode(['status' => 'error', 'message' => 'Method Not Allowed']);
+    exit;
+}
+
+$body = $method === 'POST' ? (string) file_get_contents('php://input') : '';
+$payload = json_decode($body, true);
+if (!is_array($payload)) {
+    $payload = $_POST;
+}
+
+function squad_root(): string
+{
+    return dirname(__DIR__, 2);
+}
+
+function squad_request_header(string $name): string
+{
+    $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+    $value = $_SERVER[$serverKey] ?? '';
+    return is_string($value) ? trim($value) : '';
+}
+
+function squad_authorize_operations(): bool
+{
+    $expected = getenv('SHOPVIVALIZ_AGENT_KEY');
+    if (!is_string($expected) || trim($expected) === '') {
+        http_response_code(503);
+        echo json_encode([
+            'status' => 'error',
+            'endpoint' => 'squad-chat',
+            'message' => 'Canal operacional indisponivel.',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return false;
+    }
+
+    $provided = squad_request_header('X-ShopVivaliz-Agent-Key');
+    if ($provided === '') {
+        $authorization = squad_request_header('Authorization');
+        if (preg_match('/^Bearer\s+(.+)$/i', $authorization, $matches)) {
+            $provided = trim($matches[1]);
+        }
+    }
+
+    if ($provided === '' || !hash_equals(trim($expected), $provided)) {
+        http_response_code(401);
+        header('WWW-Authenticate: Bearer realm="ShopVivaliz Operations"');
+        echo json_encode([
+            'status' => 'error',
+            'endpoint' => 'squad-chat',
+            'message' => 'Nao autorizado.',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return false;
+    }
+
+    return true;
+}
+
+function squad_read_jsonl(string $path, int $limit = 100): array
+{
+    if (!is_file($path)) {
+        return [];
+    }
+    $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!is_array($lines)) {
+        return [];
+    }
+
+    $items = [];
+    foreach (array_slice($lines, -$limit) as $line) {
+        $row = json_decode($line, true);
+        if (is_array($row)) {
+            $items[] = $row;
+        }
+    }
+    return $items;
+}
+
+function squad_append_jsonl(string $path, array $payload): void
+{
+    @mkdir(dirname($path), 0755, true);
+    file_put_contents(
+        $path,
+        json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
+        FILE_APPEND | LOCK_EX
+    );
+}
+
+function squad_operations_mode(array $payload): bool
+{
+    if (isset($_GET['mode']) && strtolower((string) $_GET['mode']) === 'operations') {
+        return true;
+    }
+    return isset($payload['agent_id']) || (isset($payload['mode']) && strtolower((string) $payload['mode']) === 'operations');
+}
+
+function squad_send_intervention(array $payload): array
+{
+    $agentId = strtolower(trim((string) ($payload['agent_id'] ?? '')));
+    $message = trim((string) ($payload['message'] ?? ''));
+    if ($agentId === '' || $message === '') {
+        http_response_code(422);
+        return ['status' => 'error', 'message' => 'agent_id e message sao obrigatorios para intervencao operacional.'];
+    }
+    if (!preg_match('/^[a-z0-9._-]{1,80}$/', $agentId)) {
+        http_response_code(422);
+        return ['status' => 'error', 'message' => 'agent_id invalido.'];
+    }
+    if (strlen($message) > 4000) {
+        http_response_code(413);
+        return ['status' => 'error', 'message' => 'Mensagem operacional excede o limite permitido.'];
+    }
+
+    $entry = [
+        'id' => bin2hex(random_bytes(8)),
+        'agent_id' => $agentId,
+        'message' => $message,
+        'source' => 'squad-chat',
+        'created_at' => date('c'),
+        'status' => 'queued',
+        'kind' => 'human-intervention',
+    ];
+
+    squad_append_jsonl(squad_root() . '/storage/private/agent-interventions.jsonl', $entry);
+
+    return [
+        'status' => 'ok',
+        'endpoint' => 'squad-chat',
+        'mode' => 'operations',
+        'message' => 'Intervencao enviada ao agente e aguardando consumo pelo executor.',
+        'command' => $entry,
+    ];
+}
+
+function squad_read_intervention_thread(string $agentId): array
+{
+    $commands = squad_read_jsonl(squad_root() . '/storage/private/agent-interventions.jsonl', 200);
+    $responses = squad_read_jsonl(squad_root() . '/storage/private/agent-intervention-responses.jsonl', 200);
+
+    return [
+        'commands' => array_values(array_filter($commands, static function (array $row) use ($agentId): bool {
+            return strtolower((string) ($row['agent_id'] ?? '')) === $agentId;
+        })),
+        'responses' => array_values(array_filter($responses, static function (array $row) use ($agentId): bool {
+            return strtolower((string) ($row['agent_id'] ?? '')) === $agentId;
+        })),
+    ];
+}
+
+if (($_GET['health'] ?? '') === '1') {
+    echo json_encode([
+        'ok' => true,
+        'endpoint' => 'squad-chat',
+        'providers' => ['gemini' => (getenv('GEMINI_API_KEY') ?: '') !== ''],
+    ]);
+    exit;
+}
+
+if (squad_operations_mode($payload)) {
+    if (!squad_authorize_operations()) {
+        exit;
+    }
+
+    if ($method === 'POST') {
+        echo json_encode(squad_send_intervention($payload), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $agentId = strtolower(trim((string) ($_GET['agent_id'] ?? '')));
+    if ($agentId !== '' && !preg_match('/^[a-z0-9._-]{1,80}$/', $agentId)) {
+        http_response_code(422);
+        echo json_encode(['status' => 'error', 'message' => 'agent_id invalido.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    echo json_encode([
+        'status' => 'ok',
+        'endpoint' => 'squad-chat',
+        'mode' => 'operations',
+        'agent_id' => $agentId,
+        'thread' => $agentId !== '' ? squad_read_intervention_thread($agentId) : ['commands' => [], 'responses' => []],
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+$response = [
+    'status' => 'ok',
+    'endpoint' => 'squad-chat',
+    'timestamp' => date('c'),
+    'method' => $method,
+];
+
+if ($method === 'POST' && !empty($payload['message'])) {
+    $message = (string) ($payload['message'] ?? '');
+    $context = (string) ($payload['context'] ?? 'site-shopvivaliz');
+    $response['answer'] = processLizChat($message, $context);
+    $response['received'] = ['message' => $message, 'context' => $context];
+}
+
+echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+function processLizChat(string $message, string $context): string
+{
+    $geminiKey = getenv('GEMINI_API_KEY') ?: '';
+    $learningFile = dirname(__DIR__, 2) . '/storage/private/liz_learning_base.json';
+    $learningData = ['learned_facts' => [], 'history' => []];
+    if (is_file($learningFile)) {
+        $learningData = json_decode((string) file_get_contents($learningFile), true) ?: $learningData;
+    } else {
+        @mkdir(dirname($learningFile), 0777, true);
+    }
+
+    $catalogFile = dirname(__DIR__, 2) . '/api/catalog/fallback-products.json';
+    $productsSummary = '';
+    if (is_file($catalogFile)) {
+        $products = json_decode((string) file_get_contents($catalogFile), true) ?: [];
+        foreach (array_slice($products, 0, 25) as $p) {
+            $productsSummary .= "- SKU: {$p['sku']}, Nome: {$p['name']}, Preço: R$ {$p['price']}, Categoria: {$p['category']}\n";
+        }
+    }
+
+    $normMsg = strtr(strtolower($message), [
+        'á'=>'a','à'=>'a','ã'=>'a','â'=>'a','ä'=>'a','é'=>'e','è'=>'e','ê'=>'e','ë'=>'e',
+        'í'=>'i','ì'=>'i','î'=>'i','ï'=>'i','ó'=>'o','ò'=>'o','õ'=>'o','ô'=>'o','ö'=>'o',
+        'ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ç'=>'c','ñ'=>'n'
+    ]);
+
+    if ($geminiKey === '') {
+        if (preg_match('/(troca|devolucao|devolver|reembolso)/i', $normMsg)) {
+            return 'Você tem até 7 dias após o recebimento para solicitar a troca ou devolução do seu produto sem burocracia! Basta enviar um e-mail para atendimento@shopvivaliz.com.br ou falar no WhatsApp (37) 99937-4112 informando o número do seu pedido.';
+        }
+        if (preg_match('/(entrega|frete|prazo|demora|envio|chega)/i', $normMsg)) {
+            return 'Enviamos para todo o Brasil! O prazo e o frete são calculados no carrinho pelo seu CEP. Compras acima de R$ 199 possuem FRETE GRÁTIS!';
+        }
+        if (preg_match('/(seguro|pagamento|boleto|cartao|pix|parcela)/i', $normMsg)) {
+            return 'Aceitamos PIX (com aprovação imediata), Boleto Bancário e Cartão de Crédito em até 12x. Todos os pagamentos são protegidos por criptografia SSL.';
+        }
+        if (preg_match('/(contato|email|telefone|whatsapp|atendimento|falar)/i', $normMsg)) {
+            return 'Você pode falar com nosso atendimento humano pelo WhatsApp (37) 99937-4112 ou e-mail atendimento@shopvivaliz.com.br.';
+        }
+        if (preg_match('/(desconto|cupom|promocao|oferta)/i', $normMsg)) {
+            return 'Use o cupom VOLTEI5 na finalização da sua compra para ganhar 5% OFF imediato na sua primeira compra!';
+        }
+        if (preg_match('/(rodizio|rodinha|roda|silicone|gel)/i', $normMsg)) {
+            return 'Temos excelentes opções de rodízios em silicone gel e aço, como o Kit 4 Rodízios Soprano 35mm giratórios com e sem freio (R$ 45,00). Você pode conferir todos no nosso catálogo!';
+        }
+        if (preg_match('/(produto|item|sku|codigo|catalogo|comprar)/i', $normMsg)) {
+            return 'Temos mais de 180 produtos organizados em nosso catálogo oficial (rodízios, utilidades, ferramentas, organização e jardim). Qual linha você gostaria de ver?';
+        }
+        return 'Olá! Sou a Liz, assistente virtual da ShopVivaliz. Posso te ajudar com produtos, frete, cupons, trocas e devoluções. Como posso te ajudar hoje?';
+    }
+
+    $systemPrompt = "Você é a Liz, assistente virtual oficial da ShopVivaliz.\n";
+    $systemPrompt .= "Atenda o cliente de forma objetiva, gentil e útil.\n\n";
+    $systemPrompt .= "Dados da loja:\n";
+    $systemPrompt .= "- Atendimento: atendimento@shopvivaliz.com.br / WhatsApp (37) 99937-4112\n";
+    $systemPrompt .= "- Devolução / Troca: Prazo de 7 dias sem burocracia via e-mail ou WhatsApp\n";
+    $systemPrompt .= "- Frete Grátis: Em compras acima de R$ 199 pra todo o Brasil\n";
+    $systemPrompt .= "- Cupom: VOLTEI5 (5% OFF na 1ª compra)\n";
+    $systemPrompt .= "- Contexto: {$context}\n";
+    if ($productsSummary !== '') {
+        $systemPrompt .= "Produtos de contexto:\n{$productsSummary}\n";
+    }
+
+    $contents = [];
+    foreach (array_slice($learningData['history'] ?? [], -10) as $msg) {
+        $contents[] = [
+            'role' => $msg['role'] === 'bot' ? 'model' : 'user',
+            'parts' => [['text' => $msg['content']]],
+        ];
+    }
+    $contents[] = ['role' => 'user', 'parts' => [['text' => $message]]];
+
+    $model = getenv('SQUAD_GEMINI_MODEL') ?: 'gemini-1.5-flash';
+    $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . $geminiKey;
+    $requestPayload = [
+        'system_instruction' => ['parts' => [['text' => $systemPrompt]]],
+        'contents' => $contents,
+        'generationConfig' => ['maxOutputTokens' => 500, 'temperature' => 0.5],
+    ];
+
+    $chat = callGeminiAPI($url, $requestPayload);
+    $answer = trim($chat['candidates'][0]['content']['parts'][0]['text'] ?? '');
+    if ($answer === '') {
+        if (preg_match('/(troca|devolucao|devolver|reembolso)/i', $normMsg)) {
+            $answer = 'Você tem até 7 dias após o recebimento para solicitar a troca ou devolução do seu produto sem burocracia! Basta enviar um e-mail para atendimento@shopvivaliz.com.br ou falar no WhatsApp (37) 99937-4112 informando o número do seu pedido.';
+        } elseif (preg_match('/(rodizio|rodinha|roda|silicone|gel)/i', $normMsg)) {
+            $answer = 'Temos excelentes opções de rodízios em silicone gel e aço, como o Kit 4 Rodízios Soprano 35mm giratórios com e sem freio (R$ 45,00). Você pode conferir todos no nosso catálogo!';
+        } elseif (preg_match('/(produto|item|sku|codigo|comprar)/i', $normMsg)) {
+            $answer = 'Temos mais de 180 produtos organizados em nosso catálogo oficial (rodízios, utilidades, ferramentas, organização e jardim). Posso te ajudar a encontrar algum item específico?';
+        } elseif (preg_match('/(entrega|frete|prazo|envio)/i', $normMsg)) {
+            $answer = 'Enviamos para todo o Brasil com frete grátis nas compras acima de R$ 199. Você também ganha 5% OFF na 1ª compra usando o cupom VOLTEI5!';
+        } else {
+            $answer = 'Olá! Sou a Liz, assistente virtual da ShopVivaliz. Posso te ajudar a localizar produtos no catálogo, consultar frete, trocas ou cupom de desconto. Como posso te ajudar hoje?';
+        }
+    }
+
+    $learningData['history'][] = ['role' => 'user', 'content' => $message];
+    $learningData['history'][] = ['role' => 'bot', 'content' => $answer];
+    $learningData['history'] = array_slice($learningData['history'], -30);
+    file_put_contents($learningFile, json_encode($learningData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
+    return $answer;
+}
+
+function callGeminiAPI(string $url, array $payload): array
+{
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    $response = curl_exec($ch);
+    $err = curl_error($ch);
+    curl_close($ch);
+
+    if ($err) {
+        return [];
+    }
+    return json_decode((string) $response, true) ?: [];
+}

@@ -1,0 +1,31 @@
+{
+  "recommendations": [
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "stylelint.vscode-stylelint",
+    "bmewburn.vscode-intelephense-client",
+    "xdebug.php-debug",
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-vscode.powershell",
+    "rooveterinaryinc.roo-cline",
+    "anthropic.claude-code",
+    "openai.chatgpt",
+    "eamodio.gitlens",
+    "mhutchie.git-graph",
+    "ms-azuretools.vscode-docker",
+    "ms-vscode-remote.remote-ssh",
+    "PKief.material-icon-theme",
+    "teabyii.ayu",
+    "redhat.vscode-yaml",
+    "usernamehw.errorlens",
+    "editorconfig.editorconfig",
+    "timonwong.shellcheck",
+    "formulahendry.auto-rename-tag",
+    "mechatroner.rainbow-csv",
+    "alefragnani.bookmarks",
+    "humao.rest-client",
+    "streetsidesoftware.code-spell-checker",
+    "streetsidesoftware.code-spell-checker-portuguese-brazilian"
+  ]
+}

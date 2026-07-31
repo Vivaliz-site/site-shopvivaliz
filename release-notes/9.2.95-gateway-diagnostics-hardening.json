@@ -1,0 +1,21 @@
+{
+  "version": "9.2.95",
+  "date": "2026-07-01",
+  "codename": "gateway-diagnostics-hardening",
+  "type": "cumulative",
+  "highlights": [
+    "Corrige o diagnostico do Melhor Envio para nunca cair em 502 por tratamento fraco de erro.",
+    "Adiciona endpoint de diagnostico do Pagar.me com autenticacao segura e sem exposicao de secrets.",
+    "Expande auto-routines e admin para mostrar se os gateways estao realmente prontos, nao apenas visiveis na interface."
+  ],
+  "files": [
+    "api/melhorenvio/diagnostic.php",
+    "api/pagarme/diagnostic.php",
+    "installer/update-applied-check.php",
+    "installer/auto-routines.php",
+    "admin/index.php",
+    "js/admin-dashboard.js",
+    "config/shopvivaliz-version.php",
+    "config/constants.php"
+  ]
+}

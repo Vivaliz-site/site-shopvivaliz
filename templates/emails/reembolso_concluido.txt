@@ -1,0 +1,5 @@
+Olá {{customer_name}},
+
+O reembolso do pedido #{{order_id}} no valor de R$ {{refund_amount}} foi concluído.
+Como você receberá o valor:
+{{refund_instructions}}

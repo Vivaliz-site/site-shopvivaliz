@@ -1,0 +1,20 @@
+{
+  "version": "9.2.101",
+  "date": "2026-07-02",
+  "codename": "shopee-media-space-repair",
+  "type": "cumulative",
+  "highlights": [
+    "Implementa reparo em lote para Shopee Media Space a partir da planilha Result_*.xlsx e do mapeamento local.",
+    "Troca o fluxo de URL externa por upload de arquivo suportado pela Shopee Open API, com captura de image_id e URL cf.shopee.",
+    "Prepara workflow manual para executar o reparo usando os secrets do GitHub sem depender do CDN externo."
+  ],
+  "files": [
+    "scripts/shopee-media-space-repair.py",
+    "scripts/utils/shopee_client.py",
+    ".github/workflows/shopee-media-space-repair.yml",
+    "installer/self-test.php",
+    "config/constants.php",
+    "config/shopvivaliz-version.php",
+    "config/shopvivaliz-device-variants.php"
+  ]
+}

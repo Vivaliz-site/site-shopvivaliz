@@ -1,0 +1,2 @@
+#!/bin/sh
+python scripts/git_autonomous_agent.py hook-pre-commit

@@ -1,0 +1,24 @@
+{
+  "last_updated": "2026-07-17T00:43:38.692Z",
+  "summary": {
+    "queue_size": 0,
+    "executing": 1,
+    "approvals_pending": 0,
+    "total_tasks_processed": 1,
+    "total_errors": 0,
+    "cost_report": {
+      "summary": {
+        "daily_used": 0,
+        "daily_limit": 10,
+        "weekly_used": 0,
+        "weekly_limit": 50,
+        "monthly_used": 0,
+        "monthly_limit": 200,
+        "per_task_limit": 2
+      },
+      "log": [],
+      "average_cost_per_task": "0.0000",
+      "total_saved_by_local": 0
+    }
+  }
+}

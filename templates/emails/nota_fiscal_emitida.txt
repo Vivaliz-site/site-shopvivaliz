@@ -1,0 +1,6 @@
+Olá {{customer_name}},
+
+A nota fiscal (NF-e) do seu pedido #{{order_id}} foi emitida.
+Acesse a nota fiscal no link: {{invoice_url}}
+
+O pedido será enviado à transportadora em breve.

@@ -1,0 +1,203 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "shopvivaliz-health",
+    "title": "ShopVivaliz Health Monitoring",
+    "tags": ["production", "health", "monitoring"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 0,
+    "refresh": "5s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "🟢 Container Status",
+        "type": "stat",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        },
+        "targets": [
+          {
+            "expr": "count(up{job=\"shopvivaliz-api\"}) by (job)",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "green", "value": 7}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "📊 CPU Usage (%)",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 6,
+          "y": 0
+        },
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total{name=~\"shopvivaliz.*\"}[5m]) * 100",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "💾 Memory Usage (MB)",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 0
+        },
+        "targets": [
+          {
+            "expr": "container_memory_usage_bytes{name=~\"shopvivaliz.*\"} / 1024 / 1024",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "🔄 Message Queue Backlog",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 18,
+          "y": 0
+        },
+        "targets": [
+          {
+            "expr": "messages_pending",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "🤖 Agents Connected",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 18,
+          "y": 4
+        },
+        "targets": [
+          {
+            "expr": "agents_connected",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "🟦 Database Size (MB)",
+        "type": "stat",
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 18,
+          "y": 8
+        },
+        "targets": [
+          {
+            "expr": "database_size_bytes / 1024 / 1024",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "📈 Request Latency (ms)",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        },
+        "targets": [
+          {
+            "expr": "message_latency_seconds * 1000",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "✅ Sync Success Rate",
+        "type": "graph",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        },
+        "targets": [
+          {
+            "expr": "rate(sync_total{status=\"success\"}[5m]) / rate(sync_total[5m]) * 100",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "📋 Container Restarts (24h)",
+        "type": "stat",
+        "gridPos": {
+          "h": 6,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        },
+        "targets": [
+          {
+            "expr": "increase(container_last_seen{name=~\"shopvivaliz.*\"}[24h])",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "🔌 Disk I/O (IOPS)",
+        "type": "graph",
+        "gridPos": {
+          "h": 6,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        },
+        "targets": [
+          {
+            "expr": "rate(container_fs_io_current{name=~\"shopvivaliz.*\"}[5m])",
+            "refId": "A"
+          }
+        ]
+      }
+    ]
+  }
+}

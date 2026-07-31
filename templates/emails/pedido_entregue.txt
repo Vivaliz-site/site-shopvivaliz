@@ -1,0 +1,4 @@
+Olá {{customer_name}},
+
+Seu pedido #{{order_id}} foi entregue com sucesso!
+Esperamos que goste da sua compra. Se tiver qualquer dúvida, entre em contato.

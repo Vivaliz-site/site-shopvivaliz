@@ -1,0 +1,73 @@
+name: Sincronizar Produtos ERP (artefato seguro)
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: product-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Validate required credentials
+        shell: bash
+        env:
+          OLIST_ACCESS_TOKEN: ${{ secrets.OLIST_ACCESS_TOKEN }}
+          TINY_ACCESS_TOKEN: ${{ secrets.TINY_ACCESS_TOKEN }}
+          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${OLIST_ACCESS_TOKEN:-}" && -z "${TINY_ACCESS_TOKEN:-}" && -z "${TOKEN_API_OLIST:-}" ]]; then
+            echo "::error::Nenhuma credencial de ERP configurada."
+            exit 1
+          fi
+
+      - name: Sincronizar produtos
+        shell: bash
+        env:
+          OLIST_ACCESS_TOKEN: ${{ secrets.OLIST_ACCESS_TOKEN }}
+          TINY_ACCESS_TOKEN: ${{ secrets.TINY_ACCESS_TOKEN }}
+          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
+          OLIST_CLIENT_ID: ${{ secrets.OLIST_CLIENT_ID }}
+          OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
+          OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
+          TINY_CLIENT_ID: ${{ secrets.TINY_CLIENT_ID }}
+          TINY_CLIENT_SECRET: ${{ secrets.TINY_CLIENT_SECRET }}
+          TINY_REFRESH_TOKEN: ${{ secrets.TINY_REFRESH_TOKEN }}
+        run: |
+          set -euo pipefail
+          python sync-products-to-json.py
+          test -s storage/products-cache.json
+          python -m json.tool storage/products-cache.json >/dev/null
+
+      - name: Upload synchronized catalog for review
+        uses: actions/upload-artifact@v7
+        with:
+          name: products-cache-${{ github.run_id }}
+          path: storage/products-cache.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Explain publication gate
+        run: |
+          echo "O catálogo foi gerado como artefato e não foi enviado para main."
+          echo "A publicação deve ocorrer por PR revisável ou pelo pipeline de deploy aprovado."

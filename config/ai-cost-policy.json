@@ -1,0 +1,48 @@
+{
+  "version": "1.0.0",
+  "project": "ShopVivaliz",
+  "goal": "Executar chats, CLIs e agentes 24/7 no modo mais economico por padrao sem remover governanca.",
+  "default_mode": "autopilot_economy",
+  "default_models": {
+    "openai": "gpt-4o-mini",
+    "anthropic": "claude-haiku-4-5-20251001",
+    "gemini": "gemini-2.5-flash",
+    "local": "mistral:7b-instruct-q4_K_M"
+  },
+  "default_behavior": {
+    "ask_user": "only_when_required_by_governance_or_missing_critical_context",
+    "autonomous_safe_tasks": true,
+    "auto_execute_safe_actions": true,
+    "permanent_default": true,
+    "preserve_human_approval_for": [
+      "price_changes",
+      "campaign_publish_or_activation",
+      "budget_increase",
+      "financial_actions",
+      "deploy_or_rollback",
+      "destructive_git_or_filesystem_operations",
+      "secrets_or_credentials"
+    ]
+  },
+  "model_preferences": {
+    "simple_chat_and_classification": {
+      "openai": "lowest_cost_available_mini_model",
+      "reasoning_effort": "low",
+      "verbosity": "low"
+    },
+    "routine_code_edits_and_audits": {
+      "openai": "lowest_cost_available_coding_model_that_passes_project_tests",
+      "reasoning_effort": "low",
+      "verbosity": "medium"
+    },
+    "high_risk_or_architecture": {
+      "openai": "gpt-4o-mini",
+      "reasoning_effort": "low",
+      "requires_extra_validation": true
+    }
+  },
+  "notes": [
+    "O modelo da conversa atual deve ser alterado na interface/provedor do chat, nao por arquivo do projeto.",
+    "Nao configurar acesso irrestrito permanente para acoes financeiras, deploy, campanhas, precos ou segredos."
+  ]
+}

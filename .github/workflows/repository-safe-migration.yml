@@ -1,0 +1,106 @@
+name: Repository Safe Migration Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch existente que contém o plano'
+        required: true
+        type: string
+      plan:
+        description: 'Caminho do plano JSON'
+        required: true
+        default: '.github/migrations/current-plan.json'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-safe-migration-preview-${{ inputs.branch }}
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Validate requested branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch='${{ inputs.branch }}'
+          if [[ -z "$branch" || "$branch" == 'main' || "$branch" == 'master' ]]; then
+            echo '::error::A migration preview requires a non-protected branch.'
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Initialize preview evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/repository-migration-preview
+          printf 'run_id=%s\nsha=%s\nbranch=%s\nplan=%s\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_SHA" '${{ inputs.branch }}' '${{ inputs.plan }}' \
+            > artifacts/repository-migration-preview/context.txt
+
+      - name: Preflight migration plan
+        run: python scripts/maintenance/apply_migration_plan.py --plan '${{ inputs.plan }}'
+
+      - name: Run migration runner tests
+        run: python -m unittest -v tests/unit/test_apply_migration_plan.py
+
+      - name: Apply migration only in ephemeral checkout
+        run: python scripts/maintenance/apply_migration_plan.py --plan '${{ inputs.plan }}' --apply
+
+      - name: Validate applied migration
+        run: python scripts/maintenance/apply_migration_plan.py --plan '${{ inputs.plan }}' --check-applied
+
+      - name: Compile migrated Python files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import py_compile
+          from pathlib import Path
+
+          plan = json.loads(Path('${{ inputs.plan }}').read_text(encoding='utf-8'))
+          for item in plan['migrations']:
+              if item['kind'] != 'python':
+                  continue
+              py_compile.compile(item['source'], doraise=True)
+              py_compile.compile(item['target'], doraise=True)
+          PY
+
+      - name: Capture reviewable patch and manifest
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --short > artifacts/repository-migration-preview/status.txt
+          git diff --binary > artifacts/repository-migration-preview/migration.patch
+          if [[ -s docs/audits/repository-safe-migration-report.json ]]; then
+            cp docs/audits/repository-safe-migration-report.json artifacts/repository-migration-preview/report.json
+          fi
+          test -s artifacts/repository-migration-preview/context.txt
+          test -s artifacts/repository-migration-preview/status.txt
+
+      - name: Upload migration preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-safe-migration-preview-${{ github.run_id }}
+          path: artifacts/repository-migration-preview/
+          if-no-files-found: error
+          retention-days: 30

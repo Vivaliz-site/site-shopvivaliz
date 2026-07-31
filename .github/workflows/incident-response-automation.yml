@@ -1,0 +1,77 @@
+name: Incident Detection
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: incident-detection
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    name: Detect and report incidents
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+
+      - name: Initialize incident evidence
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/incidents
+          printf 'run_id=%s\nsha=%s\nevent=%s\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" \
+            > artifacts/incidents/context.txt
+
+      - name: Run monitor-only incident detector
+        id: incident
+        env:
+          INCIDENT_MODE: monitor
+          HEALTHCHECK_URL: https://shopvivaliz.com.br/api/health
+        shell: bash
+        run: |
+          set -euo pipefail
+          if php scripts/incident-response.php > artifacts/incidents/detector.log 2>&1; then
+            status=0
+          else
+            status=$?
+          fi
+          cat artifacts/incidents/detector.log
+          echo "response_status=$status" >> "$GITHUB_OUTPUT"
+          echo "response_status=$status" >> artifacts/incidents/context.txt
+
+      - name: Notify on detected incident
+        if: steps.incident.outputs.response_status != '0'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: 'Incidente potencial detectado. Nenhuma ação destrutiva foi executada; revisão necessária.'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: Upload incident evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: incident-detection-${{ github.run_id }}
+          path: artifacts/incidents/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Fail when detector reported an incident
+        if: steps.incident.outputs.response_status != '0'
+        run: exit "${{ steps.incident.outputs.response_status }}"

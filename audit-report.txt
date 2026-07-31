@@ -1,0 +1,12 @@
+========================================
+AUDITORIA DE ESTRUTURA - SHOPVIVALIZ
+========================================
+
+ARQUIVOS CRITICOS:
+
+VERIFICACAO DE ARQUIVOS ESSENCIAIS:
+[FALTA] index.php
+[FALTA] config/database.php
+[FALTA] .env
+[FALTA] composer.json
+[FALTA] .htaccess

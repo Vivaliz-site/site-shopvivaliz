@@ -1,0 +1,4 @@
+Olá {{customer_name}},
+
+Registramos sua solicitação de troca ou devolução do pedido #{{order_id}}.
+Nossa equipe enviará as instruções detalhadas de envio reversivo em breve.

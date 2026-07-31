@@ -1,0 +1,8 @@
+Olá {{customer_name}},
+
+Seu pedido #{{order_id}} foi enviado!
+Transportadora: {{carrier}}
+Código de rastreamento: {{tracking_code}}
+Previsão de entrega: {{estimated_delivery}}
+
+Acompanhe a entrega no link: {{tracking_url}}

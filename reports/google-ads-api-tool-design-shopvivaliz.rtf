@@ -1,0 +1,29 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Arial;}}
+\fs24
+\b ShopVivaliz Google Ads API Tool Design\b0\par
+\par
+\b Company\b0\par
+SHOPVIVALIZ LTDA operates the ShopVivaliz ecommerce website at https://shopvivaliz.com.br. The Google Ads API tool is an internal operational tool for the company's own advertising account only.\par
+\par
+\b Purpose\b0\par
+The tool connects ShopVivaliz internal scripts and dashboards to the Google Ads API to read campaign metrics, review account configuration, audit performance, and support optimization decisions for the company's own Google Ads campaigns. The tool also supports validation of conversions imported from Google Analytics 4.\par
+\par
+\b Intended users\b0\par
+Access is limited to internal ShopVivaliz operators and authorized technical contractors. The tool is not offered to the public, customers, agencies, affiliates, or third-party advertisers.\par
+\par
+\b Supported capabilities\b0\par
+1. Reporting: read campaign, budget, keyword, cost, click, impression, and conversion metrics.\par
+2. Campaign management: review existing campaign configuration and prepare safe changes for internal review.\par
+3. Campaign creation: create or prepare campaigns in paused status first, so a human can review before activation.\par
+4. Keyword planning: support keyword research for ShopVivaliz product categories.\par
+\par
+\b Data handling\b0\par
+The tool uses OAuth credentials and a Google Ads developer token stored in private server environment variables and GitHub environment secrets. It does not expose tokens in public files or logs. Data is used only for ShopVivaliz campaign operations and is not sold or shared with third parties.\par
+\par
+\b Production safeguards\b0\par
+Campaign creation scripts are designed to create paused campaigns first. The readiness check must return READY_FOR_REAL_GOOGLE_ADS_CREATE_PAUSED before any production campaign workflow is used. Automatic token renewal is isolated on the production server and writes tokens only to the private .env file.\par
+\par
+\b Public OAuth app page\b0\par
+The OAuth app purpose is published at https://shopvivaliz.com.br/google-ads-api-app with links to privacy policy and terms of service.\par
+}

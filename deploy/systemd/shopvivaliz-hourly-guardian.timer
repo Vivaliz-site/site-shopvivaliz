@@ -1,0 +1,11 @@
+[Unit]
+Description=Run ShopVivaliz Hourly Autonomous Guardian
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+Unit=shopvivaliz-hourly-guardian.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

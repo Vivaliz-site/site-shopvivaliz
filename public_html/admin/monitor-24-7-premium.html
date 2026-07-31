@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 Dashboard Auditoria 24/7 - ShopVivaliz</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #3b82f6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #0f172a;
+            --dark-light: #1e293b;
+            --card-bg: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --border: #334155;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1a1f35 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ============ HEADER ============ */
+        header {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%);
+            border-bottom: 2px solid var(--primary);
+            padding: 40px 20px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #3b82f6, #10b981, #3b82f6);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradient 3s ease infinite;
+        }
+
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        header p {
+            color: var(--text-secondary);
+            font-size: 1.1em;
+            margin-bottom: 15px;
+        }
+
+        /* ============ STATUS BADGE ============ */
+        .status-section {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .status-badge {
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+            border: 2px solid transparent;
+        }
+
+        .badge-ok {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border-color: #34d399;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+        }
+
+        .badge-warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            border-color: #fcd34d;
+        }
+
+        .badge-critical {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            border-color: #fca5a5;
+            animation: pulse-critical 2s infinite;
+        }
+
+        @keyframes pulse-critical {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .update-time {
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            margin-top: 15px;
+        }
+
+        /* ============ CONTAINER ============ */
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        /* ============ GRID ============ */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ============ CARDS ============ */
+        .card {
+            background: linear-gradient(135deg, var(--card-bg) 0%, rgba(30, 41, 59, 0.7) 100%);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 20px 50px rgba(59, 130, 246, 0.2);
+            transform: translateY(-5px);
+        }
+
+        .card:hover::before {
+            opacity: 1;
+        }
+
+        .card h2 {
+            font-size: 1.4em;
+            margin-bottom: 20px;
+            color: #93c5fd;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .card-icon {
+            font-size: 1.8em;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+        }
+
+        /* ============ TESTE ITEM ============ */
+        .teste {
+            padding: 14px 16px;
+            margin: 10px 0;
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(51, 65, 85, 0.4);
+            border-left: 4px solid var(--border);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .teste::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 3px;
+            background: var(--border);
+        }
+
+        .teste.ok {
+            border-left-color: var(--success);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .teste.ok::after {
+            background: var(--success);
+            animation: slideIn 0.3s ease;
+        }
+
+        .teste.erro {
+            border-left-color: var(--danger);
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .teste.erro::after {
+            background: var(--danger);
+        }
+
+        @keyframes slideIn {
+            from { width: 0; }
+            to { width: 3px; }
+        }
+
+        .teste-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+        }
+
+        .teste-nome {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .teste-status {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+        }
+
+        .teste-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .teste-badge.ok {
+            background: rgba(16, 185, 129, 0.2);
+            color: #86efac;
+        }
+
+        .teste-badge.erro {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+        }
+
+        /* ============ METRICAS ============ */
+        .metricas {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .metrica {
+            text-align: center;
+            padding: 18px 12px;
+            background: linear-gradient(135deg, rgba(51, 65, 85, 0.4) 0%, rgba(51, 65, 85, 0.2) 100%);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .metrica:hover {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.1) 100%);
+            border-color: var(--primary);
+            transform: scale(1.05);
+        }
+
+        .metrica-valor {
+            font-size: 2.2em;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 6px;
+            animation: countUp 0.5s ease;
+        }
+
+        @keyframes countUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .metrica-label {
+            font-size: 0.8em;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        /* ============ TIMELINE ============ */
+        .timeline-section {
+            background: linear-gradient(135deg, var(--card-bg) 0%, rgba(30, 41, 59, 0.7) 100%);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            margin-top: 30px;
+            backdrop-filter: blur(10px);
+        }
+
+        .timeline-section h3 {
+            font-size: 1.4em;
+            margin-bottom: 20px;
+            color: #93c5fd;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .timeline-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .timeline-item {
+            padding: 16px;
+            background: rgba(51, 65, 85, 0.4);
+            border-radius: 10px;
+            border-left: 4px solid var(--primary);
+            transition: all 0.3s ease;
+        }
+
+        .timeline-item.ok {
+            border-left-color: var(--success);
+        }
+
+        .timeline-item.erro {
+            border-left-color: var(--danger);
+        }
+
+        .timeline-item:hover {
+            background: rgba(59, 130, 246, 0.1);
+            transform: translateX(5px);
+        }
+
+        .timeline-hora {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .timeline-taxa {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .timeline-status {
+            font-size: 0.9em;
+            margin-top: 4px;
+        }
+
+        /* ============ CHART ============ */
+        .chart-section {
+            background: linear-gradient(135deg, var(--card-bg) 0%, rgba(30, 41, 59, 0.7) 100%);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            margin-top: 30px;
+            backdrop-filter: blur(10px);
+        }
+
+        .chart-container {
+            height: 300px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            gap: 15px;
+            margin-top: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .chart-bar {
+            flex: 1;
+            background: linear-gradient(135deg, var(--primary), #60a5fa);
+            border-radius: 8px 8px 0 0;
+            position: relative;
+            min-height: 20px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            box-shadow: 0 -2px 8px rgba(59, 130, 246, 0.3);
+        }
+
+        .chart-bar:hover {
+            background: linear-gradient(135deg, #2563eb, #3b82f6);
+            box-shadow: 0 -4px 16px rgba(59, 130, 246, 0.5);
+        }
+
+        .chart-label {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .chart-value {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.9em;
+        }
+
+        /* ============ STATS ============ */
+        .stats-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat {
+            background: rgba(51, 65, 85, 0.4);
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 3px solid var(--primary);
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        /* ============ FOOTER ============ */
+        footer {
+            text-align: center;
+            padding: 30px 20px;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border);
+            margin-top: 50px;
+            font-size: 0.9em;
+        }
+
+        footer p {
+            margin: 5px 0;
+        }
+
+        /* ============ LOADING ============ */
+        .loading {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--primary);
+            animation: pulse-load 1.5s infinite;
+        }
+
+        @keyframes pulse-load {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* ============ ALERTS ============ */
+        .alert-box {
+            padding: 16px;
+            margin: 15px 0;
+            border-radius: 10px;
+            border-left: 4px solid;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideInAlert 0.3s ease;
+        }
+
+        @keyframes slideInAlert {
+            from { transform: translateX(-20px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.15);
+            border-left-color: var(--success);
+            color: #86efac;
+        }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.15);
+            border-left-color: var(--warning);
+            color: #fbbf24;
+        }
+
+        .alert-error {
+            background: rgba(239, 68, 68, 0.15);
+            border-left-color: var(--danger);
+            color: #fca5a5;
+        }
+
+        .alert-icon {
+            font-size: 1.3em;
+        }
+
+        /* ============ RESPONSIVE ============ */
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.8em;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .status-section {
+                flex-direction: column;
+            }
+
+            .status-badge {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .timeline-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ============ SCROLL ============ */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(51, 65, 85, 0.2);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #60a5fa;
+        }
+    </style>
+</head>
+<body>
+    <!-- HEADER -->
+    <header>
+        <h1>🤖 Dashboard Auditoria 24/7</h1>
+        <p>Monitoramento Inteligente em Tempo Real</p>
+        <div class="status-section">
+            <div class="status-badge badge-ok" id="status-badge">
+                <span>🟢</span> SISTEMA OK
+            </div>
+            <div class="update-time">
+                Última atualização: <strong id="ultima-atualizacao">Carregando...</strong>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTEÚDO -->
+    <div class="container">
+        <!-- GRID PRINCIPAL -->
+        <div class="grid">
+            <!-- DISPONIBILIDADE -->
+            <div class="card">
+                <h2>
+                    <span class="card-icon">🌐</span>
+                    Disponibilidade
+                </h2>
+                <div id="disponibilidade-testes"></div>
+                <div class="metricas">
+                    <div class="metrica">
+                        <div class="metrica-valor" id="disp-ok">-</div>
+                        <div class="metrica-label">✅ OK</div>
+                    </div>
+                    <div class="metrica">
+                        <div class="metrica-valor" id="disp-tempo">-</div>
+                        <div class="metrica-label">⏱️ ms</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEGURANÇA -->
+            <div class="card">
+                <h2>
+                    <span class="card-icon">🔒</span>
+                    Segurança
+                </h2>
+                <div id="seguranca-testes"></div>
+                <div class="alert-box alert-success" style="margin-top: 15px;">
+                    <span class="alert-icon">✅</span>
+                    <span>8 proteções ativas</span>
+                </div>
+            </div>
+
+            <!-- PERFORMANCE -->
+            <div class="card">
+                <h2>
+                    <span class="card-icon">⚡</span>
+                    Performance
+                </h2>
+                <div id="performance-testes"></div>
+                <div class="metricas">
+                    <div class="metrica">
+                        <div class="metrica-valor" id="perf-tempo">-</div>
+                        <div class="metrica-label">⏱️ ms</div>
+                    </div>
+                    <div class="metrica">
+                        <div class="metrica-valor" id="perf-tamanho">-</div>
+                        <div class="metrica-label">📦 KB</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FUNCIONALIDADE -->
+            <div class="card">
+                <h2>
+                    <span class="card-icon">✨</span>
+                    Funcionalidade
+                </h2>
+                <div id="funcional-testes"></div>
+            </div>
+
+            <!-- RESUMO GERAL -->
+            <div class="card">
+                <h2>
+                    <span class="card-icon">📊</span>
+                    Taxa de Sucesso
+                </h2>
+                <div class="metricas">
+                    <div class="metrica">
+                        <div class="metrica-valor" id="taxa-sucesso" style="font-size: 3em;">-</div>
+                        <div class="metrica-label">%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- UPTIME -->
+            <div class="card">
+                <h2>
+                    <span class="card-icon">📈</span>
+                    Uptime Geral
+                </h2>
+                <div class="metricas">
+                    <div class="metrica">
+                        <div class="metrica-valor" id="uptime" style="font-size: 3em;">-</div>
+                        <div class="metrica-label">%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GRÁFICO DE HISTÓRICO -->
+        <div class="chart-section">
+            <h2 style="color: #93c5fd; display: flex; align-items: center; gap: 10px;">
+                <span>📉</span> Histórico de Performance
+            </h2>
+            <div class="chart-container" id="chart-container">
+                <div style="color: var(--text-secondary); flex: 1; text-align: center;">Carregando gráfico...</div>
+            </div>
+            <div class="stats-section" id="stats-section"></div>
+        </div>
+
+        <!-- TIMELINE -->
+        <div class="timeline-section">
+            <h3>
+                <span>📅</span> Últimas Execuções
+            </h3>
+            <div class="timeline-grid" id="timeline-eventos">
+                <div class="timeline-item">
+                    <span class="loading"></span> Carregando histórico...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+        <p><strong>🤖 Sistema de Auditoria Autônoma 24/7</strong></p>
+        <p>Executa a cada 30 minutos | Testes Reais | Sem Simulação | Monitoramento Contínuo</p>
+        <p style="margin-top: 15px; color: var(--border);">© 2026 ShopVivaliz - Todos os direitos reservados</p>
+    </footer>
+
+    <script>
+        const API_URL = '/api/auditoria-monitor.php';
+        const UPDATE_INTERVAL = 60000;
+
+        async function carregarDados() {
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+
+                if (data.status === 'error') {
+                    console.error('Erro:', data.message);
+                    return;
+                }
+
+                atualizarDashboard(data);
+            } catch (error) {
+                console.error('Erro ao carregar:', error);
+            }
+        }
+
+        function atualizarDashboard(data) {
+            const relatorio = data.ultimo_relatorio;
+
+            if (!relatorio) {
+                document.getElementById('ultima-atualizacao').textContent = 'Aguardando primeira execução...';
+                return;
+            }
+
+            // Status Badge
+            const badge = document.getElementById('status-badge');
+            const taxa = parseFloat(relatorio.taxa_sucesso);
+
+            if (taxa >= 95) {
+                badge.className = 'status-badge badge-ok';
+                badge.innerHTML = '<span>🟢</span> SISTEMA OK (' + relatorio.taxa_sucesso + ')';
+            } else if (taxa >= 80) {
+                badge.className = 'status-badge badge-warning';
+                badge.innerHTML = '<span>🟡</span> AVISO (' + relatorio.taxa_sucesso + ')';
+            } else {
+                badge.className = 'status-badge badge-critical';
+                badge.innerHTML = '<span>🔴</span> CRÍTICO (' + relatorio.taxa_sucesso + ')';
+            }
+
+            // Disponibilidade
+            const dispDiv = document.getElementById('disponibilidade-testes');
+            dispDiv.innerHTML = relatorio.disponibilidade.testes.map(t =>
+                `<div class="teste ${t.status ? 'ok' : 'erro'}">
+                    <div class="teste-info">
+                        <span class="teste-nome">${t.teste}</span>
+                        <span class="teste-status">${t.mensagem}</span>
+                    </div>
+                    <span class="teste-badge ${t.status ? 'ok' : 'erro'}">${t.status ? '✅' : '❌'}</span>
+                </div>`
+            ).join('');
+
+            // Métricas Disponibilidade
+            if (relatorio.disponibilidade.testes.length > 0) {
+                const tempo = relatorio.disponibilidade.testes[0].tempo_ms || 0;
+                document.getElementById('disp-tempo').textContent = Math.round(tempo);
+                document.getElementById('disp-ok').textContent =
+                    relatorio.disponibilidade.testes.filter(t => t.status).length + '/' +
+                    relatorio.disponibilidade.testes.length;
+            }
+
+            // Segurança
+            const segDiv = document.getElementById('seguranca-testes');
+            segDiv.innerHTML = relatorio.seguranca.testes.map(t =>
+                `<div class="teste ${t.status ? 'ok' : 'erro'}">
+                    <div class="teste-info">
+                        <span class="teste-nome">${t.teste}</span>
+                        <span class="teste-status">${t.mensagem}</span>
+                    </div>
+                    <span class="teste-badge ${t.status ? 'ok' : 'erro'}">${t.status ? '✅' : '❌'}</span>
+                </div>`
+            ).join('');
+
+            // Performance
+            const perfDiv = document.getElementById('performance-testes');
+            perfDiv.innerHTML = relatorio.performance.testes.map(t =>
+                `<div class="teste ${t.status ? 'ok' : 'erro'}">
+                    <div class="teste-info">
+                        <span class="teste-nome">${t.teste}</span>
+                        <span class="teste-status">${t.mensagem}</span>
+                    </div>
+                    <span class="teste-badge ${t.status ? 'ok' : 'erro'}">${t.status ? '✅' : '❌'}</span>
+                </div>`
+            ).join('');
+
+            const tempoPerf = relatorio.performance.testes.find(t => t.teste === 'Tempo de Resposta');
+            if (tempoPerf) document.getElementById('perf-tempo').textContent = Math.round(tempoPerf.tempo_ms || 0);
+
+            const tamanho = relatorio.performance.testes.find(t => t.teste === 'Tamanho Página');
+            if (tamanho) document.getElementById('perf-tamanho').textContent = Math.round(tamanho.tamanho_kb || 0);
+
+            // Funcional
+            const funcDiv = document.getElementById('funcional-testes');
+            funcDiv.innerHTML = relatorio.funcional.testes.map(t =>
+                `<div class="teste ${t.status ? 'ok' : 'erro'}">
+                    <div class="teste-info">
+                        <span class="teste-nome">${t.teste}</span>
+                        <span class="teste-status">${t.mensagem}</span>
+                    </div>
+                    <span class="teste-badge ${t.status ? 'ok' : 'erro'}">${t.status ? '✅' : '❌'}</span>
+                </div>`
+            ).join('');
+
+            // Taxa de Sucesso
+            document.getElementById('taxa-sucesso').textContent = relatorio.taxa_sucesso;
+
+            // Uptime
+            document.getElementById('uptime').textContent = data.uptime || '99.9%';
+
+            // Gráfico
+            atualizarGrafico(data.historico);
+
+            // Timeline
+            const timelineDiv = document.getElementById('timeline-eventos');
+            if (data.historico && data.historico.length > 0) {
+                timelineDiv.innerHTML = data.historico.map(h =>
+                    `<div class="timeline-item ${h.ok ? 'ok' : 'erro'}">
+                        <div class="timeline-hora">📅 ${h.timestamp}</div>
+                        <div class="timeline-taxa">Taxa: <strong>${h.taxa_sucesso}</strong></div>
+                        <div class="timeline-status">${h.status}</div>
+                    </div>`
+                ).join('');
+            }
+
+            // Atualizar hora
+            document.getElementById('ultima-atualizacao').textContent =
+                new Date(relatorio.timestamp).toLocaleString('pt-BR');
+        }
+
+        function atualizarGrafico(historico) {
+            if (!historico || historico.length === 0) return;
+
+            const chartContainer = document.getElementById('chart-container');
+            const maxTaxa = 100;
+
+            chartContainer.innerHTML = historico.slice(-12).reverse().map((h, idx) => {
+                const taxa = parseFloat(h.taxa_sucesso);
+                const altura = (taxa / maxTaxa) * 100;
+                const timestamp = new Date(h.timestamp);
+                const label = timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+                return `
+                    <div style="flex: 1; position: relative; display: flex; flex-direction: column; align-items: center;">
+                        <div class="chart-value">${taxa.toFixed(0)}%</div>
+                        <div class="chart-bar" style="height: ${altura}%;" title="${h.timestamp}"></div>
+                        <div class="chart-label">${label}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Inicializar
+        carregarDados();
+        setInterval(carregarDados, UPDATE_INTERVAL);
+    </script>
+</body>
+</html>

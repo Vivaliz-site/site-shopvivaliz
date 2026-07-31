@@ -1,0 +1,102 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "SV: Docker Check",
+      "type": "shell",
+      "command": "C:\\Users\\FRED\\.local\\bin\\sv.cmd",
+      "args": ["docker", "check"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "SV: Docker Up",
+      "type": "shell",
+      "command": "C:\\Users\\FRED\\.local\\bin\\sv.cmd",
+      "args": ["docker", "up"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "SV: Docker Down",
+      "type": "shell",
+      "command": "C:\\Users\\FRED\\.local\\bin\\sv.cmd",
+      "args": ["docker", "down"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "SV: VM Status",
+      "type": "shell",
+      "command": "C:\\Users\\FRED\\.local\\bin\\sv.cmd",
+      "args": ["vm", "status"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "SV: Blog Status",
+      "type": "shell",
+      "command": "C:\\Users\\FRED\\.local\\bin\\sv.cmd",
+      "args": ["blog", "status"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "SV: Blog Publish",
+      "type": "shell",
+      "command": "C:\\Users\\FRED\\.local\\bin\\sv.cmd",
+      "args": ["blog", "publish"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "SV: Deploy HEAD (Dry Run)",
+      "type": "shell",
+      "command": "C:\\Users\\FRED\\.local\\bin\\sv.cmd",
+      "args": ["deploy", "head", "-DryRun"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "SV: Deploy HEAD",
+      "type": "shell",
+      "command": "C:\\Users\\FRED\\.local\\bin\\sv.cmd",
+      "args": ["deploy", "head"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "SV: Deploy SHA",
+      "type": "shell",
+      "command": "C:\\Users\\FRED\\.local\\bin\\sv.cmd",
+      "args": ["deploy", "sha", "${input:shopvivalizDeploySha}"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "shopvivalizDeploySha",
+      "type": "promptString",
+      "description": "Informe o SHA exato para deploy"
+    }
+  ]
+}

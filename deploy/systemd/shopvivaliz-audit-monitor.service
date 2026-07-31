@@ -1,0 +1,12 @@
+[Unit]
+Description=ShopVivaliz 24/7 Audit Monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current
+ExecStart=/usr/bin/python3 /home/ubuntu/shopvivaliz-deploy/current/scripts/audit-monitor-24-7.py
+StandardOutput=append:/home/ubuntu/shopvivaliz-deploy/shared/logs/audit-monitor-service.log
+StandardError=append:/home/ubuntu/shopvivaliz-deploy/shared/logs/audit-monitor-service.log

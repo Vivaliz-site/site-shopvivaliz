@@ -1,0 +1,142 @@
+{
+  "metadata": {
+    "schema_version": 2,
+    "generated_at": "2026-07-12T03:00:00Z",
+    "updated_at": "2026-07-31T00:20:00Z",
+    "status": "active_integration_tasks",
+    "description": "Ativar integrações com estados verificáveis e sem conclusão fictícia",
+    "allowed_states": [
+      "pending",
+      "running",
+      "blocked",
+      "failed",
+      "completed_verified"
+    ]
+  },
+  "tasks": [
+    {
+      "task_id": "SHOPEE-001",
+      "type": "integration",
+      "action": "sync_shopee_catalog",
+      "title": "Sincronizar Catálogo com Shopee",
+      "description": "Conectar produtos ao Shopee mantendo preços sincronizados",
+      "priority": "high",
+      "status": "failed",
+      "assigned_to": ["claude", "gemini"],
+      "requires_secrets": [
+        "SHOPEE_PARTNER_ID",
+        "SHOPEE_PARTNER_KEY",
+        "SHOPEE_SHOP_ID",
+        "SHOPEE_REFRESH_TOKEN"
+      ],
+      "estimated_hours": 3,
+      "created_at": "2026-07-12T03:00:00Z",
+      "last_result": {
+        "success": false,
+        "timestamp": "2026-07-26T10:51:58.353514Z",
+        "reason": "external operation failed; no verified completion evidence"
+      }
+    },
+    {
+      "task_id": "SHOPEE-002",
+      "type": "integration",
+      "action": "sync_shopee_orders",
+      "title": "Sincronizar Pedidos do Shopee",
+      "description": "Importar pedidos do Shopee para o sistema",
+      "priority": "high",
+      "status": "failed",
+      "assigned_to": ["claude", "gemini"],
+      "requires_secrets": ["SHOPEE_SHOP_ID", "SHOPEE_ACCESS_TOKEN"],
+      "estimated_hours": 2,
+      "created_at": "2026-07-12T03:00:00Z",
+      "last_result": {
+        "success": false,
+        "timestamp": "2026-07-26T10:51:58.353789Z",
+        "reason": "external operation failed; no verified completion evidence"
+      }
+    },
+    {
+      "task_id": "ML-001",
+      "type": "integration",
+      "action": "sync_mercadolivre_catalog",
+      "title": "Sincronizar Catálogo com Mercado Livre",
+      "description": "Conectar produtos ao Mercado Livre com preços sincronizados",
+      "priority": "high",
+      "status": "failed",
+      "assigned_to": ["claude", "gemini"],
+      "requires_secrets": [
+        "ML_CLIENT_ID",
+        "ML_CLIENT_SECRET",
+        "ML_REDIRECT_URI",
+        "ML_SELLER_ID"
+      ],
+      "estimated_hours": 3,
+      "created_at": "2026-07-12T03:00:00Z",
+      "last_result": {
+        "success": false,
+        "timestamp": "2026-07-26T10:51:58.353999Z",
+        "reason": "external operation failed; no verified completion evidence"
+      }
+    },
+    {
+      "task_id": "ML-002",
+      "type": "integration",
+      "action": "sync_mercadolivre_orders",
+      "title": "Sincronizar Pedidos do Mercado Livre",
+      "description": "Importar pedidos do Mercado Livre para o sistema",
+      "priority": "high",
+      "status": "failed",
+      "assigned_to": ["claude", "gemini"],
+      "requires_secrets": ["ML_SELLER_ID", "ML_CLIENT_ID"],
+      "estimated_hours": 2,
+      "created_at": "2026-07-12T03:00:00Z",
+      "last_result": {
+        "success": false,
+        "timestamp": "2026-07-26T10:51:58.354170Z",
+        "reason": "external operation failed; no verified completion evidence"
+      }
+    },
+    {
+      "task_id": "GADS-001",
+      "type": "integration",
+      "action": "setup_google_ads",
+      "title": "Configurar Google Ads para Automação",
+      "description": "Preparar stack de Google Ads com rastreamento de conversões",
+      "priority": "medium",
+      "status": "failed",
+      "assigned_to": ["claude"],
+      "requires_secrets": [
+        "GOOGLE_ADS_CUSTOMER_ID",
+        "GOOGLE_ADS_DEVELOPER_TOKEN",
+        "GOOGLE_ADS_REFRESH_TOKEN"
+      ],
+      "requires_human_approval": true,
+      "estimated_hours": 4,
+      "created_at": "2026-07-12T03:00:00Z",
+      "last_result": {
+        "success": false,
+        "timestamp": "2026-07-26T10:51:58.354346Z",
+        "reason": "external operation failed; no verified completion evidence"
+      }
+    },
+    {
+      "task_id": "AUDIT-001",
+      "type": "monitoring",
+      "action": "audit_integrations_24_7",
+      "title": "Auditoria Contínua de Integrações",
+      "description": "Monitorar sincronizações Shopee, ML e Google Ads",
+      "priority": "high",
+      "status": "blocked",
+      "blocked_reason": "legacy completion had no run id, artifact, commit SHA, or verification record",
+      "assigned_to": ["claude", "gemini"],
+      "schedule": "*/30 * * * *",
+      "estimated_hours": 0.5,
+      "created_at": "2026-07-12T03:00:00Z",
+      "last_result": {
+        "success": false,
+        "timestamp": "2026-07-31T00:20:00Z",
+        "reason": "previous success was invalidated because completion evidence was absent"
+      }
+    }
+  ]
+}

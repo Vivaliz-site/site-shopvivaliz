@@ -1,0 +1,23 @@
+{
+    "name": "vivaliz/site-shopvivaliz",
+    "description": "E-commerce ShopVivaliz com integração Mercado Pago",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": "^7.4|^8.0",
+        "mercadopago/sdk": "^2.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "ShopVivaliz\\": "src/"
+        }
+    },
+    "scripts": {
+        "post-install-cmd": [
+            "echo 'Mercado Pago SDK instalado com sucesso!'"
+        ]
+    }
+}

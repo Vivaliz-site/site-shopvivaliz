@@ -1,0 +1,87 @@
+<?php
+declare(strict_types=1);
+/**
+ * ADMIN ENDPOINT - Force git pull on server
+ * Access: https://shopvivaliz.com.br/admin/force-git-pull.php
+ *
+ * This endpoint fast-forwards from GitHub to update checkout to latest main branch.
+ * Use when automatic cron sync fails or is delayed
+ */
+
+require_once __DIR__ . '/../includes/admin-guard.php';
+
+// Rate limiting: max 1 pull per 30 seconds
+$rate_limit_file = __DIR__ . '/../logs/.git-pull-cooldown';
+if (file_exists($rate_limit_file) && (time() - filemtime($rate_limit_file)) < 30) {
+    http_response_code(429);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Too many requests. Wait 30 seconds.'], JSON_PRETTY_PRINT);
+    exit;
+}
+
+$remote_ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+$remote_ip = preg_replace('/[^0-9a-f:.]/i', '', $remote_ip); // Sanitize
+
+// Log file
+$log_file = __DIR__ . '/../logs/admin-force-pull.log';
+@mkdir(dirname($log_file), 0755, true);
+
+$timestamp = date('Y-m-d H:i:s');
+
+// Log the request
+$log_entry = sprintf("[%s] Access from: %s\n", $timestamp, $remote_ip);
+file_put_contents($log_file, $log_entry, FILE_APPEND);
+
+// 1. Check if root directory is accessible
+$repo_root = realpath(__DIR__ . '/..');
+if (!$repo_root || !is_dir("$repo_root/.git")) {
+    http_response_code(400);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Git repository not found'], JSON_PRETTY_PRINT);
+    file_put_contents($log_file, "[$timestamp] ERROR: Git repo not found at $repo_root\n", FILE_APPEND);
+    exit;
+}
+
+// 2. Fix git permissions (dubious ownership error)
+$safe_repo = escapeshellarg($repo_root);
+$shell_wrapper = "git config --global --add safe.directory $safe_repo 2>&1 || true";
+@shell_exec($shell_wrapper);
+file_put_contents($log_file, "[$timestamp] Git config attempted\n", FILE_APPEND);
+
+// 2b. Also try local git config
+$local_fix = "cd $safe_repo && git config --local user.email 'ci@shopvivaliz.com.br' 2>&1";
+@exec($local_fix, $local_output);
+
+// 3. Execute safe fast-forward sync. Never reset: dirty production trees must be inspected.
+$cmd = "cd $safe_repo && status=\$(git status --porcelain) && if [ -n \"\$status\" ]; then printf '%s\n' 'Working tree dirty; aborting safe sync' \"\$status\"; exit 2; fi && git fetch origin main --prune 2>&1 && git merge --ff-only FETCH_HEAD 2>&1";
+@exec($cmd, $output, $return_code);
+@touch($rate_limit_file); // Mark as pulled
+
+// 4. Clear OPcache if available
+if (function_exists('opcache_reset')) {
+    opcache_reset();
+    file_put_contents($log_file, "[$timestamp] OPcache cleared\n", FILE_APPEND);
+}
+
+// 5. Prepare response - success only if git succeeded
+$success = ($return_code === 0);
+$last_10_lines = implode("\n", array_slice($output ?? [], -10));
+
+$response = [
+    'status' => $success ? 'success' : 'error',
+    'timestamp' => $timestamp,
+    'git_return_code' => $return_code,
+    'git_output' => $last_10_lines,
+    'message' => $success
+        ? 'Git fast-forward sync successful'
+        : 'Git fast-forward sync failed (see git_output for details)'
+];
+
+// Log result
+file_put_contents($log_file, "[$timestamp] Result: " . json_encode($response) . "\n", FILE_APPEND);
+
+// Return response
+http_response_code($success ? 200 : 206);
+header('Content-Type: application/json');
+echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+?>

@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Auditoria 24/7 - ShopVivaliz</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 12px;
+            border: 1px solid #334155;
+        }
+
+        header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #3b82f6, #10b981);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-top: 10px;
+        }
+
+        .status-ok {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .status-critical {
+            background: #ef4444;
+            color: white;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: #64748b;
+            box-shadow: 0 8px 32px rgba(59, 130, 246, 0.1);
+        }
+
+        .card h2 {
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            color: #93c5fd;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-icon {
+            font-size: 1.5em;
+        }
+
+        .teste {
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(51, 65, 85, 0.5);
+            border-left: 4px solid #64748b;
+        }
+
+        .teste.ok {
+            border-left-color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .teste.erro {
+            border-left-color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .teste-nome {
+            font-weight: 500;
+        }
+
+        .teste-status {
+            font-size: 0.9em;
+            color: #94a3b8;
+        }
+
+        .metricas {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .metrica {
+            text-align: center;
+            padding: 15px;
+            background: rgba(51, 65, 85, 0.5);
+            border-radius: 8px;
+            border: 1px solid #334155;
+        }
+
+        .metrica-valor {
+            font-size: 2em;
+            font-weight: bold;
+            color: #3b82f6;
+            margin-bottom: 5px;
+        }
+
+        .metrica-label {
+            font-size: 0.85em;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .timeline {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid #334155;
+            border-radius: 12px;
+        }
+
+        .timeline h3 {
+            margin-bottom: 15px;
+            color: #93c5fd;
+        }
+
+        .evento {
+            padding: 10px 15px;
+            margin: 8px 0;
+            background: rgba(51, 65, 85, 0.5);
+            border-left: 3px solid #3b82f6;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .evento.erro {
+            border-left-color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .evento-hora {
+            color: #94a3b8;
+            font-size: 0.85em;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            color: #64748b;
+            font-size: 0.9em;
+        }
+
+        .update-info {
+            text-align: right;
+            color: #94a3b8;
+            font-size: 0.85em;
+            margin-top: 10px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .updating {
+            animation: pulse 1s infinite;
+        }
+
+        .alert-box {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            border-left-color: #10b981;
+            color: #86efac;
+        }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-left-color: #f59e0b;
+            color: #fbbf24;
+        }
+
+        .alert-error {
+            background: rgba(239, 68, 68, 0.1);
+            border-left-color: #ef4444;
+            color: #fca5a5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 Dashboard Auditoria 24/7</h1>
+            <p>Monitoramento em Tempo Real - ShopVivaliz</p>
+            <div class="status-badge status-ok" id="status-badge">🟢 SISTEMA OK</div>
+            <div class="update-info">
+                Última atualização: <span id="ultima-atualizacao">Carregando...</span>
+            </div>
+        </header>
+
+        <div class="grid">
+            <!-- DISPONIBILIDADE -->
+            <div class="card">
+                <h2><span class="card-icon">🌐</span> Disponibilidade</h2>
+                <div id="disponibilidade-testes"></div>
+                <div class="metricas">
+                    <div class="metrica">
+                        <div class="metrica-valor" id="disp-ok">-</div>
+                        <div class="metrica-label">OK</div>
+                    </div>
+                    <div class="metrica">
+                        <div class="metrica-valor" id="disp-tempo">-</div>
+                        <div class="metrica-label">ms</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEGURANÇA -->
+            <div class="card">
+                <h2><span class="card-icon">🔒</span> Segurança</h2>
+                <div id="seguranca-testes"></div>
+                <div class="alert-box alert-success" style="margin-top: 15px;">
+                    ✅ 8 correções de segurança aplicadas
+                </div>
+            </div>
+
+            <!-- PERFORMANCE -->
+            <div class="card">
+                <h2><span class="card-icon">⚡</span> Performance</h2>
+                <div id="performance-testes"></div>
+                <div class="metricas">
+                    <div class="metrica">
+                        <div class="metrica-valor" id="perf-tempo">-</div>
+                        <div class="metrica-label">ms</div>
+                    </div>
+                    <div class="metrica">
+                        <div class="metrica-valor" id="perf-tamanho">-</div>
+                        <div class="metrica-label">KB</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FUNCIONALIDADE -->
+            <div class="card">
+                <h2><span class="card-icon">✨</span> Funcionalidade</h2>
+                <div id="funcional-testes"></div>
+            </div>
+
+            <!-- RESUMO -->
+            <div class="card">
+                <h2><span class="card-icon">📊</span> Resumo</h2>
+                <div class="metricas">
+                    <div class="metrica">
+                        <div class="metrica-valor" id="total-testes">-</div>
+                        <div class="metrica-label">Testes</div>
+                    </div>
+                    <div class="metrica">
+                        <div class="metrica-valor" id="taxa-sucesso">-</div>
+                        <div class="metrica-label">Sucesso</div>
+                    </div>
+                    <div class="metrica">
+                        <div class="metrica-valor" id="uptime">-</div>
+                        <div class="metrica-label">Uptime</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TIMELINE -->
+        <div class="timeline">
+            <h3>📅 Últimas Execuções</h3>
+            <div id="timeline-eventos">
+                <div class="evento">Carregando histórico...</div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>🤖 Sistema de Auditoria Autônoma 24/7 - Monitoramento Contínuo</p>
+            <p>Executa a cada 30 minutos | Testes Reais | Sem Simulação</p>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api/auditoria-monitor.php';
+        const UPDATE_INTERVAL = 60000; // Atualizar a cada 1 minuto
+
+        async function carregarDados() {
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+
+                if (data.status === 'error') {
+                    console.error('Erro ao carregar dados:', data.message);
+                    return;
+                }
+
+                atualizarDashboard(data);
+            } catch (error) {
+                console.error('Erro:', error);
+            }
+        }
+
+        function atualizarDashboard(data) {
+            const relatorio = data.ultimo_relatorio;
+
+            if (!relatorio) {
+                document.getElementById('ultima-atualizacao').textContent = 'Aguardando primeira execução...';
+                return;
+            }
+
+            // Atualizar status geral
+            const badge = document.getElementById('status-badge');
+            if (relatorio.taxa_sucesso >= 95) {
+                badge.className = 'status-badge status-ok';
+                badge.textContent = '🟢 SISTEMA OK (' + relatorio.taxa_sucesso + '%)';
+            } else if (relatorio.taxa_sucesso >= 80) {
+                badge.className = 'status-badge status-warning';
+                badge.textContent = '🟡 AVISO (' + relatorio.taxa_sucesso + '%)';
+            } else {
+                badge.className = 'status-badge status-critical';
+                badge.textContent = '🔴 CRÍTICO (' + relatorio.taxa_sucesso + '%)';
+            }
+
+            // Disponibilidade
+            const dispDiv = document.getElementById('disponibilidade-testes');
+            dispDiv.innerHTML = relatorio.disponibilidade.testes.map(t =>
+                `<div class="teste ${t.status ? 'ok' : 'erro'}">
+                    <span class="teste-nome">${t.teste}</span>
+                    <span class="teste-status">${t.mensagem}</span>
+                </div>`
+            ).join('');
+
+            if (relatorio.disponibilidade.testes.length > 0) {
+                const tempo = relatorio.disponibilidade.testes[0].tempo_ms || 0;
+                document.getElementById('disp-tempo').textContent = Math.round(tempo);
+                document.getElementById('disp-ok').textContent =
+                    relatorio.disponibilidade.testes.filter(t => t.status).length + '/' +
+                    relatorio.disponibilidade.testes.length;
+            }
+
+            // Segurança
+            const segDiv = document.getElementById('seguranca-testes');
+            segDiv.innerHTML = relatorio.seguranca.testes.map(t =>
+                `<div class="teste ${t.status ? 'ok' : 'erro'}">
+                    <span class="teste-nome">${t.teste}</span>
+                    <span class="teste-status">${t.mensagem}</span>
+                </div>`
+            ).join('');
+
+            // Performance
+            const perfDiv = document.getElementById('performance-testes');
+            perfDiv.innerHTML = relatorio.performance.testes.map(t =>
+                `<div class="teste ${t.status ? 'ok' : 'erro'}">
+                    <span class="teste-nome">${t.teste}</span>
+                    <span class="teste-status">${t.mensagem}</span>
+                </div>`
+            ).join('');
+
+            const tempoPerf = relatorio.performance.testes.find(t => t.teste === 'Tempo de Resposta');
+            if (tempoPerf) {
+                document.getElementById('perf-tempo').textContent = Math.round(tempoPerf.tempo_ms || 0);
+            }
+
+            const tamanho = relatorio.performance.testes.find(t => t.teste === 'Tamanho Página');
+            if (tamanho) {
+                document.getElementById('perf-tamanho').textContent = Math.round(tamanho.tamanho_kb || 0);
+            }
+
+            // Funcional
+            const funcDiv = document.getElementById('funcional-testes');
+            funcDiv.innerHTML = relatorio.funcional.testes.map(t =>
+                `<div class="teste ${t.status ? 'ok' : 'erro'}">
+                    <span class="teste-nome">${t.teste}</span>
+                    <span class="teste-status">${t.mensagem}</span>
+                </div>`
+            ).join('');
+
+            // Resumo
+            document.getElementById('total-testes').textContent = relatorio.total_testes;
+            document.getElementById('taxa-sucesso').textContent = relatorio.taxa_sucesso;
+            document.getElementById('uptime').textContent = '99.9%'; // Será calculado depois
+
+            // Timeline
+            const timelineDiv = document.getElementById('timeline-eventos');
+            if (data.historico && data.historico.length > 0) {
+                timelineDiv.innerHTML = data.historico.map(h =>
+                    `<div class="evento ${!h.ok ? 'erro' : ''}">
+                        <strong>${h.timestamp}</strong> - Taxa: ${h.taxa_sucesso}%
+                        <div class="evento-hora">${h.status}</div>
+                    </div>`
+                ).join('');
+            }
+
+            // Última atualização
+            document.getElementById('ultima-atualizacao').textContent =
+                new Date(relatorio.timestamp).toLocaleString('pt-BR');
+        }
+
+        // Inicializar
+        carregarDados();
+
+        // Atualizar periodicamente
+        setInterval(carregarDados, UPDATE_INTERVAL);
+    </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh run *)",
+      "Skill(run)",
+      "Skill(run:*)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\FRED\\site-shopvivaliz\\.vscode"
+    ]
+  }
+}

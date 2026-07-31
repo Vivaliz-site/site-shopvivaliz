@@ -1,0 +1,315 @@
+/* ============================================================================
+   layout-polish-v1.css
+   Polimento de layout: alvos de toque, consistencia dos cards de produto e
+   hierarquia do carrinho/checkout.
+
+   Carregado DEPOIS do core consolidado, entao sobrescreve por ordem de cascata
+   sem precisar de !important (usado apenas onde ha estilo inline no HTML).
+
+   Escopo intencionalmente pequeno: so mexe no que foi medido como problema.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   1. ALVOS DE TOQUE
+   WCAG 2.5.5 e as guias de iOS/Android pedem no minimo 44x44px. Os botoes de
+   quantidade do carrinho estavam em 28px e o "Remover" era so texto, o que
+   causa toque errado no mobile.
+   ------------------------------------------------------------------------- */
+@media (pointer: coarse) {
+    .btn,
+    .qty-btn,
+    .btn-remove,
+    .thumb-btn,
+    .buy-button,
+    .home-scroller-arrow {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* Os botoes de quantidade tem width/height inline de 28px no checkout.
+       Como o inline vence a folha de estilo, aqui precisa de !important. */
+    .cart-item-controls .qty-btn,
+    .summary-item .qty-btn {
+        width: 44px !important;
+        height: 44px !important;
+        font-size: 18px !important;
+    }
+
+    .cart-item-controls .btn-remove,
+    .summary-item .btn-remove {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 10px !important;
+        margin-left: 0 !important;
+    }
+
+    /* Espaco entre alvos evita toque acidental no vizinho. */
+    .cart-item-controls {
+        gap: 12px !important;
+    }
+}
+
+/* Feedback de foco visivel para navegacao por teclado. */
+.btn:focus-visible,
+.qty-btn:focus-visible,
+.btn-remove:focus-visible,
+.thumb-btn:focus-visible,
+.buy-button:focus-visible,
+.product-card a:focus-visible,
+.sv-mobile-nav-item:focus-visible {
+    outline: 3px solid var(--brand, #173B63);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm, 6px);
+}
+
+/* ---------------------------------------------------------------------------
+   2. CARDS DE PRODUTO
+   Os cards tinham altura variavel conforme o tamanho do titulo, o que
+   desalinhava preco e CTA entre colunas do grid.
+   ------------------------------------------------------------------------- */
+
+/* Reserva a proporcao da imagem antes dela carregar (reforca o width/height
+   adicionado nas tags <img>). Evita salto de layout (CLS). */
+.product-card .product-image {
+    display: block;
+    position: relative;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: var(--bg, #f4f6fb);
+}
+
+.product-card .product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Empurra preco e acoes para a base do card: todos alinham na mesma linha
+   independente do tamanho do titulo. */
+.product-card .product-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.product-card .product-price {
+    margin-top: auto;
+}
+
+.product-card .card-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.product-card .card-actions > * {
+    flex: 1 1 auto;
+    text-align: center;
+}
+
+/* Titulo em no maximo 2 linhas, com reticencias — sem isso um nome longo
+   vindo do ERP estourava o card. */
+.product-card .product-info h2,
+.product-card .product-info h3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 2.6em;
+    line-height: 1.3;
+}
+
+/* Estado de esgotado mais legivel. */
+.product-card.is-out-of-stock .product-image img {
+    opacity: 0.55;
+    filter: grayscale(0.35);
+}
+
+.product-card .out-of-stock-badge {
+    position: absolute;
+    inset-inline-start: 8px;
+    inset-block-start: 8px;
+    background: rgba(17, 24, 39, 0.85);
+    color: #fff;
+    font-size: var(--text-xs, 12px);
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm, 6px);
+}
+
+/* ---------------------------------------------------------------------------
+   3. GRID EM TELAS MEDIAS
+   Entre 600px e 900px o grid ficava com colunas muito estreitas.
+   ------------------------------------------------------------------------- */
+@media (min-width: 600px) and (max-width: 900px) {
+    .products-grid {
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   4. CARRINHO E CHECKOUT
+   Hierarquia visual do resumo: o total precisa se destacar do subtotal.
+   ------------------------------------------------------------------------- */
+.cart-item img,
+.summary-item img {
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+    background: var(--surface, #fff);
+    border: 1px solid var(--line, #e5e9f0);
+    border-radius: var(--radius-sm, 6px);
+    flex: 0 0 auto;
+}
+
+.cart-item-info strong,
+.summary-item-info strong {
+    display: block;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+/* O total estava com o mesmo peso visual do subtotal e do frete. */
+#cart-total,
+.cart-total-value {
+    font-size: var(--text-xl, 22px);
+    font-weight: 800;
+    color: var(--brand, #173B63);
+}
+
+/* Mensagens de status de frete/cupom: estado neutro vs. erro.
+   Antes usavam a mesma cor, entao um erro passava despercebido. */
+.sv-checkout-note {
+    color: var(--accent, #059669);
+}
+
+.checkout-status-msg.err {
+    color: #b42318;
+    font-weight: 600;
+}
+
+/* No mobile o rodape fixo da navegacao cobria o botao de confirmar pedido. */
+@media (max-width: 768px) {
+    .checkout-actions,
+    .cart-actions {
+        padding-bottom: 16px;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   5. RESPEITAR PREFERENCIA DE MOVIMENTO REDUZIDO
+   Havia transform/transition em hover de card e botoes sem esta protecao.
+   ------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    .product-card:hover {
+        transform: none;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   6. WIDGETS FLUTUANTES (WhatsApp, chat) NAO COBREM CONTEUDO
+   O botao do WhatsApp cobre a primeira categoria do catalogo e o primeiro
+   card de produto na home. Empurra-lo um pouco para cima e garantir que o
+   conteudo abaixo dele tenha padding suficiente para continuar clicavel.
+   ------------------------------------------------------------------------- */
+/* Em mobile a barra de navegacao fixa ocupa ~64px na parte de baixo.
+   O dock do WhatsApp (public-experience-v1.css) fica a bottom:16px, que
+   e atras da nav e ainda cobre o primeiro card de categoria no catalogo.
+   Subir o dock para ficar acima da nav. */
+@media (max-width: 768px) {
+    .sv-support-dock {
+        bottom: 80px !important;   /* acima da nav fixa mobile (~64px + folga) */
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   7. HERO — CENTRALIZAÇÃO E RESPONSIVIDADE
+   O .hero-content tinha max-width (800–920px) mas margin: 0, ficando
+   colado à esquerda dentro do .container. O hero também não centralizava
+   o texto e os CTAs em mobile.
+   ------------------------------------------------------------------------- */
+
+/* Container do hero usa flex para centralizar o .hero-content */
+.hero .container {
+    display: flex;
+    justify-content: center;
+}
+
+/* hero-content: centraliza horizontalmente com auto margins e alinha texto */
+.hero-content {
+    margin: 0 auto;
+    text-align: center;
+    width: 100%;
+}
+
+/* CTAs centralizados */
+.hero-cta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+}
+
+/* Search bar centralizada dentro do hero-content */
+.hero-search-container {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Mobile: hero ocupa largura total, padding adequado, fontes menores */
+@media (max-width: 768px) {
+    .hero {
+        padding: 20px 0 24px;
+    }
+
+    .hero-content {
+        max-width: 100%;
+        padding: 0 4px;
+    }
+
+    .hero h1 {
+        font-size: clamp(20px, 5.5vw, 28px);
+        width: 100%;
+    }
+
+    .hero p {
+        font-size: 14px;
+        max-width: 100%;
+    }
+
+    .hero-cta {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .hero-cta .btn {
+        width: 100%;
+        justify-content: center;
+        text-align: center;
+    }
+}
+
+/* Telas pequenas extras (< 400px) */
+@media (max-width: 400px) {
+    .hero h1 {
+        font-size: 20px;
+    }
+
+    .hero p {
+        font-size: 13px;
+    }
+}

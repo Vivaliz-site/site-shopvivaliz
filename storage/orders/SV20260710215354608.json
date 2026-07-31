@@ -1,0 +1,32 @@
+{
+    "order_number": "SV20260710215354608",
+    "status": "pending_confirmation",
+    "customer": {
+        "name": "Teste Cliente Vivaliz",
+        "email": "teste@shopvivaliz.com.br",
+        "phone": "31999999999",
+        "cep": "35501236",
+        "address": "Rua Teste de Pedido, 123, Apto 456, Divinópolis"
+    },
+    "items": [
+        {
+            "sku": "CONJ-10-RODIZIOS-35MM-GEL",
+            "name": "10x Rodízio 35mm Giratório com Freio Gel Anti-Risco Soprano",
+            "quantity": 1,
+            "price": 77.98,
+            "olist_product_id": "342902731"
+        }
+    ],
+    "items_total": 77.98,
+    "shipping_total": 0,
+    "shipping_label": "",
+    "shipping_service": "",
+    "shipping_cep": "35501236",
+    "total": 77.98,
+    "payment_method": "pix",
+    "payment_label": "PIX",
+    "notes": "",
+    "created_at": "2026-07-10T21:53:54+00:00",
+    "source": "site_checkout",
+    "tiny_push": "missing_credentials"
+}

@@ -1,0 +1,66 @@
+name: Blog Publish Scheduled
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: blog-publish-scheduled
+  cancel-in-progress: false
+
+jobs:
+  publish-scheduled:
+    name: Publicar posts agendados
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Initialize publication evidence
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/blog-publish
+          printf 'run_id=%s\nsha=%s\nevent=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" > artifacts/blog-publish/context.txt
+
+      - name: Chamar publicador do blog
+        env:
+          BLOG_PUBLISH_URL: ${{ secrets.BLOG_PUBLISH_URL }}
+          BLOG_PUBLISH_TOKEN: ${{ secrets.BLOG_PUBLISH_TOKEN }}
+        run: |
+          set -euo pipefail
+          url="${BLOG_PUBLISH_URL:-https://shopvivaliz.com.br/api/blog/publish-scheduled.php}"
+          if [ -z "${BLOG_PUBLISH_TOKEN:-}" ]; then
+            echo 'credential_status=missing' >> artifacts/blog-publish/context.txt
+            echo "::error::BLOG_PUBLISH_TOKEN ausente; publicacao agendada nao foi executada."
+            exit 1
+          fi
+          echo 'credential_status=present' >> artifacts/blog-publish/context.txt
+
+          status="$(curl -sS -o artifacts/blog-publish/response.json -w '%{http_code}' \
+            -X POST \
+            -H "X-Blog-Publish-Token: ${BLOG_PUBLISH_TOKEN}" \
+            -H 'Accept: application/json' \
+            "$url")"
+          printf 'http_status=%s\n' "$status" >> artifacts/blog-publish/context.txt
+          cat artifacts/blog-publish/response.json
+          echo
+
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "Falha ao publicar posts agendados: HTTP $status" >&2
+            exit 1
+          fi
+          if ! grep -q '"ok"[[:space:]]*:[[:space:]]*true' artifacts/blog-publish/response.json; then
+            echo "Resposta inesperada do publicador do blog" >&2
+            exit 1
+          fi
+
+      - name: Upload publication evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blog-publish-${{ github.run_id }}
+          path: artifacts/blog-publish/
+          if-no-files-found: error
+          retention-days: 30

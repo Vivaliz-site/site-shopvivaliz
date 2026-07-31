@@ -1,0 +1,4 @@
+Olá {{customer_name}},
+
+Seu pedido #{{order_id}} está em preparação! Estamos embalando tudo com muito carinho.
+Assim que for coletado pela transportadora, enviaremos o rastreio.

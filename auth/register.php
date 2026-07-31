@@ -1,0 +1,459 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/../includes/secure-session.php';
+
+if (!empty($_SESSION['user_id'])) {
+    header('Location: /');
+    exit;
+}
+
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+
+require_once __DIR__ . '/../config/constants.php';
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/social-auth.php';
+require_once __DIR__ . '/../includes/csrf.php';
+require_once __DIR__ . '/../includes/input-validator.php';
+require_once __DIR__ . '/../includes/rate-limiter.php';
+
+$error = '';
+$success = '';
+$name = '';
+$email = '';
+$cpfInput = '';
+
+function sv_register_valid_cpf(string $digits): bool
+{
+    if (strlen($digits) !== 11 || preg_match('/^(\d)\1{10}$/', $digits)) {
+        return false;
+    }
+    for ($t = 9; $t <= 10; $t++) {
+        $sum = 0;
+        for ($i = 0; $i < $t; $i++) {
+            $sum += (int)$digits[$i] * (($t + 1) - $i);
+        }
+        $digit = ((10 * $sum) % 11) % 10;
+        if ((int)$digits[$t] !== $digit) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function sv_register_valid_cnpj(string $digits): bool
+{
+    if (strlen($digits) !== 14 || preg_match('/^(\d)\1{13}$/', $digits)) {
+        return false;
+    }
+    $calc = static function (string $digits, int $length) {
+        $weights = $length === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+        $sum = 0;
+        for ($i = 0; $i < $length; $i++) {
+            $sum += (int)$digits[$i] * $weights[$i];
+        }
+        $rest = $sum % 11;
+        return $rest < 2 ? 0 : 11 - $rest;
+    };
+    if ((int)$digits[12] !== $calc($digits, 12)) {
+        return false;
+    }
+    if ((int)$digits[13] !== $calc($digits, 13)) {
+        return false;
+    }
+    return true;
+}
+
+function sv_register_valid_document(string $digits): bool
+{
+    if (strlen($digits) === 11) {
+        return sv_register_valid_cpf($digits);
+    }
+    if (strlen($digits) === 14) {
+        return sv_register_valid_cnpj($digits);
+    }
+    return false;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_POST['csrf_token'] ?? null)) {
+    $error = 'Sua sessão expirou. Recarregue a página e tente novamente.';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $clientIp = $_SERVER['REMOTE_ADDR'];
+
+    // ✅ Rate limiting: máximo 3 tentativas por hora por IP
+    if (!RateLimiter::isAllowed('register_' . $clientIp, 3, 3600)) {
+        $error = 'Muitas tentativas de registro. Tente novamente em 1 hora.';
+        http_response_code(429);
+    } else {
+        // ✅ Input validation com InputValidator
+        $v = validator();
+        $name = $v->requireString('name', 3, 120, 'Nome');
+        $email = $v->getEmail('email', true);
+        $password = $v->getString('password', '', 8, 255);
+        $password_confirm = $v->getString('password_confirm', '', 8, 255);
+        $cpfInput = $v->getString('cpf', '', 0, 20);
+        $cpfDigits = preg_replace('/\D/', '', $cpfInput);
+
+        // Validações
+        if ($name === null) {
+            $error = 'Nome é obrigatório (3-120 caracteres)';
+        } elseif ($email === null || $v->getError('email')) {
+            $error = 'Email inválido';
+        } elseif ($cpfDigits !== '' && !sv_register_valid_document($cpfDigits)) {
+            $error = 'CPF/CNPJ inválido';
+        } elseif ($password === '' || strlen($password) < 1) {
+            $error = 'Senha é obrigatória';
+        } elseif (strlen($password) < 8) {
+            $error = 'Senha deve ter pelo menos 8 caracteres';
+        } elseif ($password !== $password_confirm) {
+            $error = 'As senhas não conferem';
+        } else {
+            try {
+            $db = Database::getInstance()->getConnection();
+
+            // Verificar se email já existe
+            $check = $db->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
+            if ($check) {
+                $check->bind_param('s', $email);
+                $check->execute();
+                $result = $check->get_result();
+
+                if ($result->num_rows > 0) {
+                    $error = 'Este email já está cadastrado';
+                } elseif ($cpfDigits !== '' && ($cpfCheck = $db->prepare('SELECT id FROM users WHERE cpf = ? LIMIT 1')) && (function () use ($cpfCheck, $cpfDigits) {
+                    $cpfCheck->bind_param('s', $cpfDigits);
+                    $cpfCheck->execute();
+                    return $cpfCheck->get_result()->num_rows > 0;
+                })()) {
+                    $error = 'Este CPF/CNPJ já está cadastrado em outra conta. Se o cadastro é seu, faça login ou use "Esqueci minha senha".';
+                } else {
+                    // Criar novo usuário
+                    $password_hash = password_hash($password, PASSWORD_BCRYPT);
+                    // NULL, nao string vazia: cpf tem UNIQUE KEY no schema,
+                    // e '' colide para todo cadastro sem CPF (preenchido
+                    // depois no checkout). NULL nao conflita com NULL.
+                    $cpf = $cpfDigits !== '' ? $cpfDigits : null;
+                    $phone = '';
+
+                    $insert = $db->prepare(
+                        'INSERT INTO users (name, email, password_hash, phone, cpf, created_at, updated_at)
+                         VALUES (?, ?, ?, ?, ?, NOW(), NOW())'
+                    );
+
+                    if ($insert) {
+                        $insert->bind_param('sssss', $name, $email, $password_hash, $phone, $cpf);
+
+                        if ($insert->execute()) {
+                            $success = 'Cadastro realizado com sucesso! Você pode fazer login agora.';
+                            $name = '';
+                            $email = '';
+                            $cpfInput = '';
+                        } elseif ($db->errno === 1062) {
+                            $error = 'Este CPF/CNPJ já está cadastrado em outra conta. Se o cadastro é seu, faça login ou use "Esqueci minha senha".';
+                        } else {
+                            $error = 'Erro ao criar a conta. Tente novamente.';
+                        }
+                    }
+                }
+            }
+            } catch (Throwable $e) {
+                error_log('[auth/register] ' . $e->getMessage());
+                $error = 'Erro ao processar o cadastro. Tente novamente.';
+            }
+        }
+    }
+}
+$google_auth_url = sv_social_google_auth_url('register', '/');
+$apple_auth_url = sv_social_apple_auth_url('register', '/');
+?>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro - ShopVivaliz</title>
+    <link rel="stylesheet" href="/css/dazzle-v1.css?v=1.2.0">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            max-width: 420px;
+            width: 100%;
+            padding: 40px;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #333;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #333;
+            text-align: center;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+            font-size: 14px;
+        }
+        input[type="text"],
+        input[type="email"],
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .password-field {
+            position: relative;
+        }
+        .password-field input {
+            padding-right: 92px;
+        }
+        .password-toggle {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: auto;
+            min-width: 74px;
+            padding: 8px 10px;
+            margin-top: 0;
+            border: 1px solid #d1d5db;
+            border-radius: 999px;
+            background: #fff;
+            color: #374151;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+            box-shadow: none;
+        }
+        .password-toggle:hover {
+            background: #f8fafc;
+            box-shadow: none;
+        }
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            border-left: 4px solid #c33;
+        }
+        .success {
+            background: #efe;
+            color: #3c3;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            border-left: 4px solid #3c3;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #667eea;
+            color: white;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #5568d3;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        .footer-link {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+        .footer-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .footer-link a:hover {
+            text-decoration: underline;
+        }
+        .password-requirements {
+            font-size: 12px;
+            color: #666;
+            margin-top: 6px;
+            line-height: 1.4;
+        }
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 25px 0 20px;
+            color: #999;
+            font-size: 13px;
+        }
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #ddd;
+        }
+        .social-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 12px;
+            background: #f5f5f5;
+            color: #333;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+        .social-button:hover {
+            background: #efefef;
+            border-color: #bbb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">ShopVivaliz</div>
+
+        <h1>Crie sua conta</h1>
+        <p class="subtitle">Junte-se a nossa comunidade</p>
+
+        <?php if ($error): ?>
+        <div class="error"><?php echo htmlspecialchars($error); ?></div>
+        <?php endif; ?>
+
+        <?php if ($success): ?>
+        <div class="success"><?php echo htmlspecialchars($success); ?></div>
+        <?php endif; ?>
+
+        <form method="POST">
+            <?= sv_csrf_input('auth-register') ?>
+            <div class="form-group">
+                <label for="name">Nome Completo</label>
+                <input type="text" id="name" name="name" required
+                    value="<?php echo htmlspecialchars($name); ?>"
+                    placeholder="Seu nome">
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" required
+                    value="<?php echo htmlspecialchars($email); ?>"
+                    placeholder="seu@email.com">
+            </div>
+
+            <div class="form-group">
+                <label for="cpf">CPF/CNPJ (opcional)</label>
+                <input type="text" id="cpf" name="cpf" inputmode="numeric" maxlength="18"
+                    value="<?php echo htmlspecialchars($cpfInput); ?>"
+                    placeholder="000.000.000-00 ou 00.000.000/0000-00">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Senha</label>
+                <div class="password-field">
+                    <input type="password" id="password" name="password" required
+                        placeholder="••••••••" autocomplete="new-password">
+                    <button type="button" class="password-toggle" data-password-toggle="password" aria-pressed="false" aria-label="Mostrar senha">Mostrar</button>
+                </div>
+                <div class="password-requirements">
+                    Mínimo 8 caracteres
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="password_confirm">Confirmar Senha</label>
+                <div class="password-field">
+                    <input type="password" id="password_confirm" name="password_confirm" required
+                        placeholder="••••••••" autocomplete="new-password">
+                    <button type="button" class="password-toggle" data-password-toggle="password_confirm" aria-pressed="false" aria-label="Mostrar senha">Mostrar</button>
+                </div>
+            </div>
+
+            <button type="submit">Cadastrar</button>
+        </form>
+
+        <div class="divider">OU</div>
+
+        <?php if ($google_auth_url !== ''): ?>
+        <a href="<?= htmlspecialchars($google_auth_url, ENT_QUOTES, 'UTF-8') ?>" class="social-button">
+            <span>●</span> Cadastrar com Google
+        </a>
+        <?php endif; ?>
+
+        <?php if ($apple_auth_url !== ''): ?>
+        <a href="<?= htmlspecialchars($apple_auth_url, ENT_QUOTES, 'UTF-8') ?>" class="social-button">
+            <span>●</span> Cadastrar com Apple
+        </a>
+        <?php endif; ?>
+
+        <div class="footer-link">
+            Já tem conta? <a href="/auth/login.php">Faça login</a>
+        </div>
+    </div>
+    <script>
+    (function () {
+        document.querySelectorAll('[data-password-toggle]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var targetId = btn.getAttribute('data-password-toggle');
+                var input = targetId ? document.getElementById(targetId) : null;
+                if (!input) return;
+                var hidden = input.type === 'password';
+                input.type = hidden ? 'text' : 'password';
+                btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+                btn.setAttribute('aria-label', hidden ? 'Ocultar senha' : 'Mostrar senha');
+                btn.textContent = hidden ? 'Ocultar' : 'Mostrar';
+            });
+        });
+    })();
+    </script>
+</body>
+</html>

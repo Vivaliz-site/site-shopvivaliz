@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: shopvivaliz_ml
+      POSTGRES_USER: shopvivaliz_ml
+      POSTGRES_PASSWORD: ${ML_POSTGRES_PASSWORD:?ML_POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopvivaliz_ml -d shopvivaliz_ml"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 180M
+
+  api:
+    build:
+      context: ..
+      dockerfile: ml/Dockerfile
+    restart: unless-stopped
+    environment:
+      ML_DATABASE_URL: postgresql://shopvivaliz_ml:${ML_POSTGRES_PASSWORD}@postgres:5432/shopvivaliz_ml
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../storage/ml:/app/storage/ml
+    ports:
+      - "127.0.0.1:8091:8091"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health', timeout=3)"]
+      interval: 20s
+      timeout: 5s
+      retries: 8
+    deploy:
+      resources:
+        limits:
+          memory: 180M
+
+  trainer:
+    build:
+      context: ..
+      dockerfile: ml/Dockerfile
+    restart: unless-stopped
+    environment:
+      ML_DATABASE_URL: postgresql://shopvivaliz_ml:${ML_POSTGRES_PASSWORD}@postgres:5432/shopvivaliz_ml
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../storage/ml:/app/storage/ml
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        while true; do
+          python /app/ml/train.py
+          sleep 21600
+        done
+    deploy:
+      resources:
+        limits:
+          memory: 320M
+
+volumes:
+  postgres_data:

@@ -1,0 +1,29 @@
+﻿RewriteEngine On
+RewriteBase /
+
+# HTTPS e WWW normalization
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
+RewriteRule ^(.*)$ https://%1%{REQUEST_URI} [L,R=301]
+
+# Sitemap rewrite
+RewriteRule ^sitemap\.xml$ sitemap.php [L]
+
+# Remove .php extension
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^([^\.]+)$ $1.php [NC,L]
+
+# Security headers
+<FilesMatch "\.php$">
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+</FilesMatch>
+
+# Cache control
+<FilesMatch "\.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2)$">
+    Header set Cache-Control "max-age=31536000, public"
+</FilesMatch>

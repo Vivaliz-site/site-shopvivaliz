@@ -1,0 +1,11 @@
+[Unit]
+Description=ShopVivaliz 24/7 Audit Monitor Timer
+Requires=shopvivaliz-audit-monitor.service
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+Persistent=yes
+
+[Install]
+WantedBy=timers.target

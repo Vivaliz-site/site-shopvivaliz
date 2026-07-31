@@ -1,0 +1,247 @@
+{
+  "data": "2026-07-13T21:34:16.052736",
+  "resumo": {
+    "total_local": 197,
+    "total_api": 48,
+    "identicos": 19,
+    "divergentes": 29,
+    "nao_encontrado": 149
+  },
+  "divergencias": [
+    {
+      "sku": "1C7Q-LKUT-YLKI",
+      "nome": "Rodízio Transparente 035mm Sem Freio Chapa Giratória Soprano",
+      "local": 19.9,
+      "api": 199.0,
+      "diff": 179.1
+    },
+    {
+      "sku": "03080.3050.10",
+      "nome": "Rodizio Transparente 50MM SEM Freio Chapa Giratorio Niquel Soprano",
+      "local": 15.45,
+      "api": 1545.0,
+      "diff": 1529.55
+    },
+    {
+      "sku": "RODOVED100",
+      "nome": "Rodo Vedante Borracha Friso Porta Aluminio 100cm Vivaliz",
+      "local": 29.9,
+      "api": 299.0,
+      "diff": 269.1
+    },
+    {
+      "sku": "AH-2UC1-6SIO",
+      "nome": "Sifão Multissifão Tubo Extensível - Krona",
+      "local": 23.9,
+      "api": 239.0,
+      "diff": 215.1
+    },
+    {
+      "sku": "KIT-RODIZIOS-SOPRANO-50MM-FREIO",
+      "nome": "Soprano, Kit 4 Rodízios Móveis Freio Rodas de Silicone 50mm",
+      "local": 66.9,
+      "api": 669.0,
+      "diff": 602.1
+    },
+    {
+      "sku": "SULFATOONSITE",
+      "nome": "Sulfato de Alumínio Ultraclor 2kg",
+      "local": 24.9,
+      "api": 249.0,
+      "diff": 224.1
+    },
+    {
+      "sku": "TE-C08",
+      "nome": "Tesoura Costura Profissional Aço Inox 8 Polegadas Aquatools",
+      "local": 99.99,
+      "api": 9999.0,
+      "diff": 9899.01
+    },
+    {
+      "sku": "REGUA5TOMADA",
+      "nome": "Tomada Barra Multipla Régua extensão 20A Quintupla CINZA",
+      "local": 58.5,
+      "api": 585.0,
+      "diff": 526.5
+    },
+    {
+      "sku": "1C7Q-LKVM-XFLJ",
+      "nome": "Trena Profissional Emborrachada 7,5mx25mm Team-75 Aquatools",
+      "local": 34.9,
+      "api": 349.0,
+      "diff": 314.1
+    },
+    {
+      "sku": "3X19",
+      "nome": "Trena Profissional Emborrachada Aquatools - 3 Metros X 16mm",
+      "local": 19.9,
+      "api": 199.0,
+      "diff": 179.1
+    },
+    {
+      "sku": "75X25",
+      "nome": "Trena profissional emborrachada Aquatools - 7,5 metrosx25mm",
+      "local": 29.9,
+      "api": 299.0,
+      "diff": 269.1
+    },
+    {
+      "sku": "9040101",
+      "nome": "Ultra Decantador Liquido Finalizador Piscinas 1l Ultraclor",
+      "local": 37.04,
+      "api": 3704.0,
+      "diff": 3666.96
+    },
+    {
+      "sku": "JVAQCQ44",
+      "nome": "Vaso Antique 44 70L Cimento Queimado Japi",
+      "local": 574.9,
+      "api": 5749.0,
+      "diff": 5174.1
+    },
+    {
+      "sku": "JVAQMA55",
+      "nome": "Vaso Antique 55 75L Macchiato Japi Brown",
+      "local": 573.27,
+      "api": 57327.0,
+      "diff": 56753.73
+    },
+    {
+      "sku": "VCRAC2",
+      "nome": "Vaso Concept Redondo N2 Aço Corten Japi",
+      "local": 93.94,
+      "api": 9394.0,
+      "diff": 9300.06
+    },
+    {
+      "sku": "JVCDB34",
+      "nome": "Vaso Decor Plantas Cilin Decore 34 (28l) Off White Japi",
+      "local": 473.7,
+      "api": 4737.0,
+      "diff": 4263.3
+    },
+    {
+      "sku": "JVAQAC44",
+      "nome": "Vaso Decorativo Plantas Antique 44 (70l) Aco Corten Japi",
+      "local": 574.24,
+      "api": 57424.0,
+      "diff": 56849.76
+    },
+    {
+      "sku": "JVAQMA44",
+      "nome": "Vaso Decorativo Plantas Antique 44 (70l) Macchiato Japi",
+      "local": 574.24,
+      "api": 57424.0,
+      "diff": 56849.76
+    },
+    {
+      "sku": "JVAQAC55",
+      "nome": "Vaso Decorativo Plantas Antique 55 (75l) Aço Corten Japi",
+      "local": 572.28,
+      "api": 57228.0,
+      "diff": 56655.72
+    },
+    {
+      "sku": "JVAQCQ55",
+      "nome": "Vaso Decorativo Plantas Antique 55 (75l) Cimento Queim Japi",
+      "local": 573.27,
+      "api": 57327.0,
+      "diff": 56753.73
+    },
+    {
+      "sku": "JVAQCQ56",
+      "nome": "Vaso Decorativo Plantas Antique 56 (46l) Cimento Queim Japi",
+      "local": 471.23,
+      "api": 47123.0,
+      "diff": 46651.77
+    },
+    {
+      "sku": "JVAQMA56",
+      "nome": "Vaso Decorativo Plantas Antique 56 (46l) Macchiato Japi",
+      "local": 471.19,
+      "api": 47119.0,
+      "diff": 46647.81
+    },
+    {
+      "sku": "JVNTI55",
+      "nome": "Vaso Decorativo Plantas Nativa 55 (75l) Iron JVNTI55 Japi",
+      "local": 640.3,
+      "api": 6403.0,
+      "diff": 5762.7
+    },
+    {
+      "sku": "VASOPLANTASJAPI",
+      "nome": "Vaso Plantas Decorativo Japi Unique 16 14x16cm Preto",
+      "local": 20.8,
+      "api": 208.0,
+      "diff": 187.2
+    },
+    {
+      "sku": "VUNA16",
+      "nome": "Vaso Plantas Unique 16 Azul - Japi",
+      "local": 24.9,
+      "api": 249.0,
+      "diff": 224.1
+    },
+    {
+      "sku": "1C7Q-LKW4-FC3O",
+      "nome": "VASO Unique AZUL N12 Japi",
+      "local": 19.4,
+      "api": 194.0,
+      "diff": 174.6
+    },
+    {
+      "sku": "1C7Q-LKWA-VQGQ",
+      "nome": "VASO Unique Chumbo N12 Japi",
+      "local": 19.11,
+      "api": 1911.0,
+      "diff": 1891.89
+    },
+    {
+      "sku": "1C7Q-LKW4-F5R7",
+      "nome": "VASO Unique ROSA N12 Japi",
+      "local": 20.41,
+      "api": 2041.0,
+      "diff": 2020.59
+    },
+    {
+      "sku": "1C7Q-LKW4-FI2Y",
+      "nome": "VASO Unique ROSA N16 Japi",
+      "local": 21.49,
+      "api": 2149.0,
+      "diff": 2127.51
+    }
+  ],
+  "nao_encontrado": [
+    "CONJ-10-RODIZIOS-35MM-GEL",
+    "RODIZIO-75MM",
+    "FITAPERFAFBA",
+    "341481451",
+    "JV-8HKB-IBHR",
+    "A21",
+    "A41*BR",
+    "ARM-08",
+    "TVT/K-NOVO-02",
+    "SABATINI",
+    "TAJ/AS*BR1-NOVO",
+    "TTH-K*BCO-01",
+    "TPJ/AS*BR1",
+    "1C7Q-LKVG-ED52",
+    "PET/CAT*RSP",
+    "PET/CAT*VMP",
+    "PET/CAE-RSP",
+    "CHB-40025",
+    "JFQFCQ57",
+    "JFQFAC57",
+    "JFQFE57",
+    "JFQFPA57",
+    "JFQFAC67",
+    "JFQFE67",
+    "JFQFCQ67",
+    "JFQFPA67",
+    "JFQFAC77",
+    "JFQFE77",
+    "JFQFCQ77",
+    "JFQFPA77"
+  ]
+}

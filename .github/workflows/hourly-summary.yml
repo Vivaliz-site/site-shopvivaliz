@@ -1,0 +1,153 @@
+name: Hourly Summary Report
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: hourly-summary
+  cancel-in-progress: true
+
+jobs:
+  summarize:
+    name: Generate Hourly Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Generate summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 <<'PYTHON_EOF'
+          import json
+          import subprocess
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+
+          now = datetime.now(timezone.utc)
+          hour_ago = now - timedelta(hours=1)
+
+          def checked_output(command: list[str]) -> str:
+              result = subprocess.run(
+                  command,
+                  text=True,
+                  encoding='utf-8',
+                  errors='replace',
+                  capture_output=True,
+                  check=True,
+              )
+              return result.stdout.strip()
+
+          commit_output = checked_output([
+              'git', 'log',
+              f'--since={hour_ago.isoformat()}',
+              f'--until={now.isoformat()}',
+              '--oneline', '--no-decorate',
+          ])
+          commits = [line for line in commit_output.splitlines() if line]
+
+          runs_output = checked_output([
+              'gh', 'run', 'list', '--branch', 'main', '--limit', '50',
+              '--json', 'name,status,conclusion,updatedAt,url',
+          ])
+          all_runs = json.loads(runs_output)
+          if not isinstance(all_runs, list):
+              raise TypeError('gh run list did not return a JSON list')
+
+          runs = []
+          for run in all_runs:
+              updated = run.get('updatedAt')
+              if not updated:
+                  raise ValueError('workflow run without updatedAt')
+              parsed = datetime.fromisoformat(updated.replace('Z', '+00:00'))
+              if parsed >= hour_ago:
+                  runs.append(run)
+
+          lines = [
+              '# ShopVivaliz Hourly Summary',
+              '',
+              f'**{now.strftime("%Y-%m-%d %H:00 UTC")}**',
+              '',
+              '## Activity',
+              '',
+              f'### Commits ({len(commits)})',
+          ]
+          lines.extend([f'- {commit}' for commit in commits[:10]] or ['- No commits this hour'])
+          if len(commits) > 10:
+              lines.append(f'- ... and {len(commits) - 10} more')
+
+          lines.extend(['', f'### Workflows ({len(runs)})'])
+          if runs:
+              success = sum(run.get('conclusion') == 'success' for run in runs)
+              failure = sum(run.get('conclusion') == 'failure' for run in runs)
+              in_progress = sum(run.get('status') == 'in_progress' for run in runs)
+              lines.extend([
+                  f'- Success: {success}',
+                  f'- Failed: {failure}',
+                  f'- In progress: {in_progress}',
+              ])
+          else:
+              lines.append('- No workflow runs this hour; GitHub query completed successfully')
+
+          lines.extend([
+              '',
+              '### Publication',
+              '- This report is stored as a workflow artifact.',
+              '- No commit or push to main is performed.',
+              '',
+              '---',
+              f'_Generated at {now.strftime("%Y-%m-%d %H:%M:%S UTC")}_',
+              '',
+          ])
+
+          report_dir = Path('reports/hourly')
+          report_dir.mkdir(parents=True, exist_ok=True)
+          report_text = '\n'.join(lines)
+          (report_dir / f'{now.strftime("%Y-%m-%d-%H")}-summary.md').write_text(report_text, encoding='utf-8')
+          (report_dir / 'latest.md').write_text(report_text, encoding='utf-8')
+          (report_dir / 'query-context.json').write_text(
+              json.dumps({
+                  'run_id': '${{ github.run_id }}',
+                  'sha': '${{ github.sha }}',
+                  'generated_at': now.isoformat(),
+                  'commit_count': len(commits),
+                  'workflow_run_count': len(runs),
+                  'queries_succeeded': True,
+              }, indent=2) + '\n',
+              encoding='utf-8',
+          )
+          print(report_text)
+          PYTHON_EOF
+
+      - name: Verify summary evidence
+        run: |
+          set -euo pipefail
+          test -s reports/hourly/latest.md
+          test -s reports/hourly/query-context.json
+          python -m json.tool reports/hourly/query-context.json >/dev/null
+
+      - name: Upload summary artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: hourly-summary-${{ github.run_id }}
+          path: reports/hourly/
+          if-no-files-found: error
+          retention-days: 14

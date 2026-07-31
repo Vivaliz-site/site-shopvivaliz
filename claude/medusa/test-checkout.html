@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShopVivaliz - Teste Checkout</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container { max-width: 1200px; margin: 0 auto; }
+
+    header {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+
+    header h1 { color: #667eea; margin-bottom: 5px; }
+    header p { color: #666; }
+
+    .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+
+    .section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .products {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .product {
+      border: 1px solid #eee;
+      padding: 15px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-align: center;
+    }
+
+    .product:hover {
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .product-img {
+      width: 100%;
+      height: 120px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+
+    .product-title { font-weight: bold; font-size: 14px; margin-bottom: 5px; }
+    .product-price { color: #667eea; font-weight: bold; font-size: 16px; margin-bottom: 10px; }
+
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background 0.3s;
+    }
+
+    button:hover { background: #764ba2; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+
+    .cart-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .cart-item-info { flex: 1; }
+    .cart-item-price { color: #667eea; font-weight: bold; }
+    .remove-btn { background: #e74c3c; padding: 4px 8px; font-size: 11px; }
+
+    .cart-total {
+      padding: 15px;
+      background: #f9f9f9;
+      border-radius: 4px;
+      text-align: right;
+      font-size: 18px;
+      font-weight: bold;
+      margin-top: 15px;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    .status {
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 15px;
+      display: none;
+    }
+
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+      display: block;
+    }
+
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+      display: block;
+    }
+
+    .status.info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+      display: block;
+    }
+
+    .checkout-btn {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      margin-top: 10px;
+    }
+
+    .order-confirmation {
+      display: none;
+      background: #d4edda;
+      border: 2px solid #28a745;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .order-confirmation.show {
+      display: block;
+    }
+
+    .order-confirmation h2 {
+      color: #155724;
+      margin-bottom: 10px;
+    }
+
+    .order-number {
+      font-size: 24px;
+      font-weight: bold;
+      color: #28a745;
+      margin: 10px 0;
+    }
+
+    .step-indicator {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      justify-content: center;
+    }
+
+    .step {
+      padding: 8px 16px;
+      background: #eee;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .step.active {
+      background: #667eea;
+      color: white;
+    }
+
+    h2 { color: #667eea; margin-bottom: 15px; font-size: 18px; }
+    h3 { font-size: 14px; margin: 15px 0 10px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🛍️ ShopVivaliz - Teste de Checkout</h1>
+      <p>Teste completo do fluxo: Produtos → Carrinho → Checkout</p>
+    </header>
+
+    <div class="step-indicator">
+      <div class="step active" id="step1">1. Produtos</div>
+      <div class="step" id="step2">2. Carrinho</div>
+      <div class="step" id="step3">3. Checkout</div>
+      <div class="step" id="step4">4. Confirmação</div>
+    </div>
+
+    <div class="grid">
+      <div class="section">
+        <div id="status" class="status"></div>
+
+        <!-- PRODUTOS -->
+        <div id="productsSection">
+          <h2>📦 Catálogo de Produtos</h2>
+          <div class="products" id="productsList"></div>
+        </div>
+
+        <!-- CARRINHO -->
+        <div id="cartSection" style="display:none;">
+          <h2>🛒 Seu Carrinho</h2>
+          <div id="cartItems"></div>
+          <div class="cart-total">Total: R$ <span id="cartTotal">0.00</span></div>
+          <button onclick="proceedToCheckout()" class="checkout-btn">Continuar para Checkout →</button>
+          <button onclick="backToProducts()" style="width: 100%; margin-top: 5px; background: #666;">← Voltar aos Produtos</button>
+        </div>
+
+        <!-- CHECKOUT -->
+        <div id="checkoutSection" style="display:none;">
+          <h2>💳 Checkout</h2>
+
+          <h3>Endereço de Entrega</h3>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="email" value="cliente@shopvivaliz.com.br">
+          </div>
+          <div class="form-group">
+            <label>Nome Completo</label>
+            <input type="text" id="name" value="João Silva">
+          </div>
+          <div class="form-group">
+            <label>Endereço</label>
+            <input type="text" id="address" value="Rua das Flores, 123">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Cidade</label>
+              <input type="text" id="city" value="São Paulo">
+            </div>
+            <div class="form-group">
+              <label>CEP</label>
+              <input type="text" id="zip" value="01310-100">
+            </div>
+          </div>
+
+          <h3>Método de Entrega</h3>
+          <div class="form-group">
+            <label>
+              <input type="radio" name="shipping" value="standard" checked> Standard (5-7 dias) - R$ 15.00
+            </label>
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="radio" name="shipping" value="express"> Express (2-3 dias) - R$ 35.00
+            </label>
+          </div>
+
+          <h3>Método de Pagamento</h3>
+          <div class="form-group">
+            <label>
+              <input type="radio" name="payment" value="credit_card" checked> Cartão de Crédito
+            </label>
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="radio" name="payment" value="boleto"> Boleto
+            </label>
+          </div>
+
+          <button onclick="placeOrder()" class="checkout-btn">✓ Finalizar Pedido</button>
+          <button onclick="backToCart()" style="width: 100%; margin-top: 5px; background: #666;">← Voltar ao Carrinho</button>
+        </div>
+
+        <!-- CONFIRMAÇÃO -->
+        <div id="confirmationSection" style="display:none;">
+          <div class="order-confirmation show">
+            <h2>✅ Pedido Confirmado!</h2>
+            <div class="order-number" id="orderNumber"></div>
+            <p id="orderMessage"></p>
+            <p style="margin-top: 15px; color: #666;">
+              Um e-mail de confirmação foi enviado para <strong id="orderEmail"></strong>
+            </p>
+            <button onclick="newOrder()" style="width: 100%; margin-top: 15px;">Fazer Novo Pedido</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESUMO LATERAL -->
+      <div class="section">
+        <h2>📊 Resumo</h2>
+        <div style="color: #666; line-height: 1.8;">
+          <p><strong>Status:</strong> <span id="currentStep">Selecionando Produtos</span></p>
+          <p><strong>Itens no Carrinho:</strong> <span id="itemCount">0</span></p>
+          <p><strong>Total:</strong> R$ <span id="sidebarTotal">0.00</span></p>
+          <hr style="margin: 10px 0; border: none; border-top: 1px solid #eee;">
+          <p style="font-size: 12px; color: #999;">
+            Este é um teste funcional do fluxo de checkout.
+            Todos os dados são locais e não são salvos.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:9000';
+    let cartId = null;
+    let currentCart = { items: [], total: 0 };
+
+    // Inicializar
+    async function init() {
+      await loadProducts();
+      createCart();
+    }
+
+    // Carregar produtos
+    async function loadProducts() {
+      try {
+        const res = await fetch(`${API_URL}/store/products`);
+        const data = await res.json();
+        const products = data.products || [];
+
+        const html = products.map(p => `
+          <div class="product" onclick="addToCart('${p.id}', '${p.title}', ${p.price})">
+            <div class="product-img"></div>
+            <div class="product-title">${p.title}</div>
+            <div class="product-price">R$ ${p.price.toFixed(2)}</div>
+            <button onclick="event.stopPropagation(); addToCart('${p.id}', '${p.title}', ${p.price})">Adicionar</button>
+          </div>
+        `).join('');
+
+        document.getElementById('productsList').innerHTML = html;
+        showStatus('✅ Produtos carregados com sucesso!', 'info');
+      } catch (err) {
+        showStatus('❌ Erro ao carregar produtos: ' + err.message, 'error');
+      }
+    }
+
+    // Criar carrinho
+    async function createCart() {
+      try {
+        const res = await fetch(`${API_URL}/store/carts`, { method: 'POST' });
+        const data = await res.json();
+        cartId = data.cart.id;
+      } catch (err) {
+        showStatus('⚠️ Erro ao criar carrinho', 'error');
+      }
+    }
+
+    // Adicionar ao carrinho
+    async function addToCart(productId, title, price) {
+      try {
+        const res = await fetch(`${API_URL}/store/carts/${cartId}/line-items`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ variant_id: productId, quantity: 1 })
+        });
+
+        const data = await res.json();
+        currentCart = data.cart;
+
+        showStatus(`✅ "${title}" adicionado ao carrinho!`, 'success');
+        updateUI();
+      } catch (err) {
+        showStatus('❌ Erro ao adicionar ao carrinho', 'error');
+      }
+    }
+
+    // Atualizar UI
+    function updateUI() {
+      document.getElementById('itemCount').textContent = currentCart.items.length;
+      document.getElementById('sidebarTotal').textContent = currentCart.total.toFixed(2);
+      document.getElementById('cartTotal').textContent = currentCart.total.toFixed(2);
+
+      if (currentCart.items.length > 0) {
+        document.getElementById('step2').classList.add('active');
+      }
+    }
+
+    // Ir para checkout
+    function proceedToCheckout() {
+      if (currentCart.items.length === 0) {
+        showStatus('⚠️ Adicione produtos ao carrinho!', 'error');
+        return;
+      }
+
+      document.getElementById('productsSection').style.display = 'none';
+      document.getElementById('cartSection').style.display = 'none';
+      document.getElementById('checkoutSection').style.display = 'block';
+      document.getElementById('step2').classList.remove('active');
+      document.getElementById('step3').classList.add('active');
+      document.getElementById('currentStep').textContent = 'Preenchendo Checkout';
+      showStatus('💳 Preencha seus dados para completar a compra', 'info');
+    }
+
+    // Finalizar pedido
+    async function placeOrder() {
+      try {
+        const res = await fetch(`${API_URL}/store/carts/${cartId}/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.getElementById('email').value,
+            shipping_address: {
+              first_name: document.getElementById('name').value.split(' ')[0],
+              address_1: document.getElementById('address').value,
+              city: document.getElementById('city').value,
+              postal_code: document.getElementById('zip').value
+            }
+          })
+        });
+
+        if (!res.ok) throw new Error('Erro ao processar pedido');
+
+        const data = await res.json();
+        const order = data.order;
+
+        // Mostrar confirmação
+        document.getElementById('checkoutSection').style.display = 'none';
+        document.getElementById('confirmationSection').style.display = 'block';
+        document.getElementById('orderNumber').textContent = order.confirmation.number;
+        document.getElementById('orderMessage').textContent = order.confirmation.message;
+        document.getElementById('orderEmail').textContent = document.getElementById('email').value;
+        document.getElementById('step3').classList.remove('active');
+        document.getElementById('step4').classList.add('active');
+        document.getElementById('currentStep').textContent = 'Pedido Confirmado!';
+
+        showStatus(`✅ Pedido ${order.confirmation.number} realizado com sucesso!`, 'success');
+      } catch (err) {
+        showStatus('❌ Erro ao finalizar pedido: ' + err.message, 'error');
+      }
+    }
+
+    // Controles de navegação
+    function backToProducts() {
+      document.getElementById('cartSection').style.display = 'none';
+      document.getElementById('productsSection').style.display = 'block';
+      document.getElementById('step2').classList.remove('active');
+    }
+
+    function backToCart() {
+      document.getElementById('checkoutSection').style.display = 'none';
+      document.getElementById('cartSection').style.display = 'block';
+      document.getElementById('step3').classList.remove('active');
+    }
+
+    function newOrder() {
+      location.reload();
+    }
+
+    // Mostrar status
+    function showStatus(message, type) {
+      const el = document.getElementById('status');
+      el.textContent = message;
+      el.className = 'status ' + type;
+      setTimeout(() => el.className = 'status', 5000);
+    }
+
+    // Iniciar
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+Options +FollowSymLinks
+RewriteEngine On
+
+<IfModule mod_rewrite.c>
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+</IfModule>
+
+<FilesMatch "\.php$">
+    Require all granted
+</FilesMatch>

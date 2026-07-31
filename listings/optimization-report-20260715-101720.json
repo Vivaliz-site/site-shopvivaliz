@@ -1,0 +1,22 @@
+{
+    "agent": "shopee_listings_optimization",
+    "version": "9.2.85",
+    "generated_at": "2026-07-15T10:17:20+00:00",
+    "secrets_check": {
+        "tiny_token_source": "TINY_ACCESS_TOKEN",
+        "tiny_token_ok": true,
+        "ai_provider": "anthropic",
+        "ai_key_found": true
+    },
+    "status": "error",
+    "ai_provider": "anthropic",
+    "total_products": 0,
+    "optimized": 0,
+    "skipped": 0,
+    "errors": [
+        "Falha OAuth2 refresh: Invalid client or Invalid client credentials",
+        "Autenticação Tiny falhou (401).",
+        "Nenhum produto encontrado na API Tiny."
+    ],
+    "log": []
+}

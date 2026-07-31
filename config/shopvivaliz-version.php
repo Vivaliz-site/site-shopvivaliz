@@ -1,0 +1,41 @@
+<?php
+
+declare(strict_types=1);
+
+return array(
+    'version' => '9.2.104',
+    'version_code' => 902104,
+    'channel' => 'dev',
+    'codename' => 'mercadopago-live-checkout',
+    'release_type' => 'cumulative',
+    'generated_at' => '2026-07-15T12:00:00-03:00',
+    'requires_update_php_sync' => true,
+    'notes' => array(
+        'Centraliza numero da versao para deploy, endpoints e testes pos-deploy.',
+        'Nao sobrescreve installer/update.php quando ele nao esta versionado no GitHub.',
+        'Prepara o site para detectar divergencia entre versao publicada e versao mostrada pelo atualizador.',
+        'Implanta proxy Tiny API V2 para listagem/detalhe e importador de imagens para o catalogo.',
+        'Liga home, catalogo e admin a uma API publica de catalogo com fallback por relatorio validado.',
+        'Adiciona AutoDev evolutivo com coleta de eventos, metricas, diretores, agentes, A/B test e propostas seguras de PR.',
+        'Adiciona EHA continuo com health check, checkout E2E, classificador de risco e bloqueio de entrega insegura.',
+        'Reforca guarda de segredos locais, cookies, HARs, perfis Chrome e storage privado no Git.',
+        'Versiona update-applied-check e auto-routines no repositorio para diagnostico consistente apos deploy.',
+        'Moderniza o sync Olist/Tiny para ler secrets persistidos, expor status operacional e manter OAuth com offline_access.',
+        'Adiciona diagnostico versionado de Melhor Envio e Pagar.me para diferenciar endpoint ativo de gateway realmente autenticado.',
+        'Prepara o deploy para injetar secrets de Melhor Envio e Pagar.me no .env temporario do servidor e aceita aliases de nome para o token de frete.',
+        'Adiciona reparo dedicado para Shopee Media Space lendo planilha de resultado, mapeando imagem local e atualizando a capa via Open API.',
+        'Prepara workflow manual com secrets do GitHub para executar uploads de arquivo local em lote sem depender de CDN externo.',
+        'Restaura o catalogo de producao a partir do cache detalhado Olist, incluindo estoque, imagens, dimensoes e categorias.',
+        'Torna a sincronizacao de produtos atomica, paginada, tolerante a rate limit e preserva detalhes em falhas parciais.',
+        'Centraliza a fonte autoritativa do catalogo para vitrine, carrinho, checkout, frete, feeds e endpoints de saude.',
+        'Adiciona protecao CSRF aos formularios sensiveis e remove fallbacks deterministas de assinatura de cotacao.',
+        'Endurece lint, scanner, testes Python e Playwright para impedir falsos positivos e chamadas externas na coleta.',
+        'Bloqueia acesso HTTP a arquivos, caches, diagnosticos, rotinas de manutencao e fontes internas do checkout do repositorio.',
+        'Desativa listagem de diretorios, adiciona CSP defensiva e remove estado de debug da API publica de catalogo.',
+        'Corrige workflows E2E e de configuracao da VM com jornada sem cobranca e atualizacao atomica de secrets estaticos.',
+        'Instala renovacao OAuth Olist residente, atomica e sem registrar tokens.',
+        'Ativa Checkout Pro e boleto bancario real do Mercado Pago vinculados ao pedido autoritativo.',
+        'Valida webhook Mercado Pago por HMAC e consulta o recurso oficial antes de atualizar o pedido.',
+        'Desativa endpoints legados que aceitavam valores arbitrarios ou configuracao TLS insegura.',
+    ),
+);

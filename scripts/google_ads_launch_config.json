@@ -1,0 +1,15 @@
+{
+  "name": "Rodizios-Search-ShopVivaliz-2026-07",
+  "budget_daily": 15.0,
+  "status": "PAUSED",
+  "keywords": 8,
+  "headlines": 12,
+  "descriptions": 6,
+  "negative_keywords": 8,
+  "locations": [
+    "SP",
+    "MG",
+    "PR"
+  ],
+  "cpc_target": "R$ 1.50-2.50"
+}

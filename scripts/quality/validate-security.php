@@ -1,0 +1,3 @@
+<?php
+declare(strict_types=1);
+$htaccess=(string)@file_get_contents('.htaccess');$required=['RewriteRule ^config/ - [F,L]','RewriteRule ^storage/ - [F,L]','RewriteRule ^logs/ - [F,L]','X-Content-Type-Options','Referrer-Policy','X-Frame-Options'];$errors=[];foreach($required as $needle){if(!str_contains($htaccess,$needle))$errors[]="missing security control: $needle";}if($errors){fwrite(STDERR,implode(PHP_EOL,$errors).PHP_EOL);exit(1);}echo "Security configuration validation passed.\n";

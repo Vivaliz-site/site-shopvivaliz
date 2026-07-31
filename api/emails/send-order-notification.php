@@ -1,0 +1,415 @@
+<?php
+/**
+ * Sistema de Notificação de Pedidos por Email
+ * Envia emails para clientes em:
+ * - Pedido criado/confirmado
+ * - Alteração de status
+ * - Pagamento recebido
+ * - Envio despachado
+ * - Boleto gerado
+ */
+
+declare(strict_types=1);
+
+function svem_send_order_email(array $order, string $event = 'order_created'): bool
+{
+    $email = $order['customer']['email'] ?? '';
+    $name = $order['customer']['name'] ?? 'Cliente';
+
+    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        error_log("[OrderEmail] Email inválido para pedido {$order['order_number']}: $email");
+        return false;
+    }
+
+    // Preparar conteúdo do email baseado no evento
+    [$subject, $htmlBody] = svem_build_email_content($order, $event, $name);
+
+    // Usava mail() PHP nativo direto, que sempre falhava silenciosamente
+    // porque o servidor nao tem sendmail instalado ("sh: /usr/sbin/sendmail:
+    // not found") -- todo email de pedido (order_created em diante) nunca
+    // saia de fato. send_email() ja usa PHPMailer real via SMTP (mesmo
+    // caminho corrigido em scripts/mailer.php), so faltava esse arquivo usar.
+    require_once dirname(__DIR__, 2) . '/scripts/mailer.php';
+    $success = send_email($email, $subject, $htmlBody);
+
+    if ($success) {
+        error_log("[OrderEmail] ✅ Email enviado para $email (evento: $event, pedido: {$order['order_number']})");
+    } else {
+        error_log("[OrderEmail] ❌ Falha ao enviar email para $email (evento: $event)");
+    }
+
+    return $success;
+}
+
+function svem_build_email_content(array $order, string $event, string $customerName): array
+{
+    $siteBaseUrl = rtrim((string)(getenv('SHOPVIVALIZ_BASE_URL') ?: getenv('APP_URL') ?: getenv('SITE_URL') ?: 'https://shopvivaliz.com.br'), '/');
+    $orderNumber = isset($order['order_number']) ? $order['order_number'] : 'N/A';
+    $orderDate = date('d/m/Y H:i', strtotime(isset($order['created_at']) ? $order['created_at'] : 'now'));
+    $total = number_format(isset($order['total']) ? $order['total'] : 0, 2, ',', '.');
+    $phone = isset($order['customer']['phone']) ? $order['customer']['phone'] : '';
+    $whatsapp = getenv('LOJA_WHATSAPP') ?: '551140415850';
+    $whatsappLink = "https://wa.me/" . preg_replace('/\D/', '', $whatsapp);
+    $trackingCode = isset($order['tracking_code']) ? $order['tracking_code'] : 'Código de rastreio será enviado em instantes.';
+    $address = isset($order['customer']['address']) ? $order['customer']['address'] : '';
+    $neighborhood = isset($order['customer']['neighborhood']) ? $order['customer']['neighborhood'] : '';
+    $city = isset($order['customer']['city']) ? $order['customer']['city'] : '';
+    $state = isset($order['customer']['state']) ? $order['customer']['state'] : '';
+    $cep = isset($order['customer']['cep']) ? $order['customer']['cep'] : '';
+    $paymentMethod = strtolower((string)($order['payment_method'] ?? ''));
+    $mercadoPago = is_array($order['mercadopago'] ?? null) ? $order['mercadopago'] : [];
+    $infinitePay = is_array($order['infinitepay'] ?? null) ? $order['infinitepay'] : [];
+    $boleto = is_array($mercadoPago['boleto'] ?? null) ? $mercadoPago['boleto'] : [];
+    $preference = is_array($mercadoPago['preference'] ?? null) ? $mercadoPago['preference'] : [];
+    $ticketUrl = trim((string)($boleto['ticket_url'] ?? ''));
+    $digitableLine = trim((string)($boleto['digitable_line'] ?? ''));
+    $barcodeContent = trim((string)($boleto['barcode_content'] ?? ''));
+    $checkoutUrl = trim((string)($preference['checkout_url'] ?? $infinitePay['checkout_url'] ?? ''));
+    $pixKey = trim((string)(getenv('LOJA_PIX_KEY') ?: getenv('PIX_KEY') ?: ''));
+
+    $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+    $itemsHtml = '';
+    foreach ($order['items'] ?? [] as $item) {
+        $itemName = $escape((string)($item['name'] ?? ''));
+        $qty = $item['quantity'] ?? 0;
+        $price = number_format($item['price'] ?? 0, 2, ',', '.');
+        $itemsHtml .= "<tr>
+            <td style='padding:8px; border-bottom:1px solid #eee;'>$itemName</td>
+            <td style='padding:8px; border-bottom:1px solid #eee; text-align:center;'>$qty</td>
+            <td style='padding:8px; border-bottom:1px solid #eee; text-align:right;'>R\$ $price</td>
+        </tr>";
+    }
+
+    $statusBadge = match ($event) {
+        'order_created' => '<span style="background:#4CAF50; color:white; padding:6px 12px; border-radius:4px; font-weight:bold;">✅ AGUARDANDO CONFIRMAÇÃO</span>',
+        'payment_received' => '<span style="background:#2196F3; color:white; padding:6px 12px; border-radius:4px; font-weight:bold;">💳 PAGAMENTO RECEBIDO</span>',
+        'shipping_dispatched' => '<span style="background:#FF9800; color:white; padding:6px 12px; border-radius:4px; font-weight:bold;">📦 ENVIADO</span>',
+        'shipped' => '<span style="background:#FF9800; color:white; padding:6px 12px; border-radius:4px; font-weight:bold;">📦 EM TRÂNSITO</span>',
+        'delivered' => '<span style="background:#8BC34A; color:white; padding:6px 12px; border-radius:4px; font-weight:bold;">✅ ENTREGUE</span>',
+        'boleto_generated' => '<span style="background:#FFC107; color:#333; padding:6px 12px; border-radius:4px; font-weight:bold;">📄 BOLETO DISPONÍVEL</span>',
+        'payment_link_generated' => '<span style="background:#00A650; color:white; padding:6px 12px; border-radius:4px; font-weight:bold;">💳 PAGAMENTO DISPONÍVEL</span>',
+        'status_changed' => '<span style="background:#9C27B0; color:white; padding:6px 12px; border-radius:4px; font-weight:bold;">🔄 ATUALIZAÇÃO</span>',
+        default => '<span style="background:#757575; color:white; padding:6px 12px; border-radius:4px; font-weight:bold;">📋 PEDIDO ATUALIZADO</span>',
+    };
+
+    $paymentActionHtml = '';
+    if ($event === 'boleto_generated') {
+        $ticketLink = $ticketUrl !== ''
+            ? "<p style='margin:16px 0 0;'><a href='" . $escape($ticketUrl) . "' style='display:inline-block; background:#00A650; color:#fff; padding:12px 18px; border-radius:6px; text-decoration:none; font-weight:bold;'>Abrir boleto</a></p>"
+            : '';
+        $lineBlock = $digitableLine !== ''
+            ? "<p><strong>Linha digitável:</strong><br><code style='display:block; background:#fff; border:1px solid #e6d48a; padding:10px; border-radius:4px; word-break:break-word; font-size:14px;'>" . $escape($digitableLine) . "</code></p>"
+            : '';
+        $barcodeBlock = $barcodeContent !== '' && $barcodeContent !== $digitableLine
+            ? "<p><strong>Código de barras:</strong><br><code style='display:block; background:#fff; border:1px solid #e6d48a; padding:10px; border-radius:4px; word-break:break-word; font-size:14px;'>" . $escape($barcodeContent) . "</code></p>"
+            : '';
+        $paymentActionHtml = "
+            <div style='background:#fff8e1; border:1px solid #ffe082; padding:16px; border-radius:6px; margin:20px 0;'>
+                <h3 style='margin:0 0 10px; color:#6d4c00;'>Pagamento por boleto</h3>
+                $lineBlock
+                $barcodeBlock
+                $ticketLink
+            </div>
+        ";
+    } elseif ($event === 'payment_link_generated' && $checkoutUrl !== '') {
+        $gatewayTitle = $paymentMethod === 'infinitepay' ? 'Pague com InfinitePay' : 'Pague com Mercado Pago';
+        $gatewayText = $paymentMethod === 'infinitepay'
+            ? 'Use o checkout seguro para pagar com Pix ou cartão em até 6x sem juros.'
+            : 'Use o checkout seguro para escolher Pix, boleto ou cartão.';
+        $paymentActionHtml = "
+            <div style='background:#e8f5e9; border:1px solid #a5d6a7; padding:16px; border-radius:6px; margin:20px 0;'>
+                <h3 style='margin:0 0 10px; color:#1b5e20;'>$gatewayTitle</h3>
+                <p>$gatewayText</p>
+                <p style='margin:16px 0 0;'><a href='" . $escape($checkoutUrl) . "' style='display:inline-block; background:#00A650; color:#fff; padding:12px 18px; border-radius:6px; text-decoration:none; font-weight:bold;'>Pagar agora</a></p>
+            </div>
+        ";
+    } elseif ($event === 'order_created' && $paymentMethod === 'pix' && $pixKey !== '') {
+        $paymentActionHtml = "
+            <div style='background:#e8f5e9; border:1px solid #a5d6a7; padding:16px; border-radius:6px; margin:20px 0;'>
+                <h3 style='margin:0 0 10px; color:#1b5e20;'>Pagamento por Pix</h3>
+                <p><strong>Chave Pix:</strong><br><code style='display:block; background:#fff; border:1px solid #a5d6a7; padding:10px; border-radius:4px; word-break:break-word; font-size:14px;'>" . $escape($pixKey) . "</code></p>
+                <p><strong>Valor:</strong> R\$ $total</p>
+            </div>
+        ";
+    }
+
+    $messageBodies = [
+        'order_created' => "
+            <p>Olá <strong>$customerName</strong>,</p>
+            <p>Seu pedido foi recebido com sucesso! 🎉</p>
+            <p>Número do pedido: <strong>$orderNumber</strong><br>
+            Data: <strong>$orderDate</strong></p>
+            <p><strong>Próximos passos:</strong></p>
+            <ul>
+                <li>Seu frete e total já foram registrados no pedido</li>
+                <li>Se você escolheu Pix ou boleto no Mercado Pago, enviaremos os dados de pagamento assim que o Mercado Pago confirmar a geração</li>
+                <li>Acompanhe seu pedido pelo número acima</li>
+            </ul>
+            <p>❓ Dúvidas? <a href='$whatsappLink' style='color:#25D366; text-decoration:none; font-weight:bold;'>Fale conosco no WhatsApp</a></p>
+        ",
+        'payment_received' => "
+            <p>Olá <strong>$customerName</strong>,</p>
+            <p>Pagamento confirmado com sucesso! 💚</p>
+            <p>Número do pedido: <strong>$orderNumber</strong><br>
+            Valor: <strong>R\$ $total</strong></p>
+            <p>Seu pedido foi enviado para processamento. Você receberá o código de rastreamento em breve!</p>
+        ",
+        'shipping_dispatched' => "
+            <p>Olá <strong>$customerName</strong>,</p>
+            <p>Seu pedido foi enviado! 📦</p>
+            <p>Número do pedido: <strong>$orderNumber</strong><br>
+            Status: <strong>EM TRÂNSITO</strong></p>
+            <p>Código de rastreamento: <strong>$trackingCode</strong></p>
+            <p>Acompanhe a entrega através do código acima no site dos Correios ou Melhor Envio.</p>
+        ",
+        'boleto_generated' => "
+            <p>Olá <strong>$customerName</strong>,</p>
+            <p>Boleto bancário gerado! 📄</p>
+            <p>Número do pedido: <strong>$orderNumber</strong><br>
+            Valor: <strong>R\$ $total</strong></p>
+            <p>Você pode pagar pelo link do boleto ou copiar a linha digitável no aplicativo do seu banco.</p>
+            <p>⚠️ Data de vencimento: Verificar boleto</p>
+        ",
+        'payment_link_generated' => "
+            <p>Olá <strong>$customerName</strong>,</p>
+            <p>O link de pagamento do seu pedido está disponível.</p>
+            <p>Número do pedido: <strong>$orderNumber</strong><br>
+            Valor: <strong>R\$ $total</strong></p>
+            <p>" . ($paymentMethod === 'infinitepay'
+                ? 'Finalize com Pix ou cartão no checkout seguro da InfinitePay.'
+                : 'Escolha Pix, boleto ou cartão no checkout seguro do Mercado Pago.') . "</p>
+        ",
+    ];
+
+    $subject = match ($event) {
+        'order_created' => "Pedido recebido! Número $orderNumber",
+        'payment_received' => "Pagamento confirmado - Pedido $orderNumber",
+        'shipping_dispatched' => "Seu pedido foi enviado! - $orderNumber",
+        'boleto_generated' => "Boleto disponível para pagamento - $orderNumber",
+        'payment_link_generated' => "Pagamento disponível - Pedido $orderNumber",
+        default => "Atualização de pedido - $orderNumber",
+    };
+
+    $messageBody = $messageBodies[$event] ?? $messageBodies['order_created'];
+
+    $html = "
+    <!DOCTYPE html>
+    <html lang='pt-BR'>
+    <head>
+        <meta charset='UTF-8'>
+        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+        <title>$subject</title>
+    </head>
+    <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;'>
+        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;'>
+            <h1 style='margin: 0; font-size: 28px;'>ShopVivaliz</h1>
+            <p style='margin: 5px 0 0 0; font-size: 14px;'>Sua loja de qualidade</p>
+        </div>
+
+        <div style='background: white; padding: 30px; border: 1px solid #ddd; border-top: none;'>
+            <div style='text-align: center; margin-bottom: 20px;'>
+                $statusBadge
+            </div>
+
+            $messageBody
+            $paymentActionHtml
+
+            <hr style='border: none; border-top: 1px solid #eee; margin: 30px 0;'>
+
+            <h3 style='color: #667eea; margin-top: 20px;'>Resumo do Pedido</h3>
+            <table style='width: 100%; border-collapse: collapse; margin-bottom: 20px;'>
+                <thead>
+                    <tr style='background: #f5f5f5;'>
+                        <th style='padding: 10px; text-align: left; border-bottom: 2px solid #ddd;'>Produto</th>
+                        <th style='padding: 10px; text-align: center; border-bottom: 2px solid #ddd;'>Qtd</th>
+                        <th style='padding: 10px; text-align: right; border-bottom: 2px solid #ddd;'>Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    $itemsHtml
+                    <tr style='background: #f9f9f9; font-weight: bold;'>
+                        <td colspan='2' style='padding: 10px; text-align: right;'>TOTAL:</td>
+                        <td style='padding: 10px; text-align: right;'>R\$ $total</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div style='background: #f0f0f0; padding: 15px; border-radius: 5px; margin: 20px 0;'>
+                <strong>Informações de Entrega:</strong><br>
+                $address<br>
+                $neighborhood - $city/$state<br>
+                CEP: $cep
+            </div>
+
+            <hr style='border: none; border-top: 1px solid #eee; margin: 30px 0;'>
+
+            <p style='text-align: center; color: #666; font-size: 12px;'>
+                <strong>Precisa de ajuda?</strong><br>
+                📞 WhatsApp: <a href='$whatsappLink' style='color: #25D366; text-decoration: none;'>$whatsapp</a><br>
+                📧 Email: contato@shopvivaliz.com.br<br>
+                🌐 Site: <a href='{$siteBaseUrl}' style='color: #667eea; text-decoration: none;'>{$siteBaseUrl}</a>
+            </p>
+
+            <p style='text-align: center; color: #999; font-size: 11px; margin-top: 20px;'>
+                Este é um email automático. Não responda este email.
+            </p>
+        </div>
+
+        <div style='background: #333; color: white; padding: 15px; text-align: center; font-size: 11px; border-radius: 0 0 8px 8px;'>
+            <p style='margin: 0;'>ShopVivaliz © 2026 - Todos os direitos reservados</p>
+        </div>
+    </body>
+    </html>
+    ";
+
+    return [$subject, $html];
+}
+
+/**
+ * Notifica atendimento sobre novo pedido
+ */
+function svem_notify_admin_order_created(array $order): bool
+{
+    $adminEmail = trim((string)(getenv('ADMIN_EMAIL') ?: getenv('ATENDIMENTO_EMAIL') ?: 'atendimento@shopvivaliz.com.br'));
+    if (empty($adminEmail) || !filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+        error_log("[AdminNotify] Email de atendimento inválido: $adminEmail");
+        return false;
+    }
+
+    $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+    $customerEmail = trim((string)($order['customer']['email'] ?? ''));
+    $customerName = (string)($order['customer']['name'] ?? 'Cliente');
+    $orderNumber = (string)($order['order_number'] ?? 'N/A');
+    $total = number_format((float)($order['total'] ?? 0), 2, ',', '.');
+    $paymentMethod = (string)($order['payment_method'] ?? 'Não informado');
+    $phone = (string)($order['customer']['phone'] ?? '');
+    $address = trim((string)($order['customer']['address'] ?? '') . ', ' . (string)($order['customer']['city'] ?? ''), ' ,');
+
+    $customerEmailSafe = $escape($customerEmail);
+    $customerNameSafe = $escape($customerName);
+    $orderNumberSafe = $escape($orderNumber);
+    $paymentMethodSafe = $escape($paymentMethod);
+    $phoneSafe = $escape($phone);
+    $addressSafe = $escape($address);
+    $subject = "🔔 NOVO PEDIDO: #{$orderNumber} - R\$ {$total}";
+    $subjectSafe = $escape($subject);
+
+    $orderId = $order['id'] ?? $order['order_id'] ?? null;
+    $adminLinkHtml = '';
+    if (is_scalar($orderId) && trim((string)$orderId) !== '') {
+        $adminUrl = 'https://shopvivaliz.com.br/admin/pedidos.php?action=view&id=' . rawurlencode((string)$orderId);
+        $adminLinkHtml = "
+            <div style='background: #e7f3ff; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0;'>
+                <p><strong>⚡ Link Rápido:</strong><br>
+                <a href='" . $escape($adminUrl) . "' style='background: #2196F3; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block;'>Ver Pedido no Admin</a></p>
+            </div>
+        ";
+    }
+
+    $html = "
+    <!DOCTYPE html>
+    <html lang='pt-BR'>
+    <head>
+        <meta charset='UTF-8'>
+        <title>$subjectSafe</title>
+    </head>
+    <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+        <div style='background: #dc3545; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;'>
+            <h2 style='margin: 0;'>🔔 NOVO PEDIDO RECEBIDO</h2>
+        </div>
+
+        <div style='background: white; padding: 20px; border: 1px solid #ddd;'>
+            <h3 style='color: #dc3545;'>Detalhes do Pedido</h3>
+
+            <p><strong>Número:</strong> <span style='background: #fff3cd; padding: 5px 10px; border-radius: 4px; font-weight: bold;'>{$orderNumberSafe}</span></p>
+            <p><strong>Cliente:</strong> {$customerNameSafe}</p>
+            <p><strong>Email:</strong> <a href='mailto:{$customerEmailSafe}'>{$customerEmailSafe}</a></p>
+            <p><strong>Telefone:</strong> {$phoneSafe}</p>
+            <p><strong>Endereço:</strong> {$addressSafe}</p>
+
+            <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'>
+
+            <h3 style='color: #28a745;'>Pagamento</h3>
+            <p><strong>Método:</strong> {$paymentMethodSafe}</p>
+            <p><strong>Valor Total:</strong> <span style='font-size: 18px; color: #28a745; font-weight: bold;'>R\$ {$total}</span></p>
+            <p><strong>Status:</strong> <span style='background: #ffc107; padding: 5px 8px; border-radius: 4px;'>⏳ AGUARDANDO PAGAMENTO</span></p>
+
+            <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'>
+
+            <h3>Próximos Passos</h3>
+            <ol>
+                <li>Aguardar confirmação de pagamento</li>
+                <li>Preparar itens para envio</li>
+                <li>Gerar código de rastreio</li>
+                <li>Notificar cliente</li>
+            </ol>
+
+            $adminLinkHtml
+        </div>
+
+        <div style='background: #f8f9fa; padding: 15px; text-align: center; font-size: 12px; color: #666;'>
+            <p>🤖 Notificação automática do ShopVivaliz</p>
+        </div>
+    </body>
+    </html>
+    ";
+
+    require_once dirname(__DIR__, 2) . '/scripts/mailer.php';
+    $success = send_email($adminEmail, $subject, $html);
+
+    if ($success) {
+        error_log("[AdminNotify] ✅ Email enviado para atendimento (pedido: {$orderNumber})");
+    } else {
+        error_log("[AdminNotify] ❌ Falha ao notificar atendimento sobre pedido {$orderNumber}");
+    }
+
+    return $success;
+}
+
+/**
+ * Notifica atendimento sobre pagamento confirmado
+ */
+function svem_notify_admin_payment_received(array $order): bool
+{
+    $adminEmail = trim((string)(getenv('ADMIN_EMAIL') ?: getenv('ATENDIMENTO_EMAIL') ?: 'atendimento@shopvivaliz.com.br'));
+    if (empty($adminEmail) || !filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+        return false;
+    }
+
+    $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $orderNumber = (string)($order['order_number'] ?? 'N/A');
+    $total = number_format((float)($order['total'] ?? 0), 2, ',', '.');
+    $customerName = (string)($order['customer']['name'] ?? 'Cliente');
+    $orderNumberSafe = $escape($orderNumber);
+    $customerNameSafe = $escape($customerName);
+
+    $subject = "💚 PAGAMENTO CONFIRMADO: #{$orderNumber} - R\$ {$total}";
+    $subjectSafe = $escape($subject);
+
+    $html = "
+    <!DOCTYPE html>
+    <html lang='pt-BR'>
+    <head>
+        <meta charset='UTF-8'>
+        <title>$subjectSafe</title>
+    </head>
+    <body style='font-family: Arial, sans-serif; line-height: 1.6;'>
+        <div style='background: #28a745; color: white; padding: 20px; text-align: center;'>
+            <h2 style='margin: 0;'>💚 PAGAMENTO CONFIRMADO</h2>
+        </div>
+        <div style='background: white; padding: 20px; border: 1px solid #ddd;'>
+            <p>O pagamento do pedido foi confirmado!</p>
+            <p><strong>Pedido:</strong> #{$orderNumberSafe}</p>
+            <p><strong>Cliente:</strong> {$customerNameSafe}</p>
+            <p><strong>Valor:</strong> R\$ {$total}</p>
+            <p style='margin-top: 20px;'><strong>⚡ Ação necessária:</strong> Preparar itens para envio</p>
+        </div>
+    </body>
+    </html>
+    ";
+
+    require_once dirname(__DIR__, 2) . '/scripts/mailer.php';
+    return send_email($adminEmail, $subject, $html);
+}

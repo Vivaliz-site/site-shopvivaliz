@@ -1,0 +1,38 @@
+name: Shopee Optimizer Safety
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/shopee_full_catalog_optimizer.py'
+      - 'scripts/shopee_production_seo_apply.py'
+      - 'tests/test_shopee_optimizer_safety.py'
+      - 'tests/test_shopee_production_seo.py'
+      - '.github/workflows/shopee-optimizer-safety.yml'
+      - '.github/workflows/shopee-production-seo.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/shopee_full_catalog_optimizer.py'
+      - 'scripts/shopee_production_seo_apply.py'
+      - 'tests/test_shopee_optimizer_safety.py'
+      - 'tests/test_shopee_production_seo.py'
+      - '.github/workflows/shopee-optimizer-safety.yml'
+      - '.github/workflows/shopee-production-seo.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  safety-gate:
+    name: Dry-run non-mutating and production evidence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Compile optimizers
+        run: python -m py_compile scripts/shopee_full_catalog_optimizer.py scripts/shopee_production_seo_apply.py scripts/utils/shopee_client.py
+      - name: Run safety tests
+        run: python -m unittest -v tests/test_shopee_optimizer_safety.py tests/test_shopee_production_seo.py

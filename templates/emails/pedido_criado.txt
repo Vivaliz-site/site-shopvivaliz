@@ -1,0 +1,12 @@
+Olá {{customer_name}},
+
+Recebemos o seu pedido #{{order_id}} com sucesso!
+
+Resumo do pedido:
+{{items_text}}
+Total: R$ {{total}}
+
+Forma de pagamento: {{payment_label}}
+{{payment_instructions}}
+
+Acompanhe o andamento no link: https://shopvivaliz.com.br/meus-pedidos

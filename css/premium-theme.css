@@ -1,0 +1,448 @@
+/* 
+ * ShopVivaliz - Premium Theme & CRO
+ * Contém estilos visuais de conversão: Glassmorphism, Micro-Interações, Social Proof e Hierarquia
+ */
+
+/* ==========================================================================
+   1. SKELETON LOADERS
+   ========================================================================== */
+.skeleton {
+    background: #f6f7f8;
+    background-image: linear-gradient(
+        90deg,
+        #f6f7f8 0px,
+        #edeef1 40px,
+        #f6f7f8 80px
+    );
+    background-size: 200vw 100%;
+    animation: shimmer 1.5s infinite linear;
+    border-radius: 8px;
+}
+
+.skeleton img {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+@keyframes shimmer {
+    0% { background-position: -100vw 0; }
+    100% { background-position: 100vw 0; }
+}
+
+/* ==========================================================================
+   2. HOVER ZOOM NAS IMAGENS
+   ========================================================================== */
+.hover-zoom-container {
+    overflow: hidden;
+    position: relative;
+    cursor: crosshair;
+    border-radius: 12px;
+}
+
+.hover-zoom-container img {
+    transition: transform 0.1s ease-out;
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* ==========================================================================
+   3. SOCIAL PROOF POPUP (Glassmorphism)
+   ========================================================================== */
+#social-proof-popup {
+    position: fixed;
+    bottom: -100px;
+    left: 20px;
+    z-index: 9999;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 320px;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+#social-proof-popup.show {
+    bottom: 20px;
+    opacity: 1;
+    visibility: visible;
+}
+
+.proof-icon {
+    background: #10b981;
+    color: white;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.proof-content {
+    flex-grow: 1;
+}
+
+.proof-text {
+    font-size: 13px;
+    color: #374151;
+    margin: 0 0 4px 0;
+    line-height: 1.3;
+}
+
+.proof-text strong {
+    color: #111827;
+}
+
+.proof-time {
+    font-size: 11px;
+    color: #6b7280;
+    margin: 0;
+}
+
+.proof-close {
+    background: none;
+    border: none;
+    color: #9ca3af;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+/* ==========================================================================
+   4. STICKY ADD TO CART (MOBILE)
+   ========================================================================== */
+.sticky-buy-wrapper {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: white;
+    padding: 12px 16px;
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+    z-index: 9998;
+    transform: translateY(100%);
+    transition: transform 0.3s ease-in-out;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sticky-buy-wrapper.visible {
+    transform: translateY(0);
+}
+
+.sticky-buy-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.sticky-buy-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
+.sticky-buy-price {
+    font-size: 16px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.sticky-buy-wrapper .btn-comprar {
+    margin: 0;
+    padding: 10px 24px;
+    flex-shrink: 0;
+}
+
+/* Esconder em telas maiores que 768px */
+@media (min-width: 769px) {
+    .sticky-buy-wrapper {
+        display: none !important;
+    }
+}
+
+/* ==========================================================================
+   5. ISOLAMENTO DE COR E PULSAR (Main Buy Button)
+   ========================================================================== */
+.main-buy-button {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border: none;
+    color: white;
+    font-weight: 700;
+    font-size: 18px;
+    border-radius: 8px;
+    padding: 16px 24px;
+    width: 100%;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+    transition: all 0.3s ease;
+    animation: pulse-button 2s infinite;
+}
+
+.main-buy-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+@keyframes pulse-button {
+    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+    70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+/* ==========================================================================
+   6. TRUST BADGES
+   ========================================================================== */
+.trust-badges-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px dashed #e5e7eb;
+}
+
+.trust-badge-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #6b7280;
+    font-size: 11px;
+}
+
+.trust-badge-item i {
+    font-size: 20px;
+    margin-bottom: 4px;
+    color: #4b5563;
+}
+
+/* ==========================================================================
+   7. URGENCY TAG (Escassez)
+   ========================================================================== */
+.urgency-tag {
+    display: inline-flex;
+    align-items: center;
+    background-color: #fee2e2;
+    color: #b91c1c;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+
+.urgency-tag i {
+    margin-right: 6px;
+    font-size: 16px;
+    animation: flame 1.5s infinite alternate;
+}
+
+@keyframes flame {
+    0% { transform: scale(1); color: #ef4444; }
+    100% { transform: scale(1.1); color: #f97316; }
+}
+
+/* ==========================================================================
+   8. FREE SHIPPING PROGRESS BAR
+   ========================================================================== */
+.free-shipping-container {
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 24px;
+    border: 1px solid #e2e8f0;
+}
+
+.free-shipping-text {
+    font-size: 14px;
+    color: #334155;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.free-shipping-text strong {
+    color: #10b981;
+}
+
+.free-shipping-progress-wrapper {
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.free-shipping-progress-bar {
+    height: 100%;
+    background: #f59e0b; /* Laranja por padrao, muda pra verde no JS */
+    width: 0%;
+    border-radius: 4px;
+    transition: width 0.5s ease, background-color 0.5s ease;
+}
+
+.free-shipping-progress-bar.bg-success {
+    background: #10b981 !important;
+}
+
+/* ==========================================================================
+   9. MINI-CART (SIDE DRAWER)
+   ========================================================================== */
+.mini-cart-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+    z-index: 99999;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+.mini-cart-overlay.open {
+    opacity: 1;
+    visibility: visible;
+}
+.mini-cart-drawer {
+    position: fixed;
+    top: 0; right: -400px;
+    width: 100%; max-width: 400px;
+    height: 100vh;
+    background: #fff;
+    z-index: 100000;
+    box-shadow: -5px 0 25px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    transition: right 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+}
+.mini-cart-drawer.open {
+    right: 0;
+}
+.mini-cart-header {
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.mini-cart-header h3 { margin: 0; font-size: 18px; }
+#mini-cart-close {
+    background: none; border: none; font-size: 28px; cursor: pointer; color: #999;
+}
+#mini-cart-close:hover { color: #333; }
+.mini-cart-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+.mini-cart-footer {
+    padding: 20px;
+    border-top: 1px solid #eee;
+    background: #fafafa;
+}
+.mini-cart-subtotal {
+    display: flex;
+    justify-content: space-between;
+    font-size: 16px;
+    margin-bottom: 15px;
+}
+
+/* ==========================================================================
+   10. STICKY HEADER & GLASSMORPHISM
+   ========================================================================== */
+.sv-navbar {
+    position: sticky;
+    top: 0;
+    z-index: 9000;
+    background: rgba(25, 118, 210, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    transition: background 0.3s ease, padding 0.3s ease;
+}
+
+/* ==========================================================================
+   11. PAGE FADE-IN TRANSITION
+   ========================================================================== */
+body {
+    opacity: 0;
+    transition: opacity 0.4s ease-in-out;
+}
+body.page-loaded {
+    opacity: 1;
+}
+
+/* ==========================================================================
+   12. ENHANCED PRODUCT CARDS
+   ========================================================================== */
+.product-card {
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+}
+.product-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+}
+.product-image img {
+    transition: transform 0.5s ease;
+}
+.product-card:hover .product-image img {
+    transform: scale(1.05);
+}
+
+/* ==========================================================================
+   13. FAQ & TESTIMONIALS HOME IMPROVEMENTS
+   ========================================================================== */
+details.faq-item summary {
+    outline: none;
+    user-select: none;
+}
+details.faq-item[open] .faq-icon {
+    transform: rotate(45deg);
+    color: #ff5722 !important;
+}
+.faq-icon {
+    transition: transform 0.3s ease, color 0.3s ease;
+    display: inline-block;
+}
+.testimonial-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.testimonial-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.08) !important;
+}
+
+/* ==========================================================================
+   14. MICRO-INTERACTION BUTTON & BADGE PULSE
+   ========================================================================== */
+.btn-success-added {
+    background: #10b981 !important;
+    border-color: #10b981 !important;
+    color: white !important;
+    transform: scale(0.95);
+    transition: all 0.2s ease;
+}
+@keyframes pulse-badge {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.4); background-color: #ef4444; }
+    100% { transform: scale(1); }
+}
+.badge-pulse {
+    animation: pulse-badge 0.4s ease-out;
+}

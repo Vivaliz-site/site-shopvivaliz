@@ -1,0 +1,312 @@
+#!/bin/bash
+# Deploy Production — Releases Imutáveis
+# Uso: Cron a cada 2 minutos
+# Sem intervalo de sleep: falha rápido se lock está ocupado
+
+set -Eeuo pipefail
+
+readonly REPO_DIR="/home/ubuntu/shopvivaliz-deploy/repo"
+readonly RELEASES_DIR="/home/ubuntu/shopvivaliz-deploy/releases"
+readonly SHARED_DIR="/home/ubuntu/shopvivaliz-deploy/shared"
+readonly CURRENT_LINK="/home/ubuntu/shopvivaliz-deploy/current"
+readonly TARGET_FILE="/home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref"
+readonly LOCK_FILE="/var/lock/shopvivaliz-deploy.lock"
+readonly LOG_FILE="/home/ubuntu/shopvivaliz-deploy/logs/deploy.log"
+readonly RETENTION_COUNT=5
+
+# Logging
+log() {
+  local level="$1"
+  shift
+  local msg="$*"
+  printf '[%s] [%s] %s\n' "$(date -u +'%Y-%m-%d %H:%M:%S UTC')" "$level" "$msg" >> "$LOG_FILE"
+}
+
+# Cleanup on exit
+cleanup() {
+  local exit_code=$?
+  if [ $exit_code -eq 0 ]; then
+    log "INFO" "Deploy completado com sucesso"
+  else
+    log "ERROR" "Deploy falhou com código $exit_code"
+  fi
+}
+trap cleanup EXIT
+
+# Pre-checks
+if [ ! -d "$REPO_DIR/.git" ]; then
+  log "FATAL" "Clone Git não existe: $REPO_DIR"
+  exit 1
+fi
+
+if [ ! -d "$RELEASES_DIR" ]; then
+  mkdir -p "$RELEASES_DIR"
+fi
+
+if [ ! -d "$SHARED_DIR" ]; then
+  mkdir -p "$SHARED_DIR"
+fi
+
+log "INFO" "=== Deploy iniciado ==="
+
+# Target ref or SHA. If cron does not pass an explicit ref, allow a shared
+# runtime file to pin production to a specific branch or commit until changed.
+TARGET_REF="${1:-}"
+if [ -z "$TARGET_REF" ] && [ -f "$TARGET_FILE" ]; then
+  TARGET_REF="$(tr -d '\r' < "$TARGET_FILE" | head -n 1 | xargs)"
+fi
+if [ -z "$TARGET_REF" ]; then
+  TARGET_REF="origin/main"
+fi
+FETCH_SOURCE="$TARGET_REF"
+if [[ "$TARGET_REF" == "origin/main" || "$TARGET_REF" == "main" ]]; then
+  FETCH_SOURCE="main"
+fi
+log "INFO" "Target ref solicitado: $TARGET_REF"
+
+# Fetch
+log "INFO" "Fazendo fetch de origin para $FETCH_SOURCE..."
+if ! git -C "$REPO_DIR" fetch --prune --no-tags origin "$FETCH_SOURCE"; then
+  log "ERROR" "git fetch falhou para $FETCH_SOURCE"
+  exit 1
+fi
+
+# Bootstrap the deploy runner itself from the fetched immutable Git object.
+# Without this, fixes merged into main only affect the release contents while
+# cron continues executing an outdated script from the deploy clone.
+RUNNER_PATH="$REPO_DIR/scripts/deploy-production.sh"
+RUNNER_TMP="$(mktemp "$REPO_DIR/scripts/.deploy-production.XXXXXX")"
+if ! git -C "$REPO_DIR" show FETCH_HEAD:scripts/deploy-production.sh > "$RUNNER_TMP"; then
+  rm -f -- "$RUNNER_TMP"
+  log "ERROR" "Não foi possível extrair o runner de FETCH_HEAD"
+  exit 1
+fi
+chmod 0755 "$RUNNER_TMP"
+if ! cmp -s "$RUNNER_TMP" "$RUNNER_PATH"; then
+  log "INFO" "Atualizando runner de deploy a partir de FETCH_HEAD..."
+  mv -f -- "$RUNNER_TMP" "$RUNNER_PATH"
+  exec "$RUNNER_PATH" "$TARGET_REF"
+fi
+rm -f -- "$RUNNER_TMP"
+
+# Get SHAs
+REMOTE_SHA=$(git -C "$REPO_DIR" rev-parse FETCH_HEAD)
+log "INFO" "Target SHA: $REMOTE_SHA"
+
+# Get active SHA
+if [ -L "$CURRENT_LINK" ] && [ -e "$CURRENT_LINK" ]; then
+  ACTIVE_RELEASE=$(basename "$(readlink -f "$CURRENT_LINK")")
+  ACTIVE_SHA=$(echo "$ACTIVE_RELEASE" | cut -d- -f3-)
+  log "INFO" "Active release: $ACTIVE_RELEASE (SHA: $ACTIVE_SHA)"
+else
+  ACTIVE_SHA=""
+  log "WARN" "No active release found"
+fi
+
+# Idempotent check
+if [ "${REMOTE_SHA:0:8}" = "$ACTIVE_SHA" ]; then
+  log "INFO" "Já está alinhado (SHA idêntico). Nada a fazer."
+  exit 0
+fi
+
+# Create new release
+RELEASE_TIME=$(date +%Y%m%d-%H%M%S)
+NEW_RELEASE="${RELEASE_TIME}-${REMOTE_SHA:0:8}"
+NEW_RELEASE_PATH="$RELEASES_DIR/$NEW_RELEASE"
+
+log "INFO" "Criando nova release: $NEW_RELEASE"
+
+if [ -d "$NEW_RELEASE_PATH" ]; then
+  log "WARN" "Release já existe (concorrência?). Usando existente."
+else
+  mkdir -p "$NEW_RELEASE_PATH"
+
+  # Archive from git
+  if ! (cd "$REPO_DIR" && git archive "$REMOTE_SHA") | tar -xf - -C "$NEW_RELEASE_PATH"; then
+    log "ERROR" "git archive falhou"
+    rm -rf "$NEW_RELEASE_PATH"
+    exit 1
+  fi
+
+  log "INFO" "Archive extraído para $NEW_RELEASE_PATH"
+fi
+
+# Grava o SHA completo implantado num arquivo marcador dentro do release.
+# Consumido por /api/health/version.php para reportar corretamente qual
+# commit está no ar (sem isso, o endpoint sempre retorna release_sha=null
+# porque nenhum dos outros metodos de deteccao — env var, nome do diretorio
+# de release, .git/HEAD — se aplica a este layout de deploy por releases).
+echo "$REMOTE_SHA" > "$NEW_RELEASE_PATH/.release-sha"
+
+# Create symlinks to shared
+log "INFO" "Criando symlinks para shared..."
+
+declare -a SYMLINKS=(
+  ".env"
+  "logs"
+  "cache"
+  "sessions"
+  "storage"
+  "tasks-queue.json"
+)
+# Nota (2026-07-26, achado em auditoria): "uploads" foi removido desta lista
+# de proposito. O codigo da app define UPLOADS_PATH = STORAGE_PATH . '/uploads'
+# (ver config/constants.php), ou seja, uploads mora DENTRO de storage/, nao
+# como pasta irma. Ter os dois symlinks ("uploads" e "storage") criava um
+# uploads/ vazio/errado no nivel current/ que a app nunca lia, enquanto
+# current/storage/uploads/ (o caminho real usado) ficava sem existir em
+# shared/ - causando uploads_writable=false em /health.php em producao.
+# Os dados ja foram migrados manualmente para shared/storage/uploads/.
+
+for symlink in "${SYMLINKS[@]}"; do
+  target_path="$NEW_RELEASE_PATH/$symlink"
+  shared_path="$SHARED_DIR/$symlink"
+
+  if [ "$symlink" = ".env" ]; then
+    if [ ! -f "$shared_path" ]; then
+      log "ERROR" "Configuração compartilhada ausente: $shared_path"
+      rm -rf -- "$NEW_RELEASE_PATH"
+      exit 1
+    fi
+  elif [ "$symlink" = "tasks-queue.json" ]; then
+    if [ ! -f "$shared_path" ]; then
+      printf '{\n  "version": "1.1",\n  "queue": []\n}\n' > "$shared_path"
+    fi
+  else
+    mkdir -p "$shared_path"
+  fi
+
+  # The archive contains runtime placeholders. They must be removed entirely,
+  # otherwise ln creates a nested link and the release starts writing locally.
+  if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+    rm -rf -- "$target_path"
+  fi
+
+  # Create symlink
+  ln -sf "../../shared/$symlink" "$target_path"
+  if [ ! -L "$target_path" ] || [ "$(readlink -f "$target_path")" != "$shared_path" ]; then
+    log "ERROR" "Symlink inválido: $symlink"
+    rm -rf -- "$NEW_RELEASE_PATH"
+    exit 1
+  fi
+  log "INFO" "Symlink criado: $symlink"
+done
+
+# Apply idempotent data migrations before making the release visible.
+if [ -f "$NEW_RELEASE_PATH/scripts/migrate-blog-articles.php" ]; then
+  log "INFO" "Aplicando migração editorial idempotente..."
+  if ! php "$NEW_RELEASE_PATH/scripts/migrate-blog-articles.php" >> "$LOG_FILE" 2>&1; then
+    log "ERROR" "Migração editorial falhou"
+    rm -rf -- "$NEW_RELEASE_PATH"
+    exit 1
+  fi
+fi
+
+# Validate PHP
+if [ -f "$NEW_RELEASE_PATH/index.php" ]; then
+  log "INFO" "Validando sintaxe PHP..."
+  if ! php -l "$NEW_RELEASE_PATH/index.php" > /dev/null; then
+    log "ERROR" "PHP syntax check falhou"
+    rm -rf "$NEW_RELEASE_PATH"
+    exit 1
+  fi
+  log "INFO" "✓ PHP válido"
+else
+  log "WARN" "index.php não encontrado (pode estar em subdirectório)"
+fi
+
+# Validate permissions
+log "INFO" "Validando permissões..."
+if [ ! -r "$NEW_RELEASE_PATH" ]; then
+  log "ERROR" "Release não é legível"
+  rm -rf "$NEW_RELEASE_PATH"
+  exit 1
+fi
+log "INFO" "✓ Permissões OK"
+
+# Health check local (pré-swap)
+log "INFO" "Executando health check local..."
+# Se há dependências (composer, npm), instalar aqui
+# Por enquanto, apenas básico
+if ! curl -s -f http://127.0.0.1/api/health > /dev/null 2>&1; then
+  log "WARN" "Health check local inconcluso (endpoint pode não existir ainda)"
+fi
+
+# Atomic swap
+log "INFO" "Trocando symlink de release (atômico)..."
+
+# Use temporary symlink + mv -T para atomicidade
+if ! ln -sfn "releases/$NEW_RELEASE" "$CURRENT_LINK.tmp"; then
+  log "ERROR" "Falha ao criar symlink temporário"
+  exit 1
+fi
+
+if ! mv -Tf "$CURRENT_LINK.tmp" "$CURRENT_LINK"; then
+  log "ERROR" "Falha ao trocar symlink (mv -Tf)"
+  rm -f "$CURRENT_LINK.tmp"
+  exit 1
+fi
+
+log "INFO" "✓ Symlink trocado: $NEW_RELEASE"
+
+# Reload Apache (suave)
+log "INFO" "Recarregando Apache..."
+if ! sudo systemctl reload apache2; then
+  log "ERROR" "systemctl reload falhou"
+  # Tentar rollback
+  if [ -n "$ACTIVE_SHA" ]; then
+    log "WARN" "Tentando restaurar release anterior..."
+    if ln -sfn "releases/$ACTIVE_RELEASE" "$CURRENT_LINK.tmp"; then
+      mv -Tf "$CURRENT_LINK.tmp" "$CURRENT_LINK"
+      sudo systemctl reload apache2 || log "ERROR" "Rollback falhou"
+    fi
+  fi
+  exit 1
+fi
+log "INFO" "✓ Apache recarregado"
+
+# Health check pós-deploy
+log "INFO" "Executando health check pós-deploy..."
+sleep 2  # Dar tempo ao Apache recarregar
+
+if curl -s -f http://127.0.0.1 > /dev/null 2>&1; then
+  log "INFO" "✓ Health check OK"
+else
+  log "ERROR" "Health check falhou. Restaurando release anterior."
+  if [ -n "$ACTIVE_SHA" ]; then
+    if ln -sfn "releases/$ACTIVE_RELEASE" "$CURRENT_LINK.tmp"; then
+      mv -Tf "$CURRENT_LINK.tmp" "$CURRENT_LINK"
+      sudo systemctl reload apache2 || log "ERROR" "Rollback Apache falhou"
+      log "INFO" "✓ Release anterior restaurada"
+    fi
+  fi
+  exit 1
+fi
+
+# Cleanup old releases (keep last RETENTION_COUNT)
+log "INFO" "Limpando releases antigas (manter últimas $RETENTION_COUNT)..."
+RELEASE_COUNT=$(ls -1d "$RELEASES_DIR"/*/ 2>/dev/null | wc -l || echo 0)
+if [ "$RELEASE_COUNT" -gt "$RETENTION_COUNT" ]; then
+  DELETE_COUNT=$((RELEASE_COUNT - RETENTION_COUNT))
+  log "INFO" "Removendo $DELETE_COUNT releases antigas..."
+  ls -1t "$RELEASES_DIR"/ | tail -n "$DELETE_COUNT" | while read -r old_release; do
+    if [ "$old_release" != "$NEW_RELEASE" ] && [ "$old_release" != "$ACTIVE_RELEASE" ]; then
+      log "INFO" "Removendo: $old_release"
+      old_path="$RELEASES_DIR/$old_release"
+      case "$old_path" in
+        "$RELEASES_DIR"/*)
+          if ! sudo rm -rf -- "$old_path"; then
+            log "WARN" "Não foi possível remover release antiga: $old_release"
+          fi
+          ;;
+        *)
+          log "ERROR" "Caminho de limpeza recusado: $old_path"
+          exit 1
+          ;;
+      esac
+    fi
+  done
+fi
+
+log "INFO" "=== Deploy concluído com sucesso ==="
+exit 0

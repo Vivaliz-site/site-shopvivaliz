@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{subject}}</title>
+    <style>
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1e293b; background-color: #f8fafc; margin: 0; padding: 0; }
+        .wrapper { width: 100%; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        .header { background: linear-gradient(135deg, #07345d 0%, #0b4f88 100%); color: #ffffff; padding: 32px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.025em; }
+        .header p { margin: 4px 0 0 0; font-size: 14px; opacity: 0.85; }
+        .content { padding: 32px 24px; }
+        .badge-container { text-align: center; margin-bottom: 24px; }
+        .badge { display: inline-block; padding: 8px 16px; border-radius: 9999px; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #ffffff; }
+        .badge-success { background-color: #10b981; }
+        .badge-info { background-color: #3b82f6; }
+        .badge-warning { background-color: #f59e0b; }
+        .badge-danger { background-color: #ef4444; }
+        .badge-secondary { background-color: #64748b; }
+        h2 { font-size: 20px; font-weight: 700; color: #0f172a; margin-top: 0; margin-bottom: 16px; }
+        p { margin-top: 0; margin-bottom: 16px; color: #334155; }
+        .order-summary { width: 100%; border-collapse: collapse; margin: 24px 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+        .order-summary th { background-color: #f1f5f9; padding: 12px; text-align: left; font-size: 13px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0; }
+        .order-summary td { padding: 12px; font-size: 14px; color: #334155; border-bottom: 1px solid #f1f5f9; }
+        .order-summary tr:last-child td { border-bottom: none; }
+        .total-row { font-weight: bold; background-color: #f8fafc; }
+        .info-box { background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin: 24px 0; font-size: 14px; color: #166534; }
+        .info-box-title { font-weight: bold; margin-bottom: 6px; }
+        .btn { display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #0b4f88 0%, #35c759 100%); color: #ffffff !important; text-decoration: none; font-weight: 700; border-radius: 8px; text-align: center; box-shadow: 0 4px 6px rgba(11,79,136,0.15); margin: 16px 0; }
+        .footer { background-color: #0f172a; color: #94a3b8; padding: 24px; text-align: center; font-size: 12px; }
+        .footer a { color: #38bdf8; text-decoration: none; }
+        .footer p { margin: 8px 0; color: #94a3b8; }
+        @media (max-width: 600px) {
+            .wrapper { border-radius: 0; border: none; }
+            .content { padding: 24px 16px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <div class="header">
+            <h1>ShopVivaliz</h1>
+            <p>Sua compra com total segurança</p>
+        </div>
+        <div class="content">
+            <div class="badge-container">
+                <span class="badge badge-info">Recebido</span>
+            </div>
+            <h2>Olá {{customer_name}},</h2>
+<p>Recebemos o seu pedido <strong>#{{order_id}}</strong> com sucesso! 🎉</p>
+<p>Aqui está o resumo dos itens solicitados:</p>
+
+<table class="order-summary">
+    <thead>
+        <tr>
+            <th>Produto</th>
+            <th style="text-align: center;">Qtd</th>
+            <th style="text-align: right;">Preço</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{items_rows}}
+        <tr class="total-row">
+            <td colspan="2" style="text-align: right;">Total do Pedido:</td>
+            <td style="text-align: right;">R$ {{total}}</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="info-box">
+    <div class="info-box-title">Forma de Pagamento: {{payment_label}}</div>
+    <p style="margin: 0;">{{payment_instructions}}</p>
+</div>
+
+<p style="text-align: center;">
+    <a href="https://shopvivaliz.com.br/meus-pedidos" class="btn">Acompanhar meu Pedido</a>
+</p>
+        </div>
+        <div class="footer">
+            <p><strong>Precisa de suporte?</strong></p>
+            <p>📞 WhatsApp: <a href="https://wa.me/{{whatsapp_raw}}">{{whatsapp_formatted}}</a></p>
+            <p>📧 E-mail: <a href="mailto:{{support_email}}">{{support_email}}</a></p>
+            <p>© {{current_year}} ShopVivaliz. Todos os direitos reservados.</p>
+            <p style="font-size: 10px; color: #64748b; margin-top: 16px;">Este é um e-mail transacional automático. Por favor, não responda a este e-mail.</p>
+        </div>
+    </div>
+</body>
+</html>

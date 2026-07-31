@@ -1,0 +1,133 @@
+node_modules/
+vendor/
+.env
+.env.*
+!.env.example
+.tokens/
+*.log
+logs/
+cache/
+tmp/
+.DS_Store
+Thumbs.db
+*.sql
+*.sql.gz
+*.zip
+*.tar
+*.tar.gz
+backup/
+backups/
+claude-backup/
+__pycache__/
+scripts/.ftp-credentials
+scripts/autonomous-cycle-log.json
+.vercel/
+.env.local
+.env.*.local
+
+claude-bkp/api/shopee-integration/scripts/test_final.py
+claude-bkp/api/shopee-integration/scripts/test_shopee_api.py
+claude-bkp/api/tiktok-integration/scripts/test_tiktok_api.py
+claude-bkp/medusa/apps/storefront/next-env.d.ts
+claude-bkp/medusa/apps/storefront/tsconfig.tsbuildinfo
+.secrets/
+.aider*
+
+# Segurança: Nunca committar secrets gerados em deploy
+config/runtime-secrets.php
+config/runtime-secrets*.php
+.env.production
+.env.production.local
+
+# Playwright runtime artifacts belong in CI artifacts, never in source control.
+test-results/
+playwright-report/
+storage/order-rate-limit/
+storage/order-idempotency/
+storage/private/
+storage/tiny/
+
+# Backups pontuais deixados por agentes em produção -- nunca devem ser
+# versionados nem travar o auto-sync seguro da VM.
+*.backup-*
+
+# ⚠️ CRÍTICO: Dados operacionais - NUNCA versionados (risco de perda em git reset)
+storage/orders/
+storage/commerce_signals.json
+storage/codex-bridge/state.json
+storage/orchestrator/queue.json
+storage/products-cache-ativos.json
+!storage/autonomous_cycle.json
+.agent-heartbeats/
+.git-sync.lock
+.git-auto-sync.log
+artifacts/
+scratch/compress_favicon.py
+scratch/embed_favicon_base64.py
+scratch/update_favicons_html.py
+ai-system/config/orchestrator.json
+ai-system/memory/*.db
+ai-system/memory/*_status.json
+!ai-system/requirements.txt
+!ai-system/orchestrator/runtime.py
+!ai-system/orchestrator/
+!ai-system/memory/.gitkeep
+
+# ============================================================================
+# ARQUITETURA DE RELEASES IMUTÁVEIS (2026-07-25)
+# ============================================================================
+# Pós-migração, /shopvivaliz-deploy/ é um clone local na VM.
+# Seus arquivos nunca devem entrar no Git:
+
+# Deploy infrastructure (local à VM)
+shopvivaliz-deploy/
+/home/ubuntu/shopvivaliz-deploy/
+
+# Builds locais e temporários
+dist/
+build/
+out/
+
+# Lock files temporários
+*.lock.tmp
+.deploy.lock
+
+# Logs de deploy (locais)
+deploy-*.log
+
+# Histórico de arquivo temp para rollback
+.rollback-history/
+
+# ============================================================================
+# CREDENTIALS E SECRETOS (Absolutamente Proibido)
+# ============================================================================
+.env.*.production
+.env.*.secret
+config/*secret*
+config/*credential*
+credentials/
+.credentials/
+secrets/
+.secrets/
+
+# ============================================================================
+# ARQUIVOS GERADOS (Nunca comitter)
+# ============================================================================
+# Estes são gerados/modificados em runtime via symlinks em /shared/
+
+# Gerados por app
+api/catalog/fallback-products.json
+storage/products-cache-ativos.json
+
+# Podem aparecer se não estão bem symlinked
+sync-cache-to-admin.php.bak
+sync-cache-to-admin.php
+*.tmp.php
+
+# ============================================================================
+# TESTES E VALIDAÇÃO (Temporários de sessão)
+# ============================================================================
+validacao-*.js
+diagnostico-*.js
+screenshots-validacao/
+test-*.log
