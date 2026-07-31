@@ -112,23 +112,8 @@ foreach ($blogRepository->published('', '', 500) as $article) {
     );
 }
 
-$categories = [];
-foreach ($products as $product) {
-    if (!is_array($product)) continue;
-    $category = trim((string)($product['category'] ?? ''));
-    if ($category !== '') $categories[$category] = true;
-}
-ksort($categories, SORT_NATURAL | SORT_FLAG_CASE);
-
-foreach (array_keys($categories) as $category) {
-    sitemap_emit(
-        $base . '/catalogo?categoria=' . rawurlencode($category),
-        $today,
-        'weekly',
-        '0.7'
-    );
-}
-
+// Facetas com query string ficam fora do sitemap. Elas permanecem navegáveis,
+// mas o sitemap canônico contém apenas páginas estáveis, artigos e produtos.
 foreach ($products as $product) {
     if (!is_array($product)) continue;
     $slug = trim((string)($product['slug'] ?? ''));

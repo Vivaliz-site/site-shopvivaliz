@@ -10,8 +10,35 @@ $state = $company['state'] ?? 'MG';
 $social = is_array($company['social_media'] ?? null) ? $company['social_media'] : [];
 $whatsapp = preg_replace('/\D+/', '', (string)($social['whatsapp'] ?? $phone));
 $whatsappLink = $whatsapp !== '' ? 'https://wa.me/' . $whatsapp . '?text=' . rawurlencode('Olá! Vim pelo site da ShopVivaliz e gostaria de atendimento.') : '';
+$pageTitle = 'Contato e atendimento | ShopVivaliz';
+$pageDescription = 'Fale com a ShopVivaliz sobre produtos, pedidos, pagamento, entrega, troca, devolução e pós-venda.';
+$pageUrl = 'https://shopvivaliz.com.br/contato/';
+$socialImage = 'https://shopvivaliz.com.br/images/logo-vivaliz.png';
 ?>
-<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="description" content="Canais de atendimento da ShopVivaliz para dúvidas sobre produtos, pedidos, entrega, troca e pós-venda."><title>Contato | ShopVivaliz</title><link rel="stylesheet" href="/css/responsive.css"><link rel="stylesheet" href="/css/footer-pages.css?v=20260728-1"></head><body>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="<?= htmlspecialchars($pageDescription, ENT_QUOTES, 'UTF-8') ?>">
+<title><?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?></title>
+<link rel="canonical" href="<?= htmlspecialchars($pageUrl, ENT_QUOTES, 'UTF-8') ?>">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ShopVivaliz">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:title" content="<?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?>">
+<meta property="og:description" content="<?= htmlspecialchars($pageDescription, ENT_QUOTES, 'UTF-8') ?>">
+<meta property="og:url" content="<?= htmlspecialchars($pageUrl, ENT_QUOTES, 'UTF-8') ?>">
+<meta property="og:image" content="<?= htmlspecialchars($socialImage, ENT_QUOTES, 'UTF-8') ?>">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="<?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?>">
+<meta name="twitter:description" content="<?= htmlspecialchars($pageDescription, ENT_QUOTES, 'UTF-8') ?>">
+<meta name="twitter:image" content="<?= htmlspecialchars($socialImage, ENT_QUOTES, 'UTF-8') ?>">
+<link rel="stylesheet" href="/css/responsive.css">
+<link rel="stylesheet" href="/css/footer-pages.css?v=20260728-1">
+<?php include dirname(__DIR__) . '/includes/head-analytics.php'; ?>
+</head>
+<body>
 <?php $svNavCurrent = 'contato'; include __DIR__ . '/../includes/navbar.php'; ?>
 <main class="brand-page"><section class="brand-hero"><div class="container"><div class="brand-hero-card"><span class="brand-eyebrow">Atendimento</span><h1>Como podemos ajudar?</h1><p>Fale com a equipe sobre produtos, pedidos, pagamento, entrega, troca ou devolução.</p></div></div></section>
 <div class="container"><section class="brand-section"><div class="brand-grid">
