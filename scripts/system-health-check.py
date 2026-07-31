@@ -22,11 +22,20 @@ ACTIVE_REQUIRED = (
 
 DEPRECATED_EXECUTORS: tuple[tuple[Path, Path | None], ...] = (
     (ROOT / "scripts/real-task-executor.py", None),
-    (ROOT / "scripts/continuous-executor.py", None),
+    (
+        ROOT / "scripts/continuous-executor.py",
+        ROOT / "scripts/ai/continuous_executor.py",
+    ),
     (ROOT / "scripts/force-execution.py", None),
     (ROOT / "scripts/task-queue-processor.py", None),
-    (ROOT / "scripts/autonomous-executor.py", None),
-    (ROOT / "scripts/parallel-executor.py", None),
+    (
+        ROOT / "scripts/autonomous-executor.py",
+        ROOT / "scripts/ai/autonomous_executor.py",
+    ),
+    (
+        ROOT / "scripts/parallel-executor.py",
+        ROOT / "scripts/ai/parallel_executor.py",
+    ),
     (
         ROOT / "scripts/olist-sync-master.py",
         ROOT / "scripts/marketplace/olist/sync_master.py",
