@@ -14,22 +14,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [ -x "$CURRENT_ROOT/scripts/auto-sync-oracle.sh" ]; then
+if [ -r "$CURRENT_ROOT/scripts/auto-sync-oracle.sh" ]; then
   SYNC_SCRIPT="$CURRENT_ROOT/scripts/auto-sync-oracle.sh"
 else
   SYNC_SCRIPT="$SCRIPT_ROOT/scripts/auto-sync-oracle.sh"
 fi
 
-if [ ! -f "$SYNC_SCRIPT" ]; then
-  echo "Script de sync ausente: $SYNC_SCRIPT" >&2
+if [ ! -r "$SYNC_SCRIPT" ]; then
+  echo "Script de sync ausente ou ilegivel: $SYNC_SCRIPT" >&2
   exit 2
 fi
 
 mkdir -p "$LOG_DIR"
-chmod 0755 \
-  "$SCRIPT_ROOT/git-auto-sync.py" \
-  "$SCRIPT_ROOT/scripts/safe-repo-sync.sh" \
-  "$SCRIPT_ROOT/scripts/auto-sync-oracle.sh"
 
 if ! crontab -l > "$CRON_FILE" 2>/dev/null; then
   : > "$CRON_FILE"
@@ -38,6 +34,7 @@ fi
 python3 - "$CRON_FILE" "$ROOT" "$SHARED_ROOT" "$LOCK_FILE" "$LOG_DIR" "$SYNC_SCRIPT" <<'PY'
 from __future__ import annotations
 
+import shlex
 import sys
 from pathlib import Path
 
@@ -55,13 +52,14 @@ kept = [
 ]
 entry = (
     "*/5 * * * * "
-    f"ROOT={root} SHARED_ROOT={shared_root} "
-    f"/usr/bin/flock -n {lock_file} {sync_script} "
-    f">> {log_dir}/safe-repo-sync-cron.log 2>&1"
+    f"ROOT={shlex.quote(root)} SHARED_ROOT={shlex.quote(shared_root)} "
+    f"/usr/bin/flock -n {shlex.quote(lock_file)} "
+    f"/usr/bin/bash {shlex.quote(sync_script)} "
+    f">> {shlex.quote(log_dir + '/safe-repo-sync-cron.log')} 2>&1"
 )
 kept.append(entry)
 cron_path.write_text("\n".join(kept) + "\n", encoding="utf-8")
 PY
 
 crontab "$CRON_FILE"
-echo "Auto sync Oracle instalado a cada 5 minutos usando a release ativa."
+echo "Auto sync Oracle instalado a cada 5 minutos usando bash e a release ativa."
