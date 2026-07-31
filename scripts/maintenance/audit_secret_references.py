@@ -27,7 +27,9 @@ SKIP_PREFIXES = (
 )
 WORKFLOW_PREFIX = ".github/workflows/"
 SECRET_REFERENCE = re.compile(r"\$\{\{\s*secrets\.([A-Z][A-Z0-9_]*)\s*\}\}")
-ENV_SECRET_NAME = re.compile(r"\b([A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASS|PRIVATE_KEY|API_KEY|ACCESS_KEY)[A-Z0-9_]*)\b")
+EXPANDED_SECRET_NAME = re.compile(
+    r"\$(?:\{)?([A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASS|PRIVATE_KEY|API_KEY|ACCESS_KEY)[A-Z0-9_]*)(?:\})?"
+)
 PLACEHOLDER_WORDS = (
     "seu-valor", "example", "exemplo", "placeholder", "changeme", "aqui",
     "removido", "redacted", "dummy", "fake", "test-token", "<", "[",
@@ -44,6 +46,7 @@ SECRET_COMMAND = re.compile(r"\bgh\s+secret\s+(?:set|list|remove)\b", re.I)
 SHELL_TRACE = re.compile(r"(?m)^\s*set\s+-x\s*$")
 OUTPUT_CALL = re.compile(r"\b(?:echo|printf|print|pprint|console\.log|logger\.(?:debug|info|warning|error))\b", re.I)
 MASKING_WORD = re.compile(r"mask|redact|sanitize|censor", re.I)
+FILE_REDIRECTION = re.compile(r"(?<![>&])>\s*(?:~?/|\.?\.?/|[A-Za-z0-9_.-]+/)[^&|;]*$")
 PATH_REFERENCE = re.compile(r"(?<![A-Za-z0-9_.-])((?:scripts|config|\.ai|agents)/[A-Za-z0-9_./-]+\.(?:py|js|ts|php|sh|bash|ps1))")
 ACTIVE_EVENTS = re.compile(
     r"(?m)^\s{2}(?:push|pull_request|schedule|issues|workflow_run|repository_dispatch|workflow_dispatch|workflow_call):"
@@ -135,17 +138,20 @@ def scan_file(path: Path, active: bool) -> tuple[list[Finding], set[str]]:
             "Shell tracing can expose environment variables and command arguments.", "set -x", active,
         ))
 
-    lines = text.splitlines()
-    for index, line in enumerate(lines, 1):
+    for index, line in enumerate(text.splitlines(), 1):
         if not OUTPUT_CALL.search(line) or MASKING_WORD.search(line):
             continue
-        names = ENV_SECRET_NAME.findall(line)
+        names = EXPANDED_SECRET_NAME.findall(line)
         if not names:
+            continue
+        # Writing a value into a private file is not a log disclosure. Redirections
+        # to stdout/stderr (>&1, >&2) are intentionally not matched here.
+        if FILE_REDIRECTION.search(line):
             continue
         severity = "high" if active else "medium"
         findings.append(Finding(
             severity, "secret_output_risk", rel, index,
-            "A secret-like variable is referenced by an output/logging call.",
+            "An expanded secret-like variable is referenced by an output/logging call.",
             ", ".join(sorted(set(names))), active,
         ))
 
