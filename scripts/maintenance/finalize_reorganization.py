@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+import subprocess
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,6 +44,23 @@ FORBIDDEN_FILES = (
     ".github/workflows/repository-safe-migration-push.yml",
 )
 
+TEXT_SUFFIXES = {
+    ".py", ".php", ".js", ".ts", ".tsx", ".jsx", ".json", ".yml", ".yaml",
+    ".md", ".txt", ".env", ".example", ".ini", ".conf", ".sh", ".sql", ".ps1",
+}
+
+CREDENTIAL_PATTERNS = (
+    re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}"),
+    re.compile(r"github_pat_[A-Za-z0-9_]{40,}"),
+    re.compile(r"sk-(?:proj-)?[A-Za-z0-9_-]{24,}"),
+    re.compile(r"xox[baprs]-[A-Za-z0-9-]{20,}"),
+    re.compile(r"-----BEGIN (?:RSA |OPENSSH |EC |DSA |)PRIVATE KEY-----"),
+    re.compile(
+        r"(?i)\b(?:token|secret|api[_ -]?key|client[_ -]?secret)\b"
+        r"[^\n]{0,32}[:=]\s*[`'\"]?([A-Fa-f0-9]{32,})\b"
+    ),
+)
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -53,6 +72,24 @@ class Finding:
 
 def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8", errors="replace")
+
+
+def tracked_text_files() -> list[Path]:
+    result = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    )
+    files: list[Path] = []
+    for raw in result.stdout.split(b"\0"):
+        if not raw:
+            continue
+        relative = raw.decode("utf-8", errors="replace")
+        path = ROOT / relative
+        if path.is_file() and (path.suffix.lower() in TEXT_SUFFIXES or path.name in {"Dockerfile", "Makefile"}):
+            files.append(path)
+    return files
 
 
 def evaluate() -> tuple[list[Finding], dict[str, object]]:
@@ -106,6 +143,17 @@ def evaluate() -> tuple[list[Finding], dict[str, object]]:
         if not manual_only:
             findings.append(Finding("critical", "shopee_automatic_trigger", shopee.relative_to(ROOT).as_posix(), "Shopee production workflow must be manual-only."))
 
+    scanned = 0
+    for path in tracked_text_files():
+        scanned += 1
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for pattern in CREDENTIAL_PATTERNS:
+            if pattern.search(text):
+                relative = path.relative_to(ROOT).as_posix()
+                findings.append(Finding("critical", "credential_like_value", relative, "Tracked text contains a credential-like value; revoke it and use protected secrets."))
+                break
+    checks["credential_scan_file_count"] = scanned
+
     root_legacy_docs = sorted(
         path.name for path in ROOT.iterdir()
         if path.is_file() and path.suffix.lower() in {".md", ".txt"}
@@ -125,7 +173,7 @@ def write_report(findings: list[Finding], checks: dict[str, object]) -> None:
         "blocking_finding_count": len(findings),
         "checks": checks,
         "findings": [asdict(item) for item in findings],
-        "scope_note": "Legacy root documents are reported as non-runtime historical inventory; critical automation and canonical paths are blocking.",
+        "scope_note": "Legacy root documents are reported as non-runtime historical inventory; critical automation, credentials and canonical paths are blocking.",
     }
     (REPORT_DIR / "report.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     lines = [
@@ -133,6 +181,7 @@ def write_report(findings: list[Finding], checks: dict[str, object]) -> None:
         "",
         f"- Status: **{payload['status']}**",
         f"- Blocking findings: **{len(findings)}**",
+        f"- Tracked text files scanned for credentials: **{checks['credential_scan_file_count']}**",
         f"- Legacy root documents inventoried: **{checks['legacy_root_document_count']}**",
         "",
     ]
