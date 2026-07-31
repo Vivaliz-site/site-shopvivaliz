@@ -68,7 +68,11 @@ jobs:
             scripts/maintenance/audit_active_workflows.py \
             scripts/all-documented-agents.py \
             scripts/heartbeat-executor.py \
-            scripts/system-health-check.py
+            scripts/system-health-check.py \
+            scripts/olist-sync-master.py \
+            scripts/olist-oauth-login.py \
+            scripts/marketplace/olist/sync_master.py \
+            scripts/marketplace/olist/oauth_login.py
 
       - name: Run governance unit tests
         run: |
@@ -76,6 +80,7 @@ jobs:
             tests.unit.test_audit_automation_changes \
             tests.unit.test_audit_active_workflows \
             tests.unit.test_agent_evidence_state \
+            tests.unit.test_olist_entrypoints_safe \
             -v
 
       - name: Validate canonical queue and agent health
@@ -111,5 +116,6 @@ jobs:
             artifacts/repository-governance/
             artifacts/workflow-policy/
             artifacts/system-health/
+            artifacts/disabled-executors/
           if-no-files-found: error
           retention-days: 90

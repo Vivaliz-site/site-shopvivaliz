@@ -20,27 +20,48 @@ ACTIVE_REQUIRED = (
     ROOT / "scripts/maintenance/audit_active_workflows.py",
 )
 
-DEPRECATED_EXECUTORS = (
-    ROOT / "scripts/real-task-executor.py",
-    ROOT / "scripts/continuous-executor.py",
-    ROOT / "scripts/force-execution.py",
-    ROOT / "scripts/task-queue-processor.py",
-    ROOT / "scripts/autonomous-executor.py",
-    ROOT / "scripts/parallel-executor.py",
-    ROOT / "scripts/olist-sync-master.py",
-    ROOT / "scripts/git-auto-sync-master.py",
-    ROOT / "scripts/automation/pipeline_orchestrator.py",
+DEPRECATED_EXECUTORS: tuple[tuple[Path, Path | None], ...] = (
+    (ROOT / "scripts/real-task-executor.py", None),
+    (ROOT / "scripts/continuous-executor.py", None),
+    (ROOT / "scripts/force-execution.py", None),
+    (ROOT / "scripts/task-queue-processor.py", None),
+    (ROOT / "scripts/autonomous-executor.py", None),
+    (ROOT / "scripts/parallel-executor.py", None),
+    (
+        ROOT / "scripts/olist-sync-master.py",
+        ROOT / "scripts/marketplace/olist/sync_master.py",
+    ),
+    (ROOT / "scripts/git-auto-sync-master.py", None),
+    (ROOT / "scripts/automation/pipeline_orchestrator.py", None),
 )
 
 DISABLED_MARKERS = ("intentionally disabled", "is disabled", "fail-closed", "retired")
+WRAPPER_MARKERS = ("runpy.run_path", "compatibility wrapper")
+
+
+def read_lower(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace").lower()
+    except OSError:
+        return ""
 
 
 def contains_any(path: Path, markers: tuple[str, ...]) -> bool:
-    try:
-        text = path.read_text(encoding="utf-8", errors="replace").lower()
-    except OSError:
+    text = read_lower(path)
+    return bool(text) and any(marker.lower() in text for marker in markers)
+
+
+def is_fail_closed_executor(legacy_path: Path, canonical_path: Path | None = None) -> bool:
+    if not legacy_path.is_file():
         return False
-    return any(marker.lower() in text for marker in markers)
+    if contains_any(legacy_path, DISABLED_MARKERS):
+        return True
+    if canonical_path is None or not canonical_path.is_file():
+        return False
+    wrapper_text = read_lower(legacy_path)
+    wrapper_safe = all(marker in wrapper_text for marker in WRAPPER_MARKERS)
+    canonical_safe = contains_any(canonical_path, DISABLED_MARKERS)
+    return wrapper_safe and canonical_safe
 
 
 def task_identifier(task: dict[str, object]) -> str:
@@ -110,10 +131,12 @@ def main() -> int:
         if not exists:
             errors.append(f"Required automation file missing: {relative}")
 
-    for path in DEPRECATED_EXECUTORS:
-        relative = path.relative_to(ROOT).as_posix()
-        disabled = path.is_file() and contains_any(path, DISABLED_MARKERS)
+    for legacy_path, canonical_path in DEPRECATED_EXECUTORS:
+        relative = legacy_path.relative_to(ROOT).as_posix()
+        disabled = is_fail_closed_executor(legacy_path, canonical_path)
         checks[f"deprecated_disabled:{relative}"] = disabled
+        if canonical_path is not None:
+            checks[f"canonical_target:{relative}"] = canonical_path.relative_to(ROOT).as_posix()
         if not disabled:
             errors.append(f"Deprecated executor is not fail-closed: {relative}")
 
