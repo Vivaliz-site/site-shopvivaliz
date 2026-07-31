@@ -127,6 +127,11 @@ jobs:
           url='https://shopvivaliz.com.br/'
           max_attempts=12
           wait_seconds=30
+          # UA de navegador real: o curl padrao (curl/8.x) e um dos sinais que o
+          # Cloudflare usa pra bot-scoring, e essa checagem ja levou 403
+          # transitorio do WAF contra o home real e saudavel (ver AGENTS.md /
+          # incidente 2026-07-30) so por causa do UA generico do runner.
+          ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
           for attempt in $(seq 1 "$max_attempts"); do
             echo "Tentativa ${attempt}/${max_attempts}: validando ${url}"
@@ -137,11 +142,15 @@ jobs:
               --show-error \
               --connect-timeout 10 \
               --max-time 25 \
+              --user-agent "$ua" \
+              --header 'Accept: text/html,application/xhtml+xml' \
               --output /tmp/shopvivaliz-home.html \
               --write-out '%{http_code}' \
               "${url}?qa_commit=${GITHUB_SHA}" || true)
 
-            if [[ "$http_code" != '200' ]]; then
+            if [[ "$http_code" == '403' ]]; then
+              echo "::warning::Home respondeu HTTP 403 (possivel bloqueio transitorio de WAF/Cloudflare, nao necessariamente a home fora do ar); tentando de novo."
+            elif [[ "$http_code" != '200' ]]; then
               echo "::warning::Home respondeu HTTP ${http_code:-sem-resposta}; aguardando deploy/estabilizacao."
             elif ! grep -q 'footer-cols' /tmp/shopvivaliz-home.html; then
               echo "::warning::Footer ainda nao encontrado na versao ao vivo; o deploy pode estar em andamento."
@@ -158,5 +167,5 @@ jobs:
             fi
           done
 
-          echo "::error::A producao nao apresentou a versao esperada apos $((max_attempts * wait_seconds / 60)) minutos. Verifique o deploy e a disponibilidade da home."
+          echo "::error::A producao nao apresentou a versao esperada apos $((max_attempts * wait_seconds / 60)) minutos. Verifique o deploy e a disponibilidade da home (se os avisos acima forem majoritariamente HTTP 403, suspeite de bloqueio de WAF/Cloudflare contra o runner, nao necessariamente a home fora do ar)."
           exit 1

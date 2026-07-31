@@ -112,11 +112,19 @@ jobs:
             'https://shopvivaliz.com.br/api/catalog/stock-health.php'
             'https://shopvivaliz.com.br/api/orders/health.php'
           )
+          # UA de navegador real: curl padrao e sinal comum de bot-scoring do
+          # Cloudflare e ja gerou 403 transitorio aqui contra endpoints
+          # publicos saudaveis (ver AGENTS.md / incidente 2026-07-30).
+          ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+
           for url in "${endpoints[@]}"; do
             status='000'
             for attempt in 1 2 3; do
-              status="$(curl --location --silent --output /dev/null --connect-timeout 5 --max-time 12 --write-out '%{http_code}' "$url" || echo 000)"
+              status="$(curl --location --silent --output /dev/null --connect-timeout 5 --max-time 12 --user-agent "$ua" --write-out '%{http_code}' "$url" || echo 000)"
               [[ "$status" == '200' || "$status" == '302' ]] && break
+              if [[ "$status" == '403' ]]; then
+                echo "::warning::$url respondeu 403 na tentativa $attempt/3 (possivel bloqueio de WAF/Cloudflare)" >&2
+              fi
               sleep $((attempt * 5))
             done
             report+="$url -> $status\n"
