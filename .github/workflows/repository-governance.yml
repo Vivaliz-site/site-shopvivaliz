@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/repository-governance artifacts/workflow-policy
+          mkdir -p artifacts/repository-governance artifacts/workflow-policy artifacts/system-health
           {
             echo "run_id=${GITHUB_RUN_ID}"
             echo "event=${GITHUB_EVENT_NAME}"
@@ -61,18 +61,25 @@ jobs:
           echo "base=$base" >> "$GITHUB_OUTPUT"
           echo "base=$base" >> artifacts/repository-governance/run-context.txt
 
-      - name: Compile governance auditors
+      - name: Compile governance and agent evidence scripts
         run: |
           python -m py_compile \
             scripts/maintenance/audit_automation_changes.py \
-            scripts/maintenance/audit_active_workflows.py
+            scripts/maintenance/audit_active_workflows.py \
+            scripts/all-documented-agents.py \
+            scripts/heartbeat-executor.py \
+            scripts/system-health-check.py
 
       - name: Run governance unit tests
         run: |
           python -m unittest \
             tests.unit.test_audit_automation_changes \
             tests.unit.test_audit_active_workflows \
+            tests.unit.test_agent_evidence_state \
             -v
+
+      - name: Validate canonical queue and agent health
+        run: python scripts/system-health-check.py
 
       - name: Audit changed automation surfaces
         if: always()
@@ -93,6 +100,7 @@ jobs:
           test -s artifacts/repository-governance/report.md
           test -s artifacts/workflow-policy/report.json
           test -s artifacts/workflow-policy/report.md
+          test -s artifacts/system-health/report.json
 
       - name: Upload governance evidence
         if: always()
@@ -102,5 +110,6 @@ jobs:
           path: |
             artifacts/repository-governance/
             artifacts/workflow-policy/
+            artifacts/system-health/
           if-no-files-found: error
           retention-days: 90
