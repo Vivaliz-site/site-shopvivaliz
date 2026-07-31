@@ -6,7 +6,7 @@ if (PHP_SAPI !== 'cli') {
     exit;
 }
 
-$root = dirname(__DIR__);
+$root = rtrim((string)(getenv('SHOPVIVALIZ_ROOT') ?: dirname(__DIR__)), DIRECTORY_SEPARATOR);
 require_once $root . '/config/bootstrap-env.php';
 
 function gc_bool_env(array $names): bool
