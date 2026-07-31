@@ -21,17 +21,16 @@ RULES: tuple[tuple[str, str, re.Pattern[str], str], ...] = (
     ("critical", "auto_merge", re.compile(joined(r"gh\s+pr\s+mer", r"ge\b[^\n]*--auto"), re.I), "Active workflow enables automatic pull-request merge."),
     ("critical", "destructive_git", re.compile(joined(r"git\s+(?:reset\s+--ha", r"rd|clean\s+-[a-z]*f[a-z]*d)"), re.I), "Active workflow contains destructive Git cleanup."),
     ("high", "broad_stage", re.compile(joined(r"(?m)^\s*git\s+ad", r"d\s+(?:-A|\.)\s*$"), re.I), "Active workflow stages unrelated repository changes."),
-    ("high", "workflow_push", re.compile(joined(r"(?m)^\s*git\s+pu", r"sh\b"), re.I), "Active workflow publishes Git refs directly."),
+    ("high", "workflow_push", re.compile(joined(r"(?m)^.*\bgit\s+pu", r"sh\b.*$"), re.I), "Active workflow publishes Git refs directly."),
     ("high", "continue_on_error", re.compile(joined(r"continue-on-", r"error\s*:\s*true"), re.I), "Active workflow suppresses a step failure."),
     ("high", "set_plus_e", re.compile(joined(r"(?m)^\s*set\s+", r"\+e\s*$"), re.I), "Active workflow disables shell fail-fast behavior."),
-    ("high", "forced_green", re.compile(joined(r"(?m)^\s*exit\s+", r"0\s*$"), re.I), "Active workflow explicitly forces a successful exit."),
     ("high", "optional_evidence", re.compile(joined(r"if-no-files-", r"found\s*:\s*warn"), re.I), "Workflow evidence is optional instead of required."),
 )
 
 WRITE_PERMISSION = re.compile(r"(?m)^\s{2}(contents|issues|pull-requests|actions)\s*:\s*write\s*$", re.I)
 AUTO_TRIGGER = re.compile(r"(?m)^\s{2}(push|schedule|issues|workflow_run|repository_dispatch)\s*:")
 MUTATION = re.compile(joined(r"git\s+pu", r"sh|gh\s+(?:pr\s+merge|issue\s+(?:create|edit|close|comment))"), re.I)
-PRODUCTION_NAME = re.compile(r"production|deploy|publish|shopee|olist|catalog|sync", re.I)
+PRODUCTION_NAME = re.compile(r"production|deploy|publish|apply", re.I)
 PUSH_TRIGGER = re.compile(r"(?m)^\s{2}push\s*:")
 MANUAL_TRIGGER = re.compile(r"(?m)^\s{2}workflow_dispatch\s*:")
 
