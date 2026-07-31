@@ -161,7 +161,7 @@ jobs:
                 break
               fi
             else
-              cat /tmp/deployment-api.err >&2 || true
+              cat /tmp/deployment-api.err >&2
             fi
 
             if [[ "$attempt" -lt "$max_attempts" ]]; then
