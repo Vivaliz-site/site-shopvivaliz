@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Audit every active GitHub Actions workflow for unsafe control flow."""
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+WORKFLOWS = ROOT / ".github" / "workflows"
+REPORT_DIR = ROOT / "artifacts" / "workflow-policy"
+
+
+def joined(*parts: str) -> str:
+    return "".join(parts)
+
+
+RULES: tuple[tuple[str, str, re.Pattern[str], str], ...] = (
+    ("critical", "auto_merge", re.compile(joined(r"gh\s+pr\s+mer", r"ge\b[^\n]*--auto"), re.I), "Active workflow enables automatic pull-request merge."),
+    ("critical", "destructive_git", re.compile(joined(r"git\s+(?:reset\s+--ha", r"rd|clean\s+-[a-z]*f[a-z]*d)"), re.I), "Active workflow contains destructive Git cleanup."),
+    ("high", "broad_stage", re.compile(joined(r"(?m)^\s*git\s+ad", r"d\s+(?:-A|\.)\s*$"), re.I), "Active workflow stages unrelated repository changes."),
+    ("high", "workflow_push", re.compile(joined(r"(?m)^\s*git\s+pu", r"sh\b"), re.I), "Active workflow publishes Git refs directly."),
+    ("high", "continue_on_error", re.compile(joined(r"continue-on-", r"error\s*:\s*true"), re.I), "Active workflow suppresses a step failure."),
+    ("high", "set_plus_e", re.compile(joined(r"(?m)^\s*set\s+", r"\+e\s*$"), re.I), "Active workflow disables shell fail-fast behavior."),
+    ("high", "forced_green", re.compile(joined(r"(?m)^\s*exit\s+", r"0\s*$"), re.I), "Active workflow explicitly forces a successful exit."),
+    ("high", "optional_evidence", re.compile(joined(r"if-no-files-", r"found\s*:\s*warn"), re.I), "Workflow evidence is optional instead of required."),
+)
+
+WRITE_PERMISSION = re.compile(r"(?m)^\s{2}(contents|issues|pull-requests|actions)\s*:\s*write\s*$", re.I)
+AUTO_TRIGGER = re.compile(r"(?m)^\s{2}(push|schedule|issues|workflow_run|repository_dispatch)\s*:")
+MUTATION = re.compile(joined(r"git\s+pu", r"sh|gh\s+(?:pr\s+merge|issue\s+(?:create|edit|close|comment))"), re.I)
+PRODUCTION_NAME = re.compile(r"production|deploy|publish|shopee|olist|catalog|sync", re.I)
+PUSH_TRIGGER = re.compile(r"(?m)^\s{2}push\s*:")
+MANUAL_TRIGGER = re.compile(r"(?m)^\s{2}workflow_dispatch\s*:")
+
+
+@dataclass(frozen=True)
+class Finding:
+    severity: str
+    rule: str
+    path: str
+    line: int | None
+    message: str
+    excerpt: str
+
+
+def line_number(text: str, offset: int) -> int:
+    return text.count("\n", 0, offset) + 1
+
+
+def excerpt(value: str) -> str:
+    return " ".join(value.strip().split())[:200]
+
+
+def audit_workflow(path: Path) -> list[Finding]:
+    relative = path.relative_to(ROOT).as_posix()
+    text = path.read_text(encoding="utf-8", errors="replace")
+    findings: list[Finding] = []
+
+    for severity, rule, pattern, message in RULES:
+        for match in pattern.finditer(text):
+            findings.append(Finding(severity, rule, relative, line_number(text, match.start()), message, excerpt(match.group(0))))
+
+    write_permissions = list(WRITE_PERMISSION.finditer(text))
+    automatic = AUTO_TRIGGER.search(text)
+    mutation = MUTATION.search(text)
+    if write_permissions and automatic and mutation:
+        first = write_permissions[0]
+        findings.append(Finding(
+            "critical",
+            "automatic_write_workflow",
+            relative,
+            line_number(text, first.start()),
+            "Automatically triggered workflow combines write permissions and repository mutation.",
+            excerpt(first.group(0)),
+        ))
+
+    if PRODUCTION_NAME.search(path.name) and PUSH_TRIGGER.search(text) and MANUAL_TRIGGER.search(text):
+        match = PUSH_TRIGGER.search(text)
+        findings.append(Finding(
+            "critical",
+            "production_push_trigger",
+            relative,
+            line_number(text, match.start()) if match else None,
+            "Production-like workflow can run from push instead of explicit manual authorization.",
+            "push trigger",
+        ))
+
+    return findings
+
+
+def write_report(files: list[Path], findings: list[Finding]) -> None:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "workflow_count": len(files),
+        "blocking_finding_count": len(findings),
+        "findings": [asdict(item) for item in findings],
+    }
+    (REPORT_DIR / "report.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    lines = [
+        "# Active workflow policy audit",
+        "",
+        f"- Workflows scanned: **{len(files)}**",
+        f"- Blocking findings: **{len(findings)}**",
+        "",
+    ]
+    if findings:
+        lines.extend(["## Findings", ""])
+        for item in findings:
+            location = f"{item.path}:{item.line}" if item.line else item.path
+            lines.append(f"- **{item.severity.upper()} / {item.rule}** `{location}` — {item.message} Evidence: `{item.excerpt}`")
+    else:
+        lines.append("No blocking active-workflow policy violation was detected.")
+    (REPORT_DIR / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def main() -> int:
+    files = sorted((*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")))
+    findings = [finding for path in files for finding in audit_workflow(path)]
+    order = {"critical": 0, "high": 1}
+    findings.sort(key=lambda item: (order.get(item.severity, 9), item.path, item.line or 0, item.rule))
+    write_report(files, findings)
+    print(json.dumps({
+        "workflow_count": len(files),
+        "blocking_finding_count": len(findings),
+        "findings": [asdict(item) for item in findings],
+    }, indent=2, ensure_ascii=False))
+    return 1 if findings else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
