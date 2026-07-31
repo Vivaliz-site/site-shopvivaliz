@@ -39,11 +39,15 @@ class CredentialScannerTests(unittest.TestCase):
     def test_explicit_protected_placeholder_is_ignored(self):
         self.assertTrue(FINALIZER.likely_placeholder("<SECRET_PROTEGIDO>"))
 
-    def test_sensitive_quoted_literal_requires_a_literal_value(self):
+    def test_password_literal_requires_a_literal_value(self):
         value = "".join(("Aa9Bb8", "Cc7Dd6", "Ee5Ff4"))
         literal = f'password="{value}"'
         runtime_lookup = 'password=os.environ.get("PASSWORD")'
-        self.assertIsNotNone(self.pattern("sensitive_quoted_literal").search(literal))
+        self.assertIsNotNone(self.pattern("password_quoted_literal").search(literal))
+        self.assertIsNone(self.pattern("password_quoted_literal").search(runtime_lookup))
+
+    def test_generic_runtime_lookup_is_not_a_literal_secret(self):
+        runtime_lookup = 'access_token=config.get("ACCESS_TOKEN")'
         self.assertIsNone(self.pattern("sensitive_quoted_literal").search(runtime_lookup))
 
     def test_private_key_requires_complete_block(self):
