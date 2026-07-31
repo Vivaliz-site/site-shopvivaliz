@@ -5,8 +5,35 @@ $company = @include(dirname(__DIR__) . '/config/company-profile.php') ?: [];
 $legalName = $company['legal_name'] ?? 'SHOPVIVALIZ LTDA';
 $fantasyName = $company['fantasy_name'] ?? 'ShopVivaliz';
 $cnpj = $company['cnpj'] ?? '49.903.300/0001-70';
+$pageTitle = 'Sobre a ShopVivaliz | Ferragens, ferramentas e utilidades';
+$pageDescription = 'Conheça a ShopVivaliz, loja online de ferragens, rodízios, ferramentas e utilidades para casa, organização e manutenção.';
+$pageUrl = 'https://shopvivaliz.com.br/sobre/';
+$socialImage = 'https://shopvivaliz.com.br/images/logo-vivaliz.png';
 ?>
-<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="description" content="Conheça a ShopVivaliz, loja online de ferragens, rodízios e utilidades para casa."><title>Sobre | <?= htmlspecialchars($fantasyName) ?></title><link rel="stylesheet" href="/css/responsive.css"><link rel="stylesheet" href="/css/footer-pages.css?v=20260728-1"></head><body>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="<?= htmlspecialchars($pageDescription, ENT_QUOTES, 'UTF-8') ?>">
+<title><?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?></title>
+<link rel="canonical" href="<?= htmlspecialchars($pageUrl, ENT_QUOTES, 'UTF-8') ?>">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ShopVivaliz">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:title" content="<?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?>">
+<meta property="og:description" content="<?= htmlspecialchars($pageDescription, ENT_QUOTES, 'UTF-8') ?>">
+<meta property="og:url" content="<?= htmlspecialchars($pageUrl, ENT_QUOTES, 'UTF-8') ?>">
+<meta property="og:image" content="<?= htmlspecialchars($socialImage, ENT_QUOTES, 'UTF-8') ?>">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="<?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?>">
+<meta name="twitter:description" content="<?= htmlspecialchars($pageDescription, ENT_QUOTES, 'UTF-8') ?>">
+<meta name="twitter:image" content="<?= htmlspecialchars($socialImage, ENT_QUOTES, 'UTF-8') ?>">
+<link rel="stylesheet" href="/css/responsive.css">
+<link rel="stylesheet" href="/css/footer-pages.css?v=20260728-1">
+<?php include dirname(__DIR__) . '/includes/head-analytics.php'; ?>
+</head>
+<body>
 <?php $svNavCurrent = 'sobre'; include __DIR__ . '/../includes/navbar.php'; ?>
 <main class="brand-page"><section class="brand-hero"><div class="container"><div class="brand-hero-card"><span class="brand-eyebrow">Sobre nós</span><h1>Soluções práticas para casa, organização e manutenção.</h1><p>A <?= htmlspecialchars($fantasyName) ?> reúne ferragens, rodízios, ferramentas e utilidades em um catálogo online com informações claras e atendimento direto.</p><div class="brand-hero-actions"><a class="brand-btn" href="/catalogo">Ver produtos</a><a class="brand-btn-secondary" href="/contato">Falar com a equipe</a></div></div></div></section>
 <div class="container"><section class="brand-section"><div class="brand-grid brand-grid-3">
