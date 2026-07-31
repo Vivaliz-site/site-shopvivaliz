@@ -23,23 +23,34 @@ foreach ($allPublished as $publishedArticle) {
 }
 ksort($categories, SORT_NATURAL | SORT_FLAG_CASE);
 $totalArticles = count($allPublished);
+$pageTitle = 'Central de Conhecimento | ShopVivaliz';
+$pageDescription = 'Guias de compra, organização, manutenção e cuidados para escolher melhor produtos para casa, jardim e projetos.';
+$pageUrl = 'https://shopvivaliz.com.br/blog/';
+$socialImage = 'https://shopvivaliz.com.br/images/logo-vivaliz.png';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Guias de compra, organização, manutenção e cuidados para escolher melhor produtos para casa, jardim e projetos.">
-    <title>Central de Conhecimento | ShopVivaliz</title>
-    <link rel="canonical" href="https://shopvivaliz.com.br/blog">
+    <meta name="description" content="<?= sv_blog_escape($pageDescription) ?>">
+    <title><?= sv_blog_escape($pageTitle) ?></title>
+    <link rel="canonical" href="<?= sv_blog_escape($pageUrl) ?>">
     <link rel="alternate" type="application/rss+xml" title="Central de Conhecimento ShopVivaliz" href="https://shopvivaliz.com.br/blog/feed.xml">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Central de Conhecimento | ShopVivaliz">
-    <meta property="og:description" content="Conteúdo prático para ajudar você a escolher, usar e conservar melhor seus produtos.">
-    <meta property="og:url" content="https://shopvivaliz.com.br/blog">
+    <meta property="og:site_name" content="ShopVivaliz">
+    <meta property="og:title" content="<?= sv_blog_escape($pageTitle) ?>">
+    <meta property="og:description" content="<?= sv_blog_escape($pageDescription) ?>">
+    <meta property="og:url" content="<?= sv_blog_escape($pageUrl) ?>">
     <meta property="og:locale" content="pt_BR">
+    <meta property="og:image" content="<?= sv_blog_escape($socialImage) ?>">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="<?= sv_blog_escape($pageTitle) ?>">
+    <meta name="twitter:description" content="<?= sv_blog_escape($pageDescription) ?>">
+    <meta name="twitter:image" content="<?= sv_blog_escape($socialImage) ?>">
     <link rel="stylesheet" href="/css/responsive.css">
     <link rel="stylesheet" href="/public/assets/blog/blog.css">
+    <?php include __DIR__ . '/../includes/head-analytics.php'; ?>
 </head>
 <body>
 <?php $svNavCurrent = 'blog'; include __DIR__ . '/../includes/navbar.php'; ?>
