@@ -25,9 +25,14 @@ DEPRECATED_EXECUTORS = (
     ROOT / "scripts/continuous-executor.py",
     ROOT / "scripts/force-execution.py",
     ROOT / "scripts/task-queue-processor.py",
+    ROOT / "scripts/autonomous-executor.py",
+    ROOT / "scripts/parallel-executor.py",
+    ROOT / "scripts/olist-sync-master.py",
+    ROOT / "scripts/git-auto-sync-master.py",
+    ROOT / "scripts/automation/pipeline_orchestrator.py",
 )
 
-DISABLED_MARKERS = ("intentionally disabled", "is disabled", "fail-closed")
+DISABLED_MARKERS = ("intentionally disabled", "is disabled", "fail-closed", "retired")
 
 
 def contains_any(path: Path, markers: tuple[str, ...]) -> bool:
@@ -139,7 +144,7 @@ def main() -> int:
         "status": status,
         "checks": checks,
         "errors": errors,
-        "note": "Health requires current workflows, fail-closed legacy executors, canonical queue states, and verifiable completion evidence.",
+        "note": "Health requires current workflows, fail-closed retired executors, canonical queue states, and verifiable completion evidence.",
     }
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
