@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 header('Content-Type: application/xml; charset=UTF-8');
 header('Cache-Control: public, max-age=900, stale-while-revalidate=3600');
-header('X-Robots-Tag: noindex, follow');
 
 require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/blog-article-repository.php';
