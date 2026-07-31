@@ -75,6 +75,7 @@ jobs:
             scripts/all-documented-agents.py \
             scripts/heartbeat-executor.py \
             scripts/system-health-check.py \
+            oauth-auto-exec.py \
             scripts/ai/retired_executor.py \
             scripts/ai/autonomous_executor.py \
             scripts/ai/continuous_executor.py \
