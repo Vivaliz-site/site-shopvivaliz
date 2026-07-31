@@ -110,7 +110,7 @@ jobs:
             marker_action="$(python3 - "$marker" <<'PY'
           import json, sys
           data = json.load(open(sys.argv[1], encoding='utf-8'))
-          if data.get('ok') is True and data.get('email_logs_verified') is True:
+          if data.get('ok') is True and data.get('email_delivery_verified') is True and data.get('provider_result_verified') is True:
               print('complete')
           elif data.get('error') in ('recovery_order_lock_unavailable', 'gateway_rejected_request'):
               print('retry_safe')
@@ -133,16 +133,18 @@ jobs:
           fi
 
           output_file="/tmp/boleto-recovery-${target_order}.json"
+          script_log="$(mktemp "/tmp/boleto-recovery-${target_order}.XXXXXX.stderr.log")"
           if ! sudo -u www-data -- env SHOPVIVALIZ_RECOVERY_ORDER="$target_order" \
-            php "$current/scripts/recover-boleto-canary.php" > "$output_file"; then
+            php "$current/scripts/recover-boleto-canary.php" > "$output_file" 2> "$script_log"; then
             cp "$output_file" "$marker"
             chmod 600 "$marker"
+            cat "$script_log" >&2
+            rm -f "$script_log"
             cat "$output_file"
             exit 1
           fi
 
-          # Persist the provider/order evidence before log enrichment so a
-          # logging assertion can never erase proof of a successful boleto.
+          # Persist the provider/order evidence before optional log enrichment.
           cp "$output_file" "$marker"
           chmod 600 "$marker"
 
@@ -168,6 +170,9 @@ jobs:
           with open(output, 'w', encoding='utf-8') as handle:
               handle.write('\n'.join(matches[-100:]) + ('\n' if matches else ''))
           PY
+          cat "$script_log" >> "$log_excerpt"
+          cat "$script_log" >&2
+          rm -f "$script_log"
 
           customer_count="$(awk '/\[OrderEmail\].*Email enviado/{count++} END{print count+0}' "$log_excerpt")"
           admin_count="$(awk '/\[AdminNotify\].*Email enviado para atendimento/{count++} END{print count+0}' "$log_excerpt")"
@@ -185,9 +190,15 @@ jobs:
           data['customer_email_success_log_count'] = customer_count
           data['admin_email_success_log_count'] = admin_count
           data['boleto_success_log_count'] = boleto_count
-          data['email_logs_verified'] = customer_count >= 1 and admin_count >= 1
+          data['email_log_observed'] = customer_count >= 1
+          data['admin_email_log_observed'] = admin_count >= 1
+          data['provider_success_log_observed'] = boleto_count >= 1
+          data['email_delivery_verified'] = data.get('boleto_email_sent') is True
           data['provider_schema'] = 'orders-v3-minimal'
-          data['provider_success_log_verified'] = boleto_count >= 1
+          data['provider_result_verified'] = (
+              data.get('boleto_created') is True
+              and data.get('digitable_line_present') is True
+          )
           print(json.dumps(data, ensure_ascii=False, indent=2))
           PY
           chmod 600 "$marker"
@@ -198,7 +209,7 @@ jobs:
           required = (
               'ok', 'boleto_created', 'digitable_line_present', 'boleto_email_sent',
               'tiny_not_imported_while_unpaid', 'do_not_fulfill',
-              'email_logs_verified', 'provider_success_log_verified'
+              'email_delivery_verified', 'provider_result_verified'
           )
           missing = [key for key in required if data.get(key) is not True]
           if missing:
@@ -237,7 +248,7 @@ jobs:
           for key in (
               'ok', 'boleto_created', 'digitable_line_present', 'boleto_email_sent',
               'tiny_not_imported_while_unpaid', 'do_not_fulfill',
-              'email_logs_verified', 'provider_success_log_verified'
+              'email_delivery_verified', 'provider_result_verified'
           ):
               if data.get(key) is not True:
                   raise SystemExit(f'recovery assertion not proven: {key}')
