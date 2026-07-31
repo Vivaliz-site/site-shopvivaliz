@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -110,6 +111,31 @@ class DocumentedAgentStateTests(unittest.TestCase):
         self.assertEqual(result.status, "completed_verified")
         self.assertEqual(result.scope, "readiness_audit")
         self.assertEqual(result.evidence["commit_sha"], "b" * 40)
+
+
+class RetiredExecutorTests(unittest.TestCase):
+    def test_retired_executors_fail_closed(self):
+        paths = [
+            "scripts/autonomous-executor.py",
+            "scripts/parallel-executor.py",
+            "scripts/olist-sync-master.py",
+            "scripts/git-auto-sync-master.py",
+            "scripts/automation/pipeline_orchestrator.py",
+        ]
+        for relative in paths:
+            with self.subTest(relative=relative):
+                result = subprocess.run(
+                    [sys.executable, str(ROOT / relative)],
+                    cwd=ROOT,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    capture_output=True,
+                    timeout=20,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 2)
+                self.assertIn('"status": "blocked"', result.stderr)
 
 
 if __name__ == "__main__":
