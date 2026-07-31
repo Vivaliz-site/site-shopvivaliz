@@ -86,11 +86,13 @@ grep -q '"ok": true' "$tmpdir/olist_webhook_health.body"
 echo 'OK Olist webhook health payload'
 
 olist_webhook_status="$(curl --silent --show-error --output "$tmpdir/olist_webhook_post.body" --max-time 20 --user-agent "$ua" --write-out '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"event":"health_test","test":true}' "$base/olist/webhook-receiver.php" || true)"
-if [[ ",$olist_webhook_status," != *,400,* && ",$olist_webhook_status," != *,401,* && ",$olist_webhook_status," != *,403,* && ",$olist_webhook_status," != *,405,* ]]; then
-  echo "FAIL Olist webhook perimeter: anonymous POST returned $olist_webhook_status" >&2
+if [[ "$olist_webhook_status" != '200' ]]; then
+  echo "FAIL Olist webhook contract: benign unmonitored event returned $olist_webhook_status" >&2
   exit 1
 fi
-echo "OK Olist webhook rejected unsigned POST ($olist_webhook_status)"
+grep -Eq '"sucesso"[[:space:]]*:[[:space:]]*true' "$tmpdir/olist_webhook_post.body"
+grep -q 'Webhook ignorado' "$tmpdir/olist_webhook_post.body"
+echo "OK Olist webhook ignored benign unmonitored event ($olist_webhook_status)"
 
 redirect_headers="$(curl --silent --show-error --head --max-time 20 --user-agent "$ua" https://www.shopvivaliz.com.br/ | tr -d '\r')"
 redirect_status="$(printf '%s\n' "$redirect_headers" | awk 'NR==1 {print $2}')"
