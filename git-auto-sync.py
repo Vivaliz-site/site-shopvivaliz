@@ -21,7 +21,8 @@ import re
 import subprocess
 from pathlib import Path
 
-REPO_DIR = Path(__file__).resolve().parent
+DEFAULT_REPO_DIR = Path(__file__).resolve().parent
+REPO_DIR = Path(os.getenv("SHOPVIVALIZ_REPO_DIR", str(DEFAULT_REPO_DIR))).resolve()
 DEFAULT_BRANCH = os.getenv("SHOPVIVALIZ_SYNC_BRANCH", "main")
 STATUS_FILE = REPO_DIR / "logs" / "tri-environment-sync.json"
 SANITIZED_HISTORY_MARKER = ".security/sanitized-history.json"
@@ -127,7 +128,6 @@ def realign_clean_checkout(branch: str, local_sha: str, remote_sha: str) -> None
         run(["git", "branch", "--force", branch, remote_sha], check=True)
         run(["git", "switch", branch], check=True)
     except Exception:
-        # Restaura o estado anterior caso a sequencia atomica de realinhamento falhe.
         run(["git", "branch", "--force", branch, local_sha])
         run(["git", "switch", branch])
         raise
