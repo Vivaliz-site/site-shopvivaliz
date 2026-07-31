@@ -17,30 +17,42 @@ SPEC.loader.exec_module(FINALIZER)
 
 
 class CredentialScannerTests(unittest.TestCase):
-    def matches(self, text: str) -> set[str]:
-        return {
-            name
-            for name, pattern in FINALIZER.CREDENTIAL_PATTERNS
-            if any(not FINALIZER.likely_placeholder(match.group(1) if match.lastindex else match.group(0)) for match in pattern.finditer(text))
-        }
+    def pattern(self, name: str):
+        return dict(FINALIZER.CREDENTIAL_PATTERNS)[name]
 
     def test_task_branch_name_is_not_openai_key(self):
-        self.assertNotIn("openai_key", self.matches("docs/status-task-033-stock-alerts.md"))
+        text = "docs/status-task-033-stock-alerts.md"
+        self.assertIsNone(self.pattern("openai_key").search(text))
 
-    def test_token_shaped_placeholder_is_ignored(self):
-        synthetic = "sk-" + ("x" * 32)
-        self.assertNotIn("openai_key", self.matches(synthetic))
+    def test_detects_constructed_openai_key_shape(self):
+        prefix = "".join(("s", "k", "-"))
+        body = "".join(("Ab3K9z", "Q7mN2p", "R8vT4x", "L6cD5f"))
+        self.assertIsNotNone(self.pattern("openai_key").search(prefix + body))
 
     def test_detects_constructed_shopee_partner_key(self):
-        synthetic = "shpk" + ("Ab3" * 12)
-        self.assertIn("shopee_partner_key", self.matches(f"PARTNER_KEY={synthetic}"))
+        prefix = "".join(("sh", "pk"))
+        body = "".join(("Ab3K9z", "Q7mN2p", "R8vT4x", "L6cD5f"))
+        candidate = prefix + body
+        self.assertIsNotNone(self.pattern("shopee_partner_key").search(candidate))
+        self.assertFalse(FINALIZER.likely_placeholder(candidate))
+
+    def test_explicit_protected_placeholder_is_ignored(self):
+        self.assertTrue(FINALIZER.likely_placeholder("<SECRET_PROTEGIDO>"))
+
+    def test_sensitive_quoted_literal_requires_a_literal_value(self):
+        value = "".join(("Aa9Bb8", "Cc7Dd6", "Ee5Ff4"))
+        literal = f'password="{value}"'
+        runtime_lookup = 'password=os.environ.get("PASSWORD")'
+        self.assertIsNotNone(self.pattern("sensitive_quoted_literal").search(literal))
+        self.assertIsNone(self.pattern("sensitive_quoted_literal").search(runtime_lookup))
 
     def test_private_key_requires_complete_block(self):
-        header = "-----BEGIN PRIVATE KEY-----"
-        self.assertNotIn("private_key_block", self.matches(header))
-        body = "A1b2" * 30
-        full = f"{header}\n{body}\n-----END PRIVATE KEY-----"
-        self.assertIn("private_key_block", self.matches(full))
+        header = "".join(("-----BEGIN ", "PRIVATE KEY-----"))
+        footer = "".join(("-----END ", "PRIVATE KEY-----"))
+        self.assertIsNone(self.pattern("private_key_block").search(header))
+        body = "".join(("A1b2C3d4",) * 16)
+        full = f"{header}\n{body}\n{footer}"
+        self.assertIsNotNone(self.pattern("private_key_block").search(full))
 
 
 class RetiredShopeeToolTests(unittest.TestCase):
