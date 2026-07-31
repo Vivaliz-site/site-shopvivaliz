@@ -10,6 +10,51 @@ body {
     overflow-x: hidden;
 }
 
+/* Hero com imagem escura: o texto precisa manter contraste em todos os banners. */
+.hero-carousel .banner-overlay {
+    background: linear-gradient(90deg, rgba(3, 18, 34, .88) 0%, rgba(3, 18, 34, .56) 58%, rgba(3, 18, 34, .18) 100%) !important;
+    color: #fff !important;
+}
+
+.hero-carousel .banner-title {
+    color: #fff !important;
+    text-shadow: 0 3px 12px rgba(0, 0, 0, .72) !important;
+}
+
+.hero-carousel .banner-subtitle {
+    color: #f8fafc !important;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, .62) !important;
+}
+
+.hero-carousel .banner-tag {
+    color: #6ee7b7 !important;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, .52) !important;
+}
+
+/* Em notebooks e janelas menores, os selos não devem dominar a dobra. */
+@media (min-width: 821px) and (max-width: 1150px) {
+    .trust-bar-item {
+        gap: 8px !important;
+        padding: 12px 10px !important;
+    }
+
+    .trust-bar-icon,
+    .trust-bar-icon svg {
+        width: 20px !important;
+        height: 20px !important;
+    }
+
+    .trust-bar-text strong {
+        font-size: 12px !important;
+        line-height: 1.2 !important;
+    }
+
+    .trust-bar-text span {
+        font-size: 11px !important;
+        line-height: 1.25 !important;
+    }
+}
+
 /* Home desktop: menos altura vazia entre a proposta e o conteúdo. */
 @media (min-width: 821px) {
     .hero {
