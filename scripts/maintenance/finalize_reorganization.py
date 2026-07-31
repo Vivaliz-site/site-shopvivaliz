@@ -50,7 +50,11 @@ WRAPPERS = {
     "claude/api/shopee-integration/scripts/test_shopee_api.py": "scripts/marketplace/shopee/retired_credential_tool.py",
 }
 
-FORBIDDEN_FILES = (".github/workflows/repository-safe-migration-push.yml",)
+FORBIDDEN_FILES = (
+    ".github/workflows/repository-safe-migration-push.yml",
+    "storage/private/melhorenvio-tokens.json",
+)
+
 TEXT_SUFFIXES = {
     ".py", ".php", ".js", ".ts", ".tsx", ".jsx", ".json", ".yml", ".yaml",
     ".md", ".txt", ".env", ".example", ".ini", ".conf", ".sh", ".sql", ".ps1",
@@ -59,7 +63,8 @@ TEXT_SUFFIXES = {
 SENSITIVE_LABEL = (
     r"(?:partner[_ -]?key|app[_ -]?secret|client[_ -]?secret|api[_ -]?key|"
     r"access[_ -]?token|refresh[_ -]?token|auth(?:orization)?[_ -]?code|"
-    r"webhook[_ -]?secret|sandbox[_ -]?(?:pass|password)|password|token|secret)"
+    r"webhook[_ -]?(?:secret|token)|sandbox[_ -]?(?:pass|password)|"
+    r"password|token|secret)"
 )
 
 CREDENTIAL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
@@ -67,7 +72,9 @@ CREDENTIAL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("github_fine_grained_token", re.compile(r"(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{40,}")),
     ("openai_key", re.compile(r"(?<![A-Za-z0-9])sk-(?:proj-)?[A-Za-z0-9_-]{24,}")),
     ("slack_token", re.compile(r"(?<![A-Za-z0-9])xox[baprs]-[A-Za-z0-9-]{20,}")),
+    ("aws_access_key", re.compile(r"(?<![A-Za-z0-9])AKIA[A-Z0-9]{16}(?![A-Za-z0-9])")),
     ("shopee_partner_key", re.compile(r"(?<![A-Za-z0-9])shpk[A-Za-z0-9]{20,}")),
+    ("jwt", re.compile(r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{8,}")),
     (
         "private_key_block",
         re.compile(
@@ -77,12 +84,39 @@ CREDENTIAL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         ),
     ),
     (
-        "sensitive_assignment",
+        "sensitive_quoted_literal",
         re.compile(
-            rf"(?i)\b{SENSITIVE_LABEL}\b[^\n]{{0,28}}(?:[:=]|\|)\s*"
-            r"[`'\"]?([A-Za-z0-9][A-Za-z0-9._-]{15,})\b"
+            rf"(?ix)(?:['\"]?{SENSITIVE_LABEL}['\"]?)\s*[:=]\s*"
+            r"[`'\"]([A-Za-z0-9][A-Za-z0-9._:/+~-]{11,})[`'\"]"
         ),
     ),
+    (
+        "sensitive_markdown_literal",
+        re.compile(
+            rf"(?ix){SENSITIVE_LABEL}[^|\n]{{0,24}}\|\s*"
+            r"[`'\"]?([A-Za-z0-9][A-Za-z0-9._:/+~-]{11,})[`'\"]?\s*\|"
+        ),
+    ),
+    (
+        "sensitive_query_literal",
+        re.compile(
+            r"(?i)[?&](?:token|secret|access_token|refresh_token)="
+            r"([A-Za-z0-9][A-Za-z0-9._~-]{11,})"
+        ),
+    ),
+    (
+        "sensitive_unquoted_hex",
+        re.compile(
+            rf"(?ix)\b{SENSITIVE_LABEL}\b[^\n]{{0,32}}(?:[:=]|\|)\s*"
+            r"[`'\"]?([A-Fa-f0-9]{32,})\b"
+        ),
+    ),
+)
+
+PLACEHOLDER_PATTERNS = (
+    re.compile(r"^<[^>]+>$"),
+    re.compile(r"^\$\{[^}]+\}$"),
+    re.compile(r"^\{\{[^}]+\}\}$"),
 )
 
 
@@ -105,13 +139,19 @@ def line_number(text: str, offset: int) -> int:
 
 
 def likely_placeholder(value: str) -> bool:
-    lowered = value.lower().strip("`'\"")
-    if any(word in lowered for word in ("placeholder", "substitua", "example", "secret_protegido")):
+    normalized = value.strip().strip("`'\"")
+    lowered = normalized.lower()
+    if any(pattern.fullmatch(normalized) for pattern in PLACEHOLDER_PATTERNS):
         return True
-    if lowered.startswith(("your_", "seu_", "sua_")):
+    if any(word in lowered for word in (
+        "placeholder", "substitua", "example", "exemplo", "secret_protegido",
+        "protected_secret", "authorization_code", "access_token_here",
+    )):
+        return True
+    if lowered.startswith(("your_", "seu_", "sua_", "my_")):
         return True
     compact = re.sub(r"[^a-z0-9]", "", lowered)
-    return bool(compact) and len(set(compact)) <= 2
+    return bool(compact) and len(compact) >= 12 and len(set(compact)) <= 2
 
 
 def tracked_text_files() -> list[Path]:
@@ -130,6 +170,17 @@ def tracked_text_files() -> list[Path]:
     return files
 
 
+def tracked_paths() -> set[str]:
+    result = subprocess.run(
+        ["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True
+    )
+    return {
+        raw.decode("utf-8", errors="replace")
+        for raw in result.stdout.split(b"\0")
+        if raw
+    }
+
+
 def validate_wrapper(legacy: str, target: str) -> bool:
     legacy_path = ROOT / legacy
     target_path = ROOT / target
@@ -143,13 +194,19 @@ def credential_findings() -> tuple[list[Finding], int]:
     findings: list[Finding] = []
     files = tracked_text_files()
     seen: set[tuple[str, int, str]] = set()
+    placeholder_aware = {
+        "sensitive_quoted_literal",
+        "sensitive_markdown_literal",
+        "sensitive_query_literal",
+        "sensitive_unquoted_hex",
+    }
     for path in files:
         text = path.read_text(encoding="utf-8", errors="replace")
         relative = path.relative_to(ROOT).as_posix()
         for pattern_name, pattern in CREDENTIAL_PATTERNS:
             for match in pattern.finditer(text):
                 candidate = match.group(1) if match.lastindex else match.group(0)
-                if likely_placeholder(candidate):
+                if pattern_name in placeholder_aware and likely_placeholder(candidate):
                     continue
                 line = line_number(text, match.start())
                 key = (relative, line, pattern_name)
@@ -160,7 +217,7 @@ def credential_findings() -> tuple[list[Finding], int]:
                     "critical",
                     "credential_like_value",
                     relative,
-                    "Tracked text contains a credential-like value; revoke real values and replace examples with explicit non-secret placeholders.",
+                    "Tracked text contains a credential-like literal; revoke real values and use protected secrets.",
                     line=line,
                     pattern=pattern_name,
                 ))
@@ -170,6 +227,7 @@ def credential_findings() -> tuple[list[Finding], int]:
 def evaluate() -> tuple[list[Finding], dict[str, object]]:
     findings: list[Finding] = []
     checks: dict[str, object] = {}
+    tracked = tracked_paths()
 
     for relative in REQUIRED_CANONICAL:
         exists = (ROOT / relative).is_file()
@@ -184,10 +242,16 @@ def evaluate() -> tuple[list[Finding], dict[str, object]]:
             findings.append(Finding("high", "invalid_compatibility_wrapper", legacy, f"Wrapper must delegate to {target}."))
 
     for relative in FORBIDDEN_FILES:
-        absent = not (ROOT / relative).exists()
+        absent = relative not in tracked and not (ROOT / relative).exists()
         checks[f"forbidden_absent:{relative}"] = absent
         if not absent:
-            findings.append(Finding("critical", "automatic_migration_workflow_present", relative, "Automatic repository migration workflow must remain absent."))
+            findings.append(Finding("critical", "forbidden_file_present", relative, "Forbidden workflow or credential file must remain absent."))
+
+    tracked_private = sorted(path for path in tracked if path.startswith("storage/private/"))
+    checks["tracked_private_file_count"] = len(tracked_private)
+    checks["tracked_private_files"] = tracked_private
+    for relative in tracked_private:
+        findings.append(Finding("critical", "tracked_private_file", relative, "Runtime private storage must not be tracked."))
 
     hourly_relative = ".github/workflows/agents-hourly-deep-audit.yml"
     if (ROOT / hourly_relative).is_file():
@@ -226,20 +290,21 @@ def evaluate() -> tuple[list[Finding], dict[str, object]]:
     )
     checks["legacy_root_document_count"] = len(root_docs)
     checks["legacy_root_documents_sample"] = root_docs[:20]
-    findings.sort(key=lambda item: (item.severity, item.path, item.line or 0, item.rule))
+    severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    findings.sort(key=lambda item: (severity_order.get(item.severity, 9), item.path, item.line or 0, item.rule))
     return findings, checks
 
 
 def write_report(findings: list[Finding], checks: dict[str, object]) -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
-        "schema_version": 2,
+        "schema_version": 3,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "status": "success" if not findings else "failure",
         "blocking_finding_count": len(findings),
         "checks": checks,
         "findings": [asdict(item) for item in findings],
-        "scope_note": "Historical root documents are inventory only; automation, credentials, canonical paths and wrappers are blocking.",
+        "scope_note": "Historical root documents are inventory only; automation, credentials, canonical paths, wrappers and private runtime files are blocking.",
     }
     (REPORT_DIR / "report.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     lines = [
@@ -247,6 +312,7 @@ def write_report(findings: list[Finding], checks: dict[str, object]) -> None:
         f"- Status: **{payload['status']}**",
         f"- Blocking findings: **{len(findings)}**",
         f"- Tracked text files scanned: **{checks['credential_scan_file_count']}**",
+        f"- Tracked private files: **{checks['tracked_private_file_count']}**",
         f"- Legacy root documents inventoried: **{checks['legacy_root_document_count']}**", "",
     ]
     if findings:
