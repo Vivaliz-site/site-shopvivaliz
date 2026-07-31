@@ -1,4 +1,4 @@
-name: Repository Safe Migration Push
+name: Repository Safe Migration Preview
 
 on:
   push:
@@ -9,14 +9,14 @@ on:
       - '.github/migrations/current-plan.json'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: repository-safe-migration-${{ github.ref_name }}
-  cancel-in-progress: false
+  group: repository-safe-migration-preview-${{ github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
-  migrate:
+  preview:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -33,6 +33,7 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-python@v6
         with:
@@ -44,14 +45,16 @@ jobs:
       - name: Run migration runner tests
         run: python -m unittest -v tests/unit/test_apply_migration_plan.py
 
-      - name: Apply plan
+      - name: Apply plan in isolated checkout
         run: python scripts/maintenance/apply_migration_plan.py --plan .github/migrations/current-plan.json --apply
 
       - name: Validate applied plan
         run: python scripts/maintenance/apply_migration_plan.py --plan .github/migrations/current-plan.json --check-applied
 
       - name: Compile migrated Python files
+        shell: bash
         run: |
+          set -euo pipefail
           python - <<'PY'
           import json
           import py_compile
@@ -65,21 +68,28 @@ jobs:
               py_compile.compile(item['target'], doraise=True)
           PY
 
-      - name: Commit migration
+      - name: Build immutable preview evidence
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git commit -m 'refactor(repo): aplicar plano seguro de migração'
-          git push origin HEAD:${GITHUB_REF_NAME}
+          mkdir -p artifacts/repository-safe-migration
+          git status --short > artifacts/repository-safe-migration/status.txt
+          git diff --binary > artifacts/repository-safe-migration/changes.patch
+          test -s artifacts/repository-safe-migration/changes.patch
+          cp docs/audits/repository-safe-migration-report.json artifacts/repository-safe-migration/report.json
+          test -s artifacts/repository-safe-migration/report.json
+          {
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "sha=${GITHUB_SHA}"
+            echo "source_branch=${GITHUB_REF_NAME}"
+            echo 'plan=.github/migrations/current-plan.json'
+          } > artifacts/repository-safe-migration/context.txt
 
-      - name: Upload migration report
+      - name: Upload migration preview evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: repository-safe-migration-${{ github.run_id }}
-          path: docs/audits/repository-safe-migration-report.json
-          if-no-files-found: warn
+          name: repository-safe-migration-preview-${{ github.run_id }}
+          path: artifacts/repository-safe-migration/
+          if-no-files-found: error
           retention-days: 30
