@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Generate summary
+      - name: Generate summary and verify agent-audit freshness
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -44,6 +44,7 @@ jobs:
 
           now = datetime.now(timezone.utc)
           hour_ago = now - timedelta(hours=1)
+          maximum_audit_age = timedelta(minutes=150)
 
           def checked_output(command: list[str]) -> str:
               result = subprocess.run(
@@ -81,6 +82,28 @@ jobs:
               if parsed >= hour_ago:
                   runs.append(run)
 
+          audit_output = checked_output([
+              'gh', 'run', 'list',
+              '--workflow', 'agents-hourly-deep-audit.yml',
+              '--branch', 'main', '--limit', '1',
+              '--json', 'databaseId,status,conclusion,updatedAt,url',
+          ])
+          audit_runs = json.loads(audit_output)
+          if not isinstance(audit_runs, list) or not audit_runs:
+              raise RuntimeError('Agents Hourly Deep Audit has no verifiable run')
+          latest_audit = audit_runs[0]
+          audit_updated = datetime.fromisoformat(latest_audit['updatedAt'].replace('Z', '+00:00'))
+          audit_age = now - audit_updated
+          if audit_age > maximum_audit_age:
+              raise RuntimeError(
+                  f"Agents Hourly Deep Audit is stale: {audit_age.total_seconds() / 60:.0f} minutes; "
+                  f"latest run: {latest_audit.get('url', 'unknown')}"
+              )
+          if latest_audit.get('status') == 'completed' and latest_audit.get('conclusion') != 'success':
+              raise RuntimeError(
+                  f"Latest Agents Hourly Deep Audit did not succeed: {latest_audit.get('url', 'unknown')}"
+              )
+
           lines = [
               '# ShopVivaliz Hourly Summary',
               '',
@@ -109,6 +132,12 @@ jobs:
 
           lines.extend([
               '',
+              '### Agents 24/7 audit',
+              f"- Latest run: {latest_audit.get('url', 'unknown')}",
+              f"- Status: {latest_audit.get('status')}",
+              f"- Conclusion: {latest_audit.get('conclusion')}",
+              f'- Age: {audit_age.total_seconds() / 60:.0f} minutes',
+              '',
               '### Publication',
               '- This report is stored as a workflow artifact.',
               '- No commit or push to main is performed.',
@@ -130,6 +159,9 @@ jobs:
                   'generated_at': now.isoformat(),
                   'commit_count': len(commits),
                   'workflow_run_count': len(runs),
+                  'agents_audit_run_id': latest_audit.get('databaseId'),
+                  'agents_audit_url': latest_audit.get('url'),
+                  'agents_audit_age_minutes': round(audit_age.total_seconds() / 60, 2),
                   'queries_succeeded': True,
               }, indent=2) + '\n',
               encoding='utf-8',

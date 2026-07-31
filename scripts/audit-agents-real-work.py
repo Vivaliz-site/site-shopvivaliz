@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Evidence-based audit for autonomous-agent routines.
 
-The audit scans active automation surfaces and the scripts they invoke. Existing
-legacy findings from the base branch remain visible as cleanup debt, while any new
-critical/high-risk behavior introduced by the current branch blocks CI.
+Current active automation is always fail-closed. Baseline comparison is retained
+only to distinguish newly introduced findings from legacy, unreferenced debt; it
+must never downgrade an active critical/high finding.
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ REPORT_JSON = REPORT_DIR / "report.json"
 REPORT_MD = REPORT_DIR / "report.md"
 BASE_REF = "origin/main"
 
-EXECUTABLE_SUFFIXES = {".py", ".js", ".ts", ".php", ".sh", ".yml", ".yaml", ".json"}
+EXECUTABLE_SUFFIXES = {".py", ".js", ".ts", ".php", ".sh", ".bash", ".ps1", ".yml", ".yaml", ".json"}
 EXCLUDED_FILES = {"scripts/audit-agents-real-work.py"}
 EXCLUDED_PREFIXES = (
     ".git/", "node_modules/", "vendor/", "artifacts/", "storage/", "logs/",
@@ -50,7 +50,10 @@ DANGEROUS_PATTERNS = [
     ("self_auto_merge", re.compile(r"(?m)^\s*(?:gh\s+pr\s+merge\b[^\n]*--auto|.*enable_auto_merge\s*\()", re.I)),
     ("destructive_reset", re.compile(r"(?m)^\s*(?:git\s+reset\s+--hard\b|rm\s+-rf\s+/\s*$)", re.I)),
 ]
-PATH_REFERENCE = re.compile(r"(?<![A-Za-z0-9_.-])((?:scripts|\.ai|agents|claude/api/agent)/[A-Za-z0-9_./-]+\.(?:py|js|ts|php|sh))")
+PATH_REFERENCE = re.compile(r"(?<![A-Za-z0-9_.-])((?:scripts|\.ai|agents|claude/api/agent)/[A-Za-z0-9_./-]+\.(?:py|js|ts|php|sh|bash|ps1))")
+ACTIVE_EVENT = re.compile(
+    r"(?m)^\s{2}(?:push|pull_request|schedule|issues|workflow_run|repository_dispatch|workflow_dispatch|workflow_call):"
+)
 
 
 @dataclass
@@ -108,10 +111,7 @@ def line_for(text: str, offset: int) -> int:
 
 
 def workflow_is_active(text: str) -> bool:
-    if not re.search(r"(?m)^on:\s*(?:$|\{)", text):
-        return False
-    events = set(re.findall(r"(?m)^\s{2}(push|pull_request|schedule|issues|workflow_run|repository_dispatch):", text))
-    return bool(events)
+    return bool(re.search(r"(?m)^on:\s*(?:$|\{)", text) and ACTIVE_EVENT.search(text))
 
 
 def active_surfaces(files: list[Path]) -> set[str]:
@@ -139,34 +139,40 @@ def fingerprint(rule: str, rel: str, match_text: str) -> str:
 def audit_text(rel: str, original: str, active: bool) -> list[Finding]:
     text = executable_text(original)
     findings: list[Finding] = []
-    simulation_hits = [m for p in SIMULATION_PATTERNS for m in p.finditer(text)]
-    completion_hits = [m for p in COMPLETION_PATTERNS for m in p.finditer(text)]
-    evidence_hits = [m for p in EVIDENCE_PATTERNS for m in p.finditer(text)]
+    simulation_hits = [match for pattern in SIMULATION_PATTERNS for match in pattern.finditer(text)]
+    completion_hits = [match for pattern in COMPLETION_PATTERNS for match in pattern.finditer(text)]
+    evidence_hits = [match for pattern in EVIDENCE_PATTERNS for match in pattern.finditer(text)]
 
     def severity(blocking: str) -> str:
         return blocking if active else "medium"
 
     if simulation_hits and completion_hits:
-        first = min(simulation_hits + completion_hits, key=lambda m: m.start())
-        fp = fingerprint("simulated_completion", rel, first.group(0))
-        findings.append(Finding(severity("critical"), "simulated_completion", rel,
-            "Rotina combina sinais de simulação com registro de conclusão/sucesso.",
-            line_for(text, first.start()), active, False, fp))
+        first = min(simulation_hits + completion_hits, key=lambda match: match.start())
+        findings.append(Finding(
+            severity("critical"), "simulated_completion", rel,
+            "Routine combines simulation signals with successful completion.",
+            line_for(text, first.start()), active, False,
+            fingerprint("simulated_completion", rel, first.group(0)),
+        ))
 
     if completion_hits and not evidence_hits and ("agent" in rel.lower() or "task" in rel.lower()):
-        first = min(completion_hits, key=lambda m: m.start())
-        fp = fingerprint("completion_without_evidence", rel, first.group(0))
-        findings.append(Finding(severity("high"), "completion_without_evidence", rel,
-            "Rotina registra conclusão sem exigir commit, PR, testes ou artefato.",
-            line_for(text, first.start()), active, False, fp))
+        first = min(completion_hits, key=lambda match: match.start())
+        findings.append(Finding(
+            severity("high"), "completion_without_evidence", rel,
+            "Routine records completion without commit, PR, tests or artifact evidence.",
+            line_for(text, first.start()), active, False,
+            fingerprint("completion_without_evidence", rel, first.group(0)),
+        ))
 
     for rule, pattern in DANGEROUS_PATTERNS:
         for match in pattern.finditer(text):
             blocking = "critical" if rule in {"self_auto_merge", "destructive_reset"} else "high"
-            fp = fingerprint(rule, rel, match.group(0))
-            findings.append(Finding(severity(blocking), rule, rel,
-                "Operação automática incompatível com revisão humana e evidência auditável.",
-                line_for(text, match.start()), active, False, fp))
+            findings.append(Finding(
+                severity(blocking), rule, rel,
+                "Automatic operation is incompatible with reviewed, evidence-based execution.",
+                line_for(text, match.start()), active, False,
+                fingerprint(rule, rel, match.group(0)),
+            ))
     return findings
 
 
@@ -177,8 +183,7 @@ def baseline_fingerprints(files: list[Path], active: set[str]) -> set[str]:
         text = base_text(rel)
         if text is None:
             continue
-        for finding in audit_text(rel, text, rel in active):
-            fingerprints.add(finding.fingerprint)
+        fingerprints.update(item.fingerprint for item in audit_text(rel, text, rel in active))
     return fingerprints
 
 
@@ -192,14 +197,26 @@ def main() -> int:
         rel = path.relative_to(ROOT).as_posix()
         current = audit_text(rel, path.read_text(encoding="utf-8", errors="replace"), rel in active)
         for finding in current:
-            if finding.active and finding.severity in {"critical", "high"} and finding.fingerprint in baseline:
+            if finding.fingerprint in baseline:
                 finding.preexisting = True
-                finding.severity = "medium"
-                finding.message += " Achado já existente na branch base; permanece como dívida de saneamento."
+                # Legacy files not reachable from active workflows remain visible debt.
+                # Active risk is never downgraded merely because it already exists on main.
+                if not finding.active and finding.severity in {"critical", "high"}:
+                    finding.severity = "medium"
+                    finding.message += " Existing legacy debt; not referenced by an active workflow."
             findings.append(finding)
 
     order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-    findings.sort(key=lambda f: (order.get(f.severity, 9), f.path, f.line or 0))
+    findings.sort(key=lambda item: (order.get(item.severity, 9), item.path, item.line or 0))
+    active_blocking = [
+        item for item in findings
+        if item.active and item.severity in {"critical", "high"}
+    ]
+    new_blocking = [
+        item for item in findings
+        if not item.preexisting and item.severity in {"critical", "high"}
+    ]
+    blocking_fingerprints = {item.fingerprint for item in [*active_blocking, *new_blocking]}
     generated_at = datetime.now(timezone.utc).isoformat()
     payload = {
         "generated_at": generated_at,
@@ -207,37 +224,38 @@ def main() -> int:
         "files_scanned": len(files),
         "active_surfaces": sorted(active),
         "finding_count": len(findings),
-        "critical_new": sum(f.severity == "critical" for f in findings),
-        "high_new": sum(f.severity == "high" for f in findings),
-        "preexisting_debt": sum(f.preexisting for f in findings),
-        "medium": sum(f.severity == "medium" for f in findings),
-        "findings": [asdict(f) for f in findings],
+        "active_blocking": len(active_blocking),
+        "new_blocking": len(new_blocking),
+        "blocking_finding_count": len(blocking_fingerprints),
+        "legacy_debt": sum(item.preexisting and not item.active for item in findings),
+        "findings": [asdict(item) for item in findings],
     }
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     REPORT_JSON.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     lines = [
-        "# Auditoria profunda de agentes", "", f"- Gerada em: `{generated_at}`",
-        f"- Base comparada: `{BASE_REF}`", f"- Arquivos analisados: **{len(files)}**",
-        f"- Superfícies ativas: **{len(active)}**",
-        f"- Novos achados críticos: **{payload['critical_new']}**",
-        f"- Novos achados altos: **{payload['high_new']}**",
-        f"- Dívida preexistente reportada: **{payload['preexisting_debt']}**", "",
+        "# Deep agent audit", "", f"- Generated: `{generated_at}`",
+        f"- Base compared: `{BASE_REF}`", f"- Files scanned: **{len(files)}**",
+        f"- Active surfaces: **{len(active)}**",
+        f"- Active blocking findings: **{payload['active_blocking']}**",
+        f"- New blocking findings: **{payload['new_blocking']}**",
+        f"- Legacy unreferenced debt: **{payload['legacy_debt']}**", "",
     ]
     if findings:
-        lines += ["## Achados", ""]
+        lines.extend(["## Findings", ""])
         for finding in findings:
             location = f"{finding.path}:{finding.line}" if finding.line else finding.path
-            if finding.preexisting:
-                scope = "PREEXISTENTE NA BASE"
-            else:
-                scope = "ATIVO" if finding.active else "LEGADO/NAO REFERENCIADO"
-            lines.append(f"- **{finding.severity.upper()} — {finding.rule} — {scope}** em `{location}`: {finding.message}")
+            scope = "ACTIVE" if finding.active else "LEGACY/UNREFERENCED"
+            baseline_scope = "PREEXISTING" if finding.preexisting else "NEW"
+            lines.append(
+                f"- **{finding.severity.upper()} / {finding.rule} / {scope} / {baseline_scope}** "
+                f"`{location}` — {finding.message}"
+            )
     else:
-        lines.append("Nenhum achado detectado.")
+        lines.append("No finding detected.")
     REPORT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(json.dumps(payload, indent=2, ensure_ascii=False))
-    return 1 if payload["critical_new"] or payload["high_new"] else 0
+    return 1 if payload["blocking_finding_count"] else 0
 
 
 if __name__ == "__main__":
