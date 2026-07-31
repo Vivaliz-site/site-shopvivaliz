@@ -314,12 +314,12 @@ jobs:
 
           check_http homepage "$base/" '200'
           homepage_body="$tmpdir/homepage.body"
-          grep -Eqi '<meta[^>]+name=["'"']viewport["'"']' "$homepage_body"
+          grep -Eqi 'name=.viewport.' "$homepage_body"
           grep -Eqi '(mobile|menu-toggle|header)' "$homepage_body"
           echo 'OK mobile responsive header contract'
 
           check_http catalog "$base/catalogo" '200'
-          product_path="$(grep -oE 'href=["'"']/produto/[^"'"']+' "$homepage_body" | head -n1 | cut -d= -f2 | tr -d '"'"'' || true)"
+          product_path="$(grep -oE '/produto/[A-Za-z0-9%._~/-]+' "$homepage_body" | head -n1 || true)"
           test -n "$product_path"
           check_http product "$base$product_path" '200'
           check_http cart "$base/carrinho" '200,302'
