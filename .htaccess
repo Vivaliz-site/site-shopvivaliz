@@ -10,6 +10,11 @@ ErrorDocument 404 /404.php
     Require all denied
 </FilesMatch>
 
+# Backups e arquivos temporarios nunca devem ser servidos pelo Apache.
+<FilesMatch "\.(?:bak|old|orig|save|swp|tmp)(?:\.[^.]*)?$">
+    Require all denied
+</FilesMatch>
+
 <FilesMatch "^config/.*\.php$">
     Require all denied
 </FilesMatch>
