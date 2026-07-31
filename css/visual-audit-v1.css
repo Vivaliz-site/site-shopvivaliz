@@ -346,3 +346,13 @@ body {
         display: flex;
     }
 }
+
+/* No catálogo, mantém a Liz disponível sem cobrir a área útil dos cards. */
+@media (min-width: 821px) {
+    body.sv-page-catalog #sv-liz-launcher {
+        width: 64px !important;
+        height: 64px !important;
+        right: 14px !important;
+        bottom: 14px !important;
+    }
+}
