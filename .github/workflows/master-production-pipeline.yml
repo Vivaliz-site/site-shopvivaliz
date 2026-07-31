@@ -276,7 +276,7 @@ jobs:
           printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Run production smoke test from Oracle VM
+      - name: Run canonical production smoke test from Oracle VM
         shell: bash
         run: |
           set -euo pipefail
@@ -289,102 +289,9 @@ jobs:
             'bash -s' -- "$DEPLOY_SHA" <<'REMOTE_SCRIPT'
           set -euo pipefail
           expected_sha="$1"
-          base='https://shopvivaliz.com.br'
-          ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36'
-          tmpdir="$(mktemp -d)"
-          trap 'rm -rf "$tmpdir"' EXIT
-
-          check_http() {
-            local label="$1"
-            local url="$2"
-            local allowed="$3"
-            local output="$tmpdir/${label//[^a-zA-Z0-9]/_}.body"
-            local status
-            status="$(curl --location --silent --show-error --output "$output" --max-time 20 --user-agent "$ua" --write-out '%{http_code}' "$url" || true)"
-            if [[ ",${allowed}," != *",${status},"* ]]; then
-              echo "FAIL ${label}: ${url} returned ${status}; allowed ${allowed}" >&2
-              exit 1
-            fi
-            echo "OK ${label}: ${url} (${status})"
-          }
-
-          deployed_sha="$(cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha)"
-          test "$deployed_sha" = "$expected_sha"
-          echo "OK release SHA: $deployed_sha"
-
-          check_http homepage "$base/" '200'
-          homepage_body="$tmpdir/homepage.body"
-          grep -Eqi 'name=.viewport.' "$homepage_body"
-          grep -Eqi '(mobile|menu-toggle|header)' "$homepage_body"
-          echo 'OK mobile responsive header contract'
-
-          check_http catalog "$base/catalogo" '200'
-          product_path="$(grep -oE '/produto/[A-Za-z0-9%._~/-]+' "$homepage_body" | head -n1 || true)"
-          test -n "$product_path"
-          check_http product "$base$product_path" '200'
-          check_http cart "$base/carrinho" '200,302'
-          check_http checkout "$base/checkout" '200,302'
-          check_http css "$base/css/shopvivaliz-core-consolidated.css" '200'
-          check_http catalog_api "$base/api/catalog/products.php?limit=1" '200'
-          grep -q '"ok":true' "$tmpdir/catalog_api.body"
-
-          admin_status="$(curl --silent --show-error --output "$tmpdir/admin.body" --max-time 20 --user-agent "$ua" --write-out '%{http_code}' "$base/admin" || true)"
-          if [[ "$admin_status" == '200' ]]; then
-            grep -Eqi '(login|senha|password|entrar)' "$tmpdir/admin.body"
-          elif [[ ",$admin_status," != *,301,* && ",$admin_status," != *,302,* && ",$admin_status," != *,303,* && ",$admin_status," != *,401,* && ",$admin_status," != *,403,* ]]; then
-            echo "FAIL admin behavior: HTTP $admin_status" >&2
-            exit 1
-          fi
-          echo "OK admin protected behavior ($admin_status)"
-
-          check_http liz_health "$base/api/liz-intelligent.php?health=1" '200'
-          grep -Eq '"(ok|status)"[[:space:]]*:[[:space:]]*(true|"ok"|"healthy")' "$tmpdir/liz_health.body"
-          echo 'OK Liz health payload'
-
-          check_http olist_webhook "$base/api/olist/webhook-health.php" '200'
-          grep -q '"ok": true' "$tmpdir/olist_webhook.body"
-          echo 'OK Olist webhook health payload'
-
-          redirect_headers="$(curl --silent --show-error --head --max-time 20 --user-agent "$ua" https://www.shopvivaliz.com.br/ | tr -d '\r')"
-          redirect_status="$(printf '%s\n' "$redirect_headers" | awk 'NR==1 {print $2}')"
-          redirect_location="$(printf '%s\n' "$redirect_headers" | awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]+:[[:space:]]*/, ""); print; exit}')"
-          [[ "$redirect_status" == '301' || "$redirect_status" == '302' || "$redirect_status" == '307' || "$redirect_status" == '308' ]]
-          [[ "$redirect_location" == https://shopvivaliz.com.br/* ]]
-          echo "OK www redirect: $redirect_status -> $redirect_location"
-
-          private_paths=(
-            '/.git/config'
-            '/.env.local'
-            '/storage/products-cache-ativos.json'
-            '/tasks-queue.json'
-            '/scripts/'
-            '/tests/'
-            '/installer/self-test.php'
-            '/debug-products.php'
-            '/discover-db.php'
-            '/find-db-host.php'
-            '/fix-database.php'
-            '/full-sync.php'
-            '/gen-token.php'
-            '/shop-catalog-export.php'
-            '/sync-now.php'
-            '/olist/token-refresh.php'
-            '/api/catalog/test-normalize.php'
-          )
-          for path in "${private_paths[@]}"; do
-            status="$(curl --silent --output /dev/null --max-time 10 --user-agent "$ua" --write-out '%{http_code}' "$base$path" || true)"
-            if [[ "$status" != '403' && "$status" != '404' ]]; then
-              echo "FAIL private path exposed: $path returned $status" >&2
-              exit 1
-            fi
-            echo "OK private path blocked: $path ($status)"
-          done
-
-          headers="$(curl --silent --show-error --head --max-time 20 --user-agent "$ua" "$base/" | tr -d '\r' | tr '[:upper:]' '[:lower:]')"
-          for required in strict-transport-security x-content-type-options content-security-policy; do
-            grep -q "^${required}:" <<< "$headers"
-            echo "OK security header: ${required}"
-          done
+          smoke_script='/home/ubuntu/shopvivaliz-deploy/current/scripts/production-smoke-test.sh'
+          test -r "$smoke_script"
+          bash "$smoke_script" "$expected_sha"
           REMOTE_SCRIPT
 
   deployment_failure_notice:
