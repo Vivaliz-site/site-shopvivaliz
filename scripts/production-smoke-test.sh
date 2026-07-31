@@ -7,6 +7,53 @@ ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safa
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
+repo='/home/ubuntu/shopvivaliz-deploy/repo'
+shared='/home/ubuntu/shopvivaliz-deploy/shared'
+script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+sync_script="$script_root/scripts/auto-sync-oracle.sh"
+sync_status="$shared/logs/tri-environment-sync.json"
+
+test -d "$repo/.git"
+test -x "$sync_script"
+ROOT="$repo" SHARED_ROOT="$shared" "$sync_script"
+
+repo_sha="$(git -C "$repo" rev-parse HEAD)"
+remote_sha="$(git -C "$repo" rev-parse origin/main)"
+test "$repo_sha" = "$expected_sha"
+test "$remote_sha" = "$expected_sha"
+test -s "$sync_status"
+python3 - "$sync_status" "$expected_sha" <<'PY'
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+expected = sys.argv[2].lower()
+action = str(payload.get("action") or "")
+allowed = {
+    "noop",
+    "fast-forward-to-canonical",
+    "realigned-to-verified-sanitized-history",
+}
+local_after = str(
+    payload.get("local_sha_after")
+    or payload.get("local_sha")
+    or ""
+).lower()
+remote = str(payload.get("remote_sha") or "").lower()
+if payload.get("ok") is not True:
+    raise SystemExit("sync report is not successful")
+if action not in allowed:
+    raise SystemExit(f"unexpected sync action: {action}")
+if local_after != expected or remote != expected:
+    raise SystemExit(
+        f"sync report SHA mismatch: local={local_after} remote={remote} expected={expected}"
+    )
+PY
+echo "OK Oracle repository sync: $repo_sha"
+
 check_http() {
   local label="$1"
   local url="$2"
