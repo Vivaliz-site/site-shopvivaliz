@@ -29,7 +29,7 @@ function gc_fetch(string $url): array
         CURLOPT_CONNECTTIMEOUT => 10,
         CURLOPT_TIMEOUT => 30,
         CURLOPT_HTTPHEADER => ['Accept: text/html,application/xml;q=0.9,*/*;q=0.8'],
-        CURLOPT_USERAGENT => 'ShopVivaliz-Google-Commerce-Audit/1.0',
+        CURLOPT_USERAGENT => 'ShopVivaliz-Google-Commerce-Audit/1.1',
     ]);
     $body = curl_exec($handle);
     $status = (int)curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
@@ -44,53 +44,85 @@ function gc_fetch(string $url): array
     ];
 }
 
-function gc_result(bool $ok, string $status, string $detail = ''): array
+function gc_result(bool $ok, string $status, string $detail = '', string $level = 'required'): array
 {
-    return ['ok' => $ok, 'status' => $status, 'detail' => $detail];
+    return ['ok' => $ok, 'status' => $status, 'detail' => $detail, 'level' => $level];
+}
+
+function gc_has_any(string $haystack, array $needles): bool
+{
+    foreach ($needles as $needle) {
+        if (str_contains($haystack, $needle)) return true;
+    }
+    return false;
 }
 
 $baseUrl = rtrim((string)(getenv('SHOPVIVALIZ_BASE_URL') ?: 'https://shopvivaliz.com.br'), '/');
-$home = gc_fetch($baseUrl . '/?google_config_audit=1');
-$sitemap = gc_fetch($baseUrl . '/sitemap.xml?google_config_audit=1');
-$merchant = gc_fetch($baseUrl . '/google-merchant-feed.php?google_config_audit=1');
+$home = gc_fetch($baseUrl . '/?google_config_audit=2');
+$sitemap = gc_fetch($baseUrl . '/sitemap.xml?google_config_audit=2');
+$merchant = gc_fetch($baseUrl . '/google-merchant-feed.php?google_config_audit=2');
 $homeBody = (string)$home['body'];
 
-$ga4Configured = gc_bool_env(['GA4_ID', 'GOOGLE_ANALYTICS_ID', 'GOOGLE_ANALYTICS', 'GOOGLE_ANALITYCS']);
+$ga4BrowserPublished = gc_has_any($homeBody, [
+    'googletagmanager.com/gtag/js?id=G-',
+    "gtag('config', 'G-",
+    'gtag("config", "G-',
+]);
+$gtmPublished = str_contains($homeBody, 'googletagmanager.com/gtm.js');
+$adsPublished = gc_has_any($homeBody, [
+    'googletagmanager.com/gtag/js?id=AW-',
+    "gtag('config', 'AW-",
+    'gtag("config", "AW-',
+]);
 $ga4SecretConfigured = gc_bool_env(['GA4_SECRET']);
-$gtmConfigured = gc_bool_env(['GOOGLE_TAG_MANAGER_ID', 'GTM_ID', 'TAG_MANAGER']);
-$adsConfigured = gc_bool_env(['GOOGLE_ADS_ID', 'GOOGLE_ADS_CONVERSION_ID']);
 $adsLabelConfigured = gc_bool_env(['GOOGLE_ADS_CONVERSION_LABEL']);
 $searchVerificationConfigured = gc_bool_env(['GOOGLE_SITE_VERIFICATION']);
+$tinyClientConfigured = gc_bool_env([
+    'OLIST_CLIENT_ID', 'TINY_CLIENT_ID', 'TINY_OAUTH_CLIENT_ID', 'TINY_TOKEN', 'TINY_API_TOKEN',
+]);
+$tinySecretConfigured = gc_bool_env([
+    'OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET', 'TINY_OAUTH_CLIENT_SECRET', 'TINY_TOKEN', 'TINY_API_TOKEN',
+]);
+$tinyRefreshConfigured = gc_bool_env(['OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN', 'TINY_TOKEN', 'TINY_API_TOKEN']);
 
 $checks = [
     'production_home' => gc_result((bool)$home['ok'], $home['ok'] ? 'configured' : 'failed', 'HTTP ' . $home['status']),
     'ga4_browser_tag' => gc_result(
-        $ga4Configured && (str_contains($homeBody, 'googletagmanager.com/gtag/js') || str_contains($homeBody, "gtag('config'")),
-        $ga4Configured ? 'configured' : 'missing_runtime_configuration'
+        $ga4BrowserPublished,
+        $ga4BrowserPublished ? 'published' : 'missing_from_production_html',
+        'Validated from rendered production HTML; environment variables are not required when a reviewed fallback ID is published.'
     ),
     'ga4_server_purchase' => gc_result(
-        $ga4Configured && $ga4SecretConfigured,
-        $ga4Configured && $ga4SecretConfigured ? 'configured' : 'missing_runtime_configuration'
+        $ga4BrowserPublished && $ga4SecretConfigured,
+        $ga4SecretConfigured ? 'configured' : 'measurement_protocol_secret_missing',
+        $ga4SecretConfigured
+            ? 'Approved purchases can be sent server-side.'
+            : 'Browser funnel remains active; create GA4_SECRET to enable approved-payment purchase delivery from the server.',
+        'recommended'
     ),
     'google_tag_manager' => gc_result(
-        $gtmConfigured && str_contains($homeBody, 'googletagmanager.com/gtm.js'),
-        $gtmConfigured ? 'configured' : 'missing_runtime_configuration'
+        $gtmPublished,
+        $gtmPublished ? 'published' : 'not_published',
+        'Validated from rendered production HTML.',
+        'recommended'
     ),
     'google_ads_tag' => gc_result(
-        $adsConfigured && str_contains($homeBody, "gtag('config', 'AW-"),
-        $adsConfigured ? 'configured' : 'missing_runtime_configuration',
-        $adsLabelConfigured ? 'conversion label configured' : 'conversion label not configured'
+        $adsPublished,
+        $adsPublished ? 'published' : 'not_published',
+        $adsLabelConfigured ? 'Conversion label configured.' : 'No production Ads tag/label was proven; linked-account evidence must be reviewed in Google Ads.',
+        'recommended'
     ),
     'consent_mode_v2' => gc_result(
         str_contains($homeBody, "gtag('consent', 'default'")
             && str_contains($homeBody, 'ad_user_data')
             && str_contains($homeBody, 'ad_personalization'),
-        'code_checked'
+        'production_html_checked'
     ),
     'search_console_verification_meta' => gc_result(
         $searchVerificationConfigured && str_contains($homeBody, 'google-site-verification'),
         $searchVerificationConfigured ? 'meta_configured' : 'not_present_or_dns_verified',
-        'DNS ownership cannot be proven from source code alone'
+        'Domain-property ownership may be verified by DNS and cannot be inferred from HTML alone.',
+        'informational'
     ),
     'sitemap' => gc_result(
         (bool)$sitemap['ok'] && str_contains((string)$sitemap['body'], '<urlset'),
@@ -115,20 +147,23 @@ $checks = [
         'runtime_presence_checked'
     ),
     'tiny_erp' => gc_result(
-        gc_bool_env(['TINY_CLIENT_ID', 'TINY_OAUTH_CLIENT_ID', 'TINY_TOKEN', 'TINY_API_TOKEN'])
-            && gc_bool_env(['TINY_CLIENT_SECRET', 'TINY_OAUTH_CLIENT_SECRET', 'TINY_TOKEN', 'TINY_API_TOKEN']),
-        'runtime_presence_checked'
+        $tinyClientConfigured && $tinySecretConfigured && $tinyRefreshConfigured,
+        'runtime_presence_checked',
+        'Accepts the current OLIST_* OAuth names and legacy TINY_* names; values are never printed.'
     ),
 ];
 
 $blockerKeys = [
-    'production_home', 'ga4_browser_tag', 'ga4_server_purchase', 'consent_mode_v2',
+    'production_home', 'ga4_browser_tag', 'consent_mode_v2',
     'sitemap', 'merchant_feed', 'smtp_order_email', 'mercadopago_boleto', 'tiny_erp',
 ];
 $blockers = [];
-foreach ($blockerKeys as $key) {
-    if (empty($checks[$key]['ok'])) {
+$recommendations = [];
+foreach ($checks as $key => $check) {
+    if (in_array($key, $blockerKeys, true) && empty($check['ok'])) {
         $blockers[] = $key;
+    } elseif (($check['level'] ?? '') === 'recommended' && empty($check['ok'])) {
+        $recommendations[] = $key;
     }
 }
 
@@ -138,10 +173,12 @@ $output = [
     'base_url' => $baseUrl,
     'checks' => $checks,
     'blockers' => $blockers,
+    'recommendations' => $recommendations,
     'notes' => [
-        'No secret values, IDs, cookies or personal data are included.',
+        'No secret values, tag IDs, cookies or personal data are included.',
         'Search Console DNS ownership and account linkages require console/API evidence and are not inferred from HTML.',
-        'Google Ads campaign status and spend are not changed by this audit.',
+        'Google Ads campaign status, budgets and spend are not changed by this audit.',
+        'Optional capabilities are reported separately and do not mask failures in required commerce integrations.',
     ],
 ];
 
