@@ -27,30 +27,32 @@ function load_custom_css(): void
         echo "    <script src=\"/js/visual-polish-v4.js?v=2026-07-31-1\" defer></script>\n";
     }
 
-    // Quinta rodada: cabeçalho mais compacto, catálogo/produto com melhor
-    // densidade e ajustes específicos para telas touch e áreas seguras mobile.
-    if (in_array($pageName, ['index', 'catalogo', 'produto', 'carrinho', 'checkout'], true)) {
-        echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v5.css?v=2026-07-31-1\">\n";
-    }
+    $loadVisualV5 = in_array($pageName, ['index', 'catalogo', 'produto', 'carrinho', 'checkout'], true);
 
     // CSS opcional criado pelo admin continua sendo lido do storage compartilhado.
+    // A camada visual v5 é emitida depois dele para manter a hierarquia validada
+    // em produção e impedir que regras antigas restaurem títulos e espaçamentos.
     $cssDir = $root . '/storage/css-custom';
-    if (!is_dir($cssDir)) {
-        return;
+    if (is_dir($cssDir)) {
+        $cssFiles = [
+            $cssDir . '/' . $pageName . '.css',
+            $cssDir . '/global.css',
+        ];
+
+        foreach ($cssFiles as $cssFile) {
+            if (is_file($cssFile) && is_readable($cssFile)) {
+                echo "    <style>\n";
+                echo "        /* CSS customizado de: " . basename($cssFile) . " */\n";
+                echo file_get_contents($cssFile);
+                echo "\n    </style>\n";
+            }
+        }
     }
 
-    $cssFiles = [
-        $cssDir . '/' . $pageName . '.css',
-        $cssDir . '/global.css',
-    ];
-
-    foreach ($cssFiles as $cssFile) {
-        if (is_file($cssFile) && is_readable($cssFile)) {
-            echo "    <style>\n";
-            echo "        /* CSS customizado de: " . basename($cssFile) . " */\n";
-            echo file_get_contents($cssFile);
-            echo "\n    </style>\n";
-        }
+    // Quinta rodada: última camada da cascata para cabeçalho, catálogo, produto
+    // e estados de compra responsivos. A versão muda sempre que o arquivo muda.
+    if ($loadVisualV5) {
+        echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v5.css?v=2026-07-31-2\">\n";
     }
 }
 
