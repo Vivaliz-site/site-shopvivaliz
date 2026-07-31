@@ -36,7 +36,7 @@ function sv_current_page_name(): string
 
 /**
  * Carrega CSS versionado da aplicação e CSS customizado do admin para a página atual.
- * Inclua isto no <head> de todas as páginas.
+ * Inclua isto no <head> de todas as páginas públicas suportadas.
  */
 function load_custom_css(): void
 {
@@ -57,7 +57,7 @@ function load_custom_css(): void
         echo "    <script src=\"/js/visual-polish-v4.js?v=2026-07-31-1\" defer></script>\n";
     }
 
-    $loadVisualPolish = in_array($pageName, ['index', 'catalogo', 'produto', 'carrinho', 'checkout'], true);
+    $loadVisualPolishV5 = in_array($pageName, ['index', 'catalogo', 'produto', 'carrinho', 'checkout'], true);
 
     // CSS opcional criado pelo admin continua sendo lido do storage compartilhado.
     $cssDir = $root . '/storage/css-custom';
@@ -77,11 +77,15 @@ function load_custom_css(): void
         }
     }
 
-    // Camadas validadas de acabamento sempre ficam por último na cascata.
-    if ($loadVisualPolish) {
+    // V5 permanece restrita às páginas-alvo originais.
+    if ($loadVisualPolishV5) {
         echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v5.css?v=2026-07-31-2\">\n";
-        echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v6.css?v=2026-07-31-1\">\n";
     }
+
+    // V6 contém somente seletores públicos e correções fail-safe de imagem/título.
+    // É emitida sempre que este loader público é incluído, eliminando dependência
+    // de variáveis de rewrite para rotas amigáveis como /produto/<slug>.
+    echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v6.css?v=2026-07-31-2\">\n";
 }
 
 load_custom_css();
