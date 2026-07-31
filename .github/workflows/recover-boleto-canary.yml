@@ -146,7 +146,8 @@ jobs:
           cp "$output_file" "$marker"
           chmod 600 "$marker"
 
-          log_excerpt="/tmp/boleto-recovery-${target_order}.log"
+          log_excerpt="$(sudo mktemp "/tmp/boleto-recovery-${target_order}.XXXXXX.log")"
+          sudo chmod 644 "$log_excerpt"
           sudo python3 - "$target_order" "$log_excerpt" <<'PY'
           import gzip
           import glob
@@ -171,6 +172,7 @@ jobs:
           customer_count="$(awk '/\[OrderEmail\].*Email enviado/{count++} END{print count+0}' "$log_excerpt")"
           admin_count="$(awk '/\[AdminNotify\].*Email enviado para atendimento/{count++} END{print count+0}' "$log_excerpt")"
           boleto_count="$(awk '/\[MercadoPago\].*boleto created|\[BoletoRecovery\].*ok=yes/{count++} END{print count+0}' "$log_excerpt")"
+          sudo rm -f "$log_excerpt"
 
           python3 - "$output_file" "$expected_sha" "$customer_count" "$admin_count" "$boleto_count" > "$marker" <<'PY'
           import json, sys
