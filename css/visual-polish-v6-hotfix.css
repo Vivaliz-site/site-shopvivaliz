@@ -1,0 +1,41 @@
+/* Visual v6 specificity hotfix.
+ * Public-experience CSS is emitted in the footer, after the head stylesheets.
+ * These scoped selectors intentionally have higher specificity so the final
+ * product hierarchy and support position remain stable without !important wars
+ * outside the affected components.
+ */
+
+.product-detail .product-detail-copy > h1 {
+    max-width: 28ch !important;
+    margin-block: 10px 8px !important;
+    font-size: clamp(1.85rem, 2.1vw, 2.6rem) !important;
+    line-height: 1.08 !important;
+    letter-spacing: -.03em !important;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+}
+
+body .sv-support-dock {
+    left: auto !important;
+    right: 18px !important;
+    bottom: 18px !important;
+    align-items: flex-end !important;
+}
+
+@media (max-width: 768px) {
+    .product-detail .product-detail-copy > h1 {
+        max-width: none !important;
+        font-size: clamp(1.55rem, 7vw, 2rem) !important;
+        line-height: 1.1 !important;
+    }
+
+    body .sv-support-dock,
+    body:has(.sv-mobile-nav-bar) .sv-support-dock,
+    body:has(.sv-mobile-bottom-nav) .sv-support-dock,
+    body:has(.sv-checkout-mobile-total) .sv-support-dock,
+    body:has(.sv-mobile-buybar) .sv-support-dock {
+        left: auto !important;
+        right: 10px !important;
+        align-items: flex-end !important;
+    }
+}
