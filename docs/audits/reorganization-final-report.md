@@ -56,7 +56,7 @@ Shopee legado:
 ### Manutenção e documentação
 
 - `scripts/maintenance/system_health_check.py` é o health check canônico.
-- `scripts/maintenance/finalize_reorganization.py` valida estrutura, wrappers, workflows e credenciais na árvore rastreada.
+- `scripts/maintenance/finalize_reorganization.py` valida estrutura, wrappers, workflows, arquivos privados rastreados e credenciais literais.
 - documentos históricos da raiz são inventário não executável e não servem como prova de execução.
 
 ## Credenciais removidas da árvore atual
@@ -68,15 +68,18 @@ A varredura final encontrou e removeu valores de:
 - parceiro, sandbox, authorization code, access token e refresh token Shopee;
 - aplicação TikTok;
 - webhook Tiny em query string;
+- access token e refresh token Melhor Envio em `storage/private/`;
 - exemplos com formato de token GitHub/OpenAI.
 
-Os documentos agora usam apenas nomes de secrets e placeholders explícitos. O scanner final cobre formatos conhecidos, assignments sensíveis e blocos PEM completos, sem registrar o valor encontrado.
+O arquivo privado do Melhor Envio foi removido e `storage/private/` permanece ignorado. O verificador final bloqueia qualquer arquivo rastreado nesse diretório.
+
+Os documentos agora usam apenas nomes de secrets e placeholders explícitos. O scanner final cobre formatos conhecidos, JWTs, valores literais associados a campos sensíveis e blocos PEM completos, sem registrar o valor encontrado.
 
 ## Ações externas obrigatórias
 
 Todas as credenciais acima devem ser tratadas como comprometidas. Ainda é necessário, fora do repositório:
 
-1. revogar e rotacionar os valores nos respectivos provedores;
+1. revogar e rotacionar os valores nos respectivos provedores, incluindo Melhor Envio;
 2. armazenar substitutos somente em secrets protegidos;
 3. validar as integrações por execução real e read-back;
 4. planejar a reescrita coordenada do histórico depois da revogação;
