@@ -151,17 +151,22 @@ function svseo_product_type(array $product, string $name = ''): string
     return 'Casa, jardim e utilidades';
 }
 
-/** Google Product Taxonomy IDs, kept broad when source data is not specific. */
-function svseo_google_product_category(array $product, string $name = ''): string
+/**
+ * Only emits a Google taxonomy override when the source catalog has a curated
+ * valid ID or full path. Automatic guesses are intentionally avoided because
+ * Google already categorizes products and rejects invalid overrides.
+ */
+function svseo_google_product_category(array $product): string
 {
-    $terms = svseo_intent_terms($product, $name !== '' ? $name : svseo_human_name($product));
-    if (in_array('pet', $terms, true)) return '1'; // Animals & Pet Supplies
-    if (in_array('ferramenta', $terms, true)) return '632'; // Hardware > Tools
-    if (in_array('banheiro', $terms, true)) return '536'; // Home & Garden > Bathroom Accessories
-    if (in_array('jardim', $terms, true)) return '2962'; // Lawn & Garden
-    if (in_array('eletrica', $terms, true)) return '127'; // Electronics
-    if (in_array('seguranca', $terms, true)) return '536'; // Home & Garden broad fallback
-    return '536'; // Home & Garden
+    $candidate = trim((string)(
+        $product['google_product_category']
+        ?? $product['google_category']
+        ?? $product['categoria_google']
+        ?? ''
+    ));
+    if ($candidate === '') return '';
+    if (preg_match('/^\d+$/', $candidate) === 1) return $candidate;
+    return str_contains($candidate, ' > ') ? svseo_trim_words($candidate, 750) : '';
 }
 
 function svseo_title(array $product, int $width = 150): string
