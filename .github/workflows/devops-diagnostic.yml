@@ -13,13 +13,13 @@ jobs:
   inspect:
     name: Inspect main workflow runs
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - name: Query workflow runs and jobs for target production SHA
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_SHA: f219c7aba1ccefe67f31820dac5d72c7d601d1fe
+          TARGET_SHA: 783f9188dd28d5ff5f30141e040f1246826e5f9e
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -46,14 +46,25 @@ jobs:
                   return json.load(response)
 
           runs = []
-          for attempt in range(12):
+          for attempt in range(50):
               query = urllib.parse.urlencode({'head_sha': target, 'per_page': 100})
               payload = get_json(f'https://api.github.com/repos/{repository}/actions/runs?{query}')
               runs = payload.get('workflow_runs', [])
-              names = {run.get('name') for run in runs}
-              if 'Quality Gate' in names and 'Master Production Pipeline 24/7' in names:
+              relevant = {
+                  run.get('name'): run
+                  for run in runs
+                  if run.get('name') in {'Quality Gate', 'Master Production Pipeline 24/7'}
+              }
+              if (
+                  relevant.get('Quality Gate', {}).get('status') == 'completed'
+                  and relevant.get('Master Production Pipeline 24/7', {}).get('status') == 'completed'
+              ):
                   break
-              print(f'WAIT attempt={attempt + 1} runs={len(runs)} names={sorted(name for name in names if name)}')
+              states = {
+                  name: (run.get('status'), run.get('conclusion'))
+                  for name, run in relevant.items()
+              }
+              print(f'WAIT attempt={attempt + 1} runs={len(runs)} states={states}')
               time.sleep(15)
 
           evidence = []
