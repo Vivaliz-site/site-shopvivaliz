@@ -27,6 +27,12 @@ function load_custom_css(): void
         echo "    <script src=\"/js/visual-polish-v4.js?v=2026-07-31-1\" defer></script>\n";
     }
 
+    // Quinta rodada: cabeçalho mais compacto, catálogo/produto com melhor
+    // densidade e ajustes específicos para telas touch e áreas seguras mobile.
+    if (in_array($pageName, ['index', 'catalogo', 'produto', 'carrinho', 'checkout'], true)) {
+        echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v5.css?v=2026-07-31-1\">\n";
+    }
+
     // CSS opcional criado pelo admin continua sendo lido do storage compartilhado.
     $cssDir = $root . '/storage/css-custom';
     if (!is_dir($cssDir)) {
