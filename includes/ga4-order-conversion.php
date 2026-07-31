@@ -28,6 +28,8 @@ function svga4_send_approved_purchase(array $order): bool
         ];
     }
 
+    $sessionHash = hash('crc32b', $orderNumber);
+    $sessionId = max(1, (int)hexdec(substr($sessionHash, 0, 8)));
     $payload = [
         'client_id' => 'server.' . substr(hash('sha256', $orderNumber), 0, 24),
         'timestamp_micros' => (int)(microtime(true) * 1000000),
@@ -43,7 +45,7 @@ function svga4_send_approved_purchase(array $order): bool
                 'payment_type' => (string)($order['payment_method'] ?? ''),
                 'items' => $items,
                 'engagement_time_msec' => 1,
-                'session_id' => (int)substr(hash('crc32b', $orderNumber), 0, 8),
+                'session_id' => $sessionId,
             ],
         ]],
     ];
