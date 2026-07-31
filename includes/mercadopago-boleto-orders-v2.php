@@ -7,8 +7,9 @@ require_once __DIR__ . '/mercadopago-gateway.php';
  * Payload mínimo documentado para boleto via Mercado Pago Orders API.
  *
  * A API é estrita para este meio de pagamento. Em especial, payer.address.state
- * deve ser a UF brasileira de dois caracteres. Campos adicionais usados em
- * preferências de checkout não são enviados nesta operação.
+ * deve ser a UF brasileira de dois caracteres. Campos não presentes no exemplo
+ * oficial (incluindo headers de sessão fabricados e notification_url por order)
+ * não são enviados; o webhook Orders deve permanecer configurado na integração.
  *
  * @return array<string,mixed>
  */
@@ -81,14 +82,12 @@ function svmp_boleto_orders_payload_v2(array $order): array
         'transactions' => [
             'payments' => [[
                 'amount' => svmp_money($total),
-                'expiration_time' => 'P3D',
                 'payment_method' => [
                     'id' => 'boleto',
                     'type' => 'ticket',
                 ],
             ]],
         ],
-        'notification_url' => svmp_base_url() . '/api/webhook-mercadopago.php?source_news=webhooks',
     ];
 }
 
@@ -97,16 +96,18 @@ function svmp_create_boleto_orders_v2(array $order, string $accessToken): array
 {
     $payload = svmp_boleto_orders_payload_v2($order);
     $orderNumber = (string)$order['order_number'];
-    $idempotencyKey = hash_hmac('sha256', 'boleto|' . $orderNumber, $accessToken);
-    $deviceId = trim((string)($order['device_id'] ?? ''));
+
+    // The schema changed after a rejected request. Versioning keeps retries of
+    // this exact schema stable while avoiding reuse of a key tied to a previous
+    // unsupported payload. The value remains opaque and never leaves the server.
+    $idempotencyKey = hash_hmac('sha256', 'boleto|orders-v3|' . $orderNumber, $accessToken);
 
     $response = svmp_api_request(
         'POST',
         '/v1/orders',
         $accessToken,
         $payload,
-        $idempotencyKey,
-        $deviceId
+        $idempotencyKey
     );
 
     $payment = $response['transactions']['payments'][0] ?? [];
