@@ -1,0 +1,35 @@
+{
+  "status": "applied",
+  "migrations": [
+    {
+      "source": "scripts/auto-documentation.py",
+      "target": "scripts/ai/auto-documentation.py",
+      "kind": "python",
+      "compatibility": true
+    },
+    {
+      "source": "scripts/manage-tasks-queue.py",
+      "target": "scripts/ai/manage-tasks-queue.py",
+      "kind": "python",
+      "compatibility": true
+    },
+    {
+      "source": "scripts/metrics-collector.py",
+      "target": "scripts/ai/metrics-collector.py",
+      "kind": "python",
+      "compatibility": true
+    },
+    {
+      "source": "scripts/observability-suite.py",
+      "target": "scripts/ai/observability-suite.py",
+      "kind": "python",
+      "compatibility": true
+    },
+    {
+      "source": "scripts/advanced-features.py",
+      "target": "scripts/ai/advanced-features.py",
+      "kind": "python",
+      "compatibility": true
+    }
+  ]
+}

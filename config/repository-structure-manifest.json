@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "script_migrations": {
+    "scripts/auto-documentation.py": "scripts/ai/auto-documentation.py",
+    "scripts/manage-tasks-queue.py": "scripts/ai/manage-tasks-queue.py",
+    "scripts/metrics-collector.py": "scripts/ai/metrics-collector.py",
+    "scripts/observability-suite.py": "scripts/ai/observability-suite.py",
+    "scripts/advanced-features.py": "scripts/ai/advanced-features.py"
+  }
+}
