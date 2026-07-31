@@ -137,8 +137,8 @@ jobs:
             | grep -E '\[OrderEmail\]|\[AdminNotify\]|\[MercadoPago\]' \
             | tail -n 30 > "$log_excerpt"
 
-          customer_successes="$(grep -c '\[OrderEmail\].*Email enviado' "$log_excerpt" || true)"
-          admin_successes="$(grep -c '\[AdminNotify\].*Email enviado para atendimento' "$log_excerpt" || true)"
+          customer_successes="$(awk '/\[OrderEmail\].*Email enviado/{count++} END{print count+0}' "$log_excerpt")"
+          admin_successes="$(awk '/\[AdminNotify\].*Email enviado para atendimento/{count++} END{print count+0}' "$log_excerpt")"
           test "$customer_successes" -ge 2
           test "$admin_successes" -ge 1
 
