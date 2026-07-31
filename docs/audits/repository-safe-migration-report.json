@@ -1,0 +1,35 @@
+{
+  "status": "applied",
+  "migrations": [
+    {
+      "source": "scripts/deploy-diagnostic.py",
+      "target": "scripts/maintenance/deploy-diagnostic.py",
+      "kind": "python",
+      "compatibility": true
+    },
+    {
+      "source": "scripts/quality-assurance.py",
+      "target": "scripts/maintenance/quality-assurance.py",
+      "kind": "python",
+      "compatibility": true
+    },
+    {
+      "source": "scripts/vulnerability-scanner.py",
+      "target": "scripts/maintenance/vulnerability-scanner.py",
+      "kind": "python",
+      "compatibility": true
+    },
+    {
+      "source": "scripts/rollback-manager.py",
+      "target": "scripts/maintenance/rollback-manager.py",
+      "kind": "python",
+      "compatibility": true
+    },
+    {
+      "source": "scripts/system-health-check.py",
+      "target": "scripts/maintenance/system-health-check.py",
+      "kind": "python",
+      "compatibility": true
+    }
+  ]
+}

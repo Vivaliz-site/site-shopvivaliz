@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "script_migrations": {
+    "scripts/deploy-diagnostic.py": "scripts/maintenance/deploy-diagnostic.py",
+    "scripts/quality-assurance.py": "scripts/maintenance/quality-assurance.py",
+    "scripts/vulnerability-scanner.py": "scripts/maintenance/vulnerability-scanner.py",
+    "scripts/rollback-manager.py": "scripts/maintenance/rollback-manager.py",
+    "scripts/system-health-check.py": "scripts/maintenance/system-health-check.py"
+  }
+}
