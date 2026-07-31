@@ -49,15 +49,18 @@ TEXT_SUFFIXES = {
     ".md", ".txt", ".env", ".example", ".ini", ".conf", ".sh", ".sql", ".ps1",
 }
 
-CREDENTIAL_PATTERNS = (
-    re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}"),
-    re.compile(r"github_pat_[A-Za-z0-9_]{40,}"),
-    re.compile(r"sk-(?:proj-)?[A-Za-z0-9_-]{24,}"),
-    re.compile(r"xox[baprs]-[A-Za-z0-9-]{20,}"),
-    re.compile(r"-----BEGIN (?:RSA |OPENSSH |EC |DSA |)PRIVATE KEY-----"),
-    re.compile(
-        r"(?i)\b(?:token|secret|api[_ -]?key|client[_ -]?secret)\b"
-        r"[^\n]{0,32}[:=]\s*[`'\"]?([A-Fa-f0-9]{32,})\b"
+CREDENTIAL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("github_classic_token", re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}")),
+    ("github_fine_grained_token", re.compile(r"github_pat_[A-Za-z0-9_]{40,}")),
+    ("openai_key", re.compile(r"sk-(?:proj-)?[A-Za-z0-9_-]{24,}")),
+    ("slack_token", re.compile(r"xox[baprs]-[A-Za-z0-9-]{20,}")),
+    ("private_key_header", re.compile(r"-----BEGIN (?:RSA |OPENSSH |EC |DSA |)PRIVATE KEY-----")),
+    (
+        "long_hex_sensitive_value",
+        re.compile(
+            r"(?i)\b(?:token|secret|api[_ -]?key|client[_ -]?secret)\b"
+            r"[^\n]{0,32}[:=]\s*[`'\"]?([A-Fa-f0-9]{32,})\b"
+        ),
     ),
 )
 
@@ -68,10 +71,16 @@ class Finding:
     rule: str
     path: str
     message: str
+    line: int | None = None
+    pattern: str | None = None
 
 
 def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8", errors="replace")
+
+
+def line_number(text: str, offset: int) -> int:
+    return text.count("\n", 0, offset) + 1
 
 
 def tracked_text_files() -> list[Path]:
@@ -147,10 +156,18 @@ def evaluate() -> tuple[list[Finding], dict[str, object]]:
     for path in tracked_text_files():
         scanned += 1
         text = path.read_text(encoding="utf-8", errors="replace")
-        for pattern in CREDENTIAL_PATTERNS:
-            if pattern.search(text):
+        for pattern_name, pattern in CREDENTIAL_PATTERNS:
+            match = pattern.search(text)
+            if match:
                 relative = path.relative_to(ROOT).as_posix()
-                findings.append(Finding("critical", "credential_like_value", relative, "Tracked text contains a credential-like value; revoke it and use protected secrets."))
+                findings.append(Finding(
+                    "critical",
+                    "credential_like_value",
+                    relative,
+                    "Tracked text contains a credential-like value; revoke real values and replace examples with explicit non-secret placeholders.",
+                    line=line_number(text, match.start()),
+                    pattern=pattern_name,
+                ))
                 break
     checks["credential_scan_file_count"] = scanned
 
@@ -188,7 +205,9 @@ def write_report(findings: list[Finding], checks: dict[str, object]) -> None:
     if findings:
         lines.extend(["## Blocking findings", ""])
         for item in findings:
-            lines.append(f"- **{item.severity.upper()} / {item.rule}** `{item.path}` — {item.message}")
+            location = f"{item.path}:{item.line}" if item.line else item.path
+            pattern = f" Pattern: `{item.pattern}`." if item.pattern else ""
+            lines.append(f"- **{item.severity.upper()} / {item.rule}** `{location}` — {item.message}{pattern}")
     else:
         lines.append("All critical reorganization checks passed.")
     (REPORT_DIR / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
