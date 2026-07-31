@@ -44,6 +44,8 @@ def init_repo(path: Path) -> None:
     git(path, "init", "-b", "main")
     git(path, "config", "user.name", "ShopVivaliz Test")
     git(path, "config", "user.email", "test@shopvivaliz.invalid")
+    (path / ".gitignore").write_text("logs/\n", encoding="utf-8")
+    git(path, "add", ".gitignore")
 
 
 def commit_file(repo: Path, relative: str, content: str, message: str) -> str:
