@@ -2,16 +2,46 @@
 declare(strict_types=1);
 
 /**
+ * Resolve a página PHP realmente executada, inclusive quando Apache/Nginx usa
+ * uma rota amigável como /produto/<slug>. PHP_SELF pode conter o slug nessas
+ * rotas e não deve ser a única fonte para decidir quais assets carregar.
+ */
+function sv_current_page_name(): string
+{
+    $knownPages = ['index', 'catalogo', 'produto', 'carrinho', 'checkout'];
+
+    foreach (['SCRIPT_FILENAME', 'SCRIPT_NAME', 'PHP_SELF'] as $serverKey) {
+        $candidate = basename((string)($_SERVER[$serverKey] ?? ''), '.php');
+        if (in_array($candidate, $knownPages, true)) {
+            return $candidate;
+        }
+    }
+
+    $path = trim((string)parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH), '/');
+    if ($path === '' || $path === 'index.php') {
+        return 'index';
+    }
+
+    $route = explode('/', $path, 2)[0];
+    $routeAliases = [
+        'produtos' => 'catalogo',
+        'catalogo' => 'catalogo',
+        'produto' => 'produto',
+        'carrinho' => 'carrinho',
+        'checkout' => 'checkout',
+    ];
+
+    return $routeAliases[$route] ?? basename($path, '.php');
+}
+
+/**
  * Carrega CSS versionado da aplicação e CSS customizado do admin para a página atual.
  * Inclua isto no <head> de todas as páginas.
  */
 function load_custom_css(): void
 {
     $root = dirname(__DIR__);
-
-    // Detectar página atual antes de acessar storage. O diretório storage é
-    // compartilhado em produção e substitui o conteúdo versionado da release.
-    $pageName = basename($_SERVER['PHP_SELF'], '.php');
+    $pageName = sv_current_page_name();
 
     // CSS e JS funcionais da home devem viver fora de storage, como parte da release.
     if ($pageName === 'index') {
@@ -27,11 +57,9 @@ function load_custom_css(): void
         echo "    <script src=\"/js/visual-polish-v4.js?v=2026-07-31-1\" defer></script>\n";
     }
 
-    $loadVisualV5 = in_array($pageName, ['index', 'catalogo', 'produto', 'carrinho', 'checkout'], true);
+    $loadVisualPolish = in_array($pageName, ['index', 'catalogo', 'produto', 'carrinho', 'checkout'], true);
 
     // CSS opcional criado pelo admin continua sendo lido do storage compartilhado.
-    // A camada visual v5 é emitida depois dele para manter a hierarquia validada
-    // em produção e impedir que regras antigas restaurem títulos e espaçamentos.
     $cssDir = $root . '/storage/css-custom';
     if (is_dir($cssDir)) {
         $cssFiles = [
@@ -49,10 +77,10 @@ function load_custom_css(): void
         }
     }
 
-    // Quinta rodada: última camada da cascata para cabeçalho, catálogo, produto
-    // e estados de compra responsivos. A versão muda sempre que o arquivo muda.
-    if ($loadVisualV5) {
+    // Camadas validadas de acabamento sempre ficam por último na cascata.
+    if ($loadVisualPolish) {
         echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v5.css?v=2026-07-31-2\">\n";
+        echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v6.css?v=2026-07-31-1\">\n";
     }
 }
 
