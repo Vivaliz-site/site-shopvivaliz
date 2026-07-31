@@ -63,7 +63,6 @@ function load_custom_css(): void
     }
 
     $loadVisualPolishV5 = in_array($pageName, ['index', 'catalogo', 'produto', 'carrinho', 'checkout'], true);
-
     // CSS opcional criado pelo admin continua sendo lido do storage compartilhado.
     $cssDir = $root . '/storage/css-custom';
     if (is_dir($cssDir)) {
@@ -92,6 +91,15 @@ function load_custom_css(): void
     // de variáveis de rewrite para rotas amigáveis como /produto/<slug>.
     echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v6.css?v=2026-07-31-2\">\n";
     echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v6-hotfix.css?v=2026-07-31-1\">\n";
+
+    // Ajustes desta auditoria carregam por último para vencer apenas conflitos
+    // visuais medidos, sem depender do CSS editável do admin.
+    $visualAuditCss = $root . '/css/visual-audit-v1.css';
+    if (is_file($visualAuditCss) && is_readable($visualAuditCss)) {
+        $visualAuditVersion = (string) filemtime($visualAuditCss);
+        echo "    <link rel=\"stylesheet\" href=\"/css/visual-audit-v1.css?v="
+            . htmlspecialchars($visualAuditVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
+    }
 }
 
 load_custom_css();

@@ -1,0 +1,299 @@
+/*
+ * Visual audit v1 — ajustes finais para reduzir respiro, melhorar hierarquia
+ * e preservar affordances dos carrosséis e da compra móvel.
+ * Carregado por último em includes/load-custom-css.php.
+ */
+
+/* Base: evita que conteúdos largos criem rolagem horizontal acidental. */
+html,
+body {
+    overflow-x: hidden;
+}
+
+/* Home desktop: menos altura vazia entre a proposta e o conteúdo. */
+@media (min-width: 821px) {
+    .hero {
+        padding-block: clamp(30px, 3.2vw, 40px) !important;
+    }
+
+    .hero-content h1 {
+        max-width: 920px !important;
+        margin-inline: auto !important;
+    }
+
+    .hero-carousel-section {
+        margin-top: -22px !important;
+        padding-bottom: 8px !important;
+    }
+
+    .hero-slide.hero-image-slide,
+    .hero-slide.hero-image-slide > img {
+        min-height: 440px !important;
+        height: 440px !important;
+        max-height: 440px !important;
+    }
+
+    .home-categories,
+    .home-products {
+        padding-top: 28px !important;
+        padding-bottom: 28px !important;
+    }
+
+    .home-section-intro {
+        margin-bottom: 24px !important;
+    }
+
+    /* O CTA fica próximo ao título, enquanto a descrição completa permanece abaixo. */
+    .desktop-buy-rail {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin: 16px 0 22px;
+        padding: 14px 16px;
+        border: 1px solid rgba(11, 79, 136, .12);
+        border-radius: 18px;
+        background: linear-gradient(135deg, #f3f8ff, #f4fcf6);
+    }
+
+    .desktop-buy-rail__price {
+        display: grid;
+        gap: 3px;
+        color: #60758a;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .desktop-buy-rail__price strong {
+        color: #07345d;
+        font-size: 24px;
+        line-height: 1.1;
+    }
+
+    .desktop-buy-rail__button {
+        flex: 0 0 auto;
+        min-height: 46px;
+        padding-inline: 22px;
+        border-radius: 13px !important;
+        font-weight: 900;
+    }
+
+    .product-detail-copy {
+        padding: 24px !important;
+    }
+
+    .product-detail-copy h1 {
+        margin: 10px 0 10px !important;
+        font-size: clamp(29px, 3.3vw, 40px) !important;
+    }
+
+    .product-description {
+        font-size: 15px !important;
+        line-height: 1.58 !important;
+    }
+
+    .product-price-block {
+        margin: 16px 0 12px !important;
+        padding: 16px !important;
+    }
+
+    .product-confidence-box {
+        gap: 7px !important;
+        margin: 14px 0 !important;
+    }
+
+    .confidence-item {
+        min-height: 40px !important;
+        padding: 9px 12px !important;
+    }
+
+    .produto-actions {
+        margin-top: 8px !important;
+    }
+}
+
+/* Catalog: compacta o painel de filtros e deixa a navegação horizontal limpa. */
+.catalog-tools {
+    min-height: 0 !important;
+    padding: 14px 18px 16px !important;
+}
+
+.category-filters {
+    padding-bottom: 6px !important;
+    scrollbar-width: none !important;
+}
+
+.category-filters::-webkit-scrollbar {
+    display: none;
+    height: 0;
+}
+
+.catalog-trust-strip {
+    margin-top: 8px !important;
+}
+
+.status-line {
+    margin-block: 6px 8px !important;
+}
+
+/* Coupon: em janelas baixas, não cobre o hero nem o menu. */
+@media (min-width: 721px) and (max-height: 600px) {
+    .sv-first-coupon {
+        right: 14px !important;
+        bottom: 14px !important;
+        width: min(248px, calc(100vw - 28px)) !important;
+        border-radius: 18px !important;
+    }
+
+    .sv-first-coupon__body {
+        padding: 12px !important;
+    }
+
+    .sv-first-coupon h2 {
+        font-size: 20px !important;
+    }
+
+    .sv-first-coupon p,
+    .sv-first-coupon__secondary,
+    .sv-first-coupon__status {
+        display: none !important;
+    }
+
+    .sv-first-coupon__actions {
+        grid-template-columns: 1fr !important;
+    }
+
+    .sv-first-coupon__primary {
+        min-height: 36px !important;
+    }
+}
+
+/* Mobile: mantém uma leitura compacta e indica que as faixas são roláveis. */
+@media (max-width: 820px) {
+    .hero {
+        padding-top: 10px !important;
+        padding-bottom: 10px !important;
+    }
+
+    .hero h1 {
+        line-height: 1.05 !important;
+    }
+
+    .hero-content > p {
+        margin-bottom: 8px !important;
+    }
+
+    .hero-search-container {
+        margin-top: 6px !important;
+    }
+
+    .hero-carousel-section {
+        padding-top: 8px !important;
+        padding-bottom: 12px !important;
+    }
+
+    .home-categories,
+    .home-products {
+        padding-top: 16px !important;
+        padding-bottom: 18px !important;
+    }
+
+    .home-section-shell {
+        padding-block: 24px !important;
+    }
+
+    .home-scroller-track {
+        padding-right: 16vw !important;
+        scrollbar-width: none;
+    }
+
+    .home-scroller-track::-webkit-scrollbar {
+        display: none;
+        height: 0;
+    }
+
+    .catalog-tools {
+        padding: 12px !important;
+    }
+
+    .category-filters {
+        padding: 4px 0 6px !important;
+    }
+
+    .catalog-trust-strip {
+        margin-top: 4px !important;
+    }
+
+    .catalog-page,
+    .produto-layout {
+        padding-bottom: 110px !important;
+    }
+
+    .product-detail-copy {
+        padding: 18px 16px !important;
+    }
+
+    .product-detail-copy h1 {
+        margin: 10px 0 !important;
+        font-size: clamp(28px, 8.2vw, 32px) !important;
+    }
+
+    .product-description {
+        font-size: 15px !important;
+        line-height: 1.58 !important;
+    }
+
+    .product-price-block {
+        margin: 16px 0 12px !important;
+        padding: 16px !important;
+    }
+
+    .product-confidence-box {
+        gap: 7px !important;
+        margin: 14px 0 !important;
+    }
+
+    .confidence-item {
+        min-height: 40px !important;
+        padding: 9px 12px !important;
+    }
+
+    .desktop-buy-rail {
+        display: none !important;
+    }
+
+    .sticky-buy-wrapper {
+        left: 10px !important;
+        right: 10px !important;
+        bottom: 10px !important;
+        width: auto !important;
+        border-radius: 18px !important;
+        padding: 10px 12px !important;
+        z-index: 100050 !important;
+    }
+
+    .sticky-buy-title {
+        max-width: 120px !important;
+        font-size: 12px !important;
+    }
+
+    .sticky-buy-wrapper .btn-comprar {
+        min-height: 46px !important;
+    }
+}
+
+@media (max-width: 420px) {
+    .home-scroller-track {
+        padding-right: 12vw !important;
+    }
+
+    .catalog-trust-strip {
+        gap: 10px !important;
+    }
+}
+
+@media (min-width: 821px) {
+    .desktop-buy-rail {
+        display: flex;
+    }
+}
