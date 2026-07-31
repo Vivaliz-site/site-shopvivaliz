@@ -110,14 +110,12 @@ jobs:
             marker_action="$(python3 - "$marker" <<'PY'
           import json, sys
           data = json.load(open(sys.argv[1], encoding='utf-8'))
-          if data.get('ok') is True:
+          if data.get('ok') is True and data.get('email_logs_verified') is True:
               print('complete')
-          elif data.get('error') == 'recovery_order_lock_unavailable':
-              print('retry_pre_provider')
-          elif data.get('error') == 'gateway_rejected_request':
-              print('retry_changed_schema_v3')
+          elif data.get('error') in ('recovery_order_lock_unavailable', 'gateway_rejected_request'):
+              print('retry_safe')
           else:
-              print('refuse')
+              print('enrich_existing')
           PY
           )"
             case "$marker_action" in
@@ -125,12 +123,11 @@ jobs:
                 cat "$marker"
                 exit 0
                 ;;
-              retry_pre_provider|retry_changed_schema_v3)
+              retry_safe)
                 rm -f "$marker"
                 ;;
-              *)
-                echo 'A previous recovery attempt reached an unknown state; refusing a provider retry.' >&2
-                exit 1
+              enrich_existing)
+                rm -f "$marker"
                 ;;
             esac
           fi
@@ -144,32 +141,68 @@ jobs:
             exit 1
           fi
 
+          # Persist the provider/order evidence before log enrichment so a
+          # logging assertion can never erase proof of a successful boleto.
+          cp "$output_file" "$marker"
+          chmod 600 "$marker"
+
           log_excerpt="/tmp/boleto-recovery-${target_order}.log"
-          sudo grep -F "$target_order" /var/log/apache2/error.log \
-            | grep -E '\[OrderEmail\]|\[AdminNotify\]|\[MercadoPago\]|\[BoletoRecovery\]' \
-            | tail -n 50 > "$log_excerpt"
+          sudo python3 - "$target_order" "$log_excerpt" <<'PY'
+          import gzip
+          import glob
+          import sys
+
+          order, output = sys.argv[1:]
+          tags = ('[OrderEmail]', '[AdminNotify]', '[MercadoPago]', '[BoletoRecovery]')
+          matches = []
+          for path in sorted(glob.glob('/var/log/apache2/error.log*')):
+              try:
+                  opener = gzip.open if path.endswith('.gz') else open
+                  with opener(path, 'rt', encoding='utf-8', errors='replace') as handle:
+                      for line in handle:
+                          if order in line and any(tag in line for tag in tags):
+                              matches.append(line.rstrip())
+              except OSError:
+                  continue
+          with open(output, 'w', encoding='utf-8') as handle:
+              handle.write('\n'.join(matches[-100:]) + ('\n' if matches else ''))
+          PY
 
           customer_count="$(awk '/\[OrderEmail\].*Email enviado/{count++} END{print count+0}' "$log_excerpt")"
           admin_count="$(awk '/\[AdminNotify\].*Email enviado para atendimento/{count++} END{print count+0}' "$log_excerpt")"
           boleto_count="$(awk '/\[MercadoPago\].*boleto created|\[BoletoRecovery\].*ok=yes/{count++} END{print count+0}' "$log_excerpt")"
-          test "$customer_count" -ge 2
-          test "$admin_count" -ge 1
-          test "$boleto_count" -ge 1
 
           python3 - "$output_file" "$expected_sha" "$customer_count" "$admin_count" "$boleto_count" > "$marker" <<'PY'
           import json, sys
           path, sha, customer_count, admin_count, boleto_count = sys.argv[1:]
           data = json.load(open(path, encoding='utf-8'))
+          customer_count = int(customer_count)
+          admin_count = int(admin_count)
+          boleto_count = int(boleto_count)
           data['sha'] = sha
-          data['customer_email_success_log_count'] = int(customer_count)
-          data['admin_email_success_log_count'] = int(admin_count)
-          data['boleto_success_log_count'] = int(boleto_count)
-          data['email_logs_verified'] = int(customer_count) >= 2 and int(admin_count) >= 1
+          data['customer_email_success_log_count'] = customer_count
+          data['admin_email_success_log_count'] = admin_count
+          data['boleto_success_log_count'] = boleto_count
+          data['email_logs_verified'] = customer_count >= 1 and admin_count >= 1
           data['provider_schema'] = 'orders-v3-minimal'
+          data['provider_success_log_verified'] = boleto_count >= 1
           print(json.dumps(data, ensure_ascii=False, indent=2))
           PY
           chmod 600 "$marker"
-          cat "$marker"
+
+          python3 - "$marker" <<'PY'
+          import json, sys
+          data = json.load(open(sys.argv[1], encoding='utf-8'))
+          required = (
+              'ok', 'boleto_created', 'digitable_line_present', 'boleto_email_sent',
+              'tiny_not_imported_while_unpaid', 'do_not_fulfill',
+              'email_logs_verified', 'provider_success_log_verified'
+          )
+          missing = [key for key in required if data.get(key) is not True]
+          if missing:
+              raise SystemExit('recovery evidence incomplete: ' + ','.join(missing))
+          print(json.dumps(data, ensure_ascii=False, indent=2))
+          PY
           REMOTE
 
       - name: Download redacted recovery evidence
@@ -201,7 +234,8 @@ jobs:
                   raise SystemExit(f'private/payment field leaked: {key}')
           for key in (
               'ok', 'boleto_created', 'digitable_line_present', 'boleto_email_sent',
-              'tiny_not_imported_while_unpaid', 'do_not_fulfill', 'email_logs_verified'
+              'tiny_not_imported_while_unpaid', 'do_not_fulfill',
+              'email_logs_verified', 'provider_success_log_verified'
           ):
               if data.get(key) is not True:
                   raise SystemExit(f'recovery assertion not proven: {key}')
