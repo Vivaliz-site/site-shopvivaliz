@@ -69,7 +69,9 @@ function installMobileNav(){
 function updateSupportVisibility(){
  var body=document.body;
  if(!body)return;
- var hiddenAtTop=body.classList.contains('sv-page-product')&&window.innerWidth<=820&&window.scrollY<360;
+ var isProduct=/^\/produto(?:\/|$)/i.test(window.location.pathname||'');
+ body.classList.toggle('sv-page-product',isProduct);
+ var hiddenAtTop=isProduct&&window.scrollY<420;
  body.classList.toggle('sv-product-top',hiddenAtTop);
 }
 function updateFooterVisibility(){
