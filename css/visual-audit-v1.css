@@ -40,6 +40,7 @@ body {
     .trust-bar-item {
         gap: 8px !important;
         padding: 12px 10px !important;
+        min-height: 56px !important;
     }
 
     .trust-bar-icon,
