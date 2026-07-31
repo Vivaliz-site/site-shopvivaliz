@@ -82,19 +82,28 @@ Ao adicionar novo arquivo em `/includes/` que precisa ser público:
 
 ---
 
-## 🔴 CRÍTICO: Pipeline de otimização/sincronização Shopee 100% inoperante — OAuth2 do Tiny quebrado há 3+ semanas, e desde 2026-07-27 os workflows nem existem mais
+## 🔴 CRÍTICO: Pipeline de otimização/sincronização Shopee via Tiny 100% inoperante — OAuth2 do Tiny quebrado há 4+ semanas; novo pipeline via API própria da Shopee existe mas requer aprovação manual e nunca rodou
 
-**Última atualização:** 2026-07-27
+**Última atualização:** 2026-07-31
 
-### Atualização 2026-07-27
-`fetch-shopee-listings.yml` e `optimize-shopee-listings.yml` **não existem mais** em
-`.github/workflows/` — removidos, aparentemente como colateral da consolidação "99→10
-workflows" registrada em `CLAUDE.md` (2026-07-26); nenhum workflow ativo restante
-referencia Shopee. Nenhum artefato novo em `listings/` desde `20260726-080756`/
-`20260726-060921` (ambos ainda com o erro OAuth2 abaixo, de antes da remoção). Ou seja, além
-de renovar a credencial (problema original abaixo), agora também é preciso **recriar os dois
-workflows** para o pipeline voltar a rodar. Detalhes: `docs/HISTORICO-AGENTES-SHOPEE.md`
-seção 9.10.
+### Atualização 2026-07-31
+Entrada anterior (2026-07-27) estava desatualizada: dizia que "nenhum workflow ativo restante
+referencia Shopee". Isso não é mais verdade — em 2026-07-30 foram adicionados
+`.github/workflows/shopee-production-seo.yml` e `.github/workflows/shopee-optimizer-safety.yml`,
+que aplicam SEO real (título/descrição/imagens) via API própria do Shopee Open Platform
+(`SHOPEE_PARTNER_ID`/`SHOPEE_PARTNER_KEY`/`SHOPEE_ACCESS_TOKEN`/`SHOPEE_REFRESH_TOKEN`/
+`SHOPEE_SHOP_ID`), **não** via Tiny/Olist. Porém: (1) só dispara por `workflow_dispatch` manual
+com confirmação digitada (`APPLY_ALL_SHOPEE_PRODUCTS`) e gate de aprovação do GitHub
+(`environment: shopee-production`) — não roda em `schedule`, de propósito; (2) nunca foi
+executado com sucesso — `logs/shopee-production-seo/` e
+`storage/private/shopee-production-backups/` não existem; (3) só cobre título/descrição/ordem
+de imagem, não CTR/conversão/preço/trending keywords (ver `docs/HISTORICO-AGENTES-SHOPEE.md`
+seção 9.14 para detalhes completos e a recomendação para o usuário).
+
+O pipeline **antigo** baseado em Tiny (`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml`)
+continua ausente do repo desde a consolidação de 2026-07-26 e a credencial OAuth2 do Tiny
+continua quebrada (problema original abaixo, sem mudança). Detalhes completos:
+`docs/HISTORICO-AGENTES-SHOPEE.md` seções 9.10 e 9.14.
 
 ### Problema original (até 2026-07-26)
 Os três workflows que dependem do client OAuth2 do Tiny ERP (`fetch-shopee-listings.yml` a

@@ -652,3 +652,60 @@ foi inventado. Nenhuma notificação push enviada neste ciclo: mesma recomendaç
 ciclos 15/16/17 (renovar `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`/`TINY_ACCESS_TOKEN`/
 `TINY_REFRESH_TOKEN` nos GitHub Secrets **e** recriar os dois workflows dedicados), sem fato novo
 que justifique repetir o alerta.
+
+### 9.14 Atualização — ciclo de 2026-07-31 (~UTC deste run), 19º ciclo — novo pipeline de aplicação real construído, mas gated e nunca executado
+
+Fato novo em relação aos ciclos 15-18 (que reportaram estado idêntico e sem mudança): entre
+2026-07-30 15h e 21h houve trabalho real e recente na integração Shopee, mas por uma via
+diferente da bloqueada por OAuth2 do Tiny. Commits (`git log`, ramo `main`):
+
+```
+7dc241a chore(shopee): observable one-product production validation
+a85a435 fix(shopee): capture executor errors and install runtime dependency
+6c49db8 fix(shopee): correct evidence publishing yaml
+c91fab5 fix(shopee): allow automatic access-token renewal in production workflow
+8835514 fix(shopee): require manual production approval and immutable evidence
+```
+
+Isso adicionou `.github/workflows/shopee-production-seo.yml` (aplica título/descrição/imagens
+reais via `scripts/shopee_production_seo_apply.py`, usando a API Open Platform da própria Shopee
+— secrets `SHOPEE_PARTNER_ID`/`SHOPEE_PARTNER_KEY`/`SHOPEE_ACCESS_TOKEN`/`SHOPEE_REFRESH_TOKEN`/
+`SHOPEE_SHOP_ID` — e não o OAuth2 do Tiny/Olist que segue quebrado, seção 9.10) e
+`.github/workflows/shopee-optimizer-safety.yml` (compila os scripts e roda os testes de
+segurança em todo PR/push que toque neles). `KNOWN_ISSUES.md` estava desatualizado nesse ponto
+(dizia que nenhum workflow Shopee existia mais no repo) e foi corrigido nesta sessão.
+
+**Por que isso não muda a conclusão prática deste ciclo (nenhuma otimização aplicada):**
+1. `shopee-production-seo.yml` só tem trigger `workflow_dispatch`, exige o operador digitar
+   literalmente `APPLY_ALL_SHOPEE_PRODUCTS` no campo `confirmation`, e roda sob
+   `environment: shopee-production` (gate de aprovação manual do GitHub) — construído
+   deliberadamente para exigir um humano, não uma automação de schedule. Sem trigger
+   `schedule`, este ciclo (que roda a cada 6h sem supervisão) não tem como e não deve tentar
+   dispará-lo.
+2. `logs/shopee-production-seo/` e `storage/private/shopee-production-backups/` não existem —
+   o workflow nunca foi executado com sucesso contra o catálogo real; não há nenhum
+   título/descrição já aplicado para verificar ou reportar antes/depois.
+3. `scripts/shopee_production_seo_apply.py` só cobre título/descrição/ordem de imagem
+   (com preço e estoque tratados como invariantes, nunca enviados). Não implementa nenhum dos
+   itens 1, 3, 5, 6, 7, 8, 9 destas instruções (CTR, taxa de conversão, teste A/B de descrição,
+   atributos por comportamento de busca, teste de preço, trending keywords, padrão por
+   categoria) — achado estrutural das seções 9.7/9.8 permanece: **nenhuma integração com a API
+   de analytics do Shopee Open Platform (CTR, conversão, vendas por SKU) existe em nenhum
+   workflow ou script deste repositório**, então os passos 1 e 2 destas instruções seguem
+   tecnicamente inexequíveis de forma autônoma mesmo com este novo workflow.
+4. Nenhum secret `SHOPEE_*`/`TINY_*`/`OLIST_*` está presente neste ambiente de sessão
+   (`printenv | grep -iE 'shopee|tiny|olist'` vazio) — mesmo que o gate manual não existisse,
+   esta sessão não teria como autenticar na API real da Shopee.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada neste ciclo. Nenhum dado
+de CTR/conversão/venda foi inventado. `docs/HISTORICO-AGENTES-SHOPEE.md` (esta entrada) e
+`KNOWN_ISSUES.md` atualizados para refletir o pipeline real recém-criado e seu gate manual.
+
+**Recomendação para o próximo ciclo / para o usuário:** se a intenção é que a otimização real
+rode de forma autônoma a cada 6h, alguém precisa decidir conscientemente relaxar o gate atual
+(ex: trocar `environment: shopee-production` por uma aprovação assíncrona, ou aceitar o risco de
+liberar `schedule` sem confirmação manual) — o gate foi adicionado de propósito no mesmo dia
+(commit `8835514`, "require manual production approval and immutable evidence"), então nenhuma
+sessão autônoma deve tentar contorná-lo sem essa decisão explícita do usuário. Separadamente, o
+bloqueador original do OAuth2 do Tiny (seção 9.9-9.10) e a ausência de integração de analytics
+(seções 9.7-9.8) continuam sem solução.
