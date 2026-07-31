@@ -33,7 +33,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/repository-governance artifacts/workflow-policy artifacts/system-health
+          mkdir -p \
+            artifacts/repository-governance \
+            artifacts/workflow-policy \
+            artifacts/system-health \
+            artifacts/reorganization-final
           {
             echo "run_id=${GITHUB_RUN_ID}"
             echo "event=${GITHUB_EVENT_NAME}"
@@ -61,18 +65,38 @@ jobs:
           echo "base=$base" >> "$GITHUB_OUTPUT"
           echo "base=$base" >> artifacts/repository-governance/run-context.txt
 
-      - name: Compile governance and agent evidence scripts
+      - name: Compile governance and canonical entrypoints
         run: |
           python -m py_compile \
             scripts/maintenance/audit_automation_changes.py \
             scripts/maintenance/audit_active_workflows.py \
+            scripts/maintenance/system_health_check.py \
+            scripts/maintenance/finalize_reorganization.py \
             scripts/all-documented-agents.py \
             scripts/heartbeat-executor.py \
             scripts/system-health-check.py \
+            oauth-auto-exec.py \
+            scripts/ai/retired_executor.py \
+            scripts/ai/autonomous_executor.py \
+            scripts/ai/continuous_executor.py \
+            scripts/ai/parallel_executor.py \
+            scripts/marketplace/olist/sync_master.py \
+            scripts/marketplace/olist/oauth_login.py \
+            scripts/marketplace/shopee/retired_credential_tool.py \
+            scripts/autonomous-executor.py \
+            scripts/continuous-executor.py \
+            scripts/parallel-executor.py \
             scripts/olist-sync-master.py \
             scripts/olist-oauth-login.py \
-            scripts/marketplace/olist/sync_master.py \
-            scripts/marketplace/olist/oauth_login.py
+            scripts/get_token.py \
+            scripts/run_playwright.py \
+            scripts/shopee_full_pipeline.py \
+            scripts/test_final.py \
+            scripts/test_shopee_simple.py \
+            scripts/test_shopee_api.py \
+            claude/api/shopee-integration/scripts/run_playwright.py \
+            claude/api/shopee-integration/scripts/test_final.py \
+            claude/api/shopee-integration/scripts/test_shopee_api.py
 
       - name: Run governance unit tests
         run: |
@@ -81,10 +105,11 @@ jobs:
             tests.unit.test_audit_active_workflows \
             tests.unit.test_agent_evidence_state \
             tests.unit.test_olist_entrypoints_safe \
+            tests.unit.test_shopee_legacy_credentials_safe \
             -v
 
       - name: Validate canonical queue and agent health
-        run: python scripts/system-health-check.py
+        run: python scripts/maintenance/system_health_check.py
 
       - name: Audit changed automation surfaces
         if: always()
@@ -97,6 +122,10 @@ jobs:
         if: always()
         run: python scripts/maintenance/audit_active_workflows.py
 
+      - name: Verify final reorganization contract
+        if: always()
+        run: python scripts/maintenance/finalize_reorganization.py
+
       - name: Verify evidence files
         if: always()
         run: |
@@ -106,6 +135,8 @@ jobs:
           test -s artifacts/workflow-policy/report.json
           test -s artifacts/workflow-policy/report.md
           test -s artifacts/system-health/report.json
+          test -s artifacts/reorganization-final/report.json
+          test -s artifacts/reorganization-final/report.md
 
       - name: Upload governance evidence
         if: always()
@@ -116,6 +147,7 @@ jobs:
             artifacts/repository-governance/
             artifacts/workflow-policy/
             artifacts/system-health/
+            artifacts/reorganization-final/
             artifacts/disabled-executors/
           if-no-files-found: error
           retention-days: 90

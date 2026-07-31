@@ -1,73 +1,96 @@
 # Backlog de reorganização do repositório
 
-Atualizado em: 2026-07-30
+Atualizado em: 2026-07-31
 
 ## Estado preservado
 
-- PR histórico amplo: `#599`.
-- Branch de preservação: `archive/pr-599-reorg-2026-07-30`.
-- Motivo da substituição: 1.499 arquivos, 143 commits e centenas de stubs/wrappers impediam revisão segura.
+- PR amplo `#599`: fechado sem merge.
+- Preservação histórica: `archive/pr-599-reorg-2026-07-30`.
+- Motivo: mais de 1.500 arquivos e centenas de stubs/wrappers impediam revisão segura.
 
-## Fases
+## Fases concluídas
 
-### Fase 1 — Governança e auditoria
+### Fase 1 — Governança
 
-Status: em execução.
+- [x] PR `#600` integrado;
+- [x] gate fail-closed;
+- [x] auditoria horária no minuto 17;
+- [x] testes e artifacts obrigatórios.
 
-- [x] criar branch limpa a partir de `main`;
-- [x] adicionar gate fail-closed para mudanças novas;
-- [x] restaurar auditoria horária de agentes;
-- [x] adicionar testes unitários do detector;
-- [x] exigir artifacts;
-- [ ] integrar após checks verdes.
+### Fase 2 — Workflows
 
-### Fase 2 — Workflows ativos
-
-Status: pendente após Fase 1.
-
-- inventariar workflows ativos e arquivados;
-- remover placeholders e workflows que apenas imprimem estado;
-- bloquear `continue-on-error`, `exit 0` e artifacts opcionais em auditorias;
-- remover auto-merge e pushes automáticos amplos;
-- validar permissions mínimas.
+- [x] PRs `#602` e `#609` integrados;
+- [x] auditor global de workflows ativos;
+- [x] remoção de escrita automática, sucesso forçado e artifacts opcionais;
+- [x] Shopee produção somente manual;
+- [x] migrador automático removido.
 
 ### Fase 3 — Agentes e filas
 
-Status: pendente após Fase 2.
+- [x] PR `#605` integrado;
+- [x] estados canônicos separados;
+- [x] `completed_verified` exige run, artifact, commit SHA e verificação;
+- [x] fila não avança sem evidência;
+- [x] heartbeat exige run recente e artifact.
 
-- colocar simuladores em fail-closed;
-- separar `blocked`, `failed` e `completed_verified`;
-- exigir commit, PR, testes e artifact para conclusão;
-- corrigir leitores de fila para o schema canônico;
-- impedir alteração de fila sem execução real.
+### Fase 4 — Domínios críticos
 
-### Fase 4 — Scripts por domínio
+- [x] PR `#611`: Olist canônico e fail-closed;
+- [x] PR `#612`: executores IA aposentados em `scripts/ai/`;
+- [x] health canônico em `scripts/maintenance/`;
+- [x] utilitários Shopee com credenciais substituídos por wrappers bloqueados;
+- [x] testes executam wrappers e exigem código 2, estado `blocked` e nenhuma operação externa.
 
-Status: pendente após Fase 3.
+### Fase 5 — Documentação
 
-- mover um domínio por PR: IA, manutenção, Shopee, Olist, produção e desenvolvimento;
-- manter wrapper somente para consumidor comprovado;
-- adicionar prazo de remoção para cada wrapper;
-- testar imports, workflows e comandos documentados.
+- [x] índice, política e relatório final atualizados;
+- [x] documentos históricos tratados como inventário, não prova de execução;
+- [x] nenhuma migração em massa ou criação de stubs permanentes.
 
-### Fase 5 — Documentação e arquivos históricos
-
-Status: pendente após Fase 4.
-
-- mover documentos atuais para `docs/knowledge` ou `docs/operations`;
-- mover relatórios antigos para `docs/audits` ou `archive`;
-- não substituir centenas de arquivos por stubs permanentes;
-- remover arquivos com nomes inválidos ou artefatos temporários após comprovação.
+A movimentação física de documentos históricos permanece trabalho não bloqueante e deve ocorrer apenas em PRs pequenos com consumidores identificados.
 
 ### Fase 6 — Secrets e histórico
 
-Status: ação de segurança separada.
+Árvore atual:
 
-- rotacionar credenciais já expostas;
-- sanitizar a árvore atual;
-- planejar limpeza de histórico coordenada;
-- invalidar tokens antigos antes de reescrever histórico.
+- [x] valores Olist, Mercado Pago, Shopee, TikTok, Tiny e Melhor Envio removidos dos arquivos rastreados;
+- [x] arquivo `storage/private/melhorenvio-tokens.json` removido;
+- [x] qualquer arquivo rastreado em `storage/private/` passa a ser bloqueante;
+- [x] query strings com token removidas;
+- [x] scripts que continham credenciais aposentados;
+- [x] exemplos token-shaped substituídos por placeholders explícitos;
+- [x] scanner cobre formatos conhecidos, JWTs, literais sensíveis e blocos PEM completos;
+- [x] scanner registra somente arquivo, linha e classe do padrão.
 
-## Gate de avanço
+Ações externas ainda obrigatórias e não verificáveis pelo repositório:
 
-Uma fase só avança com PR pequeno, checks verdes, artifact obrigatório e diff revisável. Nenhum workflow de reorganização pode fazer commit, push ou merge por conta própria.
+- [ ] revogar e rotacionar credenciais Olist;
+- [ ] revogar e rotacionar secrets Mercado Pago;
+- [ ] revogar e rotacionar parceiro, sandbox e tokens Shopee;
+- [ ] revogar e rotacionar aplicação TikTok;
+- [ ] revogar e rotacionar token de webhook Tiny;
+- [ ] revogar e rotacionar access token e refresh token Melhor Envio;
+- [ ] armazenar substitutos somente em stores protegidos;
+- [ ] validar integrações por execução real e read-back;
+- [ ] planejar limpeza coordenada do histórico depois das revogações;
+- [ ] comunicar colaboradores antes de reescrever histórico.
+
+A remoção da árvore atual não invalida valores nem apaga commits antigos.
+
+## Critério final
+
+A reorganização operacional só termina quando:
+
+- `finalize_reorganization.py` retorna zero;
+- relatório final tem `status: success` e zero achados bloqueantes;
+- Repository Governance, Agents Hourly Deep Audit, ShopVivaliz QA e Quality Gate estão verdes;
+- artifacts obrigatórios correspondem ao SHA revisado;
+- não há PR antigo de reorganização aberto;
+- nenhum workflow faz commit, push ou merge da reorganização automaticamente.
+
+## Próximos trabalhos não bloqueantes
+
+- mover documentos históricos por assunto;
+- remover wrappers após confirmar ausência de consumidores;
+- organizar ferramentas auxiliares em PRs independentes;
+- concluir as rotações externas e eventual limpeza de histórico.

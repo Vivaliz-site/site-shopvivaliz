@@ -1,75 +1,32 @@
-# ⚡ Setup Supabase em 5 Minutos
+# Configuração segura do Supabase
 
-## Passo 1: Criar Conta
-https://supabase.com/auth/signup
+## Criar o projeto
 
-Usar: GitHub ou Google (mais rápido)
+1. Acesse o painel oficial do Supabase.
+2. Crie o projeto na região apropriada.
+3. Gere uma senha única e aleatória em um gerenciador de senhas.
+4. Não registre a senha em documentação, issue, comando ou screenshot.
 
-## Passo 2: Criar Projeto
-1. Clicar "New project"
-2. Name: `shopvivaliz-medusa`
-3. Password: `supabase123456` (salvar)
-4. Region: **São Paulo (sp-1)**
-5. Clicar "Create new project"
-6. **Aguardar 2-3 minutos** (banco sendo criado)
+## Secrets necessários
 
-## Passo 3: Obter Connection String
-1. Projeto criado → Settings (engrenagem)
-2. Database
-3. Connection Strings → URI
-4. Copiar a string completa
-
-Exemplo:
-```
-postgresql://postgres:supabase123456@db.xxxxxxxxxx.supabase.co:5432/postgres
+```text
+SUPABASE_URL=<SECRET_PROTEGIDO>
+SUPABASE_ANON_KEY=<SECRET_PROTEGIDO>
+SUPABASE_SERVICE_ROLE_KEY=<SECRET_PROTEGIDO>
+SUPABASE_DB_URL=<SECRET_PROTEGIDO>
 ```
 
-**⚠️ IMPORTANTE:** Substituir `[YOUR-PASSWORD]` pela senha que você criou
+A connection string deve existir somente em secret protegido. Use a configuração do ambiente para montar a conexão em tempo de execução.
 
-## Passo 4: Colar no Backend
+## Banco
 
-Abra: `claude/medusa/apps/backend/.env`
+Execute migrations por ferramenta controlada, com backup e validação. Não cole SQL destrutivo diretamente no painel sem revisão.
 
-Procure por esta linha:
-```
-DATABASE_URL=postgresql://medusa:medusa123@localhost:5432/shopvivaliz_medusa
-```
+## Validação
 
-Substitua por:
-```
-DATABASE_URL=postgresql://postgres:supabase123456@db.xxxxxxxxxx.supabase.co:5432/postgres
-```
+- conexão autenticada sem imprimir a URL completa;
+- migration exit code zero;
+- consulta de read-back;
+- artifact ligado ao run e commit.
 
-## Pronto!
-
-Depois de colar, o projeto pode rodar:
-```bash
-cd claude/medusa/apps/backend
-npm run migrate
-npm run seed
-npm run dev
-```
-
----
-
-## Alternativa: PostgreSQL Local (se preferir)
-
-Se já tiver PostgreSQL instalado:
-
-```bash
-psql -U postgres
-
-CREATE DATABASE shopvivaliz_medusa;
-CREATE USER medusa PASSWORD 'medusa123';
-GRANT ALL PRIVILEGES ON DATABASE shopvivaliz_medusa TO medusa;
-\q
-```
-
-Depois usar:
-```
-DATABASE_URL=postgresql://medusa:medusa123@localhost:5432/shopvivaliz_medusa
-```
-
----
-
-**Tempo total:** ~5 minutos para Supabase pronto ⏱️
+A senha anteriormente sugerida neste documento deve ser considerada insegura caso tenha sido usada e deve ser rotacionada.

@@ -14,6 +14,7 @@ class OlistEntrypointSafetyTests(unittest.TestCase):
         expected = {
             ROOT / "scripts" / "olist-sync-master.py": "sync_master.py",
             ROOT / "scripts" / "olist-oauth-login.py": "oauth_login.py",
+            ROOT / "oauth-auto-exec.py": "oauth_login.py",
         }
         for path, target in expected.items():
             text = path.read_text(encoding="utf-8")
@@ -24,6 +25,7 @@ class OlistEntrypointSafetyTests(unittest.TestCase):
 
     def test_oauth_entrypoint_contains_no_insecure_login_automation(self):
         paths = [
+            ROOT / "oauth-auto-exec.py",
             ROOT / "scripts" / "olist-oauth-login.py",
             ROOT / "scripts" / "marketplace" / "olist" / "oauth_login.py",
         ]
@@ -34,12 +36,13 @@ class OlistEntrypointSafetyTests(unittest.TestCase):
             "response.text[:500]",
             "access_token[:",
             "session.post(login_form_url",
+            "async_playwright",
         )
         combined = "\n".join(path.read_text(encoding="utf-8") for path in paths)
         for marker in forbidden:
             self.assertNotIn(marker, combined)
 
-    def test_canonical_entrypoints_block_without_external_operation(self):
+    def test_entrypoints_block_without_external_operation(self):
         cases = (
             (
                 ROOT / "scripts" / "marketplace" / "olist" / "sync_master.py",
@@ -47,6 +50,10 @@ class OlistEntrypointSafetyTests(unittest.TestCase):
             ),
             (
                 ROOT / "scripts" / "marketplace" / "olist" / "oauth_login.py",
+                ROOT / "artifacts" / "disabled-executors" / "olist-oauth-login.json",
+            ),
+            (
+                ROOT / "oauth-auto-exec.py",
                 ROOT / "artifacts" / "disabled-executors" / "olist-oauth-login.json",
             ),
         )

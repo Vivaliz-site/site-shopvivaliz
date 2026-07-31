@@ -1,110 +1,92 @@
-# ⚙️ Configuração de Webhooks Olist/Tiny ERP
+# Configuração de Webhooks Olist/Tiny ERP
 
 ## Credenciais
-- **Identificador:** 31816
-- **Token:** 9fc7a699f6946099733fd722929652d38bb56b6f025c2ff15c51237325430878
-- **Endpoint cotação:** https://erp.olist.com/webhook/api/v1/parceiro/31816/cotar
+
+- **Identificador do parceiro:** `31816`.
+- **Token:** armazenar somente em secret protegido, usando o nome canônico `OLIST_WEBHOOK_TOKEN`.
+- **Endpoint de cotação:** `https://erp.olist.com/webhook/api/v1/parceiro/31816/cotar`.
+
+O token anteriormente versionado deve ser considerado comprometido e revogado no provedor. Nenhum valor substituto deve ser gravado neste arquivo ou em outro conteúdo versionado.
 
 ---
 
-## URLs para Configurar na Olist
+## URLs para configurar na Olist
 
-### ✅ Produtos (CRÍTICO)
-```
+### Produtos
+
+```text
 https://shopvivaliz.com.br/olist/webhook-receiver.php?event=product
 ```
-**Eventos:** produto.criado, produto.atualizado, preco.alterado, estoque.alterado
 
-### ✅ Estoque
-```
+Eventos: `produto.criado`, `produto.atualizado`, `preco.alterado`, `estoque.alterado`.
+
+### Estoque
+
+```text
 https://shopvivaliz.com.br/olist/webhook-receiver.php?event=stock
 ```
-**Eventos:** estoque.alterado
 
-### ✅ Preços
-```
+Evento: `estoque.alterado`.
+
+### Preços
+
+```text
 https://shopvivaliz.com.br/olist/webhook-receiver.php?event=price
 ```
-**Eventos:** preco.alterado
 
-### ✅ Pedidos (Opcional inicialmente)
-```
+Evento: `preco.alterado`.
+
+### Pedidos
+
+```text
 https://shopvivaliz.com.br/olist/webhook-receiver.php?event=order
 ```
-**Eventos:** pedido.criado, pedido.alterado, pedido.cancelado
 
-### ✅ Rastreio (Opcional inicialmente)
-```
+Eventos: `pedido.criado`, `pedido.alterado`, `pedido.cancelado`.
+
+### Rastreio
+
+```text
 https://shopvivaliz.com.br/olist/webhook-receiver.php?event=tracking
 ```
-**Eventos:** rastreio.alterado
 
-### ✅ Nota Fiscal (Opcional inicialmente)
-```
+Evento: `rastreio.alterado`.
+
+### Nota fiscal
+
+```text
 https://shopvivaliz.com.br/olist/webhook-receiver.php?event=invoice
 ```
-**Eventos:** nota_fiscal.emitida
+
+Evento: `nota_fiscal.emitida`.
 
 ---
 
-## 🔧 Como Configurar na Olist
+## Configuração segura
 
-1. **Acesse:** https://erp.olist.com/
-2. **Menu:** Configurações → Integrações → Webhooks
-3. **Para cada URL acima:**
-   - Cole a URL
-   - Selecione os eventos desejados
-   - Salve
-   - **Teste** (Olist oferece botão de teste)
+1. Acesse o painel oficial da Olist.
+2. Cadastre cada URL HTTPS necessária.
+3. Selecione somente os eventos utilizados.
+4. Configure o token rotacionado no secret protegido do ambiente de produção.
+5. Execute o teste fornecido pelo provedor.
+6. Verifique logs redigidos, sem token ou dados de autenticação.
+7. Confirme o efeito por leitura posterior da API de catálogo.
 
----
+## Evidência mínima
 
-## ✅ Teste de Webhook
+Uma configuração só pode ser declarada operacional quando existirem:
 
-Após configurar:
-1. Na Olist, clique em "Testar" para cada webhook
-2. Verifique logs em: `/logs/webhook.log`
-3. Atualize um produto no ERP
-4. Confirm que: `https://shopvivaliz.com.br/api/catalog/products.php` retorna o produto atualizado em ~10 segundos
+- identificador do teste do provedor;
+- timestamp;
+- status HTTP sem cabeçalhos sensíveis;
+- evento recebido;
+- read-back do dado esperado;
+- run ou artifact imutável associado.
 
----
+## Troubleshooting
 
-## 📊 Fluxo
+- Webhook não chega: valide HTTPS, DNS, autenticação e logs redigidos.
+- Produtos não atualizam: valide a fila, o processador e o read-back do catálogo.
+- Volume excessivo: aplique idempotência, fila, rate limit e concorrência controlada.
 
-```
-Alteração no ERP Olist
-    ↓
-Webhook dispara para shopvivaliz.com.br
-    ↓
-webhook-receiver.php processa
-    ↓
-sync-on-webhook.php sincroniza produtos
-    ↓
-storage/products-cache-ativos.json atualizado
-    ↓
-API retorna dados ao vivo (188 produtos)
-    ↓
-Site mostra alterações em tempo real ⚡
-```
-
----
-
-## 🚨 Troubleshooting
-
-**Webhook não chega:**
-- Verifique se URL está correta (HTTPS)
-- Verifique se servidor está online
-- Teste manualmente: `curl -X POST https://shopvivaliz.com.br/olist/webhook-receiver.php`
-
-**Produtos não atualizam:**
-- Verifique `/logs/webhook.log`
-- Verifique `.env` tem token válido
-- Tente sincronização manual: `python sync-products-to-json.py`
-
-**Muitos webhooks causando lentidão:**
-- Webhooks rodam em background via `exec()` em PHP
-- Limite máximo de 5 sincronizações simultâneas no código
-
----
-
-**PRONTO PARA PRODUÇÃO! 🚀**
+Este documento não comprova que a integração está pronta para produção. A aprovação depende de token rotacionado e teste real com evidência verificável.

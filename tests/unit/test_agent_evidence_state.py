@@ -21,7 +21,7 @@ def load(name: str, relative: str):
     return module
 
 
-HEALTH = load("system_health_check", "scripts/system-health-check.py")
+HEALTH = load("system_health_check", "scripts/maintenance/system_health_check.py")
 HEARTBEAT = load("heartbeat_executor", "scripts/heartbeat-executor.py")
 AGENTS = load("all_documented_agents", "scripts/all-documented-agents.py")
 
