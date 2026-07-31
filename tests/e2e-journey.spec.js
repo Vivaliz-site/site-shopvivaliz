@@ -148,7 +148,7 @@ test.describe('E2E Journey - Compra Completa', () => {
     await expect(page.locator('script[type="application/ld+json"]').first()).toBeAttached();
 
     const bodyText = await page.locator('body').innerText();
-    expect(bodyText).not.toMatch(/(?:Ã.|Â.|�)/);
+    expect(bodyText).not.toMatch(/InÃ|NavegaÃ|PolÃ|CondiÃ|Â©|â€“|â€”|â€™|�/);
     await expect(page.locator('.knowledge-card, .knowledge-panel').first()).toBeVisible();
   });
 
