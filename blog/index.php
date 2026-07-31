@@ -11,6 +11,7 @@ if (session_status() === PHP_SESSION_NONE) {
 header('Content-Type: text/html; charset=UTF-8');
 $query = trim((string)($_GET['q'] ?? ''));
 $categoryFilter = trim((string)($_GET['categoria'] ?? ''));
+$isFiltered = $query !== '' || $categoryFilter !== '';
 $repository = BlogArticleRepository::fromApplicationDatabase();
 $allPublished = $repository->published('', '', 200);
 $articles = $repository->published($query, $categoryFilter, 30);
@@ -27,6 +28,9 @@ $pageTitle = 'Central de Conhecimento | ShopVivaliz';
 $pageDescription = 'Guias de compra, organização, manutenção e cuidados para escolher melhor produtos para casa, jardim e projetos.';
 $pageUrl = 'https://shopvivaliz.com.br/blog/';
 $socialImage = 'https://shopvivaliz.com.br/images/logo-vivaliz.png';
+$robots = $isFiltered
+    ? 'noindex,follow,max-image-preview:large'
+    : 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1';
 
 $blogSchema = [
     '@context' => 'https://schema.org',
@@ -67,7 +71,7 @@ $blogSchema = [
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="<?= sv_blog_escape($pageDescription) ?>">
-    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+    <meta name="robots" content="<?= sv_blog_escape($robots) ?>">
     <title><?= sv_blog_escape($pageTitle) ?></title>
     <link rel="canonical" href="<?= sv_blog_escape($pageUrl) ?>">
     <link rel="alternate" type="application/rss+xml" title="Central de Conhecimento ShopVivaliz" href="https://shopvivaliz.com.br/blog/feed.xml">
@@ -111,9 +115,9 @@ $blogSchema = [
 
     <div class="container knowledge-layout">
         <section aria-labelledby="latest-title">
-            <span class="knowledge-eyebrow"><?= $query !== '' || $categoryFilter !== '' ? 'Resultados filtrados' : 'Conteúdos recentes' ?></span>
+            <span class="knowledge-eyebrow"><?= $isFiltered ? 'Resultados filtrados' : 'Conteúdos recentes' ?></span>
             <h2 id="latest-title"><?= count($articles) ?> de <?= $totalArticles ?> artigos disponíveis</h2>
-            <?php if ($query !== '' || $categoryFilter !== ''): ?>
+            <?php if ($isFiltered): ?>
                 <p class="knowledge-filter-summary" role="status">
                     Filtro ativo<?= $query !== '' ? ': busca por “' . sv_blog_escape($query) . '”' : '' ?><?= $categoryFilter !== '' ? ' em ' . sv_blog_escape($categoryFilter) : '' ?>.
                     <a href="/blog">Limpar filtros</a>
