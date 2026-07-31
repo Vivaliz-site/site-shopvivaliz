@@ -41,11 +41,21 @@ DEPRECATED_EXECUTORS: tuple[tuple[Path, Path | None], ...] = (
         ROOT / "scripts/olist-sync-master.py",
         ROOT / "scripts/marketplace/olist/sync_master.py",
     ),
+    (
+        ROOT / "oauth-auto-exec.py",
+        ROOT / "scripts/marketplace/olist/oauth_login.py",
+    ),
     (ROOT / "scripts/git-auto-sync-master.py", None),
     (ROOT / "scripts/automation/pipeline_orchestrator.py", None),
 )
 
-DISABLED_MARKERS = ("intentionally disabled", "is disabled", "fail-closed", "retired")
+DISABLED_MARKERS = (
+    "intentionally disabled",
+    "is disabled",
+    "fail-closed",
+    "retired",
+    '"status": "blocked"',
+)
 WRAPPER_MARKERS = ("runpy.run_path", "compatibility wrapper")
 
 
