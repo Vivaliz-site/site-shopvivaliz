@@ -399,3 +399,18 @@ body {
         height: 22px !important;
     }
 }
+
+/* Home: a animação herdada pode terminar em opacity:0 em navegadores com
+ * movimento reduzido; o conteúdo principal nunca deve ficar invisível. */
+body.sv-home-page .hero-content {
+    opacity: 1 !important;
+    animation-fill-mode: both !important;
+}
+
+/* Quando o cupom ocupa o canto inferior direito, evita competir com a Liz.
+ * Ao fechar o cupom, a regra deixa de aplicar e a Liz volta ao hero. */
+body.sv-home-top:has(.sv-first-coupon.is-visible) #sv-liz-launcher {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translateY(18px) scale(.92) !important;
+}
