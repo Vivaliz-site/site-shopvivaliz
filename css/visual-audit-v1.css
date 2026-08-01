@@ -414,3 +414,42 @@ body.sv-home-top:has(.sv-first-coupon.is-visible) #sv-liz-launcher {
     pointer-events: none !important;
     transform: translateY(18px) scale(.92) !important;
 }
+
+/* Catálogo desktop: aproxima a grade sem reduzir a legibilidade dos filtros. */
+@media (min-width: 821px) {
+    .catalog-header {
+        padding-top: 30px !important;
+        padding-bottom: 26px !important;
+    }
+
+    .catalog-header-inner {
+        gap: 20px !important;
+    }
+
+    .catalog-tools {
+        margin-top: -16px !important;
+        padding: 8px 14px 10px !important;
+        border-radius: 20px !important;
+    }
+
+    .sv-catalog-toolbar {
+        margin-bottom: 8px !important;
+    }
+
+    .category-filters {
+        padding-bottom: 4px !important;
+    }
+
+    .catalog-trust-strip {
+        gap: 8px !important;
+    }
+
+    .catalog-trust-item {
+        min-height: 28px !important;
+        padding: 8px 10px !important;
+    }
+
+    .product-grid {
+        margin-top: 12px !important;
+    }
+}
