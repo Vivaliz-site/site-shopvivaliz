@@ -15,24 +15,30 @@
     overflow-wrap: anywhere;
 }
 
-/* Desktop support stack: WhatsApp below, Liz above, with a real visual gap. */
+/* Separate the two support channels horizontally: WhatsApp left, Liz right. */
 body .sv-support-dock {
-    left: auto !important;
-    right: 18px !important;
-    bottom: 18px !important;
-    align-items: flex-end !important;
+    left: calc(18px + env(safe-area-inset-left, 0px)) !important;
+    right: auto !important;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important;
+    align-items: flex-start !important;
     transition: opacity .2s ease, transform .2s ease !important;
+}
+
+body .sv-support-button {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
 body #sv-liz-launcher {
     left: auto !important;
-    right: 18px !important;
-    bottom: 92px !important;
+    right: calc(18px + env(safe-area-inset-right, 0px)) !important;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important;
 }
 
 /* While Liz is open, the secondary floating channel must not sit behind the panel. */
 body:has(.sv-liz-is-open) .sv-support-dock,
-body:has(#sv-liz-panel.open) .sv-support-dock {
+body:has(#sv-liz-panel.open) .sv-support-dock,
+body:has(#sv-liz-panel.is-open) .sv-support-dock {
     opacity: 0 !important;
     visibility: hidden !important;
     pointer-events: none !important;
@@ -40,10 +46,19 @@ body:has(#sv-liz-panel.open) .sv-support-dock {
 }
 
 body:has(.sv-liz-is-open) #sv-liz-bubble,
-body:has(#sv-liz-panel.open) #sv-liz-bubble {
+body:has(#sv-liz-panel.open) #sv-liz-bubble,
+body:has(#sv-liz-panel.is-open) #sv-liz-bubble {
     opacity: 0 !important;
     visibility: hidden !important;
     pointer-events: none !important;
+}
+
+/* Coupon and support launchers must never compete for the same attention area. */
+body:has(.sv-first-coupon.is-visible) .sv-support-dock {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    transform: translateY(12px) scale(.94) !important;
 }
 
 @media (max-width: 768px) {
@@ -53,43 +68,45 @@ body:has(#sv-liz-panel.open) #sv-liz-bubble {
         line-height: 1.1 !important;
     }
 
-    /* Navigation bar: 50px WhatsApp + 20px gap before the 66px Liz launcher. */
+    /* WhatsApp stays above the mobile navigation on the left side. */
     body .sv-support-dock,
     body:has(.sv-mobile-nav-bar) .sv-support-dock,
     body:has(.sv-mobile-bottom-nav) .sv-support-dock {
-        left: auto !important;
-        right: 10px !important;
-        bottom: calc(94px + env(safe-area-inset-bottom)) !important;
-        align-items: flex-end !important;
+        left: calc(10px + env(safe-area-inset-left, 0px)) !important;
+        right: auto !important;
+        bottom: calc(94px + env(safe-area-inset-bottom, 0px)) !important;
+        align-items: flex-start !important;
     }
 
+    /* Liz stays on the opposite side, aligned with the same baseline. */
     body #sv-liz-launcher,
     body:has(.sv-mobile-nav-bar) #sv-liz-launcher,
     body:has(.sv-mobile-bottom-nav) #sv-liz-launcher {
         left: auto !important;
-        right: 10px !important;
-        bottom: calc(164px + env(safe-area-inset-bottom)) !important;
+        right: calc(10px + env(safe-area-inset-right, 0px)) !important;
+        bottom: calc(94px + env(safe-area-inset-bottom, 0px)) !important;
     }
 
     /* Checkout/buy bar is taller, so both channels move up together. */
     body:has(.sv-checkout-mobile-total) .sv-support-dock,
     body:has(.sv-mobile-buybar) .sv-support-dock {
-        bottom: calc(124px + env(safe-area-inset-bottom)) !important;
+        bottom: calc(124px + env(safe-area-inset-bottom, 0px)) !important;
     }
 
     body:has(.sv-checkout-mobile-total) #sv-liz-launcher,
     body:has(.sv-mobile-buybar) #sv-liz-launcher {
-        bottom: calc(194px + env(safe-area-inset-bottom)) !important;
+        bottom: calc(124px + env(safe-area-inset-bottom, 0px)) !important;
     }
 
     body #sv-liz-bubble {
-        right: 86px !important;
+        right: calc(86px + env(safe-area-inset-right, 0px)) !important;
         max-width: min(210px, calc(100vw - 116px)) !important;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
     body .sv-support-dock,
+    body .sv-support-button,
     body #sv-liz-launcher,
     body #sv-liz-bubble {
         transition: none !important;
