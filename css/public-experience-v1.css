@@ -7,13 +7,6 @@ body:has(.sv-first-coupon.is-visible) #sv-liz-launcher{opacity:0;pointer-events:
 body:has(.sv-mobile-nav-bar) .sv-support-dock,body:has(.sv-mobile-bottom-nav) .sv-support-dock{bottom:calc(92px + env(safe-area-inset-bottom))!important}body:has(.sv-checkout-mobile-total) .sv-support-dock,body:has(.sv-mobile-buybar) .sv-support-dock{bottom:calc(118px + env(safe-area-inset-bottom))!important}
 @media(prefers-reduced-motion:reduce){.sv-support-button,.sv-support-dock{transition:none}}
 
-/* Auditoria visual: vence o override global emitido no rodape e reduz o
- * respiro do cabecalho do catalogo no primeiro viewport desktop. */
-@media (min-width:821px){
-  .catalog-header{padding-top:30px!important;padding-bottom:26px!important}
-  .catalog-header-inner{gap:20px!important}
-}
-
 /* Final public stack: keep support channels outside the product grid. */
 @media(min-width:821px){
   body.sv-home-top #sv-liz-launcher{top:clamp(220px,42vh,360px)!important;bottom:auto!important;opacity:1!important;pointer-events:auto!important;transform:none!important}
@@ -81,4 +74,10 @@ body.sv-page-catalog.sv-catalog-top #sv-liz-launcher{opacity:0!important;pointer
   .sv-catalog-toolbar{min-height:42px}
   .sv-sort-wrap select{min-width:0;width:100%}
   .cart-empty,.empty-cart,.cart-empty-state{min-height:210px!important;padding:28px 18px!important}
+}
+
+/* Auditoria visual: regra final do stack publico, depois do override global. */
+@media (min-width:821px){
+  .catalog-header{padding-top:30px!important;padding-bottom:26px!important}
+  .catalog-header-inner{gap:20px!important}
 }
