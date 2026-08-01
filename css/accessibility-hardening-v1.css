@@ -50,7 +50,7 @@
         min-height: 44px;
     }
 
-    :where(.category-filter, .pagination a, .carousel-control, .sv-first-coupon__close) {
+    :where(.cat-filter, .category-filter, .pagination a, .carousel-control, .sv-first-coupon__close) {
         min-width: 44px;
         min-height: 44px;
     }
