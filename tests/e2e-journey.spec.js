@@ -117,7 +117,7 @@ test.describe('E2E Journey - Compra Completa', () => {
     await expect(liz).toHaveAttribute('aria-expanded', 'false');
   });
 
-  test('Mobile: Liz e WhatsApp não ocupam o mesmo espaço', async ({ page }) => {
+  test('Mobile: WhatsApp fica à esquerda e Liz à direita sem sobreposição', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(BASE_URL + '/', { waitUntil: 'networkidle' });
 
@@ -131,8 +131,15 @@ test.describe('E2E Journey - Compra Completa', () => {
     expect(lizBox).not.toBeNull();
     expect(whatsappBox).not.toBeNull();
 
-    const verticalGap = whatsappBox.y - (lizBox.y + lizBox.height);
-    expect(verticalGap).toBeGreaterThanOrEqual(12);
+    const viewportWidth = page.viewportSize().width;
+    const horizontalGap = lizBox.x - (whatsappBox.x + whatsappBox.width);
+    const lizBottom = lizBox.y + lizBox.height;
+    const whatsappBottom = whatsappBox.y + whatsappBox.height;
+
+    expect(whatsappBox.x).toBeLessThan(viewportWidth / 2);
+    expect(lizBox.x + lizBox.width).toBeGreaterThan(viewportWidth / 2);
+    expect(horizontalGap).toBeGreaterThanOrEqual(12);
+    expect(Math.abs(lizBottom - whatsappBottom)).toBeLessThanOrEqual(12);
 
     await liz.click();
     await expect(page.locator('#sv-liz-panel')).toBeVisible();
