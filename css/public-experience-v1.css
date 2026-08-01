@@ -7,6 +7,11 @@ body:has(.sv-first-coupon.is-visible) #sv-liz-launcher{opacity:0;pointer-events:
 body:has(.sv-mobile-nav-bar) .sv-support-dock,body:has(.sv-mobile-bottom-nav) .sv-support-dock{bottom:calc(92px + env(safe-area-inset-bottom))!important}body:has(.sv-checkout-mobile-total) .sv-support-dock,body:has(.sv-mobile-buybar) .sv-support-dock{bottom:calc(118px + env(safe-area-inset-bottom))!important}
 @media(prefers-reduced-motion:reduce){.sv-support-button,.sv-support-dock{transition:none}}
 
+/* Final public stack: keep support channels outside the product grid. */
+@media(min-width:821px){
+  body.sv-home-top #sv-liz-launcher{top:clamp(220px,42vh,360px)!important;bottom:auto!important;opacity:1!important;pointer-events:auto!important;transform:none!important}
+}
+
 /* Footer compacto, centralizado e com canais flutuantes persistentes. */
 footer{padding-top:32px!important;padding-bottom:0!important;text-align:center!important}
 footer .container{max-width:1440px}

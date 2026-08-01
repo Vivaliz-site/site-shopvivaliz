@@ -178,7 +178,25 @@ body {
 }
 
 .catalog-trust-strip {
-    margin-top: 8px !important;
+    margin-top: 4px !important;
+    gap: 12px !important;
+}
+
+.catalog-tools {
+    padding-top: 10px !important;
+    padding-bottom: 12px !important;
+}
+
+.catalog-tools .status-line {
+    margin-block: 2px 4px !important;
+}
+
+.catalog-trust-item {
+    min-height: 30px !important;
+}
+
+.product-grid {
+    margin-top: 16px !important;
 }
 
 .status-line {
@@ -344,6 +362,15 @@ body {
 @media (min-width: 821px) {
     .desktop-buy-rail {
         display: flex;
+    }
+
+    /* Primeiro fold da home: Liz visível, sem cobrir a busca nem os CTAs. */
+    body.sv-home-top #sv-liz-launcher {
+        top: clamp(220px, 42vh, 360px) !important;
+        bottom: auto !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        transform: none !important;
     }
 }
 

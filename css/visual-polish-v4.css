@@ -36,13 +36,6 @@ body.sv-home-page .hero-cta .btn {
     border-radius: 999px;
 }
 
-body.sv-home-top #sv-liz-launcher,
-body.sv-home-top #sv-liz-bubble {
-    opacity: 0 !important;
-    pointer-events: none !important;
-    transform: translateY(14px) scale(0.94) !important;
-}
-
 /* Cart: when empty, remove the irrelevant summary and present one clear action. */
 body.sv-cart-empty .cart-page {
     padding-top: 24px;
