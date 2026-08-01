@@ -7,22 +7,12 @@ on:
   push:
     branches:
       - main
-    paths:
-      - '.github/workflows/**'
-      - 'scripts/**'
-      - '.ai/**'
-      - 'agents/**'
-      - 'config/**'
   pull_request:
-    paths:
-      - '.github/workflows/**'
-      - 'scripts/**'
-      - '.ai/**'
-      - 'agents/**'
-      - 'config/**'
 
 permissions:
   contents: read
+  pull-requests: read
+  checks: read
 
 concurrency:
   group: agents-hourly-deep-audit-${{ github.ref }}
@@ -61,7 +51,20 @@ jobs:
         run: |
           python -m py_compile \
             scripts/audit-agents-real-work.py \
-            scripts/maintenance/audit_secret_references.py
+            scripts/maintenance/audit_secret_references.py \
+            scripts/verify-merged-pr-provenance.py
+
+      - name: Verify protected-branch provenance
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SHA: ${{ github.sha }}
+          PROTECTED_BRANCH: main
+          REQUIRED_PREMERGE_CHECKS: Validate workflows and source,Audit repository automation,Audit agents with evidence
+        run: |
+          set -euo pipefail
+          python scripts/verify-merged-pr-provenance.py
 
       - name: Run current-state deep agent audit
         run: python scripts/audit-agents-real-work.py
@@ -90,5 +93,6 @@ jobs:
           path: |
             artifacts/agents-audit/
             artifacts/secret-references/
+            artifacts/pr-provenance/
           if-no-files-found: error
           retention-days: 90
