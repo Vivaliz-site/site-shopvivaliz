@@ -100,6 +100,15 @@ function load_custom_css(): void
         echo "    <link rel=\"stylesheet\" href=\"/css/visual-audit-v1.css?v="
             . htmlspecialchars($visualAuditVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
     }
+
+    // Regras transversais de acessibilidade ficam por último para preservar foco,
+    // preferência de movimento e alvos táteis em todas as páginas públicas.
+    $accessibilityCss = $root . '/css/accessibility-hardening-v1.css';
+    if (is_file($accessibilityCss) && is_readable($accessibilityCss)) {
+        $accessibilityVersion = (string) filemtime($accessibilityCss);
+        echo "    <link rel=\"stylesheet\" href=\"/css/accessibility-hardening-v1.css?v="
+            . htmlspecialchars($accessibilityVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
+    }
 }
 
 load_custom_css();
