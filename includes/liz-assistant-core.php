@@ -44,6 +44,9 @@ function sv_liz_detect_intent(string $message): string
     if (preg_match('/\b(frete|cep|prazo de entrega|quanto demora|envio)\b/u', $normalized)) {
         return 'shipping';
     }
+    if (sv_liz_detect_category($normalized) !== null) {
+        return 'product_discovery';
+    }
     if (preg_match('/\b(produto|produtos|preco|valor|estoque|disponivel|comprar|modelo|cor|tamanho|categoria)\b/u', $normalized)) {
         return 'product_discovery';
     }
