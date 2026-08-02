@@ -10,6 +10,9 @@ $outputPath = getenv('SHOPVIVALIZ_RUNTIME_SECRETS')
 if (!is_file($sharedEnv) || !is_readable($sharedEnv)) {
     throw new RuntimeException('shared_env_unavailable');
 }
+if (!chmod($sharedEnv, 0600)) {
+    throw new RuntimeException('shared_env_private_mode_failed');
+}
 
 $allowedKeys = [
     'DB_HOST',
@@ -111,3 +114,4 @@ echo "runtime_secrets_materialized=true\n";
 echo 'runtime_key_count=' . count($values) . "\n";
 echo "database_tuple_present=true\n";
 echo "quote_signing_present=true\n";
+echo "shared_env_mode=600\n";

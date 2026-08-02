@@ -28,6 +28,8 @@ KEYS = (
     "SHOPVIVALIZ_AGENT_KEY",
 )
 
+PRIVATE_MODE = 0o600
+
 
 def main() -> int:
     if len(sys.argv) != 2:
@@ -55,10 +57,9 @@ def main() -> int:
         print(f"shared env does not exist: {path}", file=sys.stderr)
         return 1
 
-    original_mode = path.stat().st_mode & 0o777
     backup = path.with_name(f"{path.name}.backup.{int(time.time())}")
     shutil.copy2(path, backup)
-    os.chmod(backup, original_mode)
+    os.chmod(backup, PRIVATE_MODE)
 
     lines = path.read_text(encoding="utf-8").splitlines()
     seen: set[str] = set()
@@ -81,13 +82,15 @@ def main() -> int:
             handle.write("\n".join(output).rstrip("\n") + "\n")
             handle.flush()
             os.fsync(handle.fileno())
-        os.chmod(temporary, original_mode)
+        os.chmod(temporary, PRIVATE_MODE)
         os.replace(temporary, path)
+        os.chmod(path, PRIVATE_MODE)
     finally:
         temporary.unlink(missing_ok=True)
 
     print("updated_keys=" + ",".join(sorted(values)))
     print("backup_created=true")
+    print("shared_env_mode=600")
     return 0
 
 
