@@ -42,11 +42,15 @@ jobs:
           coverage: none
 
       - name: Lint trust guard and catalog runtime
+        shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           php -l includes/public-trust-guard.php
           php -l includes/catalog-runtime.php
           php -l tests/public-trust-guard-test.php
 
       - name: Verify untrusted social proof is removed
-        run: php tests/public-trust-guard-test.php
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php tests/public-trust-guard-test.php
