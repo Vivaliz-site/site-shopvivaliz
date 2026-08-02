@@ -104,7 +104,11 @@ jobs:
           set -Eeuo pipefail
           mkdir -p artifacts/olist-refresh
           run_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          started_epoch="$(date -u +%s)"
+          # Runner e VM podem ter pequeno desvio de NTP. O run_id e o
+          # execution_id continuam garantindo correlacao estrita; a janela
+          # inferior recebe cinco minutos de tolerancia sem aceitar evidencia
+          # de outra execucao.
+          started_epoch="$(($(date -u +%s) - 300))"
           printf '{"run_id":"%s","started_epoch":%s,"sha":"%s"}\n' \
             "$run_id" "$started_epoch" "$GITHUB_SHA" \
             > artifacts/olist-refresh/run-context.json
