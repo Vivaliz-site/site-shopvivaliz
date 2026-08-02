@@ -104,12 +104,26 @@ function svre_runtime_secrets(?string $projectRoot = null): array
 function svre_value(string|array $keys, ?string $projectRoot = null): string
 {
     $keys = is_array($keys) ? $keys : [$keys];
+    $normalizedKeys = array_values(array_filter(
+        $keys,
+        static fn(mixed $key): bool => is_string($key) && $key !== ''
+    ));
 
-    foreach ($keys as $key) {
-        if (!is_string($key) || $key === '') {
-            continue;
+    $databaseGroups = [
+        'host' => ['DB_HOST'],
+        'port' => ['DB_PORT'],
+        'name' => ['DB_NAME', 'DB_DATABASE'],
+        'user' => ['DB_USER', 'DB_USERNAME'],
+        'pass' => ['DB_PASS', 'DB_PASSWORD'],
+    ];
+    foreach ($databaseGroups as $field => $aliases) {
+        if ($normalizedKeys !== [] && array_diff($normalizedKeys, $aliases) === []) {
+            $database = svre_database_config($projectRoot);
+            return $database[$field];
         }
+    }
 
+    foreach ($normalizedKeys as $key) {
         $environmentValue = getenv($key);
         if (is_string($environmentValue) && trim($environmentValue) !== '') {
             return trim($environmentValue);
@@ -122,7 +136,7 @@ function svre_value(string|array $keys, ?string $projectRoot = null): string
     }
 
     $secrets = svre_runtime_secrets($projectRoot);
-    foreach ($keys as $key) {
+    foreach ($normalizedKeys as $key) {
         if (isset($secrets[$key]) && trim($secrets[$key]) !== '') {
             return trim($secrets[$key]);
         }
@@ -130,7 +144,7 @@ function svre_value(string|array $keys, ?string $projectRoot = null): string
 
     foreach (svre_env_files($projectRoot) as $path) {
         $values = svre_parse_env_file($path);
-        foreach ($keys as $key) {
+        foreach ($normalizedKeys as $key) {
             if (isset($values[$key]) && trim($values[$key]) !== '') {
                 return trim($values[$key]);
             }
