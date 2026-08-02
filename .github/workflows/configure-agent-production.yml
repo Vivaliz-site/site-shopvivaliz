@@ -69,9 +69,21 @@ jobs:
           temporary.write_text(data, encoding="utf-8")
           os.chmod(temporary, 0o600)
           os.replace(temporary, path)
-          os.chmod(path, 0o600)
+          os.chmod(path, 0o640)
           print("agent_key_configured=true")
           PY'
+
+      - name: Permitir leitura do runtime pelo usuário web
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'set -euo pipefail; sudo chgrp www-data /home/ubuntu/shopvivaliz-deploy/shared/.env; sudo chmod 640 /home/ubuntu/shopvivaliz-deploy/shared/.env; stat -c "runtime_env_mode=%a runtime_env_group=%G" /home/ubuntu/shopvivaliz-deploy/shared/.env'
 
       - name: Execute and verify the real production watchdog
         shell: bash
