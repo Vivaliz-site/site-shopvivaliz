@@ -2,174 +2,262 @@
 declare(strict_types=1);
 
 /**
- * Forca renovacao de token Olist/Tiny com saida estruturada para uso
- * manual, em CI e em automacoes de observabilidade.
- *
- * Escreve credenciais em disco e estava exposto por HTTP sem autenticacao:
- * qualquer um podia forcar a rotacao do token da integracao com o ERP.
+ * Renova o token OAuth Olist/Tiny com lock exclusivo, persistência atômica e
+ * logs redigidos. Pode ser executado por CLI ou por HTTP autenticado.
  */
 require_once __DIR__ . '/../../config/require-agent-key.php';
 sv_require_agent_key();
 
 set_time_limit(30);
+ignore_user_abort(true);
 error_reporting(E_ALL);
-// display_errors=1 vazava o caminho absoluto do servidor no corpo da resposta
-// (visto ao vivo: "Warning: file_put_contents(/home/ubuntu/shopvivaliz-deploy/...").
-// Erros continuam indo para o log; so nao vao mais para o cliente.
 ini_set('display_errors', '0');
+
+function svrt_root(): string
+{
+    return dirname(__DIR__, 2);
+}
 
 function svrt_lock_path(): string
 {
-    $dir = __DIR__ . '/../../storage/locks';
-    if (!is_dir($dir)) {
-        @mkdir($dir, 0775, true);
+    $dir = svrt_root() . '/storage/locks';
+    if (!is_dir($dir) && !@mkdir($dir, 0770, true) && !is_dir($dir)) {
+        throw new RuntimeException('Unable to create lock directory');
     }
+
     return $dir . '/olist-refresh.lock';
 }
 
-function svrt_out(string $status, string $message, array $extra = [], int $exitCode = 0): never
+function svrt_monitor_dir(): string
+{
+    $dir = svrt_root() . '/storage/monitoring/olist-token';
+    if (!is_dir($dir) && !@mkdir($dir, 0770, true) && !is_dir($dir)) {
+        throw new RuntimeException('Unable to create monitoring directory');
+    }
+
+    return $dir;
+}
+
+function svrt_atomic_write(string $path, string $content, int $mode = 0600): void
+{
+    $dir = dirname($path);
+    if (!is_dir($dir) && !@mkdir($dir, 0770, true) && !is_dir($dir)) {
+        throw new RuntimeException('Unable to create destination directory');
+    }
+
+    $tmp = tempnam($dir, '.svrt-');
+    if ($tmp === false) {
+        throw new RuntimeException('Unable to create temporary file');
+    }
+
+    try {
+        if (file_put_contents($tmp, $content, LOCK_EX) === false) {
+            throw new RuntimeException('Unable to write temporary file');
+        }
+        @chmod($tmp, $mode);
+        if (!@rename($tmp, $path)) {
+            throw new RuntimeException('Unable to publish atomic file');
+        }
+    } finally {
+        if (is_file($tmp)) {
+            @unlink($tmp);
+        }
+    }
+}
+
+function svrt_log(array $payload): void
+{
+    try {
+        $dir = svrt_monitor_dir();
+        $line = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($line)) {
+            return;
+        }
+
+        file_put_contents(
+            $dir . '/refresh-' . gmdate('Y-m-d') . '.jsonl',
+            $line . PHP_EOL,
+            FILE_APPEND | LOCK_EX
+        );
+        svrt_atomic_write(
+            $dir . '/latest.json',
+            json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) . PHP_EOL,
+            0640
+        );
+    } catch (Throwable $error) {
+        error_log('olist token monitoring write failed: ' . $error->getMessage());
+    }
+}
+
+function svrt_http_status(int $exitCode): int
+{
+    return match ($exitCode) {
+        0 => 200,
+        2 => 503,
+        6 => 423,
+        default => 500,
+    };
+}
+
+function svrt_finish($lockHandle, string $status, string $message, array $extra = [], int $exitCode = 0): never
 {
     $payload = array_merge([
         'status' => $status,
         'message' => $message,
-        'timestamp' => date('c'),
+        'timestamp' => gmdate('c'),
+        'host' => gethostname() ?: 'unknown',
+        'pid' => getmypid(),
     ], $extra);
+
+    svrt_log($payload);
+
+    if (is_resource($lockHandle)) {
+        flock($lockHandle, LOCK_UN);
+        fclose($lockHandle);
+    }
 
     if (PHP_SAPI !== 'cli') {
         header('Content-Type: application/json; charset=utf-8');
-        http_response_code($exitCode === 0 ? 200 : 500);
+        http_response_code(svrt_http_status($exitCode));
     }
 
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) . PHP_EOL;
     exit($exitCode);
 }
 
-function svrt_fail_with_lock($lockHandle, string $status, string $message, array $extra = [], int $exitCode = 0): never
+function svrt_load_env(string $envFile): void
 {
-    if (is_resource($lockHandle)) {
-        flock($lockHandle, LOCK_UN);
-        fclose($lockHandle);
+    if (!is_file($envFile) || !is_readable($envFile)) {
+        return;
     }
-    svrt_out($status, $message, $extra, $exitCode);
-}
 
-$envFile = __DIR__ . '/../../.env';
-if (is_file($envFile)) {
     foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
         $line = trim($line);
-        if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) {
+        if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
             continue;
         }
-        [$k, $v] = explode('=', $line, 2);
-        $k = trim($k);
-        $v = trim(trim($v), '"\'');
-        if ($k !== '' && getenv($k) === false) {
-            putenv($k . '=' . $v);
-            $_ENV[$k] = $v;
+
+        [$key, $value] = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim(trim($value), "\"'");
+        if ($key !== '' && getenv($key) === false) {
+            putenv($key . '=' . $value);
+            $_ENV[$key] = $value;
         }
     }
 }
 
-$clientId = getenv('OLIST_CLIENT_ID') ?: getenv('TINY_CLIENT_ID') ?: getenv('CLIENT_ID_API_OLIST');
-$clientSecret = getenv('OLIST_CLIENT_SECRET') ?: getenv('TINY_CLIENT_SECRET') ?: getenv('CLIENT_SECRET_OLIST');
-$refreshToken = getenv('OLIST_REFRESH_TOKEN') ?: getenv('TINY_REFRESH_TOKEN');
+function svrt_update_env(string $envFile, array $replacements): void
+{
+    $content = is_file($envFile) ? (string)file_get_contents($envFile) : '';
 
-$lockHandle = fopen(svrt_lock_path(), 'c+');
-if ($lockHandle === false || !flock($lockHandle, LOCK_EX)) {
-    svrt_out('error', 'Unable to acquire Olist refresh lock', [], 6);
-}
-
-if (!$clientId || !$clientSecret || !$refreshToken) {
-    svrt_fail_with_lock($lockHandle, 'error', 'Missing Olist credentials in .env', [
-        'has_client_id' => $clientId !== false && $clientId !== '',
-        'has_client_secret' => $clientSecret !== false && $clientSecret !== '',
-        'has_refresh_token' => $refreshToken !== false && $refreshToken !== '',
-    ], 2);
-}
-
-$ch = curl_init('https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token');
-curl_setopt_array($ch, [
-    CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => http_build_query([
-        'grant_type' => 'refresh_token',
-        'refresh_token' => $refreshToken,
-        'client_id' => $clientId,
-        'client_secret' => $clientSecret,
-    ]),
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_TIMEOUT => 15,
-    CURLOPT_CONNECTTIMEOUT => 10,
-]);
-
-$response = curl_exec($ch);
-$httpCode = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-$curlError = curl_error($ch);
-curl_close($ch);
-
-if ($response === false) {
-    svrt_fail_with_lock($lockHandle, 'error', 'Token refresh request failed at cURL layer', [
-        'http_code' => $httpCode,
-        'curl_error' => $curlError,
-    ], 3);
-}
-
-if ($httpCode !== 200) {
-    $decoded = json_decode((string)$response, true);
-    $oauthError = is_array($decoded) ? (string)($decoded['error'] ?? '') : '';
-    $oauthDescription = is_array($decoded) ? (string)($decoded['error_description'] ?? '') : '';
-    svrt_fail_with_lock($lockHandle, 'error', 'Token refresh failed', [
-        'http_code' => $httpCode,
-        'oauth_error' => $oauthError,
-        'oauth_error_description' => $oauthDescription,
-        'is_invalid_grant' => $oauthError === 'invalid_grant',
-        'response_excerpt' => substr((string)$response, 0, 300),
-    ], 5);
-}
-
-$data = json_decode((string)$response, true);
-if (!is_array($data) || empty($data['access_token'])) {
-    svrt_fail_with_lock($lockHandle, 'error', 'OAuth endpoint returned 200 without access_token', [
-        'http_code' => $httpCode,
-        'response_excerpt' => substr((string)$response, 0, 300),
-    ], 4);
-}
-
-$newAccess = (string)$data['access_token'];
-$newRefresh = (string)($data['refresh_token'] ?? $refreshToken);
-$envContent = is_file($envFile) ? (string)file_get_contents($envFile) : '';
-$replacements = [
-    // Fonte canonica atual.
-    'OLIST_ACCESS_TOKEN' => $newAccess,
-    'OLIST_REFRESH_TOKEN' => $newRefresh,
-
-    // Espelhos legados mantidos para evitar falsos alertas de token expirado
-    // enquanto ainda houver scripts antigos lendo esses nomes.
-    'TINY_ACCESS_TOKEN' => $newAccess,
-    'TINY_REFRESH_TOKEN' => $newRefresh,
-    'TOKEN_API_OLIST' => $newAccess,
-];
-
-foreach ($replacements as $key => $value) {
-    if (preg_match('/^' . preg_quote($key, '/') . '=.*/m', $envContent)) {
-        $envContent = (string)preg_replace(
-            '/^' . preg_quote($key, '/') . '=.*/m',
-            $key . '=' . $value,
-            $envContent
-        );
-    } else {
-        $envContent .= rtrim($envContent) === '' ? '' : PHP_EOL;
-        $envContent .= $key . '=' . $value;
+    foreach ($replacements as $key => $value) {
+        $key = (string)$key;
+        $value = (string)$value;
+        $pattern = '/^' . preg_quote($key, '/') . '=.*/m';
+        if (preg_match($pattern, $content) === 1) {
+            $content = (string)preg_replace($pattern, $key . '=' . $value, $content, 1);
+        } else {
+            $content = rtrim($content) . ($content === '' ? '' : PHP_EOL) . $key . '=' . $value . PHP_EOL;
+        }
     }
+
+    svrt_atomic_write($envFile, rtrim($content) . PHP_EOL, 0600);
 }
 
-file_put_contents($envFile, $envContent);
+$lockHandle = null;
 
-flock($lockHandle, LOCK_UN);
-fclose($lockHandle);
+try {
+    $envFile = svrt_root() . '/.env';
+    svrt_load_env($envFile);
 
-svrt_out('ok', 'Tokens refreshed and saved', [
-    'http_code' => $httpCode,
-    'refresh_rotated' => isset($data['refresh_token']) && $data['refresh_token'] !== '',
-    'mirrored_legacy_tokens' => ['TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN', 'TOKEN_API_OLIST'],
-    'access_token_preview' => substr($newAccess, 0, 10) . '...',
-]);
+    $clientId = getenv('OLIST_CLIENT_ID') ?: getenv('TINY_CLIENT_ID') ?: getenv('CLIENT_ID_API_OLIST');
+    $clientSecret = getenv('OLIST_CLIENT_SECRET') ?: getenv('TINY_CLIENT_SECRET') ?: getenv('CLIENT_SECRET_OLIST');
+    $refreshToken = getenv('OLIST_REFRESH_TOKEN') ?: getenv('TINY_REFRESH_TOKEN');
+
+    $lockHandle = fopen(svrt_lock_path(), 'c+');
+    if ($lockHandle === false || !flock($lockHandle, LOCK_EX | LOCK_NB)) {
+        svrt_finish($lockHandle, 'locked', 'Another Olist token refresh is already running', [], 6);
+    }
+
+    if (!$clientId || !$clientSecret || !$refreshToken) {
+        svrt_finish($lockHandle, 'error', 'Missing Olist OAuth credentials', [
+            'has_client_id' => is_string($clientId) && $clientId !== '',
+            'has_client_secret' => is_string($clientSecret) && $clientSecret !== '',
+            'has_refresh_token' => is_string($refreshToken) && $refreshToken !== '',
+        ], 2);
+    }
+
+    $curl = curl_init('https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token');
+    if ($curl === false) {
+        svrt_finish($lockHandle, 'error', 'Unable to initialize OAuth request', [], 3);
+    }
+
+    curl_setopt_array($curl, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => http_build_query([
+            'grant_type' => 'refresh_token',
+            'refresh_token' => $refreshToken,
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
+        ]),
+        CURLOPT_HTTPHEADER => ['Accept: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_CONNECTTIMEOUT => 10,
+    ]);
+
+    $response = curl_exec($curl);
+    $httpCode = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+    $curlError = curl_error($curl);
+    curl_close($curl);
+
+    if ($response === false) {
+        svrt_finish($lockHandle, 'error', 'Token refresh request failed at transport layer', [
+            'http_code' => $httpCode,
+            'transport_error' => $curlError !== '',
+        ], 3);
+    }
+
+    $data = json_decode((string)$response, true);
+    if ($httpCode !== 200) {
+        $oauthError = is_array($data) ? (string)($data['error'] ?? '') : '';
+        svrt_finish($lockHandle, 'error', 'Token refresh was rejected by the OAuth provider', [
+            'http_code' => $httpCode,
+            'oauth_error' => $oauthError,
+            'is_invalid_grant' => $oauthError === 'invalid_grant',
+        ], 5);
+    }
+
+    if (!is_array($data) || !is_string($data['access_token'] ?? null) || $data['access_token'] === '') {
+        svrt_finish($lockHandle, 'error', 'OAuth provider returned no access token', [
+            'http_code' => $httpCode,
+        ], 4);
+    }
+
+    $newAccess = (string)$data['access_token'];
+    $newRefresh = is_string($data['refresh_token'] ?? null) && $data['refresh_token'] !== ''
+        ? (string)$data['refresh_token']
+        : (string)$refreshToken;
+
+    svrt_update_env($envFile, [
+        'OLIST_ACCESS_TOKEN' => $newAccess,
+        'OLIST_REFRESH_TOKEN' => $newRefresh,
+        'TINY_ACCESS_TOKEN' => $newAccess,
+        'TINY_REFRESH_TOKEN' => $newRefresh,
+        'TOKEN_API_OLIST' => $newAccess,
+    ]);
+
+    svrt_finish($lockHandle, 'ok', 'Olist tokens refreshed and persisted', [
+        'http_code' => $httpCode,
+        'refresh_rotated' => $newRefresh !== (string)$refreshToken,
+        'expires_in' => max(0, (int)($data['expires_in'] ?? 0)),
+        'token_type' => is_string($data['token_type'] ?? null) ? (string)$data['token_type'] : '',
+        'monitoring_file' => 'storage/monitoring/olist-token/latest.json',
+    ]);
+} catch (Throwable $error) {
+    error_log('olist token refresh failed: ' . $error->getMessage());
+    svrt_finish($lockHandle, 'error', 'Unexpected token refresh failure', [
+        'exception' => get_class($error),
+    ], 7);
+}
