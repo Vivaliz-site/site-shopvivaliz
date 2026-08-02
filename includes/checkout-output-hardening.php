@@ -7,6 +7,23 @@ function svcoh_replace_or_original(string $html, string $pattern, string $replac
     return is_string($updated) ? $updated : $html;
 }
 
+function svcoh_defer_external_script(string $html, string $source): string
+{
+    $quoted = preg_quote($source, '~');
+    $updated = @preg_replace_callback(
+        '~<script\b(?=[^>]*\bsrc=["\']' . $quoted . '["\'])[^>]*>~i',
+        static function (array $matches): string {
+            $tag = (string)$matches[0];
+            if (preg_match('~\b(?:async|defer)\b~i', $tag) === 1) {
+                return $tag;
+            }
+            return (string)preg_replace('~<script\b~i', '<script defer', $tag, 1);
+        },
+        $html
+    );
+    return is_string($updated) ? $updated : $html;
+}
+
 function svcoh_filter(string $html): string
 {
     if ($html === '') {
@@ -14,16 +31,8 @@ function svcoh_filter(string $html): string
     }
 
     // SDKs externos nao devem bloquear o parser da tela principal.
-    $html = svcoh_replace_or_original(
-        $html,
-        '~<script\s+src="https://sdk\.mercadopago\.com/js/v2"\s*></script>~i',
-        '<script defer src="https://sdk.mercadopago.com/js/v2"></script>'
-    );
-    $html = svcoh_replace_or_original(
-        $html,
-        '~<script\s+src="https://www\.mercadopago\.com/v2/security\.js"\s+output="deviceId"\s*></script>~i',
-        '<script defer src="https://www.mercadopago.com/v2/security.js" output="deviceId"></script>'
-    );
+    $html = svcoh_defer_external_script($html, 'https://sdk.mercadopago.com/js/v2');
+    $html = svcoh_defer_external_script($html, 'https://www.mercadopago.com/v2/security.js');
 
     // Antes da confirmacao nao existe reserva persistida; nao apresentar um
     // cronometro ficticio ao consumidor.

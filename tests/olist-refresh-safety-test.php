@@ -52,7 +52,11 @@ file_put_contents(
     $shared . '/.env',
     "UNRELATED=value\nOLIST_ACCESS_TOKEN=old-access\nOLIST_REFRESH_TOKEN=old-refresh\n"
 );
-symlink('../shared/.env', $release . '/.env');
+if (!@symlink('../shared/.env', $release . '/.env')) {
+    svrt_test_remove($base);
+    echo "olist-refresh-safety: skipped (symbolic links unavailable on this Windows runner)\n";
+    exit(0);
+}
 putenv('SVRT_ROOT_OVERRIDE=' . $release);
 
 try {

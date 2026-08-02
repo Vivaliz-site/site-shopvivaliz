@@ -155,6 +155,9 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 else init();
 window.addEventListener('resize', scheduleResponsivePass, {passive:true});
 window.addEventListener('orientationchange', scheduleResponsivePass, {passive:true});
-window.addEventListener('scroll', scheduleResponsivePass, {passive:true});
+window.addEventListener('scroll', function () {
+  updateSupportVisibility();
+  updateFooterVisibility();
+}, {passive:true});
 window.addEventListener('load', scheduleResponsivePass, {once:true});
 })();

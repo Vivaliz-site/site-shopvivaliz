@@ -1,8 +1,5 @@
 <?php
 declare(strict_types=1);
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 header('Content-Type: text/html; charset=UTF-8');
 header('Cache-Control: no-store, max-age=0');
 http_response_code(403);

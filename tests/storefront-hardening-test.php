@@ -24,6 +24,13 @@ svh_assert(!str_contains($visualPolishJs, 'innerHTML ='), 'visual polish must no
 $customCssLoader = (string)file_get_contents($root . '/includes/load-custom-css.php');
 svh_assert(str_contains($customCssLoader, 'sv_emit_prepaint_page_state'), 'prepaint page state must be emitted in head');
 svh_assert(str_contains($customCssLoader, '/css/cls-stability-v1.css'), 'CLS stability CSS must load last');
+$htaccess = (string)file_get_contents($root . '/.htaccess');
+svh_assert(str_contains($htaccess, 'checkout-v2'), 'legacy checkout v2 must be closed');
+svh_assert(str_contains($htaccess, 'api/orders/create-v2\.php'), 'legacy create-v2 endpoint must be closed');
+svh_assert(str_contains($htaccess, 'ErrorDocument 502 /502.php'), '502 must preserve its HTTP status');
+svh_assert(str_contains($htaccess, 'ErrorDocument 503 /503.php'), '503 must preserve its HTTP status');
+$shippingResilience = (string)file_get_contents($root . '/js/checkout-resilience-v1.js');
+svh_assert(str_contains($shippingResilience, 'shippingRequests'), 'shipping busy state must account for concurrent requests');
 
 $homeJson = json_encode([
     '@context' => 'https://schema.org',
@@ -69,7 +76,7 @@ $productJson = json_encode([
 ], JSON_UNESCAPED_SLASHES);
 $product = '<html><head><script type="application/ld+json">' . $productJson . '</script></head><body>'
     . '<div style="color: #fbbf24; font-size: 14px;">★★★★★ <span>(4.9/5 - Excelente)</span></div>'
-    . '<span>Garantia de Fábrica</span>'
+    . '<div class="trust-badge-item"><span>Garantia de Fábrica</span></div>'
     . '<!-- Customer Reviews Widget --><section class="container sv-reviews-section"><p>Carlos M.</p></section>'
     . '<script src="/autodev/client.js"></script>'
     . '</body></html>';
@@ -81,14 +88,14 @@ svh_assert(str_contains($productFiltered, 'quando aplicável'), 'guarantee copy 
 svh_assert(!str_contains($productFiltered, 'FAQPage'), 'invisible product FAQ schema must be removed');
 
 $checkout = '<html><head>'
-    . '<script src="https://sdk.mercadopago.com/js/v2"></script>'
-    . '<script src="https://www.mercadopago.com/v2/security.js" output="deviceId"></script>'
+    . '<script id="mp-sdk" src="https://sdk.mercadopago.com/js/v2"></script>'
+    . '<script data-purpose="security" src="https://www.mercadopago.com/v2/security.js" output="deviceId"></script>'
     . '</head><body>'
     . 'Garanta o seu estoque! Os produtos no seu carrinho estão reservados por <strong id="checkout-timer-display">15:00</strong> minutos.'
     . '<script>var shippingQuote = getShippingQuote(); var shippingTotal = shippingQuote && Number(shippingQuote.total || 0) > 0 ? Number(shippingQuote.total || 0) : 0; var total = items.reduce(function(a,i){ return a+(parseFloat(i.price)||0)*(i.quantity||1); }, 0) + shippingTotal; var totalFmt = fmtMoney(total);</script>'
     . '</body></html>';
 $checkoutFiltered = svcoh_filter($checkout);
-svh_assert(str_contains($checkoutFiltered, '<script defer src="https://sdk.mercadopago.com/js/v2"></script>'), 'Mercado Pago SDK must be deferred');
+svh_assert(str_contains($checkoutFiltered, '<script defer id="mp-sdk" src="https://sdk.mercadopago.com/js/v2"></script>'), 'Mercado Pago SDK must be deferred');
 svh_assert(!str_contains($checkoutFiltered, 'estão reservados por'), 'fake pre-submit reservation must be removed');
 svh_assert(str_contains($checkoutFiltered, 'Number(order.total)'), 'checkout must use authoritative total');
 svh_assert(str_contains($checkoutFiltered, '/js/checkout-resilience-v1.js'), 'checkout resilience client must be injected');

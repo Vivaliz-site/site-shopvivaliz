@@ -1,0 +1,48 @@
+name: Canary Automation Safety
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/live-order-canary.yml
+      - .github/workflows/recover-boleto-canary.yml
+      - .github/workflows/canary-automation-safety.yml
+      - scripts/live-order-canary.php
+      - scripts/recover-boleto-canary.php
+      - scripts/check-canary-automation-safety.py
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/live-order-canary.yml
+      - .github/workflows/recover-boleto-canary.yml
+      - .github/workflows/canary-automation-safety.yml
+      - scripts/live-order-canary.php
+      - scripts/recover-boleto-canary.php
+      - scripts/check-canary-automation-safety.py
+  schedule:
+    - cron: '37 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fail-closed-canary-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Enforce read-only canary controls
+        run: python3 scripts/check-canary-automation-safety.py
+
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: canary-automation-safety-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/canary-safety/report.json
+          if-no-files-found: error
+          retention-days: 30

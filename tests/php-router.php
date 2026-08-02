@@ -4,6 +4,13 @@ declare(strict_types=1);
 $root = dirname(__DIR__);
 $path = parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
 
+// O servidor embutido nao aplica .htaccess: nunca delegar dotfiles ao PHP.
+if (preg_match('~(?:^|/)\.[^/]*~', $path) === 1) {
+    $_SERVER['SCRIPT_FILENAME'] = $root . '/404.php';
+    require $_SERVER['SCRIPT_FILENAME'];
+    return true;
+}
+
 $static = realpath($root . $path);
 if ($static !== false && str_starts_with($static, $root) && is_file($static)) {
     return false;
@@ -43,6 +50,8 @@ $routes = [
     '/termos' => 'termos.php',
     '/403.php' => '403.php',
     '/500.php' => '500.php',
+    '/502.php' => '502.php',
+    '/503.php' => '503.php',
 ];
 
 if (isset($routes[$path])) {

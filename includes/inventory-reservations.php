@@ -279,7 +279,11 @@ function svir_register_response_finalizer(
     ob_start();
     register_shutdown_function(static function () use ($reservationKey, $customerEmail): void {
         $payload = json_decode((string)ob_get_contents(), true);
-        if (!is_array($payload) || empty($payload['ok']) || empty($payload['order_number'])) {
+        if (!is_array($payload)) {
+            error_log('[inventory] response payload was not valid JSON; keeping reservation until TTL');
+            return;
+        }
+        if (empty($payload['ok']) || empty($payload['order_number'])) {
             svir_release($reservationKey);
             return;
         }
@@ -291,7 +295,7 @@ function svir_register_response_finalizer(
             );
         } catch (Throwable $error) {
             error_log('[inventory] finalize failed: ' . $error->getMessage());
-            svir_release($reservationKey);
+            error_log('[inventory] finalize failed; keeping reservation until TTL: ' . $error->getMessage());
         }
     });
 }

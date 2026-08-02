@@ -6,8 +6,8 @@ Options -Indexes
 ErrorDocument 403 /403.php
 ErrorDocument 404 /404.php
 ErrorDocument 500 /500.php
-ErrorDocument 502 /500.php
-ErrorDocument 503 /500.php
+ErrorDocument 502 /502.php
+ErrorDocument 503 /503.php
 
 # Bloquear acesso a arquivos sensiveis
 <FilesMatch "^(\.env(?:\..*)?|\.htaccess|tasks-queue\.json|mcp-servers\.json|package(?:-lock)?\.json)$">
@@ -74,6 +74,13 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^carrinho-legacy/?$ /carrinho [R=301,L,NE,QSD]
     RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
     RewriteRule ^carrinho-legacy/?$ - [F,L]
+
+    # Bloquear superficies legadas que ainda existem como diretorio/arquivo real.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^checkout-v2/?$ /checkout [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
+    RewriteRule ^checkout-v2/?$ - [F,L]
+    RewriteRule ^api/orders/create-v2\.php$ - [F,L,NC]
 
     RewriteRule ^p/termos-e-condicoes/?$ /termos [R=301,L,NE,QSD]
 

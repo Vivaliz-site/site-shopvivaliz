@@ -197,6 +197,9 @@ function svrt_finish(
 
     if (PHP_SAPI !== 'cli') {
         header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store, max-age=0');
+        header('Pragma: no-cache');
+        header('X-Content-Type-Options: nosniff');
         http_response_code(svrt_http_status($exitCode));
     }
 

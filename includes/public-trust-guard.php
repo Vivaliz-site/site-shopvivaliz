@@ -29,7 +29,7 @@ function svptg_absolute_url(string $value): string
 {
     $value = trim($value);
     if ($value === '') {
-        return 'https://shopvivaliz.com.br/images/product-placeholder.svg';
+        return 'https://shopvivaliz.com.br/';
     }
     if (preg_match('~^https?://~i', $value) === 1) {
         return $value;
@@ -93,7 +93,7 @@ function svptg_normalize_json_node(mixed $node, string $script): mixed
             $images = array_values(array_unique(array_filter(array_map(
                 static function (mixed $image): string {
                     $url = is_scalar($image) ? (string)$image : '';
-                    if (str_contains($url, 'logo-vivaliz-square')) {
+                    if ($url === '' || str_contains($url, 'logo-vivaliz-square')) {
                         $url = '/images/product-placeholder.svg';
                     }
                     return svptg_absolute_url($url);
@@ -300,10 +300,10 @@ HTML;
             "\n"
         );
 
-        $html = str_replace(
-            'Garantia de Fábrica',
-            'Garantia legal e do fabricante, quando aplicável',
-            $html
+        $html = svptg_replace_or_original(
+            $html,
+            '~(<div\b[^>]*class="[^"]*\btrust-badge-item\b[^"]*"[^>]*>.*?<span>\s*)Garantia de Fábrica(\s*</span>.*?</div>)~si',
+            '$1Garantia legal e do fabricante, quando aplicável$2'
         );
     }
 

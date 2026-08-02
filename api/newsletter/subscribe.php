@@ -9,6 +9,7 @@ header('Referrer-Policy: no-referrer');
 
 require_once dirname(__DIR__, 2) . '/includes/pdo-database.php';
 require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
+require_once dirname(__DIR__, 2) . '/includes/order-rate-limit.php';
 
 function svnl_json(int $status, array $payload): never
 {
@@ -38,33 +39,14 @@ function svnl_same_origin(): bool
     return in_array($host, ['shopvivaliz.com.br', 'www.shopvivaliz.com.br', 'localhost', '127.0.0.1'], true);
 }
 
-function svnl_ensure_schema(PDO $pdo): void
-{
-    $pdo->exec(
-        "CREATE TABLE IF NOT EXISTS newsletter_subscriptions (
-            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            email VARCHAR(190) NOT NULL,
-            status VARCHAR(24) NOT NULL DEFAULT 'pending',
-            confirm_token_hash CHAR(64) NOT NULL,
-            consent_at DATETIME NOT NULL,
-            confirmed_at DATETIME NULL,
-            source VARCHAR(80) NOT NULL DEFAULT 'site_home',
-            ip_hash CHAR(64) NOT NULL,
-            user_agent_hash CHAR(64) NOT NULL,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY uq_newsletter_email (email),
-            KEY idx_newsletter_status (status),
-            KEY idx_newsletter_token (confirm_token_hash)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
-    );
-}
-
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     svnl_json(405, ['ok' => false, 'error' => 'method_not_allowed']);
 }
 if (!svnl_same_origin()) {
     svnl_json(403, ['ok' => false, 'error' => 'origin_rejected']);
+}
+if (!svorl_allow(3, 300)) {
+    svnl_json(429, ['ok' => false, 'error' => 'rate_limit_exceeded', 'message' => 'Muitas tentativas. Aguarde alguns minutos.']);
 }
 
 $raw = (string)file_get_contents('php://input');
@@ -93,14 +75,13 @@ if (!$consent) {
 $secret = svnl_secret();
 $token = bin2hex(random_bytes(32));
 $tokenHash = hash('sha256', $token);
-$ip = trim((string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+$ip = svorl_client_ip();
 $userAgent = trim((string)($_SERVER['HTTP_USER_AGENT'] ?? 'unknown'));
 $ipHash = hash_hmac('sha256', $ip, $secret);
 $userAgentHash = hash_hmac('sha256', $userAgent, $secret);
 
 try {
     $pdo = sv_pdo();
-    svnl_ensure_schema($pdo);
     $stmt = $pdo->prepare(
         "INSERT INTO newsletter_subscriptions
             (email, status, confirm_token_hash, consent_at, source, ip_hash, user_agent_hash)

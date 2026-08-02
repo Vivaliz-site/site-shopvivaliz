@@ -4,7 +4,16 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 header('Content-Type: text/html; charset=UTF-8');
-http_response_code(500);
+$errorStatus = (int)($_SERVER['SV_ERROR_STATUS'] ?? $_SERVER['REDIRECT_STATUS'] ?? 500);
+if (!in_array($errorStatus, [500, 502, 503], true)) {
+    $errorStatus = 500;
+}
+http_response_code($errorStatus);
+$errorTitle = match ($errorStatus) {
+    502 => 'Serviço temporariamente indisponível',
+    503 => 'Loja temporariamente indisponível',
+    default => 'Erro interno do servidor',
+};
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -12,7 +21,7 @@ http_response_code(500);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex">
-    <title>Erro interno do servidor | Vivaliz</title>
+    <title><?= htmlspecialchars($errorTitle, ENT_QUOTES, 'UTF-8') ?> | Vivaliz</title>
     <link rel="stylesheet" href="/css/responsive.css">
     <style>
         .error-shell {
@@ -60,8 +69,8 @@ http_response_code(500);
 <?php $svNavCurrent = ''; include __DIR__ . '/includes/navbar.php'; ?>
 <main class="error-shell">
     <div>
-        <div class="error-code">500</div>
-        <h1>Erro interno do servidor</h1>
+        <div class="error-code"><?= $errorStatus ?></div>
+        <h1><?= htmlspecialchars($errorTitle, ENT_QUOTES, 'UTF-8') ?></h1>
         <p>Algo deu errado do nosso lado. Tenta novamente em alguns instantes, ou fala com a gente se o problema continuar.</p>
         <div class="error-actions">
             <a class="btn btn-primary" href="/catalogo">Ver catálogo</a>

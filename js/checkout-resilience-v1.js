@@ -5,6 +5,7 @@
 
   var nativeFetch = window.fetch.bind(window);
   var lastCep = '';
+  var shippingRequests = 0;
 
   function requestUrl(input) {
     if (typeof input === 'string') return input;
@@ -29,6 +30,7 @@
       controller = new AbortController();
       options.signal = controller.signal;
       timeoutId = window.setTimeout(function () { controller.abort(); }, 12000);
+      shippingRequests += 1;
       setShippingBusy(true);
     }
 
@@ -39,7 +41,10 @@
       return response;
     }).finally(function () {
       if (timeoutId !== null) window.clearTimeout(timeoutId);
-      if (isShipping) setShippingBusy(false);
+      if (controller) {
+        shippingRequests = Math.max(0, shippingRequests - 1);
+        setShippingBusy(shippingRequests > 0);
+      }
     });
   };
 
