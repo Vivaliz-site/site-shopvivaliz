@@ -247,6 +247,14 @@ function svptg_sanitize_html(string $html, string $script): string
         return $html;
     }
 
+    // O diretório /autodev é deliberadamente bloqueado no Apache. Nenhuma
+    // página pública deve solicitar esse cliente de desenvolvimento.
+    $html = svptg_replace_or_original(
+        $html,
+        '~\s*<script\s+src=["\']/autodev/client\.js(?:\?[^"\']*)?["\']\s*></script>\s*~i',
+        "\n"
+    );
+
     if ($script === 'index.php') {
         $verifiedMount = <<<'HTML'
 <!-- Testimonials Section -->
@@ -268,12 +276,6 @@ HTML;
             $html,
             '~\s*<!-- Testimonials Section -->\s*<section\s+class="home-testimonials\b.*?</section>\s*~si',
             "\n" . $verifiedMount . "\n"
-        );
-
-        $html = svptg_replace_or_original(
-            $html,
-            '~\s*<script\s+src=["\']/autodev/client\.js["\']\s*></script>\s*~i',
-            "\n"
         );
 
         if (!str_contains($html, '/js/newsletter-v1.js')) {
