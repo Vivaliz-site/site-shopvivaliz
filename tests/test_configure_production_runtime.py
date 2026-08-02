@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tempfile
+import unittest
 from pathlib import Path
 
 
@@ -55,30 +57,38 @@ def run_script(target: Path, data: bytes) -> subprocess.CompletedProcess[bytes]:
     )
 
 
-def test_rejects_root_without_modifying_file(tmp_path: Path) -> None:
-    target = tmp_path / ".env"
-    original = "DB_USER=working_user\nDB_PASS=working-password\n"
-    target.write_text(original, encoding="utf-8")
+class ConfigureProductionRuntimeTests(unittest.TestCase):
+    def test_rejects_root_without_modifying_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / ".env"
+            original = "DB_USER=working_user\nDB_PASS=working-password\n"
+            target.write_text(original, encoding="utf-8")
 
-    result = run_script(target, payload({"DB_USER": "root"}))
+            result = run_script(target, payload({"DB_USER": "root"}))
 
-    assert result.returncode == 2
-    assert b"root database user is forbidden" in result.stderr
-    assert target.read_text(encoding="utf-8") == original
-    assert not list(tmp_path.glob(".env.backup.*"))
+            self.assertEqual(result.returncode, 2)
+            self.assertIn(b"root database user is forbidden", result.stderr)
+            self.assertEqual(target.read_text(encoding="utf-8"), original)
+            self.assertEqual(list(root.glob(".env.backup.*")), [])
+
+    def test_writes_safe_tuple_atomically(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / ".env"
+            target.write_text("EXISTING=value\n", encoding="utf-8")
+
+            result = run_script(target, payload({}))
+
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            updated = target.read_text(encoding="utf-8")
+            self.assertIn("DB_USER=shop_runtime", updated)
+            self.assertIn("DB_NAME=shopvivaliz", updated)
+            self.assertIn("database-password", updated)
+            self.assertIn("database_user_safe=true", result.stdout.decode())
+            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(len(list(root.glob(".env.backup.*"))), 1)
 
 
-def test_writes_safe_tuple_atomically(tmp_path: Path) -> None:
-    target = tmp_path / ".env"
-    target.write_text("EXISTING=value\n", encoding="utf-8")
-
-    result = run_script(target, payload({}))
-
-    assert result.returncode == 0, result.stderr.decode()
-    updated = target.read_text(encoding="utf-8")
-    assert "DB_USER=shop_runtime" in updated
-    assert "DB_NAME=shopvivaliz" in updated
-    assert "database-password" in updated
-    assert "database_user_safe=true" in result.stdout.decode()
-    assert target.stat().st_mode & 0o777 == 0o600
-    assert len(list(tmp_path.glob(".env.backup.*"))) == 1
+if __name__ == "__main__":
+    unittest.main()
