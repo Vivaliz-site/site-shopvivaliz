@@ -1,0 +1,261 @@
+name: Final order flow audit
+
+on:
+  push:
+    branches:
+      - audit/final-order-flow-20260802
+    paths:
+      - .github/workflows/final-order-flow-audit.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: final-order-flow-audit-20260802
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EXPECTED_SHA: f65f4977244cd2217ad05e24976d25d7251e88ba
+      ORDER_NUMBER: SV20260731072524339
+    steps:
+      - name: Checkout exact audit commit
+        uses: actions/checkout@v4
+
+      - name: Validate critical PHP and idempotency
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -v
+          php -l includes/payment-notification-idempotency.php
+          php -l includes/mercadopago-gateway.php
+          php -l includes/tiny-order-push.php
+          php -l api/webhook-mercadopago.php
+          php -l api/webhook-post-processor.php
+          php -l tests/admin-payment-notification-idempotency-test.php
+          php tests/admin-payment-notification-idempotency-test.php
+          php -r "require 'includes/mercadopago-gateway.php'; if (svmp_local_status('processed') !== 'payment_approved' || svmp_local_status('approved') !== 'payment_approved') { fwrite(STDERR, 'status mapping failed\n'); exit(1); } echo 'OK: Mercado Pago approved status mapping\n';"
+
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Wait for exact release in production
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            release=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 "cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha 2>/dev/null || true")
+            if [ "$release" = "$EXPECTED_SHA" ]; then
+              echo "Exact release is active"
+              exit 0
+            fi
+            echo "Waiting for production release ($attempt/60)"
+            sleep 10
+          done
+          echo "Expected release did not become active" >&2
+          exit 1
+
+      - name: Reconcile production without side effects
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            "EXPECTED_SHA='$EXPECTED_SHA' ORDER_NUMBER='$ORDER_NUMBER' bash -s" > final-audit.json <<'REMOTE'
+          set -euo pipefail
+          root='/home/ubuntu/shopvivaliz-deploy/current'
+          cd "$root"
+
+          resolve=(--resolve shopvivaliz.com.br:443:127.0.0.1)
+          version_json=$(curl -fsS "${resolve[@]}" 'https://shopvivaliz.com.br/api/health/version.php')
+          orders_json=$(curl -fsS "${resolve[@]}" 'https://shopvivaliz.com.br/api/orders/health.php')
+          olist_json=$(curl -fsS "${resolve[@]}" 'https://shopvivaliz.com.br/api/olist/webhook-health.php')
+          liz_json=$(curl -fsS "${resolve[@]}" 'https://shopvivaliz.com.br/api/liz-intelligent.php?health=1')
+          home_code=$(curl -sS -o /dev/null -w '%{http_code}' "${resolve[@]}" 'https://shopvivaliz.com.br/')
+          catalog_code=$(curl -sS -o /dev/null -w '%{http_code}' "${resolve[@]}" 'https://shopvivaliz.com.br/catalogo')
+          checkout_code=$(curl -sS -o /dev/null -w '%{http_code}' "${resolve[@]}" 'https://shopvivaliz.com.br/checkout')
+          webhook_get_code=$(curl -sS -o /dev/null -w '%{http_code}' "${resolve[@]}" 'https://shopvivaliz.com.br/api/webhook-mercadopago.php')
+
+          export VERSION_JSON="$version_json"
+          export ORDERS_JSON="$orders_json"
+          export OLIST_JSON="$olist_json"
+          export LIZ_JSON="$liz_json"
+          export HOME_CODE="$home_code"
+          export CATALOG_CODE="$catalog_code"
+          export CHECKOUT_CODE="$checkout_code"
+          export WEBHOOK_GET_CODE="$webhook_get_code"
+
+          php <<'PHP'
+          <?php
+          declare(strict_types=1);
+
+          $root = getcwd();
+          require_once $root . '/includes/mercadopago-gateway.php';
+          require_once $root . '/includes/pdo-database.php';
+
+          $orderNumber = (string)getenv('ORDER_NUMBER');
+          $expectedSha = (string)getenv('EXPECTED_SHA');
+          $path = svmp_find_order_path($orderNumber);
+          if ($path === '') {
+              throw new RuntimeException('order_file_missing');
+          }
+
+          $beforeHash = hash_file('sha256', $path);
+          $order = svmp_read_order($path);
+          $paymentId = trim((string)($order['mercadopago']['payment_id'] ?? ''));
+          $tinyId = trim((string)($order['tiny_order_id'] ?? ''));
+          $mpStatus = strtolower(trim((string)($order['mercadopago']['status'] ?? '')));
+
+          $orderFileCount = 0;
+          $paymentFileCount = 0;
+          $seen = [];
+          foreach (svmp_order_directories() as $directory) {
+              foreach (glob($directory . DIRECTORY_SEPARATOR . '*.json') ?: [] as $candidate) {
+                  $real = realpath($candidate) ?: $candidate;
+                  if (isset($seen[$real])) {
+                      continue;
+                  }
+                  $seen[$real] = true;
+                  $candidateOrder = svmp_read_order($candidate);
+                  if (trim((string)($candidateOrder['order_number'] ?? '')) === $orderNumber) {
+                      $orderFileCount++;
+                  }
+                  if ($paymentId !== '' && trim((string)($candidateOrder['mercadopago']['payment_id'] ?? '')) === $paymentId) {
+                      $paymentFileCount++;
+                  }
+              }
+          }
+
+          $pdo = sv_pdo();
+          if (!$pdo instanceof PDO) {
+              throw new RuntimeException('database_unavailable');
+          }
+          $stmt = $pdo->prepare('SELECT order_status, olist_order_id FROM orders WHERE order_number = :order_number');
+          $stmt->execute([':order_number' => $orderNumber]);
+          $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+          $dbTinyIds = [];
+          $dbStatuses = [];
+          foreach ($rows as $row) {
+              $status = trim((string)($row['order_status'] ?? ''));
+              if ($status !== '') {
+                  $dbStatuses[$status] = true;
+              }
+              $dbTinyId = trim((string)($row['olist_order_id'] ?? ''));
+              if ($dbTinyId !== '') {
+                  $dbTinyIds[$dbTinyId] = true;
+              }
+          }
+          $dbTinyId = count($dbTinyIds) === 1 ? (string)array_key_first($dbTinyIds) : '';
+          $tinyDuplicateCount = 0;
+          if ($dbTinyId !== '') {
+              $duplicateStmt = $pdo->prepare('SELECT COUNT(*) FROM orders WHERE olist_order_id = :olist_order_id');
+              $duplicateStmt->execute([':olist_order_id' => $dbTinyId]);
+              $tinyDuplicateCount = (int)$duplicateStmt->fetchColumn();
+          }
+
+          $decode = static function (string $name): array {
+              $value = json_decode((string)getenv($name), true);
+              return is_array($value) ? $value : [];
+          };
+          $version = $decode('VERSION_JSON');
+          $ordersHealth = $decode('ORDERS_JSON');
+          $olistHealth = $decode('OLIST_JSON');
+          $lizHealth = $decode('LIZ_JSON');
+
+          clearstatcache(true, $path);
+          $afterHash = hash_file('sha256', $path);
+
+          $checks = [
+              'exact_release_active' => ($version['release_sha'] ?? '') === $expectedSha,
+              'version_health_ok' => ($version['ok'] ?? false) === true,
+              'orders_health_ok' => ($ordersHealth['ok'] ?? false) === true,
+              'olist_health_ok' => ($olistHealth['ok'] ?? false) === true,
+              'liz_health_ok' => ($lizHealth['ok'] ?? false) === true,
+              'home_http_200' => getenv('HOME_CODE') === '200',
+              'catalog_http_200' => getenv('CATALOG_CODE') === '200',
+              'checkout_http_200' => getenv('CHECKOUT_CODE') === '200',
+              'webhook_get_rejected' => getenv('WEBHOOK_GET_CODE') === '405',
+              'local_payment_approved' => trim((string)($order['status'] ?? '')) === 'payment_approved',
+              'provider_status_approved' => svmp_local_status($mpStatus) === 'payment_approved',
+              'webhook_timestamp_present' => trim((string)($order['mercadopago']['last_webhook_at'] ?? '')) !== '',
+              'customer_payment_email_recorded' => (bool)($order['payment_confirmation_email_sent'] ?? false),
+              'customer_payment_email_timestamped' => trim((string)($order['payment_confirmation_email_sent_at'] ?? '')) !== '',
+              'tiny_push_ok' => trim((string)($order['tiny_push'] ?? '')) === 'ok',
+              'tiny_id_present' => $tinyId !== '',
+              'single_order_file' => $orderFileCount === 1,
+              'single_payment_file' => $paymentFileCount === 1,
+              'single_database_order' => count($rows) === 1,
+              'database_status_approved' => isset($dbStatuses['pagamento_aprovado']),
+              'database_tiny_id_present' => $dbTinyId !== '',
+              'tiny_ids_match' => $tinyId !== '' && $dbTinyId !== '' && hash_equals($tinyId, $dbTinyId),
+              'tiny_id_not_duplicated' => $tinyDuplicateCount === 1,
+              'order_file_unchanged' => is_string($beforeHash) && hash_equals($beforeHash, (string)$afterHash),
+          ];
+
+          $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));
+          $report = [
+              'ok' => $failures === [],
+              'read_only' => true,
+              'order_number' => $orderNumber,
+              'release_sha' => (string)($version['release_sha'] ?? ''),
+              'provider_status_class' => svmp_local_status($mpStatus),
+              'order_file_count' => $orderFileCount,
+              'payment_file_count' => $paymentFileCount,
+              'database_order_count' => count($rows),
+              'tiny_id_hash12' => $tinyId !== '' ? substr(hash('sha256', $tinyId), 0, 12) : '',
+              'database_tiny_id_hash12' => $dbTinyId !== '' ? substr(hash('sha256', $dbTinyId), 0, 12) : '',
+              'checks' => $checks,
+              'failures' => $failures,
+          ];
+
+          echo json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL;
+          exit($failures === [] ? 0 : 1);
+          PHP
+          REMOTE
+          cat final-audit.json
+
+      - name: Validate sanitized report
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('final-audit.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          assert data['ok'] is True
+          assert data['read_only'] is True
+          assert data['failures'] == []
+          text = path.read_text(encoding='utf-8').lower()
+          forbidden = ['"customer"', '"email"', '"phone"', '"address"', '"cpf"', '"cnpj"', '"payment_id"', '"digitable_line"', '"barcode"', '"ticket_url"']
+          for key in forbidden:
+              assert key not in text, key
+          print('OK: sanitized final audit report')
+          PY
+
+      - name: Upload final sanitized evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-order-flow-audit
+          path: final-audit.json
+          retention-days: 7
