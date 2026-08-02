@@ -12,6 +12,8 @@ on:
       - '403.php'
       - '404.php'
       - '500.php'
+      - '502.php'
+      - '503.php'
       - 'api/**'
       - 'css/**'
       - 'images/**'
@@ -28,7 +30,7 @@ permissions:
 
 concurrency:
   group: storefront-browser-audit-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   playwright:
