@@ -59,13 +59,13 @@ jobs:
             'set -euo pipefail
              current=/home/ubuntu/shopvivaliz-deploy/current
              cache="$current/storage/products-cache-ativos.json"
-             sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null || true)"
-             token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null || true)"
+             if sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null)"; then :; else sync_status=inactive; fi
+             if token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null)"; then :; else token_status=inactive; fi
              if [[ -f "$cache" ]]; then
                cache_age=$(( $(date +%s) - $(stat -c %Y "$cache") ))
                cache_size=$(stat -c %s "$cache")
                cache_json_valid=true
-               python3 -m json.tool "$cache" >/dev/null 2>&1 || cache_json_valid=false
+               if python3 -m json.tool "$cache" >/dev/null 2>&1; then :; else cache_json_valid=false; fi
              else
                cache_age=-1
                cache_size=0
