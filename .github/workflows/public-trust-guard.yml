@@ -1,0 +1,52 @@
+name: Public Trust Guard
+
+on:
+  pull_request:
+    paths:
+      - 'includes/public-trust-guard.php'
+      - 'includes/catalog-runtime.php'
+      - 'index.php'
+      - 'produto.php'
+      - 'tests/public-trust-guard-test.php'
+      - '.github/workflows/public-trust-guard.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'includes/public-trust-guard.php'
+      - 'includes/catalog-runtime.php'
+      - 'index.php'
+      - 'produto.php'
+      - 'tests/public-trust-guard-test.php'
+      - '.github/workflows/public-trust-guard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+
+      - name: Lint trust guard and catalog runtime
+        run: |
+          set -euo pipefail
+          php -l includes/public-trust-guard.php
+          php -l includes/catalog-runtime.php
+          php -l tests/public-trust-guard-test.php
+
+      - name: Verify untrusted social proof is removed
+        run: php tests/public-trust-guard-test.php
