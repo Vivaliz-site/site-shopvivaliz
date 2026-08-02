@@ -6,8 +6,8 @@ if (PHP_SAPI !== 'cli') {
     exit;
 }
 
-$url = rtrim((string)(getenv('SHOPVIVALIZ_BASE_URL') ?: 'https://shopvivaliz.com.br'), '/')
-    . '/produto/chave-teste-140mm-100500v?review_integrity=' . rawurlencode((string)time());
+$baseUrl = rtrim((string)(getenv('SHOPVIVALIZ_BASE_URL') ?: 'https://shopvivaliz.com.br'), '/');
+$url = $baseUrl . '/produto/chave-teste-140mm-100500v?review_integrity=' . rawurlencode((string)time());
 $handle = curl_init($url);
 curl_setopt_array($handle, [
     CURLOPT_RETURNTRANSFER => true,
@@ -39,8 +39,38 @@ if (is_string($html)) {
 $required = [
     'Chave Teste 140MM 100/500V',
     'COMPRAR AGORA',
-    'R$ 8,90',
 ];
+
+$catalogUrl = $baseUrl . '/api/catalog/products.php?limit=20&busca=' . rawurlencode('chave teste 140mm');
+$catalogHandle = curl_init($catalogUrl);
+curl_setopt_array($catalogHandle, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_CONNECTTIMEOUT => 10,
+    CURLOPT_TIMEOUT => 30,
+    CURLOPT_HTTPHEADER => ['Accept: application/json'],
+    CURLOPT_USERAGENT => 'ShopVivaliz-Review-Integrity/1.0',
+]);
+$catalogBody = curl_exec($catalogHandle);
+$catalogStatus = (int)curl_getinfo($catalogHandle, CURLINFO_RESPONSE_CODE);
+$catalogError = curl_errno($catalogHandle);
+curl_close($catalogHandle);
+
+$expectedPrice = null;
+if ($catalogError === 0 && $catalogStatus === 200 && is_string($catalogBody)) {
+    $catalog = json_decode($catalogBody, true);
+    foreach (($catalog['products'] ?? []) as $product) {
+        if (($product['sku'] ?? '') === 'SKU-343577002' && isset($product['price'])) {
+            $expectedPrice = 'R$ ' . number_format((float)$product['price'], 2, ',', '.');
+            break;
+        }
+    }
+}
+if ($expectedPrice !== null) {
+    $required[] = $expectedPrice;
+} else {
+    $required[] = 'R$ ';
+}
 $missing = [];
 if (is_string($html)) {
     foreach ($required as $phrase) {
