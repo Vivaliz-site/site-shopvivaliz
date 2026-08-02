@@ -1,0 +1,182 @@
+name: Restore verified DB runtime
+
+on:
+  push:
+    branches:
+      - audit/final-order-flow-20260802
+    paths:
+      - .github/workflows/restore-working-db-runtime.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: configure-production-runtime
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - name: Configure verified SSH
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Restore only DB keys from verified backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'python3 -' <<'PY'
+          from __future__ import annotations
+          import os
+          import shutil
+          import tempfile
+          import time
+          from pathlib import Path
+          import mysql.connector
+
+          shared = Path('/home/ubuntu/shopvivaliz-deploy/shared/.env')
+          keys = ('DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASS')
+
+          def parse(path: Path) -> dict[str, str]:
+              values: dict[str, str] = {}
+              for raw in path.read_text(encoding='utf-8').splitlines():
+                  line = raw.strip()
+                  if not line or line.startswith('#') or '=' not in line:
+                      continue
+                  if line.startswith('export '):
+                      line = line[7:].strip()
+                  key, value = line.split('=', 1)
+                  key = key.strip()
+                  value = value.strip()
+                  if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                      value = value[1:-1]
+                  values[key] = value
+              return values
+
+          def connects(values: dict[str, str]) -> bool:
+              name = values.get('DB_NAME', '').strip()
+              user = values.get('DB_USER', '').strip()
+              if not name or not user or user.lower() == 'root':
+                  return False
+              try:
+                  connection = mysql.connector.connect(
+                      host=values.get('DB_HOST', 'localhost') or 'localhost',
+                      port=int(values.get('DB_PORT', '3306') or '3306'),
+                      database=name,
+                      user=user,
+                      password=values.get('DB_PASS', ''),
+                      connection_timeout=5,
+                  )
+                  cursor = connection.cursor()
+                  cursor.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('orders','blog_articles')")
+                  valid = int(cursor.fetchone()[0]) == 2
+                  cursor.close()
+                  connection.close()
+                  return valid
+              except Exception:
+                  return False
+
+          backups = sorted(shared.parent.glob(shared.name + '.backup.*'), key=lambda p: p.stat().st_mtime, reverse=True)
+          source = next((path for path in backups if connects(parse(path))), None)
+          if source is None:
+              raise SystemExit('no verified DB backup found')
+
+          current = parse(shared)
+          verified = parse(source)
+          for key in keys:
+              value = verified.get(key, '')
+              if key in ('DB_NAME', 'DB_USER') and not value:
+                  raise SystemExit(f'verified source missing {key}')
+              current[key] = value
+
+          if not connects(current):
+              raise SystemExit('candidate restored configuration did not connect')
+
+          mode = shared.stat().st_mode & 0o777
+          safety_backup = shared.with_name(f'{shared.name}.backup.restore.{int(time.time())}')
+          shutil.copy2(shared, safety_backup)
+          os.chmod(safety_backup, mode)
+
+          original_lines = shared.read_text(encoding='utf-8').splitlines()
+          output: list[str] = []
+          written: set[str] = set()
+          for line in original_lines:
+              key = line.split('=', 1)[0].strip() if '=' in line else ''
+              if key in keys:
+                  output.append(f'{key}={current[key]}')
+                  written.add(key)
+              else:
+                  output.append(line)
+          for key in keys:
+              if key not in written:
+                  output.append(f'{key}={current[key]}')
+
+          fd, temp_name = tempfile.mkstemp(prefix='.env.restore.', dir=shared.parent)
+          temp = Path(temp_name)
+          try:
+              with os.fdopen(fd, 'w', encoding='utf-8', newline='\n') as handle:
+                  handle.write('\n'.join(output).rstrip('\n') + '\n')
+                  handle.flush()
+                  os.fsync(handle.fileno())
+              os.chmod(temp, mode)
+              os.replace(temp, shared)
+          finally:
+              temp.unlink(missing_ok=True)
+
+          if not connects(parse(shared)):
+              shutil.copy2(safety_backup, shared)
+              os.chmod(shared, mode)
+              raise SystemExit('post-write verification failed; rollback applied')
+
+          print('working_backup_selected=true')
+          print('database_keys_restored=5')
+          print('current_database_connected=true')
+          print('safety_backup_created=true')
+          PY
+
+      - name: Validate candidate migration and order database
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          candidate=$(find /home/ubuntu/shopvivaliz-deploy/releases -maxdepth 1 -type d -name '*-fc022188' | sort | tail -n 1)
+          test -n "$candidate"
+          php "$candidate/scripts/migrate-blog-articles.php" >/tmp/editorial-migration.out 2>/tmp/editorial-migration.err || {
+            code=$?
+            echo 'editorial_migration=failed'
+            sed -E 's/([A-Za-z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z0-9_]*)=[^[:space:]]+/\1=[redacted]/Ig' /tmp/editorial-migration.err | tail -n 15
+            rm -f /tmp/editorial-migration.out /tmp/editorial-migration.err
+            exit "$code"
+          }
+          grep -Eq '^Artigos processados: [1-9][0-9]*$' /tmp/editorial-migration.out
+          CANDIDATE="$candidate" php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          $root=(string)getenv('CANDIDATE');
+          require_once $root . '/includes/runtime-env-reader.php';
+          $host=svre_value('DB_HOST',$root) ?: 'localhost';
+          $portRaw=svre_value('DB_PORT',$root); $port=ctype_digit($portRaw)?(int)$portRaw:3306;
+          $name=svre_value('DB_NAME',$root); $user=svre_value('DB_USER',$root); $pass=svre_value('DB_PASS',$root);
+          if ($user === '' || strtolower($user) === 'root') throw new RuntimeException('unsafe_database_user');
+          $pdo=new PDO(sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4',$host,$port,$name),$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+          $orders=(int)$pdo->query('SELECT COUNT(*) FROM orders')->fetchColumn();
+          $articles=(int)$pdo->query('SELECT COUNT(*) FROM blog_articles')->fetchColumn();
+          if ($orders < 1 || $articles < 1) throw new RuntimeException('required_rows_missing');
+          echo "database_connected=true\norders_present=true\nblog_articles_present=true\n";
+          PHP
+          rm -f /tmp/editorial-migration.out /tmp/editorial-migration.err
+          echo 'editorial_migration=success'
+          REMOTE
