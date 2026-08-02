@@ -164,6 +164,105 @@ PY
   return 1
 }
 
+reconcile_runtime_secrets() {
+  local release_path="$1"
+  local materializer="$release_path/scripts/materialize-runtime-secrets.php"
+  local runtime="$SHARED_DIR/runtime-secrets.php"
+  local runtime_link="$release_path/config/runtime-secrets.php"
+  local runtime_target
+
+  if [ ! -r "$materializer" ]; then
+    log ERROR "Materializador de runtime secrets ausente em $release_path"
+    return 1
+  fi
+  if [ ! -f "$SHARED_DIR/.env" ]; then
+    log ERROR "Configuracao compartilhada ausente: $SHARED_DIR/.env"
+    return 1
+  fi
+
+  if ! chmod 0600 "$SHARED_DIR/.env"; then
+    log ERROR "Nao foi possivel proteger a configuracao compartilhada"
+    return 1
+  fi
+  if ! php "$materializer" >> "$LOG_FILE" 2>&1; then
+    log ERROR "Materializacao do runtime minimo falhou"
+    return 1
+  fi
+  if ! sudo chown ubuntu:www-data "$runtime" || ! chmod 0640 "$runtime"; then
+    log ERROR "Nao foi possivel aplicar proprietario/permissoes ao runtime minimo"
+    return 1
+  fi
+
+  runtime_target="$(readlink -f "$runtime_link" 2>/dev/null || true)"
+  if [ "$runtime_target" != "$runtime" ]; then
+    if ! rm -f -- "$runtime_link"; then
+      log ERROR "Nao foi possivel remover o runtime link anterior"
+      return 1
+    fi
+    if ! ln -s "../../../shared/runtime-secrets.php" "$runtime_link"; then
+      log ERROR "Nao foi possivel criar o runtime link"
+      return 1
+    fi
+  fi
+  if [ "$(readlink -f "$runtime_link" 2>/dev/null || true)" != "$runtime" ]; then
+    log ERROR "Symlink de runtime secrets invalido"
+    return 1
+  fi
+
+  if ! sudo -u www-data php -r '
+    $values = require $argv[1];
+    $user = (string)($values["DB_USER"] ?? $values["DB_USERNAME"] ?? "");
+    $key = (string)($values["QUOTE_SIGNING_KEY"] ?? $values["APP_KEY"] ?? $values["SHOPVIVALIZ_APP_KEY"] ?? $values["SHOPVIVALIZ_AGENT_KEY"] ?? "");
+    exit(is_array($values) && $user !== "" && strtolower($user) !== "root" && strlen($key) >= 32 ? 0 : 1);
+  ' "$runtime_link"; then
+    log ERROR "Runtime minimo invalido ou ilegivel pelo SAPI web"
+    return 1
+  fi
+
+  log INFO "Runtime minimo reconciliado para o SAPI web"
+}
+
+verify_runtime_health() {
+  local orders_body olist_body orders_code olist_code
+  orders_body="$(mktemp)"
+  olist_body="$(mktemp)"
+
+  orders_code="$(curl --silent --show-error --output "$orders_body" --max-time 15 -H 'Host: shopvivaliz.com.br' --write-out '%{http_code}' 'http://127.0.0.1/api/orders/health.php' || true)"
+  olist_code="$(curl --silent --show-error --output "$olist_body" --max-time 15 -H 'Host: shopvivaliz.com.br' --write-out '%{http_code}' 'http://127.0.0.1/api/olist/webhook-health.php' || true)"
+
+  if python3 - "$orders_code" "$olist_code" "$orders_body" "$olist_body" <<'PY'
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+orders_code, olist_code, orders_path, olist_path = sys.argv[1:]
+orders = json.loads(Path(orders_path).read_text(encoding="utf-8"))
+olist = json.loads(Path(olist_path).read_text(encoding="utf-8"))
+valid = (
+    int(orders_code) == 200
+    and orders.get("ok") is True
+    and orders.get("checks", {}).get("quote_signing_configured") is True
+    and int(olist_code) == 200
+    and olist.get("ok") is True
+    and olist.get("checks", {}).get("database_connected") is True
+)
+if not valid:
+    raise SystemExit(1)
+PY
+  then
+    rm -f -- "$orders_body" "$olist_body"
+    log INFO "Health runtime confirmado: pedidos, assinatura, Olist e banco"
+    return 0
+  fi
+
+  log ERROR "Health runtime nao confirmou pedidos/Olist"
+  cat "$orders_body" "$olist_body" >> "$LOG_FILE" 2>/dev/null || :
+  rm -f -- "$orders_body" "$olist_body"
+  return 1
+}
+
 if [ ! -d "$REPO_DIR/.git" ]; then
   log FATAL "Clone Git nao existe: $REPO_DIR"
   exit 1
@@ -202,8 +301,12 @@ if [ -L "$CURRENT_LINK" ] && [ -e "$CURRENT_LINK" ]; then
 fi
 
 if [ "${REMOTE_SHA:0:8}" = "$ACTIVE_SHA" ]; then
-  log INFO "Producao ja alinhada em $REMOTE_SHA"
-  write_status success "$REMOTE_SHA" "$ACTIVE_RELEASE" "release ja estava alinhada"
+  if ! reconcile_runtime_secrets "$CURRENT_LINK" || ! verify_runtime_health; then
+    write_status failure "$REMOTE_SHA" "$ACTIVE_RELEASE" "release alinhada, mas runtime compartilhado invalido"
+    exit 1
+  fi
+  log INFO "Producao e runtime ja alinhados em $REMOTE_SHA"
+  write_status success "$REMOTE_SHA" "$ACTIVE_RELEASE" "release e runtime ja estavam alinhados"
   exit 0
 fi
 
@@ -253,25 +356,8 @@ for name in "${SYMLINKS[@]}"; do
   fi
 done
 
-if [ ! -r "$NEW_RELEASE_PATH/scripts/materialize-runtime-secrets.php" ]; then
+if ! reconcile_runtime_secrets "$NEW_RELEASE_PATH"; then
   rm -rf -- "$NEW_RELEASE_PATH"
-  log ERROR "Materializador de runtime secrets ausente"
-  exit 1
-fi
-php "$NEW_RELEASE_PATH/scripts/materialize-runtime-secrets.php" >> "$LOG_FILE" 2>&1
-sudo chown ubuntu:www-data "$SHARED_DIR/runtime-secrets.php"
-chmod 0640 "$SHARED_DIR/runtime-secrets.php"
-runtime_link="$NEW_RELEASE_PATH/config/runtime-secrets.php"
-rm -f -- "$runtime_link"
-ln -s "../../../shared/runtime-secrets.php" "$runtime_link"
-if [ "$(readlink -f "$runtime_link")" != "$SHARED_DIR/runtime-secrets.php" ]; then
-  rm -rf -- "$NEW_RELEASE_PATH"
-  log ERROR "Symlink de runtime secrets invalido"
-  exit 1
-fi
-if ! sudo -u www-data php -r '$values = require $argv[1]; exit(is_array($values) && count($values) >= 4 ? 0 : 1);' "$runtime_link"; then
-  rm -rf -- "$NEW_RELEASE_PATH"
-  log ERROR "Runtime secrets nao sao legiveis pelo SAPI web"
   exit 1
 fi
 
@@ -294,6 +380,12 @@ fi
 if ! verify_local_release "$REMOTE_SHA"; then
   rollback_to "$ACTIVE_RELEASE"
   write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "endpoint de versao nao confirmou o SHA"
+  exit 1
+fi
+
+if ! verify_runtime_health; then
+  rollback_to "$ACTIVE_RELEASE"
+  write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "health runtime de pedidos/Olist falhou"
   exit 1
 fi
 
