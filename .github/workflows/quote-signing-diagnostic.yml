@@ -1,0 +1,168 @@
+name: Quote signing diagnostic
+
+on:
+  push:
+    branches:
+      - audit/final-order-flow-20260802
+    paths:
+      - .github/workflows/quote-signing-diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure verified SSH
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Inspect code references and candidate key sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' > quote-signing-diagnostic.json <<'REMOTE'
+          set -euo pipefail
+          root='/home/ubuntu/shopvivaliz-deploy/current'
+          shared='/home/ubuntu/shopvivaliz-deploy/shared/.env'
+          export ROOT="$root" SHARED="$shared"
+          php <<'PHP'
+          <?php
+          declare(strict_types=1);
+
+          $root = (string)getenv('ROOT');
+          $shared = (string)getenv('SHARED');
+          $keys = ['QUOTE_SIGNING_KEY', 'APP_KEY', 'SHOPVIVALIZ_APP_KEY', 'SHOPVIVALIZ_AGENT_KEY'];
+
+          function quote_parse_env(string $path): array {
+              if (!is_file($path) || !is_readable($path)) return [];
+              $values = [];
+              foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+                  $line = trim($line);
+                  if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) continue;
+                  if (str_starts_with($line, 'export ')) $line = trim(substr($line, 7));
+                  [$key, $value] = explode('=', $line, 2);
+                  $key = trim($key); $value = trim($value);
+                  if (strlen($value) >= 2) {
+                      $first = $value[0]; $last = $value[strlen($value)-1];
+                      if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) $value = substr($value, 1, -1);
+                  }
+                  $values[$key] = $value;
+              }
+              return $values;
+          }
+
+          function quote_source_summary(string $label, string $path, array $keys): array {
+              $values = quote_parse_env($path);
+              $found = [];
+              foreach ($keys as $key) {
+                  $value = trim((string)($values[$key] ?? ''));
+                  if ($value === '') continue;
+                  $found[] = [
+                      'key' => $key,
+                      'length' => strlen($value),
+                      'hash12' => substr(hash('sha256', $value), 0, 12),
+                      'strong_length' => strlen($value) >= 32,
+                  ];
+              }
+              return [
+                  'label' => $label,
+                  'exists' => is_file($path),
+                  'mtime' => is_file($path) ? (int)(filemtime($path) ?: 0) : 0,
+                  'keys' => $found,
+              ];
+          }
+
+          $sources = [quote_source_summary('shared-current', $shared, $keys)];
+          $backups = glob($shared . '.backup.*') ?: [];
+          usort($backups, static fn(string $a, string $b): int => ((int)(filemtime($b) ?: 0)) <=> ((int)(filemtime($a) ?: 0)));
+          foreach (array_slice($backups, 0, 25) as $index => $path) {
+              $sources[] = quote_source_summary('shared-backup-' . ($index + 1), $path, $keys);
+          }
+
+          $runtimePath = $root . '/config/runtime-secrets.php';
+          $runtimeFound = [];
+          if (is_file($runtimePath) && is_readable($runtimePath)) {
+              try { $raw = require $runtimePath; } catch (Throwable) { $raw = []; }
+              if (is_array($raw)) {
+                  foreach ($keys as $key) {
+                      $value = isset($raw[$key]) && is_scalar($raw[$key]) ? trim((string)$raw[$key]) : '';
+                      if ($value === '') continue;
+                      $runtimeFound[] = [
+                          'key' => $key,
+                          'length' => strlen($value),
+                          'hash12' => substr(hash('sha256', $value), 0, 12),
+                          'strong_length' => strlen($value) >= 32,
+                      ];
+                  }
+              }
+          }
+          $sources[] = ['label' => 'active-runtime-secrets', 'exists' => is_file($runtimePath), 'mtime' => is_file($runtimePath) ? (int)(filemtime($runtimePath) ?: 0) : 0, 'keys' => $runtimeFound];
+
+          $patterns = ['QUOTE_SIGNING_KEY', 'SHOPVIVALIZ_APP_KEY', 'APP_KEY', 'quote_signature', 'quote_token', 'shipping_signature', 'hash_hmac'];
+          $references = [];
+          $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS));
+          foreach ($iterator as $file) {
+              if (!$file->isFile()) continue;
+              $path = $file->getPathname();
+              if (!preg_match('/\.(php|js|mjs|ts)$/i', $path)) continue;
+              if (str_contains($path, '/vendor/') || str_contains($path, '/node_modules/')) continue;
+              $lines = @file($path, FILE_IGNORE_NEW_LINES);
+              if (!is_array($lines)) continue;
+              foreach ($lines as $number => $line) {
+                  foreach ($patterns as $pattern) {
+                      if (stripos($line, $pattern) === false) continue;
+                      $sanitized = preg_replace('/([A-Za-z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD)[A-Za-z0-9_]*)\s*=\s*[\'\"][^\'\"]+[\'\"]/', '$1=[redacted]', trim($line));
+                      $references[] = [
+                          'path' => ltrim(substr($path, strlen($root)), '/'),
+                          'line' => $number + 1,
+                          'pattern' => $pattern,
+                          'snippet' => substr((string)$sanitized, 0, 240),
+                      ];
+                      break;
+                  }
+              }
+          }
+
+          echo json_encode([
+              'release_sha' => is_file($root . '/.release-sha') ? trim((string)file_get_contents($root . '/.release-sha')) : '',
+              'source_count' => count($sources),
+              'sources' => $sources,
+              'references' => $references,
+          ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL;
+          PHP
+          REMOTE
+          cat quote-signing-diagnostic.json
+
+      - name: Validate sanitized output
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('quote-signing-diagnostic.json')
+          data = json.loads(p.read_text())
+          assert isinstance(data['sources'], list)
+          text = p.read_text().lower()
+          for forbidden in ('private key', 'db_pass=', 'password=', 'access_token=', 'refresh_token='):
+              assert forbidden not in text
+          PY
+
+      - name: Upload diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: quote-signing-diagnostic
+          path: quote-signing-diagnostic.json
+          retention-days: 3
