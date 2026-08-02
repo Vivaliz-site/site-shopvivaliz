@@ -3,7 +3,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:8090';
+const baseOrigin = new URL(baseURL).origin;
 const outputDir = process.env.OUTPUT_DIR || 'test-results/storefront-audit';
+const placeholderImage = await fs.readFile(path.join(process.cwd(), 'images/product-placeholder.svg'));
 await fs.mkdir(outputDir, { recursive: true });
 
 const profiles = [
@@ -32,6 +34,46 @@ const routes = [
 const browser = await chromium.launch({ headless: true });
 const report = { generated_at: new Date().toISOString(), base_url: baseURL, pages: [], memory: null };
 let failed = false;
+
+async function installDeterministicNetwork(page) {
+  await page.route('**/*', async (route) => {
+    const request = route.request();
+    let url;
+    try {
+      url = new URL(request.url());
+    } catch (_) {
+      await route.continue();
+      return;
+    }
+
+    if (url.origin === baseOrigin || ['data:', 'blob:', 'about:'].includes(url.protocol)) {
+      await route.continue();
+      return;
+    }
+
+    // A auditoria isolada mede a aplicação e não a disponibilidade de Google
+    // Fonts, pixels, gateways ou CDNs. Recursos externos recebem respostas
+    // determinísticas para que Fast 3G não bloqueie document.fonts.ready.
+    const type = request.resourceType();
+    if (type === 'stylesheet') {
+      await route.fulfill({ status: 200, contentType: 'text/css; charset=utf-8', body: '/* external stylesheet disabled in CI */' });
+      return;
+    }
+    if (type === 'script') {
+      await route.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body: '/* external script disabled in CI */' });
+      return;
+    }
+    if (type === 'image') {
+      await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: placeholderImage });
+      return;
+    }
+    if (type === 'font') {
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+    await route.fulfill({ status: 204, body: '' });
+  });
+}
 
 async function installMetrics(page) {
   await page.addInitScript(() => {
@@ -65,33 +107,28 @@ async function scrollPage(page) {
 }
 
 async function saveScreenshot(page, screenshotPath) {
-  try {
-    await Promise.race([
-      page.evaluate(() => document.fonts && document.fonts.ready ? document.fonts.ready : null),
-      new Promise((resolve) => setTimeout(resolve, 2500))
-    ]).catch(() => null);
-    await page.screenshot({ path: screenshotPath, fullPage: true, animations: 'disabled', timeout: 12_000 });
-    return 'playwright';
-  } catch (error) {
-    const client = await page.context().newCDPSession(page);
-    const layout = await client.send('Page.getLayoutMetrics');
-    const cssSize = layout.cssContentSize || { x: 0, y: 0, width: 1440, height: 1200 };
-    const clip = {
-      x: Math.max(0, Math.floor(cssSize.x || 0)),
-      y: Math.max(0, Math.floor(cssSize.y || 0)),
-      width: Math.max(1, Math.min(2400, Math.ceil(cssSize.width || 1440))),
-      height: Math.max(1, Math.min(16000, Math.ceil(cssSize.height || 1200))),
-      scale: 1
-    };
-    const shot = await client.send('Page.captureScreenshot', {
-      format: 'png',
-      fromSurface: true,
-      captureBeyondViewport: true,
-      clip
-    });
-    await fs.writeFile(screenshotPath, Buffer.from(shot.data, 'base64'));
-    return 'cdp-font-timeout-fallback';
-  }
+  // CDP não espera indefinidamente por document.fonts.ready, ao contrário de
+  // page.screenshot. A captura continua sendo full-page e pixel a pixel.
+  const client = await page.context().newCDPSession(page);
+  await client.send('Page.enable');
+  const layout = await client.send('Page.getLayoutMetrics');
+  const cssSize = layout.cssContentSize || { x: 0, y: 0, width: 1440, height: 1200 };
+  const clip = {
+    x: Math.max(0, Math.floor(cssSize.x || 0)),
+    y: Math.max(0, Math.floor(cssSize.y || 0)),
+    width: Math.max(1, Math.min(2400, Math.ceil(cssSize.width || 1440))),
+    height: Math.max(1, Math.min(20000, Math.ceil(cssSize.height || 1200))),
+    scale: 1
+  };
+  const shot = await client.send('Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    captureBeyondViewport: true,
+    clip
+  });
+  await fs.writeFile(screenshotPath, Buffer.from(shot.data, 'base64'));
+  await client.detach();
+  return 'cdp-full-page';
 }
 
 for (const profile of profiles) {
@@ -104,6 +141,8 @@ for (const profile of profiles) {
 
   for (const route of routes) {
     const page = await context.newPage();
+    page.setDefaultTimeout(15_000);
+    await installDeterministicNetwork(page);
     await installMetrics(page);
     const consoleErrors = [];
     const networkErrors = [];
@@ -113,7 +152,7 @@ for (const profile of profiles) {
     });
     page.on('response', (response) => {
       const url = new URL(response.url());
-      const firstParty = url.origin === new URL(baseURL).origin;
+      const firstParty = url.origin === baseOrigin;
       if (firstParty && response.status() >= 400) {
         const isExpectedDocument = response.request().isNavigationRequest()
           && route.expected.includes(response.status());
@@ -122,7 +161,7 @@ for (const profile of profiles) {
     });
     page.on('requestfailed', (request) => {
       const url = new URL(request.url());
-      if (url.origin === new URL(baseURL).origin) {
+      if (url.origin === baseOrigin) {
         networkErrors.push(`FAILED ${url.pathname}: ${request.failure()?.errorText || 'unknown'}`);
       }
     });
@@ -135,6 +174,7 @@ for (const profile of profiles) {
         ...profile.throttle,
         connectionType: 'cellular3g'
       });
+      await client.detach();
     }
 
     const response = await page.goto(baseURL + route.url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
@@ -180,13 +220,14 @@ for (const profile of profiles) {
 // Navegacao repetida para detectar crescimento grosseiro de heap em 10 paginas.
 const memoryContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
 const memoryPage = await memoryContext.newPage();
+await installDeterministicNetwork(memoryPage);
 const memoryClient = await memoryContext.newCDPSession(memoryPage);
 await memoryClient.send('Performance.enable');
 async function heapSize() {
   const result = await memoryClient.send('Performance.getMetrics');
   return Number(result.metrics.find((metric) => metric.name === 'JSHeapUsedSize')?.value || 0);
 }
-await memoryPage.goto(baseURL + '/', { waitUntil: 'domcontentloaded' });
+await memoryPage.goto(baseURL + '/', { waitUntil: 'domcontentloaded', timeout: 45_000 });
 const heapBefore = await heapSize();
 for (let index = 0; index < 10; index += 1) {
   const route = routes[index % routes.length];
@@ -203,6 +244,7 @@ report.memory = {
   growth_ratio: heapBefore > 0 ? heapAfter / heapBefore : null
 };
 if (heapGrowth > 64 * 1024 * 1024 && heapBefore > 0 && heapAfter / heapBefore > 2.5) failed = true;
+await memoryClient.detach();
 await memoryContext.close();
 
 await fs.writeFile(path.join(outputDir, 'report.json'), JSON.stringify(report, null, 2));
