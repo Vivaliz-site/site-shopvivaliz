@@ -2,13 +2,28 @@ name: Configure Agent Production
 
 on:
   workflow_dispatch:
+  issues:
+    types:
+      - opened
 
 permissions:
   contents: read
 
+concurrency:
+  group: configure-agent-production
+  cancel-in-progress: false
+
 jobs:
   configure:
     name: Configurar chave e validar watchdog no Oracle
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issues' &&
+        github.actor == 'fredmourao-ai' &&
+        github.event.issue.title == '[ops] authorize agent production bootstrap 2026-08-02' &&
+        contains(github.event.issue.body, 'authorization_nonce=agent-bootstrap-20260802-v1')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
