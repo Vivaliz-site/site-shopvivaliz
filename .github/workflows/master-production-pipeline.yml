@@ -197,12 +197,7 @@ jobs:
           current_release="$(basename "$(readlink -f "$current_link")")"
           deployed_sha="$(cat "$current_link/.release-sha")"
           if [[ "$deployed_sha" == "$expected_sha" ]]; then
-            echo "Expected commit already active. Nothing to do."
-            echo "Previous release: $previous_release"
-            echo "Previous commit: $previous_sha"
-            echo "Current release: $current_release"
-            echo "Deployed commit: $deployed_sha"
-            exit 0
+            echo "Expected commit already active. Reconciling runtime before monitoring."
           fi
 
           deploy_status=0
