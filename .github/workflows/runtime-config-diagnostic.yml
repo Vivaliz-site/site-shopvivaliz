@@ -1,0 +1,122 @@
+name: Runtime config diagnostic
+
+on:
+  push:
+    branches:
+      - audit/final-order-flow-20260802
+    paths:
+      - .github/workflows/runtime-config-diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Inspect sanitized runtime state
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' > runtime-diagnostic.json <<'REMOTE'
+          set -euo pipefail
+          root='/home/ubuntu/shopvivaliz-deploy/current'
+          export ROOT="$root"
+          php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          $root = (string)getenv('ROOT');
+          require_once $root . '/config/constants.php';
+          require_once $root . '/includes/pdo-database.php';
+          require_once $root . '/includes/product-price-enrich.php';
+
+          $paths = [
+              'current_env' => $root . '/.env',
+              'shared_env' => '/home/ubuntu/shopvivaliz-deploy/shared/.env',
+              'release_parent_shared_env' => dirname($root) . '/shared/.env',
+              'runtime_secrets' => $root . '/config/runtime-secrets.php',
+          ];
+          $pathState = [];
+          foreach ($paths as $name => $path) {
+              $pathState[$name] = ['exists' => is_file($path), 'readable' => is_readable($path)];
+          }
+
+          $keys = ['QUOTE_SIGNING_KEY','APP_KEY','SHOPVIVALIZ_APP_KEY','SHOPVIVALIZ_AGENT_KEY','DB_HOST','DB_NAME','DB_USER','DB_PASS'];
+          $envState = [];
+          foreach ($keys as $key) {
+              $value = getenv($key);
+              $envState[$key] = is_string($value) && trim($value) !== '';
+          }
+
+          $sharedKeyState = [];
+          foreach (['QUOTE_SIGNING_KEY','APP_KEY','SHOPVIVALIZ_APP_KEY','SHOPVIVALIZ_AGENT_KEY'] as $key) {
+              $sharedKeyState[$key] = false;
+          }
+          $shared = $paths['shared_env'];
+          if (is_file($shared) && is_readable($shared)) {
+              foreach (file($shared, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+                  $line = trim($line);
+                  if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) continue;
+                  [$key, $value] = explode('=', $line, 2);
+                  $key = trim($key);
+                  if (array_key_exists($key, $sharedKeyState)) {
+                      $sharedKeyState[$key] = trim(trim($value), "\"'") !== '';
+                  }
+              }
+          }
+
+          $pdo = sv_pdo();
+          $pdoOk = $pdo instanceof PDO;
+          if ($pdoOk) {
+              try {
+                  $pdoOk = (int)$pdo->query('SELECT 1')->fetchColumn() === 1;
+              } catch (Throwable) {
+                  $pdoOk = false;
+              }
+          }
+
+          $mysqliClass = class_exists('mysqli') && function_exists('mysqli_report');
+          $mysqliOk = false;
+          if ($mysqliClass) {
+              try {
+                  $mysqli = svp_db();
+                  $mysqliOk = $mysqli instanceof mysqli;
+                  if ($mysqliOk) $mysqli->close();
+              } catch (Throwable) {
+                  $mysqliOk = false;
+              }
+          }
+
+          echo json_encode([
+              'release_sha' => is_file($root . '/.release-sha') ? trim((string)file_get_contents($root . '/.release-sha')) : '',
+              'paths' => $pathState,
+              'environment_keys_present' => $envState,
+              'shared_quote_keys_present' => $sharedKeyState,
+              'pdo_connected' => $pdoOk,
+              'mysqli_extension_available' => $mysqliClass,
+              'mysqli_connected' => $mysqliOk,
+          ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL;
+          PHP
+          REMOTE
+          cat runtime-diagnostic.json
+
+      - name: Upload sanitized diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-config-diagnostic
+          path: runtime-diagnostic.json
+          retention-days: 3
