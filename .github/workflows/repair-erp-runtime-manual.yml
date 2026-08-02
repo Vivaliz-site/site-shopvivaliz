@@ -69,8 +69,10 @@ jobs:
 
           sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-sync-products.service
           sleep 10
-          service_sync="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null || true)"
-          service_token="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null || true)"
+          service_sync="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null)"
+          service_sync_query_status=$?
+          service_token="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null)"
+          service_token_query_status=$?
           cache_age=0
           if [[ -e "$cache" ]]; then
             cache_age=$(( $(date +%s) - $(stat -c %Y "$cache") ))
@@ -80,10 +82,12 @@ jobs:
           orders_file="$(mktemp)"
           olist_file="$(mktemp)"
           trap 'rm -f "$renew_log" "$sync_log" "$orders_file" "$olist_file"' EXIT
-          orders_code="$(curl --location --silent --show-error --max-time 30 -o "$orders_file" -w '%{http_code}' https://shopvivaliz.com.br/api/orders/health.php || true)"
-          olist_code="$(curl --location --silent --show-error --max-time 30 -o "$olist_file" -w '%{http_code}' https://shopvivaliz.com.br/api/olist/webhook-health.php || true)"
+          orders_code="$(curl --location --silent --show-error --max-time 30 -o "$orders_file" -w '%{http_code}' https://shopvivaliz.com.br/api/orders/health.php)"
+          orders_query_status=$?
+          olist_code="$(curl --location --silent --show-error --max-time 30 -o "$olist_file" -w '%{http_code}' https://shopvivaliz.com.br/api/olist/webhook-health.php)"
+          olist_query_status=$?
 
-          echo "repair_report={\"renew_status\":$renew_status,\"sync_status\":$sync_status,\"token_service\":\"$service_token\",\"sync_service\":\"$service_sync\",\"cache_age_seconds\":$cache_age,\"orders_http\":$orders_code,\"olist_http\":$olist_code,\"env_target\":\"$(readlink -f \"$current/.env\")\"}"
+          echo "repair_report={\"renew_status\":$renew_status,\"sync_status\":$sync_status,\"token_service\":\"$service_token\",\"sync_service\":\"$service_sync\",\"service_query_status\":\"$service_token_query_status,$service_sync_query_status\",\"cache_age_seconds\":$cache_age,\"orders_http\":$orders_code,\"olist_http\":$olist_code,\"health_query_status\":\"$orders_query_status,$olist_query_status\",\"env_target\":\"$(readlink -f \"$current/.env\")\"}"
           echo 'renew_log_sanitized:'
           sed -E 's/([A-Za-z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig' "$renew_log"
           echo 'sync_log_sanitized:'
