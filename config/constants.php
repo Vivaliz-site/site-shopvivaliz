@@ -19,14 +19,18 @@ if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
     }
 }
 
-// Carrega primeiro o .env da propria release quando existir e depois o
-// ambiente compartilhado do deploy Oracle. O segundo caminho resolve tanto
-// /shopvivaliz-deploy/current quanto releases versionadas sem copiar segredos
-// para dentro de cada release. Valores ja definidos nunca sao sobrescritos.
+// Carrega primeiro o .env da propria release e depois o ambiente compartilhado
+// do deploy Oracle. Quando o PHP resolve o symlink "current", __DIR__ aponta
+// para .../releases/<release>; nesse caso subimos de "releases" ate a raiz do
+// deploy antes de procurar shared/.env. Valores existentes nunca sao sobrescritos.
 $projectRoot = dirname(__DIR__);
+$projectParent = dirname($projectRoot);
+$deployRoot = basename($projectParent) === 'releases'
+    ? dirname($projectParent)
+    : $projectParent;
 $envFiles = array_values(array_unique([
     $projectRoot . '/.env',
-    dirname($projectRoot) . '/shared/.env',
+    $deployRoot . '/shared/.env',
 ]));
 foreach ($envFiles as $envFile) {
     if (!is_file($envFile) || !is_readable($envFile)) {
