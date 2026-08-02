@@ -90,7 +90,12 @@ function load_custom_css(): void
     // É emitida sempre que este loader público é incluído, eliminando dependência
     // de variáveis de rewrite para rotas amigáveis como /produto/<slug>.
     echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v6.css?v=2026-07-31-2\">\n";
-    echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v6-hotfix.css?v=2026-07-31-2\">\n";
+    $visualPolishHotfixCss = $root . '/css/visual-polish-v6-hotfix.css';
+    if (is_file($visualPolishHotfixCss) && is_readable($visualPolishHotfixCss)) {
+        $visualPolishHotfixVersion = (string) filemtime($visualPolishHotfixCss);
+        echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v6-hotfix.css?v="
+            . htmlspecialchars($visualPolishHotfixVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
+    }
 
     // Ajustes desta auditoria carregam por último para vencer apenas conflitos
     // visuais medidos, sem depender do CSS editável do admin.
