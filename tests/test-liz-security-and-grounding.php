@@ -51,5 +51,31 @@ expect_true($largeState['budget_max'] === 1999.90, 'orçamento brasileiro com mi
 $delayedState = sv_liz_conversation_state('Meu pedido está atrasado e quero reclamar');
 expect_true($delayedState['intent'] === 'complaint', 'pedido atrasado prioriza revisão de reclamação');
 
+$postGuardState = sv_liz_conversation_state('Qual o preço desse produto?');
+$postGuard = sv_liz_post_response_guard(
+    'Qual o preço desse produto?',
+    $postGuardState,
+    'Esse produto custa R$ 49,90 e está disponível.',
+    []
+);
+expect_true(is_array($postGuard) && $postGuard['grounding_status'] === 'source_missing_blocked', 'validação pós-resposta bloqueia preço/estoque sem fonte oficial');
+expect_true(str_contains($postGuard['answer'] ?? '', 'Não consegui confirmar essa informação agora'), 'fallback pós-resposta usa mensagem segura exigida');
+
+$groundedPostGuard = sv_liz_post_response_guard(
+    'Qual o preço desse produto?',
+    $postGuardState,
+    'Esse produto custa R$ 49,90 e está disponível.',
+    ['catalog_runtime']
+);
+expect_true($groundedPostGuard === null, 'validação pós-resposta permite resposta quando há fonte oficial');
+
+$generalPostGuard = sv_liz_post_response_guard(
+    'Como limpar uma garrafa termica?',
+    sv_liz_conversation_state('Como limpar uma garrafa termica?'),
+    'Lave com água morna e detergente neutro.',
+    []
+);
+expect_true($generalPostGuard === null, 'validação pós-resposta não bloqueia orientação geral sem dado comercial');
+
 echo "Resultado: {$passed} aprovados, {$failed} falhos\n";
 exit($failed > 0 ? 1 : 0);

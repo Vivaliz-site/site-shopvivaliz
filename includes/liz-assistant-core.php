@@ -286,6 +286,51 @@ function sv_liz_guarded_response(string $message, array $state, array $products 
     return null;
 }
 
+function sv_liz_requires_official_source(string $message, array $state): bool
+{
+    $intent = (string)($state['intent'] ?? 'general');
+    if (in_array($intent, ['product_discovery', 'shipping', 'order_status', 'tracking'], true)) {
+        return true;
+    }
+
+    $normalized = sv_liz_normalize($message);
+    return preg_match('/\b(preco|valor|estoque|disponivel|promocao|desconto|cupom|frete|prazo|entrega|pedido|rastreamento|rastreio|pagamento|pix|boleto|cartao|garantia)\b/u', $normalized) === 1;
+}
+
+function sv_liz_answer_claims_official_fact(string $answer): bool
+{
+    $normalized = sv_liz_normalize($answer);
+
+    if (preg_match('/(?:r\$\s*)?[0-9]+(?:[.,][0-9]{2})?\s*(?:reais|%|off)?/u', $normalized) === 1) {
+        return true;
+    }
+
+    return preg_match('/\b(em estoque|disponivel|indisponivel|promocao|desconto|cupom|frete|prazo|entrega|pedido|rastreamento|rastreio|pagamento aprovado|pagamento recusado|boleto|pix|cartao|garantia)\b/u', $normalized) === 1;
+}
+
+/** @return array<string, mixed>|null */
+function sv_liz_post_response_guard(string $message, array $state, string $answer, array $groundingSources): ?array
+{
+    if (!sv_liz_requires_official_source($message, $state)) {
+        return null;
+    }
+
+    if ($groundingSources !== []) {
+        return null;
+    }
+
+    if (!sv_liz_answer_claims_official_fact($answer) && (string)($state['intent'] ?? 'general') === 'general') {
+        return null;
+    }
+
+    return [
+        'answer' => 'Não consegui confirmar essa informação agora. Para evitar passar preço, estoque, frete, cupom, pagamento ou pedido incorreto, consulte o carrinho, a área Minha Conta ou fale com o atendimento oficial.',
+        'grounding_status' => 'source_missing_blocked',
+        'grounding_sources' => [],
+        'handoff' => sv_liz_handoff($message, $state, 'official_source_missing'),
+    ];
+}
+
 function sv_liz_knowledge_version(): string
 {
     $configured = getenv('LIZ_KNOWLEDGE_VERSION');

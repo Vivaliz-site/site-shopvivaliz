@@ -949,11 +949,25 @@ if ($products !== []) $groundingSources[] = 'catalog_runtime';
 if ($knowledge !== []) $groundingSources[] = 'knowledge_base:' . sv_liz_knowledge_version();
 if (($orderContext['status'] ?? '') === 'confirmed') $groundingSources[] = 'orders_database_authenticated_user';
 $groundingStatus = $groundingSources !== [] ? 'grounded' : (($state['intent'] ?? 'general') === 'general' ? 'not_required' : 'source_missing');
+$handoff = null;
+
+if ($result['success'] && is_string($result['answer'])) {
+    $postGuard = sv_liz_post_response_guard($message, $state, $result['answer'], $groundingSources);
+    if (is_array($postGuard)) {
+        $result['answer'] = $postGuard['answer'];
+        $result['provider'] = null;
+        $groundingStatus = (string)($postGuard['grounding_status'] ?? 'source_missing_blocked');
+        $groundingSources = array_values(array_map('strval', (array)($postGuard['grounding_sources'] ?? [])));
+        $handoff = $postGuard['handoff'] ?? null;
+    }
+}
+
 sv_liz_record_metric([
     'intent' => $state['intent'] ?? 'unknown',
     'provider' => $result['provider'],
     'grounding_status' => $groundingStatus,
     'grounding_sources' => $groundingSources,
+    'handoff' => is_array($handoff) && !empty($handoff['required']),
     'outcome' => $result['success'] ? 'model_response' : 'provider_failed',
     'http_status' => $result['success'] ? 200 : 503,
     'latency_ms' => (int)round((microtime(true) - $requestStartedAt) * 1000),
@@ -967,7 +981,7 @@ liz_json_response($result['success'] ? 200 : 503, [
     'products_found' => count($products),
     'grounding_status' => $groundingStatus,
     'grounding_sources' => $groundingSources,
-    'handoff' => null,
+    'handoff' => $handoff,
     'conversation_state' => $state,
     'knowledge_found' => count($knowledge),
     'knowledge_version' => sv_liz_knowledge_version(),
