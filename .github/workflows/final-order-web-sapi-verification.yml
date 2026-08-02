@@ -1,0 +1,142 @@
+name: Final order web SAPI verification
+
+on:
+  push:
+    branches:
+      - audit/final-order-flow-20260802
+    paths:
+      - .github/workflows/final-order-web-sapi-verification.yml
+      - scripts/final-order-web-endpoint.php
+
+permissions:
+  contents: read
+
+concurrency:
+  group: final-order-web-sapi-verification
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate template and idempotency regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l scripts/final-order-web-endpoint.php
+          php tests/admin-payment-notification-idempotency-test.php
+
+      - name: Configure verified SSH
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Upload verifier template
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            scripts/final-order-web-endpoint.php \
+            ubuntu@137.131.156.17:/tmp/shopvivaliz-final-order-web-endpoint.php
+
+      - name: Execute ephemeral protected web verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'bash -s' > final-audit.json <<'REMOTE'
+          set -euo pipefail
+          current='/home/ubuntu/shopvivaliz-deploy/current'
+          template='/tmp/shopvivaliz-final-order-web-endpoint.php'
+          token=$(openssl rand -hex 32)
+          token_hash=$(printf '%s' "$token" | sha256sum | awk '{print $1}')
+          nonce=$(openssl rand -hex 8)
+          endpoint_name=".final-order-audit-${nonce}.php"
+          endpoint_file="$current/api/$endpoint_name"
+          endpoint_url="https://shopvivaliz.com.br/api/$endpoint_name"
+          cleanup() {
+            sudo -n rm -f "$endpoint_file" "$template"
+          }
+          trap cleanup EXIT
+
+          sed "s/__AUDIT_TOKEN_HASH__/$token_hash/g" "$template" | sudo -n tee "$endpoint_file" >/dev/null
+          sudo -n chown ubuntu:www-data "$endpoint_file"
+          sudo -n chmod 0640 "$endpoint_file"
+
+          unauthorized=$(curl -skS -o /dev/null -w '%{http_code}' --resolve shopvivaliz.com.br:443:127.0.0.1 "$endpoint_url")
+          test "$unauthorized" = '403'
+
+          response_file=$(mktemp)
+          status=$(curl -skS -o "$response_file" -w '%{http_code}' \
+            --resolve shopvivaliz.com.br:443:127.0.0.1 \
+            -H "X-Audit-Key: $token" \
+            "$endpoint_url")
+          test "$status" = '200'
+          cat "$response_file"
+          rm -f "$response_file"
+          REMOTE
+          cat final-audit.json
+
+      - name: Validate sanitized final evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('final-audit.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          assert data['ok'] is True
+          assert data['read_only'] is True
+          assert data['release_sha'] == 'cdcd9b4a9d66e860decb4ee36729d25e97dae385'
+          assert data['failures'] == []
+          assert data['order_file_count'] == 1
+          assert data['payment_file_count'] == 1
+          assert data['database_order_count'] == 1
+          assert data['tiny_id_hash12'] == data['database_tiny_id_hash12'] != ''
+          assert all(data['checks'].values())
+          text = path.read_text(encoding='utf-8').lower()
+          for forbidden in ('"customer"', '"email"', '"phone"', '"address"', '"cpf"', '"cnpj"', '"payment_id"', '"digitable_line"', '"barcode"', '"ticket_url"'):
+              assert forbidden not in text, forbidden
+          print('OK: full order flow verified through production web SAPI')
+          PY
+
+      - name: Confirm endpoint cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            "test -z \"\$(find /home/ubuntu/shopvivaliz-deploy/current/api -maxdepth 1 -name '.final-order-audit-*.php' -print -quit)\""
+
+      - name: Upload final evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-order-web-sapi-verification
+          path: final-audit.json
+          retention-days: 7
