@@ -127,7 +127,7 @@ git push origin main
 **Resolver issue encontrada por validação:**
 - Auto-validator detecta problema
 - Cria PR automático com fix
-- Você revisa e merge
+- O agente valida os checks e pode aprovar e fazer merge sem aguardar nova aprovação explícita, conforme `REGRAS-AGENTES-CENTRALIZADAS.md`
 - Deploy automático ocorre
 
 **Adicionar tarefa para agentes:**
