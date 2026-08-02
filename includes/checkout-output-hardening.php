@@ -7,23 +7,33 @@ function svcoh_replace_or_original(string $html, string $pattern, string $replac
     return is_string($updated) ? $updated : $html;
 }
 
+function svcoh_defer_script(string $html, string $srcPattern): string
+{
+    $pattern = '~<script\b(?P<attrs>[^>]*\bsrc=["\']' . $srcPattern . '["\'][^>]*)>\s*</script>~i';
+    $updated = @preg_replace_callback(
+        $pattern,
+        static function (array $matches): string {
+            $attrs = trim((string)($matches['attrs'] ?? ''));
+            if (preg_match('~(?:^|\s)defer(?:\s|=|$)~i', $attrs) !== 1) {
+                $attrs = 'defer ' . $attrs;
+            }
+            return '<script ' . $attrs . '></script>';
+        },
+        $html
+    );
+    return is_string($updated) ? $updated : $html;
+}
+
 function svcoh_filter(string $html): string
 {
     if ($html === '') {
         return $html;
     }
 
-    // SDKs externos nao devem bloquear o parser da tela principal.
-    $html = svcoh_replace_or_original(
-        $html,
-        '~<script\s+src="https://sdk\.mercadopago\.com/js/v2"\s*></script>~i',
-        '<script defer src="https://sdk.mercadopago.com/js/v2"></script>'
-    );
-    $html = svcoh_replace_or_original(
-        $html,
-        '~<script\s+src="https://www\.mercadopago\.com/v2/security\.js"\s+output="deviceId"\s*></script>~i',
-        '<script defer src="https://www.mercadopago.com/v2/security.js" output="deviceId"></script>'
-    );
+    // SDKs externos nao devem bloquear o parser da tela principal. O matcher
+    // preserva atributos extras e funciona independentemente de sua ordem.
+    $html = svcoh_defer_script($html, 'https://sdk\.mercadopago\.com/js/v2');
+    $html = svcoh_defer_script($html, 'https://www\.mercadopago\.com/v2/security\.js');
 
     // Antes da confirmacao nao existe reserva persistida; nao apresentar um
     // cronometro ficticio ao consumidor.
