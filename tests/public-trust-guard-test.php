@@ -16,13 +16,15 @@ $home = <<<'HTML'
 {"@graph":[{"@type":"ItemList"},{"@type":"AggregateRating","ratingValue":"4.8","ratingCount":"347","bestRating":"5","worstRating":"1"},{"@type":"BreadcrumbList"}]}
 </script>
 <!-- Testimonials Section -->
-<section class="home-testimonials home-section-shell"><div>Ana Paula M.</div></section>
+<section class="home-testimonials home-section-shell"><div class="testimonials-grid"><article>Ana Paula M.</article></div></section>
 <section class="home-newsletter">Newsletter</section>
 HTML;
 
 $homeSanitized = svptg_sanitize_html($home, 'index.php');
 assert_true(!str_contains($homeSanitized, 'AggregateRating'), 'home aggregate rating must be removed');
-assert_true(!str_contains($homeSanitized, 'home-testimonials'), 'home static testimonials must be removed');
+assert_true(!str_contains($homeSanitized, 'Ana Paula M.'), 'home static testimonial must be removed');
+assert_true(str_contains($homeSanitized, 'home-testimonials'), 'verified testimonial mount must be preserved');
+assert_true(str_contains($homeSanitized, 'testimonials-grid'), 'verified testimonial grid must be preserved');
 assert_true(str_contains($homeSanitized, 'BreadcrumbList'), 'home breadcrumb JSON-LD must be preserved');
 assert_true(str_contains($homeSanitized, 'home-newsletter'), 'unrelated home content must be preserved');
 
@@ -41,5 +43,11 @@ assert_true(!str_contains($productSanitized, 'sv-reviews-section'), 'product sta
 assert_true(!str_contains($productSanitized, 'Garantia de Fábrica'), 'unsupported factory guarantee copy must be removed');
 assert_true(str_contains($productSanitized, 'Garantia legal e do fabricante, quando aplicável'), 'qualified guarantee copy must be present');
 assert_true(str_contains($productSanitized, 'buy-now'), 'product CTA must be preserved');
+
+$original = '<main>preserve me</main>';
+assert_true(
+    svptg_replace_or_original($original, '~[invalid~', '', 1) === $original,
+    'regex failure must preserve the original HTML'
+);
 
 echo "public-trust-guard: ok\n";
