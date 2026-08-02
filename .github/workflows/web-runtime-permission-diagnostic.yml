@@ -1,0 +1,95 @@
+name: Web runtime permission diagnostic
+
+on:
+  push:
+    branches:
+      - audit/final-order-flow-20260802
+    paths:
+      - .github/workflows/web-runtime-permission-diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure verified SSH
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Inspect metadata and web-user readability
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' > web-runtime-permissions.json <<'REMOTE'
+          set -euo pipefail
+          env_file='/home/ubuntu/shopvivaliz-deploy/shared/.env'
+          current_env='/home/ubuntu/shopvivaliz-deploy/current/.env'
+          root='/home/ubuntu/shopvivaliz-deploy/current'
+          export ENV_FILE="$env_file" CURRENT_ENV="$current_env" ROOT="$root"
+          php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          $env=(string)getenv('ENV_FILE');
+          $link=(string)getenv('CURRENT_ENV');
+          $stat=@stat($env) ?: [];
+          $owner=isset($stat['uid']) && function_exists('posix_getpwuid') ? (posix_getpwuid((int)$stat['uid'])['name'] ?? (string)$stat['uid']) : (string)($stat['uid'] ?? '');
+          $group=isset($stat['gid']) && function_exists('posix_getgrgid') ? (posix_getgrgid((int)$stat['gid'])['name'] ?? (string)$stat['gid']) : (string)($stat['gid'] ?? '');
+          $mode=isset($stat['mode']) ? substr(sprintf('%o',(int)$stat['mode']),-4) : '';
+          $apacheUsers=[];
+          foreach (['www-data','apache','nginx'] as $candidate) {
+              if (function_exists('posix_getpwnam') && posix_getpwnam($candidate) !== false) $apacheUsers[]=$candidate;
+          }
+          echo json_encode([
+              'env_exists'=>is_file($env),
+              'env_readable_as_runner'=>is_readable($env),
+              'env_owner'=>$owner,
+              'env_group'=>$group,
+              'env_mode'=>$mode,
+              'current_env_is_link'=>is_link($link),
+              'current_env_target'=>is_link($link)?basename((string)readlink($link)):'',
+              'candidate_web_users'=>$apacheUsers,
+              'parent_modes'=>array_map(static function(string $path): array {
+                  $s=@stat($path) ?: [];
+                  return ['path'=>$path,'mode'=>isset($s['mode'])?substr(sprintf('%o',(int)$s['mode']),-4):'','readable'=>is_readable($path),'executable'=>is_executable($path)];
+              }, ['/home/ubuntu','/home/ubuntu/shopvivaliz-deploy','/home/ubuntu/shopvivaliz-deploy/shared']),
+          ],JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR),PHP_EOL;
+          PHP
+
+          web_user=''
+          for candidate in www-data apache nginx; do
+            if id "$candidate" >/dev/null 2>&1; then web_user="$candidate"; break; fi
+          done
+          if [[ -n "$web_user" ]] && sudo -n -u "$web_user" test -r "$env_file" 2>/dev/null; then
+            web_readable=true
+          else
+            web_readable=false
+          fi
+          if [[ -n "$web_user" ]] && sudo -n -u "$web_user" php -r 'echo is_readable($argv[1])?"true":"false";' "$env_file" 2>/dev/null | grep -qx true; then
+            php_web_readable=true
+          else
+            php_web_readable=false
+          fi
+          tmp=$(mktemp)
+          jq --arg user "$web_user" --argjson web_readable "$web_readable" --argjson php_web_readable "$php_web_readable" '. + {tested_web_user:$user, web_user_can_read:$web_readable, web_php_can_read:$php_web_readable}' web-runtime-permissions.json > "$tmp"
+          mv "$tmp" web-runtime-permissions.json
+          cat web-runtime-permissions.json
+          REMOTE
+
+      - name: Upload diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-runtime-permission-diagnostic
+          path: web-runtime-permissions.json
+          retention-days: 3
