@@ -1,0 +1,104 @@
+name: Storefront Browser Audit
+
+on:
+  pull_request:
+    paths:
+      - '.htaccess'
+      - 'index.php'
+      - 'catalogo.php'
+      - 'produto.php'
+      - 'carrinho.php'
+      - 'checkout.php'
+      - '403.php'
+      - '404.php'
+      - '500.php'
+      - 'api/**'
+      - 'css/**'
+      - 'images/**'
+      - 'includes/**'
+      - 'js/**'
+      - 'tests/php-router.php'
+      - 'tests/storefront-screenshot-audit.mjs'
+      - '.github/workflows/storefront-browser-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: storefront-browser-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright:
+    name: Desktop mobile network and memory audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: curl, pdo_mysql, mbstring
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install browser dependencies
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Start isolated storefront
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -S 127.0.0.1:8090 tests/php-router.php > /tmp/shopvivaliz-php.log 2>&1 &
+          echo $! > /tmp/shopvivaliz-php.pid
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:8090/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/shopvivaliz-php.log
+          exit 1
+
+      - name: Run browser audit
+        shell: bash
+        env:
+          BASE_URL: http://127.0.0.1:8090
+          OUTPUT_DIR: test-results/storefront-audit
+        run: |
+          set -Eeuo pipefail
+          node tests/storefront-screenshot-audit.mjs
+
+      - name: Stop isolated storefront
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -f /tmp/shopvivaliz-php.pid ]]; then
+            kill "$(cat /tmp/shopvivaliz-php.pid)" 2>/dev/null || true
+          fi
+          cat /tmp/shopvivaliz-php.log || true
+
+      - name: Upload screenshots and metrics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: storefront-browser-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/storefront-audit/
+          if-no-files-found: error
+          retention-days: 30
