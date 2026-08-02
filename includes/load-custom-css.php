@@ -128,6 +128,8 @@ function load_custom_css(): void
     }
 
     // V6 contém somente seletores públicos e correções fail-safe de imagem/título.
+    // É emitida sempre que este loader público é incluído, eliminando dependência
+    // de variáveis de rewrite para rotas amigáveis como /produto/<slug>.
     echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v6.css?v=2026-07-31-2\">\n";
     echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v6-hotfix.css?v=2026-07-31-2\">\n";
 
@@ -138,6 +140,15 @@ function load_custom_css(): void
         $visualAuditVersion = (string) filemtime($visualAuditCss);
         echo "    <link rel=\"stylesheet\" href=\"/css/visual-audit-v1.css?v="
             . htmlspecialchars($visualAuditVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
+    }
+
+    // Regras transversais de acessibilidade do main são preservadas antes do
+    // hotfix de geometria, que deve permanecer como a última camada visual.
+    $accessibilityCss = $root . '/css/accessibility-hardening-v1.css';
+    if (is_file($accessibilityCss) && is_readable($accessibilityCss)) {
+        $accessibilityVersion = (string) filemtime($accessibilityCss);
+        echo "    <link rel=\"stylesheet\" href=\"/css/accessibility-hardening-v1.css?v="
+            . htmlspecialchars($accessibilityVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
     }
 
     $clsStabilityCss = $root . '/css/cls-stability-v1.css';
