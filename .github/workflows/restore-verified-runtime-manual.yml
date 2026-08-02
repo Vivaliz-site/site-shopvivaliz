@@ -1,0 +1,61 @@
+name: Restore Verified Runtime Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Digite RESTORE para restaurar apenas o tuple de banco verificado'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restore-verified-runtime-production
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout do restaurador validado
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Confirmar operação e validar restaurador
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.confirmation }}" = RESTORE
+          php -l scripts/restore-verified-db-runtime.php
+          ! grep -nE '(DB_PASS|PASSWORD|SECRET|TOKEN|KEY)=[^$[:space:]]+' scripts/restore-verified-db-runtime.php
+
+      - name: Configurar SSH verificado
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Restaurar tuple de banco validado atomicamente
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 php < scripts/restore-verified-db-runtime.php
+
+      - name: Materializar runtime mínimo e confirmar produção
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'set -euo pipefail; shared=/home/ubuntu/shopvivaliz-deploy/shared; sudo chown ubuntu:ubuntu "$shared/.env"; chmod 600 "$shared/.env"; php /home/ubuntu/shopvivaliz-deploy/current/scripts/materialize-runtime-secrets.php; sudo chown ubuntu:www-data "$shared/runtime-secrets.php"; chmod 640 "$shared/runtime-secrets.php"; sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-sync-products.service; sleep 15; sync_status="$(systemctl is-active shopvivaliz-sync-products.service)"; token_status="$(systemctl is-active shopvivaliz-token-renewer.service)"; cache=/home/ubuntu/shopvivaliz-deploy/current/storage/products-cache-ativos.json; cache_age=$(( $(date +%s) - $(stat -c %Y "$cache") )); echo "runtime_services=$sync_status,$token_status,cache_age_seconds=$cache_age"; test "$sync_status" = active; test "$token_status" = active; test "$cache_age" -le 900; curl --fail --silent --show-error https://shopvivaliz.com.br/api/orders/health.php; curl --fail --silent --show-error https://shopvivaliz.com.br/api/olist/webhook-health.php'

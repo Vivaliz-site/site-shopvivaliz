@@ -112,7 +112,7 @@ jobs:
         run: |
           set -euo pipefail
           ready=0
-          for attempt in $(seq 1 36); do
+          for _ in $(seq 1 36); do
             if gh api \
               -H 'Accept: application/vnd.github.raw+json' \
               "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence" \

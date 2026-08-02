@@ -6,10 +6,11 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('X-Content-Type-Options: nosniff');
+header_remove('X-Powered-By');
 
-$root = __DIR__;
+$root = dirname(__DIR__);
 
-function sv_health_include_json(string $file): array
+function sv_erp_health_include_json(string $file): array
 {
     $previousCode = http_response_code();
     http_response_code(200);
@@ -45,22 +46,20 @@ function sv_health_include_json(string $file): array
 }
 
 $checks = [
-    'version' => sv_health_include_json($root . '/api/health/version.php'),
-    'orders' => sv_health_include_json($root . '/api/orders/health.php'),
-    'olist' => sv_health_include_json($root . '/api/olist/webhook-health.php'),
+    'orders' => sv_erp_health_include_json($root . '/api/orders/health.php'),
+    'olist' => sv_erp_health_include_json($root . '/api/olist/webhook-health.php'),
 ];
 
 $ok = true;
 foreach ($checks as $check) {
-    $ok = $ok && ($check['ok'] ?? false) === true && (int) ($check['http_code'] ?? 500) < 500;
+    $ok = $ok && ($check['ok'] ?? false) === true && (int)($check['http_code'] ?? 500) < 500;
 }
 
 http_response_code($ok ? 200 : 503);
 echo json_encode(
     [
         'ok' => $ok,
-        'service' => 'shopvivaliz',
-        'release_sha' => $checks['version']['release_sha'] ?? null,
+        'service' => 'shopvivaliz-erp-health',
         'checks' => $checks,
         'checked_at' => gmdate('c'),
     ],

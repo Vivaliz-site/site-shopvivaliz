@@ -177,6 +177,7 @@ jobs:
           repo='/home/ubuntu/shopvivaliz-deploy/repo'
           current_link='/home/ubuntu/shopvivaliz-deploy/current'
           deploy_script="$repo/scripts/deploy-production.sh"
+          deploy_log='/home/ubuntu/shopvivaliz-deploy/logs/deploy.log'
 
           test -x "$deploy_script"
           git -C "$repo" rev-parse --is-inside-work-tree >/dev/null
@@ -196,15 +197,12 @@ jobs:
           current_release="$(basename "$(readlink -f "$current_link")")"
           deployed_sha="$(cat "$current_link/.release-sha")"
           if [[ "$deployed_sha" == "$expected_sha" ]]; then
-            echo "Expected commit already active. Nothing to do."
-            echo "Previous release: $previous_release"
-            echo "Previous commit: $previous_sha"
-            echo "Current release: $current_release"
-            echo "Deployed commit: $deployed_sha"
-            exit 0
+            echo "Expected commit already active. Reconciling runtime before monitoring."
           fi
 
-          if ! flock -n /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha"; then
+          deploy_status=0
+          flock -n -E 75 /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha" || deploy_status=$?
+          if [[ "$deploy_status" -eq 75 ]]; then
             echo "Deploy lock busy. Waiting for concurrent deployment to finish..."
             for attempt in 1 2 3 4 5 6; do
               sleep 10
@@ -220,7 +218,17 @@ jobs:
               fi
             done
             echo "Deployment lock remained busy and expected commit never became active." >&2
-            exit 1
+            exit 75
+          fi
+          if [[ "$deploy_status" -ne 0 ]]; then
+            echo "Deployment script failed with status $deploy_status." >&2
+            if [[ -r "$deploy_log" ]]; then
+              echo 'Sanitized deployment log tail:' >&2
+              tail -n 80 "$deploy_log" \
+                | sed -E 's/([A-Za-z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig' \
+                >&2
+            fi
+            exit "$deploy_status"
           fi
 
           current_release="$(basename "$(readlink -f "$current_link")")"

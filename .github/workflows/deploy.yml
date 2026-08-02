@@ -276,9 +276,11 @@ jobs:
             RAW_DIR="/"
           fi
 
-          echo "server=${FTP_HOST}" >> "$GITHUB_OUTPUT"
-          echo "port=${RAW_PORT:-21}" >> "$GITHUB_OUTPUT"
-          echo "remote_dir=${RAW_DIR}" >> "$GITHUB_OUTPUT"
+          {
+            echo "server=${FTP_HOST}"
+            echo "port=${RAW_PORT:-21}"
+            echo "remote_dir=${RAW_DIR}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -346,7 +348,7 @@ jobs:
           MAX_RETRIES=3 # Número máximo de tentativas
           RETRY_DELAY=5 # Delay em segundos entre tentativas
           
-          for i in $(seq 1 $MAX_RETRIES); do
+          for i in $(seq 1 "$MAX_RETRIES"); do
             echo "Tentativa $i de $MAX_RETRIES..."
             
             # Usa curl com timeout e retry para verificar se o site está no ar
@@ -359,7 +361,7 @@ jobs:
               exit 0
             fi
             
-            if [ $i -lt $MAX_RETRIES ]; then
+            if [ "$i" -lt "$MAX_RETRIES" ]; then
               echo "Aguardando $RETRY_DELAY segundos antes de tentar novamente..."
               sleep $RETRY_DELAY
             fi
