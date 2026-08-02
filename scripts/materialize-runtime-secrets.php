@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
-$sharedEnv = '/home/ubuntu/shopvivaliz-deploy/shared/.env';
-$outputPath = '/home/ubuntu/shopvivaliz-deploy/shared/runtime-secrets.php';
+$sharedEnv = getenv('SHOPVIVALIZ_SHARED_ENV')
+    ?: '/home/ubuntu/shopvivaliz-deploy/shared/.env';
+$outputPath = getenv('SHOPVIVALIZ_RUNTIME_SECRETS')
+    ?: '/home/ubuntu/shopvivaliz-deploy/shared/runtime-secrets.php';
 
 if (!is_file($sharedEnv) || !is_readable($sharedEnv)) {
     throw new RuntimeException('shared_env_unavailable');
@@ -74,7 +76,12 @@ $payload = "<?php\n\ndeclare(strict_types=1);\n\nreturn "
     . var_export($values, true)
     . ";\n";
 
-$tempPath = tempnam(dirname($outputPath), '.runtime-secrets.');
+$outputDir = dirname($outputPath);
+if (!is_dir($outputDir) && !mkdir($outputDir, 0750, true) && !is_dir($outputDir)) {
+    throw new RuntimeException('runtime_secrets_directory_failed');
+}
+
+$tempPath = tempnam($outputDir, '.runtime-secrets.');
 if ($tempPath === false) {
     throw new RuntimeException('temporary_file_failed');
 }
@@ -95,7 +102,8 @@ try {
 }
 
 $written = require $outputPath;
-if (!is_array($written) || trim((string)($written['DB_USER'] ?? $written['DB_USERNAME'] ?? '')) === '') {
+$writtenUser = trim((string)($written['DB_USER'] ?? $written['DB_USERNAME'] ?? ''));
+if (!is_array($written) || $writtenUser === '' || strtolower($writtenUser) === 'root') {
     throw new RuntimeException('runtime_secrets_validation_failed');
 }
 
