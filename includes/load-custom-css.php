@@ -139,6 +139,13 @@ function load_custom_css(): void
         echo "    <link rel=\"stylesheet\" href=\"/css/visual-audit-v1.css?v="
             . htmlspecialchars($visualAuditVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
     }
+
+    $clsStabilityCss = $root . '/css/cls-stability-v1.css';
+    if (is_file($clsStabilityCss) && is_readable($clsStabilityCss)) {
+        $clsStabilityVersion = (string) filemtime($clsStabilityCss);
+        echo "    <link rel=\"stylesheet\" href=\"/css/cls-stability-v1.css?v="
+            . htmlspecialchars($clsStabilityVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
+    }
 }
 
 load_custom_css();
