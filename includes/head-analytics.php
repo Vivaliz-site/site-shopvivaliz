@@ -12,6 +12,11 @@ if ($requestPath === '/') {
 require_once __DIR__ . '/checkout-output-hardening.php';
 svcoh_register($requestPath);
 
+// Carrega a configuracao para montar as tags publicas. O bloqueio dos segredos
+// acontece logo depois, pois bootstrap-env.php poderia repopular valores que
+// fossem removidos antes deste require.
+require_once __DIR__ . '/analytics-tracking.php';
+
 // O consentimento precisa ser visivel para o PHP. Sem o cookie explicito,
 // segredos de envio server-side sao removidos apenas desta requisicao, o que
 // impede Measurement Protocol/CAPI de criarem identificadores antes da escolha.
@@ -25,8 +30,6 @@ if (!$serverConsentAccepted) {
         unset($_ENV[$secretKey], $_SERVER[$secretKey]);
     }
 }
-
-require_once __DIR__ . '/analytics-tracking.php';
 
 // Consent Mode existe antes de GTM/gtag. O cookie e a copia em localStorage
 // permanecem sincronizados pelo js/privacy-consent-v1.js.
