@@ -19,11 +19,19 @@ if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
     }
 }
 
-// Producao (VM Oracle) usa .env real em vez de runtime-secrets.php
-// (mecanismo antigo do deploy FTP do HostGator). Mesmo parser usado
-// em varios pontos do projeto (includes/melhorenvio-oauth.php etc.).
-$envFile = dirname(__DIR__) . '/.env';
-if (is_file($envFile) && is_readable($envFile)) {
+// Carrega primeiro o .env da propria release quando existir e depois o
+// ambiente compartilhado do deploy Oracle. O segundo caminho resolve tanto
+// /shopvivaliz-deploy/current quanto releases versionadas sem copiar segredos
+// para dentro de cada release. Valores ja definidos nunca sao sobrescritos.
+$projectRoot = dirname(__DIR__);
+$envFiles = array_values(array_unique([
+    $projectRoot . '/.env',
+    dirname($projectRoot) . '/shared/.env',
+]));
+foreach ($envFiles as $envFile) {
+    if (!is_file($envFile) || !is_readable($envFile)) {
+        continue;
+    }
     foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
         $line = trim($line);
         if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) {
