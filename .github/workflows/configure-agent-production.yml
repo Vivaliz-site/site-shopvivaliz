@@ -2,9 +2,18 @@ name: Configure Agent Production
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/agent-production-bootstrap'
 
 permissions:
   contents: read
+
+concurrency:
+  group: configure-agent-production
+  cancel-in-progress: false
 
 jobs:
   configure:
