@@ -242,6 +242,9 @@ function sv_liz_conversation_state(string $message, array $history = []): array
 
     $category = sv_liz_detect_category($normalized);
     $orderReference = sv_liz_extract_order_reference($message);
+    $productQuery = $intent === 'product_discovery'
+        ? sv_liz_extract_product_query($message)
+        : null;
     $pendingActions = [];
     if (in_array($intent, ['order_status', 'tracking'], true)) {
         $pendingActions[] = 'authenticate_user';
@@ -259,7 +262,7 @@ function sv_liz_conversation_state(string $message, array $history = []): array
     return [
         'intent' => $intent,
         'category' => $category,
-        'product_query' => sv_liz_extract_product_query($message),
+        'product_query' => $productQuery,
         'budget_max' => $budget,
         'authenticated' => sv_liz_authenticated_user() !== null,
         'requires_authentication' => in_array($intent, ['order_status', 'tracking'], true),
@@ -272,7 +275,7 @@ function sv_liz_conversation_state(string $message, array $history = []): array
         'pending_actions' => $pendingActions,
         'history_messages_considered' => count($recentUserMessages),
         'prompt_injection_detected' => sv_liz_is_prompt_injection($message),
-        'version' => '1.1.0',
+        'version' => '1.1.1',
     ];
 }
 
