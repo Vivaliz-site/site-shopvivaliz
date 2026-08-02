@@ -11,6 +11,7 @@ require_once dirname(__DIR__) . '/includes/mercadopago-gateway.php';
 require_once dirname(__DIR__) . '/includes/tiny-order-push.php';
 require_once dirname(__DIR__) . '/api/emails/send-order-notification.php';
 require_once dirname(__DIR__) . '/includes/ml-event-tracker.php';
+require_once dirname(__DIR__) . '/includes/payment-notification-idempotency.php';
 
 function svmp_webhook_response(int $status, string $result): never
 {
@@ -144,6 +145,8 @@ try {
     $statusDetail = (string)($payment['status_detail'] ?? $resource['status_detail'] ?? '');
     $localStatus = svmp_local_status($providerStatus);
 
+    $notifyAdminPayment = false;
+
     $handle = fopen($path, 'r+');
     if ($handle === false || !flock($handle, LOCK_EX)) {
         if (is_resource($handle)) {
@@ -177,6 +180,12 @@ try {
         $order['mercadopago']['transaction_amount'] = round((float)($payment['transaction_amount'] ?? $order['total'] ?? 0), 2);
         $order['mercadopago']['last_webhook_at'] = date(DATE_ATOM);
         $order['mercadopago']['last_webhook_topic'] = $isOrder ? 'order' : 'payment';
+
+        $notifyAdminPayment = svpn_prepare_admin_payment_notification(
+            $order,
+            $localStatus,
+            $currentStatus
+        );
 
         $paymentMethodId = strtolower((string)$order['mercadopago']['payment_method_id']);
         $paymentTypeId = strtolower((string)$order['mercadopago']['payment_type_id']);
@@ -264,6 +273,28 @@ try {
             }
         }
 
+        if ($notifyAdminPayment) {
+            // Persist the claim before SMTP. If the process stops after the
+            // provider accepts the message, a replay still cannot send it twice.
+            $claimEncoded = json_encode(
+                $order,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+            );
+            rewind($handle);
+            ftruncate($handle, 0);
+            if (fwrite($handle, $claimEncoded) === false || !fflush($handle)) {
+                svmp_webhook_response(500, 'notification_claim_write_failed');
+            }
+
+            $adminNotificationSent = false;
+            try {
+                $adminNotificationSent = svem_notify_admin_payment_received($order);
+            } catch (Throwable $e) {
+                error_log('[MercadoPago] admin notify failed: order=' . $externalReference . ' ' . $e->getMessage());
+            }
+            svpn_complete_admin_payment_notification($order, $adminNotificationSent);
+        }
+
         $encoded = json_encode($order, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         rewind($handle);
         ftruncate($handle, 0);
@@ -309,12 +340,6 @@ try {
 
     // Enviar email de confirmação em background (se pagamento foi aprovado)
     if ($localStatus === 'payment_approved') {
-        try {
-            svem_notify_admin_payment_received($order);
-        } catch (Throwable $e) {
-            error_log('[MercadoPago] admin notify failed: order=' . $externalReference . ' ' . $e->getMessage());
-        }
-
         foreach (is_array($order['items'] ?? null) ? $order['items'] : [] as $item) {
             if (!is_array($item)) {
                 continue;

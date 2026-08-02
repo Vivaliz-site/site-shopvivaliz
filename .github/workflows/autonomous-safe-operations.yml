@@ -20,45 +20,31 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-          fetch-depth: 1
+      - name: Initialize catalog evidence
+        run: mkdir -p artifacts/catalog-snapshot
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-
-      - name: Generate catalog snapshot
+      - name: Configure verified Oracle SSH
         env:
-          OLIST_ACCESS_TOKEN: ${{ secrets.OLIST_ACCESS_TOKEN }}
-          TINY_ACCESS_TOKEN: ${{ secrets.TINY_ACCESS_TOKEN }}
-          OLIST_CLIENT_ID: ${{ secrets.OLIST_CLIENT_ID }}
-          OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
-          OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
-          TINY_CLIENT_ID: ${{ secrets.TINY_CLIENT_ID }}
-          TINY_CLIENT_SECRET: ${{ secrets.TINY_CLIENT_SECRET }}
-          TINY_REFRESH_TOKEN: ${{ secrets.TINY_REFRESH_TOKEN }}
-          FAIL_ON_CI_FALLBACK: 'true'
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          mkdir -p artifacts/catalog-snapshot
-          python sync-products-to-json.py
-          test -s storage/products-cache.json
-          python -m json.tool storage/products-cache.json >/dev/null
-          cp storage/products-cache.json artifacts/catalog-snapshot/products-cache.json
-          printf 'run_id=%s\nsha=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" > artifacts/catalog-snapshot/context.txt
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Verify checkout was not used for repository publication
+      - name: Copy catalog snapshot from the active production release
         run: |
           set -euo pipefail
-          changed="$(git status --short)"
-          printf '%s\n' "$changed"
-          unexpected="$(printf '%s\n' "$changed" | awk '$2 != "storage/products-cache.json" {print $2}')"
-          if [[ -n "$unexpected" ]]; then
-            echo "::error::Unexpected files changed: $unexpected"
-            exit 1
-          fi
+          release_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha')"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17:/home/ubuntu/shopvivaliz-deploy/current/storage/products-cache-ativos.json artifacts/catalog-snapshot/products-cache-ativos.json
+          test -s artifacts/catalog-snapshot/products-cache-ativos.json
+          python3 -m json.tool artifacts/catalog-snapshot/products-cache-ativos.json >/dev/null
+          printf 'run_id=%s\nexecution_path=oracle-active-release\nrelease_sha=%s\n' "$GITHUB_RUN_ID" "$release_sha" > artifacts/catalog-snapshot/context.txt
 
       - name: Upload catalog snapshot evidence
         if: always()
@@ -74,50 +60,64 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
+      - name: Initialize health evidence
+        run: mkdir -p artifacts/health-watch
 
-      - name: Check public health endpoints
+      - name: Configure verified Oracle SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Check production endpoints from Oracle
         id: health
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/health-watch
-          failures=0
-          endpoints=(
-            'https://shopvivaliz.com.br/'
-            'https://shopvivaliz.com.br/api/catalog/products.php?limit=1'
-            'https://shopvivaliz.com.br/api/catalog/price-health.php'
-            'https://shopvivaliz.com.br/api/catalog/image-health.php'
-            'https://shopvivaliz.com.br/api/catalog/stock-health.php'
-            'https://shopvivaliz.com.br/api/orders/health.php'
-          )
-          ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
-          : > artifacts/health-watch/report.txt
-          for url in "${endpoints[@]}"; do
-            status='000'
-            for attempt in 1 2 3; do
-              if response="$(curl --location --silent --output /dev/null --connect-timeout 5 --max-time 12 --user-agent "$ua" --write-out '%{http_code}' "$url")"; then
-                status="$response"
-              else
-                status='000'
-              fi
-              if [[ "$status" == '200' || "$status" == '302' ]]; then
-                break
-              fi
-              if [[ "$status" == '403' ]]; then
-                echo "::warning::$url respondeu 403 na tentativa $attempt/3 (possivel bloqueio de WAF/Cloudflare)" >&2
-              fi
-              sleep $((attempt * 5))
-            done
-            printf '%s -> %s\n' "$url" "$status" | tee -a artifacts/health-watch/report.txt
-            if [[ "$status" != '200' && "$status" != '302' ]]; then
-              failures=$((failures + 1))
-            fi
-          done
-          printf 'run_id=%s\nsha=%s\nfailures=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" "$failures" > artifacts/health-watch/context.txt
+          remote_status=0
+          if ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'set -euo pipefail
+             failures=0
+             endpoints=(
+               "https://shopvivaliz.com.br/"
+               "https://shopvivaliz.com.br/api/catalog/products.php?limit=1"
+               "https://shopvivaliz.com.br/api/catalog/price-health.php"
+               "https://shopvivaliz.com.br/api/catalog/image-health.php"
+               "https://shopvivaliz.com.br/api/catalog/stock-health.php"
+               "https://shopvivaliz.com.br/api/orders/health.php"
+             )
+             ua="ShopVivaliz-Production-Health/1.0"
+             for url in "${endpoints[@]}"; do
+               status="$(curl --location --silent --output /dev/null --connect-timeout 5 --max-time 12 --user-agent "$ua" --write-out "%{http_code}" "$url" || true)"
+               printf "%s -> %s\n" "$url" "$status"
+               if [[ "$status" != 200 && "$status" != 302 ]]; then failures=$((failures + 1)); fi
+             done
+             printf "release_sha=%s\nfailures=%s\n" "$(cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha)" "$failures"
+             exit "$failures"' \
+            > artifacts/health-watch/report.txt; then
+            remote_status=0
+          else
+            remote_status=$?
+          fi
+          cat artifacts/health-watch/report.txt
+          failures="$(awk -F= '/^failures=/{print $2}' artifacts/health-watch/report.txt)"
+          : "${failures:=1}"
+          printf 'run_id=%s\nexecution_path=oracle-production\nfailures=%s\n' "$GITHUB_RUN_ID" "$failures" > artifacts/health-watch/context.txt
           echo "failures=$failures" >> "$GITHUB_OUTPUT"
+          exit "$remote_status"
 
       - name: Upload health evidence
         if: always()
