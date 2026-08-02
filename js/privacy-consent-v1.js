@@ -2,6 +2,25 @@
   'use strict';
 
   var STORAGE_KEY = 'shopvivaliz_privacy_consent_v1';
+  var COOKIE_KEY = 'sv_privacy_consent';
+
+  function cookieValue() {
+    try {
+      var match = document.cookie.match(new RegExp('(?:^|;\\s*)' + COOKIE_KEY + '=([^;]+)'));
+      return match ? decodeURIComponent(match[1]) : '';
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function setCookie(value, maxAge) {
+    var cookie = COOKIE_KEY + '=' + encodeURIComponent(value)
+      + '; Path=/'
+      + '; Max-Age=' + String(maxAge)
+      + '; SameSite=Lax';
+    if (window.location.protocol === 'https:') cookie += '; Secure';
+    document.cookie = cookie;
+  }
 
   function updateConsent(granted) {
     if (typeof window.gtag === 'function') {
@@ -19,15 +38,19 @@
   }
 
   function save(value) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ value: value, updated_at: new Date().toISOString() }));
-    } catch (error) {}
+    var record = { value: value, updated_at: new Date().toISOString() };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(record)); } catch (error) {}
+    setCookie(value, 31536000);
   }
 
   function existing() {
+    var cookie = cookieValue();
+    if (cookie === 'accepted' || cookie === 'essential') return cookie;
     try {
       var record = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      return record && (record.value === 'accepted' || record.value === 'essential') ? record.value : '';
+      var value = record && (record.value === 'accepted' || record.value === 'essential') ? record.value : '';
+      if (value) setCookie(value, 31536000);
+      return value;
     } catch (error) {
       return '';
     }
@@ -73,6 +96,7 @@
     essentialOnly: function () { choose('essential'); },
     reset: function () {
       try { localStorage.removeItem(STORAGE_KEY); } catch (error) {}
+      setCookie('', 0);
       window.location.reload();
     }
   };
