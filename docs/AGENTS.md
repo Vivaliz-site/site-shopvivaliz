@@ -58,6 +58,16 @@
 
 ---
 
+## ✅ Autorização operacional vigente — 2026-08-01
+
+O proprietário autoriza agentes com capacidade técnica e acesso válido a validar entregas no navegador real, deixar evidências prontas para revisão, aprovar PRs, fazer merge e acionar ou executar deploy sem nova aprovação explícita, quando os checks e as proteções do repositório permitirem.
+
+Fluxo padrão: após validar e preparar o PR, o agente conclui o merge autorizado e acompanha o Quality Gate, o deploy automático e o smoke test até registrar o resultado final, sem pedir confirmação intermediária.
+
+Essa autorização não permite force-push, bypass de branch protection, exposição de secrets, cobranças reais ou exclusões destrutivas fora do escopo. O agente ainda deve confirmar evidências independentes, SHA/checks do PR e, após publicação, release ativa, logs e smoke test. Se a plataforma bloquear uma etapa, não contornar: registrar como **INCONCLUSIVO**. A fonte normativa completa é `REGRAS-AGENTES-CENTRALIZADAS.md`.
+
+---
+
 ### 2026-07-30 — Bug recorrente: endpoint le getenv() sem carregar .env primeiro
 **Sistema/arquivo:** `api/blog/publish-scheduled.php`, `api/melhorenvio/webhook.php`,
 `.github/workflows/autonomous-safe-operations.yml` (job `health-watch`)
