@@ -74,12 +74,12 @@ jobs:
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
               'python3 /home/ubuntu/shopvivaliz-deploy/current/scripts/configure-production-runtime.py /home/ubuntu/shopvivaliz-deploy/shared/.env'
 
-      - name: Permitir leitura somente ao usuário web
+      - name: Atualizar runtime mínimo do usuário web
         shell: bash
         run: |
           set -euo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
-            'set -euo pipefail; test -e /home/ubuntu/shopvivaliz-deploy/shared/.env; sudo chgrp www-data /home/ubuntu/shopvivaliz-deploy/shared/.env; sudo chmod 640 /home/ubuntu/shopvivaliz-deploy/shared/.env; stat -c "runtime_env_mode=%a runtime_env_group=%G" /home/ubuntu/shopvivaliz-deploy/shared/.env'
+            'set -euo pipefail; shared=/home/ubuntu/shopvivaliz-deploy/shared; sudo chown ubuntu:ubuntu "$shared/.env"; chmod 600 "$shared/.env"; php /home/ubuntu/shopvivaliz-deploy/current/scripts/materialize-runtime-secrets.php; sudo chown ubuntu:www-data "$shared/runtime-secrets.php"; chmod 640 "$shared/runtime-secrets.php"; stat -c "shared_env_mode=%a shared_env_group=%G" "$shared/.env"; stat -c "runtime_secrets_mode=%a runtime_secrets_group=%G" "$shared/runtime-secrets.php"'
 
       - name: Reiniciar serviços e confirmar execução real
         shell: bash
