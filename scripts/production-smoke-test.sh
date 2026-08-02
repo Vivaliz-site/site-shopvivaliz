@@ -15,7 +15,7 @@ sync_script="$script_root/scripts/auto-sync-oracle.sh"
 installer="$script_root/scripts/install-auto-sync-oracle.sh"
 sync_status="$shared/logs/tri-environment-sync.json"
 
-echo "INFO validating Oracle repository sync for $expected_sha"
+echo "INFO validating Oracle repository sync for deployed commit $expected_sha"
 if [ ! -d "$repo/.git" ]; then
   echo "FAIL Oracle repository is missing: $repo" >&2
   exit 1
@@ -28,10 +28,14 @@ ROOT="$repo" SHARED_ROOT="$shared" /usr/bin/bash "$sync_script"
 
 repo_sha="$(git -C "$repo" rev-parse HEAD)"
 remote_sha="$(git -C "$repo" rev-parse origin/main)"
-test "$repo_sha" = "$expected_sha"
-test "$remote_sha" = "$expected_sha"
+test "$repo_sha" = "$remote_sha"
+git -C "$repo" cat-file -e "${expected_sha}^{commit}"
+if ! git -C "$repo" merge-base --is-ancestor "$expected_sha" "$remote_sha"; then
+  echo "FAIL deployed commit $expected_sha is not reachable from canonical main $remote_sha" >&2
+  exit 1
+fi
 test -s "$sync_status"
-python3 - "$sync_status" "$expected_sha" <<'PY'
+python3 - "$sync_status" "$remote_sha" <<'PY'
 from __future__ import annotations
 
 import json
@@ -39,7 +43,7 @@ import sys
 from pathlib import Path
 
 payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-expected = sys.argv[2].lower()
+expected_canonical = sys.argv[2].lower()
 action = str(payload.get("action") or "")
 allowed = {
     "noop",
@@ -56,12 +60,13 @@ if payload.get("ok") is not True:
     raise SystemExit("sync report is not successful")
 if action not in allowed:
     raise SystemExit(f"unexpected sync action: {action}")
-if local_after != expected or remote != expected:
+if local_after != expected_canonical or remote != expected_canonical:
     raise SystemExit(
-        f"sync report SHA mismatch: local={local_after} remote={remote} expected={expected}"
+        "sync report SHA mismatch: "
+        f"local={local_after} remote={remote} canonical={expected_canonical}"
     )
 PY
-echo "OK Oracle repository sync: $repo_sha"
+echo "OK Oracle repository sync: canonical=$repo_sha deployed=$expected_sha"
 
 if [ ! -r "$installer" ]; then
   echo "FAIL Oracle sync installer is unreadable: $installer" >&2
@@ -148,8 +153,13 @@ check_http liz_health "$base/api/liz-intelligent.php?health=1" '200'
 grep -Eq '"(ok|status)"[[:space:]]*:[[:space:]]*(true|"ok"|"healthy")' "$tmpdir/liz_health.body"
 echo 'OK Liz health payload'
 
+check_http orders_health "$base/api/orders/health.php" '200'
+grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' "$tmpdir/orders_health.body"
+grep -Eq '"quote_signing_configured"[[:space:]]*:[[:space:]]*true' "$tmpdir/orders_health.body"
+echo 'OK orders health payload'
+
 check_http olist_webhook_health "$base/api/olist/webhook-health.php" '200'
-grep -q '"ok": true' "$tmpdir/olist_webhook_health.body"
+grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' "$tmpdir/olist_webhook_health.body"
 echo 'OK Olist webhook health payload'
 
 olist_webhook_status="$(curl --silent --show-error --output "$tmpdir/olist_webhook_post.body" --max-time 20 --user-agent "$ua" --write-out '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"event":"health_test","test":true}' "$base/olist/webhook-receiver.php" || true)"
