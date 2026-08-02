@@ -51,7 +51,7 @@ function load_custom_css(): void
     // CSS e JS funcionais da home devem viver fora de storage, como parte da release.
     if ($pageName === 'index') {
         echo "    <link rel=\"stylesheet\" href=\"/css/home-mobile-compact.css?v=2026-07-28-3\">\n";
-        echo "    <link rel=\"stylesheet\" href=\"/css/home-mobile-final.css?v=2026-07-28-1\">\n";
+        echo "    <link rel=\"stylesheet\" href=\"/css/home-mobile-final.css?v=2026-08-02-1\">\n";
         echo "    <script src=\"/js/home-mobile-layout.js?v=2026-07-28-2\" defer></script>\n";
     }
 
