@@ -64,6 +64,36 @@ async function scrollPage(page) {
   });
 }
 
+async function saveScreenshot(page, screenshotPath) {
+  try {
+    await Promise.race([
+      page.evaluate(() => document.fonts && document.fonts.ready ? document.fonts.ready : null),
+      new Promise((resolve) => setTimeout(resolve, 2500))
+    ]).catch(() => null);
+    await page.screenshot({ path: screenshotPath, fullPage: true, animations: 'disabled', timeout: 12_000 });
+    return 'playwright';
+  } catch (error) {
+    const client = await page.context().newCDPSession(page);
+    const layout = await client.send('Page.getLayoutMetrics');
+    const cssSize = layout.cssContentSize || { x: 0, y: 0, width: 1440, height: 1200 };
+    const clip = {
+      x: Math.max(0, Math.floor(cssSize.x || 0)),
+      y: Math.max(0, Math.floor(cssSize.y || 0)),
+      width: Math.max(1, Math.min(2400, Math.ceil(cssSize.width || 1440))),
+      height: Math.max(1, Math.min(16000, Math.ceil(cssSize.height || 1200))),
+      scale: 1
+    };
+    const shot = await client.send('Page.captureScreenshot', {
+      format: 'png',
+      fromSurface: true,
+      captureBeyondViewport: true,
+      clip
+    });
+    await fs.writeFile(screenshotPath, Buffer.from(shot.data, 'base64'));
+    return 'cdp-font-timeout-fallback';
+  }
+}
+
 for (const profile of profiles) {
   const context = await browser.newContext({
     viewport: profile.viewport,
@@ -122,7 +152,7 @@ for (const profile of profiles) {
     }));
     const horizontalOverflow = Math.max(0, metrics.scrollWidth - metrics.clientWidth);
     const screenshot = path.join(outputDir, `${profile.name}-${route.name}.png`);
-    await page.screenshot({ path: screenshot, fullPage: true });
+    const screenshotMode = await saveScreenshot(page, screenshot);
 
     const record = {
       profile: profile.name,
@@ -134,7 +164,8 @@ for (const profile of profiles) {
       horizontal_overflow_px: horizontalOverflow,
       console_errors: consoleErrors,
       network_errors: networkErrors,
-      screenshot
+      screenshot,
+      screenshot_mode: screenshotMode
     };
     report.pages.push(record);
 
