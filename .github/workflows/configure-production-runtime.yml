@@ -72,6 +72,24 @@ jobs:
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
               'python3 /home/ubuntu/shopvivaliz-deploy/current/scripts/configure-production-runtime.py /home/ubuntu/shopvivaliz-deploy/shared/.env'
 
+      - name: Diagnosticar lock de deploy sem alterar processos
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE_DIAGNOSTIC'
+          set -u
+          echo "active_sha=$(cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha)"
+          if flock -n /var/lock/shopvivaliz-deploy.lock -c true; then
+            echo 'deploy_lock=free'
+          else
+            echo 'deploy_lock=held'
+          fi
+          echo 'deploy_related_processes:'
+          ps -eo pid=,ppid=,etimes=,stat=,args= | awk '/deploy-production|git-auto-sync|install-auto-sync/ && !/awk/ {print}'
+          echo 'deploy_related_units:'
+          systemctl list-units --all --no-legend 'shopvivaliz*'
+          REMOTE_DIAGNOSTIC
+
       - name: Reiniciar serviços e confirmar execução real
         shell: bash
         run: |
