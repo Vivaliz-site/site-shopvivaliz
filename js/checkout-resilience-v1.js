@@ -5,17 +5,29 @@
 
   var nativeFetch = window.fetch.bind(window);
   var lastCep = '';
+  var shippingRequestsInFlight = 0;
 
   function requestUrl(input) {
     if (typeof input === 'string') return input;
     return input && typeof input.url === 'string' ? input.url : '';
   }
 
-  function setShippingBusy(busy) {
+  function syncShippingBusy() {
+    var busy = shippingRequestsInFlight > 0;
     var submit = document.getElementById('submit-btn');
     var status = document.getElementById('checkout-shipping-status');
-    if (submit) submit.disabled = Boolean(busy);
+    if (submit) submit.disabled = busy;
     if (status) status.setAttribute('aria-busy', busy ? 'true' : 'false');
+  }
+
+  function beginShippingRequest() {
+    shippingRequestsInFlight += 1;
+    syncShippingBusy();
+  }
+
+  function finishShippingRequest() {
+    shippingRequestsInFlight = Math.max(0, shippingRequestsInFlight - 1);
+    syncShippingBusy();
   }
 
   window.fetch = function (input, init) {
@@ -24,12 +36,17 @@
     var options = Object.assign({}, init || {});
     var controller = null;
     var timeoutId = null;
+    var trackedShipping = false;
+
+    if (isShipping) {
+      beginShippingRequest();
+      trackedShipping = true;
+    }
 
     if (isShipping && !options.signal && typeof AbortController !== 'undefined') {
       controller = new AbortController();
       options.signal = controller.signal;
       timeoutId = window.setTimeout(function () { controller.abort(); }, 12000);
-      setShippingBusy(true);
     }
 
     return nativeFetch(input, options).then(function (response) {
@@ -39,7 +56,7 @@
       return response;
     }).finally(function () {
       if (timeoutId !== null) window.clearTimeout(timeoutId);
-      if (isShipping) setShippingBusy(false);
+      if (trackedShipping) finishShippingRequest();
     });
   };
 
