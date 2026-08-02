@@ -63,8 +63,8 @@ function sv_emit_prepaint_page_state(string $pageName): void
     echo "      var root=document.documentElement;\n";
     echo "      root.className+=(root.className?' ':'')+" . json_encode($pageClass) . ";\n";
     if ($emptyClass !== '') {
-        echo "      var empty=true;\n";
-        echo "      try{var cart=JSON.parse(localStorage.getItem('shopvivaliz_cart')||'[]');empty=!Array.isArray(cart)||cart.length===0;}catch(error){empty=true;}\n";
+        echo "      var empty=false;\n";
+        echo "      try{var cart=JSON.parse(localStorage.getItem('shopvivaliz_cart')||'[]');empty=Array.isArray(cart)&&cart.length===0;}catch(error){empty=false;}\n";
         echo "      root.classList.toggle(" . json_encode($emptyClass) . ",empty);\n";
     }
     echo "    })();\n";
