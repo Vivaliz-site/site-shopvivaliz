@@ -32,13 +32,30 @@ jobs:
           php -l scripts/final-order-state-verifier-v2.php
           php tests/admin-payment-notification-idempotency-test.php
 
+      - name: Configure verified SSH
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
       - name: Resolve active production release
         shell: bash
         run: |
           set -euo pipefail
-          response="$(curl --fail --silent --show-error --retry 3 --retry-all-errors \
-            --connect-timeout 10 --max-time 30 \
-            "https://shopvivaliz.com.br/api/health/version.php?order_audit=${GITHUB_RUN_ID}")"
+          response="$(ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            "curl --fail --silent --show-error --resolve shopvivaliz.com.br:443:127.0.0.1 'https://shopvivaliz.com.br/api/health/version.php?order_audit=${GITHUB_RUN_ID}'")"
           printf '%s\n' "$response" > production-version.json
           expected_sha="$(python3 - <<'PY'
           import json
@@ -56,19 +73,6 @@ jobs:
           fi
           printf 'EXPECTED_SHA=%s\n' "$expected_sha" >> "$GITHUB_ENV"
           echo "Resolved active production release: ${expected_sha:0:12}"
-
-      - name: Configure verified SSH
-        shell: bash
-        env:
-          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
-        run: |
-          set -euo pipefail
-          install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
-          chmod 600 "$HOME/.ssh/id_rsa"
-          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/known_hosts"
 
       - name: Run canonical read-only order reconciliation as web user
         shell: bash
