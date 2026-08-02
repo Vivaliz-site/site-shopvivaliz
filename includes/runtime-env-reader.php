@@ -64,7 +64,7 @@ function svre_parse_env_file(string $path): array
         $values[$key] = $value;
     }
 
-    $cache = [$cacheKey => $values];
+    $cache[$cacheKey] = $values;
     return $values;
 }
 
