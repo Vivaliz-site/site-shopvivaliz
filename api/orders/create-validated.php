@@ -12,6 +12,7 @@ require_once dirname(__DIR__, 2) . '/includes/order-request-context.php';
 require_once dirname(__DIR__, 2) . '/includes/order-idempotency.php';
 require_once dirname(__DIR__, 2) . '/includes/order-rate-limit.php';
 require_once dirname(__DIR__, 2) . '/includes/coupons.php';
+require_once dirname(__DIR__, 2) . '/includes/inventory-reservations.php';
 
 function svq_fail(int $status, string $error, string $message, array $extra = []): never {
     http_response_code($status);
@@ -85,6 +86,31 @@ if ($couponCode !== '') {
 
 $idempotencyKey = svoi_key($body, $resolved['items']);
 if (!svoi_claim($idempotencyKey)) svq_fail(409,'duplicate_order_request','Este pedido já está sendo processado ou foi enviado recentemente.');
+
+$reservationKey = hash('sha256', $idempotencyKey);
+try {
+    svir_reserve(
+        $reservationKey,
+        $resolved['items'],
+        (string)($body['payment_method'] ?? 'pix')
+    );
+} catch (SvirInsufficientStock $error) {
+    svoi_release($idempotencyKey);
+    svq_fail(409, 'insufficient_stock', 'O estoque mudou enquanto você finalizava. Atualize o carrinho.', [
+        'sku' => $error->sku,
+        'available' => $error->available,
+        'requested' => $error->requested,
+    ]);
+} catch (Throwable $error) {
+    svoi_release($idempotencyKey);
+    error_log('[OrderValidated] inventory reservation failed: ' . $error->getMessage());
+    svq_fail(503, 'inventory_reservation_unavailable', 'Não foi possível reservar o estoque com segurança. Tente novamente.');
+}
+
+svir_register_response_finalizer(
+    $reservationKey,
+    strtolower(trim((string)($body['customer_email'] ?? '')))
+);
 svorc_set($body, $resolved['items']);
 
 require __DIR__ . '/process-validated.php';
