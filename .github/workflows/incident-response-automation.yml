@@ -41,7 +41,7 @@ jobs:
         id: incident
         env:
           INCIDENT_MODE: monitor
-          HEALTHCHECK_URL: https://shopvivaliz.com.br/api/health
+          HEALTHCHECK_URL: https://shopvivaliz.com.br/api/health/version.php
         shell: bash
         run: |
           set -euo pipefail
@@ -56,6 +56,7 @@ jobs:
 
       - name: Notify on detected incident
         if: steps.incident.outputs.response_status != '0'
+        continue-on-error: true
         uses: 8398a7/action-slack@v3
         with:
           status: failure
