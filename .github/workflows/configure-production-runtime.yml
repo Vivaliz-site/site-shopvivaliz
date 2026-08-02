@@ -30,6 +30,7 @@ jobs:
       TINY_REFRESH_TOKEN_VALUE: ${{ secrets.TINY_REFRESH_TOKEN != '' && secrets.TINY_REFRESH_TOKEN || secrets.OLIST_REFRESH_TOKEN }}
       TINY_CLIENT_ID_VALUE: ${{ secrets.TINY_CLIENT_ID != '' && secrets.TINY_CLIENT_ID || secrets.OLIST_CLIENT_ID }}
       TINY_CLIENT_SECRET_VALUE: ${{ secrets.TINY_CLIENT_SECRET != '' && secrets.TINY_CLIENT_SECRET || secrets.OLIST_CLIENT_SECRET }}
+      SHOPVIVALIZ_AGENT_KEY_VALUE: ${{ secrets.SHOPVIVALIZ_AGENT_KEY != '' && secrets.SHOPVIVALIZ_AGENT_KEY || secrets.AGENT_KEY != '' && secrets.AGENT_KEY || secrets.WATCHDOG_AGENT_KEY != '' && secrets.WATCHDOG_AGENT_KEY || secrets.AUTONOMOUS_AGENT_KEY }}
 
     steps:
       - name: Checkout do código validado
@@ -41,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for name in DB_HOST_VALUE DB_NAME_VALUE DB_USER_VALUE DB_PASS_VALUE OLIST_ACCESS_TOKEN_VALUE OLIST_REFRESH_TOKEN_VALUE OLIST_CLIENT_ID_VALUE OLIST_CLIENT_SECRET_VALUE; do
+          for name in DB_HOST_VALUE DB_NAME_VALUE DB_USER_VALUE DB_PASS_VALUE OLIST_ACCESS_TOKEN_VALUE OLIST_REFRESH_TOKEN_VALUE OLIST_CLIENT_ID_VALUE OLIST_CLIENT_SECRET_VALUE SHOPVIVALIZ_AGENT_KEY_VALUE; do
             test -n "${!name:-}" || { echo "::error::Secret ausente: $name"; exit 1; }
           done
           echo 'required_runtime_secrets=present'
@@ -68,9 +69,17 @@ jobs:
           printf '%s\0' \
             "$DB_HOST_VALUE" "${DB_PORT_VALUE:-3306}" "$DB_NAME_VALUE" "$DB_USER_VALUE" "$DB_PASS_VALUE" \
             "$OLIST_ACCESS_TOKEN_VALUE" "$OLIST_REFRESH_TOKEN_VALUE" "$OLIST_CLIENT_ID_VALUE" "$OLIST_CLIENT_SECRET_VALUE" \
-            "$TINY_ACCESS_TOKEN_VALUE" "$TINY_REFRESH_TOKEN_VALUE" "$TINY_CLIENT_ID_VALUE" "$TINY_CLIENT_SECRET_VALUE" |
+            "$TINY_ACCESS_TOKEN_VALUE" "$TINY_REFRESH_TOKEN_VALUE" "$TINY_CLIENT_ID_VALUE" "$TINY_CLIENT_SECRET_VALUE" \
+            "$SHOPVIVALIZ_AGENT_KEY_VALUE" |
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
               'python3 /home/ubuntu/shopvivaliz-deploy/current/scripts/configure-production-runtime.py /home/ubuntu/shopvivaliz-deploy/shared/.env'
+
+      - name: Permitir leitura somente ao usuário web
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            'set -euo pipefail; test -e /home/ubuntu/shopvivaliz-deploy/shared/.env; sudo chgrp www-data /home/ubuntu/shopvivaliz-deploy/shared/.env; sudo chmod 640 /home/ubuntu/shopvivaliz-deploy/shared/.env; stat -c "runtime_env_mode=%a runtime_env_group=%G" /home/ubuntu/shopvivaliz-deploy/shared/.env'
 
       - name: Reiniciar serviços e confirmar execução real
         shell: bash
