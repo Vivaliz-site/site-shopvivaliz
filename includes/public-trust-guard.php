@@ -25,7 +25,7 @@ function svptg_sanitize_html(string $html, string $script): string
     if ($script === 'index.php') {
         $verifiedMount = <<<'HTML'
 <!-- Testimonials Section -->
-<section class="home-testimonials home-section-shell" aria-labelledby="sv-testimonials-title">
+<section class="home-testimonials home-section-shell home-section-soft" aria-labelledby="sv-testimonials-title">
   <div class="container">
     <div class="section-heading">
       <span class="section-eyebrow">Avaliações</span>
