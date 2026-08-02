@@ -35,14 +35,14 @@ function sv_liz_detect_intent(string $message): string
     if (preg_match('/\b(rastreio|rastrear|rastreamento|codigo de rastreio|transportadora)\b/u', $normalized)) {
         return 'tracking';
     }
+    if (preg_match('/\b(reclam\w*|atrasad\w*|errad\w*|avaria\w*|defeit\w*|cobranca duplicada|fraud\w*|estorn\w*)\b/u', $normalized)) {
+        return 'complaint';
+    }
     if (preg_match('/\b(pedido|compra|entrega do meu|status da compra|onde esta meu)\b/u', $normalized)) {
         return 'order_status';
     }
     if (preg_match('/\b(frete|cep|prazo de entrega|quanto demora|envio)\b/u', $normalized)) {
         return 'shipping';
-    }
-    if (preg_match('/\b(reclama|atrasad|errado|avaria|defeito|cobranca duplicada|fraude|estorno)\b/u', $normalized)) {
-        return 'complaint';
     }
     if (preg_match('/\b(produto|produtos|preco|valor|estoque|disponivel|comprar|modelo|cor|tamanho|categoria)\b/u', $normalized)) {
         return 'product_discovery';
@@ -149,8 +149,15 @@ function sv_liz_conversation_state(string $message, array $history = []): array
     $intent = sv_liz_detect_intent($message);
     $normalized = sv_liz_normalize($message);
     $budget = null;
-    if (preg_match('/(?:ate|abaixo de|menos de)\s*(?:r\$\s*)?([0-9]+(?:[\.,][0-9]{1,2})?)/u', $normalized, $matches)) {
-        $budget = (float)str_replace(',', '.', str_replace('.', '', (string)$matches[1]));
+    if (preg_match('/(?:ate|abaixo de|menos de)\s*(?:r\$\s*)?([0-9][0-9\.,]*)/u', $normalized, $matches)) {
+        $rawBudget = (string)$matches[1];
+        if (str_contains($rawBudget, ',')) {
+            $rawBudget = str_replace('.', '', $rawBudget);
+            $rawBudget = str_replace(',', '.', $rawBudget);
+        } elseif (substr_count($rawBudget, '.') > 1) {
+            $rawBudget = str_replace('.', '', $rawBudget);
+        }
+        $budget = is_numeric($rawBudget) ? (float)$rawBudget : null;
     }
 
     $recentUserMessages = [];

@@ -46,6 +46,10 @@ expect_true($masked === 'c******@example.com', 'e-mail é mascarado sem expor o 
 
 $state = sv_liz_conversation_state('Quero um produto até R$ 199');
 expect_true($state['intent'] === 'product_discovery' && $state['budget_max'] === 199.0, 'memória estruturada preserva intenção e orçamento');
+$largeState = sv_liz_conversation_state('Quero algo até R$ 1.999,90');
+expect_true($largeState['budget_max'] === 1999.90, 'orçamento brasileiro com milhar e centavos é interpretado corretamente');
+$delayedState = sv_liz_conversation_state('Meu pedido está atrasado e quero reclamar');
+expect_true($delayedState['intent'] === 'complaint', 'pedido atrasado prioriza revisão de reclamação');
 
 echo "Resultado: {$passed} aprovados, {$failed} falhos\n";
 exit($failed > 0 ? 1 : 0);
