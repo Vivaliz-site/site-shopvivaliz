@@ -149,7 +149,16 @@ function svrt_load_env(string $envFile): void
 
 function svrt_update_env(string $envFile, array $replacements): void
 {
-    $content = is_file($envFile) ? (string)file_get_contents($envFile) : '';
+    $target = $envFile;
+    if (is_link($envFile)) {
+        $resolved = realpath($envFile);
+        if ($resolved === false) {
+            throw new RuntimeException('Unable to resolve .env symlink');
+        }
+        $target = $resolved;
+    }
+
+    $content = is_file($target) ? (string)file_get_contents($target) : '';
 
     foreach ($replacements as $key => $value) {
         $key = (string)$key;
@@ -162,7 +171,7 @@ function svrt_update_env(string $envFile, array $replacements): void
         }
     }
 
-    svrt_atomic_write($envFile, rtrim($content) . PHP_EOL, 0600);
+    svrt_atomic_write($target, rtrim($content) . PHP_EOL, 0600);
 }
 
 $lockHandle = null;
