@@ -866,6 +866,36 @@ function liz_call_with_fallback(string $message, array $history, array $products
 $requestStartedAt = microtime(true);
 $state = sv_liz_conversation_state($message, $history);
 $products = liz_search_products($message);
+$needsOrderContext = in_array($state['intent'] ?? '', ['order_status', 'tracking'], true);
+if (!$needsOrderContext) {
+    $guarded = sv_liz_guarded_response($message, $state, $products, null);
+    if (is_array($guarded)) {
+        $handoff = $guarded['handoff'] ?? null;
+        sv_liz_record_metric([
+            'intent' => $state['intent'] ?? 'unknown',
+            'grounding_status' => $guarded['grounding_status'] ?? 'guarded',
+            'grounding_sources' => $guarded['grounding_sources'] ?? [],
+            'handoff' => is_array($handoff) && !empty($handoff['required']),
+            'outcome' => 'guarded_response',
+            'http_status' => 200,
+            'latency_ms' => (int)round((microtime(true) - $requestStartedAt) * 1000),
+        ]);
+        liz_json_response(200, [
+            'ok' => true,
+            'answer' => $guarded['answer'],
+            'error' => null,
+            'provider' => null,
+            'products_found' => count($products),
+            'grounding_status' => $guarded['grounding_status'] ?? 'guarded',
+            'grounding_sources' => $guarded['grounding_sources'] ?? [],
+            'handoff' => $handoff,
+            'conversation_state' => $state,
+            'knowledge_version' => sv_liz_knowledge_version(),
+            'timestamp' => (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))->format(DateTime::ATOM),
+        ]);
+    }
+}
+
 $orderContext = in_array($state['intent'] ?? '', ['order_status', 'tracking'], true) ? sv_liz_order_context($message) : [];
 $knowledge = function_exists('sv_liz_knowledge_context') ? sv_liz_knowledge_context($message, 3) : [];
 $guarded = sv_liz_guarded_response($message, $state, $products, $orderContext);
