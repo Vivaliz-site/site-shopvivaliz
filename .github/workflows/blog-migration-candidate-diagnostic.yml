@@ -1,0 +1,88 @@
+name: Blog migration candidate diagnostic
+
+on:
+  push:
+    branches:
+      - audit/final-order-flow-20260802
+    paths:
+      - .github/workflows/blog-migration-candidate-diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Inspect candidate release read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' > candidate-migration-diagnostic.json <<'REMOTE'
+          set -euo pipefail
+          candidate=$(find /home/ubuntu/shopvivaliz-deploy/releases -maxdepth 1 -type d -name '*-fc022188' | sort | tail -n 1)
+          test -n "$candidate"
+          export CANDIDATE="$candidate"
+          php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          $root = (string)getenv('CANDIDATE');
+          require_once $root . '/includes/pdo-database.php';
+
+          $pdo = sv_pdo();
+          $connected = $pdo instanceof PDO;
+          $existing = [];
+          $prepareOk = false;
+          $prepareErrorClass = '';
+          if ($connected) {
+              $stmt = $pdo->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'blog_articles' ORDER BY ORDINAL_POSITION");
+              $existing = $stmt ? array_map(static fn(array $row): string => (string)$row['COLUMN_NAME'], $stmt->fetchAll(PDO::FETCH_ASSOC)) : [];
+              $sql = "INSERT INTO blog_articles
+              (slug,title,excerpt,category,image_url,image_alt,content_json,faq_json,keywords_json,meta_title,meta_description,related_products_url,author,status,featured,reading_time,published_at)
+              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'published',?,?,?)
+              ON DUPLICATE KEY UPDATE
+               title=VALUES(title), excerpt=VALUES(excerpt), category=VALUES(category), image_url=VALUES(image_url), image_alt=VALUES(image_alt),
+               content_json=VALUES(content_json), faq_json=VALUES(faq_json), keywords_json=VALUES(keywords_json), meta_title=VALUES(meta_title),
+               meta_description=VALUES(meta_description), related_products_url=VALUES(related_products_url), author=VALUES(author),
+               featured=VALUES(featured), reading_time=VALUES(reading_time), updated_at=CURRENT_TIMESTAMP";
+              try {
+                  $prepared = $pdo->prepare($sql);
+                  $prepareOk = $prepared instanceof PDOStatement;
+              } catch (Throwable $e) {
+                  $prepareErrorClass = preg_replace('/[`\'\"].*?[`\'\"]/', '[identifier]', $e->getMessage()) ?? 'prepare_failed';
+              }
+          }
+          $expected = ['id','slug','title','excerpt','category','image_url','image_alt','content_json','faq_json','keywords_json','meta_title','meta_description','related_products_url','author','status','featured','reading_time','published_at','scheduled_at','created_at','updated_at'];
+          echo json_encode([
+              'candidate_sha' => is_file($root . '/.release-sha') ? trim((string)file_get_contents($root . '/.release-sha')) : '',
+              'pdo_connected' => $connected,
+              'table_exists' => $existing !== [],
+              'existing_columns' => $existing,
+              'missing_columns' => array_values(array_diff($expected, $existing)),
+              'prepare_ok' => $prepareOk,
+              'prepare_error_class' => $prepareErrorClass,
+          ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL;
+          PHP
+          REMOTE
+          cat candidate-migration-diagnostic.json
+
+      - name: Upload sanitized diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: blog-migration-candidate-diagnostic
+          path: candidate-migration-diagnostic.json
+          retention-days: 3
