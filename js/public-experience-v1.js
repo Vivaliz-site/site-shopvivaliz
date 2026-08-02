@@ -4,6 +4,7 @@ if (window.__svPublicExperienceInitialized) return;
 window.__svPublicExperienceInitialized = true;
 
 var framePending = false;
+var visibilityFramePending = false;
 var testimonialsInstalled = false;
 
 function esc(value) {
@@ -128,6 +129,16 @@ function updateFooterVisibility() {
   }
   body.classList.toggle('sv-footer-visible', footer.getBoundingClientRect().top < window.innerHeight - 72);
 }
+function runVisibilityPass() {
+  visibilityFramePending = false;
+  updateSupportVisibility();
+  updateFooterVisibility();
+}
+function scheduleVisibilityPass() {
+  if (visibilityFramePending) return;
+  visibilityFramePending = true;
+  window.requestAnimationFrame(runVisibilityPass);
+}
 function runResponsivePass() {
   framePending = false;
   installMobileNav();
@@ -155,6 +166,6 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 else init();
 window.addEventListener('resize', scheduleResponsivePass, {passive:true});
 window.addEventListener('orientationchange', scheduleResponsivePass, {passive:true});
-window.addEventListener('scroll', scheduleResponsivePass, {passive:true});
+window.addEventListener('scroll', scheduleVisibilityPass, {passive:true});
 window.addEventListener('load', scheduleResponsivePass, {once:true});
 })();
