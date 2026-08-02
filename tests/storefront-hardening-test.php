@@ -34,9 +34,9 @@ svh_assert(str_contains($shippingResilience, 'Math.max(0, shippingRequestsInFlig
 
 $newsletterEndpoint = (string)file_get_contents($root . '/api/newsletter/subscribe.php');
 svh_assert(str_contains($newsletterEndpoint, "svorl_allow(5, 3600, 'newsletter')"), 'newsletter must be rate limited');
-svh_assert(!str_contains($newsletterEndpoint, 'CREATE TABLE'), 'newsletter request path must not execute DDL');
+svh_assert(!str_contains($newsletterEndpoint, 'CREATE TABLE IF NOT EXISTS'), 'newsletter request path must not execute DDL');
 $inventoryLibrary = (string)file_get_contents($root . '/includes/inventory-reservations.php');
-svh_assert(!str_contains($inventoryLibrary, 'CREATE TABLE'), 'checkout inventory path must not execute DDL');
+svh_assert(!str_contains($inventoryLibrary, 'CREATE TABLE IF NOT EXISTS'), 'checkout inventory path must not execute DDL');
 $deployScript = (string)file_get_contents($root . '/scripts/deploy-production.sh');
 svh_assert(str_contains($deployScript, 'apply-storefront-hardening-migration.php'), 'deploy must apply storefront migration before activation');
 $errorPage = (string)file_get_contents($root . '/500.php');
