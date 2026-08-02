@@ -6,6 +6,8 @@ on:
       - '.htaccess'
       - '403.php'
       - '500.php'
+      - '502.php'
+      - '503.php'
       - 'api/melhorenvio/shipping-check-v2.php'
       - 'api/newsletter/**'
       - 'api/orders/create-validated.php'
@@ -31,6 +33,8 @@ on:
       - '.htaccess'
       - '403.php'
       - '500.php'
+      - '502.php'
+      - '503.php'
       - 'api/melhorenvio/shipping-check-v2.php'
       - 'api/newsletter/**'
       - 'api/orders/create-validated.php'
@@ -86,6 +90,8 @@ jobs:
           set -Eeuo pipefail
           php -l 403.php
           php -l 500.php
+          php -l 502.php
+          php -l 503.php
           php -l api/melhorenvio/shipping-check-v2.php
           php -l api/newsletter/subscribe.php
           php -l api/newsletter/confirm.php
@@ -121,8 +127,10 @@ jobs:
           test -s migrations/2026-08-02-storefront-hardening.sql
           grep -Fq 'apply-storefront-hardening-migration.php' scripts/deploy-production.sh
           grep -Fq 'ErrorDocument 500 /500.php' .htaccess
-          grep -Fq 'ErrorDocument 502 /500.php' .htaccess
-          grep -Fq 'ErrorDocument 503 /500.php' .htaccess
+          grep -Fq 'ErrorDocument 502 /502.php' .htaccess
+          grep -Fq 'ErrorDocument 503 /503.php' .htaccess
+          grep -Fq 'SV_ERROR_STATUS' 502.php
+          grep -Fq 'SV_ERROR_STATUS' 503.php
           grep -Fq 'checkout-legacy/?$ /checkout' .htaccess
           grep -Fq 'p/termos-e-condicoes/?$ /termos' .htaccess
           grep -Fq 'api/orders/create\.php$ api/orders/create-validated.php' .htaccess
