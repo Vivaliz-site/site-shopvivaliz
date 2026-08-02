@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  EXPECTED_SHA: cdcd9b4a9d66e860decb4ee36729d25e97dae385
+  EXPECTED_SHA: 756c7a5e83a874341d3622ca5ce20ad8bbc4ad02
   ORDER_NUMBER: SV20260731072524339
 
 jobs:
@@ -70,7 +70,7 @@ jobs:
           data = json.loads(path.read_text(encoding='utf-8'))
           assert data['ok'] is True
           assert data['read_only'] is True
-          assert data['release_sha'] == 'cdcd9b4a9d66e860decb4ee36729d25e97dae385'
+          assert data['release_sha'] == '756c7a5e83a874341d3622ca5ce20ad8bbc4ad02'
           assert data['failures'] == []
           assert data['order_file_count'] == 1
           assert data['payment_file_count'] == 1
