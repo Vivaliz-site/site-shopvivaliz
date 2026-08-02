@@ -1,0 +1,87 @@
+name: Autonomous Watchdog Production
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: autonomous-watchdog-production
+  cancel-in-progress: false
+
+jobs:
+  run-watchdog:
+    name: Executar watchdog na produção real
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Initialize production evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/autonomous-watchdog
+          printf 'run_id=%s\nevent=%s\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_EVENT_NAME" \
+            > artifacts/autonomous-watchdog/context.txt
+
+      - name: Configure verified Oracle SSH
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Execute watchdog in the active production release
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_sha="$(ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha')"
+          printf 'execution_path=oracle-active-release\nrelease_sha=%s\n' "$release_sha" \
+            >> artifacts/autonomous-watchdog/context.txt
+
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'set -euo pipefail; test -r /home/ubuntu/shopvivaliz-deploy/current/api/agent/autonomous-watchdog.php; /usr/bin/flock -w 120 /var/lock/shopvivaliz-autonomous-watchdog.lock /usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/api/agent/autonomous-watchdog.php' \
+            > artifacts/autonomous-watchdog/response.json
+          cat artifacts/autonomous-watchdog/response.json
+
+          python3 - artifacts/autonomous-watchdog/response.json <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding='utf-8') as handle:
+              payload = json.load(handle)
+          if payload.get('ok') is not True or payload.get('execution_accepted') is not True:
+              raise SystemExit('Watchdog não aceitou a execução real')
+          print('watchdog_execution=accepted')
+          PY
+
+      - name: Upload production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autonomous-watchdog-${{ github.run_id }}
+          path: artifacts/autonomous-watchdog/
+          if-no-files-found: error
+          retention-days: 30
