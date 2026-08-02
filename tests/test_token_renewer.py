@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
+
+import pytest
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "daemon-token-renewer.py"
@@ -46,3 +49,25 @@ def test_renew_once_never_logs_token_values(tmp_path: Path, monkeypatch, capsys)
     output = capsys.readouterr().out
     assert "sensitive-access" not in output
     assert "sensitive-refresh" not in output
+
+
+def test_atomic_env_update_writes_symlink_target_without_replacing_link(tmp_path: Path, monkeypatch) -> None:
+    if os.name == "nt":
+        pytest.skip("Windows sem privilégio de symlink; o runtime de produção é Linux")
+    shared_env = tmp_path / "shared.env"
+    release_env = tmp_path / ".env"
+    shared_env.write_text(
+        "OLIST_ACCESS_TOKEN=old\nOLIST_REFRESH_TOKEN=old-refresh\n",
+        encoding="utf-8",
+    )
+    release_env.symlink_to(shared_env)
+    monkeypatch.setattr(renewer, "ENV_PATH", release_env)
+
+    renewer.update_env("new-access", "new-refresh")
+
+    assert release_env.is_symlink()
+    assert release_env.resolve() == shared_env
+    content = shared_env.read_text(encoding="utf-8")
+    assert "OLIST_ACCESS_TOKEN=new-access" in content
+    assert "OLIST_REFRESH_TOKEN=new-refresh" in content
+    assert not list(tmp_path.glob(".env.*"))
