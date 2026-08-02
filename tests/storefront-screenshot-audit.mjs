@@ -123,37 +123,92 @@ async function scrollPage(page) {
 async function collectInitialMetrics(page) {
   return page.evaluate(() => {
     const viewportWidth = document.documentElement.clientWidth;
+    const allowedScrollerSelector = '.home-scroller-track,[data-horizontal-scroll],.product-gallery-thumbnails';
     const all = Array.from(document.querySelectorAll('body *'));
-    const overflowElements = all.map((node) => {
-      const rect = node.getBoundingClientRect();
-      const style = window.getComputedStyle(node);
+
+    function selectorFor(node) {
       const id = node.id ? `#${node.id}` : '';
       const classes = node.classList && node.classList.length
         ? `.${Array.from(node.classList).slice(0, 4).join('.')}`
         : '';
+      return `${node.tagName.toLowerCase()}${id}${classes}`;
+    }
+
+    function clippingAncestor(node) {
+      let parent = node.parentElement;
+      while (parent && parent !== document.body && parent !== document.documentElement) {
+        const overflowX = window.getComputedStyle(parent).overflowX;
+        if (['auto', 'scroll', 'hidden', 'clip'].includes(overflowX)) return parent;
+        parent = parent.parentElement;
+      }
+      return null;
+    }
+
+    const intentionalHorizontalScrollers = Array.from(document.querySelectorAll(allowedScrollerSelector)).map((node) => {
+      const rect = node.getBoundingClientRect();
       return {
-        selector: `${node.tagName.toLowerCase()}${id}${classes}`,
+        selector: selectorFor(node),
+        left: Math.round(rect.left * 10) / 10,
+        right: Math.round(rect.right * 10) / 10,
+        client_width: node instanceof HTMLElement ? node.clientWidth : Math.round(rect.width),
+        scroll_width: node instanceof HTMLElement ? node.scrollWidth : Math.round(rect.width)
+      };
+    });
+
+    const overflowElements = [];
+    for (const node of all) {
+      if (!(node instanceof Element)) continue;
+      const rect = node.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) continue;
+
+      const intentionalScroller = node.closest(allowedScrollerSelector);
+      if (intentionalScroller) {
+        // Cards podem ficar fora da viewport porque pertencem a uma faixa
+        // horizontal rolável. Só é erro se a moldura visível da própria faixa
+        // escapar da viewport.
+        if (node !== intentionalScroller) continue;
+        const scrollerRect = intentionalScroller.getBoundingClientRect();
+        if (scrollerRect.left >= -4 && scrollerRect.right <= viewportWidth + 4) continue;
+      } else if (clippingAncestor(node)) {
+        // Conteúdo deliberadamente recortado por overflow não amplia a página.
+        continue;
+      }
+
+      const leftOverflow = Math.max(0, -rect.left);
+      const rightOverflow = Math.max(0, rect.right - viewportWidth);
+      const visualOverflow = Math.max(leftOverflow, rightOverflow);
+      if (visualOverflow <= 4) continue;
+
+      const style = window.getComputedStyle(node);
+      overflowElements.push({
+        selector: selectorFor(node),
         left: Math.round(rect.left * 10) / 10,
         right: Math.round(rect.right * 10) / 10,
         width: Math.round(rect.width * 10) / 10,
-        scroll_width: node instanceof HTMLElement ? node.scrollWidth : 0,
+        visual_overflow_px: Math.round(visualOverflow * 10) / 10,
         position: style.position,
         transform: style.transform,
         overflow_x: style.overflowX
-      };
-    }).filter((item) => item.right > viewportWidth + 4 || item.left < -4 || item.scroll_width > viewportWidth + 4)
-      .sort((a, b) => Math.max(b.right - viewportWidth, b.scroll_width - viewportWidth) - Math.max(a.right - viewportWidth, a.scroll_width - viewportWidth))
-      .slice(0, 20);
+      });
+    }
+
+    overflowElements.sort((a, b) => b.visual_overflow_px - a.visual_overflow_px);
+    const visualOverflow = overflowElements.reduce(
+      (maximum, item) => Math.max(maximum, item.visual_overflow_px),
+      0
+    );
 
     return {
       cls: Number(window.__svCls || 0),
       longestTaskMs: Number(window.__svLongestTask || 0),
       layoutShiftSources: Array.from(window.__svLayoutShiftSources || []).sort((a, b) => b.value - a.value).slice(0, 12),
       metricSetupError: String(window.__svMetricSetupError || ''),
-      scrollWidth: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth),
+      visualOverflow,
+      rawDocumentScrollWidth: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth),
       clientWidth: viewportWidth,
       title: document.title,
-      overflowElements
+      overflowElements: overflowElements.slice(0, 20),
+      intentionalHorizontalScrollers
     };
   });
 }
@@ -238,7 +293,7 @@ for (const profile of profiles) {
     // CLS é medido apenas na janela inicial. Rolar programaticamente não
     // representa interação humana e, sem esta separação, gera falsos shifts.
     const metrics = await collectInitialMetrics(page);
-    const horizontalOverflow = Math.max(0, metrics.scrollWidth - metrics.clientWidth);
+    const horizontalOverflow = Math.max(0, Number(metrics.visualOverflow || 0));
 
     await scrollPage(page);
     await page.waitForTimeout(300);
@@ -264,7 +319,10 @@ for (const profile of profiles) {
       layout_shift_sources: metrics.layoutShiftSources,
       metric_setup_error: metrics.metricSetupError,
       horizontal_overflow_px: horizontalOverflow,
+      raw_document_scroll_width: metrics.rawDocumentScrollWidth,
+      viewport_width: metrics.clientWidth,
       overflow_elements: metrics.overflowElements,
+      intentional_horizontal_scrollers: metrics.intentionalHorizontalScrollers,
       console_errors: consoleErrors,
       network_errors: networkErrors,
       screenshot,
