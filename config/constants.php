@@ -53,6 +53,9 @@ foreach ($envFiles as $envFile) {
     }
 }
 
+require_once $projectRoot . '/includes/runtime-env-reader.php';
+$runtimeDatabase = svre_database_config($projectRoot);
+
 // Ambiente
 define('ENVIRONMENT', getenv('APP_ENV') ?: 'development');
 define('DEBUG_MODE', ENVIRONMENT === 'development');
@@ -77,13 +80,14 @@ if (!defined('ADMIN_URL')) {
     define('ADMIN_URL', BASE_URL . '/admin');
 }
 
-// Banco de dados
-define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
-define('DB_PORT', getenv('DB_PORT') ?: '3306');
-define('DB_NAME', getenv('DB_NAME') ?: (getenv('DB_DATABASE') ?: 'shopvivaliz'));
-define('DB_USER', getenv('DB_USER') ?: (getenv('DB_USERNAME') ?: 'root'));
-define('DB_PASS', getenv('DB_PASS') ?: (getenv('DB_PASSWORD') ?: ''));
+// Banco de dados: usa um unico conjunto coerente de aliases/runtime.
+define('DB_HOST', $runtimeDatabase['host'] ?: 'localhost');
+define('DB_PORT', $runtimeDatabase['port'] ?: '3306');
+define('DB_NAME', $runtimeDatabase['name'] ?: 'shopvivaliz');
+define('DB_USER', $runtimeDatabase['user'] ?: 'root');
+define('DB_PASS', $runtimeDatabase['pass']);
 define('DB_CHARSET', 'utf8mb4');
+unset($runtimeDatabase);
 
 // APIs de IA
 define('GEMINI_API_KEY', getenv('GEMINI_API_KEY') ?: null);
