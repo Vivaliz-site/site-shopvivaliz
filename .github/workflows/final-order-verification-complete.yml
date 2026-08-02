@@ -128,3 +128,5 @@ jobs:
             final-audit.json
             production-version.json
           retention-days: 7
+
+# verification-trigger: 2026-08-02T19:43:49Z
