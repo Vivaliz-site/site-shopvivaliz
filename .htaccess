@@ -3,7 +3,11 @@
 Options -Indexes
 
 # Error Pages
+ErrorDocument 403 /403.php
 ErrorDocument 404 /404.php
+ErrorDocument 500 /500.php
+ErrorDocument 502 /500.php
+ErrorDocument 503 /500.php
 
 # Bloquear acesso a arquivos sensiveis
 <FilesMatch "^(\.env(?:\..*)?|\.htaccess|tasks-queue\.json|mcp-servers\.json|package(?:-lock)?\.json)$">
@@ -22,6 +26,10 @@ ErrorDocument 404 /404.php
 # Charset UTF-8
 AddCharset UTF-8 .html .txt .php .json
 
+<IfModule mod_setenvif.c>
+    SetEnvIf Request_URI "^/api/olist/refresh-token\.php(?:\?|$)" SVRT_SENSITIVE=1
+</IfModule>
+
 <IfModule mod_headers.c>
     Header always set Strict-Transport-Security "max-age=31536000"
     Header always set X-UA-Compatible "IE=edge"
@@ -30,6 +38,8 @@ AddCharset UTF-8 .html .txt .php .json
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
     Header always set Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
+    Header always set Cache-Control "no-store, max-age=0" env=SVRT_SENSITIVE
+    Header always set Pragma "no-cache" env=SVRT_SENSITIVE
 </IfModule>
 
 # Uniform session-cookie protection for every PHP entry point. Lax preserves
@@ -47,14 +57,27 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteEngine On
 
     # Canonical host migration: apex/no-www is the production domain.
-    # O storefront legado em www exibe placeholders de pre-venda e textos
-    # antigos. Todo trafego de navegacao deve usar a aplicacao atual no apex.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteCond %{HTTP_HOST} ^(?:www\.shopvivaliz\.com\.br|dev\.shopvivaliz\.com\.br)$ [NC]
     RewriteRule ^ https://shopvivaliz.com.br%{REQUEST_URI} [R=301,L,NE]
 
-    # URLs publicas da vitrine legada/VNDA. As categorias passam a usar o
-    # catalogo canonico e as URLs plurais de produto passam para /produto/.
+    # Consolidar paginas antigas antes da regra que preserva arquivos reais.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^(?:remote-index\.html|temp_homepage\.html|home(?:\.php)?|index-loja\.php)$ / [R=301,L,NE,QSD]
+
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^checkout-legacy/?$ /checkout [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
+    RewriteRule ^checkout-legacy/?$ - [F,L]
+
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^carrinho-legacy/?$ /carrinho [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
+    RewriteRule ^carrinho-legacy/?$ - [F,L]
+
+    RewriteRule ^p/termos-e-condicoes/?$ /termos [R=301,L,NE,QSD]
+
+    # URLs publicas da vitrine legada/VNDA.
     RewriteRule ^ferramentas/?$ /catalogo?categoria=Ferramentas [R=301,L,NE]
     RewriteRule ^arte-papelaria-e-armarinho/?$ /catalogo?categoria=Arte%2C%20Papelaria%20e%20Armarinho [R=301,L,NE]
     RewriteRule ^produtos/([^/]+)/?$ /produto/$1 [R=301,L,NE]
@@ -72,20 +95,18 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^C.*shopee-sync\.php$ - [F,L,NC]
     RewriteRule ^api/(?:catalog/test-normalize\.php|(?:pagarme|melhorenvio|olist)/diagnostic(?:-full)?\.php|sync-cache-endpoint\.php|sync/full-sync\.php)$ - [F,L,NC]
 
-    # Valida frete no servidor antes de criar o pedido
+    # Valida preco, estoque, cupom e frete no servidor antes de criar o pedido.
     RewriteRule ^api/orders/create\.php$ api/orders/create-validated.php [L]
 
-    # Case-insensitive routing para /admin (Linux diferencia maiusculas)
-    # Redireciona /ADMIN, /Admin, /aDmIn etc. para /admin/ canonicamente
+    # Case-insensitive routing para /admin.
     RewriteCond %{REQUEST_URI} ^/[aA][dD][mM][iI][nN](?:/|$) [NC]
     RewriteCond %{REQUEST_URI} !^/admin(?:/|$) [NC]
     RewriteRule ^(.*)$ /admin/$1 [R=301,L,NE]
 
-    # Mantem o dashboard operacional isolado na subpasta /claude/
     RewriteRule ^claude/?$ claude/index.php [L]
     RewriteRule ^claude/(.*)$ claude/$1 [L]
 
-    # Normaliza URLs legadas para as rotas canonicas (apenas se solicitado diretamente)
+    # Normaliza URLs legadas para as rotas canonicas.
     RewriteCond %{THE_REQUEST} \s/carrinho\.php[\s?]
     RewriteRule ^carrinho\.php$ /carrinho [R=301,L]
     RewriteCond %{THE_REQUEST} \s/checkout\.php[\s?]
@@ -96,10 +117,9 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
-    # Redirecionar URLs de produto antigas com ID numerico para o novo slug
     RewriteRule ^produto/([a-z0-9][a-z0-9\-]*)-[0-9]+/?$ /produto/$1 [R=301,L]
 
-    # Cart API endpoints (CRUD operations)
+    # Cart API endpoints
     RewriteRule ^api/cart/add/?$ api/cart/add.php [L,QSA]
     RewriteRule ^api/cart/get/?$ api/cart/get.php [L,QSA]
     RewriteRule ^api/cart/remove/?$ api/cart/remove.php [L,QSA]
@@ -119,7 +139,7 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^api/maintenance/opcache-reset/?$ api/maintenance/opcache-reset.php [L,QSA]
     RewriteRule ^admin/mercadolivre/?$ admin/mercadolivre.php [L]
 
-    # Catalog API endpoints (products listing, search)
+    # Catalog API endpoints
     RewriteRule ^api/products/latest/?$ api/catalog/products.php [L,QSA]
     RewriteRule ^api/products/?$ api/catalog/products.php [L,QSA]
     RewriteRule ^api/catalog/?$ api/catalog/products.php [L,QSA]
@@ -129,7 +149,6 @@ AddCharset UTF-8 .html .txt .php .json
 
     # Rotas principais da loja
     RewriteRule ^$ index.php [L]
-    RewriteRule ^home/?$ home.php [L]
     RewriteRule ^produtos/?$ catalogo.php [L]
     RewriteRule ^catalogo/?$ catalogo.php [L]
     RewriteRule ^carrinho/?$ carrinho.php [L]
@@ -151,6 +170,7 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^politica-entrega/?$ politica-entrega.php [L]
     RewriteRule ^produto/?$ produto.php [L]
     RewriteRule ^produto/([^/]+)/?$ produto.php?slug=$1 [L,QSA]
+    RewriteRule ^newsletter/confirmar/?$ api/newsletter/confirm.php [L,QSA]
     RewriteRule ^sitemap\.xml$ sitemap.php [L]
 </IfModule>
 
