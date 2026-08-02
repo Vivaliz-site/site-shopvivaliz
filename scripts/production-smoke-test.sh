@@ -181,6 +181,7 @@ echo "OK www redirect: $redirect_status -> $redirect_location"
 private_paths=(
   '/.git/config'
   '/.env.local'
+  '/config/runtime-secrets.php'
   '/storage/products-cache-ativos.json'
   '/tasks-queue.json'
   '/scripts/'

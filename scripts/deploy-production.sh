@@ -253,6 +253,28 @@ for name in "${SYMLINKS[@]}"; do
   fi
 done
 
+if [ ! -r "$NEW_RELEASE_PATH/scripts/materialize-runtime-secrets.php" ]; then
+  rm -rf -- "$NEW_RELEASE_PATH"
+  log ERROR "Materializador de runtime secrets ausente"
+  exit 1
+fi
+php "$NEW_RELEASE_PATH/scripts/materialize-runtime-secrets.php" >> "$LOG_FILE" 2>&1
+sudo chown ubuntu:www-data "$SHARED_DIR/runtime-secrets.php"
+chmod 0640 "$SHARED_DIR/runtime-secrets.php"
+runtime_link="$NEW_RELEASE_PATH/config/runtime-secrets.php"
+rm -f -- "$runtime_link"
+ln -s "../../../shared/runtime-secrets.php" "$runtime_link"
+if [ "$(readlink -f "$runtime_link")" != "$SHARED_DIR/runtime-secrets.php" ]; then
+  rm -rf -- "$NEW_RELEASE_PATH"
+  log ERROR "Symlink de runtime secrets invalido"
+  exit 1
+fi
+if ! sudo -u www-data php -r '$values = require $argv[1]; exit(is_array($values) && count($values) >= 4 ? 0 : 1);' "$runtime_link"; then
+  rm -rf -- "$NEW_RELEASE_PATH"
+  log ERROR "Runtime secrets nao sao legiveis pelo SAPI web"
+  exit 1
+fi
+
 if [ -f "$NEW_RELEASE_PATH/scripts/migrate-blog-articles.php" ]; then
   php "$NEW_RELEASE_PATH/scripts/migrate-blog-articles.php" >> "$LOG_FILE" 2>&1
 fi
