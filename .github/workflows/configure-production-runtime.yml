@@ -1,0 +1,136 @@
+name: Configure Production Runtime
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: configure-production-runtime
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    name: Sincronizar configuração real da VM Oracle
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: production
+    env:
+      DB_HOST_VALUE: ${{ secrets.DB_HOST }}
+      DB_PORT_VALUE: ${{ secrets.DB_PORT }}
+      DB_NAME_VALUE: ${{ secrets.DB_NAME != '' && secrets.DB_NAME || secrets.DB_DATABASE }}
+      DB_USER_VALUE: ${{ secrets.DB_USER != '' && secrets.DB_USER || secrets.DB_USERNAME }}
+      DB_PASS_VALUE: ${{ secrets.DB_PASS != '' && secrets.DB_PASS || secrets.DB_PASSWORD }}
+      OLIST_ACCESS_TOKEN_VALUE: ${{ secrets.OLIST_ACCESS_TOKEN != '' && secrets.OLIST_ACCESS_TOKEN || secrets.TINY_ACCESS_TOKEN }}
+      OLIST_REFRESH_TOKEN_VALUE: ${{ secrets.OLIST_REFRESH_TOKEN != '' && secrets.OLIST_REFRESH_TOKEN || secrets.TINY_REFRESH_TOKEN }}
+      OLIST_CLIENT_ID_VALUE: ${{ secrets.OLIST_CLIENT_ID != '' && secrets.OLIST_CLIENT_ID || secrets.TINY_CLIENT_ID }}
+      OLIST_CLIENT_SECRET_VALUE: ${{ secrets.OLIST_CLIENT_SECRET != '' && secrets.OLIST_CLIENT_SECRET || secrets.TINY_CLIENT_SECRET }}
+      TINY_ACCESS_TOKEN_VALUE: ${{ secrets.TINY_ACCESS_TOKEN != '' && secrets.TINY_ACCESS_TOKEN || secrets.OLIST_ACCESS_TOKEN }}
+      TINY_REFRESH_TOKEN_VALUE: ${{ secrets.TINY_REFRESH_TOKEN != '' && secrets.TINY_REFRESH_TOKEN || secrets.OLIST_REFRESH_TOKEN }}
+      TINY_CLIENT_ID_VALUE: ${{ secrets.TINY_CLIENT_ID != '' && secrets.TINY_CLIENT_ID || secrets.OLIST_CLIENT_ID }}
+      TINY_CLIENT_SECRET_VALUE: ${{ secrets.TINY_CLIENT_SECRET != '' && secrets.TINY_CLIENT_SECRET || secrets.OLIST_CLIENT_SECRET }}
+
+    steps:
+      - name: Checkout do código validado
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Validar presença dos secrets sem expor valores
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in DB_HOST_VALUE DB_NAME_VALUE DB_USER_VALUE DB_PASS_VALUE OLIST_ACCESS_TOKEN_VALUE OLIST_REFRESH_TOKEN_VALUE OLIST_CLIENT_ID_VALUE OLIST_CLIENT_SECRET_VALUE; do
+            test -n "${!name:-}" || { echo "::error::Secret ausente: $name"; exit 1; }
+          done
+          echo 'required_runtime_secrets=present'
+
+      - name: Configurar SSH verificado
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Atualizar .env compartilhado atomicamente
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\0' \
+            "$DB_HOST_VALUE" "${DB_PORT_VALUE:-3306}" "$DB_NAME_VALUE" "$DB_USER_VALUE" "$DB_PASS_VALUE" \
+            "$OLIST_ACCESS_TOKEN_VALUE" "$OLIST_REFRESH_TOKEN_VALUE" "$OLIST_CLIENT_ID_VALUE" "$OLIST_CLIENT_SECRET_VALUE" \
+            "$TINY_ACCESS_TOKEN_VALUE" "$TINY_REFRESH_TOKEN_VALUE" "$TINY_CLIENT_ID_VALUE" "$TINY_CLIENT_SECRET_VALUE" |
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+              'python3 /home/ubuntu/shopvivaliz-deploy/current/scripts/configure-production-runtime.py /home/ubuntu/shopvivaliz-deploy/shared/.env'
+
+      - name: Reiniciar serviços e confirmar execução real
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          current='/home/ubuntu/shopvivaliz-deploy/current'
+          cache="$current/storage/products-cache-ativos.json"
+          sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-sync-products.service
+          for attempt in $(seq 1 12); do
+            sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null || true)"
+            token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null || true)"
+            if [[ "$sync_status" == active && "$token_status" == active && -s "$cache" ]]; then
+              cache_age="$(( $(date +%s) - $(stat -c %Y "$cache") ))"
+              if (( cache_age <= 900 )); then
+                break
+              fi
+            fi
+            sleep 10
+          done
+          sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null || true)"
+          token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null || true)"
+          cache_age="$(( $(date +%s) - $(stat -c %Y "$cache") ))"
+          orders_file="$(mktemp)"
+          olist_file="$(mktemp)"
+          trap 'rm -f "$orders_file" "$olist_file"' EXIT
+          orders_code="$(curl -sS -o "$orders_file" -w '%{http_code}' -H 'Host: shopvivaliz.com.br' http://127.0.0.1/api/orders/health.php)"
+          olist_code="$(curl -sS -o "$olist_file" -w '%{http_code}' -H 'Host: shopvivaliz.com.br' http://127.0.0.1/api/olist/webhook-health.php)"
+          python3 - "$sync_status" "$token_status" "$cache_age" "$orders_code" "$olist_code" "$orders_file" "$olist_file" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          sync_status, token_status, cache_age, orders_code, olist_code, orders_file, olist_file = sys.argv[1:]
+          orders = json.loads(pathlib.Path(orders_file).read_text())
+          olist = json.loads(pathlib.Path(olist_file).read_text())
+          report = {
+              "sync_service": sync_status,
+              "token_renewer": token_status,
+              "cache_age_seconds": int(cache_age),
+              "orders_http": int(orders_code),
+              "olist_http": int(olist_code),
+              "orders_ok": orders.get("ok") is True,
+              "olist_ok": olist.get("ok") is True,
+          }
+          print(json.dumps(report, sort_keys=True))
+          if not (
+              sync_status == "active"
+              and token_status == "active"
+              and int(cache_age) <= 900
+              and int(orders_code) == 200
+              and int(olist_code) == 200
+              and report["orders_ok"]
+              and report["olist_ok"]
+          ):
+              raise SystemExit("produção ainda não confirmou runtime, ERP e health checks")
+          PY
+          echo 'journal_sync_tail:'
+          journalctl -u shopvivaliz-sync-products.service -n 20 --no-pager -o cat || true
+          echo 'journal_token_tail:'
+          journalctl -u shopvivaliz-token-renewer.service -n 20 --no-pager -o cat || true
+          REMOTE_SCRIPT
