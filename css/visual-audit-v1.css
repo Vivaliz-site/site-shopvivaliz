@@ -496,3 +496,62 @@ body.sv-home-top:has(.sv-first-coupon.is-visible) #sv-liz-launcher {
         grid-template-columns: 1fr !important;
     }
 }
+
+/* Cupom desktop compacto: preserva a oferta sem competir com o conteúdo principal. */
+@media (min-width: 721px) {
+    .sv-first-coupon {
+        width: min(280px, calc(100vw - 28px)) !important;
+        border-radius: 16px !important;
+    }
+
+    .sv-first-coupon__body {
+        padding: 10px 12px !important;
+    }
+
+    .sv-first-coupon__close {
+        top: 6px !important;
+        right: 6px !important;
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 18px !important;
+    }
+
+    .sv-first-coupon__eyebrow,
+    .sv-first-coupon p,
+    .sv-first-coupon__secondary,
+    .sv-first-coupon__status {
+        display: none !important;
+    }
+
+    .sv-first-coupon h2 {
+        max-width: none !important;
+        margin: 0 32px 7px 0 !important;
+        font-size: 18px !important;
+        line-height: 1.05 !important;
+        letter-spacing: -0.03em !important;
+    }
+
+    .sv-first-coupon__code {
+        margin: 0 0 8px !important;
+        padding: 6px 8px !important;
+        border-radius: 10px !important;
+    }
+
+    .sv-first-coupon__code span {
+        font-size: 14px !important;
+    }
+
+    .sv-first-coupon__copy {
+        padding: 5px 9px !important;
+        font-size: 10px !important;
+    }
+
+    .sv-first-coupon__actions {
+        grid-template-columns: 1fr !important;
+    }
+
+    .sv-first-coupon__primary {
+        min-height: 30px !important;
+        font-size: 11px !important;
+    }
+}
