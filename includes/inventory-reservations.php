@@ -16,31 +16,17 @@ final class SvirInsufficientStock extends RuntimeException
 
 function svir_ensure_schema(PDO $pdo): void
 {
-    $pdo->exec(
-        "CREATE TABLE IF NOT EXISTS inventory_reservation_locks (
-            sku VARCHAR(100) NOT NULL PRIMARY KEY,
-            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
-    );
-    $pdo->exec(
-        "CREATE TABLE IF NOT EXISTS inventory_reservations (
-            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            reservation_key CHAR(64) NOT NULL,
-            order_number VARCHAR(40) NULL,
-            sku VARCHAR(100) NOT NULL,
-            quantity INT UNSIGNED NOT NULL,
-            source_stock INT UNSIGNED NOT NULL,
-            status VARCHAR(20) NOT NULL DEFAULT 'active',
-            payment_method VARCHAR(32) NOT NULL DEFAULT 'pix',
-            expires_at DATETIME NOT NULL,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY uq_inventory_reservation (reservation_key, sku),
-            KEY idx_inventory_reservation_sku (sku, status, expires_at),
-            KEY idx_inventory_reservation_order (order_number),
-            KEY idx_inventory_reservation_expiry (status, expires_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
-    );
+    static $verified = false;
+    if ($verified) {
+        return;
+    }
+
+    // A criacao das tabelas pertence ao deploy versionado. O usuario HTTP do
+    // checkout precisa apenas de DML e nunca executa CREATE TABLE por pedido.
+    foreach (['inventory_reservation_locks', 'inventory_reservations'] as $table) {
+        $pdo->query('SELECT 1 FROM ' . $table . ' LIMIT 0');
+    }
+    $verified = true;
 }
 
 function svir_ttl_minutes(string $paymentMethod): int

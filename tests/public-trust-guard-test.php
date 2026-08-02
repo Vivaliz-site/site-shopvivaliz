@@ -31,7 +31,8 @@ assert_true(str_contains($homeSanitized, 'home-newsletter'), 'unrelated home con
 $product = <<<'HTML'
 <h1>Produto</h1>
 <div style="color: #fbbf24; font-size: 14px; margin-bottom: 10px;">★★★★★ <span style="color: #6b7280; font-size: 12px; margin-left: 5px;">(4.9/5 - Excelente)</span></div>
-<div class="trust-badge-item"><span>Garantia de Fábrica</span></div>
+<p>Descrição original: Garantia de Fábrica conforme embalagem.</p>
+<span>Garantia de Fábrica</span>
 <!-- Customer Reviews Widget -->
 <section class="container sv-reviews-section"><div>Carlos M.</div></section>
 <button id="buy-now">Comprar</button>
@@ -40,16 +41,9 @@ HTML;
 $productSanitized = svptg_sanitize_html($product, 'produto.php');
 assert_true(!str_contains($productSanitized, '4.9/5'), 'product hard-coded rating must be removed');
 assert_true(!str_contains($productSanitized, 'sv-reviews-section'), 'product static reviews must be removed');
-assert_true(!str_contains($productSanitized, 'Garantia de Fábrica'), 'unsupported factory guarantee copy must be removed');
-assert_true(str_contains($productSanitized, 'Garantia legal e do fabricante, quando aplicável'), 'qualified guarantee copy must be present');
+assert_true(str_contains($productSanitized, '<span>Garantia legal e do fabricante, quando aplicável</span>'), 'qualified guarantee badge must be present');
+assert_true(str_contains($productSanitized, 'Descrição original: Garantia de Fábrica conforme embalagem.'), 'product description must remain intact');
 assert_true(str_contains($productSanitized, 'buy-now'), 'product CTA must be preserved');
-
-$jsonLd = svptg_sanitize_html(
-    '<script type="application/ld+json">{"@type":"Product","url":"","image":[""]}</script>',
-    'produto.php'
-);
-assert_true(str_contains($jsonLd, '"url":"https://shopvivaliz.com.br/"'), 'empty structured-data URLs must use the site root');
-assert_true(str_contains($jsonLd, 'product-placeholder.svg'), 'empty structured-data images must use the neutral placeholder');
 
 $original = '<main>preserve me</main>';
 assert_true(

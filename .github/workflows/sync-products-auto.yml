@@ -53,8 +53,9 @@ jobs:
           TINY_CLIENT_ID: ${{ secrets.TINY_CLIENT_ID }}
           TINY_CLIENT_SECRET: ${{ secrets.TINY_CLIENT_SECRET }}
           TINY_REFRESH_TOKEN: ${{ secrets.TINY_REFRESH_TOKEN }}
+          FAIL_ON_CI_FALLBACK: 'true'
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           python sync-products-to-json.py
           test -s storage/products-cache.json
           python -m json.tool storage/products-cache.json >/dev/null

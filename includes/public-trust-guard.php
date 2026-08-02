@@ -25,16 +25,21 @@ function svptg_is_list(array $value): bool
         : array_keys($value) === range(0, count($value) - 1);
 }
 
-function svptg_absolute_url(string $value): string
+function svptg_absolute_url(string $value, string $fallback = 'https://shopvivaliz.com.br/'): string
 {
     $value = trim($value);
     if ($value === '') {
-        return 'https://shopvivaliz.com.br/';
+        return $fallback;
     }
     if (preg_match('~^https?://~i', $value) === 1) {
         return $value;
     }
     return 'https://shopvivaliz.com.br/' . ltrim($value, '/');
+}
+
+function svptg_product_placeholder_url(): string
+{
+    return 'https://shopvivaliz.com.br/images/product-placeholder.svg';
 }
 
 function svptg_types(array $node): array
@@ -84,6 +89,7 @@ function svptg_normalize_json_node(mixed $node, string $script): mixed
         }
 
         if (in_array($key, ['url', 'item', 'mainEntityOfPage'], true) && is_string($value)) {
+            // URL sem valor aponta para a raiz do site, nunca para uma imagem.
             $node[$key] = svptg_absolute_url($value);
             continue;
         }
@@ -92,11 +98,11 @@ function svptg_normalize_json_node(mixed $node, string $script): mixed
             $images = is_array($value) ? $value : [$value];
             $images = array_values(array_unique(array_filter(array_map(
                 static function (mixed $image): string {
-                    $url = is_scalar($image) ? (string)$image : '';
+                    $url = is_scalar($image) ? trim((string)$image) : '';
                     if ($url === '' || str_contains($url, 'logo-vivaliz-square')) {
-                        $url = '/images/product-placeholder.svg';
+                        return svptg_product_placeholder_url();
                     }
-                    return svptg_absolute_url($url);
+                    return svptg_absolute_url($url, svptg_product_placeholder_url());
                 },
                 $images
             ))));
@@ -133,8 +139,8 @@ function svptg_normalize_json_node(mixed $node, string $script): mixed
                 $node['offers'] = $offers;
             }
         }
-        if (isset($node['image']) && is_array($node['image']) && $node['image'] === []) {
-            $node['image'] = ['https://shopvivaliz.com.br/images/product-placeholder.svg'];
+        if (!isset($node['image']) || !is_array($node['image']) || $node['image'] === []) {
+            $node['image'] = [svptg_product_placeholder_url()];
         }
     }
 
@@ -300,10 +306,13 @@ HTML;
             "\n"
         );
 
+        // Limita a mudanca ao badge exato. Descricoes de produto que usem a
+        // expressao permanecem intactas.
         $html = svptg_replace_or_original(
             $html,
-            '~(<div\b[^>]*class="[^"]*\btrust-badge-item\b[^"]*"[^>]*>.*?<span>\s*)Garantia de Fábrica(\s*</span>.*?</div>)~si',
-            '$1Garantia legal e do fabricante, quando aplicável$2'
+            '~<span>\s*Garantia de Fábrica\s*</span>~iu',
+            '<span>Garantia legal e do fabricante, quando aplicável</span>',
+            2
         );
     }
 

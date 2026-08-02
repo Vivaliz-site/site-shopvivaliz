@@ -7,17 +7,17 @@ function svcoh_replace_or_original(string $html, string $pattern, string $replac
     return is_string($updated) ? $updated : $html;
 }
 
-function svcoh_defer_external_script(string $html, string $source): string
+function svcoh_defer_script(string $html, string $srcPattern): string
 {
-    $quoted = preg_quote($source, '~');
+    $pattern = '~<script\b(?P<attrs>[^>]*\bsrc=["\']' . $srcPattern . '["\'][^>]*)>\s*</script>~i';
     $updated = @preg_replace_callback(
-        '~<script\b(?=[^>]*\bsrc=["\']' . $quoted . '["\'])[^>]*>~i',
+        $pattern,
         static function (array $matches): string {
-            $tag = (string)$matches[0];
-            if (preg_match('~\b(?:async|defer)\b~i', $tag) === 1) {
-                return $tag;
+            $attrs = trim((string)($matches['attrs'] ?? ''));
+            if (preg_match('~(?:^|\s)defer(?:\s|=|$)~i', $attrs) !== 1) {
+                $attrs = 'defer ' . $attrs;
             }
-            return (string)preg_replace('~<script\b~i', '<script defer', $tag, 1);
+            return '<script ' . $attrs . '></script>';
         },
         $html
     );
@@ -30,9 +30,10 @@ function svcoh_filter(string $html): string
         return $html;
     }
 
-    // SDKs externos nao devem bloquear o parser da tela principal.
-    $html = svcoh_defer_external_script($html, 'https://sdk.mercadopago.com/js/v2');
-    $html = svcoh_defer_external_script($html, 'https://www.mercadopago.com/v2/security.js');
+    // SDKs externos nao devem bloquear o parser da tela principal. O matcher
+    // preserva atributos extras e funciona independentemente de sua ordem.
+    $html = svcoh_defer_script($html, 'https://sdk\.mercadopago\.com/js/v2');
+    $html = svcoh_defer_script($html, 'https://www\.mercadopago\.com/v2/security\.js');
 
     // Antes da confirmacao nao existe reserva persistida; nao apresentar um
     // cronometro ficticio ao consumidor.

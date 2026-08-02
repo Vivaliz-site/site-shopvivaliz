@@ -39,6 +39,7 @@ jobs:
           TINY_CLIENT_ID: ${{ secrets.TINY_CLIENT_ID }}
           TINY_CLIENT_SECRET: ${{ secrets.TINY_CLIENT_SECRET }}
           TINY_REFRESH_TOKEN: ${{ secrets.TINY_REFRESH_TOKEN }}
+          FAIL_ON_CI_FALLBACK: 'true'
         run: |
           set -euo pipefail
           mkdir -p artifacts/catalog-snapshot

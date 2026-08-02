@@ -41,7 +41,7 @@ jobs:
         id: incident
         env:
           INCIDENT_MODE: monitor
-          HEALTHCHECK_URL: https://shopvivaliz.com.br/api/health
+          HEALTHCHECK_URL: https://shopvivaliz.com.br/api/health/version.php
         shell: bash
         run: |
           set -euo pipefail
@@ -54,8 +54,23 @@ jobs:
           echo "response_status=$status" >> "$GITHUB_OUTPUT"
           echo "response_status=$status" >> artifacts/incidents/context.txt
 
-      - name: Notify on detected incident
+      - name: Check incident notification configuration
         if: steps.incident.outputs.response_status != '0'
+        id: notification
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$SLACK_WEBHOOK_URL" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "Slack incident notification is configured."
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Slack incident notification is not configured; detector evidence will still be uploaded."
+          fi
+
+      - name: Notify on detected incident
+        if: steps.incident.outputs.response_status != '0' && steps.notification.outputs.configured == 'true'
         uses: 8398a7/action-slack@v3
         with:
           status: failure

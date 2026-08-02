@@ -13,6 +13,9 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
 require_once __DIR__ . '/../includes/secure-session.php';
+require_once __DIR__ . '/../includes/liz-assistant-core.php';
+require_once __DIR__ . '/../includes/liz-observability.php';
+require_once __DIR__ . '/../includes/liz-knowledge-context.php';
 
 // Funções seguras de manipulação de strings multibyte com fallback caso mbstring não esteja instalada
 function liz_strtolower(string $str): string
@@ -271,6 +274,11 @@ if (in_array($normalizedMsg, $simpleGreetings, true)) {
         'answer' => $answer,
         'error' => null,
         'products_found' => 0,
+        'grounding_status' => 'not_required',
+        'grounding_sources' => [],
+        'handoff' => null,
+        'conversation_state' => sv_liz_conversation_state($message, $history),
+        'knowledge_version' => sv_liz_knowledge_version(),
         'timestamp' => $local['timestamp'],
     ]);
 }
@@ -288,21 +296,17 @@ if (liz_env('ANTHROPIC_API_KEY') !== '') {
     $providers[] = ['name' => 'claude', 'key' => liz_env('ANTHROPIC_API_KEY')];
 }
 
-if ($providers === []) {
-    liz_json_response(503, ['ok' => false, 'provider' => null, 'error' => 'A Liz está temporariamente indisponível. Tente novamente em alguns instantes.']);
-}
-
 // 6. Busca de Produtos Local Hardened
 function liz_search_products(string $query): array
 {
     $catalogFile = __DIR__ . '/catalog/fallback-products.json';
-    if (!is_file($catalogFile)) {
-        return [];
+    $products = defined('LIZ_TEST_MODE')
+        ? (is_file($catalogFile) ? json_decode((string)file_get_contents($catalogFile), true) : [])
+        : (function_exists('svcr_products') ? svcr_products() : []);
+    if (!is_array($products) || $products === []) {
+        $products = is_file($catalogFile) ? json_decode((string)file_get_contents($catalogFile), true) : [];
     }
-    $products = json_decode((string)file_get_contents($catalogFile), true);
-    if (!is_array($products)) {
-        return [];
-    }
+    if (!is_array($products)) return [];
 
     // Normalizar busca
     $queryNorm = liz_strtolower($query);
@@ -342,7 +346,9 @@ function liz_search_products(string $query): array
                 'sku' => $product['sku'] ?? null,
                 'name' => $product['name'] ?? '',
                 'price' => $product['price'] ?? null,
+                'stock' => isset($product['stock']) ? max(0, (int)$product['stock']) : null,
                 'category' => $product['category'] ?? '',
+                'source' => defined('LIZ_TEST_MODE') ? 'test_fixture' : 'catalog_runtime',
                 'score' => $score,
             ];
         }
@@ -354,7 +360,7 @@ function liz_search_products(string $query): array
     return array_slice($relevant, 0, 5);
 }
 
-function liz_system_prompt(array $products): string
+function liz_system_prompt(array $products, array $knowledge = [], array $orderContext = [], array $state = []): string
 {
     $local = liz_local_context();
     $prompt = <<<PROMPT
@@ -447,9 +453,23 @@ PROMPT;
         $prompt .= "\n\nPRODUTOS RELACIONADOS ENCONTRADOS NO CATÁLOGO LOCAL:\n";
         foreach ($products as $product) {
             $price = is_numeric($product['price']) ? number_format((float)$product['price'], 2, ',', '.') : (string)$product['price'];
-            $prompt .= sprintf("- %s | R$ %s | categoria: %s | SKU: %s\n", (string)$product['name'], $price, (string)$product['category'], (string)($product['sku'] ?? 'não informado'));
+            $stock = is_numeric($product['stock'] ?? null) ? ((int)$product['stock'] > 0 ? 'disponível' : 'indisponível') : 'não confirmado';
+            $prompt .= sprintf("- %s | R$ %s | estoque: %s | categoria: %s | SKU: %s | fonte: %s\n", (string)$product['name'], $price, $stock, (string)$product['category'], (string)($product['sku'] ?? 'não informado'), (string)($product['source'] ?? 'catalog_runtime'));
         }
         $prompt .= "Use apenas estes dados de produto como confirmados. Não presuma estoque, frete ou prazo.\n";
+    }
+    if ($knowledge !== []) {
+        $prompt .= "\n\n" . sv_liz_knowledge_prompt_block($knowledge) . "\n";
+        $prompt .= 'Versão da base de conhecimento: ' . sv_liz_knowledge_version() . ". Use artigos publicados apenas como contexto educativo; não os trate como fonte de preço, estoque, frete ou pedido.\n";
+    }
+    if ($orderContext !== [] && ($orderContext['status'] ?? '') === 'confirmed') {
+        $prompt .= "\n\nDADOS CONFIRMADOS DO PEDIDO DO USUÁRIO AUTENTICADO:\n";
+        $prompt .= '- Pedido: ' . (string)($orderContext['reference'] ?? '') . "\n";
+        $prompt .= '- Status: ' . (string)($orderContext['order_status'] ?? '') . "\n";
+        if (is_numeric($orderContext['order_total'] ?? null)) $prompt .= '- Total: R$ ' . number_format((float)$orderContext['order_total'], 2, ',', '.') . "\n";
+        if (($orderContext['tracking_number'] ?? '') !== '') $prompt .= '- Rastreio: ' . (string)$orderContext['tracking_number'] . "\n";
+        if (($orderContext['estimated_delivery'] ?? '') !== '') $prompt .= '- Previsão: ' . (string)$orderContext['estimated_delivery'] . "\n";
+        $prompt .= "Use somente estes dados e deixe claro quando uma informação não estiver preenchida.\n";
     }
     return $prompt;
 }
@@ -587,7 +607,7 @@ function liz_extract_gemini_text(array $data): ?string
     return $answer !== '' ? $answer : null;
 }
 
-function liz_call_gemini(string $message, array $history, array $products, string $apiKey): ?string
+function liz_call_gemini(string $message, array $history, array $products, string $apiKey, array $knowledge = [], array $orderContext = [], array $state = []): ?string
 {
     $contents = [];
     foreach (liz_normalized_history($history, 'model', $message) as $entry) {
@@ -599,7 +619,7 @@ function liz_call_gemini(string $message, array $history, array $products, strin
     $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent';
 
     $payload = [
-        'system_instruction' => ['parts' => [['text' => liz_system_prompt($products)]]],
+        'system_instruction' => ['parts' => [['text' => liz_system_prompt($products, $knowledge, $orderContext, $state)]]],
         'contents' => $contents,
         'generationConfig' => [
             'maxOutputTokens' => 1200,
@@ -709,9 +729,9 @@ function liz_call_gemini(string $message, array $history, array $products, strin
     return null;
 }
 
-function liz_call_gpt(string $message, array $history, array $products, string $apiKey): ?string
+function liz_call_gpt(string $message, array $history, array $products, string $apiKey, array $knowledge = [], array $orderContext = [], array $state = []): ?string
 {
-    $messages = [['role' => 'system', 'content' => liz_system_prompt($products)]];
+    $messages = [['role' => 'system', 'content' => liz_system_prompt($products, $knowledge, $orderContext, $state)]];
     $messages = array_merge($messages, liz_normalized_history($history, 'assistant', $message));
     $messages[] = ['role' => 'user', 'content' => $message];
 
@@ -764,7 +784,7 @@ function liz_call_gpt(string $message, array $history, array $products, string $
     return is_string($answer) && trim($answer) !== '' ? trim($answer) : null;
 }
 
-function liz_call_claude(string $message, array $history, array $products, string $apiKey): ?string
+function liz_call_claude(string $message, array $history, array $products, string $apiKey, array $knowledge = [], array $orderContext = [], array $state = []): ?string
 {
     $messages = liz_normalized_history($history, 'assistant', $message);
     $messages[] = ['role' => 'user', 'content' => $message];
@@ -772,7 +792,7 @@ function liz_call_claude(string $message, array $history, array $products, strin
     $payload = [
         'model' => liz_env('ANTHROPIC_MODEL') ?: 'claude-3-5-haiku-20241022',
         'max_tokens' => 1000,
-        'system' => liz_system_prompt($products),
+        'system' => liz_system_prompt($products, $knowledge, $orderContext, $state),
         'messages' => $messages
     ];
 
@@ -822,13 +842,13 @@ function liz_call_claude(string $message, array $history, array $products, strin
     return is_string($answer) && trim($answer) !== '' ? trim($answer) : null;
 }
 
-function liz_call_with_fallback(string $message, array $history, array $products, array $providers): array
+function liz_call_with_fallback(string $message, array $history, array $products, array $providers, array $knowledge = [], array $orderContext = [], array $state = []): array
 {
     foreach ($providers as $provider) {
         $answer = match ($provider['name']) {
-            'gemini' => liz_call_gemini($message, $history, $products, $provider['key']),
-            'gpt' => liz_call_gpt($message, $history, $products, $provider['key']),
-            'claude' => liz_call_claude($message, $history, $products, $provider['key']),
+            'gemini' => liz_call_gemini($message, $history, $products, $provider['key'], $knowledge, $orderContext, $state),
+            'gpt' => liz_call_gpt($message, $history, $products, $provider['key'], $knowledge, $orderContext, $state),
+            'claude' => liz_call_claude($message, $history, $products, $provider['key'], $knowledge, $orderContext, $state),
             default => null,
         };
         if ($answer !== null) {
@@ -843,12 +863,101 @@ function liz_call_with_fallback(string $message, array $history, array $products
     ];
 }
 
+$requestStartedAt = microtime(true);
+$state = sv_liz_conversation_state($message, $history);
 $products = liz_search_products($message);
-$result = liz_call_with_fallback($message, $history, $products, $providers);
+$needsOrderContext = in_array($state['intent'] ?? '', ['order_status', 'tracking'], true);
+if (!$needsOrderContext) {
+    $guarded = sv_liz_guarded_response($message, $state, $products, null);
+    if (is_array($guarded)) {
+        $handoff = $guarded['handoff'] ?? null;
+        sv_liz_record_metric([
+            'intent' => $state['intent'] ?? 'unknown',
+            'grounding_status' => $guarded['grounding_status'] ?? 'guarded',
+            'grounding_sources' => $guarded['grounding_sources'] ?? [],
+            'handoff' => is_array($handoff) && !empty($handoff['required']),
+            'outcome' => 'guarded_response',
+            'http_status' => 200,
+            'latency_ms' => (int)round((microtime(true) - $requestStartedAt) * 1000),
+        ]);
+        liz_json_response(200, [
+            'ok' => true,
+            'answer' => $guarded['answer'],
+            'error' => null,
+            'provider' => null,
+            'products_found' => count($products),
+            'grounding_status' => $guarded['grounding_status'] ?? 'guarded',
+            'grounding_sources' => $guarded['grounding_sources'] ?? [],
+            'handoff' => $handoff,
+            'conversation_state' => $state,
+            'knowledge_version' => sv_liz_knowledge_version(),
+            'timestamp' => (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))->format(DateTime::ATOM),
+        ]);
+    }
+}
+
+$orderContext = in_array($state['intent'] ?? '', ['order_status', 'tracking'], true) ? sv_liz_order_context($message) : [];
+$knowledge = function_exists('sv_liz_knowledge_context') ? sv_liz_knowledge_context($message, 3) : [];
+$guarded = sv_liz_guarded_response($message, $state, $products, $orderContext);
+
+if (is_array($guarded)) {
+    $handoff = $guarded['handoff'] ?? null;
+    sv_liz_record_metric([
+        'intent' => $state['intent'] ?? 'unknown',
+        'grounding_status' => $guarded['grounding_status'] ?? 'guarded',
+        'grounding_sources' => $guarded['grounding_sources'] ?? [],
+        'handoff' => is_array($handoff) && !empty($handoff['required']),
+        'outcome' => 'guarded_response',
+        'http_status' => 200,
+        'latency_ms' => (int)round((microtime(true) - $requestStartedAt) * 1000),
+    ]);
+    liz_json_response(200, [
+        'ok' => true,
+        'answer' => $guarded['answer'],
+        'error' => null,
+        'provider' => null,
+        'products_found' => count($products),
+        'grounding_status' => $guarded['grounding_status'] ?? 'guarded',
+        'grounding_sources' => $guarded['grounding_sources'] ?? [],
+        'handoff' => $handoff,
+        'conversation_state' => $state,
+        'knowledge_version' => sv_liz_knowledge_version(),
+        'timestamp' => (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))->format(DateTime::ATOM),
+    ]);
+}
+
+if ($providers === []) {
+    sv_liz_record_metric([
+        'intent' => $state['intent'] ?? 'unknown',
+        'grounding_status' => 'provider_unavailable',
+        'grounding_sources' => [],
+        'outcome' => 'provider_unavailable',
+        'http_status' => 503,
+        'latency_ms' => (int)round((microtime(true) - $requestStartedAt) * 1000),
+    ]);
+    liz_json_response(503, ['ok' => false, 'provider' => null, 'conversation_state' => $state, 'error' => 'A Liz está temporariamente indisponível. Tente novamente em alguns instantes.']);
+}
+
+$result = liz_call_with_fallback($message, $history, $products, $providers, $knowledge, $orderContext, $state);
 
 // Formatar resposta final com timezone explícito America/Sao_Paulo
 $timezone = new DateTimeZone('America/Sao_Paulo');
 $now = new DateTimeImmutable('now', $timezone);
+
+$groundingSources = [];
+if ($products !== []) $groundingSources[] = 'catalog_runtime';
+if ($knowledge !== []) $groundingSources[] = 'knowledge_base:' . sv_liz_knowledge_version();
+if (($orderContext['status'] ?? '') === 'confirmed') $groundingSources[] = 'orders_database_authenticated_user';
+$groundingStatus = $groundingSources !== [] ? 'grounded' : (($state['intent'] ?? 'general') === 'general' ? 'not_required' : 'source_missing');
+sv_liz_record_metric([
+    'intent' => $state['intent'] ?? 'unknown',
+    'provider' => $result['provider'],
+    'grounding_status' => $groundingStatus,
+    'grounding_sources' => $groundingSources,
+    'outcome' => $result['success'] ? 'model_response' : 'provider_failed',
+    'http_status' => $result['success'] ? 200 : 503,
+    'latency_ms' => (int)round((microtime(true) - $requestStartedAt) * 1000),
+]);
 
 liz_json_response($result['success'] ? 200 : 503, [
     'ok' => $result['success'],
@@ -856,5 +965,11 @@ liz_json_response($result['success'] ? 200 : 503, [
     'error' => $result['error'] ?? null,
     'provider' => $result['provider'], // Mantido por compatibilidade do frontend
     'products_found' => count($products),
+    'grounding_status' => $groundingStatus,
+    'grounding_sources' => $groundingSources,
+    'handoff' => null,
+    'conversation_state' => $state,
+    'knowledge_found' => count($knowledge),
+    'knowledge_version' => sv_liz_knowledge_version(),
     'timestamp' => $now->format(DateTime::ATOM),
 ]);
