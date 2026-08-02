@@ -1,90 +1,119 @@
 #!/usr/bin/env python3
-"""Run the canonical PHP Olist token refresh on the production host."""
+"""Refresh Olist OAuth tokens without exposing or partially writing secrets."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import os
-import subprocess
+import tempfile
 import time
-import uuid
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-PHP_BINARY = "/usr/bin/php"
-REFRESH_SCRIPT = Path("api/olist/refresh-token.php")
+
+ENV_PATH = Path(".env")
+TOKEN_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
+
+
+def get_config() -> dict[str, str]:
+    config: dict[str, str] = {}
+    if not ENV_PATH.is_file():
+        return config
+    for raw in ENV_PATH.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        config[key.strip()] = value.strip().strip('"').strip("'")
+    return config
+
+
+def renew_token(config: dict[str, str]) -> dict[str, Any] | None:
+    client_id = config.get("OLIST_CLIENT_ID", "")
+    client_secret = config.get("OLIST_CLIENT_SECRET", "")
+    refresh_token = config.get("OLIST_REFRESH_TOKEN", "")
+    if not all((client_id, client_secret, refresh_token)):
+        print("[!] Credenciais Olist incompletas")
+        return None
+
+    payload = urllib.parse.urlencode({
+        "grant_type": "refresh_token",
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "refresh_token": refresh_token,
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        TOKEN_URL,
+        data=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            result = json.loads(response.read())
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        print(f"[!] Renovação Olist falhou: {type(exc).__name__}")
+        return None
+    return result if isinstance(result, dict) else None
+
+
+def update_env(new_token: str, new_refresh_token: str) -> None:
+    target = ENV_PATH.resolve(strict=True)
+    content = target.read_text(encoding="utf-8")
+    replacements = {
+        "OLIST_ACCESS_TOKEN": new_token,
+        "OLIST_REFRESH_TOKEN": new_refresh_token,
+    }
+    found: set[str] = set()
+    lines: list[str] = []
+    for line in content.splitlines():
+        key = line.split("=", 1)[0].strip() if "=" in line else ""
+        if key in replacements:
+            lines.append(f"{key}={replacements[key]}")
+            found.add(key)
+        else:
+            lines.append(line)
+    for key, value in replacements.items():
+        if key not in found:
+            lines.append(f"{key}={value}")
+
+    mode = target.stat().st_mode & 0o777
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".env.", dir=target.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write("\n".join(lines).rstrip("\n") + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, mode)
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def renew_once() -> bool:
-    run_id = f"systemd-{uuid.uuid4().hex}"
-    env = os.environ.copy()
-    env["SHOPVIVALIZ_REFRESH_RUN_ID"] = run_id
-    env["SHOPVIVALIZ_REFRESH_TRIGGER"] = "systemd-daemon"
-
-    try:
-        completed = subprocess.run(
-            [PHP_BINARY, str(REFRESH_SCRIPT)],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=90,
-            env=env,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        print(f"[!] Olist refresh launcher failed: {type(exc).__name__}", flush=True)
+    config = get_config()
+    result = renew_token(config)
+    access_token = result.get("access_token") if isinstance(result, dict) else None
+    if not isinstance(access_token, str) or not access_token:
         return False
-
-    try:
-        payload: Any = json.loads(completed.stdout)
-    except json.JSONDecodeError:
-        print(
-            f"[!] Olist refresh returned invalid JSON (exit={completed.returncode})",
-            flush=True,
-        )
+    refresh_token = result.get("refresh_token") or config.get("OLIST_REFRESH_TOKEN")
+    if not isinstance(refresh_token, str) or not refresh_token:
         return False
-
-    if not isinstance(payload, dict):
-        print("[!] Olist refresh returned a non-object payload", flush=True)
-        return False
-
-    status = str(payload.get("status", ""))
-    execution_id = str(payload.get("execution_id", ""))
-    timestamp = str(payload.get("timestamp", ""))
-    evidence_run_id = str(payload.get("run_id", ""))
-    evidence_trigger = str(payload.get("trigger", ""))
-
-    valid = (
-        completed.returncode == 0
-        and status == "ok"
-        and evidence_run_id == run_id
-        and evidence_trigger == "systemd-daemon"
-        and len(execution_id) == 32
-    )
-
-    if valid:
-        print(
-            "[+] Olist token refreshed "
-            f"execution_id={execution_id} timestamp={timestamp}",
-            flush=True,
-        )
-        return True
-
-    print(
-        "[!] Olist token refresh failed "
-        f"exit={completed.returncode} status={status or 'missing'} "
-        f"execution_id={execution_id or 'missing'}",
-        flush=True,
-    )
-    return False
+    update_env(access_token, refresh_token)
+    print(f"[+] Token Olist renovado em {datetime.now(timezone.utc).isoformat()}")
+    return True
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--once", action="store_true", help="Run once and exit")
-    parser.add_argument("--interval", type=int, default=7200, help="Interval after success")
-    parser.add_argument("--retry-interval", type=int, default=900, help="Interval after failure")
+    parser.add_argument("--once", action="store_true", help="Renova uma vez e encerra")
+    parser.add_argument("--interval", type=int, default=7200, help="Intervalo após sucesso")
+    parser.add_argument("--retry-interval", type=int, default=900, help="Intervalo após falha")
     args = parser.parse_args()
 
     while True:
@@ -92,14 +121,9 @@ def main() -> int:
             ok = renew_once()
         except KeyboardInterrupt:
             return 130
-        except Exception as exc:  # fail closed without exposing secret values
-            print(
-                f"[!] Olist refresh failed safely: {type(exc).__name__} "
-                f"at {datetime.now(timezone.utc).isoformat()}",
-                flush=True,
-            )
+        except Exception as exc:
+            print(f"[!] Renovação falhou com segurança: {type(exc).__name__}")
             ok = False
-
         if args.once:
             return 0 if ok else 1
         time.sleep(max(60, args.interval if ok else args.retry_interval))

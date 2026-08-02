@@ -53,21 +53,34 @@ jobs:
             'set -euo pipefail
              current=/home/ubuntu/shopvivaliz-deploy/current
              cache="$current/storage/products-cache-ativos.json"
+             max_cache_age=900
              release_sha="$(cat "$current/.release-sha")"
              sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null || true)"
+             sync_substate="$(systemctl show shopvivaliz-sync-products.service --property=SubState --value 2>/dev/null || true)"
+             sync_result="$(systemctl show shopvivaliz-sync-products.service --property=Result --value 2>/dev/null || true)"
+             sync_pid="$(systemctl show shopvivaliz-sync-products.service --property=MainPID --value 2>/dev/null || true)"
              token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null || true)"
+             token_substate="$(systemctl show shopvivaliz-token-renewer.service --property=SubState --value 2>/dev/null || true)"
              test -s "$cache"
+             python3 -m json.tool "$cache" >/dev/null
+             cache_size="$(stat -c %s "$cache")"
              cache_mtime="$(stat -c %Y "$cache")"
              now="$(date +%s)"
              cache_age=$((now - cache_mtime))
-             if [[ "$sync_status" != active || "$cache_age" -gt 900 ]]; then
-               ok=false
-             else
+             if [[ "$sync_status" == active && "$token_status" == active && "$cache_age" -le "$max_cache_age" ]]; then
                ok=true
+             else
+               ok=false
              fi
-             printf "{\"ok\":%s,\"release_sha\":\"%s\",\"sync_service\":\"%s\",\"token_renewer\":\"%s\",\"cache_age_seconds\":%s,\"cache\":\"%s\"}\n" \
-               "$ok" "$release_sha" "$sync_status" "$token_status" "$cache_age" "$cache"' \
+             printf "{\"ok\":%s,\"release_sha\":\"%s\",\"sync_service\":\"%s\",\"sync_substate\":\"%s\",\"sync_result\":\"%s\",\"sync_main_pid\":%s,\"token_renewer\":\"%s\",\"token_substate\":\"%s\",\"cache_age_seconds\":%s,\"max_cache_age_seconds\":%s,\"cache_size_bytes\":%s,\"cache_json_valid\":true,\"cache\":\"%s\"}\n" \
+               "$ok" "$release_sha" "$sync_status" "$sync_substate" "$sync_result" "${sync_pid:-0}" "$token_status" "$token_substate" "$cache_age" "$max_cache_age" "$cache_size" "$cache"' \
             > artifacts/erp-sync/report.json
+          echo 'journal_sync_tail:'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            'journalctl -u shopvivaliz-sync-products.service -n 40 --no-pager -o cat | sed -E "s/(token|secret|password|key)=[^ ]+/\\1=[redacted]/Ig"'
+          echo 'journal_token_tail:'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            'journalctl -u shopvivaliz-token-renewer.service -n 40 --no-pager -o cat | sed -E "s/(token|secret|password|key)=[^ ]+/\\1=[redacted]/Ig"'
           cat artifacts/erp-sync/report.json
           python3 - artifacts/erp-sync/report.json <<'PY'
           import json
@@ -76,7 +89,9 @@ jobs:
           with open(sys.argv[1], encoding='utf-8') as handle:
               report = json.load(handle)
           if report.get('ok') is not True:
-              raise SystemExit('Sincronização ERP de produção não está ativa ou o cache está obsoleto')
+              raise SystemExit('Sincronização ERP de produção não está ativa ou o cache excedeu a janela operacional de 15 minutos')
+          if report.get('cache_json_valid') is not True or report.get('cache_size_bytes', 0) <= 0:
+              raise SystemExit('Cache ERP de produção inválido ou vazio')
           print('erp_sync_production=active')
           PY
 
