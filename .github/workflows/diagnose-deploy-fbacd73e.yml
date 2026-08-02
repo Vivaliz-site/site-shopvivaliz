@@ -1,0 +1,79 @@
+name: Diagnose deploy fbacd73e
+
+on:
+  push:
+    branches:
+      - audit/deploy-fbacd73e-20260802
+    paths:
+      - '.github/workflows/diagnose-deploy-fbacd73e.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure verified SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Collect sanitized deployment diagnosis
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' > deploy-diagnostic.txt <<'REMOTE'
+          set -euo pipefail
+          releases='/home/ubuntu/shopvivaliz-deploy/releases'
+          shared='/home/ubuntu/shopvivaliz-deploy/shared'
+          log='/home/ubuntu/shopvivaliz-deploy/logs/deploy.log'
+          candidate="$(find "$releases" -maxdepth 1 -type d -name '*-fbacd73e' -printf '%f\n' | sort | tail -n 1)"
+          printf 'candidate=%s\n' "${candidate:-missing}"
+          if [[ -n "$candidate" ]]; then
+            path="$releases/$candidate"
+            printf 'candidate_exists=true\n'
+            printf 'candidate_release_sha=%s\n' "$(cat "$path/.release-sha" 2>/dev/null || printf missing)"
+            printf 'materializer_present=%s\n' "$([[ -r "$path/scripts/materialize-runtime-secrets.php" ]] && printf true || printf false)"
+            printf 'runtime_link_present=%s\n' "$([[ -L "$path/config/runtime-secrets.php" ]] && printf true || printf false)"
+            printf 'blog_migration_present=%s\n' "$([[ -r "$path/scripts/migrate-blog-articles.php" ]] && printf true || printf false)"
+          else
+            printf 'candidate_exists=false\n'
+          fi
+          if [[ -f "$shared/.env" ]]; then
+            stat -c 'shared_env_mode=%a shared_env_owner=%U shared_env_group=%G' "$shared/.env"
+          fi
+          if [[ -f "$shared/runtime-secrets.php" ]]; then
+            stat -c 'runtime_secrets_mode=%a runtime_secrets_owner=%U runtime_secrets_group=%G runtime_secrets_size=%s' "$shared/runtime-secrets.php"
+          else
+            printf 'runtime_secrets_present=false\n'
+          fi
+          printf '%s\n' '--- sanitized deploy events ---'
+          if [[ -r "$log" ]]; then
+            grep -E 'fbacd73e|04:33:2|04:33:3|04:33:4|ERROR|FATAL|RuntimeException|materializ|runtime secrets|migrat' "$log" \
+              | tail -n 80 \
+              | sed -E 's#([A-Z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Z0-9_]*=)[^[:space:]]+#\1[REDACTED]#Ig'
+          else
+            printf 'deploy_log_unreadable=true\n'
+          fi
+          REMOTE
+          cat deploy-diagnostic.txt
+          ! grep -Eiq '(BEGIN (RSA |OPENSSH )?PRIVATE KEY|sk-[A-Za-z0-9_-]{20,}|access_token=[^[]|refresh_token=[^[])' deploy-diagnostic.txt
+
+      - name: Upload sanitized evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: deploy-fbacd73e-diagnostic
+          path: deploy-diagnostic.txt
+          if-no-files-found: error
+          retention-days: 3
