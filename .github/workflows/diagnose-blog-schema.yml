@@ -1,0 +1,121 @@
+name: Diagnose Blog Migration Schema
+
+on:
+  push:
+    branches:
+      - audit/blog-migration-schema-20260802
+    paths:
+      - '.github/workflows/diagnose-blog-schema.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure verified SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Collect sanitized schema and prepare diagnostics
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' > blog-schema-diagnostic.json <<'REMOTE'
+          set -euo pipefail
+          php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          $root = '/home/ubuntu/shopvivaliz-deploy/current';
+          require_once $root . '/config/constants.php';
+          require_once $root . '/config/database.php';
+          $db = Database::getInstance()->getConnection();
+          $tableExists = false;
+          $columns = [];
+          $indexes = [];
+          $result = $db->query("SHOW TABLES LIKE 'blog_articles'");
+          if ($result instanceof mysqli_result && $result->num_rows > 0) {
+              $tableExists = true;
+              $result->free();
+              $columnResult = $db->query('SHOW COLUMNS FROM blog_articles');
+              if ($columnResult instanceof mysqli_result) {
+                  while ($row = $columnResult->fetch_assoc()) {
+                      $columns[] = [
+                          'field' => (string)$row['Field'],
+                          'type' => (string)$row['Type'],
+                          'null' => (string)$row['Null'],
+                          'key' => (string)$row['Key'],
+                          'default' => $row['Default'],
+                          'extra' => (string)$row['Extra'],
+                      ];
+                  }
+                  $columnResult->free();
+              }
+              $indexResult = $db->query('SHOW INDEX FROM blog_articles');
+              if ($indexResult instanceof mysqli_result) {
+                  while ($row = $indexResult->fetch_assoc()) {
+                      $indexes[] = [
+                          'name' => (string)$row['Key_name'],
+                          'column' => (string)$row['Column_name'],
+                          'sequence' => (int)$row['Seq_in_index'],
+                          'unique' => ((int)$row['Non_unique']) === 0,
+                      ];
+                  }
+                  $indexResult->free();
+              }
+          }
+          $sql = "INSERT INTO blog_articles
+          (slug,title,excerpt,category,image_url,image_alt,content_json,faq_json,keywords_json,meta_title,meta_description,related_products_url,author,status,featured,reading_time,published_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'published',?,?,?)
+          ON DUPLICATE KEY UPDATE title=VALUES(title)";
+          $prepareOk = false;
+          $prepareErrno = 0;
+          $prepareError = '';
+          if ($tableExists) {
+              $stmt = $db->prepare($sql);
+              if ($stmt instanceof mysqli_stmt) {
+                  $prepareOk = true;
+                  $stmt->close();
+              } else {
+                  $prepareErrno = $db->errno;
+                  $prepareError = $db->error;
+              }
+          }
+          echo json_encode([
+              'table_exists' => $tableExists,
+              'columns' => $columns,
+              'indexes' => $indexes,
+              'prepare_ok' => $prepareOk,
+              'prepare_errno' => $prepareErrno,
+              'prepare_error' => $prepareError,
+          ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), PHP_EOL;
+          PHP
+          REMOTE
+          cat blog-schema-diagnostic.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('blog-schema-diagnostic.json').read_text())
+          text = json.dumps(payload).lower()
+          for forbidden in ('db_pass', 'password=', 'access_token', 'refresh_token', 'private key'):
+              assert forbidden not in text
+          PY
+
+      - name: Upload diagnostic
+        uses: actions/upload-artifact@v7
+        with:
+          name: blog-schema-diagnostic
+          path: blog-schema-diagnostic.json
+          if-no-files-found: error
+          retention-days: 3
