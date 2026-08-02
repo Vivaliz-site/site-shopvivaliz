@@ -1,0 +1,194 @@
+name: Diagnose DB runtime sources
+
+on:
+  push:
+    branches:
+      - audit/final-order-flow-20260802
+    paths:
+      - .github/workflows/diagnose-db-runtime-sources.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure verified SSH
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Probe current and backup DB sources without exposure
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' > db-runtime-sources.json <<'REMOTE'
+          set -euo pipefail
+          php <<'PHP'
+          <?php
+          declare(strict_types=1);
+
+          $deployRoot = '/home/ubuntu/shopvivaliz-deploy';
+          $shared = $deployRoot . '/shared/.env';
+          $active = realpath($deployRoot . '/current') ?: '';
+          $candidateMatches = glob($deployRoot . '/releases/*-fc022188') ?: [];
+          sort($candidateMatches);
+          $candidate = $candidateMatches === [] ? '' : (string)end($candidateMatches);
+
+          function parse_env_source(string $path): array {
+              if (!is_file($path) || !is_readable($path)) return [];
+              $out = [];
+              foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+                  $line = trim($line);
+                  if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) continue;
+                  if (str_starts_with($line, 'export ')) $line = trim(substr($line, 7));
+                  [$key, $value] = explode('=', $line, 2);
+                  $key = trim($key);
+                  $value = trim($value);
+                  if (strlen($value) >= 2 && (($value[0] === '"' && $value[strlen($value)-1] === '"') || ($value[0] === "'" && $value[strlen($value)-1] === "'"))) {
+                      $value = substr($value, 1, -1);
+                  }
+                  if (preg_match('/^[A-Z_][A-Z0-9_]*$/i', $key) === 1) $out[$key] = $value;
+              }
+              return $out;
+          }
+
+          function parse_runtime_secrets(string $root): array {
+              $path = rtrim($root, '/') . '/config/runtime-secrets.php';
+              if (!is_file($path) || !is_readable($path)) return [];
+              try { $raw = require $path; } catch (Throwable) { return []; }
+              if (!is_array($raw)) return [];
+              $out = [];
+              foreach ($raw as $k => $v) if (is_string($k) && is_scalar($v)) $out[$k] = (string)$v;
+              return $out;
+          }
+
+          function coherent_sets(array $values): array {
+              return [
+                  'short' => [
+                      'host' => trim((string)($values['DB_HOST'] ?? 'localhost')) ?: 'localhost',
+                      'port' => trim((string)($values['DB_PORT'] ?? '3306')),
+                      'name' => trim((string)($values['DB_NAME'] ?? '')),
+                      'user' => trim((string)($values['DB_USER'] ?? '')),
+                      'pass' => (string)($values['DB_PASS'] ?? ''),
+                  ],
+                  'long' => [
+                      'host' => trim((string)($values['DB_HOST'] ?? 'localhost')) ?: 'localhost',
+                      'port' => trim((string)($values['DB_PORT'] ?? '3306')),
+                      'name' => trim((string)($values['DB_DATABASE'] ?? '')),
+                      'user' => trim((string)($values['DB_USERNAME'] ?? '')),
+                      'pass' => (string)($values['DB_PASSWORD'] ?? ''),
+                  ],
+              ];
+          }
+
+          function probe_source(string $label, string $kind, array $values, int $mtime = 0): array {
+              $probes = [];
+              foreach (coherent_sets($values) as $alias => $set) {
+                  $configured = $set['name'] !== '' && $set['user'] !== '';
+                  $connected = false;
+                  $error = '';
+                  $ordersTable = false;
+                  $blogTable = false;
+                  if ($configured) {
+                      $port = ctype_digit($set['port']) ? (int)$set['port'] : 3306;
+                      try {
+                          $pdo = new PDO(
+                              sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $set['host'], $port, $set['name']),
+                              $set['user'],
+                              $set['pass'],
+                              [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 4]
+                          );
+                          $connected = (int)$pdo->query('SELECT 1')->fetchColumn() === 1;
+                          if ($connected) {
+                              $ordersTable = (bool)$pdo->query("SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='orders' LIMIT 1")->fetchColumn();
+                              $blogTable = (bool)$pdo->query("SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='blog_articles' LIMIT 1")->fetchColumn();
+                          }
+                      } catch (PDOException $e) {
+                          $error = (string)$e->getCode();
+                      }
+                  }
+                  $probes[] = [
+                      'alias' => $alias,
+                      'configured' => $configured,
+                      'user_is_root' => strtolower($set['user']) === 'root',
+                      'connected' => $connected,
+                      'orders_table' => $ordersTable,
+                      'blog_table' => $blogTable,
+                      'error_code' => $error,
+                  ];
+              }
+              return ['label' => $label, 'kind' => $kind, 'mtime' => $mtime, 'probes' => $probes];
+          }
+
+          $sources = [];
+          $sources[] = probe_source('shared-current', 'env', parse_env_source($shared), (int)(filemtime($shared) ?: 0));
+
+          $backups = glob($shared . '.backup.*') ?: [];
+          usort($backups, static fn(string $a, string $b): int => ((int)(filemtime($b) ?: 0)) <=> ((int)(filemtime($a) ?: 0)));
+          foreach (array_slice($backups, 0, 12) as $index => $backup) {
+              $sources[] = probe_source('shared-backup-' . ($index + 1), 'env-backup', parse_env_source($backup), (int)(filemtime($backup) ?: 0));
+          }
+
+          if ($active !== '') {
+              $sources[] = probe_source('active-runtime-secrets', 'php-array', parse_runtime_secrets($active), (int)(filemtime($active . '/config/runtime-secrets.php') ?: 0));
+              $activeEnv = $active . '/.env';
+              if (is_file($activeEnv) && realpath($activeEnv) !== realpath($shared)) {
+                  $sources[] = probe_source('active-local-env', 'env', parse_env_source($activeEnv), (int)(filemtime($activeEnv) ?: 0));
+              }
+          }
+          if ($candidate !== '') {
+              $sources[] = probe_source('candidate-runtime-secrets', 'php-array', parse_runtime_secrets($candidate), (int)(filemtime($candidate . '/config/runtime-secrets.php') ?: 0));
+          }
+
+          $working = [];
+          foreach ($sources as $source) {
+              foreach ($source['probes'] as $probe) {
+                  if ($probe['connected'] && $probe['orders_table']) {
+                      $working[] = ['label' => $source['label'], 'alias' => $probe['alias'], 'mtime' => $source['mtime']];
+                  }
+              }
+          }
+
+          echo json_encode([
+              'active_release_sha' => $active !== '' && is_file($active . '/.release-sha') ? trim((string)file_get_contents($active . '/.release-sha')) : '',
+              'candidate_release_sha' => $candidate !== '' && is_file($candidate . '/.release-sha') ? trim((string)file_get_contents($candidate . '/.release-sha')) : '',
+              'backup_count' => count($backups),
+              'sources' => $sources,
+              'working_sources' => $working,
+          ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), PHP_EOL;
+          PHP
+          REMOTE
+          cat db-runtime-sources.json
+
+      - name: Validate sanitized report
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('db-runtime-sources.json')
+          data = json.loads(p.read_text())
+          assert isinstance(data['working_sources'], list)
+          text = p.read_text().lower()
+          for forbidden in ('"pass"', 'password=', 'db_pass=', 'private key', 'access_token', 'refresh_token'):
+              assert forbidden not in text
+          PY
+
+      - name: Upload sanitized evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-runtime-sources
+          path: db-runtime-sources.json
+          retention-days: 3
