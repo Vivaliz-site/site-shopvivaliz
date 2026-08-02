@@ -94,6 +94,7 @@
     const input = root.querySelector('input');
     const submitButton = root.querySelector('.sv-form button[type="submit"]');
     const conversation = [];
+    let conversationState = {};
     let requestInFlight = false;
 
     function setOpen(open) {
@@ -125,6 +126,22 @@
       return item;
     };
 
+    function addHandoff(handoff) {
+      if (!handoff || handoff.required !== true) return;
+      const box = document.createElement('div');
+      box.className = 'sv-liz-handoff';
+      const label = document.createElement('p');
+      label.textContent = 'O atendimento humano pode continuar por WhatsApp:';
+      const link = document.createElement('a');
+      link.href = 'https://wa.me/' + encodeURIComponent(String(handoff.phone || '5537999374112'));
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Falar com atendimento';
+      box.append(label, link);
+      msgs.append(box);
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+
     async function ask(rawText) {
       const text = rawText.trim();
       if (!text || requestInFlight) return;
@@ -142,6 +159,7 @@
           body: JSON.stringify({
             message: normalizeCatalogQuestion(text),
             history,
+            conversationState,
             context: 'site-shopvivaliz',
             clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }),
@@ -149,8 +167,12 @@
 
         const data = await response.json().catch(() => ({}));
         root.dataset.provider = data.provider || 'none';
+        root.dataset.groundingStatus = String(data.grounding_status || 'unknown');
         if (typeof data.knowledge_found !== 'undefined') root.dataset.knowledgeFound = String(data.knowledge_found);
         if (data.knowledge_mode) root.dataset.knowledgeMode = String(data.knowledge_mode);
+        if (data.conversation_state && typeof data.conversation_state === 'object') {
+          conversationState = data.conversation_state;
+        }
 
         if (!response.ok || data.ok === false) {
           const backendMessage = data.error || data.answer || data.message;
@@ -169,6 +191,7 @@
 
         waiting.textContent = answer;
         conversation.push({ role: 'assistant', content: answer });
+        addHandoff(data.handoff);
       } catch (error) {
         console.error('Liz error:', error);
         waiting.textContent = 'Não foi possível conectar à Liz agora. Verifique sua conexão ou fale conosco pelo WhatsApp (37) 99937-4112.';
