@@ -11,6 +11,21 @@
 
 ---
 
+## ✅ AUTORIZAÇÃO OPERACIONAL DO PROPRIETÁRIO (2026-08-01)
+
+O proprietário autoriza os agentes que tenham capacidade técnica e acesso válido a:
+
+- validar a entrega de ponta a ponta em navegador real, incluindo interação, persistência e evidência visual;
+- deixar a mudança pronta para revisão com resumo, riscos e evidências verificáveis;
+- aprovar pull requests, fazer merge e acionar ou executar o deploy sem aguardar uma nova aprovação explícita do proprietário, desde que os checks, as proteções e os critérios do repositório permitam a ação;
+- acompanhar o gate e a produção até obter evidência do resultado.
+
+Fluxo padrão: depois de validar a entrega e deixá-la pronta para revisão, o agente conclui a aprovação/merge autorizado e acompanha o Quality Gate, o deploy automático e o smoke test até o resultado final. Não deve interromper o fluxo para pedir confirmação intermediária.
+
+Esta autorização remove apenas a espera por uma aprovação adicional. Ela não autoriza force-push, bypass de branch protection, exposição de secrets, cobrança real, exclusão destrutiva de dados ou declaração de sucesso sem evidência. Antes de merge/deploy, o agente deve confirmar o SHA alvo, os checks do PR, a validação real aplicável e, quando houver alteração publicada, a release ativa, os logs e o smoke test de produção. Se a plataforma bloquear autoaprovação ou outra etapa, o agente não deve contornar a proteção: deve registrar o bloqueio como **INCONCLUSIVO**.
+
+---
+
 ## 🎯 PRINCÍPIOS FUNDAMENTAIS (4 REGRAS INVIOLÁVEIS)
 
 ### 1. NUNCA declare sucesso sem evidência INDEPENDENTE

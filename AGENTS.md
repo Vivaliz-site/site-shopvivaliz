@@ -4,11 +4,15 @@
 **Responsável:** Todos os agentes (Claude, Codex, Gemini, GPT, etc.)  
 **Escopo:** Qualquer tarefa automatizada (deploy, testes, integrações, ERP, pagamentos, e-mails)  
 
-> ⚠️ **CRÍTICO:** Ler primeiro [`VALIDATION-POLICY.md`](VALIDATION-POLICY.md) para política completa. Se houver conflito, `VALIDATION-POLICY.md` prevalece.
+> ⚠️ **CRÍTICO:** Ler primeiro [`REGRAS-AGENTES-CENTRALIZADAS.md`](REGRAS-AGENTES-CENTRALIZADAS.md), fonte única de verdade para a política completa.
 
 ---
 
 ## ⛔ REGRAS OBRIGATÓRIAS (Resumo Executivo)
+
+### 0. Autorização operacional vigente
+
+O proprietário autoriza os agentes com acesso técnico válido a validar pelo navegador real, preparar a entrega para revisão, aprovar PRs, fazer merge e acionar ou executar deploy sem nova aprovação explícita, desde que os checks e as proteções do repositório permitam. A autorização não elimina a necessidade de evidência independente, nem permite force-push, bypass de proteção, secrets, cobranças reais ou ações destrutivas fora do escopo.
 
 ### 1. NUNCA Use `git reset --hard` em Produção
 
@@ -348,11 +352,13 @@ Regras:
    - `read_file`
    - `run_readonly_audit`
 
-2. A bridge nunca deve:
+2. A bridge continua limitada à sua API e nunca deve:
    - commitar direto em `main`
    - fazer `auto-merge`
    - aceitar secrets no patch
    - operar fora dos prefixes permitidos do repositorio
+
+   A autorização operacional acima não amplia o schema da bridge nem substitui as proteções do GitHub; ela se aplica aos agentes que tenham capacidade técnica para executar o fluxo completo.
 
 3. Fluxo esperado para GPT mobile:
    - gerar um `.json`
@@ -378,7 +384,7 @@ Regras:
    Gerar uma tarefa JSON para o ShopVivaliz Mobile Agent Bridge.
    Ação: create_issue ou apply_patch_pr ou read_file ou run_readonly_audit.
    Repositório: Vivaliz-site/site-shopvivaliz.
-   Regras: nunca main direto, nunca auto-merge, nunca secrets, sempre evidência.
+   Regras: nunca main direto pela bridge, nunca secrets, sempre evidência. A autorização de aprovação/merge/deploy vale para agentes com capacidade técnica fora da bridge, sem bypass de proteção.
    Objetivo: <descrever objetivo>.
    ```
 
