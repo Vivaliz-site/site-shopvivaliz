@@ -66,14 +66,18 @@ jobs:
           set -Eeuo pipefail
           php -S 127.0.0.1:8090 tests/php-router.php > /tmp/shopvivaliz-php.log 2>&1 &
           echo $! > /tmp/shopvivaliz-php.pid
+          server_ready=0
           for attempt in {1..30}; do
             if curl --fail --silent --show-error http://127.0.0.1:8090/ >/dev/null; then
-              exit 0
+              server_ready=1
+              break
             fi
             sleep 1
           done
-          cat /tmp/shopvivaliz-php.log
-          exit 1
+          if [[ "$server_ready" != '1' ]]; then
+            cat /tmp/shopvivaliz-php.log
+            exit 1
+          fi
 
       - name: Run browser audit
         shell: bash
@@ -90,9 +94,14 @@ jobs:
         run: |
           set -Eeuo pipefail
           if [[ -f /tmp/shopvivaliz-php.pid ]]; then
-            kill "$(cat /tmp/shopvivaliz-php.pid)" 2>/dev/null || true
+            pid="$(cat /tmp/shopvivaliz-php.pid)"
+            if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+              kill "$pid"
+            fi
           fi
-          cat /tmp/shopvivaliz-php.log || true
+          if [[ -s /tmp/shopvivaliz-php.log ]]; then
+            cat /tmp/shopvivaliz-php.log
+          fi
 
       - name: Upload screenshots and metrics
         if: always()
