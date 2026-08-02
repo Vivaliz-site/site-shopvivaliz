@@ -148,7 +148,7 @@ function sv_liz_detect_sentiment(string $normalized): string
     if (preg_match('/\b(amei|obrigad|perfeito|excelente|otimo|gostei)\b/u', $normalized) === 1) {
         return 'positive';
     }
-    if (preg_match('/\b(reclam|ruim|horrivel|pessimo|irritad|raiva|decepcionad|atrasad|errad|defeit|fraud|estorn)\b/u', $normalized) === 1) {
+    if (preg_match('/\b(reclam\w*|ruim|horrivel|pessimo|irritad\w*|raiva|decepcionad\w*|atrasad\w*|errad\w*|defeit\w*|fraud\w*|estorn\w*)\b/u', $normalized) === 1) {
         return 'negative';
     }
     return 'neutral';
