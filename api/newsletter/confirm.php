@@ -16,17 +16,27 @@ $message = 'O link de confirmação é inválido ou expirou.';
 if (preg_match('/^[a-f0-9]{64}$/', $token) === 1) {
     try {
         $pdo = sv_pdo();
-        $stmt = $pdo->prepare(
-            "UPDATE newsletter_subscriptions
-                SET status = 'confirmed', confirmed_at = COALESCE(confirmed_at, NOW())
-              WHERE confirm_token_hash = :token_hash
-                AND status IN ('pending', 'confirmed')"
+        $tokenHash = hash('sha256', $token);
+        $lookup = $pdo->prepare(
+            "SELECT id, status
+             FROM newsletter_subscriptions
+             WHERE confirm_token_hash = :token_hash
+             LIMIT 1"
         );
-        $stmt->execute([':token_hash' => hash('sha256', $token)]);
-        $ok = $stmt->rowCount() > 0;
-        $message = $ok
-            ? 'Seu e-mail foi confirmado. Agora você pode receber novidades e ofertas da Vivaliz.'
-            : $message;
+        $lookup->execute([':token_hash' => $tokenHash]);
+        $row = $lookup->fetch(PDO::FETCH_ASSOC);
+        if (is_array($row) && in_array((string)$row['status'], ['pending', 'confirmed'], true)) {
+            if ((string)$row['status'] !== 'confirmed') {
+                $update = $pdo->prepare(
+                    "UPDATE newsletter_subscriptions
+                     SET status = 'confirmed', confirmed_at = COALESCE(confirmed_at, NOW())
+                     WHERE id = :id"
+                );
+                $update->execute([':id' => (int)$row['id']]);
+            }
+            $ok = true;
+            $message = 'Seu e-mail foi confirmado. Agora você pode receber novidades e ofertas da Vivaliz.';
+        }
     } catch (Throwable $error) {
         error_log('[newsletter] confirmation failed: ' . $error->getMessage());
         $message = 'Não foi possível confirmar o cadastro agora. Tente novamente mais tarde.';
