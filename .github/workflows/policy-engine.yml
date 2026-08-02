@@ -1,0 +1,25 @@
+name: Policy Engine
+
+on:
+  pull_request:
+
+jobs:
+  enforce:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+
+      - name: Install deps
+        run: |
+          npm init -y
+          npm install playwright
+          npx playwright install
+
+      - name: Run ERP check
+        run: node scripts/check-erp.js
+
+      - name: Run Policy Engine
+        run: node agents/policy-engine/index.js
