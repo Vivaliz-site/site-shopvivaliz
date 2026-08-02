@@ -6,6 +6,7 @@ on:
       - audit/final-order-flow-20260802
     paths:
       - .github/workflows/final-order-verification-complete.yml
+      - scripts/final-order-flow-audit-explicit.php
 
 permissions:
   contents: read
@@ -25,10 +26,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate payment notification idempotency
+      - name: Validate verifier and idempotency regression
         shell: bash
         run: |
           set -euo pipefail
+          php -l scripts/final-order-flow-audit-explicit.php
           php tests/admin-payment-notification-idempotency-test.php
 
       - name: Configure verified SSH
@@ -44,71 +46,41 @@ jobs:
           printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Run read-only order reconciliation
+      - name: Run explicit read-only order reconciliation
         shell: bash
         run: |
-          set -uo pipefail
+          set +e
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
             "EXPECTED_SHA='$EXPECTED_SHA' ORDER_NUMBER='$ORDER_NUMBER' php" \
-            < scripts/final-order-flow-audit.php > final-audit-raw.json
+            < scripts/final-order-flow-audit-explicit.php > final-audit.json
           status=$?
-          echo "raw_verifier_status=$status"
-          test -s final-audit-raw.json
-          cat final-audit-raw.json
+          set -e
+          cat final-audit.json
+          test "$status" -eq 0
 
-      - name: Validate canonical catalog redirect and normalize evidence
+      - name: Validate sanitized final evidence
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json
-          import urllib.request
           from pathlib import Path
-          from urllib.parse import urlparse
 
-          raw_path = Path('final-audit-raw.json')
-          data = json.loads(raw_path.read_text(encoding='utf-8'))
-          failures = list(data.get('failures', []))
-
-          catalog_ok = bool(data.get('checks', {}).get('catalog_http_200'))
-          if not catalog_ok:
-              assert failures == ['catalog_http_200'], failures
-              assert data.get('http_statuses', {}).get('catalog') in (301, 302, 307, 308)
-              request = urllib.request.Request(
-                  'https://shopvivaliz.com.br/catalogo?final_verification=20260802',
-                  headers={'User-Agent': 'ShopVivalizFinalAudit/1.0'},
-              )
-              with urllib.request.urlopen(request, timeout=20) as response:
-                  final_url = response.geturl()
-                  parsed = urlparse(final_url)
-                  assert response.status == 200
-                  assert parsed.scheme == 'https'
-                  assert parsed.hostname == 'shopvivaliz.com.br'
-                  assert parsed.path.rstrip('/') == '/catalogo'
-              catalog_ok = True
-
-          checks = dict(data.get('checks', {}))
-          checks['catalog_canonical_ok'] = catalog_ok
-          checks.pop('catalog_http_200', None)
-          remaining = [name for name, ok in checks.items() if not ok]
-          assert remaining == [], remaining
-          assert data.get('read_only') is True
-          assert data.get('release_sha') == 'cdcd9b4a9d66e860decb4ee36729d25e97dae385'
-          assert data.get('order_file_count') == 1
-          assert data.get('payment_file_count') == 1
-          assert data.get('database_order_count') == 1
-          assert data.get('tiny_id_hash12') == data.get('database_tiny_id_hash12') != ''
-
-          data['checks'] = checks
-          data['failures'] = []
-          data['ok'] = True
-          data['catalog_validation'] = 'canonical_redirect_followed_to_200'
-          output = json.dumps(data, indent=2, ensure_ascii=False)
-          lowered = output.lower()
+          path = Path('final-audit.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          assert data['ok'] is True
+          assert data['read_only'] is True
+          assert data['release_sha'] == 'cdcd9b4a9d66e860decb4ee36729d25e97dae385'
+          assert data['failures'] == []
+          assert data['order_file_count'] == 1
+          assert data['payment_file_count'] == 1
+          assert data['database_order_count'] == 1
+          assert data['tiny_id_hash12'] == data['database_tiny_id_hash12'] != ''
+          assert all(data['checks'].values())
+          text = path.read_text(encoding='utf-8').lower()
           for forbidden in ('"customer"', '"email"', '"phone"', '"address"', '"cpf"', '"cnpj"', '"payment_id"', '"digitable_line"', '"barcode"', '"ticket_url"'):
-              assert forbidden not in lowered, forbidden
-          Path('final-audit.json').write_text(output + '\n', encoding='utf-8')
-          print(output)
+              assert forbidden not in text, forbidden
+          print('OK: complete payment, webhook, email markers, Tiny and duplicate checks')
           PY
 
       - name: Upload final sanitized evidence
