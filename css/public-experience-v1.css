@@ -81,12 +81,3 @@ body.sv-page-catalog.sv-catalog-top #sv-liz-launcher{opacity:0!important;pointer
   .catalog-header{padding-top:30px!important;padding-bottom:26px!important}
   .catalog-header-inner{gap:20px!important}
 }
-
-body:has(.sv-first-coupon.is-visible) #sv-liz-launcher,
-body:has(#sv-privacy-consent) #sv-liz-launcher,
-body:has(#sv-privacy-consent) .sv-support-dock {
-  opacity:1!important;
-  visibility:visible!important;
-  pointer-events:auto!important;
-  transform:none!important;
-}
