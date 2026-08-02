@@ -1,0 +1,47 @@
+name: Runtime Root Guard
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/configure-production-runtime.py'
+      - 'tests/test_configure_production_runtime.py'
+      - '.github/workflows/master-production-pipeline.yml'
+      - '.github/workflows/runtime-root-guard.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/configure-production-runtime.py'
+      - 'tests/test_configure_production_runtime.py'
+      - '.github/workflows/master-production-pipeline.yml'
+      - '.github/workflows/runtime-root-guard.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Compile and test runtime updater
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/configure-production-runtime.py tests/test_configure_production_runtime.py
+          python -m unittest tests.test_configure_production_runtime -v
+
+      - name: Validate workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          "$(go env GOPATH)/bin/actionlint" -color -shellcheck=
