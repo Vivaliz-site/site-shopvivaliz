@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/public-trust-guard.php';
+svptg_register();
+
 function svcr_slug(string $name, string $sku = ''): string
 {
     $text = $name !== '' ? $name : $sku;
