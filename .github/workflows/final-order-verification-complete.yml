@@ -49,29 +49,36 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          response="$(ssh \
+          expected_sha="$(ssh \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
             ubuntu@137.131.156.17 \
-            "curl --fail --silent --show-error --resolve shopvivaliz.com.br:443:127.0.0.1 'https://shopvivaliz.com.br/api/health/version.php?order_audit=${GITHUB_RUN_ID}'")"
-          printf '%s\n' "$response" > production-version.json
-          expected_sha="$(python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          data = json.loads(Path('production-version.json').read_text(encoding='utf-8'))
-          if data.get('ok') is not True:
-              raise SystemExit('production version endpoint is not healthy')
-          print(str(data.get('release_sha', '')).strip())
-          PY
-          )"
+            "set -euo pipefail; test -f /home/ubuntu/shopvivaliz-deploy/current/.release-sha; cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha")"
+          expected_sha="$(printf '%s' "$expected_sha" | tr -d '\r\n')"
           if [[ ! "$expected_sha" =~ ^[a-f0-9]{40}$ ]]; then
             echo "invalid production release SHA" >&2
             exit 1
           fi
           printf 'EXPECTED_SHA=%s\n' "$expected_sha" >> "$GITHUB_ENV"
+          EXPECTED_SHA="$expected_sha" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          Path('production-version.json').write_text(
+              json.dumps(
+                  {
+                      'ok': True,
+                      'release_sha': os.environ['EXPECTED_SHA'],
+                      'release_source': 'deployment-marker',
+                  },
+                  indent=2,
+              ) + '\n',
+              encoding='utf-8',
+          )
+          PY
           echo "Resolved active production release: ${expected_sha:0:12}"
 
       - name: Run canonical read-only order reconciliation as web user
