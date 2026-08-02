@@ -13,6 +13,18 @@ function svh_assert(bool $condition, string $message): void
     }
 }
 
+$root = dirname(__DIR__);
+svh_assert(!is_file($root . '/js/home-mobile-layout.js'), 'late DOM reordering script must stay removed');
+$clsCss = (string)file_get_contents($root . '/css/cls-stability-v1.css');
+svh_assert(str_contains($clsCss, 'overflow-x: clip'), 'root overflow containment must remain enabled');
+svh_assert(str_contains($clsCss, '.home-scroller > .home-scroller-arrow'), 'mobile side arrows must stay disabled');
+svh_assert(str_contains($clsCss, 'overflow-x: auto !important'), 'internal carousel scrolling must remain available');
+$visualPolishJs = (string)file_get_contents($root . '/js/visual-polish-v4.js');
+svh_assert(!str_contains($visualPolishJs, 'innerHTML ='), 'visual polish must not rewrite purchase state DOM after paint');
+$customCssLoader = (string)file_get_contents($root . '/includes/load-custom-css.php');
+svh_assert(str_contains($customCssLoader, 'sv_emit_prepaint_page_state'), 'prepaint page state must be emitted in head');
+svh_assert(str_contains($customCssLoader, '/css/cls-stability-v1.css'), 'CLS stability CSS must load last');
+
 $homeJson = json_encode([
     '@context' => 'https://schema.org',
     '@graph' => [
