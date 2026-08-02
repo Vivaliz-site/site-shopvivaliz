@@ -92,6 +92,79 @@ function sv_liz_extract_order_reference(string $message): string
     return '';
 }
 
+function sv_liz_detect_category(string $normalized): ?string
+{
+    $categoryMap = [
+        'ferramentas' => '/\b(ferramenta|furadeira|chave|broca|soquete|martelo|alicate|parafusadeira)\b/u',
+        'cozinha' => '/\b(cozinha|copo|garrafa|jarra|panela|talher|pote|termica|termico)\b/u',
+        'moveis' => '/\b(movel|moveis|rodizio|puxador|dobradica|corredica|fechadura|gaveta|armario)\b/u',
+        'banheiro' => '/\b(banheiro|ducha|chuveiro|assento|torneira|ralo)\b/u',
+        'eletrica' => '/\b(eletrica|tomada|extensao|plug|interruptor|lampada|cabo)\b/u',
+    ];
+
+    foreach ($categoryMap as $category => $pattern) {
+        if (preg_match($pattern, $normalized) === 1) {
+            return $category;
+        }
+    }
+
+    return null;
+}
+
+function sv_liz_extract_product_query(string $message): ?string
+{
+    $normalized = sv_liz_normalize($message);
+    $terms = preg_split('/\s+/u', preg_replace('/[^\p{L}\p{N}\s-]/u', ' ', $normalized) ?? '') ?: [];
+    $stopWords = [
+        'quero', 'preciso', 'produto', 'produtos', 'comprar', 'preco', 'valor', 'estoque',
+        'disponivel', 'tem', 'voce', 'voces', 'para', 'com', 'sem', 'uma', 'um', 'meu',
+        'minha', 'ate', 'abaixo', 'menos', 'reais', 'qual', 'quanto', 'custa', 'sobre',
+    ];
+    $keywords = array_values(array_filter($terms, static function(string $term) use ($stopWords): bool {
+        return strlen($term) >= 3 && !in_array($term, $stopWords, true) && !ctype_digit($term);
+    }));
+
+    if ($keywords === []) {
+        return null;
+    }
+
+    return implode(' ', array_slice($keywords, 0, 6));
+}
+
+function sv_liz_detect_language(string $message): string
+{
+    $normalized = sv_liz_normalize($message);
+    if (preg_match('/\b(price|shipping|order|tracking|refund|hello|please)\b/u', $normalized) === 1) {
+        return 'en';
+    }
+    if (preg_match('/\b(precio|envio|pedido|reembolso|hola|gracias)\b/u', $normalized) === 1) {
+        return 'es';
+    }
+    return 'pt-BR';
+}
+
+function sv_liz_detect_sentiment(string $normalized): string
+{
+    if (preg_match('/\b(amei|obrigad|perfeito|excelente|otimo|gostei)\b/u', $normalized) === 1) {
+        return 'positive';
+    }
+    if (preg_match('/\b(reclam\w*|ruim|horrivel|pessimo|irritad\w*|raiva|decepcionad\w*|atrasad\w*|errad\w*|defeit\w*|fraud\w*|estorn\w*)\b/u', $normalized) === 1) {
+        return 'negative';
+    }
+    return 'neutral';
+}
+
+function sv_liz_detect_urgency(string $normalized, string $intent): string
+{
+    if ($intent === 'complaint' || preg_match('/\b(urgente|agora|imediato|hoje|fraude|cobranca duplicada|cancelar agora)\b/u', $normalized) === 1) {
+        return 'high';
+    }
+    if (preg_match('/\b(quando puder|sem pressa|depois|amanha)\b/u', $normalized) === 1) {
+        return 'low';
+    }
+    return 'normal';
+}
+
 /** @return array<string, mixed> */
 function sv_liz_order_context(string $message): array
 {
@@ -167,14 +240,39 @@ function sv_liz_conversation_state(string $message, array $history = []): array
         }
     }
 
+    $category = sv_liz_detect_category($normalized);
+    $orderReference = sv_liz_extract_order_reference($message);
+    $pendingActions = [];
+    if (in_array($intent, ['order_status', 'tracking'], true)) {
+        $pendingActions[] = 'authenticate_user';
+        if ($orderReference === '') {
+            $pendingActions[] = 'collect_order_reference';
+        }
+    }
+    if ($intent === 'shipping') {
+        $pendingActions[] = 'collect_cart_and_cep';
+    }
+    if ($intent === 'human_handoff' || $intent === 'complaint') {
+        $pendingActions[] = 'human_handoff';
+    }
+
     return [
         'intent' => $intent,
+        'category' => $category,
+        'product_query' => sv_liz_extract_product_query($message),
         'budget_max' => $budget,
         'authenticated' => sv_liz_authenticated_user() !== null,
         'requires_authentication' => in_array($intent, ['order_status', 'tracking'], true),
+        'order_reference' => $orderReference !== '' ? $orderReference : null,
+        'language' => sv_liz_detect_language($message),
+        'channel' => 'web',
+        'sentiment' => sv_liz_detect_sentiment($normalized),
+        'urgency' => sv_liz_detect_urgency($normalized, $intent),
+        'confirmed_data' => [],
+        'pending_actions' => $pendingActions,
         'history_messages_considered' => count($recentUserMessages),
         'prompt_injection_detected' => sv_liz_is_prompt_injection($message),
-        'version' => '1.0.0',
+        'version' => '1.1.0',
     ];
 }
 

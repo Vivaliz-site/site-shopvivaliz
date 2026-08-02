@@ -46,10 +46,23 @@ expect_true($masked === 'c******@example.com', 'e-mail é mascarado sem expor o 
 
 $state = sv_liz_conversation_state('Quero um produto até R$ 199');
 expect_true($state['intent'] === 'product_discovery' && $state['budget_max'] === 199.0, 'memória estruturada preserva intenção e orçamento');
+expect_true($state['language'] === 'pt-BR' && $state['channel'] === 'web', 'memória estruturada preserva idioma e canal');
 $largeState = sv_liz_conversation_state('Quero algo até R$ 1.999,90');
 expect_true($largeState['budget_max'] === 1999.90, 'orçamento brasileiro com milhar e centavos é interpretado corretamente');
 $delayedState = sv_liz_conversation_state('Meu pedido está atrasado e quero reclamar');
 expect_true($delayedState['intent'] === 'complaint', 'pedido atrasado prioriza revisão de reclamação');
+expect_true($delayedState['sentiment'] === 'negative' && $delayedState['urgency'] === 'high', 'reclamação registra sentimento negativo e urgência alta');
+
+$categoryState = sv_liz_conversation_state('Preciso de rodízio para armário até R$ 80');
+expect_true($categoryState['category'] === 'moveis', 'memória identifica categoria de móveis');
+expect_true($categoryState['product_query'] === 'rodizio armario', 'memória extrai produto de interesse sem stop words');
+
+$trackingState = sv_liz_conversation_state('Onde está meu pedido SV1234?');
+expect_true($trackingState['order_reference'] === 'SV1234', 'memória extrai referência de pedido');
+expect_true(in_array('authenticate_user', $trackingState['pending_actions'], true), 'pedido exige autenticação como ação pendente');
+
+$englishState = sv_liz_conversation_state('What is the shipping price please?');
+expect_true($englishState['language'] === 'en', 'memória detecta mensagem em inglês');
 
 $postGuardState = sv_liz_conversation_state('Qual o preço desse produto?');
 $postGuard = sv_liz_post_response_guard(
@@ -75,7 +88,7 @@ $generalPostGuard = sv_liz_post_response_guard(
     'Lave com água morna e detergente neutro.',
     []
 );
-expect_true($generalPostGuard === null, 'validação pós-resposta não bloqueia orientação geral sem dado comercial');
+expect_true($generalPostGuard === null, 'validação pós-responsta não bloqueia orientação geral sem dado comercial');
 
 echo "Resultado: {$passed} aprovados, {$failed} falhos\n";
 exit($failed > 0 ? 1 : 0);
