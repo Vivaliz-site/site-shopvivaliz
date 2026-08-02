@@ -1,0 +1,53 @@
+name: Diagnose runtime DB aliases
+
+on:
+  push:
+    branches:
+      - audit/deploy-fbacd73e-20260802
+    paths:
+      - '.github/workflows/diagnose-runtime-db-aliases.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure verified SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Report alias health without values
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'php -r '\''
+          $values=[];
+          foreach (file("/home/ubuntu/shopvivaliz-deploy/shared/.env", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+              $line=trim($line);
+              if ($line==="" || $line[0]==="#" || !str_contains($line,"=")) continue;
+              [$key,$value]=explode("=",$line,2);
+              $values[trim($key)]=trim(trim($value),"\"\x27");
+          }
+          $sets=[
+              "short"=>["DB_NAME","DB_USER","DB_PASS"],
+              "long"=>["DB_DATABASE","DB_USERNAME","DB_PASSWORD"],
+          ];
+          foreach ($sets as $label=>$keys) {
+              [$name,$user,$pass]=$keys;
+              $username=trim((string)($values[$user]??""));
+              echo $label,"_name_present=",trim((string)($values[$name]??""))!==""?"true":"false",PHP_EOL;
+              echo $label,"_user_present=",$username!==""?"true":"false",PHP_EOL;
+              echo $label,"_user_is_root=",strtolower($username)==="root"?"true":"false",PHP_EOL;
+              echo $label,"_pass_present=",trim((string)($values[$pass]??""))!==""?"true":"false",PHP_EOL;
+          }
+          '\'''
