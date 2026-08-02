@@ -42,7 +42,7 @@
         host.innerHTML = ''
             + '<div class="sv-empty-cart-state">'
             + '<div class="sv-empty-state-icon" aria-hidden="true">🛒</div>'
-            + '<h2>Seu carrinho está esperando por você</h2>'
+            + '<h2>Meu carrinho</h2>'
             + '<p>Explore o catálogo e escolha os produtos que combinam com sua casa ou seu trabalho.</p>'
             + '<a href="/catalogo" class="btn btn-primary sv-empty-state-action">Explorar produtos</a>'
             + '</div>';
