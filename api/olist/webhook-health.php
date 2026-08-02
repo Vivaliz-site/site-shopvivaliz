@@ -24,16 +24,13 @@ $diagnostics['checks']['logs_writable'] = is_dir($logDir) && is_writable($logDir
 
 $db = null;
 try {
-    $host = svre_value('DB_HOST', $root);
-    $portValue = svre_value('DB_PORT', $root);
-    $name = svre_value(['DB_NAME', 'DB_DATABASE'], $root);
-    $user = svre_value(['DB_USER', 'DB_USERNAME'], $root);
-    $pass = svre_value(['DB_PASS', 'DB_PASSWORD'], $root);
-    $port = ctype_digit($portValue) ? (int)$portValue : 3306;
+    $database = svre_database_config($root);
+    $host = $database['host'];
+    $port = (int)$database['port'];
+    $name = $database['name'];
+    $user = $database['user'];
+    $pass = $database['pass'];
 
-    if ($host === '') {
-        $host = 'localhost';
-    }
     if ($name === '' || $user === '') {
         throw new RuntimeException('database_configuration_missing');
     }
