@@ -59,7 +59,11 @@ expect_true($categoryState['product_query'] === 'rodizio armario', 'memória ext
 
 $trackingState = sv_liz_conversation_state('Onde está meu pedido SV1234?');
 expect_true($trackingState['order_reference'] === 'SV1234', 'memória extrai referência de pedido');
+expect_true($trackingState['product_query'] === null, 'referência de pedido não é duplicada como consulta de produto');
 expect_true(in_array('authenticate_user', $trackingState['pending_actions'], true), 'pedido exige autenticação como ação pendente');
+
+$generalState = sv_liz_conversation_state('Preciso de ajuda com minha conta');
+expect_true($generalState['product_query'] === null, 'consulta de produto só é preenchida para descoberta de catálogo');
 
 $englishState = sv_liz_conversation_state('What is the shipping price please?');
 expect_true($englishState['language'] === 'en', 'memória detecta mensagem em inglês');
@@ -88,7 +92,7 @@ $generalPostGuard = sv_liz_post_response_guard(
     'Lave com água morna e detergente neutro.',
     []
 );
-expect_true($generalPostGuard === null, 'validação pós-responsta não bloqueia orientação geral sem dado comercial');
+expect_true($generalPostGuard === null, 'validação pós-resposta não bloqueia orientação geral sem dado comercial');
 
 echo "Resultado: {$passed} aprovados, {$failed} falhos\n";
 exit($failed > 0 ? 1 : 0);
