@@ -24,37 +24,42 @@ jobs:
           mkdir -p artifacts/blog-publish
           printf 'run_id=%s\nsha=%s\nevent=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" > artifacts/blog-publish/context.txt
 
-      - name: Chamar publicador do blog
+      - name: Publicar posts agendados na release ativa do Oracle
         env:
-          BLOG_PUBLISH_URL: ${{ secrets.BLOG_PUBLISH_URL }}
-          BLOG_PUBLISH_TOKEN: ${{ secrets.BLOG_PUBLISH_TOKEN }}
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          url="${BLOG_PUBLISH_URL:-https://shopvivaliz.com.br/api/blog/publish-scheduled.php}"
-          if [ -z "${BLOG_PUBLISH_TOKEN:-}" ]; then
-            echo 'credential_status=missing' >> artifacts/blog-publish/context.txt
-            echo "::error::BLOG_PUBLISH_TOKEN ausente; publicacao agendada nao foi executada."
-            exit 1
-          fi
-          echo 'credential_status=present' >> artifacts/blog-publish/context.txt
+          test -n "${ORACLE_VM_SSH_KEY:-}"
+          test -n "${ORACLE_VM_KNOWN_HOSTS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          printf 'execution_path=oracle-active-release\n' >> artifacts/blog-publish/context.txt
 
-          status="$(curl -sS -o artifacts/blog-publish/response.json -w '%{http_code}' \
-            -X POST \
-            -H "X-Blog-Publish-Token: ${BLOG_PUBLISH_TOKEN}" \
-            -H 'Accept: application/json' \
-            "$url")"
-          printf 'http_status=%s\n' "$status" >> artifacts/blog-publish/context.txt
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'set -euo pipefail; test -r /home/ubuntu/shopvivaliz-deploy/current/api/blog/publish-scheduled.php; cd /home/ubuntu/shopvivaliz-deploy/current; exec /usr/bin/php api/blog/publish-scheduled.php' \
+            > artifacts/blog-publish/response.json
           cat artifacts/blog-publish/response.json
           echo
 
-          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
-            echo "Falha ao publicar posts agendados: HTTP $status" >&2
-            exit 1
-          fi
-          if ! grep -q '"ok"[[:space:]]*:[[:space:]]*true' artifacts/blog-publish/response.json; then
-            echo "Resposta inesperada do publicador do blog" >&2
-            exit 1
-          fi
+          python3 - artifacts/blog-publish/response.json <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding='utf-8') as handle:
+              payload = json.load(handle)
+          if payload.get('ok') is not True:
+              raise SystemExit('Resposta inesperada do publicador do blog')
+          print(f"publication_ok=true published={payload.get('published', 0)} queued={payload.get('queued', 0)}")
+          PY
 
       - name: Upload publication evidence
         if: always()
