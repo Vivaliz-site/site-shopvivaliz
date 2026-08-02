@@ -27,7 +27,7 @@ permissions:
 
 concurrency:
   group: storefront-browser-audit-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   playwright:
