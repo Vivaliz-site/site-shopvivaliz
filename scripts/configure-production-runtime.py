@@ -31,6 +31,18 @@ KEYS = (
 PRIVATE_MODE = 0o600
 
 
+def validate_database_tuple(values: dict[str, str]) -> str | None:
+    required = ("DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASS")
+    missing = [key for key in required if not values.get(key, "").strip()]
+    if missing:
+        return "database tuple is incomplete: " + ",".join(missing)
+    if values["DB_USER"].strip().lower() == "root":
+        return "root database user is forbidden in production runtime"
+    if not values["DB_PORT"].strip().isdigit():
+        return "database port must be numeric"
+    return None
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: configure-production-runtime.py SHARED_ENV", file=sys.stderr)
@@ -51,6 +63,11 @@ def main() -> int:
             return 2
         if value:
             values[key] = value
+
+    database_error = validate_database_tuple(values)
+    if database_error is not None:
+        print(database_error, file=sys.stderr)
+        return 2
 
     path = Path(sys.argv[1])
     if not path.is_file():
@@ -91,6 +108,7 @@ def main() -> int:
     print("updated_keys=" + ",".join(sorted(values)))
     print("backup_created=true")
     print("shared_env_mode=600")
+    print("database_user_safe=true")
     return 0
 
 
