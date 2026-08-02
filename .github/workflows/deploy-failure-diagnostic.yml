@@ -1,0 +1,111 @@
+name: Deploy failure diagnostic
+
+on:
+  push:
+    branches:
+      - audit/final-order-flow-20260802
+    paths:
+      - .github/workflows/deploy-failure-diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Collect sanitized deploy state
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' > deploy-diagnostic.json <<'REMOTE'
+          set -euo pipefail
+          root='/home/ubuntu/shopvivaliz-deploy'
+          export ROOT="$root"
+          php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          $root = (string)getenv('ROOT');
+          $current = $root . '/current';
+          $target = 'fc0221885944a026dbd7e535f08cda247ed51e1b';
+          $activeSha = is_file($current . '/.release-sha') ? trim((string)file_get_contents($current . '/.release-sha')) : '';
+          $activeRelease = is_link($current) ? basename((string)realpath($current)) : '';
+          $statusPath = $root . '/shared/logs/deploy-status.json';
+          $status = [];
+          if (is_file($statusPath)) {
+              $decoded = json_decode((string)file_get_contents($statusPath), true);
+              $status = is_array($decoded) ? $decoded : [];
+          }
+          $releases = [];
+          foreach (glob($root . '/releases/*-' . substr($target, 0, 8)) ?: [] as $path) {
+              $releases[] = [
+                  'name' => basename($path),
+                  'has_release_sha' => is_file($path . '/.release-sha'),
+                  'index_exists' => is_file($path . '/index.php'),
+                  'version_health_exists' => is_file($path . '/api/health/version.php'),
+                  'runtime_reader_exists' => is_file($path . '/includes/runtime-env-reader.php'),
+                  'env_link_ok' => is_link($path . '/.env') && realpath($path . '/.env') === $root . '/shared/.env',
+                  'storage_link_ok' => is_link($path . '/storage') && realpath($path . '/storage') === $root . '/shared/storage',
+              ];
+          }
+          $logPath = $root . '/logs/deploy.log';
+          $safeLines = [];
+          if (is_file($logPath)) {
+              $lines = file($logPath, FILE_IGNORE_NEW_LINES) ?: [];
+              foreach (array_slice($lines, -40) as $line) {
+                  if (preg_match('/\[(INFO|WARN|ERROR|FATAL)\]/', $line) === 1) {
+                      $safeLines[] = preg_replace('/(?i)(password|secret|token|key)=\S+/', '$1=[redacted]', $line);
+                  }
+              }
+          }
+          echo json_encode([
+              'target_sha' => $target,
+              'active_sha' => $activeSha,
+              'active_release' => $activeRelease,
+              'status' => [
+                  'state' => (string)($status['status'] ?? ''),
+                  'release_sha' => (string)($status['release_sha'] ?? ''),
+                  'release' => (string)($status['release'] ?? ''),
+                  'message' => (string)($status['message'] ?? ''),
+              ],
+              'target_releases' => $releases,
+              'safe_log_tail' => $safeLines,
+          ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL;
+          PHP
+          REMOTE
+          cat deploy-diagnostic.json
+
+      - name: Validate sanitized output
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('deploy-diagnostic.json')
+          json.loads(p.read_text())
+          text = p.read_text().lower()
+          for key in ['db_pass', 'client_secret', 'access_token', 'refresh_token', 'private key']:
+              assert key not in text
+          PY
+
+      - name: Upload diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-failure-diagnostic
+          path: deploy-diagnostic.json
+          retention-days: 3
