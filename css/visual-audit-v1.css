@@ -625,3 +625,35 @@ body.sv-home-top:has(.sv-first-coupon.is-visible) #sv-liz-launcher {
         max-width: none !important;
     }
 }
+
+
+/* Desktop: mantém título, código e CTA legíveis em duas linhas compactas. */
+@media (min-width: 821px) {
+    .sv-first-coupon__body {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 6px !important;
+        padding: 9px 10px !important;
+    }
+
+    .sv-first-coupon h2 {
+        min-width: 0 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .sv-first-coupon__code {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        padding: 5px 7px !important;
+    }
+
+    .sv-first-coupon__actions {
+        width: 100% !important;
+    }
+
+    .sv-first-coupon__primary {
+        width: 100% !important;
+        min-height: 30px !important;
+    }
+}
