@@ -41,7 +41,7 @@ async function installDeterministicNetwork(page) {
     let url;
     try {
       url = new URL(request.url());
-    } catch (_) {
+    } catch (error) {
       await route.continue();
       return;
     }
@@ -79,10 +79,22 @@ async function installMetrics(page) {
   await page.addInitScript(() => {
     window.__svCls = 0;
     window.__svLongestTask = 0;
+    window.__svLayoutShiftSources = [];
     try {
       new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
-          if (!entry.hadRecentInput) window.__svCls += entry.value;
+          if (entry.hadRecentInput) continue;
+          window.__svCls += entry.value;
+          const sources = Array.from(entry.sources || []).map((source) => {
+            const node = source.node;
+            if (!(node instanceof Element)) return 'unknown';
+            const id = node.id ? `#${node.id}` : '';
+            const classes = node.classList && node.classList.length
+              ? `.${Array.from(node.classList).slice(0, 3).join('.')}`
+              : '';
+            return `${node.tagName.toLowerCase()}${id}${classes}`;
+          });
+          window.__svLayoutShiftSources.push({ value: entry.value, sources });
         }
       }).observe({ type: 'layout-shift', buffered: true });
       new PerformanceObserver((list) => {
@@ -90,7 +102,9 @@ async function installMetrics(page) {
           window.__svLongestTask = Math.max(window.__svLongestTask, entry.duration || 0);
         }
       }).observe({ type: 'longtask', buffered: true });
-    } catch (_) {}
+    } catch (error) {
+      window.__svMetricSetupError = String(error && error.message ? error.message : error);
+    }
   });
 }
 
@@ -103,6 +117,44 @@ async function scrollPage(page) {
       await pause(90);
     }
     window.scrollTo(0, 0);
+  });
+}
+
+async function collectInitialMetrics(page) {
+  return page.evaluate(() => {
+    const viewportWidth = document.documentElement.clientWidth;
+    const all = Array.from(document.querySelectorAll('body *'));
+    const overflowElements = all.map((node) => {
+      const rect = node.getBoundingClientRect();
+      const style = window.getComputedStyle(node);
+      const id = node.id ? `#${node.id}` : '';
+      const classes = node.classList && node.classList.length
+        ? `.${Array.from(node.classList).slice(0, 4).join('.')}`
+        : '';
+      return {
+        selector: `${node.tagName.toLowerCase()}${id}${classes}`,
+        left: Math.round(rect.left * 10) / 10,
+        right: Math.round(rect.right * 10) / 10,
+        width: Math.round(rect.width * 10) / 10,
+        scroll_width: node instanceof HTMLElement ? node.scrollWidth : 0,
+        position: style.position,
+        transform: style.transform,
+        overflow_x: style.overflowX
+      };
+    }).filter((item) => item.right > viewportWidth + 4 || item.left < -4 || item.scroll_width > viewportWidth + 4)
+      .sort((a, b) => Math.max(b.right - viewportWidth, b.scroll_width - viewportWidth) - Math.max(a.right - viewportWidth, a.scroll_width - viewportWidth))
+      .slice(0, 20);
+
+    return {
+      cls: Number(window.__svCls || 0),
+      longestTaskMs: Number(window.__svLongestTask || 0),
+      layoutShiftSources: Array.from(window.__svLayoutShiftSources || []).sort((a, b) => b.value - a.value).slice(0, 12),
+      metricSetupError: String(window.__svMetricSetupError || ''),
+      scrollWidth: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth),
+      clientWidth: viewportWidth,
+      title: document.title,
+      overflowElements
+    };
   });
 }
 
@@ -144,11 +196,13 @@ for (const profile of profiles) {
     page.setDefaultTimeout(15_000);
     await installDeterministicNetwork(page);
     await installMetrics(page);
-    const consoleErrors = [];
+    const rawConsoleErrors = [];
     const networkErrors = [];
 
     page.on('console', (message) => {
-      if (message.type() === 'error') consoleErrors.push(message.text());
+      if (message.type() === 'error') {
+        rawConsoleErrors.push({ text: message.text(), url: message.location().url || '' });
+      }
     });
     page.on('response', (response) => {
       const url = new URL(response.url());
@@ -179,18 +233,24 @@ for (const profile of profiles) {
 
     const response = await page.goto(baseURL + route.url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
     const status = response?.status() || 0;
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(1800);
+
+    // CLS é medido apenas na janela inicial. Rolar programaticamente não
+    // representa interação humana e, sem esta separação, gera falsos shifts.
+    const metrics = await collectInitialMetrics(page);
+    const horizontalOverflow = Math.max(0, metrics.scrollWidth - metrics.clientWidth);
+
     await scrollPage(page);
     await page.waitForTimeout(300);
 
-    const metrics = await page.evaluate(() => ({
-      cls: Number(window.__svCls || 0),
-      longestTaskMs: Number(window.__svLongestTask || 0),
-      scrollWidth: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth),
-      clientWidth: document.documentElement.clientWidth,
-      title: document.title
-    }));
-    const horizontalOverflow = Math.max(0, metrics.scrollWidth - metrics.clientWidth);
+    const expectedErrorDocument = route.expected.some((expectedStatus) => expectedStatus >= 400)
+      && route.expected.includes(status);
+    const consoleErrors = rawConsoleErrors.filter((entry) => {
+      const genericResourceError = /^Failed to load resource: the server responded with a status of \d+/i.test(entry.text);
+      const sameDocument = entry.url === '' || entry.url === baseURL + route.url;
+      return !(expectedErrorDocument && genericResourceError && sameDocument);
+    }).map((entry) => entry.text);
+
     const screenshot = path.join(outputDir, `${profile.name}-${route.name}.png`);
     const screenshotMode = await saveScreenshot(page, screenshot);
 
@@ -199,9 +259,12 @@ for (const profile of profiles) {
       route: route.url,
       status,
       title: metrics.title,
-      cls: metrics.cls,
+      initial_cls: metrics.cls,
       longest_task_ms: metrics.longestTaskMs,
+      layout_shift_sources: metrics.layoutShiftSources,
+      metric_setup_error: metrics.metricSetupError,
       horizontal_overflow_px: horizontalOverflow,
+      overflow_elements: metrics.overflowElements,
       console_errors: consoleErrors,
       network_errors: networkErrors,
       screenshot,
@@ -209,7 +272,12 @@ for (const profile of profiles) {
     };
     report.pages.push(record);
 
-    if (!route.expected.includes(status) || horizontalOverflow > 4 || metrics.cls > 0.5 || consoleErrors.length || networkErrors.length) {
+    if (!route.expected.includes(status)
+      || horizontalOverflow > 4
+      || metrics.cls > 0.25
+      || metrics.metricSetupError !== ''
+      || consoleErrors.length
+      || networkErrors.length) {
       failed = true;
     }
     await page.close();
@@ -234,7 +302,7 @@ for (let index = 0; index < 10; index += 1) {
   await memoryPage.goto(baseURL + route.url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
   await memoryPage.waitForTimeout(150);
 }
-await memoryClient.send('HeapProfiler.collectGarbage').catch(() => {});
+await memoryClient.send('HeapProfiler.collectGarbage');
 const heapAfter = await heapSize();
 const heapGrowth = heapAfter - heapBefore;
 report.memory = {
