@@ -142,4 +142,4 @@ jobs:
 
       - name: Fail when detector reported an incident
         if: steps.incident.outputs.response_status != '0'
-        run: exit "${{ steps.incident.outputs.response_status }}"
+        run: exit 1
