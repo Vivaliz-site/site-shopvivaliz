@@ -22,27 +22,24 @@ $diagnostics['checks']['logs_writable'] = is_dir($logDir) && is_writable($logDir
 
 // 3. Tentar conectar ao banco de dados
 try {
-    $env_file = dirname(__DIR__, 2) . '/.env';
-    $db_host = 'localhost';
-    $db_user = 'root';
-    $db_pass = '';
-    $db_name = 'shopvivaliz';
-
-    if (is_file($env_file)) {
-        foreach (file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-            $line = trim($line);
-            if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
-            [$k, $v] = explode('=', $line, 2);
-            $key = trim($k);
-            $value = trim(trim($v), '"\'');
-            if ($key === 'DB_HOST') $db_host = $value;
-            if ($key === 'DB_USER') $db_user = $value;
-            if ($key === 'DB_PASS') $db_pass = $value;
-            if ($key === 'DB_NAME') $db_name = $value;
-        }
+    // The active Oracle release keeps production secrets in the shared/runtime
+    // configuration. Do not fall back to repository-local root credentials.
+    $constants_file = dirname(__DIR__, 2) . '/config/constants.php';
+    if (is_file($constants_file) && is_readable($constants_file)) {
+        require_once $constants_file;
     }
 
-    $db = @new mysqli($db_host, $db_user, $db_pass, $db_name);
+    $db_host = getenv('DB_HOST') ?: (defined('DB_HOST') ? DB_HOST : 'localhost');
+    $db_user = getenv('DB_USER') ?: (defined('DB_USER') ? DB_USER : '');
+    $db_pass = getenv('DB_PASS') ?: (defined('DB_PASS') ? DB_PASS : '');
+    $db_name = getenv('DB_NAME') ?: (defined('DB_NAME') ? DB_NAME : '');
+    $db_port = (int)(getenv('DB_PORT') ?: (defined('DB_PORT') ? DB_PORT : 3306));
+
+    if (!class_exists('mysqli')) {
+        throw new RuntimeException('ext-mysqli indisponivel');
+    }
+
+    $db = @new mysqli($db_host, $db_user, $db_pass, $db_name, $db_port);
     if ($db && !$db->connect_error) {
         $diagnostics['checks']['database_connected'] = true;
         $db->close();
