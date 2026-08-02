@@ -1,0 +1,91 @@
+name: Inventory Reservation Maintenance
+
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'includes/inventory-reservations.php'
+      - 'scripts/release-expired-stock-reservations.php'
+      - '.github/workflows/inventory-reservation-maintenance.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: inventory-reservation-maintenance-production
+  cancel-in-progress: false
+
+jobs:
+  safety:
+    name: Validate reservation maintenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+      - name: Lint reservation code
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -l includes/inventory-reservations.php
+          php -l scripts/release-expired-stock-reservations.php
+          php -l tests/storefront-hardening-test.php
+          php tests/storefront-hardening-test.php
+
+  reconcile:
+    name: Reconcile production reservations
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    needs: safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure authenticated SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          if [[ -z "$key" || -z "$known_hosts" ]]; then
+            echo '::error::SSH key or pinned known_hosts is not configured.'
+            exit 1
+          fi
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Reconcile reservations on active release
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          output="$({
+            ssh \
+              -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              -i "$HOME/.ssh/id_rsa" \
+              ubuntu@137.131.156.17 \
+              'cd /home/ubuntu/shopvivaliz-deploy/current && php scripts/release-expired-stock-reservations.php'
+          })"
+          printf '%s\n' "$output"
+          php -r '
+            $payload = json_decode(stream_get_contents(STDIN), true);
+            if (!is_array($payload) || empty($payload["ok"])) {
+                fwrite(STDERR, "Invalid reservation maintenance evidence\n");
+                exit(1);
+            }
+          ' <<<"$output"
