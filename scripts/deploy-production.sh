@@ -169,6 +169,7 @@ reconcile_runtime_secrets() {
   local materializer="$release_path/scripts/materialize-runtime-secrets.php"
   local runtime="$SHARED_DIR/runtime-secrets.php"
   local runtime_link="$release_path/config/runtime-secrets.php"
+  local runtime_target
 
   if [ ! -r "$materializer" ]; then
     log ERROR "Materializador de runtime secrets ausente em $release_path"
@@ -179,17 +180,31 @@ reconcile_runtime_secrets() {
     return 1
   fi
 
-  chmod 0600 "$SHARED_DIR/.env"
+  if ! chmod 0600 "$SHARED_DIR/.env"; then
+    log ERROR "Nao foi possivel proteger a configuracao compartilhada"
+    return 1
+  fi
   if ! php "$materializer" >> "$LOG_FILE" 2>&1; then
     log ERROR "Materializacao do runtime minimo falhou"
     return 1
   fi
-  sudo chown ubuntu:www-data "$runtime"
-  chmod 0640 "$runtime"
+  if ! sudo chown ubuntu:www-data "$runtime" || ! chmod 0640 "$runtime"; then
+    log ERROR "Nao foi possivel aplicar proprietario/permissoes ao runtime minimo"
+    return 1
+  fi
 
-  rm -f -- "$runtime_link"
-  ln -s "../../../shared/runtime-secrets.php" "$runtime_link"
-  if [ "$(readlink -f "$runtime_link")" != "$runtime" ]; then
+  runtime_target="$(readlink -f "$runtime_link" 2>/dev/null || true)"
+  if [ "$runtime_target" != "$runtime" ]; then
+    if ! rm -f -- "$runtime_link"; then
+      log ERROR "Nao foi possivel remover o runtime link anterior"
+      return 1
+    fi
+    if ! ln -s "../../../shared/runtime-secrets.php" "$runtime_link"; then
+      log ERROR "Nao foi possivel criar o runtime link"
+      return 1
+    fi
+  fi
+  if [ "$(readlink -f "$runtime_link" 2>/dev/null || true)" != "$runtime" ]; then
     log ERROR "Symlink de runtime secrets invalido"
     return 1
   fi
