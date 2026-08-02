@@ -1,0 +1,152 @@
+name: Fix runtime permissions and final audit
+
+on:
+  push:
+    branches:
+      - audit/final-order-flow-20260802
+    paths:
+      - .github/workflows/fix-runtime-permissions-and-final-audit.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-runtime-permissions
+  cancel-in-progress: false
+
+env:
+  EXPECTED_SHA: c51463b5f98b84f826a6dd91a6769bc043895f6e
+  ORDER_NUMBER: SV20260731072524339
+
+jobs:
+  fix_and_verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout audit verifier
+        uses: actions/checkout@v4
+
+      - name: Configure verified SSH
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Apply restricted web-readable runtime permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          env_file='/home/ubuntu/shopvivaliz-deploy/shared/.env'
+          test -f "$env_file"
+          sudo -n chown ubuntu:www-data "$env_file"
+          sudo -n chmod 0640 "$env_file"
+          test "$(stat -c '%U:%G:%a' "$env_file")" = 'ubuntu:www-data:640'
+          sudo -n -u www-data test -r "$env_file"
+          php_readable=$(sudo -n -u www-data php -r 'echo is_readable($argv[1]) ? "true" : "false";' "$env_file")
+          test "$php_readable" = true
+          echo 'runtime_env_owner=ubuntu'
+          echo 'runtime_env_group=www-data'
+          echo 'runtime_env_mode=640'
+          echo 'web_php_readable=true'
+          REMOTE
+
+      - name: Confirm public health endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, time, urllib.request
+
+          endpoints = {
+              'version': 'https://shopvivaliz.com.br/api/health/version.php?permission_fix=20260802',
+              'orders': 'https://shopvivaliz.com.br/api/orders/health.php?permission_fix=20260802',
+              'olist': 'https://shopvivaliz.com.br/api/olist/webhook-health.php?permission_fix=20260802',
+              'liz': 'https://shopvivaliz.com.br/api/liz-intelligent.php?health=1&permission_fix=20260802',
+          }
+          results = {}
+          for attempt in range(1, 7):
+              results = {}
+              all_ok = True
+              for name, url in endpoints.items():
+                  try:
+                      req = urllib.request.Request(url, headers={'User-Agent':'ShopVivalizFinalAudit/1.0','Accept':'application/json'})
+                      with urllib.request.urlopen(req, timeout=20) as response:
+                          body = json.loads(response.read().decode('utf-8'))
+                          results[name] = {'status': response.status, 'ok': body.get('ok') is True}
+                          if response.status != 200 or body.get('ok') is not True:
+                              all_ok = False
+                  except Exception as exc:
+                      results[name] = {'status': 0, 'ok': False, 'error_type': type(exc).__name__}
+                      all_ok = False
+              if all_ok:
+                  break
+              time.sleep(3)
+          print(json.dumps(results, indent=2))
+          assert all(v['status'] == 200 and v['ok'] for v in results.values()), results
+          PY
+
+      - name: Run canonical production smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            'bash -s' -- "$EXPECTED_SHA" > smoke-results.txt <<'REMOTE'
+          set -euo pipefail
+          expected_sha="$1"
+          script='/home/ubuntu/shopvivaliz-deploy/current/scripts/production-smoke-test.sh'
+          test -r "$script"
+          bash "$script" "$expected_sha"
+          REMOTE
+          cat smoke-results.txt
+
+      - name: Run final order verifier read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -r scripts/final-order-flow-audit.php
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            "EXPECTED_SHA='$EXPECTED_SHA' ORDER_NUMBER='$ORDER_NUMBER' php" \
+            < scripts/final-order-flow-audit.php \
+            > final-audit.json
+          cat final-audit.json
+
+      - name: Validate sanitized final evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('final-audit.json')
+          data = json.loads(p.read_text(encoding='utf-8'))
+          assert data['ok'] is True
+          assert data['read_only'] is True
+          assert data['release_sha'] == 'c51463b5f98b84f826a6dd91a6769bc043895f6e'
+          assert data['failures'] == []
+          text = p.read_text(encoding='utf-8').lower()
+          for forbidden in ('"customer"','"email"','"phone"','"address"','"cpf"','"cnpj"','"payment_id"','"digitable_line"','"barcode"','"ticket_url"'):
+              assert forbidden not in text, forbidden
+          print('OK: final production and order flow evidence validated')
+          PY
+
+      - name: Upload final evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-production-order-audit-after-permission-fix
+          path: |
+            smoke-results.txt
+            final-audit.json
+          if-no-files-found: warn
+          retention-days: 7
