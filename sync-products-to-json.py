@@ -56,11 +56,18 @@ def write_ci_fallback():
     output_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print("[+] Cache mínimo gravado no CI.")
 
+
+def handle_ci_failure(reason: str):
+    if os.getenv("FAIL_ON_CI_FALLBACK", "").strip().lower() in {"1", "true", "yes"}:
+        print(f"[!] Sincronização de produção interrompida: {reason}", file=sys.stderr)
+        sys.exit(2)
+    write_ci_fallback()
+    sys.exit(0)
+
 if not token:
     print("[!] Token não encontrado!")
     if os.getenv("GITHUB_ACTIONS") == "true":
-        write_ci_fallback()
-        sys.exit(0)
+        handle_ci_failure("token ausente")
     sys.exit(1)
 
 
@@ -141,14 +148,12 @@ while True:
                 continue
         print(f"[!] Erro HTTP na página {page}: {e.code} {e.reason}")
         if os.getenv("GITHUB_ACTIONS") == "true":
-            write_ci_fallback()
-            sys.exit(0)
+            handle_ci_failure(f"HTTP {e.code} na página {page}")
         sys.exit(1)
     except Exception as e:
         print(f"[!] Erro na página {page}: {e}")
         if os.getenv("GITHUB_ACTIONS") == "true":
-            write_ci_fallback()
-            sys.exit(0)
+            handle_ci_failure(f"erro na página {page}: {e}")
         sys.exit(1)
 
     if 'itens' not in data or not data['itens']:
@@ -169,8 +174,7 @@ while True:
 if not all_products:
     print("[!] Nenhum produto retornado; mantendo cache anterior e falhando com segurança.")
     if os.getenv("GITHUB_ACTIONS") == "true":
-        write_ci_fallback()
-        sys.exit(0)
+        handle_ci_failure("nenhum produto retornado")
     sys.exit(1)
 
 # Salvar em JSON
