@@ -88,6 +88,10 @@ jobs:
           ps -eo pid=,ppid=,etimes=,stat=,args= | awk '/deploy-production|git-auto-sync|install-auto-sync/ && !/awk/ {print}'
           echo 'deploy_related_units:'
           systemctl list-units --all --no-legend 'shopvivaliz*'
+          echo 'deploy_log_tail:'
+          tail -n 120 /home/ubuntu/shopvivaliz-deploy/logs/deploy.log
+          echo 'git_sync_journal_tail:'
+          journalctl -u shopvivaliz-git-sync.service -n 80 --no-pager -o cat
           REMOTE_DIAGNOSTIC
 
       - name: Reiniciar serviços e confirmar execução real
