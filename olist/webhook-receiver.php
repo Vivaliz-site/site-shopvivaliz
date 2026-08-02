@@ -2,138 +2,109 @@
 /**
  * Webhook Receiver - Olist envia notificações de mudanças
  * POST https://shopvivaliz.com.br/olist/webhook-receiver.php
- *
- * Gatilhos:
- * - Produto criado
- * - Produto atualizado
- * - Preço alterado
- * - Estoque alterado
  */
 
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
+header('X-Content-Type-Options: nosniff');
 
-$webhook_log = dirname(__DIR__) . '/logs/webhook.log';
-@mkdir(dirname($webhook_log), 0755, true);
+$root = dirname(__DIR__);
+require_once $root . '/includes/runtime-env-reader.php';
 
-// Registrar requisição
-$request_body = file_get_contents('php://input');
+$webhookLog = $root . '/logs/webhook.log';
+@mkdir(dirname($webhookLog), 0755, true);
+
+$requestBody = (string)file_get_contents('php://input');
 $timestamp = date('Y-m-d H:i:s');
-$log_entry = "[$timestamp] " . $_SERVER['REQUEST_METHOD'] . " " . json_encode(json_decode($request_body, true)) . "\n";
-@file_put_contents($webhook_log, $log_entry, FILE_APPEND);
+$decodedForLog = json_decode($requestBody, true);
+$logEntry = "[$timestamp] " . ($_SERVER['REQUEST_METHOD'] ?? '') . ' '
+    . json_encode($decodedForLog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+    . PHP_EOL;
+@file_put_contents($webhookLog, $logEntry, FILE_APPEND | LOCK_EX);
 
-// Validar método
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     http_response_code(405);
-    echo json_encode(['erro' => 'Apenas POST permitido']);
+    echo json_encode(['erro' => 'Apenas POST permitido'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
-// ============================================================
-// HMAC-SHA256 SIGNATURE VERIFICATION
-// ============================================================
-function verify_webhook_signature(string $request_body, string $signature): bool
+function verify_webhook_signature(string $requestBody, string $signature, string $root): bool
 {
-    // Get webhook secret from environment or config
-    $root = dirname(__DIR__);
-    $secret = '';
-
-    // Try to get from environment
-    if (function_exists('getenv')) {
-        $secret = getenv('OLIST_WEBHOOK_SECRET') ?: '';
+    $secret = svre_value('OLIST_WEBHOOK_SECRET', $root);
+    if ($secret === '') {
+        error_log('[WEBHOOK] WARNING: OLIST_WEBHOOK_SECRET not configured. Signature verification skipped.');
+        return true;
     }
 
-    // Try to get from .env file
-    if (!$secret) {
-        $env_file = $root . '/.env';
-        if (is_file($env_file)) {
-            foreach (file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-                if (str_starts_with($line, 'OLIST_WEBHOOK_SECRET=')) {
-                    $parts = explode('=', $line, 2);
-                    $secret = trim(trim($parts[1] ?? ''), "\"'");
-                    break;
-                }
-            }
-        }
+    $expectedSignature = hash_hmac('sha256', $requestBody, $secret, false);
+    $valid = hash_equals($expectedSignature, $signature);
+    if (!$valid) {
+        error_log('[WEBHOOK] FAILED: Signature mismatch.');
     }
 
-    // If no secret configured, log warning but continue (graceful degradation)
-    if (!$secret) {
-        error_log("[WEBHOOK] WARNING: OLIST_WEBHOOK_SECRET not configured. Signature verification skipped.");
-        return true; // Allow unsigned webhooks until secret is configured
-    }
-
-    // Compute expected signature: HMAC-SHA256(body, secret)
-    $expected_signature = hash_hmac('sha256', $request_body, $secret, false);
-
-    // Compare signatures (constant-time comparison to prevent timing attacks)
-    $result = hash_equals($expected_signature, $signature);
-
-    if (!$result) {
-        error_log("[WEBHOOK] FAILED: Signature mismatch. Expected: " . substr($expected_signature, 0, 16) . "... Got: " . substr($signature, 0, 16) . "...");
-    }
-
-    return $result;
+    return $valid;
 }
 
-// Verify HMAC signature if header present
-$signature = $_SERVER['HTTP_X_OLIST_SIGNATURE'] ?? $_SERVER['HTTP_X_SIGNATURE'] ?? '';
-if ($signature) {
-    if (!verify_webhook_signature($request_body, $signature)) {
-        error_log("[WEBHOOK] REJECTED: Invalid signature from " . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+$signature = (string)($_SERVER['HTTP_X_OLIST_SIGNATURE'] ?? $_SERVER['HTTP_X_SIGNATURE'] ?? '');
+if ($signature !== '') {
+    if (!verify_webhook_signature($requestBody, $signature, $root)) {
+        error_log('[WEBHOOK] REJECTED: Invalid signature.');
         http_response_code(403);
-        echo json_encode(['erro' => 'Assinatura inválida']);
+        echo json_encode(['erro' => 'Assinatura inválida'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
-    error_log("[WEBHOOK] VERIFIED: Signature valid");
+    error_log('[WEBHOOK] VERIFIED: Signature valid');
 } else {
-    error_log("[WEBHOOK] WARNING: No signature header found. Accepting unsigned webhook.");
+    error_log('[WEBHOOK] WARNING: No signature header found. Accepting unsigned webhook.');
 }
 
-// Parse JSON
-$data = json_decode($request_body, true);
-
-if (!$data) {
+$data = json_decode($requestBody, true);
+if (!is_array($data) || $data === []) {
     http_response_code(400);
-    echo json_encode(['erro' => 'JSON inválido']);
+    echo json_encode(['erro' => 'JSON inválido'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
-// ============================================================
-// Processar eventos
-// ============================================================
-
-$event_type = $data['event'] ?? $data['tipo'] ?? $data['type'] ?? null;
-$product_id = $data['produto_id'] ?? $data['product_id'] ?? $data['id'] ?? null;
-if (!$product_id && isset($data['dados']['idProduto'])) {
-    $product_id = $data['dados']['idProduto'];
+$eventType = trim((string)($data['event'] ?? $data['tipo'] ?? $data['type'] ?? ''));
+$productId = $data['produto_id'] ?? $data['product_id'] ?? $data['id'] ?? null;
+if (!$productId && isset($data['dados']['idProduto'])) {
+    $productId = $data['dados']['idProduto'];
 }
 
-// Eventos que interessam (Olist envia "tipo" em vez de "event")
-$sync_events = ['produto.criado', 'produto.atualizado', 'produto.alterado', 'preco.alterado', 'estoque.alterado', 'estoque', 'preco', 'produto'];
+$syncEvents = [
+    'produto.criado',
+    'produto.atualizado',
+    'produto.alterado',
+    'preco.alterado',
+    'estoque.alterado',
+    'estoque',
+    'preco',
+    'produto',
+];
+$shouldSync = in_array($eventType, $syncEvents, true)
+    || str_contains($eventType, 'produto')
+    || str_contains($eventType, 'estoque')
+    || str_contains($eventType, 'preco');
 
-if (in_array($event_type, $sync_events) || strpos($event_type, 'produto') !== false || strpos($event_type, 'estoque') !== false || strpos($event_type, 'preco') !== false) {
-    // Disparar sincronização
-    exec('php ' . dirname(__DIR__) . '/olist/sync-on-webhook.php > /dev/null 2>&1 &');
-
-    // Enriquecer com estoque via API v3 OAuth (calculo correto, inclusive kits)
-    exec('php ' . dirname(__DIR__) . '/olist/fetch-estoque-v3.php > /dev/null 2>&1 &');
+if ($shouldSync) {
+    exec('php ' . escapeshellarg($root . '/olist/sync-on-webhook.php') . ' > /dev/null 2>&1 &');
+    exec('php ' . escapeshellarg($root . '/olist/fetch-estoque-v3.php') . ' > /dev/null 2>&1 &');
 
     http_response_code(200);
     echo json_encode([
         'sucesso' => true,
         'mensagem' => 'Webhook recebido e sincronização iniciada',
-        'event' => $event_type,
-        'product_id' => $product_id,
-        'steps' => ['sync-v3', 'enrich-v3']
-    ]);
-} else {
-    http_response_code(200);
-    echo json_encode([
-        'sucesso' => true,
-        'mensagem' => 'Webhook ignorado (evento não monitorado)',
-        'event' => $event_type,
-    ]);
+        'event' => $eventType,
+        'product_id' => $productId,
+        'steps' => ['sync-v3', 'enrich-v3'],
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
 }
-?>
+
+http_response_code(200);
+echo json_encode([
+    'sucesso' => true,
+    'mensagem' => 'Webhook ignorado (evento não monitorado)',
+    'event' => $eventType,
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
