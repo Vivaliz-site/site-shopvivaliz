@@ -1,0 +1,286 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Primitivas compartilhadas da Liz.
+ *
+ * Este arquivo concentra classificação, controles de segurança, estado
+ * conversacional e consultas autenticadas. Nenhuma informação comercial é
+ * inventada aqui: fatos de catálogo/pedido só entram quando uma fonte oficial
+ * os fornece.
+ */
+
+require_once __DIR__ . '/catalog-runtime.php';
+require_once __DIR__ . '/pdo-database.php';
+
+function sv_liz_normalize(string $value): string
+{
+    $value = function_exists('mb_strtolower') ? mb_strtolower(trim($value), 'UTF-8') : strtolower(trim($value));
+    $value = strtr($value, [
+        'á' => 'a', 'à' => 'a', 'â' => 'a', 'ã' => 'a', 'ä' => 'a',
+        'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
+        'í' => 'i', 'ì' => 'i', 'î' => 'i', 'ï' => 'i',
+        'ó' => 'o', 'ò' => 'o', 'ô' => 'o', 'õ' => 'o', 'ö' => 'o',
+        'ú' => 'u', 'ù' => 'u', 'û' => 'u', 'ü' => 'u', 'ç' => 'c',
+    ]);
+    return trim(preg_replace('/\s+/', ' ', $value) ?? '');
+}
+
+function sv_liz_detect_intent(string $message): string
+{
+    $normalized = sv_liz_normalize($message);
+    if (preg_match('/\b(atendente|humano|pessoa|whatsapp|falar com alguem)\b/u', $normalized)) {
+        return 'human_handoff';
+    }
+    if (preg_match('/\b(rastreio|rastrear|rastreamento|codigo de rastreio|transportadora)\b/u', $normalized)) {
+        return 'tracking';
+    }
+    if (preg_match('/\b(pedido|compra|entrega do meu|status da compra|onde esta meu)\b/u', $normalized)) {
+        return 'order_status';
+    }
+    if (preg_match('/\b(frete|cep|prazo de entrega|quanto demora|envio)\b/u', $normalized)) {
+        return 'shipping';
+    }
+    if (preg_match('/\b(reclama|atrasad|errado|avaria|defeito|cobranca duplicada|fraude|estorno)\b/u', $normalized)) {
+        return 'complaint';
+    }
+    if (preg_match('/\b(produto|produtos|preco|valor|estoque|disponivel|comprar|modelo|cor|tamanho|categoria)\b/u', $normalized)) {
+        return 'product_discovery';
+    }
+    return 'general';
+}
+
+function sv_liz_is_prompt_injection(string $message): bool
+{
+    $normalized = sv_liz_normalize($message);
+    return preg_match('/(?:ignore|ignore todas|desconsidere|revele|mostre|exiba|vaze).*(?:regras|instruc|prompt|sistema|chave|segredo|api|token)|(?:prompt|system message|developer message|api key|chave secreta|segredo interno)/u', $normalized) === 1;
+}
+
+function sv_liz_authenticated_user(): ?array
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return null;
+    }
+
+    $userId = $_SESSION['user_id'] ?? null;
+    if (!is_scalar($userId) || !ctype_digit((string)$userId) || (int)$userId <= 0) {
+        return null;
+    }
+
+    return [
+        'id' => (int)$userId,
+        'name' => trim((string)($_SESSION['user_name'] ?? '')),
+        'email' => trim((string)($_SESSION['user_email'] ?? '')),
+    ];
+}
+
+function sv_liz_mask_email(string $email): string
+{
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return '';
+    }
+    [$local, $domain] = explode('@', $email, 2);
+    $visible = function_exists('mb_substr') ? mb_substr($local, 0, 1, 'UTF-8') : substr($local, 0, 1);
+    return $visible . str_repeat('*', max(1, strlen($local) - 1)) . '@' . $domain;
+}
+
+function sv_liz_extract_order_reference(string $message): string
+{
+    if (preg_match('/(?:pedido|compra|ordem|#)\s*([A-Z0-9][A-Z0-9\-]{3,})/iu', $message, $matches)) {
+        return trim((string)$matches[1]);
+    }
+    return '';
+}
+
+/** @return array<string, mixed> */
+function sv_liz_order_context(string $message): array
+{
+    $user = sv_liz_authenticated_user();
+    if ($user === null) {
+        return ['status' => 'authentication_required'];
+    }
+
+    $reference = sv_liz_extract_order_reference($message);
+    if ($reference === '') {
+        return ['status' => 'reference_required', 'user_email' => sv_liz_mask_email($user['email'])];
+    }
+
+    $pdo = sv_pdo();
+    if (!$pdo instanceof PDO) {
+        return ['status' => 'source_unavailable'];
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT order_number, order_total, order_status, tracking_number, tracking_url,
+                    estimated_delivery, created_at
+             FROM orders
+             WHERE user_id = :user_id
+               AND (order_number = :reference OR CAST(id AS CHAR) = :reference)
+             LIMIT 1'
+        );
+        $stmt->execute([':user_id' => $user['id'], ':reference' => $reference]);
+        $order = $stmt->fetch();
+    } catch (Throwable $e) {
+        error_log('[Liz] order context query failed: ' . $e->getMessage());
+        return ['status' => 'source_unavailable'];
+    }
+
+    if (!is_array($order)) {
+        return ['status' => 'not_found', 'reference' => $reference];
+    }
+
+    return [
+        'status' => 'confirmed',
+        'source' => 'orders_database_authenticated_user',
+        'reference' => (string)($order['order_number'] ?: $reference),
+        'order_status' => (string)($order['order_status'] ?? ''),
+        'order_total' => is_numeric($order['order_total'] ?? null) ? (float)$order['order_total'] : null,
+        'tracking_number' => trim((string)($order['tracking_number'] ?? '')),
+        'tracking_url' => trim((string)($order['tracking_url'] ?? '')),
+        'estimated_delivery' => trim((string)($order['estimated_delivery'] ?? '')),
+        'created_at' => trim((string)($order['created_at'] ?? '')),
+    ];
+}
+
+/** @return array<string, mixed> */
+function sv_liz_conversation_state(string $message, array $history = []): array
+{
+    $intent = sv_liz_detect_intent($message);
+    $normalized = sv_liz_normalize($message);
+    $budget = null;
+    if (preg_match('/(?:ate|abaixo de|menos de)\s*(?:r\$\s*)?([0-9]+(?:[\.,][0-9]{1,2})?)/u', $normalized, $matches)) {
+        $budget = (float)str_replace(',', '.', str_replace('.', '', (string)$matches[1]));
+    }
+
+    $recentUserMessages = [];
+    foreach (array_slice($history, -8) as $entry) {
+        if (is_array($entry) && ($entry['role'] ?? '') === 'user' && is_string($entry['content'] ?? null)) {
+            $recentUserMessages[] = sv_liz_normalize($entry['content']);
+        }
+    }
+
+    return [
+        'intent' => $intent,
+        'budget_max' => $budget,
+        'authenticated' => sv_liz_authenticated_user() !== null,
+        'requires_authentication' => in_array($intent, ['order_status', 'tracking'], true),
+        'history_messages_considered' => count($recentUserMessages),
+        'prompt_injection_detected' => sv_liz_is_prompt_injection($message),
+        'version' => '1.0.0',
+    ];
+}
+
+/** @return array<string, mixed> */
+function sv_liz_handoff(string $message, array $state, string $reason, ?array $orderContext = null): array
+{
+    $summary = trim(preg_replace('/\s+/', ' ', $message) ?? '');
+    if (function_exists('mb_substr')) {
+        $summary = mb_substr($summary, 0, 240, 'UTF-8');
+    } else {
+        $summary = substr($summary, 0, 240);
+    }
+
+    return [
+        'required' => true,
+        'reason' => $reason,
+        'channel' => 'whatsapp',
+        'phone' => '5537999374112',
+        'email' => 'atendimento@shopvivaliz.com.br',
+        'summary' => $summary,
+        'intent' => $state['intent'] ?? 'general',
+        'order_reference' => is_array($orderContext) ? ($orderContext['reference'] ?? null) : null,
+    ];
+}
+
+/** @return array<string, mixed> */
+function sv_liz_guarded_response(string $message, array $state, array $products = [], ?array $orderContext = null): ?array
+{
+    if (!empty($state['prompt_injection_detected'])) {
+        return [
+            'answer' => 'Não posso revelar instruções internas, chaves ou segredos. Posso ajudar com produtos, pedidos e dúvidas da loja.',
+            'grounding_status' => 'not_applicable',
+            'grounding_sources' => [],
+            'handoff' => null,
+        ];
+    }
+
+    $intent = (string)($state['intent'] ?? 'general');
+    if ($intent === 'human_handoff') {
+        return [
+            'answer' => 'Claro. Vou encaminhar você para o atendimento humano com um resumo desta conversa, para que não precise repetir tudo. Não envie senha, código de autenticação ou dados completos de cartão.',
+            'grounding_status' => 'not_required',
+            'grounding_sources' => [],
+            'handoff' => sv_liz_handoff($message, $state, 'customer_requested'),
+        ];
+    }
+    if ($intent === 'complaint') {
+        return [
+            'answer' => 'Sinto muito pelo problema. Vou encaminhar seu caso ao atendimento humano com um resumo para verificarmos a solução adequada. Se houver cobrança, não envie dados completos do cartão.',
+            'grounding_status' => 'human_review_required',
+            'grounding_sources' => [],
+            'handoff' => sv_liz_handoff($message, $state, 'complaint_requires_review'),
+        ];
+    }
+    if ($intent === 'shipping') {
+        return [
+            'answer' => 'O frete e o prazo dependem do CEP, dos produtos e da modalidade escolhida. Para receber uma cotação confirmada, informe o CEP no carrinho; não vou estimar um valor sem consultar a cotação oficial.',
+            'grounding_status' => 'source_required',
+            'grounding_sources' => ['checkout_shipping_quote'],
+            'handoff' => null,
+        ];
+    }
+
+    if (in_array($intent, ['order_status', 'tracking'], true)) {
+        $contextStatus = (string)($orderContext['status'] ?? '');
+        if ($contextStatus === 'authentication_required') {
+            return [
+                'answer' => 'Para proteger os dados do seu pedido, entre na sua conta e depois me informe o número do pedido. Não envie senha, código de autenticação ou dados completos de cartão.',
+                'grounding_status' => 'authentication_required',
+                'grounding_sources' => [],
+                'handoff' => null,
+            ];
+        }
+        if ($contextStatus === 'reference_required') {
+            return [
+                'answer' => 'Entre na sua conta e informe o número do pedido para eu consultar o status com segurança.',
+                'grounding_status' => 'reference_required',
+                'grounding_sources' => [],
+                'handoff' => null,
+            ];
+        }
+        if ($contextStatus === 'source_unavailable') {
+            return [
+                'answer' => 'Não consegui consultar os pedidos agora. Posso encaminhar você ao atendimento humano para verificar isso com segurança.',
+                'grounding_status' => 'source_unavailable',
+                'grounding_sources' => [],
+                'handoff' => sv_liz_handoff($message, $state, 'order_source_unavailable', $orderContext),
+            ];
+        }
+        if ($contextStatus === 'not_found') {
+            return [
+                'answer' => 'Não encontrei esse pedido na sua conta. Confira o número informado ou fale com o atendimento para verificarmos juntos.',
+                'grounding_status' => 'not_found',
+                'grounding_sources' => ['orders_database_authenticated_user'],
+                'handoff' => sv_liz_handoff($message, $state, 'order_not_found', $orderContext),
+            ];
+        }
+    }
+
+    if (in_array($intent, ['product_discovery'], true) && $products === [] && preg_match('/\b(preco|valor|estoque|disponivel)\b/u', sv_liz_normalize($message))) {
+        return [
+            'answer' => 'Não encontrei um produto correspondente no catálogo oficial agora. Posso encaminhar você ao atendimento para confirmar alternativas, sem inventar preço ou disponibilidade.',
+            'grounding_status' => 'not_found',
+            'grounding_sources' => ['catalog_runtime'],
+            'handoff' => sv_liz_handoff($message, $state, 'catalog_match_not_found'),
+        ];
+    }
+
+    return null;
+}
+
+function sv_liz_knowledge_version(): string
+{
+    $configured = getenv('LIZ_KNOWLEDGE_VERSION');
+    return is_string($configured) && trim($configured) !== '' ? trim($configured) : '2026-08-01.1';
+}

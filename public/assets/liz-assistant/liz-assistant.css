@@ -467,3 +467,33 @@ body:has(.sv-mobile-buybar) #sv-liz-bubble {
     height: calc(100dvh - 8px) !important;
   }
 }
+
+.sv-liz-handoff {
+  margin: 8px 12px 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(23, 59, 99, 0.2);
+  border-radius: 10px;
+  background: #f5f9ff;
+  font-size: 13px;
+}
+
+.sv-liz-handoff p {
+  margin: 0 0 8px;
+}
+
+.sv-liz-handoff a {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: #173b63;
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.sv-liz-handoff a:focus-visible {
+  outline: 3px solid #f0b429;
+  outline-offset: 2px;
+}
