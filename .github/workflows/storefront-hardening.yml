@@ -125,4 +125,4 @@ jobs:
           grep -Fq 'ErrorDocument 503 /500.php' .htaccess
           grep -Fq 'checkout-legacy/?$ /checkout' .htaccess
           grep -Fq 'p/termos-e-condicoes/?$ /termos' .htaccess
-          grep -Fq 'api/orders/create\.php$ api/orders/create-validated.php' .htaccess
+          grep -Fq '^api/orders/create\.php$ api/orders/create-validated.php' .htaccess
