@@ -713,9 +713,6 @@ $svNavCurrent = '';
                 </div>
 
                 <div class="cta-buttons hero-cta hero-cta-mt-24">
-                    <a href="/catalogo" class="btn btn-hero-primary">
-                        🛍️ Ver catálogo completo
-                    </a>
                     <a href="/carrinho" class="btn btn-hero-secondary">
                         🛒 Meu Carrinho
                     </a>
