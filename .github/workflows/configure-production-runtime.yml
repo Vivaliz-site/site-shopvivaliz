@@ -82,8 +82,10 @@ jobs:
           cache="$current/storage/products-cache-ativos.json"
           sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-sync-products.service
           for attempt in $(seq 1 12); do
-            sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null || true)"
-            token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null || true)"
+            sync_status='unknown'
+            if sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null)"; then :; fi
+            token_status='unknown'
+            if token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null)"; then :; fi
             if [[ "$sync_status" == active && "$token_status" == active && -s "$cache" ]]; then
               cache_age="$(( $(date +%s) - $(stat -c %Y "$cache") ))"
               if (( cache_age <= 900 )); then
@@ -92,8 +94,10 @@ jobs:
             fi
             sleep 10
           done
-          sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null || true)"
-          token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null || true)"
+          sync_status='unknown'
+          if sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null)"; then :; fi
+          token_status='unknown'
+          if token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null)"; then :; fi
           cache_age="$(( $(date +%s) - $(stat -c %Y "$cache") ))"
           orders_file="$(mktemp)"
           olist_file="$(mktemp)"
@@ -130,7 +134,7 @@ jobs:
               raise SystemExit("produção ainda não confirmou runtime, ERP e health checks")
           PY
           echo 'journal_sync_tail:'
-          journalctl -u shopvivaliz-sync-products.service -n 20 --no-pager -o cat || true
+          journalctl -u shopvivaliz-sync-products.service -n 20 --no-pager -o cat
           echo 'journal_token_tail:'
-          journalctl -u shopvivaliz-token-renewer.service -n 20 --no-pager -o cat || true
+          journalctl -u shopvivaliz-token-renewer.service -n 20 --no-pager -o cat
           REMOTE_SCRIPT
