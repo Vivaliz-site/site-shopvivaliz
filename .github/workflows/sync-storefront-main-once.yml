@@ -1,0 +1,73 @@
+name: Sync Storefront Branch With Main Once
+
+on:
+  push:
+    branches:
+      - fix/cro-trust-and-olist-refresh
+    paths:
+      - '.github/workflows/sync-storefront-main-once.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-storefront-main-once
+  cancel-in-progress: false
+
+jobs:
+  merge-main:
+    if: contains(github.event.head_commit.message, '[sync-main-once]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout feature branch with writable token
+        uses: actions/checkout@v7
+        with:
+          ref: fix/cro-trust-and-olist-refresh
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Merge latest main and resolve reviewed trust conflicts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'ShopVivaliz Branch Sync'
+          git config user.email 'agente-autonomo@shopvivaliz.com.br'
+          git fetch --no-tags origin main
+
+          set +e
+          git merge --no-commit --no-ff origin/main
+          merge_status=$?
+          set -e
+
+          if [[ "$merge_status" -ne 0 ]]; then
+            mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
+            allowed=(
+              '.github/workflows/public-trust-guard.yml'
+              'includes/catalog-runtime.php'
+              'includes/public-trust-guard.php'
+              'tests/public-trust-guard-test.php'
+            )
+            for file in "${conflicts[@]}"; do
+              permitted=0
+              for candidate in "${allowed[@]}"; do
+                if [[ "$file" == "$candidate" ]]; then permitted=1; break; fi
+              done
+              if [[ "$permitted" -ne 1 ]]; then
+                echo "::error::Unexpected merge conflict: $file"
+                git merge --abort
+                exit 1
+              fi
+              git checkout --ours -- "$file"
+              git add -- "$file"
+            done
+          fi
+
+          if git diff --name-only --diff-filter=U | grep -q .; then
+            echo '::error::Unresolved merge conflicts remain.'
+            git merge --abort
+            exit 1
+          fi
+
+          git commit -m 'chore(branch): sync latest main trust changes'
+          git push origin HEAD:fix/cro-trust-and-olist-refresh
