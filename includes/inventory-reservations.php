@@ -139,6 +139,7 @@ function svir_reserve(
     svir_ensure_schema($pdo);
     svir_reconcile($pdo);
     $ttl = svir_ttl_minutes($paymentMethod);
+    $expiresAt = date('Y-m-d H:i:s', time() + ($ttl * 60));
 
     $pdo->beginTransaction();
     try {
@@ -173,8 +174,7 @@ function svir_reserve(
             "INSERT INTO inventory_reservations
                 (reservation_key, sku, quantity, source_stock, status, payment_method, expires_at)
              VALUES
-                (:reservation_key, :sku, :quantity, :source_stock, 'active', :payment_method,
-                 DATE_ADD(NOW(), INTERVAL :ttl MINUTE))"
+                (:reservation_key, :sku, :quantity, :source_stock, 'active', :payment_method, :expires_at)"
         );
 
         foreach ($normalized as $item) {
@@ -194,7 +194,7 @@ function svir_reserve(
                 ':quantity' => $item['quantity'],
                 ':source_stock' => $item['stock'],
                 ':payment_method' => strtolower(trim($paymentMethod)) ?: 'pix',
-                ':ttl' => $ttl,
+                ':expires_at' => $expiresAt,
             ]);
         }
 
@@ -240,10 +240,21 @@ function svir_finalize(string $reservationKey, string $orderNumber, string $emai
             ':order_number' => $orderNumber,
             ':reservation_key' => $reservationKey,
         ]);
+        if ($stmt->rowCount() < 1) {
+            throw new RuntimeException('reservation_finalize_missing');
+        }
+        $pdo->commit();
+    } catch (Throwable $error) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $error;
+    }
 
-        // Se a sessao expirou, associa o pedido ao cadastro pelo e-mail sem
-        // perder o carrinho nem gerar erro de variavel nula.
-        if ($email !== '') {
+    // Associacao de conta e melhor-esforco: uma falha de schema de usuarios
+    // nunca pode desfazer a reserva que protege o estoque.
+    if ($email !== '') {
+        try {
             $associate = $pdo->prepare(
                 "UPDATE orders o
                  INNER JOIN users u ON LOWER(u.email) = LOWER(:email)
@@ -255,13 +266,9 @@ function svir_finalize(string $reservationKey, string $orderNumber, string $emai
                 ':email' => $email,
                 ':order_number' => $orderNumber,
             ]);
+        } catch (Throwable $error) {
+            error_log('[inventory] account association failed: ' . $error->getMessage());
         }
-        $pdo->commit();
-    } catch (Throwable $error) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        throw $error;
     }
 }
 
