@@ -1,0 +1,105 @@
+name: Diagnose DB Alias Matrix
+
+on:
+  push:
+    branches:
+      - audit/blog-migration-schema-20260802
+    paths:
+      - '.github/workflows/diagnose-db-alias-matrix.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure verified SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Test coherent aliases without exposing values
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' > db-alias-matrix.json <<'REMOTE'
+          set -euo pipefail
+          php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          $root = '/home/ubuntu/shopvivaliz-deploy/current';
+          require_once $root . '/includes/runtime-env-reader.php';
+
+          /** @return array<string,mixed> */
+          function probe(string $label, array $keys, string $root): array
+          {
+              [$nameKey, $userKey, $passKey] = $keys;
+              $host = svre_value('DB_HOST', $root) ?: 'localhost';
+              $portRaw = svre_value('DB_PORT', $root);
+              $port = ctype_digit($portRaw) ? (int)$portRaw : 3306;
+              $name = svre_value($nameKey, $root);
+              $user = svre_value($userKey, $root);
+              $pass = svre_value($passKey, $root);
+              $result = [
+                  'label' => $label,
+                  'name_present' => $name !== '',
+                  'user_present' => $user !== '',
+                  'pass_present' => $pass !== '',
+                  'user_is_root' => strtolower($user) === 'root',
+                  'connected' => false,
+                  'error_code' => '',
+              ];
+              if ($name === '' || $user === '') {
+                  return $result;
+              }
+              try {
+                  $pdo = new PDO(
+                      sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $host, $port, $name),
+                      $user,
+                      $pass,
+                      [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5]
+                  );
+                  $result['connected'] = (int)$pdo->query('SELECT 1')->fetchColumn() === 1;
+              } catch (PDOException $e) {
+                  $result['error_code'] = (string)$e->getCode();
+              }
+              return $result;
+          }
+
+          $probes = [
+              probe('canonical_long', ['DB_DATABASE', 'DB_USERNAME', 'DB_PASSWORD'], $root),
+              probe('legacy_short', ['DB_NAME', 'DB_USER', 'DB_PASS'], $root),
+              probe('long_name_user_short_pass', ['DB_DATABASE', 'DB_USER', 'DB_PASS'], $root),
+              probe('short_name_user_long_pass', ['DB_NAME', 'DB_USERNAME', 'DB_PASSWORD'], $root),
+          ];
+          echo json_encode(['probes' => $probes], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), PHP_EOL;
+          PHP
+          REMOTE
+          cat db-alias-matrix.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('db-alias-matrix.json').read_text())
+          assert len(payload['probes']) == 4
+          text = Path('db-alias-matrix.json').read_text().lower()
+          for forbidden in ('password=', 'db_pass=', 'private key', 'access_token', 'refresh_token'):
+              assert forbidden not in text
+          PY
+
+      - name: Upload sanitized evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: db-alias-matrix
+          path: db-alias-matrix.json
+          if-no-files-found: error
+          retention-days: 3
