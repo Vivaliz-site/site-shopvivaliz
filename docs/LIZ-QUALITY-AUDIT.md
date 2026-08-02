@@ -24,6 +24,12 @@ observabilidade, conhecimento editorial, acessibilidade e testes.
   separado da mensagem do usuário.
 - Roteamento interno: chamada knowledge usa loopback fixo e Host conhecido,
   sem confiar no HTTP_HOST recebido.
+- Políticas comerciais: contatos e frete grátis são carregados de fontes
+  oficiais; promoções e limiares não ficam hardcoded no prompt.
+- Abuso de payload: o endpoint rejeita corpos JSON acima de 256 KiB antes de
+  processar histórico ou chamar provedores.
+- Políticas: troca, devolução, garantia e privacidade usam intenção separada
+  e exigem base oficial; sem fonte, a Liz não improvisa.
 
 ## Limitações que permanecem
 

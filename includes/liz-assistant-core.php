@@ -44,6 +44,9 @@ function sv_liz_detect_intent(string $message): string
     if (preg_match('/\b(frete|cep|prazo de entrega|quanto demora|envio)\b/u', $normalized)) {
         return 'shipping';
     }
+    if (preg_match('/\b(troca|devolu\w*|garantia|privacidade|lgpd|parcelamento|politica|direito de arrependimento)\b/u', $normalized)) {
+        return 'policy';
+    }
     if (preg_match('/\b(produto|produtos|preco|valor|estoque|disponivel|comprar|modelo|cor|tamanho|categoria)\b/u', $normalized)) {
         return 'product_discovery';
     }
@@ -82,6 +85,46 @@ function sv_liz_mask_email(string $email): string
     [$local, $domain] = explode('@', $email, 2);
     $visible = function_exists('mb_substr') ? mb_substr($local, 0, 1, 'UTF-8') : substr($local, 0, 1);
     return $visible . str_repeat('*', max(1, strlen($local) - 1)) . '@' . $domain;
+}
+
+/** @return array<string, mixed> */
+function sv_liz_store_context(): array
+{
+    $context = [];
+    $profile = @include dirname(__DIR__) . '/config/company-profile.php';
+    if (is_array($profile)) {
+        $supportEmail = trim((string)($profile['operational']['support_email'] ?? $profile['email'] ?? ''));
+        $supportPhone = trim((string)($profile['operational']['support_phone'] ?? $profile['phone'] ?? ''));
+        if (filter_var($supportEmail, FILTER_VALIDATE_EMAIL)) {
+            $context['support_email'] = $supportEmail;
+        }
+        if ($supportPhone !== '') {
+            $context['support_phone'] = $supportPhone;
+        }
+    }
+
+    try {
+        $pdo = sv_pdo();
+        if ($pdo instanceof PDO) {
+            $stmt = $pdo->prepare(
+                'SELECT setting_key, setting_value
+                 FROM site_settings
+                 WHERE setting_key IN (:enabled_key, :threshold_key)'
+            );
+            $stmt->execute([':enabled_key' => 'free_shipping_enabled', ':threshold_key' => 'free_shipping_threshold']);
+            $settings = [];
+            foreach ($stmt->fetchAll() as $row) {
+                $settings[(string)($row['setting_key'] ?? '')] = (string)($row['setting_value'] ?? '');
+            }
+            if (($settings['free_shipping_enabled'] ?? '') === '1' && is_numeric($settings['free_shipping_threshold'] ?? null) && (float)$settings['free_shipping_threshold'] > 0) {
+                $context['free_shipping_threshold'] = (float)$settings['free_shipping_threshold'];
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('[Liz] store policy context unavailable: ' . $e->getMessage());
+    }
+
+    return $context;
 }
 
 function sv_liz_extract_order_reference(string $message): string
@@ -188,12 +231,13 @@ function sv_liz_handoff(string $message, array $state, string $reason, ?array $o
         $summary = substr($summary, 0, 240);
     }
 
+    $storeContext = sv_liz_store_context();
     return [
         'required' => true,
         'reason' => $reason,
         'channel' => 'whatsapp',
-        'phone' => '5537999374112',
-        'email' => 'atendimento@shopvivaliz.com.br',
+        'phone' => preg_replace('/\D+/', '', (string)($storeContext['support_phone'] ?? '')) ?: null,
+        'email' => $storeContext['support_email'] ?? null,
         'summary' => $summary,
         'intent' => $state['intent'] ?? 'general',
         'order_reference' => is_array($orderContext) ? ($orderContext['reference'] ?? null) : null,
@@ -201,7 +245,7 @@ function sv_liz_handoff(string $message, array $state, string $reason, ?array $o
 }
 
 /** @return array<string, mixed> */
-function sv_liz_guarded_response(string $message, array $state, array $products = [], ?array $orderContext = null): ?array
+function sv_liz_guarded_response(string $message, array $state, array $products = [], ?array $orderContext = null, array $knowledge = []): ?array
 {
     if (!empty($state['prompt_injection_detected'])) {
         return [
@@ -229,11 +273,26 @@ function sv_liz_guarded_response(string $message, array $state, array $products 
             'handoff' => sv_liz_handoff($message, $state, 'complaint_requires_review'),
         ];
     }
-    if ($intent === 'shipping') {
+    if ($intent === 'policy' && $knowledge === []) {
         return [
-            'answer' => 'O frete e o prazo dependem do CEP, dos produtos e da modalidade escolhida. Para receber uma cotação confirmada, informe o CEP no carrinho; não vou estimar um valor sem consultar a cotação oficial.',
+            'answer' => 'Não consegui confirmar essa política na base oficial agora. Posso encaminhar você ao atendimento para receber a orientação correta.',
             'grounding_status' => 'source_required',
-            'grounding_sources' => ['checkout_shipping_quote'],
+            'grounding_sources' => ['knowledge_base'],
+            'handoff' => sv_liz_handoff($message, $state, 'policy_source_unavailable'),
+        ];
+    }
+    if ($intent === 'shipping') {
+        $storeContext = sv_liz_store_context();
+        $freeShipping = is_numeric($storeContext['free_shipping_threshold'] ?? null)
+            ? ' Há frete grátis configurado acima de R$ ' . number_format((float)$storeContext['free_shipping_threshold'], 2, ',', '.') . ', sujeito às condições exibidas no checkout.'
+            : '';
+        return [
+            'answer' => 'O frete e o prazo dependem do CEP, dos produtos e da modalidade escolhida.' . $freeShipping . ' Para receber uma cotação confirmada, informe o CEP no carrinho; não vou estimar um valor sem consultar a cotação oficial.',
+            'grounding_status' => 'source_required',
+            'grounding_sources' => array_values(array_filter([
+                'checkout_shipping_quote',
+                $freeShipping !== '' ? 'site_settings' : null,
+            ])),
             'handoff' => null,
         ];
     }
