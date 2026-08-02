@@ -5,6 +5,9 @@ on:
     - cron: '17 */2 * * *'
     - cron: '7 * * * *'
   workflow_dispatch:
+  issues:
+    types:
+      - opened
 
 concurrency:
   group: autonomous-read-only-operations
@@ -56,7 +59,15 @@ jobs:
           retention-days: 14
 
   health-watch:
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '7 * * * *'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.schedule == '7 * * * *' ||
+      (
+        github.event_name == 'issues' &&
+        github.actor == 'fredmourao-ai' &&
+        github.event.issue.title == '[ops] verify orders health 2026-08-02' &&
+        contains(github.event.issue.body, 'authorization_nonce=orders-health-20260802-v1')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
