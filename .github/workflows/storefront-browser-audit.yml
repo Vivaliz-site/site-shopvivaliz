@@ -18,6 +18,7 @@ on:
       - 'includes/**'
       - 'js/**'
       - 'tests/php-router.php'
+      - 'tests/storefront-hardening-test.php'
       - 'tests/storefront-screenshot-audit.mjs'
       - '.github/workflows/storefront-browser-audit.yml'
   workflow_dispatch:
@@ -52,6 +53,20 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+
+      - name: Validate CLS source guards
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test ! -e js/home-mobile-layout.js
+          test -s css/cls-stability-v1.css
+          grep -Fq 'sv_emit_prepaint_page_state' includes/load-custom-css.php
+          grep -Fq 'overflow-x: clip' css/cls-stability-v1.css
+          grep -Fq '.home-scroller > .home-scroller-arrow' css/cls-stability-v1.css
+          php -l includes/load-custom-css.php
+          php tests/storefront-hardening-test.php
+          node --check js/visual-polish-v4.js
+          node --check tests/storefront-screenshot-audit.mjs
 
       - name: Install browser dependencies
         shell: bash
