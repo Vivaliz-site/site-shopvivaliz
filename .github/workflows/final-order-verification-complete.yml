@@ -6,7 +6,7 @@ on:
       - audit/final-order-flow-20260802
     paths:
       - .github/workflows/final-order-verification-complete.yml
-      - scripts/final-order-flow-audit-explicit.php
+      - scripts/final-order-state-verifier.php
 
 permissions:
   contents: read
@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          php -l scripts/final-order-flow-audit-explicit.php
+          php -l scripts/final-order-state-verifier.php
           php tests/admin-payment-notification-idempotency-test.php
 
       - name: Configure verified SSH
@@ -46,13 +46,13 @@ jobs:
           printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Run explicit read-only order reconciliation
+      - name: Run canonical read-only order reconciliation
         shell: bash
         run: |
           set +e
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
             "EXPECTED_SHA='$EXPECTED_SHA' ORDER_NUMBER='$ORDER_NUMBER' php" \
-            < scripts/final-order-flow-audit-explicit.php > final-audit.json
+            < scripts/final-order-state-verifier.php > final-audit.json
           status=$?
           set -e
           cat final-audit.json
