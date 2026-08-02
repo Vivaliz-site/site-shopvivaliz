@@ -6,7 +6,7 @@ on:
       - audit/final-order-flow-20260802
     paths:
       - .github/workflows/final-order-verification-complete.yml
-      - scripts/final-order-state-verifier.php
+      - scripts/final-order-state-verifier-v2.php
 
 permissions:
   contents: read
@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          php -l scripts/final-order-state-verifier.php
+          php -l scripts/final-order-state-verifier-v2.php
           php tests/admin-payment-notification-idempotency-test.php
 
       - name: Configure verified SSH
@@ -52,7 +52,7 @@ jobs:
           set +e
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
             "EXPECTED_SHA='$EXPECTED_SHA' ORDER_NUMBER='$ORDER_NUMBER' php" \
-            < scripts/final-order-state-verifier.php > final-audit.json
+            < scripts/final-order-state-verifier-v2.php > final-audit.json
           status=$?
           set -e
           cat final-audit.json
