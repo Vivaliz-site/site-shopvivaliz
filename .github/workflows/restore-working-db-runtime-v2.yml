@@ -1,0 +1,88 @@
+name: Restore verified DB runtime v2
+
+on:
+  push:
+    branches:
+      - audit/final-order-flow-20260802
+    paths:
+      - .github/workflows/restore-working-db-runtime-v2.yml
+      - scripts/restore-verified-db-runtime.php
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restore-verified-db-runtime-v2
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout restore script
+        uses: actions/checkout@v4
+
+      - name: Validate restore script
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l scripts/restore-verified-db-runtime.php
+          ! grep -nE '(DB_PASS|PASSWORD|SECRET|TOKEN|KEY)=[^$[:space:]]+' scripts/restore-verified-db-runtime.php
+
+      - name: Configure verified SSH
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Restore verified DB keys atomically
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 php \
+            < scripts/restore-verified-db-runtime.php
+
+      - name: Validate candidate migration and order database
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          candidate=$(find /home/ubuntu/shopvivaliz-deploy/releases -maxdepth 1 -type d -name '*-fc022188' | sort | tail -n 1)
+          test -n "$candidate"
+          php "$candidate/scripts/migrate-blog-articles.php" >/tmp/editorial-migration.out 2>/tmp/editorial-migration.err || {
+            code=$?
+            echo 'editorial_migration=failed'
+            sed -E 's/([A-Za-z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z0-9_]*)=[^[:space:]]+/\1=[redacted]/Ig' /tmp/editorial-migration.err | tail -n 15
+            rm -f /tmp/editorial-migration.out /tmp/editorial-migration.err
+            exit "$code"
+          }
+          grep -Eq '^Artigos processados: [1-9][0-9]*$' /tmp/editorial-migration.out
+          CANDIDATE="$candidate" php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          $root=(string)getenv('CANDIDATE');
+          require_once $root . '/includes/runtime-env-reader.php';
+          $host=svre_value('DB_HOST',$root) ?: 'localhost';
+          $portRaw=svre_value('DB_PORT',$root); $port=ctype_digit($portRaw)?(int)$portRaw:3306;
+          $name=svre_value('DB_NAME',$root); $user=svre_value('DB_USER',$root); $pass=svre_value('DB_PASS',$root);
+          if ($user === '' || strtolower($user) === 'root') throw new RuntimeException('unsafe_database_user');
+          $pdo=new PDO(sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4',$host,$port,$name),$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+          $orders=(int)$pdo->query('SELECT COUNT(*) FROM orders')->fetchColumn();
+          $articles=(int)$pdo->query('SELECT COUNT(*) FROM blog_articles')->fetchColumn();
+          if ($orders < 1 || $articles < 1) throw new RuntimeException('required_rows_missing');
+          echo "database_connected=true\norders_present=true\nblog_articles_present=true\n";
+          PHP
+          rm -f /tmp/editorial-migration.out /tmp/editorial-migration.err
+          echo 'editorial_migration=success'
+          REMOTE
