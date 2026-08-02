@@ -1,0 +1,93 @@
+name: Blog migration direct runtime diagnostic
+
+on:
+  push:
+    branches:
+      - audit/final-order-flow-20260802
+    paths:
+      - .github/workflows/blog-migration-direct-runtime-diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Verify direct runtime connection read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' > direct-runtime-diagnostic.json <<'REMOTE'
+          set -euo pipefail
+          candidate=$(find /home/ubuntu/shopvivaliz-deploy/releases -maxdepth 1 -type d -name '*-fc022188' | sort | tail -n 1)
+          test -n "$candidate"
+          export CANDIDATE="$candidate"
+          php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          $root = (string)getenv('CANDIDATE');
+          require_once $root . '/includes/runtime-env-reader.php';
+          $host = svre_value('DB_HOST', $root) ?: 'localhost';
+          $portRaw = svre_value('DB_PORT', $root);
+          $port = ctype_digit($portRaw) ? (int)$portRaw : 3306;
+          $name = svre_value(['DB_NAME','DB_DATABASE'], $root);
+          $user = svre_value(['DB_USER','DB_USERNAME'], $root);
+          $pass = svre_value(['DB_PASS','DB_PASSWORD'], $root);
+          $configured = $name !== '' && $user !== '';
+          $connected = false;
+          $columns = [];
+          $prepareOk = false;
+          $errorCode = '';
+          if ($configured) {
+              try {
+                  $pdo = new PDO(
+                      sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $host, $port, $name),
+                      $user,
+                      $pass,
+                      [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false, PDO::ATTR_TIMEOUT => 5]
+                  );
+                  $connected = (int)$pdo->query('SELECT 1')->fetchColumn() === 1;
+                  $stmt = $pdo->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'blog_articles' ORDER BY ORDINAL_POSITION");
+                  $columns = array_map(static fn(array $row): string => (string)$row['COLUMN_NAME'], $stmt->fetchAll());
+                  $insert = "INSERT INTO blog_articles (slug,title,excerpt,category,image_url,image_alt,content_json,faq_json,keywords_json,meta_title,meta_description,related_products_url,author,status,featured,reading_time,published_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'published',?,?,?) ON DUPLICATE KEY UPDATE title=VALUES(title), updated_at=CURRENT_TIMESTAMP";
+                  $prepareOk = $pdo->prepare($insert) instanceof PDOStatement;
+              } catch (PDOException $e) {
+                  $errorCode = (string)$e->getCode();
+              }
+          }
+          $expected = ['id','slug','title','excerpt','category','image_url','image_alt','content_json','faq_json','keywords_json','meta_title','meta_description','related_products_url','author','status','featured','reading_time','published_at','scheduled_at','created_at','updated_at'];
+          echo json_encode([
+              'candidate_sha' => is_file($root . '/.release-sha') ? trim((string)file_get_contents($root . '/.release-sha')) : '',
+              'runtime_db_configured' => $configured,
+              'direct_pdo_connected' => $connected,
+              'table_exists' => $columns !== [],
+              'existing_columns' => $columns,
+              'missing_columns' => array_values(array_diff($expected, $columns)),
+              'prepare_ok' => $prepareOk,
+              'error_code' => $errorCode,
+          ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL;
+          PHP
+          REMOTE
+          cat direct-runtime-diagnostic.json
+
+      - name: Upload diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: blog-migration-direct-runtime-diagnostic
+          path: direct-runtime-diagnostic.json
+          retention-days: 3
