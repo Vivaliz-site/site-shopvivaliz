@@ -108,42 +108,62 @@ jobs:
           token_status='unknown'
           if token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null)"; then :; fi
           cache_age="$(( $(date +%s) - $(stat -c %Y "$cache") ))"
+          base_url='https://shopvivaliz.com.br'
           orders_file="$(mktemp)"
           olist_file="$(mktemp)"
           trap 'rm -f "$orders_file" "$olist_file"' EXIT
-          orders_code="$(curl -sS -o "$orders_file" -w '%{http_code}' -H 'Host: shopvivaliz.com.br' http://127.0.0.1/api/orders/health.php)"
-          olist_code="$(curl -sS -o "$olist_file" -w '%{http_code}' -H 'Host: shopvivaliz.com.br' http://127.0.0.1/api/olist/webhook-health.php)"
+          orders_code="$(curl --location --silent --show-error --max-time 30 -o "$orders_file" -w '%{http_code}' "$base_url/api/orders/health.php" || true)"
+          olist_code="$(curl --location --silent --show-error --max-time 30 -o "$olist_file" -w '%{http_code}' "$base_url/api/olist/webhook-health.php" || true)"
+          echo "runtime_services={\"sync_service\":\"$sync_status\",\"token_renewer\":\"$token_status\",\"cache_age_seconds\":$cache_age,\"orders_http\":$orders_code,\"olist_http\":$olist_code}"
+          echo 'orders_health_body:'
+          cat "$orders_file"
+          echo
+          echo 'olist_health_body:'
+          cat "$olist_file"
+          echo
+          echo 'journal_sync_tail:'
+          journalctl -u shopvivaliz-sync-products.service -n 20 --no-pager -o cat
+          echo 'journal_token_tail:'
+          journalctl -u shopvivaliz-token-renewer.service -n 20 --no-pager -o cat
           python3 - "$sync_status" "$token_status" "$cache_age" "$orders_code" "$olist_code" "$orders_file" "$olist_file" <<'PY'
           import json
           import pathlib
           import sys
 
           sync_status, token_status, cache_age, orders_code, olist_code, orders_file, olist_file = sys.argv[1:]
-          orders = json.loads(pathlib.Path(orders_file).read_text())
-          olist = json.loads(pathlib.Path(olist_file).read_text())
+          try:
+              orders = json.loads(pathlib.Path(orders_file).read_text())
+              orders_json_valid = True
+          except (json.JSONDecodeError, OSError):
+              orders = {}
+              orders_json_valid = False
+          try:
+              olist = json.loads(pathlib.Path(olist_file).read_text())
+              olist_json_valid = True
+          except (json.JSONDecodeError, OSError):
+              olist = {}
+              olist_json_valid = False
           report = {
               "sync_service": sync_status,
               "token_renewer": token_status,
               "cache_age_seconds": int(cache_age),
-              "orders_http": int(orders_code),
-              "olist_http": int(olist_code),
+              "orders_http": int(orders_code) if orders_code.isdigit() else 0,
+              "olist_http": int(olist_code) if olist_code.isdigit() else 0,
               "orders_ok": orders.get("ok") is True,
               "olist_ok": olist.get("ok") is True,
+              "orders_json_valid": orders_json_valid,
+              "olist_json_valid": olist_json_valid,
           }
           print(json.dumps(report, sort_keys=True))
           if not (
               sync_status == "active"
               and token_status == "active"
               and int(cache_age) <= 900
-              and int(orders_code) == 200
-              and int(olist_code) == 200
+              and report["orders_http"] == 200
+              and report["olist_http"] == 200
               and report["orders_ok"]
               and report["olist_ok"]
           ):
               raise SystemExit("produção ainda não confirmou runtime, ERP e health checks")
           PY
-          echo 'journal_sync_tail:'
-          journalctl -u shopvivaliz-sync-products.service -n 20 --no-pager -o cat
-          echo 'journal_token_tail:'
-          journalctl -u shopvivaliz-token-renewer.service -n 20 --no-pager -o cat
           REMOTE_SCRIPT
