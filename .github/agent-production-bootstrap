@@ -1,3 +1,0 @@
-bootstrap_id=2026-08-02T00:35:00-03:00
-purpose=configure SHOPVIVALIZ_AGENT_KEY in the shared Oracle production environment and verify the real autonomous watchdog
-trigger=merge-to-main
