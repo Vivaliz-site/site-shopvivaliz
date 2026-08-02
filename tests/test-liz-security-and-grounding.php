@@ -86,9 +86,11 @@ $groundedPostGuard = sv_liz_post_response_guard(
 );
 expect_true($groundedPostGuard === null, 'validação pós-resposta permite resposta quando há fonte oficial');
 
+$generalGuidanceState = sv_liz_conversation_state('Como limpar uma garrafa termica?');
+expect_true($generalGuidanceState['intent'] === 'general', 'orientação de uso não é classificada como descoberta comercial');
 $generalPostGuard = sv_liz_post_response_guard(
     'Como limpar uma garrafa termica?',
-    sv_liz_conversation_state('Como limpar uma garrafa termica?'),
+    $generalGuidanceState,
     'Lave com água morna e detergente neutro.',
     []
 );
