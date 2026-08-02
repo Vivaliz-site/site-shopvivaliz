@@ -44,7 +44,11 @@ function sv_liz_detect_intent(string $message): string
     if (preg_match('/\b(frete|cep|prazo de entrega|quanto demora|envio)\b/u', $normalized)) {
         return 'shipping';
     }
-    if (sv_liz_detect_category($normalized) !== null) {
+    $category = sv_liz_detect_category($normalized);
+    if (
+        $category !== null
+        && preg_match('/\b(quero|preciso|procuro|busco|encontrar|mostre|mostrar|recomenda\w*|indica\w*|sugere\w*|tem|comprar|preco|valor|estoque|disponivel|modelo|cor|tamanho|ate|abaixo de|menos de)\b/u', $normalized) === 1
+    ) {
         return 'product_discovery';
     }
     if (preg_match('/\b(produto|produtos|preco|valor|estoque|disponivel|comprar|modelo|cor|tamanho|categoria)\b/u', $normalized)) {
