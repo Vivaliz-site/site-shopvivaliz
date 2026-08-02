@@ -555,3 +555,73 @@ body.sv-home-top:has(.sv-first-coupon.is-visible) #sv-liz-launcher {
         font-size: 11px !important;
     }
 }
+
+
+/* Desktop: o cupom vira uma faixa curta e reserva a coluna direita do hero. */
+@media (min-width: 821px) {
+    .sv-first-coupon {
+        width: min(250px, calc(100vw - 28px)) !important;
+        min-height: 0 !important;
+        height: auto !important;
+    }
+
+    .sv-first-coupon__body {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        padding: 8px 10px !important;
+    }
+
+    .sv-first-coupon h2 {
+        flex: 0 0 auto !important;
+        margin: 0 !important;
+        font-size: 15px !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+    }
+
+    .sv-first-coupon__code {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        padding: 5px 6px !important;
+    }
+
+    .sv-first-coupon__code span {
+        font-size: 12px !important;
+    }
+
+    .sv-first-coupon__copy {
+        display: none !important;
+    }
+
+    .sv-first-coupon__actions {
+        flex: 0 0 auto !important;
+        display: block !important;
+    }
+
+    .sv-first-coupon__primary {
+        min-height: 30px !important;
+        padding: 0 9px !important;
+        font-size: 10px !important;
+        white-space: nowrap !important;
+    }
+
+    body.sv-home-top:has(.sv-first-coupon.is-visible) .hero-content {
+        box-sizing: border-box !important;
+        width: calc(100% - 360px) !important;
+        max-width: none !important;
+        margin-left: 20px !important;
+        margin-right: auto !important;
+    }
+
+    body.sv-home-top:has(.sv-first-coupon.is-visible) .hero-content h1 {
+        max-width: 100% !important;
+        font-size: clamp(34px, 4.2vw, 72px) !important;
+    }
+
+    body.sv-home-top:has(.sv-first-coupon.is-visible) .hero-search-container {
+        width: 100% !important;
+        max-width: none !important;
+    }
+}
