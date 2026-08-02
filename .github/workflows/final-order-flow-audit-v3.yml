@@ -1,0 +1,89 @@
+name: Final order flow audit v3
+
+on:
+  push:
+    branches:
+      - audit/final-order-flow-20260802
+    paths:
+      - .github/workflows/final-order-flow-audit-v3.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EXPECTED_SHA: f65f4977244cd2217ad05e24976d25d7251e88ba
+      ORDER_NUMBER: SV20260731072524339
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate local critical tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l scripts/final-order-flow-audit.php
+          php tests/admin-payment-notification-idempotency-test.php
+          php -r "require 'includes/mercadopago-gateway.php'; exit(svmp_local_status('processed') === 'payment_approved' && svmp_local_status('approved') === 'payment_approved' ? 0 : 1);"
+
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Produce sanitized production report
+        shell: bash
+        run: |
+          set -uo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            "EXPECTED_SHA='$EXPECTED_SHA' ORDER_NUMBER='$ORDER_NUMBER' php" \
+            < scripts/final-order-flow-audit.php \
+            > final-audit.json
+          verifier_status=$?
+          cat final-audit.json
+          echo "verifier_status=$verifier_status" >> "$GITHUB_OUTPUT"
+          test -s final-audit.json
+        id: report
+
+      - name: Validate report and fail on concrete check
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('final-audit.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          text = path.read_text(encoding='utf-8').lower()
+          for key in ['"customer"', '"email"', '"phone"', '"address"', '"cpf"', '"cnpj"', '"payment_id"', '"digitable_line"', '"barcode"', '"ticket_url"']:
+              assert key not in text, key
+          assert data['read_only'] is True
+          if not data['ok']:
+              raise SystemExit('Concrete failed checks: ' + ', '.join(data['failures']))
+          print('OK: complete order flow confirmed')
+          PY
+
+      - name: Upload sanitized report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-order-flow-audit-v3
+          path: final-audit.json
+          if-no-files-found: warn
+          retention-days: 7
