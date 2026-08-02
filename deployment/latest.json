@@ -1,19 +1,19 @@
 {
   "status": "PRODUCTION_UPDATED",
-  "sha": "e39e4a9208ebc01febf27f62ef1b489f7d7fce8c",
-  "workflow_run_id": "30730592945",
-  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/30730592945",
+  "sha": "cdcd9b4a9d66e860decb4ee36729d25e97dae385",
+  "workflow_run_id": "30732379459",
+  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/30732379459",
   "jobs": {
     "validate": "success",
     "deploy": "success",
     "smoke_test": "success"
   },
   "results": [
-    "OK Oracle repository sync: e39e4a9208ebc01febf27f62ef1b489f7d7fce8c",
+    "OK Oracle repository sync: canonical=cdcd9b4a9d66e860decb4ee36729d25e97dae385 deployed=cdcd9b4a9d66e860decb4ee36729d25e97dae385",
     "OK Oracle repository sync cron installed",
-    "OK release SHA marker: e39e4a9208ebc01febf27f62ef1b489f7d7fce8c",
+    "OK release SHA marker: cdcd9b4a9d66e860decb4ee36729d25e97dae385",
     "OK version: https://shopvivaliz.com.br/api/health/version.php (200)",
-    "OK public version endpoint: e39e4a9208ebc01febf27f62ef1b489f7d7fce8c",
+    "OK public version endpoint: cdcd9b4a9d66e860decb4ee36729d25e97dae385",
     "OK homepage: https://shopvivaliz.com.br/ (200)",
     "OK mobile responsive header contract",
     "OK catalog: https://shopvivaliz.com.br/catalogo (200)",
@@ -26,12 +26,15 @@
     "OK admin protected behavior (301)",
     "OK liz_health: https://shopvivaliz.com.br/api/liz-intelligent.php?health=1 (200)",
     "OK Liz health payload",
+    "OK orders_health: https://shopvivaliz.com.br/api/orders/health.php (200)",
+    "OK orders health payload",
     "OK olist_webhook_health: https://shopvivaliz.com.br/api/olist/webhook-health.php (200)",
     "OK Olist webhook health payload",
     "OK Olist webhook ignored benign unmonitored event (200)",
     "OK www redirect: 301 -> https://shopvivaliz.com.br/",
     "OK private path blocked: /.git/config (403)",
     "OK private path blocked: /.env.local (403)",
+    "OK private path blocked: /config/runtime-secrets.php (403)",
     "OK private path blocked: /storage/products-cache-ativos.json (403)",
     "OK private path blocked: /tasks-queue.json (403)",
     "OK private path blocked: /scripts/ (403)",
@@ -51,5 +54,5 @@
     "OK security header: x-content-type-options",
     "OK security header: content-security-policy"
   ],
-  "verified_at": "2026-08-02T03:26:56.934953+00:00"
+  "verified_at": "2026-08-02T04:27:52.314378+00:00"
 }
