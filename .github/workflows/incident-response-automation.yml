@@ -48,6 +48,43 @@ jobs:
           printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
           printf 'execution_path=oracle-active-release\n' >> artifacts/incidents/context.txt
+
+          erp_status=0
+          if ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'set -euo pipefail
+             current=/home/ubuntu/shopvivaliz-deploy/current
+             cache="$current/storage/products-cache-ativos.json"
+             sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null || true)"
+             token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null || true)"
+             if [[ -f "$cache" ]]; then
+               cache_age=$(( $(date +%s) - $(stat -c %Y "$cache") ))
+               cache_size=$(stat -c %s "$cache")
+               cache_json_valid=true
+               python3 -m json.tool "$cache" >/dev/null 2>&1 || cache_json_valid=false
+             else
+               cache_age=-1
+               cache_size=0
+               cache_json_valid=false
+             fi
+             ok=false
+             if [[ "$sync_status" == active && "$token_status" == active && "$cache_age" -ge 0 && "$cache_age" -le 900 && "$cache_json_valid" == true ]]; then
+               ok=true
+             fi
+             printf "{\"ok\":%s,\"sync_service\":\"%s\",\"token_renewer\":\"%s\",\"cache_age_seconds\":%s,\"cache_size_bytes\":%s,\"cache_json_valid\":%s}\n" "$ok" "$sync_status" "$token_status" "$cache_age" "$cache_size" "$cache_json_valid"
+             [[ "$ok" == true ]]' \
+            > artifacts/incidents/erp-runtime.log 2>&1; then
+            erp_status=0
+          else
+            erp_status=$?
+          fi
+          cat artifacts/incidents/erp-runtime.log
+          echo "erp_runtime_status=$erp_status" >> artifacts/incidents/context.txt
+
           if ssh \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
@@ -61,8 +98,14 @@ jobs:
             status=$?
           fi
           cat artifacts/incidents/detector.log
-          echo "response_status=$status" >> "$GITHUB_OUTPUT"
+          if [[ "$status" -eq 0 && "$erp_status" -eq 0 ]]; then
+            response_status=0
+          else
+            response_status=2
+          fi
+          echo "response_status=$response_status" >> "$GITHUB_OUTPUT"
           echo "response_status=$status" >> artifacts/incidents/context.txt
+          echo "combined_response_status=$response_status" >> artifacts/incidents/context.txt
 
       - name: Check incident notification configuration
         if: steps.incident.outputs.response_status != '0'
