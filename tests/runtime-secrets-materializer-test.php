@@ -17,6 +17,9 @@ function rsm_run(string $script, string $source, string $target): array
     $environment = array_merge($_ENV, [
         'SHOPVIVALIZ_SHARED_ENV' => $source,
         'SHOPVIVALIZ_RUNTIME_SECRETS' => $target,
+        'SHOPVIVALIZ_SHARED_GROUP' => function_exists('posix_getgrgid')
+            ? (string)(posix_getgrgid(posix_getegid())['name'] ?? '')
+            : '',
     ]);
     $process = proc_open($command, [
         0 => ['pipe', 'r'],
@@ -75,6 +78,7 @@ try {
     // and cannot represent this chmod contract through the local filesystem.
     if (PHP_OS_FAMILY !== 'Windows') {
         rsm_assert((fileperms($target) & 0777) === 0640, 'generated file mode should be 0640');
+        rsm_assert((fileperms($source) & 0777) === 0640, 'shared env mode should be 0640');
     }
 
     file_put_contents($source, implode("\n", [

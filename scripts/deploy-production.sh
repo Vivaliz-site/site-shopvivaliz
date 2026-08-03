@@ -180,16 +180,15 @@ reconcile_runtime_secrets() {
     return 1
   fi
 
-  if ! chmod 0600 "$SHARED_DIR/.env"; then
-    log ERROR "Nao foi possivel proteger a configuracao compartilhada"
-    return 1
-  fi
   if ! php "$materializer" >> "$LOG_FILE" 2>&1; then
     log ERROR "Materializacao do runtime minimo falhou"
     return 1
   fi
-  if ! sudo chown ubuntu:www-data "$runtime" || ! chmod 0640 "$runtime"; then
-    log ERROR "Nao foi possivel aplicar proprietario/permissoes ao runtime minimo"
+  # O materializador reescreve as permissoes do .env. Reconcilie os dois
+  # arquivos depois dele para garantir leitura somente por ubuntu/www-data.
+  if ! sudo chown ubuntu:www-data "$SHARED_DIR/.env" "$runtime" \
+    || ! chmod 0640 "$SHARED_DIR/.env" "$runtime"; then
+    log ERROR "Nao foi possivel aplicar proprietario/permissoes ao runtime compartilhado"
     return 1
   fi
 
