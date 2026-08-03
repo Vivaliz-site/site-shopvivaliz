@@ -75,6 +75,7 @@ jobs:
             scripts/maintenance/audit_secret_references.py \
             scripts/maintenance/system_health_check.py \
             scripts/maintenance/finalize_reorganization.py \
+            scripts/generate_repository_index.py \
             scripts/all-documented-agents.py \
             scripts/heartbeat-executor.py \
             scripts/system-health-check.py \
@@ -108,9 +109,13 @@ jobs:
             tests.unit.test_audit_active_workflows \
             tests.unit.test_agent_evidence_state \
             tests.unit.test_git_auto_sync \
+            tests.unit.test_generate_repository_index \
             tests.unit.test_olist_entrypoints_safe \
             tests.unit.test_shopee_legacy_credentials_safe \
             -v
+
+      - name: Verify repository inventory is current
+        run: python scripts/generate_repository_index.py --check
 
       - name: Validate canonical queue and agent health
         run: python scripts/maintenance/system_health_check.py
