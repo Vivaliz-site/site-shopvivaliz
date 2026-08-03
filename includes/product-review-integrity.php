@@ -9,6 +9,10 @@ declare(strict_types=1);
  * to customers or search engines. This output filter removes only those exact
  * legacy blocks until the large product template is split into components and
  * a real verified-purchase review repository is implemented.
+ *
+ * The same legacy template also renders "1 unidades restantes". Until the
+ * stock component is extracted, normalize only that exact singular case in
+ * the final HTML without changing stock values or availability rules.
  */
 function sv_product_review_integrity_filter(string $html): string
 {
@@ -23,7 +27,17 @@ function sv_product_review_integrity_filter(string $html): string
         return $html;
     }
 
-    return $filtered;
+    $stockNormalized = preg_replace(
+        '~(<div\s+class="urgency-tag"[^>]*>\s*<i>🔥</i>\s* Apenas\s+)1\s+unidades\s+restantes!~iu',
+        '${1}1 unidade restante!',
+        $filtered
+    );
+    if (!is_string($stockNormalized)) {
+        error_log('[ReviewIntegrity] stock copy normalization failed; serving review-filtered response');
+        return $filtered;
+    }
+
+    return $stockNormalized;
 }
 
 function sv_enable_product_review_integrity_guard(): void
