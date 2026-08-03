@@ -1,0 +1,53 @@
+name: Hourly Integration Health
+
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integrations-hourly
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate and safely remediate integrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SITE_URL: https://shopvivaliz.com.br
+      SHOPVIVALIZ_AGENT_KEY: ${{ secrets.SHOPVIVALIZ_AGENT_KEY != '' && secrets.SHOPVIVALIZ_AGENT_KEY || secrets.AGENT_KEY }}
+    steps:
+      - name: Validate production secret configuration
+        run: test -n "$SHOPVIVALIZ_AGENT_KEY"
+      - name: Validate production connections
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --max-time 90 \
+            -H "X-Agent-Key: ${SHOPVIVALIZ_AGENT_KEY}" \
+            "${SITE_URL}/api/agent/integrations-health.php?fix=1" > integrations-health.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('integrations-health.json').read_text())
+          summary = data.get('summary', {})
+          print('checked_at=', data.get('checked_at'))
+          print('connected=', summary.get('connected', 0))
+          print('failed=', summary.get('failed', 0))
+          print('attention=', summary.get('attention', 0))
+          for item in data.get('integrations', []):
+              print(f"{item.get('name')}: {item.get('status')} — {item.get('message')}")
+          if not data.get('ok', False):
+              raise SystemExit('Integration health is degraded; inspect the dashboard remediation.')
+          PY
+      - name: Upload masked health evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integrations-health-${{ github.run_id }}
+          path: integrations-health.json
+          if-no-files-found: ignore
+          retention-days: 14

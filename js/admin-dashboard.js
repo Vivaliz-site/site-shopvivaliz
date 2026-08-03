@@ -28,12 +28,14 @@
     const settled = await Promise.allSettled([
       fetchJson('/api/health.php'),
       fetchJson('/installer/update-applied-check.php'),
-      fetchJson('/installer/auto-routines.php?expected=200&limit=50')
+      fetchJson('/installer/auto-routines.php?expected=200&limit=50'),
+      fetchJson('/api/admin/integrations-status.php')
     ]);
 
     const health = settled[0].status === 'fulfilled' ? settled[0].value.json : null;
     const update = settled[1].status === 'fulfilled' ? settled[1].value.json : null;
     const routines = settled[2].status === 'fulfilled' ? settled[2].value.json : null;
+    const integrations = settled[3].status === 'fulfilled' ? settled[3].value.json : null;
 
     if (health || update || routines) {
       const ok = Boolean((health && health.ok) || (update && update.ok) || (routines && routines.ok));
@@ -53,7 +55,15 @@
       setList('health-status-list', ['Não foi possível carregar os checks agora.']);
     }
 
-    if (routines && routines.olist_sync) {
+    const olist = integrations && Array.isArray(integrations.integrations)
+      ? integrations.integrations.find(function (item) { return item.key === 'olist_tiny'; })
+      : null;
+
+    if (olist) {
+      const connected = olist.status === 'connected';
+      setPill('olist-status-pill', connected ? 'Conectado' : 'Falhou', connected ? 'success' : 'error');
+      setList('olist-status-list', [olist.message || 'Status Olist/Tiny atualizado.', olist.remediation || 'Token validado pelo monitor.']);
+    } else if (routines && routines.olist_sync) {
       setPill('olist-status-pill', routines.olist_sync.ok ? 'Integrado' : 'Atenção', routines.olist_sync.ok ? 'success' : 'warning');
       setList('olist-status-list', [
         'Sync operacional: ' + yesNo(routines.checks && routines.checks['Olist/Tiny sincronizacao automatica sem erro operacional']),

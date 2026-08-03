@@ -365,6 +365,12 @@ if [ -f "$NEW_RELEASE_PATH/scripts/migrate-blog-articles.php" ]; then
   php "$NEW_RELEASE_PATH/scripts/migrate-blog-articles.php" >> "$LOG_FILE" 2>&1
 fi
 
+# Reconcile Apache perimeter rules from the exact release being deployed.
+# This keeps the OAuth allowlist in sync without making the rest of /olist public.
+if [ -x "$NEW_RELEASE_PATH/scripts/install-apache-hardening.sh" ]; then
+  sudo bash "$NEW_RELEASE_PATH/scripts/install-apache-hardening.sh" >> "$LOG_FILE" 2>&1
+fi
+
 php -l "$NEW_RELEASE_PATH/index.php" > /dev/null
 php -l "$NEW_RELEASE_PATH/api/health/version.php" > /dev/null
 

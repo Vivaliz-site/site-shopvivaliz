@@ -23,6 +23,21 @@ if (is_file($envFile)) {
     }
 }
 
+if (strlen(trim($clientId)) < 16 && is_file($envFile)) {
+    foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        if (str_starts_with($line, 'TINY_CLIENT_ID=')) {
+            $clientId = explode('=', $line, 2)[1] ?? '';
+        }
+    }
+}
+if (strlen(trim($clientSecret)) < 16 && is_file($envFile)) {
+    foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        if (str_starts_with($line, 'TINY_CLIENT_SECRET=')) {
+            $clientSecret = explode('=', $line, 2)[1] ?? '';
+        }
+    }
+}
+
 // ============================================================
 // PASSO 1: Verificar erro ou código
 // ============================================================
@@ -52,7 +67,11 @@ if (!$code) {
 // PASSO 2: Trocar código por token
 // ============================================================
 
-$redirectUri = getenv('OLIST_REDIRECT_URI') ?: getenv('URL_REDIRCT_OLIST') ?: getenv('TINY_REDIRECT_URI') ?: 'https://shopvivaliz.com.br/olist/callback.php';
+$configuredRedirectUri = getenv('OLIST_REDIRECT_URI') ?: getenv('URL_REDIRCT_OLIST') ?: getenv('TINY_REDIRECT_URI') ?: '';
+$redirectHost = strtolower((string)(parse_url($configuredRedirectUri, PHP_URL_HOST) ?: ''));
+$redirectUri = ($redirectHost === 'shopvivaliz.com.br' && (string)(parse_url($configuredRedirectUri, PHP_URL_PATH) ?: '') === '/olist/callback.php')
+    ? $configuredRedirectUri
+    : 'https://shopvivaliz.com.br/olist/callback.php';
 $tokenUrl = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
 
 $postData = http_build_query([
