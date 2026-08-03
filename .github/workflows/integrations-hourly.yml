@@ -17,18 +17,55 @@ jobs:
     name: Validate and safely remediate integrations
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      SITE_URL: https://shopvivaliz.com.br
-      SHOPVIVALIZ_AGENT_KEY: ${{ secrets.SHOPVIVALIZ_AGENT_KEY != '' && secrets.SHOPVIVALIZ_AGENT_KEY || secrets.AGENT_KEY }}
     steps:
-      - name: Validate production secret configuration
-        run: test -n "$SHOPVIVALIZ_AGENT_KEY"
-      - name: Validate production connections
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          curl --fail-with-body --silent --show-error --max-time 90 \
-            -H "X-Agent-Key: ${SHOPVIVALIZ_AGENT_KEY}" \
-            "${SITE_URL}/api/agent/integrations-health.php?fix=1" > integrations-health.json
+          test -n "$ORACLE_VM_SSH_KEY" || { echo "::error::ORACLE_VM_SSH_KEY is missing"; exit 1; }
+          test -n "$ORACLE_VM_KNOWN_HOSTS" || { echo "::error::ORACLE_VM_KNOWN_HOSTS is missing"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Validate production connections
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'bash -s' > integrations-health.json 2> integrations-health.stderr <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          current='/home/ubuntu/shopvivaliz-deploy/current'
+          test -r "$current/includes/integration-health.php"
+          cd "$current"
+          php -d display_errors=0 -d log_errors=1 <<'PHP'
+          <?php
+          declare(strict_types=1);
+          require '/home/ubuntu/shopvivaliz-deploy/current/includes/integration-health.php';
+          $result = svih_check_all(true);
+          echo json_encode(
+              $result,
+              JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
+          ), PHP_EOL;
+          PHP
+          REMOTE_SCRIPT
+          then
+            cat integrations-health.stderr >&2
+            exit 1
+          fi
+          if [[ -s integrations-health.stderr ]]; then
+            cat integrations-health.stderr >&2
+          fi
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -43,6 +80,7 @@ jobs:
           if not data.get('ok', False):
               raise SystemExit('Integration health is degraded; inspect the dashboard remediation.')
           PY
+
       - name: Upload masked health evidence
         if: always()
         uses: actions/upload-artifact@v4
