@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 API_BASE = "https://api.tiny.com.br/public-api/v3"
-CACHE_PATH = Path("storage/products-cache-ativos.json")
+CACHE_PATH = Path(__file__).resolve().parent / "storage" / "products-cache-ativos.json"
 _RATE_LOCK = threading.Lock()
 _LAST_REQUEST = 0.0
 _MIN_REQUEST_INTERVAL = 0.55
