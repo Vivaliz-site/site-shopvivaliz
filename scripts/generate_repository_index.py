@@ -53,13 +53,20 @@ TOP_LEVEL_APP_PURPOSE = {
     "carrinho.php": "Pagina publica do carrinho",
     "catalogo.php": "Pagina publica do catalogo",
     "checkout.php": "Pagina publica do checkout",
+    "checkout-return.php": "Retorno publico do checkout",
     "contato.php": "Pagina publica de contato",
+    "google-ads-api-app.php": "Pagina publica da integracao Google Ads",
+    "google-merchant-feed.php": "Feed publico do Google Merchant",
+    "home.php": "Vitrine publica alternativa",
     "index.php": "Vitrine principal do site",
     "login.php": "Pagina de autenticacao",
     "minha-conta.php": "Area autenticada do cliente",
     "meus-pedidos.php": "Historico autenticado de pedidos",
     "politica-privacidade.php": "Pagina publica de privacidade",
+    "politica-devolucoes.php": "Pagina publica da politica de devolucoes",
+    "politica-entrega.php": "Pagina publica da politica de entrega",
     "produto.php": "Pagina publica de produto",
+    "sitemap.php": "Sitemap XML publico",
     "termos.php": "Pagina publica de termos",
 }
 
@@ -149,7 +156,8 @@ def file_purpose(path: str) -> str:
     if "/" not in path and path in TOP_LEVEL_APP_PURPOSE:
         return f"Aplicacao web publica - {TOP_LEVEL_APP_PURPOSE[path]}."
 
-    if TEST_PATH.search(path):
+    is_test = bool(TEST_PATH.search(path))
+    if is_test:
         role = "Teste automatizado"
     elif extension in DOC_EXTENSIONS:
         role = "Documentacao ou instrucao"
@@ -174,7 +182,7 @@ def file_purpose(path: str) -> str:
     else:
         role = "Artefato de suporte"
 
-    if extension not in DOC_EXTENSIONS and extension in SOURCE_EXTENSIONS:
+    if not is_test and extension not in DOC_EXTENSIONS and extension in SOURCE_EXTENSIONS:
         if re.search(r"webhook|callback", path, re.IGNORECASE):
             role = "Endpoint de callback ou webhook"
         elif re.search(r"migration|migrate", path, re.IGNORECASE):

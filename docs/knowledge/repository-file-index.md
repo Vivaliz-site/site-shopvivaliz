@@ -1394,7 +1394,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `admin/testimonials.php` | Administracao autenticada - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `admin/trio-dashboard.html` | Administracao autenticada - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `admin/visual-editor.php` | Administracao autenticada - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `admin/webhook-test.php` | Administracao autenticada - Endpoint de callback ou webhook. | ativo ou ainda nao classificado como legado |
+| `admin/webhook-test.php` | Administracao autenticada - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `agent-bridge/.gitignore` | Ponte de agentes - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `agent-bridge/README.md` | Ponte de agentes - Documentacao de projeto. | ativo ou ainda nao classificado como legado |
 | `agent-bridge/agent_bridge.py` | Ponte de agentes - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -1671,7 +1671,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `check_api.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `checkout-legacy/checkout-page-optimizer.php` | Checkout legado - Codigo PHP. | legado declarado - revisar rota e telemetria antes de remover |
 | `checkout-legacy/index.php` | Checkout legado - Codigo PHP. | legado declarado - revisar rota e telemetria antes de remover |
-| `checkout-return.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `checkout-return.php` | Aplicacao web publica - Retorno publico do checkout. | ativo ou ainda nao classificado como legado |
 | `checkout-v2/index.php` | Checkout ativo v2 - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `checkout.php` | Aplicacao web publica - Pagina publica do checkout. | ativo ou ainda nao classificado como legado |
 | `claude/api/ProductOptimizer.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -2347,11 +2347,11 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `get_php_info.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `git-auto-sync.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `github.copilot-chat-0.48.1.vsix` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `google-ads-api-app.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `google-merchant-feed.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `google-ads-api-app.php` | Aplicacao web publica - Pagina publica da integracao Google Ads. | ativo ou ainda nao classificado como legado |
+| `google-merchant-feed.php` | Aplicacao web publica - Feed publico do Google Merchant. | ativo ou ainda nao classificado como legado |
 | `google-shopping-feed.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `health.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `home.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `home.php` | Aplicacao web publica - Vitrine publica alternativa. | ativo ou ainda nao classificado como legado |
 | `images/favicon-setup.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `images/favicon.png` | Suporte, configuracao ou artefato de projeto - Imagem ou icone. | ativo ou ainda nao classificado como legado |
 | `images/favicon.svg` | Suporte, configuracao ou artefato de projeto - Imagem ou icone. | ativo ou ainda nao classificado como legado |
@@ -2788,8 +2788,8 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `plugins/shopvivaliz-admin/README.md` | Suporte, configuracao ou artefato de projeto - Documentacao de projeto. | ativo ou ainda nao classificado como legado |
 | `plugins/shopvivaliz-admin/ai-plugin.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `plugins/shopvivaliz-admin/plugin.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
-| `politica-devolucoes.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `politica-entrega.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `politica-devolucoes.php` | Aplicacao web publica - Pagina publica da politica de devolucoes. | ativo ou ainda nao classificado como legado |
+| `politica-entrega.php` | Aplicacao web publica - Pagina publica da politica de entrega. | ativo ou ainda nao classificado como legado |
 | `politica-privacidade.php` | Aplicacao web publica - Pagina publica de privacidade. | ativo ou ainda nao classificado como legado |
 | `politica-privacidade/index.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `preencher_precos_final.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -3398,7 +3398,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `sincronizar_secrets.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `site-audit-2026-07-23_22-57-01.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `site-shopvivaliz.code-workspace` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `sitemap.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `sitemap.php` | Aplicacao web publica - Sitemap XML publico. | ativo ou ainda nao classificado como legado |
 | `sobre/index.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `storage/.htaccess` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `storage/ab_test_results.json` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -4596,7 +4596,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `tests/unit/test_olist_entrypoints_safe.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/unit/test_secrets_canonicalization.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/unit/test_shopee_legacy_credentials_safe.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
-| `tests/webhook-notificacoes.spec.ts` | Testes - Endpoint de callback ou webhook. | ativo ou ainda nao classificado como legado |
+| `tests/webhook-notificacoes.spec.ts` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tiny_products_cache.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `tmp-gh-email-artifact/email-activity-report.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | artefato/candidato a higiene - validar uso e politica de retencao |
 | `tools/execute-update.php` | Ferramentas de desenvolvimento - Codigo PHP. | ativo ou ainda nao classificado como legado |

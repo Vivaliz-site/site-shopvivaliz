@@ -82,7 +82,7 @@ A remoção da árvore atual não invalida valores nem apaga commits antigos.
 Evidência reproduzível: `python scripts/generate_repository_index.py`, com saída em
 `docs/knowledge/repository-file-index.md` e `docs/audits/repository-hygiene.md`.
 
-- 3.823 arquivos versionados e 782 diretórios foram catalogados.
+- 3.824 arquivos versionados e 782 diretórios foram catalogados.
 - 192 grupos possuem conteúdo idêntico no índice Git. A maior parte são assets
   processados; arquivos com conteúdo idêntico não devem ser removidos somente
   por esse critério.

@@ -14,10 +14,16 @@ class GenerateRepositoryIndexTests(unittest.TestCase):
     def test_top_level_storefront_files_are_application_code(self):
         self.assertIn("Pagina publica do catalogo", file_purpose("catalogo.php"))
         self.assertIn("Pagina publica do checkout", file_purpose("checkout.php"))
+        self.assertIn("Vitrine publica alternativa", file_purpose("home.php"))
+        self.assertIn("Retorno publico do checkout", file_purpose("checkout-return.php"))
+        self.assertIn("Sitemap XML publico", file_purpose("sitemap.php"))
 
     def test_documentation_keeps_its_role_when_name_mentions_webhook_or_migration(self):
         self.assertIn("Documentacao ou instrucao", file_purpose("docs/TINY-WEBHOOKS-SETUP.md"))
         self.assertIn("Documentacao ou instrucao", file_purpose("docs/repository-migration.md"))
+
+    def test_webhook_test_keeps_test_role(self):
+        self.assertIn("Teste automatizado", file_purpose("tests/webhook-notificacoes.spec.ts"))
 
     def test_legacy_in_test_name_does_not_mark_test_as_removal_candidate(self):
         path = "tests/unit/test_shopee_legacy_credentials_safe.py"
