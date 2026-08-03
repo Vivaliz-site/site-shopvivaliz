@@ -5,6 +5,7 @@ from scripts.generate_repository_index import (
     classification,
     file_purpose,
     markdown_code,
+    parse_null_delimited_grep,
     safe_path,
 )
 
@@ -29,6 +30,17 @@ class GenerateRepositoryIndexTests(unittest.TestCase):
         path = "storage/orders/SV20260803123456789.json"
         self.assertIn("violacao de politica", classification(path))
         self.assertEqual("storage/orders/<REDACTED_ORDER_ID>.json", safe_path(path))
+
+    def test_task_filenames_are_not_mistaken_for_openai_keys(self):
+        path = "docs/status-task-a-very-long-ordinary-filename.md"
+        self.assertEqual(path, safe_path(path))
+
+    def test_null_delimited_grep_keeps_colon_number_source_out_of_path(self):
+        output = b"dist/app.js\x0012\x00function Z(){return 'later:456:source';}\n"
+        self.assertEqual(
+            [("dist/app.js", "function Z(){return 'later:456:source';}")],
+            parse_null_delimited_grep(output),
+        )
 
     def test_markdown_code_span_supports_backticks(self):
         self.assertEqual("``value`with`ticks``", markdown_code("value`with`ticks"))

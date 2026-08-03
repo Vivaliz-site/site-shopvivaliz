@@ -86,7 +86,7 @@ TEST_PATH = re.compile(r"(^|/)(tests?|specs?)(/|$)|(^|[-_.])(test|spec)([-_.]|$)
 SECRET_PATTERNS = (
     re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}", re.IGNORECASE),
     re.compile(r"github_pat_[A-Za-z0-9_]{40,}", re.IGNORECASE),
-    re.compile(r"sk-(?:proj-)?[A-Za-z0-9_-]{24,}", re.IGNORECASE),
+    re.compile(r"(?<![A-Za-z0-9_-])sk-(?:proj-)?[A-Za-z0-9_-]{24,}(?![A-Za-z0-9_-])"),
     re.compile(r"xox[baprs]-[A-Za-z0-9-]{20,}", re.IGNORECASE),
     re.compile(r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}", re.IGNORECASE),
 )
@@ -207,6 +207,32 @@ def directories(paths: list[str]) -> list[str]:
     return sorted(result)
 
 
+def parse_null_delimited_grep(output: bytes) -> list[tuple[str, str]]:
+    """Parse `git grep -n -z` without confusing source text with filenames."""
+    records: list[tuple[str, str]] = []
+    cursor = 0
+    while cursor < len(output):
+        path_end = output.find(b"\0", cursor)
+        line_end = output.find(b"\0", path_end + 1)
+        content_end = output.find(b"\n", line_end + 1)
+        if path_end < 0 or line_end < 0:
+            raise RuntimeError("unexpected NUL-delimited git grep output")
+        if content_end < 0:
+            content_end = len(output)
+        raw_path = output[cursor:path_end]
+        raw_line_number = output[path_end + 1 : line_end]
+        if not raw_line_number.isdigit():
+            raise RuntimeError(f"unexpected git grep line number: {raw_line_number!r}")
+        records.append(
+            (
+                raw_path.decode("utf-8"),
+                output[line_end + 1 : content_end].decode("utf-8", "replace"),
+            )
+        )
+        cursor = content_end + 1
+    return records
+
+
 def repeated_function_names(repo: Path) -> dict[str, list[str]]:
     names: dict[str, set[str]] = collections.defaultdict(set)
     output = git(
@@ -215,6 +241,7 @@ def repeated_function_names(repo: Path) -> dict[str, list[str]]:
         "--cached",
         "-I",
         "-n",
+        "-z",
         "-E",
         r"function[[:space:]]+&?[[:space:]]*[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*\(",
         "--",
@@ -226,12 +253,8 @@ def repeated_function_names(repo: Path) -> dict[str, list[str]]:
         "*.tsx",
         "*.jsx",
         check=False,
-    ).decode("utf-8", "replace")
-    for output_line in output.splitlines():
-        parsed = re.match(r"^(.*):(\d+):(.*)$", output_line)
-        if not parsed:
-            continue
-        path, _line_number, source_line = parsed.groups()
+    )
+    for path, source_line in parse_null_delimited_grep(output):
         for match in FUNCTION_PATTERN.finditer(source_line):
             names[match.group(1)].add(path)
     return {

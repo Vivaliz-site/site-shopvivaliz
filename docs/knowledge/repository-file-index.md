@@ -2214,7 +2214,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `docs/SECURITY-ROTATE-AGENT-KEY.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/SHOPEE-OPEN-API-V2.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/SYNC-DAEMON-RUNBOOK.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/TA<REDACTED_SECRET>.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `docs/TASK-033-FASE2-IMPLEMENTATION.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/TINY-ERP-API-V3.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/TINY-TOKEN-RENEWAL-SETUP.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/TINY-WEBHOOKS-SETUP.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -2289,11 +2289,11 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `docs/squad-escopo.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/status-marketplace-readiness-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/status-stock-alerts-audit-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/status-ta<REDACTED_SECRET>.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/status-ta<REDACTED_SECRET>.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `docs/status-task-033-stock-alerts-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `docs/status-task-038-gamification-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/status-task-040-graphql-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/status-ta<REDACTED_SECRET>.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/status-ta<REDACTED_SECRET>.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `docs/status-task-043-shopee-readiness-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `docs/status-task-048-product-pages-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/status-workflows-actions.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/task-042-cro-audit.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/task-047-seo-automation.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
