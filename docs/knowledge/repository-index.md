@@ -1,5 +1,11 @@
 # Índice canônico do repositório
 
+## Inventário exaustivo
+
+- `docs/knowledge/repository-file-index.md`: lista gerada de todos os diretórios e arquivos versionados, com função inferida por caminho e extensão.
+- `docs/audits/repository-hygiene.md`: grupos de conteúdo idêntico e caminhos candidatos a revisão; o relatório não autoriza remoção automática.
+- `scripts/generate-repository-index.ps1`: gerador que lê o índice Git em formato NUL, preservando nomes de arquivo incomuns sem abrir ou reproduzir segredos.
+
 ## Aplicação
 
 - `admin/`, `api/`, `includes/`, `public/`: aplicação PHP e superfícies públicas e administrativas.

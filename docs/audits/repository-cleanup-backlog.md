@@ -77,6 +77,38 @@ Ações externas ainda obrigatórias e não verificáveis pelo repositório:
 
 A remoção da árvore atual não invalida valores nem apaga commits antigos.
 
+## Auditoria de inventário — 2026-08-02
+
+Evidência reproduzível: `scripts/generate-repository-index.ps1`, com saída em
+`docs/knowledge/repository-file-index.md` e `docs/audits/repository-hygiene.md`.
+
+- 3.822 arquivos versionados e 782 diretórios foram catalogados.
+- 192 grupos possuem conteúdo idêntico no índice Git. A maior parte são assets
+  processados; arquivos com conteúdo idêntico não devem ser removidos somente
+  por esse critério.
+- Foram encontrados 13 grupos que incluem código. Oito são arquivos vazios de
+  marcador (`.gitkeep` ou `__init__.py`); manifests dentro de `dist/` são cópias
+  de build esperadas. Os pares de endpoints e scripts restantes exigem análise
+  de rota, telemetria e compatibilidade antes de uma consolidação.
+- Os caminhos de checkout e carrinho declaradamente legados não possuem
+  referência de código versionado fora de documentos de auditoria. Mesmo assim,
+  a remoção fica bloqueada até haver confirmação de tráfego e de rotas públicas.
+- Os wrappers Shopee repetidos são mantidos intencionalmente pelo contrato de
+  `scripts/maintenance/finalize_reorganization.py` e pelo workflow de
+  governança; não devem ser apagados isoladamente.
+- A varredura estática encontrou 117 nomes de função PHP/JavaScript repetidos.
+  Isso não prova duplicação semântica porque métodos de classes e scripts de
+  página têm escopo próprio. Os candidatos que merecem PRs específicos são os
+  helpers globais Olist (`exit_error`, `log_msg` e `log_event`), as funções de
+  carrinho replicadas entre páginas e os pares de arquivos idênticos
+  `shopvivaliz_auth`, `opcache-reset`, `mercadopago-orders` e `git-force-*`.
+  Nenhum deles foi consolidado sem verificação de rota, telemetria e contrato
+  de compatibilidade.
+
+Decisão aplicada: nenhum arquivo de produção, endpoint, build, log ou dado de
+catálogo foi movido ou removido nesta auditoria. Próximas limpezas devem ser
+PRs pequenos, cada um com consumidor identificado e verificação de rota/CI.
+
 ## Critério final
 
 A reorganização operacional só termina quando:
