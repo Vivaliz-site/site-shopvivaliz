@@ -6,12 +6,16 @@ $sharedEnv = getenv('SHOPVIVALIZ_SHARED_ENV')
     ?: '/home/ubuntu/shopvivaliz-deploy/shared/.env';
 $outputPath = getenv('SHOPVIVALIZ_RUNTIME_SECRETS')
     ?: '/home/ubuntu/shopvivaliz-deploy/shared/runtime-secrets.php';
+$sharedGroup = getenv('SHOPVIVALIZ_SHARED_GROUP') ?: 'www-data';
 
 if (!is_file($sharedEnv) || !is_readable($sharedEnv)) {
     throw new RuntimeException('shared_env_unavailable');
 }
-if (!chmod($sharedEnv, 0600)) {
-    throw new RuntimeException('shared_env_private_mode_failed');
+if (PHP_OS_FAMILY !== 'Windows' && !chgrp($sharedEnv, $sharedGroup)) {
+    throw new RuntimeException('shared_env_group_failed');
+}
+if (!chmod($sharedEnv, 0640)) {
+    throw new RuntimeException('shared_env_web_mode_failed');
 }
 
 $allowedKeys = [
@@ -114,4 +118,4 @@ echo "runtime_secrets_materialized=true\n";
 echo 'runtime_key_count=' . count($values) . "\n";
 echo "database_tuple_present=true\n";
 echo "quote_signing_present=true\n";
-echo "shared_env_mode=600\n";
+echo "shared_env_mode=640\n";
