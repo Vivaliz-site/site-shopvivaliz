@@ -51,17 +51,53 @@ jobs:
             'bash -s' > integrations-health.json 2> integrations-health.stderr <<'REMOTE_SCRIPT'
           set -euo pipefail
           current='/home/ubuntu/shopvivaliz-deploy/current'
-          test -r "$current/includes/integration-health.php"
+          test -r "$current/config/bootstrap-env.php"
           cd "$current"
-          sudo -u www-data -- php -d display_errors=0 -d log_errors=1 <<'PHP'
+          php -d display_errors=0 -d log_errors=1 <<'PHP'
           <?php
           declare(strict_types=1);
-          require '/home/ubuntu/shopvivaliz-deploy/current/includes/integration-health.php';
-          $result = svih_check_all(true);
-          echo json_encode(
-              $result,
-              JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
-          ), PHP_EOL;
+          require '/home/ubuntu/shopvivaliz-deploy/current/config/bootstrap-env.php';
+
+          $agentKey = '';
+          foreach (['SHOPVIVALIZ_AGENT_KEY', 'RUNTIME_AGENT_KEY', 'AUTONOMOUS_AGENT_KEY'] as $name) {
+              $value = getenv($name);
+              if (is_string($value) && trim($value) !== '') {
+                  $agentKey = trim($value);
+                  break;
+              }
+          }
+          if ($agentKey === '') {
+              fwrite(STDERR, "agent_key_not_configured\n");
+              exit(1);
+          }
+
+          $ch = curl_init('https://shopvivaliz.com.br/api/agent/integrations-health.php?fix=1');
+          if ($ch === false) {
+              fwrite(STDERR, "curl_init_failed\n");
+              exit(1);
+          }
+          curl_setopt_array($ch, [
+              CURLOPT_RETURNTRANSFER => true,
+              CURLOPT_CONNECTTIMEOUT => 8,
+              CURLOPT_TIMEOUT => 60,
+              CURLOPT_RESOLVE => ['shopvivaliz.com.br:443:127.0.0.1'],
+              CURLOPT_HTTPHEADER => [
+                  'Accept: application/json',
+                  'X-Agent-Key: ' . $agentKey,
+              ],
+              CURLOPT_SSL_VERIFYPEER => true,
+              CURLOPT_SSL_VERIFYHOST => 2,
+          ]);
+          $body = curl_exec($ch);
+          $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+          $error = curl_error($ch);
+          curl_close($ch);
+          if (!is_string($body) || $status !== 200) {
+              fwrite(STDERR, 'local_health_request_failed status=' . $status
+                  . ($error !== '' ? ' curl_error=' . $error : '') . "\n");
+              exit(1);
+          }
+          echo $body, PHP_EOL;
           PHP
           REMOTE_SCRIPT
           then
