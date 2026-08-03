@@ -1,6 +1,6 @@
 # Indice completo do repositorio
 
-Gerado deterministicamente a partir de 3842 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
+Gerado deterministicamente a partir de 3845 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
 
 ## Diretorios
 
@@ -4568,6 +4568,7 @@ Gerado deterministicamente a partir de 3842 arquivos versionados no indice Git. 
 | `tests/blog-comments-smoke.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/blog-editorial-autopilot-smoke.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/blog-editorial-smoke.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/cart-empty-state-source-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/compra-completa.spec.ts` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/conftest.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/e2e-journey.spec.js` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -4576,9 +4577,11 @@ Gerado deterministicamente a partir de 3842 arquivos versionados no indice Git. 
 | `tests/mercadopago-payment-tests.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/meus-pedidos.spec.ts` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/mp-auth-check.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/newsletter-smtp-transport-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/olist-refresh-safety-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/php-router.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/precos-catalogo.spec.ts` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/product-stock-copy-integrity-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/public-trust-guard-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/runtime-env-reader-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/runtime-secrets-materializer-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
