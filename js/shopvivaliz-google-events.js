@@ -33,6 +33,79 @@
     }, 0);
   }
 
+  function analyticsConsentGranted() {
+    try {
+      var match = document.cookie.match(/(?:^|;\s*)sv_privacy_consent=([^;]+)/);
+      var value = match ? decodeURIComponent(match[1]) : '';
+      if (!value) {
+        var saved = JSON.parse(localStorage.getItem('shopvivaliz_privacy_consent_v1') || 'null');
+        value = saved && saved.value ? saved.value : '';
+      }
+      return value === 'accepted';
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function randomId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return window.crypto.randomUUID().toLowerCase();
+    }
+    var bytes = new Uint8Array(16);
+    if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+      window.crypto.getRandomValues(bytes);
+      return Array.prototype.map.call(bytes, function (value) {
+        return value.toString(16).padStart(2, '0');
+      }).join('');
+    }
+    return String(Date.now()) + Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2);
+  }
+
+  function funnelClientId() {
+    var key = 'sv_funnel_client_v1';
+    try {
+      var existing = String(localStorage.getItem(key) || '').toLowerCase();
+      if (/^[a-f0-9-]{16,64}$/.test(existing)) return existing;
+      var created = randomId();
+      localStorage.setItem(key, created);
+      return created;
+    } catch (error) {
+      return randomId();
+    }
+  }
+
+  function sendFirstParty(eventName, params) {
+    if (!analyticsConsentGranted()) return;
+    var allowed = ['view_item', 'view_item_list', 'add_to_cart', 'view_cart', 'begin_checkout', 'generate_lead', 'search'];
+    if (allowed.indexOf(eventName) === -1) return;
+
+    var items = params && Array.isArray(params.items) ? params.items : [];
+    var payload = JSON.stringify({
+      event_id: randomId(),
+      event_name: eventName,
+      page_path: window.location.pathname,
+      item_count: items.length,
+      client_id: funnelClientId()
+    });
+
+    try {
+      if (navigator.sendBeacon) {
+        var blob = new Blob([payload], { type: 'application/json' });
+        if (navigator.sendBeacon('/api/analytics/funnel-event.php', blob)) return;
+      }
+    } catch (error) {}
+
+    try {
+      fetch('/api/analytics/funnel-event.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        credentials: 'same-origin',
+        keepalive: true
+      }).catch(function () {});
+    } catch (error) {}
+  }
+
   function push(eventName, params) {
     params = params || {};
     window.dataLayer = window.dataLayer || [];
@@ -40,6 +113,7 @@
     if (typeof window.gtag === 'function') {
       window.gtag('event', eventName, params);
     }
+    sendFirstParty(eventName, params);
   }
 
   function pushOnce(key, eventName, params) {

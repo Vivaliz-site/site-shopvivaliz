@@ -1,0 +1,59 @@
+name: Catalog Metadata Agent Test
+
+on:
+  pull_request:
+    paths:
+      - 'agents/v9.2.84/app/CatalogMetadataAgent.php'
+      - 'agents/v9.2.84/app/ConversionFunnelAgent.php'
+      - 'api/agent/real-work-orchestrator.php'
+      - 'api/analytics/funnel-event.php'
+      - 'js/shopvivaliz-google-events.js'
+      - 'tests/catalog-metadata-agent-test.php'
+      - '.github/workflows/catalog-metadata-agent-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verified-metadata-repair:
+    name: Provar reparo e telemetria segura
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PHP lint
+        run: |
+          set -euo pipefail
+          php -l agents/v9.2.84/app/CatalogMetadataAgent.php
+          php -l agents/v9.2.84/app/ConversionFunnelAgent.php
+          php -l api/agent/real-work-orchestrator.php
+          php -l api/analytics/funnel-event.php
+          php -l tests/catalog-metadata-agent-test.php
+
+      - name: JavaScript syntax
+        run: |
+          set -euo pipefail
+          node --check js/shopvivaliz-google-events.js
+
+      - name: Execute invariance test
+        run: |
+          set -euo pipefail
+          php tests/catalog-metadata-agent-test.php | tee catalog-metadata-test.txt
+          grep -Fx 'catalog_metadata_agent_test=passed' catalog-metadata-test.txt
+
+      - name: Verify privacy boundary
+        run: |
+          set -euo pipefail
+          ! grep -Ei "email|e-mail|phone|telefone|remote_addr|http_user_agent" api/analytics/funnel-event.php
+          grep -F "contains_personal_data' => false" agents/v9.2.84/app/ConversionFunnelAgent.php
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-metadata-test-${{ github.run_id }}
+          path: catalog-metadata-test.txt
+          if-no-files-found: error
+          retention-days: 30
