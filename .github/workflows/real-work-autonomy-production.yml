@@ -75,13 +75,23 @@ jobs:
                   yield value.strip().lower()
 
           values = set(walk(payload))
+          components = payload.get('components', {})
+          catalog = components.get('catalog_metadata', {})
+          funnel = components.get('conversion_funnel', {})
           required = {
               'ok': payload.get('ok') is True,
               'execution_accepted': payload.get('execution_accepted') is True,
               'execution_status': payload.get('execution_status') == 'completed',
               'execution_completed': payload.get('execution_completed') is True,
-              'evidence': int(payload.get('work_evidence_count', 0)) >= 5,
-              'actions': len(payload.get('actions', [])) >= 5,
+              'evidence': int(payload.get('work_evidence_count', 0)) >= 9,
+              'actions': len(payload.get('actions', [])) >= 9,
+              'catalog_metadata': catalog.get('ok') is True and catalog.get('execution_completed') is True,
+              'conversion_funnel': funnel.get('ok') is True and funnel.get('execution_completed') is True,
+              'catalog_sensitive_invariance': all(
+                  action.get('sensitive_hash_before') == action.get('sensitive_hash_after')
+                  for action in catalog.get('actions', [])
+                  if action.get('action') == 'repair_catalog_metadata'
+              ),
               'no_errors': payload.get('errors') == [],
               'no_forbidden_status': not bool(values & forbidden),
           }
