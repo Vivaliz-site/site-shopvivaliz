@@ -15,12 +15,17 @@ if (empty($_SESSION['user_id'])) {
 if (empty($_SESSION['is_admin'])) {
     require_once __DIR__ . '/../config/database.php';
     try {
-        $db = Database::getInstance()->getConnection();
-        $stmt = $db->prepare('SELECT is_admin FROM users WHERE id = ? LIMIT 1');
-        $stmt->bind_param('i', $_SESSION['user_id']);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $_SESSION['is_admin'] = !empty($row['is_admin']) ? 1 : 0;
+        $instance = Database::getInstance();
+        $db = $instance ? $instance->getConnection() : null;
+        if ($db instanceof mysqli) {
+            $stmt = $db->prepare('SELECT is_admin FROM users WHERE id = ? LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('i', $_SESSION['user_id']);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $_SESSION['is_admin'] = !empty($row['is_admin']) ? 1 : 0;
+            }
+        }
     } catch (Throwable $e) {
         error_log('[admin-guard] ' . $e->getMessage());
         $_SESSION['is_admin'] = 0;
