@@ -1,36 +1,94 @@
 <?php
 declare(strict_types=1);
 
-function svorl_client_ip(): string {
+function svorl_client_ip(): string
+{
     $remote = trim((string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
     $trustedProxy = filter_var((string)getenv('SHOPVIVALIZ_TRUST_PROXY'), FILTER_VALIDATE_BOOLEAN);
     if ($trustedProxy) {
         $forwarded = trim((string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));
         if ($forwarded !== '') {
             $candidate = trim(explode(',', $forwarded)[0]);
-            if (filter_var($candidate, FILTER_VALIDATE_IP)) return $candidate;
+            if (filter_var($candidate, FILTER_VALIDATE_IP)) {
+                return $candidate;
+            }
         }
     }
     return filter_var($remote, FILTER_VALIDATE_IP) ? $remote : 'unknown';
 }
 
-function svorl_client_key(): string {
+function svorl_client_key(): string
+{
     return hash('sha256', svorl_client_ip() . '|' . (string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
 }
 
-function svorl_allow(int $limit = 10, int $window = 300): bool {
-    $dir = dirname(__DIR__) . '/storage/order-rate-limit';
+function svorl_scope(string $scope): string
+{
+    $scope = strtolower(trim($scope));
+    $scope = preg_replace('/[^a-z0-9_-]+/', '-', $scope) ?: 'default';
+    return trim($scope, '-') ?: 'default';
+}
+
+function svorl_allow(int $limit = 10, int $window = 300, string $scope = 'orders'): bool
+{
+    $limit = max(1, $limit);
+    $window = max(1, $window);
+    $scope = svorl_scope($scope);
+
+    $dir = dirname(__DIR__) . '/storage/rate-limit/' . $scope;
     if ((!is_dir($dir) && !@mkdir($dir, 0755, true)) || !is_writable($dir)) {
-        $dir = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'shopvivaliz-order-rate-limit';
-        if ((!is_dir($dir) && !@mkdir($dir, 0755, true)) || !is_writable($dir)) return false;
+        $dir = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
+            . DIRECTORY_SEPARATOR . 'shopvivaliz-rate-limit'
+            . DIRECTORY_SEPARATOR . $scope;
+        if ((!is_dir($dir) && !@mkdir($dir, 0755, true)) || !is_writable($dir)) {
+            // Fail closed: sem armazenamento confiavel nao ha como aplicar o limite.
+            return false;
+        }
     }
+
     $path = $dir . '/' . svorl_client_key() . '.json';
-    $now = time();
-    $state = is_file($path) ? json_decode((string)file_get_contents($path), true) : [];
-    $started = (int)($state['started_at'] ?? 0);
-    $count = (int)($state['count'] ?? 0);
-    if ($started <= 0 || ($now - $started) >= $window) { $started = $now; $count = 0; }
-    $count++;
-    file_put_contents($path, json_encode(['started_at'=>$started,'count'=>$count]), LOCK_EX);
-    return $count <= $limit;
+    $handle = @fopen($path, 'c+');
+    if ($handle === false) {
+        return false;
+    }
+
+    try {
+        if (!flock($handle, LOCK_EX)) {
+            return false;
+        }
+
+        rewind($handle);
+        $raw = stream_get_contents($handle);
+        $state = is_string($raw) && $raw !== '' ? json_decode($raw, true) : [];
+        $state = is_array($state) ? $state : [];
+
+        $now = time();
+        $started = (int)($state['started_at'] ?? 0);
+        $count = (int)($state['count'] ?? 0);
+        if ($started <= 0 || ($now - $started) >= $window) {
+            $started = $now;
+            $count = 0;
+        }
+        $count++;
+
+        $encoded = json_encode([
+            'started_at' => $started,
+            'count' => $count,
+            'window' => $window,
+            'scope' => $scope,
+        ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+
+        rewind($handle);
+        if (!ftruncate($handle, 0) || fwrite($handle, $encoded) === false || !fflush($handle)) {
+            return false;
+        }
+
+        return $count <= $limit;
+    } catch (Throwable $error) {
+        error_log('[rate-limit] counter failure: ' . $error->getMessage());
+        return false;
+    } finally {
+        flock($handle, LOCK_UN);
+        fclose($handle);
+    }
 }

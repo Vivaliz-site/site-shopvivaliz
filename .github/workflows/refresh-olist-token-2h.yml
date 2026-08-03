@@ -1,0 +1,166 @@
+name: Olist Token Refresh Safety and Manual Recovery
+
+on:
+  pull_request:
+    paths:
+      - 'api/olist/refresh-token.php'
+      - 'daemon-token-renewer.py'
+      - 'tests/olist-refresh-safety-test.php'
+      - '.github/workflows/refresh-olist-token-2h.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'api/olist/refresh-token.php'
+      - 'daemon-token-renewer.py'
+      - 'tests/olist-refresh-safety-test.php'
+      - '.github/workflows/refresh-olist-token-2h.yml'
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Digite REFRESH_OLIST_TOKEN para executar a recuperação manual'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-olist-token-production
+  cancel-in-progress: false
+
+jobs:
+  safety:
+    name: Validate Olist refresh safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+
+      - name: Validate implementation and regression tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -l api/olist/refresh-token.php
+          php -l tests/olist-refresh-safety-test.php
+          python3 -m py_compile daemon-token-renewer.py
+          php tests/olist-refresh-safety-test.php
+
+  refresh:
+    name: Refresh token on production VM
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    needs: safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: production
+    steps:
+      - name: Require explicit confirmation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "${{ inputs.confirmation }}" != 'REFRESH_OLIST_TOKEN' ]]; then
+            echo '::error::Confirmacao invalida.'
+            exit 1
+          fi
+
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Configure authenticated SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          if [[ -z "$key" || -z "$known_hosts" ]]; then
+            echo '::error::SSH key or pinned known_hosts is not configured.'
+            exit 1
+          fi
+
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Refresh and verify current-run evidence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts/olist-refresh
+          run_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          # Runner e VM podem ter pequeno desvio de NTP. O run_id e o
+          # execution_id continuam garantindo correlacao estrita; a janela
+          # inferior recebe cinco minutos de tolerancia sem aceitar evidencia
+          # de outra execucao.
+          started_epoch="$(($(date -u +%s) - 300))"
+          printf '{"run_id":"%s","started_epoch":%s,"sha":"%s"}\n' \
+            "$run_id" "$started_epoch" "$GITHUB_SHA" \
+            > artifacts/olist-refresh/run-context.json
+
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'bash -s' -- "$run_id" "$started_epoch" <<'REMOTE_SCRIPT' \
+            | tee artifacts/olist-refresh/evidence.json
+          set -Eeuo pipefail
+          run_id="$1"
+          started_epoch="$2"
+          cd /home/ubuntu/shopvivaliz-deploy/current
+
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+
+          SHOPVIVALIZ_REFRESH_RUN_ID="$run_id" \
+          SHOPVIVALIZ_REFRESH_TRIGGER='github-actions' \
+            php api/olist/refresh-token.php > "$response_file"
+
+          php -r '
+            define("SVRT_LIBRARY_ONLY", true);
+            require "api/olist/refresh-token.php";
+            $result = json_decode((string)file_get_contents($argv[1]), true);
+            $latest = json_decode((string)file_get_contents($argv[2]), true);
+            if (!is_array($result) || !is_array($latest)) {
+                fwrite(STDERR, "Invalid refresh evidence JSON\n");
+                exit(1);
+            }
+            try {
+                $evidence = svrt_validate_evidence($result, $latest, (int)$argv[3], $argv[4]);
+            } catch (Throwable $error) {
+                fwrite(STDERR, $error->getMessage() . "\n");
+                exit(1);
+            }
+            echo json_encode($evidence, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) . PHP_EOL;
+          ' \
+            "$response_file" \
+            'storage/monitoring/olist-token/latest.json' \
+            "$started_epoch" \
+            "$run_id"
+          REMOTE_SCRIPT
+
+      - name: Upload redacted refresh evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: olist-refresh-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/olist-refresh/
+          if-no-files-found: error
+          retention-days: 90

@@ -35,6 +35,43 @@ function sv_current_page_name(): string
 }
 
 /**
+ * Emite as classes que alteram a geometria da primeira dobra antes do CSS ser
+ * aplicado. Antes, um script deferido adicionava essas classes e reorganizava
+ * o DOM depois do primeiro paint, causando CLS de ate 0,96 no checkout.
+ */
+function sv_emit_prepaint_page_state(string $pageName): void
+{
+    if (!in_array($pageName, ['index', 'carrinho', 'checkout'], true)) {
+        return;
+    }
+
+    $pageClass = match ($pageName) {
+        'index' => 'sv-home-page sv-home-top',
+        'carrinho' => 'sv-cart-page',
+        'checkout' => 'sv-checkout-page',
+        default => '',
+    };
+
+    $emptyClass = match ($pageName) {
+        'carrinho' => 'sv-cart-empty',
+        'checkout' => 'sv-checkout-empty',
+        default => '',
+    };
+
+    echo "    <script>\n";
+    echo "    (function(){\n";
+    echo "      var root=document.documentElement;\n";
+    echo "      root.className+=(root.className?' ':'')+" . json_encode($pageClass) . ";\n";
+    if ($emptyClass !== '') {
+        echo "      var empty=false;\n";
+        echo "      try{var cart=JSON.parse(localStorage.getItem('shopvivaliz_cart')||'[]');empty=Array.isArray(cart)&&cart.length===0;}catch(error){empty=false;}\n";
+        echo "      root.classList.toggle(" . json_encode($emptyClass) . ",empty);\n";
+    }
+    echo "    })();\n";
+    echo "    </script>\n";
+}
+
+/**
  * Carrega CSS versionado da aplicação e CSS customizado do admin para a página atual.
  * Inclua isto no <head> de todas as páginas públicas suportadas.
  */
@@ -48,18 +85,22 @@ function load_custom_css(): void
         sv_enable_product_review_integrity_guard();
     }
 
-    // CSS e JS funcionais da home devem viver fora de storage, como parte da release.
+    sv_emit_prepaint_page_state($pageName);
+
+    // CSS funcional da home deve viver fora de storage, como parte da release.
+    // A antiga home-mobile-layout.js foi removida porque mudava texto e ordem de
+    // secoes apos o primeiro paint. O HTML canonico agora e igual em todos os
+    // dispositivos; apenas CSS responsivo altera sua apresentacao.
     if ($pageName === 'index') {
         echo "    <link rel=\"stylesheet\" href=\"/css/home-mobile-compact.css?v=2026-07-28-3\">\n";
         echo "    <link rel=\"stylesheet\" href=\"/css/home-mobile-final.css?v=2026-08-02-1\">\n";
-        echo "    <script src=\"/js/home-mobile-layout.js?v=2026-07-28-2\" defer></script>\n";
     }
 
-    // Quarta rodada de polimento visual. O arquivo é restrito às páginas onde
-    // foram medidos conflitos na primeira dobra ou estados vazios excessivos.
+    // Quarta rodada de polimento visual. O estado geometrico correspondente ja
+    // foi definido no <html> pelo script sincrono acima, evitando layout shift.
     if (in_array($pageName, ['index', 'carrinho', 'checkout'], true)) {
-        echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v4.css?v=2026-07-31-2\">\n";
-        echo "    <script src=\"/js/visual-polish-v4.js?v=2026-07-31-1\" defer></script>\n";
+        echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v4.css?v=2026-08-02-1\">\n";
+        echo "    <script src=\"/js/visual-polish-v4.js?v=2026-08-02-1\" defer></script>\n";
     }
 
     $loadVisualPolishV5 = in_array($pageName, ['index', 'catalogo', 'produto', 'carrinho', 'checkout'], true);
@@ -106,13 +147,20 @@ function load_custom_css(): void
             . htmlspecialchars($visualAuditVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
     }
 
-    // Regras transversais de acessibilidade ficam por último para preservar foco,
-    // preferência de movimento e alvos táteis em todas as páginas públicas.
+    // Regras transversais de acessibilidade do main são preservadas antes do
+    // hotfix de geometria, que deve permanecer como a última camada visual.
     $accessibilityCss = $root . '/css/accessibility-hardening-v1.css';
     if (is_file($accessibilityCss) && is_readable($accessibilityCss)) {
         $accessibilityVersion = (string) filemtime($accessibilityCss);
         echo "    <link rel=\"stylesheet\" href=\"/css/accessibility-hardening-v1.css?v="
             . htmlspecialchars($accessibilityVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
+    }
+
+    $clsStabilityCss = $root . '/css/cls-stability-v1.css';
+    if (is_file($clsStabilityCss) && is_readable($clsStabilityCss)) {
+        $clsStabilityVersion = (string) filemtime($clsStabilityCss);
+        echo "    <link rel=\"stylesheet\" href=\"/css/cls-stability-v1.css?v="
+            . htmlspecialchars($clsStabilityVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
     }
 }
 

@@ -11,7 +11,9 @@
             try {
                 var apiItems = window.ShopVivalizCart.get();
                 return Array.isArray(apiItems) ? apiItems : [];
-            } catch (error) {}
+            } catch (error) {
+                return [];
+            }
         }
 
         try {
@@ -34,51 +36,18 @@
         return /^\/checkout(?:\.php)?\/?$/i.test(window.location.pathname);
     }
 
-    function enhanceCartEmptyState() {
-        var host = document.querySelector('#cart-items-list .cart-empty');
-        if (!host || host.dataset.svEnhanced === '1') return;
-
-        host.dataset.svEnhanced = '1';
-        host.innerHTML = ''
-            + '<div class="sv-empty-cart-state">'
-            + '<div class="sv-empty-state-icon" aria-hidden="true">🛒</div>'
-            + '<h2>Seu carrinho está esperando por você</h2>'
-            + '<p>Explore o catálogo e escolha os produtos que combinam com sua casa ou seu trabalho.</p>'
-            + '<a href="/catalogo" class="btn btn-primary sv-empty-state-action">Explorar produtos</a>'
-            + '</div>';
-    }
-
-    function enhanceCheckoutEmptyState() {
-        var host = document.getElementById('cart-items');
-        if (!host) return;
-        if (host.querySelector('.sv-empty-checkout-state')) return;
-
-        host.innerHTML = ''
-            + '<div class="sv-empty-checkout-state">'
-            + '<div class="sv-empty-state-icon" aria-hidden="true">🧺</div>'
-            + '<h2>Adicione produtos antes de finalizar</h2>'
-            + '<p>Seu checkout ficará pronto assim que houver itens no carrinho.</p>'
-            + '<a href="/catalogo" class="btn btn-primary sv-empty-state-action">Voltar ao catálogo</a>'
-            + '</div>';
-    }
-
     function syncPageState() {
-        var body = document.body;
-        if (!body) return;
-
+        var root = document.documentElement;
         var items = readCart();
         var empty = items.length === 0;
         var home = isHomePage();
         var cart = isCartPage();
         var checkout = isCheckoutPage();
 
-        body.classList.toggle('sv-home-page', home);
-        body.classList.toggle('sv-home-top', home && window.scrollY < 260);
-        body.classList.toggle('sv-cart-empty', cart && empty);
-        body.classList.toggle('sv-checkout-empty', checkout && empty);
-
-        if (cart && empty) enhanceCartEmptyState();
-        if (checkout && empty) enhanceCheckoutEmptyState();
+        root.classList.toggle('sv-home-page', home);
+        root.classList.toggle('sv-home-top', home && window.scrollY < 260);
+        root.classList.toggle('sv-cart-empty', cart && empty);
+        root.classList.toggle('sv-checkout-empty', checkout && empty);
     }
 
     function scheduleSync() {
@@ -90,24 +59,10 @@
         });
     }
 
-    function init() {
-        syncPageState();
-
-        if (document.body) {
-            new MutationObserver(scheduleSync).observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-        }
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init, { once: true });
-    } else {
-        init();
-    }
-
-    window.addEventListener('load', scheduleSync, { once: true });
+    // As classes que alteram geometria ja foram definidas no <head>. Este
+    // script apenas acompanha mudancas causadas pelo proprio usuario, como
+    // adicionar/remover itens e rolar a home; nao reescreve mais o DOM.
+    syncPageState();
     window.addEventListener('scroll', scheduleSync, { passive: true });
     window.addEventListener('storage', scheduleSync);
     window.addEventListener('shopvivaliz:cart-updated', scheduleSync);

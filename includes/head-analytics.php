@@ -2,11 +2,37 @@
 /**
  * Head Analytics e recursos públicos compartilhados.
  */
+
+$requestPath = parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
+$requestPath = '/' . trim($requestPath, '/');
+if ($requestPath === '/') {
+    $requestPath = '/';
+}
+
+require_once __DIR__ . '/checkout-output-hardening.php';
+svcoh_register($requestPath);
+
+// Carrega a configuracao para montar as tags publicas. O bloqueio dos segredos
+// acontece logo depois, pois bootstrap-env.php poderia repopular valores que
+// fossem removidos antes deste require.
 require_once __DIR__ . '/analytics-tracking.php';
 
-// Consent Mode precisa existir antes de GTM/gtag. O estado salvo e lido sem
-// cookies; na primeira visita analytics e publicidade ficam negados ate uma
-// escolha explicita. Cookies essenciais e seguranca permanecem ativos.
+// O consentimento precisa ser visivel para o PHP. Sem o cookie explicito,
+// segredos de envio server-side sao removidos apenas desta requisicao, o que
+// impede Measurement Protocol/CAPI de criarem identificadores antes da escolha.
+$serverConsentAccepted = hash_equals(
+    'accepted',
+    (string)($_COOKIE['sv_privacy_consent'] ?? '')
+);
+if (!$serverConsentAccepted) {
+    foreach (['GA4_SECRET', 'FACEBOOK_ACCESS_TOKEN', 'TIKTOK_PIXEL_TOKEN'] as $secretKey) {
+        putenv($secretKey);
+        unset($_ENV[$secretKey], $_SERVER[$secretKey]);
+    }
+}
+
+// Consent Mode existe antes de GTM/gtag. O cookie e a copia em localStorage
+// permanecem sincronizados pelo js/privacy-consent-v1.js.
 echo <<<'HTML'
 <script>
 (function () {
@@ -14,8 +40,12 @@ echo <<<'HTML'
   window.gtag = window.gtag || function(){ window.dataLayer.push(arguments); };
   var value = '';
   try {
-    var saved = JSON.parse(localStorage.getItem('shopvivaliz_privacy_consent_v1') || 'null');
-    value = saved && saved.value ? saved.value : '';
+    var match = document.cookie.match(/(?:^|;\s*)sv_privacy_consent=([^;]+)/);
+    value = match ? decodeURIComponent(match[1]) : '';
+    if (!value) {
+      var saved = JSON.parse(localStorage.getItem('shopvivaliz_privacy_consent_v1') || 'null');
+      value = saved && saved.value ? saved.value : '';
+    }
   } catch (error) {}
   var granted = value === 'accepted';
   window.gtag('consent', 'default', {
@@ -33,16 +63,13 @@ HTML;
 
 echo $GLOBALS['analytics']->getTrackingCode();
 
-$requestPath = parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
-$requestPath = '/' . trim($requestPath, '/');
-if ($requestPath === '/') $requestPath = '/';
 if (in_array($requestPath, ['/carrinho', '/checkout', '/checkout/retorno'], true)) {
     echo "\n<meta name=\"robots\" content=\"noindex,nofollow,noarchive\">\n";
 }
 
 $googleEventsFile = dirname(__DIR__) . '/js/shopvivaliz-google-events.js';
 $googleEventsVersion = is_file($googleEventsFile) ? (string)filemtime($googleEventsFile) : '1';
-echo "\n<script src=\"/js/shopvivaliz-google-events.js?v=" . htmlspecialchars($googleEventsVersion, ENT_QUOTES, 'UTF-8') . "\"></script>\n";
+echo "\n<script defer src=\"/js/shopvivaliz-google-events.js?v=" . htmlspecialchars($googleEventsVersion, ENT_QUOTES, 'UTF-8') . "\"></script>\n";
 
 $privacyCss = dirname(__DIR__) . '/css/privacy-consent-v1.css';
 $privacyJs = dirname(__DIR__) . '/js/privacy-consent-v1.js';
