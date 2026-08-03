@@ -28,6 +28,7 @@ $codename = (string)($version['codename'] ?? '');
                 <a href="/admin/clientes.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">👥 Clientes</a>
                 <a href="/admin/admin-back.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🗂️ Legado</a>
                 <a href="/admin/monitor/" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📊 Monitor</a>
+                <a href="/admin/connections.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🔐 Conexões</a>
                 <a href="/auth/logout.php" style="color: #ff6b6b; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🚪 Sair</a>
             </div>
         </div>
@@ -74,6 +75,9 @@ $codename = (string)($version['codename'] ?? '');
                 </a>
                 <a href="/admin/integrations.php" style="background: #e83e8c; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
                     ⚙️ Integrações
+                </a>
+                <a href="/admin/connections.php" style="background: #0f766e; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    🔐 Conexões e tokens
                 </a>
             </div>
 
