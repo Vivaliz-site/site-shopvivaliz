@@ -23,6 +23,18 @@ final class ShopvivalizConversionFunnelAgent
         }
 
         try {
+            $created = !$this->tableExists($pdo, 'sv_conversion_events');
+            $this->ensureConversionTable($pdo);
+            if (!$this->tableExists($pdo, 'sv_conversion_events')) {
+                throw new RuntimeException('conversion_event_table_not_verified');
+            }
+            $actions[] = [
+                'action' => 'ensure_conversion_event_table',
+                'status' => $created ? 'created' : 'verified_existing',
+                'verified' => true,
+                'changed_items' => $created ? 1 : 0,
+            ];
+
             $ordersTable = $this->firstTable($pdo, ['orders', 'pedidos', 'sv_orders', 'customer_orders']);
             if ($ordersTable === null) {
                 throw new RuntimeException('orders_table_not_found');
@@ -64,29 +76,26 @@ final class ShopvivalizConversionFunnelAgent
                 'changed_items' => 0,
             ];
 
-            $eventTable = $this->firstTable($pdo, ['analytics_events', 'conversion_events', 'funnel_events', 'tracking_events']);
-            $eventSummary = [];
-            if ($eventTable !== null) {
-                $eventColumns = $this->columns($pdo, $eventTable);
-                $eventNameColumn = $this->firstColumn($eventColumns, ['event_name', 'event', 'name', 'type']);
-                if ($eventNameColumn !== null) {
-                    $eventSummary = $this->statusCounts($pdo, $eventTable, $eventNameColumn, 20);
-                }
-            }
+            $eventSummary = $this->statusCounts($pdo, 'sv_conversion_events', 'event_name', 20);
+            $eventsLast24h = $this->countWhere($pdo, 'sv_conversion_events', '`created_at` >= UTC_TIMESTAMP() - INTERVAL 24 HOUR');
+            $uniqueSessions24h = (int)$pdo->query("SELECT COUNT(DISTINCT session_hash) FROM sv_conversion_events WHERE created_at >= UTC_TIMESTAMP() - INTERVAL 24 HOUR")->fetchColumn();
             $actions[] = [
                 'action' => 'measure_client_events',
-                'status' => $eventTable !== null ? 'verified' : 'verified_not_configured',
+                'status' => 'verified',
                 'verified' => true,
-                'events_table' => $eventTable,
+                'events_table' => 'sv_conversion_events',
+                'events_last_24h' => $eventsLast24h,
+                'unique_sessions_last_24h' => $uniqueSessions24h,
                 'event_counts' => $eventSummary,
                 'changed_items' => 0,
             ];
 
             $evidence = [
                 'generated_at' => date('c'),
-                'orders' => $actions[0],
-                'lead_capture' => $actions[1],
-                'client_events' => $actions[2],
+                'schema' => $actions[0],
+                'orders' => $actions[1],
+                'lead_capture' => $actions[2],
+                'client_events' => $actions[3],
                 'contains_personal_data' => false,
             ];
             $this->persist($evidence);
@@ -107,7 +116,7 @@ final class ShopvivalizConversionFunnelAgent
             'started_at' => $startedAt,
             'finished_at' => date('c'),
             'evidence_count' => count($actions),
-            'changed_items' => 0,
+            'changed_items' => array_sum(array_map(static fn(array $action): int => (int)($action['changed_items'] ?? 0), $actions)),
             'actions' => $actions,
             'errors' => $errors,
         ];
@@ -124,13 +133,34 @@ final class ShopvivalizConversionFunnelAgent
         return null;
     }
 
+    private function ensureConversionTable(PDO $pdo): void
+    {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS sv_conversion_events (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            event_id VARCHAR(64) NOT NULL,
+            event_name VARCHAR(64) NOT NULL,
+            page_path VARCHAR(255) NOT NULL,
+            item_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+            session_hash CHAR(64) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_sv_conversion_event_id (event_id),
+            KEY idx_sv_conversion_event_created (event_name, created_at),
+            KEY idx_sv_conversion_session_created (session_hash, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    }
+
+    private function tableExists(PDO $pdo, string $table): bool
+    {
+        $stmt = $pdo->prepare('SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1');
+        $stmt->execute([$table]);
+        return (bool)$stmt->fetchColumn();
+    }
+
     private function firstTable(PDO $pdo, array $candidates): ?string
     {
-        $stmt = $pdo->prepare('SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1');
         foreach ($candidates as $candidate) {
-            $stmt->execute([$candidate]);
-            $table = $stmt->fetchColumn();
-            if (is_string($table) && $table !== '') return $table;
+            if ($this->tableExists($pdo, $candidate)) return $candidate;
         }
         return null;
     }
