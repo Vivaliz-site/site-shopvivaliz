@@ -9,6 +9,9 @@ if ($requestPath === '/') {
     $requestPath = '/';
 }
 
+require_once __DIR__ . '/product-trust-sanitizer.php';
+svpts_register($requestPath);
+
 require_once __DIR__ . '/checkout-output-hardening.php';
 svcoh_register($requestPath);
 
