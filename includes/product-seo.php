@@ -25,6 +25,9 @@ function svseo_plain_text(string $value): string
     $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
     $value = preg_replace('/\s*(?:FOTOS|IMAGENS)\s+MERAMENTES?\s+ILUSTRATIVAS\.?\s*/i', ' ', $value) ?: $value;
     $value = preg_replace('/\s*Confira as dimensões, compatibilidade e aplicação antes da compra\.?\s*/iu', ' ', $value) ?: $value;
+    // Normaliza descricoes vindas do ERP que chegam como "necessario.Destaques:•".
+    $value = preg_replace('/([.!?;:])(?=[\p{Lu}\p{N}])/u', '$1 ', $value) ?: $value;
+    $value = preg_replace('/\s*•\s*/u', ' • ', $value) ?: $value;
     $value = preg_replace('/\s+/', ' ', trim($value)) ?: '';
     return trim($value);
 }
@@ -50,6 +53,11 @@ function svseo_human_name(array $product): string
 
 function svseo_brand(array $product): string
 {
+    $explicit = trim((string)($product['brand'] ?? $product['marca'] ?? ''));
+    if ($explicit !== '' && preg_match('/^PRODUTO_\d+$/i', $explicit) !== 1) {
+        return svseo_trim_words($explicit, 70);
+    }
+
     $haystack = svseo_lower(implode(' ', [
         (string)($product['name'] ?? ''),
         (string)($product['description'] ?? ''),
@@ -57,7 +65,7 @@ function svseo_brand(array $product): string
         implode(' ', is_array($product['tags'] ?? null) ? $product['tags'] : []),
     ]));
 
-    foreach (['soprano', 'gedore', 'astra', 'fercar', 'papaiz', 'japi', 'aquatools', 'robust'] as $brand) {
+    foreach (['soprano', 'gedore', 'astra', 'fercar', 'papaiz', 'japi', 'aquatools', 'robust', 'ferramix', 'tramontina', 'vonder', 'tigre', 'lorenzetti'] as $brand) {
         if (str_contains($haystack, $brand)) {
             return ucfirst($brand);
         }
@@ -76,7 +84,9 @@ function svseo_intent_terms(array $product, string $name): array
         'banheiro' => ['banheiro', 'assento sanitario', 'assento sanitário', 'armario banheiro', 'armário banheiro'],
         'ferramenta' => ['ferramenta', 'alicate', 'chave', 'gedore', 'fercar', 'robust'],
         'pet' => ['pet', 'cachorro', 'gato', 'comedouro', 'racao', 'ração'],
-        'jardim' => ['jardim', 'floreira', 'cachepot', 'vaso'],
+        'jardim' => ['jardim', 'floreira', 'cachepot', 'vaso', 'irrigador'],
+        'eletrica' => ['tomada', 'interruptor', 'plugue', 'elétrica', 'eletrica'],
+        'seguranca' => ['cadeado', 'fechadura', 'cofre', 'segurança', 'seguranca'],
     ];
 
     foreach ($rules as $term => $needles) {
@@ -110,21 +120,9 @@ function svseo_attribute_terms(array $product, string $name): array
     }
 
     foreach ([
-        'silicone gel',
-        'com freio',
-        'sem freio',
-        'giratorio',
-        'giratório',
-        'almofadado',
-        'branco',
-        'azul',
-        'preto',
-        'dourado',
-        'inox',
-        'zincado',
-        'galvanizado',
-        'porta de correr',
-        'com espelho',
+        'silicone gel', 'com freio', 'sem freio', 'giratorio', 'giratório',
+        'almofadado', 'branco', 'azul', 'preto', 'dourado', 'inox', 'zincado',
+        'galvanizado', 'porta de correr', 'com espelho',
     ] as $term) {
         if (str_contains($text, $term)) {
             $attributes[] = $term;
@@ -142,30 +140,39 @@ function svseo_product_type(array $product, string $name = ''): string
     }
 
     $terms = svseo_intent_terms($product, $name !== '' ? $name : svseo_human_name($product));
-    if (in_array('rodizio', $terms, true)) {
-        return 'Casa e jardim > Ferragens > Rodizios';
-    }
-    if (in_array('banheiro', $terms, true)) {
-        return 'Casa e jardim > Banheiro';
-    }
-    if (in_array('ferramenta', $terms, true)) {
-        return 'Ferramentas';
-    }
-    if (in_array('pet', $terms, true)) {
-        return 'Pet shop';
-    }
-    if (in_array('jardim', $terms, true)) {
-        return 'Casa e jardim > Jardim';
-    }
+    if (in_array('rodizio', $terms, true)) return 'Casa e jardim > Ferragens > Rodizios';
+    if (in_array('banheiro', $terms, true)) return 'Casa e jardim > Banheiro';
+    if (in_array('ferramenta', $terms, true)) return 'Ferramentas';
+    if (in_array('pet', $terms, true)) return 'Pet shop';
+    if (in_array('jardim', $terms, true)) return 'Casa e jardim > Jardim';
+    if (in_array('eletrica', $terms, true)) return 'Casa e jardim > Eletrica';
+    if (in_array('seguranca', $terms, true)) return 'Casa e jardim > Seguranca';
 
     return 'Casa, jardim e utilidades';
+}
+
+/**
+ * Only emits a Google taxonomy override when the source catalog has a curated
+ * valid ID or full path. Automatic guesses are intentionally avoided because
+ * Google already categorizes products and rejects invalid overrides.
+ */
+function svseo_google_product_category(array $product): string
+{
+    $candidate = trim((string)(
+        $product['google_product_category']
+        ?? $product['google_category']
+        ?? $product['categoria_google']
+        ?? ''
+    ));
+    if ($candidate === '') return '';
+    if (preg_match('/^\d+$/', $candidate) === 1) return $candidate;
+    return str_contains($candidate, ' > ') ? svseo_trim_words($candidate, 750) : '';
 }
 
 function svseo_title(array $product, int $width = 150): string
 {
     $name = svseo_human_name($product);
     $brand = svseo_brand($product);
-    $category = svseo_product_type($product, $name);
     $sku = trim((string)($product['sku'] ?? $product['olist_product_id'] ?? $product['id'] ?? ''));
     $attributes = svseo_attribute_terms($product, $name);
     $parts = [];
@@ -174,7 +181,7 @@ function svseo_title(array $product, int $width = 150): string
         $parts[] = $brand;
     }
     $parts[] = $name;
-    foreach (array_slice($attributes, 0, 4) as $attribute) {
+    foreach (array_slice($attributes, 0, 3) as $attribute) {
         if ($attribute !== '' && stripos($name, $attribute) === false) {
             $parts[] = $attribute;
         }
@@ -191,25 +198,21 @@ function svseo_description(array $product, int $width = 5000): string
 {
     $name = svseo_human_name($product);
     $description = svseo_plain_text((string)($product['description'] ?? ''));
-    $category = svseo_product_type($product, $name);
     $brand = svseo_brand($product);
     $stock = (int)($product['stock'] ?? 0);
-    $terms = svseo_intent_terms($product, $name);
     $attributes = svseo_attribute_terms($product, $name);
 
     if ($description === '' || svseo_is_boilerplate_description($description)) {
         $description = $name;
     }
 
-    $parts = [];
-    $parts[] = $description;
+    $parts = [$description];
     if ($attributes !== []) {
         $parts[] = 'Principais atributos: ' . implode(', ', array_slice($attributes, 0, 8)) . '.';
     }
     if ($brand !== 'Vivaliz') {
         $parts[] = 'Marca ' . $brand . '.';
     }
-    unset($category, $terms);
     $parts[] = $stock > 0 ? 'Disponível em estoque para venda online.' : 'Produto temporariamente sem estoque.';
 
     return svseo_trim_words(implode(' ', array_filter($parts)), $width);
@@ -218,4 +221,12 @@ function svseo_description(array $product, int $width = 5000): string
 function svseo_meta_description(array $product): string
 {
     return svseo_description($product, 155);
+}
+
+function svseo_price_band(float $price): string
+{
+    if ($price < 50) return 'ate-50';
+    if ($price < 150) return '50-a-149';
+    if ($price < 500) return '150-a-499';
+    return '500-ou-mais';
 }

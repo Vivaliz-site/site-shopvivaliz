@@ -1,4 +1,4 @@
-name: Incident Detection (monitor only)
+name: Incident Detection
 
 on:
   schedule:
@@ -16,7 +16,7 @@ jobs:
   detect:
     runs-on: ubuntu-latest
     name: Detect and report incidents
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - name: Checkout without persisted credentials
@@ -24,34 +24,122 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-
-      - name: Run monitor-only incident detector
-        id: incident
-        continue-on-error: true
-        env:
-          INCIDENT_MODE: monitor
-          HEALTHCHECK_URL: https://shopvivaliz.com.br/api/health
+      - name: Initialize incident evidence
         run: |
-          set +e
-          php scripts/incident-response.php
-          status=$?
-          echo "response_status=$status" >> "$GITHUB_OUTPUT"
-          exit 0
+          set -euo pipefail
+          mkdir -p artifacts/incidents
+          printf 'run_id=%s\nsha=%s\nevent=%s\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" \
+            > artifacts/incidents/context.txt
+
+      - name: Run monitor-only incident detector on Oracle production
+        id: incident
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ORACLE_VM_SSH_KEY:-}"
+          test -n "${ORACLE_VM_KNOWN_HOSTS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          printf 'execution_path=oracle-active-release\n' >> artifacts/incidents/context.txt
+
+          erp_status=0
+          if ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'set -euo pipefail
+             current=/home/ubuntu/shopvivaliz-deploy/current
+             cache="$current/storage/products-cache-ativos.json"
+             if sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null)"; then :; else sync_status=inactive; fi
+             if token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null)"; then :; else token_status=inactive; fi
+             if [[ -f "$cache" ]]; then
+               cache_age=$(( $(date +%s) - $(stat -c %Y "$cache") ))
+               cache_size=$(stat -c %s "$cache")
+               cache_json_valid=true
+               if python3 -m json.tool "$cache" >/dev/null 2>&1; then :; else cache_json_valid=false; fi
+             else
+               cache_age=-1
+               cache_size=0
+               cache_json_valid=false
+             fi
+             ok=false
+             if [[ "$sync_status" == active && "$token_status" == active && "$cache_age" -ge 0 && "$cache_age" -le 900 && "$cache_json_valid" == true ]]; then
+               ok=true
+             fi
+             printf "{\"ok\":%s,\"sync_service\":\"%s\",\"token_renewer\":\"%s\",\"cache_age_seconds\":%s,\"cache_size_bytes\":%s,\"cache_json_valid\":%s}\n" "$ok" "$sync_status" "$token_status" "$cache_age" "$cache_size" "$cache_json_valid"
+             [[ "$ok" == true ]]' \
+            > artifacts/incidents/erp-runtime.log 2>&1; then
+            erp_status=0
+          else
+            erp_status=$?
+          fi
+          cat artifacts/incidents/erp-runtime.log
+          echo "erp_runtime_status=$erp_status" >> artifacts/incidents/context.txt
+
+          if ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'set -euo pipefail; test -r /home/ubuntu/shopvivaliz-deploy/current/scripts/incident-response.php; HEALTHCHECK_URL=https://shopvivaliz.com.br/api/health/version.php INCIDENT_MODE=monitor /usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/scripts/incident-response.php' \
+            > artifacts/incidents/detector.log 2>&1; then
+            status=0
+          else
+            status=$?
+          fi
+          cat artifacts/incidents/detector.log
+          if [[ "$status" -eq 0 && "$erp_status" -eq 0 ]]; then
+            response_status=0
+          else
+            response_status=2
+          fi
+          echo "response_status=$response_status" >> "$GITHUB_OUTPUT"
+          echo "response_status=$status" >> artifacts/incidents/context.txt
+          echo "combined_response_status=$response_status" >> artifacts/incidents/context.txt
+
+      - name: Check incident notification configuration
+        if: steps.incident.outputs.response_status != '0'
+        id: notification
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$SLACK_WEBHOOK_URL" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "Slack incident notification is configured."
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Slack incident notification is not configured; detector evidence will still be uploaded."
+          fi
 
       - name: Notify on detected incident
-        if: steps.incident.outputs.response_status != '0'
+        if: steps.incident.outputs.response_status != '0' && steps.notification.outputs.configured == 'true'
         uses: 8398a7/action-slack@v3
         with:
           status: failure
-          text: 'Incidente potencial detectado. Nenhuma ação destrutiva foi executada; revisão humana necessária.'
+          text: 'Incidente potencial detectado. Nenhuma ação destrutiva foi executada; revisão necessária.'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-        continue-on-error: true
 
-      - name: Report healthy status
-        if: steps.incident.outputs.response_status == '0'
-        run: echo "Nenhum incidente detectado."
+      - name: Upload incident evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: incident-detection-${{ github.run_id }}
+          path: artifacts/incidents/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Fail when detector reported an incident
+        if: steps.incident.outputs.response_status != '0'
+        run: exit 1

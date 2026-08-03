@@ -1,0 +1,66 @@
+/* Accessibility hardening: keyboard, reduced motion and touch targets. */
+
+/* Preserve horizontal overflow containment without clipping keyboard focus rings. */
+@supports (overflow: clip) {
+    html,
+    body {
+        overflow-x: clip;
+    }
+}
+
+/* Consistent, high-contrast keyboard focus on interactive controls. */
+:where(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
+    outline: 3px solid #f59e0b !important;
+    outline-offset: 3px !important;
+    box-shadow: 0 0 0 2px #ffffff !important;
+}
+
+/* Avoid focus indicators being hidden underneath sticky headers. */
+:where(a, button, input, select, textarea, summary, [role="button"], [tabindex]) {
+    scroll-margin-top: 96px;
+}
+
+/* Respect the operating-system motion preference across custom animations. */
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto !important;
+    }
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        transition-delay: 0ms !important;
+    }
+
+    .hero-content,
+    .hero-slide,
+    #sv-liz-launcher,
+    .sv-first-coupon,
+    .sv-support-dock {
+        transform: none !important;
+    }
+}
+
+/* Minimum touch target for primary mobile controls without inflating desktop UI. */
+@media (pointer: coarse) {
+    :where(button, .btn, [role="button"], input[type="submit"], input[type="button"]) {
+        min-height: 44px;
+    }
+
+    :where(.cat-filter, .category-filter, .pagination a, .carousel-control, .sv-first-coupon__close) {
+        min-width: 44px;
+        min-height: 44px;
+    }
+}
+
+/* Prevent long product names and user content from forcing horizontal scrolling. */
+:where(.product-card, .product-detail-copy, .cart-item, .checkout-summary) {
+    min-width: 0;
+}
+
+:where(.product-card h2, .product-card h3, .product-detail-copy h1, .cart-item, .checkout-summary) {
+    overflow-wrap: anywhere;
+}

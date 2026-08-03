@@ -7,7 +7,8 @@ import requests
 from pathlib import Path
 from dotenv import load_dotenv
 
-env_file = Path(__file__).resolve().parent / ".env"
+# Carregar .env
+env_file = Path(r"C:\site-shopvivaliz\.env.local")
 if env_file.exists():
     load_dotenv(env_file)
 

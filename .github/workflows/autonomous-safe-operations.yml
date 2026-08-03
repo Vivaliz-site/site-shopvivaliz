@@ -1,152 +1,144 @@
-name: Autonomous Safe Operations
+name: Autonomous Read-Only Operations
 
 on:
   schedule:
     - cron: '17 */2 * * *'
     - cron: '7 * * * *'
   workflow_dispatch:
+  issues:
+    types:
+      - opened
 
 concurrency:
-  group: autonomous-safe-operations
+  group: autonomous-read-only-operations
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+  contents: read
   actions: read
 
 jobs:
-  catalog-sync:
+  catalog-snapshot:
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 */2 * * *'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: true
-          fetch-depth: 0
+      - name: Initialize catalog evidence
+        run: mkdir -p artifacts/catalog-snapshot
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-
-      - name: Generate catalog snapshot
+      - name: Configure verified Oracle SSH
         env:
-          OLIST_ACCESS_TOKEN: ${{ secrets.OLIST_ACCESS_TOKEN }}
-          TINY_ACCESS_TOKEN: ${{ secrets.TINY_ACCESS_TOKEN }}
-          TOKEN_API_OLIST: ${{ secrets.TOKEN_API_OLIST }}
-          OLIST_CLIENT_ID: ${{ secrets.OLIST_CLIENT_ID }}
-          OLIST_CLIENT_SECRET: ${{ secrets.OLIST_CLIENT_SECRET }}
-          OLIST_REFRESH_TOKEN: ${{ secrets.OLIST_REFRESH_TOKEN }}
-          TINY_CLIENT_ID: ${{ secrets.TINY_CLIENT_ID }}
-          TINY_CLIENT_SECRET: ${{ secrets.TINY_CLIENT_SECRET }}
-          TINY_REFRESH_TOKEN: ${{ secrets.TINY_REFRESH_TOKEN }}
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          python sync-products-to-json.py
-          test -s storage/products-cache.json
-          python -m json.tool storage/products-cache.json >/dev/null
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Validate change scope
+      - name: Copy catalog snapshot from the active production release
         run: |
           set -euo pipefail
-          changed="$(git status --short)"
-          printf '%s\n' "$changed"
-          unexpected="$(printf '%s\n' "$changed" | awk '{print $2}' | grep -v '^storage/products-cache.json$' || true)"
-          if [[ -n "$unexpected" ]]; then
-            echo "::error::Unexpected files changed: $unexpected"
-            exit 1
-          fi
+          release_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha')"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17:/home/ubuntu/shopvivaliz-deploy/current/storage/products-cache-ativos.json artifacts/catalog-snapshot/products-cache-ativos.json
+          test -s artifacts/catalog-snapshot/products-cache-ativos.json
+          python3 -m json.tool artifacts/catalog-snapshot/products-cache-ativos.json >/dev/null
+          printf 'run_id=%s\nexecution_path=oracle-active-release\nrelease_sha=%s\n' "$GITHUB_RUN_ID" "$release_sha" > artifacts/catalog-snapshot/context.txt
 
-      - name: Publish or update autonomous PR
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          branch='automation/catalog-sync'
-          git config user.email 'automation@shopvivaliz.com.br'
-          git config user.name 'ShopVivaliz Automation'
-
-          if git diff --quiet -- storage/products-cache.json; then
-            echo 'Catalog unchanged.'
-            exit 0
-          fi
-
-          git fetch origin "$branch" || true
-          git switch -C "$branch"
-          git add storage/products-cache.json
-          git commit -m "auto: atualizar snapshot do catalogo"
-          git push --force-with-lease origin "$branch"
-
-          existing="$(gh pr list --head "$branch" --base main --state open --json number --jq '.[0].number // empty')"
-          if [[ -z "$existing" ]]; then
-            gh pr create \
-              --base main \
-              --head "$branch" \
-              --title 'auto: atualizar catalogo ERP' \
-              --body 'Atualizacao automatica e isolada do snapshot do catalogo. O workflow limita alteracoes a storage/products-cache.json e nao publica diretamente em main.'
-          else
-            echo "PR #$existing updated."
-          fi
+      - name: Upload catalog snapshot evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: catalog-snapshot-${{ github.run_id }}
+          path: artifacts/catalog-snapshot/
+          if-no-files-found: error
+          retention-days: 14
 
   health-watch:
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '7 * * * *'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.schedule == '7 * * * *' ||
+      (
+        github.event_name == 'issues' &&
+        github.actor == 'fredmourao-ai' &&
+        github.event.issue.title == '[ops] verify orders health 2026-08-02' &&
+        contains(github.event.issue.body, 'authorization_nonce=orders-health-20260802-v1')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - name: Initialize health evidence
+        run: mkdir -p artifacts/health-watch
 
-      - name: Check public health endpoints
+      - name: Configure verified Oracle SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Check production endpoints from Oracle
         id: health
         shell: bash
         run: |
-          set +e
-          failures=0
-          report=''
-          endpoints=(
-            'https://shopvivaliz.com.br/'
-            'https://shopvivaliz.com.br/api/catalog/products.php?limit=1'
-            'https://shopvivaliz.com.br/api/catalog/price-health.php'
-            'https://shopvivaliz.com.br/api/catalog/image-health.php'
-            'https://shopvivaliz.com.br/api/catalog/stock-health.php'
-            'https://shopvivaliz.com.br/api/orders/health.php'
-          )
-          for url in "${endpoints[@]}"; do
-            status='000'
-            for attempt in 1 2 3; do
-              status="$(curl --location --silent --output /dev/null --connect-timeout 5 --max-time 12 --write-out '%{http_code}' "$url" || echo 000)"
-              [[ "$status" == '200' || "$status" == '302' ]] && break
-              sleep $((attempt * 5))
-            done
-            report+="$url -> $status\n"
-            [[ "$status" == '200' || "$status" == '302' ]] || failures=$((failures + 1))
-          done
-          printf '%b' "$report" | tee health-report.txt
-          echo "failures=$failures" >> "$GITHUB_OUTPUT"
-
-      - name: Open or update incident issue
-        if: steps.health.outputs.failures != '0'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
           set -euo pipefail
-          title='[AUTO] Falha de saude detectada em producao'
-          body="$(printf 'Monitor autonomo encontrou %s falha(s).\n\n```text\n%s\n```\n\nExecucao: %s' '${{ steps.health.outputs.failures }}' "$(cat health-report.txt)" '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}')"
-          issue="$(gh issue list --repo "${{ github.repository }}" --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
-          if [[ -n "$issue" ]]; then
-            gh issue comment "$issue" --repo "${{ github.repository }}" --body "$body"
+          remote_status=0
+          if ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'set -euo pipefail
+             failures=0
+             endpoints=(
+               "https://shopvivaliz.com.br/"
+               "https://shopvivaliz.com.br/api/catalog/products.php?limit=1"
+               "https://shopvivaliz.com.br/api/catalog/price-health.php"
+               "https://shopvivaliz.com.br/api/catalog/image-health.php"
+               "https://shopvivaliz.com.br/api/catalog/stock-health.php"
+               "https://shopvivaliz.com.br/api/orders/health.php"
+             )
+             ua="ShopVivaliz-Production-Health/1.0"
+             for url in "${endpoints[@]}"; do
+               status="$(curl --location --silent --output /dev/null --connect-timeout 5 --max-time 12 --user-agent "$ua" --write-out "%{http_code}" "$url" || true)"
+               printf "%s -> %s\n" "$url" "$status"
+               if [[ "$status" != 200 && "$status" != 302 ]]; then failures=$((failures + 1)); fi
+             done
+             printf "release_sha=%s\nfailures=%s\n" "$(cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha)" "$failures"
+             exit "$failures"' \
+            > artifacts/health-watch/report.txt; then
+            remote_status=0
           else
-            gh issue create --repo "${{ github.repository }}" --title "$title" --body "$body"
+            remote_status=$?
           fi
-          exit 1
+          cat artifacts/health-watch/report.txt
+          failures="$(awk -F= '/^failures=/{print $2}' artifacts/health-watch/report.txt)"
+          : "${failures:=1}"
+          printf 'run_id=%s\nexecution_path=oracle-production\nfailures=%s\n' "$GITHUB_RUN_ID" "$failures" > artifacts/health-watch/context.txt
+          echo "failures=$failures" >> "$GITHUB_OUTPUT"
+          exit "$remote_status"
 
       - name: Upload health evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: autonomous-health-${{ github.run_id }}
-          path: health-report.txt
-          if-no-files-found: warn
+          path: artifacts/health-watch/
+          if-no-files-found: error
           retention-days: 14
+
+      - name: Fail when public health checks failed
+        if: steps.health.outputs.failures != '0'
+        run: exit 1

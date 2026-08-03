@@ -7,11 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
-  actions: write
-  checks: write
-  statuses: write
+  contents: read
 
 jobs:
   memory-nudge:
@@ -19,11 +15,13 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: write
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Verificar se arquivo de integracao de risco mudou sem atualizar docs/MEMORIA-AGENTES.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -34,9 +32,6 @@ jobs:
           HEAD="${{ github.event.pull_request.head.sha }}"
           CHANGED=$(git diff --name-only "$BASE" "$HEAD" || true)
 
-          # Arquivos onde bugs de integracao ja causaram retrabalho entre
-          # agentes (ver docs/MEMORIA-AGENTES.md). Nao e uma lista exaustiva,
-          # so os pontos de maior risco ja conhecidos.
           RISK_PATTERN='includes/tiny-order-push.php|daemon-sync-products.py|api/olist/|api/webhook-mercadopago.php|api/melhorenvio/|includes/mercadopago-gateway.php'
 
           if echo "$CHANGED" | grep -qE "$RISK_PATTERN"; then
@@ -49,31 +44,32 @@ jobs:
                 echo ""
                 echo "$MATCHED"
                 echo ""
-                echo "Se você descobriu algo não-óbvio sobre a API/comportamento externo (não só corrigiu um bug já mapeado), considere adicionar uma entrada em \`docs/MEMORIA-AGENTES.md\` — assim a próxima sessão (de qualquer agente) não precisa redescobrir do zero."
+                echo "Se você descobriu algo não-óbvio sobre a API/comportamento externo, considere atualizar \`docs/MEMORIA-AGENTES.md\`."
                 echo ""
                 echo "Isso é só um lembrete, não bloqueia o merge."
               } > /tmp/memory-nudge-body.md
-              gh pr comment "$PR_NUMBER" --body-file /tmp/memory-nudge-body.md 2>/dev/null || echo "::notice::Nao foi possivel comentar no PR (permissao/contexto), seguindo sem bloquear."
+              gh pr comment "$PR_NUMBER" --body-file /tmp/memory-nudge-body.md 2>/dev/null || echo "::notice::Nao foi possivel comentar no PR; seguindo sem bloquear."
             fi
           fi
-          exit 0
 
   workflow-lint:
     name: GitHub Actions syntax
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Actionlint
         uses: docker://rhysd/actionlint:1.7.12
         with:
-          # Shell scripts are exercised by their own jobs. This gate targets
-          # workflow YAML, triggers, expressions and action contracts.
           args: -color -shellcheck=
 
   php-lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -96,37 +92,123 @@ jobs:
           fi
       - name: "Bloquear CSS wildcard de layout (ex: [class*=hero])"
         run: |
-          # Lista de prefixos "estruturais" (secoes/layout inteiros) que ja causaram
-          # bug real em producao quando usados com [class*=...] (ver CHANGELOG.md).
-          # Wildcards em classes de componente pequeno (card, badge, grid...) ja
-          # existem no projeto e sao debito tecnico conhecido, nao bloqueado aqui.
           PADRAO='\[class\s*\*=\s*"(hero|banner|section|page|layout|container)'
           if grep -rEn "$PADRAO" --include='*.css' .; then
-            echo ""
-            echo "ERRO: selector CSS coringa estrutural encontrado acima (ex: [class*=hero])."
-            echo "Esse padrao ja quebrou a home em producao (ver CHANGELOG.md) - casa com"
-            echo "qualquer classe que contenha a substring, inclusive secoes aninhadas nao"
-            echo "relacionadas. Use selectores exatos para classes de layout/secao."
+            echo "ERRO: selector CSS coringa estrutural encontrado."
             exit 1
           fi
           echo "OK: nenhum selector CSS coringa estrutural encontrado."
       - name: Repository safety reminder
+        run: echo "Security review remains required before merge. Do not commit credentials or production dumps."
+      - name: Liz conversation and security regression tests
         run: |
-          echo "Security review remains required before merge. Do not commit credentials or production dumps."
+          set -e
+          php tests/test-liz-intelligent.php
+          php tests/test-liz-security-and-grounding.php
+          node --check public/assets/liz-assistant/liz-assistant.js
 
   live-smoke-test:
+    name: Production evidence smoke
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_SHA: ${{ github.sha }}
     steps:
-      - name: Verificar footer e ausencia de bug visual conhecido na home
+      - name: Exigir deploy e smoke canônicos no SHA exato
+        shell: bash
         run: |
-          html=$(curl -sL https://shopvivaliz.com.br/)
-          if ! echo "$html" | grep -q 'footer-cols'; then
-            echo "ERRO: footer nao encontrado na home ao vivo."
+          set -euo pipefail
+
+          max_attempts=24
+          wait_seconds=20
+          evidence_ready=0
+
+          for attempt in $(seq 1 "$max_attempts"); do
+            echo "Tentativa ${attempt}/${max_attempts}: aguardando evidencia de deploy para ${EXPECTED_SHA}"
+
+            if gh api \
+              -H 'Accept: application/vnd.github.raw+json' \
+              "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence" \
+              > /tmp/deployment-latest.json 2>/tmp/deployment-api.err; then
+              if python3 - "$EXPECTED_SHA" /tmp/deployment-latest.json <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          expected = sys.argv[1].lower()
+          payload = json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
+          actual = str(payload.get('sha') or '').lower()
+          jobs = payload.get('jobs') or {}
+          results = [str(item) for item in payload.get('results') or []]
+
+          if actual != expected:
+              print(f'evidence not ready: actual={actual or "missing"} expected={expected}')
+              raise SystemExit(1)
+          if payload.get('status') != 'PRODUCTION_UPDATED':
+              raise SystemExit(f'unexpected deployment status: {payload.get("status")}')
+          for job in ('validate', 'deploy', 'smoke_test'):
+              if jobs.get(job) != 'success':
+                  raise SystemExit(f'deployment job {job} is not successful: {jobs.get(job)}')
+          required = (
+              'OK homepage:',
+              'OK product:',
+              'OK mobile responsive header contract',
+              'OK security header: content-security-policy',
+          )
+          for prefix in required:
+              if not any(item.startswith(prefix) for item in results):
+                  raise SystemExit(f'missing canonical smoke evidence: {prefix}')
+          print(f'canonical deployment evidence verified for {expected}')
+          PY
+              then
+                evidence_ready=1
+                break
+              fi
+            else
+              cat /tmp/deployment-api.err >&2
+            fi
+
+            if [[ "$attempt" -lt "$max_attempts" ]]; then
+              sleep "$wait_seconds"
+            fi
+          done
+
+          if [[ "$evidence_ready" != '1' ]]; then
+            echo "::error::Evidencia canônica de deploy/smoke não apareceu para ${EXPECTED_SHA}."
             exit 1
           fi
-          if echo "$html" | grep -q 'class="hero-slide is-active"[^>]*style="[^"]*linear-gradient'; then
-            echo "ERRO: possivel regressao do bug de gradiente duplicado no hero."
+
+      - name: Verificar acesso público sem mascarar bloqueio do WAF
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          url='https://shopvivaliz.com.br/'
+          ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+          http_code=$(curl \
+            --location \
+            --silent \
+            --show-error \
+            --connect-timeout 10 \
+            --max-time 25 \
+            --user-agent "$ua" \
+            --header 'Accept: text/html,application/xhtml+xml' \
+            --output /tmp/shopvivaliz-home.html \
+            --write-out '%{http_code}' \
+            "${url}?qa_commit=${EXPECTED_SHA}" || true)
+
+          if [[ "$http_code" == '200' ]]; then
+            grep -q 'footer-cols' /tmp/shopvivaliz-home.html
+            if grep -qE 'class="hero-slide is-active"[^>]*style="[^"]*linear-gradient' /tmp/shopvivaliz-home.html; then
+              echo "::error::Possivel regressao do bug de gradiente duplicado no hero."
+              exit 1
+            fi
+            echo "OK: acesso público direto e contrato HTML validados."
+          elif [[ "$http_code" == '403' ]]; then
+            echo "::notice::Hosted runner bloqueado pelo WAF (HTTP 403). O job permanece válido porque a etapa anterior exigiu evidencia canônica no SHA exato, publicada somente após smoke real executado na Oracle VM."
+          else
+            echo "::error::Acesso público direto retornou HTTP ${http_code:-sem-resposta}; somente HTTP 403 conhecido do WAF pode ser substituído pela evidencia canônica."
             exit 1
           fi
-          echo "OK: home ao vivo passou no smoke test."

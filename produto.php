@@ -657,6 +657,17 @@ if ($notFound) {
                 <div style="color: #fbbf24; font-size: 14px; margin-bottom: 10px;">
                     ★★★★★ <span style="color: #6b7280; font-size: 12px; margin-left: 5px;">(4.9/5 - Excelente)</span>
                 </div>
+                <?php if ($priceRaw > 0 && $stockRaw > 0): ?>
+                    <div class="desktop-buy-rail" aria-label="Compra rápida">
+                        <div class="desktop-buy-rail__price">
+                            <span>Pronto para comprar?</span>
+                            <strong><?= sv_esc($priceLabel) ?></strong>
+                        </div>
+                        <button class="btn btn-primary desktop-buy-rail__button" type="button" onclick="document.getElementById('buy-now').click()">
+                            🛒 Comprar agora
+                        </button>
+                    </div>
+                <?php endif; ?>
                 <div class="product-description"><?= $description ?></div>
                 <div class="product-price-block">
                     <?php if ($stockRaw > 0 && $stockRaw <= 5): ?>

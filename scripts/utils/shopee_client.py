@@ -1,7 +1,8 @@
 """
 Cliente Shopee Partner API v2.
 Secrets necessários: SHOPEE_PARTNER_ID, SHOPEE_PARTNER_KEY,
-                     SHOPEE_ACCESS_TOKEN, SHOPEE_SHOP_ID
+                      SHOPEE_SHOP_ID e pelo menos um entre
+                      SHOPEE_ACCESS_TOKEN ou SHOPEE_REFRESH_TOKEN.
 """
 import hashlib
 import hmac
@@ -20,6 +21,7 @@ from tenacity import (
 
 DEFAULT_BASE_URL = "https://partner.shopeemobile.com/api/v2"
 SANDBOX_BASE_URL = "https://openplatform.sandbox.test-stable.shopee.sg/api/v2"
+TOKEN_REFRESH_INTERVAL_SECONDS = int(os.environ.get("SHOPEE_TOKEN_REFRESH_INTERVAL_SECONDS", "7200"))
 
 
 def _is_retryable(exc: Exception) -> bool:
@@ -30,20 +32,30 @@ def _is_retryable(exc: Exception) -> bool:
 
 class ShopeeClient:
     def __init__(self):
-        # Aceita tanto SHOPEE_PARTNER_ID quanto SHOPEE_TEST_PARTNER_ID
         pid = os.environ.get("SHOPEE_PARTNER_ID") or os.environ.get("SHOPEE_TEST_PARTNER_ID")
         pkey = os.environ.get("SHOPEE_PARTNER_KEY") or os.environ.get("SHOPEE_TEST_PARTNER_KEY")
         if not pid or not pkey:
             raise RuntimeError("Secret SHOPEE_PARTNER_ID (ou SHOPEE_TEST_PARTNER_ID) não configurado")
+
         self.partner_id = int(pid)
         self.partner_key = pkey
-        self.access_token = os.environ["SHOPEE_ACCESS_TOKEN"]
-        self.refresh_token = os.environ.get("SHOPEE_REFRESH_TOKEN", "")
-        self.shop_id = int(os.environ["SHOPEE_SHOP_ID"])
+        self.access_token = (os.environ.get("SHOPEE_ACCESS_TOKEN") or "").strip()
+        self.refresh_token = (os.environ.get("SHOPEE_REFRESH_TOKEN") or "").strip()
+        shop_id = (os.environ.get("SHOPEE_SHOP_ID") or "").strip()
+        if not shop_id:
+            raise RuntimeError("Secret SHOPEE_SHOP_ID não configurado")
+        self.shop_id = int(shop_id)
         self.base_url = self._resolve_base_url()
         self._session = requests.Session()
+        self._last_refresh_attempt_monotonic = 0.0
+        self._last_refresh_success_monotonic = 0.0
+
+        if not self.access_token and not self.refresh_token:
+            raise RuntimeError("Configure SHOPEE_ACCESS_TOKEN ou SHOPEE_REFRESH_TOKEN")
+
+        # Renova na inicialização. Se não houver access token, a renovação é obrigatória.
         if self.refresh_token:
-            self._refresh_access_token()
+            self._refresh_access_token(required=not bool(self.access_token))
 
     @staticmethod
     def _is_invalid_token_response(resp: requests.Response) -> bool:
@@ -85,6 +97,8 @@ class ShopeeClient:
         return path if path.startswith("/api/") else f"/api/v2{path}"
 
     def _base_params(self, path: str) -> dict:
+        if not self.access_token:
+            raise RuntimeError("Shopee access token indisponível após tentativa de renovação")
         ts = int(time.time())
         return {
             "partner_id": self.partner_id,
@@ -94,7 +108,22 @@ class ShopeeClient:
             "sign": self._sign(path, ts),
         }
 
-    def _refresh_access_token(self) -> None:
+    def _refresh_if_due(self) -> None:
+        """Renova preventivamente a cada 2 horas, sem esperar o token expirar."""
+        if not self.refresh_token:
+            return
+        now = time.monotonic()
+        elapsed = now - self._last_refresh_attempt_monotonic
+        if self._last_refresh_attempt_monotonic == 0.0 or elapsed >= TOKEN_REFRESH_INTERVAL_SECONDS:
+            self._refresh_access_token(required=not bool(self.access_token))
+
+    def _refresh_access_token(self, *, required: bool = False) -> None:
+        if not self.refresh_token:
+            if required:
+                raise RuntimeError("SHOPEE_REFRESH_TOKEN não configurado")
+            return
+
+        self._last_refresh_attempt_monotonic = time.monotonic()
         path = "/auth/access_token/get"
         timestamp = int(time.time())
         params = {
@@ -111,16 +140,20 @@ class ShopeeClient:
             resp = self._session.post(f"{self.base_url}{path}", params=params, json=body, timeout=30)
             resp.raise_for_status()
             data = resp.json()
+            if data.get("error"):
+                raise RuntimeError(f"Shopee token refresh error {data['error']}: {data.get('message')}")
             response = data.get("response") or data
-            new_access_token = response.get("access_token")
-            new_refresh_token = response.get("refresh_token")
-            if new_access_token:
-                self.access_token = new_access_token
+            new_access_token = str(response.get("access_token") or "").strip()
+            new_refresh_token = str(response.get("refresh_token") or "").strip()
+            if not new_access_token:
+                raise RuntimeError("Shopee token refresh não retornou access_token")
+            self.access_token = new_access_token
             if new_refresh_token:
                 self.refresh_token = new_refresh_token
-        except Exception:
-            # Keep the configured token if refresh fails.
-            pass
+            self._last_refresh_success_monotonic = time.monotonic()
+        except Exception as exc:
+            if required:
+                raise RuntimeError(f"Falha ao renovar token Shopee: {exc}") from exc
 
     def _send_with_refresh(
         self,
@@ -133,6 +166,7 @@ class ShopeeClient:
         files: dict | None = None,
         timeout: int = 30,
     ) -> requests.Response:
+        self._refresh_if_due()
         params = {**self._base_params(path), **(extra_params or {})}
         headers = {"Content-Type": "application/json"} if files is None else None
         resp = self._session.request(
@@ -146,7 +180,7 @@ class ShopeeClient:
             timeout=timeout,
         )
         if resp.status_code == 403 and self.refresh_token and self._is_invalid_token_response(resp):
-            self._refresh_access_token()
+            self._refresh_access_token(required=True)
             params = {**self._base_params(path), **(extra_params or {})}
             resp = self._session.request(
                 method,
@@ -192,10 +226,7 @@ class ShopeeClient:
             raise RuntimeError(f"Shopee API error {data['error']}: {data.get('message')}")
         return data
 
-    # ── Produtos ──────────────────────────────────────────────────────────────
-
     def iter_all_products(self, page_size: int = 100) -> Generator[dict, None, None]:
-        """Itera por TODOS os produtos da loja com paginação automática."""
         path = "/product/get_item_list"
         offset = 0
         while True:
@@ -214,7 +245,6 @@ class ShopeeClient:
             time.sleep(0.4)
 
     def get_product_details(self, item_ids: list[int]) -> list[dict]:
-        """Busca detalhes completos em lotes de 50."""
         path = "/product/get_item_base_info"
         results = []
         for i in range(0, len(item_ids), 50):
@@ -225,15 +255,12 @@ class ShopeeClient:
         return results
 
     def get_product_metrics(self, item_ids: list[int]) -> list[dict]:
-        """Busca métricas de performance (CTR, views, sales)."""
         path = "/analytics/get_shop_performance"
         try:
             data = self._get(path)
             return data.get("response", {}).get("item_performance_list", [])
         except Exception:
             return []
-
-    # ── Atualização ───────────────────────────────────────────────────────────
 
     def update_product(
         self,
@@ -243,7 +270,6 @@ class ShopeeClient:
         description: str | None = None,
         image_ids: list[str] | None = None,
     ) -> dict:
-        """Atualiza título, descrição e/ou imagens. NUNCA altera preço."""
         body: dict = {"item_id": item_id}
         if title:
             body["item_name"] = title[:120]
@@ -253,14 +279,10 @@ class ShopeeClient:
             body["image"] = {"image_id_list": image_ids}
         return self._post("/product/update_item", body)
 
-    # ── Imagens ───────────────────────────────────────────────────────────────
-
     def upload_image(self, local_path: str) -> str:
-        """Faz upload de imagem local para Shopee e retorna image_id."""
         return self.upload_image_full(local_path)["image_id"]
 
     def upload_image_full(self, local_path: str) -> dict:
-        """Faz upload de imagem local e retorna image_id e, se disponivel, a URL Shopee."""
         path = "/media_space/upload_image"
         with open(local_path, "rb") as f:
             resp = self._send_with_refresh(
@@ -301,7 +323,5 @@ class ShopeeClient:
         }
 
     def upload_image_by_url(self, url: str) -> str:
-        """Faz upload de imagem via URL para Shopee e retorna image_id."""
-        path = "/media_space/upload_image_by_url"
-        data = self._post(path, {"url": url})
+        data = self._post("/media_space/upload_image_by_url", {"url": url})
         return data["response"]["image_id"]

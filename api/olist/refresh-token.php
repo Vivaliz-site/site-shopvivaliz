@@ -70,8 +70,17 @@ if (is_file($envFile)) {
     }
 }
 
-$clientId = getenv('OLIST_CLIENT_ID') ?: getenv('TINY_CLIENT_ID') ?: getenv('CLIENT_ID_API_OLIST');
-$clientSecret = getenv('OLIST_CLIENT_SECRET') ?: getenv('TINY_CLIENT_SECRET') ?: getenv('CLIENT_SECRET_OLIST');
+function svrt_credential(string ...$keys): string
+{
+    foreach ($keys as $key) {
+        $value = trim((string)(getenv($key) ?: ''));
+        if (strlen($value) >= 16) return $value;
+    }
+    return '';
+}
+
+$clientId = svrt_credential('OLIST_CLIENT_ID', 'TINY_CLIENT_ID', 'CLIENT_ID_API_OLIST');
+$clientSecret = svrt_credential('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET', 'CLIENT_SECRET_OLIST');
 $refreshToken = getenv('OLIST_REFRESH_TOKEN') ?: getenv('TINY_REFRESH_TOKEN');
 
 $lockHandle = fopen(svrt_lock_path(), 'c+');

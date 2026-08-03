@@ -10,6 +10,11 @@ ErrorDocument 404 /404.php
     Require all denied
 </FilesMatch>
 
+# Backups e arquivos temporarios nunca devem ser servidos pelo Apache.
+<FilesMatch "\.(?:bak|old|orig|save|swp|tmp)(?:\.[^.]*)?$">
+    Require all denied
+</FilesMatch>
+
 <FilesMatch "^config/.*\.php$">
     Require all denied
 </FilesMatch>
@@ -66,6 +71,11 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^(?:discover-db|do-sync-[a-z0-9-]+|find-db-host|fix-database|full-sync|get_ext_dir|get_php_info|shop-catalog-export)\.php$ - [F,L,NC]
     RewriteRule ^C.*shopee-sync\.php$ - [F,L,NC]
     RewriteRule ^api/(?:catalog/test-normalize\.php|(?:pagarme|melhorenvio|olist)/diagnostic(?:-full)?\.php|sync-cache-endpoint\.php|sync/full-sync\.php)$ - [F,L,NC]
+
+    # Aliases operacionais canonicos para SRE/monitoramento externo.
+    RewriteRule ^health/?$ health.php [L,QSA]
+    RewriteRule ^metrics/?$ metrics.php [L,QSA]
+    RewriteRule ^erp/health/?$ erp/health.php [L,QSA]
 
     # Valida frete no servidor antes de criar o pedido
     RewriteRule ^api/orders/create\.php$ api/orders/create-validated.php [L]

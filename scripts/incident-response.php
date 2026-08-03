@@ -23,7 +23,7 @@ final class IncidentDetector
 
         $this->healthcheckUrl = trim((string) getenv('HEALTHCHECK_URL'));
         if ($this->healthcheckUrl === '') {
-            $this->healthcheckUrl = 'https://shopvivaliz.com.br/api/health';
+            $this->healthcheckUrl = 'https://shopvivaliz.com.br/api/health/version.php';
         }
 
         if (!filter_var($this->healthcheckUrl, FILTER_VALIDATE_URL)) {
@@ -55,7 +55,7 @@ final class IncidentDetector
             ];
         }
 
-        $load = sys_getloadavg();
+        $load = function_exists('sys_getloadavg') ? sys_getloadavg() : null;
         if (is_array($load) && isset($load[0]) && $load[0] >= 8.0) {
             $incidents[] = [
                 'type' => 'runner_load_high',
@@ -91,11 +91,15 @@ final class IncidentDetector
             $status = (int) $matches[1];
         }
 
+        $payload = is_string($body) ? json_decode($body, true) : null;
+        $bodyIsHealthy = is_array($payload) && ($payload['ok'] ?? false) === true;
+
         return [
-            'healthy' => $body !== false && $status >= 200 && $status < 400,
+            'healthy' => $body !== false && $status >= 200 && $status < 400 && $bodyIsHealthy,
             'url' => $this->healthcheckUrl,
             'http_status' => $status,
             'response_received' => $body !== false,
+            'response_ok' => $bodyIsHealthy,
         ];
     }
 

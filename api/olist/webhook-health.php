@@ -1,65 +1,71 @@
 <?php
+
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
+$root = dirname(__DIR__, 2);
+require_once $root . '/includes/runtime-env-reader.php';
+
 $diagnostics = [
     'ok' => true,
     'service' => 'olist-webhook-health',
     'generated_at' => date('c'),
-    'checks' => []
+    'checks' => [],
 ];
 
-// 1. Verificar arquivo do processador
 $processor = __DIR__ . '/webhook-processor.php';
 $diagnostics['checks']['processor_file_exists'] = is_file($processor) && is_readable($processor);
 
-// 2. Verificar permissão de escrita nos logs
-$logDir = dirname(__DIR__, 2) . '/logs';
+$logDir = $root . '/logs';
 $diagnostics['checks']['logs_writable'] = is_dir($logDir) && is_writable($logDir);
 
-// 3. Tentar conectar ao banco de dados
+$db = null;
 try {
-    $env_file = dirname(__DIR__, 2) . '/.env';
-    $db_host = 'localhost';
-    $db_user = 'root';
-    $db_pass = '';
-    $db_name = 'shopvivaliz';
+    $database = svre_database_config($root);
+    $host = $database['host'];
+    $port = (int)$database['port'];
+    $name = $database['name'];
+    $user = $database['user'];
+    $pass = $database['pass'];
 
-    if (is_file($env_file)) {
-        foreach (file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-            $line = trim($line);
-            if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
-            [$k, $v] = explode('=', $line, 2);
-            $key = trim($k);
-            $value = trim(trim($v), '"\'');
-            if ($key === 'DB_HOST') $db_host = $value;
-            if ($key === 'DB_USER') $db_user = $value;
-            if ($key === 'DB_PASS') $db_pass = $value;
-            if ($key === 'DB_NAME') $db_name = $value;
-        }
+    if ($name === '' || $user === '') {
+        throw new RuntimeException('database_configuration_missing');
+    }
+    if (!class_exists('mysqli') || !function_exists('mysqli_report')) {
+        throw new RuntimeException('mysqli_extension_unavailable');
     }
 
-    $db = @new mysqli($db_host, $db_user, $db_pass, $db_name);
-    if ($db && !$db->connect_error) {
-        $diagnostics['checks']['database_connected'] = true;
-        $db->close();
-    } else {
-        $diagnostics['checks']['database_connected'] = false;
-        $diagnostics['checks']['database_error'] = $db->connect_error ?? 'Erro desconhecido';
+    mysqli_report(MYSQLI_REPORT_OFF);
+    $db = @new mysqli($host, $user, $pass, $name, $port);
+    if ($db->connect_errno !== 0) {
+        throw new RuntimeException('database_connection_failed');
     }
-} catch (Exception $e) {
+    $db->set_charset('utf8mb4');
+    $probe = $db->query('SELECT 1');
+    if ($probe === false) {
+        throw new RuntimeException('database_probe_failed');
+    }
+    $probe->free();
+
+    $diagnostics['checks']['database_connected'] = true;
+} catch (Throwable $e) {
     $diagnostics['checks']['database_connected'] = false;
-    $diagnostics['checks']['database_error'] = $e->getMessage();
+    $diagnostics['checks']['database_error'] = 'Runtime database configuration unavailable or connection failed';
+} finally {
+    if ($db instanceof mysqli) {
+        $db->close();
+    }
 }
 
-// 4. Verificar status geral
-$diagnostics['ok'] = $diagnostics['checks']['processor_file_exists'] &&
-                     $diagnostics['checks']['logs_writable'] &&
-                     $diagnostics['checks']['database_connected'];
+$diagnostics['ok'] = $diagnostics['checks']['processor_file_exists']
+    && $diagnostics['checks']['logs_writable']
+    && $diagnostics['checks']['database_connected'];
 
 http_response_code($diagnostics['ok'] ? 200 : 503);
-echo json_encode($diagnostics, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
-?>
+echo json_encode(
+    $diagnostics,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
+);

@@ -3,11 +3,59 @@
  * Head Analytics e recursos públicos compartilhados.
  */
 require_once __DIR__ . '/analytics-tracking.php';
+
+// Consent Mode precisa existir antes de GTM/gtag. O estado salvo e lido sem
+// cookies; na primeira visita analytics e publicidade ficam negados ate uma
+// escolha explicita. Cookies essenciais e seguranca permanecem ativos.
+echo <<<'HTML'
+<script>
+(function () {
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = window.gtag || function(){ window.dataLayer.push(arguments); };
+  var value = '';
+  try {
+    var saved = JSON.parse(localStorage.getItem('shopvivaliz_privacy_consent_v1') || 'null');
+    value = saved && saved.value ? saved.value : '';
+  } catch (error) {}
+  var granted = value === 'accepted';
+  window.gtag('consent', 'default', {
+    analytics_storage: granted ? 'granted' : 'denied',
+    ad_storage: granted ? 'granted' : 'denied',
+    ad_user_data: granted ? 'granted' : 'denied',
+    ad_personalization: granted ? 'granted' : 'denied',
+    functionality_storage: 'granted',
+    security_storage: 'granted',
+    wait_for_update: 500
+  });
+})();
+</script>
+HTML;
+
 echo $GLOBALS['analytics']->getTrackingCode();
+
+$requestPath = parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
+$requestPath = '/' . trim($requestPath, '/');
+if ($requestPath === '/') $requestPath = '/';
+if (in_array($requestPath, ['/carrinho', '/checkout', '/checkout/retorno'], true)) {
+    echo "\n<meta name=\"robots\" content=\"noindex,nofollow,noarchive\">\n";
+}
 
 $googleEventsFile = dirname(__DIR__) . '/js/shopvivaliz-google-events.js';
 $googleEventsVersion = is_file($googleEventsFile) ? (string)filemtime($googleEventsFile) : '1';
 echo "\n<script src=\"/js/shopvivaliz-google-events.js?v=" . htmlspecialchars($googleEventsVersion, ENT_QUOTES, 'UTF-8') . "\"></script>\n";
+
+$privacyCss = dirname(__DIR__) . '/css/privacy-consent-v1.css';
+$privacyJs = dirname(__DIR__) . '/js/privacy-consent-v1.js';
+$privacyCssVersion = is_file($privacyCss) ? (string)filemtime($privacyCss) : '1';
+$privacyJsVersion = is_file($privacyJs) ? (string)filemtime($privacyJs) : '1';
+echo '<link rel="stylesheet" href="/css/privacy-consent-v1.css?v=' . htmlspecialchars($privacyCssVersion, ENT_QUOTES, 'UTF-8') . '">' . "\n";
+echo '<script defer src="/js/privacy-consent-v1.js?v=' . htmlspecialchars($privacyJsVersion, ENT_QUOTES, 'UTF-8') . '"></script>' . "\n";
+
+if ($requestPath === '/checkout') {
+    $checkoutPaymentJs = dirname(__DIR__) . '/js/checkout-payment-v2.js';
+    $checkoutPaymentVersion = is_file($checkoutPaymentJs) ? (string)filemtime($checkoutPaymentJs) : '1';
+    echo '<script defer src="/js/checkout-payment-v2.js?v=' . htmlspecialchars($checkoutPaymentVersion, ENT_QUOTES, 'UTF-8') . '"></script>' . "\n";
+}
 
 $company = @include dirname(__DIR__) . '/config/company-profile.php';
 $company = is_array($company) ? $company : [];

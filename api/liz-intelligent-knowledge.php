@@ -41,15 +41,10 @@ if ($message === '') {
 }
 
 $matches = sv_liz_knowledge_search($message, 3);
-$context = sv_liz_knowledge_prompt_block($message, 3);
 
-if ($context !== '') {
-    $input['message'] = $message . "\n\n" . $context . "\n\nUse o contexto editorial apenas quando ele ajudar a responder melhor. Se citar um guia, mencione o link do artigo completo.";
-}
+$input['message'] = $message;
 
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host = $_SERVER['HTTP_HOST'] ?? 'shopvivaliz.com.br';
-$targetUrl = $scheme . '://' . $host . '/api/liz-intelligent.php';
+$targetUrl = 'http://127.0.0.1/api/liz-intelligent.php';
 
 $payload = json_encode($input, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 if (!is_string($payload)) {
@@ -65,7 +60,7 @@ curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_POST => true,
     CURLOPT_POSTFIELDS => $payload,
-    CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+    CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Host: shopvivaliz.com.br', 'X-Liz-Internal-Route: 1'],
     CURLOPT_CONNECTTIMEOUT => 4,
     CURLOPT_TIMEOUT => 35,
 ]);
@@ -99,5 +94,6 @@ $data['knowledge_articles'] = array_map(static fn(array $article): array => [
     'category' => (string)($article['category'] ?? ''),
 ], $matches);
 $data['knowledge_mode'] = 'opt-in';
+$data['knowledge_version'] = function_exists('sv_liz_knowledge_version') ? sv_liz_knowledge_version() : '2026-08-01.1';
 
 lizk_json_response($httpCode > 0 ? $httpCode : 200, $data);

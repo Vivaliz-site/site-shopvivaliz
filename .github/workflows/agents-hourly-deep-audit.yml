@@ -1,0 +1,94 @@
+name: Agents Hourly Deep Audit
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/**'
+      - '.ai/**'
+      - 'agents/**'
+      - 'config/**'
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/**'
+      - '.ai/**'
+      - 'agents/**'
+      - 'config/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agents-hourly-deep-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audit agents with evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Record audit context
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/agents-audit artifacts/secret-references
+          {
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "event=${GITHUB_EVENT_NAME}"
+            echo "sha=${GITHUB_SHA}"
+            echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > artifacts/agents-audit/run-context.txt
+          git rev-parse HEAD
+          git show-ref --verify refs/remotes/origin/main >/dev/null
+
+      - name: Compile auditors
+        run: |
+          python -m py_compile \
+            scripts/audit-agents-real-work.py \
+            scripts/maintenance/audit_secret_references.py
+
+      - name: Run current-state deep agent audit
+        run: python scripts/audit-agents-real-work.py
+
+      - name: Audit secret and token references
+        if: always()
+        run: python scripts/maintenance/audit_secret_references.py
+
+      - name: Verify audit evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          test -s artifacts/agents-audit/run-context.txt
+          test -s artifacts/agents-audit/report.json
+          test -s artifacts/agents-audit/report.md
+          test -s artifacts/secret-references/report.json
+          test -s artifacts/secret-references/report.md
+          python -m json.tool artifacts/agents-audit/report.json >/dev/null
+          python -m json.tool artifacts/secret-references/report.json >/dev/null
+
+      - name: Upload agent audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agents-deep-audit-${{ github.run_id }}
+          path: |
+            artifacts/agents-audit/
+            artifacts/secret-references/
+          if-no-files-found: error
+          retention-days: 90

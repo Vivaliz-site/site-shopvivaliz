@@ -1,6 +1,6 @@
 {
   "campaign": {
-    "name": "Ferramentas-Vasos-ROI12-ABC-2026-08",
+    "name": "Ferramentas-Vasos-ROI10-ABC-2026-07",
     "channel": "SEARCH",
     "status_on_create": "PAUSED",
     "daily_budget_brl": 10.0,
@@ -138,7 +138,7 @@
     "coupon": "PRIMEIRA10",
     "utm_source": "google",
     "utm_medium": "cpc",
-    "utm_campaign": "abc_alto_ticket_roi12_2026_08"
+    "utm_campaign": "abc_alto_ticket_roi10_2026_07"
   },
   "guardrails": {
     "no_broad_match": true,
@@ -146,8 +146,8 @@
     "require_human_review_before_enable": true,
     "max_daily_budget_brl": 10.0,
     "max_cpc_brl": 0.95,
-    "target_roi": 12.0,
-    "target_roas": 12.0,
+    "target_roi": 10.1,
+    "target_roas": 10.1,
     "target_average_order_value_brl": 600.0,
     "target_conversion_rate_percent": 2.0,
     "pause_if_spend_without_conversion_brl": 20.0

@@ -1,9 +1,5 @@
-import sys
 import urllib.request
 import json
-
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
 
 url = "https://shopvivaliz.com.br/api/agent/squad-chat.php"
 payload = json.dumps({

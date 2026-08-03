@@ -42,12 +42,7 @@ class Database {
 
     public static function getInstance() {
         if (self::$instance === null) {
-            try {
-                self::$instance = new self();
-            } catch (Throwable $e) {
-                error_log('[Database::getInstance] ' . $e->getMessage());
-                return null;
-            }
+            self::$instance = new self();
         }
         return self::$instance;
     }

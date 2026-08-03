@@ -11,7 +11,7 @@ header('Cache-Control: public, max-age=3600');
 require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/site-settings.php';
 
-$products = svcr_products();
+$products = array_slice(sv_home_catalog_source_rows(), 0, 1000);
 
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 echo '<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">' . "\n";

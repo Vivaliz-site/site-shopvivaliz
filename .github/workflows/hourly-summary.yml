@@ -31,47 +31,78 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Generate summary
+      - name: Generate summary and verify agent-audit freshness
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python3 << 'PYTHON_EOF'
+          python3 <<'PYTHON_EOF'
           import json
-          import os
           import subprocess
           from datetime import datetime, timedelta, timezone
           from pathlib import Path
 
           now = datetime.now(timezone.utc)
           hour_ago = now - timedelta(hours=1)
+          maximum_audit_age = timedelta(minutes=150)
 
-          def output(command):
-              result = subprocess.run(command, shell=True, text=True, capture_output=True)
+          def checked_output(command: list[str]) -> str:
+              result = subprocess.run(
+                  command,
+                  text=True,
+                  encoding='utf-8',
+                  errors='replace',
+                  capture_output=True,
+                  check=True,
+              )
               return result.stdout.strip()
 
-          commit_output = output(
-              f'git log --since="{hour_ago.isoformat()}" --until="{now.isoformat()}" --oneline --no-decorate'
-          )
+          commit_output = checked_output([
+              'git', 'log',
+              f'--since={hour_ago.isoformat()}',
+              f'--until={now.isoformat()}',
+              '--oneline', '--no-decorate',
+          ])
           commits = [line for line in commit_output.splitlines() if line]
 
+          runs_output = checked_output([
+              'gh', 'run', 'list', '--branch', 'main', '--limit', '50',
+              '--json', 'name,status,conclusion,updatedAt,url',
+          ])
+          all_runs = json.loads(runs_output)
+          if not isinstance(all_runs, list):
+              raise TypeError('gh run list did not return a JSON list')
+
           runs = []
-          runs_output = output(
-              'gh run list --branch main --limit 50 '
-              '--json name,status,conclusion,updatedAt,url'
-          )
-          if runs_output:
-              try:
-                  all_runs = json.loads(runs_output)
-                  for run in all_runs:
-                      updated = run.get('updatedAt', '')
-                      if not updated:
-                          continue
-                      parsed = datetime.fromisoformat(updated.replace('Z', '+00:00'))
-                      if parsed >= hour_ago:
-                          runs.append(run)
-              except (json.JSONDecodeError, ValueError):
-                  runs = []
+          for run in all_runs:
+              updated = run.get('updatedAt')
+              if not updated:
+                  raise ValueError('workflow run without updatedAt')
+              parsed = datetime.fromisoformat(updated.replace('Z', '+00:00'))
+              if parsed >= hour_ago:
+                  runs.append(run)
+
+          audit_output = checked_output([
+              'gh', 'run', 'list',
+              '--workflow', 'agents-hourly-deep-audit.yml',
+              '--branch', 'main', '--limit', '1',
+              '--json', 'databaseId,status,conclusion,updatedAt,url',
+          ])
+          audit_runs = json.loads(audit_output)
+          if not isinstance(audit_runs, list) or not audit_runs:
+              raise RuntimeError('Agents Hourly Deep Audit has no verifiable run')
+          latest_audit = audit_runs[0]
+          audit_updated = datetime.fromisoformat(latest_audit['updatedAt'].replace('Z', '+00:00'))
+          audit_age = now - audit_updated
+          if audit_age > maximum_audit_age:
+              raise RuntimeError(
+                  f"Agents Hourly Deep Audit is stale: {audit_age.total_seconds() / 60:.0f} minutes; "
+                  f"latest run: {latest_audit.get('url', 'unknown')}"
+              )
+          if latest_audit.get('status') == 'completed' and latest_audit.get('conclusion') != 'success':
+              raise RuntimeError(
+                  f"Latest Agents Hourly Deep Audit did not succeed: {latest_audit.get('url', 'unknown')}"
+              )
 
           lines = [
               '# ShopVivaliz Hourly Summary',
@@ -97,9 +128,15 @@ jobs:
                   f'- In progress: {in_progress}',
               ])
           else:
-              lines.append('- No workflow runs this hour')
+              lines.append('- No workflow runs this hour; GitHub query completed successfully')
 
           lines.extend([
+              '',
+              '### Agents 24/7 audit',
+              f"- Latest run: {latest_audit.get('url', 'unknown')}",
+              f"- Status: {latest_audit.get('status')}",
+              f"- Conclusion: {latest_audit.get('conclusion')}",
+              f'- Age: {audit_age.total_seconds() / 60:.0f} minutes',
               '',
               '### Publication',
               '- This report is stored as a workflow artifact.',
@@ -112,11 +149,32 @@ jobs:
 
           report_dir = Path('reports/hourly')
           report_dir.mkdir(parents=True, exist_ok=True)
-          report_file = report_dir / f'{now.strftime("%Y-%m-%d-%H")}-summary.md'
-          report_file.write_text('\n'.join(lines), encoding='utf-8')
-          (report_dir / 'latest.md').write_text('\n'.join(lines), encoding='utf-8')
-          print('\n'.join(lines))
+          report_text = '\n'.join(lines)
+          (report_dir / f'{now.strftime("%Y-%m-%d-%H")}-summary.md').write_text(report_text, encoding='utf-8')
+          (report_dir / 'latest.md').write_text(report_text, encoding='utf-8')
+          (report_dir / 'query-context.json').write_text(
+              json.dumps({
+                  'run_id': '${{ github.run_id }}',
+                  'sha': '${{ github.sha }}',
+                  'generated_at': now.isoformat(),
+                  'commit_count': len(commits),
+                  'workflow_run_count': len(runs),
+                  'agents_audit_run_id': latest_audit.get('databaseId'),
+                  'agents_audit_url': latest_audit.get('url'),
+                  'agents_audit_age_minutes': round(audit_age.total_seconds() / 60, 2),
+                  'queries_succeeded': True,
+              }, indent=2) + '\n',
+              encoding='utf-8',
+          )
+          print(report_text)
           PYTHON_EOF
+
+      - name: Verify summary evidence
+        run: |
+          set -euo pipefail
+          test -s reports/hourly/latest.md
+          test -s reports/hourly/query-context.json
+          python -m json.tool reports/hourly/query-context.json >/dev/null
 
       - name: Upload summary artifact
         uses: actions/upload-artifact@v7

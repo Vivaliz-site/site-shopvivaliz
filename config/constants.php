@@ -19,11 +19,23 @@ if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
     }
 }
 
-// Producao (VM Oracle) usa .env real em vez de runtime-secrets.php
-// (mecanismo antigo do deploy FTP do HostGator). Mesmo parser usado
-// em varios pontos do projeto (includes/melhorenvio-oauth.php etc.).
-$envFile = dirname(__DIR__) . '/.env';
-if (is_file($envFile) && is_readable($envFile)) {
+// Carrega primeiro o .env da propria release e depois o ambiente compartilhado
+// do deploy Oracle. Quando o PHP resolve o symlink "current", __DIR__ aponta
+// para .../releases/<release>; nesse caso subimos de "releases" ate a raiz do
+// deploy antes de procurar shared/.env. Valores existentes nunca sao sobrescritos.
+$projectRoot = dirname(__DIR__);
+$projectParent = dirname($projectRoot);
+$deployRoot = basename($projectParent) === 'releases'
+    ? dirname($projectParent)
+    : $projectParent;
+$envFiles = array_values(array_unique([
+    $projectRoot . '/.env',
+    $deployRoot . '/shared/.env',
+]));
+foreach ($envFiles as $envFile) {
+    if (!is_file($envFile) || !is_readable($envFile)) {
+        continue;
+    }
     foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
         $line = trim($line);
         if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) {
@@ -40,6 +52,9 @@ if (is_file($envFile) && is_readable($envFile)) {
         $_SERVER[$key] = $value;
     }
 }
+
+require_once $projectRoot . '/includes/runtime-env-reader.php';
+$runtimeDatabase = svre_database_config($projectRoot);
 
 // Ambiente
 define('ENVIRONMENT', getenv('APP_ENV') ?: 'development');
@@ -65,13 +80,14 @@ if (!defined('ADMIN_URL')) {
     define('ADMIN_URL', BASE_URL . '/admin');
 }
 
-// Banco de dados
-define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
-define('DB_PORT', getenv('DB_PORT') ?: '3306');
-define('DB_NAME', getenv('DB_NAME') ?: (getenv('DB_DATABASE') ?: 'shopvivaliz'));
-define('DB_USER', getenv('DB_USER') ?: (getenv('DB_USERNAME') ?: 'root'));
-define('DB_PASS', getenv('DB_PASS') ?: (getenv('DB_PASSWORD') ?: ''));
+// Banco de dados: usa um unico conjunto coerente de aliases/runtime.
+define('DB_HOST', $runtimeDatabase['host'] ?: 'localhost');
+define('DB_PORT', $runtimeDatabase['port'] ?: '3306');
+define('DB_NAME', $runtimeDatabase['name'] ?: 'shopvivaliz');
+define('DB_USER', $runtimeDatabase['user'] ?: 'root');
+define('DB_PASS', $runtimeDatabase['pass']);
 define('DB_CHARSET', 'utf8mb4');
+unset($runtimeDatabase);
 
 // APIs de IA
 define('GEMINI_API_KEY', getenv('GEMINI_API_KEY') ?: null);

@@ -49,7 +49,7 @@ jobs:
           fi
 
       - name: Checkout exact validated commit
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6
         with:
           ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false
@@ -140,7 +140,7 @@ jobs:
     environment: production
     steps:
       - name: Checkout exact validated commit
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6
         with:
           ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false
@@ -177,12 +177,40 @@ jobs:
           repo='/home/ubuntu/shopvivaliz-deploy/repo'
           current_link='/home/ubuntu/shopvivaliz-deploy/current'
           deploy_script="$repo/scripts/deploy-production.sh"
+          deploy_log='/home/ubuntu/shopvivaliz-deploy/logs/deploy.log'
 
           test -x "$deploy_script"
           git -C "$repo" rev-parse --is-inside-work-tree >/dev/null
           git -C "$repo" remote get-url origin >/dev/null
           git -C "$repo" fetch --no-tags origin "$expected_sha"
           git -C "$repo" cat-file -e "${expected_sha}^{commit}"
+
+          # A legacy/out-of-band runner may have changed only this bootstrap
+          # file. Preserve it with a hash, then stage the exact requested
+          # runner so its own verified recovery logic can run. Any other dirty
+          # path remains a hard failure; no checkout reset or deletion occurs.
+          dirty="$(git -C "$repo" status --porcelain=v1 --untracked-files=all)"
+          if [[ -n "$dirty" ]]; then
+            dirty_paths="$(printf '%s\n' "$dirty" | sed -E 's/^.. //')"
+            if [[ "$dirty_paths" != 'scripts/deploy-production.sh' ]]; then
+              echo "Unexpected dirty deploy checkout:" >&2
+              printf '%s\n' "$dirty" >&2
+              exit 1
+            fi
+            backup_dir='/home/ubuntu/shopvivaliz-deploy/shared/logs/runner-recovery'
+            mkdir -p "$backup_dir"
+            recovery_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+            backup_path="$backup_dir/deploy-production.sh.$recovery_stamp.$expected_sha"
+            cp -p "$deploy_script" "$backup_path"
+            sha256sum "$deploy_script" > "$backup_path.sha256"
+            printf 'recovered_at=%s\nexpected_sha=%s\noriginal_path=%s\n' \
+              "$recovery_stamp" "$expected_sha" "$deploy_script" > "$backup_path.meta"
+            restore_tmp="$(mktemp "$repo/scripts/.deploy-bootstrap.XXXXXX")"
+            git -C "$repo" show "${expected_sha}:scripts/deploy-production.sh" > "$restore_tmp"
+            chmod 0755 "$restore_tmp"
+            mv -f -- "$restore_tmp" "$deploy_script"
+            echo "Preserved legacy runner at $backup_path"
+          fi
 
           previous_release=''
           previous_sha=''
@@ -196,15 +224,12 @@ jobs:
           current_release="$(basename "$(readlink -f "$current_link")")"
           deployed_sha="$(cat "$current_link/.release-sha")"
           if [[ "$deployed_sha" == "$expected_sha" ]]; then
-            echo "Expected commit already active. Nothing to do."
-            echo "Previous release: $previous_release"
-            echo "Previous commit: $previous_sha"
-            echo "Current release: $current_release"
-            echo "Deployed commit: $deployed_sha"
-            exit 0
+            echo "Expected commit already active. Reconciling runtime before monitoring."
           fi
 
-          if ! flock -n /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha"; then
+          deploy_status=0
+          flock -n -E 75 /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha" || deploy_status=$?
+          if [[ "$deploy_status" -eq 75 ]]; then
             echo "Deploy lock busy. Waiting for concurrent deployment to finish..."
             for attempt in 1 2 3 4 5 6; do
               sleep 10
@@ -220,7 +245,17 @@ jobs:
               fi
             done
             echo "Deployment lock remained busy and expected commit never became active." >&2
-            exit 1
+            exit 75
+          fi
+          if [[ "$deploy_status" -ne 0 ]]; then
+            echo "Deployment script failed with status $deploy_status." >&2
+            if [[ -r "$deploy_log" ]]; then
+              echo 'Sanitized deployment log tail:' >&2
+              tail -n 80 "$deploy_log" \
+                | sed -E 's/([A-Za-z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig' \
+                >&2
+            fi
+            exit "$deploy_status"
           fi
 
           current_release="$(basename "$(readlink -f "$current_link")")"
@@ -231,6 +266,27 @@ jobs:
           echo "Previous commit: $previous_sha"
           echo "Current release: $current_release"
           echo "Deployed commit: $deployed_sha"
+
+          canonical_main="$(git -C "$repo" ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [[ "$canonical_main" == "$expected_sha" ]]; then
+            target_file='/home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref'
+            current_target="$(head -n 1 "$target_file" 2>/dev/null | tr -d '\r' | xargs || true)"
+            if [[ "$current_target" != 'main' ]]; then
+              backup_dir='/home/ubuntu/shopvivaliz-deploy/shared/logs/target-recovery'
+              mkdir -p "$backup_dir"
+              recovery_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+              backup_path="$backup_dir/deploy-target-ref.$recovery_stamp.$expected_sha.bak"
+              cp -p "$target_file" "$backup_path"
+              sha256sum "$target_file" > "$backup_path.sha256"
+              printf 'previous_target=%s\nnew_target=main\nactive_sha=%s\n' \
+                "$current_target" "$expected_sha" > "$backup_path.meta"
+              target_tmp="$(mktemp '/home/ubuntu/shopvivaliz-deploy/shared/.deploy-target.XXXXXX')"
+              printf 'main\n' > "$target_tmp"
+              chmod 0644 "$target_tmp"
+              mv -f -- "$target_tmp" "$target_file"
+              echo "Canonicalized deploy target from $current_target to main; backup=$backup_path"
+            fi
+          fi
           REMOTE_SCRIPT
 
       - name: Write deployment evidence
@@ -259,85 +315,93 @@ jobs:
     name: Post-deploy Monitoring
     runs-on: ubuntu-latest
     needs: deploy
-    timeout-minutes: 5
+    timeout-minutes: 6
+    permissions:
+      contents: write
     steps:
-      - name: Wait for application stabilization
-        run: sleep 10
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY" || { echo "::error::ORACLE_VM_SSH_KEY is missing"; exit 1; }
+          test -n "$ORACLE_VM_KNOWN_HOSTS" || { echo "::error::ORACLE_VM_KNOWN_HOSTS is missing"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
-      - name: Check public endpoints
+      - name: Run canonical production smoke test from Oracle VM
         shell: bash
         run: |
           set -euo pipefail
-          endpoints=(
-            'https://shopvivaliz.com.br/'
-            'https://shopvivaliz.com.br/carrinho'
-            'https://shopvivaliz.com.br/checkout'
-            'https://shopvivaliz.com.br/api/catalog/products.php?limit=1'
-            'https://shopvivaliz.com.br/api/catalog/price-health.php'
-            'https://shopvivaliz.com.br/api/catalog/image-health.php'
-            'https://shopvivaliz.com.br/api/catalog/stock-health.php'
-            'https://shopvivaliz.com.br/api/orders/health.php'
-          )
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'bash -s' -- "$DEPLOY_SHA" > >(tee smoke-results.txt) 2>&1 <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          expected_sha="$1"
+          smoke_script='/home/ubuntu/shopvivaliz-deploy/current/scripts/production-smoke-test.sh'
+          test -r "$smoke_script"
+          bash "$smoke_script" "$expected_sha"
+          REMOTE_SCRIPT
 
-          for url in "${endpoints[@]}"; do
-            status='000'
-            for attempt in 1 2 3; do
-              status="$(curl --location --silent --output /dev/null --max-time 10 --write-out '%{http_code}' "$url" || true)"
-              [[ "$status" == '200' || "$status" == '302' ]] && break
-              sleep 5
-            done
-            if [[ "$status" != '200' && "$status" != '302' ]]; then
-              echo "::error::Endpoint unhealthy: $url returned $status"
-              exit 1
-            fi
-            echo "OK $url ($status)"
-          done
-
-      - name: Check private paths remain blocked
+      - name: Publish immutable deployment evidence branch
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVIDENCE_BRANCH: deployment-evidence
         run: |
           set -euo pipefail
-          private_paths=(
-            '/.git/config'
-            '/.env.local'
-            '/storage/products-cache-ativos.json'
-            '/tasks-queue.json'
-            '/scripts/'
-            '/tests/'
-            '/installer/self-test.php'
-            '/debug-products.php'
-            '/discover-db.php'
-            '/find-db-host.php'
-            '/fix-database.php'
-            '/full-sync.php'
-            '/gen-token.php'
-            '/shop-catalog-export.php'
-            '/sync-now.php'
-            '/olist/token-refresh.php'
-            '/api/catalog/test-normalize.php'
-          )
+          python3 - <<'PY' > /tmp/deployment-evidence.json
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
 
-          for path in "${private_paths[@]}"; do
-            status="$(curl --silent --output /dev/null --max-time 10 --write-out '%{http_code}' "https://shopvivaliz.com.br${path}" || true)"
-            if [[ "$status" != '403' && "$status" != '404' ]]; then
-              echo "::error::Private path exposed: ${path} returned ${status}"
-              exit 1
-            fi
-            echo "Blocked ${path} ($status)"
-          done
+          results = [
+              line.strip()
+              for line in Path('smoke-results.txt').read_text(encoding='utf-8').splitlines()
+              if line.startswith('OK ')
+          ]
+          evidence = {
+              'status': 'PRODUCTION_UPDATED',
+              'sha': os.environ['DEPLOY_SHA'],
+              'workflow_run_id': os.environ['GITHUB_RUN_ID'],
+              'workflow_run_url': f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+              'jobs': {
+                  'validate': 'success',
+                  'deploy': 'success',
+                  'smoke_test': 'success',
+              },
+              'results': results,
+              'verified_at': datetime.now(timezone.utc).isoformat(),
+          }
+          print(json.dumps(evidence, ensure_ascii=False, indent=2))
+          PY
 
-      - name: Check required security headers
-        shell: bash
-        run: |
-          set -euo pipefail
-          headers="$(curl --silent --show-error --head --max-time 10 https://shopvivaliz.com.br/ | tr -d '\r' | tr '[:upper:]' '[:lower:]')"
-          for required in strict-transport-security x-content-type-options content-security-policy; do
-            if ! grep -q "^${required}:" <<< "$headers"; then
-              echo "::error::Required security header missing: ${required}"
-              exit 1
-            fi
-            echo "Header present: ${required}"
-          done
+          cat /tmp/deployment-evidence.json
+          content="$(base64 -w0 /tmp/deployment-evidence.json)"
+          path='deployment/latest.json'
+          existing_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EVIDENCE_BRANCH}" --jq '.sha' 2>/dev/null || true)"
+          if [[ -n "$existing_sha" ]]; then
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${path}" \
+              -f message="evidence: production ${DEPLOY_SHA}" \
+              -f content="$content" \
+              -f branch="$EVIDENCE_BRANCH" \
+              -f sha="$existing_sha" >/dev/null
+          else
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${path}" \
+              -f message="evidence: production ${DEPLOY_SHA}" \
+              -f content="$content" \
+              -f branch="$EVIDENCE_BRANCH" >/dev/null
+          fi
 
   deployment_failure_notice:
     name: Deployment Failure Notice

@@ -1,72 +1,68 @@
 <?php
-/**
- * Endpoint de Verificação de Saúde (Health Check) do ShopVivaliz
- *
- * Retorna o status do sistema, incluindo conexão com o banco de dados e
- * configurações essenciais.
- */
+
+declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 header('X-Content-Type-Options: nosniff');
-header('X-Frame-Options: DENY');
-header('X-XSS-Protection: 1; mode=block');
 
-// Em um ambiente de produção, considere um HSTS mais longo após testes.
-// header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+$root = __DIR__;
 
-try {
-    // Carrega as constantes e a configuração do banco de dados de forma segura
-require_once __DIR__ . '/config/constants.php';
-require_once __DIR__ . '/config/database.php';
+function sv_health_include_json(string $file): array
+{
+    $previousCode = http_response_code();
+    http_response_code(200);
 
-    // Tenta obter uma instância do banco de dados
-    $db_instance = Database::getInstance();
-    $connection = $db_instance->getConnection();
-
-    $db_status = 'ok';
-    $db_error = null;
-
-    if (!$connection || $connection->connect_error) {
-        $db_status = 'error';
-        $db_error = $connection ? $connection->connect_error : 'Falha ao obter conexão.';
-        http_response_code(503); // Service Unavailable
+    ob_start();
+    try {
+        require $file;
+    } catch (Throwable $e) {
+        ob_end_clean();
+        http_response_code($previousCode ?: 200);
+        return [
+            'ok' => false,
+            'http_code' => 500,
+            'error' => 'health_check_exception',
+        ];
     }
 
-    // Verifica se diretórios essenciais para a operação existem e têm permissão de escrita
-    $logs_writable = is_writable(LOGS_PATH);
-    $uploads_writable = is_writable(UPLOADS_PATH);
+    $body = trim((string) ob_get_clean());
+    $code = http_response_code();
+    http_response_code($previousCode ?: 200);
 
-    $storage_status = ($logs_writable && $uploads_writable) ? 'ok' : 'error';
-
-    if ($storage_status === 'error') {
-        http_response_code(503);
+    $payload = json_decode($body, true);
+    if (!is_array($payload)) {
+        return [
+            'ok' => false,
+            'http_code' => $code ?: 500,
+            'error' => 'invalid_health_payload',
+        ];
     }
 
-    $response = [
-        'ok' => ($db_status === 'ok' && $storage_status === 'ok'),
-        'status' => ($db_status === 'ok' && $storage_status === 'ok') ? 'healthy' : 'degraded',
-        'timestamp' => date('c'),
-        'version' => defined('APP_VERSION') ? APP_VERSION : 'unknown',
-        'environment' => ENVIRONMENT,
-        'checks' => [
-            'database' => ['status' => $db_status, 'error' => DEBUG_MODE ? $db_error : null],
-            'storage' => [
-                'status' => $storage_status,
-                'logs_writable' => $logs_writable,
-                'uploads_writable' => $uploads_writable,
-            ],
-        ],
-    ];
-
-} catch (Exception $e) {
-    http_response_code(500); // Internal Server Error
-    $response = [
-        'ok' => false,
-        'status' => 'error',
-        'message' => 'Uma exceção crítica ocorreu durante a verificação de saúde.',
-        'error' => DEBUG_MODE ? $e->getMessage() : 'Detalhes ocultos em ambiente de produção.',
-    ];
+    $payload['http_code'] = $code ?: 200;
+    return $payload;
 }
 
-echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-exit;
+$checks = [
+    'version' => sv_health_include_json($root . '/api/health/version.php'),
+    'orders' => sv_health_include_json($root . '/api/orders/health.php'),
+    'olist' => sv_health_include_json($root . '/api/olist/webhook-health.php'),
+];
+
+$ok = true;
+foreach ($checks as $check) {
+    $ok = $ok && ($check['ok'] ?? false) === true && (int) ($check['http_code'] ?? 500) < 500;
+}
+
+http_response_code($ok ? 200 : 503);
+echo json_encode(
+    [
+        'ok' => $ok,
+        'service' => 'shopvivaliz',
+        'release_sha' => $checks['version']['release_sha'] ?? null,
+        'checks' => $checks,
+        'checked_at' => gmdate('c'),
+    ],
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+);

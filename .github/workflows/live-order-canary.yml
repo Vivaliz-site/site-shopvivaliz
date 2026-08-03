@@ -1,0 +1,20 @@
+name: Live Order Boleto Canary (Disabled)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  disabled:
+    name: Real-order production canary is disabled
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Refuse real customer and payment side effects
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'Real-order canary disabled: use an isolated test identity and provider sandbox before re-enabling.' >&2
+          exit 1

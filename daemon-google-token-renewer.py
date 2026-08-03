@@ -15,7 +15,7 @@ import json
 import tempfile
 from pathlib import Path
 
-ENV_PATH = Path(__file__).resolve().parent / ".env"
+ENV_PATH = Path("c:/site-shopvivaliz/.env") if os.name == "nt" else Path("/home/ubuntu/site-shopvivaliz/.env")
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 def load_env() -> dict:

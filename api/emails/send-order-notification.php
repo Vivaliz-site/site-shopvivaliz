@@ -277,22 +277,43 @@ function svem_notify_admin_order_created(array $order): bool
         return false;
     }
 
-    $customerEmail = $order['customer']['email'] ?? '';
-    $customerName = $order['customer']['name'] ?? 'Cliente';
-    $orderNumber = $order['order_number'] ?? 'N/A';
-    $total = number_format($order['total'] ?? 0, 2, ',', '.');
-    $paymentMethod = $order['payment_method'] ?? 'Não informado';
-    $phone = $order['customer']['phone'] ?? '';
-    $address = ($order['customer']['address'] ?? '') . ', ' . ($order['customer']['city'] ?? '');
+    $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
+    $customerEmail = trim((string)($order['customer']['email'] ?? ''));
+    $customerName = (string)($order['customer']['name'] ?? 'Cliente');
+    $orderNumber = (string)($order['order_number'] ?? 'N/A');
+    $total = number_format((float)($order['total'] ?? 0), 2, ',', '.');
+    $paymentMethod = (string)($order['payment_method'] ?? 'Não informado');
+    $phone = (string)($order['customer']['phone'] ?? '');
+    $address = trim((string)($order['customer']['address'] ?? '') . ', ' . (string)($order['customer']['city'] ?? ''), ' ,');
+
+    $customerEmailSafe = $escape($customerEmail);
+    $customerNameSafe = $escape($customerName);
+    $orderNumberSafe = $escape($orderNumber);
+    $paymentMethodSafe = $escape($paymentMethod);
+    $phoneSafe = $escape($phone);
+    $addressSafe = $escape($address);
     $subject = "🔔 NOVO PEDIDO: #{$orderNumber} - R\$ {$total}";
+    $subjectSafe = $escape($subject);
+
+    $orderId = $order['id'] ?? $order['order_id'] ?? null;
+    $adminLinkHtml = '';
+    if (is_scalar($orderId) && trim((string)$orderId) !== '') {
+        $adminUrl = 'https://shopvivaliz.com.br/admin/pedidos.php?action=view&id=' . rawurlencode((string)$orderId);
+        $adminLinkHtml = "
+            <div style='background: #e7f3ff; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0;'>
+                <p><strong>⚡ Link Rápido:</strong><br>
+                <a href='" . $escape($adminUrl) . "' style='background: #2196F3; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block;'>Ver Pedido no Admin</a></p>
+            </div>
+        ";
+    }
 
     $html = "
     <!DOCTYPE html>
     <html lang='pt-BR'>
     <head>
         <meta charset='UTF-8'>
-        <title>$subject</title>
+        <title>$subjectSafe</title>
     </head>
     <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
         <div style='background: #dc3545; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;'>
@@ -302,16 +323,16 @@ function svem_notify_admin_order_created(array $order): bool
         <div style='background: white; padding: 20px; border: 1px solid #ddd;'>
             <h3 style='color: #dc3545;'>Detalhes do Pedido</h3>
 
-            <p><strong>Número:</strong> <span style='background: #fff3cd; padding: 5px 10px; border-radius: 4px; font-weight: bold;'>{$orderNumber}</span></p>
-            <p><strong>Cliente:</strong> {$customerName}</p>
-            <p><strong>Email:</strong> <a href='mailto:{$customerEmail}'>{$customerEmail}</a></p>
-            <p><strong>Telefone:</strong> {$phone}</p>
-            <p><strong>Endereço:</strong> {$address}</p>
+            <p><strong>Número:</strong> <span style='background: #fff3cd; padding: 5px 10px; border-radius: 4px; font-weight: bold;'>{$orderNumberSafe}</span></p>
+            <p><strong>Cliente:</strong> {$customerNameSafe}</p>
+            <p><strong>Email:</strong> <a href='mailto:{$customerEmailSafe}'>{$customerEmailSafe}</a></p>
+            <p><strong>Telefone:</strong> {$phoneSafe}</p>
+            <p><strong>Endereço:</strong> {$addressSafe}</p>
 
             <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'>
 
             <h3 style='color: #28a745;'>Pagamento</h3>
-            <p><strong>Método:</strong> {$paymentMethod}</p>
+            <p><strong>Método:</strong> {$paymentMethodSafe}</p>
             <p><strong>Valor Total:</strong> <span style='font-size: 18px; color: #28a745; font-weight: bold;'>R\$ {$total}</span></p>
             <p><strong>Status:</strong> <span style='background: #ffc107; padding: 5px 8px; border-radius: 4px;'>⏳ AGUARDANDO PAGAMENTO</span></p>
 
@@ -325,13 +346,7 @@ function svem_notify_admin_order_created(array $order): bool
                 <li>Notificar cliente</li>
             </ol>
 
-            <div style='background: #e7f3ff; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0;'>
-                <p><strong>⚡ Link Rápido:</strong><br>
-                <a href='https://shopvivaliz.com.br/admin/pedidos.php?action=view&id={$orderNumber}'
-                   style='background: #2196F3; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block;'>
-                   Ver Pedido no Admin
-                </a></p>
-            </div>
+            $adminLinkHtml
         </div>
 
         <div style='background: #f8f9fa; padding: 15px; text-align: center; font-size: 12px; color: #666;'>
@@ -363,18 +378,22 @@ function svem_notify_admin_payment_received(array $order): bool
         return false;
     }
 
-    $orderNumber = $order['order_number'] ?? 'N/A';
-    $total = number_format($order['total'] ?? 0, 2, ',', '.');
-    $customerName = $order['customer']['name'] ?? 'Cliente';
+    $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $orderNumber = (string)($order['order_number'] ?? 'N/A');
+    $total = number_format((float)($order['total'] ?? 0), 2, ',', '.');
+    $customerName = (string)($order['customer']['name'] ?? 'Cliente');
+    $orderNumberSafe = $escape($orderNumber);
+    $customerNameSafe = $escape($customerName);
 
     $subject = "💚 PAGAMENTO CONFIRMADO: #{$orderNumber} - R\$ {$total}";
+    $subjectSafe = $escape($subject);
 
     $html = "
     <!DOCTYPE html>
     <html lang='pt-BR'>
     <head>
         <meta charset='UTF-8'>
-        <title>$subject</title>
+        <title>$subjectSafe</title>
     </head>
     <body style='font-family: Arial, sans-serif; line-height: 1.6;'>
         <div style='background: #28a745; color: white; padding: 20px; text-align: center;'>
@@ -382,8 +401,8 @@ function svem_notify_admin_payment_received(array $order): bool
         </div>
         <div style='background: white; padding: 20px; border: 1px solid #ddd;'>
             <p>O pagamento do pedido foi confirmado!</p>
-            <p><strong>Pedido:</strong> #{$orderNumber}</p>
-            <p><strong>Cliente:</strong> {$customerName}</p>
+            <p><strong>Pedido:</strong> #{$orderNumberSafe}</p>
+            <p><strong>Cliente:</strong> {$customerNameSafe}</p>
             <p><strong>Valor:</strong> R\$ {$total}</p>
             <p style='margin-top: 20px;'><strong>⚡ Ação necessária:</strong> Preparar itens para envio</p>
         </div>

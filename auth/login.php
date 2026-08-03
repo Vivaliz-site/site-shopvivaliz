@@ -42,11 +42,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-login', $_POST
             $error = 'Email e senha são obrigatórios';
         } else {
         try {
-            $instance = Database::getInstance();
-            $db = $instance ? $instance->getConnection() : null;
+            $db = Database::getInstance()->getConnection();
 
-            if ($db instanceof mysqli) {
-                $stmt = $db->prepare('SELECT id, name, email, password_hash FROM users WHERE email = ? LIMIT 1');
+            $stmt = $db->prepare('SELECT id, name, email, password_hash FROM users WHERE email = ? LIMIT 1');
             if ($stmt) {
                 $stmt->bind_param('s', $email);
                 $stmt->execute();

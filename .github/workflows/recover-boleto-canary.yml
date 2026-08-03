@@ -1,0 +1,295 @@
+name: Reconcile Existing Boleto Canary
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Digite RECONCILE para executar somente verificacoes de leitura'
+        required: true
+        type: string
+      reason:
+        description: 'Motivo auditavel para a reconciliacao'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reconcile-existing-boleto-canary
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Read-only reconciliation of existing canary state
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      TARGET_ORDER: SV20260731072524339
+    steps:
+      - name: Require explicit confirmation
+        shell: bash
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = 'RECONCILE'
+          test -n "$REASON"
+
+      - name: Wait for exact commit in production evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ready=0
+          for _ in $(seq 1 36); do
+            if gh api \
+              -H 'Accept: application/vnd.github.raw+json' \
+              "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence" \
+              > /tmp/deployment-latest.json 2>/tmp/deployment-error.txt; then
+              if python3 - "$EXPECTED_SHA" /tmp/deployment-latest.json <<'PY'
+          import json
+          import sys
+
+          expected = sys.argv[1].lower()
+          data = json.load(open(sys.argv[2], encoding='utf-8'))
+          assert str(data.get('sha', '')).lower() == expected
+          assert data.get('status') == 'PRODUCTION_UPDATED'
+          assert all(
+              (data.get('jobs') or {}).get(name) == 'success'
+              for name in ('validate', 'deploy', 'smoke_test')
+          )
+          PY
+              then
+                ready=1
+                break
+              fi
+            fi
+            sleep 20
+          done
+          test "$ready" = '1'
+
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Reconcile persisted state without provider or email calls
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'bash -s' -- "$EXPECTED_SHA" "$TARGET_ORDER" "$RUN_ID" "$RUN_ATTEMPT" <<'REMOTE'
+          set -euo pipefail
+          expected_sha="$1"
+          target_order="$2"
+          run_id="$3"
+          run_attempt="$4"
+          current='/home/ubuntu/shopvivaliz-deploy/current'
+          state_dir='/home/ubuntu/shopvivaliz-deploy/state'
+          evidence_dir="$state_dir/evidence/boleto-reconciliation"
+          legacy_marker="$state_dir/boleto-recovery-${target_order}.json"
+          evidence="$evidence_dir/${target_order}-${run_id}-${run_attempt}.json"
+
+          install -m 700 -d "$evidence_dir"
+          test "$(cat "$current/.release-sha")" = "$expected_sha"
+          test ! -e "$evidence"
+
+          legacy_before='absent'
+          if [[ -f "$legacy_marker" ]]; then
+            legacy_before="$(sha256sum "$legacy_marker" | awk '{print $1}')"
+          fi
+
+          raw_output="$(mktemp "$evidence_dir/.raw-${run_id}-${run_attempt}.XXXXXX")"
+          stderr_log="$(mktemp "$evidence_dir/.stderr-${run_id}-${run_attempt}.XXXXXX")"
+          final_output="$(mktemp "$evidence_dir/.final-${run_id}-${run_attempt}.XXXXXX")"
+          log_excerpt="$(mktemp "$evidence_dir/.logs-${run_id}-${run_attempt}.XXXXXX")"
+          cleanup() {
+            rm -f "$raw_output" "$stderr_log" "$final_output" "$log_excerpt"
+          }
+          trap cleanup EXIT
+
+          if sudo -u www-data -- env SHOPVIVALIZ_RECOVERY_ORDER="$target_order" \
+            php "$current/scripts/recover-boleto-canary.php" \
+            > "$raw_output" 2> "$stderr_log"; then
+            script_rc=0
+          else
+            script_rc=$?
+          fi
+
+          sudo python3 - "$target_order" "$log_excerpt" <<'PY'
+          import glob
+          import gzip
+          import sys
+
+          order, output = sys.argv[1:]
+          tags = ('[OrderEmail]', '[AdminNotify]', '[MercadoPago]')
+          matches = []
+          for path in sorted(glob.glob('/var/log/apache2/error.log*')):
+              try:
+                  opener = gzip.open if path.endswith('.gz') else open
+                  with opener(path, 'rt', encoding='utf-8', errors='replace') as handle:
+                      for line in handle:
+                          if order in line and any(tag in line for tag in tags):
+                              matches.append(line.rstrip())
+              except OSError:
+                  continue
+          with open(output, 'w', encoding='utf-8') as handle:
+              handle.write('\n'.join(matches[-100:]) + ('\n' if matches else ''))
+          PY
+
+          customer_count="$(awk '/\[OrderEmail\].*Email enviado/{count++} END{print count+0}' "$log_excerpt")"
+          admin_count="$(awk '/\[AdminNotify\].*Email enviado para atendimento/{count++} END{print count+0}' "$log_excerpt")"
+          provider_count="$(awk '/\[MercadoPago\].*boleto created/{count++} END{print count+0}' "$log_excerpt")"
+
+          legacy_after='absent'
+          if [[ -f "$legacy_marker" ]]; then
+            legacy_after="$(sha256sum "$legacy_marker" | awk '{print $1}')"
+          fi
+
+          python3 - \
+            "$raw_output" "$script_rc" "$expected_sha" "$run_id" "$run_attempt" \
+            "$legacy_before" "$legacy_after" "$customer_count" "$admin_count" "$provider_count" \
+            > "$final_output" <<'PY'
+          import json
+          import sys
+
+          (
+              path, script_rc, sha, run_id, run_attempt,
+              legacy_before, legacy_after,
+              customer_count, admin_count, provider_count,
+          ) = sys.argv[1:]
+
+          try:
+              data = json.load(open(path, encoding='utf-8'))
+          except Exception:
+              data = {'ok': False, 'error': 'invalid_reconciliation_output'}
+
+          customer_count = int(customer_count)
+          admin_count = int(admin_count)
+          provider_count = int(provider_count)
+          data.update({
+              'sha': sha,
+              'run_id': run_id,
+              'run_attempt': int(run_attempt),
+              'script_exit_code': int(script_rc),
+              'reconciliation_only': True,
+              'side_effects_attempted': False,
+              'legacy_marker_present': legacy_before != 'absent',
+              'legacy_marker_unchanged': legacy_before == legacy_after,
+              'customer_email_success_log_count': customer_count,
+              'admin_email_success_log_count': admin_count,
+              'provider_success_log_count': provider_count,
+              'customer_email_log_observed': customer_count >= 1,
+              'admin_email_log_observed': admin_count >= 1,
+              'provider_success_log_observed': provider_count >= 1,
+          })
+
+          required = (
+              data.get('ok') is True,
+              int(script_rc) == 0,
+              data.get('order_file_unchanged') is True,
+              data.get('persisted_provider_order') is True,
+              data.get('digitable_line_present') is True,
+              data.get('email_send_state_persisted') is True,
+              data.get('tiny_not_imported_while_unpaid') is True,
+              data.get('do_not_fulfill') is True,
+              data.get('legacy_marker_unchanged') is True,
+              data.get('customer_email_log_observed') is True,
+              data.get('provider_success_log_observed') is True,
+          )
+          data['ok'] = all(required)
+          print(json.dumps(data, ensure_ascii=False, indent=2))
+          PY
+
+          chmod 600 "$final_output"
+          ln "$final_output" "$evidence"
+          cat "$evidence"
+
+          python3 - "$evidence" <<'PY'
+          import json
+          import sys
+
+          data = json.load(open(sys.argv[1], encoding='utf-8'))
+          if data.get('ok') is not True:
+              raise SystemExit('read-only reconciliation evidence is incomplete')
+          PY
+          REMOTE
+
+      - name: Download immutable redacted evidence
+        if: always()
+        shell: bash
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          scp \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            "ubuntu@137.131.156.17:/home/ubuntu/shopvivaliz-deploy/state/evidence/boleto-reconciliation/${TARGET_ORDER}-${RUN_ID}-${RUN_ATTEMPT}.json" \
+            artifacts/boleto-reconciliation.json
+
+      - name: Validate redacted evidence contract
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - artifacts/boleto-reconciliation.json <<'PY'
+          import json
+          import sys
+
+          data = json.load(open(sys.argv[1], encoding='utf-8'))
+          serialized = json.dumps(data).lower()
+          for key in ('customer', 'cpf', 'address', 'phone', 'ticket_url', 'digitable_line'):
+              if f'"{key}"' in serialized:
+                  raise SystemExit(f'private/payment field leaked: {key}')
+
+          true_fields = (
+              'ok', 'reconciliation_only', 'order_file_unchanged',
+              'persisted_provider_order', 'digitable_line_present',
+              'email_send_state_persisted', 'tiny_not_imported_while_unpaid',
+              'do_not_fulfill', 'legacy_marker_unchanged',
+              'customer_email_log_observed', 'provider_success_log_observed',
+          )
+          for key in true_fields:
+              if data.get(key) is not True:
+                  raise SystemExit(f'reconciliation assertion not proven: {key}')
+          if data.get('side_effects_attempted') is not False:
+              raise SystemExit('reconciliation attempted a side effect')
+          PY
+
+      - name: Upload immutable redacted evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: boleto-reconciliation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/boleto-reconciliation.json
+          if-no-files-found: error
+          retention-days: 30

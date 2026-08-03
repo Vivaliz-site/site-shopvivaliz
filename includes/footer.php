@@ -96,12 +96,20 @@ footer::before {
         padding-bottom: 0 !important;
     }
 
+    html, body {
+        background-color: #071b2f !important;
+    }
+
     footer {
-        padding-bottom: calc(24px + var(--sv-bottom-ui-offset, 0px) + env(safe-area-inset-bottom)) !important;
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+        background-color: #071b2f !important;
     }
 
     .footer-legal {
+        margin-bottom: 0 !important;
         padding-bottom: calc(20px + env(safe-area-inset-bottom)) !important;
+        background-color: #071b2f !important;
     }
 
     .footer-legal {
