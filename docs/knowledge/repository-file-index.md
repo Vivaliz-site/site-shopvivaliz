@@ -1,6 +1,6 @@
 # Indice completo do repositorio
 
-Gerado deterministicamente a partir de 3823 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
+Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
 
 ## Diretorios
 
@@ -2024,6 +2024,7 @@ Gerado deterministicamente a partir de 3823 arquivos versionados no indice Git. 
 | `clean-all-css.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `cnpj-rodape-teste.html` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `composer.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
+| `composer.lock` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `compra-final.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `compra-simples.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `config/__init__.py` | Configuracao e seguranca - Script operacional. | ativo ou ainda nao classificado como legado |
