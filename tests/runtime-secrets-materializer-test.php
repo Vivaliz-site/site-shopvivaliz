@@ -71,7 +71,11 @@ try {
     rsm_assert(($values['OLIST_WEBHOOK_SECRET'] ?? '') === 'olist-secret', 'Olist secret should be included');
     rsm_assert(!array_key_exists('OPENAI_API_KEY', $values), 'unrelated AI keys must not be exported');
     rsm_assert(!array_key_exists('SMTP_PASS', $values), 'unrelated mail secrets must not be exported');
-    rsm_assert((fileperms($target) & 0777) === 0640, 'generated file mode should be 0640');
+    // The Oracle contract is POSIX 0640. Windows reports synthetic mode bits
+    // and cannot represent this chmod contract through the local filesystem.
+    if (PHP_OS_FAMILY !== 'Windows') {
+        rsm_assert((fileperms($target) & 0777) === 0640, 'generated file mode should be 0640');
+    }
 
     file_put_contents($source, implode("\n", [
         'DB_NAME=shopvivaliz',

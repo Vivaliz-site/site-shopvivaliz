@@ -7,8 +7,14 @@ const maxAttempts = 3;
 function fetchHealth() {
   return new Promise((resolve, reject) => {
     const request = https.get(endpoint, {
-      headers: { 'User-Agent': 'ShopVivaliz-ERP-Policy-Check/1.0' },
-      timeout: 10000,
+      family: 4,
+      agent: false,
+      headers: {
+        Accept: 'application/json',
+        Connection: 'close',
+        'User-Agent': 'ShopVivaliz-ERP-Policy-Check/1.0',
+      },
+      timeout: 30000,
     }, response => {
       let data = '';
       response.setEncoding('utf8');
