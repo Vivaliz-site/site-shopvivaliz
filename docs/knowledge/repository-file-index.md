@@ -1,6 +1,6 @@
 # Indice completo do repositorio
 
-Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
+Gerado deterministicamente a partir de 3842 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
 
 ## Diretorios
 
@@ -77,6 +77,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `api/mercadopago` | Endpoints HTTP e webhooks |
 | `api/ml` | Endpoints HTTP e webhooks |
 | `api/monitor` | Endpoints HTTP e webhooks |
+| `api/newsletter` | Endpoints HTTP e webhooks |
 | `api/olist` | Endpoints HTTP e webhooks |
 | `api/orchestrator` | Endpoints HTTP e webhooks |
 | `api/orders` | Endpoints HTTP e webhooks |
@@ -105,7 +106,6 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `automations/scripts` | Automacao |
 | `blog` | Blog publico e publicacao |
 | `capas-shopee` | Suporte, configuracao ou artefato de projeto |
-| `carrinho-legacy` | Carrinho legado |
 | `catalogo` | Catalogo publico |
 | `checkout-legacy` | Checkout legado |
 | `checkout-v2` | Checkout ativo v2 |
@@ -865,6 +865,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `.github/workflows/hourly-summary.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/incident-response-automation.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/integrations-hourly.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
+| `.github/workflows/inventory-reservation-maintenance.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/live-order-canary.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/master-production-pipeline.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/olist-sync.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
@@ -875,6 +876,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `.github/workflows/quality-gate.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/recover-boleto-canary.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/recover-erp-from-backups-manual.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
+| `.github/workflows/refresh-olist-token-2h.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/repair-erp-runtime-manual.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/repository-governance.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/repository-safe-migration.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
@@ -885,6 +887,8 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `.github/workflows/shopee-optimizer-safety.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/shopee-production-seo.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/shopvivaliz-qa.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
+| `.github/workflows/storefront-browser-audit.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
+| `.github/workflows/storefront-hardening.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/sync-products-auto.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.gitignore` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `.gitleaks.toml` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
@@ -936,9 +940,12 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `.wrangler/registry/__vite_proxy_worker__` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `.wrangler/registry/site-creator-vinext-starter` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `036e6d865ffc4525b743d6dd53c3cb4a.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `403.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `404.php` | Aplicacao web publica - Pagina publica de erro 404. | ativo ou ainda nao classificado como legado |
 | `50-IMPROVEMENTS-SUMMARY.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `500.php` | Aplicacao web publica - Pagina publica de erro 500. | ativo ou ainda nao classificado como legado |
+| `502.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `503.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `ACAO-IMEDIATA-TOKEN-FIX.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `ACAO-PRODUCAO-HOJE.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `ACCESSIBILITY-AUDIT.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -1546,6 +1553,8 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `api/ml/webhook.php` | Endpoints HTTP e webhooks - Endpoint de callback ou webhook. | ativo ou ainda nao classificado como legado |
 | `api/monitor/api.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `api/monitor/dev-status.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `api/newsletter/confirm.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `api/newsletter/subscribe.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `api/olist/LOCAL-API-README.md` | Endpoints HTTP e webhooks - Documentacao de projeto. | ativo ou ainda nao classificado como legado |
 | `api/olist/QUICK-START.txt` | Endpoints HTTP e webhooks - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `api/olist/callback.php` | Endpoints HTTP e webhooks - Endpoint de callback ou webhook. | ativo ou ainda nao classificado como legado |
@@ -1659,7 +1668,6 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `blog/index.php` | Blog publico e publicacao - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `bootstrap-claude-access.sh` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `capas-shopee/AGENTE_INSTALADOR_PIPELINE_CAPAS_SHOPEE.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `carrinho-legacy/index.php` | Carrinho legado - Codigo PHP. | legado declarado - revisar rota e telemetria antes de remover |
 | `carrinho.php` | Aplicacao web publica - Pagina publica do carrinho. | ativo ou ainda nao classificado como legado |
 | `catalogo-v2.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `catalogo.php` | Aplicacao web publica - Pagina publica do catalogo. | ativo ou ainda nao classificado como legado |
@@ -1670,7 +1678,6 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `check-table.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `check_api.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `checkout-legacy/checkout-page-optimizer.php` | Checkout legado - Codigo PHP. | legado declarado - revisar rota e telemetria antes de remover |
-| `checkout-legacy/index.php` | Checkout legado - Codigo PHP. | legado declarado - revisar rota e telemetria antes de remover |
 | `checkout-return.php` | Aplicacao web publica - Retorno publico do checkout. | ativo ou ainda nao classificado como legado |
 | `checkout-v2/index.php` | Checkout ativo v2 - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `checkout.php` | Aplicacao web publica - Pagina publica do checkout. | ativo ou ainda nao classificado como legado |
@@ -2072,6 +2079,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `css/category-real-images-v52.css` | Estilos - Estilo visual. | ativo ou ainda nao classificado como legado |
 | `css/checkout-conversion-v6.css` | Estilos - Estilo visual. | ativo ou ainda nao classificado como legado |
 | `css/checkout.css` | Estilos - Estilo visual. | ativo ou ainda nao classificado como legado |
+| `css/cls-stability-v1.css` | Estilos - Estilo visual. | ativo ou ainda nao classificado como legado |
 | `css/dazzle-v1.css` | Estilos - Estilo visual. | ativo ou ainda nao classificado como legado |
 | `css/first-purchase-popup-v1.css` | Estilos - Estilo visual. | ativo ou ainda nao classificado como legado |
 | `css/footer-pages.css` | Estilos - Estilo visual. | ativo ou ainda nao classificado como legado |
@@ -2362,6 +2370,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `images/logo.svg` | Suporte, configuracao ou artefato de projeto - Imagem ou icone. | ativo ou ainda nao classificado como legado |
 | `images/mercado-pago-logo.jpg` | Suporte, configuracao ou artefato de projeto - Imagem ou icone. | ativo ou ainda nao classificado como legado |
 | `images/mercado-pago-logo.svg` | Suporte, configuracao ou artefato de projeto - Imagem ou icone. | ativo ou ainda nao classificado como legado |
+| `images/product-placeholder.svg` | Suporte, configuracao ou artefato de projeto - Imagem ou icone. | ativo ou ainda nao classificado como legado |
 | `images/selo-ssl-seguro.webp` | Suporte, configuracao ou artefato de projeto - Imagem ou icone. | ativo ou ainda nao classificado como legado |
 | `imports/shopee-media-space/Result_shopee_mass_update_media_info_604371761_20260702124508.xlsx` | Suporte, configuracao ou artefato de projeto - Planilha ou dados tabulares. | ativo ou ainda nao classificado como legado |
 | `imports/shopee-media-space/images/341440872_KIT4R-SOPR_O_shopee.jpg` | Suporte, configuracao ou artefato de projeto - Imagem ou icone. | ativo ou ainda nao classificado como legado |
@@ -2520,6 +2529,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `includes/blog-comment-repository.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/blog-editorial-autopilot.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/catalog-runtime.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `includes/checkout-output-hardening.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/cors.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/coupons.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/csrf-protection.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -2536,6 +2546,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `includes/infinitepay-gateway.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/input-validator.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/integration-health.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `includes/inventory-reservations.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/layout-loader.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/liz-assistant-core.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/liz-blog-comment-responder.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -2608,14 +2619,15 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `js/checkout-conversion-v6.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `js/checkout-idempotency-v122.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `js/checkout-payment-v2.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
+| `js/checkout-resilience-v1.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `js/checkout-resilience-v15.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `js/checkout-shipping-v7.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `js/cro-interactions.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `js/dazzle-v1.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `js/first-purchase-popup-v1.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
-| `js/home-mobile-layout.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `js/install-prompt-v29.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `js/ml-events.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
+| `js/newsletter-v1.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `js/offline-status-v22.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `js/performance-v12.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `js/privacy-consent-v1.js` | Scripts de frontend - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
@@ -2710,6 +2722,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `message-queue.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `metrics.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `meus-pedidos.php` | Aplicacao web publica - Historico autenticado de pedidos. | ativo ou ainda nao classificado como legado |
+| `migrations/2026-08-02-storefront-hardening.sql` | Migracoes de banco - Schema, migracao ou consulta SQL. | ativo ou ainda nao classificado como legado |
 | `migrations/20260712_add_stock_alerts_table.sql` | Migracoes de banco - Schema, migracao ou consulta SQL. | ativo ou ainda nao classificado como legado |
 | `minha-conta/cupons.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `minha-conta/dados.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -2846,7 +2859,6 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `release-notes/9.2.96-gateway-secret-injection.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `release-notes/cleanup-historico-credenciais-only.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `release-notes/patches/cleanup-historico-credenciais-only.patch` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `remote-index.html` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `reports/24-7-real-validation-2026-07-13.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `reports/auditoria-google-tools-2026-07-19.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `reports/autonomous-audit-2026-07-13.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -3008,6 +3020,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `scripts/analytics/__init__.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/analytics/performance_tracker.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/analyze-pr-failures.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
+| `scripts/apply-storefront-hardening-migration.php` | Ferramentas e rotinas de manutencao - Migracao de banco de dados. | ativo ou ainda nao classificado como legado |
 | `scripts/audit-agents-real-work.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/audit-all-pages.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/audit-deep-content.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -3254,6 +3267,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `scripts/recover-boleto-canary.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `scripts/refine-ecommerce-audit-report.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/refresh-catalog-fallback.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
+| `scripts/release-expired-stock-reservations.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `scripts/repair-olist-images.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/reparo-catalogo-olist.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/report-merchant-excluded-products.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -4478,7 +4492,6 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `sync.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `tasks-queue-activate.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `tasks-queue.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
-| `temp_homepage.html` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `templates/emails/layout.html` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `templates/emails/nota_fiscal_emitida.html` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `templates/emails/nota_fiscal_emitida.txt` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
@@ -4563,11 +4576,15 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `tests/mercadopago-payment-tests.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/meus-pedidos.spec.ts` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/mp-auth-check.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/olist-refresh-safety-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/php-router.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/precos-catalogo.spec.ts` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/public-trust-guard-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/runtime-env-reader-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/runtime-secrets-materializer-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/send-single-test-email.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/storefront-hardening-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/storefront-screenshot-audit.mjs` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/storefront-smoke.sh` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test-emails-idempotency.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test-liz-intelligent.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -4576,6 +4593,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `tests/test_codex_mesh_bridge.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_configure_production_runtime.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_daemon_sync_products.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/test_deploy_production_script.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_env_loading.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_example.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/test_git_auto_sync.py` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |

@@ -4,12 +4,12 @@ Gerado deterministicamente do indice Git. Este relatorio aponta candidatos; nao 
 
 ## Resumo
 
-- Arquivos versionados: 3824
+- Arquivos versionados: 3842
 - Diretorios versionados: 782
 - Grupos de conteudo identico: 192
 - Grupos identicos que incluem codigo: 12
-- Nomes de funcao encontrados em mais de um arquivo: 444
-- Arquivos em diretorios explicitamente legados: 3
+- Nomes de funcao encontrados em mais de um arquivo: 432
+- Arquivos em diretorios explicitamente legados: 1
 - Violacoes de dados operacionais versionados: 5
 
 ## Violacoes de politica
@@ -1371,7 +1371,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 
 - `$i`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `$t`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `__construct`: `agents/project-director-agent.php`, `api/liz-web-search.php`, `checkout-legacy/checkout-page-optimizer.php`, `claude/api/ProductOptimizer.php`, `claude/api/shopee/upload-imagens-batch.php`, `claude/api/shopee/validar-imagens.php`, `claude/api/sync-olist-products.php`, `claude/api/sync-shopee-products.php`, `config/database.php`, `core/ai/market/collector.php`, `core/ai/strategy/engine.php`, `core/config/ShopeeSecretsLoader.php`, `includes/OrderNotificationService.class.php`, `includes/PHPMailer/PHPMailer.php`, `includes/analytics-tracking.php`, `includes/blog-article-repository.php`, `includes/blog-comment-repository.php`, `includes/infinitepay-gateway.php`, `includes/logger.php`, `includes/mercadopago-gateway.php`, `includes/performance-optimization.php`, `includes/query-builder.php`, `includes/redis-cache.php`, `includes/testimonials-repository.php`, `scripts/agent-heartbeat-monitor.php`, `scripts/agent-lock-manager.php`, `scripts/database-sandbox.php`, `scripts/disaster-recovery.php`, `scripts/incident-response.php`, `scripts/llm-knowledge-base.php`, `scripts/llm-log-analyzer.php`, `scripts/performance-optimizer.php`, `scripts/revenue-driven-queue.php`, `scripts/send-notifications.php`, `scripts/seo-generator.php`, `scripts/task-distribution-engine.php`, `scripts/test-shopee-connection.php`, `scripts/watchdog-health-check.php`, `scripts/whatsapp-integration.php`
+- `__construct`: `agents/project-director-agent.php`, `api/liz-web-search.php`, `checkout-legacy/checkout-page-optimizer.php`, `claude/api/ProductOptimizer.php`, `claude/api/shopee/upload-imagens-batch.php`, `claude/api/shopee/validar-imagens.php`, `claude/api/sync-olist-products.php`, `claude/api/sync-shopee-products.php`, `config/database.php`, `core/ai/market/collector.php`, `core/ai/strategy/engine.php`, `core/config/ShopeeSecretsLoader.php`, `includes/OrderNotificationService.class.php`, `includes/PHPMailer/PHPMailer.php`, `includes/analytics-tracking.php`, `includes/blog-article-repository.php`, `includes/blog-comment-repository.php`, `includes/infinitepay-gateway.php`, `includes/inventory-reservations.php`, `includes/logger.php`, `includes/mercadopago-gateway.php`, `includes/performance-optimization.php`, `includes/query-builder.php`, `includes/redis-cache.php`, `includes/testimonials-repository.php`, `scripts/agent-heartbeat-monitor.php`, `scripts/agent-lock-manager.php`, `scripts/database-sandbox.php`, `scripts/disaster-recovery.php`, `scripts/incident-response.php`, `scripts/llm-knowledge-base.php`, `scripts/llm-log-analyzer.php`, `scripts/performance-optimizer.php`, `scripts/revenue-driven-queue.php`, `scripts/send-notifications.php`, `scripts/seo-generator.php`, `scripts/task-distribution-engine.php`, `scripts/test-shopee-connection.php`, `scripts/watchdog-health-check.php`, `scripts/whatsapp-integration.php`
 - `__destruct`: `checkout-legacy/checkout-page-optimizer.php`, `includes/PHPMailer/PHPMailer.php`
 - `_getClientHydrationContext`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `_getGlobalAccessors`: `dist/server/index.js`, `dist/server/ssr/index.js`
@@ -1400,7 +1400,6 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `br`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `buildDangerousSchemeRegex`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `buildOutgoingAppPayload`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `buildWhatsappLink`: `checkout-legacy/index.php`, `checkout-v2/index.php`
 - `byteLengthOfChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `C`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `c`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1414,7 +1413,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `Ci`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `classify`: `api/autonomous/operational-controls.php`, `automation/eha/classifier.php`
 - `cleanupOldBackups`: `api/autonomous/backup-manager.php`, `scripts/disaster-recovery.php`
-- `clearShippingQuote`: `carrinho-legacy/index.php`, `carrinho.php`, `checkout.php`
+- `clearShippingQuote`: `carrinho.php`, `checkout.php`
 - `cloneAndReplaceKey`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `close`: `config/database.php`, `dist/server/index.js`, `dist/server/ssr/index.js`, `includes/PHPMailer/SMTP.php`
 - `closeWithError`: `dist/server/index.js`, `dist/server/ssr/index.js`
@@ -1439,6 +1438,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `createSet`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `ct`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `curl_post`: `claude/api/olist/auto-sync.php`, `olist/direct-sync.php`
+- `currentCep`: `js/checkout-resilience-v1.js`, `js/checkout-shipping-v7.js`
 - `d`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `D`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `de`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1448,7 +1448,6 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `detect`: `api/autonomous/incident-manager.php`, `scripts/incident-response.php`
 - `detectAttributeType`: `claude/api/ProductOptimizer.php`, `claude/api/sync-shopee-products.php`
 - `digits`: `js/cart.js`, `js/checkout-conversion-v6.js`, `js/checkout-shipping-v7.js`, `js/product-conversion-v5.js`
-- `digitsOnly`: `checkout-legacy/index.php`, `checkout-v2/index.php`
 - `Dn`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `dr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Dr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1472,15 +1471,9 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `extractKeywords`: `agents/v9.2.85/app/ShopeeListingsOptimizationAgent.php`, `claude/api/sync-shopee-products.php`
 - `fatalError`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `fetchAllProducts`: `agents/v9.2.85/app/ShopeeListingsExtractorAgent.php`, `agents/v9.2.85/app/ShopeeListingsOptimizationAgent.php`
-- `fetchCep`: `checkout-legacy/index.php`, `checkout-v2/index.php`
-- `fetchCnpj`: `checkout-legacy/index.php`, `checkout-v2/index.php`
 - `fi`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `fillAddressFromCep`: `checkout-legacy/index.php`, `checkout-v2/index.php`
-- `fillCompanyData`: `checkout-legacy/index.php`, `checkout-v2/index.php`
 - `fmtMoney`: `carrinho.php`, `checkout.php`, `gamificacao.php`
 - `fn`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `formatCep`: `carrinho-legacy/index.php`, `js/product-conversion-v5.js`
-- `formatCpfCnpj`: `checkout-legacy/index.php`, `checkout-v2/index.php`
 - `formatProdErrorMessage`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `fr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Fr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1539,7 +1532,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `ia`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `ie`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `ignoreReject`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `init`: `includes/idempotency.php`, `js/checkout-payment-v2.js`, `js/public-experience-v1.js`, `js/visual-polish-v4.js`
+- `init`: `includes/idempotency.php`, `js/checkout-payment-v2.js`, `js/checkout-resilience-v1.js`, `js/newsletter-v1.js`, `js/public-experience-v1.js`
 - `initAll`: `includes/auto-image-carousel.js`, `js/auto-image-carousel.js`
 - `initialize`: `dist/server/index.js`, `dist/server/ssr/index.js`, `includes/audit-middleware.php`
 - `initializeModelChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
@@ -1560,7 +1553,6 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `isRecord`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `isRscCacheBustingSearchPair`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `isStringOrNull`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `isValidCPF`: `checkout-legacy/index.php`, `checkout-v2/index.php`
 - `isValidElement`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `j`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `Ji`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1606,7 +1598,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `ml_env`: `api/ml/_bootstrap.php`, `api/ml/client.php`
 - `ml_save_tokens`: `api/ml/_bootstrap.php`, `api/ml/client.php`
 - `ml_token_path`: `api/ml/_bootstrap.php`, `api/ml/client.php`
-- `money`: `carrinho-legacy/index.php`, `checkout-legacy/index.php`, `checkout-v2/index.php`, `claude/carrinho/index.php`, `claude/checkout/index.php`, `claude/produto.php`, `js/cart-shipping-v7.js`, `js/cart.js`, `js/catalog.js`
+- `money`: `checkout-v2/index.php`, `claude/carrinho/index.php`, `claude/checkout/index.php`, `claude/produto.php`, `js/cart-shipping-v7.js`, `js/cart.js`, `js/catalog.js`
 - `monitor_read_json`: `admin/monitor-completo.php`, `api/monitor/api.php`
 - `mp_get_secret`: `includes/mercadopago-checkout-js.php`, `tests/mp-auth-check.php`
 - `mr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1675,18 +1667,16 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `ReactPromise`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `readAppElementsMetadata`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `readArtifactCompatibilityMetadata`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `readCart`: `carrinho-legacy/index.php`, `checkout-legacy/index.php`, `checkout-v2/index.php`, `claude/carrinho/index.php`, `claude/checkout/index.php`, `index.php`, `js/catalog.js`, `js/shopvivaliz-google-events.js`, `js/visual-polish-v4.js`
+- `readCart`: `checkout-v2/index.php`, `claude/carrinho/index.php`, `claude/checkout/index.php`, `index.php`, `js/catalog.js`, `js/shopvivaliz-google-events.js`, `js/visual-polish-v4.js`
 - `readJson`: `admin/monitor/index.php`, `admin/monitor_agentes.php`, `scripts/tri-environment-sync.js`
 - `readQueue`: `scripts/revenue-driven-queue.php`, `scripts/task-distribution-engine.php`
-- `readShippingQuote`: `carrinho-legacy/index.php`, `checkout-v2/index.php`
 - `reject`: `agents/v9.2.84/app/MediaMemoryAgent.php`, `api/autonomous/approval-queue-manager.php`, `api/autonomous/task-validator.php`, `dist/server/index.js`
 - `rejectChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `rejectReference`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `removeReferenceCacheTag`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `render`: `admin/clientes.php`, `admin/connections.php`, `admin/produtos.php`, `carrinho-legacy/index.php`, `carrinho.php`, `claude/carrinho/index.php`, `js/cart.js`, `js/category-real-images-v52.js`, `js/privacy-consent-v1.js`, `js/testimonials.js`
+- `render`: `admin/clientes.php`, `admin/connections.php`, `admin/produtos.php`, `carrinho.php`, `claude/carrinho/index.php`, `js/cart.js`, `js/category-real-images-v52.js`, `js/privacy-consent-v1.js`, `js/testimonials.js`
 - `renderAgents`: `admin/monitor/index.php`, `admin/monitor_agentes.php`
 - `renderElement`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `renderSuccess`: `checkout-legacy/index.php`, `checkout-v2/index.php`
 - `reportGlobalError`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `RequestInstance`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `requireAsyncModule`: `dist/server/index.js`, `dist/server/ssr/index.js`
@@ -1728,17 +1718,16 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `serializeReadableStream`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `serializeTypedArray`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `set`: `includes/PHPMailer/PHPMailer.php`, `includes/performance-optimization.php`, `includes/redis-cache.php`
-- `setDocumentMode`: `checkout-legacy/index.php`, `checkout-v2/index.php`
 - `setError`: `includes/PHPMailer/PHPMailer.php`, `includes/PHPMailer/SMTP.php`
 - `setInternalRequire`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `setNavigationContext`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `setOpen`: `js/shopvivaliz-visual-v3.js`, `public/assets/liz-assistant/liz-assistant.js`
 - `setRequireModule`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `setRscCacheBustingSearchParam`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `setStatus`: `checkout-legacy/index.php`, `checkout-v2/index.php`, `js/cart.js`, `js/checkout-conversion-v6.js`
+- `setStatus`: `checkout-v2/index.php`, `js/cart.js`, `js/checkout-conversion-v6.js`
 - `sha256CacheBustingHash`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `shippingErrorMessage`: `js/cart-shipping-v7.js`, `js/checkout-shipping-v7.js`, `js/product-conversion-v5.js`
-- `showToast`: `carrinho-legacy/index.php`, `claude/carrinho/index.php`, `claude/produto.php`
+- `showToast`: `claude/carrinho/index.php`, `claude/produto.php`
 - `Si`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `sign`: `api/autonomous/operational-controls.php`, `includes/PHPMailer/PHPMailer.php`
 - `start`: `.ai/worker.js`, `includes/logger.php`
@@ -1749,7 +1738,6 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `stats`: `agents/v9.2.84/app/MediaMemoryAgent.php`, `agents/v9.2.84/app/OlistImageRepairAgent.php`
 - `stringToChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `stripBasePath`: `dist/server/index.js`, `dist/server/ssr/index.js`
-- `sv_checkout_env`: `checkout-legacy/index.php`, `checkout-v2/index.php`
 - `sv_me_env`: `api/melhorenvio/diagnostic.php`, `claude/api/melhorenvio/diagnostic.php`
 - `sv_me_mask`: `api/melhorenvio/diagnostic.php`, `claude/api/melhorenvio/diagnostic.php`
 - `sv_me_request`: `api/melhorenvio/diagnostic.php`, `claude/api/melhorenvio/diagnostic.php`
@@ -1794,7 +1782,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `wakeChunk`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `withLayoutFlags`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `Wr`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
-- `writeCart`: `carrinho-legacy/index.php`, `claude/carrinho/index.php`, `index.php`
+- `writeCart`: `claude/carrinho/index.php`, `index.php`
 - `writeChunkAndReturn`: `dist/server/index.js`, `dist/server/ssr/index.js`
 - `Wt`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
 - `x`: `dist/client/assets/framework-RikywCkn.js`, `dist/client/assets/index-Bcc9vI31.js`
@@ -1835,9 +1823,7 @@ Varredura sintatica reproduzivel de declaracoes nomeadas `function` em PHP/JavaS
 - `.tmp_shopvivaliz/scripts/seo/generate.py` - artefato/candidato a higiene - validar uso e politica de retencao
 - `.tmp_shopvivaliz/scripts/utils/image_downloader.py` - artefato/candidato a higiene - validar uso e politica de retencao
 - `.tmp_shopvivaliz/scripts/utils/read_csv.py` - artefato/candidato a higiene - validar uso e politica de retencao
-- `carrinho-legacy/index.php` - legado declarado - revisar rota e telemetria antes de remover
 - `checkout-legacy/checkout-page-optimizer.php` - legado declarado - revisar rota e telemetria antes de remover
-- `checkout-legacy/index.php` - legado declarado - revisar rota e telemetria antes de remover
 - `dist/.openai/drizzle/meta/_journal.json` - artefato/candidato a higiene - validar uso e politica de retencao
 - `dist/.openai/hosting.json` - artefato/candidato a higiene - validar uso e politica de retencao
 - `dist/client/.assetsignore` - artefato/candidato a higiene - validar uso e politica de retencao
