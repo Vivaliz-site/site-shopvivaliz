@@ -1,6 +1,6 @@
 # Indice completo do repositorio
 
-Gerado deterministicamente a partir de 3845 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
+Gerado deterministicamente a partir de 3853 arquivos versionados no indice Git. O inventario nao le nem replica valores de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
 
 ## Diretorios
 
@@ -383,6 +383,8 @@ Gerado deterministicamente a partir de 3845 arquivos versionados no indice Git. 
 | `migrations` | Migracoes de banco |
 | `minha-conta` | Suporte, configuracao ou artefato de projeto |
 | `ml` | Suporte, configuracao ou artefato de projeto |
+| `newsletter` | Suporte, configuracao ou artefato de projeto |
+| `newsletter/descadastrar` | Suporte, configuracao ou artefato de projeto |
 | `olist` | Integracao Olist/Tiny |
 | `planilhas` | Suporte, configuracao ou artefato de projeto |
 | `plugins` | Suporte, configuracao ou artefato de projeto |
@@ -872,6 +874,7 @@ Gerado deterministicamente a partir de 3845 arquivos versionados no indice Git. 
 | `.github/workflows/one-time-olist-refresh.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/policy-engine.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/probe-erp-access-manual.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
+| `.github/workflows/product-highlights-email.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/public-trust-guard.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/quality-gate.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `.github/workflows/recover-boleto-canary.yml` | Governanca e integracao continua - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
@@ -2534,6 +2537,7 @@ Gerado deterministicamente a partir de 3845 arquivos versionados no indice Git. 
 | `includes/coupons.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/csrf-protection.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/csrf.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `includes/email-marketing-service.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/facebook-shop-config.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/footer.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `includes/ga4-order-conversion.php` | Bibliotecas PHP compartilhadas - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -2723,6 +2727,7 @@ Gerado deterministicamente a partir de 3845 arquivos versionados no indice Git. 
 | `metrics.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `meus-pedidos.php` | Aplicacao web publica - Historico autenticado de pedidos. | ativo ou ainda nao classificado como legado |
 | `migrations/2026-08-02-storefront-hardening.sql` | Migracoes de banco - Schema, migracao ou consulta SQL. | ativo ou ainda nao classificado como legado |
+| `migrations/2026-08-03-real-email-campaigns.sql` | Migracoes de banco - Schema, migracao ou consulta SQL. | ativo ou ainda nao classificado como legado |
 | `migrations/20260712_add_stock_alerts_table.sql` | Migracoes de banco - Schema, migracao ou consulta SQL. | ativo ou ainda nao classificado como legado |
 | `minha-conta/cupons.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `minha-conta/dados.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -2748,6 +2753,7 @@ Gerado deterministicamente a partir de 3845 arquivos versionados no indice Git. 
 | `mp-checkout-filled.png` | Suporte, configuracao ou artefato de projeto - Imagem ou icone. | ativo ou ainda nao classificado como legado |
 | `mp-checkout-initial.png` | Suporte, configuracao ou artefato de projeto - Imagem ou icone. | ativo ou ainda nao classificado como legado |
 | `mp-checkout-result.png` | Suporte, configuracao ou artefato de projeto - Imagem ou icone. | ativo ou ainda nao classificado como legado |
+| `newsletter/descadastrar/index.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `oauth-auto-exec-v2.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `oauth-auto-exec.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
 | `oauth-playwright-auto.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -3020,6 +3026,7 @@ Gerado deterministicamente a partir de 3845 arquivos versionados no indice Git. 
 | `scripts/analytics/__init__.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/analytics/performance_tracker.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/analyze-pr-failures.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
+| `scripts/apply-real-email-campaigns-migration.php` | Ferramentas e rotinas de manutencao - Migracao de banco de dados. | ativo ou ainda nao classificado como legado |
 | `scripts/apply-storefront-hardening-migration.php` | Ferramentas e rotinas de manutencao - Migracao de banco de dados. | ativo ou ainda nao classificado como legado |
 | `scripts/audit-agents-real-work.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/audit-all-pages.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -3282,6 +3289,8 @@ Gerado deterministicamente a partir de 3845 arquivos versionados no indice Git. 
 | `scripts/rollback-manager.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/rollback-production.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/run-autonomy-phases.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
+| `scripts/run-blog-email-campaigns.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `scripts/run-product-highlights-campaign.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `scripts/run_pipeline_test.py` | Ferramentas e rotinas de manutencao - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `scripts/run_playwright.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/safe-repo-sync.sh` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
@@ -4583,6 +4592,7 @@ Gerado deterministicamente a partir de 3845 arquivos versionados no indice Git. 
 | `tests/precos-catalogo.spec.ts` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/product-stock-copy-integrity-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/public-trust-guard-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `tests/real-email-campaigns-source-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/runtime-env-reader-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/runtime-secrets-materializer-test.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `tests/send-single-test-email.php` | Testes - Teste automatizado. | ativo ou ainda nao classificado como legado |
