@@ -52,7 +52,7 @@ jobs:
           EVENT_BEFORE: ${{ github.event.before }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           baseline=''
           case "$EVENT_NAME" in
             pull_request)
@@ -68,12 +68,12 @@ jobs:
               ;;
           esac
           echo "AUDIT_BASE_REF=$baseline" >> "$GITHUB_ENV"
-          printf 'audit_base_ref=%s\n' "${baseline:-none-current-state}" 
+          printf 'audit_base_ref=%s\n' "${baseline:-none-current-state}"
 
       - name: Record audit context
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           mkdir -p artifacts/agents-audit artifacts/secret-references
           {
             echo "run_id=${GITHUB_RUN_ID}"
@@ -100,8 +100,9 @@ jobs:
 
       - name: Verify audit evidence
         if: always()
+        shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           test -s artifacts/agents-audit/run-context.txt
           test -s artifacts/agents-audit/report.json
           test -s artifacts/agents-audit/report.md
