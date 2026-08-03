@@ -1,272 +1,90 @@
-# 🔄 SYNC DAEMON RUNBOOK
+# Sync daemon runbook
 
-**Última atualização:** 2026-07-15  
-**Status:** ⚠️ AUDITORIA CRÍTICA EM PROGRESSO  
-**Segurança:** OBRIGATÓRIO ler AGENTS.md antes de modificar
+**Updated:** 2026-08-03  
+**Policy:** reviewed commits only; no test commits, direct pushes, force pushes, or destructive resets.
 
----
+## Purpose
 
-## ⚠️ STATUS CRÍTICO
+The sync daemon may deploy only a commit that has already passed repository review and required checks. The verification script is read-only: it polls the VM and proves that a supplied immutable SHA reached the remote checkout.
 
-**INCONCLUSIVO:**
-- Daemon anterior DESCONHECIDO já está rodando na VM
-- Script novo `git-auto-sync.py` foi REESCRITO com segurança
-- Arquivo novo NÃO FOI SINCRONIZADO para a VM ainda
-- Working tree SUJO na VM (`storage/commerce_signals.json`)
-- Pedidos com permissões incorretas
+## Components
 
-**AÇÃO NECESSÁRIA:** Investigar daemon anterior antes de prosseguir
+- `scripts/git-auto-sync.py`: performs the configured fast-forward-only synchronization.
+- `scripts/install-git-sync-cron.sh`: installs the scheduled synchronization job.
+- `scripts/verify-sync-daemon.sh`: verifies an expected SHA without creating commits or pushing branches.
 
----
+## Required protections
 
-## 🏗️ Arquitetura
+- The production checkout must use `git fetch` and `git merge --ff-only`.
+- A dirty working tree must stop synchronization.
+- `git reset --hard`, force push, direct push to `main`, and automatic commit creation are prohibited.
+- Production data and mutable state must remain outside the deployment checkout or be ignored and backed up.
+- SSH host-key verification must remain enabled.
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│ GitHub (source)                                              │
-│ main branch                                                  │
-└─────────────────────────────────────────────────────────────┘
-                              ↑
-                    git fetch (a cada 2 min)
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│ VM Oracle (137.131.156.17)                                   │
-│ Cron: */2 * * * *                                            │
-│ Script: scripts/git-auto-sync.py                             │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                   git merge --ff-only
-                              ↓
-                    Production Code Ready
-```
+## Verify an approved deployment
 
----
-
-## 📋 Componentes
-
-### 1. Daemon Script (NOVO - SEGURO)
-
-**Arquivo:** `scripts/git-auto-sync.py`  
-**Tipo:** Python 3  
-**Execução:** Cron `*/2 * * * *` (a cada 2 minutos)
-
-**Mudanças de segurança:**
-- ❌ Removeu `git reset --hard` (perigoso)
-- ✅ Usa `git fetch` + `git merge --ff-only` (seguro)
-- ✅ Valida working tree antes de merge
-- ✅ Rejeita se há arquivos modificados
-- ✅ Registra SHA completo para auditoria
-- ✅ Falha rápido com mensagens claras
-
-**Logs:**
-```
-/var/log/shopvivaliz/git-auto-sync-YYYYMMDD.log
-/var/log/shopvivaliz/cron.log
-```
-
-### 2. Instalador
-
-**Arquivo:** `scripts/install-git-sync-cron.sh`  
-**Status:** Precisa de `set -Eeuo pipefail` (TODO)
+Obtain the full 40-character SHA from the merged, reviewed pull request. Do not create an empty commit for testing.
 
 ```bash
-bash scripts/install-git-sync-cron.sh
-```
+export EXPECTED_SHA="0123456789abcdef0123456789abcdef01234567"
+export SSH_HOST="production-host.example"
+export SSH_USER="ubuntu"
+export SSH_KEY="$HOME/.ssh/shopvivaliz-production"
+export REMOTE_REPO_PATH="/home/ubuntu/shopvivaliz-deploy/repo"
 
-### 3. Verificador (NOVO)
-
-**Arquivo:** `scripts/verify-sync-daemon.sh`  
-**Tipo:** Bash com `set -Eeuo pipefail`  
-**Uso:** Teste independente do daemon
-
-```bash
 bash scripts/verify-sync-daemon.sh
 ```
 
----
-
-## 🔐 Proteções de Dados
-
-**Arquivos em `.gitignore` (não sincronizados):**
-
-| Arquivo | Razão |
-|---------|-------|
-| `storage/orders/` | Pedidos em produção (risco de perda) |
-| `storage/codex-bridge/state.json` | Estado mutável |
-| `storage/orchestrator/queue.json` | Fila de tarefas |
-| `.agent-heartbeats/` | Heartbeats de agentes |
-| `.git-sync.lock` | Lock do daemon |
-| `.git-auto-sync.log` | Logs locais |
-
-**Observação:** Arquivos em `storage/orders/` AINDA estão sendo commitados (risco!). TODO: Migrar para banco de dados ou implementar backup automático.
-
----
-
-## ⚙️ Configuração
-
-### Na Máquina Local
+Optional timing controls:
 
 ```bash
-# 1. Commitar mudanças
-git add .
-git commit -m "fix: sync daemon com segurança e validações"
-git push origin main
+export WAIT_SECONDS=300
+export POLL_SECONDS=15
 ```
 
-### Na VM
+The command exits with code `0` only after the remote repository reports exactly `EXPECTED_SHA`. It records each observation in `/tmp/sync-daemon-verify-<timestamp>.log` unless `LOG_FILE` is set.
+
+## Install or inspect the daemon
 
 ```bash
-# 1. SSH
-ssh -i ~/.ssh/ssh-key-2026-07-04.key ubuntu@137.131.156.17
-
-# 2. Instalar novo daemon (quando pronto)
 cd /home/ubuntu/site-shopvivaliz
 bash scripts/install-git-sync-cron.sh
-
-# 3. Verificar cron
 crontab -l | grep git-auto-sync
-
-# 4. Ver logs
 tail -f /var/log/shopvivaliz/git-auto-sync-*.log
 ```
 
----
+Before installation, inspect the existing service or cron entry and confirm that it points to the reviewed script version.
 
-## 🧪 Teste Independente
+## Troubleshooting
 
-**Script:** `scripts/verify-sync-daemon.sh`
+### Expected SHA never appears
 
-**O que faz:**
-1. ✅ Registra SHA antes
-2. ✅ Cria commit de teste
-3. ✅ Push para origin/main
-4. ✅ Aguarda 4 min (SEM intervir)
-5. ✅ Verifica SHA na VM via SSH
-6. ✅ Valida correspondência
+1. Check the synchronization logs.
+2. Confirm the production working tree is clean.
+3. Confirm the remote branch contains the reviewed SHA.
+4. Confirm the daemon uses fast-forward-only synchronization.
+5. Inspect network and credential failures without changing repository history.
 
-**Uso:**
+### SSH verification fails
 
-```bash
-cd /c/site-shopvivaliz
-bash scripts/verify-sync-daemon.sh
-```
+1. Confirm `SSH_HOST`, `SSH_USER`, and `SSH_KEY` are correct.
+2. Confirm the key file exists and has restricted permissions.
+3. Confirm the host is present in `known_hosts`; do not disable strict host-key checking.
+4. Confirm `REMOTE_REPO_PATH` points to the production checkout.
 
-**Resultado esperado:**
-```
-=== VALIDAÇÃO FINAL ===
-✅ COMPROVADO: SHA bate!
+### Production working tree is dirty
 
-Resumo:
-  Commit: abc123def456...
-  Tempo: 2026-07-15T...
-  Status: SINCRONIZADO
-```
+Do not reset or discard files automatically. Identify the owner of each change, preserve evidence, move mutable data outside the checkout, and resolve through a reviewed operational procedure.
 
----
+## Evidence requirements
 
-## 🚨 Problemas Conhecidos
+A deployment verification is valid only when it contains:
 
-### Problema 1: Script não existe na VM
+- reviewed pull request and merge SHA;
+- required check results;
+- expected SHA;
+- observed production SHA;
+- UTC timestamps;
+- command exit code and retained log.
 
-**Sintoma:** Cron falha com `FileNotFoundError`  
-**Causa:** Script nunca foi copiado para VM  
-**Solução:** Fazer push das mudanças e rodar install-git-sync-cron.sh
-
-### Problema 2: Working tree sujo
-
-**Sintoma:** Daemon rejeita merge  
-**Causa:** Arquivo modificado não commitado  
-**Solução:**
-```bash
-ssh ubuntu@137.131.156.17
-cd /home/ubuntu/site-shopvivaliz
-git status  # Ver qual arquivo
-git stash   # Ou git commit se mudanças são legítimas
-```
-
-### Problema 3: Permissões incorretas
-
-**Sintoma:** Permission denied em arquivos  
-**Causa:** Arquivo criado com permissões restritas  
-**Solução:**
-```bash
-chmod 644 storage/orders/*.json
-chmod 644 storage/codex-bridge/state.json
-```
-
----
-
-## 📊 Monitoramento
-
-### Verificar se daemon está rodando
-
-```bash
-ssh ubuntu@137.131.156.17 "crontab -l | grep git-auto-sync"
-```
-
-### Ver últimas execuções
-
-```bash
-ssh ubuntu@137.131.156.17 "tail -20 /var/log/shopvivaliz/git-auto-sync-*.log"
-```
-
-### Verificar SHAs
-
-```bash
-# Local
-git log --oneline -1
-
-# VM
-ssh ubuntu@137.131.156.17 "git -C /home/ubuntu/site-shopvivaliz log --oneline -1"
-```
-
----
-
-## 🔧 Troubleshooting
-
-### Daemon não sincroniza
-
-1. Verificar se cron job existe
-2. Verificar se script existe em `/home/ubuntu/site-shopvivaliz/scripts/git-auto-sync.py`
-3. Verificar logs
-4. Validar working tree
-
-### Teste verify-sync-daemon.sh falha
-
-1. Verificar SSH key
-2. Verificar que estamos em branch `main`
-3. Verificar que working tree está limpa
-4. Verificar logs da VM
-
----
-
-## 📝 Regras Obrigatórias
-
-Ver `AGENTS.md`:
-
-- [ ] ⛔ NUNCA use `git reset --hard` em produção
-- [ ] ✅ Use `git merge --ff-only` (seguro)
-- [ ] ✅ Valide working tree antes de git pull
-- [ ] ✅ Todo script shell use `set -Eeuo pipefail`
-- [ ] ✅ Registre SHA ANTES e DEPOIS
-- [ ] ✅ Nenhuma declaração de sucesso sem evidência
-- [ ] ✅ Testes REAIS, nunca simulação
-- [ ] ✅ Proteja dados operacionais em `.gitignore`
-
----
-
-## 📞 Referências
-
-| Item | Link |
-|------|------|
-| AGENTS.md | Regras obrigatórias para agentes |
-| AUDITORIA-DAEMON-CRITICO | Achados da auditoria |
-| scripts/git-auto-sync.py | Daemon (seguro) |
-| scripts/verify-sync-daemon.sh | Teste independente |
-| .gitignore | Proteção de dados |
-
----
-
-**Status:** 🟡 INCONCLUSIVO - Aguardando investigação  
-**Segurança:** CRÍTICA - Leia AGENTS.md  
-**Próximo:** Limpar problemas críticos e retentar instalação
+No queue item, agent task, deployment, or audit may be marked successful without those concrete artifacts.
