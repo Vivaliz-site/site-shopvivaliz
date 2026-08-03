@@ -387,6 +387,16 @@ for name in "${SYMLINKS[@]}"; do
   fi
 done
 
+if [ -f "$NEW_RELEASE_PATH/scripts/apply-storefront-hardening-migration.php" ]; then
+  log INFO "Aplicando migracao idempotente de estoque e newsletter"
+  if ! php "$NEW_RELEASE_PATH/scripts/apply-storefront-hardening-migration.php" >> "$LOG_FILE" 2>&1; then
+    rm -rf -- "$NEW_RELEASE_PATH"
+    log ERROR "Migracao de storefront falhou; release nao foi ativada"
+    write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "migracao de storefront falhou"
+    exit 1
+  fi
+fi
+
 if ! reconcile_runtime_secrets "$NEW_RELEASE_PATH"; then
   rm -rf -- "$NEW_RELEASE_PATH"
   exit 1
@@ -404,6 +414,9 @@ fi
 
 php -l "$NEW_RELEASE_PATH/index.php" > /dev/null
 php -l "$NEW_RELEASE_PATH/api/health/version.php" > /dev/null
+if [ -f "$NEW_RELEASE_PATH/scripts/apply-storefront-hardening-migration.php" ]; then
+  php -l "$NEW_RELEASE_PATH/scripts/apply-storefront-hardening-migration.php" > /dev/null
+fi
 
 ln -sfn "releases/$NEW_RELEASE" "$CURRENT_LINK.tmp"
 mv -Tf "$CURRENT_LINK.tmp" "$CURRENT_LINK"
@@ -441,5 +454,5 @@ for old_release in "${OLD_RELEASES[@]}"; do
   fi
 done
 
-write_status success "$REMOTE_SHA" "$NEW_RELEASE" "deploy, sync e health confirmados"
+write_status success "$REMOTE_SHA" "$NEW_RELEASE" "deploy, sync, migracao e health confirmados"
 log INFO "=== Deploy concluido em $REMOTE_SHA ==="

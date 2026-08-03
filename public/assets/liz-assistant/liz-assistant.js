@@ -62,7 +62,7 @@
       <button id="sv-liz-launcher" type="button" aria-label="Abrir assistente Liz" aria-controls="sv-liz-panel" aria-expanded="false">
         <img src="/public/assets/liz-assistant/liz-avatar.png" alt="Liz">
       </button>
-      <div id="sv-liz-bubble">Posso ajudar com os produtos do seu carrinho. O cupom VOLTEI5 oferece 5% de desconto na primeira compra.</div>
+      <div id="sv-liz-bubble">Posso ajudar com os produtos do seu carrinho e com dúvidas sobre sua compra.</div>
       <section id="sv-liz-panel" role="dialog" aria-modal="false" aria-label="Liz - Assistente Virtual">
         <div class="sv-head">
           <img src="/public/assets/liz-assistant/logo-oficial.svg" alt="ShopVivaliz">
@@ -133,7 +133,9 @@
       const label = document.createElement('p');
       label.textContent = 'O atendimento humano pode continuar por WhatsApp:';
       const link = document.createElement('a');
-      link.href = 'https://wa.me/' + encodeURIComponent(String(handoff.phone || '5537999374112'));
+      const phone = String(handoff.phone || '').replace(/\D/g, '');
+      if (!phone) return;
+      link.href = 'https://wa.me/' + encodeURIComponent(phone);
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
       link.textContent = 'Falar com atendimento';
@@ -178,14 +180,14 @@
           const backendMessage = data.error || data.answer || data.message;
           if (backendMessage) waiting.textContent = cleanAssistantText(String(backendMessage));
           else if (response.status === 429) waiting.textContent = 'Recebemos muitas mensagens agora. Aguarde alguns instantes e tente novamente.';
-          else if (response.status === 503) waiting.textContent = 'A Liz está temporariamente indisponível. Tente novamente em alguns instantes ou fale conosco pelo WhatsApp (37) 99937-4112.';
+          else if (response.status === 503) waiting.textContent = 'A Liz está temporariamente indisponível. Tente novamente em alguns instantes ou fale com o atendimento.';
           else waiting.textContent = 'Não foi possível concluir sua solicitação agora. Tente novamente.';
           return;
         }
 
         const answer = cleanAssistantText(String(data.answer || data.reply || data.message || data.response || ''));
         if (!answer) {
-          waiting.textContent = 'Não recebi uma resposta completa. Tente novamente ou fale conosco pelo WhatsApp (37) 99937-4112.';
+          waiting.textContent = 'Não recebi uma resposta completa. Tente novamente ou fale com o atendimento.';
           return;
         }
 
@@ -194,7 +196,7 @@
         addHandoff(data.handoff);
       } catch (error) {
         console.error('Liz error:', error);
-        waiting.textContent = 'Não foi possível conectar à Liz agora. Verifique sua conexão ou fale conosco pelo WhatsApp (37) 99937-4112.';
+        waiting.textContent = 'Não foi possível conectar à Liz agora. Verifique sua conexão ou fale com o atendimento.';
         root.dataset.provider = 'none';
       } finally {
         setBusy(false);

@@ -1,0 +1,136 @@
+name: Storefront Hardening
+
+on:
+  pull_request:
+    paths:
+      - '.htaccess'
+      - '403.php'
+      - '500.php'
+      - '502.php'
+      - '503.php'
+      - 'api/melhorenvio/shipping-check-v2.php'
+      - 'api/newsletter/**'
+      - 'api/orders/create-validated.php'
+      - 'includes/checkout-output-hardening.php'
+      - 'includes/head-analytics.php'
+      - 'includes/inventory-reservations.php'
+      - 'includes/order-rate-limit.php'
+      - 'includes/public-trust-guard.php'
+      - 'js/checkout-resilience-v1.js'
+      - 'js/newsletter-v1.js'
+      - 'js/privacy-consent-v1.js'
+      - 'js/public-experience-v1.js'
+      - 'migrations/2026-08-02-storefront-hardening.sql'
+      - 'scripts/apply-storefront-hardening-migration.php'
+      - 'scripts/deploy-production.sh'
+      - 'scripts/release-expired-stock-reservations.php'
+      - 'tests/storefront-hardening-test.php'
+      - '.github/workflows/storefront-hardening.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - '.htaccess'
+      - '403.php'
+      - '500.php'
+      - '502.php'
+      - '503.php'
+      - 'api/melhorenvio/shipping-check-v2.php'
+      - 'api/newsletter/**'
+      - 'api/orders/create-validated.php'
+      - 'includes/checkout-output-hardening.php'
+      - 'includes/head-analytics.php'
+      - 'includes/inventory-reservations.php'
+      - 'includes/order-rate-limit.php'
+      - 'includes/public-trust-guard.php'
+      - 'js/checkout-resilience-v1.js'
+      - 'js/newsletter-v1.js'
+      - 'js/privacy-consent-v1.js'
+      - 'js/public-experience-v1.js'
+      - 'migrations/2026-08-02-storefront-hardening.sql'
+      - 'scripts/apply-storefront-hardening-migration.php'
+      - 'scripts/deploy-production.sh'
+      - 'scripts/release-expired-stock-reservations.php'
+      - 'tests/storefront-hardening-test.php'
+      - '.github/workflows/storefront-hardening.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: storefront-hardening-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate storefront hardening
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Lint PHP and execute regressions
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -l 403.php
+          php -l 500.php
+          php -l 502.php
+          php -l 503.php
+          php -l api/melhorenvio/shipping-check-v2.php
+          php -l api/newsletter/subscribe.php
+          php -l api/newsletter/confirm.php
+          php -l api/orders/create-validated.php
+          php -l includes/checkout-output-hardening.php
+          php -l includes/head-analytics.php
+          php -l includes/inventory-reservations.php
+          php -l includes/order-rate-limit.php
+          php -l includes/public-trust-guard.php
+          php -l scripts/apply-storefront-hardening-migration.php
+          php -l scripts/release-expired-stock-reservations.php
+          php -l tests/storefront-hardening-test.php
+          php tests/storefront-hardening-test.php
+
+      - name: Validate browser JavaScript and deploy shell
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node --check js/checkout-resilience-v1.js
+          node --check js/newsletter-v1.js
+          node --check js/privacy-consent-v1.js
+          node --check js/public-experience-v1.js
+          bash -n scripts/deploy-production.sh
+
+      - name: Verify migration deployment and legacy routing
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test ! -e remote-index.html
+          test ! -e temp_homepage.html
+          test ! -e checkout-legacy/index.php
+          test ! -e carrinho-legacy/index.php
+          test -s migrations/2026-08-02-storefront-hardening.sql
+          grep -Fq 'apply-storefront-hardening-migration.php' scripts/deploy-production.sh
+          grep -Fq 'ErrorDocument 500 /500.php' .htaccess
+          grep -Fq 'ErrorDocument 502 /502.php' .htaccess
+          grep -Fq 'ErrorDocument 503 /503.php' .htaccess
+          grep -Fq 'SV_ERROR_STATUS' 502.php
+          grep -Fq 'SV_ERROR_STATUS' 503.php
+          grep -Fq 'checkout-legacy/?$ /checkout' .htaccess
+          grep -Fq 'p/termos-e-condicoes/?$ /termos' .htaccess
+          grep -Fq '^api/orders/create\.php$ api/orders/create-validated.php' .htaccess
