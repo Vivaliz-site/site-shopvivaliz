@@ -42,6 +42,18 @@ function svrw_contains_forbidden_status(mixed $value): bool
     return false;
 }
 
+function svrw_component_errors(string $component, array $result): array
+{
+    $errors = [];
+    foreach ((array)($result['errors'] ?? []) as $error) {
+        $errors[] = ['component' => $component, 'detail' => $error];
+    }
+    if (($result['ok'] ?? false) !== true && $errors === []) {
+        $errors[] = ['component' => $component, 'detail' => ['error' => 'component_failed_without_detail']];
+    }
+    return $errors;
+}
+
 $isCli = PHP_SAPI === 'cli';
 if (!$isCli) {
     $expected = svrw_expected_key();
@@ -52,20 +64,61 @@ if (!$isCli) {
 
 require_once __DIR__ . '/../../includes/pdo-database.php';
 require_once __DIR__ . '/../../agents/v9.2.84/app/RealWorkOrchestratorAgent.php';
+require_once __DIR__ . '/../../agents/v9.2.84/app/CatalogMetadataAgent.php';
+require_once __DIR__ . '/../../agents/v9.2.84/app/ConversionFunnelAgent.php';
 
 $body = file_get_contents('php://input');
 $input = json_decode(is_string($body) ? $body : '', true);
 if (!is_array($input)) $input = [];
 $options = [
     'blog_queue_depth' => max(3, min(36, (int)($input['blog_queue_depth'] ?? 12))),
+    'catalog_metadata_limit' => max(1, min(500, (int)($input['catalog_metadata_limit'] ?? 100))),
 ];
 
 try {
-    $result = (new ShopvivalizRealWorkOrchestratorAgent())->run($options);
-    $accepted = ($result['ok'] ?? false) === true
-        && ($result['execution_status'] ?? '') === 'completed'
-        && ($result['execution_completed'] ?? false) === true
-        && (int)($result['work_evidence_count'] ?? 0) >= 5
+    $components = [
+        'operational_work' => (new ShopvivalizRealWorkOrchestratorAgent())->run($options),
+        'catalog_metadata' => (new ShopvivalizCatalogMetadataAgent())->run($options),
+        'conversion_funnel' => (new ShopvivalizConversionFunnelAgent())->run($options),
+    ];
+
+    $actions = [];
+    $errors = [];
+    $changedItems = 0;
+    foreach ($components as $name => $component) {
+        $actions = array_merge($actions, (array)($component['actions'] ?? []));
+        $errors = array_merge($errors, svrw_component_errors($name, $component));
+        $changedItems += (int)($component['changed_items'] ?? 0);
+    }
+
+    $allComponentsOk = count(array_filter(
+        $components,
+        static fn(array $component): bool => ($component['ok'] ?? false) === true
+            && ($component['execution_completed'] ?? false) === true
+            && ($component['execution_status'] ?? '') === 'completed'
+    )) === count($components);
+
+    $result = [
+        'ok' => $allComponentsOk && $errors === [],
+        'agent' => 'real_work_orchestrator',
+        'version' => '10.1.0-catalog-conversion',
+        'execution_status' => $allComponentsOk && $errors === [] ? 'completed' : 'failed',
+        'execution_completed' => $allComponentsOk && $errors === [],
+        'started_at' => min(array_map(static fn(array $component): string => (string)($component['started_at'] ?? date('c')), $components)),
+        'finished_at' => date('c'),
+        'work_evidence_count' => count($actions),
+        'changed_items' => $changedItems,
+        'actions' => $actions,
+        'components' => $components,
+        'errors' => $errors,
+    ];
+
+    $accepted = $result['ok'] === true
+        && $result['execution_status'] === 'completed'
+        && $result['execution_completed'] === true
+        && $result['work_evidence_count'] >= 9
+        && ($components['catalog_metadata']['ok'] ?? false) === true
+        && ($components['conversion_funnel']['ok'] ?? false) === true
         && !svrw_contains_forbidden_status($result);
     $result['execution_accepted'] = $accepted;
     svrw_reply($accepted ? 200 : 500, $result);
