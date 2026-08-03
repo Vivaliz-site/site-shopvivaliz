@@ -3,6 +3,11 @@ name: Blog Publish Scheduled
 on:
   schedule:
     - cron: '*/15 * * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/blog-publish-scheduled.yml
   workflow_dispatch:
 
 permissions:
