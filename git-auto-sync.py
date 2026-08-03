@@ -20,6 +20,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
+from collections.abc import Iterable
 
 DEFAULT_REPO_DIR = Path(__file__).resolve().parent
 REPO_DIR = Path(os.getenv("SHOPVIVALIZ_REPO_DIR", str(DEFAULT_REPO_DIR))).resolve()
@@ -27,6 +28,20 @@ DEFAULT_BRANCH = os.getenv("SHOPVIVALIZ_SYNC_BRANCH", "main")
 STATUS_FILE = REPO_DIR / "logs" / "tri-environment-sync.json"
 SANITIZED_HISTORY_MARKER = ".security/sanitized-history.json"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+PRESERVE_PATHS = {
+    ".env.local",
+    "logs",
+    "storage/private",
+    ".agent-heartbeats",
+    "reports/hourly",
+    "tasks-queue.json",
+    "config/__pycache__",
+    "storage/order-idempotency",
+    "storage/order-rate-limit",
+    "storage/orders",
+    ".claude/scheduled_tasks.lock",
+    ".claude/settings.local.json",
+}
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 log = logging.getLogger(__name__)
@@ -55,6 +70,29 @@ def git_output(args: list[str]) -> str:
     return run(["git", *args], check=True).stdout.strip()
 
 
+def unsafe_dirty_paths(paths: Iterable[str]) -> list[str]:
+    """Normalize paths that must block an automatic sync.
+
+    The sync policy is fail-closed: every reported dirty path is unsafe until
+    a human reviews it. Keeping this helper separate also lets callers test
+    the policy without fabricating Git status output.
+    """
+    return [path.strip().replace("\\", "/") for path in paths if path and path.strip()]
+
+
+def is_preserved_path(path: str) -> bool:
+    """Report whether a path belongs to an operationally preserved area.
+
+    This is informational only. The current sync policy still blocks every
+    dirty path and never discards preserved runtime data automatically.
+    """
+    normalized = path.replace("\\", "/").rstrip("/")
+    return any(
+        normalized == keep or normalized.startswith(keep + "/")
+        for keep in PRESERVE_PATHS
+    )
+
+
 def tracked_dirty_paths() -> list[str]:
     result = run(["git", "status", "--porcelain"], check=True)
     paths: list[str] = []
@@ -63,8 +101,8 @@ def tracked_dirty_paths() -> list[str]:
             continue
         path = line[3:].strip()
         if path:
-            paths.append(path.replace("\\", "/"))
-    return paths
+            paths.append(path)
+    return unsafe_dirty_paths(paths)
 
 
 def write_status(payload: dict[str, object]) -> None:

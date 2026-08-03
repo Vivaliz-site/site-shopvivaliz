@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import os
 from pathlib import Path
 
 
@@ -86,7 +87,11 @@ class ConfigureProductionRuntimeTests(unittest.TestCase):
             self.assertIn("DB_NAME=shopvivaliz", updated)
             self.assertIn("database-password", updated)
             self.assertIn("database_user_safe=true", result.stdout.decode())
-            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+            # POSIX mode bits are enforceable on the Oracle/Linux target. NTFS
+            # reports synthetic mode bits and cannot represent this contract
+            # through chmod alone, so content/atomicity are the portable checks.
+            if os.name != "nt":
+                self.assertEqual(target.stat().st_mode & 0o777, 0o600)
             self.assertEqual(len(list(root.glob(".env.backup.*"))), 1)
 
 

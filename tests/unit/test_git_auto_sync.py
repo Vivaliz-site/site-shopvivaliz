@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import stat
 import shutil
 import subprocess
 import sys
@@ -57,6 +58,14 @@ def commit_file(repo: Path, relative: str, content: str, message: str) -> str:
     return git(repo, "rev-parse", "HEAD").stdout.strip()
 
 
+def remove_tree(path: Path) -> None:
+    def clear_readonly(func, target, _exc_info):
+        os.chmod(target, stat.S_IWRITE)
+        func(target)
+
+    shutil.rmtree(path, onerror=clear_readonly)
+
+
 class SanitizedHistorySyncTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -104,7 +113,10 @@ class SanitizedHistorySyncTests(unittest.TestCase):
         SYNC.DEFAULT_BRANCH = "main"
 
     def tearDown(self) -> None:
-        self.tmp.cleanup()
+        try:
+            self.tmp.cleanup()
+        except PermissionError:
+            remove_tree(Path(self.tmp.name))
 
     def status(self) -> dict[str, object]:
         return json.loads(SYNC.STATUS_FILE.read_text(encoding="utf-8"))
@@ -155,7 +167,7 @@ class SanitizedHistorySyncTests(unittest.TestCase):
         self.assertEqual(report["action"], "blocked-diverged-history")
 
     def test_keeps_normal_fast_forward_path(self) -> None:
-        shutil.rmtree(self.local)
+        remove_tree(self.local)
         git(Path(self.tmp.name), "clone", str(self.remote_bare), str(self.local))
         git(self.local, "switch", "--detach", self.clean_root)
         git(self.local, "branch", "--force", "main", self.clean_root)
