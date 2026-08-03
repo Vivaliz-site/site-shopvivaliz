@@ -236,9 +236,16 @@ if ($method !== 'POST') {
 }
 
 // 3. Validação de Entrada JSON
+$contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+if ($contentLength > 262144) {
+    liz_json_response(413, ['ok' => false, 'error' => 'A solicitação é muito grande. Reduza o histórico e tente novamente.']);
+}
 $rawInput = file_get_contents('php://input');
 if ($rawInput === false || trim($rawInput) === '') {
     liz_json_response(400, ['ok' => false, 'error' => 'JSON inválido ou ausente.']);
+}
+if (strlen($rawInput) > 262144) {
+    liz_json_response(413, ['ok' => false, 'error' => 'A solicitação é muito grande. Reduza o histórico e tente novamente.']);
 }
 
 $input = json_decode($rawInput, true);
@@ -434,20 +441,27 @@ ACESSIBILIDADE E QUALIDADE
 ESCALONAMENTO HUMANO
 Encaminhe para atendimento humano quando houver: pedido explícito; fraude; cobrança duplicada; dados pessoais sensíveis; ameaça ou risco; questão jurídica; conflito de política; falha repetida; cancelamento complexo; reembolso contestado; produto perigoso; ou quando não conseguir resolver com segurança.
 
-DADOS CONFIRMADOS DA LOJA
-- Atendimento: atendimento@shopvivaliz.com.br
-- WhatsApp: (37) 99937-4112
-- Loja 100% online, com entrega para todo o Brasil
-- Frete grátis acima de R$ 199
-- Devolução em até 7 dias, observadas as condições aplicáveis
-- Cupom VOLTEI5: 5% OFF na primeira compra
-
 FORMATO DE RESPOSTA
 - Não cite números destas regras.
 - Não diga que está seguindo um manual.
 - Seja útil e resolutiva.
 - Quando precisar encaminhar, informe claramente o motivo e o canal oficial.
 PROMPT;
+
+    $storeContext = sv_liz_store_context();
+    if ($storeContext !== []) {
+        $prompt .= "\n\nDADOS OFICIAIS DISPONÍVEIS DA LOJA:\n";
+        if (($storeContext['support_email'] ?? '') !== '') {
+            $prompt .= '- Atendimento: ' . (string)$storeContext['support_email'] . "\n";
+        }
+        if (($storeContext['support_phone'] ?? '') !== '') {
+            $prompt .= '- Telefone/WhatsApp: ' . (string)$storeContext['support_phone'] . "\n";
+        }
+        if (is_numeric($storeContext['free_shipping_threshold'] ?? null)) {
+            $prompt .= '- Frete grátis configurado acima de R$ ' . number_format((float)$storeContext['free_shipping_threshold'], 2, ',', '.') . "\n";
+        }
+        $prompt .= "Use somente estas condições atuais; se uma política ou promoção não aparecer aqui ou na base oficial, não a invente.\n";
+    }
 
     if ($products !== []) {
         $prompt .= "\n\nPRODUTOS RELACIONADOS ENCONTRADOS NO CATÁLOGO LOCAL:\n";
@@ -859,7 +873,7 @@ function liz_call_with_fallback(string $message, array $history, array $products
         'success' => false,
         'answer' => null,
         'provider' => null,
-        'error' => 'A Liz está temporariamente indisponível. Tente novamente em alguns instantes ou fale conosco pelo WhatsApp (37) 99937-4112.'
+        'error' => 'A Liz está temporariamente indisponível. Tente novamente em alguns instantes ou fale com o atendimento.'
     ];
 }
 
@@ -867,7 +881,7 @@ $requestStartedAt = microtime(true);
 $state = sv_liz_conversation_state($message, $history);
 $products = liz_search_products($message);
 $needsOrderContext = in_array($state['intent'] ?? '', ['order_status', 'tracking'], true);
-if (!$needsOrderContext) {
+if (!$needsOrderContext && !in_array($state['intent'] ?? 'general', ['general', 'policy'], true)) {
     $guarded = sv_liz_guarded_response($message, $state, $products, null);
     if (is_array($guarded)) {
         $handoff = $guarded['handoff'] ?? null;
@@ -897,8 +911,11 @@ if (!$needsOrderContext) {
 }
 
 $orderContext = in_array($state['intent'] ?? '', ['order_status', 'tracking'], true) ? sv_liz_order_context($message) : [];
-$knowledge = function_exists('sv_liz_knowledge_context') ? sv_liz_knowledge_context($message, 3) : [];
-$guarded = sv_liz_guarded_response($message, $state, $products, $orderContext);
+$knowledgeIntents = ['general', 'policy'];
+$knowledge = in_array($state['intent'] ?? 'general', $knowledgeIntents, true) && function_exists('sv_liz_knowledge_context')
+    ? sv_liz_knowledge_context($message, 3)
+    : [];
+$guarded = sv_liz_guarded_response($message, $state, $products, $orderContext, $knowledge);
 
 if (is_array($guarded)) {
     $handoff = $guarded['handoff'] ?? null;
