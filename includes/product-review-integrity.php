@@ -27,17 +27,17 @@ function sv_product_review_integrity_filter(string $html): string
         return $html;
     }
 
-    $filtered = preg_replace(
+    $stockNormalized = preg_replace(
         '~(<div\s+class="urgency-tag"[^>]*>\s*<i>🔥</i>\s* Apenas\s+)1\s+unidades\s+restantes!~iu',
-        '$11 unidade restante!',
+        '${1}1 unidade restante!',
         $filtered
     );
-    if (!is_string($filtered)) {
+    if (!is_string($stockNormalized)) {
         error_log('[ReviewIntegrity] stock copy normalization failed; serving review-filtered response');
-        return preg_replace($patterns, '', $html) ?: $html;
+        return $filtered;
     }
 
-    return $filtered;
+    return $stockNormalized;
 }
 
 function sv_enable_product_review_integrity_guard(): void
