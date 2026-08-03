@@ -1,152 +1,106 @@
 #!/usr/bin/env python3
-"""
-Sistema de A/B Testing automático
-Testa imagens e escolhe melhor automaticamente
-"""
+"""Sistema de A/B testing baseado exclusivamente em eventos reais."""
 
 import json
 import random
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Optional
+
 
 class ABTester:
-    def __init__(self):
-        self.tests = {}
+    def __init__(self) -> None:
+        self.tests: Dict[str, Dict] = {}
 
     def create_ab_test(self, product_id: str, images: List[Dict]) -> Dict:
-        """Cria novo A/B test para imagens"""
+        """Cria um teste A/B e inicializa contadores observáveis."""
         test_id = f"test_{product_id}_{int(random.random() * 10000)}"
-
         test = {
-            'test_id': test_id,
-            'product_id': product_id,
-            'images': images,
-            'created_at': datetime.now().isoformat(),
-            'status': 'running',
-            'results': None
+            "test_id": test_id,
+            "product_id": product_id,
+            "images": images,
+            "created_at": datetime.now().isoformat(),
+            "status": "running",
+            "results": None,
         }
 
-        # Inicializar estatísticas para cada variante
-        for img in images:
-            img['impressions'] = 0
-            img['clicks'] = 0
-            img['conversions'] = 0
-            img['ctr'] = 0
-            img['conversion_rate'] = 0
+        for image in images:
+            image["impressions"] = 0
+            image["clicks"] = 0
+            image["conversions"] = 0
+            image["ctr"] = 0.0
+            image["conversion_rate"] = 0.0
 
         self.tests[test_id] = test
         return test
 
-    def record_impression(self, test_id: str, image_variant: int):
-        """Registra visualização de imagem"""
-        if test_id in self.tests:
-            test = self.tests[test_id]
-            if image_variant < len(test['images']):
-                test['images'][image_variant]['impressions'] += 1
+    def record_impression(self, test_id: str, image_variant: int) -> None:
+        if test_id in self.tests and image_variant < len(self.tests[test_id]["images"]):
+            self.tests[test_id]["images"][image_variant]["impressions"] += 1
 
-    def record_click(self, test_id: str, image_variant: int):
-        """Registra clique em imagem"""
-        if test_id in self.tests:
-            test = self.tests[test_id]
-            if image_variant < len(test['images']):
-                test['images'][image_variant]['clicks'] += 1
-                self._update_metrics(test_id, image_variant)
+    def record_click(self, test_id: str, image_variant: int) -> None:
+        if test_id in self.tests and image_variant < len(self.tests[test_id]["images"]):
+            self.tests[test_id]["images"][image_variant]["clicks"] += 1
+            self._update_metrics(test_id, image_variant)
 
-    def record_conversion(self, test_id: str, image_variant: int):
-        """Registra conversão (venda)"""
-        if test_id in self.tests:
-            test = self.tests[test_id]
-            if image_variant < len(test['images']):
-                test['images'][image_variant]['conversions'] += 1
-                self._update_metrics(test_id, image_variant)
+    def record_conversion(self, test_id: str, image_variant: int) -> None:
+        if test_id in self.tests and image_variant < len(self.tests[test_id]["images"]):
+            self.tests[test_id]["images"][image_variant]["conversions"] += 1
+            self._update_metrics(test_id, image_variant)
 
-    def _update_metrics(self, test_id: str, variant: int):
-        """Atualiza métricas CTR e conversion rate"""
-        test = self.tests[test_id]
-        img = test['images'][variant]
-
-        if img['impressions'] > 0:
-            img['ctr'] = img['clicks'] / img['impressions']
-            img['conversion_rate'] = img['conversions'] / img['impressions']
+    def _update_metrics(self, test_id: str, variant: int) -> None:
+        image = self.tests[test_id]["images"][variant]
+        impressions = image["impressions"]
+        if impressions > 0:
+            image["ctr"] = image["clicks"] / impressions
+            image["conversion_rate"] = image["conversions"] / impressions
 
     def should_finish_test(self, test_id: str) -> bool:
-        """Verifica se teste pode terminar (significância estatística)"""
         if test_id not in self.tests:
             return False
 
         test = self.tests[test_id]
-        created = datetime.fromisoformat(test['created_at'])
-
-        # Mínimo 7 dias e 100 impressões
-        if (datetime.now() - created) < timedelta(days=7):
+        created = datetime.fromisoformat(test["created_at"])
+        if datetime.now() - created < timedelta(days=7):
             return False
 
-        total_impressions = sum(img['impressions'] for img in test['images'])
+        total_impressions = sum(image["impressions"] for image in test["images"])
         if total_impressions < 100:
             return False
 
-        return self._has_statistical_significance(test['images'])
+        return self._has_statistical_significance(test["images"])
 
     def _has_statistical_significance(self, images: List[Dict]) -> bool:
-        """Verifica significância estatística entre variantes"""
-        # Teste chi-quadrado simplificado
         if len(images) < 2:
             return True
 
-        best = max(images, key=lambda x: x['ctr'])
-        worst = min(images, key=lambda x: x['ctr'])
-
-        # Diferença mínima de 15% no CTR
-        if best['impressions'] > 50 and worst['impressions'] > 50:
-            difference = abs(best['ctr'] - worst['ctr'])
-            return difference > 0.15
-
+        best = max(images, key=lambda item: item["ctr"])
+        worst = min(images, key=lambda item: item["ctr"])
+        if best["impressions"] > 50 and worst["impressions"] > 50:
+            return abs(best["ctr"] - worst["ctr"]) > 0.15
         return False
 
-    def get_winner(self, test_id: str) -> Dict:
-        """Retorna imagem vencedora (melhor CTR)"""
+    def get_winner(self, test_id: str) -> Optional[Dict]:
         if test_id not in self.tests:
             return None
 
         test = self.tests[test_id]
-        winner = max(test['images'], key=lambda x: x['ctr'])
-
-        test['status'] = 'finished'
-        test['results'] = {
-            'winner': winner,
-            'metrics': {
-                img['variant']: {
-                    'ctr': img['ctr'],
-                    'conversions': img['conversions']
+        winner = max(test["images"], key=lambda item: item["ctr"])
+        test["status"] = "finished"
+        test["results"] = {
+            "winner": winner,
+            "metrics": {
+                image["variant"]: {
+                    "ctr": image["ctr"],
+                    "conversions": image["conversions"],
                 }
-                for img in test['images']
+                for image in test["images"]
             },
-            'finished_at': datetime.now().isoformat()
+            "finished_at": datetime.now().isoformat(),
         }
-
         return winner
 
-    def save_results(self, test_id: str, filepath: str = 'logs/ab_tests.jsonl'):
-        """Salva resultados do teste"""
-        if test_id in self.tests:
-            test = self.tests[test_id]
-
-            with open(filepath, 'a') as f:
-                f.write(json.dumps(test) + '\n')
-
-    def simulate_test_data(self, test_id: str, num_impressions: int = 500):
-        """Simula dados de teste para desenvolvimento"""
+    def save_results(self, test_id: str, filepath: str = "logs/ab_tests.jsonl") -> None:
         if test_id not in self.tests:
             return
-
-        test = self.tests[test_id]
-
-        # Simular diferentes performance entre variantes
-        performances = [0.08, 0.12, 0.10, 0.09]  # CTRs diferentes
-
-        for img, perf in zip(test['images'], performances):
-            img['impressions'] = num_impressions
-            img['clicks'] = int(num_impressions * perf)
-            img['conversions'] = int(img['clicks'] * 0.3)  # 30% conversion rate
-            img['ctr'] = img['clicks'] / num_impressions
-            img['conversion_rate'] = img['conversions'] / num_impressions
+        with open(filepath, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(self.tests[test_id], ensure_ascii=False) + "\n")
