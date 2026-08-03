@@ -70,6 +70,20 @@ class AutomationChangeAuditTests(unittest.TestCase):
         self.assertNotIn(secret, credential.excerpt)
         self.assertIn("REDACTED_SECRET", credential.excerpt)
 
+    def test_task_filename_is_not_mistaken_for_openai_key(self):
+        findings = self.scan(
+            "docs/status-task-a-very-long-ordinary-filename.md",
+            [(1, "docs/status-task-a-very-long-ordinary-filename.md")],
+            status="A",
+        )
+        self.assertNotIn("credential_exposed", {item.rule for item in findings})
+
+    def test_standalone_openai_key_shape_remains_blocked(self):
+        secret = "sk-" + ("a" * 32)
+        findings = self.scan("config/runtime.yml", [(3, f"token: {secret}")])
+        credential = next(item for item in findings if item.rule == "credential_exposed")
+        self.assertNotIn(secret, credential.excerpt)
+
 
 if __name__ == "__main__":
     unittest.main()
