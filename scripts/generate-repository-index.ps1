@@ -116,6 +116,21 @@ function Get-MarkdownCode([string]$Value) {
     return ('`' + $Value.Replace('`', '\`') + '`')
 }
 
+function Get-SafePathForDocumentation([string]$Path) {
+    $safePath = $Path
+    $secretPatterns = @(
+        'gh[pousr]_[A-Za-z0-9_]{20,}',
+        'github_pat_[A-Za-z0-9_]{40,}',
+        'sk-(?:proj-)?[A-Za-z0-9_-]{24,}',
+        'xox[baprs]-[A-Za-z0-9-]{20,}',
+        'eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}'
+    )
+    foreach ($pattern in $secretPatterns) {
+        $safePath = [regex]::Replace($safePath, $pattern, '<REDACTED_SECRET>', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    }
+    return $safePath
+}
+
 $hashGroups = @{}
 foreach ($entry in $trackedEntries) {
     $hash = $entry.BlobId
@@ -151,7 +166,7 @@ foreach ($directory in ($directorySet | Sort-Object)) {
 [void]$index.AppendLine('| Arquivo | Funcao | Classificacao |')
 [void]$index.AppendLine('|---|---|---|')
 foreach ($path in $tracked) {
-    $safePath = $path -replace '\|', '\\|'
+    $safePath = (Get-SafePathForDocumentation $path) -replace '\|', '\\|'
     [void]$index.AppendLine(('| {0} | {1} | {2} |' -f (Get-MarkdownCode $safePath), (Get-FilePurpose $path), (Get-Classification $path)))
 }
 [IO.File]::WriteAllText((Join-Path $RepositoryRoot 'docs/knowledge/repository-file-index.md'), $index.ToString(), [Text.UTF8Encoding]::new($false))
@@ -175,7 +190,7 @@ if ($duplicateGroups.Count -eq 0) {
 } else {
     foreach ($group in $duplicateGroups) {
         [void]$hygiene.AppendLine(('### Git blob ID {0}' -f (Get-MarkdownCode $group.Key)))
-        foreach ($path in ($group.Value | Sort-Object)) { [void]$hygiene.AppendLine(('- {0}' -f (Get-MarkdownCode $path))) }
+        foreach ($path in ($group.Value | Sort-Object)) { [void]$hygiene.AppendLine(('- {0}' -f (Get-MarkdownCode (Get-SafePathForDocumentation $path)))) }
         [void]$hygiene.AppendLine()
     }
 }
@@ -183,7 +198,7 @@ if ($duplicateGroups.Count -eq 0) {
 [void]$hygiene.AppendLine('## Candidatos a revisao manual')
 [void]$hygiene.AppendLine()
 foreach ($path in ($tracked | Where-Object { $_ -match '(?i)(legacy|(^|/)(scratch|tmp-gh-email-artifact|\.tmp_shopvivaliz|logs|uploads|dist)(/|$))' })) {
-    [void]$hygiene.AppendLine(('- {0} - {1}' -f (Get-MarkdownCode $path), (Get-Classification $path)))
+    [void]$hygiene.AppendLine(('- {0} - {1}' -f (Get-MarkdownCode (Get-SafePathForDocumentation $path)), (Get-Classification $path)))
 }
 [void]$hygiene.AppendLine()
 [void]$hygiene.AppendLine('## Pastas paralelas')

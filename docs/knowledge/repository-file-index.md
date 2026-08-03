@@ -1,6 +1,6 @@
 # Indice completo do repositorio
 
-Gerado em 2026-08-03T03:09:25Z a partir de 3822 arquivos versionados. O indice nao le ou replica conteudo de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
+Gerado em 2026-08-03T03:14:55Z a partir de 3822 arquivos versionados. O indice nao le ou replica conteudo de segredos; a funcao e inferida por caminho, extensao e convencoes do repositorio.
 
 ## Diretorios
 
@@ -2003,14 +2003,14 @@ Gerado em 2026-08-03T03:09:25Z a partir de 3822 arquivos versionados. O indice n
 | `docs/squad-escopo.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/status-marketplace-readiness-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/status-stock-alerts-audit-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/status-task-033-stock-alerts-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/status-task-038-gamification-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `docs/status-ta<REDACTED_SECRET>.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `docs/status-ta<REDACTED_SECRET>.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/status-task-040-graphql-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/status-task-043-shopee-readiness-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/status-task-048-product-pages-2026-07-05.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `docs/status-ta<REDACTED_SECRET>.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `docs/status-ta<REDACTED_SECRET>.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/status-workflows-actions.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/SYNC-DAEMON-RUNBOOK.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `docs/TASK-033-FASE2-IMPLEMENTATION.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `docs/TA<REDACTED_SECRET>.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/task-042-cro-audit.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/task-047-seo-automation.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `docs/task-048-product-pages.md` | Documentacao - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
