@@ -1,109 +1,65 @@
-#!/bin/bash
-# VERIFICAÇÃO RIGOROSA DO DAEMON DE SINCRONIZAÇÃO
-# Regras: set -Eeuo pipefail, validar SHAs, nenhuma simulação
+#!/usr/bin/env bash
+# Verify that an already-reviewed commit reached the deployment VM.
+# This script never creates commits and never pushes branches.
 
 set -Eeuo pipefail
 
-REPO_DIR="$(pwd)"
-TEST_NAME="sync-daemon-verify-$(date +%s)"
-LOG_FILE="/tmp/sync-daemon-test-$TEST_NAME.log"
+EXPECTED_SHA="${1:-${EXPECTED_SHA:-}}"
+SSH_HOST="${SSH_HOST:-}"
+SSH_USER="${SSH_USER:-ubuntu}"
+SSH_KEY="${SSH_KEY:-}"
+REMOTE_REPO_PATH="${REMOTE_REPO_PATH:-/home/ubuntu/shopvivaliz-deploy/repo}"
+WAIT_SECONDS="${WAIT_SECONDS:-300}"
+POLL_SECONDS="${POLL_SECONDS:-15}"
+LOG_FILE="${LOG_FILE:-/tmp/sync-daemon-verify-$(date +%s).log}"
 
-echo "╔════════════════════════════════════════════════════════════╗"
-echo "║  TESTE DE SINCRONIZAÇÃO DO DAEMON                         ║"
-echo "║  Regras: Sem simulação, validação de SHAs, auditoria       ║"
-echo "╚════════════════════════════════════════════════════════════╝"
-echo ""
-
-# FASE 1: PREPARAÇÃO
-echo "=== FASE 1: PREPARAÇÃO ===" | tee -a "$LOG_FILE"
-BEFORE_SHA=$(git rev-parse HEAD)
-BEFORE_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-echo "SHA antes: $BEFORE_SHA" | tee -a "$LOG_FILE"
-echo "Hora: $BEFORE_TIME" | tee -a "$LOG_FILE"
-echo "Branch: $(git rev-parse --abbrev-ref HEAD)" | tee -a "$LOG_FILE"
-
-# Validar que estamos em main
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if [[ "$CURRENT_BRANCH" != "main" ]]; then
-    echo "❌ ERRO: Não estamos em main (estamos em $CURRENT_BRANCH)" | tee -a "$LOG_FILE"
-    exit 1
-fi
-
-# Validar que working tree está limpa
-if [[ -n "$(git status --porcelain)" ]]; then
-    echo "❌ ERRO: Working tree sujo, não posso testar" | tee -a "$LOG_FILE"
-    git status --porcelain | tee -a "$LOG_FILE"
-    exit 1
-fi
-
-# FASE 2: DISPARO (criar commit de teste)
-echo "" | tee -a "$LOG_FILE"
-echo "=== FASE 2: DISPARO ===" | tee -a "$LOG_FILE"
-git commit --allow-empty -m "test: sync daemon verification - $TEST_NAME" 2>&1 | tee -a "$LOG_FILE"
-
-EXPECTED_SHA=$(git rev-parse HEAD)
-echo "SHA esperado (origin/main): $EXPECTED_SHA" | tee -a "$LOG_FILE"
-
-echo "Push para origin/main..." | tee -a "$LOG_FILE"
-git push origin main 2>&1 | tee -a "$LOG_FILE" || {
-    echo "❌ ERRO: git push falhou" | tee -a "$LOG_FILE"
+fail() {
+    printf 'ERROR: %s\n' "$1" | tee -a "$LOG_FILE" >&2
     exit 1
 }
 
-PUSH_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-echo "Push concluído em: $PUSH_TIME" | tee -a "$LOG_FILE"
+[[ "$EXPECTED_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || fail "Provide a full 40-character EXPECTED_SHA as argument or environment variable."
+[[ -n "$SSH_HOST" ]] || fail "SSH_HOST is required."
+[[ -n "$SSH_KEY" ]] || fail "SSH_KEY is required."
+[[ -f "$SSH_KEY" ]] || fail "SSH key not found: $SSH_KEY"
+[[ "$REMOTE_REPO_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]] || fail "REMOTE_REPO_PATH contains unsupported characters."
+[[ "$WAIT_SECONDS" =~ ^[0-9]+$ ]] || fail "WAIT_SECONDS must be an integer."
+[[ "$POLL_SECONDS" =~ ^[0-9]+$ ]] || fail "POLL_SECONDS must be an integer."
+(( POLL_SECONDS > 0 )) || fail "POLL_SECONDS must be greater than zero."
 
-# FASE 3: ESPERA (deixe daemon rodar)
-echo "" | tee -a "$LOG_FILE"
-echo "=== FASE 3: ESPERA ===" | tee -a "$LOG_FILE"
-echo "Aguardando 4 minutos para cron */2 rodar 2 vezes..." | tee -a "$LOG_FILE"
-echo "⚠️  NÃO FAÇA GIT FETCH/PULL/RESET/CHECKOUT!" | tee -a "$LOG_FILE"
-echo "Começou em: $(date -u)" | tee -a "$LOG_FILE"
+chmod 600 "$SSH_KEY"
+STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+DEADLINE=$(( $(date +%s) + WAIT_SECONDS ))
+SSH_TARGET="${SSH_USER}@${SSH_HOST}"
 
-sleep 240
+{
+    echo "verification=sync-daemon"
+    echo "expected_sha=$EXPECTED_SHA"
+    echo "ssh_target=$SSH_TARGET"
+    echo "remote_repo_path=$REMOTE_REPO_PATH"
+    echo "started_at=$STARTED_AT"
+} | tee "$LOG_FILE"
 
-echo "Aguardo concluído em: $(date -u)" | tee -a "$LOG_FILE"
+while (( $(date +%s) <= DEADLINE )); do
+    ACTUAL_SHA="$({
+        ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o StrictHostKeyChecking=yes \
+            -i "$SSH_KEY" \
+            "$SSH_TARGET" \
+            "git -C '$REMOTE_REPO_PATH' rev-parse HEAD"
+    } 2>>"$LOG_FILE" || true)"
 
-# FASE 4: OBSERVAÇÃO (verificar resultado NA VM via SSH)
-echo "" | tee -a "$LOG_FILE"
-echo "=== FASE 4: OBSERVAÇÃO ===" | tee -a "$LOG_FILE"
+    ACTUAL_SHA="$(printf '%s' "$ACTUAL_SHA" | tr -d '\r\n')"
+    printf 'observed_at=%s actual_sha=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${ACTUAL_SHA:-unavailable}" | tee -a "$LOG_FILE"
 
-# Verificar SSH key
-if [[ ! -f ~/.ssh/ssh-key-2026-07-04.key ]]; then
-    echo "❌ ERRO: SSH key não encontrada em ~/.ssh/ssh-key-2026-07-04.key" | tee -a "$LOG_FILE"
-    echo "INCONCLUSIVO: Não consegui verificar VM" | tee -a "$LOG_FILE"
-    exit 1
-fi
+    if [[ "$ACTUAL_SHA" == "$EXPECTED_SHA" ]]; then
+        printf 'verified=true verified_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | tee -a "$LOG_FILE"
+        exit 0
+    fi
 
-chmod 600 ~/.ssh/ssh-key-2026-07-04.key
+    sleep "$POLL_SECONDS"
+done
 
-# Verificar SHA na VM
-echo "Verificando SHA na VM..." | tee -a "$LOG_FILE"
-ACTUAL_SHA=$(ssh -i ~/.ssh/ssh-key-2026-07-04.key ubuntu@137.131.156.17 \
-    "cd /home/ubuntu/shopvivaliz-deploy/repo && git rev-parse HEAD" 2>&1) || {
-    echo "❌ ERRO: Não consegui conectar à VM via SSH" | tee -a "$LOG_FILE"
-    exit 1
-}
-
-echo "SHA na VM: $ACTUAL_SHA" | tee -a "$LOG_FILE"
-
-# VALIDAÇÃO FINAL
-echo "" | tee -a "$LOG_FILE"
-echo "=== VALIDAÇÃO FINAL ===" | tee -a "$LOG_FILE"
-
-if [[ "$ACTUAL_SHA" == "$EXPECTED_SHA" ]]; then
-    echo "✅ COMPROVADO: SHA bate!" | tee -a "$LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
-    echo "Resumo:" | tee -a "$LOG_FILE"
-    echo "  Commit: $EXPECTED_SHA" | tee -a "$LOG_FILE"
-    echo "  Tempo: $PUSH_TIME até $(date -u)" | tee -a "$LOG_FILE"
-    echo "  Status: SINCRONIZADO" | tee -a "$LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
-    exit 0
-else
-    echo "❌ FALHOU: SHA não bate!" | tee -a "$LOG_FILE"
-    echo "  Esperado: $EXPECTED_SHA" | tee -a "$LOG_FILE"
-    echo "  Encontrado: $ACTUAL_SHA" | tee -a "$LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
-    exit 1
-fi
+fail "Remote repository did not reach the expected reviewed SHA within ${WAIT_SECONDS}s."
