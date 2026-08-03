@@ -38,7 +38,8 @@ jobs:
             artifacts/workflow-policy \
             artifacts/system-health \
             artifacts/reorganization-final \
-            artifacts/secret-references
+            artifacts/secret-references \
+            artifacts/generated-index
           {
             echo "run_id=${GITHUB_RUN_ID}"
             echo "event=${GITHUB_EVENT_NAME}"
@@ -114,8 +115,13 @@ jobs:
             tests.unit.test_shopee_legacy_credentials_safe \
             -v
 
-      - name: Verify repository inventory is current
-        run: python scripts/generate_repository_index.py --check
+      - name: Generate repository inventory snapshot
+        run: |
+          set -euo pipefail
+          python scripts/generate_repository_index.py
+          cp docs/knowledge/repository-file-index.md artifacts/generated-index/repository-file-index.md
+          cp docs/audits/repository-hygiene.md artifacts/generated-index/repository-hygiene.md
+          python scripts/generate_repository_index.py --check
 
       - name: Validate canonical queue and agent health
         run: python scripts/maintenance/system_health_check.py
@@ -152,6 +158,8 @@ jobs:
           test -s artifacts/system-health/report.json
           test -s artifacts/reorganization-final/report.json
           test -s artifacts/reorganization-final/report.md
+          test -s artifacts/generated-index/repository-file-index.md
+          test -s artifacts/generated-index/repository-hygiene.md
 
       - name: Upload governance evidence
         if: always()
@@ -165,5 +173,6 @@ jobs:
             artifacts/system-health/
             artifacts/reorganization-final/
             artifacts/disabled-executors/
+            artifacts/generated-index/
           if-no-files-found: error
           retention-days: 90
