@@ -1374,7 +1374,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `admin/monitor/index-v2-backup.html` | Administracao autenticada - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `admin/monitor/index.html` | Administracao autenticada - Artefato de suporte. | ativo ou ainda nao classificado como legado |
 | `admin/monitor/index.php` | Administracao autenticada - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `admin/monitor/test.txt` | Administracao autenticada - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
+| `admin/monitor/test.txt` | Administracao autenticada - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `admin/monitor_agentes.php` | Administracao autenticada - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `admin/olist-images-audit.php` | Administracao autenticada - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `admin/orchestrator.php` | Administracao autenticada - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -1389,7 +1389,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `admin/squad-chat.php` | Administracao autenticada - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `admin/sync-critical-files.php` | Administracao autenticada - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `admin/sync-olist-para-products.php` | Administracao autenticada - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `admin/test-auto-sync.sh` | Administracao autenticada - Script operacional. | ativo ou ainda nao classificado como legado |
+| `admin/test-auto-sync.sh` | Administracao autenticada - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `admin/teste-banco.php` | Administracao autenticada - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `admin/testimonials.php` | Administracao autenticada - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `admin/trio-dashboard.html` | Administracao autenticada - Artefato de suporte. | ativo ou ainda nao classificado como legado |
@@ -1495,7 +1495,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `api/catalog/stock-alert.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `api/catalog/stock-by-product.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `api/catalog/stock-health.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `api/catalog/test-normalize.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `api/catalog/test-normalize.php` | Endpoints HTTP e webhooks - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `api/catalog/valid-image-products.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `api/checkout/endereco.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `api/cnpj-proxy.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -1504,7 +1504,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `api/covers/status.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `api/debug-version.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `api/emails/send-order-notification.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `api/emails/test-send.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `api/emails/test-send.php` | Endpoints HTTP e webhooks - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `api/gamification/status.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `api/generate-boleto-email.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `api/generate-test-order.php` | Endpoints HTTP e webhooks - Teste automatizado. | ativo ou ainda nao classificado como legado |
@@ -1554,7 +1554,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `api/olist/refresh-token.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `api/olist/run-local-server.ps1` | Endpoints HTTP e webhooks - Script operacional. | ativo ou ainda nao classificado como legado |
 | `api/olist/sync-company-profile.php` | Endpoints HTTP e webhooks - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `api/olist/test-local-api.ps1` | Endpoints HTTP e webhooks - Script operacional. | ativo ou ainda nao classificado como legado |
+| `api/olist/test-local-api.ps1` | Endpoints HTTP e webhooks - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `api/olist/webhook-health.php` | Endpoints HTTP e webhooks - Endpoint de callback ou webhook. | ativo ou ainda nao classificado como legado |
 | `api/olist/webhook-processor.php` | Endpoints HTTP e webhooks - Endpoint de callback ou webhook. | ativo ou ainda nao classificado como legado |
 | `api/olist/webhook-receiver.php` | Endpoints HTTP e webhooks - Endpoint de callback ou webhook. | ativo ou ainda nao classificado como legado |
@@ -1715,8 +1715,8 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `claude/api/shopee-integration/README.md` | Suporte, configuracao ou artefato de projeto - Documentacao de projeto. | ativo ou ainda nao classificado como legado |
 | `claude/api/shopee-integration/SETUP_GUIDE.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `claude/api/shopee-integration/scripts/run_playwright.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
-| `claude/api/shopee-integration/scripts/test_final.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
-| `claude/api/shopee-integration/scripts/test_shopee_api.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
+| `claude/api/shopee-integration/scripts/test_final.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `claude/api/shopee-integration/scripts/test_shopee_api.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `claude/api/shopee/atualizar-completo.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/api/shopee/upload-imagens-batch.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/api/shopee/validar-imagens.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -1728,7 +1728,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `claude/api/tiktok-integration/API_REFERENCE.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
 | `claude/api/tiktok-integration/README.md` | Suporte, configuracao ou artefato de projeto - Documentacao de projeto. | ativo ou ainda nao classificado como legado |
 | `claude/api/tiktok-integration/SETUP_GUIDE.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `claude/api/tiktok-integration/scripts/test_tiktok_api.py` | Suporte, configuracao ou artefato de projeto - Script operacional. | ativo ou ainda nao classificado como legado |
+| `claude/api/tiktok-integration/scripts/test_tiktok_api.py` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `claude/carrinho/index.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/catalogo/index-backup.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/catalogo/index.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -1896,7 +1896,7 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `claude/medusa/apps/storefront/src/modules/checkout/components/error-message/index.tsx` | Suporte, configuracao ou artefato de projeto - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `claude/medusa/apps/storefront/src/modules/checkout/components/payment-button/index.tsx` | Suporte, configuracao ou artefato de projeto - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `claude/medusa/apps/storefront/src/modules/checkout/components/payment-container/index.tsx` | Suporte, configuracao ou artefato de projeto - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
-| `claude/medusa/apps/storefront/src/modules/checkout/components/payment-test/index.tsx` | Suporte, configuracao ou artefato de projeto - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
+| `claude/medusa/apps/storefront/src/modules/checkout/components/payment-test/index.tsx` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `claude/medusa/apps/storefront/src/modules/checkout/components/payment-wrapper/index.tsx` | Suporte, configuracao ou artefato de projeto - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `claude/medusa/apps/storefront/src/modules/checkout/components/payment-wrapper/stripe-wrapper.tsx` | Suporte, configuracao ou artefato de projeto - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
 | `claude/medusa/apps/storefront/src/modules/checkout/components/payment/index.tsx` | Suporte, configuracao ou artefato de projeto - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
@@ -2016,8 +2016,8 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `claude/medusa/pnpm-lock.yaml` | Suporte, configuracao ou artefato de projeto - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `claude/medusa/pnpm-workspace.yaml` | Suporte, configuracao ou artefato de projeto - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
 | `claude/medusa/setup-payment-gateways.md` | Suporte, configuracao ou artefato de projeto - Documentacao ou instrucao. | ativo ou ainda nao classificado como legado |
-| `claude/medusa/test-checkout.html` | Suporte, configuracao ou artefato de projeto - Artefato de suporte. | ativo ou ainda nao classificado como legado |
-| `claude/medusa/test-server.js` | Suporte, configuracao ou artefato de projeto - Codigo JavaScript/TypeScript. | ativo ou ainda nao classificado como legado |
+| `claude/medusa/test-checkout.html` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `claude/medusa/test-server.js` | Suporte, configuracao ou artefato de projeto - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `claude/medusa/turbo.json` | Suporte, configuracao ou artefato de projeto - Configuracao ou dados JSON. | ativo ou ainda nao classificado como legado |
 | `claude/navbar.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `claude/produto.php` | Suporte, configuracao ou artefato de projeto - Codigo PHP. | ativo ou ainda nao classificado como legado |
@@ -2767,8 +2767,8 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `olist/sync-on-webhook.php` | Integracao Olist/Tiny - Endpoint de callback ou webhook. | ativo ou ainda nao classificado como legado |
 | `olist/sync-products.php` | Integracao Olist/Tiny - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `olist/sync-to-database.php` | Integracao Olist/Tiny - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `olist/test-token-v3.php` | Integracao Olist/Tiny - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `olist/test-token.php` | Integracao Olist/Tiny - Codigo PHP. | ativo ou ainda nao classificado como legado |
+| `olist/test-token-v3.php` | Integracao Olist/Tiny - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `olist/test-token.php` | Integracao Olist/Tiny - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `olist/token-refresh.php` | Integracao Olist/Tiny - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `olist/webhook-receiver.php` | Integracao Olist/Tiny - Endpoint de callback ou webhook. | ativo ou ainda nao classificado como legado |
 | `openapi.yml` | Suporte, configuracao ou artefato de projeto - Configuracao YAML/CI. | ativo ou ainda nao classificado como legado |
@@ -3331,17 +3331,17 @@ Gerado deterministicamente a partir de 3824 arquivos versionados no indice Git. 
 | `scripts/task-distribution-engine.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
 | `scripts/task-queue-processor.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/task_queue_lib.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/test-and-send-report.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `scripts/test-apis.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/test-autonomous-deploy.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `scripts/test-checkout-api.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/test-shopee-connection.php` | Ferramentas e rotinas de manutencao - Codigo PHP. | ativo ou ainda nao classificado como legado |
-| `scripts/test-tiktok-connection.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/test_final.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/test_pipeline.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/test_pipeline_full.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/test_shopee_api.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
-| `scripts/test_shopee_simple.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
+| `scripts/test-and-send-report.php` | Ferramentas e rotinas de manutencao - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `scripts/test-apis.py` | Ferramentas e rotinas de manutencao - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `scripts/test-autonomous-deploy.php` | Ferramentas e rotinas de manutencao - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `scripts/test-checkout-api.py` | Ferramentas e rotinas de manutencao - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `scripts/test-shopee-connection.php` | Ferramentas e rotinas de manutencao - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `scripts/test-tiktok-connection.py` | Ferramentas e rotinas de manutencao - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `scripts/test_final.py` | Ferramentas e rotinas de manutencao - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `scripts/test_pipeline.py` | Ferramentas e rotinas de manutencao - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `scripts/test_pipeline_full.py` | Ferramentas e rotinas de manutencao - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `scripts/test_shopee_api.py` | Ferramentas e rotinas de manutencao - Teste automatizado. | ativo ou ainda nao classificado como legado |
+| `scripts/test_shopee_simple.py` | Ferramentas e rotinas de manutencao - Teste automatizado. | ativo ou ainda nao classificado como legado |
 | `scripts/testar-ftp.ps1` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/tiktok-auth-now.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |
 | `scripts/tiktok-get-shop-cipher.py` | Ferramentas e rotinas de manutencao - Script operacional. | ativo ou ainda nao classificado como legado |

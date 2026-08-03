@@ -40,7 +40,7 @@ LINE_RULES: tuple[tuple[str, str, re.Pattern[str], str], ...] = (
 SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}"),
     re.compile(r"github_pat_[A-Za-z0-9_]{40,}"),
-    re.compile(r"(?<![A-Za-z0-9_-])sk-(?:proj-)?[A-Za-z0-9_-]{24,}(?![A-Za-z0-9_-])"),
+    re.compile(r"(?<![A-Za-z0-9])sk-(?:proj-)?[A-Za-z0-9_-]{24,}(?![A-Za-z0-9])"),
     re.compile(r"xox[baprs]-[A-Za-z0-9-]{20,}"),
     re.compile(r"-----BEGIN (?:RSA |OPENSSH |EC |DSA |)PRIVATE KEY-----"),
     re.compile(r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}"),

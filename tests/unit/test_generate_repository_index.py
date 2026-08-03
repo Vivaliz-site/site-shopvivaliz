@@ -1,9 +1,12 @@
 import unittest
+from pathlib import Path
+from unittest.mock import Mock, patch
 
 from scripts.generate_repository_index import (
     GENERATED_OUTPUTS,
     classification,
     file_purpose,
+    git,
     markdown_code,
     parse_null_delimited_grep,
     safe_path,
@@ -25,6 +28,10 @@ class GenerateRepositoryIndexTests(unittest.TestCase):
     def test_webhook_test_keeps_test_role(self):
         self.assertIn("Teste automatizado", file_purpose("tests/webhook-notificacoes.spec.ts"))
 
+    def test_nested_test_filename_keeps_test_role(self):
+        self.assertIn("Teste automatizado", file_purpose("scripts/test-apis.py"))
+        self.assertIn("Teste automatizado", file_purpose("api/catalog/test-normalize.php"))
+
     def test_legacy_in_test_name_does_not_mark_test_as_removal_candidate(self):
         path = "tests/unit/test_shopee_legacy_credentials_safe.py"
         self.assertEqual("ativo ou ainda nao classificado como legado", classification(path))
@@ -40,6 +47,12 @@ class GenerateRepositoryIndexTests(unittest.TestCase):
     def test_task_filenames_are_not_mistaken_for_openai_keys(self):
         path = "docs/status-task-a-very-long-ordinary-filename.md"
         self.assertEqual(path, safe_path(path))
+
+    @patch("scripts.generate_repository_index.subprocess.run")
+    def test_git_rejects_fatal_grep_status(self, run: Mock):
+        run.return_value = Mock(returncode=2, stdout=b"", stderr=b"fatal: index error")
+        with self.assertRaisesRegex(RuntimeError, "index error"):
+            git(Path("."), "grep", check=False, allowed_returncodes={0, 1})
 
     def test_null_delimited_grep_keeps_colon_number_source_out_of_path(self):
         output = b"dist/app.js\x0012\x00function Z(){return 'later:456:source';}\n"

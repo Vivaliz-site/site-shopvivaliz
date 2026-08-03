@@ -84,6 +84,12 @@ class AutomationChangeAuditTests(unittest.TestCase):
         credential = next(item for item in findings if item.rule == "credential_exposed")
         self.assertNotIn(secret, credential.excerpt)
 
+    def test_prefixed_openai_key_shape_remains_blocked(self):
+        secret = "sk-" + ("a" * 32)
+        for prefix in ("backup-", "_"):
+            findings = self.scan("config/runtime.yml", [(3, f"token: {prefix}{secret}")])
+            self.assertIn("credential_exposed", {item.rule for item in findings})
+
 
 if __name__ == "__main__":
     unittest.main()

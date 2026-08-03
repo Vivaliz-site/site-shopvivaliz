@@ -89,25 +89,35 @@ HYGIENE_PATH = re.compile(
     re.IGNORECASE,
 )
 LEGACY_PATH = re.compile(r"(^|/)(carrinho-legacy|checkout-legacy)(/|$)", re.IGNORECASE)
-TEST_PATH = re.compile(r"(^|/)(tests?|specs?)(/|$)|(^|[-_.])(test|spec)([-_.]|$)", re.IGNORECASE)
+TEST_PATH = re.compile(r"(^|/)(tests?|specs?)(/|$)|(^|[/_.-])(test|spec)([/_.-]|$)", re.IGNORECASE)
 SECRET_PATTERNS = (
     re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}", re.IGNORECASE),
     re.compile(r"github_pat_[A-Za-z0-9_]{40,}", re.IGNORECASE),
-    re.compile(r"(?<![A-Za-z0-9_-])sk-(?:proj-)?[A-Za-z0-9_-]{24,}(?![A-Za-z0-9_-])"),
+    re.compile(r"(?<![A-Za-z0-9])sk-(?:proj-)?[A-Za-z0-9_-]{24,}(?![A-Za-z0-9])"),
     re.compile(r"xox[baprs]-[A-Za-z0-9-]{20,}", re.IGNORECASE),
     re.compile(r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}", re.IGNORECASE),
 )
 FUNCTION_PATTERN = re.compile(r"\bfunction\s+&?\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\(")
 
 
-def git(repo: Path, *args: str, check: bool = True) -> bytes:
+def git(
+    repo: Path,
+    *args: str,
+    check: bool = True,
+    allowed_returncodes: set[int] | None = None,
+) -> bytes:
     completed = subprocess.run(
         ["git", "-C", str(repo), *args],
         check=False,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    if check and completed.returncode != 0:
+    failed = (
+        completed.returncode not in allowed_returncodes
+        if allowed_returncodes is not None
+        else check and completed.returncode != 0
+    )
+    if failed:
         message = completed.stderr.decode("utf-8", "replace").strip()
         raise RuntimeError(f"git {' '.join(args)} failed ({completed.returncode}): {message}")
     return completed.stdout
@@ -261,6 +271,7 @@ def repeated_function_names(repo: Path) -> dict[str, list[str]]:
         "*.tsx",
         "*.jsx",
         check=False,
+        allowed_returncodes={0, 1},
     )
     for path, source_line in parse_null_delimited_grep(output):
         for match in FUNCTION_PATTERN.finditer(source_line):
