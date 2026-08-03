@@ -2,64 +2,142 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__, 3) . '/includes/catalog-runtime.php';
+
 final class ShopvivalizMediaQualityAgent
 {
+    private string $root;
+
+    public function __construct(?string $root = null)
+    {
+        $this->root = $root !== null ? rtrim($root, '/\\') : dirname(__DIR__, 3);
+    }
+
     public function run(array $options = []): array
     {
-        $pdo = $this->pdo();
-        $data = [
-            'ok' => false,
+        $startedAt = gmdate('c');
+        $actions = [];
+        $errors = [];
+
+        try {
+            $products = svcr_products();
+            if ($products === []) {
+                throw new RuntimeException('storefront_catalog_empty');
+            }
+
+            $missingPrimary = 0;
+            $invalidPrimary = 0;
+            $genericAssets = 0;
+            $withoutGallery = 0;
+            $totalImages = 0;
+            $findings = [];
+
+            foreach ($products as $product) {
+                if (!is_array($product)) continue;
+                $sku = trim((string)($product['sku'] ?? ''));
+                $primary = trim((string)($product['image_url'] ?? ''));
+                $images = array_values(array_filter(
+                    (array)($product['images'] ?? []),
+                    static fn(mixed $value): bool => is_string($value) && trim($value) !== ''
+                ));
+                $totalImages += count($images);
+
+                $reasons = [];
+                if ($primary === '') {
+                    $missingPrimary++;
+                    $reasons[] = 'primary_image_missing';
+                } elseif (preg_match('~^https://~i', $primary) !== 1) {
+                    $invalidPrimary++;
+                    $reasons[] = 'primary_image_not_https';
+                }
+
+                $lower = strtolower($primary);
+                if ($lower !== '' && (
+                    str_contains($lower, 'placeholder')
+                    || str_contains($lower, 'default')
+                    || str_contains($lower, 'example.com')
+                    || str_contains($lower, 'unsplash.com')
+                )) {
+                    $genericAssets++;
+                    $reasons[] = 'generic_or_external_placeholder';
+                }
+
+                if (count($images) === 0) {
+                    $withoutGallery++;
+                    $reasons[] = 'gallery_empty';
+                }
+
+                if ($reasons !== [] && count($findings) < 100) {
+                    $findings[] = ['sku' => $sku, 'reasons' => $reasons];
+                }
+            }
+
+            $summary = [
+                'products_checked' => count($products),
+                'images_checked' => $totalImages,
+                'missing_primary' => $missingPrimary,
+                'invalid_primary' => $invalidPrimary,
+                'generic_assets' => $genericAssets,
+                'without_gallery' => $withoutGallery,
+                'findings_count' => $missingPrimary + $invalidPrimary + $genericAssets + $withoutGallery,
+            ];
+
+            $actions[] = [
+                'action' => 'audit_storefront_media_quality',
+                'status' => 'completed',
+                'verified' => true,
+                'source' => 'svcr_products',
+                'summary' => $summary,
+                'findings' => $findings,
+                'changed_items' => 0,
+            ];
+        } catch (Throwable $error) {
+            $errors[] = ['action' => 'audit_storefront_media_quality', 'error' => $error->getMessage()];
+        }
+
+        $result = $this->result($errors === [], $startedAt, $actions, $errors);
+        try {
+            $this->persist($result);
+        } catch (Throwable $error) {
+            $result['ok'] = false;
+            $result['execution_status'] = 'failed';
+            $result['execution_completed'] = false;
+            $result['errors'][] = ['action' => 'persist_media_quality_evidence', 'error' => $error->getMessage()];
+        }
+        return $result;
+    }
+
+    private function result(bool $ok, string $startedAt, array $actions, array $errors): array
+    {
+        return [
+            'ok' => $ok,
             'agent' => 'media_quality',
-            'generated_at' => date('c'),
-            'summary' => [],
-            'recommendations' => [],
-            'errors' => [],
+            'execution_status' => $ok ? 'completed' : 'failed',
+            'execution_completed' => $ok,
+            'started_at' => $startedAt,
+            'finished_at' => gmdate('c'),
+            'actions' => $actions,
+            'changed_items' => 0,
+            'errors' => $errors,
         ];
-        if (!$pdo) {
-            $data['errors'][] = 'database unavailable';
-            return $data;
-        }
-        try {
-            $data['summary']['items_total'] = $this->count($pdo, 'SELECT COUNT(*) FROM olist_products');
-            $data['summary']['items_ready'] = $this->count($pdo, "SELECT COUNT(*) FROM olist_products WHERE primary_image_url IS NOT NULL AND primary_image_url <> ''");
-            $data['summary']['items_pending'] = $this->count($pdo, "SELECT COUNT(*) FROM olist_products WHERE primary_image_url IS NULL OR primary_image_url = ''");
-            $data['summary']['media_total'] = $this->count($pdo, "SELECT COUNT(*) FROM olist_product_images WHERE status = 'active'");
-            $data['summary']['media_without_item'] = $this->count($pdo, 'SELECT COUNT(*) FROM olist_product_images WHERE product_local_id IS NULL OR product_local_id = 0');
-            $data['summary']['items_with_more_than_10_media'] = $this->count($pdo, "SELECT COUNT(*) FROM (SELECT product_local_id FROM olist_product_images WHERE status = 'active' GROUP BY product_local_id HAVING COUNT(*) > 10) x");
-            if (($data['summary']['items_pending'] ?? 0) > 0) {
-                $data['recommendations'][] = 'Run media repair and import cycle again.';
-            }
-            if (($data['summary']['media_without_item'] ?? 0) > 0) {
-                $data['recommendations'][] = 'Run media relation repair before next report.';
-            }
-            $data['ok'] = true;
-        } catch (Throwable $e) {
-            $data['errors'][] = $e->getMessage();
-        }
-        $this->beat($pdo, $data);
-        return $data;
     }
 
-    private function count(PDO $pdo, string $sql): ?int
+    private function persist(array $result): void
     {
-        try { return (int)$pdo->query($sql)->fetchColumn(); } catch (Throwable $e) { return null; }
-    }
-
-    private function pdo(): ?PDO
-    {
-        foreach (['sv_pdo', 'sv_db', 'db', 'get_pdo'] as $fn) {
-            if (function_exists($fn)) {
-                $value = $fn();
-                if ($value instanceof PDO) return $value;
-            }
+        $directory = $this->root . '/storage/agent-evidence';
+        if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
+            throw new RuntimeException('media_quality_evidence_directory_unavailable');
         }
-        return null;
-    }
-
-    private function beat(PDO $pdo, array $data): void
-    {
-        try {
-            $pdo->prepare('INSERT INTO sv_agent_heartbeats (agent, status, summary_json, created_at) VALUES (?, ?, ?, NOW())')->execute(['media_quality', $data['ok'] ? 'ok' : 'warning', json_encode($data)]);
-        } catch (Throwable $ignored) {}
+        $path = $directory . '/latest-media-quality.json';
+        $temporary = $path . '.tmp-' . getmypid();
+        $json = json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n";
+        if (file_put_contents($temporary, $json, LOCK_EX) === false || !rename($temporary, $path)) {
+            @unlink($temporary);
+            throw new RuntimeException('media_quality_evidence_write_failed');
+        }
+        $readback = json_decode((string)file_get_contents($path), true);
+        if (!is_array($readback) || ($readback['agent'] ?? '') !== 'media_quality') {
+            throw new RuntimeException('media_quality_evidence_readback_failed');
+        }
     }
 }
