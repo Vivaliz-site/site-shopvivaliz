@@ -4,13 +4,23 @@ on:
   schedule:
     - cron: '47 * * * *'
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/agents-audit-schedule-watchdog.yml'
+      - '.github/workflows/agents-hourly-deep-audit.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/agents-audit-schedule-watchdog.yml'
+      - '.github/workflows/agents-hourly-deep-audit.yml'
 
 permissions:
   actions: read
   contents: read
 
 concurrency:
-  group: agents-audit-schedule-watchdog
+  group: agents-audit-schedule-watchdog-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
