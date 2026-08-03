@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 
-ENV_PATH = Path(".env")
+ENV_PATH = Path(__file__).resolve().parent / ".env"
 TOKEN_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
 
 
@@ -62,8 +62,7 @@ def renew_token(config: dict[str, str]) -> dict[str, Any] | None:
 
 
 def update_env(new_token: str, new_refresh_token: str) -> None:
-    target = ENV_PATH.resolve(strict=True)
-    content = target.read_text(encoding="utf-8")
+    content = ENV_PATH.read_text(encoding="utf-8")
     replacements = {
         "OLIST_ACCESS_TOKEN": new_token,
         "OLIST_REFRESH_TOKEN": new_refresh_token,
@@ -81,8 +80,8 @@ def update_env(new_token: str, new_refresh_token: str) -> None:
         if key not in found:
             lines.append(f"{key}={value}")
 
-    mode = target.stat().st_mode & 0o777
-    descriptor, temporary_name = tempfile.mkstemp(prefix=".env.", dir=target.parent)
+    mode = ENV_PATH.stat().st_mode & 0o777
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".env.", dir=ENV_PATH.parent)
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
@@ -90,7 +89,7 @@ def update_env(new_token: str, new_refresh_token: str) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(temporary, mode)
-        os.replace(temporary, target)
+        os.replace(temporary, ENV_PATH)
     finally:
         temporary.unlink(missing_ok=True)
 

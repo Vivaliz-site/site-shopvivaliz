@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 
-ENV_PATH = Path(".env")
+ENV_PATH = Path(__file__).resolve().parent / ".env"
 BASE_URL = "https://partner.shopeemobile.com/api/v2"
 
 
