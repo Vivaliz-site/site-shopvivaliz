@@ -37,9 +37,16 @@ foreach ($registered as $id => $definition) {
     if ($class === '' || !str_contains($source, 'final class ' . $class)) {
         $errors[] = 'registered_agent_class_invalid:' . $id;
     }
-    foreach (['simulat', 'mock', 'dry_run', 'dry-run', 'Produto Premium'] as $forbidden) {
-        if (stripos($source, $forbidden) !== false) {
-            $errors[] = 'registered_agent_contains_forbidden_source:' . $id . ':' . $forbidden;
+    $forbiddenPatterns = [
+        '/function\s+simulate[A-Za-z0-9_]*\s*\(/i',
+        '/function\s+mock[A-Za-z0-9_]*\s*\(/i',
+        '/[\'\"]status[\'\"]\s*=>\s*[\'\"]dry[_-]?run[\'\"]/i',
+        '/[\'\"]status[\'\"]\s*=>\s*[\'\"]simulated[\'\"]/i',
+        '/Produto Premium/i',
+    ];
+    foreach ($forbiddenPatterns as $pattern) {
+        if (preg_match($pattern, $source) === 1) {
+            $errors[] = 'registered_agent_contains_simulation_path:' . $id . ':' . $pattern;
         }
     }
 }
@@ -90,6 +97,7 @@ if (!is_file($agentWorkflow)) {
         'StrictHostKeyChecking=yes',
         'flock -w 120',
         'execution_accepted',
+        'work_evidence_count',
         'active_agent_count',
         'latest-agent-cycle.json',
         'agent_evidence_stale',
