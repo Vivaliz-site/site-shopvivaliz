@@ -1,0 +1,51 @@
+name: Product Trust Sanitizer Test
+
+on:
+  pull_request:
+    paths:
+      - 'includes/product-trust-sanitizer.php'
+      - 'includes/head-analytics.php'
+      - 'tests/product-trust-sanitizer-test.php'
+      - '.github/workflows/product-trust-sanitizer-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trust-integrity:
+    name: Bloquear prova social simulada
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PHP lint
+        run: |
+          set -euo pipefail
+          php -l includes/product-trust-sanitizer.php
+          php -l includes/head-analytics.php
+          php -l tests/product-trust-sanitizer-test.php
+
+      - name: Execute sanitizer test
+        run: |
+          set -euo pipefail
+          php tests/product-trust-sanitizer-test.php | tee product-trust-test.txt
+          grep -Fx 'product_trust_sanitizer_test=passed' product-trust-test.txt
+
+      - name: Verify forbidden claims are guarded
+        run: |
+          set -euo pipefail
+          grep -F 'Carlos M. - Divinópolis/MG' includes/product-trust-sanitizer.php
+          grep -F 'Fernanda S. - São Paulo/SP' includes/product-trust-sanitizer.php
+          grep -F 'Compre Junto e Economize (Combo Recomendado)' includes/product-trust-sanitizer.php
+          grep -F "svpts_register(\$requestPath);" includes/head-analytics.php
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-trust-sanitizer-${{ github.run_id }}
+          path: product-trust-test.txt
+          if-no-files-found: error
+          retention-days: 30
