@@ -180,7 +180,10 @@ reconcile_runtime_secrets() {
     return 1
   fi
 
-  if ! chmod 0600 "$SHARED_DIR/.env"; then
+  # O PHP do Apache precisa ler as credenciais compartilhadas. Mantemos
+  # o arquivo fechado para outros usuários e liberamos somente o grupo
+  # www-data, que é aplicado logo abaixo.
+  if ! chmod 0640 "$SHARED_DIR/.env"; then
     log ERROR "Nao foi possivel proteger a configuracao compartilhada"
     return 1
   fi
