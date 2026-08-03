@@ -28,22 +28,8 @@ $products=[];$fingerprintItems=[];
 foreach($items as $item){ if(!is_array($item))continue; $sku=trim((string)($item['sku']??'')); $id=trim((string)($item['product_id']??$item['olist_product_id']??'')); $row=svsh_product($sku,$id); if($row===[])svsh_json(404,['ok'=>false,'error'=>'product_not_found','sku'=>$sku]); $quantity=max(1,min(99,(int)($item['quantity']??1))); $price=max(1.0,(float)($row['price']??0)); $products[]=['id'=>(string)($row['id']??$row['olist_product_id']??$row['sku']??'produto'),'width'=>max(1,(int)round(svsh_number($row,['width','largura'],16))),'height'=>max(1,(int)round(svsh_number($row,['height','altura'],16))),'length'=>max(1,(int)round(svsh_number($row,['length','comprimento'],16))),'weight'=>max(.1,svsh_number($row,['weight','peso'],1)),'insurance_value'=>$price,'quantity'=>$quantity]; $fingerprintItems[]=['sku'=>(string)($row['sku']??$sku),'quantity'=>$quantity,'price'=>round($price,2)]; }
 $token=me_current_access_token()?:svsh_env('MELHORENVIO_ACCESS_TOKEN','SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN','MELHORENVIO_API_KEY'); if($token==='')svsh_json(503,['ok'=>false,'error'=>'missing_access_token','message'=>'Frete temporariamente indisponível.']);
 $from=preg_replace('/\D+/','',svsh_env('MELHORENVIO_FROM_POSTAL_CODE','SHOPVIVALIZ_FROM_POSTAL_CODE'))?:'35501236';
-$result=svsh_post(me_api_base().'/api/v2/me/shipment/calculate',['from'=>['postal_code'=>$from],'to'=>['postal_code'=>$cep],'products'=>$products,'options'=>['receipt'=>false,'own_hand'=>false,'collect'=>false]],$token); if(!$result['ok']){
-    $isLocal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true) || str_contains($_SERVER['HTTP_HOST'] ?? '', '127.0.0.1') || str_contains($_SERVER['HTTP_HOST'] ?? '', 'localhost');
-    if ($isLocal) {
-        $options = [
-            ['id' => '1', 'name' => 'PAC (Mock Local)', 'company' => 'Correios', 'price' => 12.50, 'delivery_time' => 5],
-            ['id' => '2', 'name' => 'Sedex (Mock Local)', 'company' => 'Correios', 'price' => 22.10, 'delivery_time' => 2]
-        ];
-        $expiresAt = time() + 1800;
-        foreach ($options as &$option) {
-            $option['quote_id'] = svsh_quote_id($cep, $fingerprintItems, $option, $expiresAt);
-            $option['expires_at'] = $expiresAt;
-        }
-        unset($option);
-        $selected = $options[0];
-        svsh_json(200, ['ok' => true, 'provider' => 'melhorenvio_mock', 'cep' => $cep, 'shipping_options' => $options, 'shipping_total' => $selected['price'], 'selected_option' => $selected, 'quote_id' => $selected['quote_id'], 'expires_at' => $expiresAt]);
-    }
+$result=svsh_post(me_api_base().'/api/v2/me/shipment/calculate',['from'=>['postal_code'=>$from],'to'=>['postal_code'=>$cep],'products'=>$products,'options'=>['receipt'=>false,'own_hand'=>false,'collect'=>false]],$token);
+if(!$result['ok']){
     $message=((int)($result['errno']??0)===28||$result['status']===0)?'A transportadora demorou mais que o esperado. Tente novamente.':'Frete temporariamente indisponível.';
     if (!empty($result['body']['message']) && is_string($result['body']['message'])) {
         $message=trim($result['body']['message']);
