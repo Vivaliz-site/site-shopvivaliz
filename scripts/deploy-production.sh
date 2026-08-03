@@ -14,6 +14,8 @@ readonly LOCK_FILE="/var/lock/shopvivaliz-deploy.lock"
 readonly LOG_FILE="/home/ubuntu/shopvivaliz-deploy/logs/deploy.log"
 readonly RETENTION_COUNT=5
 
+mkdir -p "$(dirname "$LOG_FILE")"
+
 # Logging
 log() {
   local level="$1"
