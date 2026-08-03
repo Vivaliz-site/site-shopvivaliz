@@ -23,6 +23,10 @@ declare(strict_types=1);
  * liberar o acesso: falhar fechado e melhor do que ficar aberto por descuido.
  */
 
+// HTTP endpoints do not inherit the shell environment used by cron and
+// deploy scripts. Load the protected runtime environment before evaluating
+// the agent guard so a valid configured key is not mistaken for an outage.
+require_once __DIR__ . '/bootstrap-env.php';
 require_once __DIR__ . '/agent-keys.php';
 
 if (!function_exists('sv_agent_key_from_request')) {

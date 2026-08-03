@@ -185,6 +185,33 @@ jobs:
           git -C "$repo" fetch --no-tags origin "$expected_sha"
           git -C "$repo" cat-file -e "${expected_sha}^{commit}"
 
+          # A legacy/out-of-band runner may have changed only this bootstrap
+          # file. Preserve it with a hash, then stage the exact requested
+          # runner so its own verified recovery logic can run. Any other dirty
+          # path remains a hard failure; no checkout reset or deletion occurs.
+          dirty="$(git -C "$repo" status --porcelain=v1 --untracked-files=all)"
+          if [[ -n "$dirty" ]]; then
+            dirty_paths="$(printf '%s\n' "$dirty" | sed -E 's/^.. //')"
+            if [[ "$dirty_paths" != 'scripts/deploy-production.sh' ]]; then
+              echo "Unexpected dirty deploy checkout:" >&2
+              printf '%s\n' "$dirty" >&2
+              exit 1
+            fi
+            backup_dir='/home/ubuntu/shopvivaliz-deploy/shared/logs/runner-recovery'
+            mkdir -p "$backup_dir"
+            recovery_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+            backup_path="$backup_dir/deploy-production.sh.$recovery_stamp.$expected_sha"
+            cp -p "$deploy_script" "$backup_path"
+            sha256sum "$deploy_script" > "$backup_path.sha256"
+            printf 'recovered_at=%s\nexpected_sha=%s\noriginal_path=%s\n' \
+              "$recovery_stamp" "$expected_sha" "$deploy_script" > "$backup_path.meta"
+            restore_tmp="$(mktemp "$repo/scripts/.deploy-bootstrap.XXXXXX")"
+            git -C "$repo" show "${expected_sha}:scripts/deploy-production.sh" > "$restore_tmp"
+            chmod 0755 "$restore_tmp"
+            mv -f -- "$restore_tmp" "$deploy_script"
+            echo "Preserved legacy runner at $backup_path"
+          fi
+
           previous_release=''
           previous_sha=''
           if [[ -L "$current_link" && -e "$current_link" ]]; then
@@ -239,6 +266,27 @@ jobs:
           echo "Previous commit: $previous_sha"
           echo "Current release: $current_release"
           echo "Deployed commit: $deployed_sha"
+
+          canonical_main="$(git -C "$repo" ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [[ "$canonical_main" == "$expected_sha" ]]; then
+            target_file='/home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref'
+            current_target="$(head -n 1 "$target_file" 2>/dev/null | tr -d '\r' | xargs || true)"
+            if [[ "$current_target" != 'main' ]]; then
+              backup_dir='/home/ubuntu/shopvivaliz-deploy/shared/logs/target-recovery'
+              mkdir -p "$backup_dir"
+              recovery_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+              backup_path="$backup_dir/deploy-target-ref.$recovery_stamp.$expected_sha.bak"
+              cp -p "$target_file" "$backup_path"
+              sha256sum "$target_file" > "$backup_path.sha256"
+              printf 'previous_target=%s\nnew_target=main\nactive_sha=%s\n' \
+                "$current_target" "$expected_sha" > "$backup_path.meta"
+              target_tmp="$(mktemp '/home/ubuntu/shopvivaliz-deploy/shared/.deploy-target.XXXXXX')"
+              printf 'main\n' > "$target_tmp"
+              chmod 0644 "$target_tmp"
+              mv -f -- "$target_tmp" "$target_file"
+              echo "Canonicalized deploy target from $current_target to main; backup=$backup_path"
+            fi
+          fi
           REMOTE_SCRIPT
 
       - name: Write deployment evidence

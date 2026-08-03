@@ -1,0 +1,78 @@
+import unittest
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+from scripts.generate_repository_index import (
+    GENERATED_OUTPUTS,
+    classification,
+    file_purpose,
+    git,
+    markdown_code,
+    parse_null_delimited_grep,
+    safe_path,
+)
+
+
+class GenerateRepositoryIndexTests(unittest.TestCase):
+    def test_top_level_storefront_files_are_application_code(self):
+        self.assertIn("Pagina publica do catalogo", file_purpose("catalogo.php"))
+        self.assertIn("Pagina publica do checkout", file_purpose("checkout.php"))
+        self.assertIn("Vitrine publica alternativa", file_purpose("home.php"))
+        self.assertIn("Retorno publico do checkout", file_purpose("checkout-return.php"))
+        self.assertIn("Sitemap XML publico", file_purpose("sitemap.php"))
+
+    def test_documentation_keeps_its_role_when_name_mentions_webhook_or_migration(self):
+        self.assertIn("Documentacao ou instrucao", file_purpose("docs/TINY-WEBHOOKS-SETUP.md"))
+        self.assertIn("Documentacao ou instrucao", file_purpose("docs/repository-migration.md"))
+
+    def test_webhook_test_keeps_test_role(self):
+        self.assertIn("Teste automatizado", file_purpose("tests/webhook-notificacoes.spec.ts"))
+
+    def test_nested_test_filename_keeps_test_role(self):
+        self.assertIn("Teste automatizado", file_purpose("scripts/test-apis.py"))
+        self.assertIn("Teste automatizado", file_purpose("api/catalog/test-normalize.php"))
+
+    def test_legacy_in_test_name_does_not_mark_test_as_removal_candidate(self):
+        path = "tests/unit/test_shopee_legacy_credentials_safe.py"
+        self.assertEqual("ativo ou ainda nao classificado como legado", classification(path))
+
+    def test_declared_legacy_directory_is_classified(self):
+        self.assertIn("legado declarado", classification("checkout-legacy/index.php"))
+
+    def test_operational_data_is_flagged_and_identifier_is_redacted(self):
+        path = "storage/orders/SV20260803123456789.json"
+        self.assertIn("violacao de politica", classification(path))
+        self.assertEqual("storage/orders/<REDACTED_ORDER_ID>.json", safe_path(path))
+
+    def test_task_filenames_are_not_mistaken_for_openai_keys(self):
+        path = "docs/status-task-a-very-long-ordinary-filename.md"
+        self.assertEqual(path, safe_path(path))
+
+    @patch("scripts.generate_repository_index.subprocess.run")
+    def test_git_rejects_fatal_grep_status(self, run: Mock):
+        run.return_value = Mock(returncode=2, stdout=b"", stderr=b"fatal: index error")
+        with self.assertRaisesRegex(RuntimeError, "index error"):
+            git(Path("."), "grep", check=False, allowed_returncodes={0, 1})
+
+    def test_null_delimited_grep_keeps_colon_number_source_out_of_path(self):
+        output = b"dist/app.js\x0012\x00function Z(){return 'later:456:source';}\n"
+        self.assertEqual(
+            [("dist/app.js", "function Z(){return 'later:456:source';}")],
+            parse_null_delimited_grep(output),
+        )
+
+    def test_markdown_code_span_supports_backticks(self):
+        self.assertEqual("``value`with`ticks``", markdown_code("value`with`ticks"))
+
+    def test_generated_reports_are_excluded_from_self_referential_hash_comparison(self):
+        self.assertEqual(
+            {
+                "docs/audits/repository-hygiene.md",
+                "docs/knowledge/repository-file-index.md",
+            },
+            GENERATED_OUTPUTS,
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

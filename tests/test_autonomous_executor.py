@@ -1,14 +1,15 @@
 import importlib.util
-import os
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "scripts" / "autonomous-executor.py"
 AI_MODULE_PATH = ROOT / "ai_collaboration.py"
+RETIRED_MODULE_PATH = ROOT / "scripts" / "ai" / "retired_executor.py"
 
 
-def load_module():
-    spec = importlib.util.spec_from_file_location("autonomous_executor", MODULE_PATH)
+def load_retired_module():
+    spec = importlib.util.spec_from_file_location("retired_executor", RETIRED_MODULE_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -23,40 +24,42 @@ def load_ai_module():
     return module
 
 
-def test_ai_result_without_clients_is_reported_as_blocked_external_access():
-    module = load_module()
+def test_retired_executor_is_fail_closed(tmp_path, capsys):
+    module = load_retired_module()
+    module.REPORT_DIR = tmp_path
 
-    status, reason = module.classify_ai_result(
-        2,
-        "Nenhum cliente de IA disponivel. Abortando diagnostico.",
+    result = module.run_blocked(
+        "scripts/ai/autonomous_executor.py",
+        "executor aposentado sem evidência revisada",
+        ["adaptador explícito", "verificação de leitura"],
     )
 
-    assert status == "blocked_external_access_required"
-    assert "cliente de ia" in reason.lower()
+    assert result == 2
+    payload = json.loads(capsys.readouterr().err)
+    assert payload["status"] == "blocked"
+    assert payload["external_operation_performed"] is False
+    assert payload["required_replacement"] == ["adaptador explícito", "verificação de leitura"]
+    assert (tmp_path / "autonomous-executor.json").exists()
 
 
-def test_select_roo_helper_matches_primary_agent_domain():
-    module = load_module()
+def test_autonomous_wrapper_points_to_canonical_fail_closed_entrypoint():
+    wrapper = MODULE_PATH.read_text(encoding="utf-8")
+    canonical = (ROOT / "scripts" / "ai" / "autonomous_executor.py").read_text(encoding="utf-8")
+    retired = RETIRED_MODULE_PATH.read_text(encoding="utf-8")
 
-    helper = module.select_roo_helper(
-        {"title": "QA / Self-test", "description": "Validar fluxo de checkout e logs"}
-    )
-
-    assert helper["id"] == "qa-self-test"
-    assert "QA" in helper["name"]
+    assert "runpy.run_path" in wrapper
+    assert '"autonomous_executor.py"' in wrapper
+    assert "run_blocked" in canonical
+    assert "external_operation_performed" in retired
 
 
-def test_roo_fallback_report_contains_safe_next_steps_for_each_helper():
-    module = load_module()
+def test_retired_executor_never_claims_external_operation(tmp_path, capsys):
+    module = load_retired_module()
+    module.REPORT_DIR = tmp_path
 
-    report = module.render_roo_fallback_report(
-        {"title": "Olist / Tiny", "description": "Sincronizar estoque e imagens"},
-        module.select_roo_helper({"title": "Olist / Tiny", "description": "Sincronizar estoque e imagens"}),
-    )
-
-    assert "Roo Auxiliar" in report
-    assert "próximos passos seguros" in report.lower()
-    assert "olist" in report.lower()
+    assert module.run_blocked("scripts/ai/autonomous_executor.py", "blocked", []) == 2
+    payload = json.loads(capsys.readouterr().err)
+    assert payload["external_operation_performed"] is False
 
 
 def test_ai_collaboration_returns_blocked_when_all_providers_fail(monkeypatch):

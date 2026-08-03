@@ -1,5 +1,11 @@
 # Índice canônico do repositório
 
+## Inventário exaustivo
+
+- `docs/knowledge/repository-file-index.md`: lista gerada de todos os diretórios e arquivos versionados, com função inferida por caminho e extensão.
+- `docs/audits/repository-hygiene.md`: grupos de conteúdo idêntico e caminhos candidatos a revisão; o relatório não autoriza remoção automática.
+- `scripts/generate_repository_index.py`: gerador multiplataforma e determinístico que lê o índice Git em formato NUL, preserva nomes incomuns, mascara identificadores operacionais e não reproduz valores de segredos.
+
 ## Aplicação
 
 - `admin/`, `api/`, `includes/`, `public/`: aplicação PHP e superfícies públicas e administrativas.
@@ -10,7 +16,7 @@
 ## Automação e governança
 
 - `.github/workflows/`: workflows ativos. Devem usar permissões mínimas e artifacts obrigatórios quando produzirem evidência.
-- `.github/workflows/repository-governance.yml`: gate read-only para PRs e pushes em `main`.
+- `.github/workflows/repository-governance.yml`: gate read-only para PRs e pushes em `main`; também falha quando o inventário gerado está desatualizado.
 - `.github/workflows/agents-hourly-deep-audit.yml`: auditoria profunda horária no minuto 17.
 - `scripts/audit-agents-real-work.py`: auditor profundo de agentes baseado em evidência.
 - `scripts/maintenance/audit_automation_changes.py`: bloqueia regressões novas em agentes e automações.
