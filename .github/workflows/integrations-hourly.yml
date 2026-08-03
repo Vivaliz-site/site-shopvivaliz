@@ -53,7 +53,7 @@ jobs:
           current='/home/ubuntu/shopvivaliz-deploy/current'
           test -r "$current/includes/integration-health.php"
           cd "$current"
-          php -d display_errors=0 -d log_errors=1 <<'PHP'
+          sudo -u www-data -- php -d display_errors=0 -d log_errors=1 <<'PHP'
           <?php
           declare(strict_types=1);
           require '/home/ubuntu/shopvivaliz-deploy/current/includes/integration-health.php';
