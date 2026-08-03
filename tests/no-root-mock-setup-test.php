@@ -2,13 +2,15 @@
 declare(strict_types=1);
 
 $root = dirname(__DIR__);
-$forbiddenFiles = [
+$forbiddenPaths = [
     $root . '/setup-auto.sh',
+    $root . '/claude/medusa',
+    $root . '/medusa',
 ];
 
-foreach ($forbiddenFiles as $path) {
-    if (is_file($path)) {
-        fwrite(STDERR, "Forbidden mock-oriented root installer exists: {$path}\n");
+foreach ($forbiddenPaths as $path) {
+    if (file_exists($path)) {
+        fwrite(STDERR, "Forbidden cancelled or mock component exists: {$path}\n");
         exit(1);
     }
 }
@@ -18,6 +20,8 @@ $forbiddenPatterns = [
     '/pk_live_default/i',
     '/mock\s+api/i',
     '/simulad[oa]/i',
+    '/claude\/medusa/i',
+    '/\bmedusa\b/i',
 ];
 
 foreach ($rootScripts as $script) {
@@ -27,10 +31,10 @@ foreach ($rootScripts as $script) {
     }
     foreach ($forbiddenPatterns as $pattern) {
         if (preg_match($pattern, $source) === 1) {
-            fwrite(STDERR, "Mock or placeholder setup pattern found in root script: {$script}\n");
+            fwrite(STDERR, "Cancelled, mock or placeholder setup pattern found in root script: {$script}\n");
             exit(1);
         }
     }
 }
 
-echo "OK: no mock-oriented root setup scripts\n";
+echo "OK: no cancelled Medusa or mock-oriented root setup\n";
