@@ -1,6 +1,7 @@
 import unittest
 
 from scripts.generate_repository_index import (
+    GENERATED_OUTPUTS,
     classification,
     file_purpose,
     markdown_code,
@@ -31,6 +32,15 @@ class GenerateRepositoryIndexTests(unittest.TestCase):
 
     def test_markdown_code_span_supports_backticks(self):
         self.assertEqual("``value`with`ticks``", markdown_code("value`with`ticks"))
+
+    def test_generated_reports_are_excluded_from_self_referential_hash_comparison(self):
+        self.assertEqual(
+            {
+                "docs/audits/repository-hygiene.md",
+                "docs/knowledge/repository-file-index.md",
+            },
+            GENERATED_OUTPUTS,
+        )
 
 
 if __name__ == "__main__":

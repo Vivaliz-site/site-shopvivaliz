@@ -66,6 +66,10 @@ TOP_LEVEL_APP_PURPOSE = {
 DOC_EXTENSIONS = {".md", ".mdx", ".txt"}
 SOURCE_EXTENSIONS = {".php", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx"}
 CODE_EXTENSIONS = SOURCE_EXTENSIONS | {".py", ".sh", ".ps1"}
+GENERATED_OUTPUTS = {
+    "docs/audits/repository-hygiene.md",
+    "docs/knowledge/repository-file-index.md",
+}
 PROTECTED_PATTERNS = (
     re.compile(r"^storage/orders/"),
     re.compile(r"^storage/codex-bridge/state\.json$"),
@@ -243,6 +247,8 @@ def render(repo: Path) -> tuple[str, str]:
     directory_list = directories(paths)
     groups: dict[str, list[str]] = collections.defaultdict(list)
     for blob_id, path in entries:
+        if path in GENERATED_OUTPUTS:
+            continue
         groups[blob_id].append(path)
     duplicate_groups = sorted(
         ((blob_id, sorted(group_paths)) for blob_id, group_paths in groups.items() if len(group_paths) > 1),
