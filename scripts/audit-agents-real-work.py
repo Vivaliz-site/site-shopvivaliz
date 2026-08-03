@@ -104,6 +104,21 @@ def run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes
     return subprocess.run(["git", *args], cwd=ROOT, check=check, capture_output=True)
 
 
+def is_executable_candidate(rel: str, path: Path) -> bool:
+    """Include known source types, Git hooks and extensionless shebang scripts."""
+    if not path.is_file():
+        return False
+    if path.suffix.lower() in EXECUTABLE_SUFFIXES or rel.startswith(".githooks/"):
+        return True
+    if path.suffix:
+        return False
+    try:
+        with path.open("rb") as handle:
+            return handle.read(2) == b"#!"
+    except OSError:
+        return False
+
+
 def tracked_files() -> list[Path]:
     result = run_git("ls-files", "-z")
     files: list[Path] = []
@@ -114,7 +129,7 @@ def tracked_files() -> list[Path]:
         if rel in EXCLUDED_FILES or rel.startswith(EXCLUDED_PREFIXES):
             continue
         path = ROOT / rel
-        if path.suffix.lower() in EXECUTABLE_SUFFIXES and path.is_file():
+        if is_executable_candidate(rel, path):
             files.append(path)
     return files
 
@@ -287,6 +302,11 @@ def main() -> int:
     baseline_ref = valid_baseline_ref()
     baseline = baseline_fingerprints(files, active, baseline_ref)
     current_sha = run_git("rev-parse", "HEAD").stdout.decode().strip()
+    scanned_git_hooks = sorted(
+        path.relative_to(ROOT).as_posix()
+        for path in files
+        if path.relative_to(ROOT).as_posix().startswith(".githooks/")
+    )
     findings: list[Finding] = []
 
     for path in files:
@@ -307,6 +327,7 @@ def main() -> int:
         "current_sha": current_sha,
         "base_ref": baseline_ref,
         "files_scanned": len(files),
+        "scanned_git_hooks": scanned_git_hooks,
         "active_surfaces": sorted(active),
         "finding_count": len(findings),
         "active_blocking": len(active_blocking),
@@ -327,6 +348,7 @@ def main() -> int:
         f"- Current SHA: `{current_sha}`",
         f"- Base compared: `{baseline_ref or 'none (current-state fail-closed)'}`",
         f"- Files scanned: **{len(files)}**",
+        f"- Git hooks scanned: **{len(scanned_git_hooks)}**",
         f"- Active surfaces: **{len(active)}**",
         f"- Blocking findings: **{len(blocking)}**",
         f"- Active blocking findings: **{len(active_blocking)}**",
