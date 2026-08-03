@@ -6,9 +6,10 @@ declare(strict_types=1);
  * Authoritative list of production agents.
  *
  * Every entry is executed by the scheduled production watchdog. Files ending
- * in Agent.php that are not present here are not allowed by the regression
- * gate, preventing dormant, simulated or duplicate agents from being
- * advertised as 24/7 workers.
+ * in Agent.php that are not present here are rejected by the regression gate,
+ * preventing dormant, simulated or duplicate agents from being advertised as
+ * 24/7 workers. The aggregate cycle embeds the complete result of every agent
+ * and is the authoritative evidence consumed by CI and the admin panel.
  */
 function svpa_registry(): array
 {
@@ -16,36 +17,32 @@ function svpa_registry(): array
         'schema_version' => 1,
         'schedule_minutes' => 15,
         'workflow' => '.github/workflows/autonomous-watchdog.yml',
+        'aggregate_evidence' => 'storage/agent-evidence/latest-agent-cycle.json',
         'agents' => [
             'operational_work' => [
                 'class' => 'ShopvivalizRealWorkOrchestratorAgent',
                 'file' => 'agents/v9.2.84/app/RealWorkOrchestratorAgent.php',
                 'mode' => 'mutating',
-                'evidence' => 'storage/agent-evidence/latest-real-work.json',
             ],
             'catalog_metadata' => [
                 'class' => 'ShopvivalizCatalogMetadataAgent',
                 'file' => 'agents/v9.2.84/app/CatalogMetadataAgent.php',
                 'mode' => 'mutating',
-                'evidence' => 'storage/agent-evidence/latest-catalog-metadata.json',
             ],
             'conversion_funnel' => [
                 'class' => 'ShopvivalizConversionFunnelAgent',
                 'file' => 'agents/v9.2.84/app/ConversionFunnelAgent.php',
                 'mode' => 'observability',
-                'evidence' => 'storage/agent-evidence/latest-conversion-funnel.json',
             ],
             'media_quality' => [
                 'class' => 'ShopvivalizMediaQualityAgent',
                 'file' => 'agents/v9.2.84/app/MediaQualityAgent.php',
                 'mode' => 'observability',
-                'evidence' => 'storage/agent-evidence/latest-media-quality.json',
             ],
             'media_mismatch' => [
                 'class' => 'ShopvivalizMediaMismatchAgent',
                 'file' => 'agents/v9.2.84/app/MediaMismatchAgent.php',
                 'mode' => 'observability',
-                'evidence' => 'storage/agent-evidence/latest-media-mismatch.json',
             ],
         ],
     ];
