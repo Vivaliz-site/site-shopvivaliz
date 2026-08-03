@@ -226,11 +226,7 @@ if [ ! -r "$NEW_RELEASE_PATH" ]; then
 fi
 log "INFO" "✓ Permissões OK"
 
-# Health check local (pré-swap)
-log "INFO" "Executando health check local..."
-# Se há dependências (composer, npm), instalar aqui
-# Por enquanto, apenas básico
-if ! curl -s -f http://127.0.0.1/api/health > /dev/null 2>&1; then
+if ! curl -s -f -H 'Host: shopvivaliz.com.br' http://127.0.0.1/api/health.php > /dev/null 2>&1; then
   log "WARN" "Health check local inconcluso (endpoint pode não existir ainda)"
 fi
 
