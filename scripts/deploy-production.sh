@@ -74,10 +74,22 @@ rollback_to() {
     log ERROR "Rollback indisponivel: release anterior ausente"
     return 1
   fi
-  ln -sfn "releases/$previous_release" "$CURRENT_LINK.tmp"
-  mv -Tf "$CURRENT_LINK.tmp" "$CURRENT_LINK"
-  restart_runtime_services
-  sudo systemctl reload apache2
+  if ! ln -sfn "releases/$previous_release" "$CURRENT_LINK.tmp"; then
+    log ERROR "Rollback falhou ao preparar o symlink anterior"
+    return 1
+  fi
+  if ! mv -Tf "$CURRENT_LINK.tmp" "$CURRENT_LINK"; then
+    log ERROR "Rollback falhou ao restaurar o symlink current"
+    return 1
+  fi
+  if ! restart_runtime_services; then
+    log ERROR "Rollback restaurou o symlink, mas nao reiniciou as integracoes"
+    return 1
+  fi
+  if ! sudo systemctl reload apache2; then
+    log ERROR "Rollback restaurou o symlink, mas nao recarregou o Apache"
+    return 1
+  fi
   log WARN "Rollback aplicado para $previous_release"
 }
 
