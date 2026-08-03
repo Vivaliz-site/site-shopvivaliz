@@ -36,6 +36,21 @@ def test_linux_daemons_follow_the_dynamic_current_release_path() -> None:
     assert google_renewer.ENV_PATH == expected
 
 
+def test_deploy_restarts_integrations_after_current_release_swap() -> None:
+    deploy = (Path(__file__).resolve().parents[1] / "scripts" / "deploy-production.sh").read_text(
+        encoding="utf-8"
+    )
+    switch = 'mv -Tf "$CURRENT_LINK.tmp" "$CURRENT_LINK"'
+    production_switch = deploy.rfind(switch)
+    restart = deploy.find("if ! restart_runtime_services; then", production_switch)
+    apache_reload = deploy.find("if ! sudo systemctl reload apache2; then", production_switch)
+    assert production_switch >= 0
+    assert production_switch < restart < apache_reload
+    assert "shopvivaliz-token-renewer.service" in deploy
+    assert "shopvivaliz-shopee-token-renewer.service" in deploy
+    assert "shopvivaliz-sync-products.service" in deploy
+
+
 def test_atomic_env_update_preserves_unrelated_values(tmp_path: Path, monkeypatch) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text(

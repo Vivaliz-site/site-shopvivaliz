@@ -14,6 +14,11 @@ readonly LOG_FILE="$LOG_DIR/deploy.log"
 readonly STATUS_FILE="$SHARED_DIR/logs/deploy-status.json"
 readonly RUNNER_PATH="$REPO_DIR/scripts/deploy-production.sh"
 readonly RETENTION_COUNT=5
+readonly -a RUNTIME_SERVICES=(
+  "shopvivaliz-token-renewer.service"
+  "shopvivaliz-shopee-token-renewer.service"
+  "shopvivaliz-sync-products.service"
+)
 
 mkdir -p "$RELEASES_DIR" "$SHARED_DIR" "$LOG_DIR" "$SHARED_DIR/logs"
 
@@ -49,6 +54,20 @@ path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 PY
 }
 
+restart_runtime_services() {
+  local service
+  if ! sudo systemctl restart "${RUNTIME_SERVICES[@]}"; then
+    log ERROR "Reinicio dos servicos de integracao falhou"
+    return 1
+  fi
+  for service in "${RUNTIME_SERVICES[@]}"; do
+    if ! sudo systemctl is-active --quiet "$service"; then
+      log ERROR "Servico de integracao inativo apos reinicio: $service"
+      return 1
+    fi
+  done
+}
+
 rollback_to() {
   local previous_release="$1"
   if [ -z "$previous_release" ] || [ ! -d "$RELEASES_DIR/$previous_release" ]; then
@@ -57,6 +76,7 @@ rollback_to() {
   fi
   ln -sfn "releases/$previous_release" "$CURRENT_LINK.tmp"
   mv -Tf "$CURRENT_LINK.tmp" "$CURRENT_LINK"
+  restart_runtime_services
   sudo systemctl reload apache2
   log WARN "Rollback aplicado para $previous_release"
 }
@@ -375,6 +395,14 @@ php -l "$NEW_RELEASE_PATH/api/health/version.php" > /dev/null
 
 ln -sfn "releases/$NEW_RELEASE" "$CURRENT_LINK.tmp"
 mv -Tf "$CURRENT_LINK.tmp" "$CURRENT_LINK"
+
+if ! restart_runtime_services; then
+  if ! rollback_to "$ACTIVE_RELEASE"; then
+    log ERROR "Rollback apos falha dos servicos de integracao tambem falhou"
+  fi
+  write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reinicio dos servicos de integracao falhou"
+  exit 1
+fi
 
 if ! sudo systemctl reload apache2; then
   rollback_to "$ACTIVE_RELEASE"
