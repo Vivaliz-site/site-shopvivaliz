@@ -16,7 +16,12 @@ from pathlib import Path
 from typing import Any
 
 
-ENV_PATH = Path(".env")
+ENV_PATH = Path(
+    os.environ.get(
+        "SHOPVIVALIZ_ENV_PATH",
+        "c:/site-shopvivaliz/.env" if os.name == "nt" else "/home/ubuntu/shopvivaliz-deploy/current/.env",
+    )
+)
 TOKEN_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
 
 

@@ -11,7 +11,10 @@ header('Cache-Control: public, max-age=3600');
 require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/site-settings.php';
 
-$products = array_slice(sv_home_catalog_source_rows(), 0, 1000);
+$products = svcr_products();
+$freeShipping = sv_free_shipping_config();
+$hasUnconditionalFreeShipping = ($freeShipping['enabled'] ?? false)
+    && (float)($freeShipping['threshold'] ?? 0) <= 0;
 
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 echo '<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">' . "\n";
@@ -40,7 +43,7 @@ foreach ($products as $product) {
     echo '<description>' . htmlspecialchars(substr($product['description'] ?? 'Produto ShopVivaliz', 0, 5000)) . '</description>' . "\n";
     echo '<g:link>' . htmlspecialchars($url) . '</g:link>' . "\n";
     echo '<g:image_link>' . htmlspecialchars($image) . '</g:image_link>' . "\n";
-    echo '<g:availability>' . ($stock > 0 ? 'in stock' : 'out of stock') . '</g:availability>' . "\n";
+    echo '<g:availability>' . ($stock > 0 ? 'in_stock' : 'out_of_stock') . '</g:availability>' . "\n";
     echo '<g:price>' . htmlspecialchars(number_format($price, 2, '.', '')) . ' BRL</g:price>' . "\n";
     echo '<g:currency>BRL</g:currency>' . "\n";
     echo '<g:brand>ShopVivaliz</g:brand>' . "\n";
@@ -48,12 +51,12 @@ foreach ($products as $product) {
     echo '<g:google_product_category>' . htmlspecialchars($category) . '</g:google_product_category>' . "\n";
     echo '<g:mpn>' . htmlspecialchars($sku) . '</g:mpn>' . "\n";
 
-    // Shipping configuration
-    echo '<g:shipping>' . "\n";
-    echo '<g:country>BR</g:country>' . "\n";
-    echo '<g:region>São Paulo</g:region>' . "\n";
-    echo '<g:price>0 BRL</g:price>' . "\n";
-    echo '</g:shipping>' . "\n";
+    if ($hasUnconditionalFreeShipping) {
+        echo '<g:shipping>' . "\n";
+        echo '<g:country>BR</g:country>' . "\n";
+        echo '<g:price>0 BRL</g:price>' . "\n";
+        echo '</g:shipping>' . "\n";
+    }
 
     // Condition
     echo '<g:condition>new</g:condition>' . "\n";

@@ -15,7 +15,12 @@ import json
 import tempfile
 from pathlib import Path
 
-ENV_PATH = Path("c:/site-shopvivaliz/.env") if os.name == "nt" else Path("/home/ubuntu/site-shopvivaliz/.env")
+ENV_PATH = Path(
+    os.environ.get(
+        "SHOPVIVALIZ_ENV_PATH",
+        "c:/site-shopvivaliz/.env" if os.name == "nt" else "/home/ubuntu/shopvivaliz-deploy/current/.env",
+    )
+)
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 def load_env() -> dict:
@@ -35,7 +40,8 @@ def write_env(new_values: dict) -> bool:
     if not ENV_PATH.is_file():
         print(f"[!] Erro: .env nao encontrado em {ENV_PATH}")
         return False
-    with open(ENV_PATH, "r", encoding="utf-8", errors="ignore") as f:
+    target = ENV_PATH.resolve(strict=True)
+    with open(target, "r", encoding="utf-8", errors="ignore") as f:
         lines = f.readlines()
         
     updated_lines = []
@@ -55,15 +61,15 @@ def write_env(new_values: dict) -> bool:
     for key, val in pending.items():
         updated_lines.append(f"{key}={val}\n")
 
-    mode = ENV_PATH.stat().st_mode & 0o777
-    fd, temp_name = tempfile.mkstemp(prefix=".env.google.", dir=str(ENV_PATH.parent))
+    mode = target.stat().st_mode & 0o777
+    fd, temp_name = tempfile.mkstemp(prefix=".env.google.", dir=str(target.parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
             f.writelines(updated_lines)
             f.flush()
             os.fsync(f.fileno())
         os.chmod(temp_name, mode)
-        os.replace(temp_name, ENV_PATH)
+        os.replace(temp_name, target)
         return True
     finally:
         if os.path.exists(temp_name):

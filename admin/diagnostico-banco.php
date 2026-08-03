@@ -7,10 +7,17 @@ $user = getenv('DB_USER') ?: 'root';
 $pass = getenv('DB_PASS') ?: '';
 $db_name = getenv('DB_NAME') ?: 'shopvivaliz';
 
-$db = new mysqli($host, $user, $pass, $db_name, 3306);
+mysqli_report(MYSQLI_REPORT_OFF);
+try {
+    $db = @new mysqli((string)$host, (string)$user, (string)$pass, (string)$db_name, 3306);
+} catch (Throwable $e) {
+    http_response_code(503);
+    exit(json_encode(['ok' => false, 'erro' => 'Banco de dados indisponível.'], JSON_UNESCAPED_UNICODE));
+}
 
-if ($db->connect_error) {
-    exit(json_encode(['ok' => false, 'erro' => $db->connect_error]));
+if ($db->connect_errno) {
+    http_response_code(503);
+    exit(json_encode(['ok' => false, 'erro' => 'Banco de dados indisponível.'], JSON_UNESCAPED_UNICODE));
 }
 
 $db->set_charset('utf8mb4');
