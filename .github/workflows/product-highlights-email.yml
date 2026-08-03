@@ -1,0 +1,72 @@
+name: Product Highlights Email
+
+on:
+  schedule:
+    - cron: '20 12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: product-highlights-email
+  cancel-in-progress: false
+
+jobs:
+  send:
+    name: Enviar destaques quando completar 15 dias
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Prepare evidence
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/product-highlights
+          printf 'run_id=%s\nsha=%s\nevent=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" > artifacts/product-highlights/context.txt
+
+      - name: Execute real campaign on Oracle active release
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "${ORACLE_VM_SSH_KEY:-}"
+          test -n "${ORACLE_VM_KNOWN_HOSTS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'set -euo pipefail; cd /home/ubuntu/shopvivaliz-deploy/current; test -r scripts/apply-real-email-campaigns-migration.php; test -r scripts/run-product-highlights-campaign.php; /usr/bin/php scripts/apply-real-email-campaigns-migration.php; /usr/bin/php scripts/run-product-highlights-campaign.php' \
+            > artifacts/product-highlights/response.jsonl
+          cat artifacts/product-highlights/response.jsonl
+
+          python3 - artifacts/product-highlights/response.jsonl <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding='utf-8') as handle:
+              lines = [line.strip() for line in handle if line.strip()]
+          if len(lines) != 2:
+              raise SystemExit(f'Esperadas 2 evidencias JSON, recebidas {len(lines)}')
+          payloads = [json.loads(line) for line in lines]
+          if any(payload.get('ok') is not True for payload in payloads):
+              raise SystemExit('Migracao ou campanha real retornou falha')
+          print('product_highlights_ok=true')
+          PY
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-highlights-${{ github.run_id }}
+          path: artifacts/product-highlights/
+          if-no-files-found: error
+          retention-days: 30
