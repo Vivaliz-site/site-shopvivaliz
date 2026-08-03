@@ -1,7 +1,11 @@
 import os
+import sys
 import json
 import time
 from datetime import datetime
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -14,10 +18,13 @@ os.makedirs(SCREENSHOT_DIR, exist_ok=True)
 
 PAGES_TO_TEST = [
     {"name": "Home", "url": f"{BASE_URL}/"},
-    {"name": "Catalogo", "url": f"{BASE_URL}/produtos"},
+    {"name": "Catalogo", "url": f"{BASE_URL}/catalogo"},
     {"name": "Sobre", "url": f"{BASE_URL}/sobre"},
     {"name": "Contato", "url": f"{BASE_URL}/contato"},
     {"name": "Carrinho", "url": f"{BASE_URL}/carrinho"},
+    {"name": "Checkout", "url": f"{BASE_URL}/checkout"},
+    {"name": "Blog", "url": f"{BASE_URL}/blog"},
+    {"name": "Admin", "url": f"{BASE_URL}/admin"},
 ]
 
 def run_tests():
