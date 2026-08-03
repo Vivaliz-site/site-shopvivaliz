@@ -13,6 +13,7 @@ on:
       - '.ai/**'
       - 'agents/**'
       - 'config/**'
+      - '.githooks/**'
   pull_request:
     paths:
       - '.github/workflows/**'
@@ -20,6 +21,7 @@ on:
       - '.ai/**'
       - 'agents/**'
       - 'config/**'
+      - '.githooks/**'
 
 permissions:
   contents: read
@@ -43,15 +45,41 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Select immutable comparison baseline
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -Eeuo pipefail
+          baseline=''
+          case "$EVENT_NAME" in
+            pull_request)
+              baseline="$PR_BASE_SHA"
+              ;;
+            push)
+              if [[ "$EVENT_BEFORE" =~ ^[0-9a-f]{40}$ ]] && [[ "$EVENT_BEFORE" != 0000000000000000000000000000000000000000 ]]; then
+                baseline="$EVENT_BEFORE"
+              fi
+              ;;
+            schedule|workflow_dispatch)
+              baseline=''
+              ;;
+          esac
+          echo "AUDIT_BASE_REF=$baseline" >> "$GITHUB_ENV"
+          printf 'audit_base_ref=%s\n' "${baseline:-none-current-state}"
+
       - name: Record audit context
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           mkdir -p artifacts/agents-audit artifacts/secret-references
           {
             echo "run_id=${GITHUB_RUN_ID}"
             echo "event=${GITHUB_EVENT_NAME}"
             echo "sha=${GITHUB_SHA}"
+            echo "audit_base_ref=${AUDIT_BASE_REF:-}"
             echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > artifacts/agents-audit/run-context.txt
           git rev-parse HEAD
@@ -72,8 +100,9 @@ jobs:
 
       - name: Verify audit evidence
         if: always()
+        shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           test -s artifacts/agents-audit/run-context.txt
           test -s artifacts/agents-audit/report.json
           test -s artifacts/agents-audit/report.md
@@ -81,6 +110,16 @@ jobs:
           test -s artifacts/secret-references/report.md
           python -m json.tool artifacts/agents-audit/report.json >/dev/null
           python -m json.tool artifacts/secret-references/report.json >/dev/null
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path('artifacts/agents-audit/report.json').read_text())
+          assert report['fail_closed'] is True
+          assert report['current_sha']
+          assert isinstance(report['blocking_finding_count'], int)
+          assert '.githooks/pre-push' in report['scanned_git_hooks']
+          PY
 
       - name: Upload agent audit evidence
         if: always()

@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
-"""Evidence-based audit for autonomous-agent routines.
-
-Current active automation is always fail-closed. Baseline comparison is retained
-only to distinguish newly introduced findings from legacy, unreferenced debt; it
-must never downgrade an active critical/high finding.
-"""
+"""Fail-closed audit for autonomous-agent routines and repository automations."""
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from dataclasses import asdict, dataclass
@@ -18,9 +14,11 @@ ROOT = Path(__file__).resolve().parents[1]
 REPORT_DIR = ROOT / "artifacts" / "agents-audit"
 REPORT_JSON = REPORT_DIR / "report.json"
 REPORT_MD = REPORT_DIR / "report.md"
-BASE_REF = "origin/main"
+BASE_REF = os.getenv("AUDIT_BASE_REF", "").strip()
 
-EXECUTABLE_SUFFIXES = {".py", ".js", ".ts", ".php", ".sh", ".bash", ".ps1", ".yml", ".yaml", ".json"}
+EXECUTABLE_SUFFIXES = {
+    ".py", ".js", ".ts", ".php", ".sh", ".bash", ".ps1", ".yml", ".yaml", ".json"
+}
 EXCLUDED_FILES = {"scripts/audit-agents-real-work.py"}
 EXCLUDED_PREFIXES = (
     ".git/", "node_modules/", "vendor/", "artifacts/", "storage/", "logs/",
@@ -40,19 +38,53 @@ COMPLETION_PATTERNS = [
     re.compile(r"success\s*:\s*true", re.I),
 ]
 EVIDENCE_PATTERNS = [
-    re.compile(r"evidence", re.I), re.compile(r"commit_sha", re.I),
-    re.compile(r"pull_request|pr_url", re.I), re.compile(r"artifact", re.I),
+    re.compile(r"evidence", re.I),
+    re.compile(r"commit_sha", re.I),
+    re.compile(r"pull_request|pr_url", re.I),
+    re.compile(r"artifact", re.I),
     re.compile(r"test_(?:report|result)|tests_passed", re.I),
 ]
 DANGEROUS_PATTERNS = [
-    ("broad_git_add", re.compile(r"(?m)^\s*git\s+add\s+(?:-A|\.)\s*$", re.I)),
-    ("protected_or_force_push", re.compile(r"(?m)^\s*git\s+push\b[^\n]*(?:--force(?:-with-lease)?|\s(?:main|master)(?:\s|$))", re.I)),
-    ("self_auto_merge", re.compile(r"(?m)^\s*(?:gh\s+pr\s+merge\b[^\n]*--auto|.*enable_auto_merge\s*\()", re.I)),
-    ("destructive_reset", re.compile(r"(?m)^\s*(?:git\s+reset\s+--hard\b|rm\s+-rf\s+/\s*$)", re.I)),
+    ("broad_git_add", "high", re.compile(r"(?m)^\s*git\s+add\s+(?:-A|\.)\s*$", re.I)),
+    (
+        "protected_or_force_push",
+        "high",
+        re.compile(
+            r"(?m)^\s*git\s+push\b[^\n]*(?:--force(?:-with-lease)?|(?:^|\s)(?:main|master)(?:\s|$))",
+            re.I,
+        ),
+    ),
+    (
+        "self_auto_merge",
+        "critical",
+        re.compile(r"(?m)^\s*(?:gh\s+pr\s+merge\b[^\n]*--auto|.*enable_auto_merge\s*\()", re.I),
+    ),
+    (
+        "destructive_reset",
+        "critical",
+        re.compile(r"(?m)^\s*(?:git\s+reset\s+--hard\b|rm\s+-rf\s+/\s*$)", re.I),
+    ),
 ]
-PATH_REFERENCE = re.compile(r"(?<![A-Za-z0-9_.-])((?:scripts|\.ai|agents|claude/api/agent)/[A-Za-z0-9_./-]+\.(?:py|js|ts|php|sh|bash|ps1))")
+PATH_REFERENCE = re.compile(
+    r"(?<![A-Za-z0-9_.-])((?:scripts|\.ai|agents|claude/api/agent)/"
+    r"[A-Za-z0-9_./-]+\.(?:py|js|ts|php|sh|bash|ps1))"
+)
 ACTIVE_EVENT = re.compile(
-    r"(?m)^\s{2}(?:push|pull_request|schedule|issues|workflow_run|repository_dispatch|workflow_dispatch|workflow_call):"
+    r"(?m)^\s{2}(?:push|pull_request|schedule|issues|workflow_run|repository_dispatch|"
+    r"workflow_dispatch|workflow_call):"
+)
+REMOTE_EXEC_MARKERS = (
+    "shell=true",
+    "subprocess.check_output(",
+    "subprocess.run(",
+)
+AUTH_MARKERS = (
+    "authorization",
+    "bearer ",
+    "x-api-key",
+    "hmac",
+    "compare_digest",
+    "authenticate",
 )
 
 
@@ -72,6 +104,21 @@ def run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes
     return subprocess.run(["git", *args], cwd=ROOT, check=check, capture_output=True)
 
 
+def is_executable_candidate(rel: str, path: Path) -> bool:
+    """Include known source types, Git hooks and extensionless shebang scripts."""
+    if not path.is_file():
+        return False
+    if path.suffix.lower() in EXECUTABLE_SUFFIXES or rel.startswith(".githooks/"):
+        return True
+    if path.suffix:
+        return False
+    try:
+        with path.open("rb") as handle:
+            return handle.read(2) == b"#!"
+    except OSError:
+        return False
+
+
 def tracked_files() -> list[Path]:
     result = run_git("ls-files", "-z")
     files: list[Path] = []
@@ -82,16 +129,9 @@ def tracked_files() -> list[Path]:
         if rel in EXCLUDED_FILES or rel.startswith(EXCLUDED_PREFIXES):
             continue
         path = ROOT / rel
-        if path.suffix.lower() in EXECUTABLE_SUFFIXES and path.is_file():
+        if is_executable_candidate(rel, path):
             files.append(path)
     return files
-
-
-def base_text(rel: str) -> str | None:
-    result = run_git("show", f"{BASE_REF}:{rel}", check=False)
-    if result.returncode != 0:
-        return None
-    return result.stdout.decode("utf-8", errors="replace")
 
 
 def executable_text(text: str) -> str:
@@ -136,53 +176,122 @@ def fingerprint(rule: str, rel: str, match_text: str) -> str:
     return f"{rule}|{rel}|{normalized}"
 
 
+def add_finding(
+    findings: list[Finding],
+    *,
+    severity: str,
+    rule: str,
+    rel: str,
+    text: str,
+    offset: int,
+    match_text: str,
+    active: bool,
+    message: str,
+) -> None:
+    findings.append(
+        Finding(
+            severity=severity,
+            rule=rule,
+            path=rel,
+            message=message,
+            line=line_for(text, offset),
+            active=active,
+            fingerprint=fingerprint(rule, rel, match_text),
+        )
+    )
+
+
 def audit_text(rel: str, original: str, active: bool) -> list[Finding]:
     text = executable_text(original)
+    lowered = text.lower()
     findings: list[Finding] = []
     simulation_hits = [match for pattern in SIMULATION_PATTERNS for match in pattern.finditer(text)]
     completion_hits = [match for pattern in COMPLETION_PATTERNS for match in pattern.finditer(text)]
     evidence_hits = [match for pattern in EVIDENCE_PATTERNS for match in pattern.finditer(text)]
 
-    def severity(blocking: str) -> str:
-        return blocking if active else "medium"
-
     if simulation_hits and completion_hits:
         first = min(simulation_hits + completion_hits, key=lambda match: match.start())
-        findings.append(Finding(
-            severity("critical"), "simulated_completion", rel,
-            "Routine combines simulation signals with successful completion.",
-            line_for(text, first.start()), active, False,
-            fingerprint("simulated_completion", rel, first.group(0)),
-        ))
+        add_finding(
+            findings,
+            severity="critical",
+            rule="simulated_completion",
+            rel=rel,
+            text=text,
+            offset=first.start(),
+            match_text=first.group(0),
+            active=active,
+            message="Routine combines simulation signals with successful completion.",
+        )
 
     if completion_hits and not evidence_hits and ("agent" in rel.lower() or "task" in rel.lower()):
         first = min(completion_hits, key=lambda match: match.start())
-        findings.append(Finding(
-            severity("high"), "completion_without_evidence", rel,
-            "Routine records completion without commit, PR, tests or artifact evidence.",
-            line_for(text, first.start()), active, False,
-            fingerprint("completion_without_evidence", rel, first.group(0)),
-        ))
+        add_finding(
+            findings,
+            severity="high",
+            rule="completion_without_evidence",
+            rel=rel,
+            text=text,
+            offset=first.start(),
+            match_text=first.group(0),
+            active=active,
+            message="Routine records completion without commit, PR, tests or artifact evidence.",
+        )
 
-    for rule, pattern in DANGEROUS_PATTERNS:
+    for rule, severity, pattern in DANGEROUS_PATTERNS:
         for match in pattern.finditer(text):
-            blocking = "critical" if rule in {"self_auto_merge", "destructive_reset"} else "high"
-            findings.append(Finding(
-                severity(blocking), rule, rel,
-                "Automatic operation is incompatible with reviewed, evidence-based execution.",
-                line_for(text, match.start()), active, False,
-                fingerprint(rule, rel, match.group(0)),
-            ))
+            add_finding(
+                findings,
+                severity=severity,
+                rule=rule,
+                rel=rel,
+                text=text,
+                offset=match.start(),
+                match_text=match.group(0),
+                active=active,
+                message="Automatic operation is incompatible with reviewed, evidence-based execution.",
+            )
+
+    is_agent_server = "agent" in rel.lower() and any(marker in lowered for marker in REMOTE_EXEC_MARKERS)
+    binds_publicly = "0.0.0.0" in lowered
+    has_auth = any(marker in lowered for marker in AUTH_MARKERS)
+    if is_agent_server and binds_publicly and not has_auth:
+        offset = lowered.find("0.0.0.0")
+        add_finding(
+            findings,
+            severity="critical",
+            rule="unauthenticated_remote_execution",
+            rel=rel,
+            text=text,
+            offset=max(offset, 0),
+            match_text="0.0.0.0 remote execution without authentication",
+            active=active,
+            message="Agent server exposes command-capable handlers on a public bind address without authentication.",
+        )
+
     return findings
 
 
-def baseline_fingerprints(files: list[Path], active: set[str]) -> set[str]:
+def valid_baseline_ref() -> str | None:
+    if not BASE_REF:
+        return None
+    result = run_git("rev-parse", "--verify", f"{BASE_REF}^{{commit}}", check=False)
+    if result.returncode != 0:
+        raise RuntimeError(f"AUDIT_BASE_REF does not resolve to a commit: {BASE_REF}")
+    baseline_sha = result.stdout.decode().strip()
+    current_sha = run_git("rev-parse", "HEAD").stdout.decode().strip()
+    return None if baseline_sha == current_sha else BASE_REF
+
+
+def baseline_fingerprints(files: list[Path], active: set[str], baseline_ref: str | None) -> set[str]:
+    if baseline_ref is None:
+        return set()
     fingerprints: set[str] = set()
     for path in files:
         rel = path.relative_to(ROOT).as_posix()
-        text = base_text(rel)
-        if text is None:
+        result = run_git("show", f"{baseline_ref}:{rel}", check=False)
+        if result.returncode != 0:
             continue
+        text = result.stdout.decode("utf-8", errors="replace")
         fingerprints.update(item.fingerprint for item in audit_text(rel, text, rel in active))
     return fingerprints
 
@@ -190,63 +299,68 @@ def baseline_fingerprints(files: list[Path], active: set[str]) -> set[str]:
 def main() -> int:
     files = tracked_files()
     active = active_surfaces(files)
-    baseline = baseline_fingerprints(files, active)
+    baseline_ref = valid_baseline_ref()
+    baseline = baseline_fingerprints(files, active, baseline_ref)
+    current_sha = run_git("rev-parse", "HEAD").stdout.decode().strip()
+    scanned_git_hooks = sorted(
+        path.relative_to(ROOT).as_posix()
+        for path in files
+        if path.relative_to(ROOT).as_posix().startswith(".githooks/")
+    )
     findings: list[Finding] = []
 
     for path in files:
         rel = path.relative_to(ROOT).as_posix()
         current = audit_text(rel, path.read_text(encoding="utf-8", errors="replace"), rel in active)
         for finding in current:
-            if finding.fingerprint in baseline:
-                finding.preexisting = True
-                # Legacy files not reachable from active workflows remain visible debt.
-                # Active risk is never downgraded merely because it already exists on main.
-                if not finding.active and finding.severity in {"critical", "high"}:
-                    finding.severity = "medium"
-                    finding.message += " Existing legacy debt; not referenced by an active workflow."
+            finding.preexisting = finding.fingerprint in baseline
             findings.append(finding)
 
     order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     findings.sort(key=lambda item: (order.get(item.severity, 9), item.path, item.line or 0))
-    active_blocking = [
-        item for item in findings
-        if item.active and item.severity in {"critical", "high"}
-    ]
-    new_blocking = [
-        item for item in findings
-        if not item.preexisting and item.severity in {"critical", "high"}
-    ]
-    blocking_fingerprints = {item.fingerprint for item in [*active_blocking, *new_blocking]}
+    blocking = [item for item in findings if item.severity in {"critical", "high"}]
+    active_blocking = [item for item in blocking if item.active]
+    new_blocking = [item for item in blocking if not item.preexisting]
     generated_at = datetime.now(timezone.utc).isoformat()
     payload = {
         "generated_at": generated_at,
-        "base_ref": BASE_REF,
+        "current_sha": current_sha,
+        "base_ref": baseline_ref,
         "files_scanned": len(files),
+        "scanned_git_hooks": scanned_git_hooks,
         "active_surfaces": sorted(active),
         "finding_count": len(findings),
         "active_blocking": len(active_blocking),
         "new_blocking": len(new_blocking),
-        "blocking_finding_count": len(blocking_fingerprints),
+        "blocking_finding_count": len(blocking),
         "legacy_debt": sum(item.preexisting and not item.active for item in findings),
+        "fail_closed": True,
         "findings": [asdict(item) for item in findings],
     }
+
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     REPORT_JSON.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     lines = [
-        "# Deep agent audit", "", f"- Generated: `{generated_at}`",
-        f"- Base compared: `{BASE_REF}`", f"- Files scanned: **{len(files)}**",
+        "# Deep agent audit",
+        "",
+        f"- Generated: `{generated_at}`",
+        f"- Current SHA: `{current_sha}`",
+        f"- Base compared: `{baseline_ref or 'none (current-state fail-closed)'}`",
+        f"- Files scanned: **{len(files)}**",
+        f"- Git hooks scanned: **{len(scanned_git_hooks)}**",
         f"- Active surfaces: **{len(active)}**",
-        f"- Active blocking findings: **{payload['active_blocking']}**",
-        f"- New blocking findings: **{payload['new_blocking']}**",
-        f"- Legacy unreferenced debt: **{payload['legacy_debt']}**", "",
+        f"- Blocking findings: **{len(blocking)}**",
+        f"- Active blocking findings: **{len(active_blocking)}**",
+        f"- New blocking findings: **{len(new_blocking)}**",
+        "",
     ]
     if findings:
         lines.extend(["## Findings", ""])
         for finding in findings:
             location = f"{finding.path}:{finding.line}" if finding.line else finding.path
-            scope = "ACTIVE" if finding.active else "LEGACY/UNREFERENCED"
-            baseline_scope = "PREEXISTING" if finding.preexisting else "NEW"
+            scope = "ACTIVE" if finding.active else "UNREFERENCED"
+            baseline_scope = "PREEXISTING" if finding.preexisting else "NEW/CURRENT"
             lines.append(
                 f"- **{finding.severity.upper()} / {finding.rule} / {scope} / {baseline_scope}** "
                 f"`{location}` — {finding.message}"
@@ -255,7 +369,7 @@ def main() -> int:
         lines.append("No finding detected.")
     REPORT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(json.dumps(payload, indent=2, ensure_ascii=False))
-    return 1 if payload["blocking_finding_count"] else 0
+    return 1 if blocking else 0
 
 
 if __name__ == "__main__":
