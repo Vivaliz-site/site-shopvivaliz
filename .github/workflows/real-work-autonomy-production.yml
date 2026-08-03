@@ -91,8 +91,11 @@ jobs:
           print('real_work_evidence=verified')
           PY
 
-      - name: Validate production surface
+      - name: Validate production surface from Oracle VM
         run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            'bash -s' > artifacts/real-work/http-checks.txt <<'REMOTE_SCRIPT'
           set -euo pipefail
           for url in \
             https://shopvivaliz.com.br/ \
@@ -102,10 +105,12 @@ jobs:
             https://shopvivaliz.com.br/api/orders/health.php \
             https://shopvivaliz.com.br/api/olist/webhook-health.php
           do
-            code="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' --max-time 30 "$url")"
-            printf '%s %s\n' "$code" "$url" | tee -a artifacts/real-work/http-checks.txt
+            code="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' --max-time 30 --user-agent 'ShopVivalizProductionMonitor/1.0' "$url")"
+            printf '%s %s\n' "$code" "$url"
             test "$code" = '200'
           done
+          REMOTE_SCRIPT
+          cat artifacts/real-work/http-checks.txt
 
       - name: Upload real-work evidence
         if: always()
