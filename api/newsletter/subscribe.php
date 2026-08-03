@@ -10,6 +10,7 @@ header('Referrer-Policy: no-referrer');
 require_once dirname(__DIR__, 2) . '/includes/pdo-database.php';
 require_once dirname(__DIR__, 2) . '/includes/order-rate-limit.php';
 require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
+require_once dirname(__DIR__, 2) . '/scripts/mailer.php';
 
 function svnl_json(int $status, array $payload): never
 {
@@ -63,7 +64,6 @@ if (!is_array($body)) {
     svnl_json(400, ['ok' => false, 'error' => 'invalid_json']);
 }
 
-// Honeypot: bots recebem resposta neutra sem gravacao ou envio de email.
 if (trim((string)($body['website'] ?? '')) !== '') {
     svnl_json(200, ['ok' => true, 'message' => 'Cadastro recebido.']);
 }
@@ -87,8 +87,6 @@ $userAgentHash = hash_hmac('sha256', $userAgent, $secret);
 
 try {
     $pdo = sv_pdo();
-    // A tabela e criada pela migracao versionada. O usuario HTTP nao precisa
-    // nem deve possuir permissao DDL em producao.
     $stmt = $pdo->prepare(
         "INSERT INTO newsletter_subscriptions
             (email, status, confirm_token_hash, consent_at, source, ip_hash, user_agent_hash)
@@ -122,15 +120,13 @@ if ($status === 'confirmed') {
 
 $confirmUrl = 'https://shopvivaliz.com.br/newsletter/confirmar?token=' . rawurlencode($token);
 $subject = 'Confirme seu cadastro na Vivaliz';
-$message = "Olá!\n\nConfirme que deseja receber novidades e ofertas da Vivaliz acessando o link abaixo:\n\n{$confirmUrl}\n\nSe você não solicitou este cadastro, ignore esta mensagem.\n";
-$headers = [
-    'From: Vivaliz <newsletter@shopvivaliz.com.br>',
-    'Reply-To: atendimento@shopvivaliz.com.br',
-    'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset=UTF-8',
-];
+$text = "Olá!\n\nConfirme que deseja receber novidades e ofertas da Vivaliz acessando o link abaixo:\n\n{$confirmUrl}\n\nSe você não solicitou este cadastro, ignore esta mensagem.\n";
+$html = '<h2>Confirme seu cadastro</h2>'
+    . '<p>Você solicitou receber novidades e ofertas da Vivaliz.</p>'
+    . '<p><a href="' . htmlspecialchars($confirmUrl, ENT_QUOTES, 'UTF-8') . '" style="display:inline-block;padding:12px 18px;background:#0b7a52;color:#fff;text-decoration:none;border-radius:8px;font-weight:700">Confirmar e-mail</a></p>'
+    . '<p>Se você não solicitou este cadastro, ignore esta mensagem.</p>';
 
-$mailSent = @mail($email, $subject, $message, implode("\r\n", $headers));
+$mailSent = send_email($email, $subject, $html, $text);
 if (!$mailSent) {
     error_log('[newsletter] confirmation email transport failed hash=' . substr(hash('sha256', $email), 0, 12));
     svnl_json(502, ['ok' => false, 'error' => 'email_transport_failed', 'message' => 'Cadastro salvo, mas não foi possível enviar a confirmação. Tente novamente mais tarde.']);
