@@ -1,5 +1,10 @@
 <?php
 require_once __DIR__ . '/../includes/admin-guard.php';
+require_once __DIR__ . '/../config/bootstrap-env.php';
+$constants = __DIR__ . '/../config/constants.php';
+if (is_file($constants)) {
+    require_once $constants;
+}
 header('Content-Type: application/json; charset=utf-8');
 
 $host = getenv('DB_HOST') ?: 'localhost';
@@ -7,10 +12,14 @@ $user = getenv('DB_USER') ?: 'root';
 $pass = getenv('DB_PASS') ?: '';
 $db_name = getenv('DB_NAME') ?: 'shopvivaliz';
 
-$db = new mysqli($host, $user, $pass, $db_name, 3306);
-
-if ($db->connect_error) {
-    exit(json_encode(['ok' => false, 'erro' => $db->connect_error]));
+try {
+    mysqli_report(MYSQLI_REPORT_OFF);
+    $db = @new mysqli((string)$host, (string)$user, (string)$pass, (string)$db_name, 3306);
+    if ($db->connect_error) {
+        exit(json_encode(['ok' => false, 'erro' => $db->connect_error]));
+    }
+} catch (Throwable $e) {
+    exit(json_encode(['ok' => false, 'erro' => $e->getMessage()]));
 }
 
 $db->set_charset('utf8mb4');
