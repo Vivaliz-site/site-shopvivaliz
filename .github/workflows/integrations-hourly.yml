@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '7 * * * *'
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/integrations-hourly.yml'
 
 permissions:
   contents: read
