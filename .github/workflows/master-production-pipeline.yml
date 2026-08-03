@@ -266,6 +266,27 @@ jobs:
           echo "Previous commit: $previous_sha"
           echo "Current release: $current_release"
           echo "Deployed commit: $deployed_sha"
+
+          canonical_main="$(git -C "$repo" ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [[ "$canonical_main" == "$expected_sha" ]]; then
+            target_file='/home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref'
+            current_target="$(head -n 1 "$target_file" 2>/dev/null | tr -d '\r' | xargs || true)"
+            if [[ "$current_target" != 'main' ]]; then
+              backup_dir='/home/ubuntu/shopvivaliz-deploy/shared/logs/target-recovery'
+              mkdir -p "$backup_dir"
+              recovery_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+              backup_path="$backup_dir/deploy-target-ref.$recovery_stamp.$expected_sha.bak"
+              cp -p "$target_file" "$backup_path"
+              sha256sum "$target_file" > "$backup_path.sha256"
+              printf 'previous_target=%s\nnew_target=main\nactive_sha=%s\n' \
+                "$current_target" "$expected_sha" > "$backup_path.meta"
+              target_tmp="$(mktemp '/home/ubuntu/shopvivaliz-deploy/shared/.deploy-target.XXXXXX')"
+              printf 'main\n' > "$target_tmp"
+              chmod 0644 "$target_tmp"
+              mv -f -- "$target_tmp" "$target_file"
+              echo "Canonicalized deploy target from $current_target to main; backup=$backup_path"
+            fi
+          fi
           REMOTE_SCRIPT
 
       - name: Write deployment evidence
