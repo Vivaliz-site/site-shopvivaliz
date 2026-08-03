@@ -128,6 +128,9 @@ jobs:
               response = {}
           result_path.unlink(missing_ok=True)
           if result.returncode != 0 or response.get('status') != 'ok':
+              for key in ('status', 'http_code', 'oauth_error', 'is_invalid_grant', 'has_client_id', 'has_client_secret', 'has_refresh_token'):
+                  if key in response:
+                      print('refresh_' + key + '=' + str(response[key]).lower())
               raise SystemExit('refresh Olist falhou: status=' + str(response.get('status', 'indisponivel')))
           active = subprocess.run(
               ['systemctl', 'is-active', '--quiet', 'shopvivaliz-token-renewer.service'],
