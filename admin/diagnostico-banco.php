@@ -12,12 +12,12 @@ try {
     $db = @new mysqli((string)$host, (string)$user, (string)$pass, (string)$db_name, 3306);
 } catch (Throwable $e) {
     http_response_code(503);
-    exit(json_encode(['ok' => false, 'erro' => 'Banco de dados indisponível.']));
+    exit(json_encode(['ok' => false, 'erro' => 'Banco de dados indisponível.'], JSON_UNESCAPED_UNICODE));
 }
 
 if ($db->connect_errno) {
     http_response_code(503);
-    exit(json_encode(['ok' => false, 'erro' => 'Banco de dados indisponível.']));
+    exit(json_encode(['ok' => false, 'erro' => 'Banco de dados indisponível.'], JSON_UNESCAPED_UNICODE));
 }
 
 $db->set_charset('utf8mb4');
