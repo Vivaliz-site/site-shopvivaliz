@@ -7,43 +7,36 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   generate:
-    name: Generate repository inventory artifact
+    name: Regenerate and commit repository inventory
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          persist-credentials: false
 
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      - name: Exclude temporary workflow from target inventory
-        shell: bash
-        run: git rm --cached .github/workflows/regenerate-repository-index-once.yml
-
-      - name: Regenerate deterministic inventory
-        run: python scripts/generate_repository_index.py
-
-      - name: Verify generated files
+      - name: Regenerate deterministic inventory without temporary workflow
         shell: bash
         run: |
           set -euo pipefail
-          test -s docs/knowledge/repository-file-index.md
-          test -s docs/audits/repository-hygiene.md
+          git rm .github/workflows/regenerate-repository-index-once.yml
+          python scripts/generate_repository_index.py
+          git add docs/knowledge/repository-file-index.md docs/audits/repository-hygiene.md
+          git diff --cached --check
 
-      - name: Upload generated inventory
-        uses: actions/upload-artifact@v4
-        with:
-          name: regenerated-repository-index-${{ github.run_id }}
-          path: |
-            docs/knowledge/repository-file-index.md
-            docs/audits/repository-hygiene.md
-          if-no-files-found: error
-          retention-days: 1
+      - name: Commit minimal governance correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(governance): refresh deterministic repository inventory"
+          git push origin HEAD:main
