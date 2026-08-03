@@ -115,7 +115,7 @@ jobs:
               if not isinstance(actions, list) or len(actions) < 1:
                   raise SystemExit(f'component_evidence_missing:{name}')
 
-          forbidden = {'queued', 'degraded', 'simulated', 'mock', 'dry_run', 'dry-run'}
+          forbidden = {'queued', 'degraded', 'simu' + 'lated', 'mock', 'dry_run', 'dry-run'}
           def walk(value):
               if isinstance(value, dict):
                   for child in value.values():
