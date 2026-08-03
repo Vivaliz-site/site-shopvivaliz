@@ -118,6 +118,7 @@ jobs:
           assert report['fail_closed'] is True
           assert report['current_sha']
           assert isinstance(report['blocking_finding_count'], int)
+          assert '.githooks/pre-push' in report['scanned_git_hooks']
           PY
 
       - name: Upload agent audit evidence
