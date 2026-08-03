@@ -1,6 +1,35 @@
 (function () {
   'use strict';
 
+  function ensureNewsletterStyle() {
+    if (document.getElementById('sv-newsletter-style')) return;
+
+    var style = document.createElement('style');
+    style.id = 'sv-newsletter-style';
+    style.textContent = [
+      '.home-newsletter .newsletter-card{align-items:center!important}',
+      '.home-newsletter .newsletter-info{flex:1 1 420px!important;min-width:0!important}',
+      '.home-newsletter .newsletter-form{display:grid!important;grid-template-columns:minmax(260px,1fr) auto!important;align-items:center!important;gap:12px 14px!important;flex:1 1 620px!important;width:min(100%,680px)!important;max-width:680px!important;min-width:0!important;position:relative!important;box-sizing:border-box!important}',
+      '.home-newsletter .newsletter-form input[type="email"]{display:block!important;visibility:visible!important;opacity:1!important;grid-column:auto!important;width:100%!important;min-width:0!important;max-width:100%!important;min-height:56px!important;height:56px!important;padding:0 18px!important;box-sizing:border-box!important;border-radius:14px!important;border:1.5px solid rgba(255,255,255,.35)!important;background:#fff!important;color:#0f172a!important;font-size:16px!important;line-height:1.2!important;box-shadow:inset 0 1px 0 rgba(15,23,42,.04)!important;-webkit-appearance:none!important;appearance:none!important}',
+      '.home-newsletter .newsletter-form input[type="email"]::placeholder{color:#64748b!important;opacity:1!important}',
+      '.home-newsletter .newsletter-form input[type="email"]:focus{outline:none!important;border-color:#34d399!important;box-shadow:0 0 0 4px rgba(16,185,129,.18)!important}',
+      '.home-newsletter .newsletter-form button[type="submit"]{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:auto!important;min-width:158px!important;min-height:56px!important;padding:0 26px!important;white-space:nowrap!important;line-height:1!important;box-sizing:border-box!important}',
+      '.home-newsletter .newsletter-form .sv-newsletter-consent{grid-column:1/-1!important;display:grid!important;grid-template-columns:18px minmax(0,1fr)!important;align-items:flex-start!important;gap:10px!important;width:100%!important;max-width:100%!important;margin:2px 0 0!important;color:#dbeafe!important;font-size:14px!important;line-height:1.45!important;font-weight:500!important;opacity:1!important;box-sizing:border-box!important}',
+      '.home-newsletter .newsletter-form .sv-newsletter-consent input[type="checkbox"]{display:block!important;visibility:visible!important;opacity:1!important;flex:0 0 18px!important;width:18px!important;height:18px!important;min-width:18px!important;min-height:18px!important;max-width:18px!important;max-height:18px!important;margin:2px 0 0!important;padding:0!important;border-radius:4px!important;box-shadow:none!important;accent-color:#10b981!important;-webkit-appearance:auto!important;appearance:auto!important}',
+      '.home-newsletter .newsletter-form .sv-newsletter-consent span,.home-newsletter .newsletter-form .sv-newsletter-consent a{color:#eaf2ff!important;opacity:1!important}',
+      '.home-newsletter .newsletter-form .sv-newsletter-consent a{text-decoration:underline!important;text-underline-offset:3px!important}',
+      '.home-newsletter .newsletter-form .sv-newsletter-status{grid-column:1/-1!important;width:100%!important;min-height:20px!important;margin-top:0!important}',
+      '.home-newsletter .newsletter-form input[name="website"]{position:absolute!important;left:-9999px!important;top:auto!important;width:1px!important;height:1px!important;min-width:1px!important;min-height:1px!important;padding:0!important;border:0!important;opacity:0!important;pointer-events:none!important}',
+      '@media (max-width:900px){.home-newsletter .newsletter-card{align-items:stretch!important}.home-newsletter .newsletter-info,.home-newsletter .newsletter-form{flex-basis:auto!important;width:100%!important;max-width:100%!important}}',
+      '@media (max-width:700px){.home-newsletter .newsletter-form{grid-template-columns:1fr!important;gap:12px!important}.home-newsletter .newsletter-form input[type="email"],.home-newsletter .newsletter-form button[type="submit"]{width:100%!important;min-width:0!important}.home-newsletter .newsletter-form .sv-newsletter-consent{font-size:13px!important}}',
+      '.newsletter-form{position:relative}',
+      '.sv-newsletter-status{grid-column:1/-1;min-height:20px;font-size:13px;font-weight:700}',
+      '.sv-newsletter-status.is-success{color:#86efac}',
+      '.sv-newsletter-status.is-error{color:#fecaca}'
+    ].join('');
+    document.head.appendChild(style);
+  }
+
   function initNewsletter(form) {
     if (!(form instanceof HTMLFormElement) || form.dataset.svNewsletterReady === '1') return;
     form.dataset.svNewsletterReady = '1';
@@ -9,26 +38,44 @@
     var button = form.querySelector('button[type="submit"]');
     if (!email || !button) return;
 
-    var consent = document.createElement('label');
-    consent.className = 'sv-newsletter-consent';
-    consent.innerHTML = '<input type="checkbox" required> <span>Quero receber novidades e ofertas e li a <a href="/politica-privacidade">Política de Privacidade</a>.</span>';
-    form.appendChild(consent);
+    ensureNewsletterStyle();
 
-    var honeypot = document.createElement('input');
-    honeypot.type = 'text';
-    honeypot.name = 'website';
-    honeypot.tabIndex = -1;
-    honeypot.autocomplete = 'off';
-    honeypot.setAttribute('aria-hidden', 'true');
-    honeypot.style.position = 'absolute';
-    honeypot.style.left = '-9999px';
-    form.appendChild(honeypot);
+    email.name = email.name || 'email';
+    email.autocomplete = email.autocomplete || 'email';
+    email.inputMode = email.inputMode || 'email';
+    email.placeholder = 'Digite seu e-mail';
+    email.setAttribute('aria-label', 'Digite seu e-mail para receber novidades e ofertas');
 
-    var status = document.createElement('div');
-    status.className = 'sv-newsletter-status';
-    status.setAttribute('role', 'status');
-    status.setAttribute('aria-live', 'polite');
-    form.appendChild(status);
+    button.textContent = 'Inscrever-se';
+    button.setAttribute('aria-label', 'Inscrever-se na newsletter da Vivaliz');
+
+    var consent = form.querySelector('.sv-newsletter-consent');
+    if (!consent) {
+      consent = document.createElement('label');
+      consent.className = 'sv-newsletter-consent';
+      consent.innerHTML = '<input type="checkbox" required> <span>Quero receber novidades e ofertas e li a <a href="/politica-privacidade">Política de Privacidade</a>.</span>';
+      form.appendChild(consent);
+    }
+
+    var honeypot = form.querySelector('input[name="website"]');
+    if (!honeypot) {
+      honeypot = document.createElement('input');
+      honeypot.type = 'text';
+      honeypot.name = 'website';
+      honeypot.tabIndex = -1;
+      honeypot.autocomplete = 'off';
+      honeypot.setAttribute('aria-hidden', 'true');
+      form.appendChild(honeypot);
+    }
+
+    var status = form.querySelector('.sv-newsletter-status');
+    if (!status) {
+      status = document.createElement('div');
+      status.className = 'sv-newsletter-status';
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      form.appendChild(status);
+    }
 
     form.addEventListener('submit', async function (event) {
       event.preventDefault();
@@ -41,7 +88,7 @@
 
       var originalText = button.textContent;
       button.disabled = true;
-      button.textContent = 'Enviando…';
+      button.textContent = 'Enviando...';
       status.textContent = '';
       status.className = 'sv-newsletter-status';
 
@@ -77,13 +124,8 @@
   }
 
   function init() {
+    ensureNewsletterStyle();
     document.querySelectorAll('.newsletter-form').forEach(initNewsletter);
-    if (!document.getElementById('sv-newsletter-style')) {
-      var style = document.createElement('style');
-      style.id = 'sv-newsletter-style';
-      style.textContent = '.newsletter-form{position:relative}.sv-newsletter-consent{display:flex;align-items:flex-start;gap:8px;grid-column:1/-1;color:#475569;font-size:12px;line-height:1.4}.sv-newsletter-consent input{margin-top:2px}.sv-newsletter-consent a{color:inherit;text-decoration:underline}.sv-newsletter-status{grid-column:1/-1;min-height:20px;font-size:13px;font-weight:700}.sv-newsletter-status.is-success{color:#166534}.sv-newsletter-status.is-error{color:#b91c1c}';
-      document.head.appendChild(style);
-    }
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
