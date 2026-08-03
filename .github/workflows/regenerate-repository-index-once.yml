@@ -1,6 +1,9 @@
 name: Regenerate Repository Index Once
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
