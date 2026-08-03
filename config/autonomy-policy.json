@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "mode": "autonomous_by_default",
+  "autonomous_domains": [
+    "accessibility",
+    "blog",
+    "catalog_metadata",
+    "checkout",
+    "content",
+    "design",
+    "images",
+    "observability",
+    "performance",
+    "quality",
+    "security",
+    "seo",
+    "tests"
+  ],
+  "human_only_domains": [
+    "price",
+    "stock"
+  ],
+  "autonomous_branch_prefixes": [
+    "agent/",
+    "automation/",
+    "autonomous/"
+  ],
+  "human_approval_label": "human-approved-price-stock",
+  "rules": {
+    "require_pull_request": true,
+    "require_green_checks": true,
+    "merge_via_gate": true,
+    "deploy_via_gate": true,
+    "queued_is_execution": false,
+    "degraded_is_success": false,
+    "require_machine_readable_evidence": true
+  }
+}
