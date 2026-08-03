@@ -131,8 +131,10 @@ function svs_http_post(string $url, array $fields, array $extraHeaders = []): ar
 function svs_get_access_token(): string {
     $TOKEN_URL    = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
     $refresh      = svs_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN');
-    $clientId     = svs_env('OLIST_CLIENT_ID',     'TINY_CLIENT_ID');
-    $clientSecret = svs_env('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET');
+    $clientId     = svs_env('OLIST_CLIENT_ID');
+    $clientSecret = svs_env('OLIST_CLIENT_SECRET');
+    if (strlen($clientId) < 16) $clientId = svs_env('TINY_CLIENT_ID', 'CLIENT_ID_API_OLIST');
+    if (strlen($clientSecret) < 16) $clientSecret = svs_env('TINY_CLIENT_SECRET', 'CLIENT_SECRET_OLIST');
 
     if ($refresh === '' || $clientId === '' || $clientSecret === '') {
         throw new RuntimeException(
