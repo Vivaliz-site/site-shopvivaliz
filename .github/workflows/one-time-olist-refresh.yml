@@ -27,8 +27,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$OLIST_CLIENT_ID" || { echo "::error::OLIST_CLIENT_ID ausente"; exit 1; }
-          test -n "$OLIST_CLIENT_SECRET" || { echo "::error::OLIST_CLIENT_SECRET ausente"; exit 1; }
+          if [[ -z "${OLIST_CLIENT_ID:-}" ]]; then
+            echo "::error::OLIST_CLIENT_ID ausente"
+            exit 1
+          fi
+          if [[ -z "${OLIST_CLIENT_SECRET:-}" ]]; then
+            echo "::error::OLIST_CLIENT_SECRET ausente"
+            exit 1
+          fi
           echo "::add-mask::$OLIST_CLIENT_ID"
           echo "::add-mask::$OLIST_CLIENT_SECRET"
 
