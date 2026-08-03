@@ -131,3 +131,6 @@ validacao-*.js
 diagnostico-*.js
 screenshots-validacao/
 test-*.log
+/.tmp_shopvivaliz/
+/test*.php
+/teste*.php
