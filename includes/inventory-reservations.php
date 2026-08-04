@@ -48,7 +48,8 @@ function svir_reconcile(PDO $pdo): array
 
     $consumed = $pdo->exec(
         "UPDATE inventory_reservations r
-         INNER JOIN orders o ON o.order_number = r.order_number
+         INNER JOIN orders o
+           ON o.order_number COLLATE utf8mb4_unicode_ci = r.order_number COLLATE utf8mb4_unicode_ci
          SET r.status = 'consumed',
              r.expires_at = GREATEST(r.expires_at, DATE_ADD(NOW(), INTERVAL 7 DAY))
          WHERE r.status = 'active'
@@ -57,7 +58,8 @@ function svir_reconcile(PDO $pdo): array
 
     $releasedCancelled = $pdo->exec(
         "UPDATE inventory_reservations r
-         INNER JOIN orders o ON o.order_number = r.order_number
+         INNER JOIN orders o
+           ON o.order_number COLLATE utf8mb4_unicode_ci = r.order_number COLLATE utf8mb4_unicode_ci
          SET r.status = 'released', r.expires_at = NOW()
          WHERE r.status = 'active'
            AND o.order_status IN ('cancelado', 'devolvido')"
