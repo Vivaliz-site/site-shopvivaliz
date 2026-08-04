@@ -9,6 +9,8 @@ on:
       - main
     paths:
       - '.github/workflows/integrations-hourly.yml'
+      - 'includes/integration-health.php'
+      - 'includes/melhorenvio-oauth.php'
 
 permissions:
   contents: read
@@ -19,9 +21,9 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate and safely remediate integrations
+    name: Validate integrations without mutating credentials
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Configure verified SSH host
         shell: bash
@@ -29,19 +31,19 @@ jobs:
           ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
           ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           test -n "$ORACLE_VM_SSH_KEY" || { echo "::error::ORACLE_VM_SSH_KEY is missing"; exit 1; }
           test -n "$ORACLE_VM_KNOWN_HOSTS" || { echo "::error::ORACLE_VM_KNOWN_HOSTS is missing"; exit 1; }
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Validate production connections
+      - name: Validate production connections read-only
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           if ! ssh \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
@@ -49,13 +51,15 @@ jobs:
             -i "$HOME/.ssh/id_rsa" \
             ubuntu@137.131.156.17 \
             'bash -s' > integrations-health.json 2> integrations-health.stderr <<'REMOTE_SCRIPT'
-          set -euo pipefail
+          set -Eeuo pipefail
           current='/home/ubuntu/shopvivaliz-deploy/current'
           private_dir="$current/storage/private"
           state_file="$private_dir/integration-health.json"
           test -r "$current/includes/integration-health.php"
 
-          sudo install -d -o ubuntu -g www-data -m 2770 "$private_dir"
+          # The web group may traverse/read the health state, but it cannot create,
+          # replace or delete token files in the private directory.
+          sudo install -d -o ubuntu -g www-data -m 2750 "$private_dir"
           if [[ -e "$state_file" ]]; then
             sudo chown ubuntu:www-data "$state_file"
             sudo chmod 0660 "$state_file"
@@ -68,7 +72,9 @@ jobs:
           <?php
           declare(strict_types=1);
           require '/home/ubuntu/shopvivaliz-deploy/current/includes/integration-health.php';
-          $result = svih_check_all(true);
+          // Scheduled health is observation-only. OAuth refresh requires an
+          // explicit authenticated administrative action.
+          $result = svih_check_all(false);
           echo json_encode(
               $result,
               JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
@@ -85,16 +91,21 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
-          data = json.loads(Path('integrations-health.json').read_text())
+
+          path = Path('integrations-health.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
           summary = data.get('summary', {})
           print('checked_at=', data.get('checked_at'))
           print('connected=', summary.get('connected', 0))
           print('failed=', summary.get('failed', 0))
           print('attention=', summary.get('attention', 0))
+          print('auto_fix_attempted=', data.get('auto_fix_attempted'))
+          if data.get('auto_fix_attempted') is not False:
+              raise SystemExit('Scheduled health unexpectedly attempted credential remediation.')
           for item in data.get('integrations', []):
               print(f"{item.get('name')}: {item.get('status')} — {item.get('message')}")
           if not data.get('ok', False):
-              raise SystemExit('Integration health is degraded; inspect the dashboard remediation.')
+              raise SystemExit('Integration health is degraded; explicit administrative remediation is required.')
           PY
 
       - name: Upload masked health evidence
@@ -102,6 +113,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: integrations-health-${{ github.run_id }}
-          path: integrations-health.json
-          if-no-files-found: ignore
-          retention-days: 14
+          path: |
+            integrations-health.json
+            integrations-health.stderr
+          if-no-files-found: error
+          retention-days: 30
