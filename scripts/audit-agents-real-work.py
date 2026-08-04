@@ -45,7 +45,8 @@ EVIDENCE = re.compile(
     re.I,
 )
 COMPLETION = re.compile(
-    r"(?:status|state)[\"']?\s*[:=]\s*[\"'](?:completed|success|ok)[\"']|"
+    r"(?:status|state)\s*[:=]\s*[\"'](?:completed|success)[\"']|"
+    r"[\"']status[\"']\s*:\s*[\"']ok[\"']|"
     r"[\"'](?:success|ok)[\"']\s*:\s*(?:true|True)",
     re.I,
 )
@@ -183,7 +184,8 @@ def active_surfaces(files: list[Path]) -> set[str]:
 
 
 def fp(rule: str, rel: str, excerpt: str) -> str:
-    return f"{rule}|{rel}|{re.sub(r'\s+', ' ', excerpt.strip().lower())}"
+    normalized = re.sub(r"\s+", " ", excerpt.strip().lower())
+    return f"{rule}|{rel}|{normalized}"
 
 
 def add(findings: list[Finding], severity: str, rule: str, rel: str, text: str, match: re.Match[str] | None, active: bool, message: str, excerpt: str | None = None) -> None:
@@ -212,10 +214,14 @@ def audit_text(rel: str, original: str, active: bool) -> list[Finding]:
     evidence = bool(EVIDENCE.search(text))
     completion = COMPLETION.search(text)
     simulation = SIMULATED_SUCCESS.search(text)
+    evidence_sensitive_path = any(
+        token in rel.lower()
+        for token in ("agent", "task", "audit", "guardian", "orchestrator", "bridge", "worker")
+    )
 
     if simulation and completion:
         add(findings, "critical", "simulated_completion", rel, text, simulation, active, "Simulated state and successful completion coexist.")
-    if completion and not evidence and any(token in rel.lower() for token in ("agent", "task", "audit", "guardian", "orchestrator")):
+    if completion and not evidence and evidence_sensitive_path:
         add(findings, "high", "completion_without_evidence", rel, text, completion, active, "Successful completion lacks commit, test, verification or artifact evidence.")
 
     for rule, severity, pattern, message in DANGEROUS:
@@ -227,11 +233,11 @@ def audit_text(rel: str, original: str, active: bool) -> list[Finding]:
         add(findings, "critical", "queue_mutation_without_evidence", rel, text, queue, active, "Queue state or assignment changes before verifiable evidence exists.")
 
     masked = MASKED_FAILURE.search(text)
-    if masked and (completion or re.search(r"cycle finished|runtime operacional|setup completo", text, re.I)):
+    if masked and evidence_sensitive_path and (completion or re.search(r"cycle finished|runtime operacional|setup completo", text, re.I)):
         add(findings, "high", "masked_failure_with_success", rel, text, masked, active, "Failure is ignored while the routine can report success.")
 
     unchecked = CHECK_FALSE.search(text)
-    if unchecked and not RETURN_CODE_CHECK.search(text) and (completion or any(token in rel.lower() for token in ("agent", "audit", "guardian", "orchestrator"))):
+    if unchecked and not RETURN_CODE_CHECK.search(text) and evidence_sensitive_path:
         add(findings, "high", "unchecked_process_returncode", rel, text, unchecked, active, "A subprocess disables automatic checking without inspecting its return code.")
 
     printed = PRINTED_EXECUTION.search(text)
