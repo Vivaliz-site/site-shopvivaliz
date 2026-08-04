@@ -9,21 +9,42 @@ on:
       - main
     paths:
       - '.github/workflows/**'
+      - '.githooks/**'
       - 'scripts/**'
       - '.ai/**'
       - 'agents/**'
+      - 'agent-bridge/**'
+      - 'ai-system/**'
+      - 'deploy/systemd/**'
+      - 'api/agent/**'
+      - 'admin/**'
+      - 'includes/production-agent-registry.php'
       - 'config/**'
-      - '.githooks/**'
+      - '*.ps1'
+      - 'tasks-queue.json'
+      - 'AGENTS.md'
+      - 'REGRAS-AGENTES-CENTRALIZADAS.md'
   pull_request:
     paths:
       - '.github/workflows/**'
+      - '.githooks/**'
       - 'scripts/**'
       - '.ai/**'
       - 'agents/**'
+      - 'agent-bridge/**'
+      - 'ai-system/**'
+      - 'deploy/systemd/**'
+      - 'api/agent/**'
+      - 'admin/**'
+      - 'includes/production-agent-registry.php'
       - 'config/**'
-      - '.githooks/**'
+      - '*.ps1'
+      - 'tasks-queue.json'
+      - 'AGENTS.md'
+      - 'REGRAS-AGENTES-CENTRALIZADAS.md'
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -34,7 +55,7 @@ jobs:
   audit:
     name: Audit agents with evidence
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
         with:
@@ -85,11 +106,28 @@ jobs:
           git rev-parse HEAD
           git show-ref --verify refs/remotes/origin/main >/dev/null
 
-      - name: Compile auditors
+      - name: Compile automation entrypoints
         run: |
           python -m py_compile \
             scripts/audit-agents-real-work.py \
-            scripts/maintenance/audit_secret_references.py
+            scripts/maintenance/audit_secret_references.py \
+            scripts/maintenance/system_health_check.py \
+            scripts/autonomous-continuous-cycle.py \
+            scripts/autonomous-hourly-guardian.py \
+            scripts/agent-operations-worker.py \
+            agent-bridge/agent_bridge.py \
+            ai-system/orchestrator/runtime.py \
+            tests/unit/test_automation_integrity_regressions.py
+          bash -n scripts/autonomous-agent-loop.sh
+          php -l admin/agents-monitor.php
+          php -l admin/audit-dashboard.php
+
+      - name: Run automation integrity regressions
+        run: |
+          python -m unittest \
+            tests.unit.test_agent_evidence_state \
+            tests.unit.test_automation_integrity_regressions \
+            -v
 
       - name: Run current-state deep agent audit
         run: python scripts/audit-agents-real-work.py
@@ -98,7 +136,7 @@ jobs:
         if: always()
         run: python scripts/maintenance/audit_secret_references.py
 
-      - name: Verify audit evidence
+      - name: Verify audit evidence and coverage
         if: always()
         shell: bash
         run: |
@@ -114,12 +152,47 @@ jobs:
           import json
           from pathlib import Path
 
-          report = json.loads(Path('artifacts/agents-audit/report.json').read_text())
+          report = json.loads(Path('artifacts/agents-audit/report.json').read_text(encoding='utf-8'))
           assert report['fail_closed'] is True
           assert report['current_sha']
-          assert isinstance(report['blocking_finding_count'], int)
+          assert report['blocking_finding_count'] == 0, report['findings']
           assert '.githooks/pre-push' in report['scanned_git_hooks']
+          assert 'deploy/systemd/shopvivaliz-agent.service' in report['scanned_systemd_units']
+          required_coverage = {
+              'workflows', 'git_hooks', 'systemd', 'agent_bridge', 'ai_system',
+              'admin_php', 'root_powershell', 'queue_mutation',
+              'masked_failures', 'private_permissions',
+          }
+          missing = sorted(key for key in required_coverage if report['coverage'].get(key) is not True)
+          assert not missing, missing
           PY
+
+      - name: Verify independent schedule watchdog freshness
+        if: github.event_name != 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const response = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'agents-audit-schedule-watchdog.yml',
+              event: 'schedule',
+              branch: context.payload.repository.default_branch,
+              per_page: 10,
+            });
+            const latest = response.data.workflow_runs[0] || null;
+            if (!latest) {
+              core.setFailed('No scheduled run exists for the independent schedule watchdog.');
+              return;
+            }
+            const ageMinutes = (Date.now() - Date.parse(latest.created_at)) / 60000;
+            if (ageMinutes > 105) {
+              core.setFailed(`Independent schedule watchdog is stale: ${ageMinutes.toFixed(1)} minutes.`);
+              return;
+            }
+            if (latest.status === 'completed' && latest.conclusion !== 'success') {
+              core.setFailed(`Independent schedule watchdog concluded with ${latest.conclusion}.`);
+            }
 
       - name: Upload agent audit evidence
         if: always()
