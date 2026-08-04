@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
-"""Fail-closed compatibility runtime for explicitly configured executors.
-
-The runtime never changes the queue. Every execution receives a unique run ID,
-an expected evidence path and the current commit SHA. Evidence from an earlier
-cycle cannot be reused: the file must be new, recent and contain matching
-``run_id``, ``task_id`` and ``commit_sha`` fields plus independent verification.
-"""
+"""Fail-closed compatibility runtime for explicitly configured executors."""
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import uuid
@@ -21,6 +16,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 QUEUE = ROOT / "tasks-queue.json"
 EVIDENCE_DIR = ROOT / "reports" / "orchestrator-evidence"
+SAFE_TASK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 def load_queue() -> dict[str, Any]:
@@ -34,23 +30,31 @@ def load_queue() -> dict[str, Any]:
 
 def current_commit_sha() -> str:
     completed = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False
+        ["git", "rev-parse", "HEAD"], cwd=ROOT,
+        capture_output=True, text=True, check=False,
     )
     value = completed.stdout.strip()
-    if completed.returncode != 0 or len(value) != 40:
+    if completed.returncode != 0 or re.fullmatch(r"[0-9a-f]{40}", value) is None:
         raise RuntimeError("current_commit_sha_unavailable")
     return value
 
 
-def executor_command(task: dict[str, Any]) -> list[str] | None:
-    task_id = str(task.get("task_id", "")).lower()
+def normalized_task_id(task: dict[str, Any]) -> str:
+    task_id = str(task.get("task_id", "")).strip()
+    if SAFE_TASK_ID.fullmatch(task_id) is None:
+        raise RuntimeError("invalid_task_id")
+    return task_id
+
+
+def executor_command(task: dict[str, Any], task_id: str) -> list[str] | None:
+    lowered = task_id.lower()
     mapping = {
         "shopee": "SHOPVIVALIZ_SHOPEE_EXECUTOR",
         "ml": "SHOPVIVALIZ_ML_EXECUTOR",
         "gads": "SHOPVIVALIZ_GOOGLE_ADS_EXECUTOR",
         "audit": "SHOPVIVALIZ_AUDIT_EXECUTOR",
     }
-    key = next((name for token, name in mapping.items() if token in task_id), None)
+    key = next((name for token, name in mapping.items() if token in lowered), None)
     if not key:
         return None
     configured = os.environ.get(key, "").strip()
@@ -59,7 +63,7 @@ def executor_command(task: dict[str, Any]) -> list[str] | None:
     path = Path(configured)
     if not path.is_absolute() or not path.is_file() or not os.access(path, os.X_OK):
         raise RuntimeError(f"invalid_executor:{key}")
-    return [str(path), "--task-id", str(task.get("task_id", ""))]
+    return [str(path), "--task-id", task_id]
 
 
 def failed(task_id: str, status: str, reason: str, **extra: Any) -> dict[str, Any]:
@@ -75,14 +79,20 @@ def failed(task_id: str, status: str, reason: str, **extra: Any) -> dict[str, An
 
 
 def execute_real(task: dict[str, Any], commit_sha: str) -> dict[str, Any]:
-    command = executor_command(task)
-    task_id = str(task.get("task_id", ""))
+    try:
+        task_id = normalized_task_id(task)
+    except RuntimeError as exc:
+        return failed(str(task.get("task_id", "")), "failed", str(exc))
+    command = executor_command(task, task_id)
     if not command:
         return failed(task_id, "blocked", "real_executor_not_configured")
 
     run_id = str(uuid.uuid4())
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
-    evidence = EVIDENCE_DIR / f"{task_id}-{run_id}.json"
+    evidence_dir = EVIDENCE_DIR.resolve()
+    evidence = (EVIDENCE_DIR / f"{task_id}-{run_id}.json").resolve()
+    if evidence.parent != evidence_dir:
+        return failed(task_id, "failed", "evidence_path_escape", run_id=run_id)
     if evidence.exists():
         return failed(task_id, "failed", "evidence_path_collision", run_id=run_id)
 
@@ -95,22 +105,13 @@ def execute_real(task: dict[str, Any], commit_sha: str) -> dict[str, Any]:
         "SHOPVIVALIZ_TASK_ID": task_id,
     })
     completed = subprocess.run(
-        command,
-        cwd=ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=900,
-        check=False,
+        command, cwd=ROOT, env=env, capture_output=True, text=True,
+        timeout=900, check=False,
     )
     if completed.returncode != 0:
         return failed(
-            task_id,
-            "failed",
-            "executor_failed",
-            run_id=run_id,
-            returncode=completed.returncode,
-            stderr=completed.stderr[-2000:],
+            task_id, "failed", "executor_failed", run_id=run_id,
+            returncode=completed.returncode, stderr=completed.stderr[-2000:],
         )
     if not evidence.is_file() or evidence.stat().st_size == 0:
         return failed(task_id, "failed", "evidence_missing", run_id=run_id)
@@ -132,9 +133,15 @@ def execute_real(task: dict[str, Any], commit_sha: str) -> dict[str, Any]:
     }
     mismatches = [key for key, value in required.items() if payload.get(key) != value]
     if mismatches:
-        return failed(task_id, "failed", "evidence_identity_mismatch", run_id=run_id, fields=mismatches)
+        return failed(
+            task_id, "failed", "evidence_identity_mismatch",
+            run_id=run_id, fields=mismatches,
+        )
     if not payload.get("verification") or not payload.get("artifact"):
-        return failed(task_id, "failed", "evidence_lacks_verification_or_artifact", run_id=run_id)
+        return failed(
+            task_id, "failed", "evidence_lacks_verification_or_artifact",
+            run_id=run_id,
+        )
 
     finished = datetime.now(timezone.utc)
     return {
@@ -169,7 +176,10 @@ def main() -> int:
         return 2
 
     commit_sha = current_commit_sha()
-    candidates = [task for task in queue.get("tasks", []) if task.get("status") != "completed_verified"]
+    candidates = [
+        task for task in queue.get("tasks", [])
+        if task.get("status") != "completed_verified"
+    ]
     results = [execute_real(task, commit_sha) for task in candidates]
     output = {
         "ok": bool(results) and all(item.get("success") is True for item in results),
