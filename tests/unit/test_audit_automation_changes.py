@@ -19,11 +19,11 @@ class AutomationChangeAuditTests(unittest.TestCase):
         with patch.object(AUDIT, "added_lines", return_value=lines):
             return AUDIT.scan_file("base", "head", status, path)
 
-    def test_blocks_hourly_audit_removal(self):
+    def test_blocks_required_workflow_removal(self):
         findings = AUDIT.scan_file(
             "base", "head", "D", ".github/workflows/agents-hourly-deep-audit.yml"
         )
-        self.assertEqual([item.rule for item in findings], ["hourly_audit_removed"])
+        self.assertEqual([item.rule for item in findings], ["critical_workflow_removed"])
         self.assertEqual(findings[0].severity, "critical")
 
     def test_blocks_broad_git_add(self):
@@ -33,7 +33,7 @@ class AutomationChangeAuditTests(unittest.TestCase):
     def test_blocks_simulated_completion(self):
         findings = self.scan(
             "scripts/ai/runner.py",
-            [(10, "# simulate processing"), (11, "status = 'completed'")],
+            [(10, "simulated: true"), (11, "status = 'completed'")],
         )
         self.assertIn("simulated_completion", {item.rule for item in findings})
 
@@ -43,6 +43,7 @@ class AutomationChangeAuditTests(unittest.TestCase):
             [(20, "task['status'] = 'completed'"), (21, "queue.save(task)")],
         )
         self.assertIn("queue_completion_without_evidence", {item.rule for item in findings})
+        self.assertIn("queue_mutation_without_evidence", {item.rule for item in findings})
 
     def test_allows_completion_with_verifiable_evidence(self):
         findings = self.scan(
@@ -52,9 +53,37 @@ class AutomationChangeAuditTests(unittest.TestCase):
                 (21, "queue.save(task)"),
                 (22, "task['artifact'] = artifact"),
                 (23, "task['commit_sha'] = commit_sha"),
+                (24, "task['verification'] = readback"),
             ],
         )
-        self.assertNotIn("queue_completion_without_evidence", {item.rule for item in findings})
+        rules = {item.rule for item in findings}
+        self.assertNotIn("queue_completion_without_evidence", rules)
+        self.assertNotIn("queue_mutation_without_evidence", rules)
+
+    def test_blocks_printed_execution_without_runner(self):
+        findings = self.scan(
+            "agent-bridge/worker.py",
+            [(10, "print('Executando comando de teste: php -l index.php')")],
+        )
+        self.assertIn("printed_execution_without_execution", {item.rule for item in findings})
+
+    def test_blocks_web_triggered_code_mutation(self):
+        findings = self.scan(
+            "admin/update.php",
+            [
+                (1, "$url = 'https://raw.githubusercontent.com/org/repo/main/index.php';"),
+                (2, "$body = file_get_contents($url);"),
+                (3, "file_put_contents('../index.php', $body);")
+            ],
+        )
+        self.assertIn("web_triggered_code_mutation", {item.rule for item in findings})
+
+    def test_blocks_private_group_write_permission(self):
+        findings = self.scan(
+            ".github/workflows/health.yml",
+            [(10, "sudo install -d -g www-data -m 2770 storage/private")],
+        )
+        self.assertIn("unsafe_private_directory_permission", {item.rule for item in findings})
 
     def test_detector_does_not_match_its_own_rules(self):
         findings = self.scan(
