@@ -23,47 +23,71 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def failure_evidence(name: str, url: str, started_at: str, expected: int, error: str) -> dict[str, Any]:
+    return {
+        "name": name,
+        "url": url,
+        "started_at": started_at,
+        "finished_at": utc_now(),
+        "passed": False,
+        "status_code": None,
+        "expected_status_code": expected,
+        "body_bytes": 0,
+        "body_sha256": None,
+        "error": error,
+    }
+
+
 def request_evidence(session: requests.Session, name: str, path: str, expected: int = 200) -> dict[str, Any]:
     url = f"{BASE_URL}{path}"
     started_at = utc_now()
     try:
         response = session.get(url, timeout=TIMEOUT_SECONDS, allow_redirects=True)
-        body = response.content
-        return {
-            "name": name,
-            "url": url,
-            "started_at": started_at,
-            "finished_at": utc_now(),
-            "passed": response.status_code == expected,
-            "status_code": response.status_code,
-            "expected_status_code": expected,
-            "body_bytes": len(body),
-            "body_sha256": hashlib.sha256(body).hexdigest(),
-            "error": None,
-        }
     except requests.RequestException as exc:
-        return {
-            "name": name,
-            "url": url,
-            "started_at": started_at,
-            "finished_at": utc_now(),
-            "passed": False,
-            "status_code": None,
-            "expected_status_code": expected,
-            "body_bytes": 0,
-            "body_sha256": None,
-            "error": f"{type(exc).__name__}: {exc}",
-        }
+        return failure_evidence(name, url, started_at, expected, f"{type(exc).__name__}: {exc}")
+    body = response.content
+    return {
+        "name": name,
+        "url": url,
+        "started_at": started_at,
+        "finished_at": utc_now(),
+        "passed": response.status_code == expected,
+        "status_code": response.status_code,
+        "expected_status_code": expected,
+        "body_bytes": len(body),
+        "body_sha256": hashlib.sha256(body).hexdigest(),
+        "error": None if response.status_code == expected else "unexpected_status_code",
+    }
 
 
 def orders_health(session: requests.Session) -> dict[str, Any]:
-    evidence = request_evidence(session, "orders_health", "/api/orders/health.php")
-    if not evidence["passed"]:
+    name = "orders_health"
+    url = f"{BASE_URL}/api/orders/health.php"
+    started_at = utc_now()
+    try:
+        response = session.get(url, timeout=TIMEOUT_SECONDS, allow_redirects=True)
+    except requests.RequestException as exc:
+        return failure_evidence(name, url, started_at, 200, f"{type(exc).__name__}: {exc}")
+
+    body = response.content
+    evidence: dict[str, Any] = {
+        "name": name,
+        "url": url,
+        "started_at": started_at,
+        "finished_at": utc_now(),
+        "passed": response.status_code == 200,
+        "status_code": response.status_code,
+        "expected_status_code": 200,
+        "body_bytes": len(body),
+        "body_sha256": hashlib.sha256(body).hexdigest(),
+        "error": None,
+    }
+    if response.status_code != 200:
+        evidence["error"] = "unexpected_status_code"
         return evidence
     try:
-        response = session.get(f"{BASE_URL}/api/orders/health.php", timeout=TIMEOUT_SECONDS)
         payload = response.json()
-    except (requests.RequestException, ValueError) as exc:
+    except ValueError as exc:
         evidence.update({"passed": False, "error": f"invalid_health_json:{exc}"})
         return evidence
     evidence["payload_checks"] = {
@@ -86,11 +110,11 @@ def write_atomic(path: Path, payload: dict[str, Any]) -> None:
 def main() -> int:
     generated_at = utc_now()
     with requests.Session() as session:
-        session.headers.update({"User-Agent": "ShopVivaliz-Audit-Monitor/2.0"})
+        session.headers.update({"User-Agent": "ShopVivaliz-Audit-Monitor/2.1"})
         checks = [
             request_evidence(session, "home", "/"),
             request_evidence(session, "catalog", "/catalogo"),
-            request_evidence(session, "checkout", "/checkout", expected=200),
+            request_evidence(session, "checkout", "/checkout"),
             orders_health(session),
         ]
 
