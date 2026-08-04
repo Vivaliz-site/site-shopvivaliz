@@ -51,7 +51,18 @@ jobs:
             'bash -s' > integrations-health.json 2> integrations-health.stderr <<'REMOTE_SCRIPT'
           set -euo pipefail
           current='/home/ubuntu/shopvivaliz-deploy/current'
+          private_dir="$current/storage/private"
+          state_file="$private_dir/integration-health.json"
           test -r "$current/includes/integration-health.php"
+
+          sudo install -d -o ubuntu -g www-data -m 2770 "$private_dir"
+          if [[ -e "$state_file" ]]; then
+            sudo chown ubuntu:www-data "$state_file"
+            sudo chmod 0660 "$state_file"
+          else
+            sudo install -o ubuntu -g www-data -m 0660 /dev/null "$state_file"
+          fi
+
           cd "$current"
           php -d display_errors=0 -d log_errors=1 <<'PHP'
           <?php
