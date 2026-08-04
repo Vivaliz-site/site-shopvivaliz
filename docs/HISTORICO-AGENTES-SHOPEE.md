@@ -652,3 +652,53 @@ foi inventado. Nenhuma notificação push enviada neste ciclo: mesma recomendaç
 ciclos 15/16/17 (renovar `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET`/`TINY_ACCESS_TOKEN`/
 `TINY_REFRESH_TOKEN` nos GitHub Secrets **e** recriar os dois workflows dedicados), sem fato novo
 que justifique repetir o alerta.
+
+### 9.14 Atualização — ciclo de 2026-08-04 (~13h UTC), 19º ciclo — gap de 6 dias sem registro; novo caminho de produção encontrado (ainda não resolve o bloqueio de dados)
+
+Lacuna de ~6 dias sem entrada nesta seção desde o ciclo 18 (2026-07-29 19h UTC) até este ciclo
+(2026-08-04) — não foi possível confirmar nesta sessão se a rotina de 6h simplesmente não
+disparou nesse intervalo ou se disparou e algum agente não registrou aqui; sem acesso a logs de
+execução do scheduler para diferenciar as duas hipóteses.
+
+**Fato novo em relação ao ciclo 18:** `.github/workflows/` agora contém dois workflows Shopee que
+não existiam nos ciclos 15-18 (`ls .github/workflows/ | grep -i shopee` retornava vazio até
+então): `shopee-optimizer-safety.yml` (gate de dry-run em push/PR, roda
+`tests/test_shopee_optimizer_safety.py`/`test_shopee_production_seo.py`) e
+`shopee-production-seo.yml` (`workflow_dispatch` manual, exige confirmação literal
+`APPLY_ALL_SHOPEE_PRODUCTS` digitada por humano, usa secrets `SHOPEE_PARTNER_ID`/
+`SHOPEE_PARTNER_KEY`/`SHOPEE_ACCESS_TOKEN`/`SHOPEE_SHOP_ID` — família de credencial diferente da
+`TINY_*` que está quebrada). O clone raso não alcança o commit exato de introdução (só aparece
+como parte de `chore(ci): apply generated repository inventory`), então a data exata de criação
+não pôde ser confirmada.
+
+Esses workflows chamam `scripts/shopee_full_catalog_optimizer.py` e
+`scripts/shopee_production_seo_apply.py` (lidos nesta sessão). **Isso não resolve o bloqueio
+estrutural desta rotina**: o otimizador constrói título/descrição a partir de `attribute_list` do
+próprio produto (marca/modelo/material/tamanho/cor) e gera imagens via IA — regras genéricas de
+SEO, sem nenhuma chamada a endpoint de analytics do Shopee Open Platform. Não há cálculo de CTR,
+taxa de conversão, comparação alto-vs-baixo-desempenho, nem A/B testing medido — os itens 1, 3, 9
+e 10 das instruções desta rotina continuam tecnicamente inexequíveis com o código atual, mesmo
+que a credencial `SHOPEE_*` estivesse presente. Além disso o único caminho de produção exige
+gatilho manual (`workflow_dispatch`) com confirmação humana digitada — não é algo que esta rotina
+autônoma deva ou possa acionar por conta própria.
+
+Estado dos bloqueios já conhecidos, confirmado sem mudança: `fetch-shopee-listings.yml`/
+`optimize-shopee-listings.yml` (o par baseado em Tiny/Olist) continuam ausentes; nenhum artefato
+novo em `listings/` desde `shopee-listings-20260726-080756.json`/
+`optimization-report-20260726-060921.json`; nenhum secret `TINY_*`/`OLIST_*`/`SHOPEE_*` neste
+ambiente de sessão (`printenv | grep -iE 'shopee|tiny|olist'` vazio — esperado, sessões deste tipo
+não recebem GitHub Secrets injetados, então isso não prova nem desmente se os secrets `SHOPEE_*`
+estão configurados no repositório). Único commit relacionado a OAuth desde o ciclo 18
+(`17a6c5e`, 2026-08-04, `#747`) corrige a UI de reconexão OAuth de Olist/Tiny/Melhor Envio no
+painel admin — não toca `TINY_CLIENT_ID`/`TINY_CLIENT_SECRET` nem cria os workflows Tiny-Shopee
+ausentes.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado. Nenhuma notificação push enviada neste ciclo: o achado dos
+dois workflows novos é informativo mas não muda a recomendação de fundo já comunicada (a rotina
+como especificada exige dados de analytics do Shopee Open Platform que não existem no código, e
+mesmo o caminho de produção que existe é gatilho manual). Recomendação para quando o usuário
+tiver tempo: (1) decidir se vale investir em consumir a API de analytics do Shopee Open Platform
+para viabilizar os itens 1/3/9/10, ou (2) reduzir o escopo desta rotina de 6h para apenas o que o
+código hoje sustenta (aplicar `shopee_full_catalog_optimizer.py` via `workflow_dispatch` manual,
+sem métricas de CTR).
