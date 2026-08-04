@@ -9,6 +9,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -28,15 +29,37 @@ def write_atomic(path: Path, content: str) -> None:
     os.replace(temporary, path)
 
 
+def normalize_products(payload: Any) -> tuple[list[dict[str, Any]], str]:
+    if isinstance(payload, list):
+        products = [item for item in payload if isinstance(item, dict)]
+        if len(products) != len(payload):
+            raise ValueError("catalog_list_contains_non_object_entries")
+        return products, "list"
+    if isinstance(payload, dict):
+        products: list[dict[str, Any]] = []
+        for product_id, raw in payload.items():
+            if not isinstance(raw, dict):
+                raise ValueError(f"catalog_entry_is_not_object:{product_id}")
+            product = dict(raw)
+            product.setdefault("id", str(product_id))
+            products.append(product)
+        return products, "object_by_id"
+    raise ValueError("catalog_payload_must_be_list_or_object")
+
+
 def main() -> int:
-    products = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
-    if not isinstance(products, list):
-        raise SystemExit("catalog_payload_must_be_a_list")
-    slugs = [str(product.get("slug") or "").strip() for product in products if isinstance(product, dict)]
+    raw_catalog = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+    try:
+        products, catalog_shape = normalize_products(raw_catalog)
+    except ValueError as exc:
+        print(json.dumps({"status": "FAILED", "error": str(exc)}, ensure_ascii=False))
+        return 2
+
+    slugs = [str(product.get("slug") or "").strip() for product in products]
     valid_slugs = [slug for slug in slugs if slug]
     fallback_descriptions = sum(
         1 for product in products
-        if isinstance(product, dict) and not str(product.get("description") or "").strip()
+        if not str(product.get("description") or "").strip()
     )
     htaccess = HTACCESS_PATH.read_text(encoding="utf-8")
     product_page = PRODUCT_PAGE_PATH.read_text(encoding="utf-8")
@@ -57,6 +80,7 @@ def main() -> int:
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "status": "PASSED" if passed else "FAILED",
         "passed": passed,
+        "catalog_shape": catalog_shape,
         "catalog_products": len(products),
         "products_with_slug": len(valid_slugs),
         "unique_slugs": len(set(valid_slugs)),
@@ -73,6 +97,7 @@ def main() -> int:
         "# Product page indexability audit", "",
         f"- generated_at: `{report['generated_at']}`",
         f"- status: **{report['status']}**",
+        f"- catalog_shape: `{catalog_shape}`",
         f"- catalog_products: {report['catalog_products']}",
         f"- products_with_slug: {report['products_with_slug']}",
         f"- unique_slugs: {report['unique_slugs']}",
