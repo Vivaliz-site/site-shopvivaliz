@@ -114,7 +114,9 @@ jobs:
           php -l admin/audit-dashboard.php
 
       - name: Run governance unit tests
+        shell: bash
         run: |
+          set -Eeuo pipefail
           python -m unittest \
             tests.unit.test_audit_automation_changes \
             tests.unit.test_audit_active_workflows \
@@ -124,7 +126,7 @@ jobs:
             tests.unit.test_generate_repository_index \
             tests.unit.test_olist_entrypoints_safe \
             tests.unit.test_shopee_legacy_credentials_safe \
-            -v
+            -v 2>&1 | tee artifacts/repository-governance/unit-tests.log
 
       - name: Generate repository inventory snapshot
         run: |
@@ -162,6 +164,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           test -s artifacts/repository-governance/run-context.txt
+          test -s artifacts/repository-governance/unit-tests.log
           test -s artifacts/repository-governance/report.json
           test -s artifacts/repository-governance/report.md
           test -s artifacts/workflow-policy/report.json
@@ -179,6 +182,8 @@ jobs:
           report = json.loads(Path('artifacts/system-health/report.json').read_text(encoding='utf-8'))
           assert report['runtime_health'] == 'NOT_OBSERVED_IN_REPOSITORY_CHECKOUT'
           assert report['queue_mode'] == 'retired_read_only'
+          changes = json.loads(Path('artifacts/repository-governance/report.json').read_text(encoding='utf-8'))
+          assert changes['blocking_finding_count'] == 0, changes['findings']
           PY
 
       - name: Require independent human approval
