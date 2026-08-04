@@ -2,13 +2,17 @@
 declare(strict_types=1);
 
 /**
- * OAuth 2.0 do Melhor Envio -- troca de codigo por token e refresh,
- * mesmo padrao usado em api/ml/client.php para o Mercado Livre.
+ * OAuth 2.0 do Melhor Envio.
+ * Mantem tokens fora do repositorio e suporta producao/sandbox.
  */
 
-function me_oauth_root(): string { return dirname(__DIR__); }
+function me_oauth_root(): string
+{
+    return dirname(__DIR__);
+}
 
-function me_oauth_env(string ...$keys): string {
+function me_oauth_env(string ...$keys): string
+{
     static $loaded = false;
     if (!$loaded) {
         $loaded = true;
@@ -16,163 +20,249 @@ function me_oauth_env(string ...$keys): string {
         if (is_file($constants)) {
             require_once $constants;
         }
-        $f = me_oauth_root() . '/.env';
-        if (is_file($f)) {
-            foreach (file($f, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-                $line = trim($line);
-                if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
-                [$k, $v] = explode('=', $line, 2);
-                $k = trim($k); $v = trim(trim($v), '"\'');
-                if ($k !== '' && getenv($k) === false) { putenv("$k=$v"); $_ENV[$k] = $v; }
-            }
-        }
     }
-    foreach ($keys as $k) {
-        $v = getenv($k);
-        if (is_string($v) && $v !== '') return $v;
+
+    foreach ($keys as $key) {
+        $value = getenv($key);
+        if (is_string($value) && trim($value) !== '') {
+            return trim($value);
+        }
+        if (isset($_ENV[$key]) && is_string($_ENV[$key]) && trim($_ENV[$key]) !== '') {
+            return trim($_ENV[$key]);
+        }
     }
     return '';
 }
 
-function me_token_path(): string {
+function me_token_path(): string
+{
     $dir = me_oauth_root() . '/storage/private';
-    if (!is_dir($dir)) @mkdir($dir, 0750, true);
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0750, true);
+    }
     return $dir . '/melhorenvio-tokens.json';
 }
 
-function me_save_tokens(array $data): array {
+function me_save_tokens(array $data): array
+{
     $existing = me_read_tokens() ?? [];
     $expiresAt = isset($data['expires_in'])
-        ? time() + (int)$data['expires_in']
-        : ($existing['expires_at'] ?? 0);
+        ? time() + max(0, (int)$data['expires_in'])
+        : (int)($existing['expires_at'] ?? 0);
 
     $enriched = array_merge($existing, $data, [
-        'saved_at' => date('c'),
+        'saved_at' => gmdate('c'),
         'expires_at' => $expiresAt,
     ]);
-    file_put_contents(me_token_path(), json_encode($enriched, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+    unset($enriched['_refresh_error'], $enriched['_refresh_status']);
+
+    $json = json_encode($enriched, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (is_string($json)) {
+        file_put_contents(me_token_path(), $json . PHP_EOL, LOCK_EX);
+    }
     return $enriched;
 }
 
-function me_read_tokens(): ?array {
+function me_read_tokens(): ?array
+{
     $path = me_token_path();
-    if (!is_file($path)) return null;
+    if (!is_file($path)) {
+        return null;
+    }
     $data = json_decode((string)file_get_contents($path), true);
     return is_array($data) ? $data : null;
 }
 
-/** Troca o "code" recebido no callback OAuth por access_token/refresh_token. */
-function me_exchange_code(string $code): array {
-    // O .env de producao tem a variavel gravada como MELHORENVIO_CLIENTE_ID
-    // (em portugues), nao MELHORENVIO_CLIENT_ID -- sem esse alias o OAuth
-    // nunca completava a troca de code por token (client_id sempre vazio).
-    $clientId = me_oauth_env('MELHORENVIO_CLIENT_ID', 'MELHORENVIO_CLIENTE_ID');
-    $clientSecret = me_oauth_env('MELHORENVIO_CLIENT_SECRET', 'MELHORENVIO_CLIENTE_SECRET');
-    $redirectUri = me_oauth_env('MELHORENVIO_REDIRECT_URI') ?: 'https://shopvivaliz.com.br/api/melhorenvio/webhook.php';
+function me_environment(): string
+{
+    $configured = strtolower(me_oauth_env('MELHORENVIO_ENV', 'MELHORENVIO_ENVIRONMENT'));
+    if (in_array($configured, ['sandbox', 'homolog', 'homologacao', 'test'], true)) {
+        return 'sandbox';
+    }
+    return 'production';
+}
 
+function me_base_url(?string $environment = null): string
+{
+    $environment = $environment ?: me_environment();
+    return $environment === 'sandbox'
+        ? 'https://sandbox.melhorenvio.com.br'
+        : 'https://melhorenvio.com.br';
+}
+
+function me_user_agent(): string
+{
+    return me_oauth_env('MELHORENVIO_USER_AGENT') ?: 'ShopVivaliz (suporte@shopvivaliz.com.br)';
+}
+
+function me_redirect_uri(): string
+{
+    return me_oauth_env('MELHORENVIO_REDIRECT_URI')
+        ?: 'https://shopvivaliz.com.br/api/melhorenvio/webhook.php';
+}
+
+function me_authorization_url(string $state): string
+{
+    $clientId = me_oauth_env('MELHORENVIO_CLIENT_ID', 'MELHORENVIO_CLIENTE_ID');
+    $scope = me_oauth_env('MELHORENVIO_SCOPES')
+        ?: 'cart-read cart-write orders-read shipping-calculate shipping-checkout shipping-generate shipping-preview shipping-print shipping-tracking users-read';
+
+    return me_base_url() . '/oauth/authorize?' . http_build_query([
+        'client_id' => $clientId,
+        'redirect_uri' => me_redirect_uri(),
+        'response_type' => 'code',
+        'state' => $state,
+        'scope' => $scope,
+    ], '', '&', PHP_QUERY_RFC3986);
+}
+
+function me_validate_oauth_state(): bool
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        @session_start();
+    }
+    $expected = (string)($_SESSION['melhorenvio_oauth_state'] ?? '');
+    if ($expected === '') {
+        return true;
+    }
+    $createdAt = (int)($_SESSION['melhorenvio_oauth_state_created_at'] ?? 0);
+    $received = (string)($_GET['state'] ?? '');
+    unset($_SESSION['melhorenvio_oauth_state'], $_SESSION['melhorenvio_oauth_state_created_at']);
+    return $received !== ''
+        && $createdAt >= time() - 900
+        && hash_equals($expected, $received);
+}
+
+/** Troca o code recebido no callback OAuth por access_token/refresh_token. */
+function me_exchange_code(string $code): array
+{
+    if (!me_validate_oauth_state()) {
+        return ['error' => 'invalid_oauth_state', '_http_status' => 400];
+    }
     $fields = [
         'grant_type' => 'authorization_code',
-        'client_id' => $clientId,
-        'client_secret' => $clientSecret,
-        'redirect_uri' => $redirectUri,
+        'client_id' => me_oauth_env('MELHORENVIO_CLIENT_ID', 'MELHORENVIO_CLIENTE_ID'),
+        'client_secret' => me_oauth_env('MELHORENVIO_CLIENT_SECRET', 'MELHORENVIO_CLIENTE_SECRET'),
+        'redirect_uri' => me_redirect_uri(),
         'code' => $code,
     ];
 
-    $result = me_oauth_post('https://www.melhorenvio.com.br/oauth/token', $fields);
-    if (!empty($result['access_token'])) {
-        $result['_token_host'] = 'production';
-        return $result;
-    }
+    $preferred = me_environment();
+    $environments = $preferred === 'sandbox'
+        ? ['sandbox', 'production']
+        : ['production', 'sandbox'];
+    $last = ['error' => 'token_exchange_failed'];
 
-    // App registrado na area de desenvolvimento (app.melhorenvio.com.br/integracoes/area-dev)
-    // usa o endpoint de sandbox, nao o de producao.
-    if (($result['error'] ?? '') === 'invalid_client') {
-        $sandboxResult = me_oauth_post('https://sandbox.melhorenvio.com.br/oauth/token', $fields);
-        if (!empty($sandboxResult['access_token'])) {
-            $sandboxResult['_token_host'] = 'sandbox';
-            return $sandboxResult;
+    foreach ($environments as $environment) {
+        $result = me_oauth_post(me_base_url($environment) . '/oauth/token', $fields);
+        if (!empty($result['access_token'])) {
+            $result['_token_host'] = $environment;
+            return $result;
+        }
+        $last = $result;
+        if (($result['error'] ?? '') !== 'invalid_client') {
+            break;
         }
     }
 
-    return $result;
+    return $last;
 }
 
-function me_refresh_if_needed(): ?array {
+function me_refresh_if_needed(bool $force = false): ?array
+{
     $tokens = me_read_tokens();
-    if ($tokens === null) return null;
+    if ($tokens === null) {
+        return null;
+    }
 
-    $tenMin = 600;
-    if (($tokens['expires_at'] ?? 0) > time() + $tenMin) {
+    if (!$force && (int)($tokens['expires_at'] ?? 0) > time() + 600) {
         return $tokens;
     }
 
-    $refresh = $tokens['refresh_token'] ?? '';
-    if ($refresh === '') return $tokens;
+    $refresh = trim((string)($tokens['refresh_token'] ?? ''));
+    if ($refresh === '') {
+        $tokens['_refresh_error'] = 'refresh_token_missing';
+        return $tokens;
+    }
 
-    $refreshFields = [
+    $fields = [
         'grant_type' => 'refresh_token',
         'client_id' => me_oauth_env('MELHORENVIO_CLIENT_ID', 'MELHORENVIO_CLIENTE_ID'),
         'client_secret' => me_oauth_env('MELHORENVIO_CLIENT_SECRET', 'MELHORENVIO_CLIENTE_SECRET'),
         'refresh_token' => $refresh,
     ];
-    $tokenHost = str_contains((string)($tokens['_token_host'] ?? ''), 'sandbox')
-        ? 'https://sandbox.melhorenvio.com.br/oauth/token'
-        : 'https://www.melhorenvio.com.br/oauth/token';
-    $resp = me_oauth_post($tokenHost, $refreshFields);
+    $environment = (string)($tokens['_token_host'] ?? me_environment());
+    $response = me_oauth_post(me_base_url($environment) . '/oauth/token', $fields);
 
-    if (!isset($resp['access_token'])) {
-        return $tokens; // refresh falhou, mantem o que tinha
+    if (empty($response['access_token'])) {
+        $tokens['_refresh_error'] = (string)($response['error'] ?? 'refresh_failed');
+        $tokens['_refresh_status'] = (int)($response['_http_status'] ?? 0);
+        return $tokens;
     }
 
-    return me_save_tokens($resp);
+    $response['_token_host'] = $environment;
+    return me_save_tokens($response);
 }
 
-function me_oauth_post(string $url, array $fields): array {
-    // Melhor Envio rejeita client_id/client_secret no corpo com
-    // "invalid_client" -- exige HTTP Basic Auth (padrao OAuth2 para
-    // clientes confidenciais). Envia dos dois jeitos: Basic Auth no
-    // header, e sem client_id/client_secret duplicado no corpo.
-    $clientId = (string)($fields['client_id'] ?? '');
-    $clientSecret = (string)($fields['client_secret'] ?? '');
-    unset($fields['client_id'], $fields['client_secret']);
-
-    $headers = ['Content-Type: application/x-www-form-urlencoded', 'Accept: application/json'];
-    if ($clientId !== '' && $clientSecret !== '') {
-        $headers[] = 'Authorization: Basic ' . base64_encode($clientId . ':' . $clientSecret);
-    }
+function me_oauth_post(string $url, array $fields): array
+{
+    $headers = [
+        'Content-Type: application/x-www-form-urlencoded',
+        'Accept: application/json',
+        'User-Agent: ' . me_user_agent(),
+    ];
 
     $ch = curl_init($url);
+    if ($ch === false) {
+        return ['error' => 'curl_init_failed', '_http_status' => 0];
+    }
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => http_build_query($fields),
+        CURLOPT_POSTFIELDS => http_build_query($fields, '', '&', PHP_QUERY_RFC3986),
         CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 8,
         CURLOPT_TIMEOUT => 20,
         CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
     ]);
     $body = (string)curl_exec($ch);
     $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $curlError = curl_error($ch);
     curl_close($ch);
 
     $data = json_decode($body, true);
     if (!is_array($data)) {
-        return ['error' => 'invalid_response', 'status' => $status, 'raw' => substr($body, 0, 300)];
+        return [
+            'error' => $curlError !== '' ? 'transport_error' : 'invalid_response',
+            'error_description' => $curlError !== '' ? $curlError : 'Resposta OAuth nao reconhecida.',
+            '_http_status' => $status,
+        ];
     }
     $data['_http_status'] = $status;
     return $data;
 }
 
-/** Access token valido, priorizando o obtido via OAuth sobre variavel de ambiente estatica. */
-function me_current_access_token(): ?string {
+/** Access token valido, priorizando o obtido via OAuth sobre variavel estatica. */
+function me_current_access_token(): ?string
+{
     $tokens = me_refresh_if_needed();
     if ($tokens !== null && !empty($tokens['access_token'])) {
         return (string)$tokens['access_token'];
     }
-    return null;
+
+    $fallback = me_oauth_env(
+        'MELHORENVIO_ACCESS_TOKEN',
+        'SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN',
+        'MELHORENVIO_API_KEY'
+    );
+    return $fallback !== '' ? $fallback : null;
 }
 
-/** Host base da API (sandbox ou producao) conforme onde o token atual foi emitido. */
-function me_api_base(): string {
+/** Host base da API conforme onde o token atual foi emitido. */
+function me_api_base(): string
+{
     $tokens = me_read_tokens();
-    $host = (string)($tokens['_token_host'] ?? 'production');
-    return $host === 'sandbox' ? 'https://sandbox.melhorenvio.com.br' : 'https://www.melhorenvio.com.br';
+    $environment = (string)($tokens['_token_host'] ?? me_environment());
+    return me_base_url($environment);
 }
