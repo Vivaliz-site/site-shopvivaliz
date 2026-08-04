@@ -10,10 +10,12 @@ on:
     paths:
       - '.github/workflows/agents-audit-schedule-watchdog.yml'
       - '.github/workflows/agents-hourly-deep-audit.yml'
+      - '.github/workflows/autonomous-watchdog.yml'
   pull_request:
     paths:
       - '.github/workflows/agents-audit-schedule-watchdog.yml'
       - '.github/workflows/agents-hourly-deep-audit.yml'
+      - '.github/workflows/autonomous-watchdog.yml'
 
 permissions:
   actions: read
@@ -24,66 +26,142 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify-scheduled-audit:
-    name: Verify recent scheduled audit
+  validate-contract:
+    name: Validate schedule watchdog contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Check latest scheduled audit run
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Verify monitored workflows and evidence requirements
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          text = Path('.github/workflows/agents-audit-schedule-watchdog.yml').read_text(encoding='utf-8')
+          required = [
+              'agents-hourly-deep-audit.yml',
+              'autonomous-watchdog.yml',
+              'agents-deep-audit-',
+              'autonomous-real-work-',
+              'event: schedule',
+              'if-no-files-found: error',
+          ]
+          missing = [item for item in required if item not in text]
+          if missing:
+              raise SystemExit(f'schedule_watchdog_contract_missing:{missing}')
+          PY
+
+  verify-scheduled-automation:
+    if: github.event_name != 'pull_request'
+    needs: validate-contract
+    name: Verify recent scheduled automation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check recent scheduled runs and artifacts
         uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
             const path = require('path');
-            const workflow_id = 'agents-hourly-deep-audit.yml';
-            const maximumAgeMinutes = 105;
-            const response = await github.rest.actions.listWorkflowRuns({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id,
-              event: 'schedule',
-              per_page: 10,
-            });
-
-            const latest = response.data.workflow_runs[0] || null;
             const now = Date.now();
-            const observed = {
+            const specs = [
+              {
+                workflow_id: 'agents-hourly-deep-audit.yml',
+                maximum_age_minutes: 105,
+                artifact_prefix: 'agents-deep-audit-',
+              },
+              {
+                workflow_id: 'autonomous-watchdog.yml',
+                maximum_age_minutes: 45,
+                artifact_prefix: 'autonomous-real-work-',
+              },
+            ];
+            const observations = [];
+            const failures = [];
+
+            for (const spec of specs) {
+              const response = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: spec.workflow_id,
+                event: 'schedule',
+                branch: context.payload.repository.default_branch,
+                per_page: 10,
+              });
+              const latest = response.data.workflow_runs[0] || null;
+              const observation = {
+                workflow: spec.workflow_id,
+                maximum_age_minutes: spec.maximum_age_minutes,
+                latest_run: latest ? {
+                  id: latest.id,
+                  html_url: latest.html_url,
+                  created_at: latest.created_at,
+                  updated_at: latest.updated_at,
+                  status: latest.status,
+                  conclusion: latest.conclusion,
+                  head_sha: latest.head_sha,
+                  event: latest.event,
+                } : null,
+                artifacts: [],
+              };
+
+              if (!latest) {
+                failures.push(`${spec.workflow_id}: no scheduled run exists`);
+                observations.push(observation);
+                continue;
+              }
+
+              const ageMinutes = (now - Date.parse(latest.created_at)) / 60000;
+              observation.age_minutes = Number(ageMinutes.toFixed(1));
+              if (ageMinutes > spec.maximum_age_minutes) {
+                failures.push(`${spec.workflow_id}: stale by ${ageMinutes.toFixed(1)} minutes`);
+              }
+              if (latest.status === 'completed' && latest.conclusion !== 'success') {
+                failures.push(`${spec.workflow_id}: latest conclusion is ${latest.conclusion}`);
+              }
+
+              if (latest.status === 'completed' && latest.conclusion === 'success') {
+                const artifactResponse = await github.rest.actions.listWorkflowRunArtifacts({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: latest.id,
+                  per_page: 100,
+                });
+                observation.artifacts = artifactResponse.data.artifacts.map(item => ({
+                  id: item.id,
+                  name: item.name,
+                  expired: item.expired,
+                  digest: item.digest || null,
+                }));
+                const validArtifact = artifactResponse.data.artifacts.some(
+                  item => !item.expired && item.name.startsWith(spec.artifact_prefix)
+                );
+                if (!validArtifact) {
+                  failures.push(`${spec.workflow_id}: required non-expired artifact is missing`);
+                }
+              }
+              observations.push(observation);
+            }
+
+            const report = {
               checked_at: new Date(now).toISOString(),
-              workflow: workflow_id,
-              maximum_age_minutes: maximumAgeMinutes,
-              latest_run: latest ? {
-                id: latest.id,
-                html_url: latest.html_url,
-                created_at: latest.created_at,
-                updated_at: latest.updated_at,
-                status: latest.status,
-                conclusion: latest.conclusion,
-                head_sha: latest.head_sha,
-                event: latest.event,
-              } : null,
+              event: context.eventName,
+              current_run_id: context.runId,
+              default_branch: context.payload.repository.default_branch,
+              observations,
+              failures,
+              ok: failures.length === 0,
             };
-
-            fs.mkdirSync(path.join('artifacts', 'agents-audit-watchdog'), { recursive: true });
-            fs.writeFileSync(
-              path.join('artifacts', 'agents-audit-watchdog', 'report.json'),
-              JSON.stringify(observed, null, 2) + '\n',
-            );
-
-            if (!latest) {
-              core.setFailed('No scheduled run exists for the hourly agent audit.');
-              return;
-            }
-
-            const ageMinutes = (now - Date.parse(latest.created_at)) / 60000;
-            core.info(`Latest scheduled audit run ${latest.id} is ${ageMinutes.toFixed(1)} minutes old.`);
-
-            if (ageMinutes > maximumAgeMinutes) {
-              core.setFailed(`Latest scheduled audit is stale: ${ageMinutes.toFixed(1)} minutes old.`);
-              return;
-            }
-
-            if (latest.status === 'completed' && latest.conclusion !== 'success') {
-              core.setFailed(`Latest scheduled audit concluded with ${latest.conclusion}.`);
+            const output = path.join('artifacts', 'agents-audit-watchdog');
+            fs.mkdirSync(output, { recursive: true });
+            fs.writeFileSync(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+            if (failures.length) {
+              core.setFailed(failures.join('; '));
             }
 
       - name: Upload watchdog evidence
