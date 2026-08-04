@@ -772,7 +772,7 @@ $svNavCurrent = '';
                 <div class="hero-carousel-track">
                     <?php foreach ($heroBanners as $index => $banner): ?>
                         <article class="hero-slide hero-image-slide<?= $index === 0 ? ' is-active' : '' ?>" data-slide="<?= $index ?>" style="position:relative;">
-                            <img src="<?= sv_home_esc($banner['image']) ?>" alt="<?= sv_home_esc($banner['alt']) ?>" class="hero-banner-image" width="1200" height="480" loading="<?= $index === 0 ? 'eager' : 'lazy' ?>" <?= $index === 0 ? 'fetchpriority="high"' : '' ?> decoding="async" style="width:100%;height:100%;object-fit:cover;">
+                            <img src="<?= sv_home_esc($banner['image']) ?>" alt="<?= sv_home_esc($banner['alt']) ?>" class="hero-banner-image" width="1200" height="480" loading="<?= $index === 0 ? 'eager' : 'lazy' ?>" <?= $index === 0 ? 'fetchpriority="high"' : 'fetchpriority="low"' ?> decoding="async" style="width:100%;height:100%;object-fit:cover;">
                             <div class="hero-overlay banner-overlay">
                                 <?php if (!empty($banner['tag'])): ?>
                                     <span class="banner-tag color-accent-green"><?= sv_home_esc($banner['tag']) ?></span>
@@ -820,7 +820,7 @@ $svNavCurrent = '';
                         <?php foreach ($homeCategories as $category): ?>
                             <a class="category-slide" href="<?= sv_home_esc($category['href']) ?>">
                                 <div class="category-slide-image-wrapper">
-                                    <img src="<?= sv_home_esc($category['icon']) ?>" alt="<?= sv_home_esc($category['name']) ?>" class="category-slide-img" width="240" height="240" loading="lazy" decoding="async">
+                                    <img src="<?= sv_home_esc($category['icon']) ?>" alt="<?= sv_home_esc($category['name']) ?>" class="category-slide-img" width="240" height="240" loading="lazy" fetchpriority="low" decoding="async">
                                 </div>
                                 <strong><?= sv_home_esc($category['name']) ?></strong>
                                 <span class="category-slide-count"><?= (int)$category['count'] ?> itens</span>
@@ -873,7 +873,7 @@ $svNavCurrent = '';
                             <article class="product-card<?= $stock <= 0 ? ' is-out-of-stock' : '' ?>" data-sku="<?= sv_home_esc($product['sku']) ?>">
                                 <?php $cardImages = array_values(array_unique(array_filter(array_merge([$image], is_array($product['images'] ?? null) ? $product['images'] : [])))); ?>
                                 <a class="product-image" href="<?= sv_home_esc($productUrl) ?>" data-images="<?= sv_home_esc(json_encode(array_slice($cardImages, 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
-                                    <img src="<?= sv_home_esc($image) ?>" alt="<?= sv_home_esc($product['name']) ?>" width="400" height="400" loading="lazy" decoding="async" onerror="this.src='<?= sv_home_default_image() ?>'">
+                                    <img src="<?= sv_home_esc($image) ?>" alt="<?= sv_home_esc($product['name']) ?>" width="400" height="400" loading="lazy" fetchpriority="low" decoding="async" onerror="this.src='<?= sv_home_default_image() ?>'">
                                     <?php if ($stock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                                 </a>
                                 <div class="product-info">
