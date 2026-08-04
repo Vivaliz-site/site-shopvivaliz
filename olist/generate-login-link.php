@@ -5,7 +5,7 @@
  */
 
 // Configurações do Aplicativo DEV do painel ERP
-$clientId = "tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553";
+$clientId = "tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1784255157";
 $redirectUri = getenv('OLIST_REDIRECT_URI') ?: getenv('URL_REDIRCT_OLIST') ?: getenv('TINY_REDIRECT_URI') ?: "https://shopvivaliz.com.br/olist/callback.php";
 
 // Endpoint oficial OAuth2 da API V3 do Tiny
