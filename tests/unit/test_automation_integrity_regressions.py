@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -7,6 +8,12 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+AUDITOR_PATH = ROOT / "scripts" / "audit-agents-real-work.py"
+SPEC = importlib.util.spec_from_file_location("deep_agent_auditor", AUDITOR_PATH)
+assert SPEC and SPEC.loader
+AUDITOR = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = AUDITOR
+SPEC.loader.exec_module(AUDITOR)
 
 
 class AutomationIntegrityRegressionTests(unittest.TestCase):
@@ -22,6 +29,7 @@ class AutomationIntegrityRegressionTests(unittest.TestCase):
             "scripts/shopvivaliz_debugger.py",
             "scripts/task-distribution-engine.php",
             "scripts/shopvivaliz_backup.py",
+            "scripts/task-queue-cli.py",
         )
         for relative in removed:
             self.assertFalse((ROOT / relative).exists(), relative)
@@ -75,9 +83,30 @@ class AutomationIntegrityRegressionTests(unittest.TestCase):
     def test_bridge_requires_successful_commands_and_evidence(self) -> None:
         text = (ROOT / "agent-bridge/agent_bridge.py").read_text(encoding="utf-8")
         self.assertIn("all_commands_succeeded", text)
-        self.assertIn("Mutating action lacks commit/PR/evidence", text)
+        self.assertIn("Action lacks verified evidence", text)
         self.assertIn('task_path.with_suffix(".json.failed")', text)
-        self.assertNotIn('return {"status": "OK", "action": "run_readonly_audit", "outputs": outputs}', text)
+        self.assertIn('["bash", "-Eeu", "-o", "pipefail", "-c", command]', text)
+
+    def test_active_files_have_no_deep_audit_finding(self) -> None:
+        active_files = (
+            "agent-bridge/agent_bridge.py",
+            "scripts/agent-operations-worker.py",
+            "scripts/autonomous-hourly-guardian.py",
+        )
+        failures: dict[str, list[dict[str, object]]] = {}
+        for relative in active_files:
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            findings = AUDITOR.audit_text(relative, text, True)
+            if findings:
+                failures[relative] = [
+                    {
+                        "rule": item.rule,
+                        "line": item.line,
+                        "message": item.message,
+                    }
+                    for item in findings
+                ]
+        self.assertEqual(failures, {})
 
     def test_legacy_powershell_entrypoints_are_blocked(self) -> None:
         for relative in ("SETUP-COMPLETE.ps1", "RUN-ORCHESTRATOR.ps1"):
