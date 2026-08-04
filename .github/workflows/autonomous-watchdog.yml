@@ -5,8 +5,7 @@ on:
     - cron: '*/15 * * * *'
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - '.github/workflows/autonomous-watchdog.yml'
       - 'api/agent/**'
@@ -35,27 +34,25 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-
       - name: Verify immutable release and evidence contract
         shell: bash
         run: |
           set -Eeuo pipefail
           python3 - <<'PY'
           from pathlib import Path
-
           workflow = Path('.github/workflows/autonomous-watchdog.yml').read_text(encoding='utf-8')
           required = [
-              'release_sha != expected_sha',
-              'persisted_cycle_mismatch',
-              'execution_accepted',
-              'work_evidence_count',
-              'registry_sha256',
+              'release_sha != expected_sha', 'persisted_cycle_mismatch',
+              'execution_accepted', 'work_evidence_count', 'registry_sha256',
               'if-no-files-found: error',
           ]
           missing = [item for item in required if item not in workflow]
           if missing:
               raise SystemExit(f'watchdog_contract_missing:{missing}')
-          forbidden = ['continue-on-error: true', 'if-no-files-found: warn']
+          forbidden = [
+              'continue-on-error' + ': true',
+              'if-no-files-found' + ': warn',
+          ]
           found = [item for item in forbidden if item in workflow]
           if found:
               raise SystemExit(f'watchdog_contract_fail_open:{found}')
@@ -98,34 +95,24 @@ jobs:
           set -Eeuo pipefail
           SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17)
           SCP=(scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa")
-
-          "${SSH[@]}" 'set -Eeuo pipefail; cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha' \
-            > artifacts/agent-watchdog/release-sha.txt
+          "${SSH[@]}" 'set -Eeuo pipefail; cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha' > artifacts/agent-watchdog/release-sha.txt
           release_sha="$(tr -d '\r\n' < artifacts/agent-watchdog/release-sha.txt)"
           expected_sha="$GITHUB_SHA"
           printf 'observed_release_sha=%s\n' "$release_sha" >> artifacts/agent-watchdog/context.txt
           if [[ "$release_sha" != "$expected_sha" ]]; then
-            printf 'release_match=false\n' >> artifacts/agent-watchdog/context.txt
+            echo "release_match=false" >> artifacts/agent-watchdog/context.txt
             echo "::error::Deployed release $release_sha does not match approved SHA $expected_sha"
             exit 1
           fi
-          printf 'release_match=true\n' >> artifacts/agent-watchdog/context.txt
-
-          "${SSH[@]}" 'set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/current; test -r api/agent/real-work-orchestrator.php; test -r includes/production-agent-registry.php; timeout 1500s flock -w 120 /tmp/shopvivaliz-real-work.lock /usr/bin/php api/agent/real-work-orchestrator.php' \
-            > artifacts/agent-watchdog/response.json
-          "${SCP[@]}" \
-            ubuntu@137.131.156.17:/home/ubuntu/shopvivaliz-deploy/current/storage/agent-evidence/latest-agent-cycle.json \
-            artifacts/agent-watchdog/latest-agent-cycle.json
+          echo "release_match=true" >> artifacts/agent-watchdog/context.txt
+          "${SSH[@]}" 'set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/current; test -r api/agent/real-work-orchestrator.php; test -r includes/production-agent-registry.php; timeout 1500s flock -w 120 /tmp/shopvivaliz-real-work.lock /usr/bin/php api/agent/real-work-orchestrator.php' > artifacts/agent-watchdog/response.json
+          "${SCP[@]}" ubuntu@137.131.156.17:/home/ubuntu/shopvivaliz-deploy/current/storage/agent-evidence/latest-agent-cycle.json artifacts/agent-watchdog/latest-agent-cycle.json
 
       - name: Validate every production agent and evidence
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 - \
-            artifacts/agent-watchdog/response.json \
-            artifacts/agent-watchdog/latest-agent-cycle.json \
-            artifacts/agent-watchdog/release-sha.txt \
-            "$GITHUB_SHA" <<'PY'
+          python3 - artifacts/agent-watchdog/response.json artifacts/agent-watchdog/latest-agent-cycle.json artifacts/agent-watchdog/release-sha.txt "$GITHUB_SHA" <<'PY'
           import datetime as dt
           import hashlib
           import json
@@ -137,30 +124,22 @@ jobs:
           response = json.loads(Path(response_path).read_text(encoding='utf-8'))
           persisted = json.loads(Path(persisted_path).read_text(encoding='utf-8'))
           release_sha = Path(release_path).read_text(encoding='utf-8').strip()
-
           if re.fullmatch(r'[0-9a-f]{40}', release_sha) is None:
               raise SystemExit('release_sha_invalid')
           if release_sha != expected_sha:
               raise SystemExit(f'release_sha_mismatch:{release_sha}:{expected_sha}')
 
           required = {
-              'ok': True,
-              'execution_status': 'completed',
-              'execution_completed': True,
-              'execution_accepted': True,
-              'active_agent_count': 5,
-              'schedule_minutes': 15,
+              'ok': True, 'execution_status': 'completed',
+              'execution_completed': True, 'execution_accepted': True,
+              'active_agent_count': 5, 'schedule_minutes': 15,
           }
           for key, expected in required.items():
               if response.get(key) != expected:
                   raise SystemExit(f'agent_response_invalid:{key}')
-
           expected_agents = {
-              'operational_work',
-              'catalog_metadata',
-              'conversion_funnel',
-              'media_quality',
-              'media_mismatch',
+              'operational_work', 'catalog_metadata', 'conversion_funnel',
+              'media_quality', 'media_mismatch',
           }
           if set(response.get('active_agents', [])) != expected_agents:
               raise SystemExit('active_agent_registry_invalid')
@@ -170,43 +149,31 @@ jobs:
               raise SystemExit('agent_evidence_count_below_minimum')
           if re.fullmatch(r'[0-9a-f]{64}', str(response.get('registry_sha256', ''))) is None:
               raise SystemExit('registry_hash_invalid')
-
           components = response.get('components')
           if not isinstance(components, dict) or set(components) != expected_agents:
               raise SystemExit('agent_components_invalid')
           for name, component in components.items():
-              if component.get('registry_id') != name:
-                  raise SystemExit(f'component_registry_id_invalid:{name}')
-              if component.get('ok') is not True:
+              if component.get('registry_id') != name or component.get('ok') is not True:
                   raise SystemExit(f'component_failed:{name}')
-              if component.get('execution_completed') is not True:
+              if component.get('execution_completed') is not True or component.get('execution_status') != 'completed':
                   raise SystemExit(f'component_incomplete:{name}')
-              if component.get('execution_status') != 'completed':
-                  raise SystemExit(f'component_status_invalid:{name}')
-              actions = component.get('actions')
-              if not isinstance(actions, list) or not actions:
+              if not isinstance(component.get('actions'), list) or not component['actions']:
                   raise SystemExit(f'component_evidence_missing:{name}')
-
-          forbidden = {'queued', 'degraded', 'simulated', 'mock', 'dry_run', 'dry-run'}
+          forbidden_statuses = {'queued', 'degraded', 'simulated', 'mock', 'dry_run', 'dry-run'}
           def walk(value):
               if isinstance(value, dict):
-                  for child in value.values():
-                      walk(child)
+                  for child in value.values(): walk(child)
               elif isinstance(value, list):
-                  for child in value:
-                      walk(child)
-              elif isinstance(value, str) and value.strip().lower() in forbidden:
+                  for child in value: walk(child)
+              elif isinstance(value, str) and value.strip().lower() in forbidden_statuses:
                   raise SystemExit(f'forbidden_execution_status:{value}')
           walk(response)
-
           for key in ('cycle_id', 'registry_sha256', 'active_agents', 'work_evidence_count', 'execution_accepted'):
               if persisted.get(key) != response.get(key):
                   raise SystemExit(f'persisted_cycle_mismatch:{key}')
-
           reported_sha = str(response.get('release_sha') or persisted.get('release_sha') or '')
           if reported_sha and reported_sha != release_sha:
               raise SystemExit('evidence_release_sha_mismatch')
-
           finished_raw = str(response.get('finished_at', '')).replace('Z', '+00:00')
           try:
               finished = dt.datetime.fromisoformat(finished_raw)
@@ -216,13 +183,10 @@ jobs:
               finished = finished.replace(tzinfo=dt.timezone.utc)
           age = (dt.datetime.now(dt.timezone.utc) - finished.astimezone(dt.timezone.utc)).total_seconds()
           if age < -120 or age > 1800:
-              raise SystemExit(f'agent_evidence_stale:age_seconds={int(age)}')
-
+              raise SystemExit(f'agent_evidence_stale:{int(age)}')
           print(json.dumps({
-              'ok': True,
-              'expected_release_sha': expected_sha,
-              'observed_release_sha': release_sha,
-              'cycle_id': response['cycle_id'],
+              'ok': True, 'expected_release_sha': expected_sha,
+              'observed_release_sha': release_sha, 'cycle_id': response['cycle_id'],
               'active_agent_count': response['active_agent_count'],
               'work_evidence_count': response['work_evidence_count'],
               'changed_items': response.get('changed_items', 0),
