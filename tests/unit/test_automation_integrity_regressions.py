@@ -8,14 +8,24 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-AUDITOR_PATH = ROOT / "scripts" / "audit-agents-real-work.py"
-SPEC = importlib.util.spec_from_file_location(
-    "deep_agent_auditor", AUDITOR_PATH
+
+
+def load_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+AUDITOR = load_module(
+    "deep_agent_auditor", ROOT / "scripts" / "audit-agents-real-work.py"
 )
-assert SPEC and SPEC.loader
-AUDITOR = importlib.util.module_from_spec(SPEC)
-sys.modules[SPEC.name] = AUDITOR
-SPEC.loader.exec_module(AUDITOR)
+INDEXABILITY = load_module(
+    "product_page_indexability_audit",
+    ROOT / "scripts" / "product-page-indexability-audit.py",
+)
 
 
 class AutomationIntegrityRegressionTests(unittest.TestCase):
@@ -52,26 +62,16 @@ class AutomationIntegrityRegressionTests(unittest.TestCase):
             self.assertFalse((ROOT / relative).exists(), relative)
 
     def test_legacy_queue_is_retired_and_empty(self) -> None:
-        payload = json.loads(
-            (ROOT / "tasks-queue.json").read_text(encoding="utf-8")
-        )
-        self.assertEqual(
-            payload["metadata"]["status"], "retired_read_only"
-        )
-        self.assertIs(
-            payload["metadata"]["queue_modified_by_runtime"], False
-        )
+        payload = json.loads((ROOT / "tasks-queue.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["metadata"]["status"], "retired_read_only")
+        self.assertIs(payload["metadata"]["queue_modified_by_runtime"], False)
         self.assertEqual(payload["tasks"], [])
 
     def test_legacy_selector_never_modifies_queue(self) -> None:
         queue_path = ROOT / "tasks-queue.json"
         before = queue_path.read_bytes()
         result = subprocess.run(
-            [
-                sys.executable,
-                str(ROOT / "scripts/autonomous-continuous-cycle.py"),
-                "--advance",
-            ],
+            [sys.executable, str(ROOT / "scripts/autonomous-continuous-cycle.py"), "--advance"],
             cwd=ROOT,
             text=True,
             capture_output=True,
@@ -83,9 +83,7 @@ class AutomationIntegrityRegressionTests(unittest.TestCase):
         self.assertEqual(queue_path.read_bytes(), before)
 
     def test_service_loop_uses_only_canonical_orchestrator(self) -> None:
-        text = (
-            ROOT / "scripts/autonomous-agent-loop.sh"
-        ).read_text(encoding="utf-8")
+        text = (ROOT / "scripts/autonomous-agent-loop.sh").read_text(encoding="utf-8")
         self.assertIn("api/agent/real-work-orchestrator.php", text)
         self.assertIn("execution_accepted", text)
         self.assertIn("work_evidence_count", text)
@@ -93,10 +91,14 @@ class AutomationIntegrityRegressionTests(unittest.TestCase):
         self.assertNotIn("agent-operations-worker.py", text)
         self.assertNotIn("|| log", text)
 
+    def test_first_agent_cycle_generates_evidence_before_requiring_it(self) -> None:
+        text = (ROOT / "scripts/autonomous-agent-loop.sh").read_text(encoding="utf-8")
+        execution = text.index("real-work-orchestrator.php\" > \"$tmp_response\"")
+        requirement = text.index('require_file "$PERSISTED_EVIDENCE"')
+        self.assertLess(execution, requirement)
+
     def test_guardian_is_read_only_and_fail_closed(self) -> None:
-        text = (
-            ROOT / "scripts/autonomous-hourly-guardian.py"
-        ).read_text(encoding="utf-8")
+        text = (ROOT / "scripts/autonomous-hourly-guardian.py").read_text(encoding="utf-8")
         self.assertIn('"queue_modified": False', text)
         self.assertIn("return 0 if not errors else 2", text)
         self.assertNotIn("systemctl", text)
@@ -104,9 +106,7 @@ class AutomationIntegrityRegressionTests(unittest.TestCase):
         self.assertNotIn("--advance", text)
 
     def test_operations_observer_does_not_assign_or_fake_execution(self) -> None:
-        text = (
-            ROOT / "scripts/agent-operations-worker.py"
-        ).read_text(encoding="utf-8")
+        text = (ROOT / "scripts/agent-operations-worker.py").read_text(encoding="utf-8")
         self.assertIn('"queue_modified": False', text)
         self.assertNotIn('task["assigned_to"]', text)
         self.assertNotIn("Executando comando de teste", text)
@@ -114,16 +114,11 @@ class AutomationIntegrityRegressionTests(unittest.TestCase):
         self.assertNotIn("Enviando resposta de sucesso", text)
 
     def test_bridge_requires_successful_commands_and_evidence(self) -> None:
-        text = (
-            ROOT / "agent-bridge/agent_bridge.py"
-        ).read_text(encoding="utf-8")
+        text = (ROOT / "agent-bridge/agent_bridge.py").read_text(encoding="utf-8")
         self.assertIn("all_commands_succeeded", text)
         self.assertIn("Action lacks verified evidence", text)
         self.assertIn('task_path.with_suffix(".json.failed")', text)
-        self.assertIn(
-            '["bash", "-Eeu", "-o", "pipefail", "-c", command]',
-            text,
-        )
+        self.assertIn('["bash", "-Eeu", "-o", "pipefail", "-c", command]', text)
 
     def test_active_files_have_no_deep_audit_finding(self) -> None:
         active_files = (
@@ -137,11 +132,7 @@ class AutomationIntegrityRegressionTests(unittest.TestCase):
             findings = AUDITOR.audit_text(relative, text, True)
             if findings:
                 failures[relative] = [
-                    {
-                        "rule": item.rule,
-                        "line": item.line,
-                        "message": item.message,
-                    }
+                    {"rule": item.rule, "line": item.line, "message": item.message}
                     for item in findings
                 ]
         self.assertEqual(failures, {})
@@ -153,55 +144,48 @@ class AutomationIntegrityRegressionTests(unittest.TestCase):
             self.assertIn("success = $false", text)
             self.assertIn("exit 2", text)
 
-    def test_production_monitor_is_fail_closed(self) -> None:
-        text = (
-            ROOT / "scripts/audit-monitor-24-7.py"
-        ).read_text(encoding="utf-8")
+    def test_production_monitor_is_fail_closed_and_single_request(self) -> None:
+        text = (ROOT / "scripts/audit-monitor-24-7.py").read_text(encoding="utf-8")
         self.assertIn('"read_only": True', text)
         self.assertIn('return 0 if report["passed"] else 2', text)
         self.assertNotIn("load_env", text)
-        service = (
-            ROOT / "deploy/systemd/shopvivaliz-audit-monitor.service"
-        ).read_text(encoding="utf-8")
+        self.assertEqual(text.count('f"{BASE_URL}/api/orders/health.php"'), 1)
+        service = (ROOT / "deploy/systemd/shopvivaliz-audit-monitor.service").read_text(encoding="utf-8")
         self.assertIn("ProtectSystem=strict", service)
-        self.assertIn(
-            "ReadWritePaths=/home/ubuntu/shopvivaliz-deploy/shared/logs",
-            service,
-        )
+        self.assertIn("ReadWritePaths=/home/ubuntu/shopvivaliz-deploy/shared/logs", service)
+
+    def test_integration_snapshot_is_not_group_writable(self) -> None:
+        text = (ROOT / ".github/workflows/integrations-hourly.yml").read_text(encoding="utf-8")
+        self.assertIn('chmod 0640 "$state_file"', text)
+        self.assertIn('-m 0640 /dev/null "$state_file"', text)
+        self.assertNotIn('chmod 0660 "$state_file"', text)
+
+    def test_indexability_accepts_list_and_object_catalogs(self) -> None:
+        list_products, list_shape = INDEXABILITY.normalize_products([{"slug": "a"}])
+        object_products, object_shape = INDEXABILITY.normalize_products({"123": {"slug": "b"}})
+        self.assertEqual(list_shape, "list")
+        self.assertEqual(list_products, [{"slug": "a"}])
+        self.assertEqual(object_shape, "object_by_id")
+        self.assertEqual(object_products[0]["id"], "123")
+        self.assertEqual(object_products[0]["slug"], "b")
 
     def test_indexability_audit_fails_when_checks_fail(self) -> None:
-        text = (
-            ROOT / "scripts/product-page-indexability-audit.py"
-        ).read_text(encoding="utf-8")
+        text = (ROOT / "scripts/product-page-indexability-audit.py").read_text(encoding="utf-8")
         self.assertIn("return 0 if passed else 2", text)
-        self.assertIn(
-            '"status": "PASSED" if passed else "FAILED"', text
-        )
+        self.assertIn('"status": "PASSED" if passed else "FAILED"', text)
 
     def test_system_health_is_structural_not_runtime_proof(self) -> None:
         result = subprocess.run(
-            [
-                sys.executable,
-                str(ROOT / "scripts/maintenance/system_health_check.py"),
-            ],
+            [sys.executable, str(ROOT / "scripts/maintenance/system_health_check.py")],
             cwd=ROOT,
             text=True,
             capture_output=True,
             check=False,
             timeout=30,
         )
-        self.assertEqual(
-            result.returncode, 0, result.stdout + result.stderr
-        )
-        report = json.loads(
-            (
-                ROOT / "artifacts/system-health/report.json"
-            ).read_text(encoding="utf-8")
-        )
-        self.assertEqual(
-            report["runtime_health"],
-            "NOT_OBSERVED_IN_REPOSITORY_CHECKOUT",
-        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        report = json.loads((ROOT / "artifacts/system-health/report.json").read_text(encoding="utf-8"))
+        self.assertEqual(report["runtime_health"], "NOT_OBSERVED_IN_REPOSITORY_CHECKOUT")
         self.assertEqual(report["queue_mode"], "retired_read_only")
 
 
