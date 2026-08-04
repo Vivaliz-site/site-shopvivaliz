@@ -16,15 +16,15 @@ $failed = 0;
 // TESTE 1: Credenciais
 // ============================================================================
 
-$client_id = getenv('OLIST_CLIENT_ID');
-$client_secret = getenv('OLIST_CLIENT_SECRET');
+$client_id = getenv('TINY_CLIENT_ID');
+$client_secret = getenv('TINY_CLIENT_SECRET');
 
 $tests[] = [
     'nome' => 'Credenciais configuradas',
     'resultado' => $client_id && $client_secret ? 'OK' : 'FALHOU',
     'detalhes' => $client_id && $client_secret
         ? "Client ID: " . substr($client_id, 0, 20) . "..."
-        : "Faltam OLIST_CLIENT_ID ou OLIST_CLIENT_SECRET"
+        : "Faltam TINY_CLIENT_ID ou TINY_CLIENT_SECRET"
 ];
 
 if ($client_id && $client_secret) $passed++; else $failed++;

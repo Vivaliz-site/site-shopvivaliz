@@ -18,7 +18,7 @@
       "script": "agents/v9.2.85/scripts/fetch-shopee-listings.php",
       "workflow": ".github/workflows/fetch-shopee-listings.yml",
       "saida": "listings/shopee-listings-YYYYMMDD-HHmmss.json",
-      "auth_secrets": ["TINY_ACCESS_TOKEN", "TINY_API_TOKEN", "ERP_API_TOKEN", "OLIST_ACCESS_TOKEN", "TINY_CLIENT_ID+SECRET+REFRESH"],
+      "auth_secrets": ["TINY_ACCESS_TOKEN", "TINY_API_TOKEN", "ERP_API_TOKEN", "TINY_ACCESS_TOKEN", "TINY_CLIENT_ID+SECRET+REFRESH"],
       "endpoint_tiny": "GET https://api.tiny.com.br/public-api/v3/produtos"
     },
     "ShopeeListingsOptimizationAgent": {
@@ -26,7 +26,7 @@
       "script": "agents/v9.2.85/scripts/optimize-shopee-listings.php",
       "workflow": ".github/workflows/optimize-shopee-listings.yml",
       "saida": "listings/optimization-report-YYYYMMDD-HHmmss.json",
-      "auth_secrets": ["TINY_ACCESS_TOKEN", "TINY_API_TOKEN", "ERP_API_TOKEN", "OLIST_ACCESS_TOKEN", "TINY_CLIENT_ID+SECRET+REFRESH"],
+      "auth_secrets": ["TINY_ACCESS_TOKEN", "TINY_API_TOKEN", "ERP_API_TOKEN", "TINY_ACCESS_TOKEN", "TINY_CLIENT_ID+SECRET+REFRESH"],
       "ai_secrets": ["ANTHROPIC_API_KEY (primario)", "OPENAI_API_KEY (fallback)"],
       "ai_modelos": ["claude-haiku-4-5-20251001", "gpt-4o-mini"],
       "ai_fallback": "rule_based (sem custo, sem IA)",

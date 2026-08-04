@@ -6,8 +6,8 @@
  * Executa: A cada 6 horas (autônomo)
  *
  * Variáveis necessárias:
- * - OLIST_CLIENT_ID
- * - OLIST_CLIENT_SECRET
+ * - TINY_CLIENT_ID
+ * - TINY_CLIENT_SECRET
  * - TINY_TOKEN
  * - MEDUSA_BACKEND_URL
  */
@@ -38,8 +38,8 @@ class OlistSync {
     private $medusaUrl;
 
     public function __construct() {
-        $this->clientId = getenv('OLIST_CLIENT_ID') ?: $_ENV['OLIST_CLIENT_ID'] ?? null;
-        $this->clientSecret = getenv('OLIST_CLIENT_SECRET') ?: $_ENV['OLIST_CLIENT_SECRET'] ?? null;
+        $this->clientId = getenv('TINY_CLIENT_ID') ?: $_ENV['TINY_CLIENT_ID'] ?? null;
+        $this->clientSecret = getenv('TINY_CLIENT_SECRET') ?: $_ENV['TINY_CLIENT_SECRET'] ?? null;
         $this->tinyToken = getenv('TINY_TOKEN') ?: $_ENV['TINY_TOKEN'] ?? null;
         $this->medusaUrl = getenv('MEDUSA_BACKEND_URL') ?: $_ENV['MEDUSA_BACKEND_URL'] ?? 'http://localhost:9000';
     }

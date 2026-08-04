@@ -251,7 +251,7 @@ class ProjectDirectorAgent {
         // do orquestrador) -- presenca de credencial e um proxy real e
         // barato de "integracao configurada".
         $envKeys = match ($key) {
-            'olist' => ['OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN', 'OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN'],
+            'olist' => ['TINY_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN'],
             'mercadolivre' => ['ML_CLIENT_ID', 'ML_CLIENT_SECRET'],
             'pagarme' => ['PAGARME_API_KEY', 'PAGARME_SECRET_KEY'],
             'mercadopago' => ['MERCADOPAGO_ACCESS_TOKEN'],

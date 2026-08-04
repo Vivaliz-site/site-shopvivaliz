@@ -7,7 +7,7 @@ shopt -s nullglob
 
 check_token() {
     if [ -f .env ]; then
-        TOKEN=$(grep "^OLIST_REFRESH_TOKEN=" .env | cut -d= -f2)
+        TOKEN=$(grep "^TINY_REFRESH_TOKEN=" .env | cut -d= -f2)
         if [ -n "$TOKEN" ]; then
             PAYLOAD=$(echo "$TOKEN" | cut -d. -f2)
             PADDED="${PAYLOAD}=="

@@ -78,11 +78,11 @@ fi
 echo ""
 echo "4. OLIST/TINY ERP"
 echo "================="
-if [ ! -z "$OLIST_ACCESS_TOKEN" ]; then
-  echo -e "${GREEN}✅ OLIST_ACCESS_TOKEN configurada${NC}"
+if [ ! -z "$TINY_ACCESS_TOKEN" ]; then
+  echo -e "${GREEN}✅ TINY_ACCESS_TOKEN configurada${NC}"
   ((passed++))
 else
-  echo -e "${YELLOW}⚠️  OLIST_ACCESS_TOKEN não configurada${NC}"
+  echo -e "${YELLOW}⚠️  TINY_ACCESS_TOKEN não configurada${NC}"
   ((failed++))
 fi
 

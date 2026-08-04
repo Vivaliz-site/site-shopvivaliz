@@ -43,9 +43,9 @@ final class ShopeeListingsExtractorAgent
         // a cada 6h, entao um TINY_ACCESS_TOKEN estatico salvo em secret
         // sempre estara vencido quando rodar. Por isso o refresh via OAuth2
         // tem prioridade -- so cai pro token direto se o refresh falhar.
-        $clientId     = getenv('TINY_CLIENT_ID')     ?: getenv('OLIST_CLIENT_ID')     ?: '';
-        $clientSecret = getenv('TINY_CLIENT_SECRET') ?: getenv('OLIST_CLIENT_SECRET') ?: '';
-        $refreshToken = getenv('TINY_REFRESH_TOKEN') ?: getenv('OLIST_REFRESH_TOKEN') ?: '';
+        $clientId     = getenv('TINY_CLIENT_ID')     ?: getenv('TINY_CLIENT_ID')     ?: '';
+        $clientSecret = getenv('TINY_CLIENT_SECRET') ?: getenv('TINY_CLIENT_SECRET') ?: '';
+        $refreshToken = getenv('TINY_REFRESH_TOKEN') ?: getenv('TINY_REFRESH_TOKEN') ?: '';
 
         if ($clientId && $clientSecret && $refreshToken) {
             $result['secrets_check']['token_source'] = 'oauth2_refresh';
@@ -54,7 +54,7 @@ final class ShopeeListingsExtractorAgent
         }
 
         // Fallback: aceita qualquer variante de token direto (pode estar vencido)
-        foreach (['TINY_ACCESS_TOKEN', 'TINY_API_TOKEN', 'ERP_API_TOKEN', 'OLIST_ACCESS_TOKEN'] as $name) {
+        foreach (['TINY_ACCESS_TOKEN', 'TINY_API_TOKEN', 'ERP_API_TOKEN', 'TINY_ACCESS_TOKEN'] as $name) {
             $val = getenv($name);
             if ($val !== false && $val !== '') {
                 $result['secrets_check']['token_source']    = $name;
@@ -65,12 +65,12 @@ final class ShopeeListingsExtractorAgent
 
         // Relata apenas nomes ausentes, nunca valores
         $missing = [];
-        if (!getenv('TINY_ACCESS_TOKEN') && !getenv('TINY_API_TOKEN') && !getenv('OLIST_ACCESS_TOKEN')) {
+        if (!getenv('TINY_ACCESS_TOKEN') && !getenv('TINY_API_TOKEN') && !getenv('TINY_ACCESS_TOKEN')) {
             $missing[] = 'TINY_ACCESS_TOKEN ou TINY_API_TOKEN';
         }
-        if (!$clientId)     $missing[] = 'TINY_CLIENT_ID ou OLIST_CLIENT_ID';
-        if (!$clientSecret) $missing[] = 'TINY_CLIENT_SECRET ou OLIST_CLIENT_SECRET';
-        if (!$refreshToken) $missing[] = 'TINY_REFRESH_TOKEN ou OLIST_REFRESH_TOKEN';
+        if (!$clientId)     $missing[] = 'TINY_CLIENT_ID ou TINY_CLIENT_ID';
+        if (!$clientSecret) $missing[] = 'TINY_CLIENT_SECRET ou TINY_CLIENT_SECRET';
+        if (!$refreshToken) $missing[] = 'TINY_REFRESH_TOKEN ou TINY_REFRESH_TOKEN';
 
         $result['secrets_check']['token_available']  = false;
         $result['secrets_check']['missing_secrets']  = $missing;

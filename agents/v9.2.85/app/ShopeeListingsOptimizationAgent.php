@@ -90,9 +90,9 @@ final class ShopeeListingsOptimizationAgent
         // O access_token da Tiny expira em ~4h; refresh via OAuth2 tem
         // prioridade (mesmo criterio do ShopeeListingsExtractorAgent) --
         // um TINY_ACCESS_TOKEN estatico so serve de fallback se o refresh falhar.
-        $clientId     = getenv('TINY_CLIENT_ID')     ?: getenv('OLIST_CLIENT_ID')     ?: '';
-        $clientSecret = getenv('TINY_CLIENT_SECRET') ?: getenv('OLIST_CLIENT_SECRET') ?: '';
-        $refreshToken = getenv('TINY_REFRESH_TOKEN') ?: getenv('OLIST_REFRESH_TOKEN') ?: '';
+        $clientId     = getenv('TINY_CLIENT_ID')     ?: getenv('TINY_CLIENT_ID')     ?: '';
+        $clientSecret = getenv('TINY_CLIENT_SECRET') ?: getenv('TINY_CLIENT_SECRET') ?: '';
+        $refreshToken = getenv('TINY_REFRESH_TOKEN') ?: getenv('TINY_REFRESH_TOKEN') ?: '';
 
         if ($clientId && $clientSecret && $refreshToken) {
             $result['secrets_check']['tiny_token_source'] = 'oauth2_refresh';
@@ -100,7 +100,7 @@ final class ShopeeListingsOptimizationAgent
             if ($token) return $token;
         }
 
-        foreach (['TINY_ACCESS_TOKEN', 'TINY_API_TOKEN', 'ERP_API_TOKEN', 'OLIST_ACCESS_TOKEN'] as $name) {
+        foreach (['TINY_ACCESS_TOKEN', 'TINY_API_TOKEN', 'ERP_API_TOKEN', 'TINY_ACCESS_TOKEN'] as $name) {
             $val = getenv($name);
             if ($val !== false && $val !== '') {
                 $result['secrets_check']['tiny_token_source'] = $name;

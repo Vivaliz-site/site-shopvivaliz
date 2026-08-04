@@ -11,12 +11,12 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../../config/constants.php';
 
-$client_id = getenv('OLIST_CLIENT_ID') ?: '';
-$client_secret = getenv('OLIST_CLIENT_SECRET') ?: '';
+$client_id = getenv('TINY_CLIENT_ID') ?: '';
+$client_secret = getenv('TINY_CLIENT_SECRET') ?: '';
 
 if (!$client_id || !$client_secret) {
     http_response_code(400);
-    echo json_encode(['erro' => 'Faltam credenciais OLIST_CLIENT_ID ou OLIST_CLIENT_SECRET'], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['erro' => 'Faltam credenciais TINY_CLIENT_ID ou TINY_CLIENT_SECRET'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

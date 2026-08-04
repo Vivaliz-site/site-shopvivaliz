@@ -11,11 +11,11 @@ header('Content-Type: application/json; charset=utf-8');
 log_sync("=== INICIO DA SINCRONIZACAO AUTOMATICA ===");
 
 // Credenciais - usar environment variables (GitHub Secrets)
-$client_id = getenv('OLIST_CLIENT_ID') ?: die('ERRO: OLIST_CLIENT_ID não configurado');
-$client_secret = getenv('OLIST_CLIENT_SECRET') ?: die('ERRO: OLIST_CLIENT_SECRET não configurado');
+$client_id = getenv('TINY_CLIENT_ID') ?: die('ERRO: TINY_CLIENT_ID não configurado');
+$client_secret = getenv('TINY_CLIENT_SECRET') ?: die('ERRO: TINY_CLIENT_SECRET não configurado');
 
 if (!$client_id || !$client_secret) {
-    exit_error("Faltam OLIST_CLIENT_ID e OLIST_CLIENT_SECRET");
+    exit_error("Faltam TINY_CLIENT_ID e TINY_CLIENT_SECRET");
 }
 
 log_sync("Credenciais carregadas");

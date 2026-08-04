@@ -16,8 +16,8 @@ gh secret set GOOGLE_API_KEY --body "${GOOGLE_API_KEY:-}" 2>/dev/null || echo "�
 
 # Credenciais Olist
 echo "📝 Adicionando credenciais Olist..."
-gh secret set OLIST_CLIENT_ID --body "${OLIST_CLIENT_ID:-}" 2>/dev/null || echo "⚠️  OLIST_CLIENT_ID - não definida"
-gh secret set OLIST_CLIENT_SECRET --body "${OLIST_CLIENT_SECRET:-}" 2>/dev/null || echo "⚠️  OLIST_CLIENT_SECRET - não definida"
+gh secret set TINY_CLIENT_ID --body "${TINY_CLIENT_ID:-}" 2>/dev/null || echo "⚠️  TINY_CLIENT_ID - não definida"
+gh secret set TINY_CLIENT_SECRET --body "${TINY_CLIENT_SECRET:-}" 2>/dev/null || echo "⚠️  TINY_CLIENT_SECRET - não definida"
 gh secret set TOKEN_API_OLIST --body "${TOKEN_API_OLIST:-}" 2>/dev/null || echo "⚠️  TOKEN_API_OLIST - não definida"
 gh secret set CLIENT_ID_API_OLIST --body "${CLIENT_ID_API_OLIST:-}" 2>/dev/null || echo "⚠️  CLIENT_ID_API_OLIST - não definida"
 gh secret set CLIENT_SECRET_OLIST --body "${CLIENT_SECRET_OLIST:-}" 2>/dev/null || echo "⚠️  CLIENT_SECRET_OLIST - não definida"
