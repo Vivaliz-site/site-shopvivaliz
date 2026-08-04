@@ -1,175 +1,124 @@
 #!/usr/bin/env python3
+"""Fail-closed health guardian for canonical production-agent evidence.
+
+The legacy guardian attempted queue generation, task selection, a retired
+executor and service restarts, then returned zero regardless of the outcome.
+This implementation is intentionally read-only: it validates the canonical
+agent-cycle evidence and returns non-zero whenever the evidence is missing,
+stale or inconsistent.
+"""
 from __future__ import annotations
 
 import json
-import os
-import shutil
-import subprocess
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-LOG_DIR = ROOT / "logs"
-REPORT_PATH = LOG_DIR / "autonomous-cycle-report.json"
-QUEUE_PATH = ROOT / "tasks-queue.json"
-GUARDIAN_LOG = LOG_DIR / "autonomous-hourly-guardian.json"
-EVENTS_LOG = LOG_DIR / "autonomous-hourly-guardian.jsonl"
-STALE_MINUTES = 70
+EVIDENCE_PATH = ROOT / "storage" / "agent-evidence" / "latest-agent-cycle.json"
+RELEASE_SHA_PATH = ROOT / ".release-sha"
+REPORT_PATH = ROOT / "logs" / "autonomous-hourly-guardian.json"
+EVENTS_PATH = ROOT / "logs" / "autonomous-hourly-guardian.jsonl"
+MAX_AGE_SECONDS = 1800
+EXPECTED_AGENTS = {
+    "operational_work",
+    "catalog_metadata",
+    "conversion_funnel",
+    "media_quality",
+    "media_mismatch",
+}
 
 
-def utc_now() -> datetime:
+def now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def read_json(path: Path, default: Any) -> Any:
-    if not path.exists():
-        return default
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return default
-    return data if isinstance(data, type(default)) else default
-
-
-def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, check=False)
-
-
-def parse_dt(raw: str | None) -> datetime | None:
-    if not raw:
+def parse_time(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
         return None
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
-@dataclass
-class GuardianDecision:
-    idle: bool
-    stale: bool
-    no_pending: bool
-    reason: str
-
-
-def inspect_state() -> tuple[dict[str, Any], dict[str, Any], GuardianDecision]:
-    report = read_json(REPORT_PATH, {})
-    queue = read_json(QUEUE_PATH, {})
-    generated_at = parse_dt(report.get("generated_at"))
-    backlog = report.get("backlog", {}) if isinstance(report.get("backlog", {}), dict) else {}
-    pending = int(backlog.get("pending", 0) or 0)
-    in_progress = int(backlog.get("in_progress", 0) or 0)
-    result = report.get("result", {}) if isinstance(report.get("result", {}), dict) else {}
-    summary = str(result.get("summary", "")).lower()
-    status = str(result.get("status", "")).lower()
-    stale = generated_at is None or generated_at < utc_now() - timedelta(minutes=STALE_MINUTES)
-    idle = (
-        "nenhuma tarefa segura elegível" in summary
-        or "nenhuma tarefa segura elegivel" in summary
-        or status == "idle"
-    )
-    no_pending = pending <= 1 and in_progress == 0
-    reason_parts = []
-    if stale:
-        reason_parts.append("stale_cycle")
-    if idle:
-        reason_parts.append("idle_result")
-    if no_pending:
-        reason_parts.append("thin_backlog")
-    decision = GuardianDecision(
-        idle=idle,
-        stale=stale,
-        no_pending=no_pending,
-        reason=",".join(reason_parts) or "healthy",
-    )
-    return report, queue, decision
-
-
-def append_event(payload: dict[str, Any]) -> None:
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with EVENTS_LOG.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+def write_report(payload: dict[str, Any]) -> None:
+    REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    serialized = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    REPORT_PATH.write_text(serialized, encoding="utf-8")
+    with EVENTS_PATH.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 
 def main() -> int:
-    report, queue, decision = inspect_state()
-    actions: list[dict[str, Any]] = []
-    post_recovery_decision = decision
+    checked_at = now()
+    errors: list[str] = []
+    evidence: dict[str, Any] = {}
 
-    if decision.stale or decision.idle or decision.no_pending:
-        gen = run(["python3", "scripts/auto-task-generator.py"])
-        actions.append(
-            {
-                "step": "auto_task_generator",
-                "exit_code": gen.returncode,
-                "stdout_tail": gen.stdout.strip().splitlines()[-5:],
-                "stderr_tail": gen.stderr.strip().splitlines()[-5:],
-            }
-        )
+    if not EVIDENCE_PATH.is_file() or EVIDENCE_PATH.stat().st_size == 0:
+        errors.append("canonical_agent_evidence_missing")
+    else:
+        try:
+            raw = json.loads(EVIDENCE_PATH.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                evidence = raw
+            else:
+                errors.append("canonical_agent_evidence_invalid_type")
+        except (OSError, ValueError) as exc:
+            errors.append(f"canonical_agent_evidence_unreadable:{exc}")
 
-        cycle = run(["python3", "scripts/autonomous-continuous-cycle.py", "--advance"])
-        actions.append(
-            {
-                "step": "autonomous_continuous_cycle",
-                "exit_code": cycle.returncode,
-                "stdout_tail": cycle.stdout.strip().splitlines()[-8:],
-                "stderr_tail": cycle.stderr.strip().splitlines()[-8:],
-            }
-        )
+    finished = parse_time(evidence.get("finished_at") or evidence.get("generated_at"))
+    age_seconds: int | None = None
+    if evidence and finished is None:
+        errors.append("canonical_agent_evidence_timestamp_invalid")
+    elif finished is not None:
+        age_seconds = int((checked_at - finished).total_seconds())
+        if age_seconds < -120 or age_seconds > MAX_AGE_SECONDS:
+            errors.append(f"canonical_agent_evidence_stale:{age_seconds}")
 
-        executor = run(["python3", "scripts/autonomous-executor.py", "--max-cycles", "1"])
-        actions.append(
-            {
-                "step": "autonomous_executor",
-                "exit_code": executor.returncode,
-                "stdout_tail": executor.stdout.strip().splitlines()[-8:],
-                "stderr_tail": executor.stderr.strip().splitlines()[-8:],
-            }
-        )
+    release_sha = RELEASE_SHA_PATH.read_text(encoding="utf-8").strip() if RELEASE_SHA_PATH.is_file() else ""
+    if re.fullmatch(r"[0-9a-f]{40}", release_sha) is None:
+        errors.append("release_sha_invalid_or_missing")
 
-        report, queue, post_recovery_decision = inspect_state()
-        restart_needed = (
-            decision.stale
-            or post_recovery_decision.idle
-            or all(step.get("exit_code", 1) != 0 for step in actions)
-        )
-        if restart_needed and shutil.which("sudo") and os.name != "nt":
-            restart = run(["sudo", "systemctl", "restart", "shopvivaliz-agent.service"])
-            actions.append(
-                {
-                    "step": "restart_agent_service",
-                    "exit_code": restart.returncode,
-                    "stdout_tail": restart.stdout.strip().splitlines()[-5:],
-                    "stderr_tail": restart.stderr.strip().splitlines()[-5:],
-                }
-            )
-            report, queue, post_recovery_decision = inspect_state()
+    active_agents = set(evidence.get("active_agents", [])) if evidence else set()
+    checks = {
+        "execution_accepted": evidence.get("execution_accepted") is True,
+        "execution_completed": evidence.get("execution_completed") is True,
+        "execution_status": evidence.get("execution_status") == "completed",
+        "active_agents": active_agents == EXPECTED_AGENTS,
+        "active_agent_count": int(evidence.get("active_agent_count", 0) or 0) == 5,
+        "work_evidence_count": int(evidence.get("work_evidence_count", 0) or 0) >= 12,
+        "registry_sha256": re.fullmatch(r"[0-9a-f]{64}", str(evidence.get("registry_sha256", ""))) is not None,
+    }
+    errors.extend(f"failed_check:{name}" for name, passed in checks.items() if not passed)
+
+    evidence_release_sha = str(evidence.get("release_sha", "") or evidence.get("commit_sha", ""))
+    if evidence_release_sha:
+        if evidence_release_sha != release_sha:
+            errors.append("evidence_release_sha_mismatch")
 
     payload = {
-        "generated_at": utc_now().isoformat().replace("+00:00", "Z"),
-        "decision": {
-            "idle": decision.idle,
-            "stale": decision.stale,
-            "no_pending": decision.no_pending,
-            "reason": decision.reason,
-        },
-        "post_recovery": {
-            "idle": post_recovery_decision.idle,
-            "stale": post_recovery_decision.stale,
-            "no_pending": post_recovery_decision.no_pending,
-            "reason": post_recovery_decision.reason,
-        },
-        "report_generated_at": report.get("generated_at"),
-        "queue_size": len(queue.get("queue", [])) if isinstance(queue, dict) else 0,
-        "actions": actions,
+        "generated_at": checked_at.isoformat().replace("+00:00", "Z"),
+        "status": "HEALTHY" if not errors else "CRITICAL",
+        "ok": not errors,
+        "read_only": True,
+        "queue_modified": False,
+        "service_restarted": False,
+        "release_sha": release_sha or None,
+        "cycle_id": evidence.get("cycle_id"),
+        "evidence_finished_at": finished.isoformat().replace("+00:00", "Z") if finished else None,
+        "evidence_age_seconds": age_seconds,
+        "evidence_path": str(EVIDENCE_PATH.relative_to(ROOT)),
+        "checks": checks,
+        "errors": errors,
     }
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    GUARDIAN_LOG.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    append_event(payload)
+    write_report(payload)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
-    return 0
+    return 0 if not errors else 2
 
 
 if __name__ == "__main__":
