@@ -57,14 +57,14 @@ jobs:
           state_file="$private_dir/integration-health.json"
           test -r "$current/includes/integration-health.php"
 
-          # The web group may traverse/read the health state, but it cannot create,
-          # replace or delete token files in the private directory.
+          # The web group may traverse the directory and read the snapshot, but
+          # only the operational owner may create, replace or modify private state.
           sudo install -d -o ubuntu -g www-data -m 2750 "$private_dir"
           if [[ -e "$state_file" ]]; then
             sudo chown ubuntu:www-data "$state_file"
-            sudo chmod 0660 "$state_file"
+            sudo chmod 0640 "$state_file"
           else
-            sudo install -o ubuntu -g www-data -m 0660 /dev/null "$state_file"
+            sudo install -o ubuntu -g www-data -m 0640 /dev/null "$state_file"
           fi
 
           cd "$current"
