@@ -352,8 +352,9 @@
     z-index: 10010 !important;
   }
 
+  /* A barra inferior e o footer nao podem somar reservas de espaco. */
   footer {
-    padding-bottom: calc(92px + env(safe-area-inset-bottom)) !important;
+    padding-bottom: 0 !important;
   }
   footer .footer-grid,
   footer .footer-content {
@@ -366,13 +367,11 @@
   footer ul,
   footer p { margin-bottom: 0 !important; }
   .footer-legal {
-    padding-bottom: calc(98px + env(safe-area-inset-bottom)) !important;
+    padding-bottom: calc(88px + env(safe-area-inset-bottom)) !important;
   }
 
   main,
-  #main-content {
-    padding-bottom: calc(94px + env(safe-area-inset-bottom)) !important;
-  }
+  #main-content { padding-bottom: 0 !important; }
 }
 
 @media (max-width: 380px) {

@@ -42,7 +42,10 @@ if (in_array($requestPath, ['/carrinho', '/checkout', '/checkout/retorno'], true
 
 $googleEventsFile = dirname(__DIR__) . '/js/shopvivaliz-google-events.js';
 $googleEventsVersion = is_file($googleEventsFile) ? (string)filemtime($googleEventsFile) : '1';
-echo "\n<script src=\"/js/shopvivaliz-google-events.js?v=" . htmlspecialchars($googleEventsVersion, ENT_QUOTES, 'UTF-8') . "\"></script>\n";
+// Eventos de interação não são necessários para a primeira pintura. Carregá-los
+// de forma adiada evita que a resposta deste arquivo bloqueie a home, em especial
+// nas conexões móveis mais lentas.
+echo "\n<script defer src=\"/js/shopvivaliz-google-events.js?v=" . htmlspecialchars($googleEventsVersion, ENT_QUOTES, 'UTF-8') . "\"></script>\n";
 
 $privacyCss = dirname(__DIR__) . '/css/privacy-consent-v1.css';
 $privacyJs = dirname(__DIR__) . '/js/privacy-consent-v1.js';

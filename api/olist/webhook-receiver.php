@@ -125,6 +125,34 @@ switch ($event) {
         exit;
 }
 
+/**
+ * Invalida o cache ativo (renomeia com backup timestampado, se existir) e
+ * dispara daemon-sync-products.py em background para repopular na hora,
+ * em vez de esperar o proximo ciclo agendado do daemon (ate 5 min).
+ *
+ * Usado pelos 3 eventos (price/stock/product). Antes, so handle_price_update
+ * disparava o daemon -- handle_stock_update/handle_product_update so
+ * invalidavam o cache e ficavam esperando o proximo ciclo, o que e
+ * inconsistente e faz produto/estoque novo demorar mais que preco pra
+ * aparecer no site.
+ */
+function trigger_cache_resync($log_file) {
+    $cache_file = __DIR__ . '/../../storage/products-cache-ativos.json';
+    if (file_exists($cache_file)) {
+        $backup = $cache_file . '.webhook-' . time();
+        if (rename($cache_file, $backup)) {
+            log_event("  ✓ Cache invalidado (backup: " . basename($backup) . ")");
+        }
+    }
+
+    $daemon = __DIR__ . '/../../daemon-sync-products.py';
+    if (is_file($daemon)) {
+        $cmd = "cd " . escapeshellarg(__DIR__ . '/../../') . " && /usr/bin/python3 daemon-sync-products.py --once >> " . escapeshellarg(__DIR__ . '/../../logs/sync-products.log') . " 2>&1 &";
+        exec($cmd, $output, $code);
+        log_event("  ✓ Sincronização disparada (código: {$code})");
+    }
+}
+
 function handle_price_update($data, $log_file) {
     log_event("PRICE UPDATE");
 
@@ -147,23 +175,7 @@ function handle_price_update($data, $log_file) {
     }
 
     log_event("  SKU: {$sku} | Novo preço: R$ {$price}");
-
-    // Invalidar cache
-    $cache_file = __DIR__ . '/../../storage/products-cache-ativos.json';
-    if (file_exists($cache_file)) {
-        $backup = $cache_file . '.webhook-' . time();
-        if (rename($cache_file, $backup)) {
-            log_event("  ✓ Cache invalidado (backup: " . basename($backup) . ")");
-        }
-    }
-
-    // Disparar sincronização em background
-    $daemon = __DIR__ . '/../../daemon-sync-products.py';
-    if (is_file($daemon)) {
-        $cmd = "cd " . escapeshellarg(__DIR__ . '/../../') . " && /usr/bin/python3 daemon-sync-products.py >> " . escapeshellarg(__DIR__ . '/../../logs/sync-products.log') . " 2>&1 &";
-        exec($cmd, $output, $code);
-        log_event("  ✓ Sincronização disparada (código: {$code})");
-    }
+    trigger_cache_resync($log_file);
 
     http_response_code(200);
     echo json_encode(['status' => 'received', 'sku' => $sku, 'price' => $price, 'action' => 'sync queued']);
@@ -184,16 +196,10 @@ function handle_stock_update($data, $log_file) {
     }
 
     log_event("  SKU: {$sku} | Novo estoque: {$quantity}");
-
-    // Invalidar cache
-    $cache_file = __DIR__ . '/../../storage/products-cache-ativos.json';
-    if (file_exists($cache_file)) {
-        rename($cache_file, $cache_file . '.webhook-' . time());
-        log_event("  ✓ Cache invalidado");
-    }
+    trigger_cache_resync($log_file);
 
     http_response_code(200);
-    echo json_encode(['status' => 'received', 'sku' => $sku, 'quantity' => $quantity]);
+    echo json_encode(['status' => 'received', 'sku' => $sku, 'quantity' => $quantity, 'action' => 'sync queued']);
     log_event("  ✅ Processado com sucesso");
 }
 
@@ -208,16 +214,10 @@ function handle_product_update($data, $log_file) {
     }
 
     log_event("  SKU: {$sku}");
-
-    // Invalidar cache
-    $cache_file = __DIR__ . '/../../storage/products-cache-ativos.json';
-    if (file_exists($cache_file)) {
-        rename($cache_file, $cache_file . '.webhook-' . time());
-        log_event("  ✓ Cache invalidado");
-    }
+    trigger_cache_resync($log_file);
 
     http_response_code(200);
-    echo json_encode(['status' => 'received', 'sku' => $sku]);
+    echo json_encode(['status' => 'received', 'sku' => $sku, 'action' => 'sync queued']);
     log_event("  ✅ Processado com sucesso");
 }
 

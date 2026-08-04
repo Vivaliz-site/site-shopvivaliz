@@ -9,7 +9,6 @@ web_search = "live"
 
 [sandbox_workspace_write]
 network_access = true
-
 project = "ShopVivaliz"
 default_agent = "shopvivaliz-release"
 
@@ -43,6 +42,14 @@ required = true
 startup_timeout_sec = 30
 tool_timeout_sec = 120
 default_tools_approval_mode = "prompt"
+
+[mcp_servers.codex-mesh-bridge]
+command = "python"
+args = ['C:\site-shopvivaliz\scripts\codex-mesh-bridge.py']
+
+[mcp_servers.google-ads-readonly]
+command = "python"
+args = ['C:\site-shopvivaliz\scripts\mcp-google-ads-readonly.py']
 
 [paths]
 app = "app"
