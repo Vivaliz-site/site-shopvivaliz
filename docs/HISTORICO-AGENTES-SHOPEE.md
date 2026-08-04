@@ -702,3 +702,30 @@ tiver tempo: (1) decidir se vale investir em consumir a API de analytics do Shop
 para viabilizar os itens 1/3/9/10, ou (2) reduzir o escopo desta rotina de 6h para apenas o que o
 código hoje sustenta (aplicar `shopee_full_catalog_optimizer.py` via `workflow_dispatch` manual,
 sem métricas de CTR).
+
+### 9.15 Atualização — ciclo de 2026-08-04 (~19h UTC), 20º ciclo — estado idêntico ao ciclo 19, sem fato novo
+
+Checagem rápida ~6h depois do ciclo 19, sem reinvestigar do zero: `env | grep -iE "TINY_|OLIST_|
+SHOPEE_|ANTHROPIC_API_KEY"` continua vazio neste sandbox; `.github/workflows/` continua com
+apenas `shopee-optimizer-safety.yml`/`shopee-production-seo.yml` (o par baseado em Tiny/Olist,
+`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml`, continua ausente); artefato mais
+recente em `listings/` (por `sort`, não `ls -t`) continua `shopee-listings-20260726-080756.json`/
+`optimization-report-20260726-060921.json`, mesmo erro `"Falha ao renovar token: Invalid client
+or Invalid client credentials"`, `total_products: 0` — nenhum artefato novo desde 2026-07-26.
+Via `mcp__github__actions_list` (workflow `shopee-production-seo.yml`, owner
+`fredmourao-ai`/repo `site-shopvivaliz`): ainda as mesmas 5 execuções de 2026-07-30 (todas
+`conclusion: failure`, disparadas por `fredmourao-ai`) — nenhuma execução nova desde então, ou
+seja, o passo real de apply ("Apply SEO to real Shopee catalog") nunca rodou de fato
+(`!= skipped` com `success`) em nenhum momento até agora.
+
+O achado estrutural do ciclo 19 (nenhuma chamada a endpoint de analytics do Shopee Open Platform
+em `scripts/shopee_full_catalog_optimizer.py`/`shopee_production_seo_apply.py` — sem CTR, taxa de
+conversão, ou A/B testing medido, itens 1/3/9/10 desta rotina continuam tecnicamente inexequíveis
+mesmo com credencial `SHOPEE_*` presente) não foi re-verificado nesta sessão por já ter sido
+confirmado há ~6h; nada no diff de commits desde `860be30` sugere mudança nesses scripts.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado. Nenhuma notificação push enviada neste ciclo — nenhum dos
+critérios de novo aviso (workflows Tiny recriados, artefato novo com erro diferente, ou execução
+de `shopee-production-seo.yml` com apply real bem-sucedido) ocorreu, e o achado estrutural do
+ciclo 19 já foi comunicado no relatório daquele ciclo.
