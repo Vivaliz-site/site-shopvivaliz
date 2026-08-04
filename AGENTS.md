@@ -20,11 +20,11 @@ script, daemon ou integração que opere neste repositório.
 
 - agente, bot ou autor do PR aprovar o próprio trabalho;
 - auto-merge, merge por bot, merge antes da aprovação humana ou bypass de proteção;
-- push direto em `main`/`master`, force-push ou refspec protegido;
-- `git reset --hard`, `git clean -fd`, exclusão destrutiva ou staging amplo;
-- mudar fila para `in_progress`, `completed` ou equivalente antes do trabalho real;
+- publicação direta em branch protegida, force-push, refspec protegido ou staging amplo;
+- reset, limpeza ou exclusão destrutiva de árvore ou dados;
+- mudar fila para estado de execução ou conclusão antes do trabalho real;
 - declarar execução, sucesso, health ou conclusão sem evidência verificável;
-- mascarar erro com `|| true`, `|| log`, `continue-on-error` ou saída zero artificial;
+- ignorar erro, continuar após falha ou fabricar saída zero;
 - expor ou versionar secrets, tokens, chaves, dados pessoais ou credenciais;
 - executar deploy, Git ou sobrescrita de código por endpoint web;
 - alterar preço, estoque, campanha, orçamento, pagamento ou produção fora de fluxo aprovado.
