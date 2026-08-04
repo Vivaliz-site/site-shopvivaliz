@@ -1,26 +1,30 @@
 #!/usr/bin/env python3
-"""
-ShopVivaliz Mobile Agent Bridge
+"""ShopVivaliz mobile agent bridge with fail-closed task completion.
 
-Executa tarefas vindas do ChatGPT Chat mobile por fila local ou, futuramente, Gmail.
-Foco: operar GitHub com seguranca via git/gh, sempre em branch e PR.
+The bridge may create an issue, read an allow-listed file, run the canonical
+read-only audit, or apply an allow-listed patch on a new branch and open a PR.
+It never merges a PR or pushes a protected branch. A queue item is moved to
+``.done`` only after every required command succeeded and the result contains
+verifiable evidence.
 """
 from __future__ import annotations
 
 import argparse
 import fnmatch
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 
-class BridgeError(Exception):
+class BridgeError(RuntimeError):
     pass
 
 
@@ -32,294 +36,272 @@ class CmdResult:
     stderr: str
 
 
-def load_json(path: Path) -> Dict[str, Any]:
+def load_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+        data = json.load(handle)
+    if not isinstance(data, dict):
+        raise BridgeError(f"JSON object required: {path}")
+    return data
 
 
-def write_json(path: Path, data: Dict[str, Any]) -> None:
+def write_json(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with tmp.open("w", encoding="utf-8") as handle:
-        json.dump(data, handle, ensure_ascii=False, indent=2)
-        handle.write("\n")
-    tmp.replace(path)
+    temp = path.with_suffix(path.suffix + ".tmp")
+    temp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(temp, path)
 
 
-def run(cmd: List[str], cwd: Path, timeout: int = 120, check: bool = True) -> CmdResult:
-    joined = " ".join(cmd)
-    forbidden_fragments = [
-        "git reset --hard",
-        "git clean",
-        "rm -rf",
-        "sudo rm",
-        "gh pr merge",
-    ]
-    if any(fragment in joined for fragment in forbidden_fragments):
-        raise BridgeError(f"Comando bloqueado por seguranca: {joined}")
-    proc = subprocess.run(cmd, cwd=str(cwd), text=True, capture_output=True, timeout=timeout)
+def command_text(cmd: list[str]) -> str:
+    return " ".join(cmd)
+
+
+def assert_command_safe(text: str) -> None:
+    patterns = (
+        r"\bgit\s+reset\s+--hard\b",
+        r"\bgit\s+clean\b",
+        r"\brm\s+-rf\b",
+        r"\bsudo\s+rm\b",
+        r"\bgh\s+pr\s+merge\b",
+        r"\bgit\s+push\b[^\n]*(?:--force(?:-with-lease)?|(?:HEAD:|refs/heads/)?(?:main|master)\b)",
+    )
+    if any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns):
+        raise BridgeError(f"Unsafe command blocked: {text}")
+
+
+def run(cmd: list[str], cwd: Path, timeout: int = 120) -> CmdResult:
+    joined = command_text(cmd)
+    assert_command_safe(joined)
+    proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, timeout=timeout, check=False)
     result = CmdResult(joined, proc.returncode, proc.stdout, proc.stderr)
-    if check and proc.returncode != 0:
+    if proc.returncode != 0:
         raise BridgeError(
-            f"Comando falhou ({proc.returncode}): {joined}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+            f"Command failed ({proc.returncode}): {joined}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
         )
     return result
 
 
-def run_shell(command: str, cwd: Path, timeout: int = 180, check: bool = True) -> CmdResult:
-    dangerous_patterns = [
-        r"(^|[;&|]\s*)git\s+reset\s+--hard(\s|$)",
-        r"(^|[;&|]\s*)git\s+clean(\s|$)",
-        r"(^|[;&|]\s*)rm\s+-rf(\s|$)",
-        r"(^|[;&|]\s*)sudo\s+rm(\s|$)",
-        r"(^|[;&|]\s*)gh\s+pr\s+merge(\s|$)",
-        r"(^|[;&|]\s*)git\s+push\s+origin\s+main(\s|$)",
-    ]
-    lowered = command.lower()
-    for pattern in dangerous_patterns:
-        if re.search(pattern, lowered):
-            raise BridgeError(f"Comando shell bloqueado: {command}")
-    proc = subprocess.run(["bash", "-lc", command], cwd=str(cwd), text=True, capture_output=True, timeout=timeout)
+def run_shell(command: str, cwd: Path, timeout: int = 180) -> CmdResult:
+    assert_command_safe(command)
+    proc = subprocess.run(
+        ["bash", "-Eeuo", "pipefail", "-c", command],
+        cwd=cwd,
+        text=True,
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+    )
     result = CmdResult(command, proc.returncode, proc.stdout, proc.stderr)
-    if check and proc.returncode != 0:
+    if proc.returncode != 0:
         raise BridgeError(
-            f"Comando falhou ({proc.returncode}): {command}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+            f"Shell command failed ({proc.returncode}): {command}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
         )
     return result
 
 
 def assert_repo_clean(repo: Path) -> None:
-    status = run(["git", "status", "--porcelain"], repo).stdout.splitlines()
-    relevant = []
-    for line in status:
-        if not line.strip():
-            continue
-        path = line[3:]
-        if " -> " in path:
-            path = path.split(" -> ", 1)[1]
-        normalized = path.replace("\\", "/")
-        if normalized.startswith("agent-bridge/") or normalized.startswith(".agent-bridge"):
+    lines = run(["git", "status", "--porcelain"], repo).stdout.splitlines()
+    relevant: list[str] = []
+    for line in lines:
+        path = line[3:].split(" -> ", 1)[-1].replace("\\", "/") if len(line) >= 4 else ""
+        if path.startswith("agent-bridge/") or path.startswith(".agent-bridge"):
             continue
         relevant.append(line)
     if relevant:
-        raise BridgeError(
-            "Repositorio com alteracoes locais. Abortando para evitar sobrescrever trabalho.\n"
-            + "\n".join(relevant)
-        )
+        raise BridgeError("Repository has unrelated local changes:\n" + "\n".join(relevant))
 
 
 def safe_branch_name(prefix: str, title: str) -> str:
-    slug = title.lower()
-    slug = re.sub(r"[^a-z0-9]+", "-", slug).strip("-")[:60]
-    if not slug:
-        slug = "task"
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:60] or "task"
     return f"{prefix}{slug}-{int(time.time())}"
 
 
-def is_blocked_path(path: str, config: Dict[str, Any]) -> bool:
+def is_blocked_path(path: str, config: dict[str, Any]) -> bool:
     normalized = path.replace("\\", "/")
-    for pattern in config.get("blocked_file_patterns", []):
-        if fnmatch.fnmatch(normalized, pattern) or fnmatch.fnmatch(Path(normalized).name, pattern):
-            return True
-    return False
+    return any(
+        fnmatch.fnmatch(normalized, pattern) or fnmatch.fnmatch(Path(normalized).name, pattern)
+        for pattern in config.get("blocked_file_patterns", [])
+    )
 
 
-def is_allowed_path(path: str, config: Dict[str, Any]) -> bool:
+def is_allowed_path(path: str, config: dict[str, Any]) -> bool:
     normalized = path.replace("\\", "/")
     if is_blocked_path(normalized, config):
         return False
-    prefixes = config.get("allowed_file_prefixes", [])
-    return any(normalized.startswith(prefix) for prefix in prefixes)
+    return any(normalized.startswith(prefix) for prefix in config.get("allowed_file_prefixes", []))
 
 
-def extract_patch_paths(patch_text: str) -> List[str]:
-    paths: List[str] = []
+def extract_patch_paths(patch_text: str) -> list[str]:
+    paths: set[str] = set()
     for line in patch_text.splitlines():
         if line.startswith("diff --git "):
-            parts = line.split()
-            if len(parts) >= 4:
-                b_path = parts[3]
-                if b_path.startswith("b/"):
-                    paths.append(b_path[2:])
+            fields = line.split()
+            if len(fields) >= 4 and fields[3].startswith("b/"):
+                paths.add(fields[3][2:])
         elif line.startswith("+++ b/"):
-            paths.append(line[6:])
-    return sorted(set(paths))
+            paths.add(line[6:])
+    return sorted(paths)
 
 
-def validate_patch(patch_text: str, config: Dict[str, Any]) -> List[str]:
+def validate_patch(patch_text: str, config: dict[str, Any]) -> list[str]:
     if len(patch_text.encode("utf-8")) > int(config.get("max_patch_bytes", 200000)):
-        raise BridgeError("Patch excede max_patch_bytes")
+        raise BridgeError("Patch exceeds max_patch_bytes")
     paths = extract_patch_paths(patch_text)
     if not paths:
-        raise BridgeError("Patch sem arquivos detectaveis")
+        raise BridgeError("Patch contains no detectable paths")
     blocked = [path for path in paths if not is_allowed_path(path, config)]
     if blocked:
-        raise BridgeError(
-            "Patch tenta alterar arquivos fora do escopo permitido ou bloqueados: " + ", ".join(blocked)
-        )
-    if re.search(r"(?i)(password|client_secret|access_token|refresh_token|private key|senha\s*=|token\s*=)", patch_text):
-        raise BridgeError("Patch contem padrao parecido com segredo. Abortando.")
+        raise BridgeError("Patch contains blocked paths: " + ", ".join(blocked))
+    secret_pattern = re.compile(
+        r"(?i)(?:github_pat_|gh[pousr]_|-----BEGIN .*PRIVATE KEY-----|"
+        r"(?:password|client_secret|access_token|refresh_token|api_key)\s*[:=]\s*['\"][^'\"]{8,})"
+    )
+    if secret_pattern.search(patch_text):
+        raise BridgeError("Patch contains a credential-like value")
     return paths
 
 
-def create_issue(task: Dict[str, Any], config: Dict[str, Any], repo: Path) -> Dict[str, Any]:
+def create_issue(task: dict[str, Any], config: dict[str, Any], repo: Path) -> dict[str, Any]:
     title = task.get("title") or task.get("issue", {}).get("title")
     body = task.get("body") or task.get("issue", {}).get("body")
     if not title or not body:
-        raise BridgeError("create_issue exige title/body")
-    tmp_body = repo / ".agent-bridge-issue-body.md"
-    tmp_body.write_text(body, encoding="utf-8")
+        raise BridgeError("create_issue requires title and body")
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".md", delete=False, dir=repo) as handle:
+        handle.write(str(body))
+        body_path = Path(handle.name)
     try:
-        args = ["gh", "issue", "create", "--repo", config["repo_full_name"], "--title", title, "--body-file", str(tmp_body)]
+        args = ["gh", "issue", "create", "--repo", config["repo_full_name"], "--title", str(title), "--body-file", str(body_path)]
         for label in config.get("github_labels", []):
-            args += ["--label", label]
-        res = run(args, repo, timeout=120)
-        return {"status": "OK", "action": "create_issue", "stdout": res.stdout.strip(), "stderr": res.stderr.strip()}
+            args.extend(["--label", str(label)])
+        result = run(args, repo)
     finally:
-        try:
-            tmp_body.unlink()
-        except FileNotFoundError:
-            pass
+        body_path.unlink(missing_ok=True)
+    url = result.stdout.strip()
+    if not re.match(r"^https://github\.com/.+/issues/\d+$", url):
+        raise BridgeError("Issue creation returned no verifiable URL")
+    return {"status": "OK", "action": "create_issue", "issue_url": url, "evidence": {"command": asdict(result)}}
 
 
-def apply_patch_pr(task: Dict[str, Any], config: Dict[str, Any], repo: Path) -> Dict[str, Any]:
-    title = task.get("title") or "Agent patch"
+def apply_patch_pr(task: dict[str, Any], config: dict[str, Any], repo: Path) -> dict[str, Any]:
+    title = str(task.get("title") or "Agent patch")
     patch_text = task.get("patch")
-    body = task.get("body") or "PR criado pelo ShopVivaliz Mobile Agent Bridge."
-    if not patch_text:
-        raise BridgeError("apply_patch_pr exige campo patch")
-
+    if not isinstance(patch_text, str) or not patch_text:
+        raise BridgeError("apply_patch_pr requires patch")
     changed_paths = validate_patch(patch_text, config)
     assert_repo_clean(repo)
 
-    base = task.get("base_branch") or config.get("default_base_branch", "main")
-    branch = task.get("branch") or safe_branch_name(config.get("branch_prefix", "agent/"), title)
-    evidence: Dict[str, Any] = {"changed_paths": changed_paths, "commands": []}
+    base = str(task.get("base_branch") or config.get("default_base_branch", "main"))
+    if base not in set(config.get("allowed_base_branches", ["main"])):
+        raise BridgeError(f"Base branch is not allowed: {base}")
+    prefix = str(config.get("branch_prefix", "agent/"))
+    branch = str(task.get("branch") or safe_branch_name(prefix, title))
+    if not branch.startswith(prefix) or branch in {"main", "master"}:
+        raise BridgeError("Head branch must use the configured non-protected prefix")
 
-    run(["git", "fetch", "origin", base], repo)
-    run(["git", "checkout", base], repo)
-    run(["git", "pull", "--ff-only", "origin", base], repo)
-    run(["git", "checkout", "-b", branch], repo)
+    evidence: dict[str, Any] = {"changed_paths": changed_paths, "commands": [], "validations": []}
+    for command in (["git", "fetch", "origin", base], ["git", "checkout", base], ["git", "merge", "--ff-only", f"origin/{base}"], ["git", "checkout", "-b", branch]):
+        evidence["commands"].append(asdict(run(command, repo)))
 
     patch_file = repo / ".agent-bridge.patch"
     patch_file.write_text(patch_text, encoding="utf-8")
     try:
-        res = run(["git", "apply", "--check", str(patch_file)], repo)
-        evidence["commands"].append(res.__dict__)
-        res = run(["git", "apply", str(patch_file)], repo)
-        evidence["commands"].append(res.__dict__)
+        evidence["commands"].append(asdict(run(["git", "apply", "--check", str(patch_file)], repo)))
+        evidence["commands"].append(asdict(run(["git", "apply", str(patch_file)], repo)))
     finally:
-        try:
-            patch_file.unlink()
-        except FileNotFoundError:
-            pass
+        patch_file.unlink(missing_ok=True)
 
-    validations: List[Dict[str, Any]] = []
     for command in config.get("validations", []):
-        res = run_shell(command, repo, check=True)
-        validations.append(res.__dict__)
-    evidence["validations"] = validations
+        evidence["validations"].append(asdict(run_shell(str(command), repo)))
 
     status = run(["git", "status", "--porcelain"], repo).stdout.strip()
     if not status:
-        raise BridgeError("Patch nao gerou alteracao real. Abortando sem PR.")
+        raise BridgeError("Patch generated no real change")
+    evidence["diffstat"] = run(["git", "diff", "--stat"], repo).stdout
 
-    diffstat = run(["git", "diff", "--stat"], repo).stdout
-    evidence["diffstat"] = diffstat
+    evidence["commands"].append(asdict(run(["git", "add", "--", *changed_paths], repo)))
+    evidence["commands"].append(asdict(run(["git", "commit", "-m", str(task.get("commit_message") or title)], repo)))
+    commit_sha = run(["git", "rev-parse", "HEAD"], repo).stdout.strip()
+    if re.fullmatch(r"[0-9a-f]{40}", commit_sha) is None:
+        raise BridgeError("Commit SHA could not be verified")
+    evidence["commit_sha"] = commit_sha
+    evidence["commands"].append(asdict(run(["git", "push", "-u", "origin", branch], repo)))
 
-    run(["git", "add"] + changed_paths, repo)
-    commit_message = task.get("commit_message") or title
-    run(["git", "commit", "-m", commit_message], repo)
-    run(["git", "push", "-u", "origin", branch], repo)
-
-    pr_body = (
-        body
-        + "\n\n## Evidencias do Agent Bridge\n\n```json\n"
-        + json.dumps(evidence, ensure_ascii=False, indent=2)
-        + "\n```\n"
-    )
-    tmp_body = repo / ".agent-bridge-pr-body.md"
-    tmp_body.write_text(pr_body, encoding="utf-8")
+    body = str(task.get("body") or "PR created by the ShopVivaliz Mobile Agent Bridge.")
+    body += "\n\n## Agent Bridge evidence\n\n```json\n" + json.dumps(evidence, ensure_ascii=False, indent=2) + "\n```\n"
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".md", delete=False, dir=repo) as handle:
+        handle.write(body)
+        body_path = Path(handle.name)
     try:
-        args = [
-            "gh",
-            "pr",
-            "create",
-            "--repo",
-            config["repo_full_name"],
-            "--base",
-            base,
-            "--head",
-            branch,
-            "--title",
-            title,
-            "--body-file",
-            str(tmp_body),
-        ]
-        pr = run(args, repo, timeout=120)
+        pr = run([
+            "gh", "pr", "create", "--repo", config["repo_full_name"], "--base", base,
+            "--head", branch, "--title", title, "--body-file", str(body_path),
+        ], repo)
     finally:
-        try:
-            tmp_body.unlink()
-        except FileNotFoundError:
-            pass
+        body_path.unlink(missing_ok=True)
+    pr_url = pr.stdout.strip()
+    if not re.match(r"^https://github\.com/.+/pull/\d+$", pr_url):
+        raise BridgeError("PR creation returned no verifiable URL")
 
     return {
         "status": "OK",
         "action": "apply_patch_pr",
         "branch": branch,
+        "commit_sha": commit_sha,
+        "pr_url": pr_url,
         "changed_paths": changed_paths,
-        "diffstat": diffstat,
-        "pr": pr.stdout.strip(),
-        "validations_count": len(validations),
+        "validation_count": len(evidence["validations"]),
+        "evidence": evidence,
+        "merge_performed": False,
     }
 
 
-def read_file(task: Dict[str, Any], config: Dict[str, Any], repo: Path) -> Dict[str, Any]:
-    path = task.get("path")
-    if not path:
-        raise BridgeError("read_file exige path")
-    if not is_allowed_path(path, config):
-        raise BridgeError("Arquivo bloqueado ou fora do escopo permitido")
+def read_file(task: dict[str, Any], config: dict[str, Any], repo: Path) -> dict[str, Any]:
+    path = str(task.get("path") or "")
+    if not path or not is_allowed_path(path, config):
+        raise BridgeError("read_file path is missing or blocked")
     full = (repo / path).resolve()
-    if not str(full).startswith(str(repo.resolve())):
-        raise BridgeError("Path traversal bloqueado")
+    if repo.resolve() not in full.parents and full != repo.resolve():
+        raise BridgeError("Path traversal blocked")
     text = full.read_text(encoding="utf-8", errors="replace")
+    return {"status": "OK", "action": "read_file", "path": path, "content": text[:20000], "truncated": len(text) > 20000}
+
+
+def run_readonly_audit(task: dict[str, Any], config: dict[str, Any], repo: Path) -> dict[str, Any]:
+    commands = [
+        ["git", "status", "--short"],
+        ["git", "log", "--oneline", "-n", "15"],
+        [sys.executable, "scripts/audit-agents-real-work.py"],
+        [sys.executable, "scripts/maintenance/system_health_check.py"],
+    ]
+    outputs = [asdict(run(command, repo, timeout=300)) for command in commands]
     return {
         "status": "OK",
-        "action": "read_file",
-        "path": path,
-        "content": text[:20000],
-        "truncated": len(text) > 20000,
+        "action": "run_readonly_audit",
+        "all_commands_succeeded": True,
+        "command_count": len(outputs),
+        "outputs": outputs,
     }
 
 
-def run_readonly_audit(task: Dict[str, Any], config: Dict[str, Any], repo: Path) -> Dict[str, Any]:
-    commands = [
-        "git status --short",
-        "git log --oneline -n 15",
-        "find .github/workflows -maxdepth 1 -type f -print 2>/dev/null | sort",
-        "grep -RInE 'git clean|reset --hard|gh pr merge|--auto|continue-on-error|exit 0|simula|mock|fallback' .github scripts api includes admin 2>/dev/null | head -200",
-    ]
-    outputs = []
-    for command in commands:
-        res = run_shell(command, repo, check=False)
-        outputs.append(res.__dict__)
-    return {"status": "OK", "action": "run_readonly_audit", "outputs": outputs}
-
-
-def process_task(task_path: Path, config: Dict[str, Any]) -> Dict[str, Any]:
+def process_task(task_path: Path, config: dict[str, Any]) -> dict[str, Any]:
     repo = Path(config["repo_path"]).resolve()
     task = load_json(task_path)
-    action = task.get("action")
-    if action == "create_issue":
-        return create_issue(task, config, repo)
-    if action == "apply_patch_pr":
-        return apply_patch_pr(task, config, repo)
-    if action == "read_file":
-        return read_file(task, config, repo)
-    if action == "run_readonly_audit":
-        return run_readonly_audit(task, config, repo)
-    raise BridgeError(f"Acao nao permitida: {action}")
+    handlers = {
+        "create_issue": create_issue,
+        "apply_patch_pr": apply_patch_pr,
+        "read_file": read_file,
+        "run_readonly_audit": run_readonly_audit,
+    }
+    action = str(task.get("action") or "")
+    if action not in handlers:
+        raise BridgeError(f"Action is not allowed: {action}")
+    result = handlers[action](task, config, repo)
+    if result.get("status") != "OK":
+        raise BridgeError(f"Action did not return verified OK status: {action}")
+    if action == "apply_patch_pr" and not all(result.get(key) for key in ("commit_sha", "pr_url", "evidence")):
+        raise BridgeError("Mutating action lacks commit/PR/evidence")
+    if action == "run_readonly_audit" and result.get("all_commands_succeeded") is not True:
+        raise BridgeError("Read-only audit did not validate all commands")
+    return result
 
 
 def main() -> int:
@@ -331,37 +313,31 @@ def main() -> int:
 
     config_path = Path(args.config)
     if not config_path.exists():
-        example = Path("agent-bridge/config.example.json")
-        raise SystemExit(f"Config nao encontrada: {config_path}. Copie {example} para {config_path}.")
+        raise SystemExit(f"Config not found: {config_path}")
     config = load_json(config_path)
-    repo = Path(config["repo_path"])
+    repo = Path(config["repo_path"]).resolve()
     inbox = repo / config.get("inbox_dir", "agent-bridge/inbox")
     outbox = repo / config.get("outbox_dir", "agent-bridge/outbox")
     logs = repo / config.get("log_dir", "agent-bridge/logs")
-    inbox.mkdir(parents=True, exist_ok=True)
-    outbox.mkdir(parents=True, exist_ok=True)
-    logs.mkdir(parents=True, exist_ok=True)
+    for directory in (inbox, outbox, logs):
+        directory.mkdir(parents=True, exist_ok=True)
 
     while True:
-        tasks = sorted(inbox.glob("*.json"))
-        for task_path in tasks:
+        for task_path in sorted(inbox.glob("*.json")):
             stamp = int(time.time())
             result_path = outbox / f"{task_path.stem}.{stamp}.result.json"
             try:
                 result = process_task(task_path, config)
                 write_json(result_path, result)
-                processed = task_path.with_suffix(".json.done")
-                shutil.move(str(task_path), str(processed))
+                shutil.move(str(task_path), str(task_path.with_suffix(".json.done")))
             except Exception as exc:
-                err = {"status": "ERROR", "task": task_path.name, "error": str(exc)}
-                write_json(result_path, err)
-                failed = task_path.with_suffix(".json.failed")
-                shutil.move(str(task_path), str(failed))
+                error = {"status": "ERROR", "task": task_path.name, "error": str(exc), "completed": False}
+                write_json(result_path, error)
+                shutil.move(str(task_path), str(task_path.with_suffix(".json.failed")))
         if args.once:
-            break
-        time.sleep(args.sleep)
-    return 0
+            return 0
+        time.sleep(max(5, args.sleep))
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())
