@@ -19,7 +19,7 @@ env_file = Path(".env")
 access_token = ""
 
 for line in env_file.read_text().split('\n'):
-    if line.startswith('OLIST_ACCESS_TOKEN='):
+    if line.startswith('TINY_ACCESS_TOKEN='):
         access_token = line.split('=', 1)[1].strip()
         break
 

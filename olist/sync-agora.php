@@ -10,8 +10,8 @@
 header('Content-Type: application/json; charset=utf-8');
 set_time_limit(900);
 
-$client_id = getenv('OLIST_CLIENT_ID') ?: die('ERRO: OLIST_CLIENT_ID não configurado');
-$client_secret = getenv('OLIST_CLIENT_SECRET') ?: die('ERRO: OLIST_CLIENT_SECRET não configurado');
+$client_id = getenv('TINY_CLIENT_ID') ?: die('ERRO: TINY_CLIENT_ID não configurado');
+$client_secret = getenv('TINY_CLIENT_SECRET') ?: die('ERRO: TINY_CLIENT_SECRET não configurado');
 
 log_msg("=== SYNC AGORA INICIADO ===");
 

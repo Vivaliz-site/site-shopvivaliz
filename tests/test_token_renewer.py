@@ -14,7 +14,7 @@ SPEC.loader.exec_module(renewer)
 def test_atomic_env_update_preserves_unrelated_values(tmp_path: Path, monkeypatch) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text(
-        "UNCHANGED=value\nOLIST_ACCESS_TOKEN=old\nOLIST_REFRESH_TOKEN=old-refresh\n",
+        "UNCHANGED=value\nTINY_ACCESS_TOKEN=old\nTINY_REFRESH_TOKEN=old-refresh\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(renewer, "ENV_PATH", env_file)
@@ -23,16 +23,16 @@ def test_atomic_env_update_preserves_unrelated_values(tmp_path: Path, monkeypatc
 
     content = env_file.read_text(encoding="utf-8")
     assert "UNCHANGED=value" in content
-    assert "OLIST_ACCESS_TOKEN=new-access" in content
-    assert "OLIST_REFRESH_TOKEN=new-refresh" in content
+    assert "TINY_ACCESS_TOKEN=new-access" in content
+    assert "TINY_REFRESH_TOKEN=new-refresh" in content
     assert not list(tmp_path.glob(".env.*"))
 
 
 def test_renew_once_never_logs_token_values(tmp_path: Path, monkeypatch, capsys) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text(
-        "OLIST_CLIENT_ID=id\nOLIST_CLIENT_SECRET=secret\n"
-        "OLIST_ACCESS_TOKEN=old\nOLIST_REFRESH_TOKEN=old-refresh\n",
+        "TINY_CLIENT_ID=id\nTINY_CLIENT_SECRET=secret\n"
+        "TINY_ACCESS_TOKEN=old\nTINY_REFRESH_TOKEN=old-refresh\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(renewer, "ENV_PATH", env_file)

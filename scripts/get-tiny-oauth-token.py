@@ -9,8 +9,8 @@ Uso:
     python scripts/get-tiny-oauth-token.py
 
 Variáveis de ambiente necessárias (ou em .env.local):
-    OLIST_CLIENT_ID      ou  TINY_CLIENT_ID
-    OLIST_CLIENT_SECRET  ou  TINY_CLIENT_SECRET
+    TINY_CLIENT_ID      ou  TINY_CLIENT_ID
+    TINY_CLIENT_SECRET  ou  TINY_CLIENT_SECRET
     URL_REDIRCT_OLIST            (opcional — URL de redirect registrada no app Tiny)
 """
 
@@ -52,14 +52,14 @@ def load_env_local():
 
 
 def get_credentials():
-    client_id     = os.getenv("OLIST_CLIENT_ID") or os.getenv("TINY_CLIENT_ID") or os.getenv("CLIENT_ID_API_OLIST")
-    client_secret = os.getenv("OLIST_CLIENT_SECRET") or os.getenv("TINY_CLIENT_SECRET") or os.getenv("CLIENT_SECRET_OLIST")
+    client_id     = os.getenv("TINY_CLIENT_ID") or os.getenv("TINY_CLIENT_ID") or os.getenv("CLIENT_ID_API_OLIST")
+    client_secret = os.getenv("TINY_CLIENT_SECRET") or os.getenv("TINY_CLIENT_SECRET") or os.getenv("CLIENT_SECRET_OLIST")
     redirect_uri  = os.getenv("URL_REDIRCT_OLIST") or REDIRECT_URI
 
     if not client_id:
-        client_id = input("OLIST_CLIENT_ID (client_id do app Tiny): ").strip()
+        client_id = input("TINY_CLIENT_ID (client_id do app Tiny): ").strip()
     if not client_secret:
-        client_secret = input("OLIST_CLIENT_SECRET: ").strip()
+        client_secret = input("TINY_CLIENT_SECRET: ").strip()
 
     return client_id, client_secret, redirect_uri
 
@@ -149,7 +149,7 @@ def main():
 
     client_id, client_secret, redirect_uri = get_credentials()
     if not client_id or not client_secret:
-        print("ERRO: OLIST_CLIENT_ID e OLIST_CLIENT_SECRET são obrigatórios.")
+        print("ERRO: TINY_CLIENT_ID e TINY_CLIENT_SECRET são obrigatórios.")
         sys.exit(1)
 
     # Usar redirect local para callback (só se o app Tiny aceitar localhost)
@@ -218,9 +218,9 @@ def main():
         print(f"  refresh_token: {refresh_token[:40]}...")
 
     print("\n  Salvando nos GitHub Secrets...")
-    set_github_secret("OLIST_ACCESS_TOKEN", access_token)
+    set_github_secret("TINY_ACCESS_TOKEN", access_token)
     if refresh_token:
-        set_github_secret("OLIST_REFRESH_TOKEN", refresh_token)
+        set_github_secret("TINY_REFRESH_TOKEN", refresh_token)
         set_github_secret("TINY_ACCESS_TOKEN", access_token)
 
     print("\n" + "="*60)
@@ -229,7 +229,7 @@ def main():
         print("  Os secrets foram atualizados. Você pode rodar o pipeline novamente.")
     else:
         print("  Apenas access_token obtido (sem refresh_token).")
-        print("  Adicione OLIST_ACCESS_TOKEN manualmente nos secrets do GitHub.")
+        print("  Adicione TINY_ACCESS_TOKEN manualmente nos secrets do GitHub.")
     print("="*60 + "\n")
 
 

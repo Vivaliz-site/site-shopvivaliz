@@ -20,5 +20,5 @@ function svoe_env(string ...$keys): string
 
 function svoe_access_token(): string
 {
-    return svoe_env('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN');
+    return svoe_env('TINY_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN');
 }

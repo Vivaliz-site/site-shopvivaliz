@@ -49,9 +49,9 @@ function oa_env(string ...$keys): string {
 
 $GLOBALS['root'] = $root;
 
-$hasClientId     = oa_env('OLIST_CLIENT_ID', 'TINY_CLIENT_ID') !== '';
-$hasClientSecret = oa_env('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET') !== '';
-$hasRefresh      = oa_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN') !== '';
+$hasClientId     = oa_env('TINY_CLIENT_ID', 'TINY_CLIENT_ID') !== '';
+$hasClientSecret = oa_env('TINY_CLIENT_SECRET', 'TINY_CLIENT_SECRET') !== '';
+$hasRefresh      = oa_env('TINY_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN') !== '';
 $hasV2Token      = oa_env('TOKEN_API_OLIST', 'TINY_API_TOKEN') !== '';
 
 $tokensJson  = $root . '/storage/private/tokens.json';
@@ -76,8 +76,8 @@ $catalogCount = is_array($catalog) ? count($catalog) : 0;
 $withPrice = is_array($catalog) ? count(array_filter($catalog, fn($p) => (float)($p['price'] ?? 0) > 0)) : 0;
 
 /* ── URL de autorização OAuth ── */
-$clientId    = oa_env('OLIST_CLIENT_ID', 'TINY_CLIENT_ID');
-$redirectUri = oa_env('OLIST_REDIRECT_URI', 'TINY_REDIRECT_URI')
+$clientId    = oa_env('TINY_CLIENT_ID', 'TINY_CLIENT_ID');
+$redirectUri = oa_env('TINY_REDIRECT_URI', 'TINY_REDIRECT_URI')
     ?: 'https://shopvivaliz.com.br/olist/callback.php';
 $oauthUrl = $clientId !== ''
     ? 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth?' . http_build_query([
@@ -144,9 +144,9 @@ pre{background:#0a0c12;padding:.8rem;border-radius:4px;overflow-x:auto;font-size
 <div class="card">
   <table>
     <tr><th>Secret</th><th>Status</th></tr>
-    <tr><td>OLIST_CLIENT_ID</td><td><?= oa_badge($hasClientId) ?></td></tr>
-    <tr><td>OLIST_CLIENT_SECRET</td><td><?= oa_badge($hasClientSecret) ?></td></tr>
-    <tr><td>OLIST_REFRESH_TOKEN</td><td><?= oa_badge($hasRefresh) ?></td></tr>
+    <tr><td>TINY_CLIENT_ID</td><td><?= oa_badge($hasClientId) ?></td></tr>
+    <tr><td>TINY_CLIENT_SECRET</td><td><?= oa_badge($hasClientSecret) ?></td></tr>
+    <tr><td>TINY_REFRESH_TOKEN</td><td><?= oa_badge($hasRefresh) ?></td></tr>
     <tr><td>TOKEN_API_OLIST (v2 fallback)</td><td><?= oa_badge($hasV2Token) ?></td></tr>
   </table>
   <?php if ($tokensAge): ?>
@@ -160,10 +160,10 @@ pre{background:#0a0c12;padding:.8rem;border-radius:4px;overflow-x:auto;font-size
   <p>Clique abaixo para autorizar o Vivaliz no Tiny ERP e obter novos tokens:</p>
   <a class="btn green" href="<?= htmlspecialchars($oauthUrl) ?>" target="_blank">🚀 Autorizar no Tiny ERP</a>
   <p style="margin-top:.8rem;color:#888">Após autorizar, o callback <code><?= htmlspecialchars($redirectUri) ?></code>
-  vai exibir o novo <code>refresh_token</code>. Copie e atualize o secret <code>OLIST_REFRESH_TOKEN</code> no GitHub.</p>
+  vai exibir o novo <code>refresh_token</code>. Copie e atualize o secret <code>TINY_REFRESH_TOKEN</code> no GitHub.</p>
 <?php else: ?>
-  <p class="warn">⚠️ OLIST_CLIENT_ID não configurado — não é possível iniciar OAuth.</p>
-  <p>Configure o secret <code>OLIST_CLIENT_ID</code> no GitHub Actions e no <code>.env</code> do servidor.</p>
+  <p class="warn">⚠️ TINY_CLIENT_ID não configurado — não é possível iniciar OAuth.</p>
+  <p>Configure o secret <code>TINY_CLIENT_ID</code> no GitHub Actions e no <code>.env</code> do servidor.</p>
 <?php endif; ?>
 </div>
 

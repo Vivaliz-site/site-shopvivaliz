@@ -40,8 +40,8 @@ def gen_token():
     if not env:
         return False
 
-    client_id = env.get('OLIST_CLIENT_ID', '')
-    client_secret = env.get('OLIST_CLIENT_SECRET', '')
+    client_id = env.get('TINY_CLIENT_ID', '')
+    client_secret = env.get('TINY_CLIENT_SECRET', '')
 
     if not client_id or not client_secret:
         print("❌ CLIENT_ID ou CLIENT_SECRET não configurados em .env")
@@ -89,7 +89,7 @@ def gen_token():
     env_file = Path(__file__).parent / ".env"
     content = env_file.read_text()
 
-    keys = ['OLIST_ACCESS_TOKEN', 'OLIST_REFRESH_TOKEN', 'TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN']
+    keys = ['TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN', 'TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN']
     values = [access_token, refresh_token, access_token, refresh_token]
 
     for key, val in zip(keys, values):

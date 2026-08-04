@@ -70,9 +70,9 @@ if (is_file($envFile)) {
     }
 }
 
-$clientId = getenv('OLIST_CLIENT_ID') ?: getenv('TINY_CLIENT_ID') ?: getenv('CLIENT_ID_API_OLIST');
-$clientSecret = getenv('OLIST_CLIENT_SECRET') ?: getenv('TINY_CLIENT_SECRET') ?: getenv('CLIENT_SECRET_OLIST');
-$refreshToken = getenv('OLIST_REFRESH_TOKEN') ?: getenv('TINY_REFRESH_TOKEN');
+$clientId = getenv('TINY_CLIENT_ID') ?: getenv('TINY_CLIENT_ID') ?: getenv('CLIENT_ID_API_OLIST');
+$clientSecret = getenv('TINY_CLIENT_SECRET') ?: getenv('TINY_CLIENT_SECRET') ?: getenv('CLIENT_SECRET_OLIST');
+$refreshToken = getenv('TINY_REFRESH_TOKEN') ?: getenv('TINY_REFRESH_TOKEN');
 
 $lockHandle = fopen(svrt_lock_path(), 'c+');
 if ($lockHandle === false || !flock($lockHandle, LOCK_EX)) {
@@ -139,8 +139,8 @@ $newRefresh = (string)($data['refresh_token'] ?? $refreshToken);
 $envContent = is_file($envFile) ? (string)file_get_contents($envFile) : '';
 $replacements = [
     // Fonte canonica atual.
-    'OLIST_ACCESS_TOKEN' => $newAccess,
-    'OLIST_REFRESH_TOKEN' => $newRefresh,
+    'TINY_ACCESS_TOKEN' => $newAccess,
+    'TINY_REFRESH_TOKEN' => $newRefresh,
 
     // Espelhos legados mantidos para evitar falsos alertas de token expirado
     // enquanto ainda houver scripts antigos lendo esses nomes.

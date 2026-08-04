@@ -93,9 +93,9 @@ def auth_context() -> dict:
 
     # API v2 (legada) foi descontinuada pela Tiny e bloqueada via Cloudflare para
     # qualquer origem (datacenter ou residencial) — preferimos sempre OAuth/v3.
-    client_id = os.getenv("OLIST_CLIENT_ID") or os.getenv("TINY_CLIENT_ID")
-    client_secret = os.getenv("OLIST_CLIENT_SECRET") or os.getenv("TINY_CLIENT_SECRET")
-    refresh_token = os.getenv("OLIST_REFRESH_TOKEN") or os.getenv("TINY_REFRESH_TOKEN")
+    client_id = os.getenv("TINY_CLIENT_ID") or os.getenv("TINY_CLIENT_ID")
+    client_secret = os.getenv("TINY_CLIENT_SECRET") or os.getenv("TINY_CLIENT_SECRET")
+    refresh_token = os.getenv("TINY_REFRESH_TOKEN") or os.getenv("TINY_REFRESH_TOKEN")
 
     if client_id and client_secret and refresh_token:
         print("Renovando access token com refresh_token (API v3)...")
@@ -111,13 +111,13 @@ def auth_context() -> dict:
             return {"type": "bearer_v3", "token": access_token}
         print(f"Falha ao renovar token: {json.dumps(token_response, ensure_ascii=False)[:300]}")
 
-    access_token = os.getenv("OLIST_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
+    access_token = os.getenv("TINY_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
     if access_token:
         print("Usando access token Bearer direto do ambiente (API v3).")
         return {"type": "bearer_v3", "token": access_token}
 
     if not client_id or not client_secret:
-        fail("Configure OLIST_REFRESH_TOKEN/OLIST_ACCESS_TOKEN ou OLIST_CLIENT_ID e OLIST_CLIENT_SECRET.")
+        fail("Configure TINY_REFRESH_TOKEN/TINY_ACCESS_TOKEN ou TINY_CLIENT_ID e TINY_CLIENT_SECRET.")
 
     print("Refresh token nao encontrado. Tentando client_credentials...")
     payload = {"grant_type": "client_credentials", "client_id": client_id, "client_secret": client_secret}

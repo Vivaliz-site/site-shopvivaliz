@@ -34,14 +34,14 @@ foreach (explode("\n", $envContent) as $line) {
     $env[trim($k)] = trim(trim($v), '"\'');
 }
 
-$clientId = $env['OLIST_CLIENT_ID'] ?? $env['TINY_CLIENT_ID'] ?? '';
+$clientId = $env['TINY_CLIENT_ID'] ?? $env['TINY_CLIENT_ID'] ?? '';
 $redirectUri = $env['URL_REDIRCT_OLIST'] ?? 'https://shopvivaliz.com.br/olist/callback.php';
 
 if (!$clientId) {
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
-        'message' => 'OLIST_CLIENT_ID not configured in .env',
+        'message' => 'TINY_CLIENT_ID not configured in .env',
     ]);
     exit;
 }

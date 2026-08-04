@@ -15,7 +15,7 @@ for f in [Path(r"C:\site-shopvivaliz\.env.local"), Path(r"C:\site-shopvivaliz\.e
         load_dotenv(f)
         break
 
-token = os.getenv("OLIST_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
+token = os.getenv("TINY_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
 
 headers = {
     "Authorization": f"Bearer {token}",

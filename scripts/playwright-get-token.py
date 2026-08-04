@@ -18,14 +18,14 @@ from urllib.request import Request, urlopen
 
 from playwright.sync_api import sync_playwright
 
-CLIENT_ID     = os.environ.get("OLIST_CLIENT_ID", "")
-CLIENT_SECRET = os.environ.get("OLIST_CLIENT_SECRET", "")
-REDIRECT_URI  = os.environ.get("OLIST_REDIRECT_URI", "https://shopvivaliz.com.br/olist/callback.php")
+CLIENT_ID     = os.environ.get("TINY_CLIENT_ID", "")
+CLIENT_SECRET = os.environ.get("TINY_CLIENT_SECRET", "")
+REDIRECT_URI  = os.environ.get("TINY_REDIRECT_URI", "https://shopvivaliz.com.br/olist/callback.php")
 TOKEN_URL     = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
 
 if not CLIENT_ID or not CLIENT_SECRET:
     print("⚠️  Script legado Olist — não necessário para o pipeline Shopee+TikTok.")
-    print("   Configure OLIST_CLIENT_ID e OLIST_CLIENT_SECRET se precisar do Olist.")
+    print("   Configure TINY_CLIENT_ID e TINY_CLIENT_SECRET se precisar do Olist.")
     sys.exit(0)
 
 AUTH_URL = (
@@ -163,10 +163,10 @@ def main():
     print(f"   expires_in   : {expires_in}s")
 
     print("\nSalvando nos GitHub Secrets...")
-    set_github_secret("OLIST_ACCESS_TOKEN",  access_token)
+    set_github_secret("TINY_ACCESS_TOKEN",  access_token)
     set_github_secret("TINY_ACCESS_TOKEN",   access_token)
     if refresh_token:
-        set_github_secret("OLIST_REFRESH_TOKEN", refresh_token)
+        set_github_secret("TINY_REFRESH_TOKEN", refresh_token)
         set_github_secret("TINY_REFRESH_TOKEN",  refresh_token)
 
     print("\n✅ Concluído! Todos os tokens salvos nos secrets.")

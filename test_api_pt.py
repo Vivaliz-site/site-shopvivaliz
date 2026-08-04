@@ -12,7 +12,7 @@ env_file = Path(r"C:\site-shopvivaliz\.env.local")
 if env_file.exists():
     load_dotenv(env_file)
 
-access_token = os.getenv("OLIST_ACCESS_TOKEN")
+access_token = os.getenv("TINY_ACCESS_TOKEN")
 base_url = "https://api.tiny.com.br/public-api/v3"
 
 if not access_token:

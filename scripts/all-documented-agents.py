@@ -65,7 +65,7 @@ SPECS: tuple[AgentSpec, ...] = (
     AgentSpec("executor", (r"executor|execute_task|process_task", r"evidence|artifact|sha256")),
     AgentSpec("validator", (r"validation|policy|audit",)),
     AgentSpec("orchestrator", (r"orchestrator",), (".ai/agents.js",)),
-    AgentSpec("olist-sync", (r"olist|tiny\s*erp",), required_env=("OLIST_ACCESS_TOKEN",), external=True),
+    AgentSpec("olist-sync", (r"olist|tiny\s*erp",), required_env=("TINY_ACCESS_TOKEN",), external=True),
     AgentSpec("pagarme-webhook", (r"pagarme|webhook",), required_env=("PAGARME_API_KEY", "PAGARME_WEBHOOK_SECRET"), external=True),
     AgentSpec("shopee", (r"shopee",), required_env=("SHOPEE_PARTNER_ID", "SHOPEE_PARTNER_KEY", "SHOPEE_SHOP_ID"), external=True),
     AgentSpec("mercado-livre", (r"mercado\s*livre|mercadolivre",), required_env=("MERCADOLIVRE_ACCESS_TOKEN",), external=True),

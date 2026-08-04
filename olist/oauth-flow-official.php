@@ -17,9 +17,9 @@ header('Content-Type: application/json; charset=utf-8');
 // Carregar .env
 if (is_file(dirname(__DIR__) . '/.env')) {
     foreach (file(dirname(__DIR__) . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-        if (str_starts_with($line, 'OLIST_CLIENT_ID=')) {
+        if (str_starts_with($line, 'TINY_CLIENT_ID=')) {
             putenv($line);
-        } elseif (str_starts_with($line, 'OLIST_CLIENT_SECRET=')) {
+        } elseif (str_starts_with($line, 'TINY_CLIENT_SECRET=')) {
             putenv($line);
         }
     }
@@ -27,7 +27,7 @@ if (is_file(dirname(__DIR__) . '/.env')) {
 
 if (!isset($_GET['code']) && !isset($_GET['error'])) {
     // Usuário ainda não clicou no link
-    $clientId = getenv('OLIST_CLIENT_ID') ?: 'CONFIGURE OLIST_CLIENT_ID NO .env';
+    $clientId = getenv('TINY_CLIENT_ID') ?: 'CONFIGURE TINY_CLIENT_ID NO .env';
     $redirectUri = getenv('OLIST_OFFICIAL_REDIRECT_URI') ?: "https://shopvivaliz.com.br/olist/oauth-flow-official.php";
 
     $authUrl = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth?" . http_build_query([
@@ -94,8 +94,8 @@ echo json_encode([
 // PASSO 3: SOLICITAÇÃO DE TOKEN DE ACESSO (POST)
 // ============================================================
 
-$clientId = getenv('OLIST_CLIENT_ID') ?: die('ERRO: OLIST_CLIENT_ID não configurado em .env');
-$clientSecret = getenv('OLIST_CLIENT_SECRET') ?: die('ERRO: OLIST_CLIENT_SECRET não configurado em .env');
+$clientId = getenv('TINY_CLIENT_ID') ?: die('ERRO: TINY_CLIENT_ID não configurado em .env');
+$clientSecret = getenv('TINY_CLIENT_SECRET') ?: die('ERRO: TINY_CLIENT_SECRET não configurado em .env');
 $redirectUri = getenv('OLIST_OFFICIAL_REDIRECT_URI') ?: "https://shopvivaliz.com.br/olist/oauth-flow-official.php";
 
 $tokenEndpoint = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token";
@@ -160,8 +160,8 @@ $envContent = is_file($envFile) ? file_get_contents($envFile) : '';
 
 // Atualizar ou adicionar tokens
 $replacements = [
-    'OLIST_ACCESS_TOKEN' => $accessToken,
-    'OLIST_REFRESH_TOKEN' => $refreshToken,
+    'TINY_ACCESS_TOKEN' => $accessToken,
+    'TINY_REFRESH_TOKEN' => $refreshToken,
     'TINY_ACCESS_TOKEN' => $accessToken,
     'TINY_REFRESH_TOKEN' => $refreshToken,
 ];
@@ -194,7 +194,7 @@ echo json_encode([
     'expires_in_hours' => round($expiresIn / 3600, 1),
     'arquivo_atualizado' => $envFile,
     'proximo_passo' => [
-        '1. GitHub Secrets: OLIST_ACCESS_TOKEN (copie o access_token)',
+        '1. GitHub Secrets: TINY_ACCESS_TOKEN (copie o access_token)',
         '2. Workflow sync-olist-6h será disparado automaticamente',
         '3. Produtos serão sincronizados do ERP a cada 5 minutos',
         '4. Depois de validar, alterar para 2 horas',

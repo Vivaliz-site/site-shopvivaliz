@@ -37,7 +37,7 @@ $tokensFile  = __DIR__ . '/storage/private/tokens.json';
 $olist_token = '';
 if (is_file($tokensFile)) {
     $tokens = json_decode((string)file_get_contents($tokensFile), true);
-    $olist_token = (string)($tokens['OLIST_ACCESS_TOKEN'] ?? $tokens['TINY_ACCESS_TOKEN'] ?? '');
+    $olist_token = (string)($tokens['TINY_ACCESS_TOKEN'] ?? $tokens['TINY_ACCESS_TOKEN'] ?? '');
 }
 if ($olist_token === '') {
     http_response_code(400);

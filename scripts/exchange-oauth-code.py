@@ -11,13 +11,13 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-CLIENT_ID     = os.environ.get("OLIST_CLIENT_ID", "")
-CLIENT_SECRET = os.environ.get("OLIST_CLIENT_SECRET", "")
-REDIRECT_URI  = os.environ.get("OLIST_REDIRECT_URI", "https://shopvivaliz.com.br/olist/callback.php")
+CLIENT_ID     = os.environ.get("TINY_CLIENT_ID", "")
+CLIENT_SECRET = os.environ.get("TINY_CLIENT_SECRET", "")
+REDIRECT_URI  = os.environ.get("TINY_REDIRECT_URI", "https://shopvivaliz.com.br/olist/callback.php")
 TOKEN_URL     = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
 
 if not CLIENT_ID or not CLIENT_SECRET:
-    print("⚠️  OLIST_CLIENT_ID e OLIST_CLIENT_SECRET não definidos no ambiente.")
+    print("⚠️  TINY_CLIENT_ID e TINY_CLIENT_SECRET não definidos no ambiente.")
     print("   Este script é legado — o novo pipeline usa Shopee + TikTok diretamente.")
     sys.exit(1)
 
@@ -53,7 +53,7 @@ print(f"✅ refresh_token: {rt[:60] if rt else '(não retornado)'}...")
 
 if rt:
     # Salvar nos secrets do GitHub automaticamente
-    for name, val in [("OLIST_ACCESS_TOKEN", at), ("OLIST_REFRESH_TOKEN", rt), ("TINY_ACCESS_TOKEN", at)]:
+    for name, val in [("TINY_ACCESS_TOKEN", at), ("TINY_REFRESH_TOKEN", rt), ("TINY_ACCESS_TOKEN", at)]:
         r = subprocess.run(["gh", "secret", "set", name, "--body", val], capture_output=True)
         status = "✅" if r.returncode == 0 else "⚠️ "
         print(f"{status} secret {name} {'atualizado' if r.returncode==0 else 'falhou: '+r.stderr.decode()[:80]}")

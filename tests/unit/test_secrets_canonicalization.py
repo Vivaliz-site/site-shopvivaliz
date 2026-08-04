@@ -30,28 +30,28 @@ class SecretsCanonicalizationTest(unittest.TestCase):
     def test_canonical_olist_token_has_precedence_over_legacy_alias(self):
         module = self.load_module(
             {
-                "OLIST_ACCESS_TOKEN": "canonical-value",
+                "TINY_ACCESS_TOKEN": "canonical-value",
                 "TOKEN_API_OLIST": "legacy-value",
             }
         )
-        self.assertEqual(module.OLIST_ACCESS_TOKEN, "canonical-value")
+        self.assertEqual(module.TINY_ACCESS_TOKEN, "canonical-value")
         self.assertEqual(module.TOKEN_API_OLIST, "canonical-value")
 
     def test_legacy_olist_alias_remains_compatible(self):
         module = self.load_module({"TOKEN_API_OLIST": "legacy-only"})
-        self.assertEqual(module.OLIST_ACCESS_TOKEN, "legacy-only")
+        self.assertEqual(module.TINY_ACCESS_TOKEN, "legacy-only")
         self.assertEqual(module.TOKEN_API_OLIST, "legacy-only")
 
     def test_tiny_native_credentials_are_separate_from_olist(self):
         module = self.load_module(
             {
-                "OLIST_ACCESS_TOKEN": "olist-value",
+                "TINY_ACCESS_TOKEN": "olist-value",
                 "TINY_ACCESS_TOKEN": "tiny-value",
             }
         )
-        self.assertEqual(module.OLIST_ACCESS_TOKEN, "olist-value")
+        self.assertEqual(module.TINY_ACCESS_TOKEN, "olist-value")
         self.assertEqual(module.TINY_ACCESS_TOKEN, "tiny-value")
-        self.assertNotEqual(module.OLIST_ACCESS_TOKEN, module.TINY_ACCESS_TOKEN)
+        self.assertNotEqual(module.TINY_ACCESS_TOKEN, module.TINY_ACCESS_TOKEN)
 
     def test_ftp_and_smtp_canonical_names_precede_legacy_aliases(self):
         module = self.load_module(

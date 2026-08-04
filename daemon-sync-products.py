@@ -89,7 +89,7 @@ def throttle() -> None:
 
 
 def get_token() -> str | None:
-    token = os.getenv("OLIST_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
+    token = os.getenv("TINY_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
     if token:
         return token.strip()
     env_file = Path(".env")
@@ -100,7 +100,7 @@ def get_token() -> str | None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        if key.strip() in {"OLIST_ACCESS_TOKEN", "TINY_ACCESS_TOKEN"}:
+        if key.strip() in {"TINY_ACCESS_TOKEN", "TINY_ACCESS_TOKEN"}:
             return value.strip().strip('"').strip("'") or None
     return None
 
@@ -254,7 +254,7 @@ def save_products(products: list[dict[str, Any]]) -> Path:
 def sync_once(workers: int) -> bool:
     token = get_token()
     if not token:
-        print("[!] OLIST_ACCESS_TOKEN/TINY_ACCESS_TOKEN não configurado")
+        print("[!] TINY_ACCESS_TOKEN/TINY_ACCESS_TOKEN não configurado")
         return False
     summaries = fetch_products_active(token)
     if not summaries:

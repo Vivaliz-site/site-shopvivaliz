@@ -33,19 +33,12 @@ def get_config() -> dict[str, str]:
     return config
 
 
-def renew_token(config: dict[str, str], provider: str = "olist") -> dict[str, Any] | None:
-    if provider == "olist":
-        client_id = config.get("OLIST_CLIENT_ID", "")
-        client_secret = config.get("OLIST_CLIENT_SECRET", "")
-        refresh_token = config.get("OLIST_REFRESH_TOKEN", "")
-        if not all((client_id, client_secret, refresh_token)) or client_id == "-" or client_secret == "-":
-            return None
-    else:  # tiny
-        client_id = config.get("TINY_CLIENT_ID", "")
-        client_secret = config.get("TINY_CLIENT_SECRET", "")
-        refresh_token = config.get("TINY_REFRESH_TOKEN", "")
-        if not all((client_id, client_secret, refresh_token)):
-            return None
+def renew_token(config: dict[str, str]) -> dict[str, Any] | None:
+    client_id = config.get("TINY_CLIENT_ID", "")
+    client_secret = config.get("TINY_CLIENT_SECRET", "")
+    refresh_token = config.get("TINY_REFRESH_TOKEN", "")
+    if not all((client_id, client_secret, refresh_token)):
+        return None
 
     payload = urllib.parse.urlencode({
         "grant_type": "refresh_token",
@@ -62,23 +55,17 @@ def renew_token(config: dict[str, str], provider: str = "olist") -> dict[str, An
         with urllib.request.urlopen(request, timeout=30) as response:
             result = json.loads(response.read())
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        print(f"[!] Renovação {provider.upper()} falhou: {type(exc).__name__}")
+        print(f"[!] Token renewal failed: {type(exc).__name__}")
         return None
     return result if isinstance(result, dict) else None
 
 
-def update_env(new_token: str, new_refresh_token: str, provider: str = "olist") -> None:
+def update_env(new_token: str, new_refresh_token: str) -> None:
     content = ENV_PATH.read_text(encoding="utf-8")
-    if provider == "olist":
-        replacements = {
-            "OLIST_ACCESS_TOKEN": new_token,
-            "OLIST_REFRESH_TOKEN": new_refresh_token,
-        }
-    else:  # tiny
-        replacements = {
-            "TINY_ACCESS_TOKEN": new_token,
-            "TINY_REFRESH_TOKEN": new_refresh_token,
-        }
+    replacements = {
+        "TINY_ACCESS_TOKEN": new_token,
+        "TINY_REFRESH_TOKEN": new_refresh_token,
+    }
     found: set[str] = set()
     lines: list[str] = []
     for line in content.splitlines():
@@ -108,31 +95,16 @@ def update_env(new_token: str, new_refresh_token: str, provider: str = "olist") 
 
 def renew_once() -> bool:
     config = get_config()
-    success = False
-
-    # Try to renew Olist token
-    result = renew_token(config, "olist")
-    if result:
-        access_token = result.get("access_token")
-        if isinstance(access_token, str) and access_token:
-            refresh_token = result.get("refresh_token") or config.get("OLIST_REFRESH_TOKEN")
-            if isinstance(refresh_token, str) and refresh_token:
-                update_env(access_token, refresh_token, "olist")
-                print(f"[+] Token Olist renovado em {datetime.now(timezone.utc).isoformat()}")
-                success = True
-
-    # Try to renew Tiny token
-    result = renew_token(config, "tiny")
-    if result:
-        access_token = result.get("access_token")
-        if isinstance(access_token, str) and access_token:
-            refresh_token = result.get("refresh_token") or config.get("TINY_REFRESH_TOKEN")
-            if isinstance(refresh_token, str) and refresh_token:
-                update_env(access_token, refresh_token, "tiny")
-                print(f"[+] Token Tiny renovado em {datetime.now(timezone.utc).isoformat()}")
-                success = True
-
-    return success
+    result = renew_token(config)
+    access_token = result.get("access_token") if isinstance(result, dict) else None
+    if not isinstance(access_token, str) or not access_token:
+        return False
+    refresh_token = result.get("refresh_token") or config.get("TINY_REFRESH_TOKEN")
+    if not isinstance(refresh_token, str) or not refresh_token:
+        return False
+    update_env(access_token, refresh_token)
+    print(f"[+] Tiny token renewed at {datetime.now(timezone.utc).isoformat()}")
+    return True
 
 
 def main() -> int:

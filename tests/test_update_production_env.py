@@ -15,7 +15,7 @@ merge_env = MODULE.merge_env
 def test_merge_env_is_atomic_and_preserves_unmanaged_tokens(tmp_path: Path) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text(
-        "OLIST_ACCESS_TOKEN=managed-by-renewer\nML_CLIENT_ID=old\n",
+        "TINY_ACCESS_TOKEN=managed-by-renewer\nML_CLIENT_ID=old\n",
         encoding="utf-8",
     )
     env_file.chmod(0o640)
@@ -24,7 +24,7 @@ def test_merge_env_is_atomic_and_preserves_unmanaged_tokens(tmp_path: Path) -> N
     changed = merge_env(env_file, {"ML_CLIENT_ID": "new", "ML_CLIENT_SECRET": "secret"})
 
     content = env_file.read_text(encoding="utf-8")
-    assert "OLIST_ACCESS_TOKEN=managed-by-renewer" in content
+    assert "TINY_ACCESS_TOKEN=managed-by-renewer" in content
     assert "ML_CLIENT_ID=new" in content
     assert "ML_CLIENT_SECRET=secret" in content
     assert changed == ["ML_CLIENT_ID", "ML_CLIENT_SECRET"]
@@ -33,7 +33,7 @@ def test_merge_env_is_atomic_and_preserves_unmanaged_tokens(tmp_path: Path) -> N
 
 def test_merge_env_rejects_unmanaged_keys(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="unsupported"):
-        merge_env(tmp_path / ".env", {"OLIST_REFRESH_TOKEN": "must-not-overwrite"})
+        merge_env(tmp_path / ".env", {"TINY_REFRESH_TOKEN": "must-not-overwrite"})
 
 
 def test_merge_env_accepts_mercadopago_runtime_keys(tmp_path: Path) -> None:

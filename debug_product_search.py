@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 env_file = Path(r"C:\site-shopvivaliz\.env.local")
 load_dotenv(env_file)
 
-token = os.getenv("OLIST_ACCESS_TOKEN")
+token = os.getenv("TINY_ACCESS_TOKEN")
 headers = {
     "Authorization": f"Bearer {token}",
     "Content-Type": "application/json"

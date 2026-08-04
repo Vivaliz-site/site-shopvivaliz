@@ -180,7 +180,7 @@ async def save_token_to_env(access_token, refresh_token):
 
     content = env_file.read_text()
 
-    keys = ['OLIST_ACCESS_TOKEN', 'OLIST_REFRESH_TOKEN', 'TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN']
+    keys = ['TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN', 'TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN']
     values = [access_token, refresh_token, access_token, refresh_token]
 
     for key, val in zip(keys, values):
@@ -204,8 +204,8 @@ async def main():
     if not env:
         return
 
-    client_id = env.get('OLIST_CLIENT_ID', '')
-    client_secret = env.get('OLIST_CLIENT_SECRET', '')
+    client_id = env.get('TINY_CLIENT_ID', '')
+    client_secret = env.get('TINY_CLIENT_SECRET', '')
     redirect_uri = env.get('URL_REDIRCT_OLIST', 'https://shopvivaliz.com.br/olist/callback.php')
 
     if not client_id or not client_secret:

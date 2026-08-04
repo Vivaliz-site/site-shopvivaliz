@@ -11,7 +11,7 @@ $root = dirname(__DIR__);
 // Ler token do .env
 $token = '';
 foreach (file($root . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-    if (str_starts_with($line, 'OLIST_ACCESS_TOKEN=')) {
+    if (str_starts_with($line, 'TINY_ACCESS_TOKEN=')) {
         $token = trim(explode('=', $line, 2)[1] ?? '');
         break;
     }

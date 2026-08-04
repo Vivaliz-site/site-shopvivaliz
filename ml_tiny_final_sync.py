@@ -33,7 +33,7 @@ for f in env_files:
 # CLIENT
 class TinyClient:
     def __init__(self):
-        self.token = os.getenv("OLIST_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
+        self.token = os.getenv("TINY_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
         if not self.token:
             print("❌ Token não encontrado")
             sys.exit(1)

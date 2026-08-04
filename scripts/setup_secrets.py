@@ -18,14 +18,14 @@ SECRETS_TO_ADD = {
     'GOOGLE_API_KEY': 'Chave API Google',
 
     # Olist
-    'OLIST_CLIENT_ID': 'ID Cliente Olist',
-    'OLIST_CLIENT_SECRET': 'Secret Cliente Olist',
-    'OLIST_ACCESS_TOKEN': 'Token de acesso Olist',
-    'OLIST_REFRESH_TOKEN': 'Refresh token Olist',
+    'TINY_CLIENT_ID': 'ID Cliente Olist',
+    'TINY_CLIENT_SECRET': 'Secret Cliente Olist',
+    'TINY_ACCESS_TOKEN': 'Token de acesso Olist',
+    'TINY_REFRESH_TOKEN': 'Refresh token Olist',
     'TOKEN_API_OLIST': 'Token API Olist',
     'CLIENT_ID_API_OLIST': 'ID API Olist',
     'CLIENT_SECRET_OLIST': 'Secret API Olist',
-    'OLIST_REDIRECT_URI': 'Redirect Olist',
+    'TINY_REDIRECT_URI': 'Redirect Olist',
 
     # FTP
     'FTP_SERVER': 'Servidor FTP',

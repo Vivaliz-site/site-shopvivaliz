@@ -20,13 +20,13 @@ REQUIRED_SECRETS = {
         'GEMINI_API_KEY',
     ],
     'Olist': [
-        'OLIST_CLIENT_ID',
-        'OLIST_CLIENT_SECRET',
+        'TINY_CLIENT_ID',
+        'TINY_CLIENT_SECRET',
         'TOKEN_API_OLIST',
         'CLIENT_ID_API_OLIST',
         'CLIENT_SECRET_OLIST',
-        'OLIST_ACCESS_TOKEN',
-        'OLIST_REFRESH_TOKEN',
+        'TINY_ACCESS_TOKEN',
+        'TINY_REFRESH_TOKEN',
     ],
     'FTP': [
         'FTP_SERVER',

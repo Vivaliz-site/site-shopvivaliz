@@ -206,21 +206,21 @@ PY;
 
 function svtop_tiny_credentials_configured(): bool
 {
-    return svtop_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN') !== ''
-        && svtop_env('OLIST_CLIENT_ID', 'TINY_CLIENT_ID') !== ''
-        && svtop_env('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET') !== '';
+    return svtop_env('TINY_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN') !== ''
+        && svtop_env('TINY_CLIENT_ID', 'TINY_CLIENT_ID') !== ''
+        && svtop_env('TINY_CLIENT_SECRET', 'TINY_CLIENT_SECRET') !== '';
 }
 
 function svtop_tiny_get_token(): string
 {
     $TOKEN_URL    = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
-    $accessToken  = svtop_env('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN');
+    $accessToken  = svtop_env('TINY_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN');
     if ($accessToken !== '') {
         return $accessToken;
     }
-    $refresh      = svtop_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN');
-    $clientId     = svtop_env('OLIST_CLIENT_ID',     'TINY_CLIENT_ID');
-    $clientSecret = svtop_env('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET');
+    $refresh      = svtop_env('TINY_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN');
+    $clientId     = svtop_env('TINY_CLIENT_ID',     'TINY_CLIENT_ID');
+    $clientSecret = svtop_env('TINY_CLIENT_SECRET', 'TINY_CLIENT_SECRET');
     if ($refresh === '' || $clientId === '' || $clientSecret === '') return '';
 
     $ch = curl_init($TOKEN_URL);

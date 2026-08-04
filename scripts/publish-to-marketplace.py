@@ -108,15 +108,15 @@ def http_api(method: str, url: str, token: str, body: Optional[dict] = None, par
 # ---------------------------------------------------------------------------
 
 def resolve_token() -> str:
-    for name in ("OLIST_ACCESS_TOKEN", "TINY_ACCESS_TOKEN", "ERP_API_TOKEN", "TOKEN_API_OLIST", "OLIST_API_TOKEN", "TINY_API_TOKEN"):
+    for name in ("TINY_ACCESS_TOKEN", "TINY_ACCESS_TOKEN", "ERP_API_TOKEN", "TOKEN_API_OLIST", "OLIST_API_TOKEN", "TINY_API_TOKEN"):
         val = os.getenv(name, "").strip()
         if val:
             log(f"Token: usando {name}")
             return val
 
-    client_id     = os.getenv("OLIST_CLIENT_ID") or os.getenv("TINY_CLIENT_ID", "")
-    client_secret = os.getenv("OLIST_CLIENT_SECRET") or os.getenv("TINY_CLIENT_SECRET", "")
-    refresh_token = os.getenv("OLIST_REFRESH_TOKEN") or os.getenv("TINY_REFRESH_TOKEN", "")
+    client_id     = os.getenv("TINY_CLIENT_ID") or os.getenv("TINY_CLIENT_ID", "")
+    client_secret = os.getenv("TINY_CLIENT_SECRET") or os.getenv("TINY_CLIENT_SECRET", "")
+    refresh_token = os.getenv("TINY_REFRESH_TOKEN") or os.getenv("TINY_REFRESH_TOKEN", "")
 
     if client_id and client_secret and refresh_token:
         log("Renovando token OAuth2...")
@@ -131,7 +131,7 @@ def resolve_token() -> str:
             return token
         fail(f"Falha ao renovar token: {resp.get('_error', resp)}")
 
-    fail("Nenhuma credencial Tiny/Olist configurada. Defina OLIST_ACCESS_TOKEN ou TINY_CLIENT_ID/SECRET/REFRESH_TOKEN.")
+    fail("Nenhuma credencial Tiny/Olist configurada. Defina TINY_ACCESS_TOKEN ou TINY_CLIENT_ID/SECRET/REFRESH_TOKEN.")
     return ""
 
 

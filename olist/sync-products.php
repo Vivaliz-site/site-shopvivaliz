@@ -57,8 +57,8 @@ function svs_save_tokens(string $access, string $refresh): void {
     $dir = svs_root() . '/storage/private';
     @mkdir($dir, 0750, true);
     file_put_contents("$dir/tokens.json", json_encode([
-        'OLIST_ACCESS_TOKEN'  => $access,
-        'OLIST_REFRESH_TOKEN' => $refresh,
+        'TINY_ACCESS_TOKEN'  => $access,
+        'TINY_REFRESH_TOKEN' => $refresh,
         'updated_at'          => date('c'),
     ], JSON_PRETTY_PRINT), LOCK_EX);
 }
@@ -130,13 +130,13 @@ function svs_http_post(string $url, array $fields, array $extraHeaders = []): ar
 /* ── OAuth: obter access_token via refresh ── */
 function svs_get_access_token(): string {
     $TOKEN_URL    = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
-    $refresh      = svs_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN');
-    $clientId     = svs_env('OLIST_CLIENT_ID',     'TINY_CLIENT_ID');
-    $clientSecret = svs_env('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET');
+    $refresh      = svs_env('TINY_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN');
+    $clientId     = svs_env('TINY_CLIENT_ID',     'TINY_CLIENT_ID');
+    $clientSecret = svs_env('TINY_CLIENT_SECRET', 'TINY_CLIENT_SECRET');
 
     if ($refresh === '' || $clientId === '' || $clientSecret === '') {
         throw new RuntimeException(
-            'credentials_missing: configure OLIST_CLIENT_ID, OLIST_CLIENT_SECRET e OLIST_REFRESH_TOKEN'
+            'credentials_missing: configure TINY_CLIENT_ID, TINY_CLIENT_SECRET e TINY_REFRESH_TOKEN'
         );
     }
 

@@ -28,7 +28,7 @@ except ImportError:
 PROJECT_ROOT = Path(__file__).parent.parent
 LOG_FILE = PROJECT_ROOT / 'logs' / 'olist-headless-login.log'
 
-CLIENT_ID = os.getenv('OLIST_CLIENT_ID') or os.getenv('TINY_CLIENT_ID') or ''
+CLIENT_ID = os.getenv('TINY_CLIENT_ID') or os.getenv('TINY_CLIENT_ID') or ''
 OLIST_EMAIL = os.getenv('OLIST_EMAIL') or os.getenv('OLIST_USER') or os.getenv('EMAIL_USER') or ''
 OLIST_PASSWORD = os.getenv('OLIST_PASSWORD') or os.getenv('EMAIL_PASSWORD') or ''
 REDIRECT_URI = 'https://shopvivaliz.com.br/olist/handle-callback.php'

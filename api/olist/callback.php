@@ -47,8 +47,8 @@ foreach (explode("\n", $envContent) as $line) {
     $env[trim($k)] = trim(trim($v), '"\'');
 }
 
-$clientId = $env['OLIST_CLIENT_ID'] ?? '';
-$clientSecret = $env['OLIST_CLIENT_SECRET'] ?? '';
+$clientId = $env['TINY_CLIENT_ID'] ?? '';
+$clientSecret = $env['TINY_CLIENT_SECRET'] ?? '';
 $redirectUri = $env['URL_REDIRCT_OLIST'] ?? 'https://shopvivaliz.com.br/olist/callback.php';
 
 if (!$clientId || !$clientSecret) {
@@ -109,8 +109,8 @@ $newAccess = $data['access_token'];
 $newRefresh = $data['refresh_token'] ?? '';
 
 $replacements = [
-    'OLIST_ACCESS_TOKEN' => $newAccess,
-    'OLIST_REFRESH_TOKEN' => $newRefresh,
+    'TINY_ACCESS_TOKEN' => $newAccess,
+    'TINY_REFRESH_TOKEN' => $newRefresh,
     'TINY_ACCESS_TOKEN' => $newAccess,
     'TINY_REFRESH_TOKEN' => $newRefresh,
 ];

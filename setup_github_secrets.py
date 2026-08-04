@@ -104,12 +104,12 @@ SECRETS_CONFIG = {
     },
 
     # Olist (integração)
-    "OLIST_CLIENT_ID": {
+    "TINY_CLIENT_ID": {
         "description": "Client ID da Olist",
         "default": "olist_",
         "category": "📦 Olist"
     },
-    "OLIST_CLIENT_SECRET": {
+    "TINY_CLIENT_SECRET": {
         "description": "Client Secret da Olist",
         "default": "secret_",
         "category": "📦 Olist"

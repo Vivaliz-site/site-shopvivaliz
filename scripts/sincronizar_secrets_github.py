@@ -84,7 +84,7 @@ def get_github_secrets() -> Dict[str, str]:
         # "SHOPEE_REFRESH_TOKEN",     # DINÂMICO - renovado localmente
 
         # Outros (ESTÁTICAS APENAS)
-        # "OLIST_ACCESS_TOKEN",       # DINÂMICO - renovado por daemon-token-renewer.py
+        # "TINY_ACCESS_TOKEN",       # DINÂMICO - renovado por daemon-token-renewer.py
         # "TIKTOK_ACCESS_TOKEN",      # DINÂMICO - renovado localmente
         # "MELHORENVIO_ACCESS_TOKEN", # DINÂMICO - renovado localmente
     ]
@@ -152,7 +152,7 @@ SHOPEE_ACCESS_TOKEN=
 SHOPEE_REFRESH_TOKEN=
 
 # Integrações
-OLIST_ACCESS_TOKEN=
+TINY_ACCESS_TOKEN=
 TIKTOK_ACCESS_TOKEN=
 MELHORENVIO_ACCESS_TOKEN=
 

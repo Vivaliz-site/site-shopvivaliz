@@ -99,13 +99,13 @@ def get_json(path: str, token: str, retries: int = 4) -> tuple[int, dict | list 
 
 
 def resolve_token() -> str:
-    static = os.getenv("TINY_ACCESS_TOKEN") or os.getenv("OLIST_ACCESS_TOKEN") or ""
+    static = os.getenv("TINY_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN") or ""
     if static:
         return static
 
-    client_id = os.getenv("TINY_CLIENT_ID") or os.getenv("OLIST_CLIENT_ID") or ""
-    client_secret = os.getenv("TINY_CLIENT_SECRET") or os.getenv("OLIST_CLIENT_SECRET") or ""
-    refresh = os.getenv("TINY_REFRESH_TOKEN") or os.getenv("OLIST_REFRESH_TOKEN") or ""
+    client_id = os.getenv("TINY_CLIENT_ID") or os.getenv("TINY_CLIENT_ID") or ""
+    client_secret = os.getenv("TINY_CLIENT_SECRET") or os.getenv("TINY_CLIENT_SECRET") or ""
+    refresh = os.getenv("TINY_REFRESH_TOKEN") or os.getenv("TINY_REFRESH_TOKEN") or ""
     if client_id and client_secret and refresh:
         data = post_form(TOKEN_URL, {
             "grant_type": "refresh_token",
@@ -249,7 +249,7 @@ def main() -> int:
         token = resolve_token()
         catalog = load_catalog()
         order_ids = iter_order_ids(token, days, max_pages)
-        if not order_ids and (os.getenv("TINY_CLIENT_ID") or os.getenv("OLIST_CLIENT_ID")):
+        if not order_ids and (os.getenv("TINY_CLIENT_ID") or os.getenv("TINY_CLIENT_ID")):
             token = resolve_token_with_refresh()
             order_ids = iter_order_ids(token, days, max_pages)
         if not order_ids:
@@ -342,9 +342,9 @@ def main() -> int:
 
 
 def resolve_token_with_refresh() -> str:
-    client_id = os.getenv("TINY_CLIENT_ID") or os.getenv("OLIST_CLIENT_ID") or ""
-    client_secret = os.getenv("TINY_CLIENT_SECRET") or os.getenv("OLIST_CLIENT_SECRET") or ""
-    refresh = os.getenv("TINY_REFRESH_TOKEN") or os.getenv("OLIST_REFRESH_TOKEN") or ""
+    client_id = os.getenv("TINY_CLIENT_ID") or os.getenv("TINY_CLIENT_ID") or ""
+    client_secret = os.getenv("TINY_CLIENT_SECRET") or os.getenv("TINY_CLIENT_SECRET") or ""
+    refresh = os.getenv("TINY_REFRESH_TOKEN") or os.getenv("TINY_REFRESH_TOKEN") or ""
     if not (client_id and client_secret and refresh):
         return resolve_token()
     data = post_form(TOKEN_URL, {

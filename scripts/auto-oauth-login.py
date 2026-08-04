@@ -31,8 +31,8 @@ except ImportError:
     from selenium.webdriver.chrome.options import Options
 
 # Configurações
-CLIENT_ID = os.getenv('OLIST_CLIENT_ID', 'SEU_OLIST_CLIENT_ID_AQUI')
-CLIENT_SECRET = os.getenv('OLIST_CLIENT_SECRET', 'SEU_OLIST_CLIENT_SECRET_AQUI')
+CLIENT_ID = os.getenv('TINY_CLIENT_ID', 'SEU_TINY_CLIENT_ID_AQUI')
+CLIENT_SECRET = os.getenv('TINY_CLIENT_SECRET', 'SEU_TINY_CLIENT_SECRET_AQUI')
 REDIRECT_URI = 'https://shopvivaliz.com.br/olist/oauth-callback-simple.php'
 
 # Credenciais Olist

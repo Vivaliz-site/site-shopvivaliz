@@ -7,13 +7,13 @@
 // Carregar .env
 if (is_file(dirname(__DIR__) . '/.env')) {
     foreach (file(dirname(__DIR__) . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-        if (str_starts_with($line, 'OLIST_ACCESS_TOKEN=')) {
+        if (str_starts_with($line, 'TINY_ACCESS_TOKEN=')) {
             putenv($line);
         }
     }
 }
 
-$accessToken = getenv('OLIST_ACCESS_TOKEN') ?: null;
+$accessToken = getenv('TINY_ACCESS_TOKEN') ?: null;
 
 header('Content-Type: application/json; charset=utf-8');
 

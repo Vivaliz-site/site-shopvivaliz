@@ -38,9 +38,9 @@ if (!is_file($envFile)) {
 }
 
 foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-    if (str_starts_with($line, 'OLIST_CLIENT_ID=')) {
+    if (str_starts_with($line, 'TINY_CLIENT_ID=')) {
         $clientId = trim(explode('=', $line, 2)[1] ?? '');
-    } elseif (str_starts_with($line, 'OLIST_CLIENT_SECRET=')) {
+    } elseif (str_starts_with($line, 'TINY_CLIENT_SECRET=')) {
         $clientSecret = trim(explode('=', $line, 2)[1] ?? '');
     }
 }
@@ -142,8 +142,8 @@ if ($isCli) echo "✓ Salvando em .env...\n";
 $envContent = file_get_contents($envFile);
 
 $replacements = [
-    'OLIST_ACCESS_TOKEN' => $accessToken,
-    'OLIST_REFRESH_TOKEN' => $refreshToken,
+    'TINY_ACCESS_TOKEN' => $accessToken,
+    'TINY_REFRESH_TOKEN' => $refreshToken,
     'TINY_ACCESS_TOKEN' => $accessToken,
     'TINY_REFRESH_TOKEN' => $refreshToken,
 ];

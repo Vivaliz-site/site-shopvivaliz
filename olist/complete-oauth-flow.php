@@ -34,8 +34,8 @@ function olist_complete_persist_tokens(string $accessToken, string $refreshToken
     $privateDir = $root . '/storage/private';
     @mkdir($privateDir, 0750, true);
     @file_put_contents($privateDir . '/tokens.json', json_encode([
-        'OLIST_ACCESS_TOKEN' => $accessToken,
-        'OLIST_REFRESH_TOKEN' => $refreshToken,
+        'TINY_ACCESS_TOKEN' => $accessToken,
+        'TINY_REFRESH_TOKEN' => $refreshToken,
         'TINY_ACCESS_TOKEN' => $accessToken,
         'TINY_REFRESH_TOKEN' => $refreshToken,
         'updated_at' => date('c')
@@ -44,8 +44,8 @@ function olist_complete_persist_tokens(string $accessToken, string $refreshToken
     $envFile = $root . '/.env';
     $envContent = is_file($envFile) ? (string)file_get_contents($envFile) : '';
     foreach ([
-        'OLIST_ACCESS_TOKEN' => $accessToken,
-        'OLIST_REFRESH_TOKEN' => $refreshToken,
+        'TINY_ACCESS_TOKEN' => $accessToken,
+        'TINY_REFRESH_TOKEN' => $refreshToken,
         'TINY_ACCESS_TOKEN' => $accessToken,
         'TINY_REFRESH_TOKEN' => $refreshToken,
     ] as $key => $value) {
@@ -61,9 +61,9 @@ function olist_complete_persist_tokens(string $accessToken, string $refreshToken
     @file_put_contents($envFile, $envContent);
 }
 
-$client_id = getenv('OLIST_CLIENT_ID') ?: die('ERRO: OLIST_CLIENT_ID nao configurado');
-$client_secret = getenv('OLIST_CLIENT_SECRET') ?: die('ERRO: OLIST_CLIENT_SECRET nao configurado');
-$redirect_uri = getenv('OLIST_REDIRECT_URI') ?: getenv('URL_REDIRCT_OLIST') ?: 'https://shopvivaliz.com.br/olist/oauth-callback-simple.php';
+$client_id = getenv('TINY_CLIENT_ID') ?: die('ERRO: TINY_CLIENT_ID nao configurado');
+$client_secret = getenv('TINY_CLIENT_SECRET') ?: die('ERRO: TINY_CLIENT_SECRET nao configurado');
+$redirect_uri = getenv('TINY_REDIRECT_URI') ?: getenv('URL_REDIRCT_OLIST') ?: 'https://shopvivaliz.com.br/olist/oauth-callback-simple.php';
 
 log_msg('=== COMPLETE OAUTH FLOW ===');
 

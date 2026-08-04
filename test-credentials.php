@@ -13,7 +13,7 @@ if (is_file($env_file)) {
 echo "=== TESTE DE CREDENCIAIS E TOKEN ===\n\n";
 
 echo "1. Verificando credenciais...\n";
-$keys = ['OLIST_REFRESH_TOKEN', 'OLIST_CLIENT_ID', 'OLIST_CLIENT_SECRET'];
+$keys = ['TINY_REFRESH_TOKEN', 'TINY_CLIENT_ID', 'TINY_CLIENT_SECRET'];
 $all_present = true;
 foreach ($keys as $k) {
   $v = getenv($k);
@@ -29,9 +29,9 @@ if (!$all_present) {
 
 echo "\n2. Testando renovação de token...\n";
 $TOKEN_URL = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
-$refresh = getenv('OLIST_REFRESH_TOKEN');
-$clientId = getenv('OLIST_CLIENT_ID');
-$clientSecret = getenv('OLIST_CLIENT_SECRET');
+$refresh = getenv('TINY_REFRESH_TOKEN');
+$clientId = getenv('TINY_CLIENT_ID');
+$clientSecret = getenv('TINY_CLIENT_SECRET');
 
 $ch = curl_init($TOKEN_URL);
 curl_setopt_array($ch, [

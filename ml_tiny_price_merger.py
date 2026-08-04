@@ -39,11 +39,11 @@ class TinyAPIClient:
     """Cliente para API Tiny/Olist com retry e rate limiting"""
 
     def __init__(self):
-        # Prioriza OLIST_ACCESS_TOKEN
-        self.access_token = os.getenv("OLIST_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
-        self.refresh_token = os.getenv("OLIST_REFRESH_TOKEN")
-        self.client_id = os.getenv("OLIST_CLIENT_ID")
-        self.client_secret = os.getenv("OLIST_CLIENT_SECRET")
+        # Prioriza TINY_ACCESS_TOKEN
+        self.access_token = os.getenv("TINY_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
+        self.refresh_token = os.getenv("TINY_REFRESH_TOKEN")
+        self.client_id = os.getenv("TINY_CLIENT_ID")
+        self.client_secret = os.getenv("TINY_CLIENT_SECRET")
 
         self.base_url = "https://api.tiny.com.br/public-api/v3"
         self.oauth_url = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
@@ -61,12 +61,12 @@ class TinyAPIClient:
         self.cache = {}
 
         if not self.access_token:
-            print("❌ ERRO: Nenhum token disponível. Configure OLIST_ACCESS_TOKEN ou TINY_ACCESS_TOKEN")
+            print("❌ ERRO: Nenhum token disponível. Configure TINY_ACCESS_TOKEN ou TINY_ACCESS_TOKEN")
             sys.exit(1)
 
         print(f"✅ Cliente Tiny API inicializado")
         print(f"   Base URL: {self.base_url}")
-        print(f"   Token: {'OLIST' if 'OLIST_ACCESS_TOKEN' in os.environ else 'TINY'}")
+        print(f"   Token: {'OLIST' if 'TINY_ACCESS_TOKEN' in os.environ else 'TINY'}")
 
     def _refresh_olist_token(self):
         """Renova token OLIST se expirado"""

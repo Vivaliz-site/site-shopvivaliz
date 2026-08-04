@@ -15,9 +15,9 @@ $clientSecret = '';
 
 if (is_file($envFile)) {
     foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-        if (str_starts_with($line, 'OLIST_CLIENT_ID=')) {
+        if (str_starts_with($line, 'TINY_CLIENT_ID=')) {
             $clientId = explode('=', $line, 2)[1] ?? '';
-        } elseif (str_starts_with($line, 'OLIST_CLIENT_SECRET=')) {
+        } elseif (str_starts_with($line, 'TINY_CLIENT_SECRET=')) {
             $clientSecret = explode('=', $line, 2)[1] ?? '';
         }
     }
@@ -52,7 +52,7 @@ if (!$code) {
 // PASSO 2: Trocar código por token
 // ============================================================
 
-$redirectUri = getenv('OLIST_REDIRECT_URI') ?: getenv('URL_REDIRCT_OLIST') ?: getenv('TINY_REDIRECT_URI') ?: 'https://shopvivaliz.com.br/olist/callback.php';
+$redirectUri = getenv('TINY_REDIRECT_URI') ?: getenv('URL_REDIRCT_OLIST') ?: getenv('TINY_REDIRECT_URI') ?: 'https://shopvivaliz.com.br/olist/callback.php';
 $tokenUrl = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
 
 $postData = http_build_query([
@@ -111,8 +111,8 @@ $expiresIn = $tokenData['expires_in'] ?? 14400;
 $envContent = is_file($envFile) ? file_get_contents($envFile) : '';
 
 $replacements = [
-    'OLIST_ACCESS_TOKEN' => $accessToken,
-    'OLIST_REFRESH_TOKEN' => $refreshToken,
+    'TINY_ACCESS_TOKEN' => $accessToken,
+    'TINY_REFRESH_TOKEN' => $refreshToken,
     'TINY_ACCESS_TOKEN' => $accessToken,
     'TINY_REFRESH_TOKEN' => $refreshToken,
 ];

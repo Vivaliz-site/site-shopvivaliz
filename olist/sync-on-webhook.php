@@ -12,7 +12,7 @@ $token = '';
 
 // Carregar token
 foreach (file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-    if (str_starts_with($line, 'OLIST_ACCESS_TOKEN=')) {
+    if (str_starts_with($line, 'TINY_ACCESS_TOKEN=')) {
         $token = explode('=', $line, 2)[1] ?? '';
         break;
     }

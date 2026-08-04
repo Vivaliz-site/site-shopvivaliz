@@ -22,9 +22,9 @@ if (!is_file($envFile)) {
 }
 
 foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-    if (str_starts_with($line, 'OLIST_CLIENT_ID=')) {
+    if (str_starts_with($line, 'TINY_CLIENT_ID=')) {
         $clientId = trim(explode('=', $line, 2)[1] ?? '');
-    } elseif (str_starts_with($line, 'OLIST_CLIENT_SECRET=')) {
+    } elseif (str_starts_with($line, 'TINY_CLIENT_SECRET=')) {
         $clientSecret = trim(explode('=', $line, 2)[1] ?? '');
     }
 }
@@ -80,7 +80,7 @@ $refreshToken = $tokenData['refresh_token'] ?? '';
 
 $envContent = file_get_contents($envFile);
 
-$keys = ['OLIST_ACCESS_TOKEN', 'OLIST_REFRESH_TOKEN', 'TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN'];
+$keys = ['TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN', 'TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN'];
 $vals = [$accessToken, $refreshToken, $accessToken, $refreshToken];
 
 for ($i = 0; $i < count($keys); $i++) {

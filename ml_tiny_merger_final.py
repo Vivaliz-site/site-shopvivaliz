@@ -40,7 +40,7 @@ for f in env_files:
 
 class TinyAPIClient:
     def __init__(self):
-        self.access_token = os.getenv("OLIST_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
+        self.access_token = os.getenv("TINY_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
         if not self.access_token:
             print("❌ ERRO: Token não configurado")
             sys.exit(1)

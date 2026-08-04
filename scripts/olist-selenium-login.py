@@ -38,7 +38,7 @@ import requests
 BASE_URL = "https://shopvivaliz.com.br"
 OLIST_AUTH_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth"
 
-CLIENT_ID = os.getenv("OLIST_CLIENT_ID") or os.getenv("TINY_CLIENT_ID") or ""
+CLIENT_ID = os.getenv("TINY_CLIENT_ID") or os.getenv("TINY_CLIENT_ID") or ""
 EMAIL = os.getenv("OLIST_EMAIL") or os.getenv("OLIST_USER") or os.getenv("EMAIL_USER") or ""
 SENHA = os.getenv("OLIST_PASSWORD") or os.getenv("EMAIL_PASSWORD") or ""
 

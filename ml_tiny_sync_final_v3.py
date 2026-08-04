@@ -28,7 +28,7 @@ print("║  " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "                
 print("╚════════════════════════════════════════════════════════════════╝")
 
 # GET TOKEN
-token = os.getenv("OLIST_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
+token = os.getenv("TINY_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
 if not token:
     print("❌ Token não configurado")
     sys.exit(1)

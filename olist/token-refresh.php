@@ -28,18 +28,18 @@ if (!is_file($envFile)) {
 // Carregar .env
 $env = [];
 foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-    if (str_starts_with($line, 'OLIST_CLIENT_ID=')) {
-        $env['OLIST_CLIENT_ID'] = explode('=', $line, 2)[1] ?? '';
-    } elseif (str_starts_with($line, 'OLIST_CLIENT_SECRET=')) {
-        $env['OLIST_CLIENT_SECRET'] = explode('=', $line, 2)[1] ?? '';
-    } elseif (str_starts_with($line, 'OLIST_REFRESH_TOKEN=')) {
-        $env['OLIST_REFRESH_TOKEN'] = explode('=', $line, 2)[1] ?? '';
+    if (str_starts_with($line, 'TINY_CLIENT_ID=')) {
+        $env['TINY_CLIENT_ID'] = explode('=', $line, 2)[1] ?? '';
+    } elseif (str_starts_with($line, 'TINY_CLIENT_SECRET=')) {
+        $env['TINY_CLIENT_SECRET'] = explode('=', $line, 2)[1] ?? '';
+    } elseif (str_starts_with($line, 'TINY_REFRESH_TOKEN=')) {
+        $env['TINY_REFRESH_TOKEN'] = explode('=', $line, 2)[1] ?? '';
     }
 }
 
-$clientId = trim($env['OLIST_CLIENT_ID'] ?? '');
-$clientSecret = trim($env['OLIST_CLIENT_SECRET'] ?? '');
-$refreshToken = trim($env['OLIST_REFRESH_TOKEN'] ?? '');
+$clientId = trim($env['TINY_CLIENT_ID'] ?? '');
+$clientSecret = trim($env['TINY_CLIENT_SECRET'] ?? '');
+$refreshToken = trim($env['TINY_REFRESH_TOKEN'] ?? '');
 
 if (!$refreshToken) {
     svtr_log('ERRO: refresh_token não configurado');
@@ -105,7 +105,7 @@ $newRefreshToken = $tokenData['refresh_token'] ?? $refreshToken;
 
 $envContent = file_get_contents($envFile);
 
-$keys = ['OLIST_ACCESS_TOKEN', 'OLIST_REFRESH_TOKEN', 'TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN'];
+$keys = ['TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN', 'TINY_ACCESS_TOKEN', 'TINY_REFRESH_TOKEN'];
 $values = [$accessToken, $newRefreshToken, $accessToken, $newRefreshToken];
 
 for ($i = 0; $i < count($keys); $i++) {

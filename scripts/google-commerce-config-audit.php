@@ -78,12 +78,12 @@ $ga4SecretConfigured = gc_bool_env(['GA4_SECRET']);
 $adsLabelConfigured = gc_bool_env(['GOOGLE_ADS_CONVERSION_LABEL']);
 $searchVerificationConfigured = gc_bool_env(['GOOGLE_SITE_VERIFICATION']);
 $tinyClientConfigured = gc_bool_env([
-    'OLIST_CLIENT_ID', 'TINY_CLIENT_ID', 'TINY_OAUTH_CLIENT_ID', 'TINY_TOKEN', 'TINY_API_TOKEN',
+    'TINY_CLIENT_ID', 'TINY_CLIENT_ID', 'TINY_OAUTH_CLIENT_ID', 'TINY_TOKEN', 'TINY_API_TOKEN',
 ]);
 $tinySecretConfigured = gc_bool_env([
-    'OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET', 'TINY_OAUTH_CLIENT_SECRET', 'TINY_TOKEN', 'TINY_API_TOKEN',
+    'TINY_CLIENT_SECRET', 'TINY_CLIENT_SECRET', 'TINY_OAUTH_CLIENT_SECRET', 'TINY_TOKEN', 'TINY_API_TOKEN',
 ]);
-$tinyRefreshConfigured = gc_bool_env(['OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN', 'TINY_TOKEN', 'TINY_API_TOKEN']);
+$tinyRefreshConfigured = gc_bool_env(['TINY_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN', 'TINY_TOKEN', 'TINY_API_TOKEN']);
 
 $checks = [
     'production_home' => gc_result((bool)$home['ok'], $home['ok'] ? 'configured' : 'failed', 'HTTP ' . $home['status']),

@@ -42,7 +42,7 @@ function fev3_env(string ...$keys): string
 
 function fev3_access_token(): string
 {
-    return fev3_env('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN');
+    return fev3_env('TINY_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN');
 }
 
 /**
