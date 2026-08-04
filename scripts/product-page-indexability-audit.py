@@ -3,8 +3,11 @@
 """Valida prontidão de páginas de produto dinâmicas e indexáveis."""
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 if sys.platform == "win32":
@@ -18,77 +21,67 @@ REPORT_JSON = ROOT / "logs" / "product-page-indexability-audit.json"
 REPORT_MD = ROOT / "logs" / "product-page-indexability-audit.md"
 
 
+def write_atomic(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(content, encoding="utf-8")
+    os.replace(temporary, path)
+
+
 def main() -> int:
     products = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+    if not isinstance(products, list):
+        raise SystemExit("catalog_payload_must_be_a_list")
     slugs = [str(product.get("slug") or "").strip() for product in products if isinstance(product, dict)]
     valid_slugs = [slug for slug in slugs if slug]
     fallback_descriptions = sum(
-        1
-        for product in products
+        1 for product in products
         if isinstance(product, dict) and not str(product.get("description") or "").strip()
     )
-
     htaccess = HTACCESS_PATH.read_text(encoding="utf-8")
     product_page = PRODUCT_PAGE_PATH.read_text(encoding="utf-8")
 
     checks = {
-        "catalog_products": len(products),
-        "products_with_slug": len(valid_slugs),
-        "unique_slugs": len(set(valid_slugs)),
+        "catalog_is_non_empty": len(products) > 0,
+        "every_product_has_unique_slug": len(valid_slugs) == len(set(valid_slugs)) == len(products),
         "rewrite_rule_present": "RewriteRule ^produto/([a-z0-9][a-z0-9\\-]*)/?$ produto.php?slug=$1 [L,QSA]" in htaccess,
         "canonical_present": '<link rel="canonical"' in product_page,
         "product_jsonld_present": "'@type'          => 'Product'" in product_page,
         "breadcrumb_jsonld_present": "'@type' => 'BreadcrumbList'" in product_page,
         "not_found_noindex_present": '<meta name="robots" content="noindex,follow">' in product_page,
         "og_url_present": '<meta property="og:url"' in product_page,
-        "fallback_description_count": fallback_descriptions,
     }
-
-    site_ready = (
-        checks["products_with_slug"] == checks["unique_slugs"] == checks["catalog_products"]
-        and checks["rewrite_rule_present"]
-        and checks["canonical_present"]
-        and checks["product_jsonld_present"]
-        and checks["breadcrumb_jsonld_present"]
-        and checks["not_found_noindex_present"]
-        and checks["og_url_present"]
-    )
-
+    passed = all(checks.values())
     report = {
-        "summary": checks,
-        "status": "ok" if site_ready else "warning",
+        "schema_version": 2,
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "status": "PASSED" if passed else "FAILED",
+        "passed": passed,
+        "catalog_products": len(products),
+        "products_with_slug": len(valid_slugs),
+        "unique_slugs": len(set(valid_slugs)),
+        "fallback_description_count": fallback_descriptions,
+        "checks": checks,
+        "inputs": {
+            "catalog_sha256": hashlib.sha256(CATALOG_PATH.read_bytes()).hexdigest(),
+            "htaccess_sha256": hashlib.sha256(HTACCESS_PATH.read_bytes()).hexdigest(),
+            "product_page_sha256": hashlib.sha256(PRODUCT_PAGE_PATH.read_bytes()).hexdigest(),
+        },
     }
-
-    REPORT_JSON.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_JSON.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    REPORT_MD.write_text(
-        "\n".join(
-            [
-                "# Task 048 - Product page indexability audit",
-                "",
-                f"- catalog_products: {checks['catalog_products']}",
-                f"- products_with_slug: {checks['products_with_slug']}",
-                f"- unique_slugs: {checks['unique_slugs']}",
-                f"- rewrite_rule_present: {checks['rewrite_rule_present']}",
-                f"- canonical_present: {checks['canonical_present']}",
-                f"- product_jsonld_present: {checks['product_jsonld_present']}",
-                f"- breadcrumb_jsonld_present: {checks['breadcrumb_jsonld_present']}",
-                f"- not_found_noindex_present: {checks['not_found_noindex_present']}",
-                f"- og_url_present: {checks['og_url_present']}",
-                f"- fallback_description_count: {checks['fallback_description_count']}",
-                "",
-                f"- status: {report['status']}",
-            ]
-        ) + "\n",
-        encoding="utf-8",
-    )
-
-    print("Product page indexability audit")
-    for key, value in checks.items():
-        print(f"{key}: {value}")
-    print(f"JSON saved at: {REPORT_JSON.relative_to(ROOT)}")
-    print(f"Markdown saved at: {REPORT_MD.relative_to(ROOT)}")
-    return 0
+    write_atomic(REPORT_JSON, json.dumps(report, indent=2, ensure_ascii=False) + "\n")
+    markdown = [
+        "# Product page indexability audit", "",
+        f"- generated_at: `{report['generated_at']}`",
+        f"- status: **{report['status']}**",
+        f"- catalog_products: {report['catalog_products']}",
+        f"- products_with_slug: {report['products_with_slug']}",
+        f"- unique_slugs: {report['unique_slugs']}",
+        f"- fallback_description_count: {fallback_descriptions}", "", "## Checks", "",
+    ]
+    markdown.extend(f"- {name}: {value}" for name, value in checks.items())
+    write_atomic(REPORT_MD, "\n".join(markdown) + "\n")
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return 0 if passed else 2
 
 
 if __name__ == "__main__":
