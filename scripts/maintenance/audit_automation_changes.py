@@ -13,6 +13,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REPORT_DIR = ROOT / "artifacts" / "repository-governance"
 SELF_PATH = "scripts/maintenance/audit_automation_changes.py"
+AUDITOR_IMPLEMENTATIONS = {
+    SELF_PATH,
+    "scripts/audit-agents-real-work.py",
+    "scripts/maintenance/audit_active_workflows.py",
+    "scripts/maintenance/audit_secret_references.py",
+}
 TEXT_SUFFIXES = {
     ".py", ".php", ".js", ".ts", ".tsx", ".jsx", ".sh", ".ps1",
     ".yml", ".yaml", ".json", ".md", ".txt", ".service", ".timer",
@@ -37,6 +43,20 @@ AUDIT_WORDS = (
 EVIDENCE_WORDS = (
     "artifact", "evidence", "commit_sha", "pull_request", "pr_url",
     "test_report", "run_id", "read-back", "readback", "verification",
+)
+
+SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}"),
+    re.compile(r"github_pat_[A-Za-z0-9_]{40,}"),
+    re.compile(
+        r"(?<![A-Za-z0-9])sk-(?:proj-)?[A-Za-z0-9_-]{24,}(?![A-Za-z0-9])"
+    ),
+    re.compile(r"xox[baprs]-[A-Za-z0-9-]{20,}"),
+    re.compile(r"-----BEGIN (?:RSA |OPENSSH |EC |DSA |)PRIVATE KEY-----"),
+    re.compile(
+        r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\."
+        r"[A-Za-z0-9_-]{10,}"
+    ),
 )
 
 LINE_RULES: tuple[tuple[str, str, re.Pattern[str], str], ...] = (
@@ -87,26 +107,11 @@ LINE_RULES: tuple[tuple[str, str, re.Pattern[str], str], ...] = (
     ),
 )
 
-SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}"),
-    re.compile(r"github_pat_[A-Za-z0-9_]{40,}"),
-    re.compile(
-        r"(?<![A-Za-z0-9])sk-(?:proj-)?[A-Za-z0-9_-]{24,}(?![A-Za-z0-9])"
-    ),
-    re.compile(r"xox[baprs]-[A-Za-z0-9-]{20,}"),
-    re.compile(r"-----BEGIN (?:RSA |OPENSSH |EC |DSA |)PRIVATE KEY-----"),
-    re.compile(
-        r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\."
-        r"[A-Za-z0-9_-]{10,}"
-    ),
-)
-
 HUNK = re.compile(r"^@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,(\d+))?\s+@@")
 COMPLETION_PATTERN = re.compile(
     r"(?:status|state)[^\n:=]{0,32}[:=]\s*['\"]?"
-    r"(?:completed|concluido|concluído|success|ok)\b"
-    r"|completed_with_evidence\b"
-    r"|(?:success|ok)\s*:\s*true\b",
+    r"(?:completed|concluido|concluído|success|ok)\b|"
+    r"completed_with_evidence\b|(?:success|ok)\s*:\s*true\b",
     re.I,
 )
 QUEUE_PATTERN = re.compile(
@@ -120,12 +125,10 @@ QUEUE_MUTATION_PATTERN = re.compile(
     re.I,
 )
 RETIRED_BLOCKER_PATTERN = re.compile(
-    r"['\"]status['\"]\s*:\s*['\"]blocked['\"]",
-    re.I,
+    r"['\"]status['\"]\s*:\s*['\"]blocked['\"]", re.I,
 )
 QUEUE_IMMUTABLE_PATTERN = re.compile(
-    r"['\"]queue_modified['\"]\s*:\s*(?:false|False)",
-    re.I,
+    r"['\"]queue_modified['\"]\s*:\s*(?:false|False)", re.I,
 )
 SIMULATION_PATTERN = re.compile(
     r"(?:['\"]simulated['\"]\s*:\s*true|"
@@ -252,8 +255,9 @@ def scan_file(
         and Path(path).name not in {"Dockerfile", "Makefile"}
     ):
         return findings
+
     additions = added_lines(base, head, path)
-    if not additions or path == SELF_PATH:
+    if not additions:
         return findings
 
     added_text = "\n".join(text for _, text in additions)
@@ -269,6 +273,12 @@ def scan_file(
                     redact(text),
                 )
             )
+
+    # Auditor implementations contain detection regexes and controlled probes.
+    # Their behavior is verified by unit tests; only literal secret scanning is
+    # applied here to avoid recursive false positives.
+    if path in AUDITOR_IMPLEMENTATIONS:
+        return findings
 
     if suffix == ".md" or not is_automation_path(path):
         return findings
