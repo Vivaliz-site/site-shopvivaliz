@@ -5,15 +5,15 @@ qualquer rotina capaz de observar ou alterar o projeto.
 
 ## 1. Evidência antes de estado
 
-Nenhuma rotina pode registrar `success`, `OK`, `completed`, `done`, `healthy`,
-`alive` ou equivalente sem comprovar o efeito real. A evidência deve estar
-vinculada à execução atual e não pode ser reutilizada de outro ciclo.
+Nenhuma rotina pode registrar estado de sucesso, conclusão, saúde ou atividade
+sem comprovar o efeito real. A evidência deve estar vinculada à execução atual e
+não pode ser reutilizada de outro ciclo.
 
 Evidência mínima:
 
-- `run_id` ou identificador único do ciclo;
-- `commit_sha` esperado e observado;
-- comando/API e código de saída;
+- identificador único do ciclo;
+- SHA esperado e observado;
+- comando ou API e código de saída;
 - teste ou verificação independente;
 - artifact, relatório ou hash imutável;
 - timestamp posterior ao início da execução;
@@ -32,29 +32,15 @@ Evidência mínima:
 - O merge deve ser concluído por mantenedor humano diferente do autor/agente.
 - Auto-merge e merge pelo próprio agente são proibidos.
 
-É proibido:
-
-```text
-git push origin main
-git push ... --force
-git add .
-git add -A
-gh pr merge --auto
-git reset --hard
-git clean -fd
-```
+Também são proibidos publicação direta em branch protegida, force-push,
+staging amplo, reset destrutivo e limpeza destrutiva da árvore.
 
 ## 3. Falhar fechado
 
-Scripts shell devem usar:
-
-```bash
-set -Eeuo pipefail
-```
-
-Erros não podem ser ocultados com `|| true`, `|| log`, `continue-on-error`,
-`@exec`, retorno zero artificial ou mensagem de sucesso posterior. Uma falha em
-etapa obrigatória deve encerrar a rotina com código diferente de zero.
+Scripts shell devem habilitar tratamento estrito de erro, variável indefinida,
+pipelines e propagação de trap. Erros não podem ser ocultados, convertidos em
+aviso ou seguidos por retorno zero artificial. Uma falha em etapa obrigatória
+deve encerrar a rotina com código diferente de zero.
 
 ## 4. Fila e trabalho real
 
@@ -62,22 +48,18 @@ A fila só pode mudar de estado depois que o trabalho real ocorreu e foi
 verificado. Selecionar, atribuir, imprimir um comando, produzir heartbeat ou
 montar uma resposta textual não constitui execução.
 
-- `pending` pode ser observado sem mutação;
-- `running` exige executor iniciado e identificador do ciclo;
-- `completed_verified` exige commit/teste/artifact/read-back;
-- `failed` preserva código e erro;
-- `blocked` preserva o motivo e não pode ser exibido como saudável.
+- estado pendente pode ser observado sem mutação;
+- estado de execução exige executor iniciado e identificador do ciclo;
+- conclusão verificada exige commit, teste, artifact e read-back;
+- falha preserva código e erro;
+- bloqueio preserva o motivo e não pode ser exibido como saudável.
 
 Filas legadas aposentadas devem permanecer vazias e somente leitura.
 
 ## 5. Deploy e produção
 
 Deploy só pode usar release imutável vinculada a SHA aprovado. O monitor deve
-comparar explicitamente:
-
-```text
-expected_release_sha == observed_release_sha
-```
+comparar explicitamente o SHA esperado com o SHA observado.
 
 Endpoints web não podem executar Git, baixar código de uma branch mutável,
 sobrescrever PHP ou limpar OPcache após escrita parcial. Operações de deploy
@@ -95,14 +77,14 @@ exigem pipeline revisado, release separada, rollback e smoke test independente.
 
 ## 7. Health e monitoramento
 
-Processo `active`, arquivo existente, `idle`, `no_pending`, heartbeat ou saída
+Processo ativo, arquivo existente, estado ocioso, fila vazia, heartbeat ou saída
 zero não comprovam saúde. Health operacional exige:
 
 - execução recente dentro da janela definida;
 - conclusão verdadeira de todas as etapas;
 - artifact não expirado;
 - SHA correto;
-- evidência mínima por agente/componente;
+- evidência mínima por agente ou componente;
 - ausência de erro mascarado.
 
 O health estrutural do repositório deve declarar explicitamente que não prova o
