@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/incident-response-automation.yml'
+      - 'scripts/incident-response.php'
 
 permissions:
   contents: read
@@ -25,8 +31,9 @@ jobs:
           persist-credentials: false
 
       - name: Initialize incident evidence
+        shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           mkdir -p artifacts/incidents
           printf 'run_id=%s\nsha=%s\nevent=%s\n' \
             "$GITHUB_RUN_ID" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" \
@@ -39,7 +46,7 @@ jobs:
           ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           test -n "${ORACLE_VM_SSH_KEY:-}"
           test -n "${ORACLE_VM_KNOWN_HOSTS:-}"
           install -d -m 700 "$HOME/.ssh"
@@ -56,7 +63,7 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
             ubuntu@137.131.156.17 \
-            'set -euo pipefail
+            'set -Eeuo pipefail
              current=/home/ubuntu/shopvivaliz-deploy/current
              cache="$current/storage/products-cache-ativos.json"
              if sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null)"; then :; else sync_status=inactive; fi
@@ -83,43 +90,49 @@ jobs:
             erp_status=$?
           fi
           cat artifacts/incidents/erp-runtime.log
-          echo "erp_runtime_status=$erp_status" >> artifacts/incidents/context.txt
 
+          detector_status=0
           if ssh \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
             ubuntu@137.131.156.17 \
-            'set -euo pipefail; test -r /home/ubuntu/shopvivaliz-deploy/current/scripts/incident-response.php; HEALTHCHECK_URL=https://shopvivaliz.com.br/api/health/version.php INCIDENT_MODE=monitor /usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/scripts/incident-response.php' \
+            'set -Eeuo pipefail; test -r /home/ubuntu/shopvivaliz-deploy/current/scripts/incident-response.php; HEALTHCHECK_URL=https://shopvivaliz.com.br/api/health/version.php INCIDENT_MODE=monitor /usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/scripts/incident-response.php' \
             > artifacts/incidents/detector.log 2>&1; then
-            status=0
+            detector_status=0
           else
-            status=$?
+            detector_status=$?
           fi
           cat artifacts/incidents/detector.log
-          if [[ "$status" -eq 0 && "$erp_status" -eq 0 ]]; then
-            response_status=0
-          else
+
+          response_status=0
+          if [[ "$detector_status" -ne 0 || "$erp_status" -ne 0 ]]; then
             response_status=2
           fi
+
+          {
+            echo "detector_status=$detector_status"
+            echo "erp_runtime_status=$erp_status"
+            echo "response_status=$response_status"
+          } >> artifacts/incidents/context.txt
           echo "response_status=$response_status" >> "$GITHUB_OUTPUT"
-          echo "response_status=$status" >> artifacts/incidents/context.txt
-          echo "combined_response_status=$response_status" >> artifacts/incidents/context.txt
 
       - name: Check incident notification configuration
         if: steps.incident.outputs.response_status != '0'
         id: notification
+        shell: bash
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           if [[ -n "$SLACK_WEBHOOK_URL" ]]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
-            echo "Slack incident notification is configured."
+            echo "notification_configured=true" >> artifacts/incidents/context.txt
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "Slack incident notification is not configured; detector evidence will still be uploaded."
+            echo "notification_configured=false" >> artifacts/incidents/context.txt
+            echo "::warning::Slack incident notification is not configured."
           fi
 
       - name: Notify on detected incident
@@ -133,7 +146,7 @@ jobs:
 
       - name: Upload incident evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: incident-detection-${{ github.run_id }}
           path: artifacts/incidents/
@@ -142,4 +155,7 @@ jobs:
 
       - name: Fail when detector reported an incident
         if: steps.incident.outputs.response_status != '0'
-        run: exit 1
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          exit 1
