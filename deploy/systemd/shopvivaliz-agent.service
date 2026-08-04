@@ -17,10 +17,12 @@ RestartSec=120
 KillSignal=SIGTERM
 TimeoutStopSec=90
 NoNewPrivileges=true
-PrivateTmp=true
 ProtectHome=read-only
 ProtectSystem=full
-ReadWritePaths=/home/ubuntu/shopvivaliz-deploy/current/logs /home/ubuntu/shopvivaliz-deploy/current/storage/agent-evidence
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/home/ubuntu/shopvivaliz-deploy/current/logs /home/ubuntu/shopvivaliz-deploy/current/storage/agent-evidence /tmp
 
 [Install]
 WantedBy=multi-user.target
