@@ -756,3 +756,25 @@ CTR/conversão/venda foi inventado. Nenhuma notificação push enviada neste cic
 critérios de novo aviso (workflows Tiny recriados, artefato novo com erro diferente, ou execução
 de `shopee-production-seo.yml` com apply real bem-sucedido) ocorreu, e o achado estrutural já foi
 comunicado nos ciclos anteriores.
+
+### 9.17 Atualização — ciclo de 2026-08-05, 22º ciclo — estado idêntico ao ciclo 21, sem fato novo
+
+Checagem no mesmo dia do ciclo 21 (~poucas horas depois): `env | grep -iE "SHOPEE|TINY"` segue
+vazio neste sandbox; `ls .github/workflows/ | grep -i shopee` retorna as mesmas duas entradas
+(`shopee-optimizer-safety.yml`, `shopee-production-seo.yml`) — o par baseado em Tiny/Olist ainda
+ausente. Artefato mais recente em `listings/` continua `shopee-listings-20260726-080756.json`;
+nenhum arquivo novo desde 2026-07-26 (último commit tocando `listings/` é `ff63455`, de
+2026-08-03, fix de newsletter SMTP não relacionado). Via `mcp__github__actions_list`
+(`shopee-production-seo.yml`): as mesmas 5 execuções de 2026-07-30 (`id`s 30585266165,
+30571531668, 30571478470, 30571242284, 30570700034), todas `conclusion: failure` — nenhuma
+execução nova desde então.
+
+O achado estrutural dos ciclos 19–21 (sem chamada a endpoint de analytics do Shopee Open
+Platform nos scripts de produção — sem CTR, conversão ou A/B testing medido; itens 1/3/9/10
+desta rotina permanecem tecnicamente inexequíveis mesmo com credencial `SHOPEE_*` presente) não
+foi re-verificado nesta sessão por já confirmado nos ciclos anteriores; nenhum commit desde
+`1010a5a` toca esses scripts.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado. Nenhuma notificação push enviada neste ciclo — nenhum dos
+critérios de novo aviso ocorreu.
