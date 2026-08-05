@@ -778,3 +778,28 @@ foi re-verificado nesta sessão por já confirmado nos ciclos anteriores; nenhum
 Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
 CTR/conversão/venda foi inventado. Nenhuma notificação push enviada neste ciclo — nenhum dos
 critérios de novo aviso ocorreu.
+
+### 9.18 Atualização — ciclo de 2026-08-05 (~13h UTC), 23º ciclo — estado idêntico ao ciclo 22, sem fato novo
+
+Checagem no mesmo dia do ciclo 22 (~6h depois, slot das 13h UTC): `env | grep -iE "SHOPEE|TINY"`
+segue vazio neste sandbox; `.github/workflows/` continua só com `shopee-optimizer-safety.yml` e
+`shopee-production-seo.yml` — o par baseado em Tiny/Olist (`fetch-shopee-listings.yml`/
+`optimize-shopee-listings.yml`) ainda ausente. Artefato mais recente em `listings/` continua
+`shopee-listings-20260726-080756.json` (`status: partial`, `total_products: 0`, mesmo erro
+`"Falha ao renovar token: Invalid client or Invalid client credentials"`); nenhum arquivo novo
+desde 2026-07-26. `git log a8c7f9a..origin/main` mostra só um commit (`170e0a0`, fix de CI do
+Policy Engine não relacionado) — nada toca `scripts/shopee_*`, `listings/` ou
+`tasks-queue.json`. Via `mcp__github__actions_list` (`shopee-production-seo.yml`): as mesmas 5
+execuções de 2026-07-30 (`id`s 30585266165, 30571531668, 30571478470, 30571242284,
+30570700034), todas `conclusion: failure` — nenhuma execução nova desde então.
+
+O achado estrutural dos ciclos 19–22 (sem chamada a endpoint de analytics do Shopee Open
+Platform nos scripts de produção — sem CTR, conversão ou A/B testing medido; itens 1/3/9/10
+desta rotina permanecem tecnicamente inexequíveis mesmo com credencial `SHOPEE_*` presente) não
+foi re-verificado nesta sessão por já confirmado nos ciclos anteriores.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado. Nenhuma notificação push enviada neste ciclo — nenhum dos
+critérios de novo aviso (workflows Tiny recriados, artefato novo com erro diferente, ou execução
+de `shopee-production-seo.yml` com apply real bem-sucedido) ocorreu, e o achado estrutural já foi
+comunicado nos ciclos anteriores.
