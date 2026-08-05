@@ -1,19 +1,19 @@
 {
   "status": "PRODUCTION_UPDATED",
-  "sha": "0693580dc6ec32bb2820a9b69472b72ebc33d3d0",
-  "workflow_run_id": "31047806312",
-  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31047806312",
+  "sha": "46000f17db6d63f12e73cb3e01a5f84d4bc7dee9",
+  "workflow_run_id": "31050520156",
+  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31050520156",
   "jobs": {
     "validate": "success",
     "deploy": "success",
     "smoke_test": "success"
   },
   "results": [
-    "OK Oracle repository sync: canonical=0693580dc6ec32bb2820a9b69472b72ebc33d3d0 deployed=0693580dc6ec32bb2820a9b69472b72ebc33d3d0",
+    "OK Oracle repository sync: canonical=46000f17db6d63f12e73cb3e01a5f84d4bc7dee9 deployed=46000f17db6d63f12e73cb3e01a5f84d4bc7dee9",
     "OK Oracle repository sync cron installed",
-    "OK release SHA marker: 0693580dc6ec32bb2820a9b69472b72ebc33d3d0",
+    "OK release SHA marker: 46000f17db6d63f12e73cb3e01a5f84d4bc7dee9",
     "OK version: https://shopvivaliz.com.br/api/health/version.php (200)",
-    "OK public version endpoint: 0693580dc6ec32bb2820a9b69472b72ebc33d3d0",
+    "OK public version endpoint: 46000f17db6d63f12e73cb3e01a5f84d4bc7dee9",
     "OK homepage: https://shopvivaliz.com.br/ (200)",
     "OK mobile responsive header contract",
     "OK catalog: https://shopvivaliz.com.br/catalogo (200)",
@@ -54,5 +54,5 @@
     "OK security header: x-content-type-options",
     "OK security header: content-security-policy"
   ],
-  "verified_at": "2026-08-05T21:17:09.520074+00:00"
+  "verified_at": "2026-08-05T21:55:07.490430+00:00"
 }
