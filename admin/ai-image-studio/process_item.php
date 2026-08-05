@@ -72,7 +72,7 @@ function ai_studio_default_prompts(string $productName): array
  */
 function ai_studio_fetch_product(PDO $db, int $productId): ?array
 {
-    $stmt = $db->prepare('SELECT * FROM produtos WHERE id = ? LIMIT 1');
+    $stmt = $db->prepare('SELECT * FROM products WHERE id = ? LIMIT 1');
     $stmt->execute([$productId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -80,22 +80,27 @@ function ai_studio_fetch_product(PDO $db, int $productId): ?array
         return null;
     }
 
-    $name = trim((string) ($row['nome'] ?? $row['name'] ?? $row['descricao'] ?? ''));
+    // `products` (nome real da tabela em produção, confirmado via
+    // admin/diagnostico-banco.php em 2026-08-05 — NÃO é `produtos`) usa
+    // colunas em inglês (`name`, `description`, `image_url`). Mantemos os
+    // fallbacks em português como rede de segurança, caso este código um dia
+    // rode contra um schema diferente, mas as chaves reais são as primeiras.
+    $name = trim((string) ($row['name'] ?? $row['nome'] ?? $row['descricao'] ?? ''));
     $description = trim((string) (
-        $row['descricao_completa']
+        $row['description']
+        ?? $row['descricao_completa']
         ?? $row['descricaoComplementar']
         ?? $row['descricao_complementar']
         ?? $row['descricao']
-        ?? $row['description']
         ?? $name
     ));
 
     // Mesma tolerância de nomes de coluna usada em
     // includes/catalog-runtime.php para a imagem principal do produto.
     $imageRef = trim((string) (
-        $row['imagem_principal_url']
+        $row['image_url']
+        ?? $row['imagem_principal_url']
         ?? $row['primary_image_url']
-        ?? $row['image_url']
         ?? $row['imagem']
         ?? ''
     ));
@@ -125,7 +130,7 @@ function ai_studio_resolve_base_image(string $imageRef, string $projectRoot, int
 {
     if ($imageRef === '') {
         throw new AiStudioApiException(
-            "Produto #$productId não tem foto cadastrada em `produtos` (imagem_principal_url/primary_image_url/image_url/imagem todos vazios). " .
+            "Produto #$productId não tem foto cadastrada em `products` (image_url/imagem_principal_url/primary_image_url/imagem todos vazios). " .
             'Não é possível gerar imagens sem uma foto real de referência (regra de fidelidade do produto).'
         );
     }
@@ -197,12 +202,20 @@ function ai_studio_insert_staging_row(
 }
 
 /**
- * Processa um único produto para um provedor, gerando as 3 variações.
+ * Processa um único produto para um provedor, gerando as variações de imagem
+ * selecionadas (por padrão as 3: white/hero/ambient).
  *
+ * @param array<int,string> $imageTypes subconjunto de ['white','hero','ambient'] — permite ao admin optar por gerar só 1 ou 2 tipos por produto em vez de sempre os 3
+ * @param string|null $modelOverride nome de modelo específico a usar no lugar do default de config.php (ex: forçar um modelo OpenAI/Google diferente pontualmente); null = usa o default
  * @return array{success:bool, product_id:int, provider:string, results:array<int,array<string,mixed>>}
  */
-function ai_studio_process_item(PDO $db, int $productId, string $provider): array
-{
+function ai_studio_process_item(
+    PDO $db,
+    int $productId,
+    string $provider,
+    array $imageTypes = ['white', 'hero', 'ambient'],
+    ?string $modelOverride = null
+): array {
     $provider = strtolower(trim($provider));
     if (!in_array($provider, ['openai', 'google', 'claude'], true)) {
         return [
@@ -211,6 +224,21 @@ function ai_studio_process_item(PDO $db, int $productId, string $provider): arra
             'provider' => $provider,
             'results' => [],
             'error' => "Provider inválido: '$provider'. Use 'openai', 'google' ou 'claude'.",
+        ];
+    }
+
+    // Valida e normaliza os tipos de imagem solicitados — nunca aceita tipo
+    // desconhecido, e nunca processa lista vazia (equivalente a "nada
+    // selecionado", tratado como erro explícito em vez de silenciosamente
+    // não gerar nada).
+    $imageTypes = array_values(array_unique(array_intersect($imageTypes, ['white', 'hero', 'ambient'])));
+    if ($imageTypes === []) {
+        return [
+            'success' => false,
+            'product_id' => $productId,
+            'provider' => $provider,
+            'results' => [],
+            'error' => 'Nenhum tipo de imagem válido selecionado (white/hero/ambient).',
         ];
     }
 
@@ -240,7 +268,7 @@ function ai_studio_process_item(PDO $db, int $productId, string $provider): arra
         error_log("[ai-image-studio] Falha ao resolver foto base do produto #$productId: " . $e->getMessage());
 
         $results = [];
-        foreach (['white', 'hero', 'ambient'] as $imageType) {
+        foreach ($imageTypes as $imageType) {
             $id = ai_studio_insert_staging_row(
                 $db,
                 $productId,
@@ -297,7 +325,17 @@ function ai_studio_process_item(PDO $db, int $productId, string $provider): arra
 
         $results = [];
 
-        foreach (['white', 'hero', 'ambient'] as $imageType) {
+        // Modelo efetivo: usa o override explícito do chamador (ex: escolha
+        // feita no seletor de modelo do dashboard) se fornecido e não-vazio;
+        // senão cai no default de config.php, como sempre fez.
+        $effectiveOpenAiModel = ($modelOverride !== null && trim($modelOverride) !== '' && $imageEngine === 'openai')
+            ? trim($modelOverride)
+            : AI_STUDIO_OPENAI_IMAGE_MODEL;
+        $effectiveGoogleModel = ($modelOverride !== null && trim($modelOverride) !== '' && $imageEngine === 'google')
+            ? trim($modelOverride)
+            : AI_STUDIO_GOOGLE_IMAGEN_MODEL;
+
+        foreach ($imageTypes as $imageType) {
             $prompt = $prompts[$imageType];
             $filename = ai_studio_unique_filename($productId, $imageType);
             $destinationPath = AI_STUDIO_STORAGE_DIR . $filename;
@@ -307,10 +345,10 @@ function ai_studio_process_item(PDO $db, int $productId, string $provider): arra
                 // Sempre EDITA a foto real ($baseImagePath) — nenhum dos
                 // dois caminhos abaixo gera imagem do zero só por texto.
                 if ($imageEngine === 'openai') {
-                    $client = new AiStudioOpenAiClient(AI_STUDIO_OPENAI_API_KEY, AI_STUDIO_OPENAI_IMAGE_MODEL);
+                    $client = new AiStudioOpenAiClient(AI_STUDIO_OPENAI_API_KEY, $effectiveOpenAiModel);
                     $client->editImageToFile($prompt, $baseImagePath, $destinationPath);
                 } else {
-                    $client = new AiStudioGoogleImageEditClient(AI_STUDIO_GOOGLE_IMAGEN_API_KEY, AI_STUDIO_GOOGLE_IMAGEN_MODEL);
+                    $client = new AiStudioGoogleImageEditClient(AI_STUDIO_GOOGLE_IMAGEN_API_KEY, $effectiveGoogleModel);
                     $client->editImageToFile($prompt, $baseImagePath, $destinationPath);
                 }
 
@@ -385,11 +423,17 @@ function ai_studio_process_item(PDO $db, int $productId, string $provider): arra
 if (PHP_SAPI === 'cli' && realpath($argv[0] ?? '') === realpath(__FILE__)) {
     $cliProductId = (int) ($argv[1] ?? 0);
     $cliProvider = (string) ($argv[2] ?? '');
+    $cliImageTypesArg = (string) ($argv[3] ?? '');
+    $cliModel = (string) ($argv[4] ?? '');
 
     if ($cliProductId <= 0 || $cliProvider === '') {
-        fwrite(STDERR, "Uso: php process_item.php <product_id> <openai|google|claude>\n");
+        fwrite(STDERR, "Uso: php process_item.php <product_id> <openai|google|claude> [white,hero,ambient] [modelo]\n");
         exit(1);
     }
+
+    $cliImageTypes = $cliImageTypesArg !== ''
+        ? array_map('trim', explode(',', $cliImageTypesArg))
+        : ['white', 'hero', 'ambient'];
 
     $db = ai_studio_db();
     if ($db === null) {
@@ -397,7 +441,7 @@ if (PHP_SAPI === 'cli' && realpath($argv[0] ?? '') === realpath(__FILE__)) {
         exit(1);
     }
 
-    $result = ai_studio_process_item($db, $cliProductId, $cliProvider);
+    $result = ai_studio_process_item($db, $cliProductId, $cliProvider, $cliImageTypes, $cliModel !== '' ? $cliModel : null);
     fwrite(STDOUT, json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n");
     exit($result['success'] ? 0 : 1);
 }
@@ -415,6 +459,12 @@ if (PHP_SAPI !== 'cli' && basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basena
 
     $httpProductId = (int) ($_POST['product_id'] ?? 0);
     $httpProvider = (string) ($_POST['provider'] ?? '');
+    // image_types[]: checkboxes por tipo de imagem vindos do formulário do
+    // dashboard (ver admin_dashboard.php) — se omitido, mantém o
+    // comportamento antigo de sempre gerar os 3 tipos.
+    $httpImageTypesRaw = $_POST['image_types'] ?? ['white', 'hero', 'ambient'];
+    $httpImageTypes = is_array($httpImageTypesRaw) ? array_map('strval', $httpImageTypesRaw) : ['white', 'hero', 'ambient'];
+    $httpModel = trim((string) ($_POST['model'] ?? ''));
 
     if ($httpProductId <= 0 || $httpProvider === '') {
         http_response_code(400);
@@ -429,6 +479,9 @@ if (PHP_SAPI !== 'cli' && basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basena
         exit;
     }
 
-    echo json_encode(ai_studio_process_item($db, $httpProductId, $httpProvider), JSON_UNESCAPED_UNICODE);
+    echo json_encode(
+        ai_studio_process_item($db, $httpProductId, $httpProvider, $httpImageTypes, $httpModel !== '' ? $httpModel : null),
+        JSON_UNESCAPED_UNICODE
+    );
     exit;
 }

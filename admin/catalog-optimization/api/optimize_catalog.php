@@ -34,20 +34,29 @@ require_once __DIR__ . '/../config_optimization.php';
 require_once __DIR__ . '/../src/TextAiServices.php';
 
 /**
- * Busca os dados de TEXTO do produto na tabela `produtos` — nunca preço ou
- * estoque. Usa SELECT * (não SELECT com lista fixa de colunas) porque o
- * schema real de `produtos` varia entre releases (mesma situação já
- * documentada em admin/ai-image-studio/process_item.php) e uma lista fixa
- * de colunas quebraria com "Unknown column" em produção. A proteção contra
- * vazamento de preço/estoque não vem da query, e sim do fato de que o
- * código abaixo só copia name/description/category/brand/specs para
- * $product — nenhuma outra chave do row bruto é lida ou propagada.
+ * Busca os dados de TEXTO do produto na tabela `products` (nome real da
+ * tabela em produção, confirmado via admin/diagnostico-banco.php em
+ * 2026-08-05 — NÃO é `produtos`, que não existe e era a causa do HTTP 500
+ * anterior) — nunca preço ou estoque. Usa SELECT * (não SELECT com lista
+ * fixa de colunas) porque, mesmo dentro de `products`, mantemos tolerância a
+ * nomes de coluna alternativos por segurança; a proteção contra vazamento de
+ * preço/estoque não vem da query, e sim do fato de que o código abaixo só
+ * copia name/description/category/brand/specs para $product — nenhuma outra
+ * chave do row bruto é lida ou propagada.
+ *
+ * `products` não tem colunas de categoria/marca diretamente — esses dados
+ * vêm da tabela `olist_products` (schema paralelo em português, populado
+ * pela sincronização Tiny/Olist), casados via `olist_id`. Atenção ao tipo:
+ * `products.olist_id` é VARCHAR(100) e `olist_products.olist_id` é BIGINT
+ * UNSIGNED — por isso o cast explícito no JOIN abaixo. Produtos sem
+ * `olist_id` ou sem correspondência em `olist_products` caem no default
+ * ('Vivaliz' / vazio), sem erro.
  *
  * @return array{name:string, description:string, category:string, brand:string, specs:string}|null
  */
 function ai_catalog_fetch_product(PDO $db, int $productId): ?array
 {
-    $stmt = $db->prepare('SELECT * FROM produtos WHERE id = ? LIMIT 1');
+    $stmt = $db->prepare('SELECT * FROM products WHERE id = ? LIMIT 1');
     $stmt->execute([$productId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -55,26 +64,44 @@ function ai_catalog_fetch_product(PDO $db, int $productId): ?array
         return null;
     }
 
-    $name = trim((string) ($row['nome'] ?? $row['name'] ?? ''));
+    $name = trim((string) ($row['name'] ?? $row['nome'] ?? ''));
     if ($name === '') {
         return null;
     }
 
     $description = trim((string) (
-        $row['descricao_completa']
+        $row['description']
+        ?? $row['descricao_completa']
         ?? $row['descricaoComplementar']
         ?? $row['descricao_complementar']
         ?? $row['descricao']
-        ?? $row['description']
         ?? ''
     ));
 
-    $categoryRaw = $row['categoria'] ?? $row['category'] ?? '';
-    $category = is_array($categoryRaw)
-        ? trim((string) ($categoryRaw['nome'] ?? $categoryRaw['caminhoCompleto'] ?? ''))
-        : trim((string) $categoryRaw);
-
-    $brand = trim((string) ($row['marca'] ?? $row['brand'] ?? 'Vivaliz'));
+    // `products` em si não tem categoria/marca — enriquece via olist_products
+    // (join tolerante a tipo, com try/catch: se falhar por qualquer motivo,
+    // degrada para os defaults em vez de derrubar o processamento do item).
+    $category = '';
+    $brand = 'Vivaliz';
+    $olistId = trim((string) ($row['olist_id'] ?? ''));
+    if ($olistId !== '') {
+        try {
+            $enrichStmt = $db->prepare(
+                'SELECT categoria, marca FROM olist_products WHERE CAST(olist_id AS CHAR) = ? LIMIT 1'
+            );
+            $enrichStmt->execute([$olistId]);
+            $enrichRow = $enrichStmt->fetch(PDO::FETCH_ASSOC);
+            if (is_array($enrichRow)) {
+                $categoryRaw = $enrichRow['categoria'] ?? '';
+                $category = is_array($categoryRaw)
+                    ? trim((string) ($categoryRaw['nome'] ?? $categoryRaw['caminhoCompleto'] ?? ''))
+                    : trim((string) $categoryRaw);
+                $brand = trim((string) ($enrichRow['marca'] ?? '')) !== '' ? trim((string) $enrichRow['marca']) : $brand;
+            }
+        } catch (Throwable $e) {
+            error_log('[catalog-optimization] Falha ao enriquecer categoria/marca via olist_products para produto #' . $productId . ': ' . $e->getMessage());
+        }
+    }
 
     $specsRaw = $row['especificacoes_tecnicas'] ?? $row['especificacoes'] ?? $row['specifications'] ?? $row['ficha_tecnica'] ?? '';
     $specs = is_array($specsRaw) ? trim((string) json_encode($specsRaw, JSON_UNESCAPED_UNICODE)) : trim((string) $specsRaw);

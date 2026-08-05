@@ -75,19 +75,29 @@ if (($_GET['ajax'] ?? '') === 'pending_ids') {
         exit;
     }
 
-    $stmt = $db->prepare(
-        'SELECT p.id
-         FROM produtos p
-         LEFT JOIN catalog_optimizations_staging s
-            ON s.product_id = p.id AND s.channel = ?
-         WHERE s.id IS NULL
-         ORDER BY p.id ASC
-         LIMIT ' . (int) $limit
-    );
-    $stmt->execute([$channel]);
-    $ids = array_map('intval', array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'id'));
+    try {
+        // `products` é o nome real da tabela em produção (confirmado via
+        // admin/diagnostico-banco.php em 2026-08-05) — NÃO é `produtos`, que
+        // não existe. Isso era a causa raiz exata do "Falha ao buscar
+        // produtos pendentes (HTTP 500)" relatado pelo Fred.
+        $stmt = $db->prepare(
+            'SELECT p.id
+             FROM products p
+             LEFT JOIN catalog_optimizations_staging s
+                ON s.product_id = p.id AND s.channel = ?
+             WHERE s.id IS NULL
+             ORDER BY p.id ASC
+             LIMIT ' . (int) $limit
+        );
+        $stmt->execute([$channel]);
+        $ids = array_map('intval', array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'id'));
 
-    echo json_encode(['product_ids' => $ids]);
+        echo json_encode(['product_ids' => $ids]);
+    } catch (Throwable $e) {
+        error_log('[catalog-optimization] Falha ao buscar produtos pendentes (ajax pending_ids): ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['error' => 'Falha ao buscar produtos pendentes: ' . $e->getMessage()]);
+    }
     exit;
 }
 
@@ -204,13 +214,14 @@ $originalByProductId = [];
 $uniqueProductIds = array_unique(array_map(static fn (array $r) => (int) $r['product_id'], $pendingItems));
 foreach ($uniqueProductIds as $pid) {
     try {
-        $pStmt = $db->prepare('SELECT * FROM produtos WHERE id = ? LIMIT 1');
+        // `products` (não `produtos` — mesma correção aplicada em todo o módulo).
+        $pStmt = $db->prepare('SELECT * FROM products WHERE id = ? LIMIT 1');
         $pStmt->execute([$pid]);
         $pRow = $pStmt->fetch(PDO::FETCH_ASSOC);
         if (is_array($pRow)) {
             $originalByProductId[$pid] = [
-                'name' => (string) ($pRow['nome'] ?? $pRow['name'] ?? ''),
-                'description' => (string) ($pRow['descricao_completa'] ?? $pRow['descricao'] ?? $pRow['description'] ?? ''),
+                'name' => (string) ($pRow['name'] ?? $pRow['nome'] ?? ''),
+                'description' => (string) ($pRow['description'] ?? $pRow['descricao_completa'] ?? $pRow['descricao'] ?? ''),
             ];
         }
     } catch (Throwable $e) {
@@ -269,6 +280,7 @@ $channels = catalog_ai_channels();
 </head>
 <body>
 <div class="cat-wrap">
+    <div style="margin-bottom:12px;"><a href="/admin/menu-completo.php" style="color:#555;text-decoration:none;font-size:14px;">← Voltar ao Admin</a></div>
     <div class="cat-topbar">
         <h1>📝 Otimização de Cadastro (SEO/GEO)</h1>
     </div>

@@ -92,11 +92,13 @@ $productNamesById = [];
 $uniqueProductIds = array_unique(array_map(static fn (array $r) => (int) $r['product_id'], $pendingItems));
 foreach ($uniqueProductIds as $pid) {
     try {
-        $pStmt = $db->prepare('SELECT * FROM produtos WHERE id = ? LIMIT 1');
+        // `products` (não `produtos`, que não existe em produção — ver
+        // process_item.php::ai_studio_fetch_product para a mesma correção).
+        $pStmt = $db->prepare('SELECT * FROM products WHERE id = ? LIMIT 1');
         $pStmt->execute([$pid]);
         $pRow = $pStmt->fetch(PDO::FETCH_ASSOC);
         if (is_array($pRow)) {
-            $productNamesById[$pid] = trim((string) ($pRow['nome'] ?? $pRow['name'] ?? $pRow['descricao'] ?? ''));
+            $productNamesById[$pid] = trim((string) ($pRow['name'] ?? $pRow['nome'] ?? $pRow['descricao'] ?? ''));
         }
     } catch (Throwable $e) {
         error_log('[ai-image-studio] Falha ao buscar nome do produto #' . $pid . ': ' . $e->getMessage());
@@ -140,6 +142,7 @@ function ais_v_h(string $value): string
 </head>
 <body>
 <div class="aisv-wrap">
+    <div style="margin-bottom:12px;"><a href="/admin/menu-completo.php" style="color:#555;text-decoration:none;font-size:14px;">← Voltar ao Admin</a></div>
     <div class="aisv-topbar">
         <h1>✅ Validar imagens geradas</h1>
         <a href="/admin/ai-image-studio/admin_dashboard.php">← Voltar ao dashboard</a>

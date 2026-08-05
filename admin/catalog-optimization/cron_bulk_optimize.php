@@ -94,9 +94,13 @@ ai_catalog_cli_log("Iniciando lote: canal={$args['channel']} provider={$args['pr
 // Busca produtos que ainda não têm NENHUM registro em
 // catalog_optimizations_staging para este canal específico (permite rodar
 // o mesmo produto de novo para um canal DIFERENTE sem duplicar controle).
+// `products` é o nome real da tabela em produção (confirmado via
+// admin/diagnostico-banco.php em 2026-08-05) — NÃO é `produtos`, que não
+// existe (mesma correção aplicada em api/optimize_catalog.php e
+// admin_catalog.php).
 $stmt = $db->prepare(
     'SELECT p.id
-     FROM produtos p
+     FROM products p
      LEFT JOIN catalog_optimizations_staging s
         ON s.product_id = p.id AND s.channel = ?
      WHERE s.id IS NULL
