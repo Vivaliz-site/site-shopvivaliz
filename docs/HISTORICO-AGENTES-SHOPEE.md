@@ -729,3 +729,30 @@ CTR/conversão/venda foi inventado. Nenhuma notificação push enviada neste cic
 critérios de novo aviso (workflows Tiny recriados, artefato novo com erro diferente, ou execução
 de `shopee-production-seo.yml` com apply real bem-sucedido) ocorreu, e o achado estrutural do
 ciclo 19 já foi comunicado no relatório daquele ciclo.
+
+### 9.16 Atualização — ciclo de 2026-08-05, 21º ciclo — estado idêntico ao ciclo 20, sem fato novo
+
+Checagem ~24h depois do ciclo 20, sem reinvestigar do zero: `env | grep -iE "SHOPEE|TINY"` segue
+vazio neste sandbox; `ls .github/workflows/ | grep -i shopee` retorna as mesmas duas entradas
+(`shopee-optimizer-safety.yml`, `shopee-production-seo.yml`) — o par baseado em Tiny/Olist
+(`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml`) continua ausente. Artefato mais
+recente em `listings/` continua `shopee-listings-20260726-080756.json`/
+`optimization-report-20260726-060921.json` — nenhum arquivo novo desde 2026-07-26 (o commit mais
+recente que toca `listings/` é de 2026-08-03, mas é o commit deste próprio histórico de ciclos,
+não um artefato de execução real). Via `mcp__github__actions_list`
+(`shopee-production-seo.yml`, owner `fredmourao-ai`/repo `site-shopvivaliz`): ainda as mesmas 5
+execuções de 2026-07-30 (todas `conclusion: failure`) — nenhuma execução nova desde então, ou
+seja, o passo real de apply nunca rodou com sucesso em nenhum momento até agora.
+
+O achado estrutural dos ciclos 19/20 (nenhuma chamada a endpoint de analytics do Shopee Open
+Platform em `scripts/shopee_full_catalog_optimizer.py`/`shopee_production_seo_apply.py` — sem
+CTR, taxa de conversão, ou A/B testing medido; itens 1/3/9/10 desta rotina continuam
+tecnicamente inexequíveis mesmo com credencial `SHOPEE_*` presente) não foi re-verificado nesta
+sessão por já ter sido confirmado nos ciclos anteriores; nada nos commits mais recentes (fix de
+OAuth Olist/Melhor Envio, `#747`) toca esses scripts.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado. Nenhuma notificação push enviada neste ciclo — nenhum dos
+critérios de novo aviso (workflows Tiny recriados, artefato novo com erro diferente, ou execução
+de `shopee-production-seo.yml` com apply real bem-sucedido) ocorreu, e o achado estrutural já foi
+comunicado nos ciclos anteriores.
