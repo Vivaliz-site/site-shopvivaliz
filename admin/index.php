@@ -79,6 +79,12 @@ $codename = (string)($version['codename'] ?? '');
                 <a href="/admin/connections.php" style="background: #0f766e; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
                     🔐 Conexões e tokens
                 </a>
+                <a href="/admin/ai-image-studio/admin_dashboard.php" style="background: #9333ea; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    🖼️ AI Image Studio
+                </a>
+                <a href="/admin/catalog-optimization/admin_catalog.php" style="background: #ea580c; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    📝 Otimização de Cadastro
+                </a>
             </div>
 
             <article class="admin-card admin-card-wide">

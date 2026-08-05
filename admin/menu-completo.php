@@ -45,6 +45,9 @@ $sections = [
         ['🧠', 'Orchestrator', '/admin/orchestrator.php', 'Orquestrar agentes e fluxos.'],
         ['💬', 'Squad Chat', '/admin/squad-chat.php', 'Conversar com o conjunto de agentes.'],
         ['🩺', 'Monitor do sistema de IA', '/admin/ai-system-monitor.php', 'Acompanhar saúde e uso dos serviços de IA.'],
+        ['🖼️', 'AI Image Studio — Gerar imagens', '/admin/ai-image-studio/admin_dashboard.php', 'Disparar geração de imagens de produto (OpenAI/Google/Claude) a partir da foto real.'],
+        ['✅', 'AI Image Studio — Validar imagens', '/admin/ai-image-studio/admin_validate.php', 'Aprovar ou rejeitar as imagens geradas antes de publicar.'],
+        ['📝', 'Otimização de Cadastro (SEO/GEO)', '/admin/catalog-optimization/admin_catalog.php', 'Reescrever título, descrição e SEO de produtos por canal de venda.'],
     ],
     'Monitoramento e auditoria' => [
         ['📡', 'Monitor principal', '/admin/monitor/', 'Painel central de saúde do sistema.'],
