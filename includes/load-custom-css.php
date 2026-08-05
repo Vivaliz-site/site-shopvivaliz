@@ -91,15 +91,23 @@ function load_custom_css(): void
     // A antiga home-mobile-layout.js foi removida porque mudava texto e ordem de
     // secoes apos o primeiro paint. O HTML canonico agora e igual em todos os
     // dispositivos; apenas CSS responsivo altera sua apresentacao.
+    //
+    // Na home (index), esses dois arquivos já vêm dentro do bundle emitido em
+    // index.php (ver includes/asset-bundle-manifest.php) — não reemitir aqui
+    // para não duplicar a carga. Outras páginas não usam este bloco.
     if ($pageName === 'index') {
-        echo "    <link rel=\"stylesheet\" href=\"/css/home-mobile-compact.css?v=2026-07-28-3\">\n";
-        echo "    <link rel=\"stylesheet\" href=\"/css/home-mobile-final.css?v=2026-08-02-1\">\n";
+        // já incluído via /css/home-bundle.php
     }
 
     // Quarta rodada de polimento visual. O estado geometrico correspondente ja
     // foi definido no <html> pelo script sincrono acima, evitando layout shift.
+    // O CSS do visual-polish-v4 na home também já vem no bundle de
+    // index.php; aqui só falta o <script>, que precisa continuar separado
+    // (é comportamento, não estilo, e roda em carrinho/checkout também).
     if (in_array($pageName, ['index', 'carrinho', 'checkout'], true)) {
-        echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v4.css?v=2026-08-02-1\">\n";
+        if ($pageName !== 'index') {
+            echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v4.css?v=2026-08-02-1\">\n";
+        }
         echo "    <script src=\"/js/visual-polish-v4.js?v=2026-08-02-1\" defer></script>\n";
     }
 

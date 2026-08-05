@@ -47,6 +47,14 @@ storage/order-idempotency/
 storage/private/
 storage/tiny/
 
+# AI Image Studio: imagens geradas em staging, e cópias temporárias da foto
+# real do produto usada como referência, são runtime output, não código.
+# Os diretórios são criados automaticamente por admin/ai-image-studio/config.php.
+admin/ai-image-studio/storage/staging/*
+!admin/ai-image-studio/storage/staging/.gitkeep
+admin/ai-image-studio/storage/base-image-tmp/*
+!admin/ai-image-studio/storage/base-image-tmp/.gitkeep
+
 # Backups pontuais deixados por agentes em produção -- nunca devem ser
 # versionados nem travar o auto-sync seguro da VM.
 *.backup-*
