@@ -180,22 +180,40 @@ function svih_olist_candidates(array $stored): array
     $storedRefresh = (string)($stored['OLIST_REFRESH_TOKEN'] ?? $stored['TINY_REFRESH_TOKEN'] ?? '');
     $storedAccess = (string)($stored['OLIST_ACCESS_TOKEN'] ?? $stored['TINY_ACCESS_TOKEN'] ?? '');
 
+    // client_id/client_secret sao o MESMO app OAuth2 do Tiny/Olist, so
+    // gravado sob nomes de variavel diferentes por convencao historica (ver
+    // docs/knowledge/secrets-and-integrations-map.md: CLIENT_ID_API_OLIST ->
+    // OLIST_CLIENT_ID sao apelidos do mesmo valor, nao apps diferentes).
+    // BUG CORRIGIDO 2026-08-05: o commit 17a6c5ef7 (#747) passou a exigir
+    // que client_id/client_secret venham da MESMA familia (olist/tiny/
+    // legacy) que teria tambem o refresh_token, em vez de aceitar qualquer
+    // nome valido — se as credenciais reais estivessem gravadas sob um
+    // nome (ex: CLIENT_ID_API_OLIST) e o refresh_token persistido tivesse
+    // credential_family diferente (ex: 'tiny'), NENHUMA familia batia com
+    // as 3 pecas completas e o painel reportava "credenciais incompletas
+    // ou placeholders" mesmo com tudo configurado. Fallback único abaixo
+    // restaura o comportamento anterior para client_id/secret, mantendo a
+    // separação por família só para refresh/access token (que sim podem
+    // ser específicos por integração).
+    $sharedClientId = svih_env('OLIST_CLIENT_ID', 'TINY_CLIENT_ID', 'CLIENT_ID_API_OLIST');
+    $sharedClientSecret = svih_env('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET', 'CLIENT_SECRET_OLIST');
+
     $definitions = [
         'olist' => [
-            'client_id' => svih_env('OLIST_CLIENT_ID'),
-            'client_secret' => svih_env('OLIST_CLIENT_SECRET'),
+            'client_id' => svih_env('OLIST_CLIENT_ID') ?: $sharedClientId,
+            'client_secret' => svih_env('OLIST_CLIENT_SECRET') ?: $sharedClientSecret,
             'refresh_token' => svih_env('OLIST_REFRESH_TOKEN'),
             'access_token' => svih_env('OLIST_ACCESS_TOKEN'),
         ],
         'tiny' => [
-            'client_id' => svih_env('TINY_CLIENT_ID'),
-            'client_secret' => svih_env('TINY_CLIENT_SECRET'),
+            'client_id' => svih_env('TINY_CLIENT_ID') ?: $sharedClientId,
+            'client_secret' => svih_env('TINY_CLIENT_SECRET') ?: $sharedClientSecret,
             'refresh_token' => svih_env('TINY_REFRESH_TOKEN'),
             'access_token' => svih_env('TINY_ACCESS_TOKEN'),
         ],
         'legacy' => [
-            'client_id' => svih_env('CLIENT_ID_API_OLIST'),
-            'client_secret' => svih_env('CLIENT_SECRET_OLIST'),
+            'client_id' => svih_env('CLIENT_ID_API_OLIST') ?: $sharedClientId,
+            'client_secret' => svih_env('CLIENT_SECRET_OLIST') ?: $sharedClientSecret,
             'refresh_token' => svih_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN'),
             'access_token' => svih_env('TOKEN_API_OLIST'),
         ],

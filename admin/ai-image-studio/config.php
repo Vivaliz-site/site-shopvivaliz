@@ -29,11 +29,20 @@ require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../includes/pdo-database.php';
 
 // --- Chaves de API (placeholders lidos de ambiente, nunca hardcoded) ---
+// NOTA 2026-08-05: o resto do projeto (Liz, config/constants.php,
+// squad-chat.php etc.) já usa chaves reais e funcionando sob os nomes
+// GEMINI_API_KEY e ANTHROPIC_API_KEY (confirmado em produção: Liz respondeu
+// de verdade via provider 'gemini'). Este módulo tentava nomes próprios
+// (GOOGLE_IMAGEN_API_KEY, CLAUDE_API_KEY) que nunca foram configurados —
+// por isso caía em "sem chave" mesmo com a chave real já existindo no
+// projeto. Agora tenta primeiro o nome específico deste módulo (permite
+// override futuro sem tocar na chave compartilhada) e cai para a variável
+// já usada pelo resto do sistema, sem duplicar segredo em lugar nenhum.
 define('AI_STUDIO_OPENAI_API_KEY', (string) (getenv('OPENAI_API_KEY') ?: ''));
-define('AI_STUDIO_GOOGLE_IMAGEN_API_KEY', (string) (getenv('GOOGLE_IMAGEN_API_KEY') ?: ''));
+define('AI_STUDIO_GOOGLE_IMAGEN_API_KEY', (string) (getenv('GOOGLE_IMAGEN_API_KEY') ?: (getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_GEMINI_API_KEY')) ?: ''));
 define('AI_STUDIO_GOOGLE_IMAGEN_PROJECT_ID', (string) (getenv('GOOGLE_IMAGEN_PROJECT_ID') ?: ''));
 define('AI_STUDIO_GOOGLE_IMAGEN_LOCATION', (string) (getenv('GOOGLE_IMAGEN_LOCATION') ?: 'us-central1'));
-define('AI_STUDIO_CLAUDE_API_KEY', (string) (getenv('CLAUDE_API_KEY') ?: ''));
+define('AI_STUDIO_CLAUDE_API_KEY', (string) (getenv('CLAUDE_API_KEY') ?: getenv('ANTHROPIC_API_KEY') ?: ''));
 
 // --- Modelos (podem ser sobrescritos via ambiente sem editar código) ---
 // gpt-image-1 é o modelo da OpenAI que suporta o endpoint /v1/images/edits

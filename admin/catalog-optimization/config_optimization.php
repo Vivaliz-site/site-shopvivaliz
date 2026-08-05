@@ -37,9 +37,17 @@ require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../includes/pdo-database.php';
 
 // --- Chaves de API (placeholders lidos de ambiente, nunca hardcoded) ---
+// NOTA 2026-08-05: o resto do projeto (Liz, config/constants.php) já usa
+// chaves reais e funcionando sob GEMINI_API_KEY e ANTHROPIC_API_KEY
+// (confirmado em produção via Liz respondendo de verdade pelo provider
+// 'gemini'). Este módulo tentava GOOGLE_GEMINI_API_KEY/CLAUDE_API_KEY, que
+// nunca foram configurados — por isso "sem chave" mesmo com a chave real já
+// existindo. Tenta primeiro o nome específico deste módulo (permite
+// override futuro) e cai para a variável já usada pelo resto do sistema,
+// sem duplicar segredo.
 define('CATALOG_AI_OPENAI_API_KEY', (string) (getenv('OPENAI_API_KEY') ?: ''));
-define('CATALOG_AI_GOOGLE_GEMINI_API_KEY', (string) (getenv('GOOGLE_GEMINI_API_KEY') ?: ''));
-define('CATALOG_AI_CLAUDE_API_KEY', (string) (getenv('CLAUDE_API_KEY') ?: ''));
+define('CATALOG_AI_GOOGLE_GEMINI_API_KEY', (string) (getenv('GOOGLE_GEMINI_API_KEY') ?: getenv('GEMINI_API_KEY') ?: ''));
+define('CATALOG_AI_CLAUDE_API_KEY', (string) (getenv('CLAUDE_API_KEY') ?: getenv('ANTHROPIC_API_KEY') ?: ''));
 
 // --- Modelos (podem ser sobrescritos via ambiente sem editar código) ---
 // Modelos de TEXTO reais e vigentes (não os genéricos citados no briefing
