@@ -12,6 +12,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 MATERIALIZER = REPO_ROOT / "scripts" / "sincronizar_secrets_github.py"
 SHELL_WRAPPER = REPO_ROOT / "scripts" / "sincronizar_secrets_github.sh"
 BOOTSTRAP = REPO_ROOT / "scripts" / "bootstrap.sh"
+INSTALLER = REPO_ROOT / "scripts" / "install.sh"
+SYSTEMD_SETUP = REPO_ROOT / "scripts" / "setup-auto-sync-linux.sh"
 
 
 def clean_environment(**extra: str) -> dict[str, str]:
@@ -147,6 +149,13 @@ class BootstrapSafetyTests(unittest.TestCase):
         self.assertTrue((root / "validator-ran").exists())
         self.assertFalse((root / "auto-sync-started").exists())
         self.assertNotIn("Bootstrap validado com sucesso", result.stdout)
+
+    def test_installers_do_not_mask_secret_or_service_failures(self) -> None:
+        for script in (INSTALLER, SYSTEMD_SETUP):
+            content = script.read_text(encoding="utf-8")
+            self.assertNotIn("validar_secrets.py || true", content)
+            self.assertNotIn('sincronizar_secrets_github.sh" > /dev/null 2>&1 || true', content)
+            self.assertIn("set -euo pipefail", content)
 
     def test_default_success_does_not_start_auto_sync(self) -> None:
         root = self.make_fixture(0)
