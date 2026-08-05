@@ -89,6 +89,20 @@ jobs:
           fi
           shellcheck --severity=error "${scripts[@]}"
 
+      - name: Validate Python syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            scripts/sincronizar_secrets_github.py \
+            tests/test_secret_bootstrap_safety.py
+
+      - name: Run secret bootstrap safety tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests/test_secret_bootstrap_safety.py -v
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
