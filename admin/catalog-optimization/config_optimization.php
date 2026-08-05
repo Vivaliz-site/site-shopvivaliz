@@ -54,14 +54,15 @@ define('CATALOG_AI_CLAUDE_API_KEY', (string) (getenv('CLAUDE_API_KEY') ?: getenv
 // original — "gpt-4o"/"claude-3-5-sonnet" como nomes fixos ficam
 // desatualizados rápido; usamos defaults atuais de 2026, sobrescrevíveis).
 define('CATALOG_AI_OPENAI_MODEL', (string) (getenv('OPENAI_TEXT_MODEL') ?: 'gpt-4.1'));
-// gemini-2.5-pro falhou em produção nesta sessão (2026-08-05) com HTTP 404
-// "This model models/gemini-2.5-pro is no longer available to new users" —
-// a chave/projeto real deste ambiente não tem acesso a ele. gemini-1.5-flash
-// é o modelo confirmado FUNCIONANDO agora mesmo com a mesma GEMINI_API_KEY
-// real (é o que api/liz-intelligent.php usa e que respondeu de verdade
-// durante esta validação). Ajustável via GOOGLE_GEMINI_MODEL sem editar
-// código, caso o projeto Google ganhe acesso a um modelo mais novo depois.
-define('CATALOG_AI_GEMINI_MODEL', (string) (getenv('GOOGLE_GEMINI_MODEL') ?: 'gemini-1.5-flash'));
+// Testado ao vivo em produção nesta sessão (2026-08-05) contra a
+// GEMINI_API_KEY real: gemini-2.5-pro -> HTTP 404 "no longer available to
+// new users"; gemini-1.5-flash -> HTTP 404 "not found for API version
+// v1beta, or is not supported for generateContent". gemini-2.5-flash é o
+// default do próprio scripts/validate-gemini-credentials.php do projeto
+// (script cuja função é validar que o modelo funciona com a chave real) —
+// usando esse como próxima tentativa. Ajustável via GOOGLE_GEMINI_MODEL
+// sem editar código.
+define('CATALOG_AI_GEMINI_MODEL', (string) (getenv('GOOGLE_GEMINI_MODEL') ?: 'gemini-2.5-flash'));
 define('CATALOG_AI_CLAUDE_MODEL', (string) (getenv('CLAUDE_TEXT_MODEL') ?: 'claude-sonnet-4-20250514'));
 
 // --- Timeout estendido para chamadas de IA (mínimo 60s, texto longo demora) ---
