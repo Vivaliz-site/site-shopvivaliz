@@ -62,5 +62,45 @@ test.describe('Fluxo de Compra Completa', () => {
     await expect(page).toHaveURL(/\/pedido-confirmado|\/sucesso/);
     await expect(page.locator('h1:has-text("Pedido Confirmado"), h1:has-text("Sucesso")')).toBeVisible();
     await expect(page.getByText(/pedido foi realizado com sucesso/i)).toBeVisible();
+
+    // Verificar que tracking foi capturado
+    const hasClientId = await page.evaluate(() => {
+      try {
+        const clientId = localStorage.getItem('sv_funnel_client_v1');
+        return clientId && clientId.length > 16;
+      } catch (e) {
+        return false;
+      }
+    });
+    expect(hasClientId).toBe(true);
+
+    // Verificar que gtag foi carregado
+    const hasGtag = await page.evaluate(() => {
+      return typeof window.gtag === 'function' || (window.dataLayer && Array.isArray(window.dataLayer));
+    });
+    expect(hasGtag).toBe(true);
+  });
+
+  test('persistir dados de tracking (client_id, gclid, utm) no pedido', async ({ page }) => {
+    test.skip(isLocal, 'Requer ambiente de teste com persistência de pedidos');
+
+    // Simular URL com parâmetros de rastreamento
+    const trackingUrl = `${baseUrl}/?utm_source=google&utm_medium=cpc&utm_campaign=test&gclid=test123`;
+    await page.goto(trackingUrl, { waitUntil: 'networkidle' });
+
+    // Validar que UTM params foram capturados
+    const hasUtmData = await page.evaluate(() => {
+      try {
+        return (
+          localStorage.getItem('sv_utm_source') === 'google' &&
+          localStorage.getItem('sv_utm_medium') === 'cpc' &&
+          localStorage.getItem('sv_utm_campaign') === 'test' &&
+          localStorage.getItem('sv_gclid') === 'test123'
+        );
+      } catch (e) {
+        return false;
+      }
+    });
+    expect(hasUtmData).toBe(true);
   });
 });

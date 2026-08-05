@@ -11,6 +11,7 @@ require_once dirname(__DIR__) . '/includes/mercadopago-gateway.php';
 require_once dirname(__DIR__) . '/includes/tiny-order-push.php';
 require_once dirname(__DIR__) . '/api/emails/send-order-notification.php';
 require_once dirname(__DIR__) . '/includes/ml-event-tracker.php';
+require_once dirname(__DIR__) . '/includes/analytics-tracking.php';
 
 function svip_webhook_response(int $status, string $result): never
 {
@@ -238,6 +239,7 @@ try {
 }
 
 if ($localStatus === 'payment_approved') {
+    // Track purchase to ML (existing tracker)
     foreach (is_array($order['items'] ?? null) ? $order['items'] : [] as $item) {
         if (!is_array($item)) {
             continue;
@@ -251,6 +253,21 @@ if ($localStatus === 'payment_approved') {
             'order_number' => $orderNumber,
             'payment_id' => (string)($order['infinitepay']['payment_id'] ?? ''),
         ]);
+    }
+
+    // Track purchase to GA4 server-side (Measurement Protocol)
+    try {
+        $clientId = (string)($order['funnel_client_id'] ?? '');
+        if ($clientId !== '') {
+            track_purchase_ga4_serverside(
+                $clientId,
+                $orderNumber,
+                (float)($order['total'] ?? 0),
+                is_array($order['items'] ?? null) ? $order['items'] : []
+            );
+        }
+    } catch (Throwable $e) {
+        error_log('[InfinitePay] GA4 purchase tracking failure: order=' . $orderNumber . ' ' . $e->getMessage());
     }
 
     try {

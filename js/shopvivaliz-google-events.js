@@ -74,6 +74,26 @@
     }
   }
 
+  function captureGclsAndUtmParams() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var gclid = params.get('gclid');
+      if (gclid) localStorage.setItem('sv_gclid', gclid);
+
+      var utm_source = params.get('utm_source');
+      if (utm_source) localStorage.setItem('sv_utm_source', utm_source);
+
+      var utm_medium = params.get('utm_medium');
+      if (utm_medium) localStorage.setItem('sv_utm_medium', utm_medium);
+
+      var utm_campaign = params.get('utm_campaign');
+      if (utm_campaign) localStorage.setItem('sv_utm_campaign', utm_campaign);
+
+      var utm_content = params.get('utm_content');
+      if (utm_content) localStorage.setItem('sv_utm_content', utm_content);
+    } catch (error) {}
+  }
+
   function sendFirstParty(eventName, params) {
     if (!analyticsConsentGranted()) return;
     var allowed = ['view_item', 'view_item_list', 'add_to_cart', 'view_cart', 'begin_checkout', 'generate_lead', 'search'];
@@ -273,11 +293,13 @@
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
+      captureGclsAndUtmParams();
       bindClicks();
       bindForms();
       trackPageContext();
     });
   } else {
+    captureGclsAndUtmParams();
     bindClicks();
     bindForms();
     trackPageContext();

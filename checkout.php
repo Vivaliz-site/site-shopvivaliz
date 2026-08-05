@@ -775,6 +775,30 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             if (appliedCoupon && appliedCoupon.code) payload.coupon_code = appliedCoupon.code;
         } catch (ignore) {}
 
+        // Capturar client_id do GA4/funnel tracking
+        try {
+            var clientId = localStorage.getItem('sv_funnel_client_v1') || '';
+            if (clientId && String(clientId).length > 0) payload.funnel_client_id = clientId;
+        } catch (ignore) {}
+
+        // Capturar gclid (Google Click ID) da URL ou localStorage
+        try {
+            var params = new URLSearchParams(window.location.search);
+            var gclid = params.get('gclid') || localStorage.getItem('sv_gclid') || '';
+            if (gclid) payload.gclid = gclid;
+
+            // Capturar UTM parameters
+            var utm_source = params.get('utm_source') || localStorage.getItem('sv_utm_source') || '';
+            var utm_medium = params.get('utm_medium') || localStorage.getItem('sv_utm_medium') || '';
+            var utm_campaign = params.get('utm_campaign') || localStorage.getItem('sv_utm_campaign') || '';
+            var utm_content = params.get('utm_content') || localStorage.getItem('sv_utm_content') || '';
+
+            if (utm_source) payload.utm_source = utm_source;
+            if (utm_medium) payload.utm_medium = utm_medium;
+            if (utm_campaign) payload.utm_campaign = utm_campaign;
+            if (utm_content) payload.utm_content = utm_content;
+        } catch (ignore) {}
+
         var method = fd.get('payment_method') || 'pix';
         var key = pendingKey(items, method);
         try {

@@ -409,6 +409,59 @@ JS;
 
         return implode("\n\n", $blocks);
     }
+
+    public static function sendPurchaseEventGA4($clientId, $orderId, $orderTotal, $items, $currency = 'BRL') {
+        $ga4Id = getenv('GA4_ID') ?: (getenv('GOOGLE_ANALYTICS_ID') ?: (getenv('GOOGLE_ANALYTICS') ?: (getenv('GOOGLE_ANALITYCS') ?: 'G-1H55K1TZ5D')));
+        $ga4Secret = getenv('GA4_SECRET') ?: '';
+
+        if ($ga4Id === '' || $ga4Id === 'G-XXXXXXXXXX' || $ga4Secret === '') {
+            return false;
+        }
+
+        $cleanItems = [];
+        if (is_array($items)) {
+            foreach ($items as $item) {
+                if (!is_array($item)) continue;
+                $cleanItems[] = [
+                    'item_id' => (string)($item['sku'] ?? $item['item_id'] ?? $item['olist_product_id'] ?? ''),
+                    'item_name' => (string)($item['name'] ?? $item['item_name'] ?? 'Produto'),
+                    'price' => (float)($item['price'] ?? 0),
+                    'quantity' => (int)($item['quantity'] ?? 1),
+                ];
+            }
+        }
+
+        $payload = [
+            'client_id' => (string)$clientId,
+            'events' => [
+                [
+                    'name' => 'purchase',
+                    'params' => [
+                        'currency' => $currency,
+                        'transaction_id' => (string)$orderId,
+                        'value' => (float)$orderTotal,
+                        'items' => $cleanItems,
+                        'timestamp_micros' => (int)(microtime(true) * 1000000),
+                    ]
+                ]
+            ],
+        ];
+
+        $ch = curl_init("https://www.google-analytics.com/mp/collect?measurement_id={$ga4Id}&api_secret={$ga4Secret}");
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($payload),
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+            CURLOPT_TIMEOUT => 5,
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return $httpCode >= 200 && $httpCode < 300;
+    }
 }
 
 // Global instance
@@ -441,6 +494,10 @@ function send_analytics() {
 
 function get_tracking_code() {
     return $GLOBALS['analytics']->getTrackingCode();
+}
+
+function track_purchase_ga4_serverside($clientId, $orderId, $orderTotal, $items = []) {
+    return AnalyticsTracking::sendPurchaseEventGA4($clientId, $orderId, $orderTotal, $items);
 }
 
 // Auto-send on shutdown

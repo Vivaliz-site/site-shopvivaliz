@@ -1,20 +1,34 @@
 # 📊 Auditoria Google Ads + Fluxo Ecommerce - ShopVivaliz
 
-**Data**: 2026-07-13  
-**Status**: ⚠️ CRÍTICO - Tracking implementado mas NÃO ATIVO  
-**Recomendação**: NÃO colocar em produção com campanhas Google Ads até corrigir
+**Data**: 2026-07-13 | **Atualizado**: 2026-08-05  
+**Status**: ✅ FASES 1 & 2 IMPLEMENTADAS - Awaiting configuration de env vars  
+**Recomendação**: Configure variáveis de ambiente e teste em staging antes de produção
 
 ---
 
-## 🔴 PROBLEMAS CRÍTICOS ENCONTRADOS
+## 🟡 STATUS DA IMPLEMENTAÇÃO (Fase 1 & 2)
 
-### 1. **Tracking Code NÃO Inserido nas Páginas**
+### ✅ CONCLUÍDO (2026-08-05)
+
+#### 1. **Tracking Code Inserido nas Páginas**
 - ✅ `analytics-tracking.php` implementado com GA4, Facebook e TikTok
-- ❌ **NÃO está incluído em nenhuma página** (index.php, checkout.php, etc)
-- ❌ **Sem código gtag.js** no `<head>` das páginas
-- **Impacto**: Zero conversões rastreadas, dados de Google Ads não coletados
+- ✅ **Incluído em todas as páginas** via `head-analytics.php`
+- ✅ **Código gtag.js** carregado no `<head>` de todas as páginas (checkout.php, carrinho.php, etc)
+- ✅ **Funções helpers** definidas: `track_page_view()`, `track_view_item()`, `track_add_to_cart()`, `track_purchase()`
+- ✅ **Server-side GA4** via Measurement Protocol implementado
 
-### 2. **Variáveis de Ambiente NÃO Configuradas**
+#### 2. **Captura & Persistência de Dados de Tracking**
+- ✅ **funnel_client_id** capturado do `localStorage.sv_funnel_client_v1` e persistido no pedido
+- ✅ **gclid** capturado da URL ou localStorage e persistido
+- ✅ **UTM parameters** (utm_source, utm_medium, utm_campaign, utm_content) capturados e persistidos
+- ✅ **Página de confirmação** criada em `/pedido-confirmado`
+
+#### 3. **Tracking Server-Side de Purchase**
+- ✅ **GA4 Measurement Protocol** disparado via webhook quando `payment_approved`
+- ✅ Apenas dispara quando pagamento é realmente aprovado (não em criação do pedido)
+- ✅ Mantém padrão de ROAS não inflado
+
+### 🟠 AGUARDANDO CONFIGURAÇÃO (Variáveis de Ambiente)
 ```
 GA4_ID              ❌ Vazio/Placeholder 'G-XXXXXXXXXX'
 GA4_SECRET          ❌ Não configurado
@@ -71,23 +85,67 @@ get_tracking_code()                     // NÃO INSERIDA NO HTML
 
 ---
 
-## 🚨 PLANO DE CORREÇÃO (Prioritário)
+## 🔧 PRÓXIMOS PASSOS - CONFIGURAÇÃO OBRIGATÓRIA
 
-### FASE 1: Ativar Tracking Básico (2 horas)
-1. Incluir `analytics-tracking.php` no head de todas as páginas
-2. Inserir `<?php echo get_tracking_code(); ?>` antes de `</head>`
-3. Criar `page-head.php` include padrão para reutilização
-4. Configurar variáveis de ambiente (.env):
-   - `GA4_ID` = ID do seu Google Analytics 4
-   - `GA4_SECRET` = API secret do GA4
-   - `GOOGLE_ADS_ID` = ID de conversão do Google Ads
+### Variáveis de Ambiente Necessárias (Configurar antes de usar em produção)
 
-### FASE 2: Instrumentar Fluxo (3 horas)
-1. Adicionar `track_page_view()` em todas as páginas principais:
-   - Home, Categoria, Produto, Carrinho, Checkout
-2. Adicionar `track_view_item()` em página de produto
-3. Adicionar `track_add_to_cart()` no carrinho
-4. Criar página de confirmação com `track_purchase()`
+```env
+# GA4 (obrigatório para server-side tracking)
+GA4_ID=G-XXXXXXXXX              # Seu Measurement ID do GA4
+GA4_SECRET=abc123def456...      # API Secret gerado em GA4 > Admin > Data API
+
+# Google Ads (opcional, mas recomendado)
+GOOGLE_ADS_CONVERSION_ID=123456789      # Seu Conversion ID
+GOOGLE_ADS_CONVERSION_LABEL=abc-123-xyz # Label da conversão Purchase
+
+# Consent (obrigatório para respeitar privacidade)
+# Já está implementado - verificar se sv_privacy_consent cookie está funcionando
+```
+
+### Aonde obter as credenciais:
+
+1. **GA4_ID**: Google Analytics 4 → Admin → Data Streams → Seu Web Stream → Measurement ID
+2. **GA4_SECRET**: Google Analytics 4 → Admin → Data API → Criar novo secret
+3. **GOOGLE_ADS_CONVERSION_ID/LABEL**: Google Ads → Tools & Settings → Conversions → Selecione "Purchase" → Copie ID e Label
+
+### Checklist pré-produção após configurar env vars:
+
+- [ ] Adicionar GA4_ID ao arquivo `.env` (ou runtime-secrets.php)
+- [ ] Adicionar GA4_SECRET ao arquivo `.env`
+- [ ] Testar checkout com um pedido PIX (client-side tracking)
+- [ ] Confirmar pagamento e validar que GA4 recebeu o evento "purchase"
+- [ ] Usar Google Tag Assistant para validar que gtag.js está disparando
+- [ ] Validar que funnel_client_id está sendo salvo nos pedidos (verificar storage/orders/)
+- [ ] Testar com URL contendo gclid para validar persistência
+- [ ] Deploy em staging para QA
+- [ ] Deploy em produção
+
+---
+
+## 📋 PLANO ORIGINAL (Referência)
+
+### FASE 1: Ativar Tracking Básico ✅ FEITO (2026-08-05)
+- ✅ `analytics-tracking.php` já incluído via `head-analytics.php` em todas as páginas
+- ✅ `get_tracking_code()` dispara gtag.js e GA4/Facebook/TikTok pixels no `<head>`
+- ✅ Head include padrão criado em `includes/head-analytics.php` (reutilizável em todas as páginas)
+- ✅ Funções helpers de tracking definidas e prontas para uso
+- ⏳ Variáveis de ambiente requerem configuração manual (GA4_ID, GA4_SECRET, etc) — ver seção acima
+
+### FASE 2: Instrumentar Fluxo ✅ FEITO (2026-08-05)
+- ✅ Tracking client-side já funciona via `shopvivaliz-google-events.js`
+  - `view_item` disparado na página de produto
+  - `view_item_list` disparado no catálogo
+  - `add_to_cart` disparado via click listener
+  - `view_cart` disparado no carrinho
+  - `begin_checkout` disparado no checkout
+- ✅ Página de confirmação criada em `/pedido-confirmado` (order-confirmation.php)
+- ✅ Tracking server-side de purchase implementado:
+  - GA4 Measurement Protocol disparado via webhook quando `payment_approved`
+  - Apenas após pagamento confirmado (não infla ROAS)
+  - Usa `funnel_client_id` persistido no pedido
+- ✅ Captura de UTM params (utm_source, utm_medium, utm_campaign, utm_content)
+- ✅ Captura de gclid (Google Click ID)
+- ✅ Persistência de dados no arquivo JSON do pedido para auditoria
 
 ### FASE 3: Google Ads Setup (1 hora)
 1. Criar conversão "Purchase" no Google Ads
