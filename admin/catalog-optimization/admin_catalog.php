@@ -13,12 +13,31 @@ if ($db === null) {
 }
 
 /**
- * Gancho de promoção para produção — preparado e comentado. Não é chamado
- * automaticamente porque o schema exato de onde o título/descrição
- * "oficiais" do produto vivem em `produtos` não foi confirmado neste
- * checkout (nomes de coluna variam entre releases, ver
- * ai_catalog_fetch_product() em api/optimize_catalog.php). Confirme o
- * schema real antes de descomentar o corpo do método.
+ * Gancho de promoção para produção — IMPLEMENTADO em 2026-08-05 para o
+ * canal 'site' (grava de volta em `products.name`/`products.description`,
+ * schema real confirmado via admin/diagnostico-banco.php e
+ * admin/diagnostico-produto.php nesta mesma data). Preço e estoque nunca
+ * são lidos nem escritos por este método — só nome/descrição.
+ *
+ * IMPORTANTE — o que este método NÃO faz, de propósito, e por quê:
+ * `products` é uma tabela ÚNICA por produto (não existe uma linha por
+ * canal de venda). Se este método também sobrescrevesse `products` para
+ * os canais de marketplace (ml/shopee/amazon/tiktok/erp), o texto otimizado
+ * para Shopee (ex: com emojis/hashtags) substituiria o texto do canal
+ * 'site' aprovado antes, e vice-versa — a última aprovação sempre
+ * "ganharia" e apagaria a anterior. Além disso, não existe hoje neste
+ * repositório nenhum mecanismo CONFIRMADO de push de título/descrição de
+ * volta para Mercado Livre/Shopee/Amazon/TikTok: a integração Tiny/Olist
+ * documentada em docs/TINY-ERP-API-V3.md e docs/MEMORIA-AGENTES.md só
+ * PUXA catálogo do Tiny pro site (via olist/sync-products.php); os únicos
+ * scripts de "upload pra marketplace" encontrados
+ * (scripts/execute_marketplace_upload.py, scripts/integrations/
+ * ftp_uploader.py) sobem IMAGENS via a API do Shopee/TikTok, não texto de
+ * título/descrição. Fabricar aqui uma chamada de "sync" que não existe de
+ * verdade repetiria exatamente o bug já documentado em 2026-07-17 (scripts
+ * que imprimiam "sucesso" sem chamar API nenhuma) — por isso, para canais
+ * de marketplace, este método só REGISTRA a aprovação (log), sem prometer
+ * uma propagação automática que não pode cumprir.
  */
 final class CatalogOptimizationPromoter
 {
@@ -28,37 +47,41 @@ final class CatalogOptimizationPromoter
 
     /**
      * @param array<string,mixed> $stagingRow linha de catalog_optimizations_staging já aprovada
+     * @return array{promoted:bool, note:string}
      */
-    public function promoteToProduction(array $stagingRow): void
+    public function promoteToProduction(array $stagingRow): array
     {
-        // ---------------------------------------------------------------
-        // GANCHO: aqui é onde o texto aprovado deveria ser escrito na
-        // tabela oficial de produtos (ou numa tabela por-canal, se o site
-        // mantiver textos diferentes por canal de venda simultaneamente).
-        // Exemplo do que normalmente entraria aqui, ajustando nomes de
-        // coluna/tabela para o schema real confirmado via
-        // `SHOW CREATE TABLE produtos;`:
-        //
-        //   if ($stagingRow['channel'] === 'site') {
-        //       $update = $this->db->prepare(
-        //           'UPDATE produtos SET nome = ?, descricao = ? WHERE id = ?'
-        //       );
-        //       $update->execute([
-        //           $stagingRow['optimized_title'],
-        //           $stagingRow['optimized_description'],
-        //           (int) $stagingRow['product_id'],
-        //       ]);
-        //   } else {
-        //       // Canais de marketplace (ml/shopee/amazon/tiktok) tipicamente
-        //       // vivem numa tabela de integração separada (ex:
-        //       // produtos_canal_ml) em vez de sobrescrever `produtos`
-        //       // diretamente — confirme a tabela certa antes de escrever.
-        //   }
-        //
-        // Deliberadamente NÃO implementado sem essa confirmação: escrever
-        // no lugar errado da tabela de produtos em produção é pior do que
-        // não escrever nada.
-        // ---------------------------------------------------------------
+        $channel = (string) ($stagingRow['channel'] ?? '');
+        $productId = (int) ($stagingRow['product_id'] ?? 0);
+
+        if ($channel === 'site') {
+            $update = $this->db->prepare(
+                'UPDATE products SET name = ?, description = ?, updated_at = NOW() WHERE id = ?'
+            );
+            $update->execute([
+                (string) $stagingRow['optimized_title'],
+                (string) $stagingRow['optimized_description'],
+                $productId,
+            ]);
+
+            return [
+                'promoted' => true,
+                'note' => "Título e descrição gravados em products.name/description (produto #$productId).",
+            ];
+        }
+
+        // Canais de marketplace: sem destino de escrita confirmado (ver
+        // comentário da classe). Só loga a aprovação — não finge sync.
+        error_log(
+            "[catalog-optimization] Item aprovado para canal '$channel' (produto #$productId) — " .
+            'promoção automática para este canal não está implementada (sem mecanismo de push confirmado). ' .
+            'Texto aprovado permanece em catalog_optimizations_staging para uso manual/externo.'
+        );
+
+        return [
+            'promoted' => false,
+            'note' => "Canal '$channel' não tem propagação automática confirmada nesta versão — o texto aprovado fica disponível aqui, mas não foi enviado a lugar nenhum automaticamente.",
+        ];
     }
 }
 
@@ -97,6 +120,38 @@ if (($_GET['ajax'] ?? '') === 'pending_ids') {
         error_log('[catalog-optimization] Falha ao buscar produtos pendentes (ajax pending_ids): ' . $e->getMessage());
         http_response_code(500);
         echo json_encode(['error' => 'Falha ao buscar produtos pendentes: ' . $e->getMessage()]);
+    }
+    exit;
+}
+
+// --- Ação AJAX: lista de itens com falha TÉCNICA (status 'failed') a
+// reprocessar — usado pelo botão "Reprocessar falhas técnicas". Nunca
+// inclui itens 'rejected' (rejeição de conteúdo por um admin não deve ser
+// reprocessada automaticamente). ---
+if (($_GET['ajax'] ?? '') === 'failed_items') {
+    header('Content-Type: application/json; charset=UTF-8');
+    try {
+        $stmt = $db->query(
+            "SELECT id, product_id, channel, provider_used, error_message
+             FROM catalog_optimizations_staging
+             WHERE status = 'failed'
+             ORDER BY created_at ASC
+             LIMIT 200"
+        );
+        $items = array_map(static function (array $row): array {
+            return [
+                'staging_id' => (int) $row['id'],
+                'product_id' => (int) $row['product_id'],
+                'channel' => (string) $row['channel'],
+                'provider' => (string) $row['provider_used'],
+                'error_message' => (string) $row['error_message'],
+            ];
+        }, $stmt->fetchAll(PDO::FETCH_ASSOC));
+        echo json_encode(['items' => $items]);
+    } catch (Throwable $e) {
+        error_log('[catalog-optimization] Falha ao listar itens com falha técnica: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['error' => 'Falha ao listar itens com falha técnica: ' . $e->getMessage()]);
     }
     exit;
 }
@@ -168,11 +223,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['action']))
             $stmt = $db->prepare('SELECT * FROM catalog_optimizations_staging WHERE id = ? LIMIT 1');
             $stmt->execute([$stagingId]);
             $updatedRow = $stmt->fetch(PDO::FETCH_ASSOC);
+            $promotionNote = '';
             if (is_array($updatedRow)) {
-                (new CatalogOptimizationPromoter($db))->promoteToProduction($updatedRow);
+                $promotion = (new CatalogOptimizationPromoter($db))->promoteToProduction($updatedRow);
+                $promotionNote = ' ' . $promotion['note'];
             }
 
-            $flashMessage = "Item #$stagingId salvo e aprovado. Promoção para a tabela oficial de produtos não é automática — ver gancho comentado em CatalogOptimizationPromoter::promoteToProduction().";
+            $flashMessage = "Item #$stagingId salvo e aprovado." . $promotionNote;
         }
     }
 }
@@ -210,23 +267,92 @@ try {
     error_log('[catalog-optimization] Falha ao listar pendentes: ' . $e->getMessage());
 }
 
-$originalByProductId = [];
-$uniqueProductIds = array_unique(array_map(static fn (array $r) => (int) $r['product_id'], $pendingItems));
-foreach ($uniqueProductIds as $pid) {
+/**
+ * Busca TODOS os dados ORIGINAIS reais do produto, para comparação campo a
+ * campo com o "Depois" gerado por IA (mesmos 7 campos do formulário de
+ * edição: título, descrição, bullet points, SEO keywords, marketing hooks,
+ * meta title, meta description) — pedido explícito do Fred após reportar
+ * que o card "Antes" mostrava o título duplicado como se fosse descrição.
+ *
+ * Verificado ao vivo em 2026-08-05 via admin/diagnostico-produto.php em 4
+ * produtos reais (#1, #2, #4, #50): `products.description` e
+ * `olist_products.descricao`/`descricao_complementar` são de fato iguais
+ * ao nome (ou nulos) e `marca`/`categoria` vêm vazios do Tiny para esses
+ * itens — não é bug de query, é o cadastro original mesmo não tendo esses
+ * dados. Por isso os campos abaixo aparecem como '—' quando genuinamente
+ * não existem no original, em vez de inventar conteúdo.
+ *
+ * Único campo estruturado "técnico" que o schema real tem hoje são as
+ * dimensões físicas (weight_kg/height_cm/width_cm/length_cm em `products`)
+ * — usadas como "bullet points" originais quando presentes.
+ *
+ * @return array{name:string, description:string, category:string, brand:string, specs:string, bullet_points:list<string>, seo_keywords:string, marketing_hooks:string, meta_title:string, meta_description:string}
+ */
+function cat_fetch_original(PDO $db, int $productId): array
+{
+    $result = [
+        'name' => '',
+        'description' => '',
+        'category' => '',
+        'brand' => '',
+        'specs' => '',
+        'bullet_points' => [],
+        'seo_keywords' => '',
+        'marketing_hooks' => '',
+        'meta_title' => '',
+        'meta_description' => '',
+    ];
+
     try {
         // `products` (não `produtos` — mesma correção aplicada em todo o módulo).
         $pStmt = $db->prepare('SELECT * FROM products WHERE id = ? LIMIT 1');
-        $pStmt->execute([$pid]);
-        $pRow = $pStmt->fetch(PDO::FETCH_ASSOC);
-        if (is_array($pRow)) {
-            $originalByProductId[$pid] = [
-                'name' => (string) ($pRow['name'] ?? $pRow['nome'] ?? ''),
-                'description' => (string) ($pRow['description'] ?? $pRow['descricao_completa'] ?? $pRow['descricao'] ?? ''),
-            ];
+        $pStmt->execute([$productId]);
+        $row = $pStmt->fetch(PDO::FETCH_ASSOC);
+        if (!is_array($row)) {
+            return $result;
+        }
+
+        $result['name'] = trim((string) ($row['name'] ?? ''));
+        $result['description'] = trim((string) ($row['description'] ?? ''));
+
+        $dims = [];
+        if (!empty($row['weight_kg'])) $dims[] = 'Peso: ' . $row['weight_kg'] . ' kg';
+        if (!empty($row['height_cm'])) $dims[] = 'Altura: ' . $row['height_cm'] . ' cm';
+        if (!empty($row['width_cm'])) $dims[] = 'Largura: ' . $row['width_cm'] . ' cm';
+        if (!empty($row['length_cm'])) $dims[] = 'Comprimento: ' . $row['length_cm'] . ' cm';
+        $result['specs'] = implode(' · ', $dims);
+        $result['bullet_points'] = $dims;
+
+        $olistId = trim((string) ($row['olist_id'] ?? ''));
+        if ($olistId !== '') {
+            $enrichStmt = $db->prepare(
+                'SELECT categoria, marca, descricao_complementar FROM olist_products WHERE CAST(olist_id AS CHAR) = ? LIMIT 1'
+            );
+            $enrichStmt->execute([$olistId]);
+            $enrichRow = $enrichStmt->fetch(PDO::FETCH_ASSOC);
+            if (is_array($enrichRow)) {
+                $categoryRaw = $enrichRow['categoria'] ?? '';
+                $result['category'] = is_array($categoryRaw) ? trim((string) ($categoryRaw['nome'] ?? '')) : trim((string) $categoryRaw);
+                $result['brand'] = trim((string) ($enrichRow['marca'] ?? ''));
+                $complementar = trim((string) ($enrichRow['descricao_complementar'] ?? ''));
+                if ($complementar !== '' && $complementar !== $result['description']) {
+                    $result['description'] = $result['description'] !== ''
+                        ? $result['description'] . "\n\n" . $complementar
+                        : $complementar;
+                }
+            }
         }
     } catch (Throwable $e) {
-        error_log('[catalog-optimization] Falha ao buscar produto original #' . $pid . ': ' . $e->getMessage());
+        error_log('[catalog-optimization] Falha ao buscar produto original #' . $productId . ': ' . $e->getMessage());
     }
+
+    return $result;
+}
+
+$originalByProductId = [];
+$uniqueProductIds = array_unique(array_map(static fn (array $r) => (int) $r['product_id'], $pendingItems));
+foreach ($uniqueProductIds as $pid) {
+    $originalByProductId[$pid] = cat_fetch_original($db, $pid);
 }
 
 function cat_h(string $value): string
@@ -305,7 +431,8 @@ $channels = catalog_ai_channels();
                 <div class="label">Aprovados — <?= cat_h($channelLabel) ?></div>
                 <table>
                     <tr><td>Pendentes</td><td style="text-align:right"><?= (int) ($counts['pending'] ?? 0) ?></td></tr>
-                    <tr><td>Rejeitados</td><td style="text-align:right"><?= (int) ($counts['rejected'] ?? 0) ?></td></tr>
+                    <tr><td>Rejeitados (conteúdo)</td><td style="text-align:right"><?= (int) ($counts['rejected'] ?? 0) ?></td></tr>
+                    <tr><td>Falharam (erro técnico)</td><td style="text-align:right"><?= (int) ($counts['failed'] ?? 0) ?></td></tr>
                 </table>
             </div>
         <?php endforeach; ?>
@@ -344,6 +471,26 @@ $channels = catalog_ai_channels();
         </div>
     </div>
 
+    <!-- Bloco 2b: reprocessar falhas técnicas (chave ausente, timeout, etc.) -->
+    <div class="cat-form">
+        <h2>⚠️ Reprocessar falhas técnicas</h2>
+        <p style="font-size:13px;color:#666;margin-top:-8px;">
+            Itens com status "Falhou (erro técnico)" — ex: chave de API ausente no momento, timeout de rede.
+            Diferente de "Rejeitado" (rejeição de conteúdo por um admin), estes nunca foram avaliados de verdade e
+            valem a pena tentar de novo agora que as chaves estão configuradas.
+        </p>
+        <div>
+            <button type="button" id="cat-reprocess-failed">Reprocessar falhas técnicas agora</button>
+        </div>
+        <div class="cat-progress-wrap" id="cat-reprocess-progress-wrap">
+            <div class="cat-progress-bar-track">
+                <div class="cat-progress-bar-fill" id="cat-reprocess-progress-fill"></div>
+            </div>
+            <div id="cat-reprocess-progress-label" style="font-size:13px;margin-top:6px;color:#555;"></div>
+            <div class="cat-progress-log" id="cat-reprocess-progress-log"></div>
+        </div>
+    </div>
+
     <!-- Bloco 3: grid antes/depois -->
     <h2>Comparação de cadastro — Antes e Depois (pendentes)</h2>
     <?php if ($pendingItems === []): ?>
@@ -352,11 +499,12 @@ $channels = catalog_ai_channels();
         <?php foreach ($pendingItems as $item): ?>
             <?php
                 $productId = (int) $item['product_id'];
-                $original = $originalByProductId[$productId] ?? ['name' => '', 'description' => ''];
+                $original = $originalByProductId[$productId] ?? cat_fetch_original($db, $productId);
                 $bulletPoints = json_decode((string) $item['bullet_points_json'], true);
                 $bulletPointsText = is_array($bulletPoints) ? implode("\n", $bulletPoints) : '';
                 $metaData = json_decode((string) $item['meta_data_json'], true);
                 $metaData = is_array($metaData) ? $metaData : [];
+                $catDash = static fn (string $v): string => $v !== '' ? $v : '—';
             ?>
             <div class="cat-compare-card">
                 <div class="cat-compare-meta">
@@ -370,9 +518,23 @@ $channels = catalog_ai_channels();
                     <div class="cat-compare-grid">
                         <div class="cat-compare-col">
                             <h4>Antes (cadastro original)</h4>
-                            <div class="original-box"><strong><?= cat_h($original['name']) ?></strong>
-
-<?= cat_h($original['description']) ?></div>
+                            <label>Título</label>
+                            <div class="original-box"><?= cat_h($catDash($original['name'])) ?></div>
+                            <label>Descrição</label>
+                            <div class="original-box"><?= nl2br(cat_h($catDash($original['description']))) ?></div>
+                            <label>Categoria / Marca</label>
+                            <div class="original-box"><?= cat_h($catDash($original['category'])) ?> / <?= cat_h($catDash($original['brand'])) ?></div>
+                            <label>Bullet points (specs físicas, quando existirem no cadastro)</label>
+                            <div class="original-box"><?= $original['bullet_points'] !== [] ? nl2br(cat_h(implode("\n", $original['bullet_points']))) : '—' ?></div>
+                            <label>SEO keywords</label>
+                            <div class="original-box"><?= cat_h($catDash($original['seo_keywords'])) ?></div>
+                            <label>Marketing hooks</label>
+                            <div class="original-box"><?= cat_h($catDash($original['marketing_hooks'])) ?></div>
+                            <label>Meta title</label>
+                            <div class="original-box"><?= cat_h($catDash($original['meta_title'])) ?></div>
+                            <label>Meta description</label>
+                            <div class="original-box"><?= cat_h($catDash($original['meta_description'])) ?></div>
+                            <p style="font-size:12px;color:#888;margin-top:8px;">Campos marcados com "—" não existem no cadastro original (não fazem parte do schema atual do produto) — nada foi inventado aqui.</p>
                         </div>
                         <div class="cat-compare-col">
                             <h4>Depois (gerado por IA — editável)</h4>
@@ -502,6 +664,90 @@ $channels = catalog_ai_channels();
 
         if (successCount > 0) {
             setTimeout(function () { window.location.reload(); }, 1500);
+        }
+    });
+
+    // --- Reprocessar falhas técnicas ---
+    var reprocessBtn = document.getElementById('cat-reprocess-failed');
+    var reprocessWrap = document.getElementById('cat-reprocess-progress-wrap');
+    var reprocessFill = document.getElementById('cat-reprocess-progress-fill');
+    var reprocessLabel = document.getElementById('cat-reprocess-progress-label');
+    var reprocessLog = document.getElementById('cat-reprocess-progress-log');
+
+    function reprocessLogLine(text) {
+        var line = document.createElement('div');
+        line.textContent = text;
+        reprocessLog.appendChild(line);
+        reprocessLog.scrollTop = reprocessLog.scrollHeight;
+    }
+
+    async function fetchFailedItems() {
+        var res = await fetch('/admin/catalog-optimization/admin_catalog.php?ajax=failed_items', { credentials: 'same-origin' });
+        if (!res.ok) {
+            throw new Error('Falha ao buscar itens com falha técnica (HTTP ' + res.status + ').');
+        }
+        var data = await res.json();
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        return data.items || [];
+    }
+
+    reprocessBtn.addEventListener('click', async function () {
+        reprocessBtn.disabled = true;
+        reprocessWrap.style.display = 'block';
+        reprocessFill.style.width = '0%';
+        reprocessLog.innerHTML = '';
+        reprocessLabel.textContent = 'Buscando itens com falha técnica...';
+
+        var items;
+        try {
+            items = await fetchFailedItems();
+        } catch (err) {
+            reprocessLabel.textContent = 'Erro ao buscar itens: ' + err.message;
+            reprocessBtn.disabled = false;
+            return;
+        }
+
+        if (items.length === 0) {
+            reprocessLabel.textContent = 'Nenhum item com falha técnica pendente de reprocessamento.';
+            reprocessBtn.disabled = false;
+            return;
+        }
+
+        var total = items.length;
+        var done = 0;
+        var successCount = 0;
+        var errorCount = 0;
+
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            reprocessLabel.textContent = 'Reprocessando ' + (i + 1) + '/' + total + ' — produto #' + item.product_id + ' (' + item.channel + '/' + item.provider + ')...';
+
+            try {
+                var result = await processOne(item.product_id, item.channel, item.provider);
+                done++;
+                if (result.success) {
+                    successCount++;
+                    reprocessLogLine('[' + (i + 1) + '/' + total + '] Produto #' + item.product_id + ' (antigo #' + item.staging_id + ') OK agora (novo staging_id=' + result.staging_id + ')');
+                } else {
+                    errorCount++;
+                    reprocessLogLine('[' + (i + 1) + '/' + total + '] Produto #' + item.product_id + ' (antigo #' + item.staging_id + ') ainda FALHOU: ' + (result.error || 'erro desconhecido'));
+                }
+            } catch (err) {
+                done++;
+                errorCount++;
+                reprocessLogLine('[' + (i + 1) + '/' + total + '] Produto #' + item.product_id + ' FALHOU (rede): ' + err.message);
+            }
+
+            reprocessFill.style.width = Math.round((done / total) * 100) + '%';
+        }
+
+        reprocessLabel.textContent = 'Concluído: ' + successCount + ' sucesso(s), ' + errorCount + ' ainda falhando, ' + total + ' total. Os antigos itens "Falhou" continuam no histórico; os novos sucessos aparecem na fila de aprovação abaixo.';
+        reprocessBtn.disabled = false;
+
+        if (successCount > 0) {
+            setTimeout(function () { window.location.reload(); }, 2000);
         }
     });
 })();

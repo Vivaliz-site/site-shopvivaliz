@@ -276,7 +276,7 @@ function ai_studio_process_item(
                 $provider === 'claude' ? 'claude_optimized' : $provider,
                 null,
                 null,
-                'rejected',
+                'failed',
                 $e->getMessage()
             );
             $results[] = ['image_type' => $imageType, 'status' => 'error', 'staging_id' => $id, 'error' => $e->getMessage()];
@@ -371,9 +371,11 @@ function ai_studio_process_item(
             } catch (AiStudioApiException $e) {
                 error_log("[ai-image-studio] Falha editando imagem '$imageType' para produto #$productId via $imageEngine: " . $e->getMessage());
 
-                // Registra o erro no banco também (status 'rejected' com
-                // error_message) para o erro ficar visível no dashboard, em vez
-                // de só sumir nos logs do servidor.
+                // Registra o erro no banco também com status 'failed' (NÃO
+                // 'rejected' — esse é exclusivo de rejeição de conteúdo por
+                // um admin; ver docs/AGENTS.md 2026-08-05) para o erro ficar
+                // visível no dashboard, em vez de só sumir nos logs do
+                // servidor, e para poder ser reprocessado depois.
                 $id = ai_studio_insert_staging_row(
                     $db,
                     $productId,
@@ -381,7 +383,7 @@ function ai_studio_process_item(
                     $providerUsedLabel,
                     null,
                     $prompt,
-                    'rejected',
+                    'failed',
                     $e->getMessage()
                 );
 

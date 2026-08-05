@@ -95,7 +95,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['run_batch'
 }
 
 // --- Estatísticas da fila para exibição ---
-$statusCounts = ['pending' => 0, 'approved' => 0, 'rejected' => 0];
+$statusCounts = ['pending' => 0, 'approved' => 0, 'rejected' => 0, 'failed' => 0];
 try {
     $stmt = $db->query('SELECT status, COUNT(*) AS total FROM product_images_staging GROUP BY status');
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -136,6 +136,7 @@ try {
     .ais-card.pending .num { color: #b8860b; }
     .ais-card.approved .num { color: #1a7f37; }
     .ais-card.rejected .num { color: #c62828; }
+    .ais-card.failed .num { color: #b45309; }
     .ais-form { background: #fff; border: 1px solid #e2e4ea; border-radius: 10px; padding: 20px; margin-bottom: 24px; }
     .ais-form label { display: block; font-weight: 600; margin-bottom: 6px; margin-top: 14px; }
     .ais-form select, .ais-form input[type=number], .ais-form input[type=text] { padding: 8px; border: 1px solid #ccc; border-radius: 6px; width: 320px; max-width: 100%; }
@@ -153,6 +154,7 @@ try {
     .ais-badge.pending { background: #fff3cd; color: #7a5c00; }
     .ais-badge.approved { background: #d4edda; color: #14532d; }
     .ais-badge.rejected { background: #f8d7da; color: #611a15; }
+    .ais-badge.failed { background: #fef3c7; color: #92400e; }
     .ais-badge.error { background: #f8d7da; color: #611a15; }
     .ais-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
     .ais-topbar a { color: #1a1a2e; text-decoration: none; font-weight: 600; }
@@ -181,7 +183,8 @@ try {
     <div class="ais-cards">
         <div class="ais-card pending"><div class="num"><?= (int) $statusCounts['pending'] ?></div><div>Pendentes</div></div>
         <div class="ais-card approved"><div class="num"><?= (int) $statusCounts['approved'] ?></div><div>Aprovadas</div></div>
-        <div class="ais-card rejected"><div class="num"><?= (int) $statusCounts['rejected'] ?></div><div>Rejeitadas</div></div>
+        <div class="ais-card rejected"><div class="num"><?= (int) $statusCounts['rejected'] ?></div><div>Rejeitadas (conteúdo)</div></div>
+        <div class="ais-card failed"><div class="num"><?= (int) $statusCounts['failed'] ?></div><div>Falharam (erro técnico)</div></div>
     </div>
 
     <?php if ($batchError !== null): ?>

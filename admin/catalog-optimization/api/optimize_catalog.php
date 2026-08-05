@@ -338,9 +338,14 @@ function ai_catalog_process_item(PDO $db, int $productId, string $channel, strin
     } catch (CatalogAiApiException $e) {
         error_log("[catalog-optimization] Falha otimizando produto #$productId (canal=$channel, provider=$provider): " . $e->getMessage());
 
-        // Registra o erro no banco também, com status 'rejected', para
-        // ficar visível no dashboard em vez de só sumir no log do servidor
-        // — nunca fabricamos um registro "pending" de sucesso falso.
+        // Registra o erro no banco também, com status 'failed' (NÃO
+        // 'rejected' — ver docs/AGENTS.md 2026-08-05: 'rejected' é
+        // exclusivamente para quando um admin rejeita o CONTEÚDO de
+        // verdade pelo botão "Rejeitar" em admin_catalog.php. Este bloco
+        // só executa em falha TÉCNICA (chave ausente, erro de rede,
+        // resposta malformada) — misturar os dois status escondia falhas
+        // reprocessáveis atrás de uma rejeição aparentemente definitiva.
+        // Nunca fabricamos um registro "pending" de sucesso falso.
         $stagingId = ai_catalog_insert_staging_row(
             $db,
             $productId,
@@ -355,7 +360,7 @@ function ai_catalog_process_item(PDO $db, int $productId, string $channel, strin
                 'meta_title' => '',
                 'meta_description' => '',
             ],
-            'rejected',
+            'failed',
             $e->getMessage()
         );
 
