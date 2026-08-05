@@ -14,7 +14,11 @@ class Database {
         try {
             // Usar configurações de constants.php
             $this->connection = mysqli_init();
-            $this->connection->options(MYSQLI_OPT_CONNECT_TIMEOUT, 2);
+            // 2026-08-05: 2s era apertado demais mesmo só para a conexão
+            // (sem contar create_tables(), agora cacheado — ver abaixo).
+            // 5s dá mais margem sob latência real do MySQL sem deixar a
+            // requisição pendurada indefinidamente.
+            $this->connection->options(MYSQLI_OPT_CONNECT_TIMEOUT, 5);
             if (!$this->connection->real_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME, (int)DB_PORT)) {
                 throw new Exception($this->connection->connect_error ?: 'Connection failed');
             }
@@ -368,9 +372,45 @@ function create_tables() {
 }
 
 // Inicializar banco de dados
+//
+// NOTA 2026-08-05 — causa raiz de "Erro ao inicializar banco de dados"
+// intermitente no login (auth/login.php) e, uma vez por sessão, no primeiro
+// gate de admin (includes/admin-guard.php): create_tables() roda ~15
+// queries (7x CREATE TABLE IF NOT EXISTS + ALTER TABLE + SHOW COLUMNS +
+// SHOW INDEX) TODA VEZ que este arquivo é incluído — em login.php isso é
+// em TODA carga de página, autenticado ou não — contra uma conexão mysqli
+// com timeout de conexão de apenas 2s (MYSQLI_OPT_CONNECT_TIMEOUT). Sob
+// qualquer latência real do MySQL (já confirmada existir nesta sessão em
+// outras páginas), essa combinação (timeout apertado + trabalho pesado e
+// redundante no caminho crítico) faz login.php falhar bem mais que páginas
+// que já usam a conexão PDO mais leve (includes/pdo-database.php / sv_pdo()).
+// O schema já está confirmado correto em produção (ver admin/diagnostico-
+// banco.php) — não há necessidade de reverificar em toda requisição.
+// Fix: cachear "schema já verificado" num marker em disco por um período,
+// evitando repetir esse trabalho em cada request sem deixar de reagir a um
+// ambiente novo (ex.: banco recriado do zero, marker ausente/expirado).
+function sv_schema_migration_marker_path(): string
+{
+    return sys_get_temp_dir() . '/shopvivaliz-schema-verified';
+}
+
+function sv_schema_migration_needed(): bool
+{
+    $marker = sv_schema_migration_marker_path();
+    if (!is_file($marker)) {
+        return true;
+    }
+    $ageSeconds = time() - (int) filemtime($marker);
+    return $ageSeconds > 3600; // reverifica no máximo 1x por hora
+}
+
 try {
     $db = Database::getInstance();
-    create_tables();
+    if (sv_schema_migration_needed()) {
+        if (create_tables()) {
+            @touch(sv_schema_migration_marker_path());
+        }
+    }
 } catch (Exception $e) {
     if (DEBUG_MODE) {
         echo "Erro ao inicializar banco de dados: " . $e->getMessage();
