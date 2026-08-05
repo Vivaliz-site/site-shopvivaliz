@@ -86,6 +86,17 @@ sempre em produção via Apache/PHP-FPM puro.
 
 ---
 
+### 2026-08-05 — Regressão real no painel Conexões (Tiny/Olist) + chaves de IA já existentes com nome errado
+**Sistema/arquivo:** `includes/integration-health.php` (`svih_olist_candidates`), `admin/ai-image-studio/config.php`, `admin/catalog-optimization/config_optimization.php`
+**O que descobri:**
+1. O commit `17a6c5ef7` (PR #747, "corrigir renovação OAuth de Olist e Melhor Envio", 2026-08-04) fragmentou a busca de `client_id`/`client_secret` do Tiny/Olist em 3 famílias isoladas (`olist`/`tiny`/`legacy`), exigindo que a MESMA família tivesse também o `refresh_token` persistido. Na conta real, o `client_id`/`client_secret` estavam sob os nomes legados (`CLIENT_ID_API_OLIST`/`CLIENT_SECRET_OLIST`) e o `refresh_token` persistido tinha `credential_family` diferente — nenhuma família batia com as 4 peças completas, e o painel `/admin/connections.php` reportava **"Credenciais OAuth incompletas ou placeholders"** mesmo com tudo configurado. **Isso é diferente e mais recente que o bloqueio de 3+ semanas do pipeline Shopee/GitHub Actions documentado abaixo — não confundir os dois.** Corrigido com um fallback único entre os 3 nomes pra `client_id`/`client_secret` (mantendo a separação por família só pra `refresh_token`/`access_token`). Validado ao vivo: painel voltou a "Conectado — API de produtos respondeu." em 2026-08-05.
+2. `GEMINI_API_KEY` já existe e funciona em produção (é a chave real usada por `api/liz-intelligent.php`) — mas `admin/ai-image-studio/config.php` e `admin/catalog-optimization/config_optimization.php` (módulos novos deste mesmo dia) esperavam `GOOGLE_IMAGEN_API_KEY`/`GOOGLE_GEMINI_API_KEY`/`CLAUDE_API_KEY`, nomes que nunca foram configurados. Adicionado fallback pra `GEMINI_API_KEY`/`ANTHROPIC_API_KEY` nos dois módulos. **Confirmado ao vivo que `OPENAI_API_KEY` e `ANTHROPIC_API_KEY` genuinamente NÃO estão configuradas em produção** (erro explícito "não configurada" mesmo após o fallback, e o mesmo nome de variável já é usado em ~8 outros arquivos do projeto sem sucesso) — não é bug de nome, falta a chave real mesmo.
+3. Descoberto também ao vivo: `gemini-2.5-pro` e `gemini-1.5-flash` retornam HTTP 404 (modelo descontinuado/não disponível) com a `GEMINI_API_KEY` real deste projeto — `gemini-2.5-flash` é o que funciona agora (mesmo default de `scripts/validate-gemini-credentials.php`). `admin/catalog-optimization/config_optimization.php::CATALOG_AI_GEMINI_MODEL` ajustado para esse valor.
+**Por quê importa:** ao investigar "Tiny/Olist falhou" no painel, checar primeiro se é regressão recente de código (`git log` em `includes/integration-health.php`) antes de assumir que é o bloqueio antigo de 3+ semanas do Shopee — são sintomas parecidos, causas diferentes. E antes de pedir chave de API nova pro Fred, sempre grep primeiro por `getenv('` no resto do projeto — quase sempre já existe uma chave real sob outro nome.
+**Ver também:** commits `46000f1`, `01428a6` (branch `main`); seção Shopee abaixo (bloqueio diferente, ainda não resolvido).
+
+---
+
 ## 🔴 Crítico: Problemas Não Resolvidos
 
 ### Shopee/Tiny OAuth2 — PARADO HÁ 3+ SEMANAS + workflows removidos (2026-07-27)
