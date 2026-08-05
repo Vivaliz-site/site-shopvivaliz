@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Atomically update the production shared environment from a NUL payload."""
+"""Atomically update static production settings without touching managed OAuth."""
 
 from __future__ import annotations
 
@@ -11,12 +11,19 @@ import time
 from pathlib import Path
 
 
+# This utility is used by the generic runtime workflow. OAuth credentials are
+# deliberately absent: access/refresh tokens may only be written by a
+# successful OAuth exchange or the interactive callback flow.
 KEYS = (
     "DB_HOST",
     "DB_PORT",
     "DB_NAME",
     "DB_USER",
     "DB_PASS",
+    "SHOPVIVALIZ_AGENT_KEY",
+)
+
+MANAGED_OAUTH_KEYS = (
     "OLIST_ACCESS_TOKEN",
     "OLIST_REFRESH_TOKEN",
     "OLIST_CLIENT_ID",
@@ -25,7 +32,7 @@ KEYS = (
     "TINY_REFRESH_TOKEN",
     "TINY_CLIENT_ID",
     "TINY_CLIENT_SECRET",
-    "SHOPVIVALIZ_AGENT_KEY",
+    "TOKEN_API_OLIST",
 )
 
 PRIVATE_MODE = 0o600
@@ -43,26 +50,33 @@ def validate_database_tuple(values: dict[str, str]) -> str | None:
     return None
 
 
-def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: configure-production-runtime.py SHARED_ENV", file=sys.stderr)
-        return 2
-
+def read_payload() -> dict[str, str]:
     raw_values = sys.stdin.buffer.read().split(b"\0")
     if raw_values and raw_values[-1] == b"":
         raw_values.pop()
     if len(raw_values) != len(KEYS):
-        print("payload field count mismatch", file=sys.stderr)
-        return 2
+        raise ValueError("payload field count mismatch")
 
     values: dict[str, str] = {}
     for key, raw_value in zip(KEYS, raw_values):
         value = raw_value.decode("utf-8")
         if "\x00" in value or "\r" in value or "\n" in value:
-            print(f"invalid control character in {key}", file=sys.stderr)
-            return 2
+            raise ValueError(f"invalid control character in {key}")
         if value:
             values[key] = value
+    return values
+
+
+def main() -> int:
+    if len(sys.argv) != 2:
+        print("usage: configure-production-runtime.py SHARED_ENV", file=sys.stderr)
+        return 2
+
+    try:
+        values = read_payload()
+    except (UnicodeDecodeError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
 
     database_error = validate_database_tuple(values)
     if database_error is not None:
@@ -74,6 +88,9 @@ def main() -> int:
         print(f"shared env does not exist: {path}", file=sys.stderr)
         return 1
 
+    # The generic configurator never changes managed OAuth keys. This keeps a
+    # stale GitHub secret, an alias mismatch, or a placeholder from breaking
+    # the working Tiny/Olist integration on the VM.
     backup = path.with_name(f"{path.name}.backup.{int(time.time())}")
     shutil.copy2(path, backup)
     os.chmod(backup, PRIVATE_MODE)
@@ -106,6 +123,7 @@ def main() -> int:
         temporary.unlink(missing_ok=True)
 
     print("updated_keys=" + ",".join(sorted(values)))
+    print("managed_oauth_mutation=blocked")
     print("backup_created=true")
     print("shared_env_mode=600")
     print("database_user_safe=true")
