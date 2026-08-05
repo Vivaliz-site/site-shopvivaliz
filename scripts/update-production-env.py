@@ -11,6 +11,20 @@ import tempfile
 from pathlib import Path
 
 
+# OAuth credentials are owned by the live OAuth callback and refresh paths.
+# This generic tool must never accept them, including client credentials.
+MANAGED_OAUTH_KEYS = {
+    "OLIST_ACCESS_TOKEN",
+    "OLIST_REFRESH_TOKEN",
+    "OLIST_CLIENT_ID",
+    "OLIST_CLIENT_SECRET",
+    "TINY_ACCESS_TOKEN",
+    "TINY_REFRESH_TOKEN",
+    "TINY_CLIENT_ID",
+    "TINY_CLIENT_SECRET",
+    "TOKEN_API_OLIST",
+}
+
 ALLOWED_KEYS = {
     "MELHORENVIO_ACCESS_TOKEN",
     "MELHORENVIO_CLIENTE_ID",
@@ -27,8 +41,6 @@ ALLOWED_KEYS = {
     "SITE_URL",
     "BASE_URL",
     "MELHORENVIO_REDIRECT_URI",
-    "OLIST_CLIENT_ID",
-    "OLIST_CLIENT_SECRET",
     "OLIST_REDIRECT_URI",
     "URL_REDIRCT_OLIST",
     "URL_TINY_OLIST",
@@ -55,11 +67,19 @@ ALLOWED_KEYS = {
     "GOOGLE_ADS_CONVERSION_LABEL",
 }
 
+
 def normalize_value(key: str, value: object) -> str:
     return str(value).replace("https://www.shopvivaliz.com.br", "https://shopvivaliz.com.br")
 
 
 def merge_env(path: Path, incoming: dict[str, object]) -> list[str]:
+    protected = sorted(set(incoming) & MANAGED_OAUTH_KEYS)
+    if protected:
+        raise ValueError(
+            "managed OAuth keys may only be written after a verified provider exchange: "
+            + ", ".join(protected)
+        )
+
     invalid = sorted(set(incoming) - ALLOWED_KEYS)
     if invalid:
         raise ValueError("unsupported environment keys: " + ", ".join(invalid))
