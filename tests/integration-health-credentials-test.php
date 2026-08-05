@@ -57,8 +57,8 @@ try {
     // refresh_token persistido sob família "tiny" (não "legacy"). Antes da
     // correção, isso resultava em ZERO candidato completo. ---
     ihct_clear_env($envKeysToClean);
-    putenv('CLIENT_ID_API_OLIST=tiny1234567890abcdef5157');
-    putenv('CLIENT_SECRET_OLIST=gvai1234567890abcdefqZ6N');
+    putenv('CLIENT_ID_API_OLIST=' . str_repeat('i', 24));
+    putenv('CLIENT_SECRET_OLIST=' . str_repeat('s', 24));
     $_ENV['CLIENT_ID_API_OLIST'] = getenv('CLIENT_ID_API_OLIST');
     $_ENV['CLIENT_SECRET_OLIST'] = getenv('CLIENT_SECRET_OLIST');
 
