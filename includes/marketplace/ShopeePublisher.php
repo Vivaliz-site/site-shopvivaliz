@@ -11,6 +11,7 @@ final class SvShopeeClient
     private string $accessToken;
     private string $refreshToken;
     private string $shopId;
+    private int $accessExpiresAt = 0;
 
     public function __construct()
     {
@@ -21,10 +22,11 @@ final class SvShopeeClient
         $this->accessToken = sv_market_env('SHOPEE_ACCESS_TOKEN');
         $this->refreshToken = sv_market_env('SHOPEE_REFRESH_TOKEN');
         $this->shopId = sv_market_env('SHOPEE_SHOP_ID');
+        $this->loadTokenCache();
         if ($this->partnerId === '' || $this->partnerKey === '' || $this->shopId === '' || ($this->accessToken === '' && $this->refreshToken === '')) {
             throw new RuntimeException('Credenciais de escrita da Shopee incompletas.');
         }
-        if ($this->accessToken === '') {
+        if ($this->accessToken === '' || ($this->accessExpiresAt > 0 && $this->accessExpiresAt <= time() + 600)) {
             $this->refreshAccessToken();
         }
     }
@@ -143,6 +145,62 @@ final class SvShopeeClient
         $this->accessToken = $newAccess;
         if ($newRefresh !== '') {
             $this->refreshToken = $newRefresh;
+        }
+        $expireIn = max(0, (int)($data['expire_in'] ?? 0));
+        $this->accessExpiresAt = $expireIn > 0 ? time() + $expireIn : 0;
+        $this->saveTokenCache([
+            'access_token' => $this->accessToken,
+            'refresh_token' => $this->refreshToken,
+            'expires_at' => $this->accessExpiresAt,
+            'updated_at' => gmdate('c'),
+        ]);
+    }
+
+    private function tokenCachePath(): string
+    {
+        $configured = sv_market_env('SHOPEE_TOKEN_FILE');
+        if ($configured !== '') return $configured;
+        return dirname(__DIR__, 2) . '/storage/private/shopee-tokens.json';
+    }
+
+    private function loadTokenCache(): void
+    {
+        $path = $this->tokenCachePath();
+        if (!is_file($path) || !is_readable($path)) return;
+        $data = sv_market_decode_json((string)file_get_contents($path));
+        $access = trim((string)($data['access_token'] ?? ''));
+        $refresh = trim((string)($data['refresh_token'] ?? ''));
+        if ($access !== '') $this->accessToken = $access;
+        if ($refresh !== '') $this->refreshToken = $refresh;
+        $this->accessExpiresAt = (int)($data['expires_at'] ?? 0);
+    }
+
+    private function saveTokenCache(array $data): void
+    {
+        $path = $this->tokenCachePath();
+        $directory = dirname($path);
+        if (!is_dir($directory) && !@mkdir($directory, 0750, true) && !is_dir($directory)) {
+            throw new RuntimeException('Não foi possível criar o diretório privado de tokens Shopee.');
+        }
+        $temporary = tempnam($directory, '.shopee-token-');
+        if ($temporary === false) throw new RuntimeException('Não foi possível criar arquivo temporário de token Shopee.');
+        try {
+            $encoded = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            if (!is_string($encoded) || file_put_contents($temporary, $encoded . PHP_EOL, LOCK_EX) === false) {
+                throw new RuntimeException('Não foi possível gravar token Shopee com segurança.');
+            }
+            @chmod($temporary, 0640);
+            if (is_file($path)) {
+                $stat = stat($path);
+                if (is_array($stat) && function_exists('chown') && function_exists('chgrp')) {
+                    @chown($temporary, (int)$stat['uid']);
+                    @chgrp($temporary, (int)$stat['gid']);
+                }
+            }
+            if (!@rename($temporary, $path)) throw new RuntimeException('Não foi possível substituir o token Shopee atomicamente.');
+            @chmod($path, 0640);
+        } finally {
+            if (is_file($temporary)) @unlink($temporary);
         }
     }
 
