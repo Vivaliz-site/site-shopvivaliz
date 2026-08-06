@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Static guard: catalog and image approvals must call real publishers."""
+"""Static guard: catalog and image approvals must call real publishers.
+
+The audit is intentionally strict: a UI success message, staging status or API
+submission is not enough. Each channel must use a real official client, protect
+price/inventory, record evidence and either confirm a read-back or explicitly
+remain in a submitted/audit-pending state.
+"""
 from __future__ import annotations
 
 import json
@@ -12,12 +18,18 @@ TARGETS = {
     "catalog_publisher": ROOT / "admin/catalog-optimization/src/CatalogPublisher.php",
     "image_admin": ROOT / "admin/ai-image-studio/admin_validate.php",
     "image_publisher": ROOT / "admin/ai-image-studio/src/OmnichannelImagePublisher.php",
+    "runtime_schema": ROOT / "includes/catalog-publication-schema.php",
+    "marketplace_runtime": ROOT / "includes/marketplace/MarketplaceRuntime.php",
+    "storefront_runtime": ROOT / "includes/catalog-runtime.php",
+    "site_seo": ROOT / "includes/product-seo.php",
     "ml": ROOT / "includes/marketplace/MercadoLivrePublisher.php",
     "shopee": ROOT / "includes/marketplace/ShopeePublisher.php",
     "amazon": ROOT / "includes/marketplace/AmazonPublisher.php",
     "tiktok": ROOT / "includes/marketplace/TikTokPublisher.php",
     "tiny": ROOT / "includes/marketplace/TinyPublisher.php",
+    "shopee_python": ROOT / "scripts/utils/shopee_client.py",
     "tiktok_python": ROOT / "scripts/utils/tiktok_client.py",
+    "readiness": ROOT / "scripts/maintenance/marketplace_publication_readiness.php",
 }
 
 FORBIDDEN_MARKERS = (
@@ -28,10 +40,12 @@ FORBIDDEN_MARKERS = (
     "promoção automática para este canal não está implementada",
     "promoção para a loja não é automática",
     "gancho comentado",
+    "mock_success",
+    "fake_success",
 )
 
 REQUIRED_SNIPPETS = {
-    "catalog_admin": ("CatalogOptimizationPublisher", "Salvar e publicar em", "publication_failed"),
+    "catalog_admin": ("CatalogOptimizationPublisher", "Salvar e publicar em", "publication_failed", "submitted"),
     "catalog_publisher": (
         "SvMercadoLivrePublisher",
         "SvShopeePublisher",
@@ -41,6 +55,7 @@ REQUIRED_SNIPPETS = {
         "'publishing'",
         "'published'",
         "'submitted'",
+        "sv_market_write_publication",
     ),
     "image_admin": ("AiStudioOmnichannelImagePublisher", "channels[]", "Aprovar e publicar nos canais selecionados"),
     "image_publisher": (
@@ -50,13 +65,76 @@ REQUIRED_SNIPPETS = {
         "SvAmazonPublisher",
         "SvTinyPublisher",
         "partial_published",
+        "sv_market_write_publication",
     ),
-    "ml": ("/items/", "/description", "read-back"),
-    "shopee": ("/api/v2/product/update_item", "/api/v2/media_space/upload_image", "get_item_base_info"),
-    "amazon": ("/listings/2021-08-01/items/", "x-amz-access-token", "submission_status"),
-    "tiktok": ("/product/202509/products/", "/product/202309/images/upload", "partial_edit"),
-    "tiny": ("/produtos/", "produto.alterar.php", "price_preserved"),
-    "tiktok_python": ("/product/202509/products/", "/product/202309/images/upload", "image_files"),
+    "runtime_schema": (
+        "product_channel_content",
+        "product_channel_mappings",
+        "catalog_publications",
+        "product_images",
+        "publication_summary_json",
+    ),
+    "marketplace_runtime": (
+        "sv_market_assert_no_commerce_fields",
+        "sv_market_write_publication",
+        "sv_market_save_mapping",
+        "sv_market_save_channel_content",
+        "CURLOPT_SSL_VERIFYPEER",
+    ),
+    "storefront_runtime": (
+        "bullet_points",
+        "seo_keywords",
+        "marketing_hooks",
+        "meta_title",
+        "meta_description",
+    ),
+    "site_seo": ("meta_title", "meta_description", "bullet_points"),
+    "ml": ("/items/", "/description", "read-back", "sv_market_assert_no_commerce_fields"),
+    "shopee": (
+        "/api/v2/product/update_item",
+        "/api/v2/media_space/upload_image",
+        "get_item_base_info",
+        "SHOPEE_REFRESH_TOKEN",
+        "/api/v2/auth/access_token/get",
+        "description_confirmed",
+    ),
+    "amazon": (
+        "/listings/2021-08-01/items/",
+        "x-amz-access-token",
+        "submission_status",
+        "'status' => 'submitted'",
+    ),
+    "tiktok": (
+        "/product/202509/products/",
+        "/product/202309/images/upload",
+        "partial_edit",
+        "/api/v2/token/refresh",
+        "return_under_review_version",
+        "'status' => $publicationStatus",
+    ),
+    "tiny": (
+        "/produtos/",
+        "produto.alterar.php",
+        "produtos.pesquisa.php",
+        "exact_sku",
+        "price_preserved",
+        "stock_untouched",
+    ),
+    "shopee_python": ("SHOPEE_REFRESH_TOKEN", "/auth/access_token/get", "_send_with_refresh"),
+    "tiktok_python": (
+        "/product/202509/products/",
+        "/product/202309/images/upload",
+        "image_files",
+        "/api/v2/token/refresh",
+        "under_review=True",
+    ),
+    "readiness": (
+        "private_token_file",
+        "exact_sku_lookup_enabled",
+        "publication_requires_api_confirmation",
+        "price_payload_guard",
+        "stock_payload_guard",
+    ),
 }
 
 report: dict[str, object] = {"ok": True, "checks": {}}
@@ -85,12 +163,38 @@ protection_issues: list[str] = []
 for key in ("price", "stock", "inventory", "available_quantity", "purchasable_offer"):
     if f"'{key}'" not in runtime:
         protection_issues.append("missing_forbidden_key:" + key)
-for name in ("MercadoLivrePublisher.php", "ShopeePublisher.php", "TikTokPublisher.php", "AmazonPublisher.php", "TinyPublisher.php"):
+for name in ("MercadoLivrePublisher.php", "ShopeePublisher.php", "TikTokPublisher.php", "AmazonPublisher.php"):
     text = (ROOT / "includes/marketplace" / name).read_text(encoding="utf-8", errors="replace")
     if "sv_market_assert_no_commerce_fields" not in text:
         protection_issues.append("publisher_without_commerce_guard:" + name)
+
+# Tiny V2 image updates require a full product layout including the unchanged
+# price. The publisher must prove that price is read back unchanged and that no
+# stock field is sent.
+tiny = (ROOT / "includes/marketplace/TinyPublisher.php").read_text(encoding="utf-8", errors="replace")
+if "price_preserved" not in tiny or "stock_untouched" not in tiny:
+    protection_issues.append("tiny_without_price_stock_readback_guard")
+if "'estoque'" in tiny or '"estoque"' in tiny:
+    protection_issues.append("tiny_image_payload_mentions_stock")
+
 report["checks"]["price_stock_guard"] = {"ok": not protection_issues, "issues": protection_issues}
 if protection_issues:
+    report["ok"] = False
+
+# Approval is not publication: published statuses need evidence fields.
+status_issues: list[str] = []
+for publisher_name in (
+    "MercadoLivrePublisher.php",
+    "ShopeePublisher.php",
+    "TikTokPublisher.php",
+    "AmazonPublisher.php",
+    "TinyPublisher.php",
+):
+    text = (ROOT / "includes/marketplace" / publisher_name).read_text(encoding="utf-8", errors="replace")
+    if "'http_status'" not in text or "'response'" not in text or "'external_id'" not in text:
+        status_issues.append("publisher_without_evidence:" + publisher_name)
+report["checks"]["publication_evidence"] = {"ok": not status_issues, "issues": status_issues}
+if status_issues:
     report["ok"] = False
 
 print(json.dumps(report, ensure_ascii=False, indent=2))
