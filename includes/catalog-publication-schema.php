@@ -15,6 +15,16 @@ function svcp_column_exists(PDO $db, string $table, string $column): bool
     return (int)$stmt->fetchColumn() > 0;
 }
 
+function svcp_column_type(PDO $db, string $table, string $column): string
+{
+    $stmt = $db->prepare(
+        'SELECT COLUMN_TYPE FROM information_schema.COLUMNS '
+        . 'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1'
+    );
+    $stmt->execute([$table, $column]);
+    return strtolower((string)$stmt->fetchColumn());
+}
+
 function svcp_add_column_if_missing(PDO $db, string $table, string $column, string $definition): void
 {
     if (!svcp_column_exists($db, $table, $column)) {
@@ -28,7 +38,6 @@ function svcp_ensure_schema(PDO $db): void
     if ($done) {
         return;
     }
-    $done = true;
 
     $db->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS `product_channel_content` (
@@ -113,17 +122,24 @@ CREATE TABLE IF NOT EXISTS `product_images` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL);
 
-    // VARCHAR evita que novos estados quebrem em produção por ENUM desatualizado.
     if (svcp_column_exists($db, 'catalog_optimizations_staging', 'status')) {
-        $db->exec("ALTER TABLE `catalog_optimizations_staging` MODIFY `status` VARCHAR(32) NOT NULL DEFAULT 'pending'");
+        $statusType = svcp_column_type($db, 'catalog_optimizations_staging', 'status');
+        if (!str_starts_with($statusType, 'varchar(')) {
+            $db->exec("ALTER TABLE `catalog_optimizations_staging` MODIFY `status` VARCHAR(32) NOT NULL DEFAULT 'pending'");
+        }
         svcp_add_column_if_missing($db, 'catalog_optimizations_staging', 'publication_summary_json', 'LONGTEXT NULL AFTER `error_message`');
         svcp_add_column_if_missing($db, 'catalog_optimizations_staging', 'published_at', 'DATETIME NULL AFTER `publication_summary_json`');
     }
 
     if (svcp_column_exists($db, 'product_images_staging', 'status')) {
-        $db->exec("ALTER TABLE `product_images_staging` MODIFY `status` VARCHAR(32) NOT NULL DEFAULT 'pending'");
+        $statusType = svcp_column_type($db, 'product_images_staging', 'status');
+        if (!str_starts_with($statusType, 'varchar(')) {
+            $db->exec("ALTER TABLE `product_images_staging` MODIFY `status` VARCHAR(32) NOT NULL DEFAULT 'pending'");
+        }
         svcp_add_column_if_missing($db, 'product_images_staging', 'target_channels_json', 'LONGTEXT NULL AFTER `error_message`');
         svcp_add_column_if_missing($db, 'product_images_staging', 'publication_summary_json', 'LONGTEXT NULL AFTER `target_channels_json`');
         svcp_add_column_if_missing($db, 'product_images_staging', 'published_at', 'DATETIME NULL AFTER `publication_summary_json`');
     }
+
+    $done = true;
 }
