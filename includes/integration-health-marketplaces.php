@@ -87,7 +87,14 @@ function svih_tiktok_shop_publication(): array
     ];
     try {
         $client = new SvTikTokClient();
-        $response = $client->request('POST', '/product/202309/products/search', [], ['page_size' => 1]);
+        // Corpo não vazio força JSON object válido em PHP; o SKU sentinela
+        // não corresponde a anúncio real e serve somente para provar acesso.
+        $response = $client->request(
+            'POST',
+            '/product/202309/products/search',
+            ['seller_skus' => ['__SHOPVIVALIZ_HEALTHCHECK_NO_MATCH__']],
+            ['page_size' => 1]
+        );
         return [
             'name' => 'TikTok Shop — publicação de catálogo',
             'key' => 'tiktok_shop_publication',
