@@ -122,6 +122,16 @@ jobs:
           php tests/runtime-env-reader-test.php
           php tests/runtime-secrets-materializer-test.php
 
+      - name: Run task queue safety regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests/test_task_queue_safety.py -v
+          python3 -m py_compile \
+            scripts/task_queue_lib.py \
+            scripts/manage-tasks-queue.py \
+            tests/test_task_queue_safety.py
+
       - name: Audit Composer dependencies when available
         shell: bash
         run: |
