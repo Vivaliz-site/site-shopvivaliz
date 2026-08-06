@@ -18,6 +18,10 @@ if (!chmod($sharedEnv, 0640)) {
     throw new RuntimeException('shared_env_web_mode_failed');
 }
 
+// Runtime secrets are a PHP-readable fallback loaded by config/constants.php
+// before .env. Marketplace credentials are included because admin publication
+// executes under the web user and must survive an accidental .env permission
+// regression. Values are never logged and the generated file remains 0640.
 $allowedKeys = [
     'DB_HOST',
     'DB_PORT',
@@ -32,6 +36,54 @@ $allowedKeys = [
     'SHOPVIVALIZ_APP_KEY',
     'SHOPVIVALIZ_AGENT_KEY',
     'OLIST_WEBHOOK_SECRET',
+
+    'ML_CLIENT_ID',
+    'ML_CLIENT_SECRET',
+    'ML_ACCESS_TOKEN',
+    'ML_REFRESH_TOKEN',
+    'ML_SELLER_ID',
+    'MERCADO_LIVRE_CLIENT_ID',
+    'MERCADO_LIVRE_CLIENT_SECRET',
+    'MERCADO_LIVRE_ACCESS_TOKEN',
+    'MERCADO_LIVRE_REFRESH_TOKEN',
+    'MERCADO_LIVRE_SELLER_ID',
+
+    'SHOPEE_PARTNER_ID',
+    'SHOPEE_PARTNER_KEY',
+    'SHOPEE_SHOP_ID',
+    'SHOPEE_ACCESS_TOKEN',
+    'SHOPEE_REFRESH_TOKEN',
+    'SHOPEE_TOKEN_FILE',
+
+    'TIKTOK_APP_KEY',
+    'TIKTOK_CLIENT_ID',
+    'TIKTOK_APP_SECRET',
+    'TIKTOK_CLIENT_SECRET',
+    'TIKTOK_ACCESS_TOKEN',
+    'TIKTOK_REFRESH_TOKEN',
+    'TIKTOK_SHOP_CIPHER',
+    'TIKTOK_SHOP_ID',
+    'TIKTOK_TOKEN_FILE',
+
+    'AMAZON_LWA_CLIENT_ID',
+    'AMAZON_LWA_CLIENT_SECRET',
+    'AMAZON_LWA_REFRESH_TOKEN',
+    'AMAZON_SELLER_ID',
+    'AMAZON_ACCOUNT_ID',
+    'AMAZON_MARKETPLACE_ID',
+    'AMAZON_SP_API_ENDPOINT',
+    'AMAZON_SP_API_REGION',
+
+    'OLIST_ACCESS_TOKEN',
+    'OLIST_REFRESH_TOKEN',
+    'OLIST_CLIENT_ID',
+    'OLIST_CLIENT_SECRET',
+    'OLIST_API_KEY',
+    'TINY_ACCESS_TOKEN',
+    'TINY_REFRESH_TOKEN',
+    'TINY_CLIENT_ID',
+    'TINY_CLIENT_SECRET',
+    'TOKEN_API_OLIST',
 ];
 
 $values = [];
