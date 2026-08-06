@@ -222,4 +222,4 @@ jobs:
             -f description='Verification failed; inspect the workflow logs' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
-# verification-trigger: 2026-08-06T15:52:07Z
+# verification-trigger: 2026-08-06T16:46:01Z
