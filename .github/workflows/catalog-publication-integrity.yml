@@ -1,0 +1,124 @@
+name: Catalog Publication Integrity
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'admin/catalog-optimization/**'
+      - 'admin/ai-image-studio/**'
+      - 'includes/marketplace/**'
+      - 'includes/catalog-publication-schema.php'
+      - 'includes/tiny-order-push.php'
+      - 'api/ml/**'
+      - 'scripts/utils/tiktok_client.py'
+      - 'scripts/integrations/tiktok.py'
+      - 'scripts/execute_marketplace_upload.py'
+      - 'scripts/maintenance/catalog_real_execution_audit.py'
+      - 'scripts/maintenance/marketplace_publication_readiness.php'
+      - '.github/workflows/catalog-publication-integrity.yml'
+  schedule:
+    - cron: '37 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-publication-integrity
+  cancel-in-progress: true
+
+jobs:
+  static-integrity:
+    name: Lint and anti-simulation audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint PHP publication code
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          files=(
+            includes/catalog-publication-schema.php
+            includes/marketplace/MarketplaceRuntime.php
+            includes/marketplace/MercadoLivrePublisher.php
+            includes/marketplace/ShopeePublisher.php
+            includes/marketplace/TikTokPublisher.php
+            includes/marketplace/AmazonPublisher.php
+            includes/marketplace/TinyPublisher.php
+            admin/catalog-optimization/src/CatalogPublisher.php
+            admin/catalog-optimization/admin_catalog.php
+            admin/ai-image-studio/src/OmnichannelImagePublisher.php
+            admin/ai-image-studio/admin_validate.php
+            scripts/maintenance/marketplace_publication_readiness.php
+          )
+          for file in "${files[@]}"; do php -l "$file"; done
+      - name: Compile Python integration code
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile \
+            scripts/utils/tiktok_client.py \
+            scripts/integrations/tiktok.py \
+            scripts/execute_marketplace_upload.py \
+            scripts/maintenance/catalog_real_execution_audit.py
+      - name: Reject simulation and missing publisher wiring
+        run: python3 scripts/maintenance/catalog_real_execution_audit.py
+
+  production-readiness:
+    name: Audit production credentials and schema
+    if: github.event_name != 'push'
+    needs: static-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::SSH key missing'; exit 1; }
+          test -n "$known_hosts" || { echo '::error::known_hosts missing'; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+      - name: Run masked production readiness audit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            'cd /home/ubuntu/shopvivaliz-deploy/current && php scripts/maintenance/marketplace_publication_readiness.php' \
+            > marketplace-publication-readiness.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('marketplace-publication-readiness.json').read_text(encoding='utf-8'))
+          print('ok=', data.get('ok'))
+          for channel, state in data.get('channels', {}).items():
+              print(channel, 'ready=', state.get('ready'), 'missing=', ','.join(state.get('missing_or_invalid', [])))
+          db = data.get('database', {})
+          print('database_ready=', db.get('ready'))
+          print('mapping_counts=', db.get('mapping_counts', {}))
+          if not data.get('ok', False):
+              raise SystemExit('One or more publication channels are not ready in production.')
+          PY
+      - name: Upload masked readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketplace-publication-readiness-${{ github.run_id }}
+          path: marketplace-publication-readiness.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Remove SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
