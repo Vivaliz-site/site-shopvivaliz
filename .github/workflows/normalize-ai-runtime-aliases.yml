@@ -1,0 +1,142 @@
+name: Normalize AI runtime credential aliases
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/normalize-ai-runtime-aliases.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: normalize-ai-runtime-aliases
+  cancel-in-progress: false
+
+jobs:
+  normalize:
+    name: Normalize Google and Claude aliases in production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::SSH key missing'; exit 1; }
+          test -n "$known_hosts" || { echo '::error::known_hosts missing'; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Materialize compatible aliases without printing secrets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'python3 -' <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          env_path = Path('/home/ubuntu/shopvivaliz-deploy/shared/.env')
+          if not env_path.is_file() or not os.access(env_path, os.R_OK | os.W_OK):
+              raise SystemExit('shared_env_unavailable')
+
+          original_stat = env_path.stat()
+          original_mode = original_stat.st_mode & 0o777
+          original_uid = original_stat.st_uid
+          original_gid = original_stat.st_gid
+          data = env_path.read_text(encoding='utf-8')
+
+          values = {}
+          for raw in data.splitlines():
+              text = raw.strip()
+              if not text or text.startswith('#') or '=' not in text:
+                  continue
+              if text.startswith('export '):
+                  text = text[7:].strip()
+              key, value = text.split('=', 1)
+              values[key.strip()] = value.strip().strip('"\'')
+
+          def first_nonempty(*names):
+              for name in names:
+                  value = values.get(name, '').strip()
+                  if value:
+                      return value
+              return ''
+
+          aliases = {
+              'GOOGLE_API_KEY': first_nonempty(
+                  'GOOGLE_API_KEY', 'GOOGLE_GEMINI_API_KEY',
+                  'GEMINI_API_KEY', 'GOOGLE_IMAGEN_API_KEY'
+              ),
+              'CLAUDE_API_KEY': first_nonempty('CLAUDE_API_KEY', 'ANTHROPIC_API_KEY'),
+              'ANTHROPIC_API_KEY': first_nonempty('ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'),
+          }
+
+          missing_sources = [key for key, value in aliases.items() if not value]
+          if missing_sources:
+              raise SystemExit('missing_alias_sources=' + ','.join(missing_sources))
+
+          changed = []
+          for key, value in aliases.items():
+              if values.get(key, '').strip():
+                  continue
+              line = key + '=' + value
+              pattern = r'^\s*(?:export\s+)?' + re.escape(key) + r'=.*$'
+              if re.search(pattern, data, flags=re.MULTILINE):
+                  data = re.sub(pattern, line, data, count=1, flags=re.MULTILINE)
+              else:
+                  data = data.rstrip('\n') + '\n' + line + '\n'
+              values[key] = value
+              changed.append(key)
+
+          if changed:
+              temporary = env_path.with_name('.env.normalize-ai-aliases-tmp')
+              temporary.write_text(data, encoding='utf-8')
+              temporary.chmod(original_mode)
+              try:
+                  os.chown(temporary, original_uid, original_gid)
+              except PermissionError:
+                  pass
+              os.replace(temporary, env_path)
+
+          post_stat = env_path.stat()
+          if (post_stat.st_mode & 0o777) != original_mode:
+              raise SystemExit('shared_env_mode_changed')
+
+          print('shared_env_readable=true')
+          print('shared_env_mode_preserved=true')
+          print('google_api_key_present=' + str(bool(values.get('GOOGLE_API_KEY'))).lower())
+          print('gemini_api_key_present=' + str(bool(values.get('GEMINI_API_KEY'))).lower())
+          print('google_gemini_api_key_present=' + str(bool(values.get('GOOGLE_GEMINI_API_KEY'))).lower())
+          print('google_imagen_api_key_present=' + str(bool(values.get('GOOGLE_IMAGEN_API_KEY'))).lower())
+          print('anthropic_api_key_present=' + str(bool(values.get('ANTHROPIC_API_KEY'))).lower())
+          print('claude_api_key_present=' + str(bool(values.get('CLAUDE_API_KEY'))).lower())
+          print('aliases_added_count=' + str(len(changed)))
+          PY
+
+      - name: Verify through the PHP constants loader
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            "cd /home/ubuntu/shopvivaliz-deploy/current && php -r 'require \"config/constants.php\"; foreach ([\"OPENAI_API_KEY\",\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"GOOGLE_GEMINI_API_KEY\",\"GOOGLE_IMAGEN_API_KEY\",\"ANTHROPIC_API_KEY\",\"CLAUDE_API_KEY\"] as \$k) { echo strtolower(\$k), \"_present=\", trim((string)getenv(\$k)) !== \"\" ? \"true\" : \"false\", PHP_EOL; }'"
+
+      - name: Remove SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
