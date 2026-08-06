@@ -4,6 +4,7 @@
 A UI success message, staging status or API submission is not enough. Each
 channel must call a real client, protect commerce fields, preserve rotated OAuth
 tokens and either confirm read-back or explicitly remain submitted for review.
+Submissions waiting for Amazon/TikTok review must be reconciled automatically.
 """
 from __future__ import annotations
 
@@ -31,6 +32,7 @@ TARGETS = {
     "tiktok_python": ROOT / "scripts/utils/tiktok_client.py",
     "runtime_configurator": ROOT / "scripts/configure-production-runtime.py",
     "readiness": ROOT / "scripts/maintenance/marketplace_publication_readiness.php",
+    "reconciler": ROOT / "scripts/maintenance/reconcile_catalog_publications.php",
 }
 
 FORBIDDEN_MARKERS = (
@@ -44,6 +46,7 @@ REQUIRED_SNIPPETS = {
     "catalog_publisher": (
         "SvMercadoLivrePublisher", "SvShopeePublisher", "SvTikTokPublisher", "SvAmazonPublisher",
         "SvTinyPublisher", "'publishing'", "'published'", "'submitted'", "sv_market_write_publication",
+        "all_approved_text_fields_exposed",
     ),
     "image_admin": ("AiStudioOmnichannelImagePublisher", "channels[]", "Aprovar e publicar nos canais selecionados"),
     "image_publisher": (
@@ -93,6 +96,11 @@ REQUIRED_SNIPPETS = {
     "readiness": (
         "private_token_file", "exact_sku_lookup_enabled", "publication_requires_api_confirmation",
         "price_payload_guard", "stock_payload_guard",
+    ),
+    "reconciler": (
+        "SvAmazonClient", "SvTikTokClient", "status = 'submitted'", "includedData",
+        "return_under_review_version", "publication_failed", "amazon_live_readback",
+        "tiktok_live_readback", "svrec_refresh_staging", "CATALOG_SUBMISSION_MAX_AGE_SECONDS",
     ),
 }
 
