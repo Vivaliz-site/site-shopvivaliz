@@ -8,6 +8,8 @@ on:
       - 'admin/ai-image-studio/**'
       - 'includes/marketplace/**'
       - 'includes/catalog-publication-schema.php'
+      - 'includes/catalog-runtime.php'
+      - 'includes/product-seo.php'
       - 'includes/tiny-order-push.php'
       - 'api/ml/**'
       - 'utils/shopee_client.py'
@@ -18,7 +20,9 @@ on:
       - 'scripts/execute_marketplace_upload.py'
       - 'scripts/maintenance/catalog_real_execution_audit.py'
       - 'scripts/maintenance/marketplace_publication_readiness.php'
+      - 'scripts/maintenance/reconcile_catalog_publications.php'
       - '.github/workflows/catalog-publication-integrity.yml'
+      - '.github/workflows/catalog-publication-reconcile.yml'
   schedule:
     - cron: '37 * * * *'
   workflow_dispatch:
@@ -43,6 +47,8 @@ jobs:
           set -Eeuo pipefail
           files=(
             includes/catalog-publication-schema.php
+            includes/catalog-runtime.php
+            includes/product-seo.php
             includes/marketplace/MarketplaceRuntime.php
             includes/marketplace/MercadoLivrePublisher.php
             includes/marketplace/ShopeePublisher.php
@@ -54,6 +60,7 @@ jobs:
             admin/ai-image-studio/src/OmnichannelImagePublisher.php
             admin/ai-image-studio/admin_validate.php
             scripts/maintenance/marketplace_publication_readiness.php
+            scripts/maintenance/reconcile_catalog_publications.php
           )
           for file in "${files[@]}"; do php -l "$file"; done
       - name: Compile Python integration code
@@ -104,6 +111,7 @@ jobs:
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
               -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
               "test -r /home/ubuntu/shopvivaliz-deploy/current/scripts/maintenance/marketplace_publication_readiness.php && \
+               test -r /home/ubuntu/shopvivaliz-deploy/current/scripts/maintenance/reconcile_catalog_publications.php && \
                grep -q 'AMAZON_LWA_CLIENT_ID' /home/ubuntu/shopvivaliz-deploy/current/scripts/maintenance/marketplace_publication_readiness.php && \
                grep -q 'AiStudioOmnichannelImagePublisher' /home/ubuntu/shopvivaliz-deploy/current/admin/ai-image-studio/admin_validate.php"; then
               ready=1
