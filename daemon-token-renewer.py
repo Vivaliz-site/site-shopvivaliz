@@ -86,7 +86,8 @@ def update_env(new_token: str, new_refresh_token: str) -> None:
         if key not in found:
             lines.append(f"{key}={value}")
 
-    mode = target.stat().st_mode & 0o777
+    original = target.stat()
+    mode = original.st_mode & 0o777
     descriptor, temporary_name = tempfile.mkstemp(prefix=".env.", dir=target.parent)
     temporary = Path(temporary_name)
     try:
@@ -95,7 +96,14 @@ def update_env(new_token: str, new_refresh_token: str) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(temporary, mode)
+        if os.name != "nt":
+            os.chown(temporary, original.st_uid, original.st_gid)
         os.replace(temporary, target)
+        updated = target.stat()
+        if (updated.st_mode & 0o777) != mode:
+            raise RuntimeError("permissao do .env mudou durante renovacao Olist")
+        if os.name != "nt" and (updated.st_uid != original.st_uid or updated.st_gid != original.st_gid):
+            raise RuntimeError("owner/group do .env mudou durante renovacao Olist")
     finally:
         temporary.unlink(missing_ok=True)
 
