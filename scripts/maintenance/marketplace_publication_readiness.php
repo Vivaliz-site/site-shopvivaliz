@@ -29,9 +29,33 @@ function svmpr_valid(string $value): bool
     return true;
 }
 
+function svmpr_ml_tokens_ready(): bool
+{
+    if (svmpr_valid(svmpr_env('ML_ACCESS_TOKEN', 'MERCADO_LIVRE_ACCESS_TOKEN'))
+        && svmpr_valid(svmpr_env('ML_REFRESH_TOKEN', 'MERCADO_LIVRE_REFRESH_TOKEN'))) {
+        return true;
+    }
+    $root = dirname(__DIR__, 2);
+    $configured = trim(svmpr_env('ML_TOKEN_FILE'));
+    $paths = array_values(array_filter([
+        $configured,
+        $root . '/storage/private/ml-tokens.json',
+        $root . '/data/tokens.json',
+    ]));
+    foreach ($paths as $path) {
+        if (!is_file($path) || !is_readable($path)) continue;
+        $data = json_decode((string)file_get_contents($path), true);
+        if (is_array($data)
+            && svmpr_valid((string)($data['access_token'] ?? ''))
+            && svmpr_valid((string)($data['refresh_token'] ?? ''))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 $requirements = [
     'ml' => [
-        ['ML_ACCESS_TOKEN', 'MERCADO_LIVRE_ACCESS_TOKEN'],
         ['ML_CLIENT_ID', 'MERCADO_LIVRE_CLIENT_ID'],
         ['ML_CLIENT_SECRET', 'MERCADO_LIVRE_CLIENT_SECRET'],
     ],
@@ -60,6 +84,9 @@ foreach ($requirements as $channel => $groups) {
     foreach ($groups as $aliases) {
         $value = svmpr_env(...$aliases);
         if (!svmpr_valid($value)) $missing[] = implode('/', $aliases);
+    }
+    if ($channel === 'ml' && !svmpr_ml_tokens_ready()) {
+        $missing[] = 'ML token file or ML_ACCESS_TOKEN/ML_REFRESH_TOKEN';
     }
     $report['channels'][$channel] = ['ready' => $missing === [], 'missing_or_invalid' => $missing];
     if ($missing !== []) $report['ok'] = false;
