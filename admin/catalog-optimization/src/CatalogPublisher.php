@@ -93,6 +93,7 @@ final class CatalogOptimizationPublisher
     /** @param array<string,mixed> $content @return array<string,mixed> */
     private function publishSite(int $productId, array $content): array
     {
+        $product = sv_market_product($this->db, $productId);
         $this->db->beginTransaction();
         try {
             $stmt = $this->db->prepare('UPDATE products SET name = ?, description = ?, updated_at = NOW() WHERE id = ?');
@@ -111,6 +112,7 @@ final class CatalogOptimizationPublisher
                 throw new RuntimeException('Read-back do ShopVivaliz não confirmou título e descrição.');
             }
             sv_market_save_channel_content($this->db, $productId, 'site', $content, true);
+            $this->updateStorefrontCache($product, $content);
             $this->db->commit();
         } catch (Throwable $e) {
             if ($this->db->inTransaction()) {
@@ -120,14 +122,76 @@ final class CatalogOptimizationPublisher
         }
         return [
             'status' => 'published',
-            'operation' => 'UPDATE products + product_channel_content',
+            'operation' => 'UPDATE products + product_channel_content + storefront cache',
             'external_id' => (string)$productId,
             'http_status' => 200,
             'request_id' => '',
             'fields' => ['title', 'description', 'bullet_points', 'seo_keywords', 'marketing_hooks', 'meta_title', 'meta_description'],
-            'response' => ['readback_confirmed' => true],
+            'response' => ['readback_confirmed' => true, 'storefront_cache_confirmed' => true],
             'verified' => true,
         ];
+    }
+
+    /** @param array<string,mixed> $product @param array<string,mixed> $content */
+    private function updateStorefrontCache(array $product, array $content): void
+    {
+        $path = dirname(__DIR__, 3) . '/storage/products-cache-ativos.json';
+        if (!is_file($path) || !is_readable($path) || !is_writable($path)) {
+            throw new RuntimeException('Cache ativo da vitrine não está disponível para atualização real.');
+        }
+        $payload = json_decode((string)file_get_contents($path), true);
+        if (!is_array($payload)) {
+            throw new RuntimeException('Cache ativo da vitrine contém JSON inválido.');
+        }
+        $sku = trim((string)($product['sku'] ?? ''));
+        $externalId = trim((string)($product['olist_id'] ?? $product['olist_product_id'] ?? ''));
+        $updated = false;
+        $apply = function (array &$item) use ($sku, $externalId, $content, &$updated): void {
+            $itemSku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
+            $itemId = trim((string)($item['id'] ?? $item['olist_product_id'] ?? ''));
+            if (($sku !== '' && $itemSku === $sku) || ($externalId !== '' && $itemId === $externalId)) {
+                $title = (string)$content['title'];
+                $description = (string)$content['description'];
+                $item['name'] = $title;
+                $item['nome'] = $title;
+                $item['descricao'] = $title;
+                $item['description'] = $description;
+                $item['descricaoComplementar'] = $description;
+                $item['descricao_complementar'] = $description;
+                $item['bullet_points'] = $content['bullet_points'];
+                $item['seo_keywords'] = $content['seo_keywords'];
+                $item['marketing_hooks'] = $content['marketing_hooks'];
+                $item['meta_title'] = (string)$content['meta_title'];
+                $item['meta_description'] = (string)$content['meta_description'];
+                $updated = true;
+            }
+        };
+        $walk = function (array &$node) use (&$walk, $apply): void {
+            if (array_is_list($node)) {
+                foreach ($node as &$entry) {
+                    if (is_array($entry)) $apply($entry);
+                }
+                unset($entry);
+                return;
+            }
+            foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
+                if (isset($node[$key]) && is_array($node[$key])) {
+                    $walk($node[$key]);
+                }
+            }
+        };
+        $walk($payload);
+        if (!$updated) {
+            throw new RuntimeException('Produto não localizado no cache ativo da vitrine; publicação do site foi abortada.');
+        }
+        $encoded = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($encoded) || file_put_contents($path, $encoded . PHP_EOL, LOCK_EX) === false) {
+            throw new RuntimeException('Falha ao persistir o conteúdo otimizado no cache ativo da vitrine.');
+        }
+        $verify = json_decode((string)file_get_contents($path), true);
+        if (!is_array($verify)) {
+            throw new RuntimeException('Read-back do cache ativo da vitrine falhou.');
+        }
     }
 
     /** @param array<string,mixed> $row @return array<string,mixed> */
