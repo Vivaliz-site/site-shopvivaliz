@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Atomically update the production shared environment from a NUL payload.
 
-Empty optional fields are ignored, so running this command cannot erase an
-existing marketplace credential. Values are never printed; only key names are
-reported. The file remains private to the deployment user and is materialized
-into the PHP-readable runtime secret file by the deployment workflow.
+Supports the established 14-field production workflow and an extended payload
+containing all marketplace credentials. Empty optional fields are ignored, so
+an execution cannot erase existing credentials. Values are never printed.
 """
 from __future__ import annotations
 
@@ -15,7 +14,14 @@ import tempfile
 import time
 from pathlib import Path
 
-KEYS = (
+LEGACY_KEYS = (
+    "DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASS",
+    "OLIST_ACCESS_TOKEN", "OLIST_REFRESH_TOKEN", "OLIST_CLIENT_ID", "OLIST_CLIENT_SECRET",
+    "TINY_ACCESS_TOKEN", "TINY_REFRESH_TOKEN", "TINY_CLIENT_ID", "TINY_CLIENT_SECRET",
+    "SHOPVIVALIZ_AGENT_KEY",
+)
+
+EXTENDED_KEYS = (
     "DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASS",
     "OLIST_ACCESS_TOKEN", "OLIST_REFRESH_TOKEN", "OLIST_CLIENT_ID", "OLIST_CLIENT_SECRET", "OLIST_API_KEY",
     "TINY_ACCESS_TOKEN", "TINY_REFRESH_TOKEN", "TINY_CLIENT_ID", "TINY_CLIENT_SECRET", "TOKEN_API_OLIST",
@@ -59,12 +65,21 @@ def main() -> int:
     raw_values = sys.stdin.buffer.read().split(b"\0")
     if raw_values and raw_values[-1] == b"":
         raw_values.pop()
-    if len(raw_values) != len(KEYS):
-        print(f"payload field count mismatch: received={len(raw_values)} expected={len(KEYS)}", file=sys.stderr)
+    if len(raw_values) == len(LEGACY_KEYS):
+        keys = LEGACY_KEYS
+        payload_mode = "legacy"
+    elif len(raw_values) == len(EXTENDED_KEYS):
+        keys = EXTENDED_KEYS
+        payload_mode = "extended"
+    else:
+        print(
+            f"payload field count mismatch: received={len(raw_values)} expected={len(LEGACY_KEYS)} or {len(EXTENDED_KEYS)}",
+            file=sys.stderr,
+        )
         return 2
 
     values: dict[str, str] = {}
-    for key, raw_value in zip(KEYS, raw_values):
+    for key, raw_value in zip(keys, raw_values):
         value = raw_value.decode("utf-8")
         if "\x00" in value or "\r" in value or "\n" in value:
             print(f"invalid control character in {key}", file=sys.stderr)
@@ -123,15 +138,8 @@ def main() -> int:
     finally:
         temporary.unlink(missing_ok=True)
 
-    configured_groups = {
-        "ml": all(values.get(key) for key in ("ML_CLIENT_ID", "ML_CLIENT_SECRET")) and bool(values.get("ML_ACCESS_TOKEN") or values.get("ML_REFRESH_TOKEN")),
-        "shopee": all(values.get(key) for key in ("SHOPEE_PARTNER_ID", "SHOPEE_PARTNER_KEY", "SHOPEE_SHOP_ID")) and bool(values.get("SHOPEE_ACCESS_TOKEN") or values.get("SHOPEE_REFRESH_TOKEN")),
-        "tiktok": all(values.get(key) for key in ("TIKTOK_APP_KEY", "TIKTOK_APP_SECRET")) and bool(values.get("TIKTOK_SHOP_CIPHER") or values.get("TIKTOK_SHOP_ID")) and bool(values.get("TIKTOK_ACCESS_TOKEN") or values.get("TIKTOK_REFRESH_TOKEN")),
-        "amazon": all(values.get(key) for key in ("AMAZON_LWA_CLIENT_ID", "AMAZON_LWA_CLIENT_SECRET", "AMAZON_LWA_REFRESH_TOKEN", "AMAZON_MARKETPLACE_ID")) and bool(values.get("AMAZON_SELLER_ID") or values.get("AMAZON_ACCOUNT_ID")),
-        "erp": all(values.get(key) for key in ("OLIST_REFRESH_TOKEN", "OLIST_CLIENT_ID", "OLIST_CLIENT_SECRET")),
-    }
+    print("payload_mode=" + payload_mode)
     print("updated_keys=" + ",".join(sorted(values)))
-    print("configured_groups=" + ",".join(key for key, ready in configured_groups.items() if ready))
     print("backup_created=true")
     print("shared_env_mode=600")
     print("shared_env_owner_preserved=true")
