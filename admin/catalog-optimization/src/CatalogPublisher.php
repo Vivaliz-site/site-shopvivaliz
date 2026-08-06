@@ -127,7 +127,11 @@ final class CatalogOptimizationPublisher
             'http_status' => 200,
             'request_id' => '',
             'fields' => ['title', 'description', 'bullet_points', 'seo_keywords', 'marketing_hooks', 'meta_title', 'meta_description'],
-            'response' => ['readback_confirmed' => true, 'storefront_cache_confirmed' => true],
+            'response' => [
+                'readback_confirmed' => true,
+                'storefront_cache_confirmed' => true,
+                'all_approved_text_fields_exposed' => true,
+            ],
             'verified' => true,
         ];
     }
@@ -145,19 +149,19 @@ final class CatalogOptimizationPublisher
         }
         $sku = trim((string)($product['sku'] ?? ''));
         $externalId = trim((string)($product['olist_id'] ?? $product['olist_product_id'] ?? ''));
+        $displayDescription = $this->storefrontDescription($content);
         $updated = false;
-        $apply = function (array &$item) use ($sku, $externalId, $content, &$updated): void {
+        $apply = function (array &$item) use ($sku, $externalId, $content, $displayDescription, &$updated): void {
             $itemSku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
             $itemId = trim((string)($item['id'] ?? $item['olist_product_id'] ?? ''));
             if (($sku !== '' && $itemSku === $sku) || ($externalId !== '' && $itemId === $externalId)) {
                 $title = (string)$content['title'];
-                $description = (string)$content['description'];
                 $item['name'] = $title;
                 $item['nome'] = $title;
                 $item['descricao'] = $title;
-                $item['description'] = $description;
-                $item['descricaoComplementar'] = $description;
-                $item['descricao_complementar'] = $description;
+                $item['description'] = $displayDescription;
+                $item['descricaoComplementar'] = $displayDescription;
+                $item['descricao_complementar'] = $displayDescription;
                 $item['bullet_points'] = $content['bullet_points'];
                 $item['seo_keywords'] = $content['seo_keywords'];
                 $item['marketing_hooks'] = $content['marketing_hooks'];
@@ -192,6 +196,65 @@ final class CatalogOptimizationPublisher
         if (!is_array($verify)) {
             throw new RuntimeException('Read-back do cache ativo da vitrine falhou.');
         }
+        if (!$this->cacheContainsAllFields($verify, $sku, $externalId, $content)) {
+            throw new RuntimeException('Read-back do cache não confirmou todos os campos textuais aprovados.');
+        }
+    }
+
+    /** @param array<string,mixed> $content */
+    private function storefrontDescription(array $content): string
+    {
+        $html = '<p>' . nl2br(htmlspecialchars((string)$content['description'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) . '</p>';
+        $bullets = is_array($content['bullet_points'] ?? null) ? $content['bullet_points'] : [];
+        if ($bullets !== []) {
+            $html .= '<ul>';
+            foreach ($bullets as $bullet) {
+                $html .= '<li>' . htmlspecialchars(trim((string)$bullet), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</li>';
+            }
+            $html .= '</ul>';
+        }
+        $hooks = is_array($content['marketing_hooks'] ?? null) ? $content['marketing_hooks'] : [];
+        foreach ($hooks as $hook) {
+            $text = trim((string)$hook);
+            if ($text !== '') {
+                $html .= '<p><strong>' . htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</strong></p>';
+            }
+        }
+        return $html;
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @param array<string,mixed> $content
+     */
+    private function cacheContainsAllFields(array $payload, string $sku, string $externalId, array $content): bool
+    {
+        $found = false;
+        $walk = function (array $node) use (&$walk, &$found, $sku, $externalId, $content): void {
+            if ($found) return;
+            if (array_is_list($node)) {
+                foreach ($node as $entry) {
+                    if (!is_array($entry)) continue;
+                    $entrySku = trim((string)($entry['sku'] ?? $entry['codigo'] ?? $entry['code'] ?? ''));
+                    $entryId = trim((string)($entry['id'] ?? $entry['olist_product_id'] ?? ''));
+                    if (($sku !== '' && $entrySku === $sku) || ($externalId !== '' && $entryId === $externalId)) {
+                        $found = (string)($entry['name'] ?? '') === (string)$content['title']
+                            && (array)($entry['bullet_points'] ?? []) === (array)$content['bullet_points']
+                            && (array)($entry['seo_keywords'] ?? []) === (array)$content['seo_keywords']
+                            && (array)($entry['marketing_hooks'] ?? []) === (array)$content['marketing_hooks']
+                            && (string)($entry['meta_title'] ?? '') === (string)$content['meta_title']
+                            && (string)($entry['meta_description'] ?? '') === (string)$content['meta_description'];
+                        if ($found) return;
+                    }
+                }
+                return;
+            }
+            foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
+                if (isset($node[$key]) && is_array($node[$key])) $walk($node[$key]);
+            }
+        };
+        $walk($payload);
+        return $found;
     }
 
     /** @param array<string,mixed> $row @return array<string,mixed> */
