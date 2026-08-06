@@ -4,7 +4,8 @@ declare(strict_types=1);
 /**
  * One-time production bootstrap for an administrator account.
  * Credentials are supplied only through base64-encoded environment variables.
- * No plaintext password is accepted or stored by this script.
+ * The plaintext password exists only in process memory and is hashed with bcrypt
+ * before any database write.
  */
 require_once dirname(__DIR__, 2) . '/config/constants.php';
 require_once dirname(__DIR__, 2) . '/includes/pdo-database.php';
@@ -24,7 +25,7 @@ function sv_bootstrap_admin_decode(string $key): string
 
 $email = strtolower(trim(sv_bootstrap_admin_decode('ADMIN_EMAIL_B64')));
 $name = trim(sv_bootstrap_admin_decode('ADMIN_NAME_B64'));
-$passwordHash = trim(sv_bootstrap_admin_decode('ADMIN_PASSWORD_HASH_B64'));
+$password = sv_bootstrap_admin_decode('ADMIN_PASSWORD_B64');
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     throw new RuntimeException('Invalid administrator email.');
@@ -32,10 +33,14 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 if (mb_strlen($name) < 3 || mb_strlen($name) > 120) {
     throw new RuntimeException('Invalid administrator name.');
 }
-$passwordInfo = password_get_info($passwordHash);
-if (($passwordInfo['algoName'] ?? 'unknown') === 'unknown') {
-    throw new RuntimeException('Invalid password hash.');
+if (strlen($password) < 20) {
+    throw new RuntimeException('Administrator password must have at least 20 characters.');
 }
+$passwordHash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
+if (!is_string($passwordHash) || $passwordHash === '') {
+    throw new RuntimeException('Unable to hash administrator password.');
+}
+unset($password);
 
 $db = sv_pdo();
 if (!$db instanceof PDO) {
