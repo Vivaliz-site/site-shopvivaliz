@@ -134,3 +134,5 @@ $report = [
 
 echo json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL;
 exit($failures === [] ? 0 : 1);
+
+// verification-trigger: 2026-08-06T19:51:14Z
