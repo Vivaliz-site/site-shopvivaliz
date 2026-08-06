@@ -1,6 +1,7 @@
 name: Final order verification complete
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - audit/final-order-flow-20260802
@@ -129,4 +130,4 @@ jobs:
             production-version.json
           retention-days: 7
 
-# verification-trigger: 2026-08-02T19:43:49Z
+# verification-trigger: 2026-08-06T11:14:00Z
