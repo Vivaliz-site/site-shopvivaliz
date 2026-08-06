@@ -16,6 +16,7 @@ on:
       - 'scripts/utils/shopee_client.py'
       - 'scripts/utils/tiktok_client.py'
       - 'scripts/configure-production-runtime.py'
+      - 'scripts/configure-marketplace-publication-runtime.py'
       - 'scripts/integrations/tiktok.py'
       - 'scripts/execute_marketplace_upload.py'
       - 'scripts/maintenance/catalog_real_execution_audit.py'
@@ -23,6 +24,7 @@ on:
       - 'scripts/maintenance/reconcile_catalog_publications.php'
       - '.github/workflows/catalog-publication-integrity.yml'
       - '.github/workflows/catalog-publication-reconcile.yml'
+      - '.github/workflows/configure-marketplace-publication-runtime.yml'
   schedule:
     - cron: '37 * * * *'
   workflow_dispatch:
@@ -72,6 +74,7 @@ jobs:
             scripts/utils/shopee_client.py \
             scripts/utils/tiktok_client.py \
             scripts/configure-production-runtime.py \
+            scripts/configure-marketplace-publication-runtime.py \
             scripts/integrations/tiktok.py \
             scripts/execute_marketplace_upload.py \
             scripts/maintenance/catalog_real_execution_audit.py
