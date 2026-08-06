@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Static guard: catalog and image approvals must call real publishers.
 
-The audit is intentionally strict: a UI success message, staging status or API
-submission is not enough. Each channel must use a real official client, protect
-price/inventory, record evidence and either confirm a read-back or explicitly
-remain in a submitted/audit-pending state.
+A UI success message, staging status or API submission is not enough. Each
+channel must use a real client, protect price/inventory, preserve rotated OAuth
+tokens and either confirm read-back or explicitly remain submitted for review.
 """
 from __future__ import annotations
 
@@ -28,6 +27,7 @@ TARGETS = {
     "tiktok": ROOT / "includes/marketplace/TikTokPublisher.php",
     "tiny": ROOT / "includes/marketplace/TinyPublisher.php",
     "shopee_python": ROOT / "scripts/utils/shopee_client.py",
+    "shopee_compat": ROOT / "utils/shopee_client.py",
     "tiktok_python": ROOT / "scripts/utils/tiktok_client.py",
     "readiness": ROOT / "scripts/maintenance/marketplace_publication_readiness.php",
 }
@@ -47,93 +47,60 @@ FORBIDDEN_MARKERS = (
 REQUIRED_SNIPPETS = {
     "catalog_admin": ("CatalogOptimizationPublisher", "Salvar e publicar em", "publication_failed", "submitted"),
     "catalog_publisher": (
-        "SvMercadoLivrePublisher",
-        "SvShopeePublisher",
-        "SvTikTokPublisher",
-        "SvAmazonPublisher",
-        "SvTinyPublisher",
-        "'publishing'",
-        "'published'",
-        "'submitted'",
-        "sv_market_write_publication",
+        "SvMercadoLivrePublisher", "SvShopeePublisher", "SvTikTokPublisher",
+        "SvAmazonPublisher", "SvTinyPublisher", "'publishing'", "'published'",
+        "'submitted'", "sv_market_write_publication",
     ),
     "image_admin": ("AiStudioOmnichannelImagePublisher", "channels[]", "Aprovar e publicar nos canais selecionados"),
     "image_publisher": (
-        "SvMercadoLivrePublisher",
-        "SvShopeePublisher",
-        "SvTikTokPublisher",
-        "SvAmazonPublisher",
-        "SvTinyPublisher",
-        "partial_published",
+        "SvMercadoLivrePublisher", "SvShopeePublisher", "SvTikTokPublisher",
+        "SvAmazonPublisher", "SvTinyPublisher", "partial_published",
         "sv_market_write_publication",
     ),
     "runtime_schema": (
-        "product_channel_content",
-        "product_channel_mappings",
-        "catalog_publications",
-        "product_images",
-        "publication_summary_json",
+        "product_channel_content", "product_channel_mappings", "catalog_publications",
+        "product_images", "publication_summary_json",
     ),
     "marketplace_runtime": (
-        "sv_market_assert_no_commerce_fields",
-        "sv_market_write_publication",
-        "sv_market_save_mapping",
-        "sv_market_save_channel_content",
+        "sv_market_assert_no_commerce_fields", "sv_market_write_publication",
+        "sv_market_save_mapping", "sv_market_save_channel_content",
         "CURLOPT_SSL_VERIFYPEER",
     ),
-    "storefront_runtime": (
-        "bullet_points",
-        "seo_keywords",
-        "marketing_hooks",
-        "meta_title",
-        "meta_description",
-    ),
+    "storefront_runtime": ("bullet_points", "seo_keywords", "marketing_hooks", "meta_title", "meta_description"),
     "site_seo": ("meta_title", "meta_description", "bullet_points"),
     "ml": ("/items/", "/description", "read-back", "sv_market_assert_no_commerce_fields"),
     "shopee": (
-        "/api/v2/product/update_item",
-        "/api/v2/media_space/upload_image",
-        "get_item_base_info",
-        "SHOPEE_REFRESH_TOKEN",
-        "/api/v2/auth/access_token/get",
-        "description_confirmed",
+        "/api/v2/product/update_item", "/api/v2/media_space/upload_image",
+        "get_item_base_info", "SHOPEE_REFRESH_TOKEN", "/api/v2/auth/access_token/get",
+        "SHOPEE_TOKEN_FILE", "shopee-tokens.json", "description_confirmed",
+        "tempnam", "rename($temporary, $path)",
     ),
     "amazon": (
-        "/listings/2021-08-01/items/",
-        "x-amz-access-token",
-        "submission_status",
-        "'status' => 'submitted'",
+        "/listings/2021-08-01/items/", "x-amz-access-token",
+        "submission_status", "'status' => 'submitted'",
     ),
     "tiktok": (
-        "/product/202509/products/",
-        "/product/202309/images/upload",
-        "partial_edit",
-        "/api/v2/token/refresh",
-        "return_under_review_version",
-        "'status' => $publicationStatus",
+        "/product/202509/products/", "/product/202309/images/upload", "partial_edit",
+        "/api/v2/token/refresh", "return_under_review_version", "TIKTOK_TOKEN_FILE",
+        "tiktok-tokens.json", "'status' => $publicationStatus", "rename($temporary, $path)",
     ),
     "tiny": (
-        "/produtos/",
-        "produto.alterar.php",
-        "produtos.pesquisa.php",
-        "exact_sku",
-        "price_preserved",
-        "stock_untouched",
+        "/produtos/", "produto.alterar.php", "produtos.pesquisa.php", "exact_sku",
+        "price_preserved", "stock_untouched",
     ),
-    "shopee_python": ("SHOPEE_REFRESH_TOKEN", "/auth/access_token/get", "_send_with_refresh"),
+    "shopee_python": (
+        "SHOPEE_REFRESH_TOKEN", "/auth/access_token/get", "_send_with_refresh",
+        "SHOPEE_TOKEN_FILE", "shopee-tokens.json", "os.replace",
+    ),
+    "shopee_compat": ("from scripts.utils.shopee_client import ShopeeClient",),
     "tiktok_python": (
-        "/product/202509/products/",
-        "/product/202309/images/upload",
-        "image_files",
-        "/api/v2/token/refresh",
-        "under_review=True",
+        "/product/202509/products/", "/product/202309/images/upload", "image_files",
+        "/api/v2/token/refresh", "under_review=True", "TIKTOK_TOKEN_FILE",
+        "tiktok-tokens.json", "os.replace",
     ),
     "readiness": (
-        "private_token_file",
-        "exact_sku_lookup_enabled",
-        "publication_requires_api_confirmation",
-        "price_payload_guard",
-        "stock_payload_guard",
+        "private_token_file", "exact_sku_lookup_enabled",
+        "publication_requires_api_confirmation", "price_payload_guard", "stock_payload_guard",
     ),
 }
 
@@ -157,7 +124,6 @@ for name, path in TARGETS.items():
     if issues:
         report["ok"] = False
 
-# Payload protection is centralized and every publisher must invoke it.
 runtime = (ROOT / "includes/marketplace/MarketplaceRuntime.php").read_text(encoding="utf-8", errors="replace")
 protection_issues: list[str] = []
 for key in ("price", "stock", "inventory", "available_quantity", "purchasable_offer"):
@@ -168,27 +134,19 @@ for name in ("MercadoLivrePublisher.php", "ShopeePublisher.php", "TikTokPublishe
     if "sv_market_assert_no_commerce_fields" not in text:
         protection_issues.append("publisher_without_commerce_guard:" + name)
 
-# Tiny V2 image updates require a full product layout including the unchanged
-# price. The publisher must prove that price is read back unchanged and that no
-# stock field is sent.
 tiny = (ROOT / "includes/marketplace/TinyPublisher.php").read_text(encoding="utf-8", errors="replace")
 if "price_preserved" not in tiny or "stock_untouched" not in tiny:
     protection_issues.append("tiny_without_price_stock_readback_guard")
 if "'estoque'" in tiny or '"estoque"' in tiny:
     protection_issues.append("tiny_image_payload_mentions_stock")
-
 report["checks"]["price_stock_guard"] = {"ok": not protection_issues, "issues": protection_issues}
 if protection_issues:
     report["ok"] = False
 
-# Approval is not publication: published statuses need evidence fields.
 status_issues: list[str] = []
 for publisher_name in (
-    "MercadoLivrePublisher.php",
-    "ShopeePublisher.php",
-    "TikTokPublisher.php",
-    "AmazonPublisher.php",
-    "TinyPublisher.php",
+    "MercadoLivrePublisher.php", "ShopeePublisher.php", "TikTokPublisher.php",
+    "AmazonPublisher.php", "TinyPublisher.php",
 ):
     text = (ROOT / "includes/marketplace" / publisher_name).read_text(encoding="utf-8", errors="replace")
     if "'http_status'" not in text or "'response'" not in text or "'external_id'" not in text:
