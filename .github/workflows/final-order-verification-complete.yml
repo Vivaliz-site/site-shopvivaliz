@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: final-order-verification-complete
@@ -130,4 +131,52 @@ jobs:
             production-version.json
           retention-days: 7
 
-# verification-trigger: 2026-08-06T15:45:46Z
+      - name: Publish sanitized verification statuses
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > statuses.tsv
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path('final-audit.json').read_text(encoding='utf-8'))
+          release = data['release_sha'][:12]
+          tiny_hash = data['tiny_id_hash12']
+          rows = [
+              ('shopvivaliz/payment', f"provider={data['provider_status_class']}; release={release}"),
+              ('shopvivaliz/webhook-local', 'webhook timestamp present; local and database statuses approved'),
+              ('shopvivaliz/email-marker', 'customer payment-approved email marker recorded and timestamped'),
+              ('shopvivaliz/tiny', f"Tiny import confirmed; sanitized id={tiny_hash}"),
+              ('shopvivaliz/unique-order', '1 order file; 1 payment file; 1 database row; Tiny id unique'),
+          ]
+          for context, description in rows:
+              print(f'{context}\t{description}')
+          PY
+
+          while IFS=$'\t' read -r context description; do
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state=success \
+              -f context="$context" \
+              -f description="$description" \
+              -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          done < statuses.tsv
+
+      - name: Publish reconciliation failure status
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context=shopvivaliz/order-reconciliation \
+            -f description='Verification failed; inspect the workflow logs' \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+# verification-trigger: 2026-08-06T15:50:11Z
