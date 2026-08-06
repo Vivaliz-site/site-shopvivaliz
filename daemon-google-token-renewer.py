@@ -1,141 +1,83 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Google Ads Token Renewer Daemon - ShopVivaliz
-Renova o access_token do Google Ads automaticamente a cada 50 minutos
-"""
+"""Renova o access token do Google Ads preservando os metadados do .env."""
 
+import json
 import os
 import sys
+import tempfile
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
-import urllib.error
-import json
-import tempfile
 from pathlib import Path
 
-ENV_PATH = Path(
-    os.environ.get(
-        "SHOPVIVALIZ_ENV_PATH",
-        "c:/site-shopvivaliz/.env" if os.name == "nt" else "/home/ubuntu/shopvivaliz-deploy/current/.env",
-    )
-)
+ENV_PATH = Path(os.environ.get("SHOPVIVALIZ_ENV_PATH", "c:/site-shopvivaliz/.env" if os.name == "nt" else "/home/ubuntu/shopvivaliz-deploy/current/.env"))
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 def load_env() -> dict:
     config = {}
-    if not ENV_PATH.is_file():
-        return config
-    with open(ENV_PATH, "r", encoding="utf-8", errors="ignore") as f:
-        for raw in f.read().splitlines():
+    if not ENV_PATH.is_file(): return config
+    with open(ENV_PATH, "r", encoding="utf-8", errors="ignore") as handle:
+        for raw in handle.read().splitlines():
             line = raw.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            config[key.strip()] = value.strip().strip('"').strip("'")
+            if not line or line.startswith("#") or "=" not in line: continue
+            key, value = line.split("=", 1); config[key.strip()] = value.strip().strip('"').strip("'")
     return config
 
 def write_env(new_values: dict) -> bool:
     if not ENV_PATH.is_file():
-        print(f"[!] Erro: .env nao encontrado em {ENV_PATH}")
-        return False
+        print(f"[!] Erro: .env nao encontrado em {ENV_PATH}"); return False
     target = ENV_PATH.resolve(strict=True)
-    with open(target, "r", encoding="utf-8", errors="ignore") as f:
-        lines = f.readlines()
-        
-    updated_lines = []
-    pending = dict(new_values)
+    with open(target, "r", encoding="utf-8", errors="ignore") as handle: lines = handle.readlines()
+    updated_lines, pending = [], dict(new_values)
     for line in lines:
         stripped = line.strip()
         if stripped and not stripped.startswith("#") and "=" in stripped:
-            key, _ = stripped.split("=", 1)
-            key = key.strip()
+            key = stripped.split("=", 1)[0].strip()
             if key in pending:
-                updated_lines.append(f"{key}={pending[key]}\n")
-                del pending[key]
-                continue
+                updated_lines.append(f"{key}={pending.pop(key)}\n"); continue
         updated_lines.append(line)
-        
-    # Append any remaining keys
-    for key, val in pending.items():
-        updated_lines.append(f"{key}={val}\n")
+    for key, value in pending.items(): updated_lines.append(f"{key}={value}\n")
 
-    mode = target.stat().st_mode & 0o777
+    original = target.stat(); mode = original.st_mode & 0o777
     fd, temp_name = tempfile.mkstemp(prefix=".env.google.", dir=str(target.parent))
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-            f.writelines(updated_lines)
-            f.flush()
-            os.fsync(f.fileno())
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.writelines(updated_lines); handle.flush(); os.fsync(handle.fileno())
         os.chmod(temp_name, mode)
+        if os.name != "nt": os.chown(temp_name, original.st_uid, original.st_gid)
         os.replace(temp_name, target)
+        updated = target.stat()
+        if (updated.st_mode & 0o777) != mode or (os.name != "nt" and (updated.st_uid != original.st_uid or updated.st_gid != original.st_gid)):
+            raise RuntimeError("metadados do .env mudaram durante renovacao Google")
         return True
     finally:
-        if os.path.exists(temp_name):
-            os.unlink(temp_name)
+        if os.path.exists(temp_name): os.unlink(temp_name)
 
 def renew_google_token(config: dict) -> str | None:
-    client_id = config.get("GOOGLE_OAUTH_CLIENT_ID")
-    client_secret = config.get("GOOGLE_OAUTH_CLIENT_SECRET")
-    refresh_token = config.get("GOOGLE_ADS_REFRESH_TOKEN")
-    
+    client_id = config.get("GOOGLE_OAUTH_CLIENT_ID"); client_secret = config.get("GOOGLE_OAUTH_CLIENT_SECRET"); refresh_token = config.get("GOOGLE_ADS_REFRESH_TOKEN")
     if not all([client_id, client_secret, refresh_token]):
-        print("[!] Erro: Credenciais do Google Ads incompletas no .env")
-        return None
-        
-    payload = urllib.parse.urlencode({
-        "grant_type": "refresh_token",
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "refresh_token": refresh_token
-    }).encode("utf-8")
-    
-    req = urllib.request.Request(TOKEN_URL, data=payload, headers={
-        "Content-Type": "application/x-www-form-urlencoded"
-    })
-    
+        print("[!] Erro: Credenciais do Google Ads incompletas no .env"); return None
+    payload = urllib.parse.urlencode({"grant_type":"refresh_token", "client_id":client_id, "client_secret":client_secret, "refresh_token":refresh_token}).encode("utf-8")
     try:
-        with urllib.request.urlopen(req, timeout=15) as response:
-            res_data = json.loads(response.read().decode("utf-8"))
-            access_token = res_data.get("access_token")
-            new_refresh = res_data.get("refresh_token")
-
-            if not access_token:
-                print("[!] Erro: resposta do Google OAuth nao retornou access_token")
-                return None
-            
+        with urllib.request.urlopen(urllib.request.Request(TOKEN_URL, data=payload, headers={"Content-Type":"application/x-www-form-urlencoded"}), timeout=15) as response:
+            data = json.loads(response.read().decode("utf-8")); access_token = data.get("access_token"); new_refresh = data.get("refresh_token")
+            if not access_token: return None
             updates = {"GOOGLE_ADS_ACCESS_TOKEN": access_token}
-            if new_refresh:
-                updates["GOOGLE_ADS_REFRESH_TOKEN"] = new_refresh
-
-            if not write_env(updates):
-                return None
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Token do Google Ads renovado com sucesso.")
-            return access_token
-    except urllib.error.HTTPError as e:
-        try:
-            body = e.read().decode("utf-8", errors="replace")
-        except Exception:
-            body = str(e)
-        print(f"[!] Erro HTTP ao renovar token do Google Ads: status={e.code} body={body}")
-        return None
-    except Exception as e:
-        print(f"[!] Erro ao renovar token do Google Ads: {e}")
-        return None
+            if new_refresh: updates["GOOGLE_ADS_REFRESH_TOKEN"] = new_refresh
+            if not write_env(updates): return None
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Token do Google Ads renovado com sucesso."); return access_token
+    except urllib.error.HTTPError as exc:
+        print(f"[!] Erro HTTP ao renovar token do Google Ads: status={exc.code}"); return None
+    except Exception as exc:
+        print(f"[!] Erro ao renovar token do Google Ads: {type(exc).__name__}"); return None
 
 def main() -> int:
-    print("Iniciando Google Ads Token Renewer Daemon...")
-    once = "--once" in sys.argv
-    
+    print("Iniciando Google Ads Token Renewer Daemon..."); once = "--once" in sys.argv
     while True:
-        config = load_env()
-        token = renew_google_token(config)
-        
-        if once:
-            return 0 if token else 1
-        # Dorme por 50 minutos (3000 segundos) antes de renovar novamente
+        token = renew_google_token(load_env())
+        if once: return 0 if token else 1
         time.sleep(3000)
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == "__main__": raise SystemExit(main())
