@@ -1,6 +1,11 @@
 name: Reconcile Catalog Publications
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/maintenance/reconcile_catalog_publications.php'
+      - '.github/workflows/catalog-publication-reconcile.yml'
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
