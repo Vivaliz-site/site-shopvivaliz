@@ -31,6 +31,7 @@ TARGETS = {
     "shopee_compat": ROOT / "utils/shopee_client.py",
     "tiktok_python": ROOT / "scripts/utils/tiktok_client.py",
     "runtime_configurator": ROOT / "scripts/configure-production-runtime.py",
+    "marketplace_configurator": ROOT / "scripts/configure-marketplace-publication-runtime.py",
     "readiness": ROOT / "scripts/maintenance/marketplace_publication_readiness.php",
     "reconciler": ROOT / "scripts/maintenance/reconcile_catalog_publications.php",
 }
@@ -91,6 +92,11 @@ REQUIRED_SNIPPETS = {
     "runtime_configurator": (
         "LEGACY_KEYS", "EXTENDED_KEYS", "payload_mode", "validate_no_placeholders",
         "shared env metadata changed unexpectedly", "os.chown", "os.replace",
+        "TIKTOK_APP_KEY", "AMAZON_LWA_CLIENT_ID", "SHOPEE_PARTNER_ID", "ML_CLIENT_ID",
+    ),
+    "marketplace_configurator": (
+        "NUL-delimited", "Empty fields are", "PLACEHOLDER_MARKERS", "suspiciously short secret",
+        "os.chown", "os.replace", "shared env metadata changed unexpectedly",
         "TIKTOK_APP_KEY", "AMAZON_LWA_CLIENT_ID", "SHOPEE_PARTNER_ID", "ML_CLIENT_ID",
     ),
     "readiness": (
