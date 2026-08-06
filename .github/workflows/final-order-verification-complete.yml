@@ -130,4 +130,4 @@ jobs:
             production-version.json
           retention-days: 7
 
-# verification-trigger: 2026-08-06T11:14:00Z
+# verification-trigger: 2026-08-06T13:46:38Z
