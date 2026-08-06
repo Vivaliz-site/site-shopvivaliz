@@ -1,0 +1,101 @@
+name: Reconcile Catalog Publications
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-publication-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Confirmar publicações submetidas
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::SSH key missing'; exit 1; }
+          test -n "$known_hosts" || { echo '::error::known_hosts missing'; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Wait for reconciler deployment
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ready=0
+          for attempt in $(seq 1 24); do
+            if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+              "test -r /home/ubuntu/shopvivaliz-deploy/current/scripts/maintenance/reconcile_catalog_publications.php && \
+               grep -q 'amazon_live_readback' /home/ubuntu/shopvivaliz-deploy/current/scripts/maintenance/reconcile_catalog_publications.php"; then
+              ready=1
+              break
+            fi
+            echo "deployment_wait_attempt=$attempt"
+            sleep 10
+          done
+          test "$ready" = 1 || { echo '::error::Publication reconciler was not deployed within 4 minutes'; exit 1; }
+
+      - name: Reconcile real marketplace submissions
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set +e
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            'cd /home/ubuntu/shopvivaliz-deploy/current && php scripts/maintenance/reconcile_catalog_publications.php' \
+            > catalog-publication-reconcile.json
+          command_status=$?
+          set -e
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('catalog-publication-reconcile.json')
+          if not path.is_file() or not path.read_text(encoding='utf-8').strip():
+              raise SystemExit('Reconciler produced no JSON evidence.')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          counts = data.get('counts', {})
+          print('ok=', data.get('ok'))
+          print('checked=', counts.get('checked', 0))
+          print('published=', counts.get('published', 0))
+          print('submitted=', counts.get('submitted', 0))
+          print('publication_failed=', counts.get('publication_failed', 0))
+          print('transient_errors=', counts.get('transient_errors', 0))
+          if not data.get('ok', False):
+              raise SystemExit('One or more submitted publications could not be reconciled.')
+          PY
+          test "$command_status" = 0
+
+      - name: Upload reconciliation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-publication-reconcile-${{ github.run_id }}
+          path: catalog-publication-reconcile.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Remove SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
