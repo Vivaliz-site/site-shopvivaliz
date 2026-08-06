@@ -111,24 +111,33 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          set +e
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
             'cd /home/ubuntu/shopvivaliz-deploy/current && php scripts/maintenance/marketplace_publication_readiness.php' \
             > marketplace-publication-readiness.json
+          audit_status=$?
+          set -e
           python3 - <<'PY'
           import json
           from pathlib import Path
-          data = json.loads(Path('marketplace-publication-readiness.json').read_text(encoding='utf-8'))
+          path = Path('marketplace-publication-readiness.json')
+          if not path.is_file() or not path.read_text(encoding='utf-8').strip():
+              raise SystemExit('Production readiness audit produced no JSON report.')
+          data = json.loads(path.read_text(encoding='utf-8'))
           print('ok=', data.get('ok'))
           for channel, state in data.get('channels', {}).items():
               print(channel, 'ready=', state.get('ready'), 'missing=', ','.join(state.get('missing_or_invalid', [])))
           db = data.get('database', {})
           print('database_ready=', db.get('ready'))
           print('mapping_counts=', db.get('mapping_counts', {}))
+          print('products_missing_sku=', db.get('products_missing_sku'))
+          print('products_missing_olist_id=', db.get('products_missing_olist_id'))
           if not data.get('ok', False):
               raise SystemExit('One or more publication channels are not ready in production.')
           PY
+          test "$audit_status" = 0
       - name: Upload masked readiness evidence
         if: always()
         uses: actions/upload-artifact@v4
