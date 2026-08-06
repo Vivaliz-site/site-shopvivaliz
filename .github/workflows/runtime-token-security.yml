@@ -1,0 +1,118 @@
+name: Runtime Token Security Audit
+
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/maintenance/runtime_token_audit.py'
+      - '.github/workflows/runtime-token-security.yml'
+      - 'config/constants.php'
+      - 'includes/integration-health.php'
+      - 'daemon-*-token-renewer.py'
+      - 'daemon-token-renewer.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-token-security
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Audit production runtime credentials
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::SSH key missing'; exit 1; }
+          test -n "$known_hosts" || { echo '::error::known_hosts missing'; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Audit all populated runtime tokens without exposing values
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' \
+            > runtime-token-audit.json <<'REMOTE'
+          set -Eeuo pipefail
+          current='/home/ubuntu/shopvivaliz-deploy/current'
+          env_file='/home/ubuntu/shopvivaliz-deploy/shared/.env'
+          report='/tmp/shopvivaliz-runtime-token-audit.json'
+          php_user="$(ps -eo user,comm | awk '$2 ~ /php-fpm|apache2|httpd/ && $1 != "root" {print $1; exit}')"
+          php_user="${php_user:-www-data}"
+
+          test -f "$env_file" || { echo '{"ok":false,"critical":[{"key":"__file__","reason":"env_file_missing"}]}'; exit 2; }
+          test -r "$current/scripts/maintenance/runtime_token_audit.py" || { echo '{"ok":false,"critical":[{"key":"__script__","reason":"audit_script_missing"}]}'; exit 2; }
+
+          if ! sudo -u "$php_user" test -r "$env_file"; then
+            env_group="$(id -gn "$php_user")"
+            sudo chown ubuntu:"$env_group" "$env_file"
+            sudo chmod 0640 "$env_file"
+          fi
+          sudo -u "$php_user" test -r "$env_file" || { echo '{"ok":false,"critical":[{"key":"__file__","reason":"php_cannot_read_env"}]}'; exit 2; }
+
+          set +e
+          python3 "$current/scripts/maintenance/runtime_token_audit.py" \
+            "$env_file" --php-user "$php_user" --json-output "$report"
+          status=$?
+          set -e
+          cat "$report"
+          exit "$status"
+          REMOTE
+
+      - name: Summarize masked findings
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('runtime-token-audit.json')
+          if not path.is_file() or not path.read_text(encoding='utf-8').strip():
+              raise SystemExit('runtime token audit produced no report')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          print('ok=', data.get('ok'))
+          print('checked_sensitive_keys=', data.get('checked_sensitive_keys', 0))
+          print('critical_count=', data.get('critical_count', len(data.get('critical', []))))
+          print('warning_count=', data.get('warning_count', len(data.get('warnings', []))))
+          for item in data.get('critical', []):
+              print(f"CRITICAL {item.get('key')}: {item.get('reason')}")
+          for item in data.get('warnings', []):
+              print(f"WARNING {item.get('key')}: {item.get('reason')}")
+          if not data.get('ok', False):
+              raise SystemExit('One or more runtime credentials are empty, placeholder, malformed, duplicated, missing, or insecurely stored.')
+          PY
+
+      - name: Upload masked audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-token-audit-${{ github.run_id }}
+          path: runtime-token-audit.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Remove SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
