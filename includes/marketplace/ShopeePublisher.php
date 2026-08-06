@@ -9,6 +9,7 @@ final class SvShopeeClient
     private string $partnerId;
     private string $partnerKey;
     private string $accessToken;
+    private string $refreshToken;
     private string $shopId;
 
     public function __construct()
@@ -18,13 +19,30 @@ final class SvShopeeClient
         $this->partnerId = sv_market_env('SHOPEE_PARTNER_ID');
         $this->partnerKey = sv_market_env('SHOPEE_PARTNER_KEY');
         $this->accessToken = sv_market_env('SHOPEE_ACCESS_TOKEN');
+        $this->refreshToken = sv_market_env('SHOPEE_REFRESH_TOKEN');
         $this->shopId = sv_market_env('SHOPEE_SHOP_ID');
-        if ($this->partnerId === '' || $this->partnerKey === '' || $this->accessToken === '' || $this->shopId === '') {
+        if ($this->partnerId === '' || $this->partnerKey === '' || $this->shopId === '' || ($this->accessToken === '' && $this->refreshToken === '')) {
             throw new RuntimeException('Credenciais de escrita da Shopee incompletas.');
+        }
+        if ($this->accessToken === '') {
+            $this->refreshAccessToken();
         }
     }
 
     public function request(string $method, string $path, ?array $body = null, array $extraQuery = []): array
+    {
+        try {
+            return $this->requestOnce($method, $path, $body, $extraQuery);
+        } catch (SvMarketplaceException $e) {
+            if ($this->refreshToken === '' || !$this->isTokenFailure($e)) {
+                throw $e;
+            }
+            $this->refreshAccessToken();
+            return $this->requestOnce($method, $path, $body, $extraQuery);
+        }
+    }
+
+    private function requestOnce(string $method, string $path, ?array $body, array $extraQuery): array
     {
         $timestamp = time();
         $base = $this->partnerId . $path . $timestamp . $this->accessToken . $this->shopId;
@@ -41,18 +59,40 @@ final class SvShopeeClient
         if (($json['error'] ?? '') !== '' && ($json['error'] ?? 0) !== 0) {
             throw new SvMarketplaceException((string)($json['message'] ?? $json['error']), $response['status'], (string)($json['request_id'] ?? ''), $json);
         }
-        return ['status' => $response['status'], 'request_id' => (string)($json['request_id'] ?? $response['request_id']),
-            'response' => is_array($json['response'] ?? null) ? $json['response'] : [], 'raw' => $json];
+        return [
+            'status' => $response['status'],
+            'request_id' => (string)($json['request_id'] ?? $response['request_id']),
+            'response' => is_array($json['response'] ?? null) ? $json['response'] : [],
+            'raw' => $json,
+        ];
     }
 
     public function uploadImage(string $filePath): array
+    {
+        try {
+            return $this->uploadImageOnce($filePath);
+        } catch (SvMarketplaceException $e) {
+            if ($this->refreshToken === '' || !$this->isTokenFailure($e)) {
+                throw $e;
+            }
+            $this->refreshAccessToken();
+            return $this->uploadImageOnce($filePath);
+        }
+    }
+
+    private function uploadImageOnce(string $filePath): array
     {
         if (!is_file($filePath) || !is_readable($filePath)) throw new RuntimeException('Imagem local indisponível para upload na Shopee.');
         $path = '/api/v2/media_space/upload_image';
         $timestamp = time();
         $base = $this->partnerId . $path . $timestamp . $this->accessToken . $this->shopId;
-        $query = ['partner_id' => $this->partnerId, 'timestamp' => (string)$timestamp, 'access_token' => $this->accessToken,
-            'shop_id' => $this->shopId, 'sign' => hash_hmac('sha256', $base, $this->partnerKey)];
+        $query = [
+            'partner_id' => $this->partnerId,
+            'timestamp' => (string)$timestamp,
+            'access_token' => $this->accessToken,
+            'shop_id' => $this->shopId,
+            'sign' => hash_hmac('sha256', $base, $this->partnerKey),
+        ];
         $url = $this->host . $path . '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
         $mime = mime_content_type($filePath) ?: 'image/png';
         $response = sv_market_http_multipart($url, ['Accept' => 'application/json'], [
@@ -64,8 +104,53 @@ final class SvShopeeClient
         }
         $info = $json['response']['image_info'] ?? [];
         $urls = is_array($info['image_url_list'] ?? null) ? $info['image_url_list'] : [];
-        return ['image_id' => (string)($info['image_id'] ?? ''), 'image_url' => (string)($urls[0]['image_url'] ?? ''),
-            'request_id' => (string)($json['request_id'] ?? '')];
+        return [
+            'image_id' => (string)($info['image_id'] ?? ''),
+            'image_url' => (string)($urls[0]['image_url'] ?? ''),
+            'request_id' => (string)($json['request_id'] ?? ''),
+        ];
+    }
+
+    private function refreshAccessToken(): void
+    {
+        if ($this->refreshToken === '') {
+            throw new RuntimeException('SHOPEE_REFRESH_TOKEN ausente; reautorize a loja.');
+        }
+        $path = '/api/v2/auth/access_token/get';
+        $timestamp = time();
+        $signature = hash_hmac('sha256', $this->partnerId . $path . $timestamp, $this->partnerKey);
+        $url = $this->host . $path . '?' . http_build_query([
+            'partner_id' => $this->partnerId,
+            'timestamp' => (string)$timestamp,
+            'sign' => $signature,
+        ], '', '&', PHP_QUERY_RFC3986);
+        $payload = [
+            'refresh_token' => $this->refreshToken,
+            'shop_id' => (int)$this->shopId,
+            'partner_id' => (int)$this->partnerId,
+        ];
+        $response = sv_market_http_json('POST', $url, ['Accept' => 'application/json'], $payload);
+        $json = $response['json'];
+        if (($json['error'] ?? '') !== '' && ($json['error'] ?? 0) !== 0) {
+            throw new SvMarketplaceException('Falha ao renovar token Shopee: ' . (string)($json['message'] ?? $json['error']), $response['status'], (string)($json['request_id'] ?? ''), $json);
+        }
+        $data = is_array($json['response'] ?? null) ? $json['response'] : $json;
+        $newAccess = trim((string)($data['access_token'] ?? ''));
+        $newRefresh = trim((string)($data['refresh_token'] ?? ''));
+        if ($newAccess === '') {
+            throw new RuntimeException('Renovação Shopee não retornou access_token.');
+        }
+        $this->accessToken = $newAccess;
+        if ($newRefresh !== '') {
+            $this->refreshToken = $newRefresh;
+        }
+    }
+
+    private function isTokenFailure(SvMarketplaceException $e): bool
+    {
+        if (in_array($e->httpStatus, [401, 403], true)) return true;
+        $text = strtolower($e->getMessage() . ' ' . sv_market_json($e->response));
+        return str_contains($text, 'access_token') || str_contains($text, 'invalid token') || str_contains($text, 'token expired');
     }
 }
 
@@ -80,18 +165,30 @@ final class SvShopeePublisher
         $sku = trim((string)($product['sku'] ?? ''));
         if ($sku === '') throw new RuntimeException('SKU ausente para localizar o produto na Shopee.');
         $itemId = $this->resolveItemId($productId, $sku);
-        $payload = ['item_id' => (int)$itemId, 'item_name' => $this->limit(trim((string)($content['title'] ?? '')), 120),
-            'description' => $this->description($content)];
+        $payload = [
+            'item_id' => (int)$itemId,
+            'item_name' => $this->limit(trim((string)($content['title'] ?? '')), 120),
+            'description' => $this->description($content),
+        ];
         sv_market_assert_no_commerce_fields($payload, 'Shopee update_item');
         if ($payload['item_name'] === '' || $payload['description'] === '') throw new RuntimeException('Título ou descrição vazios para a Shopee.');
         $result = $this->client->request('POST', '/api/v2/product/update_item', $payload);
         $read = $this->getBaseInfo([(int)$itemId]);
         $item = $read[0] ?? [];
         if (trim((string)($item['item_name'] ?? '')) !== $payload['item_name']) throw new RuntimeException('A Shopee não confirmou o título atualizado no read-back.');
+        $readDescription = trim((string)($item['description'] ?? $item['description_info']['extended_description']['field_list'][0]['text'] ?? ''));
+        if ($readDescription === '') throw new RuntimeException('A Shopee não confirmou a descrição no read-back.');
         sv_market_save_mapping($this->db, $productId, 'shopee', (string)$itemId, $sku, ['item_status' => $item['item_status'] ?? null]);
-        return ['status' => 'published', 'operation' => 'POST /api/v2/product/update_item', 'external_id' => (string)$itemId,
-            'http_status' => (int)$result['status'], 'request_id' => (string)$result['request_id'],
-            'fields' => ['item_name', 'description'], 'response' => ['confirmed' => true, 'item_status' => $item['item_status'] ?? null], 'verified' => true];
+        return [
+            'status' => 'published',
+            'operation' => 'POST /api/v2/product/update_item',
+            'external_id' => (string)$itemId,
+            'http_status' => (int)$result['status'],
+            'request_id' => (string)$result['request_id'],
+            'fields' => ['item_name', 'description'],
+            'response' => ['title_confirmed' => true, 'description_confirmed' => true, 'item_status' => $item['item_status'] ?? null],
+            'verified' => true,
+        ];
     }
 
     public function publishImages(int $productId, array $localFiles): array
@@ -121,9 +218,16 @@ final class SvShopeePublisher
         $item = $read[0] ?? [];
         $readImages = $item['image']['image_id_list'] ?? $item['image_info']['image_id_list'] ?? [];
         if (!is_array($readImages) || $readImages === []) throw new RuntimeException('A Shopee aceitou a chamada, mas não confirmou imagens no read-back.');
-        return ['status' => 'published', 'operation' => 'upload_image + update_item image', 'external_id' => (string)$itemId,
-            'http_status' => (int)$result['status'], 'request_id' => (string)($result['request_id'] ?: ($requestIds[0] ?? '')),
-            'fields' => ['image'], 'response' => ['image_count' => count($readImages)], 'verified' => true];
+        return [
+            'status' => 'published',
+            'operation' => 'upload_image + update_item image',
+            'external_id' => (string)$itemId,
+            'http_status' => (int)$result['status'],
+            'request_id' => (string)($result['request_id'] ?: ($requestIds[0] ?? '')),
+            'fields' => ['image'],
+            'response' => ['image_count' => count($readImages)],
+            'verified' => true,
+        ];
     }
 
     private function resolveItemId(int $productId, string $sku): int
@@ -159,7 +263,10 @@ final class SvShopeePublisher
     private function getBaseInfo(array $ids): array
     {
         if ($ids === []) return [];
-        $result = $this->client->request('GET', '/api/v2/product/get_item_base_info', null, ['item_id_list' => implode(',', $ids), 'need_complaint_policy' => 'false']);
+        $result = $this->client->request('GET', '/api/v2/product/get_item_base_info', null, [
+            'item_id_list' => implode(',', $ids),
+            'need_complaint_policy' => 'false',
+        ]);
         $items = $result['response']['item_list'] ?? [];
         return is_array($items) ? array_values($items) : [];
     }
@@ -170,7 +277,9 @@ final class SvShopeePublisher
             $result = $this->client->request('GET', '/api/v2/product/get_model_list', null, ['item_id' => $itemId]);
             $models = $result['response']['model'] ?? $result['response']['model_list'] ?? [];
             foreach (is_array($models) ? $models : [] as $model) if (trim((string)($model['model_sku'] ?? '')) === $sku) return true;
-        } catch (Throwable) { return false; }
+        } catch (Throwable) {
+            return false;
+        }
         return false;
     }
 
