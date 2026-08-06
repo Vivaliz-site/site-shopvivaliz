@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Static guard: catalog and image approvals must call real publishers.
+"""Static guard for real omnichannel publication and secure credentials.
 
 A UI success message, staging status or API submission is not enough. Each
-channel must use a real client, protect price/inventory, preserve rotated OAuth
+channel must call a real client, protect commerce fields, preserve rotated OAuth
 tokens and either confirm read-back or explicitly remain submitted for review.
 """
 from __future__ import annotations
@@ -29,56 +29,44 @@ TARGETS = {
     "shopee_python": ROOT / "scripts/utils/shopee_client.py",
     "shopee_compat": ROOT / "utils/shopee_client.py",
     "tiktok_python": ROOT / "scripts/utils/tiktok_client.py",
+    "runtime_configurator": ROOT / "scripts/configure-production-runtime.py",
     "readiness": ROOT / "scripts/maintenance/marketplace_publication_readiness.php",
 }
 
 FORBIDDEN_MARKERS = (
-    "[simulado]",
-    "finge sucesso",
-    "não foi enviado a lugar nenhum",
-    "não tem propagação automática",
-    "promoção automática para este canal não está implementada",
-    "promoção para a loja não é automática",
-    "gancho comentado",
-    "mock_success",
-    "fake_success",
+    "[simulado]", "finge sucesso", "não foi enviado a lugar nenhum",
+    "não tem propagação automática", "promoção automática para este canal não está implementada",
+    "promoção para a loja não é automática", "gancho comentado", "mock_success", "fake_success",
 )
 
 REQUIRED_SNIPPETS = {
     "catalog_admin": ("CatalogOptimizationPublisher", "Salvar e publicar em", "publication_failed", "submitted"),
     "catalog_publisher": (
-        "SvMercadoLivrePublisher", "SvShopeePublisher", "SvTikTokPublisher",
-        "SvAmazonPublisher", "SvTinyPublisher", "'publishing'", "'published'",
-        "'submitted'", "sv_market_write_publication",
+        "SvMercadoLivrePublisher", "SvShopeePublisher", "SvTikTokPublisher", "SvAmazonPublisher",
+        "SvTinyPublisher", "'publishing'", "'published'", "'submitted'", "sv_market_write_publication",
     ),
     "image_admin": ("AiStudioOmnichannelImagePublisher", "channels[]", "Aprovar e publicar nos canais selecionados"),
     "image_publisher": (
-        "SvMercadoLivrePublisher", "SvShopeePublisher", "SvTikTokPublisher",
-        "SvAmazonPublisher", "SvTinyPublisher", "partial_published",
-        "sv_market_write_publication",
+        "SvMercadoLivrePublisher", "SvShopeePublisher", "SvTikTokPublisher", "SvAmazonPublisher",
+        "SvTinyPublisher", "partial_published", "sv_market_write_publication",
     ),
     "runtime_schema": (
         "product_channel_content", "product_channel_mappings", "catalog_publications",
         "product_images", "publication_summary_json",
     ),
     "marketplace_runtime": (
-        "sv_market_assert_no_commerce_fields", "sv_market_write_publication",
-        "sv_market_save_mapping", "sv_market_save_channel_content",
-        "CURLOPT_SSL_VERIFYPEER",
+        "sv_market_assert_no_commerce_fields", "sv_market_write_publication", "sv_market_save_mapping",
+        "sv_market_save_channel_content", "CURLOPT_SSL_VERIFYPEER",
     ),
     "storefront_runtime": ("bullet_points", "seo_keywords", "marketing_hooks", "meta_title", "meta_description"),
     "site_seo": ("meta_title", "meta_description", "bullet_points"),
     "ml": ("/items/", "/description", "read-back", "sv_market_assert_no_commerce_fields"),
     "shopee": (
-        "/api/v2/product/update_item", "/api/v2/media_space/upload_image",
-        "get_item_base_info", "SHOPEE_REFRESH_TOKEN", "/api/v2/auth/access_token/get",
-        "SHOPEE_TOKEN_FILE", "shopee-tokens.json", "description_confirmed",
-        "tempnam", "rename($temporary, $path)",
+        "/api/v2/product/update_item", "/api/v2/media_space/upload_image", "get_item_base_info",
+        "SHOPEE_REFRESH_TOKEN", "/api/v2/auth/access_token/get", "SHOPEE_TOKEN_FILE",
+        "shopee-tokens.json", "description_confirmed", "tempnam", "rename($temporary, $path)",
     ),
-    "amazon": (
-        "/listings/2021-08-01/items/", "x-amz-access-token",
-        "submission_status", "'status' => 'submitted'",
-    ),
+    "amazon": ("/listings/2021-08-01/items/", "x-amz-access-token", "submission_status", "'status' => 'submitted'"),
     "tiktok": (
         "/product/202509/products/", "/product/202309/images/upload", "partial_edit",
         "/api/v2/token/refresh", "return_under_review_version", "TIKTOK_TOKEN_FILE",
@@ -95,12 +83,16 @@ REQUIRED_SNIPPETS = {
     "shopee_compat": ("from scripts.utils.shopee_client import ShopeeClient",),
     "tiktok_python": (
         "/product/202509/products/", "/product/202309/images/upload", "image_files",
-        "/api/v2/token/refresh", "under_review=True", "TIKTOK_TOKEN_FILE",
-        "tiktok-tokens.json", "os.replace",
+        "/api/v2/token/refresh", "under_review=True", "TIKTOK_TOKEN_FILE", "tiktok-tokens.json", "os.replace",
+    ),
+    "runtime_configurator": (
+        "LEGACY_KEYS", "EXTENDED_KEYS", "payload_mode", "validate_no_placeholders",
+        "shared env metadata changed unexpectedly", "os.chown", "os.replace",
+        "TIKTOK_APP_KEY", "AMAZON_LWA_CLIENT_ID", "SHOPEE_PARTNER_ID", "ML_CLIENT_ID",
     ),
     "readiness": (
-        "private_token_file", "exact_sku_lookup_enabled",
-        "publication_requires_api_confirmation", "price_payload_guard", "stock_payload_guard",
+        "private_token_file", "exact_sku_lookup_enabled", "publication_requires_api_confirmation",
+        "price_payload_guard", "stock_payload_guard",
     ),
 }
 
@@ -119,7 +111,6 @@ for name, path in TARGETS.items():
         for snippet in REQUIRED_SNIPPETS.get(name, ()):
             if snippet not in text:
                 issues.append("required_snippet_missing:" + snippet)
-
     report["checks"][name] = {"ok": not issues, "issues": issues}
     if issues:
         report["ok"] = False
