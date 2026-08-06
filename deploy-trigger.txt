@@ -1,4 +1,4 @@
 Deploy trigger
-Updated at: 2026-08-06T20:01:31Z
-Source HEAD: 5cf05af53dd62526a708c048844c5932826628b3
-Purpose: run Quality Gate and deploy the current canonical main state.
+Updated at: 2026-08-06T21:56:45Z
+Source HEAD: 7269382ebe6f882c33c4ddfd0a796bed96c337be
+Purpose: retrigger Quality Gate and canonical production deployment after Actions recovery.
