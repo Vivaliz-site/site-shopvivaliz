@@ -44,7 +44,7 @@ final class AiStudioOmnichannelImagePublisher
         foreach ($channels as $channel) {
             try {
                 $result = match ($channel) {
-                    'site' => $this->publishSite($productId, $imageType, $publicUrl),
+                    'site' => $this->publishSite($productId, $imageType, $publicUrl, $publicUrls),
                     'ml' => (new SvMercadoLivrePublisher($this->db))->publishImages($productId, $publicUrls),
                     'shopee' => (new SvShopeePublisher($this->db))->publishImages($productId, $localFiles),
                     'tiktok' => (new SvTikTokPublisher($this->db))->publishImages($productId, $localFiles),
@@ -206,9 +206,10 @@ final class AiStudioOmnichannelImagePublisher
         return $files;
     }
 
-    /** @return array<string,mixed> */
-    private function publishSite(int $productId, string $imageType, string $publicUrl): array
+    /** @param list<string> $publicUrls @return array<string,mixed> */
+    private function publishSite(int $productId, string $imageType, string $publicUrl, array $publicUrls): array
     {
+        $product = sv_market_product($this->db, $productId);
         if ($imageType === 'white') {
             $stmt = $this->db->prepare('UPDATE products SET image_url = ?, updated_at = NOW() WHERE id = ?');
             $stmt->execute([$publicUrl, $productId]);
@@ -223,16 +224,75 @@ final class AiStudioOmnichannelImagePublisher
         if ((int)$exists->fetchColumn() < 1) {
             throw new RuntimeException('Galeria do ShopVivaliz não confirmou a imagem.');
         }
+        $this->updateStorefrontCache($product, $imageType, $publicUrl, $publicUrls);
         return [
             'status' => 'published',
-            'operation' => 'product_images' . ($imageType === 'white' ? ' + products.image_url' : ''),
+            'operation' => 'product_images + storefront cache' . ($imageType === 'white' ? ' + products.image_url' : ''),
             'external_id' => (string)$productId,
             'http_status' => 200,
             'request_id' => '',
-            'fields' => ['image_type', 'public_url'],
-            'response' => ['image_type' => $imageType, 'readback_confirmed' => true],
+            'fields' => ['image_type', 'public_url', 'gallery'],
+            'response' => ['image_type' => $imageType, 'readback_confirmed' => true, 'storefront_cache_confirmed' => true],
             'verified' => true,
         ];
+    }
+
+    /** @param array<string,mixed> $product @param list<string> $publicUrls */
+    private function updateStorefrontCache(array $product, string $imageType, string $publicUrl, array $publicUrls): void
+    {
+        $path = dirname(__DIR__, 3) . '/storage/products-cache-ativos.json';
+        if (!is_file($path) || !is_readable($path) || !is_writable($path)) {
+            throw new RuntimeException('Cache ativo da vitrine não está disponível para publicar a galeria.');
+        }
+        $payload = json_decode((string)file_get_contents($path), true);
+        if (!is_array($payload)) throw new RuntimeException('Cache ativo da vitrine contém JSON inválido.');
+        $sku = trim((string)($product['sku'] ?? ''));
+        $externalId = trim((string)($product['olist_id'] ?? $product['olist_product_id'] ?? ''));
+        $absoluteUrls = array_values(array_unique(array_map('sv_market_absolute_url', $publicUrls)));
+        $updated = false;
+        $apply = function (array &$item) use ($sku, $externalId, $imageType, $publicUrl, $absoluteUrls, &$updated): void {
+            $itemSku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
+            $itemId = trim((string)($item['id'] ?? $item['olist_product_id'] ?? ''));
+            if (($sku === '' || $itemSku !== $sku) && ($externalId === '' || $itemId !== $externalId)) return;
+            $existing = [];
+            foreach (['images', 'imagens', 'gallery', 'galeria'] as $field) {
+                if (is_array($item[$field] ?? null)) {
+                    foreach ($item[$field] as $entry) {
+                        $url = is_string($entry) ? trim($entry) : trim((string)($entry['url'] ?? $entry['src'] ?? ''));
+                        if ($url !== '') $existing[] = $url;
+                    }
+                }
+            }
+            $gallery = array_slice(array_values(array_unique(array_merge($absoluteUrls, $existing))), 0, 12);
+            $item['images'] = $gallery;
+            $item['imagens'] = array_map(static fn(string $url): array => ['url' => $url], $gallery);
+            if ($imageType === 'white') {
+                $item['image_url'] = $publicUrl;
+                $item['primary_image_url'] = $publicUrl;
+                $item['imagem_principal_url'] = $publicUrl;
+                $item['imagem'] = $publicUrl;
+            }
+            $updated = true;
+        };
+        $walk = function (array &$node) use (&$walk, $apply): void {
+            if (array_is_list($node)) {
+                foreach ($node as &$entry) if (is_array($entry)) $apply($entry);
+                unset($entry);
+                return;
+            }
+            foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
+                if (isset($node[$key]) && is_array($node[$key])) $walk($node[$key]);
+            }
+        };
+        $walk($payload);
+        if (!$updated) throw new RuntimeException('Produto não localizado no cache ativo da vitrine para publicar a galeria.');
+        $encoded = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($encoded) || file_put_contents($path, $encoded . PHP_EOL, LOCK_EX) === false) {
+            throw new RuntimeException('Falha ao persistir a galeria no cache ativo da vitrine.');
+        }
+        if (!is_array(json_decode((string)file_get_contents($path), true))) {
+            throw new RuntimeException('Read-back do cache ativo da vitrine falhou após publicar a galeria.');
+        }
     }
 
     /** @param list<string> $channels @param array<string,mixed>|null $summary */
