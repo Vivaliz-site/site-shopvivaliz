@@ -25,8 +25,8 @@ final class AiStudioOmnichannelImagePublisher
         $productId = (int)($row['product_id'] ?? 0);
         $imageType = strtolower(trim((string)($row['image_type'] ?? '')));
         $channels = array_values(array_unique(array_intersect(self::CHANNELS, array_map('strtolower', $channels))));
-        if ($stagingId <= 0 || $productId <= 0 || $imageType === '' || $channels === []) {
-            throw new RuntimeException('Imagem, produto ou canal de destino inválido.');
+        if ($stagingId <= 0 || $productId <= 0 || $imageType === '' || count($channels) !== 1) {
+            throw new RuntimeException('A aprovação de imagem exige exatamente um canal de destino.');
         }
         $this->setStaging($stagingId, 'publishing', null, $channels, null, null);
         [$publicUrl, $publicFile] = $this->ensurePublicAsset($row);
