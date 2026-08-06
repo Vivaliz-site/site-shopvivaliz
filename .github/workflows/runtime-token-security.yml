@@ -9,11 +9,17 @@ on:
       - main
     paths:
       - 'scripts/maintenance/runtime_token_audit.py'
+      - 'scripts/maintenance/token_reference_audit.py'
       - '.github/workflows/runtime-token-security.yml'
       - 'config/constants.php'
       - 'includes/integration-health.php'
       - 'daemon-*-token-renewer.py'
       - 'daemon-token-renewer.py'
+      - '**/*.php'
+      - '**/*.py'
+      - '**/*.sh'
+      - '**/*.yml'
+      - '**/*.yaml'
 
 permissions:
   contents: read
@@ -80,6 +86,31 @@ jobs:
           exit "$status"
           REMOTE
 
+      - name: Detect token references with no runtime provisioning
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' \
+            > token-reference-audit.json <<'REMOTE'
+          set -Eeuo pipefail
+          current='/home/ubuntu/shopvivaliz-deploy/current'
+          env_file='/home/ubuntu/shopvivaliz-deploy/shared/.env'
+          report='/tmp/shopvivaliz-token-reference-audit.json'
+          test -r "$current/scripts/maintenance/token_reference_audit.py" || {
+            echo '{"ok":false,"critical":[{"key":"__script__","reason":"reference_audit_script_missing"}]}'
+            exit 2
+          }
+          set +e
+          python3 "$current/scripts/maintenance/token_reference_audit.py" \
+            "$current" "$env_file" --json-output "$report"
+          status=$?
+          set -e
+          cat "$report"
+          exit "$status"
+          REMOTE
+
       - name: Summarize masked findings
         if: always()
         shell: bash
@@ -87,20 +118,34 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
-          path = Path('runtime-token-audit.json')
-          if not path.is_file() or not path.read_text(encoding='utf-8').strip():
-              raise SystemExit('runtime token audit produced no report')
-          data = json.loads(path.read_text(encoding='utf-8'))
-          print('ok=', data.get('ok'))
-          print('checked_sensitive_keys=', data.get('checked_sensitive_keys', 0))
-          print('critical_count=', data.get('critical_count', len(data.get('critical', []))))
-          print('warning_count=', data.get('warning_count', len(data.get('warnings', []))))
-          for item in data.get('critical', []):
-              print(f"CRITICAL {item.get('key')}: {item.get('reason')}")
-          for item in data.get('warnings', []):
-              print(f"WARNING {item.get('key')}: {item.get('reason')}")
-          if not data.get('ok', False):
-              raise SystemExit('One or more runtime credentials are empty, placeholder, malformed, duplicated, missing, or insecurely stored.')
+
+          failed = False
+          reports = (
+              ('runtime-token-audit.json', 'runtime'),
+              ('token-reference-audit.json', 'references'),
+          )
+          for filename, label in reports:
+              path = Path(filename)
+              if not path.is_file() or not path.read_text(encoding='utf-8').strip():
+                  print(f'CRITICAL {label}: audit produced no report')
+                  failed = True
+                  continue
+              data = json.loads(path.read_text(encoding='utf-8'))
+              print(f'[{label}] ok=', data.get('ok'))
+              print(f'[{label}] critical_count=', data.get('critical_count', len(data.get('critical', []))))
+              print(f'[{label}] warning_count=', data.get('warning_count', len(data.get('warnings', []))))
+              for item in data.get('critical', []):
+                  print(f"CRITICAL {item.get('key')}: {item.get('reason')}")
+                  for ref in item.get('references', [])[:5]:
+                      print(f"  referenced at {ref.get('path')}:{ref.get('line')}")
+              for item in data.get('warnings', []):
+                  print(f"WARNING {item.get('key')}: {item.get('reason')}")
+                  for ref in item.get('references', [])[:3]:
+                      print(f"  referenced at {ref.get('path')}:{ref.get('line')}")
+              if not data.get('ok', False):
+                  failed = True
+          if failed:
+              raise SystemExit('Runtime credential security audit found invalid values or sensitive variables referenced without provisioning.')
           PY
 
       - name: Upload masked audit evidence
@@ -108,7 +153,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: runtime-token-audit-${{ github.run_id }}
-          path: runtime-token-audit.json
+          path: |
+            runtime-token-audit.json
+            token-reference-audit.json
           if-no-files-found: ignore
           retention-days: 14
 
