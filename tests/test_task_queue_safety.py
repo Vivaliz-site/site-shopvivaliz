@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -123,6 +124,16 @@ class TaskQueueLibraryTests(unittest.TestCase):
             )
             self.assertFalse((root / "logs" / "tasks-queue.json").exists())
             self.assertEqual(list(root.glob(".tasks-queue.json.*.tmp")), [])
+
+    def test_operational_scripts_cannot_opt_into_reviewed_runtime_write(self) -> None:
+        pattern = re.compile(r"reviewed_change\s*=\s*True")
+        offenders = []
+        for path in (REPO_ROOT / "scripts").rglob("*.py"):
+            if path == LIB_PATH:
+                continue
+            if pattern.search(path.read_text(encoding="utf-8", errors="replace")):
+                offenders.append(path.relative_to(REPO_ROOT).as_posix())
+        self.assertEqual(offenders, [])
 
     def test_repository_queue_matches_canonical_contract(self) -> None:
         self.lib.load_queue(REPO_ROOT / "tasks-queue.json")
