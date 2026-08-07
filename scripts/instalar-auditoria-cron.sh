@@ -15,7 +15,16 @@ chmod +x "$ROOT/scripts/auditoria-24-7.py"
 # Adicionar cron job (executar a cada 30 minutos) preservando todo o crontab.
 MARKER="# shopvivaliz-auditoria-24-7"
 CRON_JOB="*/30 * * * * cd $ROOT && python3 scripts/auditoria-24-7.py >> logs/auditoria-cron.log 2>&1 $MARKER"
-CURRENT_CRONTAB="$(crontab -l 2>/dev/null || true)"
+CURRENT_CRONTAB=""
+if CURRENT_CRONTAB="$(crontab -l 2>/dev/null)"; then
+    :
+else
+    CRONTAB_STATUS=$?
+    if [[ "$CRONTAB_STATUS" -ne 1 ]]; then
+        echo "❌ Não foi possível ler o crontab atual (status $CRONTAB_STATUS)" >&2
+        exit "$CRONTAB_STATUS"
+    fi
+fi
 
 if printf '%s\n' "$CURRENT_CRONTAB" | grep -Fq "$MARKER"; then
     echo "⚠️ Cron job já existe"
