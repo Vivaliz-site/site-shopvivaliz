@@ -1,5 +1,5 @@
 {
-  "action": "graph_browser_authorize",
-  "requested_at": "2026-08-07T17:11:00-03:00",
-  "reason": "Authorize Microsoft Graph with browser-based authorization code PKCE because device code is blocked by Security Defaults"
+  "action": "email_emergency_stop",
+  "requested_at": "2026-08-07T17:13:00-03:00",
+  "reason": "User reported another identical incorrect email; stop all mei-mg-email processes and scheduled email/auth tasks immediately before further diagnosis"
 }
