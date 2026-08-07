@@ -70,14 +70,11 @@ jobs:
           php_user="${php_user:-www-data}"
           php_group="$(id -gn "$php_user")"
 
-          # Repara apenas metadados do arquivo, nunca seu conteudo.
-          if ! sudo -u "$php_user" test -r "$shared_env"; then
-            echo "env_repair=required" >&2
-            sudo chown ubuntu:"$php_group" "$shared_env"
-            sudo chmod 0640 "$shared_env"
-          fi
+          # Permission repair has a single owner: runtime-env-guard.yml.
+          # This integration workflow fails closed rather than mutating .env
+          # metadata independently.
           sudo -u "$php_user" test -r "$shared_env" || {
-            echo "shared .env is unreadable by PHP user $php_user" >&2
+            echo "shared .env is unreadable by PHP user $php_user; runtime-env-guard must repair it" >&2
             exit 1
           }
 
