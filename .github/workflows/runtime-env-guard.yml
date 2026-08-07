@@ -89,7 +89,7 @@ jobs:
 
           sudo -u "$php_user" test -r "$VM_ENV"
           sudo -u "$php_user" php -r '
-            $path = getenv("VM_ENV");
+            $path = $argv[1] ?? "";
             if (!is_file($path) || !is_readable($path)) { exit(2); }
             $keys = [];
             foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
@@ -107,7 +107,7 @@ jobs:
               foreach ($required as $key) if (isset($keys[$key])) $present++;
               echo $name . "_env_keys_present=" . $present . PHP_EOL;
             }
-          '
+          ' "$VM_ENV"
           REMOTE
 
       - name: Smoke test publico do login
