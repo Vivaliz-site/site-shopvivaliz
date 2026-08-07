@@ -1,0 +1,5 @@
+{
+  "action": "health",
+  "requested_at": "2026-08-07T15:35:00-03:00",
+  "reason": "Validate private Fred-Win MCP path through Oracle VM after self-healing bootstrap"
+}
