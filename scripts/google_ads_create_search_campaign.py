@@ -217,6 +217,10 @@ def create_responsive_search_ad(
     ad_group_ad.ad.final_urls.append(final_url)
 
     rsa = ad_group_ad.ad.responsive_search_ad
+    if ad.get("path1"):
+        rsa.path1 = ad["path1"]
+    if ad.get("path2"):
+        rsa.path2 = ad["path2"]
     for text in ad["headlines"]:
         asset = client.get_type("AdTextAsset")
         asset.text = text
@@ -250,7 +254,11 @@ def main() -> int:
                 config["tracking"],
                 group["tracking_content"],
             )
-            print(f"group={group['name']} keywords={len(group['keywords'])} final_url={url}")
+            print(
+                f"group={group['name']} keywords={len(group['keywords'])} "
+                f"path1={group['responsive_search_ad'].get('path1', '')} "
+                f"path2={group['responsive_search_ad'].get('path2', '')} final_url={url}"
+            )
         return 0
 
     run_readiness()
