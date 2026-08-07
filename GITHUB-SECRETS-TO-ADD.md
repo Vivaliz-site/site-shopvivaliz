@@ -39,13 +39,6 @@ MELHOR_ENVIO_CLIENT_SECRET = (sua chave)
 MELHOR_ENVIO_ACCESS_TOKEN = (sua chave)
 ```
 
-## Pagar.me
-
-```
-PAGARME_API_KEY = (sua chave)
-PAGARME_ENCRYPTION_KEY = (sua chave)
-```
-
 ## FTP Deploy (já configurado?)
 
 ```
