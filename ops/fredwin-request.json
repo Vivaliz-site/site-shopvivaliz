@@ -1,5 +1,5 @@
 {
-  "action": "email_hard_stop_repair",
-  "requested_at": "2026-08-07T16:55:00-03:00",
-  "reason": "Stop any legacy Gmail/SMTP send processes and tasks, force Graph-only config, run Flyway migrations, and rerun tests"
+  "action": "email_migration_status",
+  "requested_at": "2026-08-07T17:02:00-03:00",
+  "reason": "Inspect duplicate Flyway V009 migration and database schema history before repair"
 }
