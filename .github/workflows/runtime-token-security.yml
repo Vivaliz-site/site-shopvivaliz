@@ -79,7 +79,7 @@ jobs:
 
           set +e
           python3 "$current/scripts/maintenance/runtime_token_audit.py" \
-            "$env_file" --php-user "$php_user" --json-output "$report"
+            "$env_file" --php-user "$php_user" --json-output "$report" >/dev/null
           status=$?
           set -e
           cat "$report"
@@ -104,7 +104,7 @@ jobs:
           }
           set +e
           python3 "$current/scripts/maintenance/token_reference_audit.py" \
-            "$current" "$env_file" --json-output "$report"
+            "$current" "$env_file" --json-output "$report" >/dev/null
           status=$?
           set -e
           cat "$report"
