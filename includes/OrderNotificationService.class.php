@@ -57,17 +57,6 @@ class OrderNotificationService
             };
         }
 
-        if ($provider === 'pagarme') {
-            // paid, refused, pending, refunded, canceled
-            return match ($status) {
-                'paid' => 'pagamento_aprovado',
-                'refused' => 'pagamento_recusado',
-                'canceled' => 'pedido_cancelado',
-                'refunded' => 'reembolso_concluido',
-                default => null
-            };
-        }
-
         if ($provider === 'tiny' || $provider === 'olist') {
             // waiting_payment, payment_approved, invoice_sent, invoiced, ready_to_ship, shipped, delivered, cancelled, returned
             return match ($status) {
@@ -350,7 +339,7 @@ class OrderNotificationService
         // Cancel instructions explaining financial impact
         $cancelReason = (string)($data['cancel_reason'] ?? '');
         $cancelReasonInstructions = "O seu pedido foi cancelado e nenhuma cobrança adicional será gerada. ";
-        if (in_array($data['payment_method'] ?? '', ['pix', 'mercado_pago', 'pagarme'], true)) {
+        if (in_array($data['payment_method'] ?? '', ['pix', 'mercado_pago'], true)) {
             $cancelReasonInstructions .= "Caso o pagamento já tenha sido debitado, o valor de R$ $total será estornado automaticamente no mesmo meio de pagamento em até 2 dias úteis.";
         } else {
             $cancelReasonInstructions .= "Caso tenha pago o boleto, por favor entre em contato com nosso suporte informando os dados bancários para transferência de devolução.";
