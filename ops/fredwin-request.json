@@ -1,5 +1,5 @@
 {
-  "action": "email_hard_stop_repair",
-  "requested_at": "2026-08-07T17:21:30-03:00",
-  "reason": "Enforce SMTP guard on Fred-Win, sync Graph sender fix, validate database migrations and run full email test suite"
+  "action": "graph_browser_authorize",
+  "requested_at": "2026-08-07T17:23:00-03:00",
+  "reason": "Launch interactive Microsoft Graph OAuth in Fred-Win browser after SMTP guard and runtime validation passed"
 }
