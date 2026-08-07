@@ -1,5 +1,5 @@
 {
   "action": "graph_browser_authorize",
-  "requested_at": "2026-08-07T18:20:00-03:00",
-  "reason": "User reported login error; reopen interactive Microsoft Graph OAuth in Fred-Win browser"
+  "requested_at": "2026-08-07T18:24:00-03:00",
+  "reason": "Reopen interactive Microsoft Graph OAuth after reported login error; diagnose authorization before any email send"
 }
