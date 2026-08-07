@@ -7,7 +7,6 @@ check is allowed to touch Google Ads.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
@@ -110,15 +109,37 @@ def main() -> int:
             if len(description) > 90:
                 errors.append(f"{prefix}:description_too_long={len(description)}:{description}")
 
+        path1 = str(ad.get("path1", "")).strip()
+        path2 = str(ad.get("path2", "")).strip()
+        if not path1 or not path2:
+            errors.append(f"{prefix}:rsa_display_paths_required")
+        if len(path1) > 15:
+            errors.append(f"{prefix}:path1_too_long={len(path1)}")
+        if len(path2) > 15:
+            errors.append(f"{prefix}:path2_too_long={len(path2)}")
+        if path1 and not path1.replace("-", "").isalnum():
+            errors.append(f"{prefix}:path1_should_be_simple_text")
+        if path2 and not path2.replace("-", "").isalnum():
+            errors.append(f"{prefix}:path2_should_be_simple_text")
+
         final_url = str(ad.get("final_url", ""))
         split = urlsplit(final_url)
         if split.scheme != "https" or split.hostname != ALLOWED_HOST:
             errors.append(f"{prefix}:invalid_final_url")
         decoded_url = norm(unquote(final_url))
-        if "carrinho" in norm(name) and "carrinho" not in decoded_url:
-            errors.append(f"{prefix}:carrinho_group_url_not_specific")
-        if "caixa" in norm(name) and "caixa" not in decoded_url:
-            errors.append(f"{prefix}:caixa_group_url_not_specific")
+        name_norm = norm(name)
+        if "carrinho" in name_norm:
+            if "carrinho" not in decoded_url:
+                errors.append(f"{prefix}:carrinho_group_url_not_specific")
+            if "carrinho" not in norm(path1):
+                errors.append(f"{prefix}:path1_not_aligned_to_carrinho_intent")
+        if "caixa" in name_norm:
+            if "caixa" not in decoded_url:
+                errors.append(f"{prefix}:caixa_group_url_not_specific")
+            if "caixa" not in norm(path1):
+                errors.append(f"{prefix}:path1_not_aligned_to_caixa_intent")
+        if path2 and "fercar" not in norm(path2):
+            errors.append(f"{prefix}:path2_should_reinforce_fercar_brand")
 
         if not norm(group.get("tracking_content", "")):
             errors.append(f"{prefix}:tracking_content_missing")
