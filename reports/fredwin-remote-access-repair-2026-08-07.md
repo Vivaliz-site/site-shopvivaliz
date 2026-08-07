@@ -1,65 +1,76 @@
-# Fred-Win remote access repair — 2026-08-07
+# Fred-Win remote access / tunnel — persistent operator context
 
-## Root cause confirmed
+> IMPORTANT FOR FUTURE CHATGPT SESSIONS: this remote path already exists and has been validated. Do not ask the user to rediscover or recreate the tunnel before checking this document and the current workflow status.
 
-- The public hostname `rce-shopvivaliz.trycloudflare.com` is not reachable from GitHub-hosted runners.
-- Oracle VM `137.131.156.17` is reachable with the existing GitHub Actions secret `SHOPVIVALIZ_VM_SSH_KEY`.
-- The existing Windows -> Oracle reverse SSH tunnel is alive on VM loopback port `2222`.
-- The VM cannot reach `100.71.51.106:5557` directly (Tailscale/private address path unavailable from VM).
-- Connecting to VM `127.0.0.1:2222` reaches the reverse-forward listener, but the forwarded Windows SSH endpoint closes the connection; therefore this path is not suitable as the control plane.
-- No active self-hosted GitHub runner was available for the repository at audit time.
+## Working architecture
 
-## Repair implemented
+`ChatGPT -> GitHub connector -> GitHub Actions -> Oracle VM SSH -> VM 127.0.0.1:5557 -> reverse SSH -> Fred-Win 127.0.0.1:5557 -> MCP`
 
-The new design removes the public RCE dependency entirely:
+The Fred-Win Windows machine keeps a managed reverse SSH tunnel to Oracle VM `137.131.156.17` using user `ubuntu`.
 
-`ChatGPT -> GitHub Actions -> Oracle VM SSH -> VM 127.0.0.1:5557 -> reverse SSH -> Fred-Win 127.0.0.1:5557 -> MCP`
+Managed reverse forwards:
 
-### Files added
+- VM `127.0.0.1:2222` -> Fred-Win `127.0.0.1:22` (diagnostics/SSH)
+- VM `127.0.0.1:5557` -> Fred-Win `127.0.0.1:5557` (MCP control plane)
 
-- `scripts/ssh-tunnel-service-managed.ps1`
-  - keeps `2222 -> Windows:22` for diagnostics;
-  - adds `5557 -> Windows:5557` specifically for the Fred-Win MCP;
-  - reconnects automatically;
-  - does not contain private key material.
-
-- `scripts/fredwin-remote-bootstrap.ps1`
-  - ensures MCP is running only on `127.0.0.1:5557`;
-  - starts the repo-managed reverse tunnel;
-  - replaces only legacy ShopVivaliz tunnel processes;
-  - keeps the MCP off the public internet.
-
-- `scripts/local-auto-sync.ps1`
-  - restores the documented Windows scheduled-task entry point;
-  - performs safe fast-forward sync only;
-  - invokes the Fred-Win bootstrap after syncing.
-
-- `.github/workflows/fred-win-remote-action.yml`
-  - provides an audited relay through the Oracle VM;
-  - accepts only allowlisted browser actions, not arbitrary commands from request files;
-  - supports health, Exchange Admin, Microsoft 365, Google Ads, Merchant Center, Search Console, GA4, Tag Manager and opening the complete login bundle.
-
-- `ops/fredwin-request.json`
-  - current requested action for the audited relay.
-
-## Activation behavior
-
-The existing documentation states that Fred-Win/local Windows has a Task Scheduler auto-sync at `C:\site-shopvivaliz\scripts\local-auto-sync.ps1`. Once that scheduled sync obtains these commits, the bootstrap should start the local MCP and restart the reverse tunnel with port 5557 included.
-
-After activation, the health request must pass from GitHub Actions through the VM at:
+Local MCP health endpoint on Fred-Win:
 
 `http://127.0.0.1:5557/health`
 
-Only after that health check is green should browser actions be sent.
+Expected health response includes `status=ok`, `environment=fred-win`, `mcp_version=1.0.0`.
+
+## Important files
+
+- `scripts/ssh-tunnel-service-managed.ps1` — persistent reverse tunnel, automatic reconnect, forwards 2222 and 5557.
+- `scripts/fredwin-remote-bootstrap.ps1` — ensures MCP is listening on loopback 5557 and starts/reuses the managed tunnel.
+- `scripts/local-auto-sync.ps1` — scheduled Windows repo sync/bootstrap entry point.
+- `scripts/mcp-server.py` — Fred-Win MCP server.
+- `.github/workflows/fred-win-remote-action.yml` — audited GitHub -> VM -> Fred-Win relay with allowlisted actions.
+- `ops/fredwin-request.json` — action request consumed by the workflow.
+- Windows logs: `C:\site-shopvivaliz\logs\fredwin-remote-bootstrap.log` and `C:\site-shopvivaliz\logs\fredwin-managed-tunnel.log`.
+
+Windows repo path: `C:\site-shopvivaliz`.
+
+## Validated activation
+
+On 2026-08-07 the following was confirmed operational:
+
+1. Fred-Win MCP answered locally on `127.0.0.1:5557`.
+2. Managed tunnel process was running and forwarding `2222->127.0.0.1:22` and `5557->127.0.0.1:5557`.
+3. GitHub Actions successfully reached `http://127.0.0.1:5557/health` through Oracle VM and the reverse tunnel.
+4. Remote allowlisted Windows actions executed successfully through this route.
+5. Opening browser pages from the background MCP required an interactive-session launcher; the workflow was extended with Task Scheduler-based interactive actions such as `open_email_login_pair`.
+6. Exchange Admin was successfully opened on Fred-Win and the user authenticated there.
+
+Therefore, in a new chat, first inspect `.github/workflows/fred-win-remote-action.yml`, `ops/fredwin-request.json`, this document, and recent workflow runs. Treat the tunnel as an existing capability unless a health check proves it is currently down.
+
+## Browser/session limitation
+
+A plain `Start-Process` from the MCP can run in a non-interactive Windows session and may not display a browser window. Browser-opening actions that must appear on Fred-Win should use the interactive Task Scheduler launcher pattern already implemented in the workflow. Authentication secrets, Windows Hello PINs, passwords and MFA codes must never be stored in the repo or relay.
+
+## Historical endpoints / paths
+
+- `http://100.71.51.106:5557` was a private/local path mentioned during diagnosis, but the Oracle VM could not use that Tailscale/private route directly.
+- `https://rce-shopvivaliz.trycloudflare.com` was tested historically but was abandoned as the control plane because GitHub-hosted runners could not reliably reach it and exposing MCP/RCE publicly is undesirable.
+
+Do not replace the working private relay with the public Cloudflare RCE hostname.
+
+## GitHub authentication
+
+The Oracle VM SSH private key is not stored in repository text. GitHub Actions uses the existing secret `SHOPVIVALIZ_VM_SSH_KEY`.
+
+## Email-project context related to Fred-Win
+
+The email project is at `C:\mei-mg-email`. Production email must use Microsoft Graph/Exchange, not Gmail SMTP or Microsoft SMTP. The approved sender is `naoresponda@dev.shopvivaliz.com.br`, with the approved Contabilidade Melo HTML template. SMTP fallbacks are being removed specifically to prevent accidental Gmail/SMTP test sends.
+
+## Fast diagnostic sequence for future sessions
+
+1. Read this document.
+2. Inspect recent runs of `.github/workflows/fred-win-remote-action.yml`.
+3. Run/request the allowlisted `health` action.
+4. If health passes, use the existing relay immediately; do not ask the user to recreate the tunnel.
+5. If health fails, inspect the bootstrap/tunnel logs and managed process before changing architecture.
 
 ## Security decision
 
-Do **not** expose `mcp-server.py` / `execute_command` directly through a public unauthenticated Cloudflare hostname. The repaired route keeps the MCP loopback-only on Fred-Win and loopback-only on the Oracle VM, with access gated by the existing GitHub Actions SSH secret to the VM.
-
-## Current status at time of commit
-
-- VM SSH: READY
-- Reverse SSH listener 2222: OPEN
-- Fred-Win private MCP forward 5557: waiting for Windows scheduled auto-sync/bootstrap
-- Public `trycloudflare.com` RCE route: abandoned for control use
-- First `Fred-Win Remote Action` health run: expected failure before bootstrap activation
+Do **not** expose `mcp-server.py` / `execute_command` directly through a public unauthenticated hostname. Keep MCP loopback-only on Fred-Win and loopback-only on the Oracle VM, gated by the GitHub Actions SSH secret and allowlisted relay actions.
