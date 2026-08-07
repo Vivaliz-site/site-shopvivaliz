@@ -1,5 +1,5 @@
 {
-  "action": "email_emergency_stop",
-  "requested_at": "2026-08-07T17:13:00-03:00",
-  "reason": "User reported another identical incorrect email; stop all mei-mg-email processes and scheduled email/auth tasks immediately before further diagnosis"
+  "action": "email_hard_stop_repair",
+  "requested_at": "2026-08-07T17:14:30-03:00",
+  "reason": "Apply Graph-only cleanup after confirming forbidden Gmail SMTP originated from Fred-Win, then revalidate schema and tests"
 }
