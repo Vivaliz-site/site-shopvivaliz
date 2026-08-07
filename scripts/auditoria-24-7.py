@@ -133,9 +133,11 @@ class AuditoriaDisponibilidade:
         for api in apis:
             try:
                 r = requests.get(f"{BASE_URL}{api}", timeout=5)
-                if r.status_code in [200, 400, 401]:  # 200 = sucesso, 400+ = existe mas sem dados
+                if r.status_code in [200, 400, 401, 405]:  # 405 confirma endpoint existente com método restrito
                     apis_ok += 1
                     logger.info(f"API {api}: ✅ HTTP {r.status_code}")
+                else:
+                    logger.error(f"API {api}: ❌ HTTP {r.status_code}")
             except Exception as e:
                 logger.error(f"API {api}: ❌ {str(e)}")
 
@@ -196,11 +198,10 @@ class AuditoriaSegurança:
         """Teste: Informações sensíveis expostas?"""
         try:
             r = requests.get(f"{BASE_URL}/admin/monitor/", timeout=5)
-            # Verificar se há credenciais expostas
             sensitive_patterns = ["password", "secret", "api_key", "database", "user_id"]
             exposure = any(pattern.lower() in r.text.lower() for pattern in sensitive_patterns)
 
-            status = not exposure  # OK se NÃO houver exposição
+            status = not exposure
             self.resultados.append({
                 "teste": "Information Disclosure",
                 "status": status,
@@ -225,10 +226,10 @@ class AuditoriaPerformance:
         for _ in range(3):
             try:
                 start = time.time()
-                r = requests.get(f"{BASE_URL}/", timeout=10)
+                requests.get(f"{BASE_URL}/", timeout=10)
                 tempo = (time.time() - start) * 1000
                 tempos.append(tempo)
-            except:
+            except Exception:
                 pass
 
         if tempos:
@@ -249,7 +250,7 @@ class AuditoriaPerformance:
         try:
             r = requests.get(f"{BASE_URL}/", timeout=10)
             tamanho_kb = len(r.content) / 1024
-            ok = tamanho_kb < 1000  # Menos de 1MB
+            ok = tamanho_kb < 1000
 
             self.resultados.append({
                 "teste": "Tamanho Página",
@@ -315,8 +316,6 @@ class GeradorRelatorio:
         """Cria relatório consolidado"""
 
         timestamp = datetime.now().isoformat()
-
-        # Contar sucessos
         total_testes = 0
         total_ok = 0
 
@@ -363,7 +362,6 @@ def executar_auditoria_completa():
     logger.info(f"🤖 INICIANDO AUDITORIA 24/7 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("=" * 80)
 
-    # Executar testes
     disponibilidade = AuditoriaDisponibilidade()
     disponibilidade.testar_home()
     disponibilidade.testar_catalogo()
@@ -383,10 +381,8 @@ def executar_auditoria_completa():
     funcional.testar_liz_disponivel()
     funcional.testar_formulario_checkout()
 
-    # Gerar relatório
     relatorio = GeradorRelatorio.criar_relatorio(disponibilidade, seguranca, performance, funcional)
 
-    # Salvar relatório
     os.makedirs(REPORT_DIR, exist_ok=True)
     arquivo_relatorio = f"{REPORT_DIR}/auditoria-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
 
