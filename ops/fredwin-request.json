@@ -1,5 +1,5 @@
 {
-  "action": "graph_browser_authorize",
-  "requested_at": "2026-08-07T18:39:00-03:00",
-  "reason": "Tunnel recovered on Fred-Win with MCP local health OK and 5557-only reverse forward; retry Microsoft Graph device-code authorization"
+  "action": "graph_auth_status",
+  "requested_at": "2026-08-07T18:41:00-03:00",
+  "reason": "Read current Microsoft Graph device-code authorization instructions from Fred-Win logs"
 }
