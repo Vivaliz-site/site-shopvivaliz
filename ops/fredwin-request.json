@@ -1,5 +1,5 @@
 {
   "action": "graph_browser_authorize",
-  "requested_at": "2026-08-07T18:29:00-03:00",
-  "reason": "Retry Microsoft Graph authorization using device-code flow to avoid missing redirect URI AADSTS500113"
+  "requested_at": "2026-08-07T18:39:00-03:00",
+  "reason": "Tunnel recovered on Fred-Win with MCP local health OK and 5557-only reverse forward; retry Microsoft Graph device-code authorization"
 }
