@@ -75,8 +75,9 @@ function Ensure-Database {
         docker compose logs --no-color flyway
         throw 'Flyway migrate failed'
     }
-    & $Python -c "import psycopg; from app.config import settings; c=psycopg.connect(settings.database_url); q=c.cursor(); q.execute(\"select exists(select 1 from information_schema.columns where table_schema='mei_email' and table_name='empresas' and column_name='marketing_autorizado')\"); print('marketing_autorizado_column='+str(q.fetchone()[0])); c.close()"
-    if ($LASTEXITCODE -ne 0) { throw 'database schema verification failed' }
+    $column = docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -Atc "select exists(select 1 from information_schema.columns where table_schema='mei_email' and table_name='empresas' and column_name='marketing_autorizado')"
+    Write-Output ('marketing_autorizado_column=' + $column)
+    if (($column | Out-String).Trim() -ne 't') { throw 'database schema verification failed' }
 }
 
 function Run-Tests {
