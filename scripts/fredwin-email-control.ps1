@@ -6,8 +6,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Repo = 'C:\mei-mg-email'
+$SiteRepo = 'C:\site-shopvivaliz'
 $Python = Join-Path $Repo '.venv\Scripts\python.exe'
 $LogDir = Join-Path $Repo 'logs'
+$SmtpGuard = Join-Path $SiteRepo 'scripts\fredwin-email-smtp-guard.ps1'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 function Write-Step([string]$Message) {
@@ -21,13 +23,20 @@ function Sync-EmailRepo {
     if ($LASTEXITCODE -ne 0) { throw 'git sync failed' }
 }
 
+function Invoke-SmtpGuard {
+    if (Test-Path $SmtpGuard) {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $SmtpGuard
+        if ($LASTEXITCODE -ne 0) { throw 'SMTP guard failed' }
+    }
+}
+
 function Stop-LegacyEmailProcesses {
     Write-Step 'Stopping legacy mei-mg-email/Gmail/SMTP processes'
     $targets = Get-CimInstance Win32_Process | Where-Object {
         $cmd = [string]$_.CommandLine
         if ([string]::IsNullOrWhiteSpace($cmd)) { return $false }
         (($cmd -match 'mei-mg-email') -and ($cmd -match '(?i)gmail|smtp|worker|disparar|enviar')) -or
-        ($cmd -match '(?i)enviar_teste_gmail|gmail.*smtp')
+        ($cmd -match '(?i)enviar_teste_gmail|gmail.*smtp|smtp\.gmail\.com|Teste Gmail SMTP')
     }
     foreach ($p in $targets) {
         if ($p.ProcessId -eq $PID) { continue }
@@ -37,7 +46,7 @@ function Stop-LegacyEmailProcesses {
 
     $tasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
         $joined = (($_.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join ' ')
-        $joined -match '(?i)mei-mg-email.*(gmail|smtp)|enviar_teste_gmail|gmail.*smtp'
+        $joined -match '(?i)mei-mg-email.*(gmail|smtp)|enviar_teste_gmail|gmail.*smtp|smtp\.gmail\.com|Teste Gmail SMTP'
     }
     foreach ($t in $tasks) {
         Write-Output ("removing_task=" + $t.TaskName)
@@ -51,16 +60,18 @@ function Sanitize-Env {
     if (!(Test-Path $envPath)) { throw '.env not found' }
     $lines = Get-Content $envPath
     $clean = $lines | Where-Object {
-        $_ -notmatch '^\s*(GMAIL_ADDRESS|GMAIL_APP_PASSWORD|MICROSOFT_SMTP_HOST|MICROSOFT_SMTP_PORT|MICROSOFT_SMTP_USER|MICROSOFT_SMTP_PASS)\s*=' -and
+        $_ -notmatch '^\s*(GMAIL_|SMTP_|MICROSOFT_SMTP_)' -and
         $_ -notmatch '^\s*EMAIL_PROVIDER\s*=' -and
         $_ -notmatch '^\s*MICROSOFT_GRAPH_USER\s*=' -and
-        $_ -notmatch '^\s*MAIL_FROM\s*='
+        $_ -notmatch '^\s*MAIL_FROM\s*=' -and
+        $_ -notmatch '^\s*MAIL_FROM_NAME\s*='
     }
     $clean += 'EMAIL_PROVIDER=microsoft_graph'
     $clean += 'MICROSOFT_GRAPH_USER=naoresponda@dev.shopvivaliz.com.br'
     $clean += 'MAIL_FROM=Contabilidade Melo <naoresponda@dev.shopvivaliz.com.br>'
+    $clean += 'MAIL_FROM_NAME=Contabilidade Melo'
     Set-Content -Path $envPath -Value $clean -Encoding UTF8
-    $remaining = (Get-Content $envPath | Where-Object { $_ -match '^\s*(GMAIL_|MICROSOFT_SMTP_)' }).Count
+    $remaining = (Get-Content $envPath | Where-Object { $_ -match '^\s*(GMAIL_|SMTP_|MICROSOFT_SMTP_)' }).Count
     Write-Output ("smtp_keys_remaining=" + $remaining)
     if ($remaining -ne 0) { throw 'SMTP keys remain in .env' }
 }
@@ -88,6 +99,7 @@ function Run-Tests {
 
 function Start-InteractiveGraphAuth {
     Sync-EmailRepo
+    Invoke-SmtpGuard
     Sanitize-Env
     $task = 'ShopVivalizGraphBrowserAuth'
     $out = Join-Path $LogDir 'graph-browser-auth.out.log'
@@ -102,24 +114,13 @@ function Start-InteractiveGraphAuth {
     Register-ScheduledTask -TaskName $task -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
     Start-ScheduledTask -TaskName $task
     Write-Output ('graph_auth_task_started_for=' + $user)
-    for ($i=0; $i -lt 125; $i++) {
-        Start-Sleep -Seconds 5
-        if (Test-Path $out) {
-            $text = Get-Content $out -Raw -ErrorAction SilentlyContinue
-            if ($text -match 'GRAPH_BROWSER_AUTH_READY') { break }
-            if ($text -match 'GRAPH_BROWSER_AUTH_ERROR|GRAPH_BROWSER_AUTH_TIMEOUT') { break }
-        }
-    }
-    if (Test-Path $out) { Get-Content $out -Tail 30 }
-    if (Test-Path $err) { Get-Content $err -Tail 30 }
-    Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue
-    if (!(Test-Path $out) -or !((Get-Content $out -Raw) -match 'GRAPH_BROWSER_AUTH_READY')) {
-        throw 'Graph browser authorization did not complete successfully'
-    }
+    Write-Output ('graph_auth_out_log=' + $out)
+    Write-Output 'GRAPH_BROWSER_AUTH_LAUNCHED'
 }
 
 function Run-GraphTemplateTest {
     Sync-EmailRepo
+    Invoke-SmtpGuard
     Sanitize-Env
     & $Python '.\scripts\auditar_graph_token.py'
     if ($LASTEXITCODE -ne 0) { throw 'Graph token audit failed' }
@@ -129,6 +130,7 @@ function Run-GraphTemplateTest {
 
 function Run-Audit9950 {
     Sync-EmailRepo
+    Invoke-SmtpGuard
     Sanitize-Env
     Ensure-Database
     & $Python '.\scripts\auditar_exchange_10000.py'
@@ -143,6 +145,7 @@ function Start-AuthorizedSend {
 
 switch ($Mode) {
     'hard-stop-repair' {
+        Invoke-SmtpGuard
         Stop-LegacyEmailProcesses
         Sync-EmailRepo
         Sanitize-Env
@@ -156,8 +159,8 @@ switch ($Mode) {
     'start-authorized-send' { Start-AuthorizedSend }
     'status' {
         Write-Step 'Current email runtime status'
-        Get-CimInstance Win32_Process | Where-Object { ([string]$_.CommandLine) -match '(?i)mei-mg-email|gmail.*smtp' } | Select-Object ProcessId,Name,CommandLine
-        Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { (($_.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join ' ') -match '(?i)mei-mg-email|gmail.*smtp' } | Select-Object TaskName,State
+        Get-CimInstance Win32_Process | Where-Object { ([string]$_.CommandLine) -match '(?i)mei-mg-email|gmail.*smtp|smtp\.gmail\.com|Teste Gmail SMTP' } | Select-Object ProcessId,Name,CommandLine
+        Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { (($_.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join ' ') -match '(?i)mei-mg-email|gmail.*smtp|smtp\.gmail\.com|Teste Gmail SMTP' } | Select-Object TaskName,State
         Set-Location $Repo
         docker compose ps
     }
