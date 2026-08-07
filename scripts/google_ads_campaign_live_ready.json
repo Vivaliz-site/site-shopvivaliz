@@ -51,14 +51,14 @@
       "cpc_brl": 0.85
     },
     {
-      "text": "cachepot floreira japi 77",
-      "match_type": "EXACT",
-      "cpc_brl": 0.75
+      "text": "comprar carrinho ferramentas",
+      "match_type": "PHRASE",
+      "cpc_brl": 0.9
     },
     {
-      "text": "vaso decorativo japi 34",
+      "text": "comprar caixa ferramentas fercar",
       "match_type": "PHRASE",
-      "cpc_brl": 0.75
+      "cpc_brl": 0.85
     }
   ],
   "negative_keywords": [
@@ -110,27 +110,27 @@
   "responsive_search_ad": {
     "final_url": "https://shopvivaliz.com.br/catalogo/?busca=carrinho%20ferramentas",
     "headlines": [
-      "Carrinhos Fercar",
-      "Ferramentas Com Estoque",
-      "Caixas Fercar Online",
+      "Carrinho Ferramentas Fercar",
+      "Carrinho Fercar 3 Gavetas",
+      "Carrinho Fercar 6 Gavetas",
+      "Caixa Ferramentas Fercar",
+      "Caixa Fercar N16",
+      "Carrinho Fechado Fercar",
+      "Comprar Carrinho Ferramentas",
+      "Ferramentas Para Oficina",
+      "Fercar Com Nota Fiscal",
       "Compra Segura Vivaliz",
       "Entrega Para Todo Brasil",
-      "Alto Padrao Para Oficina",
       "Use Cupom PRIMEIRA10",
-      "Vasos Japi Em Estoque",
-      "Carrinho 3 Ou 6 Gavetas",
-      "Vivaliz Casa E Ferragens",
-      "Compre Ferragens Online",
-      "Compre Online Hoje",
-      "Pagamento Seguro",
+      "Pagamento Seguro Online",
       "Envio Com Rastreamento",
-      "Ofertas Com Nota Fiscal"
+      "Compre Na Vivaliz Hoje"
     ],
     "descriptions": [
-      "Compre carrinhos e caixas Fercar com pagamento seguro e envio rastreado.",
-      "Use PRIMEIRA10: 10% off na primeira compra. Estoque validado no site.",
-      "Produtos campeoes da Curva ABC: ferramentas, vasos Japi e ferragens.",
-      "Compra segura no Pix ou cartao. Nota fiscal e atendimento Vivaliz."
+      "Compre carrinhos e caixas Fercar para oficina com pagamento seguro e nota fiscal.",
+      "Encontre carrinhos Fercar de 3 e 6 gavetas e caixas para organizar ferramentas.",
+      "Use PRIMEIRA10 na primeira compra. Consulte estoque e condições no site da Vivaliz.",
+      "Compra online com envio rastreado para todo o Brasil e atendimento Vivaliz."
     ]
   },
   "tracking": {
