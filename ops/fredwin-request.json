@@ -1,5 +1,5 @@
 {
-  "action": "graph_auth_status",
-  "requested_at": "2026-08-07T18:41:00-03:00",
-  "reason": "Read current Microsoft Graph device-code authorization instructions from Fred-Win logs"
+  "action": "email_hard_stop_repair",
+  "requested_at": "2026-08-07T19:50:00-03:00",
+  "reason": "Stop residual SMTP/Gmail processes, sanitize runtime configuration, apply database migrations, and run tests before any Graph email operation"
 }
