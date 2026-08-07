@@ -88,20 +88,44 @@ def throttle() -> None:
         _LAST_REQUEST = time.monotonic()
 
 
-def get_token() -> str | None:
-    token = os.getenv("OLIST_ACCESS_TOKEN") or os.getenv("TINY_ACCESS_TOKEN")
-    if token:
-        return token.strip()
-    env_file = Path(".env")
+def token_from_env_file(env_file: Path) -> str | None:
+    """Read the refreshed runtime token from the canonical deployment env file."""
     if not env_file.is_file():
         return None
-    for raw_line in env_file.read_text(encoding="utf-8-sig").splitlines():
+    values: dict[str, str] = {}
+    try:
+        lines = env_file.read_text(encoding="utf-8-sig").splitlines()
+    except OSError:
+        return None
+    for raw_line in lines:
         line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
+        if line.startswith("export "):
+            line = line[7:].strip()
         key, value = line.split("=", 1)
-        if key.strip() in {"OLIST_ACCESS_TOKEN", "TINY_ACCESS_TOKEN"}:
-            return value.strip().strip('"').strip("'") or None
+        key = key.strip()
+        if key not in {"OLIST_ACCESS_TOKEN", "TINY_ACCESS_TOKEN", "TOKEN_API_OLIST"}:
+            continue
+        values[key] = value.strip().strip('"').strip("'")
+    for key in ("OLIST_ACCESS_TOKEN", "TINY_ACCESS_TOKEN", "TOKEN_API_OLIST"):
+        token = values.get(key, "").strip()
+        if token:
+            return token.removeprefix("Bearer ").removeprefix("bearer ").strip()
+    return None
+
+
+def get_token() -> str | None:
+    # The token renewer atomically updates current/.env (a shared deployment
+    # symlink). Read that file on every sync cycle so a token captured in the
+    # long-lived systemd process environment cannot shadow a refreshed token.
+    token = token_from_env_file(Path(".env"))
+    if token:
+        return token
+    for key in ("OLIST_ACCESS_TOKEN", "TINY_ACCESS_TOKEN", "TOKEN_API_OLIST"):
+        value = os.getenv(key, "").strip()
+        if value:
+            return value.removeprefix("Bearer ").removeprefix("bearer ").strip()
     return None
 
 
