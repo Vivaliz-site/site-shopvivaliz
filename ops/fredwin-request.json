@@ -1,5 +1,5 @@
 {
-  "action": "email_hard_stop_repair",
-  "requested_at": "2026-08-07T17:14:30-03:00",
-  "reason": "Apply Graph-only cleanup after confirming forbidden Gmail SMTP originated from Fred-Win, then revalidate schema and tests"
+  "action": "health",
+  "requested_at": "2026-08-07T17:19:30-03:00",
+  "reason": "Probe Fred-Win after auto-sync/bootstrap MCP recovery patch and SMTP guard deployment"
 }
