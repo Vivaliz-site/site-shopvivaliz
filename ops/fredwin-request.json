@@ -1,5 +1,5 @@
 {
-  "action": "graph_browser_authorize",
-  "requested_at": "2026-08-07T17:23:00-03:00",
-  "reason": "Launch interactive Microsoft Graph OAuth in Fred-Win browser after SMTP guard and runtime validation passed"
+  "action": "graph_auth_status",
+  "requested_at": "2026-08-07T17:25:00-03:00",
+  "reason": "Check interactive Microsoft Graph OAuth completion before any test send"
 }
