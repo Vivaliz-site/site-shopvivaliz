@@ -1,5 +1,5 @@
 {
-  "action": "sanitize_email_smtp_config",
-  "requested_at": "2026-08-07T16:44:00-03:00",
-  "reason": "Remove Gmail and Microsoft SMTP configuration, force Microsoft Graph, and verify tests"
+  "action": "email_hard_stop_repair",
+  "requested_at": "2026-08-07T16:55:00-03:00",
+  "reason": "Stop any legacy Gmail/SMTP send processes and tasks, force Graph-only config, run Flyway migrations, and rerun tests"
 }
