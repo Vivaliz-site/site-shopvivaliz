@@ -5,57 +5,125 @@
     "status_on_create": "PAUSED",
     "daily_budget_brl": 10.0,
     "monthly_budget_brl": 300.0,
-    "landing_page": "https://shopvivaliz.com.br/catalogo/?busca=carrinho%20ferramentas",
     "language": "pt",
     "locations": ["Brasil"],
-    "bidding": {"strategy": "MANUAL_CPC", "max_cpc_brl": 0.95}
+    "bidding": {
+      "strategy": "MANUAL_CPC",
+      "max_cpc_brl": 0.95
+    }
   },
-  "ad_group": {"name": "Fercar Carrinhos e Caixas", "default_cpc_brl": 0.85},
-  "keywords": [
-    {"text":"carrinho ferramentas fercar","match_type":"EXACT","cpc_brl":0.95},
-    {"text":"carrinho fechado ferramentas fercar","match_type":"EXACT","cpc_brl":0.95},
-    {"text":"carrinho ferramentas 3 gavetas","match_type":"EXACT","cpc_brl":0.90},
-    {"text":"carrinho ferramentas 6 gavetas","match_type":"EXACT","cpc_brl":0.90},
-    {"text":"caixa ferramentas fercar n16","match_type":"EXACT","cpc_brl":0.85},
-    {"text":"caixa ferramentas bau fercar","match_type":"EXACT","cpc_brl":0.85},
-    {"text":"comprar carrinho ferramentas fercar","match_type":"PHRASE","cpc_brl":0.90},
-    {"text":"comprar caixa ferramentas fercar","match_type":"PHRASE","cpc_brl":0.85},
-    {"text":"carrinho fercar 3 gavetas","match_type":"PHRASE","cpc_brl":0.90},
-    {"text":"carrinho fercar 6 gavetas","match_type":"PHRASE","cpc_brl":0.90}
+  "ad_groups": [
+    {
+      "name": "Carrinhos Fercar",
+      "default_cpc_brl": 0.90,
+      "tracking_content": "carrinhos_fercar",
+      "keywords": [
+        {"text": "carrinho ferramentas fercar", "match_type": "EXACT", "cpc_brl": 0.95},
+        {"text": "carrinho fechado ferramentas fercar", "match_type": "EXACT", "cpc_brl": 0.95},
+        {"text": "carrinho ferramentas 3 gavetas", "match_type": "EXACT", "cpc_brl": 0.90},
+        {"text": "carrinho ferramentas 6 gavetas", "match_type": "EXACT", "cpc_brl": 0.90},
+        {"text": "comprar carrinho ferramentas fercar", "match_type": "PHRASE", "cpc_brl": 0.90},
+        {"text": "carrinho fercar 3 gavetas", "match_type": "PHRASE", "cpc_brl": 0.90},
+        {"text": "carrinho fercar 6 gavetas", "match_type": "PHRASE", "cpc_brl": 0.90}
+      ],
+      "negative_keywords": ["caixa", "bau", "baú", "n16"],
+      "responsive_search_ad": {
+        "final_url": "https://shopvivaliz.com.br/catalogo/?busca=carrinho%20fercar",
+        "headlines": [
+          "Carrinho Ferramentas Fercar",
+          "Carrinho Fercar 3 Gavetas",
+          "Carrinho Fercar 6 Gavetas",
+          "Carrinho Fechado Fercar",
+          "Comprar Carrinho Fercar",
+          "Carrinho Fercar Para Oficina",
+          "Carrinhos Fercar Online",
+          "Organize Suas Ferramentas",
+          "Fercar Para Sua Oficina",
+          "Compra Segura Vivaliz",
+          "Entrega Para Todo Brasil",
+          "Use Cupom PRIMEIRA10",
+          "Envio Com Rastreamento",
+          "Compre Na Vivaliz Hoje",
+          "Veja Carrinhos Fercar"
+        ],
+        "descriptions": [
+          "Compre carrinhos Fercar de 3 ou 6 gavetas para organizar ferramentas na sua oficina.",
+          "Veja carrinhos Fercar com compra online segura e envio rastreado pela Vivaliz.",
+          "Use PRIMEIRA10 na primeira compra. Consulte estoque, preços e condições no site.",
+          "Escolha seu carrinho Fercar e receba em todo o Brasil com atendimento Vivaliz."
+        ]
+      }
+    },
+    {
+      "name": "Caixas Fercar",
+      "default_cpc_brl": 0.80,
+      "tracking_content": "caixas_fercar",
+      "keywords": [
+        {"text": "caixa ferramentas fercar n16", "match_type": "EXACT", "cpc_brl": 0.85},
+        {"text": "caixa ferramentas bau fercar", "match_type": "EXACT", "cpc_brl": 0.85},
+        {"text": "comprar caixa ferramentas fercar", "match_type": "PHRASE", "cpc_brl": 0.85},
+        {"text": "caixa fercar n16", "match_type": "PHRASE", "cpc_brl": 0.80},
+        {"text": "caixa bau fercar", "match_type": "PHRASE", "cpc_brl": 0.80}
+      ],
+      "negative_keywords": ["carrinho", "gavetas"],
+      "responsive_search_ad": {
+        "final_url": "https://shopvivaliz.com.br/catalogo/?busca=caixa%20ferramentas%20fercar",
+        "headlines": [
+          "Caixa Ferramentas Fercar",
+          "Caixa Fercar N16",
+          "Caixa Baú Fercar",
+          "Comprar Caixa Fercar",
+          "Caixas Fercar Para Oficina",
+          "Caixa Para Ferramentas",
+          "Caixa Fercar Online",
+          "Organize Suas Ferramentas",
+          "Fercar Para Sua Oficina",
+          "Compra Segura Vivaliz",
+          "Entrega Para Todo Brasil",
+          "Use Cupom PRIMEIRA10",
+          "Envio Com Rastreamento",
+          "Compre Na Vivaliz Hoje",
+          "Veja Caixas Fercar"
+        ],
+        "descriptions": [
+          "Compre caixas Fercar para organizar e transportar ferramentas com mais praticidade.",
+          "Veja caixas Fercar N16 e modelos baú com compra online segura pela Vivaliz.",
+          "Use PRIMEIRA10 na primeira compra. Consulte estoque, preços e condições no site.",
+          "Escolha sua caixa Fercar e receba em todo o Brasil com envio rastreado."
+        ]
+      }
+    }
   ],
   "negative_keywords": [
-    "gratis","free","download","usado","segunda mao","emprego","curso","tutorial","como fazer","caseiro","reclamacao","defeito","brinquedo","olx","mercado livre usado","barato","preco tabela","preço tabela","peso capacidade","rodizio de pizza","restaurante","escala de trabalho","sp trans","detector","tutorial youtube","reparo","aluguel","projeto","planta baixa","gratis olx","pdf","manual","assistencia tecnica","pecas usadas","peças usadas","mercado livre","shopee","amazon","atacado gratis","fabricar","desenho tecnico","desenho técnico","medidas pdf","reclame aqui","gratis ferramentas","curso mecanica","emprego mecanico","desenho carrinho","projeto carrinho","carrinho brinquedo","carrinho supermercado","carrinho bebe"
+    "gratis", "free", "download", "usado", "segunda mao", "emprego", "curso",
+    "tutorial", "como fazer", "caseiro", "reclamacao", "defeito", "brinquedo",
+    "olx", "mercado livre usado", "barato", "preco tabela", "preço tabela",
+    "peso capacidade", "rodizio de pizza", "restaurante", "escala de trabalho",
+    "sp trans", "detector", "tutorial youtube", "reparo", "aluguel", "projeto",
+    "planta baixa", "gratis olx", "pdf", "manual", "assistencia tecnica",
+    "pecas usadas", "peças usadas", "mercado livre", "shopee", "amazon",
+    "atacado gratis", "fabricar", "desenho tecnico", "desenho técnico",
+    "medidas pdf", "reclame aqui", "gratis ferramentas", "curso mecanica",
+    "emprego mecanico", "desenho carrinho", "projeto carrinho", "carrinho brinquedo",
+    "carrinho supermercado", "carrinho bebe"
   ],
-  "responsive_search_ad": {
-    "final_url": "https://shopvivaliz.com.br/catalogo/?busca=carrinho%20ferramentas",
-    "headlines": [
-      "Carrinho Ferramentas Fercar",
-      "Carrinho Fercar 3 Gavetas",
-      "Carrinho Fercar 6 Gavetas",
-      "Caixa Ferramentas Fercar",
-      "Caixa Fercar N16",
-      "Carrinho Fechado Fercar",
-      "Comprar Carrinho Fercar",
-      "Comprar Caixa Fercar",
-      "Organize Suas Ferramentas",
-      "Fercar Para Sua Oficina",
-      "Compra Segura Vivaliz",
-      "Entrega Para Todo Brasil",
-      "Use Cupom PRIMEIRA10",
-      "Envio Com Rastreamento",
-      "Compre Na Vivaliz Hoje"
-    ],
-    "descriptions": [
-      "Compre carrinhos e caixas Fercar para organizar sua oficina. Consulte estoque no site.",
-      "Carrinhos Fercar de 3 e 6 gavetas e caixas para ferramentas com compra online segura.",
-      "Use PRIMEIRA10 na primeira compra. Confira produtos, preços e condições na Vivaliz.",
-      "Escolha seu carrinho ou caixa Fercar e receba com envio rastreado para todo o Brasil."
-    ]
-  },
   "tracking": {
-    "ga4_measurement_id":"G-1H55K1TZ5D","coupon":"PRIMEIRA10","utm_source":"google","utm_medium":"cpc","utm_campaign":"abc_alto_ticket_roi10_2026_07"
+    "ga4_measurement_id": "G-1H55K1TZ5D",
+    "coupon": "PRIMEIRA10",
+    "utm_source": "google",
+    "utm_medium": "cpc",
+    "utm_campaign": "abc_alto_ticket_roi10_2026_07"
   },
   "guardrails": {
-    "no_broad_match":true,"create_paused_first":true,"require_human_review_before_enable":true,"max_daily_budget_brl":10.0,"max_cpc_brl":0.95,"target_roi":10.1,"target_roas":10.1,"target_average_order_value_brl":600.0,"target_conversion_rate_percent":2.0,"pause_if_spend_without_conversion_brl":20.0
+    "no_broad_match": true,
+    "create_paused_first": true,
+    "require_human_review_before_enable": true,
+    "max_daily_budget_brl": 10.0,
+    "max_cpc_brl": 0.95,
+    "target_roi": 10.1,
+    "target_roas": 10.1,
+    "target_average_order_value_brl": 600.0,
+    "target_conversion_rate_percent": 2.0,
+    "pause_if_spend_without_conversion_brl": 20.0
   }
 }
