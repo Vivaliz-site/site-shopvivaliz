@@ -37,7 +37,7 @@ jobs:
               COMMAND=""
               ;;
             email_audit_status)
-              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -File C:\\site-shopvivaliz\\scripts\\fredwin-email-audit.ps1"
+              COMMAND="powershell -NoProfile -Command \"\$r='C:\\mei-mg-email'; Write-Output ('repo_exists='+(Test-Path \$r)); if(Test-Path \$r){ Set-Location \$r; Write-Output ('git_head='+(git rev-parse --short HEAD)); Write-Output ('env_exists='+(Test-Path '.env')); Write-Output ('venv_exists='+(Test-Path '.\\.venv\\Scripts\\python.exe')); Write-Output ('templates_exists='+(Test-Path '.\\templates')); if(Test-Path '.env'){ \$l=Get-Content '.env'; foreach(\$n in @('EMAIL_PROVIDER','MICROSOFT_TENANT_ID','MICROSOFT_CLIENT_ID','MICROSOFT_CLIENT_SECRET','MICROSOFT_SENDER','GRAPH_TENANT_ID','GRAPH_CLIENT_ID','GRAPH_CLIENT_SECRET','GRAPH_SENDER','DAILY_SEND_LIMIT')){ \$p=[bool](\$l|Where-Object{\$_ -match ('^\\s*'+[regex]::Escape(\$n)+'\\s*=\\s*\\S+')}); Write-Output ('env_'+\$n+'_present='+\$p) } }; Get-ChildItem -Recurse -File -Include *.py,*.md,*.yml,*.yaml | Select-String -Pattern 'graph.microsoft.com|sendMail|MicrosoftGraph|EMAIL_PROVIDER|9950|10000' | Select-Object -First 25 | ForEach-Object { Write-Output ('hit='+\$_.Path.Replace(\$r+'\\','')+':'+\$_.LineNumber+':'+\$_.Line.Trim()) }; if(Test-Path '.\\.venv\\Scripts\\python.exe'){ & .\\.venv\\Scripts\\python.exe -m pytest -q --disable-warnings --maxfail=1; Write-Output ('pytest_exit='+\$LASTEXITCODE) } }\""
               ;;
             open_exchange_admin)
               COMMAND="powershell -NoProfile -Command \"Start-Process 'https://admin.exchange.microsoft.com/'\""
