@@ -1,5 +1,5 @@
 {
-  "action": "start_email_runtime",
-  "requested_at": "2026-08-07T16:17:00-03:00",
-  "reason": "Start Docker Desktop, bring up Postgres, and rerun email integration tests"
+  "action": "email_preflight",
+  "requested_at": "2026-08-07T16:22:00-03:00",
+  "reason": "Validate consent eligibility, Graph token cache, limits, database state, templates, and tests before any production email send"
 }
