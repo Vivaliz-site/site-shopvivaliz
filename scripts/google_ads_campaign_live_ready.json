@@ -29,6 +29,8 @@
       "negative_keywords": ["caixa", "bau", "baú", "n16"],
       "responsive_search_ad": {
         "final_url": "https://shopvivaliz.com.br/catalogo/?busca=carrinho%20fercar",
+        "path1": "carrinhos",
+        "path2": "fercar",
         "headlines": [
           "Carrinho Ferramentas Fercar",
           "Carrinho Fercar 3 Gavetas",
@@ -68,6 +70,8 @@
       "negative_keywords": ["carrinho", "gavetas"],
       "responsive_search_ad": {
         "final_url": "https://shopvivaliz.com.br/catalogo/?busca=caixa%20ferramentas%20fercar",
+        "path1": "caixas",
+        "path2": "fercar",
         "headlines": [
           "Caixa Ferramentas Fercar",
           "Caixa Fercar N16",
