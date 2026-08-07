@@ -36,6 +36,12 @@ jobs:
             health)
               COMMAND=""
               ;;
+            email_emergency_stop)
+              COMMAND="powershell -NoProfile -Command \"Get-CimInstance Win32_Process | Where-Object { ([string]\$_.CommandLine) -match '(?i)mei-mg-email' -and ([string]\$_.Name) -match '(?i)python|powershell' } | ForEach-Object { if (\$_.ProcessId -ne \$PID) { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue; Write-Output ('stopped_pid=' + \$_.ProcessId) } }; Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { \$_.TaskName -match '(?i)ShopVivalizGraphBrowserAuth|mei.*email|gmail|smtp' } | ForEach-Object { Stop-ScheduledTask -TaskName \$_.TaskName -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName \$_.TaskName -Confirm:\$false -ErrorAction SilentlyContinue; Write-Output ('removed_task=' + \$_.TaskName) }; Write-Output 'EMAIL_EMERGENCY_STOP_DONE'\""
+              ;;
+            email_recent_sends)
+              COMMAND="powershell -NoProfile -Command \"Set-Location 'C:\\mei-mg-email'; Write-Output 'RECENT_SENDS_BEGIN'; docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -P pager=off -c 'select e.id,e.status,e.enviado_em,e.email,e.erro,c.nome as campanha,c.assunto from mei_email.envios e left join mei_email.campanhas c on c.id=e.campanha_id order by coalesce(e.enviado_em,e.criado_em) desc nulls last limit 20'; Write-Output 'RECENT_SENDS_END'; Write-Output 'LOGS_BEGIN'; if(Test-Path '.\\logs'){ Get-ChildItem '.\\logs' -File | Sort-Object LastWriteTime -Descending | Select-Object -First 8 Name,LastWriteTime,Length }; Write-Output 'LOGS_END'\""
+              ;;
             email_hard_stop_repair)
               COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; & '.\\scripts\\fredwin-email-control.ps1' -Mode 'hard-stop-repair'\""
               ;;
