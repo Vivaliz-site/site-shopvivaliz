@@ -249,6 +249,11 @@ function svcr_products(): array
         $seoKeywords = svcr_string_list($item['seo_keywords'] ?? $item['seo_keywords_json'] ?? []);
         $marketingHooks = svcr_string_list($item['marketing_hooks'] ?? $item['marketing_hooks_json'] ?? []);
         $existingTags = svcr_string_list($item['tags'] ?? []);
+        $brandValue = $item['brand'] ?? $item['marca'] ?? '';
+        if (is_array($brandValue)) {
+            $brandValue = $brandValue['nome'] ?? $brandValue['name'] ?? '';
+        }
+        $brand = is_scalar($brandValue) ? trim((string)$brandValue) : '';
 
         $products[] = [
             'id' => (string)($item['id'] ?? $sku),
@@ -263,7 +268,7 @@ function svcr_products(): array
             'images' => $imagesList,
             'images_count' => count($imagesList),
             'category' => trim((string)($category['nome'] ?? $category['caminhoCompleto'] ?? $item['category'] ?? '')),
-            'brand' => trim((string)($item['brand'] ?? $item['marca'] ?? '')),
+            'brand' => $brand,
             'bullet_points' => $bulletPoints,
             'seo_keywords' => $seoKeywords,
             'marketing_hooks' => $marketingHooks,
