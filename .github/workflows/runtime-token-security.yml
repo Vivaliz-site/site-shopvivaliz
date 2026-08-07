@@ -77,21 +77,11 @@ jobs:
           fi
           sudo -u "$php_user" test -r "$env_file" || { echo '{"ok":false,"critical":[{"key":"__file__","reason":"php_cannot_read_env"}]}'; exit 2; }
 
-          status=0
-          if ! python3 "$current/scripts/maintenance/runtime_token_audit.py" \
+          if python3 "$current/scripts/maintenance/runtime_token_audit.py" \
             "$env_file" --php-user "$php_user" --json-output "$report" >/dev/null; then
+            status=0
+          else
             status=$?
-            # `!` normalizes $? to zero, so recover the audit decision from
-            # its report instead of masking a real finding.
-            status="$(python3 - "$report" <<'PY'
-          import json
-          import sys
-          from pathlib import Path
-
-          data = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
-          print(0 if data.get('ok') else 2)
-          PY
-          )"
           fi
           cat "$report"
           exit "$status"
@@ -113,18 +103,11 @@ jobs:
             echo '{"ok":false,"critical":[{"key":"__script__","reason":"reference_audit_script_missing"}]}'
             exit 2
           }
-          status=0
-          if ! python3 "$current/scripts/maintenance/token_reference_audit.py" \
+          if python3 "$current/scripts/maintenance/token_reference_audit.py" \
             "$current" "$env_file" --json-output "$report" >/dev/null; then
-            status="$(python3 - "$report" <<'PY'
-          import json
-          import sys
-          from pathlib import Path
-
-          data = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
-          print(0 if data.get('ok') else 2)
-          PY
-          )"
+            status=0
+          else
+            status=$?
           fi
           cat "$report"
           exit "$status"
