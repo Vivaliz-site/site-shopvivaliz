@@ -1,5 +1,5 @@
 {
   "action": "graph_browser_authorize",
-  "requested_at": "2026-08-07T18:28:00-03:00",
-  "reason": "Retry opening Microsoft Graph authorization in Fred-Win interactive browser after connection recovery request"
+  "requested_at": "2026-08-07T18:29:00-03:00",
+  "reason": "Retry Microsoft Graph authorization using device-code flow to avoid missing redirect URI AADSTS500113"
 }
