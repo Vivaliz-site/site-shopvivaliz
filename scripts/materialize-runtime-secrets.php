@@ -11,6 +11,53 @@ $sharedGroup = getenv('SHOPVIVALIZ_SHARED_GROUP') ?: 'www-data';
 if (!is_file($sharedEnv) || !is_readable($sharedEnv)) {
     throw new RuntimeException('shared_env_unavailable');
 }
+
+// Pagar.me foi aposentado do projeto. Remova qualquer chave residual do
+// runtime compartilhado de forma atomica, sem carregar ou registrar valores.
+$envLines = file($sharedEnv, FILE_IGNORE_NEW_LINES);
+if ($envLines === false) {
+    throw new RuntimeException('shared_env_read_failed');
+}
+$retainedLines = [];
+$retiredRuntimeKeysRemoved = 0;
+foreach ($envLines as $line) {
+    $candidate = trim($line);
+    if (str_starts_with($candidate, 'export ')) {
+        $candidate = trim(substr($candidate, 7));
+    }
+    if ($candidate !== '' && !str_starts_with($candidate, '#') && str_contains($candidate, '=')) {
+        [$candidateKey] = explode('=', $candidate, 2);
+        if (str_starts_with(trim($candidateKey), 'PAGARME_')) {
+            $retiredRuntimeKeysRemoved++;
+            continue;
+        }
+    }
+    $retainedLines[] = $line;
+}
+if ($retiredRuntimeKeysRemoved > 0) {
+    $envDir = dirname($sharedEnv);
+    $envTemp = tempnam($envDir, '.shared-env-retire.');
+    if ($envTemp === false) {
+        throw new RuntimeException('shared_env_temporary_file_failed');
+    }
+    try {
+        $envPayload = implode(PHP_EOL, $retainedLines) . PHP_EOL;
+        if (file_put_contents($envTemp, $envPayload, LOCK_EX) === false) {
+            throw new RuntimeException('shared_env_retirement_write_failed');
+        }
+        if (!chmod($envTemp, 0640)) {
+            throw new RuntimeException('shared_env_retirement_mode_failed');
+        }
+        if (!rename($envTemp, $sharedEnv)) {
+            throw new RuntimeException('shared_env_retirement_replace_failed');
+        }
+    } finally {
+        if (is_file($envTemp)) {
+            @unlink($envTemp);
+        }
+    }
+}
+
 if (PHP_OS_FAMILY !== 'Windows' && !chgrp($sharedEnv, $sharedGroup)) {
     throw new RuntimeException('shared_env_group_failed');
 }
@@ -168,6 +215,7 @@ if (!is_array($written) || $writtenUser === '' || strtolower($writtenUser) === '
 
 echo "runtime_secrets_materialized=true\n";
 echo 'runtime_key_count=' . count($values) . "\n";
+echo 'retired_runtime_keys_removed=' . $retiredRuntimeKeysRemoved . "\n";
 echo "database_tuple_present=true\n";
 echo "quote_signing_present=true\n";
 echo "shared_env_mode=640\n";
