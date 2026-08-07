@@ -1,0 +1,41 @@
+name: Fred-Win Check M365 Paths
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fred-win-check-m365-paths.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY" || exit 2
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect direct paths
+        run: |
+          python3 - <<'PY' > /tmp/body.json
+          import json
+          ps=r'''powershell -NoProfile -Command "$paths=@('C:\Scripts','C:\Certs','C:\site-shopvivaliz','C:\Users\FRED\Downloads','C:\Users\FRED\Documents'); foreach($p in $paths){ Write-Output ('PATH=' + $p + ';EXISTS=' + (Test-Path $p)); if(Test-Path $p){ Get-ChildItem $p -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)(Certificate|Authentication|Send-Email|Audit-Complete|MICROSOFT365|walkthrough|task)' } | ForEach-Object { Write-Output ('FILE=' + $_.FullName) } } }; Write-Output ('CER=' + (Test-Path 'C:\Certs\ShopVivalizExchangeAuth.cer')); Get-ChildItem Cert:\CurrentUser\My -ErrorAction SilentlyContinue | Where-Object { $_.Subject -match 'ShopVivalizExchangeAuth' } | ForEach-Object { Write-Output ('CERT=' + $_.Thumbprint + ';' + $_.NotAfter.ToString('o')) }"'''
+          print(json.dumps({'params':{'command':ps,'timeout':120}}))
+          PY
+          BODY_B64="$(base64 -w0 /tmp/body.json)"
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 "BODY_B64='$BODY_B64' python3 - <<'PY'
+          import os,base64,urllib.request
+          body=base64.b64decode(os.environ['BODY_B64'])
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=140) as r: print(r.read().decode())
+          PY"
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/body.json
