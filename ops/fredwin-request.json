@@ -1,5 +1,5 @@
 {
-  "action": "email_hard_stop_repair",
-  "requested_at": "2026-08-07T19:50:00-03:00",
-  "reason": "Stop residual SMTP/Gmail processes, sanitize runtime configuration, apply database migrations, and run tests before any Graph email operation"
+  "action": "m365_app_only_audit",
+  "requested_at": "2026-08-07T20:50:00-03:00",
+  "reason": "Validate certificate-based Microsoft Graph app-only authentication and complete Microsoft 365 integration audit before any production email operation"
 }
