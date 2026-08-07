@@ -13,7 +13,7 @@ if (!is_file($sharedEnv) || !is_readable($sharedEnv)) {
 }
 
 // Pagar.me foi aposentado do projeto. Remova qualquer chave residual do
-// runtime compartilhado de forma atomica, sem carregar ou registrar valores.
+// runtime compartilhado de forma atomica, sem expor ou registrar valores.
 $envLines = file($sharedEnv, FILE_IGNORE_NEW_LINES);
 if ($envLines === false) {
     throw new RuntimeException('shared_env_read_failed');
