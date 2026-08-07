@@ -1,5 +1,5 @@
 {
-  "action": "health",
-  "requested_at": "2026-08-07T17:19:30-03:00",
-  "reason": "Probe Fred-Win after auto-sync/bootstrap MCP recovery patch and SMTP guard deployment"
+  "action": "email_hard_stop_repair",
+  "requested_at": "2026-08-07T17:21:30-03:00",
+  "reason": "Enforce SMTP guard on Fred-Win, sync Graph sender fix, validate database migrations and run full email test suite"
 }
