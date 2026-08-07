@@ -1,0 +1,34 @@
+name: Google Ads Config CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/google_ads_campaign_live_ready.json"
+      - "scripts/google_ads_config_lint.py"
+      - "scripts/google_ads_real_readiness.py"
+      - "scripts/google_ads_create_search_campaign.py"
+      - ".github/workflows/google-ads-config-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Google Ads scripts
+        run: python -m py_compile scripts/google_ads_config_lint.py scripts/google_ads_real_readiness.py scripts/google_ads_create_search_campaign.py
+
+      - name: Validate Google Ads static config
+        run: python scripts/google_ads_config_lint.py
