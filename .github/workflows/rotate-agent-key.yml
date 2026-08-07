@@ -91,8 +91,10 @@ jobs:
               \$key = trim((string) stream_get_contents(STDIN));
               if (\$key === \"\") { fwrite(STDERR, \"invalid key\\n\"); exit(2); }
               \$data = is_file(\$path) ? file_get_contents(\$path) : \"\";
+              \$metadata = is_file(\$path) ? stat(\$path) : false;
+              if (!is_array(\$metadata)) { fwrite(STDERR, \"metadata read failed\\n\"); exit(3); }
               \$backup = \$path . \".rotation-backup-\" . gmdate(\"Ymd-His\");
-              if (is_file(\$path) && !copy(\$path, \$backup)) { fwrite(STDERR, \"backup failed\\n\"); exit(3); }
+              if (!copy(\$path, \$backup)) { fwrite(STDERR, \"backup failed\\n\"); exit(4); }
               \$line = \"SHOPVIVALIZ_AGENT_KEY=\" . \$key;
               if (preg_match(\"/^SHOPVIVALIZ_AGENT_KEY=.*$/m\", \$data)) {
                 \$data = preg_replace(\"/^SHOPVIVALIZ_AGENT_KEY=.*$/m\", \$line, \$data, 1);
@@ -101,9 +103,14 @@ jobs:
               }
               \$tmp = \$path . \".tmp\";
               if (file_put_contents(\$tmp, \$data, LOCK_EX) === false || !rename(\$tmp, \$path)) {
-                fwrite(STDERR, \"atomic write failed\\n\"); exit(4);
+                fwrite(STDERR, \"atomic write failed\\n\"); exit(5);
               }
-              chmod(\$path, 0600);
+              \$owner = (int) \$metadata[\"uid\"];
+              \$group = (int) \$metadata[\"gid\"];
+              \$command = \"sudo chown \" . \$owner . \"\:\" . \$group . \" \" . escapeshellarg(\$path);
+              exec(\$command, \$unused, \$status);
+              if (\$status !== 0) { fwrite(STDERR, \"metadata owner restore failed\\n\"); exit(6); }
+              if (!chmod(\$path, 0640)) { fwrite(STDERR, \"metadata mode restore failed\\n\"); exit(7); }
             '" < /tmp/new_agent_key
 
       - name: Verify watchdog authentication
@@ -146,8 +153,8 @@ jobs:
                 } else {
                   \$data = rtrim(\$data) . \"\\n\" . \$line . \"\\n\";
                 }
-                file_put_contents(\$path, \$data, LOCK_EX);
-                chmod(\$path, 0600);
+                if (file_put_contents(\$path, \$data, LOCK_EX) === false) { exit(3); }
+                if (!chmod(\$path, 0640)) { exit(4); }
               '" < /tmp/current_agent_key
           else
             echo 'No previous key was captured; rollback is not applicable.'
