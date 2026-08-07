@@ -91,10 +91,8 @@ jobs:
               \$key = trim((string) stream_get_contents(STDIN));
               if (\$key === \"\") { fwrite(STDERR, \"invalid key\\n\"); exit(2); }
               \$data = is_file(\$path) ? file_get_contents(\$path) : \"\";
-              \$metadata = is_file(\$path) ? stat(\$path) : false;
-              if (!is_array(\$metadata)) { fwrite(STDERR, \"metadata read failed\\n\"); exit(3); }
               \$backup = \$path . \".rotation-backup-\" . gmdate(\"Ymd-His\");
-              if (!copy(\$path, \$backup)) { fwrite(STDERR, \"backup failed\\n\"); exit(4); }
+              if (is_file(\$path) && !copy(\$path, \$backup)) { fwrite(STDERR, \"backup failed\\n\"); exit(3); }
               \$line = \"SHOPVIVALIZ_AGENT_KEY=\" . \$key;
               if (preg_match(\"/^SHOPVIVALIZ_AGENT_KEY=.*$/m\", \$data)) {
                 \$data = preg_replace(\"/^SHOPVIVALIZ_AGENT_KEY=.*$/m\", \$line, \$data, 1);
@@ -103,15 +101,28 @@ jobs:
               }
               \$tmp = \$path . \".tmp\";
               if (file_put_contents(\$tmp, \$data, LOCK_EX) === false || !rename(\$tmp, \$path)) {
-                fwrite(STDERR, \"atomic write failed\\n\"); exit(5);
+                fwrite(STDERR, \"atomic write failed\\n\"); exit(4);
               }
-              \$owner = (int) \$metadata[\"uid\"];
-              \$group = (int) \$metadata[\"gid\"];
-              \$command = \"sudo chown \" . \$owner . \"\:\" . \$group . \" \" . escapeshellarg(\$path);
-              exec(\$command, \$unused, \$status);
-              if (\$status !== 0) { fwrite(STDERR, \"metadata owner restore failed\\n\"); exit(6); }
-              if (!chmod(\$path, 0640)) { fwrite(STDERR, \"metadata mode restore failed\\n\"); exit(7); }
             '" < /tmp/new_agent_key
+
+      - name: Restore server environment access contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa \
+            "${VM_USER}@${VM_HOST}" "cd '${REPO_DIR}' && bash -s" <<'REMOTE'
+          set -euo pipefail
+          php_user='www-data'
+          if ! getent passwd "$php_user" >/dev/null 2>&1; then
+            php_user="$(ps -eo user,comm | awk '$2 ~ /php-fpm|apache2|httpd/ && $1 != "root" {print $1; exit}')"
+          fi
+          test -n "$php_user"
+          php_group="$(id -gn "$php_user")"
+          sudo chown "${USER}:${php_group}" .env
+          sudo chmod 0640 .env
+          sudo -u "$php_user" test -r .env
+          test "$(stat -c '%a' .env)" = '640'
+          REMOTE
 
       - name: Verify watchdog authentication
         shell: bash
@@ -154,8 +165,20 @@ jobs:
                   \$data = rtrim(\$data) . \"\\n\" . \$line . \"\\n\";
                 }
                 if (file_put_contents(\$path, \$data, LOCK_EX) === false) { exit(3); }
-                if (!chmod(\$path, 0640)) { exit(4); }
               '" < /tmp/current_agent_key
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -i ~/.ssh/id_rsa \
+              "${VM_USER}@${VM_HOST}" "cd '${REPO_DIR}' && bash -s" <<'REMOTE'
+            set -euo pipefail
+            php_user='www-data'
+            if ! getent passwd "$php_user" >/dev/null 2>&1; then
+              php_user="$(ps -eo user,comm | awk '$2 ~ /php-fpm|apache2|httpd/ && $1 != "root" {print $1; exit}')"
+            fi
+            test -n "$php_user"
+            php_group="$(id -gn "$php_user")"
+            sudo chown "${USER}:${php_group}" .env
+            sudo chmod 0640 .env
+            sudo -u "$php_user" test -r .env
+            REMOTE
           else
             echo 'No previous key was captured; rollback is not applicable.'
           fi
