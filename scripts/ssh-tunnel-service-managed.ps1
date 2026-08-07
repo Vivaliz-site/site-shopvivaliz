@@ -26,11 +26,11 @@ Write-TunnelLog "Managed reverse tunnel service started"
 $attempt = 0
 while ($true) {
     $attempt++
-    Write-TunnelLog "Connecting attempt=$attempt VM=$VMUser@$VMHost forwards=2222->22,5557->5557"
+    Write-TunnelLog "Connecting attempt=$attempt VM=$VMUser@$VMHost forwards=2222->127.0.0.1:22,5557->127.0.0.1:5557"
     try {
         & ssh -i $KeyPath `
-            -R 2222:localhost:22 `
-            -R 5557:localhost:5557 `
+            -R 2222:127.0.0.1:22 `
+            -R 5557:127.0.0.1:5557 `
             -o "BatchMode=yes" `
             -o "ServerAliveInterval=30" `
             -o "ServerAliveCountMax=3" `
