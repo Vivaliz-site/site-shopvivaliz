@@ -125,7 +125,6 @@ class AuditoriaDisponibilidade:
         """Teste 4: APIs funcionando?"""
         apis = [
             "/api/catalog/products.php",
-            "/api/webhooks/pagarme.php",
             "/api/melhorenvio/webhook.php",
             "/api/olist/webhook.php"
         ]
@@ -140,13 +139,14 @@ class AuditoriaDisponibilidade:
             except Exception as e:
                 logger.error(f"API {api}: ❌ {str(e)}")
 
+        all_apis_ok = apis_ok == len(apis)
         self.resultados.append({
             "teste": "APIs",
-            "status": apis_ok >= 3,
-            "mensagem": f"✅ {apis_ok}/{len(apis)} APIs respondendo",
+            "status": all_apis_ok,
+            "mensagem": f"{'✅' if all_apis_ok else '❌'} {apis_ok}/{len(apis)} APIs respondendo",
             "detalhes": f"{apis_ok} de {len(apis)} APIs"
         })
-        return apis_ok >= 3
+        return all_apis_ok
 
 # ============ TESTES DE SEGURANÇA ============
 class AuditoriaSegurança:
@@ -284,7 +284,7 @@ class AuditoriaFuncional:
             logger.info(f"Liz: {'✅' if liz_presente else '❌'}")
             return liz_presente
         except Exception as e:
-            logger.error(f"Teste Liz: {str(e)}")
+            logger.error(f"Teste Liz falhou: {str(e)}")
             return False
 
     def testar_formulario_checkout(self):
