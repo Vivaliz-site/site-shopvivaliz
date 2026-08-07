@@ -70,12 +70,13 @@ jobs:
           test -f "$env_file" || { echo '{"ok":false,"critical":[{"key":"__file__","reason":"env_file_missing"}]}'; exit 2; }
           test -r "$current/scripts/maintenance/runtime_token_audit.py" || { echo '{"ok":false,"critical":[{"key":"__script__","reason":"audit_script_missing"}]}'; exit 2; }
 
-          if ! sudo -u "$php_user" test -r "$env_file"; then
-            env_group="$(id -gn "$php_user")"
-            sudo chown ubuntu:"$env_group" "$env_file"
-            sudo chmod 0640 "$env_file"
-          fi
-          sudo -u "$php_user" test -r "$env_file" || { echo '{"ok":false,"critical":[{"key":"__file__","reason":"php_cannot_read_env"}]}'; exit 2; }
+          # Audit workflows are read-only. Permission repair belongs exclusively
+          # to runtime-env-guard.yml so this audit cannot unexpectedly mutate
+          # production metadata while inspecting credentials.
+          sudo -u "$php_user" test -r "$env_file" || {
+            echo '{"ok":false,"critical":[{"key":"__file__","reason":"php_cannot_read_env"}]}'
+            exit 2
+          }
 
           set +e
           python3 "$current/scripts/maintenance/runtime_token_audit.py" \
