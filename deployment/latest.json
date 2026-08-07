@@ -1,20 +1,21 @@
 {
   "status": "PRODUCTION_UPDATED",
-  "sha": "3498dec81345722b2f5f881d2f2e17d80cef7cd9",
-  "workflow_run_id": "31130761339",
-  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31130761339",
+  "sha": "1d54e7c89ce3b5e750689eda7185bcf97a125994",
+  "workflow_run_id": "31149690628",
+  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31149690628",
   "jobs": {
     "validate": "success",
     "deploy": "success",
     "smoke_test": "success"
   },
   "results": [
-    "OK Oracle repository sync: canonical=3498dec81345722b2f5f881d2f2e17d80cef7cd9 deployed=3498dec81345722b2f5f881d2f2e17d80cef7cd9",
+    "OK Oracle repository sync: canonical=1d54e7c89ce3b5e750689eda7185bcf97a125994 deployed=1d54e7c89ce3b5e750689eda7185bcf97a125994",
     "OK Oracle repository sync cron installed",
-    "OK release SHA marker: 3498dec81345722b2f5f881d2f2e17d80cef7cd9",
+    "OK release SHA marker: 1d54e7c89ce3b5e750689eda7185bcf97a125994",
     "OK version: https://shopvivaliz.com.br/api/health/version.php (200)",
-    "OK public version endpoint: 3498dec81345722b2f5f881d2f2e17d80cef7cd9",
+    "OK public version endpoint: 1d54e7c89ce3b5e750689eda7185bcf97a125994",
     "OK homepage: https://shopvivaliz.com.br/ (200)",
+    "OK public homepage HTML contract",
     "OK mobile responsive header contract",
     "OK catalog: https://shopvivaliz.com.br/catalogo (200)",
     "OK product: https://shopvivaliz.com.br/produto/irrigador-girat%C3%B3rio-jardim-12-6-jatos-com-suporte-garden (200)",
@@ -54,5 +55,5 @@
     "OK security header: x-content-type-options",
     "OK security header: content-security-policy"
   ],
-  "verified_at": "2026-08-07T04:09:37.292403+00:00"
+  "verified_at": "2026-08-07T05:12:03.808407+00:00"
 }
