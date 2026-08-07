@@ -51,6 +51,9 @@ jobs:
             graph_browser_authorize)
               COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; & '.\\scripts\\fredwin-email-control.ps1' -Mode 'graph-browser-auth'\""
               ;;
+            graph_auth_status)
+              COMMAND="powershell -NoProfile -Command \"Write-Output 'GRAPH_AUTH_OUT_BEGIN'; if(Test-Path 'C:\\mei-mg-email\\logs\\graph-browser-auth.out.log'){ Get-Content 'C:\\mei-mg-email\\logs\\graph-browser-auth.out.log' -Tail 40 } else { Write-Output 'NO_OUT_LOG' }; Write-Output 'GRAPH_AUTH_OUT_END'; Write-Output 'GRAPH_AUTH_ERR_BEGIN'; if(Test-Path 'C:\\mei-mg-email\\logs\\graph-browser-auth.err.log'){ Get-Content 'C:\\mei-mg-email\\logs\\graph-browser-auth.err.log' -Tail 40 } else { Write-Output 'NO_ERR_LOG' }; Write-Output 'GRAPH_AUTH_ERR_END'; \$task=Get-ScheduledTask -TaskName 'ShopVivalizGraphBrowserAuth' -ErrorAction SilentlyContinue; if(\$task){ Write-Output ('graph_auth_task_state=' + \$task.State) } else { Write-Output 'graph_auth_task_state=absent' }; \$cache=Join-Path \$env:LOCALAPPDATA 'mei-mg-email\\microsoft-graph-token.json'; Write-Output ('graph_token_cache_exists=' + (Test-Path \$cache))\""
+              ;;
             graph_template_test)
               COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; & '.\\scripts\\fredwin-email-control.ps1' -Mode 'graph-template-test'\""
               ;;
