@@ -1,0 +1,24 @@
+name: Fred-Win Self-Hosted Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fred-win-self-hosted-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: self-hosted
+    timeout-minutes: 3
+    steps:
+      - name: Report runner identity
+        shell: powershell
+        run: |
+          Write-Host "HOSTNAME=$env:COMPUTERNAME"
+          Write-Host "USERNAME=$env:USERNAME"
+          Get-Date -Format o
+          Get-Process -Name opera* -ErrorAction SilentlyContinue | Select-Object -First 5 ProcessName,Id,Path
