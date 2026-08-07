@@ -32,7 +32,7 @@ jobs:
   audit:
     name: Audit production runtime credentials
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Configure verified SSH host
         shell: bash
@@ -51,6 +51,27 @@ jobs:
           printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Wait for exact production release
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ready=0
+          for attempt in $(seq 1 30); do
+            deployed_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              ubuntu@137.131.156.17 \
+              'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha 2>/dev/null || true')"
+            if [[ "$deployed_sha" == "$GITHUB_SHA" ]]; then
+              ready=1
+              echo "deployed_sha=$deployed_sha"
+              break
+            fi
+            echo "deployment_wait_attempt=$attempt"
+            sleep 20
+          done
+          test "$ready" = 1 || { echo '::error::Exact push SHA was not deployed within 10 minutes'; exit 1; }
 
       - name: Audit all populated runtime tokens without exposing values
         shell: bash

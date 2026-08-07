@@ -25,12 +25,11 @@ jobs:
   guard:
     if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     env:
       VM_HOST: 137.131.156.17
       VM_USER: ubuntu
       VM_ENV: /home/ubuntu/shopvivaliz-deploy/shared/.env
-      SITE_LOGIN: https://shopvivaliz.com.br/auth/login.php
     steps:
       - name: Configurar SSH autenticado com host fixado
         shell: bash
@@ -52,11 +51,34 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
+      - name: Aguardar release exata em producao
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ready=0
+          for attempt in $(seq 1 30); do
+            deployed_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              "${VM_USER}@${VM_HOST}" \
+              'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha 2>/dev/null || true')"
+            if [[ "$deployed_sha" == "$GITHUB_SHA" ]]; then
+              ready=1
+              echo "deployed_sha=$deployed_sha"
+              break
+            fi
+            echo "deployment_wait_attempt=$attempt"
+            sleep 20
+          done
+          test "$ready" = 1 || { echo '::error::A release exata do push nao chegou a producao em 10 minutos.'; exit 1; }
+
       - name: Reparar e validar permissoes do shared/.env
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes "${VM_USER}@${VM_HOST}" "VM_ENV='${VM_ENV}' bash -s" <<'REMOTE'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "${VM_USER}@${VM_HOST}" "VM_ENV='${VM_ENV}' bash -s" <<'REMOTE'
           set -Eeuo pipefail
           if [[ ! -f "$VM_ENV" ]]; then
             echo 'shared_env_exists=false'
@@ -73,10 +95,6 @@ jobs:
           fi
           php_group="$(id -gn "$php_user")"
 
-          # O incidente de 2026-08-05 foi causado por replace atomico que
-          # transformou o arquivo em ubuntu:ubuntu 0600. Corrigimos o estado
-          # atual e estabelecemos o contrato permanente: dono SSH, grupo do
-          # PHP e leitura somente para dono/grupo.
           sudo chown "${USER}:${php_group}" "$VM_ENV"
           sudo chmod 0640 "$VM_ENV"
 
@@ -110,15 +128,23 @@ jobs:
           ' "$VM_ENV"
           REMOTE
 
-      - name: Smoke test publico do login
+      - name: Smoke test local da release ativa
         shell: bash
         run: |
           set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "${VM_USER}@${VM_HOST}" 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
           body="$(mktemp)"
-          code="$(curl -L -sS --connect-timeout 10 --max-time 25 -o "$body" -w '%{http_code}' "$SITE_LOGIN")"
+          trap 'rm -f "$body"' EXIT
+          code="$(curl --silent --show-error --connect-timeout 5 --max-time 20 \
+            -H 'Host: shopvivaliz.com.br' \
+            -o "$body" -w '%{http_code}' \
+            'http://127.0.0.1/auth/login.php')"
           echo "login_http_status=$code"
           if [[ "$code" != '200' ]]; then
-            echo '::error::Login nao retornou HTTP 200.'
+            echo '::error::Login local nao retornou HTTP 200.'
             exit 1
           fi
           if grep -qi 'Banco de dados indisponível\|Erro ao inicializar banco de dados' "$body"; then
@@ -131,3 +157,4 @@ jobs:
           fi
           echo 'login_database_error=false'
           echo 'google_login_visible=true'
+          REMOTE
