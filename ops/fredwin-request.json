@@ -1,5 +1,5 @@
 {
-  "action": "email_runtime_status",
-  "requested_at": "2026-08-07T17:10:00-03:00",
-  "reason": "Confirm no legacy Gmail/SMTP processes or tasks remain after hard-stop repair"
+  "action": "graph_browser_authorize",
+  "requested_at": "2026-08-07T17:11:00-03:00",
+  "reason": "Authorize Microsoft Graph with browser-based authorization code PKCE because device code is blocked by Security Defaults"
 }
