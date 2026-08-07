@@ -33,11 +33,29 @@ function Test-LocalPort {
     catch { return $false }
 }
 
-if (!(Test-Path $McpScript)) { throw "MCP script missing: $McpScript" }
-if (!(Test-Path $TunnelScript)) { throw "Tunnel script missing: $TunnelScript" }
+function Test-McpHealth {
+    try {
+        $response = Invoke-RestMethod -Uri "http://127.0.0.1:5557/health" -Method Get -TimeoutSec 3
+        return ($response.status -eq 'ok' -and $response.environment -eq 'fred-win')
+    }
+    catch { return $false }
+}
 
-# 1) Ensure local MCP is listening only on loopback.
-if (-not (Test-LocalPort -Port 5557)) {
+function Stop-FredWinMcp {
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            ($_.Name -match '^(?i)(python|python3|py)\.exe$') -and
+            ([string]$_.CommandLine -like '*mcp-server.py*') -and
+            ([string]$_.CommandLine -like '*5557*')
+        } |
+        ForEach-Object {
+            Log ("Stopping stale/unhealthy MCP pid=" + $_.ProcessId)
+            try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop } catch { }
+        }
+    Start-Sleep -Seconds 2
+}
+
+function Start-FredWinMcp {
     $python = $null
     if (Get-Command py -ErrorAction SilentlyContinue) {
         $python = "py"
@@ -54,8 +72,29 @@ if (-not (Test-LocalPort -Port 5557)) {
     Start-Sleep -Seconds 3
 }
 
+if (!(Test-Path $McpScript)) { throw "MCP script missing: $McpScript" }
+if (!(Test-Path $TunnelScript)) { throw "Tunnel script missing: $TunnelScript" }
+
+# 1) Ensure the MCP responds to HTTP health, not merely that the TCP port is open.
+# A long blocking command can leave port 5557 open while making the aiohttp event loop
+# unresponsive; in that case the bootstrap now kills and recreates the MCP process.
+$portOpen = Test-LocalPort -Port 5557
+$healthy = $false
+if ($portOpen) { $healthy = Test-McpHealth }
+
+if ($portOpen -and -not $healthy) {
+    Log "MCP port is open but health is unresponsive; recovering process"
+    Stop-FredWinMcp
+    $portOpen = $false
+}
+
+if (-not $portOpen) {
+    Start-FredWinMcp
+}
+
 if (-not (Test-LocalPort -Port 5557)) { throw "MCP failed to listen on 127.0.0.1:5557" }
-Log "MCP local health port 5557 is open"
+if (-not (Test-McpHealth)) { throw "MCP health failed on 127.0.0.1:5557" }
+Log "MCP local health 5557 is OK"
 
 # 2) Replace only the old ShopVivaliz reverse-tunnel processes, then start the managed one.
 $managedRunning = Get-CimInstance Win32_Process -Filter "Name='powershell.exe' OR Name='pwsh.exe'" -ErrorAction SilentlyContinue |
