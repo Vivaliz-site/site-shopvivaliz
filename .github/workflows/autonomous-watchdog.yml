@@ -78,7 +78,7 @@ jobs:
               'execution_completed': True,
               'execution_accepted': True,
               'active_agent_count': 5,
-              'schedule_minutes': 15,
+              'schedule_minutes': 0,
           }
           for key, expected in required.items():
               if response.get(key) != expected:
