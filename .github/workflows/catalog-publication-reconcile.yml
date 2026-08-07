@@ -64,14 +64,15 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          set +e
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+          if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
             'cd /home/ubuntu/shopvivaliz-deploy/current && php scripts/maintenance/reconcile_catalog_publications.php' \
-            > catalog-publication-reconcile.json
-          command_status=$?
-          set -e
+            > catalog-publication-reconcile.json; then
+            command_status=0
+          else
+            command_status=$?
+          fi
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -98,7 +99,7 @@ jobs:
         with:
           name: catalog-publication-reconcile-${{ github.run_id }}
           path: catalog-publication-reconcile.json
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 14
 
       - name: Remove SSH material

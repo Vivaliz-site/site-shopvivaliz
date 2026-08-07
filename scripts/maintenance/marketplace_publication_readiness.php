@@ -162,7 +162,7 @@ foreach ($channelChecks as $channel => $definition) {
     $report['channels'][$channel] = [
         'ready' => $missing === [],
         'missing_or_invalid' => $missing,
-        'token_state' => is_array($token) ? $token : ['managed_by' => $channel === 'amazon' ? 'LWA_refresh_token' : 'Tiny_OAuth_refresh_token'],
+        'token_state' => is_array($token) ? $token : ['managed_by' => $channel === 'amazon' ? 'amazon_oauth_refresh_flow' : 'tiny_oauth_refresh_flow'],
     ];
     if ($missing !== []) $report['ok'] = false;
 }

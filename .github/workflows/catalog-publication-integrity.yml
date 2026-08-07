@@ -133,14 +133,15 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          set +e
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+          if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
             'cd /home/ubuntu/shopvivaliz-deploy/current && php scripts/maintenance/marketplace_publication_readiness.php' \
-            > marketplace-publication-readiness.json
-          audit_status=$?
-          set -e
+            > marketplace-publication-readiness.json; then
+            audit_status=0
+          else
+            audit_status=$?
+          fi
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -166,7 +167,7 @@ jobs:
         with:
           name: marketplace-publication-readiness-${{ github.run_id }}
           path: marketplace-publication-readiness.json
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 14
       - name: Remove SSH material
         if: always()

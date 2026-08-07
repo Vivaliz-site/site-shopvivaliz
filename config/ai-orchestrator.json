@@ -39,8 +39,7 @@
   "execution_policy": {
     "isolated_environments": true,
     "rate_limiting": {
-      "olist": "100_requests_per_minute",
-      "pagarme": "50_requests_per_minute"
+      "olist": "100_requests_per_minute"
     },
     "state_change_logging": "mandatory"
   },

@@ -77,11 +77,12 @@ jobs:
           fi
           sudo -u "$php_user" test -r "$env_file" || { echo '{"ok":false,"critical":[{"key":"__file__","reason":"php_cannot_read_env"}]}'; exit 2; }
 
-          set +e
-          python3 "$current/scripts/maintenance/runtime_token_audit.py" \
-            "$env_file" --php-user "$php_user" --json-output "$report"
-          status=$?
-          set -e
+          if python3 "$current/scripts/maintenance/runtime_token_audit.py" \
+            "$env_file" --php-user "$php_user" --json-output "$report" >/dev/null; then
+            status=0
+          else
+            status=$?
+          fi
           cat "$report"
           exit "$status"
           REMOTE
@@ -102,11 +103,12 @@ jobs:
             echo '{"ok":false,"critical":[{"key":"__script__","reason":"reference_audit_script_missing"}]}'
             exit 2
           }
-          set +e
-          python3 "$current/scripts/maintenance/token_reference_audit.py" \
-            "$current" "$env_file" --json-output "$report"
-          status=$?
-          set -e
+          if python3 "$current/scripts/maintenance/token_reference_audit.py" \
+            "$current" "$env_file" --json-output "$report" >/dev/null; then
+            status=0
+          else
+            status=$?
+          fi
           cat "$report"
           exit "$status"
           REMOTE
@@ -115,6 +117,7 @@ jobs:
         if: always()
         shell: bash
         run: |
+          set -Eeuo pipefail
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -156,7 +159,7 @@ jobs:
           path: |
             runtime-token-audit.json
             token-reference-audit.json
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 14
 
       - name: Remove SSH material
