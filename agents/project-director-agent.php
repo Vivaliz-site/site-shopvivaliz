@@ -121,7 +121,6 @@ class ProjectDirectorAgent {
         $integrations = [
             'olist' => 'Olist/Tiny ERP',
             'mercadolivre' => 'Mercado Livre',
-            'pagarme' => 'Pagar.me',
             'mercadopago' => 'Mercado Pago',
             'shopee' => 'Shopee',
         ];
@@ -253,7 +252,6 @@ class ProjectDirectorAgent {
         $envKeys = match ($key) {
             'olist' => ['OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN', 'OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN'],
             'mercadolivre' => ['ML_CLIENT_ID', 'ML_CLIENT_SECRET'],
-            'pagarme' => ['PAGARME_API_KEY', 'PAGARME_SECRET_KEY'],
             'mercadopago' => ['MERCADOPAGO_ACCESS_TOKEN'],
             'shopee' => ['SHOPEE_PARTNER_ID', 'SHOPEE_PARTNER_KEY'],
             default => [],
