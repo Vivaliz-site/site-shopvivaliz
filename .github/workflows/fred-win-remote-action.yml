@@ -36,6 +36,9 @@ jobs:
             health)
               COMMAND=""
               ;;
+            email_audit_status)
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -File C:\\site-shopvivaliz\\scripts\\fredwin-email-audit.ps1"
+              ;;
             open_exchange_admin)
               COMMAND="powershell -NoProfile -Command \"Start-Process 'https://admin.exchange.microsoft.com/'\""
               ;;
@@ -84,14 +87,14 @@ jobs:
             "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
           import base64, json, os, urllib.request
           command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
-          body = json.dumps({'params': {'command': command, 'timeout': 30}}).encode('utf-8')
+          body = json.dumps({'params': {'command': command, 'timeout': 120}}).encode('utf-8')
           req = urllib.request.Request(
               'http://127.0.0.1:5557/mcp/tool/execute_command',
               data=body,
               headers={'Content-Type': 'application/json'},
               method='POST',
           )
-          with urllib.request.urlopen(req, timeout=40) as response:
+          with urllib.request.urlopen(req, timeout=130) as response:
               payload = json.loads(response.read().decode('utf-8'))
           print(json.dumps(payload, ensure_ascii=False))
           result = payload.get('result') or {}
