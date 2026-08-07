@@ -37,7 +37,7 @@ jobs:
               COMMAND=""
               ;;
             email_audit_status)
-              COMMAND="powershell -NoProfile -Command \"\$r='C:\\mei-mg-email'; Write-Output ('repo_exists='+(Test-Path \$r)); if(Test-Path \$r){ Set-Location \$r; Write-Output ('git_head='+(git rev-parse --short HEAD)); Write-Output ('env_exists='+(Test-Path '.env')); Write-Output ('venv_exists='+(Test-Path '.\\.venv\\Scripts\\python.exe')); Write-Output ('templates_exists='+(Test-Path '.\\templates')); if(Test-Path '.env'){ \$l=Get-Content '.env'; foreach(\$n in @('EMAIL_PROVIDER','MICROSOFT_TENANT_ID','MICROSOFT_CLIENT_ID','MICROSOFT_CLIENT_SECRET','MICROSOFT_SENDER','GRAPH_TENANT_ID','GRAPH_CLIENT_ID','GRAPH_CLIENT_SECRET','GRAPH_SENDER','DAILY_SEND_LIMIT')){ \$p=[bool](\$l|Where-Object{\$_ -match ('^\\s*'+[regex]::Escape(\$n)+'\\s*=\\s*\\S+')}); Write-Output ('env_'+\$n+'_present='+\$p) } }; Get-ChildItem -Recurse -File -Include *.py,*.md,*.yml,*.yaml | Select-String -Pattern 'graph.microsoft.com|sendMail|MicrosoftGraph|EMAIL_PROVIDER|9950|10000' | Select-Object -First 25 | ForEach-Object { Write-Output ('hit='+\$_.Path.Replace(\$r+'\\','')+':'+\$_.LineNumber+':'+\$_.Line.Trim()) }; if(Test-Path '.\\.venv\\Scripts\\python.exe'){ & .\\.venv\\Scripts\\python.exe -m pytest -q --disable-warnings --maxfail=1; Write-Output ('pytest_exit='+\$LASTEXITCODE) } }\""
+              COMMAND="powershell -NoProfile -Command \"\$r='C:\\mei-mg-email'; Write-Output ('repo_exists='+(Test-Path \$r)); if(Test-Path \$r){ Set-Location \$r; docker compose up -d; Start-Sleep -Seconds 8; Write-Output ('git_head='+(git rev-parse --short HEAD)); Write-Output ('env_exists='+(Test-Path '.env')); Write-Output ('venv_exists='+(Test-Path '.\\.venv\\Scripts\\python.exe')); Write-Output ('templates_exists='+(Test-Path '.\\templates')); if(Test-Path '.env'){ \$l=Get-Content '.env'; foreach(\$n in @('EMAIL_PROVIDER','MICROSOFT_GRAPH_TENANT_ID','MICROSOFT_GRAPH_CLIENT_ID','MICROSOFT_GRAPH_USER','MICROSOFT_GRAPH_TOKEN_CACHE','MAIL_FROM','RATE_LIMIT_ENVIOS_POR_MINUTO','MAX_ENVIOS_POR_DIA','META_ENVIOS_POR_DIA','BASE_URL_DESCADASTRO')){ \$p=[bool](\$l|Where-Object{\$_ -match ('^\\s*'+[regex]::Escape(\$n)+'\\s*=\\s*\\S+')}); Write-Output ('env_'+\$n+'_present='+\$p) } }; docker compose ps; if(Test-Path '.\\.venv\\Scripts\\python.exe'){ & .\\.venv\\Scripts\\python.exe -m pytest -q --disable-warnings --maxfail=1; Write-Output ('pytest_exit='+\$LASTEXITCODE) } }\""
               ;;
             open_exchange_admin)
               COMMAND="powershell -NoProfile -Command \"Start-Process 'https://admin.exchange.microsoft.com/'\""
@@ -87,14 +87,14 @@ jobs:
             "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
           import base64, json, os, urllib.request
           command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
-          body = json.dumps({'params': {'command': command, 'timeout': 120}}).encode('utf-8')
+          body = json.dumps({'params': {'command': command, 'timeout': 180}}).encode('utf-8')
           req = urllib.request.Request(
               'http://127.0.0.1:5557/mcp/tool/execute_command',
               data=body,
               headers={'Content-Type': 'application/json'},
               method='POST',
           )
-          with urllib.request.urlopen(req, timeout=130) as response:
+          with urllib.request.urlopen(req, timeout=190) as response:
               payload = json.loads(response.read().decode('utf-8'))
           print(json.dumps(payload, ensure_ascii=False))
           result = payload.get('result') or {}
