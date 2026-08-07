@@ -1,5 +1,5 @@
 {
-  "action": "email_hard_stop_repair",
-  "requested_at": "2026-08-07T17:09:00-03:00",
-  "reason": "Rerun Graph-only cleanup, Flyway validation, schema verification, and full tests after explicit authorization fixtures were fixed"
+  "action": "email_runtime_status",
+  "requested_at": "2026-08-07T17:10:00-03:00",
+  "reason": "Confirm no legacy Gmail/SMTP processes or tasks remain after hard-stop repair"
 }
