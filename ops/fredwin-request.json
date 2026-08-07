@@ -1,5 +1,5 @@
 {
-  "action": "graph_auth_status",
-  "requested_at": "2026-08-07T17:26:30-03:00",
-  "reason": "Recheck Graph OAuth completion after interactive browser launch"
+  "action": "graph_browser_authorize",
+  "requested_at": "2026-08-07T18:20:00-03:00",
+  "reason": "User reported login error; reopen interactive Microsoft Graph OAuth in Fred-Win browser"
 }
