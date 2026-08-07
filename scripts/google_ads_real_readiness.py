@@ -48,6 +48,21 @@ def is_placeholder(value: str) -> bool:
     )
 
 
+def norm(value: str) -> str:
+    return " ".join(str(value).strip().casefold().split())
+
+
+def duplicates(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    dupes: list[str] = []
+    for value in values:
+        key = norm(value)
+        if key in seen and key not in dupes:
+            dupes.append(key)
+        seen.add(key)
+    return dupes
+
+
 def main() -> int:
     load_dotenv(ROOT / ".env")
     errors: list[str] = []
@@ -73,6 +88,7 @@ def main() -> int:
         errors.append("python_package_missing=google-ads")
 
     campaign = config.get("campaign", {})
+    ad_group = config.get("ad_group", {})
     guardrails = config.get("guardrails", {})
     if campaign.get("status_on_create") != "PAUSED":
         errors.append("campaign_must_create_paused_first")
@@ -80,6 +96,8 @@ def main() -> int:
         errors.append("daily_budget_exceeds_guardrail")
     if float(campaign.get("bidding", {}).get("max_cpc_brl", 0)) > float(guardrails.get("max_cpc_brl", 0)):
         errors.append("max_cpc_exceeds_roi_guardrail")
+    if float(ad_group.get("default_cpc_brl", 0)) > float(guardrails.get("max_cpc_brl", 0)):
+        errors.append("ad_group_default_cpc_exceeds_guardrail")
 
     target_aov = float(guardrails.get("target_average_order_value_brl", 0))
     target_conversion_rate = float(guardrails.get("target_conversion_rate_percent", 0)) / 100
@@ -96,30 +114,27 @@ def main() -> int:
             )
 
     keywords = config.get("keywords", [])
-    if any(str(item.get("match_type", "")).upper() == "BROAD" for item in keywords):
-        errors.append("broad_match_not_allowed")
-    high_intent_tokens = [
-        "kit",
-        "comprar",
-        "freio",
-        "12",
-        "10",
-        "carrinho",
-        "ferramentas",
-        "fercar",
-        "caixa",
-        "japi",
-        "cachepot",
-        "vaso",
-        "floreira",
-    ]
+    if not keywords:
+        errors.append("keywords_missing")
+    if any(str(item.get("match_type", "")).upper() not in {"EXACT", "PHRASE"} for item in keywords):
+        errors.append("only_exact_and_phrase_match_allowed")
+
+    keyword_keys = [f"{norm(item.get('text', ''))}|{str(item.get('match_type', '')).upper()}" for item in keywords]
+    if duplicates(keyword_keys):
+        errors.append("duplicate_keyword_match_pairs")
+
+    if any(float(item.get("cpc_brl", 0)) <= 0 for item in keywords):
+        errors.append("keyword_cpc_must_be_positive")
+
+    high_intent_tokens = ["comprar", "carrinho", "ferramentas", "fercar", "caixa", "gavetas", "oficina"]
     weak_keywords = [
         item.get("text", "")
         for item in keywords
-        if not any(token in str(item.get("text", "")).lower() for token in high_intent_tokens)
+        if not any(token in norm(item.get("text", "")) for token in high_intent_tokens)
     ]
     if weak_keywords:
         errors.append(f"low_intent_keyword_count={len(weak_keywords)}")
+
     expensive_keywords = [
         item.get("text", "")
         for item in keywords
@@ -128,17 +143,47 @@ def main() -> int:
     if expensive_keywords:
         errors.append(f"keyword_cpc_exceeds_guardrail_count={len(expensive_keywords)}")
 
+    negative_keywords = [norm(value) for value in config.get("negative_keywords", [])]
+    positive_keyword_texts = [norm(item.get("text", "")) for item in keywords]
+    direct_negative_conflicts = sorted(set(negative_keywords).intersection(positive_keyword_texts))
+    if direct_negative_conflicts:
+        errors.append(f"negative_keyword_direct_conflict_count={len(direct_negative_conflicts)}")
+
     ad = config.get("responsive_search_ad", {})
-    long_headlines = [text for text in ad.get("headlines", []) if len(text) > 30]
-    long_descriptions = [text for text in ad.get("descriptions", []) if len(text) > 90]
+    headlines = ad.get("headlines", [])
+    descriptions = ad.get("descriptions", [])
+    long_headlines = [text for text in headlines if len(text) > 30]
+    long_descriptions = [text for text in descriptions if len(text) > 90]
     if long_headlines:
         errors.append(f"headline_too_long_count={len(long_headlines)}")
     if long_descriptions:
         errors.append(f"description_too_long_count={len(long_descriptions)}")
-    if len(ad.get("headlines", [])) < 8:
-        errors.append("rsa_needs_at_least_8_headlines")
-    if len(ad.get("descriptions", [])) < 3:
-        errors.append("rsa_needs_at_least_3_descriptions")
+    if len(headlines) < 12:
+        errors.append("rsa_needs_at_least_12_headlines")
+    if len(descriptions) < 4:
+        errors.append("rsa_needs_4_descriptions")
+    if duplicates(headlines):
+        errors.append("rsa_duplicate_headlines")
+    if duplicates(descriptions):
+        errors.append("rsa_duplicate_descriptions")
+
+    commercial_headlines = [
+        text for text in headlines
+        if any(token in norm(text) for token in ("fercar", "carrinho", "caixa", "ferramentas"))
+    ]
+    if len(commercial_headlines) < 7:
+        errors.append("rsa_needs_more_keyword_relevant_headlines")
+    if sum("comprar" in norm(text) or "compre" in norm(text) for text in headlines) < 2:
+        errors.append("rsa_needs_more_purchase_intent_headlines")
+
+    campaign_url = str(campaign.get("landing_page", "")).strip()
+    ad_url = str(ad.get("final_url", "")).strip()
+    if not campaign_url or not ad_url:
+        errors.append("landing_page_missing")
+    elif campaign_url != ad_url:
+        errors.append("campaign_and_rsa_landing_page_mismatch")
+    if not ad_url.startswith("https://shopvivaliz.com.br/"):
+        errors.append("rsa_final_url_must_use_shopvivaliz_https")
 
     if errors:
         print("NOT_READY")
@@ -151,8 +196,9 @@ def main() -> int:
     print("daily_budget_brl=" + str(campaign.get("daily_budget_brl", "")))
     print("max_cpc_brl=" + str(campaign.get("bidding", {}).get("max_cpc_brl", "")))
     print("keywords=" + str(len(keywords)))
-    print("headlines=" + str(len(ad.get("headlines", []))))
-    print("descriptions=" + str(len(ad.get("descriptions", []))))
+    print("headlines=" + str(len(headlines)))
+    print("descriptions=" + str(len(descriptions)))
+    print("commercial_headlines=" + str(len(commercial_headlines)))
     return 0
 
 
