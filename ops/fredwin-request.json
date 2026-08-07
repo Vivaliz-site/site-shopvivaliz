@@ -1,5 +1,5 @@
 {
   "action": "email_audit_status",
-  "requested_at": "2026-08-07T16:13:00-03:00",
-  "reason": "Status audit retry"
+  "requested_at": "2026-08-07T16:15:00-03:00",
+  "reason": "Prepare runtime and rerun status audit"
 }
