@@ -1,5 +1,5 @@
 {
-  "action": "email_migration_status",
-  "requested_at": "2026-08-07T17:02:00-03:00",
-  "reason": "Inspect duplicate Flyway V009 migration and database schema history before repair"
+  "action": "email_hard_stop_repair",
+  "requested_at": "2026-08-07T17:05:00-03:00",
+  "reason": "Re-run Graph-only cleanup, apply repaired Flyway sequence, verify marketing authorization schema, and run full tests"
 }
