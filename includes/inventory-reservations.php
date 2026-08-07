@@ -33,7 +33,7 @@ function svir_ttl_minutes(string $paymentMethod): int
 {
     return match (strtolower(trim($paymentMethod))) {
         'boleto' => 4320,
-        'mercado_pago', 'infinitepay', 'pagarme' => 120,
+        'mercado_pago', 'infinitepay' => 120,
         'pix' => 30,
         default => 30,
     };
