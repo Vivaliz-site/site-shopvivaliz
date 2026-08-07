@@ -1,7 +1,7 @@
 #!/bin/bash
 # Instalar auditoria 24/7 em cron sem substituir entradas existentes.
 
-set -euo pipefail
+set -Eeuo pipefail
 
 echo "📋 Instalando Auditoria 24/7 em Cron..."
 
@@ -14,7 +14,8 @@ chmod +x "$ROOT/scripts/auditoria-24-7.py"
 
 # Adicionar cron job (executar a cada 30 minutos) preservando todo o crontab.
 MARKER="# shopvivaliz-auditoria-24-7"
-CRON_JOB="*/30 * * * * cd $ROOT && python3 scripts/auditoria-24-7.py >> logs/auditoria-cron.log 2>&1 $MARKER"
+ROOT_QUOTED="$(python3 -c 'import shlex,sys; print(shlex.quote(sys.argv[1]))' "$ROOT")"
+CRON_JOB="*/30 * * * * cd $ROOT_QUOTED && python3 scripts/auditoria-24-7.py >> logs/auditoria-cron.log 2>&1 $MARKER"
 CURRENT_CRONTAB=""
 if CURRENT_CRONTAB="$(crontab -l 2>/dev/null)"; then
     :
