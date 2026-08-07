@@ -1,0 +1,41 @@
+name: Fred-Win Graph Cache Audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fred-win-graph-cache-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY" || exit 2
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect cache claims and non-secret config
+        run: |
+          python3 - <<'PY' > /tmp/body.json
+          import json
+          ps=r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$envPath='C:\mei-mg-email\.env'; if(Test-Path $envPath){ $lines=Get-Content $envPath; foreach($n in @('MICROSOFT_GRAPH_TENANT_ID','MICROSOFT_GRAPH_CLIENT_ID','MICROSOFT_GRAPH_USER','EMAIL_PROVIDER')){ $m=$lines | Where-Object { $_ -match ('^\s*'+[regex]::Escape($n)+'\s*=') } | Select-Object -Last 1; if($m){ Write-Output ('ENV_' + $m.Trim()) } } }; $cache=Join-Path $env:LOCALAPPDATA 'mei-mg-email\microsoft-graph-token.json'; if(!(Test-Path $cache)){ Write-Output 'CACHE=missing'; exit 0 }; $j=Get-Content $cache -Raw | ConvertFrom-Json; Write-Output ('CACHE_HAS_REFRESH=' + [bool]$j.refresh_token); Write-Output ('CACHE_EXPIRES_AT=' + $j.expires_at); if($j.access_token){ $parts=$j.access_token.Split('.'); if($parts.Count -eq 3){ $p=$parts[1].Replace('-','+').Replace('_','/'); switch($p.Length % 4){ 2{$p+='=='} 3{$p+='='} }; $claims=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($p)) | ConvertFrom-Json; Write-Output ('TOKEN_APPID=' + ($claims.appid ?? $claims.azp)); Write-Output ('TOKEN_TID=' + $claims.tid); Write-Output ('TOKEN_SCP=' + $claims.scp); Write-Output ('TOKEN_ROLES=' + (($claims.roles) -join ',')); Write-Output ('TOKEN_AUD=' + $claims.aud); Write-Output ('TOKEN_EXP=' + $claims.exp) } }"'''
+          print(json.dumps({'params':{'command':ps,'timeout':90}}))
+          PY
+          BODY_B64="$(base64 -w0 /tmp/body.json)"
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 "BODY_B64='$BODY_B64' python3 - <<'PY'
+          import os,base64,urllib.request
+          body=base64.b64decode(os.environ['BODY_B64'])
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=110) as r: print(r.read().decode())
+          PY"
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/body.json
