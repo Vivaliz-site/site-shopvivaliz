@@ -13,7 +13,7 @@ permissions:
 jobs:
   execute:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,6 +38,9 @@ jobs:
               ;;
             email_audit_status)
               COMMAND="powershell -NoProfile -Command \"\$r='C:\\mei-mg-email'; Write-Output ('repo_exists='+(Test-Path \$r)); if(Test-Path \$r){ Set-Location \$r; docker compose up -d; Start-Sleep -Seconds 8; Write-Output ('git_head='+(git rev-parse --short HEAD)); Write-Output ('env_exists='+(Test-Path '.env')); Write-Output ('venv_exists='+(Test-Path '.\\.venv\\Scripts\\python.exe')); Write-Output ('templates_exists='+(Test-Path '.\\templates')); if(Test-Path '.env'){ \$l=Get-Content '.env'; foreach(\$n in @('EMAIL_PROVIDER','MICROSOFT_GRAPH_TENANT_ID','MICROSOFT_GRAPH_CLIENT_ID','MICROSOFT_GRAPH_USER','MICROSOFT_GRAPH_TOKEN_CACHE','MAIL_FROM','RATE_LIMIT_ENVIOS_POR_MINUTO','MAX_ENVIOS_POR_DIA','META_ENVIOS_POR_DIA','BASE_URL_DESCADASTRO')){ \$p=[bool](\$l|Where-Object{\$_ -match ('^\\s*'+[regex]::Escape(\$n)+'\\s*=\\s*\\S+')}); Write-Output ('env_'+\$n+'_present='+\$p) } }; docker compose ps; if(Test-Path '.\\.venv\\Scripts\\python.exe'){ & .\\.venv\\Scripts\\python.exe -m pytest -q --disable-warnings --maxfail=1; Write-Output ('pytest_exit='+\$LASTEXITCODE) } }\""
+              ;;
+            start_email_runtime)
+              COMMAND="powershell -NoProfile -Command \"\$docker='C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe'; if(!(Test-Path \$docker)){ throw 'Docker Desktop executable not found' }; \$task='ShopVivalizStartDocker'; \$user=[System.Security.Principal.WindowsIdentity]::GetCurrent().Name; \$action=New-ScheduledTaskAction -Execute \$docker; \$trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1); \$principal=New-ScheduledTaskPrincipal -UserId \$user -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName \$task -Action \$action -Trigger \$trigger -Principal \$principal -Force | Out-Null; Start-ScheduledTask -TaskName \$task; \$ok=\$false; for(\$i=0;\$i -lt 36;\$i++){ Start-Sleep -Seconds 5; docker info *>\$null; if(\$LASTEXITCODE -eq 0){ \$ok=\$true; break } }; Unregister-ScheduledTask -TaskName \$task -Confirm:\$false -ErrorAction SilentlyContinue; Write-Output ('docker_ready='+\$ok); if(!\$ok){ throw 'Docker Desktop engine did not become ready' }; Set-Location 'C:\\mei-mg-email'; docker compose up -d; Start-Sleep -Seconds 10; docker compose ps; & .\\.venv\\Scripts\\python.exe -m pytest -q --disable-warnings --maxfail=1; Write-Output ('pytest_exit='+\$LASTEXITCODE)\""
               ;;
             open_exchange_admin)
               COMMAND="powershell -NoProfile -Command \"Start-Process 'https://admin.exchange.microsoft.com/'\""
@@ -87,14 +90,14 @@ jobs:
             "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
           import base64, json, os, urllib.request
           command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
-          body = json.dumps({'params': {'command': command, 'timeout': 180}}).encode('utf-8')
+          body = json.dumps({'params': {'command': command, 'timeout': 300}}).encode('utf-8')
           req = urllib.request.Request(
               'http://127.0.0.1:5557/mcp/tool/execute_command',
               data=body,
               headers={'Content-Type': 'application/json'},
               method='POST',
           )
-          with urllib.request.urlopen(req, timeout=190) as response:
+          with urllib.request.urlopen(req, timeout=310) as response:
               payload = json.loads(response.read().decode('utf-8'))
           print(json.dumps(payload, ensure_ascii=False))
           result = payload.get('result') or {}
