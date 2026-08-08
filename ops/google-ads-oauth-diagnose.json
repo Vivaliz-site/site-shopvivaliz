@@ -1,0 +1,5 @@
+{
+  "job": "360925a31e807fbaf8795ac3314a20c8",
+  "requested_at": "2026-08-08T18:02:00-03:00",
+  "reason": "Investigate OAuth callback state and secure runtime readiness without exposing secrets"
+}
