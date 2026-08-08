@@ -32,6 +32,15 @@ Quando SKU e ID externo existem:
 
 Quando somente um identificador esta disponivel, ele so pode ser usado se a correspondencia for unica.
 
+## Publicacao por marketplace
+
+- Cada aprovacao vale para exatamente um canal.
+- Um marketplace recebe somente a imagem atual e imagens que ja tenham sido aprovadas anteriormente para esse mesmo canal; a galeria do site nao e copiada silenciosamente para outro marketplace.
+- A ordem externa e sempre `white -> hero -> ambient`. Se `white` ainda nao foi aprovada no canal, `hero` ou `ambient` sao bloqueadas para impedir que virem capa.
+- Amazon recebe as imagens aprovadas na frente, mas preserva os locators existentes da listagem para nao apagar a galeria anterior ao adicionar novas imagens.
+- Mercado Livre, Shopee e TikTok preservam as imagens externas existentes por meio dos respectivos publishers, com `white` mantida como primeira imagem do novo conjunto.
+- O caminho de publicacao de imagem gerada no Olist/Tiny via API V2 fica bloqueado. O endpoint de alteracao de produto exige reenviar `preco` no layout completo; isso conflita com a regra absoluta do AI Image Studio de nao tocar, recalcular ou reenviar preco/estoque. O ERP permanece fonte protegida.
+
 ## Cache da vitrine
 
 A publicacao do Admin deve encontrar exatamente um item do cache. Se zero ou mais de um item corresponderem, o arquivo nao e persistido no cache.
@@ -47,5 +56,9 @@ A publicacao do Admin deve encontrar exatamente um item do cache. Se zero ou mai
 - bloqueio de traversal no caminho da foto-base;
 - prompts com preservacao de identidade, 1024x1024 e regra de imagem principal branca;
 - SKU + ID externo obrigatoriamente consistentes;
+- ordem `white -> hero -> ambient`;
+- proveniencia de aprovacao por marketplace;
+- preservacao da galeria Amazon;
+- bloqueio fail-closed do caminho ERP que exigiria reenviar preco;
 - remocao da query antiga `WHERE olist_id = ? OR sku = ?`;
 - remocao do bind incompleto da rotina antiga.
