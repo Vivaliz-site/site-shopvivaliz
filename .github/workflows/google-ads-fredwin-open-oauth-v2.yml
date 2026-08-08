@@ -1,0 +1,70 @@
+name: Google Ads Fred-Win Open OAuth V2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/google-ads-fredwin-open-oauth-v2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  open:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Check Fred-Win tunnel
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
+
+      - name: Schedule OAuth page in interactive Windows session
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >/tmp/open.ps1 <<'PS1'
+          $ErrorActionPreference='Stop'
+          $url='https://shopvivaliz.com.br/auth/google-ads-authorize.php?job=360925a31e807fbaf8795ac3314a20c8'
+          $task='ShopVivalizGoogleAdsOAuth'
+          $user=(Get-CimInstance Win32_ComputerSystem).UserName
+          if(-not $user){ throw 'NO_INTERACTIVE_USER' }
+          $args='-NoProfile -Command "Start-Process ''' + $url.Replace("'","''") + '''"'
+          $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $args
+          $trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(5)
+          $principal=New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+          Register-ScheduledTask -TaskName $task -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+          Start-ScheduledTask -TaskName $task
+          Write-Output 'GOOGLE_ADS_OAUTH_SCHEDULED_ON_FREDWIN'
+          PS1
+          PS_B64="$(iconv -f UTF-8 -t UTF-16LE /tmp/open.ps1 | base64 -w0)"
+          CMD="powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $PS_B64"
+          CMD_B64="$(printf '%s' "$CMD" | base64 -w0)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
+          body = json.dumps({'params': {'command': command, 'timeout': 20}}).encode('utf-8')
+          req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
+          with urllib.request.urlopen(req, timeout=30) as response:
+              payload = json.loads(response.read().decode('utf-8'))
+          result = payload.get('result') or {}
+          print(result.get('output') or '')
+          if result.get('success') is not True:
+              raise SystemExit('Fred-Win action failed')
+          PY"
+
+      - name: Cleanup local runner
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/open.ps1
