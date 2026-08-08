@@ -181,8 +181,8 @@ final class AiStudioOmnichannelImagePublisher
         if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)) {
             throw new RuntimeException("Formato real de imagem não permitido: {$mime}.");
         }
-        if ($width < 512 || $height < 512) {
-            throw new RuntimeException("Imagem gerada abaixo do padrão mínimo: {$width}x{$height}; mínimo 512px por lado.");
+        if ($width < 1000 || $height < 1000) {
+            throw new RuntimeException("Imagem gerada abaixo do padrão premium: {$width}x{$height}; mínimo 1000px por lado.");
         }
         $hash = hash_file('sha256', $path);
         if (!is_string($hash) || $hash === '') {
