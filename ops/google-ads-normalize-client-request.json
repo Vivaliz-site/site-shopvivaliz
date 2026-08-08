@@ -1,0 +1,5 @@
+{
+  "action": "normalize_oauth_client_id",
+  "requested_at": "2026-08-08T12:45:00-03:00",
+  "reason": "Use the authenticated Fred-Win GitHub CLI to normalize the malformed Google OAuth client id and update the Production environment without exposing credentials"
+}
