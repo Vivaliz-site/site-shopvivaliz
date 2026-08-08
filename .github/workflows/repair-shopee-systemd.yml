@@ -1,0 +1,113 @@
+name: Repair Shopee systemd unit
+
+on:
+  push:
+    branches:
+      - repair/shopee-systemd-unit-20260808
+    paths:
+      - '.github/workflows/repair-shopee-systemd.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure verified Oracle SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Repair and verify Shopee renewer unit
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          unit='shopvivaliz-shopee-token-renewer.service'
+          target="/etc/systemd/system/$unit"
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          backup="${target}.repair-${stamp}.bak"
+          candidate="$(mktemp /tmp/shopvivaliz-shopee-token-renewer.XXXXXX.service)"
+          rollback_needed=0
+
+          cleanup() {
+            rm -f -- "$candidate"
+          }
+          trap cleanup EXIT
+
+          cat > "$candidate" <<'UNIT'
+          [Unit]
+          Description=ShopVivaliz Shopee OAuth Token Renewer
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          User=ubuntu
+          Group=www-data
+          WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current
+          EnvironmentFile=/home/ubuntu/shopvivaliz-deploy/shared/.env
+          Environment=PYTHONUNBUFFERED=1
+          ExecStart=/usr/bin/python3 /home/ubuntu/shopvivaliz-deploy/current/daemon-shopee-token-renewer.py --interval 10800 --retry-interval 900
+          Restart=always
+          RestartSec=60
+          TimeoutStopSec=30
+          UMask=0027
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectSystem=full
+          StandardOutput=journal
+          StandardError=journal
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+
+          test -r /home/ubuntu/shopvivaliz-deploy/current/daemon-shopee-token-renewer.py
+          systemd-analyze verify "$candidate"
+
+          if [[ -r "$target" ]]; then
+            sudo cp -p -- "$target" "$backup"
+            rollback_needed=1
+          fi
+
+          if ! sudo install -o root -g root -m 0644 "$candidate" "$target" \
+            || ! sudo systemctl daemon-reload \
+            || ! sudo systemctl enable "$unit" >/dev/null \
+            || ! sudo systemctl restart "$unit"; then
+            echo 'Repair failed; restoring previous unit.' >&2
+            if [[ "$rollback_needed" -eq 1 && -r "$backup" ]]; then
+              sudo install -o root -g root -m 0644 "$backup" "$target"
+              sudo systemctl daemon-reload || true
+              sudo systemctl restart "$unit" || true
+            fi
+            exit 1
+          fi
+
+          load="$(systemctl show "$unit" -p LoadState --value)"
+          active="$(systemctl show "$unit" -p ActiveState --value)"
+          sub="$(systemctl show "$unit" -p SubState --value)"
+          execstart="$(systemctl show "$unit" -p ExecStart --value)"
+          if [[ "$load" != loaded || "$active" != active || "$sub" != running ]]; then
+            echo "Unexpected service state: load=$load active=$active sub=$sub" >&2
+            exit 1
+          fi
+          if [[ "$execstart" != *'/home/ubuntu/shopvivaliz-deploy/current/daemon-shopee-token-renewer.py'* ]]; then
+            echo 'ExecStart does not point to the active release symlink.' >&2
+            exit 1
+          fi
+          systemd-analyze verify "$target"
+          echo "Shopee renewer repaired: load=$load active=$active sub=$sub backup=$backup"
+          REMOTE
