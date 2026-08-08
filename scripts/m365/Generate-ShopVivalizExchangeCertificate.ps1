@@ -4,6 +4,9 @@ param(
   [string]$CerPath = 'C:\Certs\ShopVivalizExchangeAuth.cer'
 )
 $ErrorActionPreference='Stop'
+Import-Module PKI -ErrorAction Stop
+if(-not (Get-PSProvider -PSProvider Certificate -ErrorAction SilentlyContinue)) { throw 'Certificate PSProvider unavailable' }
+if(-not (Get-PSDrive -Name Cert -ErrorAction SilentlyContinue)) { New-PSDrive -Name Cert -PSProvider Certificate -Root '\' | Out-Null }
 $store='Cert:\CurrentUser\My'
 $existing = Get-ChildItem $store | Where-Object { $_.Subject -eq $Subject -and $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date).AddDays(30) } | Sort-Object NotAfter -Descending | Select-Object -First 1
 if(-not $existing){
