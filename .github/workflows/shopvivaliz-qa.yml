@@ -108,6 +108,8 @@ jobs:
           node --check public/assets/liz-assistant/liz-assistant.js
       - name: Regressao de resolucao de credenciais Tiny/Olist (incidente #747)
         run: php tests/integration-health-credentials-test.php
+      - name: Politica premium de otimizacao por marketplace
+        run: php tests/catalog-optimization-policy-test.php
 
 # Validacao de producao e evidencia canonica pertencem ao
 # Post-deploy Monitoring do Master Production Pipeline. O QA permanece
