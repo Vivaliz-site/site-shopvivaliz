@@ -1,5 +1,5 @@
 {
-  "action": "m365_app_only_audit",
-  "requested_at": "2026-08-07T20:50:00-03:00",
-  "reason": "Validate certificate-based Microsoft Graph app-only authentication and complete Microsoft 365 integration audit before any production email operation"
+  "action": "email_runtime_status",
+  "requested_at": "2026-08-07T21:27:00-03:00",
+  "reason": "Inspect runtime, migrations, provider, authorization controls, and send state after Microsoft app-only setup"
 }
