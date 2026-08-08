@@ -14,22 +14,23 @@ Este modulo otimiza apenas conteudo editorial, identificadores e SEO. Preco e es
 - Bloquear preco, estoque, desconto, cupom, parcelamento e frete gratis na saida gerada.
 - Registrar score e checks de qualidade no staging.
 - Conteudo reprovado pela politica do canal deve falhar antes de entrar como `pending`.
+- Distinguir limite oficial do marketplace de alvo interno de qualidade; nunca tratar uma preferencia editorial interna como regra oficial.
 
 ## Mercado Livre
 
-Priorizar identidade estruturada do produto e atributos da categoria. Para anuncios legados, manter titulo enxuto e factual, sem condicoes comerciais. Em fluxos User Products, marca, modelo, GTIN/MPN, variacao e atributos sao a base da identidade.
+Priorizar identidade estruturada do produto e atributos da categoria. O limite de titulo e definido pela categoria (`max_title_length`); enquanto esse valor nao estiver disponivel no fluxo local, o engine usa 60 caracteres como teto conservador. Em User Products o titulo muda de funcao e os dados estruturados (marca, modelo, GTIN/MPN, variacao e atributos) passam a ser ainda mais importantes. Condicoes comerciais e a palavra estoque nao entram no titulo.
 
 ## Shopee
 
-Priorizar legibilidade mobile, tipo do produto, marca/modelo quando existentes e atributos de decisao. Nao usar urgencia ou escassez artificiais, claims de garantia/autenticidade sem fonte, nem marcas de terceiros para capturar trafego.
+Priorizar legibilidade mobile, tipo do produto, marca/modelo quando existentes e atributos de decisao. O alvo operacional local e um titulo de ate 120 caracteres, sem preencher texto so para atingir tamanho. Nao usar urgencia ou escassez artificiais, claims de garantia/autenticidade sem fonte, nem marcas de terceiros para capturar trafego.
 
 ## Amazon
 
-Titulo mobile-first de ate 75 caracteres para o perfil operacional atual, sem emojis/promocoes e sem repeticao abusiva. Usar exatamente cinco bullets factuais. Item Highlight, quando usado, deve ser factual e curto.
+A politica geral atual permite ate 200 caracteres para a maioria das categorias. O engine prefere 80-150 quando isso preserva a identidade completa do produto, sem transformar essa faixa em limite oficial. Sao bloqueados caracteres promocionais proibidos e repeticao da mesma palavra mais de duas vezes, exceto artigos, preposicoes e conjuncoes. Usar exatamente cinco bullets factuais.
 
 ## TikTok Shop
 
-Titulo factual dentro do limite tecnico, descricao detalhada quando houver dados suficientes, 3 a 5 selling points curtos e tres hooks factuais para video/live. Proibidos medo, falsa urgencia, escassez e promessas nao comprovadas.
+Titulo obrigatoriamente entre 25 e 200 caracteres; o alvo de performance usado pelo engine e 40-150. Deve conter somente dados essenciais de identificacao e descoberta. Quando a origem tiver material factual suficiente, a descricao deve buscar 500+ caracteres sem padding, repeticao ou invencao. Usar 3 a 5 selling points curtos e tres hooks factuais para video/live. Proibidos referencias a estoque/inventario, desconto, medo, falsa urgencia, escassez e promessas nao comprovadas.
 
 ## Site proprio
 
@@ -45,8 +46,9 @@ O teste `tests/catalog-optimization-policy-test.php` cobre:
 
 - bloqueio de preco/estoque/condicao comercial;
 - bloqueio de garantia sem fonte;
-- limites e repeticao de titulo Amazon;
-- estrutura TikTok Shop;
+- limite de 200 caracteres, caracteres e repeticao de titulo Amazon;
+- faixa obrigatoria de 25-200 caracteres e estrutura TikTok Shop;
 - ERP sem SEO/hook;
 - preservacao de marca real;
-- ausencia de preco/estoque no prompt.
+- ausencia de preco/estoque no prompt;
+- aplicacao do mesmo quality gate no fluxo de regeneracao do Admin.
