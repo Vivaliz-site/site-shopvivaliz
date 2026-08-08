@@ -1,5 +1,5 @@
 {
   "job": "360925a31e807fbaf8795ac3314a20c8",
-  "requested_at": "2026-08-08T18:22:00-03:00",
-  "reason": "Compare public and direct-origin OAuth responses after runtime credential sync"
+  "requested_at": "2026-08-08T18:26:00-03:00",
+  "reason": "Check whether Google Ads OAuth callback completed after user authorization"
 }
