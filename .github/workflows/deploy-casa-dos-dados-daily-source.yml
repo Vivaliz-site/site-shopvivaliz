@@ -1,0 +1,123 @@
+name: Deploy Casa dos Dados daily discovery source
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/deploy-casa-dos-dados-daily-source.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deploy-casa-dos-dados-daily-source
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Deploy daily source without touching bulk email worker
+        run: |
+          timeout 420s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          ROOT=/home/ubuntu/mei-mg-email
+          EXPECTED_PRIVATE_SHA=4a0f7ccef455a9e77f212251a545547418556e3c
+          cd "$ROOT"
+
+          # Daily data ingestion is independent from sending. Never start the worker here.
+          test "$(sudo systemctl is-active mei-mg-email-worker.service || true)" = inactive
+          timeout 40s git fetch --quiet origin main
+          actual=$(git rev-parse origin/main)
+          echo ORIGIN_MAIN="$actual"
+          test "$actual" = "$EXPECTED_PRIVATE_SHA"
+
+          stamp=$(date +%Y%m%d-%H%M%S)
+          backup="$ROOT/backups/casa-dos-dados-daily-$stamp"
+          mkdir -p "$backup/scripts"
+          for f in scripts/ingest_casa_dos_dados_daily.py scripts/sincronizar_base_diaria.py; do
+            if [ -e "$f" ]; then cp -a "$f" "$backup/$f"; fi
+            tmp=$(mktemp)
+            git show "$EXPECTED_PRIVATE_SHA:$f" > "$tmp"
+            install -m 750 "$tmp" "$ROOT/$f"
+            rm -f "$tmp"
+          done
+          .venv/bin/python -m py_compile scripts/ingest_casa_dos_dados_daily.py scripts/sincronizar_base_diaria.py
+
+          # Configure only non-secret selector/tuning values. Never write an API key here.
+          .venv/bin/python - <<'PY'
+          from pathlib import Path
+          path=Path('/home/ubuntu/mei-mg-email/.env')
+          text=path.read_text(encoding='utf-8') if path.exists() else ''
+          updates={
+              'CNPJ_DAILY_SOURCE':'casadosdados',
+              'CNPJ_DAILY_LOOKBACK_DAYS':'3',
+              'CASA_DOS_DADOS_PAGE_SIZE':'100',
+              'CASA_DOS_DADOS_MAX_PAGES':'500',
+              'CASA_DOS_DADOS_TIMEOUT_SECONDS':'45',
+              'CNPJ_DAILY_TIMEZONE':'America/Sao_Paulo',
+          }
+          lines=text.splitlines()
+          seen=set()
+          out=[]
+          for line in lines:
+              key=line.split('=',1)[0].strip() if '=' in line and not line.lstrip().startswith('#') else None
+              if key in updates:
+                  out.append(f'{key}={updates[key]}')
+                  seen.add(key)
+              else:
+                  out.append(line)
+          for key,value in updates.items():
+              if key not in seen:
+                  out.append(f'{key}={value}')
+          path.write_text('\n'.join(out).rstrip()+'\n',encoding='utf-8')
+          PY
+
+          if grep -Eq '^CASA_DOS_DADOS_API_KEY=.+$' .env; then
+            echo CASA_DOS_DADOS_KEY_PRESENT=true
+          else
+            echo CASA_DOS_DADOS_KEY_PRESENT=false
+          fi
+
+          sudo systemctl reset-failed mei-mg-base-sync.service || true
+          set +e
+          timeout 180s sudo systemctl start mei-mg-base-sync.service
+          sync_rc=$?
+          set -e
+          echo BASE_SYNC_SYSTEMCTL_RC=$sync_rc
+
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('/home/ubuntu/mei-mg-email/.env',override=True)
+          import json,os,psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'],row_factory=dict_row,connect_timeout=10) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("""
+                    select id,source_name,status,started_at,finished_at,rows_before,rows_after,rows_added,error,details
+                      from mei_email.base_sync_runs
+                     order by id desc limit 1
+                  """)
+                  row=dict(cur.fetchone())
+          print('LATEST_SYNC='+json.dumps(row,default=str,ensure_ascii=False))
+          assert row['source_name']=='casa_dos_dados_v5', row
+          assert row['status'] in {'source_unconfigured','success'}, row
+          if row['status']=='source_unconfigured':
+              assert (row.get('details') or {}).get('missing_secret')=='CASA_DOS_DADOS_API_KEY', row
+          PY
+
+          test "$(sudo systemctl is-enabled mei-mg-base-sync.timer)" = enabled
+          test "$(sudo systemctl is-active mei-mg-base-sync.timer)" = active
+          test "$(sudo systemctl is-active mei-mg-email-worker.service || true)" = inactive
+          sudo systemctl reset-failed mei-mg-base-sync.service || true
+          sudo systemctl list-timers mei-mg-base-sync.timer --all --no-pager
+          echo BACKUP="$backup"
+          echo DAILY_SOURCE_DEPLOYED_WORKER_INACTIVE
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
