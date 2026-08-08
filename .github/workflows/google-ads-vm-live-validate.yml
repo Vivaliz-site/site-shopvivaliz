@@ -1,0 +1,79 @@
+name: Google Ads VM Live Validate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-vm-live-validate.json"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Validate OAuth and Google Ads read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          envfile='/home/ubuntu/shopvivaliz-deploy/shared/.env'
+          current='/home/ubuntu/shopvivaliz-deploy/current'
+          test -r "$envfile"
+          set -a
+          . "$envfile"
+          set +a
+          python3 - <<'PY'
+          import json, os, urllib.parse, urllib.request, urllib.error
+          required=['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','GOOGLE_ADS_REFRESH_TOKEN','GOOGLE_ADS_DEVELOPER_TOKEN','GOOGLE_ADS_CUSTOMER_ID']
+          missing=[k for k in required if not os.environ.get(k,'').strip()]
+          if missing:
+              print('VM_GOOGLE_ADS_NOT_READY')
+              print('missing=' + ','.join(missing))
+              raise SystemExit(2)
+          data=urllib.parse.urlencode({
+              'client_id':os.environ['GOOGLE_OAUTH_CLIENT_ID'],
+              'client_secret':os.environ['GOOGLE_OAUTH_CLIENT_SECRET'],
+              'refresh_token':os.environ['GOOGLE_ADS_REFRESH_TOKEN'],
+              'grant_type':'refresh_token',
+          }).encode()
+          req=urllib.request.Request('https://oauth2.googleapis.com/token', data=data, headers={'Content-Type':'application/x-www-form-urlencoded'}, method='POST')
+          try:
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  payload=json.loads(r.read().decode())
+              ok=bool(payload.get('access_token'))
+              print('OAUTH_REFRESH_VALID=' + ('yes' if ok else 'no'))
+              if not ok: raise SystemExit(3)
+          except urllib.error.HTTPError as e:
+              try: payload=json.loads(e.read().decode(errors='ignore'))
+              except Exception: payload={}
+              print('OAUTH_REFRESH_VALID=no')
+              print('oauth_error=' + str(payload.get('error','http_'+str(e.code))))
+              raise SystemExit(4)
+          PY
+          python3 -m pip install --user --disable-pip-version-check google-ads >/dev/null
+          python3 "$current/scripts/google_ads_review_campaigns.py"
+          python3 "$current/scripts/google_ads_dynamic_images.py"
+          echo 'GOOGLE_ADS_VM_LIVE_VALIDATED'
+          REMOTE
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
