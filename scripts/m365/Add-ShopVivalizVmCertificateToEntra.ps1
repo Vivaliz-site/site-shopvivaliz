@@ -15,11 +15,15 @@ function New-SignedJwt([System.Security.Cryptography.X509Certificates.X509Certif
   $header=@{alg='RS256';typ='JWT';x5t=(ConvertTo-B64Url $Cert.GetCertHash())} | ConvertTo-Json -Compress
   $payload=$Claims | ConvertTo-Json -Compress
   $unsigned=(ConvertTo-B64Url ([Text.Encoding]::UTF8.GetBytes($header)))+'.'+(ConvertTo-B64Url ([Text.Encoding]::UTF8.GetBytes($payload)))
-  $rsa=$Cert.GetRSAPrivateKey()
+  $rsa=$Cert.PrivateKey
   if(-not $rsa){ throw 'Private key is unavailable for the existing certificate' }
+  $bytes=[Text.Encoding]::UTF8.GetBytes($unsigned)
   try {
-    $sig=$rsa.SignData([Text.Encoding]::UTF8.GetBytes($unsigned),[Security.Cryptography.HashAlgorithmName]::SHA256,[Security.Cryptography.RSASignaturePadding]::Pkcs1)
-  } finally { $rsa.Dispose() }
+    $sig=$rsa.SignData($bytes,[Security.Cryptography.CryptoConfig]::MapNameToOID('SHA256'))
+  } catch {
+    $sha=[Security.Cryptography.SHA256]::Create()
+    try { $sig=$rsa.SignData($bytes,$sha) } finally { $sha.Dispose() }
+  }
   $unsigned+'.'+(ConvertTo-B64Url $sig)
 }
 
