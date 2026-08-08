@@ -55,7 +55,7 @@ $product = [
     'olist_id' => '123',
 ];
 
-// Mercado Livre: saida factual dentro do limite deve passar.
+// Mercado Livre: saida factual dentro do limite conservador deve passar.
 $ml = cot_base_data();
 ai_catalog_validate_ai_response($ml, 'ml', $product);
 $report = ai_catalog_quality_report($ml, 'ml', $product);
@@ -71,7 +71,7 @@ $badGuarantee = cot_base_data();
 $badGuarantee['optimized_description'] .= ' Com garantia de fabrica.';
 cot_expect_rejection(fn() => ai_catalog_validate_ai_response($badGuarantee, 'shopee', $product), 'unsourced guarantee');
 
-// Amazon: exatamente 5 bullets, titulo curto e sem repeticao abusiva.
+// Amazon: limite oficial atual de 200 caracteres, 5 bullets e sem repeticao abusiva.
 $amazon = cot_base_data();
 $amazon['optimized_title'] = 'Suporte Articulado Mesa X1 Preto';
 $amazon['bullet_points'] = [
@@ -84,14 +84,14 @@ $amazon['bullet_points'] = [
 ai_catalog_validate_ai_response($amazon, 'amazon', $product);
 
 $amazonLong = $amazon;
-$amazonLong['optimized_title'] = str_repeat('A', 76);
-cot_expect_rejection(fn() => ai_catalog_validate_ai_response($amazonLong, 'amazon', $product), 'Amazon title > 75');
+$amazonLong['optimized_title'] = str_repeat('A', 201);
+cot_expect_rejection(fn() => ai_catalog_validate_ai_response($amazonLong, 'amazon', $product), 'Amazon title > 200');
 
 $amazonRepeat = $amazon;
 $amazonRepeat['optimized_title'] = 'Suporte Suporte Suporte Mesa X1';
 cot_expect_rejection(fn() => ai_catalog_validate_ai_response($amazonRepeat, 'amazon', $product), 'Amazon repeated word');
 
-// TikTok Shop: 3 hooks factuais obrigatorios e bullets curtos.
+// TikTok Shop: titulo 25-200, 3 hooks factuais e bullets curtos.
 $tiktok = cot_base_data();
 $tiktok['marketing_hooks'] = [
     'Veja o modelo X1 em uso sobre a mesa.',
@@ -99,6 +99,14 @@ $tiktok['marketing_hooks'] = [
     'Confira os detalhes do suporte na cor preta.',
 ];
 ai_catalog_validate_ai_response($tiktok, 'tiktok', $product);
+
+$tiktokShort = $tiktok;
+$tiktokShort['optimized_title'] = 'Suporte X1 Preto';
+cot_expect_rejection(fn() => ai_catalog_validate_ai_response($tiktokShort, 'tiktok', $product), 'TikTok title < 25');
+
+$tiktokLong = $tiktok;
+$tiktokLong['optimized_title'] = str_repeat('T', 201);
+cot_expect_rejection(fn() => ai_catalog_validate_ai_response($tiktokLong, 'tiktok', $product), 'TikTok title > 200');
 
 $tiktokBad = $tiktok;
 $tiktokBad['marketing_hooks'] = ['Apenas um hook factual.'];
