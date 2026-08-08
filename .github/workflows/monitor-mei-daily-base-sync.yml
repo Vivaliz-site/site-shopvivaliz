@@ -40,7 +40,7 @@ jobs:
                   cur.execute("set statement_timeout='20s'")
                   cur.execute("""
                     select id,source_name,source_revision,source_last_modified,status,
-                           started_at,finished_at,rows_before,rows_after,rows_added,error
+                           started_at,finished_at,rows_before,rows_after,rows_added,error,details
                       from mei_email.base_sync_runs
                      order by id desc limit 1
                   """)
@@ -48,24 +48,40 @@ jobs:
           print(json.dumps(row,default=str,ensure_ascii=False))
           now=datetime.datetime.now(datetime.timezone.utc)
           finished=row.get('finished_at')
-          source_modified=row.get('source_last_modified')
           if finished is None:
               raise SystemExit('HEALTH_FAIL=nenhuma_sincronizacao_concluida')
           if finished.tzinfo is None:
               finished=finished.replace(tzinfo=datetime.timezone.utc)
           if now-finished.astimezone(datetime.timezone.utc) > datetime.timedelta(hours=26):
               raise SystemExit('HEALTH_FAIL=sincronizacao_nao_executou_nas_ultimas_26h')
-          if row.get('status') not in {'success','no_change'}:
-              raise SystemExit('HEALTH_FAIL=status_sincronizacao='+str(row.get('status')))
-          if source_modified is None:
-              raise SystemExit('HEALTH_FAIL=fonte_sem_timestamp_de_atualizacao')
-          if source_modified.tzinfo is None:
-              source_modified=source_modified.replace(tzinfo=datetime.timezone.utc)
-          age=now-source_modified.astimezone(datetime.timezone.utc)
-          print('SOURCE_AGE_HOURS='+str(round(age.total_seconds()/3600,2)))
-          if age > datetime.timedelta(hours=48):
-              raise SystemExit('HEALTH_FAIL=fonte_mais_antiga_que_48h')
-          print('DAILY_BASE_SYNC_HEALTHY')
+
+          status=row.get('status')
+          source=row.get('source_name') or ''
+          if status == 'source_unconfigured':
+              raise SystemExit('HEALTH_FAIL=CASA_DOS_DADOS_API_KEY_nao_configurada')
+          if status not in {'success','no_change'}:
+              raise SystemExit('HEALTH_FAIL=status_sincronizacao='+str(status))
+
+          if source == 'casa_dos_dados_v5':
+              details=row.get('details') or {}
+              api_result=details.get('api_result') or {}
+              print('DAILY_SOURCE=casa_dos_dados_v5')
+              print('WINDOW_START='+str(api_result.get('window_start')))
+              print('WINDOW_END='+str(api_result.get('window_end')))
+              print('API_TOTAL='+str(api_result.get('api_total')))
+              print('ROWS_ADDED='+str(row.get('rows_added')))
+              print('DAILY_BASE_SYNC_HEALTHY')
+          else:
+              source_modified=row.get('source_last_modified')
+              if source_modified is None:
+                  raise SystemExit('HEALTH_FAIL=fonte_sem_timestamp_de_atualizacao')
+              if source_modified.tzinfo is None:
+                  source_modified=source_modified.replace(tzinfo=datetime.timezone.utc)
+              age=now-source_modified.astimezone(datetime.timezone.utc)
+              print('SOURCE_AGE_HOURS='+str(round(age.total_seconds()/3600,2)))
+              if age > datetime.timedelta(hours=48):
+                  raise SystemExit('HEALTH_FAIL=fonte_mais_antiga_que_48h')
+              print('DAILY_BASE_SYNC_HEALTHY')
           PY
           echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
           EOF
