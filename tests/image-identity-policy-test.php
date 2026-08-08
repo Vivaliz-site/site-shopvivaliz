@@ -74,7 +74,6 @@ try {
     iip_expect_failure(fn() => ai_studio_validate_image_file($fake, 600), 'fake image with jpg extension');
     iip_expect_failure(fn() => AiStudioHttpClient::validateOutputImage($fake, 1000), 'fake regenerated image with jpg extension');
 
-    // Traversal local nunca pode ser usado como foto-base.
     iip_expect_failure(
         fn() => ai_studio_resolve_base_image('../etc/passwd', $tmp, 123),
         'path traversal in base image'
@@ -92,34 +91,50 @@ try {
     iip_assert(str_contains($prompts['white'], '85-95%'), 'main image must request strong product fill');
     iip_assert(str_contains($prompts['white'], 'no badges'), 'main image must reject promotional overlays');
 
-    // Testa o matcher privado sem abrir conexão de banco.
+    // Testa funcoes puras/privadas de identidade e ordenacao sem banco.
     $reflection = new ReflectionClass(AiStudioOmnichannelImagePublisher::class);
     $publisher = $reflection->newInstanceWithoutConstructor();
-    $method = $reflection->getMethod('cacheItemMatchesProduct');
-    $method->setAccessible(true);
 
+    $matchMethod = $reflection->getMethod('cacheItemMatchesProduct');
+    $matchMethod->setAccessible(true);
     $exact = ['sku' => 'SKU-1', 'olist_id' => '1001'];
-    iip_assert($method->invoke($publisher, $exact, 'SKU-1', '1001') === true, 'exact SKU + Olist ID must match');
-
+    iip_assert($matchMethod->invoke($publisher, $exact, 'SKU-1', '1001') === true, 'exact SKU + Olist ID must match');
     $wrongSku = ['sku' => 'SKU-OUTRO', 'olist_id' => '1001'];
-    iip_assert($method->invoke($publisher, $wrongSku, 'SKU-1', '1001') === false, 'matching Olist ID with conflicting SKU must not match');
-
+    iip_assert($matchMethod->invoke($publisher, $wrongSku, 'SKU-1', '1001') === false, 'matching Olist ID with conflicting SKU must not match');
     $wrongId = ['sku' => 'SKU-1', 'olist_id' => '9999'];
-    iip_assert($method->invoke($publisher, $wrongId, 'SKU-1', '1001') === false, 'matching SKU with conflicting Olist ID must not match');
-
+    iip_assert($matchMethod->invoke($publisher, $wrongId, 'SKU-1', '1001') === false, 'matching SKU with conflicting Olist ID must not match');
     $onlySku = ['sku' => 'SKU-1'];
-    iip_assert($method->invoke($publisher, $onlySku, 'SKU-1', '1001') === false, 'two source identifiers require two cache confirmations');
-    iip_assert($method->invoke($publisher, $onlySku, 'SKU-1', '') === true, 'SKU-only source may match exact SKU');
-
+    iip_assert($matchMethod->invoke($publisher, $onlySku, 'SKU-1', '1001') === false, 'two source identifiers require two cache confirmations');
+    iip_assert($matchMethod->invoke($publisher, $onlySku, 'SKU-1', '') === true, 'SKU-only source may match exact SKU');
     $onlyId = ['olist_product_id' => '1001'];
-    iip_assert($method->invoke($publisher, $onlyId, '', '1001') === true, 'ID-only source may match exact external ID');
+    iip_assert($matchMethod->invoke($publisher, $onlyId, '', '1001') === true, 'ID-only source may match exact external ID');
 
-    // A sincronização Olist antiga usava OR e um bind incompleto. Ambos devem sumir.
+    $orderMethod = $reflection->getMethod('orderImageCandidates');
+    $orderMethod->setAccessible(true);
+    $ordered = $orderMethod->invoke($publisher, [
+        ['type' => 'hero', 'url' => '/hero-new.png', 'order' => 0],
+        ['type' => 'white', 'url' => '/white-approved.png', 'order' => 1],
+        ['type' => 'ambient', 'url' => '/ambient-approved.png', 'order' => 2],
+        ['type' => 'hero', 'url' => '/hero-old.png', 'order' => 3],
+    ]);
+    iip_assert($ordered === ['/white-approved.png', '/hero-new.png', '/ambient-approved.png'], 'white must always be first and only latest type kept');
+
+    // A sincronizacao Olist antiga usava OR e um bind incompleto. Ambos devem sumir.
     $syncSource = file_get_contents(__DIR__ . '/../olist/sync-images-to-site.php');
     iip_assert(is_string($syncSource), 'sync source must be readable');
     iip_assert(!str_contains($syncSource, 'WHERE olist_id = ? OR sku = ?'), 'unsafe OR identity query must not exist');
     iip_assert(!str_contains($syncSource, 'bind_param("issi"'), 'old incomplete image bind must not exist');
     iip_assert(str_contains($syncSource, 'correspondência ambígua'), 'sync must explicitly block ambiguity');
+
+    // Publicacao multicanal nao pode reaproveitar silenciosamente a galeria do
+    // site e nao pode tocar no preco do ERP para publicar imagem gerada.
+    $publisherSource = file_get_contents(__DIR__ . '/../admin/ai-image-studio/src/OmnichannelImagePublisher.php');
+    iip_assert(is_string($publisherSource), 'publisher source must be readable');
+    iip_assert(str_contains($publisherSource, 'approvedChannelUrls'), 'external channels must use same-channel approval provenance');
+    iip_assert(str_contains($publisherSource, 'white deve ser aprovada primeiro'), 'secondary image cannot become cover without approved white');
+    iip_assert(str_contains($publisherSource, 'amazonUrlsWithExisting'), 'Amazon gallery must preserve pre-existing locators');
+    iip_assert(str_contains($publisherSource, 'API V2 exige reenviar preço'), 'ERP image publish must fail closed instead of resending price');
+    iip_assert(!str_contains($publisherSource, "new SvTinyPublisher(\$this->db))->publishImages"), 'AI Image Studio must not call Tiny image mutation path');
 
     fwrite(STDOUT, "OK image identity and quality policy\n");
 } finally {
