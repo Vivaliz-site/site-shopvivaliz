@@ -18,17 +18,16 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Inspect production migration files
+      - name: Inspect production worker
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           sudo systemctl stop mei-mg-email-worker.service || true
           cd /home/ubuntu/mei-mg-email
-          for f in db/migrations/V009__add_performance_indexes.sql db/migrations/V010__add_lote_priority.sql db/migrations/V011__add_descartado_status.sql; do
-            echo "=== $f ==="
-            cat "$f"
-            echo
-          done
+          echo '=== WORKER 1-220 ==='
+          sed -n '1,220p' worker/worker.py
+          echo '=== WORKER 221-460 ==='
+          sed -n '221,460p' worker/worker.py
           echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
           EOF
       - name: Cleanup
