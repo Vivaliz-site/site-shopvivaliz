@@ -87,8 +87,6 @@ function svih_tiktok_shop_publication(): array
     ];
     try {
         $client = new SvTikTokClient();
-        // Corpo não vazio força JSON object válido em PHP; o SKU sentinela
-        // não corresponde a anúncio real e serve somente para provar acesso.
         $response = $client->request(
             'POST',
             '/product/202309/products/search',
@@ -126,25 +124,28 @@ function svih_tiktok_shop_publication(): array
 function svih_amazon_publication(): array
 {
     $tokens = [
-        'lwa_refresh_token' => svih_token_meta(svih_env('AMAZON_LWA_REFRESH_TOKEN'), 'environment'),
-        'lwa_client_id' => svih_token_meta(svih_env('AMAZON_LWA_CLIENT_ID'), 'environment'),
-        'lwa_client_secret' => svih_token_meta(svih_env('AMAZON_LWA_CLIENT_SECRET'), 'environment'),
-        'seller_id' => svih_token_meta(svih_env('AMAZON_SELLER_ID', 'AMAZON_ACCOUNT_ID'), 'environment'),
-        'marketplace_id' => svih_token_meta(svih_env('AMAZON_MARKETPLACE_ID'), 'environment'),
+        'lwa_refresh_token' => svih_token_meta(svih_env('AMAZON_LWA_REFRESH_TOKEN', 'AMAZON_SP_API_REFRESH_TOKEN', 'SP_API_REFRESH_TOKEN', 'LWA_REFRESH_TOKEN'), 'environment'),
+        'lwa_client_id' => svih_token_meta(svih_env('AMAZON_LWA_CLIENT_ID', 'AMAZON_SP_API_CLIENT_ID', 'SP_API_CLIENT_ID', 'LWA_CLIENT_ID'), 'environment'),
+        'lwa_client_secret' => svih_token_meta(svih_env('AMAZON_LWA_CLIENT_SECRET', 'AMAZON_SP_API_CLIENT_SECRET', 'SP_API_CLIENT_SECRET', 'LWA_CLIENT_SECRET'), 'environment'),
+        'seller_id' => svih_token_meta(svih_env('AMAZON_SELLER_ID', 'AMAZON_ACCOUNT_ID', 'AMAZON_MERCHANT_ID', 'AMAZON_MERCHANT_TOKEN', 'SP_API_SELLER_ID'), 'environment'),
+        'marketplace_id' => svih_token_meta(svih_env('AMAZON_MARKETPLACE_ID', 'AMAZON_MARKETPLACE', 'SP_API_MARKETPLACE_ID'), 'environment'),
     ];
     try {
         $client = new SvAmazonClient();
         $response = $client->request('GET', '/sellers/v1/marketplaceParticipations');
+        $resolvedMarketplace = $client->marketplaceId();
         return [
             'name' => 'Amazon SP-API — publicação de catálogo',
             'key' => 'amazon_publication',
             'status' => 'connected',
-            'message' => 'SP-API autenticada confirmou as participações do vendedor.',
+            'message' => 'SP-API autenticada por LWA confirmou as participações do vendedor.',
             'remediation' => null,
             'tokens' => $tokens,
             'fixes' => [],
             'provider_status' => (int)($response['status'] ?? 200),
             'validation' => 'authenticated_seller_read',
+            'resolved_marketplace' => $resolvedMarketplace !== '' ? 'present' : 'missing',
+            'auth_mode' => 'lwa_only',
         ];
     } catch (Throwable $e) {
         return [
@@ -152,12 +153,13 @@ function svih_amazon_publication(): array
             'key' => 'amazon_publication',
             'status' => 'failed',
             'message' => 'A SP-API não confirmou acesso ao vendedor.',
-            'remediation' => 'Preencher LWA Client ID/Secret, Refresh Token, Seller ID e Marketplace ID da Amazon.',
+            'remediation' => 'Localizar LWA Client ID/Secret e Refresh Token da autorização SP-API. Seller/Merchant ID só é obrigatório para operações de listing; Marketplace ID pode ser descoberto pela Sellers API.',
             'tokens' => $tokens,
             'fixes' => [],
             'provider_status' => $e instanceof SvMarketplaceException ? $e->httpStatus : 0,
             'provider_error' => get_class($e),
             'validation' => 'authenticated_seller_read',
+            'auth_mode' => 'lwa_only',
         ];
     }
 }
