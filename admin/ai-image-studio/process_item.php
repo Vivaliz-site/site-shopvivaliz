@@ -20,9 +20,9 @@ function ai_studio_default_prompts(string $productName): array
     $identity = "Use the supplied real photo of {$productName} as the only product reference. Preserve the exact product identity: shape, proportions, color, material appearance, labels, logos, printed text, connectors, controls and included parts. Do not invent, remove, replace or redesign any product feature. Do not add accessories that could be interpreted as included with the product.";
 
     return [
-        'white' => $identity . ' Create a marketplace-safe main image: pure white background, product centered and fully visible, neutral professional lighting, natural contact shadow only, no badges, borders, promotional text or extra objects. Square 1:1 composition, photorealistic and high resolution.',
-        'hero' => $identity . ' Create a premium ecommerce hero image with controlled studio lighting and a clean neutral setting. Keep the product unobstructed and dominant in frame. No promotional text, badges or invented props. Square 1:1 composition, photorealistic and high resolution.',
-        'ambient' => $identity . ' Place the exact product in a realistic usage context supported by the visible product category, without implying unsupported compatibility or accessories. Keep the product fully recognizable and unobstructed. Natural scale, perspective, shadows and lighting. Square 1:1 composition, photorealistic and high resolution.',
+        'white' => $identity . ' Create a marketplace-safe main image: pure white RGB 255,255,255 background, product centered, fully visible and occupying about 85-95% of the frame, neutral professional lighting, natural contact shadow only, no badges, borders, promotional text, watermarks or extra objects. Square 1:1 composition, photorealistic and at least 1024x1024.',
+        'hero' => $identity . ' Create a premium ecommerce hero image with controlled studio lighting and a clean neutral setting. Keep the product unobstructed and dominant in frame. No promotional text, badges or invented props. Square 1:1 composition, photorealistic and at least 1024x1024.',
+        'ambient' => $identity . ' Place the exact product in a realistic usage context supported by the visible product category, without implying unsupported compatibility or accessories. Keep the product fully recognizable and unobstructed. Natural scale, perspective, shadows and lighting. Square 1:1 composition, photorealistic and at least 1024x1024.',
     ];
 }
 
@@ -67,7 +67,7 @@ function ai_studio_fetch_product(PDO $db, int $productId): ?array
 }
 
 /** @return array{width:int,height:int,mime:string,sha256:string} */
-function ai_studio_validate_image_file(string $path, int $minimumSide = 300): array
+function ai_studio_validate_image_file(string $path, int $minimumSide = 600): array
 {
     if (!is_file($path) || !is_readable($path) || (int)filesize($path) <= 0) {
         throw new AiStudioApiException('Arquivo de imagem inexistente, vazio ou ilegível.');
@@ -111,7 +111,7 @@ function ai_studio_resolve_base_image(string $imageRef, string $projectRoot, int
         $tmpPath = AI_STUDIO_BASE_IMAGE_TMP_DIR . 'base-' . $productId . '-' . bin2hex(random_bytes(6)) . '.' . $extension;
         AiStudioHttpClient::downloadToFile($imageRef, $tmpPath);
         try {
-            ai_studio_validate_image_file($tmpPath, 300);
+            ai_studio_validate_image_file($tmpPath, 600);
         } catch (Throwable $e) {
             @unlink($tmpPath);
             throw $e;
@@ -129,7 +129,7 @@ function ai_studio_resolve_base_image(string $imageRef, string $projectRoot, int
     if (!is_file($localPath) || !is_readable($localPath)) {
         throw new AiStudioApiException("Produto #{$productId}: foto cadastrada não foi encontrada no disco.");
     }
-    ai_studio_validate_image_file($localPath, 300);
+    ai_studio_validate_image_file($localPath, 600);
     return $localPath;
 }
 
@@ -262,8 +262,10 @@ function ai_studio_process_item(
                     (new AiStudioGoogleImageEditClient(AI_STUDIO_GOOGLE_IMAGEN_API_KEY, $googleModel))->editImageToFile($prompt, $baseImagePath, $destination);
                 }
 
-                // Arquivo inválido nunca entra em staging como pending.
-                $quality = ai_studio_validate_image_file($destination, 512);
+                // Arquivo inválido nunca entra em staging como pending. Como
+                // a composição é quadrada, 1000px por lado atende também ao
+                // patamar de zoom recomendado para imagem principal Amazon.
+                $quality = ai_studio_validate_image_file($destination, 1000);
                 $id = ai_studio_insert_staging_row($db, $productId, $imageType, $providerUsed, $publicPath, $prompt, 'pending');
                 $results[] = [
                     'image_type' => $imageType,
