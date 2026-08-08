@@ -18,7 +18,7 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Send official template to Gmail through Microsoft Graph App-Only
+      - name: Send official template through Microsoft Graph App-Only to forwarding address
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
@@ -31,8 +31,8 @@ jobs:
           load_dotenv('.env', override=True)
           from app.email_provider import MicrosoftGraphEmailProvider
 
-          recipient='fredmourao@gmail.com'
-          subject='MEI: Ganhe Certificado Digital + 10 Notas Fiscais por mes'
+          recipient='atendimento@shopvivaliz.com.br'
+          subject='MEI: Ganhe Certificado Digital + 10 Notas Fiscais por mes [DIAG-ROUTE-1245]'
           template_path=Path('templates/mei-contabilidade-melo.html')
           if not template_path.exists():
               raise SystemExit(f'TEMPLATE_NOT_FOUND:{template_path}')
@@ -52,7 +52,7 @@ jobs:
           print(f'error={getattr(result,"error",None)}')
           if not result.success or getattr(result,'status',None) != 'submitted':
               raise SystemExit('TEST_SEND_NOT_SUBMITTED')
-          print('TEST_GRAPH_SUBMITTED_OK')
+          print('TEST_GRAPH_ROUTED_SUBMITTED_OK')
           PY
           EOF
       - name: Cleanup
