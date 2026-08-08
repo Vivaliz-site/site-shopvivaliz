@@ -9,7 +9,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - name: Configure VM key
         env:
@@ -18,12 +18,41 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Audit production DB prerequisites
+      - name: Apply safe runtime and schema repair
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           sudo systemctl stop mei-mg-email-worker.service || true
           cd /home/ubuntu/mei-mg-email
+          ts=$(date +%Y%m%d%H%M%S)
+          mkdir -p backups
+          cp app/email_provider.py backups/email_provider.py.pre-final-$ts
+          cp worker/worker.py backups/worker.py.pre-final-$ts
+
+          echo '=== SYNC SAFE CODE ==='
+          curl -fsSL https://raw.githubusercontent.com/fredmourao-ai/mei-mg-email/main/app/email_provider.py -o /tmp/email_provider.py
+          curl -fsSL https://raw.githubusercontent.com/fredmourao-ai/mei-mg-email/main/worker/worker.py -o /tmp/worker.py
+          curl -fsSL https://raw.githubusercontent.com/fredmourao-ai/mei-mg-email/main/db/migrations/V012__delivery_status_semantics.sql -o db/migrations/V012__delivery_status_semantics.sql
+          curl -fsSL https://raw.githubusercontent.com/fredmourao-ai/mei-mg-email/main/db/migrations/V013__eligibility_consent_and_global_dedupe.sql -o db/migrations/V013__eligibility_consent_and_global_dedupe.sql
+          install -m 0644 /tmp/email_provider.py app/email_provider.py
+          install -m 0644 /tmp/worker.py worker/worker.py
+          /home/ubuntu/mei-mg-email/.venv/bin/python -m py_compile app/email_provider.py worker/worker.py
+
+          echo '=== STATIC FAIL-CLOSED CHECKS ==='
+          grep -q 'ALLOWED_SENDER = "naoresponda@dev.shopvivaliz.com.br"' app/email_provider.py
+          grep -q "status::text in ('submitted', 'enviado')" worker/worker.py
+          grep -q 'marketing_autorizado' worker/worker.py
+          grep -q 'pg_try_advisory_lock' worker/worker.py
+          grep -q 'status="submitted"' app/email_provider.py
+          test "$(grep '^EMAIL_PROVIDER=' .env | tail -1 | cut -d= -f2-)" = "microsoft_graph"
+          test "$(grep '^MICROSOFT_GRAPH_USER=' .env | tail -1 | cut -d= -f2-)" = "naoresponda@dev.shopvivaliz.com.br"
+          test "$(grep '^RATE_LIMIT_ENVIOS_POR_MINUTO=' .env | tail -1 | cut -d= -f2-)" -le 30
+          ! grep -Eq '^(GMAIL_APP_PASSWORD|MICROSOFT_SMTP_PASSWORD|BREVO_API_KEY|MICROSOFT_GRAPH_CLIENT_SECRET)=[^[:space:]]+' .env
+
+          echo '=== FLYWAY MIGRATE ==='
+          docker compose run --rm flyway
+
+          echo '=== DB POST-REPAIR ==='
           /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
           from dotenv import load_dotenv
           load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
@@ -32,33 +61,49 @@ jobs:
           with psycopg.connect(os.environ['DATABASE_URL'], autocommit=True, row_factory=dict_row) as conn:
               with conn.cursor() as cur:
                   cur.execute("""
-                    select table_name,column_name,data_type,column_default,is_nullable
-                      from information_schema.columns
-                     where table_schema='mei_email'
-                       and table_name in ('empresas','envios','lotes','campanhas')
-                       and column_name in ('marketing_autorizado','situacao_cadastral','enviado','enviado_em','prioridade_data','tentativas','provider_message_id','erro')
-                     order by table_name,column_name
+                    select e.enumlabel
+                      from pg_type t
+                      join pg_enum e on e.enumtypid=t.oid
+                      join pg_namespace n on n.oid=t.typnamespace
+                     where n.nspname='mei_email' and t.typname='status_envio'
+                     order by e.enumsortorder
                   """)
-                  print('columns='+json.dumps([dict(r) for r in cur.fetchall()],default=str,ensure_ascii=False))
-                  cur.execute("select to_regclass('mei_email.aquecimento_envio') as warmup")
-                  print('aquecimento='+json.dumps(dict(cur.fetchone()),default=str))
-                  cur.execute("select count(*) n from mei_email.empresas where coalesce(marketing_autorizado,false)=true")
-                  print('marketing_autorizado_true='+str(cur.fetchone()['n']))
-                  cur.execute("select count(*) n from mei_email.envios where status::text='pendente'")
-                  print('pending='+str(cur.fetchone()['n']))
+                  enum_values=[r['enumlabel'] for r in cur.fetchall()]
+                  print('status_envio='+json.dumps(enum_values))
+                  for required in ('submitted','sender_blocked','bloqueado','descartado'):
+                      if required not in enum_values:
+                          raise SystemExit('MISSING_STATUS:'+required)
                   cur.execute("""
-                    select count(*) n from mei_email.envios p
-                     where p.status::text='pendente'
-                       and exists (
-                         select 1 from mei_email.envios s
-                          where s.id<>p.id
-                            and s.status::text='enviado'
-                            and lower(btrim(s.email::text))=lower(btrim(p.email::text))
-                       )
+                    select column_name from information_schema.columns
+                     where table_schema='mei_email' and table_name='empresas'
+                       and column_name in ('marketing_autorizado','marketing_autorizado_em','marketing_autorizado_origem')
                   """)
-                  print('pending_already_enviado='+str(cur.fetchone()['n']))
+                  columns={r['column_name'] for r in cur.fetchall()}
+                  if 'marketing_autorizado' not in columns:
+                      raise SystemExit('MISSING_MARKETING_AUTH_COLUMN')
+                  cur.execute("select count(*) n from mei_email.empresas where marketing_autorizado=true")
+                  authorized=cur.fetchone()['n']
+                  cur.execute("select count(*) n from mei_email.envios where status::text='pendente'")
+                  pending=cur.fetchone()['n']
+                  cur.execute("select count(*) n from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours'")
+                  used=cur.fetchone()['n']
+                  print(json.dumps({'marketing_autorizado_true':authorized,'pending':pending,'used_24h':used,'target':9950},ensure_ascii=False))
           PY
+
+          echo '=== GRAPH AUTH ONLY, NO SEND ==='
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
+          from app.email_provider import MicrosoftGraphEmailProvider
+          p=MicrosoftGraphEmailProvider()
+          p.authenticate()
+          print('GRAPH_APP_ONLY_AUTH_OK')
+          print('sender='+p.address)
+          PY
+
           echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+          test "$(sudo systemctl is-active mei-mg-email-worker.service || true)" != "active"
+          echo 'SAFE_REPAIR_COMPLETE_WORKER_STOPPED'
           EOF
       - name: Cleanup
         if: always()
