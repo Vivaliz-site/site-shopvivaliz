@@ -12,6 +12,8 @@ on:
       - "scripts/google_ads_review_campaigns.py"
       - "scripts/google_ads_dynamic_images.py"
       - "scripts/google_ads_create_search_campaign.py"
+      - "scripts/google_ads_api_activation.py"
+      - "scripts/launch_google_ads.py"
       - ".github/workflows/google-ads-config-ci.yml"
 
 permissions:
@@ -31,10 +33,13 @@ jobs:
           python-version: "3.12"
 
       - name: Compile Google Ads scripts
-        run: python -m py_compile scripts/google_ads_config_lint.py scripts/google_ads_real_readiness.py scripts/google_ads_auth_preflight.py scripts/google_ads_review_campaigns.py scripts/google_ads_dynamic_images.py scripts/google_ads_create_search_campaign.py
+        run: python -m py_compile scripts/google_ads_config_lint.py scripts/google_ads_real_readiness.py scripts/google_ads_auth_preflight.py scripts/google_ads_review_campaigns.py scripts/google_ads_dynamic_images.py scripts/google_ads_create_search_campaign.py scripts/google_ads_api_activation.py scripts/launch_google_ads.py
 
       - name: Validate Google Ads static config
         run: python scripts/google_ads_config_lint.py
+
+      - name: Validate safe legacy launcher summary
+        run: python scripts/launch_google_ads.py
 
   live-readonly-audit:
     if: github.event_name == 'workflow_dispatch'
