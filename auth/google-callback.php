@@ -8,6 +8,41 @@ require_once __DIR__ . '/../includes/social-auth.php';
 $error = '';
 $adsOauthSuccess = false;
 
+function sv_google_ads_signed_state_job(string $state): ?string
+{
+    if (!str_starts_with($state, 'gads1.')) {
+        return null;
+    }
+    $parts = explode('.', $state, 3);
+    if (count($parts) !== 3) {
+        return null;
+    }
+    [, $payloadB64, $signature] = $parts;
+    $expected = hash_hmac('sha256', $payloadB64, sv_social_env('GOOGLE_OAUTH_CLIENT_SECRET'));
+    if (!hash_equals($expected, $signature)) {
+        return null;
+    }
+    $padded = strtr($payloadB64, '-_', '+/');
+    $rem = strlen($padded) % 4;
+    if ($rem > 0) {
+        $padded .= str_repeat('=', 4 - $rem);
+    }
+    $payload = json_decode((string)base64_decode($padded, true), true);
+    if (!is_array($payload)) {
+        return null;
+    }
+    $job = strtolower(trim((string)($payload['job'] ?? '')));
+    $ts = (int)($payload['ts'] ?? 0);
+    if ((int)($payload['v'] ?? 0) !== 1
+        || !preg_match('/^[a-f0-9]{32}$/', $job)
+        || $ts < time() - 1800
+        || $ts > time() + 60
+    ) {
+        return null;
+    }
+    return $job;
+}
+
 try {
     if (!sv_social_google_is_configured()) {
         throw new RuntimeException('Login com Google não está configurado neste ambiente.');
@@ -25,15 +60,21 @@ try {
         throw new RuntimeException('Resposta inválida do Google.');
     }
 
+    $signedAdsJob = sv_google_ads_signed_state_job($state);
     $adsRequest = $_SESSION['social_oauth']['google_ads'] ?? null;
+    $sessionAdsJob = null;
     if (is_array($adsRequest)
         && isset($adsRequest['state'], $adsRequest['job'], $adsRequest['created_at'])
         && hash_equals((string)$adsRequest['state'], $state)
         && (int)$adsRequest['created_at'] >= (time() - 1800)
         && preg_match('/^[a-f0-9]{32}$/', (string)$adsRequest['job']) === 1
     ) {
+        $sessionAdsJob = (string)$adsRequest['job'];
         unset($_SESSION['social_oauth']['google_ads']);
+    }
 
+    $adsJob = $signedAdsJob ?: $sessionAdsJob;
+    if (is_string($adsJob) && $adsJob !== '') {
         $tokenResponse = sv_social_http_post('https://oauth2.googleapis.com/token', [
             'code' => $code,
             'client_id' => sv_social_env('GOOGLE_OAUTH_CLIENT_ID'),
@@ -50,8 +91,7 @@ try {
             throw new RuntimeException('Google não retornou refresh token. Reautorize com consentimento.');
         }
 
-        $job = (string)$adsRequest['job'];
-        $pendingPath = sys_get_temp_dir() . '/shopvivaliz-google-ads-refresh-' . $job . '.token';
+        $pendingPath = sys_get_temp_dir() . '/shopvivaliz-google-ads-refresh-' . $adsJob . '.token';
         if (file_put_contents($pendingPath, $refreshToken, LOCK_EX) === false) {
             throw new RuntimeException('Não foi possível armazenar o token temporário com segurança.');
         }
