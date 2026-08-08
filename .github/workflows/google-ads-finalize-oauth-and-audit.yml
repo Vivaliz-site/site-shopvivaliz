@@ -1,0 +1,70 @@
+name: Google Ads Finalize OAuth And Audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-finalize-oauth.json"
+
+permissions:
+  contents: read
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate job
+        id: req
+        shell: bash
+        run: |
+          set -euo pipefail
+          JOB="$(jq -r '.job // ""' ops/google-ads-finalize-oauth.json)"
+          [[ "$JOB" =~ ^[a-f0-9]{32}$ ]] || exit 2
+          echo "job=$JOB" >> "$GITHUB_OUTPUT"
+
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Wait for callback, install token, and run read-only audit
+        env:
+          JOB: ${{ steps.req.outputs.job }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' -- "$JOB" <<'REMOTE'
+          set -euo pipefail
+          job="$1"
+          token="/tmp/shopvivaliz-google-ads-refresh-${job}.token"
+          envfile='/home/ubuntu/shopvivaliz-deploy/shared/.env'
+          current='/home/ubuntu/shopvivaliz-deploy/current'
+          for i in $(seq 1 60); do
+            if [ -s "$token" ]; then break; fi
+            sleep 10
+          done
+          if [ ! -s "$token" ]; then
+            echo 'OAUTH_CALLBACK_PENDING'
+            exit 3
+          fi
+          python3 "$current/scripts/install-google-ads-refresh-pending.py" "$envfile" "$token"
+          set -a
+          . "$envfile"
+          set +a
+          python3 -m pip install --user --disable-pip-version-check google-ads >/dev/null
+          python3 "$current/scripts/google_ads_review_campaigns.py"
+          echo 'GOOGLE_ADS_OAUTH_FINALIZED_AND_AUDITED'
+          REMOTE
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
