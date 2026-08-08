@@ -26,14 +26,20 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           python3 - <<'PY'
-          import importlib.util,json,urllib.request
+          import base64,hashlib,importlib.util,json,os,subprocess,time,urllib.request,uuid
+          def b64u(data): return base64.urlsafe_b64encode(data).rstrip(b'=').decode()
           spec=importlib.util.spec_from_file_location('g','/home/ubuntu/.shopvivaliz/bin/graph-app-only.py'); g=importlib.util.module_from_spec(spec); spec.loader.exec_module(g)
           access,claims=g.token()
+          cert='/home/ubuntu/.shopvivaliz/m365/graph-auth.crt'; key='/home/ubuntu/.shopvivaliz/m365/graph-auth.key'
+          der=subprocess.check_output(['openssl','x509','-in',cert,'-outform','DER'])
+          now=int(time.time())
+          header=b64u(json.dumps({'alg':'RS256','typ':'JWT','x5t':b64u(hashlib.sha1(der).digest())},separators=(',',':')).encode())
+          payload=b64u(json.dumps({'aud':'00000002-0000-0000-c000-000000000000','iss':'a5e400f0-969e-4fbe-be61-d390cb112517','nbf':now-60,'exp':now+540,'jti':str(uuid.uuid4())},separators=(',',':')).encode())
+          unsigned=f'{header}.{payload}'.encode(); sig=subprocess.check_output(['openssl','dgst','-sha256','-sign',key],input=unsigned); proof=unsigned.decode()+'.'+b64u(sig)
           url='https://graph.microsoft.com/v1.0/applications/709b607b-87f9-4572-8661-2ea8cec6e294/removeKey'
-          body=json.dumps({'keyId':'62fab7e0-931d-4dd8-83ce-34293e2486e5'}).encode()
+          body=json.dumps({'keyId':'62fab7e0-931d-4dd8-83ce-34293e2486e5','proof':proof}).encode()
           req=urllib.request.Request(url,data=body,headers={'Authorization':'Bearer '+access,'Content-Type':'application/json'},method='POST')
-          with urllib.request.urlopen(req,timeout=30) as r:
-              print('ENTRA_FRED_CERT_REMOVED status='+str(r.status))
+          with urllib.request.urlopen(req,timeout=30) as r: print('ENTRA_FRED_CERT_REMOVED status='+str(r.status))
           PY
           EOF
       - name: Remove Fred-Win local private certificate and temporary PFX
