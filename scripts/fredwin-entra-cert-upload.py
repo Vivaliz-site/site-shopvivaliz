@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import os
 import shutil
-import sys
+import subprocess
 import tempfile
 import time
 from pathlib import Path
@@ -35,12 +34,11 @@ def visible_text(page) -> str:
 
 def click_any(page, names: list[str], timeout: int = 5000) -> bool:
     for name in names:
-        candidates = [
+        for candidate in (
             page.get_by_role("button", name=name, exact=False),
             page.get_by_role("link", name=name, exact=False),
             page.get_by_text(name, exact=False),
-        ]
-        for candidate in candidates:
+        ):
             try:
                 if candidate.first.is_visible(timeout=700):
                     candidate.first.click(timeout=timeout)
@@ -50,8 +48,20 @@ def click_any(page, names: list[str], timeout: int = 5000) -> bool:
     return False
 
 
+def release_chrome_profile() -> None:
+    # Chrome may have been opened earlier by the operator. Closing only chrome.exe
+    # releases its SQLite profile locks; credentials are never read by this script.
+    subprocess.run(
+        ["taskkill", "/IM", "chrome.exe", "/F"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=15,
+    )
+    time.sleep(3)
+
+
 def make_profile_copy() -> Path:
-    """Copy only auth/profile state needed by Chrome; never read cookies ourselves."""
     target = Path(tempfile.gettempdir()) / "ShopVivaliz-Entra-Automation"
     if target.exists():
         shutil.rmtree(target, ignore_errors=True)
@@ -65,14 +75,11 @@ def make_profile_copy() -> Path:
     excluded_dirs = {
         "Cache", "Code Cache", "GPUCache", "DawnCache", "GrShaderCache",
         "ShaderCache", "Service Worker", "blob_storage", "File System",
+        "Safe Browsing Network", "Sessions",
     }
 
     def ignore(directory: str, names: list[str]) -> set[str]:
-        result: set[str] = set()
-        for name in names:
-            if name in excluded_dirs or name.endswith("-journal"):
-                result.add(name)
-        return result
+        return {name for name in names if name in excluded_dirs or name.endswith("-journal")}
 
     shutil.copytree(src, dst, ignore=ignore, dirs_exist_ok=True)
     return target
@@ -86,10 +93,11 @@ def main() -> int:
         log("ENTRA_CERT_UPLOAD_NOT_READY: Chrome/profile missing")
         return 3
 
+    release_chrome_profile()
     try:
         automation_profile = make_profile_copy()
     except Exception as exc:
-        log(f"ENTRA_CERT_UPLOAD_NOT_READY: profile copy failed: {type(exc).__name__}: {exc}")
+        log(f"ENTRA_CERT_UPLOAD_NOT_READY: profile copy failed: {type(exc).__name__}: {str(exc)[:800]}")
         return 4
 
     with sync_playwright() as p:
@@ -123,7 +131,6 @@ def main() -> int:
             if any(marker in url.casefold() or marker in lower for marker in login_markers):
                 log("ENTRA_CERT_UPLOAD_AUTH_REQUIRED")
                 return 10
-
             if THUMBPRINT.casefold() in lower:
                 log("ENTRA_CERT_ALREADY_REGISTERED")
                 return 0
@@ -143,13 +150,11 @@ def main() -> int:
                 return 11
 
             page.wait_for_timeout(1200)
-            file_input = page.locator('input[type="file"]')
             try:
-                file_input.first.set_input_files(str(CERT_PATH), timeout=8000)
+                page.locator('input[type="file"]').first.set_input_files(str(CERT_PATH), timeout=8000)
             except PlaywrightTimeoutError:
                 log("ENTRA_CERT_UPLOAD_NOT_READY: file input not found after upload action")
                 return 12
-
             page.wait_for_timeout(1200)
             if not click_any(page, ["Add", "Adicionar"]):
                 log("ENTRA_CERT_UPLOAD_NOT_READY: final Add button not found")
@@ -158,8 +163,7 @@ def main() -> int:
             deadline = time.time() + 35
             while time.time() < deadline:
                 page.wait_for_timeout(2000)
-                text = visible_text(page)
-                if THUMBPRINT.casefold() in text.casefold():
+                if THUMBPRINT.casefold() in visible_text(page).casefold():
                     log("ENTRA_CERT_UPLOAD_READY")
                     log(f"registered_thumbprint={THUMBPRINT}")
                     return 0
