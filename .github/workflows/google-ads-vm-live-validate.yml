@@ -34,24 +34,34 @@ jobs:
           set -euo pipefail
           ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
           set -euo pipefail
-          envfile='/home/ubuntu/shopvivaliz-deploy/shared/.env'
-          current='/home/ubuntu/shopvivaliz-deploy/current'
-          test -r "$envfile"
-          set -a
-          . "$envfile"
-          set +a
           python3 - <<'PY'
-          import json, os, urllib.parse, urllib.request, urllib.error
+          import json, os, subprocess, sys, urllib.parse, urllib.request, urllib.error
+          from pathlib import Path
+
+          envfile=Path('/home/ubuntu/shopvivaliz-deploy/shared/.env')
+          current=Path('/home/ubuntu/shopvivaliz-deploy/current')
+          env=os.environ.copy()
+          if not envfile.is_file():
+              print('VM_ENVFILE_MISSING')
+              raise SystemExit(2)
+          for raw in envfile.read_text(encoding='utf-8', errors='ignore').splitlines():
+              line=raw.strip()
+              if not line or line.startswith('#') or '=' not in line:
+                  continue
+              k,v=line.split('=',1)
+              k=k.strip(); v=v.strip().strip('"\'')
+              if k:
+                  env[k]=v
           required=['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','GOOGLE_ADS_REFRESH_TOKEN','GOOGLE_ADS_DEVELOPER_TOKEN','GOOGLE_ADS_CUSTOMER_ID']
-          missing=[k for k in required if not os.environ.get(k,'').strip()]
+          missing=[k for k in required if not env.get(k,'').strip()]
           if missing:
               print('VM_GOOGLE_ADS_NOT_READY')
               print('missing=' + ','.join(missing))
-              raise SystemExit(2)
+              raise SystemExit(3)
           data=urllib.parse.urlencode({
-              'client_id':os.environ['GOOGLE_OAUTH_CLIENT_ID'],
-              'client_secret':os.environ['GOOGLE_OAUTH_CLIENT_SECRET'],
-              'refresh_token':os.environ['GOOGLE_ADS_REFRESH_TOKEN'],
+              'client_id':env['GOOGLE_OAUTH_CLIENT_ID'],
+              'client_secret':env['GOOGLE_OAUTH_CLIENT_SECRET'],
+              'refresh_token':env['GOOGLE_ADS_REFRESH_TOKEN'],
               'grant_type':'refresh_token',
           }).encode()
           req=urllib.request.Request('https://oauth2.googleapis.com/token', data=data, headers={'Content-Type':'application/x-www-form-urlencoded'}, method='POST')
@@ -60,18 +70,20 @@ jobs:
                   payload=json.loads(r.read().decode())
               ok=bool(payload.get('access_token'))
               print('OAUTH_REFRESH_VALID=' + ('yes' if ok else 'no'))
-              if not ok: raise SystemExit(3)
+              if not ok:
+                  raise SystemExit(4)
           except urllib.error.HTTPError as e:
               try: payload=json.loads(e.read().decode(errors='ignore'))
               except Exception: payload={}
               print('OAUTH_REFRESH_VALID=no')
               print('oauth_error=' + str(payload.get('error','http_'+str(e.code))))
-              raise SystemExit(4)
+              raise SystemExit(5)
+
+          subprocess.run([sys.executable,'-m','pip','install','--user','--disable-pip-version-check','google-ads'], check=True, stdout=subprocess.DEVNULL)
+          subprocess.run([sys.executable,str(current/'scripts/google_ads_review_campaigns.py')], check=True, env=env)
+          subprocess.run([sys.executable,str(current/'scripts/google_ads_dynamic_images.py')], check=True, env=env)
+          print('GOOGLE_ADS_VM_LIVE_VALIDATED')
           PY
-          python3 -m pip install --user --disable-pip-version-check google-ads >/dev/null
-          python3 "$current/scripts/google_ads_review_campaigns.py"
-          python3 "$current/scripts/google_ads_dynamic_images.py"
-          echo 'GOOGLE_ADS_VM_LIVE_VALIDATED'
           REMOTE
 
       - name: Cleanup
