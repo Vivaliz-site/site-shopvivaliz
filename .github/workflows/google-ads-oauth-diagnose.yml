@@ -43,13 +43,30 @@ jobs:
           else
             echo 'envfile=missing'
           fi
+          url="https://shopvivaliz.com.br/auth/google-ads-authorize.php?job=${job}"
+          echo 'authorize_probe_begin'
+          code="$(curl -ksS -o /tmp/oauth-body -D /tmp/oauth-head -w '%{http_code}' --max-time 20 "$url" || true)"
+          echo "authorize_http_status=$code"
+          location="$(awk 'BEGIN{IGNORECASE=1} /^Location:/{sub(/\r$/,"",$0); print substr($0,11); exit}' /tmp/oauth-head 2>/dev/null || true)"
+          if [ -n "$location" ]; then
+            case "$location" in
+              https://accounts.google.com/*) echo 'authorize_redirect=google_accounts' ;;
+              *) echo 'authorize_redirect=other' ;;
+            esac
+          else
+            echo 'authorize_redirect=none'
+          fi
+          if grep -qi 'Google OAuth is not configured' /tmp/oauth-body 2>/dev/null; then echo 'authorize_body=oauth_not_configured'; fi
+          if grep -qi 'Invalid authorization job' /tmp/oauth-body 2>/dev/null; then echo 'authorize_body=invalid_job'; fi
+          echo 'authorize_probe_end'
           echo 'callback_log_hits_begin'
           for f in /var/log/nginx/access.log /var/log/nginx/error.log /home/ubuntu/shopvivaliz-deploy/shared/storage/logs/app.log; do
             if [ -r "$f" ]; then
-              grep -E 'google-callback|google-ads-authorize|Google OAuth callback failed|Google Ads autorizado' "$f" 2>/dev/null | tail -n 20 | sed -E 's/(code|state|job)=[^& ]+/\1=[REDACTED]/g' || true
+              grep -E 'google-callback|google-ads-authorize|Google OAuth callback failed|Google Ads autorizado' "$f" 2>/dev/null | tail -n 30 | sed -E 's/(code|state|job)=[^& ]+/\1=[REDACTED]/g' || true
             fi
           done
           echo 'callback_log_hits_end'
+          rm -f /tmp/oauth-body /tmp/oauth-head
           REMOTE
 
       - name: Cleanup
