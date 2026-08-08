@@ -1,0 +1,53 @@
+name: Classify blocked MEI queue
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/classify-mei-blocked-queue.yml']
+permissions:
+  contents: read
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Classify blocked queue
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          import os,json,psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'],autocommit=True,row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+              cur.execute("set statement_timeout='30s'")
+              cur.execute("""
+                select
+                  count(*) as total,
+                  count(*) filter (where emp.cnpj is null) as no_company,
+                  count(*) filter (where emp.marketing_autorizado) as marketing_true,
+                  count(*) filter (where emp.situacao_cadastral='ATIVA') as active,
+                  count(*) filter (where not emp.opt_out) as no_opt_out,
+                  count(*) filter (where not emp.provavel_terceiro) as not_third_party,
+                  count(*) filter (where emp.situacao_cadastral='ATIVA' and not emp.opt_out and not emp.provavel_terceiro and emp.marketing_autorizado) as fully_eligible
+                from mei_email.envios e
+                left join mei_email.empresas emp on emp.cnpj=e.cnpj
+                where e.status::text='bloqueado'
+              """)
+              print('BLOCKED_CLASS='+json.dumps(cur.fetchone(),default=str,ensure_ascii=False))
+              cur.execute("select coalesce(erro,'<null>') erro,count(*) n from mei_email.envios where status::text='bloqueado' group by 1 order by n desc")
+              print('BLOCKED_REASONS='+json.dumps(cur.fetchall(),default=str,ensure_ascii=False))
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
