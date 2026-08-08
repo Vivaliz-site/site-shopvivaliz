@@ -1,0 +1,51 @@
+name: Cap VM journal storage for MEI growth
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/cap-mei-vm-journal-storage.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Cap journal and vacuum old entries safely
+        run: |
+          timeout 180s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          echo '=== BEFORE ==='
+          df -h /
+          journalctl --disk-usage || true
+          test "$(sudo systemctl is-active mei-mg-email-worker.service || true)" = inactive
+
+          sudo mkdir -p /etc/systemd/journald.conf.d
+          cat >/tmp/99-shopvivaliz-storage.conf <<'CONF'
+          [Journal]
+          SystemMaxUse=1G
+          SystemKeepFree=6G
+          MaxRetentionSec=14day
+          CONF
+          sudo install -m 644 /tmp/99-shopvivaliz-storage.conf /etc/systemd/journald.conf.d/99-shopvivaliz-storage.conf
+          rm -f /tmp/99-shopvivaliz-storage.conf
+          sudo systemctl restart systemd-journald
+          sudo journalctl --vacuum-size=1G
+
+          echo '=== AFTER ==='
+          journalctl --disk-usage || true
+          df -h /
+          sudo cat /etc/systemd/journald.conf.d/99-shopvivaliz-storage.conf
+          test "$(sudo systemctl is-active mei-mg-email-worker.service || true)" = inactive
+          echo JOURNAL_STORAGE_CAPPED_WORKER_INACTIVE
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
