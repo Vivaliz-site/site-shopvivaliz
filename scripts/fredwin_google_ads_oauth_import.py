@@ -6,6 +6,7 @@ Runs only on Fred-Win. It never prints credential values.
 import json
 import subprocess
 from pathlib import Path
+from urllib.parse import urlsplit
 
 repo = "Vivaliz-site/site-shopvivaliz"
 roots = [Path.home() / "Downloads", Path.home() / "Desktop"]
@@ -16,18 +17,24 @@ for root in roots:
 
 chosen = None
 section = None
+kind = "unknown"
 for path in candidates:
     try:
         obj = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         continue
-    s = obj.get("installed") or obj.get("web")
-    if not isinstance(s, dict):
+    if isinstance(obj.get("installed"), dict):
+        s = obj["installed"]
+        candidate_kind = "installed"
+    elif isinstance(obj.get("web"), dict):
+        s = obj["web"]
+        candidate_kind = "web"
+    else:
         continue
     cid = str(s.get("client_id", "")).strip()
     secret = str(s.get("client_secret", "")).strip()
     if cid.endswith(".apps.googleusercontent.com") and secret:
-        chosen, section = path, s
+        chosen, section, kind = path, s, candidate_kind
         break
 
 if chosen is None or section is None:
@@ -45,8 +52,27 @@ for name, value in (("GOOGLE_OAUTH_CLIENT_ID", section["client_id"]), ("GOOGLE_O
         stderr=subprocess.DEVNULL,
     )
 
-kind = "installed" if "installed" in json.loads(chosen.read_text(encoding="utf-8")) else "web"
+redirects = [str(v).strip() for v in (section.get("redirect_uris") or []) if str(v).strip()]
+loopback = False
+https_site = False
+hosts = set()
+for uri in redirects:
+    try:
+        parsed = urlsplit(uri)
+    except Exception:
+        continue
+    host = (parsed.hostname or "").lower()
+    if host:
+        hosts.add(host)
+    if host in {"localhost", "127.0.0.1", "::1"}:
+        loopback = True
+    if parsed.scheme == "https" and host not in {"localhost", "127.0.0.1", "::1"}:
+        https_site = True
+
 print("PRODUCTION_OAUTH_CLIENT_IMPORTED")
 print("oauth_client_type=" + kind)
-print("redirect_uri_count=" + str(len(section.get("redirect_uris") or [])))
+print("redirect_uri_count=" + str(len(redirects)))
+print("has_loopback_redirect=" + str(loopback))
+print("has_https_site_redirect=" + str(https_site))
+print("redirect_host_count=" + str(len(hosts)))
 print("NO_SECRET_VALUES_PRINTED")
