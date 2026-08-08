@@ -8,6 +8,7 @@ on:
       - "scripts/google_ads_campaign_live_ready.json"
       - "scripts/google_ads_config_lint.py"
       - "scripts/google_ads_real_readiness.py"
+      - "scripts/google_ads_auth_preflight.py"
       - "scripts/google_ads_review_campaigns.py"
       - "scripts/google_ads_dynamic_images.py"
       - "scripts/google_ads_create_search_campaign.py"
@@ -30,7 +31,7 @@ jobs:
           python-version: "3.12"
 
       - name: Compile Google Ads scripts
-        run: python -m py_compile scripts/google_ads_config_lint.py scripts/google_ads_real_readiness.py scripts/google_ads_review_campaigns.py scripts/google_ads_dynamic_images.py scripts/google_ads_create_search_campaign.py
+        run: python -m py_compile scripts/google_ads_config_lint.py scripts/google_ads_real_readiness.py scripts/google_ads_auth_preflight.py scripts/google_ads_review_campaigns.py scripts/google_ads_dynamic_images.py scripts/google_ads_create_search_campaign.py
 
       - name: Validate Google Ads static config
         run: python scripts/google_ads_config_lint.py
@@ -55,6 +56,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Validate auth inputs without network
+        run: python scripts/google_ads_auth_preflight.py
 
       - name: Install Google Ads SDK
         run: python -m pip install --disable-pip-version-check google-ads
