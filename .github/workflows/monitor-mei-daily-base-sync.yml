@@ -57,13 +57,13 @@ jobs:
 
           status=row.get('status')
           source=row.get('source_name') or ''
-          if status == 'source_unconfigured':
+          details=row.get('details') or {}
+          if status == 'failed' and details.get('missing_secret') == 'CASA_DOS_DADOS_API_KEY':
               raise SystemExit('HEALTH_FAIL=CASA_DOS_DADOS_API_KEY_nao_configurada')
           if status not in {'success','no_change'}:
               raise SystemExit('HEALTH_FAIL=status_sincronizacao='+str(status))
 
           if source == 'casa_dos_dados_v5':
-              details=row.get('details') or {}
               api_result=details.get('api_result') or {}
               print('DAILY_SOURCE=casa_dos_dados_v5')
               print('WINDOW_START='+str(api_result.get('window_start')))
