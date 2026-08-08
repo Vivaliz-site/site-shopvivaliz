@@ -47,11 +47,11 @@ $tmp = sys_get_temp_dir() . '/shopvivaliz-image-policy-' . bin2hex(random_bytes(
 @mkdir($tmp, 0700, true);
 
 try {
-    // Saida premium 1024x1024 deve ser aceita pelo fluxo inicial e pelo
-    // validador compartilhado usado na regeneracao.
+    // Saida 1024x1024 continua tecnicamente valida. O novo perfil separa
+    // minimo tecnico de alvo recomendado de cada marketplace.
     $good = $tmp . '/good.png';
     iip_write_png($good, 1024, 1024);
-    $meta = ai_studio_validate_image_file($good, 600);
+    $meta = ai_studio_validate_image_file($good, 1000);
     iip_assert($meta['width'] === 1024 && $meta['height'] === 1024, '1024x1024 image metadata');
     iip_assert($meta['mime'] === 'image/png', 'PNG MIME must be detected from file content');
     iip_assert(strlen($meta['sha256']) === 64, 'image fingerprint must be SHA-256');
@@ -79,17 +79,28 @@ try {
         'path traversal in base image'
     );
 
-    // Prompts devem manter fidelidade, resolucao e regras da imagem principal.
-    $prompts = ai_studio_default_prompts('Produto Teste X1');
+    // Prompts devem manter identidade real e composicao quadrada sem inventar
+    // especificacoes. Regras visuais passam a depender do destino escolhido.
+    $sitePrompts = ai_studio_default_prompts('Produto Teste X1', 'site');
     foreach (['white', 'hero', 'ambient'] as $type) {
-        iip_assert(isset($prompts[$type]), "prompt {$type} must exist");
-        iip_assert(str_contains($prompts[$type], 'Preserve the exact product identity'), "prompt {$type} must preserve identity");
-        iip_assert(str_contains($prompts[$type], 'Do not invent'), "prompt {$type} must reject invented features");
-        iip_assert(str_contains($prompts[$type], '1024x1024'), "prompt {$type} must request premium square resolution");
+        iip_assert(isset($sitePrompts[$type]), "prompt {$type} must exist");
+        iip_assert(str_contains($sitePrompts[$type], 'Preserve the exact product identity'), "prompt {$type} must preserve identity");
+        iip_assert(str_contains($sitePrompts[$type], 'Do not invent'), "prompt {$type} must reject invented features");
+        iip_assert(str_contains($sitePrompts[$type], 'Square 1:1 composition'), "prompt {$type} must request square composition");
+        iip_assert(str_contains($sitePrompts[$type], 'Marketplace-specific guidance'), "prompt {$type} must carry marketplace guidance");
     }
-    iip_assert(str_contains($prompts['white'], 'RGB 255,255,255'), 'main image must request pure white background');
-    iip_assert(str_contains($prompts['white'], '85-95%'), 'main image must request strong product fill');
-    iip_assert(str_contains($prompts['white'], 'no badges'), 'main image must reject promotional overlays');
+    iip_assert(str_contains($sitePrompts['white'], 'RGB 255,255,255'), 'main image must request pure white background');
+    iip_assert(str_contains($sitePrompts['white'], '85-95%'), 'main image must request strong product fill');
+    iip_assert(str_contains($sitePrompts['white'], 'no badges'), 'main image must reject promotional overlays');
+
+    $amazonPrompts = ai_studio_default_prompts('Produto Teste X1', 'amazon');
+    iip_assert(str_contains($amazonPrompts['white'], 'Amazon-compliant main product image'), 'Amazon white prompt must include Amazon guidance');
+    iip_assert(str_contains($amazonPrompts['white'], 'first marketplace image'), 'Amazon white prompt must be treated as first image');
+
+    $tiktokProfile = ai_studio_channel_profile('tiktok');
+    iip_assert((int)($tiktokProfile['minimum_side'] ?? 0) === 1000, 'TikTok technical minimum must remain 1000px');
+    iip_assert((int)($tiktokProfile['recommended_side'] ?? 0) === 1600, 'TikTok recommended target must be visible as 1600px');
+    iip_assert(!empty($tiktokProfile['white_first']), 'TikTok white cover must be reviewed first');
 
     // Testa funcoes puras/privadas de identidade e ordenacao sem banco.
     $reflection = new ReflectionClass(AiStudioOmnichannelImagePublisher::class);
@@ -138,8 +149,6 @@ try {
 
     fwrite(STDOUT, "OK image identity and quality policy\n");
 } finally {
-    foreach (glob($tmp . '/*') ?: [] as $file) {
-        @unlink($file);
-    }
+    foreach (glob($tmp . '/*') ?: [] as $file) @unlink($file);
     @rmdir($tmp);
 }
