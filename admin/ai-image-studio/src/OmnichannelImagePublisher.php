@@ -12,6 +12,7 @@ require_once __DIR__ . '/../../../includes/marketplace/TinyPublisher.php';
 final class AiStudioOmnichannelImagePublisher
 {
     private const CHANNELS = ['site', 'ml', 'shopee', 'amazon', 'tiktok', 'erp'];
+    private const COVER_FIRST_CHANNELS = ['ml', 'shopee', 'amazon', 'tiktok', 'erp'];
 
     public function __construct(private PDO $db)
     {
@@ -29,25 +30,36 @@ final class AiStudioOmnichannelImagePublisher
             throw new RuntimeException('A aprovação de imagem exige exatamente um canal de destino.');
         }
 
-        // Confirma que o produto ainda existe antes de promover qualquer arquivo.
         sv_market_product($this->db, $productId);
 
         $this->setStaging($stagingId, 'publishing', null, $channels, null, null);
         [$publicUrl, $publicFile] = $this->ensurePublicAsset($row);
-        $publicUrls = array_values(array_unique(array_merge([$publicUrl], $this->existingPublicUrls($productId))));
-        $localFiles = $this->localFiles($publicUrls);
         $results = [];
         $failures = [];
 
         foreach ($channels as $channel) {
             try {
+                if ($channel === 'site') {
+                    $channelUrls = $this->sitePublicUrls($productId, $imageType, $publicUrl);
+                } else {
+                    $channelUrls = $this->approvedChannelUrls($productId, $channel, $stagingId, $imageType, $publicUrl);
+                }
+                $channelFiles = in_array($channel, ['shopee', 'tiktok'], true) ? $this->localFiles($channelUrls) : [];
+
+                // Amazon substitui os locators informados no patch. Preserva a
+                // galeria já existente, mas mantém as imagens explicitamente
+                // aprovadas pelo Admin na frente e sempre com white como capa.
+                if ($channel === 'amazon') {
+                    $channelUrls = $this->amazonUrlsWithExisting($productId, $channelUrls);
+                }
+
                 $result = match ($channel) {
-                    'site' => $this->publishSite($stagingId, $productId, $imageType, $publicUrl, $publicUrls),
-                    'ml' => (new SvMercadoLivrePublisher($this->db))->publishImages($productId, $publicUrls),
-                    'shopee' => (new SvShopeePublisher($this->db))->publishImages($productId, $localFiles),
-                    'tiktok' => (new SvTikTokPublisher($this->db))->publishImages($productId, $localFiles),
-                    'amazon' => (new SvAmazonPublisher($this->db))->publishImages($productId, $publicUrls),
-                    'erp' => (new SvTinyPublisher($this->db))->publishImages($productId, $publicUrls),
+                    'site' => $this->publishSite($stagingId, $productId, $imageType, $publicUrl, $channelUrls),
+                    'ml' => (new SvMercadoLivrePublisher($this->db))->publishImages($productId, $channelUrls),
+                    'shopee' => (new SvShopeePublisher($this->db))->publishImages($productId, $channelFiles),
+                    'tiktok' => (new SvTikTokPublisher($this->db))->publishImages($productId, $channelFiles),
+                    'amazon' => (new SvAmazonPublisher($this->db))->publishImages($productId, $channelUrls),
+                    'erp' => throw new RuntimeException('Publicação de imagem gerada no Olist/Tiny está bloqueada: a API V2 exige reenviar preço no layout completo. O ERP permanece fonte protegida; preço e estoque não são tocados pelo AI Image Studio.'),
                     default => throw new RuntimeException("Canal de imagem não suportado: {$channel}"),
                 };
                 $results[$channel] = $result;
@@ -147,7 +159,6 @@ final class AiStudioOmnichannelImagePublisher
                 @unlink($temporary);
                 throw new RuntimeException('Falha ao copiar a imagem para promoção.');
             }
-            // Read-back antes do rename atômico: arquivo inválido nunca chega à área pública.
             try {
                 $this->validateGeneratedImage($temporary);
             } catch (Throwable $e) {
@@ -203,11 +214,146 @@ final class AiStudioOmnichannelImagePublisher
     }
 
     /** @return list<string> */
-    private function existingPublicUrls(int $productId): array
+    private function sitePublicUrls(int $productId, string $currentType, string $currentUrl): array
     {
-        $stmt = $this->db->prepare("SELECT public_url FROM product_images WHERE product_id = ? ORDER BY CASE image_type WHEN 'white' THEN 1 WHEN 'hero' THEN 2 WHEN 'ambient' THEN 3 ELSE 4 END, id DESC");
+        $candidates = [['type' => $currentType, 'url' => $currentUrl, 'order' => 0]];
+        $stmt = $this->db->prepare('SELECT image_type, public_url FROM product_images WHERE product_id = ? ORDER BY id DESC');
         $stmt->execute([$productId]);
-        return array_values(array_unique(array_filter(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN)))));
+        $order = 1;
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $candidates[] = [
+                'type' => strtolower(trim((string)($row['image_type'] ?? 'other'))),
+                'url' => trim((string)($row['public_url'] ?? '')),
+                'order' => $order++,
+            ];
+        }
+        return $this->orderImageCandidates($candidates);
+    }
+
+    /**
+     * Retorna somente a imagem atual e imagens que já foram aprovadas para o
+     * MESMO canal. Nunca reaproveita silenciosamente a galeria do site em um
+     * marketplace diferente.
+     *
+     * @return list<string>
+     */
+    private function approvedChannelUrls(int $productId, string $channel, int $currentStagingId, string $currentType, string $currentUrl): array
+    {
+        $candidates = [['type' => $currentType, 'url' => $currentUrl, 'order' => 0]];
+        $stmt = $this->db->prepare(
+            "SELECT id, image_type, target_channels_json, publication_summary_json, status "
+            . "FROM product_images_staging WHERE product_id = ? AND id <> ? "
+            . "AND status IN ('published','partial_published','submitted') "
+            . 'ORDER BY COALESCE(published_at, updated_at, created_at) DESC, id DESC'
+        );
+        $stmt->execute([$productId, $currentStagingId]);
+        $order = 1;
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $targets = json_decode((string)($row['target_channels_json'] ?? ''), true);
+            if (!is_array($targets) || !in_array($channel, array_map('strval', $targets), true)) {
+                continue;
+            }
+            $summary = json_decode((string)($row['publication_summary_json'] ?? ''), true);
+            if (!is_array($summary)) {
+                continue;
+            }
+            $channelResult = $summary['channels'][$channel] ?? null;
+            $channelStatus = is_array($channelResult) ? strtolower(trim((string)($channelResult['status'] ?? ''))) : '';
+            if (!in_array($channelStatus, ['published', 'submitted'], true)) {
+                continue;
+            }
+            $url = trim((string)($summary['public_url'] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $candidates[] = [
+                'type' => strtolower(trim((string)($row['image_type'] ?? 'other'))),
+                'url' => $url,
+                'order' => $order++,
+            ];
+        }
+
+        $urls = $this->orderImageCandidates($candidates);
+        $whitePresent = false;
+        foreach ($candidates as $candidate) {
+            if (($candidate['type'] ?? '') === 'white' && trim((string)($candidate['url'] ?? '')) !== '') {
+                $whitePresent = true;
+                break;
+            }
+        }
+        if (in_array($channel, self::COVER_FIRST_CHANNELS, true) && !$whitePresent) {
+            throw new RuntimeException("A imagem white deve ser aprovada primeiro para {$channel}; hero/ambient nunca podem virar capa automaticamente.");
+        }
+        return $urls;
+    }
+
+    /**
+     * Mantém no máximo a versão mais recente de cada tipo e garante a ordem
+     * white -> hero -> ambient -> outros. O primeiro URL é a capa nos
+     * publishers externos, portanto esta função é parte do contrato de
+     * segurança da publicação.
+     *
+     * @param list<array{type:string,url:string,order:int}> $candidates
+     * @return list<string>
+     */
+    private function orderImageCandidates(array $candidates): array
+    {
+        $rank = ['white' => 0, 'hero' => 1, 'ambient' => 2];
+        $seenTypes = [];
+        $selected = [];
+        foreach ($candidates as $candidate) {
+            $type = strtolower(trim((string)($candidate['type'] ?? 'other')));
+            $url = trim((string)($candidate['url'] ?? ''));
+            if ($url === '' || isset($seenTypes[$type])) {
+                continue;
+            }
+            $seenTypes[$type] = true;
+            $selected[] = [
+                'type' => $type,
+                'url' => $url,
+                'order' => (int)($candidate['order'] ?? 9999),
+                'rank' => $rank[$type] ?? 50,
+            ];
+        }
+        usort($selected, static function (array $a, array $b): int {
+            return [$a['rank'], $a['order']] <=> [$b['rank'], $b['order']];
+        });
+        return array_values(array_unique(array_map(static fn(array $row): string => $row['url'], $selected)));
+    }
+
+    /** @return list<string> */
+    private function amazonUrlsWithExisting(int $productId, array $approvedUrls): array
+    {
+        $product = sv_market_product($this->db, $productId);
+        $sku = trim((string)($product['sku'] ?? ''));
+        if ($sku === '') {
+            throw new RuntimeException('SKU ausente para preservar a galeria Amazon.');
+        }
+
+        $client = new SvAmazonClient();
+        $listing = $client->request(
+            'GET',
+            '/listings/2021-08-01/items/' . rawurlencode($client->sellerId()) . '/' . rawurlencode($sku),
+            [
+                'marketplaceIds' => $client->marketplaceId(),
+                'includedData' => 'attributes',
+                'issueLocale' => 'pt_BR',
+            ]
+        );
+        $attributes = is_array($listing['data']['attributes'] ?? null) ? $listing['data']['attributes'] : [];
+        $existing = [];
+        foreach (array_merge(['main_product_image_locator'], array_map(static fn(int $i): string => 'other_product_image_locator_' . $i, range(1, 8))) as $key) {
+            foreach (is_array($attributes[$key] ?? null) ? $attributes[$key] : [] as $entry) {
+                if (!is_array($entry)) {
+                    continue;
+                }
+                $url = trim((string)($entry['media_location'] ?? $entry['value'] ?? ''));
+                if ($url !== '') {
+                    $existing[] = $url;
+                }
+            }
+        }
+        return array_slice(array_values(array_unique(array_merge($approvedUrls, $existing))), 0, 9);
     }
 
     /** @return list<string> */
@@ -380,8 +526,6 @@ final class AiStudioOmnichannelImagePublisher
         $skuMatches = $sku !== '' && $itemSku !== '' && hash_equals($sku, $itemSku);
         $idMatches = $externalId !== '' && in_array($externalId, $idCandidates, true);
 
-        // Se a origem possui os dois identificadores, o cache também precisa
-        // confirmar os dois. Nunca aceitar um identificador correto e outro conflitante.
         if ($sku !== '' && $externalId !== '') {
             return $skuMatches && $idMatches;
         }
