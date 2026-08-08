@@ -27,7 +27,17 @@ $now=[DateTimeOffset]::UtcNow
 $header=@{alg='RS256';typ='JWT';x5t=(B64Url $cert.GetCertHash())} | ConvertTo-Json -Compress
 $payload=@{aud="https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token";iss=$ClientId;sub=$ClientId;jti=[guid]::NewGuid().ToString();nbf=$now.AddMinutes(-1).ToUnixTimeSeconds();exp=$now.AddMinutes(9).ToUnixTimeSeconds()} | ConvertTo-Json -Compress
 $unsigned=(B64Url ([Text.Encoding]::UTF8.GetBytes($header)))+'.'+(B64Url ([Text.Encoding]::UTF8.GetBytes($payload)))
-$rsa=$cert.GetRSAPrivateKey(); $sig=$rsa.SignData([Text.Encoding]::UTF8.GetBytes($unsigned),[Security.Cryptography.HashAlgorithmName]::SHA256,[Security.Cryptography.RSASignaturePadding]::Pkcs1)
+$rsa=$null
+try {
+  $rsa=[System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($cert)
+} catch {
+  $rsa=$null
+}
+if(-not $rsa){
+  $rsa=$cert.PrivateKey
+}
+if(-not $rsa){ throw 'RSA private key could not be opened from certificate' }
+$sig=$rsa.SignData([Text.Encoding]::UTF8.GetBytes($unsigned),[Security.Cryptography.HashAlgorithmName]::SHA256,[Security.Cryptography.RSASignaturePadding]::Pkcs1)
 $assertion=$unsigned+'.'+(B64Url $sig)
 $body=@{client_id=$ClientId;scope='https://graph.microsoft.com/.default';grant_type='client_credentials';client_assertion_type='urn:ietf:params:oauth:client-assertion-type:jwt-bearer';client_assertion=$assertion}
 $token=Invoke-RestMethod -Method Post -Uri "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token" -Body $body -ContentType 'application/x-www-form-urlencoded'
