@@ -5,6 +5,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+Import-Module Microsoft.PowerShell.Security -ErrorAction Stop
+Import-Module PKI -ErrorAction Stop
+
+if (-not (Get-PSDrive -Name Cert -ErrorAction SilentlyContinue)) {
+    throw 'Windows Certificate provider is unavailable in this PowerShell session'
+}
+
 $certDir = 'C:\Certs'
 $cerPath = Join-Path $certDir 'ShopVivalizExchangeAuth.cer'
 New-Item -ItemType Directory -Force -Path $certDir | Out-Null
