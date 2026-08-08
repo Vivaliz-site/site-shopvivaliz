@@ -1,0 +1,74 @@
+name: Monitor MEI daily base freshness
+on:
+  schedule:
+    - cron: '45 9 * * *'
+  push:
+    branches: [main]
+    paths: ['.github/workflows/monitor-mei-daily-base-sync.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Verify timer execution and upstream freshness
+        run: |
+          timeout 180s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          test "$(sudo systemctl is-enabled mei-mg-base-sync.timer)" = enabled
+          test "$(sudo systemctl is-active mei-mg-base-sync.timer)" = active
+          echo '=== TIMER ==='
+          sudo systemctl list-timers mei-mg-base-sync.timer --all --no-pager
+          echo '=== BASE SYNC HEALTH ==='
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          import datetime,json,os,psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'],row_factory=dict_row,connect_timeout=10) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set statement_timeout='20s'")
+                  cur.execute("""
+                    select id,source_name,source_revision,source_last_modified,status,
+                           started_at,finished_at,rows_before,rows_after,rows_added,error
+                      from mei_email.base_sync_runs
+                     order by id desc limit 1
+                  """)
+                  row=dict(cur.fetchone())
+          print(json.dumps(row,default=str,ensure_ascii=False))
+          now=datetime.datetime.now(datetime.timezone.utc)
+          finished=row.get('finished_at')
+          source_modified=row.get('source_last_modified')
+          if finished is None:
+              raise SystemExit('HEALTH_FAIL=nenhuma_sincronizacao_concluida')
+          if finished.tzinfo is None:
+              finished=finished.replace(tzinfo=datetime.timezone.utc)
+          if now-finished.astimezone(datetime.timezone.utc) > datetime.timedelta(hours=26):
+              raise SystemExit('HEALTH_FAIL=sincronizacao_nao_executou_nas_ultimas_26h')
+          if row.get('status') not in {'success','no_change'}:
+              raise SystemExit('HEALTH_FAIL=status_sincronizacao='+str(row.get('status')))
+          if source_modified is None:
+              raise SystemExit('HEALTH_FAIL=fonte_sem_timestamp_de_atualizacao')
+          if source_modified.tzinfo is None:
+              source_modified=source_modified.replace(tzinfo=datetime.timezone.utc)
+          age=now-source_modified.astimezone(datetime.timezone.utc)
+          print('SOURCE_AGE_HOURS='+str(round(age.total_seconds()/3600,2)))
+          if age > datetime.timedelta(hours=48):
+              raise SystemExit('HEALTH_FAIL=fonte_mais_antiga_que_48h')
+          print('DAILY_BASE_SYNC_HEALTHY')
+          PY
+          echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
