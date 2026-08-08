@@ -1,5 +1,5 @@
 {
   "action": "m365_app_only_audit",
-  "requested_at": "2026-08-07T22:30:00-03:00",
-  "reason": "Validate imported ShopVivalizExchangeAuth private key, Graph app-only authentication, and Mail.Send"
+  "requested_at": "2026-08-07T22:52:00-03:00",
+  "reason": "Re-run app-only audit after replacing Cert drive dependency with direct CurrentUser certificate store access"
 }
