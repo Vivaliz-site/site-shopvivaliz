@@ -110,6 +110,8 @@ jobs:
         run: php tests/integration-health-credentials-test.php
       - name: Politica premium de otimizacao por marketplace
         run: php tests/catalog-optimization-policy-test.php
+      - name: Identidade e qualidade de imagens do Admin
+        run: php tests/image-identity-policy-test.php
 
 # Validacao de producao e evidencia canonica pertencem ao
 # Post-deploy Monitoring do Master Production Pipeline. O QA permanece
