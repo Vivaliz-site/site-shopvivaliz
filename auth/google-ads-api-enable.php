@@ -20,7 +20,7 @@ $payloadB64 = rtrim(strtr(base64_encode($payloadJson), '+/', '-_'), '=');
 $signature = hash_hmac('sha256', $payloadB64, sv_social_env('GOOGLE_OAUTH_CLIENT_SECRET'));
 $state = 'gcloud1.' . $payloadB64 . '.' . $signature;
 
-$url = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
+$params = [
     'client_id' => sv_social_env('GOOGLE_OAUTH_CLIENT_ID'),
     'redirect_uri' => sv_social_callback_url('google'),
     'response_type' => 'code',
@@ -28,9 +28,12 @@ $url = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
     'state' => $state,
     'access_type' => 'online',
     'include_granted_scopes' => 'false',
-    'prompt' => 'consent',
-]);
-
+    // The user already granted this scope in the immediately preceding flow.
+    // Reuse that grant without presenting a second consent screen when Google can do so.
+    'prompt' => 'none',
+    'login_hint' => 'fredmourao@gmail.com',
+];
+$url = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query($params);
 header('Cache-Control: no-store, max-age=0');
 header('Pragma: no-cache');
 header('Location: ' . $url, true, 302);
