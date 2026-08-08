@@ -9,7 +9,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 8
     steps:
       - name: Configure VM key
         env:
@@ -18,63 +18,16 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Send one direct Gmail diagnostic through Graph
+      - name: Inspect VM provider implementation
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           sudo systemctl stop mei-mg-email-worker.service || true
           cd /home/ubuntu/mei-mg-email
-          /home/ubuntu/mei-mg-email/.venv/bin/python -m py_compile app/email_provider.py worker/worker.py
-          test "$(grep '^EMAIL_PROVIDER=' .env | tail -1 | cut -d= -f2-)" = "microsoft_graph"
-          test "$(grep '^MICROSOFT_GRAPH_USER=' .env | tail -1 | cut -d= -f2-)" = "naoresponda@dev.shopvivaliz.com.br"
-          test "$(grep '^RATE_LIMIT_ENVIOS_POR_MINUTO=' .env | tail -1 | cut -d= -f2-)" -le 30
-          ! grep -Eq '^(GMAIL_APP_PASSWORD|MICROSOFT_SMTP_PASSWORD|BREVO_API_KEY)=[^[:space:]]+' .env
-          /home/ubuntu/.shopvivaliz/bin/graph-app-only.py
-
-          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
-          from dotenv import load_dotenv
-          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
-          import os, psycopg
-          with psycopg.connect(os.environ['DATABASE_URL'], autocommit=True) as conn:
-              with conn.cursor() as cur:
-                  cur.execute("select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em >= now()-interval '24 hours'")
-                  used=cur.fetchone()[0]
-                  print(f'used_24h={used}')
-                  if used >= 9950:
-                      raise SystemExit('NO_SAFE_CAPACITY_FOR_DIRECT_TEST')
-          PY
-
-          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
-          from dotenv import load_dotenv
-          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
-          from datetime import datetime, timezone
-          from pathlib import Path
-          from app.email_provider import MicrosoftGraphEmailProvider
-          from worker.worker import montar_corpo
-
-          recipient='fredmourao@gmail.com'
-          template=Path('/home/ubuntu/mei-mg-email/templates/mei-contabilidade-melo.html').read_text(encoding='utf-8')
-          body=montar_corpo(template, {
-              'cnpj':'00000000000000',
-              'email':recipient,
-              'razao_social':'Frederico Mourao',
-              'nome_fantasia':'Teste Direto Gmail',
-          })
-          provider=MicrosoftGraphEmailProvider()
-          stamp=datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%SZ')
-          subject=f'VALIDACAO GRAPH DIRETA - Contabilidade Melo - {stamp}'
-          result=provider.send(to=recipient, subject=subject, body=body)
-          print(f'subject={subject}')
-          print(f'success={result.success}')
-          print(f'status={result.status}')
-          print(f'status_code={result.status_code}')
-          print(f'request_id={result.message_id or ""}')
-          if not result.success or result.status != 'submitted' or result.status_code not in (200,202):
-              raise SystemExit(f'GRAPH_DIRECT_TEST_FAILED:{result.error}')
-          print('GRAPH_DIRECT_GMAIL_TEST_SUBMITTED')
-          PY
-
-          echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+          echo '=== PROVIDER 80-230 ==='
+          sed -n '80,230p' app/email_provider.py
+          echo '=== WORKER STATE ==='
+          sudo systemctl is-active mei-mg-email-worker.service || true
           EOF
       - name: Cleanup
         if: always()
