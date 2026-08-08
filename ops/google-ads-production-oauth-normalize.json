@@ -1,5 +1,5 @@
 {
   "action": "probe_and_normalize_production_oauth",
-  "requested_at": "2026-08-08T12:47:00-03:00",
-  "reason": "Test a safe normalization of the malformed Production OAuth client id against Google's token endpoint, update the Production secret through Fred-Win gh if accepted, and run read-only Ads audit if authentication succeeds"
+  "requested_at": "2026-08-08T12:56:00-03:00",
+  "reason": "Re-test Production OAuth using the valid client id and secret imported from Fred-Win; run read-only Ads audit if the existing refresh token matches"
 }
