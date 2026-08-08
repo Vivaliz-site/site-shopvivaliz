@@ -43,24 +43,37 @@ jobs:
           else
             echo 'envfile=missing'
           fi
-          url="https://shopvivaliz.com.br/auth/google-ads-authorize.php?job=${job}"
-          echo 'authorize_probe_begin'
-          code="$(curl -ksS -o /tmp/oauth-body -D /tmp/oauth-head -w '%{http_code}' --max-time 20 "$url" || true)"
-          echo "authorize_http_status=$code"
-          location="$(awk 'BEGIN{IGNORECASE=1} /^Location:/{sub(/\r$/,"",$0); print substr($0,11); exit}' /tmp/oauth-head 2>/dev/null || true)"
-          if [ -n "$location" ]; then
+          path="/auth/google-ads-authorize.php?job=${job}"
+          probe() {
+            label="$1"; shift
+            rm -f /tmp/oauth-body /tmp/oauth-head
+            code="$(curl -ksS -o /tmp/oauth-body -D /tmp/oauth-head -w '%{http_code}' --max-time 20 "$@" || true)"
+            echo "${label}_http_status=$code"
+            server="$(awk 'BEGIN{IGNORECASE=1} /^Server:/{sub(/\r$/,"",$0); print substr($0,9); exit}' /tmp/oauth-head || true)"
+            ctype="$(awk 'BEGIN{IGNORECASE=1} /^Content-Type:/{sub(/\r$/,"",$0); print substr($0,15); exit}' /tmp/oauth-head || true)"
+            echo "${label}_server=${server:-none}"
+            echo "${label}_content_type=${ctype:-none}"
+            location="$(awk 'BEGIN{IGNORECASE=1} /^Location:/{sub(/\r$/,"",$0); print substr($0,11); exit}' /tmp/oauth-head || true)"
             case "$location" in
-              https://accounts.google.com/*) echo 'authorize_redirect=google_accounts' ;;
-              *) echo 'authorize_redirect=other' ;;
+              https://accounts.google.com/*) echo "${label}_redirect=google_accounts" ;;
+              '') echo "${label}_redirect=none" ;;
+              *) echo "${label}_redirect=other" ;;
             esac
-          else
-            echo 'authorize_redirect=none'
-          fi
-          if grep -qi 'Google OAuth is not configured' /tmp/oauth-body 2>/dev/null; then echo 'authorize_body=oauth_not_configured'; fi
-          if grep -qi 'Invalid authorization job' /tmp/oauth-body 2>/dev/null; then echo 'authorize_body=invalid_job'; fi
+            if grep -qi 'Google OAuth is not configured' /tmp/oauth-body 2>/dev/null; then echo "${label}_body=oauth_not_configured"; fi
+            if grep -qi 'Invalid authorization job' /tmp/oauth-body 2>/dev/null; then echo "${label}_body=invalid_job"; fi
+            if grep -qiE 'forbidden|access denied|request blocked|cloudflare|security' /tmp/oauth-body 2>/dev/null; then echo "${label}_body=access_block_page"; fi
+            bytes="$(wc -c </tmp/oauth-body 2>/dev/null || echo 0)"
+            echo "${label}_body_bytes=$bytes"
+          }
+          echo 'authorize_probe_begin'
+          probe public "https://shopvivaliz.com.br${path}"
+          probe local -H 'Host: shopvivaliz.com.br' "http://127.0.0.1${path}"
           echo 'authorize_probe_end'
+          echo 'apache_vhost_begin'
+          sudo apache2ctl -S 2>/dev/null | head -n 40 || true
+          echo 'apache_vhost_end'
           echo 'callback_log_hits_begin'
-          for f in /var/log/nginx/access.log /var/log/nginx/error.log /home/ubuntu/shopvivaliz-deploy/shared/storage/logs/app.log; do
+          for f in /var/log/apache2/access.log /var/log/apache2/error.log /var/log/nginx/access.log /var/log/nginx/error.log /home/ubuntu/shopvivaliz-deploy/shared/storage/logs/app.log; do
             if [ -r "$f" ]; then
               grep -E 'google-callback|google-ads-authorize|Google OAuth callback failed|Google Ads autorizado' "$f" 2>/dev/null | tail -n 30 | sed -E 's/(code|state|job)=[^& ]+/\1=[REDACTED]/g' || true
             fi
