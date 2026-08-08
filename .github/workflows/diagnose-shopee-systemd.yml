@@ -1,0 +1,55 @@
+name: Diagnose Shopee systemd unit
+
+on:
+  push:
+    branches:
+      - repair/shopee-systemd-unit-20260808
+    paths:
+      - '.github/workflows/diagnose-shopee-systemd.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure verified Oracle SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Inspect failing unit without exposing secrets
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          unit='shopvivaliz-shopee-token-renewer.service'
+          redact='s/([A-Za-z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig'
+          echo '=== systemctl show ==='
+          systemctl show "$unit" -p FragmentPath -p LoadState -p ActiveState -p SubState -p UnitFileState || true
+          echo '=== systemctl status ==='
+          systemctl status "$unit" --no-pager --full 2>&1 | sed -E "$redact" || true
+          echo '=== systemctl cat (sanitized) ==='
+          systemctl cat "$unit" 2>&1 | sed -E "$redact" || true
+          echo '=== systemd-analyze verify ==='
+          fragment="$(systemctl show "$unit" -p FragmentPath --value 2>/dev/null || true)"
+          if [[ -n "$fragment" && -r "$fragment" ]]; then
+            systemd-analyze verify "$fragment" 2>&1 | sed -E "$redact" || true
+          else
+            echo 'fragment unavailable'
+          fi
+          echo '=== related unit files ==='
+          find /etc/systemd/system /lib/systemd/system -maxdepth 2 -type f -name '*shopee*' -printf '%p\n' 2>/dev/null | sort || true
+          REMOTE
