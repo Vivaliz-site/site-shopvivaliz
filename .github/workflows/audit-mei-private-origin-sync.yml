@@ -1,0 +1,43 @@
+name: Audit MEI private origin sync
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/audit-mei-private-origin-sync.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Check origin access without changing working tree
+        run: |
+          timeout 120s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo LOCAL_HEAD=$(git rev-parse HEAD)
+          timeout 40s git fetch --quiet origin main
+          echo ORIGIN_MAIN=$(git rev-parse origin/main)
+          echo '=== FILE_COMPARISON ==='
+          for f in scripts/ingest_from_huggingface.py scripts/disparar_10000_mei_mg.py worker/worker.py app/routes/campanhas.py; do
+            local_hash=$(sha256sum "$f" | awk '{print $1}')
+            origin_hash=$(git show "origin/main:$f" | sha256sum | awk '{print $1}')
+            if [ "$local_hash" = "$origin_hash" ]; then state=MATCH; else state=DIFF; fi
+            echo "$state $f local=$local_hash origin=$origin_hash"
+          done
+          git show origin/main:scripts/sincronizar_base_diaria.py >/dev/null
+          git show origin/main:db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql >/dev/null
+          git show origin/main:db/migrations/V015__base_sync_runs.sql >/dev/null
+          echo PRIVATE_ORIGIN_READ_OK
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
