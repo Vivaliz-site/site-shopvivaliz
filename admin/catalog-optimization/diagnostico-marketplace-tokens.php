@@ -3,43 +3,150 @@
 declare(strict_types=1);
 
 /**
- * Diagnóstico read-only (uso único, admin-guarded): confirma, canal por
- * canal, se existe de verdade credencial/token configurado para PUSH de
- * atualização de produto (não apenas leitura) — NUNCA imprime valor real,
- * só booleans de presença e, quando aplicável, se o arquivo de token local
- * existe.
+ * Diagnostico read-only e protegido por admin.
  *
- * Motivo de existir: Fred pediu para conectar "Aprovar" da Otimização de
- * Cadastro às APIs reais de update de cada marketplace. Antes de escrever
- * qualquer código de integração, preciso confirmar objetivamente quais
- * canais já têm credencial de escrita configurada agora — em vez de
- * assumir a partir do painel Conexões (que, por inspeção do código-fonte de
- * includes/integration-health.php, só verifica Olist/Tiny, Mercado Livre,
- * Mercado Pago, Melhor Envio, Facebook CAPI, Google Ads, TikTok Pixel e
- * SMTP — não inclui Shopee, Amazon nem TikTok Shop).
- *
- * Uso: abrir uma vez, logado como admin:
- *   https://shopvivaliz.com.br/admin/catalog-optimization/diagnostico-marketplace-tokens.php
+ * Nunca imprime valores de segredo. Retorna apenas presenca/ausencia, nomes
+ * de aliases reconhecidos e existencia de arquivos privados conhecidos.
  */
 
 require_once __DIR__ . '/../../includes/admin-guard.php';
 require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../includes/tiny-order-push.php';
+require_once __DIR__ . '/../../includes/marketplace/AmazonPublisher.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
 function dmt_present(string $key): bool
 {
     $v = getenv($key);
-    return $v !== false && trim((string) $v) !== '';
+    return $v !== false && trim((string)$v) !== '';
 }
 
-function dmt_file_exists_bool(string $path): bool
+/** @param list<string> $keys @return array<string,bool> */
+function dmt_presence_map(array $keys): array
 {
-    return is_file($path);
+    $out = [];
+    foreach ($keys as $key) $out[$key] = dmt_present($key);
+    return $out;
+}
+
+/** @param list<string> $keys */
+function dmt_any_present(array $keys): bool
+{
+    foreach ($keys as $key) if (dmt_present($key)) return true;
+    return false;
+}
+
+/**
+ * Inspeciona somente chaves conhecidas de JSON privado; nunca retorna valores.
+ *
+ * @param list<string> $paths
+ * @param list<string> $keys
+ * @return array<string,array{exists:bool,readable:bool,recognized_keys:array<string,bool>}>
+ */
+function dmt_private_json_presence(array $paths, array $keys): array
+{
+    $out = [];
+    foreach ($paths as $path) {
+        $entry = ['exists' => is_file($path), 'readable' => is_readable($path), 'recognized_keys' => []];
+        if ($entry['exists'] && $entry['readable']) {
+            $raw = @file_get_contents($path);
+            $data = is_string($raw) ? json_decode($raw, true) : null;
+            if (is_array($data)) {
+                foreach ($keys as $key) {
+                    if (!array_key_exists($key, $data)) continue;
+                    $value = $data[$key];
+                    $entry['recognized_keys'][$key] = is_scalar($value) && trim((string)$value) !== '';
+                }
+            }
+        }
+        $out[$path] = $entry;
+    }
+    return $out;
+}
+
+function dmt_amazon_api_probe(): array
+{
+    try {
+        $client = new SvAmazonClient();
+        $response = $client->request('GET', '/sellers/v1/marketplaceParticipations');
+        $payload = is_array($response['data']['payload'] ?? null)
+            ? $response['data']['payload']
+            : (is_array($response['data'] ?? null) ? $response['data'] : []);
+        return [
+            'connected' => true,
+            'http_status' => (int)($response['status'] ?? 0),
+            'request_id_present' => trim((string)($response['request_id'] ?? '')) !== '',
+            'marketplace_participations_count' => count($payload),
+            'validation' => 'GET /sellers/v1/marketplaceParticipations',
+        ];
+    } catch (Throwable $e) {
+        return [
+            'connected' => false,
+            'error_type' => get_class($e),
+            'http_status' => $e instanceof SvMarketplaceException ? $e->httpStatus : 0,
+            'validation' => 'GET /sellers/v1/marketplaceParticipations',
+        ];
+    }
 }
 
 $root = dirname(__DIR__, 2);
+$sharedRoot = '/home/ubuntu/shopvivaliz-deploy/shared';
+
+$amazonClientIdAliases = [
+    'AMAZON_LWA_CLIENT_ID',
+    'AMAZON_SP_API_CLIENT_ID',
+    'SP_API_CLIENT_ID',
+    'LWA_CLIENT_ID',
+];
+$amazonClientSecretAliases = [
+    'AMAZON_LWA_CLIENT_SECRET',
+    'AMAZON_SP_API_CLIENT_SECRET',
+    'SP_API_CLIENT_SECRET',
+    'LWA_CLIENT_SECRET',
+];
+$amazonRefreshAliases = [
+    'AMAZON_LWA_REFRESH_TOKEN',
+    'AMAZON_SP_API_REFRESH_TOKEN',
+    'SP_API_REFRESH_TOKEN',
+    'LWA_REFRESH_TOKEN',
+];
+$amazonAccessAliases = [
+    'AMAZON_LWA_ACCESS_TOKEN',
+    'AMAZON_SP_API_ACCESS_TOKEN',
+    'SP_API_ACCESS_TOKEN',
+    'LWA_ACCESS_TOKEN',
+];
+$amazonSellerAliases = [
+    'AMAZON_SELLER_ID',
+    'AMAZON_ACCOUNT_ID',
+    'AMAZON_MERCHANT_ID',
+    'AMAZON_MERCHANT_TOKEN',
+    'SP_API_SELLER_ID',
+];
+$amazonMarketplaceAliases = [
+    'AMAZON_MARKETPLACE_ID',
+    'AMAZON_MARKETPLACE',
+    'SP_API_MARKETPLACE_ID',
+];
+
+$amazonPrivatePaths = [
+    $root . '/storage/private/amazon-tokens.json',
+    $root . '/storage/private/amazon-spapi.json',
+    $root . '/storage/private/amazon-sp-api.json',
+    $root . '/storage/private/sp-api.json',
+    $root . '/storage/private/lwa-tokens.json',
+    $sharedRoot . '/amazon-tokens.json',
+    $sharedRoot . '/amazon-spapi.json',
+    $sharedRoot . '/amazon-sp-api.json',
+    $sharedRoot . '/sp-api.json',
+    $sharedRoot . '/lwa-tokens.json',
+];
+$amazonPrivateKeys = [
+    'client_id', 'client_secret', 'refresh_token', 'access_token',
+    'lwa_client_id', 'lwa_client_secret', 'lwa_refresh_token', 'lwa_access_token',
+    'seller_id', 'merchant_id', 'merchant_token', 'account_id', 'marketplace_id',
+];
 
 $report = [
     'ml' => [
@@ -48,10 +155,8 @@ $report = [
         'client_secret_present' => dmt_present('ML_CLIENT_SECRET'),
         'access_token_env_present' => dmt_present('ML_ACCESS_TOKEN'),
         'refresh_token_env_present' => dmt_present('ML_REFRESH_TOKEN'),
-        'token_file_exists' => dmt_file_exists_bool($root . '/storage/private/ml-tokens.json')
-            || dmt_file_exists_bool($root . '/data/tokens.json'),
-        'item_map_file_exists' => dmt_file_exists_bool($root . '/storage/private/ml-item-map.json'),
-        'cliente_real_no_repo' => 'api/ml/client.php + api/ml/products.php (PUT /items/{id} já implementado, falta description sub-resource)',
+        'token_file_exists' => is_file($root . '/storage/private/ml-tokens.json') || is_file($root . '/data/tokens.json'),
+        'publisher_real' => 'MercadoLivrePublisher.php',
     ],
     'shopee' => [
         'nome' => 'Shopee',
@@ -60,33 +165,46 @@ $report = [
         'shop_id_present' => dmt_present('SHOPEE_SHOP_ID'),
         'access_token_present' => dmt_present('SHOPEE_ACCESS_TOKEN'),
         'refresh_token_present' => dmt_present('SHOPEE_REFRESH_TOKEN'),
-        'cliente_real_no_repo' => 'utils/shopee_client.py update_product() -> POST /api/v2/product/update_item (Python; sem porta PHP ainda)',
-        'gap_conhecido' => 'Nenhum mapeamento product_id -> shopee item_id persistido no banco (ML tem ml-item-map.json, Shopee não tem equivalente).',
+        'token_file_exists' => is_file($root . '/storage/private/shopee-tokens.json'),
+        'publisher_real' => 'ShopeePublisher.php',
     ],
     'tiktok' => [
         'nome' => 'TikTok Shop',
-        'app_key_present' => dmt_present('TIKTOK_APP_KEY'),
-        'app_secret_present' => dmt_present('TIKTOK_APP_SECRET'),
+        'app_key_aliases' => dmt_presence_map(['TIKTOK_APP_KEY', 'TIKTOK_CLIENT_ID']),
+        'app_secret_aliases' => dmt_presence_map(['TIKTOK_APP_SECRET', 'TIKTOK_CLIENT_SECRET']),
         'access_token_present' => dmt_present('TIKTOK_ACCESS_TOKEN'),
-        'shop_cipher_present' => dmt_present('TIKTOK_SHOP_CIPHER'),
-        'shop_id_present' => dmt_present('TIKTOK_SHOP_ID'),
-        'cliente_real_no_repo' => 'scripts/utils/tiktok_client.py update_product() -> PUT /api/products (Python; sem porta PHP ainda)',
-        'gap_conhecido' => 'Nenhum mapeamento product_id -> tiktok product_id persistido no banco. Painel Conexões só verifica TIKTOK_PIXEL_TOKEN (analytics), não é o mesmo escopo de Shop/produto.',
+        'refresh_token_present' => dmt_present('TIKTOK_REFRESH_TOKEN'),
+        'shop_aliases' => dmt_presence_map(['TIKTOK_SHOP_CIPHER', 'TIKTOK_SHOP_ID']),
+        'configured_token_file_env_present' => dmt_present('TIKTOK_TOKEN_FILE'),
+        'default_token_file_exists' => is_file($root . '/storage/private/tiktok-tokens.json'),
+        'shared_token_file_exists' => is_file($sharedRoot . '/tiktok-tokens.json'),
+        'publisher_real' => 'TikTokPublisher.php',
     ],
     'amazon' => [
         'nome' => 'Amazon SP-API',
-        'lwa_client_id_present' => dmt_present('AMAZON_LWA_CLIENT_ID'),
-        'lwa_client_secret_present' => dmt_present('AMAZON_LWA_CLIENT_SECRET'),
-        'lwa_refresh_token_present' => dmt_present('AMAZON_LWA_REFRESH_TOKEN'),
-        'aws_access_key_present' => dmt_present('AMAZON_AWS_ACCESS_KEY_ID'),
-        'aws_secret_key_present' => dmt_present('AMAZON_AWS_SECRET_ACCESS_KEY'),
-        'cliente_real_no_repo' => 'NENHUM — nem leitura nem escrita. Só nomes de secret documentados em docs/knowledge/secrets-and-integrations-map.md, sem nenhuma implementação de cliente/chamada real em nenhuma linguagem do repositório.',
+        'auth_mode' => 'LWA OAuth / x-amz-access-token; AWS IAM/SigV4 nao e requisito',
+        'client_id_aliases' => dmt_presence_map($amazonClientIdAliases),
+        'client_secret_aliases' => dmt_presence_map($amazonClientSecretAliases),
+        'refresh_token_aliases' => dmt_presence_map($amazonRefreshAliases),
+        'access_token_aliases' => dmt_presence_map($amazonAccessAliases),
+        'seller_aliases' => dmt_presence_map($amazonSellerAliases),
+        'marketplace_aliases' => dmt_presence_map($amazonMarketplaceAliases),
+        'lwa_refresh_configuration_complete' => dmt_any_present($amazonClientIdAliases)
+            && dmt_any_present($amazonClientSecretAliases)
+            && dmt_any_present($amazonRefreshAliases),
+        'private_file_candidates' => dmt_private_json_presence($amazonPrivatePaths, $amazonPrivateKeys),
+        'publisher_real' => 'AmazonPublisher.php -> Sellers API + Listings Items API + Product Type Definitions',
+        'read_only_api_probe' => dmt_amazon_api_probe(),
     ],
     'erp_tiny' => [
         'nome' => 'ERP / Tiny',
         'credenciais_configuradas' => svtop_tiny_credentials_configured(),
-        'cliente_real_no_repo' => 'includes/tiny-product-push.php svtpp_push_product_update() -> PUT /produtos/{id} já implementado e funcional.',
+        'publisher_real' => 'TinyPublisher.php / tiny-product-push.php',
     ],
 ];
 
-echo json_encode(['ok' => true, 'canais' => $report], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+echo json_encode([
+    'ok' => true,
+    'safe_output' => 'Somente presenca/ausencia; nenhum valor de segredo e retornado.',
+    'canais' => $report,
+], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
