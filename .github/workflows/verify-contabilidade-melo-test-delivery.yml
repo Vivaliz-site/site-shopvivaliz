@@ -18,14 +18,42 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Inspect VM provider implementation
+      - name: Audit migration and enum state
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           sudo systemctl stop mei-mg-email-worker.service || true
           cd /home/ubuntu/mei-mg-email
-          echo '=== PROVIDER 80-230 ==='
-          sed -n '80,230p' app/email_provider.py
+          echo '=== MIGRATION FILES ==='
+          find db/migrations -maxdepth 1 -type f -name 'V*.sql' -printf '%f\n' | sort -V
+          echo '=== DELIVERY ENUM + FLYWAY ==='
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
+          import os, json, psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'], autocommit=True, row_factory=dict_row) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("""
+                    select e.enumlabel
+                      from pg_type t
+                      join pg_enum e on e.enumtypid=t.oid
+                      join pg_namespace n on n.oid=t.typnamespace
+                     where n.nspname='mei_email' and t.typname='status_envio'
+                     order by e.enumsortorder
+                  """)
+                  print('status_envio=' + json.dumps([r['enumlabel'] for r in cur.fetchall()], ensure_ascii=False))
+                  cur.execute("""
+                    select to_regclass('public.flyway_schema_history') as public_flyway,
+                           to_regclass('mei_email.flyway_schema_history') as mei_flyway
+                  """)
+                  loc=cur.fetchone()
+                  print('flyway_tables=' + json.dumps(dict(loc), default=str))
+                  table='public.flyway_schema_history' if loc['public_flyway'] else ('mei_email.flyway_schema_history' if loc['mei_flyway'] else None)
+                  if table:
+                      cur.execute(f'select installed_rank, version, description, type, checksum, success from {table} order by installed_rank')
+                      print('flyway_history=' + json.dumps([dict(r) for r in cur.fetchall()], default=str, ensure_ascii=False))
+          PY
           echo '=== WORKER STATE ==='
           sudo systemctl is-active mei-mg-email-worker.service || true
           EOF
