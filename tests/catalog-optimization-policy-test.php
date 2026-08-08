@@ -128,4 +128,18 @@ cot_assert(stripos($userPrompt, 'estoque') === false, 'user prompt must not cont
 cot_assert(str_contains($userPrompt, 'SUP-X1-PT'), 'user prompt must preserve SKU');
 cot_assert(str_contains($userPrompt, 'X1'), 'user prompt must preserve model');
 
+// A regeneracao do Admin historicamente chama o validador sem canal/produto.
+// O contexto guardado pela construcao do prompt deve impedir qualquer bypass.
+ai_catalog_build_user_prompt($product, 'amazon');
+cot_expect_rejection(
+    fn() => ai_catalog_validate_ai_response($amazonLong),
+    'regeneration must inherit Amazon title policy from request context'
+);
+
+ai_catalog_build_user_prompt($product, 'shopee');
+cot_expect_rejection(
+    fn() => ai_catalog_validate_ai_response($badGuarantee),
+    'regeneration must inherit sourced-claim policy from request context'
+);
+
 fwrite(STDOUT, "OK catalog optimization marketplace policy\n");
