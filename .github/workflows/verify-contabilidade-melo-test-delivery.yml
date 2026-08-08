@@ -9,7 +9,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 8
     steps:
       - name: Configure VM key
         env:
@@ -18,121 +18,60 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Diagnose DNS and Microsoft tenant sending quota
+      - name: Classify tenant commercial subscriptions
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           sudo systemctl stop mei-mg-email-worker.service || true
-          pkill -TERM -f 'python.*(-m[[:space:]]+worker\.worker|worker/worker\.py)' || true
-          sleep 2
           cd /home/ubuntu/mei-mg-email
-
-          echo '=== SYNC DIAGNOSTIC SCRIPTS ==='
-          GIT_TERMINAL_PROMPT=0 git fetch --quiet origin main
-          for f in scripts/auditar_dns_microsoft.py scripts/auditar_graph_token.py scripts/auditar_exchange_10000.py; do
-            mkdir -p "$(dirname "$f")"
-            git show "origin/main:$f" > "/tmp/$(basename "$f")"
-            install -m 0644 "/tmp/$(basename "$f")" "$f"
-          done
-
-          echo '=== SET SAFER RATE MARGIN ==='
-          if grep -q '^RATE_LIMIT_ENVIOS_POR_MINUTO=' .env; then
-            sed -i 's/^RATE_LIMIT_ENVIOS_POR_MINUTO=.*/RATE_LIMIT_ENVIOS_POR_MINUTO=20/' .env
-          else
-            printf '\nRATE_LIMIT_ENVIOS_POR_MINUTO=20\n' >> .env
-          fi
-          echo RATE_LIMIT_ENVIOS_POR_MINUTO=$(grep '^RATE_LIMIT_ENVIOS_POR_MINUTO=' .env | tail -1 | cut -d= -f2-)
-
-          echo '=== DNS AUDIT ==='
-          set +e
-          /home/ubuntu/mei-mg-email/.venv/bin/python scripts/auditar_dns_microsoft.py
-          dns_rc=$?
-          set -e
-          echo DNS_RC=$dns_rc
-
-          echo '=== GRAPH APP-ONLY AUDIT ==='
-          /home/ubuntu/mei-mg-email/.venv/bin/python scripts/auditar_graph_token.py
-
-          echo '=== TENANT LICENSE + APP ROLE DIAGNOSTIC ==='
           /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
           from dotenv import load_dotenv
           load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
           import json, math
-          from urllib.parse import quote
           from urllib.request import Request, urlopen
           from app.email_provider import MicrosoftGraphEmailProvider
 
-          p = MicrosoftGraphEmailProvider()
-          token = p._get_access_token()
-          headers = {'Authorization': 'Bearer '+token, 'Accept':'application/json'}
-          def get(url):
-              with urlopen(Request(url, headers=headers), timeout=30) as r:
+          p=MicrosoftGraphEmailProvider()
+          token=p._get_access_token()
+          def get(path):
+              req=Request('https://graph.microsoft.com/v1.0'+path,headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
+              with urlopen(req,timeout=30) as r:
                   return json.loads(r.read().decode('utf-8'))
 
-          skus = get('https://graph.microsoft.com/v1.0/subscribedSkus').get('value', [])
-          email_skus=[]
-          enabled_email_units=0
-          for sku in skus:
+          subs=get('/directory/subscriptions').get('value',[])
+          rows=[]
+          nontrial_email_licenses=0
+          trial_email_licenses=0
+          for s in subs:
               plans=[]
-              for sp in sku.get('servicePlans') or []:
+              for sp in s.get('serviceStatus') or []:
                   name=str(sp.get('servicePlanName') or '')
                   low=name.casefold()
                   if ('exchange' in low or low.startswith('eop_') or 'exchangearchive' in low) and str(sp.get('provisioningStatus') or '').casefold() not in {'disabled','deleted'}:
                       plans.append(name)
-              if plans:
-                  enabled=int((sku.get('prepaidUnits') or {}).get('enabled') or 0)
-                  enabled_email_units += enabled
-                  email_skus.append({
-                      'skuPartNumber': sku.get('skuPartNumber'),
-                      'capabilityStatus': sku.get('capabilityStatus'),
-                      'enabledUnits': enabled,
-                      'consumedUnits': sku.get('consumedUnits'),
-                      'exchangePlans': sorted(set(plans)),
-                  })
-          calculated = math.floor(500 * (enabled_email_units ** 0.7) + 9500) if enabled_email_units > 0 else 0
-          print('email_license_summary='+json.dumps({'enabled_email_units_estimate':enabled_email_units,'formula_threshold_if_non_trial':calculated,'email_skus':email_skus}, ensure_ascii=False))
-
-          q=quote("appId eq '"+p.client_id+"'")
-          sps=get('https://graph.microsoft.com/v1.0/servicePrincipals?$filter='+q+'&$select=id,appId,displayName').get('value',[])
-          assignments=[]
-          if sps:
-              spid=sps[0]['id']
-              data=get(f'https://graph.microsoft.com/v1.0/servicePrincipals/{spid}/appRoleAssignments').get('value',[])
-              for a in data:
-                  resource=get('https://graph.microsoft.com/v1.0/servicePrincipals/'+a['resourceId']+'?$select=displayName,appRoles')
-                  role_name=None
-                  for role in resource.get('appRoles') or []:
-                      if str(role.get('id')).casefold()==str(a.get('appRoleId')).casefold():
-                          role_name=role.get('value') or role.get('displayName')
-                          break
-                  assignments.append({'resource':resource.get('displayName'),'role':role_name or str(a.get('appRoleId'))})
-          print('app_role_assignments='+json.dumps(assignments,ensure_ascii=False))
-          print('exchange_manage_as_app=' + ('true' if any((x.get('role') or '').casefold()=='exchange.manageasapp' for x in assignments) else 'false'))
-          PY
-
-          echo '=== POWERSHELL / EXCHANGE MODULE AVAILABILITY ==='
-          if command -v pwsh >/dev/null 2>&1; then
-            echo PWSH_AVAILABLE=true
-            pwsh -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString(); $m=Get-Module ExchangeOnlineManagement -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1; if($m){"EXO_MODULE="+$m.Version}else{"EXO_MODULE=missing"}'
-          else
-            echo PWSH_AVAILABLE=false
-          fi
-
-          echo '=== AUTHORIZED RECIPIENT POOL ==='
-          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
-          from dotenv import load_dotenv
-          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
-          import os, json, psycopg
-          from psycopg.rows import dict_row
-          with psycopg.connect(os.environ['DATABASE_URL'], row_factory=dict_row) as conn:
-              with conn.cursor() as cur:
-                  cur.execute("select count(*) n from mei_email.empresas where marketing_autorizado=true and situacao_cadastral='ATIVA' and opt_out=false and provavel_terceiro=false")
-                  authorized=cur.fetchone()['n']
-                  cur.execute('select count(*) n from mei_email.vw_empresas_elegiveis')
-                  eligible=cur.fetchone()['n']
-                  cur.execute("select count(*) n from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours'")
-                  used=cur.fetchone()['n']
-                  print(json.dumps({'authorized_active':authorized,'eligible_for_new_queue':eligible,'used_24h':used,'target':9950},ensure_ascii=False))
+              if not plans:
+                  continue
+              total=int(s.get('totalLicenses') or 0)
+              is_trial=bool(s.get('isTrial'))
+              if is_trial:
+                  trial_email_licenses += total
+              elif str(s.get('status') or '').casefold() in {'enabled','warning'}:
+                  nontrial_email_licenses += total
+              rows.append({
+                  'skuPartNumber':s.get('skuPartNumber'),
+                  'isTrial':is_trial,
+                  'status':s.get('status'),
+                  'totalLicenses':total,
+                  'createdDateTime':s.get('createdDateTime'),
+                  'nextLifecycleDateTime':s.get('nextLifecycleDateTime'),
+                  'exchangePlans':sorted(set(plans)),
+              })
+          threshold = math.floor(500*(nontrial_email_licenses**0.7)+9500) if nontrial_email_licenses else 5000 if trial_email_licenses else 0
+          print('company_subscriptions='+json.dumps(rows,ensure_ascii=False))
+          print('nontrial_email_licenses='+str(nontrial_email_licenses))
+          print('trial_email_licenses='+str(trial_email_licenses))
+          print('terrl_formula_threshold='+str(threshold))
+          print('terrl_formula_sufficient_for_9950='+('true' if threshold>=9950 else 'false'))
           PY
           echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
           EOF
