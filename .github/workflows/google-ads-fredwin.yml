@@ -1,0 +1,96 @@
+name: Google Ads Fred-Win
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-fredwin-request.json"
+      - ".github/workflows/google-ads-fredwin.yml"
+      - "scripts/google_ads_auth_preflight.py"
+      - "scripts/google_ads_review_campaigns.py"
+      - "scripts/google_ads_dynamic_images.py"
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY" || { echo "SHOPVIVALIZ_VM_SSH_KEY missing"; exit 2; }
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Resolve allowlisted action
+        id: action
+        shell: bash
+        run: |
+          ACTION="$(jq -r '.action // "health"' ops/google-ads-fredwin-request.json)"
+          case "$ACTION" in
+            health)
+              COMMAND=""
+              ;;
+            audit_local_tooling)
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; Write-Output 'GOOGLE_ADS_FREDWIN_AUDIT_BEGIN'; Write-Output ('user=' + [Environment]::UserName); Write-Output ('python=' + [bool](Get-Command python -ErrorAction SilentlyContinue)); Write-Output ('gh=' + [bool](Get-Command gh -ErrorAction SilentlyContinue)); Write-Output ('gcloud=' + [bool](Get-Command gcloud -ErrorAction SilentlyContinue)); Write-Output ('google_ads_python=' + [bool](python -c \\\"import importlib.util; print(importlib.util.find_spec('google.ads.googleads') is not None)\\\" 2>\$null)); if(Get-Command gh -ErrorAction SilentlyContinue){ gh auth status 2>&1 | ForEach-Object { \$_ -replace 'gho_[A-Za-z0-9_]+','[REDACTED]' -replace 'github_pat_[A-Za-z0-9_]+','[REDACTED]' } }; if(Get-Command gcloud -ErrorAction SilentlyContinue){ Write-Output 'GCLOUD_ACCOUNTS_BEGIN'; gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>\$null; Write-Output 'GCLOUD_ACCOUNTS_END' }; \$envPath='C:\\site-shopvivaliz\\.env'; if(Test-Path \$envPath){ \$lines=Get-Content \$envPath; \$cid=(\$lines | Where-Object { \$_ -match '^GOOGLE_OAUTH_CLIENT_ID=' } | Select-Object -First 1); \$hasSecret=[bool](\$lines | Where-Object { \$_ -match '^GOOGLE_OAUTH_CLIENT_SECRET=.+$' } | Select-Object -First 1); \$hasRefresh=[bool](\$lines | Where-Object { \$_ -match '^GOOGLE_ADS_REFRESH_TOKEN=.+$' } | Select-Object -First 1); \$hasDev=[bool](\$lines | Where-Object { \$_ -match '^GOOGLE_ADS_DEVELOPER_TOKEN=.+$' } | Select-Object -First 1); \$cidValid=\$false; if(\$cid){ \$v=(\$cid -split '=',2)[1].Trim(); \$cidValid=\$v -match '^[0-9A-Za-z._-]+\\.apps\\.googleusercontent\\.com$' }; Write-Output ('env_exists=True'); Write-Output ('oauth_client_id_format_valid=' + \$cidValid); Write-Output ('oauth_client_secret_present=' + \$hasSecret); Write-Output ('refresh_token_present=' + \$hasRefresh); Write-Output ('developer_token_present=' + \$hasDev) } else { Write-Output 'env_exists=False' }; Write-Output 'GOOGLE_ADS_FREDWIN_AUDIT_END'\""
+              ;;
+            run_local_preflight)
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; python scripts/google_ads_auth_preflight.py\""
+              ;;
+            run_local_readonly)
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; python scripts/google_ads_review_campaigns.py; if(\$LASTEXITCODE -eq 0){ python scripts/google_ads_dynamic_images.py }\""
+              ;;
+            open_google_cloud_oauth)
+              COMMAND="powershell -NoProfile -Command \"\$task='ShopVivalizOpenGoogleOAuth'; \$user=(Get-CimInstance Win32_ComputerSystem).UserName; \$url='https://console.cloud.google.com/apis/credentials'; \$args='-NoProfile -WindowStyle Hidden -Command \\\"Start-Process ''''' + \$url + '''''\\\"'; \$a=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument \$args; \$t=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1); \$p=New-ScheduledTaskPrincipal -UserId \$user -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName \$task -Action \$a -Trigger \$t -Principal \$p -Force | Out-Null; Start-ScheduledTask -TaskName \$task; Start-Sleep -Seconds 5; Unregister-ScheduledTask -TaskName \$task -Confirm:\$false; Write-Output 'OPENED_GOOGLE_CLOUD_OAUTH_INTERACTIVE'\""
+              ;;
+            open_google_ads)
+              COMMAND="powershell -NoProfile -Command \"\$task='ShopVivalizOpenGoogleAds'; \$user=(Get-CimInstance Win32_ComputerSystem).UserName; \$args='-NoProfile -WindowStyle Hidden -Command \\\"Start-Process ''''https://ads.google.com/''''\\\"'; \$a=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument \$args; \$t=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1); \$p=New-ScheduledTaskPrincipal -UserId \$user -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName \$task -Action \$a -Trigger \$t -Principal \$p -Force | Out-Null; Start-ScheduledTask -TaskName \$task; Start-Sleep -Seconds 5; Unregister-ScheduledTask -TaskName \$task -Confirm:\$false; Write-Output 'OPENED_GOOGLE_ADS_INTERACTIVE'\""
+              ;;
+            *)
+              echo "Action not allowlisted: $ACTION"
+              exit 3
+              ;;
+          esac
+          echo "action=$ACTION" >> "$GITHUB_OUTPUT"
+          printf '%s' "$COMMAND" | base64 -w0 > /tmp/fredwin-command.b64
+
+      - name: Check private MCP path through VM
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
+
+      - name: Execute allowlisted action
+        if: steps.action.outputs.action != 'health'
+        run: |
+          CMD_B64="$(cat /tmp/fredwin-command.b64)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
+          body = json.dumps({'params': {'command': command, 'timeout': 850}}).encode('utf-8')
+          req = urllib.request.Request(
+              'http://127.0.0.1:5557/mcp/tool/execute_command',
+              data=body,
+              headers={'Content-Type': 'application/json'},
+              method='POST',
+          )
+          with urllib.request.urlopen(req, timeout=860) as response:
+              payload = json.loads(response.read().decode('utf-8'))
+          print(json.dumps(payload, ensure_ascii=False))
+          result = payload.get('result') or {}
+          if result.get('success') is not True:
+              raise SystemExit('Fred-Win action failed')
+          PY"
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/fredwin-command.b64
