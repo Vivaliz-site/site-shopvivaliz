@@ -1,4 +1,4 @@
-name: Audit VM MEI email runtime after resume
+name: Patch and safely resume VM MEI email runtime
 on:
   push:
     branches: [main]
@@ -9,7 +9,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - name: Configure VM key
         env:
@@ -18,23 +18,63 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Stop and audit exact VM runtime
+      - name: Patch runtime and resume safely
         run: |
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           sudo systemctl stop mei-mg-email-worker.service || true
           cd /home/ubuntu/mei-mg-email
-          echo '=== GIT ==='
-          git remote -v
-          git status --short
-          git log -8 --oneline
-          echo '=== PROVIDER MARKERS ==='
-          grep -nE "submitted|sender_blocked|202|SendResult|graph-auth.crt|app_only" app/email_provider.py | head -120 || true
-          echo '=== WORKER MARKERS ==='
-          grep -nE "resultado.success|submitted|enviado|rate_limit|max_envios|meta_envios" worker/worker.py | head -160 || true
-          echo '=== CONFIG SAFE FIELDS ==='
-          grep -E '^(EMAIL_PROVIDER|MICROSOFT_GRAPH_USER|MICROSOFT_GRAPH_AUTH_MODE|MAIL_FROM|MAIL_FROM_NAME|RATE_LIMIT_ENVIOS_POR_MINUTO|META_ENVIOS_POR_DIA|MAX_ENVIOS_POR_DIA)=' .env || true
-          echo '=== QUEUE SNAPSHOT ==='
+          ts=$(date +%Y%m%d%H%M%S)
+          cp app/email_provider.py backups/email_provider.py.$ts
+          cp worker/worker.py backups/worker.py.$ts
+          cp .env backups/.env.$ts
+
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from pathlib import Path
+          p=Path('app/email_provider.py')
+          s=p.read_text()
+          if 'status: str | None = None' not in s:
+              s=s.replace('    retry_after_seconds: int | None = None\n','    retry_after_seconds: int | None = None\n    status: str | None = None\n')
+          s=s.replace('            return SendResult(True)\n','            return SendResult(True, status="submitted")\n')
+          if 'status="submitted"' not in s:
+              raise SystemExit('provider patch failed: submitted marker missing')
+          p.write_text(s)
+
+          p=Path('worker/worker.py')
+          s=p.read_text()
+          old='''        if resultado.success:\n            _atualizar_envio(\n                conn, envio["envio_id"], "enviado",\n                provider_message_id=resultado.message_id,\n            )\n            enviados += 1\n'''
+          new='''        if resultado.success:\n            provider_status = getattr(resultado, "status", None) or "submitted"\n            if provider_status != "submitted":\n                raise RuntimeError(f"status Graph inesperado apos sendMail: {provider_status}")\n            _atualizar_envio(\n                conn, envio["envio_id"], "submitted",\n                provider_message_id=resultado.message_id,\n            )\n            enviados += 1\n'''
+          if old in s:
+              s=s.replace(old,new)
+          elif 'provider_status = getattr(resultado, "status", None) or "submitted"' not in s:
+              raise SystemExit('worker patch failed: expected success block not found')
+          s=s.replace("where status = 'enviado'\n", "where status::text in ('enviado','submitted')\n")
+          s=s.replace("enviado_em = case when %s = 'enviado' then now() else enviado_em end", "enviado_em = case when %s in ('enviado','submitted') then now() else enviado_em end")
+          if 'provider_status = getattr(resultado, "status", None) or "submitted"' not in s:
+              raise SystemExit('worker submitted handling missing')
+          p.write_text(s)
+
+          p=Path('.env')
+          lines=p.read_text().splitlines()
+          vals={'RATE_LIMIT_ENVIOS_POR_MINUTO':'30','META_ENVIOS_POR_DIA':'9950','MAX_ENVIOS_POR_DIA':'10000'}
+          seen=set(); out=[]
+          for line in lines:
+              k=line.split('=',1)[0] if '=' in line else ''
+              if k in vals:
+                  out.append(f'{k}={vals[k]}'); seen.add(k)
+              else:
+                  out.append(line)
+          for k,v in vals.items():
+              if k not in seen: out.append(f'{k}={v}')
+          p.write_text('\n'.join(out)+'\n')
+          PY
+
+          echo '=== STATIC SAFETY CHECKS ==='
+          grep -n 'status="submitted"' app/email_provider.py
+          grep -n 'provider_status = getattr' worker/worker.py
+          grep -E '^(RATE_LIMIT_ENVIOS_POR_MINUTO|META_ENVIOS_POR_DIA|MAX_ENVIOS_POR_DIA)=' .env
+
+          echo '=== DB PREFLIGHT ==='
           /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
           from dotenv import load_dotenv
           load_dotenv('.env',override=True)
@@ -42,13 +82,28 @@ jobs:
           from psycopg.rows import dict_row
           with psycopg.connect(os.environ['DATABASE_URL'],autocommit=True,row_factory=dict_row) as conn:
             with conn.cursor() as cur:
-              cur.execute("select id,nome,status::text,total_empresas,total_enviados,total_falhas from mei_email.campanhas where status::text in ('enfileirada','em_andamento') order by criado_em desc")
-              camps=[dict(r) for r in cur.fetchall()]
-              cur.execute("select status::text,count(*) n from mei_email.envios where (coalesce(enviado_em,criado_em) at time zone 'America/Sao_Paulo')::date=(now() at time zone 'America/Sao_Paulo')::date group by status::text order by status::text")
-              today=[dict(r) for r in cur.fetchall()]
-              print(json.dumps({'active_campaigns':camps,'today_counts':today},default=str,ensure_ascii=False))
+              cur.execute("select id,nome,status::text,total_empresas from mei_email.campanhas where status::text in ('enfileirada','em_andamento') order by criado_em desc")
+              active=cur.fetchall()
+              if len(active)!=1: raise SystemExit(f'expected one active campaign, got {len(active)}')
+              camp=active[0]
+              cur.execute("select count(*) n,count(distinct lower(email::text)) d from mei_email.envios where campanha_id=%s and status::text='pendente'",(camp['id'],))
+              q=cur.fetchone()
+              if q['n']!=q['d']: raise SystemExit('duplicate pending emails')
+              cur.execute("select count(*) n from mei_email.envios p where p.campanha_id=%s and p.status::text='pendente' and exists(select 1 from mei_email.envios s where s.status::text in ('enviado','submitted') and lower(s.email::text)=lower(p.email::text) and s.id<>p.id)",(camp['id'],))
+              if cur.fetchone()['n']!=0: raise SystemExit('pending recipients already sent/submitted')
+              cur.execute("select count(*) n from mei_email.envios where status::text in ('enviado','submitted') and enviado_em >= now()-interval '24 hours'")
+              used=cur.fetchone()['n']
+              print(json.dumps({'campaign':dict(camp),'pending':q['n'],'used_24h':used,'target':9950},default=str,ensure_ascii=False))
+              if used>=9950: raise SystemExit('24h target already reached')
           PY
-          echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+
+          /home/ubuntu/.shopvivaliz/bin/graph-app-only.py
+          sudo systemctl reset-failed mei-mg-email-worker.service || true
+          sudo systemctl start mei-mg-email-worker.service
+          sleep 15
+          sudo systemctl is-active --quiet mei-mg-email-worker.service
+          sudo journalctl -u mei-mg-email-worker.service -n 25 --no-pager
+          echo 'MEI_EMAIL_RUNTIME_PATCHED_AND_RESUMED'
           EOF
       - name: Cleanup
         if: always()
