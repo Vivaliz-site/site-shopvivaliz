@@ -1,0 +1,57 @@
+name: Google Ads OAuth Diagnose
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-oauth-diagnose.json"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Inspect OAuth state safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          job='360925a31e807fbaf8795ac3314a20c8'
+          token="/tmp/shopvivaliz-google-ads-refresh-${job}.token"
+          envfile='/home/ubuntu/shopvivaliz-deploy/shared/.env'
+          echo "token_file_exists=$([ -s "$token" ] && echo yes || echo no)"
+          if [ -f "$envfile" ]; then
+            for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_ADS_REFRESH_TOKEN GOOGLE_ADS_DEVELOPER_TOKEN GOOGLE_ADS_CUSTOMER_ID GOOGLE_ADS_LOGIN_CUSTOMER_ID; do
+              val="$(grep -m1 "^${key}=" "$envfile" 2>/dev/null | cut -d= -f2- || true)"
+              if [ -n "$val" ]; then echo "${key}=present"; else echo "${key}=missing"; fi
+            done
+          else
+            echo 'envfile=missing'
+          fi
+          echo 'callback_log_hits_begin'
+          for f in /var/log/nginx/access.log /var/log/nginx/error.log /home/ubuntu/shopvivaliz-deploy/shared/storage/logs/app.log; do
+            if [ -r "$f" ]; then
+              grep -E 'google-callback|google-ads-authorize|Google OAuth callback failed|Google Ads autorizado' "$f" 2>/dev/null | tail -n 20 | sed -E 's/(code|state|job)=[^& ]+/\1=[REDACTED]/g' || true
+            fi
+          done
+          echo 'callback_log_hits_end'
+          REMOTE
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
