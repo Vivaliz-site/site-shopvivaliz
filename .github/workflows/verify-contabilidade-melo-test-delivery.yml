@@ -18,16 +18,46 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Inspect production worker
+      - name: Audit production DB prerequisites
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           sudo systemctl stop mei-mg-email-worker.service || true
           cd /home/ubuntu/mei-mg-email
-          echo '=== WORKER 1-220 ==='
-          sed -n '1,220p' worker/worker.py
-          echo '=== WORKER 221-460 ==='
-          sed -n '221,460p' worker/worker.py
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
+          import os, json, psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'], autocommit=True, row_factory=dict_row) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("""
+                    select table_name,column_name,data_type,column_default,is_nullable
+                      from information_schema.columns
+                     where table_schema='mei_email'
+                       and table_name in ('empresas','envios','lotes','campanhas')
+                       and column_name in ('marketing_autorizado','situacao_cadastral','enviado','enviado_em','prioridade_data','tentativas','provider_message_id','erro')
+                     order by table_name,column_name
+                  """)
+                  print('columns='+json.dumps([dict(r) for r in cur.fetchall()],default=str,ensure_ascii=False))
+                  cur.execute("select to_regclass('mei_email.aquecimento_envio') as warmup")
+                  print('aquecimento='+json.dumps(dict(cur.fetchone()),default=str))
+                  cur.execute("select count(*) n from mei_email.empresas where coalesce(marketing_autorizado,false)=true")
+                  print('marketing_autorizado_true='+str(cur.fetchone()['n']))
+                  cur.execute("select count(*) n from mei_email.envios where status::text='pendente'")
+                  print('pending='+str(cur.fetchone()['n']))
+                  cur.execute("""
+                    select count(*) n from mei_email.envios p
+                     where p.status::text='pendente'
+                       and exists (
+                         select 1 from mei_email.envios s
+                          where s.id<>p.id
+                            and s.status::text='enviado'
+                            and lower(btrim(s.email::text))=lower(btrim(p.email::text))
+                       )
+                  """)
+                  print('pending_already_enviado='+str(cur.fetchone()['n']))
+          PY
           echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
           EOF
       - name: Cleanup
