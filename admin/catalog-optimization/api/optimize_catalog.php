@@ -241,6 +241,15 @@ TXT;
 
 function ai_catalog_build_user_prompt(array $product, string $channel): string
 {
+    // O Admin reutiliza esta funcao na acao "regenerate". Guardamos o
+    // contexto factual da ultima geracao nesta requisicao para que uma
+    // chamada legada ai_catalog_validate_ai_response($data) sem argumentos
+    // adicionais continue recebendo o MESMO quality gate especifico do canal.
+    $GLOBALS['ai_catalog_validation_context'] = [
+        'channel' => $channel,
+        'product' => $product,
+    ];
+
     $channelLabel = catalog_ai_channels()[$channel] ?? $channel;
     $fields = [
         'Nome atual' => $product['name'] ?? '',
@@ -390,11 +399,28 @@ function ai_catalog_validate_ai_response(array $data, string $channel = '', arra
         throw new CatalogAiApiException('A IA tentou incluir preco, estoque ou condicao comercial protegida.');
     }
 
+    // Compatibilidade segura com o fluxo de regeneracao do admin_catalog.php:
+    // ele historicamente chamava o validador sem canal/produto. O contexto
+    // foi registrado por ai_catalog_build_user_prompt() imediatamente antes
+    // da chamada ao provider. Se houver contexto, o quality gate especifico
+    // do marketplace e obrigatorio; nao existe downgrade silencioso.
+    if ($channel === '') {
+        $context = $GLOBALS['ai_catalog_validation_context'] ?? null;
+        if (is_array($context)
+            && is_string($context['channel'] ?? null)
+            && is_array($context['product'] ?? null)
+        ) {
+            $channel = (string) $context['channel'];
+            $product = $context['product'];
+        }
+    }
+
     if ($channel === '') {
         return;
     }
 
     $report = ai_catalog_quality_report($data, $channel, $product);
+    $GLOBALS['ai_catalog_last_quality_report'] = $report;
     $failed = array_keys(array_filter($report['checks'], fn(bool $ok): bool => !$ok));
     if ($failed !== []) {
         throw new CatalogAiApiException('Saida reprovada pela politica de qualidade: ' . implode(', ', $failed));
