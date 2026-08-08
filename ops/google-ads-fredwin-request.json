@@ -1,5 +1,5 @@
 {
-  "action": "audit_local_tooling",
-  "requested_at": "2026-08-08T12:38:00-03:00",
-  "reason": "Inspect Fred-Win Google Ads/OAuth tooling and secure local credential readiness without printing secret values"
+  "action": "open_google_cloud_oauth",
+  "requested_at": "2026-08-08T12:40:00-03:00",
+  "reason": "Open Google Cloud OAuth credentials in Fred-Win interactive session to repair Google Ads authentication"
 }
