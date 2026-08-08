@@ -1,0 +1,41 @@
+name: Fred-Win Browser Capability
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fred-win-browser-capability.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY" || exit 2
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect browser capability
+        run: |
+          python3 - <<'PY' > /tmp/body.json
+          import json
+          ps=r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$chrome=@('C:\Program Files\Google\Chrome\Application\chrome.exe','C:\Program Files (x86)\Google\Chrome\Application\chrome.exe','$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe'); foreach($c in $chrome){ $p=[Environment]::ExpandEnvironmentVariables($c); if(Test-Path $p){ Write-Output ('CHROME=' + $p); & $p --version 2>$null } }; $edge='C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'; if(Test-Path $edge){ Write-Output ('EDGE=' + $edge); & $edge --version 2>$null }; Write-Output ('PY=' + [bool](Get-Command py -ErrorAction SilentlyContinue)); if(Get-Command py -ErrorAction SilentlyContinue){ py -3 -c \"import importlib.util; print('SELENIUM='+str(bool(importlib.util.find_spec('selenium')))); print('PLAYWRIGHT='+str(bool(importlib.util.find_spec('playwright'))))\" }; Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'chrome|msedge' } | Select-Object -First 8 | ForEach-Object { Write-Output ('BROWSER_PID=' + $_.ProcessId + ';NAME=' + $_.Name + ';CMD=' + ([string]$_.CommandLine -replace ' --[^ ]*(password|token|secret)[^ ]*',' [REDACTED]')) }; $profile=Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data'; Write-Output ('CHROME_PROFILE=' + (Test-Path $profile)); if(Test-Path $profile){ Get-ChildItem $profile -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^(Default|Profile )' } | ForEach-Object { Write-Output ('PROFILE_DIR=' + $_.FullName) } }"'''
+          print(json.dumps({'params':{'command':ps,'timeout':90}}))
+          PY
+          BODY_B64="$(base64 -w0 /tmp/body.json)"
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 "BODY_B64='$BODY_B64' python3 - <<'PY'
+          import os,base64,urllib.request
+          body=base64.b64decode(os.environ['BODY_B64'])
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=110) as r: print(r.read().decode())
+          PY"
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/body.json
