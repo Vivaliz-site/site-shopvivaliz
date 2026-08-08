@@ -1,0 +1,31 @@
+name: Check Azure CLI authenticated session on VM
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/check-azure-cli-session.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Check Azure CLI session
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set +e
+          echo AZ_PATH=$(command -v az || true)
+          if command -v az >/dev/null 2>&1; then
+            az account show --query '{tenantId:tenantId,user:user.name,userType:user.type,state:state}' -o json
+          fi
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
