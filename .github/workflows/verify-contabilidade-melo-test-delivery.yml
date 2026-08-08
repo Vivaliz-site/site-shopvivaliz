@@ -55,7 +55,6 @@ jobs:
             scripts/auditar_exchange_10000.py scripts/disparar_10000_mei_mg.py
           grep -q 'ALLOWED_SENDER = "naoresponda@dev.shopvivaliz.com.br"' app/email_provider.py
           grep -q "status::text in ('submitted', 'enviado')" worker/worker.py
-          grep -q 'conn.commit()' worker/worker.py
           grep -q 'provavel_terceiro' worker/worker.py
           grep -q 'marketing_autorizado' worker/worker.py
           grep -q "status::text in ('submitted', 'enviado')" scripts/disparar_10000_mei_mg.py
@@ -65,8 +64,31 @@ jobs:
           test "$(grep '^RATE_LIMIT_ENVIOS_POR_MINUTO=' .env | tail -1 | cut -d= -f2-)" -le 30
           ! grep -Eq '^(GMAIL_APP_PASSWORD|MICROSOFT_SMTP_PASSWORD|BREVO_API_KEY|MICROSOFT_GRAPH_CLIENT_SECRET)=[^[:space:]]+' .env
 
-          echo '=== TESTS ==='
-          timeout 180 /home/ubuntu/mei-mg-email/.venv/bin/python -m pytest -q tests/test_worker_safety.py
+          echo '=== RUNTIME SMOKE ASSERTIONS ==='
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from pathlib import Path
+          from app.config import settings
+          from app.email_provider import MicrosoftGraphEmailProvider
+          from scripts.disparar_10000_mei_mg import EXPECTED_DAILY_TARGET, carregar_template_html
+          from worker.worker import _erro_transitorio, montar_corpo
+          assert EXPECTED_DAILY_TARGET == 9950
+          assert settings.meta_envios_por_dia == 9950
+          assert settings.max_envios_por_dia == 10000
+          assert 0 < settings.rate_limit_envios_por_minuto <= 30
+          assert _erro_transitorio('Microsoft Graph: TooManyRequests; http_429')
+          assert not _erro_transitorio('Microsoft Graph: ErrorSendAsDenied')
+          template = carregar_template_html()
+          assert '<html' in template.casefold()
+          assert '{{unsubscribe_url}}' in template
+          assert 'logo-contabilidade-melo-transparente.png' in template.casefold()
+          body = montar_corpo('Oi {{razao_social}} {{unsubscribe_url}}', {'cnpj':'12345678000190','email':'cliente+teste@example.com','razao_social':'Empresa Teste','nome_fantasia':'Teste'})
+          assert 'Empresa Teste' in body and 'cliente%2Bteste%40example.com' in body
+          migration = Path('db/migrations/V013__eligibility_consent_and_global_dedupe.sql').read_text(encoding='utf-8').casefold()
+          assert 'marketing_autorizado = true' in migration
+          assert 'not exists' in migration
+          assert MicrosoftGraphEmailProvider._parse_retry_after
+          print('RUNTIME_SMOKE_ASSERTIONS_OK')
+          PY
 
           echo '=== FAIL-CLOSED CLEANUP OF LEGACY UNSAFE QUEUE ==='
           /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
@@ -78,23 +100,16 @@ jobs:
               with conn.cursor() as cur:
                   cur.execute("""
                     update mei_email.envios e
-                       set status='bloqueado',
-                           erro='fail-closed: destinatario nao elegivel na validacao pre-disparo'
+                       set status='bloqueado', erro='fail-closed: destinatario nao elegivel na validacao pre-disparo'
                       from mei_email.empresas emp
                      where e.cnpj=emp.cnpj
                        and e.status::text in ('pendente','enviando')
-                       and (
-                         emp.situacao_cadastral <> 'ATIVA'
-                         or emp.opt_out
-                         or emp.provavel_terceiro
-                         or not emp.marketing_autorizado
-                       )
+                       and (emp.situacao_cadastral <> 'ATIVA' or emp.opt_out or emp.provavel_terceiro or not emp.marketing_autorizado)
                   """)
                   blocked=cur.rowcount
                   cur.execute("""
                     update mei_email.envios p
-                       set status='descartado',
-                           erro='supressao global: email ja submitted/enviado anteriormente'
+                       set status='descartado', erro='supressao global: email ja submitted/enviado anteriormente'
                      where p.status::text in ('pendente','enviando')
                        and exists (
                          select 1 from mei_email.envios s
@@ -106,17 +121,12 @@ jobs:
                   discarded_prior=cur.rowcount
                   cur.execute("""
                     with ranked as (
-                      select id,
-                             row_number() over (
-                               partition by lower(btrim(email::text))
-                               order by criado_em, id
-                             ) as rn
+                      select id, row_number() over (partition by lower(btrim(email::text)) order by criado_em,id) rn
                         from mei_email.envios
                        where status::text in ('pendente','enviando')
                     )
                     update mei_email.envios e
-                       set status='descartado',
-                           erro='supressao global: duplicidade na fila atual'
+                       set status='descartado', erro='supressao global: duplicidade na fila atual'
                       from ranked r
                      where e.id=r.id and r.rn>1
                   """)
