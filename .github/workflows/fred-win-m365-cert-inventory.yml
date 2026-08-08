@@ -1,0 +1,43 @@
+name: Fred-Win M365 Certificate Inventory
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fred-win-m365-cert-inventory.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY" || exit 2
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Check MCP
+        run: ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'curl -fsS --max-time 10 http://127.0.0.1:5557/health'
+      - name: Inspect certificate state
+        run: |
+          python3 - <<'PY' > /tmp/body.json
+          import json
+          ps = r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$tp='7EFCBC6676B61F8C076F08127F5F7E365A95F2E9'; Write-Output ('CER_EXISTS=' + (Test-Path 'C:\Certs\ShopVivalizExchangeAuth.cer')); if(Test-Path 'C:\Certs\ShopVivalizExchangeAuth.cer'){ $f=Get-Item 'C:\Certs\ShopVivalizExchangeAuth.cer'; Write-Output ('CER_SIZE=' + $f.Length + ';CER_MODIFIED=' + $f.LastWriteTime.ToString('o')) }; foreach($s in @('Cert:\CurrentUser\My','Cert:\LocalMachine\My')){ Write-Output ('STORE=' + $s); if(Test-Path $s){ $m=Get-ChildItem $s -ErrorAction SilentlyContinue | Where-Object { $_.Thumbprint -eq $tp -or $_.Subject -match 'ShopVivaliz|ExchangeAuth' }; if($m){ foreach($c in $m){ Write-Output ('MATCH=' + $c.Thumbprint + ';SUBJECT=' + $c.Subject + ';HASPRIVATEKEY=' + $c.HasPrivateKey + ';NOTAFTER=' + $c.NotAfter.ToString('o')) } } else { Write-Output 'MATCH=NONE' } } }"'''
+          print(json.dumps({'params': {'command': ps, 'timeout': 90}}))
+          PY
+          B64="$(base64 -w0 /tmp/body.json)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "B64='$B64' python3 - <<'PY'
+          import base64,json,os,urllib.request
+          body=base64.b64decode(os.environ['B64'])
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=110) as r: print(r.read().decode())
+          PY"
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/body.json
