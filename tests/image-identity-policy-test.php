@@ -55,14 +55,23 @@ try {
     iip_assert($meta['mime'] === 'image/png', 'PNG MIME must be detected from file content');
     iip_assert(strlen($meta['sha256']) === 64, 'image fingerprint must be SHA-256');
 
-    // Imagem pequena e arquivo falso devem ser bloqueados.
+    // O validador compartilhado pelos clientes de IA protege inclusive o
+    // botão Regenerar do Admin, que chama os clients diretamente.
+    $providerMeta = AiStudioHttpClient::validateOutputImage($good, 512);
+    iip_assert($providerMeta['mime'] === 'image/png', 'provider output validator must inspect real MIME');
+    iip_assert(strlen($providerMeta['sha256']) === 64, 'provider output validator must fingerprint output');
+
+    // Imagem pequena e arquivo falso devem ser bloqueados tanto no fluxo
+    // inicial quanto no fluxo compartilhado de regeneração.
     $small = $tmp . '/small.png';
     iip_write_png($small, 128, 128);
     iip_expect_failure(fn() => ai_studio_validate_image_file($small, 300), 'small source image');
+    iip_expect_failure(fn() => AiStudioHttpClient::validateOutputImage($small, 512), 'small regenerated output');
 
     $fake = $tmp . '/fake.jpg';
     file_put_contents($fake, '<html>not an image</html>');
     iip_expect_failure(fn() => ai_studio_validate_image_file($fake, 300), 'fake image with jpg extension');
+    iip_expect_failure(fn() => AiStudioHttpClient::validateOutputImage($fake, 512), 'fake regenerated image with jpg extension');
 
     // Traversal local nunca pode ser usado como foto-base.
     iip_expect_failure(
