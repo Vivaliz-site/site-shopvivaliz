@@ -129,7 +129,6 @@ jobs:
           TARGET=9950
           with psycopg.connect(os.environ['DATABASE_URL'],autocommit=True,row_factory=dict_row) as conn:
             with conn.cursor() as cur:
-              # Suppress recipients already accepted/sent under another row.
               cur.execute("""
                 update mei_email.envios p
                    set status='descartado',
@@ -144,7 +143,6 @@ jobs:
               """)
               suppressed=cur.rowcount
 
-              # Quarantine pending rows that are no longer eligible.
               cur.execute("""
                 update mei_email.envios p
                    set status='bloqueado',
@@ -161,7 +159,6 @@ jobs:
               """)
               quarantined=cur.rowcount
 
-              # Keep only the oldest row for any duplicate normalized pending e-mail.
               cur.execute("""
                 with ranked as (
                   select id,
