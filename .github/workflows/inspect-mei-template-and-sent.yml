@@ -1,0 +1,59 @@
+name: Inspect MEI email template and sent campaigns
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/inspect-mei-template-and-sent.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect campaign template hashes and sends
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import os, json, hashlib, psycopg
+          from psycopg.rows import dict_row
+          out=[]
+          with psycopg.connect(os.environ['DATABASE_URL'],autocommit=True,row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+              cur.execute("set default_transaction_read_only=on")
+              cur.execute("""
+                select c.id,c.nome,c.assunto,c.status::text,c.criado_em,c.corpo_template,
+                       count(*) filter (where e.status='enviado')::bigint enviados,
+                       count(*) filter (where e.status='pendente')::bigint pendentes,
+                       min(e.enviado_em) filter (where e.status='enviado') primeiro_envio,
+                       max(e.enviado_em) filter (where e.status='enviado') ultimo_envio
+                  from mei_email.campanhas c
+                  left join mei_email.envios e on e.campanha_id=c.id
+                 group by c.id,c.nome,c.assunto,c.status,c.criado_em,c.corpo_template
+                 order by c.criado_em
+              """)
+              for r in cur.fetchall():
+                tpl=r.pop('corpo_template') or ''
+                r=dict(r)
+                r['template_sha256']=hashlib.sha256(tpl.encode()).hexdigest()
+                r['template_len']=len(tpl)
+                r['has_unsubscribe']='{{unsubscribe_url}}' in tpl
+                r['template_preview']=' '.join(tpl.replace('\n',' ').split())[:240]
+                out.append(r)
+          print(json.dumps(out,ensure_ascii=False,default=str,indent=2))
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
