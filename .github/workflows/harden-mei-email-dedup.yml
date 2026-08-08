@@ -1,0 +1,64 @@
+name: Harden MEI email deduplication
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/harden-mei-email-dedup.yml']
+permissions:
+  contents: read
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Patch duplicate protections on Oracle VM
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          cp app/routes/campanhas.py app/routes/campanhas.py.pre-dedup
+          cp worker/worker.py worker/worker.py.pre-dedup
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p=Path('app/routes/campanhas.py')
+          s=p.read_text()
+          old='''                      from mei_email.vw_empresas_elegiveis\n                     where {where_clause}\n'''
+          new='''                      from mei_email.vw_empresas_elegiveis\n                     where {where_clause}\n                       and not exists (\n                           select 1\n                             from mei_email.envios ex\n                            where lower(ex.email::text) = lower(mei_email.vw_empresas_elegiveis.email::text)\n                              and ex.status::text in ('pendente','enviando','enviado')\n                       )\n'''
+          if old not in s:
+              raise SystemExit('campaign selection anchor not found')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('worker/worker.py')
+          s=p.read_text()
+          old='''        corpo = montar_corpo(envio["corpo_template"], envio)\n        resultado = provider.send(to=email_limpo, subject=envio["assunto"], body=corpo)\n'''
+          new='''        # Final global suppression check immediately before provider call.\n        # This prevents a recipient already sent by any campaign from being sent again.\n        with conn.cursor() as guard_cur:\n            guard_cur.execute(\n                """\n                select 1\n                  from mei_email.envios\n                 where id <> %s\n                   and status::text = 'enviado'\n                   and lower(email::text) = lower(%s)\n                 limit 1\n                """,\n                (envio["envio_id"], email_limpo),\n            )\n            ja_enviado = guard_cur.fetchone() is not None\n        if ja_enviado:\n            _atualizar_envio(\n                conn, envio["envio_id"], "descartado",\n                erro="supressao global: destinatario ja enviado anteriormente",\n            )\n            continue\n\n        corpo = montar_corpo(envio["corpo_template"], envio)\n        resultado = provider.send(to=email_limpo, subject=envio["assunto"], body=corpo)\n'''
+          if old not in s:
+              raise SystemExit('worker send anchor not found')
+          s=s.replace(old,new,1)
+
+          old='''            select id, campanha_id, numero\n              from mei_email.lotes\n             where status = 'pendente'\n             order by criado_em\n'''
+          new='''            select l.id, l.campanha_id, l.numero\n              from mei_email.lotes l\n              join mei_email.campanhas c on c.id = l.campanha_id\n             where l.status = 'pendente'\n               and c.status::text in ('enfileirada','em_andamento')\n             order by l.criado_em\n'''
+          if old not in s:
+              raise SystemExit('worker queue anchor not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+          /home/ubuntu/mei-mg-email/.venv/bin/python -m compileall -q app worker
+          sudo systemctl restart mei-mg-email-api.service
+          sudo systemctl is-active mei-mg-email-api.service
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            echo 'worker unexpectedly active'
+            exit 2
+          fi
+          echo 'DEDUP_HARDENING_APPLIED_WORKER_REMAINS_HELD'
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
