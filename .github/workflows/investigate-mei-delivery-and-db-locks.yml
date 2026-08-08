@@ -1,0 +1,70 @@
+name: Investigate MEI delivery path and DB locks
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/investigate-mei-delivery-and-db-locks.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  investigate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Diagnose VM and send routed test
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo '=== WORKER ==='
+          echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+          echo '=== DB ==='
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          import os,json,psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'],autocommit=True,row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+              cur.execute("set statement_timeout='5s'")
+              cur.execute("select count(*) n from mei_email.empresas where marketing_autorizado")
+              print('AUTHORIZED='+str(cur.fetchone()['n']))
+              cur.execute("select status::text,count(*) n from mei_email.envios group by 1 order by 1")
+              print('ENVIO_STATUS='+json.dumps(cur.fetchall(),default=str,ensure_ascii=False))
+              cur.execute("select pid,state,wait_event_type,wait_event,pg_blocking_pids(pid) blocking_pids,left(query,120) query from pg_stat_activity where datname=current_database() and pid<>pg_backend_pid()")
+              print('DB_ACTIVITY='+json.dumps(cur.fetchall(),default=str,ensure_ascii=False))
+          PY
+          echo '=== ROUTED TEST ==='
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          import os
+          from pathlib import Path
+          from urllib.parse import urlencode
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          from app.email_provider import MicrosoftGraphEmailProvider
+          recipient='atendimento@shopvivaliz.com.br'
+          subject='MEI: Ganhe Certificado Digital + 10 Notas Fiscais por mes [DIAG 1240]'
+          template=Path('templates/mei-contabilidade-melo.html').read_text(encoding='utf-8')
+          base_url=os.environ['BASE_URL_DESCADASTRO'].rstrip('?')
+          unsub=f"{base_url}?{urlencode({'email':recipient})}"
+          body=(template.replace('{{nome_fantasia}}','Equipe ShopVivaliz').replace('{{razao_social}}','ShopVivaliz').replace('{{cnpj}}','').replace('{{unsubscribe_url}}',unsub))
+          p=MicrosoftGraphEmailProvider()
+          r=p.send(to=recipient,subject=subject,body=body)
+          print('ROUTED_TEST_SUCCESS='+str(r.success))
+          print('ROUTED_TEST_STATUS='+str(r.status))
+          print('ROUTED_TEST_CODE='+str(r.status_code))
+          print('ROUTED_TEST_ID='+str(r.message_id))
+          print('ROUTED_TEST_ERROR='+str(r.error))
+          if not r.success or r.status!='submitted': raise SystemExit(2)
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
