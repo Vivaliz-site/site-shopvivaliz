@@ -42,7 +42,7 @@ jobs:
         run: python scripts/launch_google_ads.py
 
   live-readonly-audit:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[live-auth-probe]')
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     environment: Production
