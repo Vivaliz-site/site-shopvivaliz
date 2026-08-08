@@ -128,8 +128,8 @@ function ai_catalog_policy(string $channel): array
             'instructions' => <<<'TXT'
 Canal: Mercado Livre (Brasil).
 Priorize qualidade de catalogo e atributos, nao copy promocional.
-- Titulo, quando o fluxo do item ainda exigir titulo: Produto + Marca + Modelo + especificacao realmente identificadora. Maximo operacional de 60 caracteres para compatibilidade com anuncios legados. Sem preco, parcelas, frete, desconto, emojis ou chamadas promocionais.
-- Em fluxos User Products, trate marca, modelo, GTIN/MPN, variacao e atributos como fonte principal de identidade; nunca invente um identificador ausente.
+- Titulo, quando o fluxo do item ainda exigir titulo: Produto + Marca + Modelo + especificacao realmente identificadora. Use 60 caracteres como teto conservador somente quando o max_title_length especifico da categoria nao estiver disponivel. Sem preco, parcelas, frete, desconto, emojis ou chamadas promocionais.
+- No modelo User Products, o titulo pode deixar de ser enviado; nesse caso priorize marca, modelo, GTIN/MPN, variacao e atributos de identidade, porque o produto e sua familia sao definidos por dados estruturados.
 - Descricao: objetiva, factual e util para reduzir duvidas. Explique uso e compatibilidade somente se estiverem nos dados de origem. Nao inclua contato externo.
 - bullet_points: 3 a 5 fatos complementares.
 - seo_keywords: consultas de busca plausiveis derivadas de produto, categoria, marca, modelo e atributos existentes; sem stuffing.
@@ -142,7 +142,7 @@ TXT,
             'bullets_max' => 5,
             'instructions' => <<<'TXT'
 Canal: Shopee Brasil.
-- Titulo: claro e pesquisavel, priorizando tipo de produto, marca/modelo quando existirem e 1-3 atributos decisivos. Alvo de qualidade: ate 120 caracteres. Nao use escassez artificial, preco, desconto, frete, cupom ou emojis decorativos.
+- Titulo: claro e pesquisavel, priorizando tipo de produto, marca/modelo quando existirem e 1-3 atributos decisivos. Use 120 caracteres como alvo operacional de qualidade, nao como pretexto para preencher texto desnecessario. Nao use escassez artificial, preco, desconto, frete, cupom ou emojis decorativos.
 - Descricao: leitura mobile, paragrafos curtos, 3 a 5 pontos escaneaveis e especificacoes reais. Nao prometa garantia, originalidade, certificacao, prazo ou suporte se a origem nao comprovar.
 - bullet_points: 3 a 5 fatos de decisao de compra.
 - seo_keywords: termos internos de descoberta derivados dos dados reais; sem marcas de terceiros para capturar trafego.
@@ -150,12 +150,12 @@ Canal: Shopee Brasil.
 TXT,
         ],
         'amazon' => [
-            'title_max' => 75,
+            'title_max' => 200,
             'bullets_min' => 5,
             'bullets_max' => 5,
             'instructions' => <<<'TXT'
 Canal: Amazon.
-- Titulo: maximo 75 caracteres, claro e mobile-first. Estrutura preferida: Marca + tipo de produto + modelo/linha + diferenciador factual. Sem emojis, ALL CAPS, preco, promocao ou caracteres promocionais. Nao repetir a mesma palavra mais de duas vezes, exceto artigos/preposicoes/conjuncoes.
+- Titulo: obedeca ao limite oficial atual de ate 200 caracteres para a maioria das categorias, mas prefira 80-150 quando isso mantiver todos os identificadores e atributos decisivos. Estrutura preferida: Marca + tipo de produto + modelo/linha + diferenciador factual. Sem emojis, ALL CAPS, preco, promocao ou caracteres promocionais. Nao repetir a mesma palavra mais de duas vezes, exceto artigos/preposicoes/conjuncoes.
 - Descricao: tecnica, objetiva e factual; nao simule A+ nem certificacoes inexistentes.
 - bullet_points: exatamente 5. Cada bullet deve unir um fato/atributo real a sua utilidade direta, sem superlativos nao comprovados.
 - seo_keywords: termos de busca complementares, evitando repeticao mecanica do titulo e sem inventar aplicacoes.
@@ -163,13 +163,14 @@ Canal: Amazon.
 TXT,
         ],
         'tiktok' => [
-            'title_max' => 300,
+            'title_min' => 25,
+            'title_max' => 200,
             'bullets_min' => 3,
             'bullets_max' => 5,
             'instructions' => <<<'TXT'
-Canal: TikTok Shop Brasil.
-- Titulo: factual, natural e orientado a descoberta. Limite tecnico de 300 caracteres; prefira ate 150 quando isso preservar todos os identificadores importantes.
-- Descricao: detalhada e facil de escanear. Quando houver material factual suficiente, ultrapasse 300 caracteres. Organize 3 a 5 selling points; cada um deve ser curto e comprovado pela origem.
+Canal: TikTok Shop.
+- Titulo: deve ficar entre 25 e 200 caracteres; como alvo de performance, prefira 40-150 caracteres. Inclua apenas marca autorizada quando existir, tipo de produto, aplicacao real e caracteristicas factuais relevantes. Nao mencione estoque, desconto, inventario, variantes irrelevantes ou claims subjetivos.
+- Descricao: detalhada e facil de escanear. Mire 500+ caracteres quando os dados de origem fornecerem fatos suficientes; nunca alongue inventando ou repetindo. Organize 3 a 5 selling points curtos e comprovados.
 - bullet_points: 3 a 5 pontos, cada um com menos de 250 caracteres.
 - seo_keywords: termos de descoberta e categoria; hashtags somente se diretamente relevantes e sem claims.
 - marketing_hooks: exatamente 3 ganchos curtos para video/live, todos factuais. Nao use falsa urgencia, medo, escassez ou promessa nao comprovada.
@@ -315,7 +316,11 @@ function ai_catalog_quality_report(array $data, string $channel, array $product)
     $source = ai_catalog_source_blob($product);
 
     $checks = [];
-    $checks['title_length'] = mb_strlen($title, 'UTF-8') <= (int) $policy['title_max'];
+    $titleLength = mb_strlen($title, 'UTF-8');
+    $checks['title_length_max'] = $titleLength <= (int) $policy['title_max'];
+    if (isset($policy['title_min'])) {
+        $checks['title_length_min'] = $titleLength >= (int) $policy['title_min'];
+    }
     $checks['description_present'] = $description !== '';
     $checks['protected_commerce_fields_absent'] = preg_match('/(?:R\$|\bpre[cç]o\b|\bestoque\b|\bparcel(?:a|as|ado|amento)?\b|\bfrete\s+gr[aá]tis\b|\bcupom\b|\bdesconto\b)/iu', $text) !== 1;
     $checks['bullet_count'] = count($bullets) >= (int) $policy['bullets_min'] && count($bullets) <= (int) $policy['bullets_max'];
