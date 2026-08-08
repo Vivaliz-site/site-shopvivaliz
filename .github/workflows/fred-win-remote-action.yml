@@ -58,7 +58,7 @@ jobs:
               COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; & '.\\scripts\\fredwin-email-control.ps1' -Mode 'graph-template-test'\""
               ;;
             m365_app_only_audit)
-              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"if(!(Test-Path 'C:\\Scripts\\2-Test-Authentication.ps1')){ throw '2-Test-Authentication.ps1 missing' }; if(!(Test-Path 'C:\\Scripts\\4-Audit-Complete.ps1')){ throw '4-Audit-Complete.ps1 missing' }; Write-Output 'APP_ONLY_AUTH_BEGIN'; & 'C:\\Scripts\\2-Test-Authentication.ps1'; if(\$LASTEXITCODE -ne 0){ throw 'app-only authentication test failed' }; Write-Output 'APP_ONLY_AUTH_END'; Write-Output 'APP_ONLY_AUDIT_BEGIN'; & 'C:\\Scripts\\4-Audit-Complete.ps1'; if(\$LASTEXITCODE -ne 0){ throw 'app-only audit failed' }; Write-Output 'APP_ONLY_AUDIT_END'\""
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; Write-Output 'APP_ONLY_AUTH_BEGIN'; & '.\\scripts\\m365\\Test-ShopVivalizGraphAppOnly.ps1' -Thumbprint '7EFCBC6676B61F8C076F08127F5F7E365A95F2E9'; Write-Output 'APP_ONLY_AUTH_END'; Write-Output 'APP_ONLY_AUDIT_BEGIN'; & '.\\scripts\\m365\\Audit-ShopVivalizM365.ps1'; Write-Output 'APP_ONLY_AUDIT_END'\""
               ;;
             email_audit_9950)
               COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; & '.\\scripts\\fredwin-email-control.ps1' -Mode 'audit-9950'\""
