@@ -73,6 +73,27 @@ jobs:
           if login:
               headers['login-customer-id']=login
 
+          def error_parts(data, http_code):
+              items=data if isinstance(data,list) else [data]
+              statuses=[]; messages=[]; reasons=[]
+              for item in items:
+                  if not isinstance(item,dict): continue
+                  err=item.get('error') if isinstance(item.get('error'),dict) else item
+                  if not isinstance(err,dict): continue
+                  if err.get('status'): statuses.append(str(err.get('status')))
+                  if err.get('message'): messages.append(str(err.get('message')))
+                  details=err.get('details') or []
+                  for detail in details if isinstance(details,list) else []:
+                      if not isinstance(detail,dict): continue
+                      errors=detail.get('errors') or []
+                      for ge in errors if isinstance(errors,list) else []:
+                          if not isinstance(ge,dict): continue
+                          code=ge.get('errorCode') or {}
+                          if isinstance(code,dict):
+                              for k,v in code.items(): reasons.append(str(k)+'='+str(v))
+                          if ge.get('message'): messages.append(str(ge.get('message')))
+              return (statuses[0] if statuses else 'HTTP_'+str(http_code), ' | '.join(dict.fromkeys(messages)), ' | '.join(dict.fromkeys(reasons)))
+
           def query(label, gaql):
               req=urllib.request.Request(base, data=json.dumps({'query':gaql}).encode(), headers=headers, method='POST')
               try:
@@ -82,15 +103,16 @@ jobs:
                   body=e.read().decode(errors='ignore')
                   try: data=json.loads(body)
                   except Exception: data={}
-                  status=((data.get('error') or {}).get('status') or 'HTTP_'+str(e.code))
-                  message=((data.get('error') or {}).get('message') or '')
+                  status,message,reasons=error_parts(data,e.code)
                   print(label + '_FAILED')
-                  print('status=' + str(status))
-                  print('message=' + message[:500].replace('\n',' '))
+                  print('http_code=' + str(e.code))
+                  print('status=' + status)
+                  print('reasons=' + reasons[:500].replace('\n',' '))
+                  print('message=' + message[:700].replace('\n',' '))
                   raise SystemExit(4)
               rows=[]
               for batch in payload if isinstance(payload,list) else []:
-                  rows.extend(batch.get('results') or [])
+                  if isinstance(batch,dict): rows.extend(batch.get('results') or [])
               return rows
 
           campaign_q='''
