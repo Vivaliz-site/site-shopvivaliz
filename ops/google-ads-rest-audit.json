@@ -1,4 +1,4 @@
 {
-  "requested_at": "2026-08-08T18:33:00-03:00",
-  "reason": "Run Google Ads API v25 REST read-only audit after OAuth refresh token validation"
+  "requested_at": "2026-08-08T18:34:00-03:00",
+  "reason": "Retry Google Ads API v25 REST read-only audit with structured sanitized error reporting"
 }
