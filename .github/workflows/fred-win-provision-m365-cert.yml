@@ -1,5 +1,5 @@
 name: Fred-Win Provision M365 Cert
-# Retry after explicitly loading Windows certificate providers.
+# Retry using the .NET X509 store directly; no PowerShell Cert provider dependency.
 
 on:
   push:
