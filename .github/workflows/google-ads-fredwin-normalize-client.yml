@@ -1,0 +1,87 @@
+name: Google Ads Normalize OAuth Client
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-normalize-client-request.json"
+      - ".github/workflows/google-ads-fredwin-normalize-client.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY" || { echo "SHOPVIVALIZ_VM_SSH_KEY missing"; exit 2; }
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Check Fred-Win MCP
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
+
+      - name: Normalize client id and update Production secret through authenticated gh
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >/tmp/fredwin-normalize.ps1 <<'PS1'
+          $ErrorActionPreference = 'Stop'
+          $envPath = 'C:\site-shopvivaliz\.env'
+          if (-not (Test-Path $envPath)) { throw 'LOCAL_ENV_NOT_FOUND' }
+          $line = Get-Content $envPath | Where-Object { $_ -match '^GOOGLE_OAUTH_CLIENT_ID=' } | Select-Object -First 1
+          if (-not $line) { throw 'LOCAL_OAUTH_CLIENT_ID_NOT_FOUND' }
+          $current = ($line -split '=', 2)[1].Trim().Trim('"').Trim("'")
+          $candidate = $current -replace '\.app\.s\.googleusercontent\.com$', '.apps.googleusercontent.com'
+          if ($candidate -notmatch '^[0-9A-Za-z._-]+\.apps\.googleusercontent\.com$') { throw 'NORMALIZED_CLIENT_ID_FORMAT_INVALID' }
+          if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'GH_CLI_NOT_FOUND' }
+          gh auth status --hostname github.com *> $null
+          if ($LASTEXITCODE -ne 0) { throw 'GH_AUTH_NOT_READY' }
+          $candidate | gh secret set GOOGLE_OAUTH_CLIENT_ID --env Production --repo Vivaliz-site/site-shopvivaliz
+          if ($LASTEXITCODE -ne 0) { throw 'GH_SECRET_UPDATE_FAILED' }
+          $raw = Get-Content $envPath
+          $updated = foreach ($item in $raw) {
+            if ($item -match '^GOOGLE_OAUTH_CLIENT_ID=') { 'GOOGLE_OAUTH_CLIENT_ID=' + $candidate } else { $item }
+          }
+          $tmp = $envPath + '.oauth-client.tmp'
+          $updated | Set-Content -Path $tmp -Encoding utf8
+          Move-Item -Force $tmp $envPath
+          Write-Output 'PRODUCTION_OAUTH_CLIENT_ID_UPDATED'
+          Write-Output 'LOCAL_OAUTH_CLIENT_ID_UPDATED'
+          Write-Output 'NO_SECRET_VALUES_PRINTED'
+          PS1
+          PS_B64="$(iconv -f UTF-8 -t UTF-16LE /tmp/fredwin-normalize.ps1 | base64 -w0)"
+          COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $PS_B64"
+          printf '%s' "$COMMAND" | base64 -w0 >/tmp/fredwin-command.b64
+          CMD_B64="$(cat /tmp/fredwin-command.b64)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
+          body = json.dumps({'params': {'command': command, 'timeout': 90}}).encode('utf-8')
+          req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
+          with urllib.request.urlopen(req, timeout=105) as response:
+              payload = json.loads(response.read().decode('utf-8'))
+          result = payload.get('result') or {}
+          print(result.get('output') or '')
+          if result.get('error'):
+              print('REMOTE_ERROR=' + str(result.get('error')))
+          if result.get('success') is not True:
+              raise SystemExit('NORMALIZE_CLIENT_FAILED')
+          PY"
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/fredwin-normalize.ps1 /tmp/fredwin-command.b64
