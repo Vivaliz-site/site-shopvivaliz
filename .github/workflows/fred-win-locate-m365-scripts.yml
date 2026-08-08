@@ -42,3 +42,5 @@ jobs:
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey /tmp/body.json
+
+# Discovery workflow refreshed 2026-08-07
