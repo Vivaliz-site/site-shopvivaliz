@@ -9,7 +9,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - name: Configure VM key
         env:
@@ -18,20 +18,119 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Inspect runtime contract safely
+      - name: Repair runtime and send one controlled Graph test
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           sudo systemctl stop mei-mg-email-worker.service || true
           cd /home/ubuntu/mei-mg-email
-          echo '=== PROVIDER HEAD ==='
-          sed -n '1,90p' app/email_provider.py
-          echo '=== SUBMITTED CALL ==='
-          sed -n '130,160p' app/email_provider.py
-          echo '=== WORKER SUBMITTED BLOCK ==='
-          sed -n '246,270p' worker/worker.py
-          echo '=== SAFE CONFIG ==='
+          ts=$(date +%Y%m%d%H%M%S)
+          cp app/email_provider.py backups/email_provider.py.verify.$ts
+          cp worker/worker.py backups/worker.py.verify.$ts
+
+          echo '=== APPLY RUNTIME REPAIR ==='
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from pathlib import Path
+
+          p=Path('app/email_provider.py')
+          s=p.read_text(encoding='utf-8')
+          if '    status: str | None = None\n' not in s:
+              needle='    error: str | None = None\n'
+              if needle not in s:
+                  raise SystemExit('SENDRESULT_ERROR_FIELD_NOT_FOUND')
+              s=s.replace(needle, needle+'    status: str | None = None\n    status_code: int | None = None\n', 1)
+          elif '    status_code: int | None = None\n' not in s:
+              s=s.replace('    status: str | None = None\n', '    status: str | None = None\n    status_code: int | None = None\n', 1)
+
+          old='''            with urlopen(req, timeout=30) as response:\n                if response.status not in (200, 202):\n                    return SendResult(False, error=f"Microsoft Graph HTTP {response.status}")\n            return SendResult(True, status="submitted")\n'''
+          new='''            with urlopen(req, timeout=30) as response:\n                status_code = int(response.status)\n                request_id = response.headers.get("request-id") or response.headers.get("client-request-id")\n                if status_code not in (200, 202):\n                    return SendResult(False, message_id=request_id, error=f"Microsoft Graph HTTP {status_code}", status="error", status_code=status_code)\n            return SendResult(True, message_id=request_id, status="submitted", status_code=status_code)\n'''
+          if old in s:
+              s=s.replace(old,new,1)
+          elif 'message_id=request_id, status="submitted"' not in s:
+              raise SystemExit('GRAPH_SUCCESS_BLOCK_NOT_FOUND')
+
+          old_err='''            return SendResult(False, error=f"Microsoft Graph: {code}")\n'''
+          new_err='''            mapped = "sender_blocked" if ("5.1.8" in str(code).casefold() or "42004" in str(code).casefold()) else "error"\n            return SendResult(False, error=f"Microsoft Graph: {code}", status=mapped, status_code=int(error.code))\n'''
+          if old_err in s:
+              s=s.replace(old_err,new_err,1)
+          p.write_text(s, encoding='utf-8')
+
+          p=Path('worker/worker.py')
+          s=p.read_text(encoding='utf-8')
+          old='''        else:\n            _atualizar_envio(conn, envio["envio_id"], "falhou", erro=resultado.error)\n            falhas += 1\n'''
+          new='''        elif getattr(resultado, "status", None) == "sender_blocked":\n            _atualizar_envio(conn, envio["envio_id"], "sender_blocked", erro=resultado.error)\n            falhas += 1\n        else:\n            _atualizar_envio(conn, envio["envio_id"], "falhou", erro=resultado.error)\n            falhas += 1\n'''
+          if old in s:
+              s=s.replace(old,new,1)
+          p.write_text(s, encoding='utf-8')
+          PY
+
+          /home/ubuntu/mei-mg-email/.venv/bin/python -m py_compile app/email_provider.py worker/worker.py
+          grep -nE 'status: str|status_code: int|message_id=request_id, status="submitted"' app/email_provider.py | head -20
+
+          echo '=== SAFE RUNTIME ==='
           grep -E '^(EMAIL_PROVIDER|MICROSOFT_GRAPH_USER|MAIL_FROM|RATE_LIMIT_ENVIOS_POR_MINUTO|META_ENVIOS_POR_DIA|MAX_ENVIOS_POR_DIA)=' .env
+          test "$(grep '^EMAIL_PROVIDER=' .env | tail -1 | cut -d= -f2-)" = "microsoft_graph"
+          test "$(grep '^MICROSOFT_GRAPH_USER=' .env | tail -1 | cut -d= -f2-)" = "naoresponda@dev.shopvivaliz.com.br"
+          test "$(grep '^RATE_LIMIT_ENVIOS_POR_MINUTO=' .env | tail -1 | cut -d= -f2-)" -le 30
+          ! grep -Eq '^(GMAIL_APP_PASSWORD|MICROSOFT_SMTP_PASSWORD|BREVO_API_KEY)=[^[:space:]]+' .env
+
+          echo '=== GRAPH APP-ONLY ==='
+          /home/ubuntu/.shopvivaliz/bin/graph-app-only.py
+
+          echo '=== ROLLING QUOTA ==='
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
+          import os, psycopg
+          with psycopg.connect(os.environ['DATABASE_URL'], autocommit=True) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em >= now()-interval '24 hours'")
+                  used = cur.fetchone()[0]
+                  print(f'used_24h={used}')
+                  print(f'capacity_to_9950={max(0,9950-used)}')
+                  if used >= 9950:
+                      raise SystemExit('NO_SAFE_CAPACITY_FOR_TEST')
+          PY
+
+          echo '=== CONTROLLED TEST ==='
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from app.email_provider import MicrosoftGraphEmailProvider
+          from worker.worker import montar_corpo
+
+          recipient='atendimento@shopvivaliz.com.br'
+          template=Path('/home/ubuntu/mei-mg-email/templates/mei-contabilidade-melo.html').read_text(encoding='utf-8')
+          body=montar_corpo(template, {
+              'cnpj':'00000000000000',
+              'email':recipient,
+              'razao_social':'Equipe ShopVivaliz',
+              'nome_fantasia':'ShopVivaliz',
+          })
+          for marker in ('R$ 200,00/mês','Quero falar no WhatsApp','logo-contabilidade-melo-transparente.png'):
+              if marker.casefold() not in body.casefold():
+                  raise SystemExit(f'TEMPLATE_MARKER_MISSING:{marker}')
+          if '{{unsubscribe_url}}' in body:
+              raise SystemExit('UNRENDERED_UNSUBSCRIBE')
+
+          provider=MicrosoftGraphEmailProvider()
+          if provider.address.casefold() != 'naoresponda@dev.shopvivaliz.com.br':
+              raise SystemExit('WRONG_SENDER')
+          stamp=datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%SZ')
+          subject=f'VALIDACAO GRAPH CORRIGIDA - Contabilidade Melo - {stamp}'
+          result=provider.send(to=recipient, subject=subject, body=body)
+          print(f'subject={subject}')
+          print(f'success={result.success}')
+          print(f'status={result.status}')
+          print(f'status_code={result.status_code}')
+          print(f'request_id={result.message_id or ""}')
+          if not result.success or result.status != 'submitted' or result.status_code not in (200,202):
+              raise SystemExit(f'GRAPH_TEST_FAILED:{result.error}')
+          print('GRAPH_CONTROLLED_TEST_SUBMITTED')
+          PY
+
           echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
           EOF
       - name: Cleanup
